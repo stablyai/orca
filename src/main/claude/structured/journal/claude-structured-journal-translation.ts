@@ -69,7 +69,7 @@ export function createClaudeJournalTranslator(
   const fallbackId = deps.fallbackIdPrefix ?? 'acquisition'
   const providerFallback = createClaudeProviderFrameFallback(deps.sink, fallbackId, turnScope)
   const toolOrigins = new ClaudeToolOriginRegistry()
-  const journaled = new ClaudeJournaledSubagents(() => deps.sink.journalLinkage?.() ?? null)
+  const journaled = new ClaudeJournaledSubagents(() => deps.sink.journalSnapshot?.() ?? null)
   const subagents = new ClaudeSubagentIdentities({
     isForwardedParentTool: (toolUseId) => toolOrigins.has(toolUseId),
     childOwnerRefOf: (toolUseId) => toolOrigins.childOwnerRef(toolUseId),
@@ -140,7 +140,7 @@ export function createClaudeJournalTranslator(
     turn,
     assistantFailures: new ClaudeAssistantFailures(deps.account, deps.model),
     usageLimits: new ClaudeUsageLimits(),
-    threadGoal: new ClaudeThreadGoal(() => deps.sink.journalLinkage?.()?.threadGoalSource())
+    threadGoal: new ClaudeThreadGoal(() => deps.sink.journalSnapshot?.()?.threadGoal)
   }
 
   const resultContext: ClaudeResultJournalContext = {

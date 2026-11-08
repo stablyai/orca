@@ -2,6 +2,7 @@ import type { AgentJournalProducerLinkage } from '../../shared/agent-session/jou
 import { namedSubagents } from '../../shared/native-chat/transcript/native-chat-subagent-items'
 import type { StructuredAgentSessionLinkageJournal } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import { isBoundedClaudeTaskId } from './claude-background-task-frames'
+import type { JournalThreadGoalSource } from '../native-chat/agent-session-journal/projection/journal-thread-goal-source'
 
 type Reading = {
   canonicalByToolUse: Map<string, string>
@@ -9,11 +10,12 @@ type Reading = {
   subagents: Set<string>
 }
 
-/** The saved identity facts a Claude acquisition reads once, before translating. */
-export type ClaudeJournaledIdentities = {
+/** The saved facts a Claude acquisition reads in one observation, before translating. */
+export type ClaudeJournalSnapshot = {
   canonicalByToolUse: [toolUseId: string, agentId: string][]
   attemptByAgent: [agentId: string, attempt: number][]
   subagents: string[]
+  threadGoal: JournalThreadGoalSource
 }
 
 /** One row's contribution, stored beside it so a snapshot never decodes bodies. */
@@ -40,42 +42,43 @@ export function claudeAgentRowFacts({
 }
 
 /** Visit visible items in insertion order, as the memory journal does. */
-export function readClaudeJournaledIdentities(
-  visit: StructuredAgentSessionLinkageJournal['visitItemsWithLinkage']
-): ClaudeJournaledIdentities {
-  const reading = read({ visitItemsWithLinkage: visit })
+export function readClaudeJournalSnapshot(
+  journal: Pick<StructuredAgentSessionLinkageJournal, 'visitItemsWithLinkage' | 'threadGoalSource'>
+): ClaudeJournalSnapshot {
+  const reading = read(journal)
   return {
     canonicalByToolUse: [...reading.canonicalByToolUse],
     attemptByAgent: [...reading.attemptByAgent],
-    subagents: [...reading.subagents]
+    subagents: [...reading.subagents],
+    threadGoal: journal.threadGoalSource()
   }
 }
 
 /** Cache per bound journal epoch; reads before binding must not populate the cache. */
 export class ClaudeJournaledSubagents {
-  private journal: StructuredAgentSessionLinkageJournal | null = null
-  private epoch: string | null = null
+  private snapshot: ClaudeJournalSnapshot | null = null
   private reading: Reading | null = null
 
-  constructor(private readonly bound: () => StructuredAgentSessionLinkageJournal | null) {}
+  constructor(private readonly current: () => ClaudeJournalSnapshot | null) {}
 
   canonical = (toolUseId: string): string | null =>
-    this.current()?.canonicalByToolUse.get(toolUseId) ?? null
+    this.read()?.canonicalByToolUse.get(toolUseId) ?? null
 
   /** Zero means no journaled attempt. */
-  attempt = (agentId: string): number => this.current()?.attemptByAgent.get(agentId) ?? 0
+  attempt = (agentId: string): number => this.read()?.attemptByAgent.get(agentId) ?? 0
 
-  isSubagent = (taskId: string): boolean => this.current()?.subagents.has(taskId) === true
+  isSubagent = (taskId: string): boolean => this.read()?.subagents.has(taskId) === true
 
-  private current(): Reading | null {
-    const journal = this.bound()
-    if (!journal) {
-      return null
-    }
-    if (!this.reading || journal !== this.journal || journal.epoch !== this.epoch) {
-      this.journal = journal
-      this.epoch = journal.epoch
-      this.reading = read(journal)
+  /** Dereference the acquisition's current snapshot; a replacement swaps it whole. */
+  private read(): Reading | null {
+    const snapshot = this.current()
+    if (snapshot !== this.snapshot) {
+      this.snapshot = snapshot
+      this.reading = snapshot && {
+        canonicalByToolUse: new Map(snapshot.canonicalByToolUse),
+        attemptByAgent: new Map(snapshot.attemptByAgent),
+        subagents: new Set(snapshot.subagents)
+      }
     }
     return this.reading
   }

@@ -4,6 +4,7 @@ import type { AgentSessionJournal } from '../../agent-session-journal/journal-st
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { StructuredAgentSessionSettledTurnRoutes } from './structured-agent-session-settled-turn-routes'
+import { StructuredAgentSessionSnapshotRoutes } from './structured-agent-session-snapshot-routes'
 
 export type JournalPublication = {
   kind: 'commit' | 'reset' | 'operational' | 'detach' | 'end'
@@ -31,6 +32,7 @@ export class StructuredAgentSessionConversations extends Map<
   private ended = false
   private readonly activity = new Map<string, number>()
   private readonly settledTurns: StructuredAgentSessionSettledTurnRoutes
+  private readonly snapshots: StructuredAgentSessionSnapshotRoutes
 
   constructor(
     private readonly delivery: {
@@ -51,6 +53,7 @@ export class StructuredAgentSessionConversations extends Map<
   ) {
     super()
     this.settledTurns = new StructuredAgentSessionSettledTurnRoutes(delivery.logger)
+    this.snapshots = new StructuredAgentSessionSnapshotRoutes(delivery.logger)
   }
 
   loadedSessionIds = (): string[] =>
@@ -71,6 +74,7 @@ export class StructuredAgentSessionConversations extends Map<
       journal,
       release: () => {
         releaseCommit()
+        releaseReplacing()
         releaseSettle()
       }
     }
@@ -115,6 +119,11 @@ export class StructuredAgentSessionConversations extends Map<
         }
       })
     })
+    const releaseReplacing = journal.context.replacements.observe((replaced) => {
+      if (current()) {
+        this.snapshots.replacing(sessionId, journal, replaced)
+      }
+    })
     const releaseSettle = journal.stopMarks.observeSettleEdges(() => {
       if (!current()) {
         return
@@ -147,6 +156,10 @@ export class StructuredAgentSessionConversations extends Map<
   /** Terminal turn rows of each commit, delivered after COMMIT and before its publication callbacks. */
   observeSettledTurns: StructuredAgentSessionSettledTurnRoutes['observe'] = (...args) =>
     this.settledTurns.observe(...args)
+
+  /** Saved Claude facts for one acquisition of this exact journal, kept current across replacements. */
+  snapshotSource: StructuredAgentSessionSnapshotRoutes['observe'] = (...args) =>
+    this.snapshots.observe(...args)
 
   observeConversationPublications(sessionId: string, observer: PublicationObserver): () => void {
     if (this.ended) {

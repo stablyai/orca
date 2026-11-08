@@ -8,6 +8,7 @@ import { createTrackedJournalOpener } from '../native-chat/agent-session-journal
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { createClaudeJournalTranslator } from './structured/journal/claude-structured-journal-translation'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { StructuredAgentSessionSnapshotRoutes } from '../native-chat/agent-session-wire/host/structured-agent-session-snapshot-routes'
 import { claudeProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 // Captured restart order: resumed frames retain original spawn IDs while announcements name new resume calls.
@@ -102,10 +103,14 @@ async function openJournal(): Promise<AgentSessionJournal> {
   })
 }
 
-function acquire(journal: AgentSessionJournal) {
-  const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+async function acquire(journal: AgentSessionJournal) {
+  const logging = testEventSinkLogging()
+  const deferred = createDeferredStructuredAgentSessionEventSink(logging)
+  await deferred.followSnapshots(
+    new StructuredAgentSessionSnapshotRoutes(logging.logger).observe('orca-session', journal)
+  )
   const translator = createClaudeJournalTranslator({ sink: deferred.sink, coalesceMs: 0 })
-  deferred.bind({ journal, fence: 1, publish: () => {} })
+  const bind = () => deferred.bind({ journal, fence: 1, publish: () => {} })
   const settle = async (): Promise<void> => {
     await expect(deferred.drained()).resolves.toEqual({ ok: true })
   }
@@ -115,7 +120,7 @@ function acquire(journal: AgentSessionJournal) {
     translator.dispose()
     deferred.close()
   }
-  return { translator, settle, exit }
+  return { translator, bind, settle, exit }
 }
 
 const proseRow = (journal: AgentSessionJournal, text: string): AgentJournalRenderItem | undefined =>
@@ -131,7 +136,8 @@ describe('a Claude subagent resumed after its provider restarted', () => {
   it('keeps the canonical id its first run was given, so one child stays one child', async () => {
     const journal = await openJournal()
 
-    const first = acquire(journal)
+    const first = await acquire(journal)
+    first.bind()
     first.translator.handle(userTurn('turn-a'))
     first.translator.handle(
       toolCall('spawn-a', 'toolu_spawn_a', 'Agent', {
@@ -157,7 +163,8 @@ describe('a Claude subagent resumed after its provider restarted', () => {
     await first.exit()
     expect(proseRow(journal, 'A reads the rig recipes')).toMatchObject({ agentId: 'agent-a' })
 
-    const second = acquire(journal)
+    // The acquisition's saved answers apply before its sink binds.
+    const second = await acquire(journal)
     second.translator.handle(userTurn('turn-b'))
     second.translator.handle(
       toolCall('resume-a', 'toolu_message_a', 'SendMessage', { to: 'agent-a', message: 'go on' })
@@ -172,6 +179,7 @@ describe('a Claude subagent resumed after its provider restarted', () => {
     // Preserve captured interleaving to catch cross-child identity swaps.
     second.translator.handle(childSays('a-2', 'toolu_spawn_a', 'A restarts the receiver'))
     second.translator.handle(childSays('b-2', 'toolu_spawn_b', 'B checks the rig'))
+    second.bind()
     await second.settle()
 
     expect(proseRow(journal, 'A restarts the receiver')).toMatchObject({

@@ -14,8 +14,8 @@ import type { JournalReducerState } from './projection/journal-reducer'
 import type { JournalItemEcho } from './projection/journal-item-echo'
 import type { JournalThreadGoalSource } from './projection/journal-thread-goal-source'
 import {
-  readClaudeJournaledIdentities,
-  type ClaudeJournaledIdentities
+  readClaudeJournalSnapshot,
+  type ClaudeJournalSnapshot
 } from '../../claude/claude-subagent-journaled-identities'
 import { readJournalInput, type JournalInputReader } from './journal-input-reads'
 import { readJournalUsageLimitCut, readJournalOrcaStopCut } from './journal-status-cuts'
@@ -88,8 +88,8 @@ export type AgentSessionJournalReads = {
   messageOptions(clientMessageId: string): Promise<JournalMessageOptions>
   continuationContext(): Promise<JournalContinuationContext>
   threadGoalSource(): Promise<JournalThreadGoalSource>
-  /** Saved Claude aliases, attempts and roster, read once per acquisition. */
-  claudeIdentities(): Promise<ClaudeJournaledIdentities>
+  /** Saved Claude aliases, attempts, roster and goal, read per acquisition and epoch replacement. */
+  claudeSnapshot(): Promise<ClaudeJournalSnapshot>
   contextUsage(): Promise<AgentSessionContextUsage>
   visitItems(filter: JournalItemFilter, visit: JournalItemLinkageVisitor): Promise<void>
 }
@@ -111,7 +111,7 @@ type FoldedJournalReads = {
       | 'orcaStopCut'
       | 'statusState'
       | 'statusIndicators'
-      | 'claudeIdentities'
+      | 'claudeSnapshot'
     >
   ]: (
     ...args: Parameters<AgentSessionJournalReads[K]>
@@ -205,7 +205,7 @@ export function foldedJournalReads(
       }
     }),
     threadGoalSource: now(journal.threadGoalSource),
-    claudeIdentities: now(() => readClaudeJournaledIdentities(journal.visitItemsWithLinkage)),
+    claudeSnapshot: now(() => readClaudeJournalSnapshot(journal)),
     contextUsage: now(journal.contextUsage),
     visitItems: now((filter: JournalItemFilter, visit: JournalItemLinkageVisitor) => {
       const kinds = new Set(filter.kinds)

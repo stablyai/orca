@@ -12,6 +12,8 @@ import type { JournalLifecycleIdentityMutationInput } from '../../agent-session-
 import type { JournalTimelineItemResolution } from '../../agent-session-journal/writing/journal-timeline-resolution'
 import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
+import type { StructuredAgentSessionSnapshotSource } from './structured-agent-session-sink-snapshots'
+import type { ClaudeJournalSnapshot } from '../../../claude/claude-subagent-journaled-identities'
 import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
 import { createStructuredAgentSessionResolvedAppend } from './structured-agent-session-resolved-append'
 import {
@@ -19,10 +21,7 @@ import {
   type StructuredAgentSessionTransitionSink
 } from './structured-agent-session-transition'
 import type { StructuredAgentSessionLogger } from '../host/structured-agent-session-logger'
-import type {
-  StructuredAgentSessionHistoryJournal,
-  StructuredAgentSessionLinkageJournal
-} from './structured-agent-session-journal-views'
+import type { StructuredAgentSessionHistoryJournal } from './structured-agent-session-journal-views'
 
 import {
   StructuredAgentSessionExitObservation,
@@ -123,7 +122,9 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
   journalEpoch?(): string | null
   /** Notices of turns settled by any writer while this sink is bound. */
   observeSettledTurns?(listener: (turnItemIds: readonly string[]) => void): () => void
-  journalLinkage?(): StructuredAgentSessionLinkageJournal | null
+  /** Saved facts the acquisition read before translating, replaced whole per epoch. */
+  journalSnapshot?(): ClaudeJournalSnapshot | null
+  snapshotCurrent?(): Promise<void>
   journalHistory?(): StructuredAgentSessionHistoryJournal | null
   /** Apply the journal’s personal-Stop cancellation rule; false until bound. */
   journalStopDecidesTurn?(turnId: string, endedAt: number): boolean
@@ -155,6 +156,7 @@ export type DeferredStructuredAgentSessionEventSink = {
   exitObservation(): Omit<StructuredAgentSessionExitObservation, 'record'>
   bind(target: StructuredAgentSessionEventTarget): void
   unbind(): void
+  followSnapshots(source: StructuredAgentSessionSnapshotSource): Promise<void>
   close(): void
   drained(): Promise<StructuredAgentSessionSinkBarrier>
   lifecycleBarrier(): Promise<StructuredAgentSessionSinkBarrier>
@@ -269,7 +271,8 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
       ...createStructuredAgentSessionTransitionMembers(queue),
       journalEpoch: queue.journalEpoch,
       observeSettledTurns: queue.observeSettledTurns,
-      journalLinkage: queue.journalLinkage,
+      journalSnapshot: queue.snapshots.current,
+      snapshotCurrent: queue.snapshots.settled,
       journalHistory: queue.journalHistory,
       journalStopDecidesTurn: queue.journalStopDecidesTurn,
       appendLifecycleBatch: (settlementId, mutations) => {
@@ -300,6 +303,7 @@ export function createDeferredStructuredAgentSessionEventSink(deps: {
     },
     bind: (next) => queue.bind(next),
     unbind: () => queue.unbind(),
+    followSnapshots: (source) => queue.snapshots.follow(source),
     close: () => queue.close(),
     drained: queue.barrier,
     lifecycleBarrier: queue.barrier,

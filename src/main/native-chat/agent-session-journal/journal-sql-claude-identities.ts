@@ -1,8 +1,10 @@
-import type { ClaudeJournaledIdentities } from '../../claude/claude-subagent-journaled-identities'
+import type { ClaudeJournalSnapshot } from '../../claude/claude-subagent-journaled-identities'
 import type { JournalSqlScope } from './journal-sql-scope'
 
 /** Read the derived columns only: the last alias per parent, the floored highest attempt, the roster. */
-export function readJournalSqlClaudeIdentities(scope: JournalSqlScope): ClaudeJournaledIdentities {
+export function readJournalSqlClaudeIdentities(
+  scope: JournalSqlScope
+): Omit<ClaudeJournalSnapshot, 'threadGoal'> {
   const canonical = new Map<string, string>()
   for (const row of scope.db
     .prepare(`SELECT producer_parent_ref, producer_agent_id FROM journal_proj_items

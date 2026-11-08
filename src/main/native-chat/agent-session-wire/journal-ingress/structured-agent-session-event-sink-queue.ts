@@ -6,10 +6,8 @@ import type {
   StructuredAgentSessionSinkState,
   StructuredAgentSessionSinkWatermarks
 } from './structured-agent-session-event-sink'
-import type {
-  StructuredAgentSessionHistoryJournal,
-  StructuredAgentSessionLinkageJournal
-} from './structured-agent-session-journal-views'
+import type { StructuredAgentSessionHistoryJournal } from './structured-agent-session-journal-views'
+import { StructuredAgentSessionSinkSnapshots } from './structured-agent-session-sink-snapshots'
 import type { StructuredAgentSessionTransitionJournal } from './structured-agent-session-transition'
 
 export type StructuredAgentSessionSinkOperation = {
@@ -51,6 +49,8 @@ export class StructuredAgentSessionSinkQueue {
   private readonly waiters: StructuredAgentSessionDrainWaiter[] = []
   private readonly settledTurnListeners = new Set<(turnItemIds: readonly string[]) => void>()
   private releaseSettledTurns: (() => void) | undefined
+  private readingPaused = false
+  readonly snapshots = new StructuredAgentSessionSinkSnapshots(() => this.syncReading())
 
   constructor(
     private readonly deps: {
@@ -76,8 +76,6 @@ export class StructuredAgentSessionSinkQueue {
 
   journalEpoch = (): string | null => this.target?.journal.epoch ?? null
 
-  journalLinkage = (): StructuredAgentSessionLinkageJournal | null => this.target?.journal ?? null
-
   journalHistory = (): StructuredAgentSessionHistoryJournal | null => this.target?.journal ?? null
 
   journalItems = (): StructuredAgentSessionTransitionJournal | null => this.target?.journal ?? null
@@ -96,9 +94,8 @@ export class StructuredAgentSessionSinkQueue {
   bindReadingControl(control: StructuredAgentSessionReadingControl): () => void {
     this.readingControl = control
     this.hasBoundReadingControl = true
-    if (this.backpressured) {
-      control.pauseReading()
-    }
+    this.readingPaused = false
+    this.syncReading()
     return () => {
       if (this.readingControl === control) {
         this.readingControl = undefined
@@ -131,6 +128,7 @@ export class StructuredAgentSessionSinkQueue {
   close(): void {
     this.releaseSettledTurns?.()
     this.releaseSettledTurns = undefined
+    this.snapshots.close()
     this.closed = true
     this.dropBuffered()
     this.updateBackpressure()
@@ -257,12 +255,22 @@ export class StructuredAgentSessionSinkQueue {
       return
     }
     this.backpressured = next
-    if (next) {
+    this.syncReading()
+    this.deps.onBackpressureChange?.(next, this.state())
+  }
+
+  /** A drain must not resume a stream still held for an epoch replacement. */
+  private syncReading(): void {
+    const paused = !this.closed && (this.backpressured || this.snapshots.held)
+    if (paused === this.readingPaused) {
+      return
+    }
+    this.readingPaused = paused
+    if (paused) {
       this.readingControl?.pauseReading()
     } else {
       this.readingControl?.resumeReading()
     }
-    this.deps.onBackpressureChange?.(next, this.state())
   }
 
   private updateBackpressure(): void {

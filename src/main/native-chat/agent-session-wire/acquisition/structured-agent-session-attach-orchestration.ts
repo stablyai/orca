@@ -178,6 +178,18 @@ async function runAttachUnderAbort(
         if (barrier && !barrier.ok) {
           throw barrier.error
         }
+        if (params.agent === 'claude') {
+          // The translator classifies against the reserved conversation's actual saved facts.
+          await lock.commit(async () => {
+            const conversation = await context.openConversation(sessionId, { acquisition: true })
+            if (!conversation) {
+              throw new Error('agent_session_identity_required')
+            }
+            await attemptSink.followSnapshots(
+              context.sessions.snapshotSource(sessionId, conversation.journal)
+            )
+          })
+        }
       },
       authority: {
         ...(launchDirectory ? { launchDirectory } : {}),

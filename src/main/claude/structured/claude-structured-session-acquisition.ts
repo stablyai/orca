@@ -290,7 +290,8 @@ export async function acquireClaudeSession({
       callbacks,
       sessions,
       exits,
-      recordPhase: input.recordPhase
+      recordPhase: input.recordPhase,
+      ...(input.events?.snapshotCurrent ? { snapshotCurrent: input.events.snapshotCurrent } : {})
     })
     return acquisition
   } catch (error) {

@@ -30,6 +30,7 @@ import {
 } from '../submissions/journal-submission-hook'
 import { claimAgentSessionAttachmentsInTransaction } from '../../agent-session-attachments/agent-session-attachment-claims'
 import { JournalGoalAttachmentInverse } from '../writing/journal-goal-attachment-inverse'
+import { JournalEpochReplacements } from '../context-epochs/journal-epoch-replacements'
 import {
   isJournalOutputRevision,
   isJournalStreamedTextRevision
@@ -128,6 +129,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     }
     return inputReceipt(rows, journalAttachmentClaimsReceipt(claimAttachments, bodies, receipt))
   }
+  const replacements = new JournalEpochReplacements()
   const epochController = new JournalEpochController({
     identity: host.identity,
     now: host.now,
@@ -137,7 +139,8 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     writer: rowWriter,
     inputReceipt: rewindReceipt,
     cards: queuedMessages,
-    adopt: host.adopt
+    adopt: host.adopt,
+    replacing: replacements.notify
   })
   const lifecycleBatchAppender = new JournalLifecycleBatchAppender({
     state: host.state,
@@ -153,7 +156,8 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
       state: host.state,
       writer: rowWriter,
       cards: queuedMessages,
-      inputReceipt: rewindReceipt
+      inputReceipt: rewindReceipt,
+      replacements
     }),
     stops: new JournalStopAcceptor({ writer: rowWriter, state: host.state }),
     // Import legacy cards once per open without failing the open.

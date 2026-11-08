@@ -82,12 +82,13 @@ it('snapshots saved Claude aliases, attempts and roster from indexed columns', a
     producerKind: 'agent'
   })
 
-  expect(await sql.reads.claudeIdentities()).toEqual({
+  expect(await sql.reads.claudeSnapshot()).toEqual({
     canonicalByToolUse: [['toolu_1', 'agent-b']],
     attemptByAgent: expect.arrayContaining([
       ['agent-a', 3],
       ['agent-b', 1]
     ]),
-    subagents: ['agent-a']
+    subagents: ['agent-a'],
+    threadGoal: { goal: null, row: null }
   })
 })

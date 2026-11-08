@@ -24,6 +24,7 @@ export class JournalEpochController {
       state: () => JournalReducerState
       writer: JournalRowWriter
       adopt: (loaded: JournalLoad) => void
+      replacing?: (replaced: Promise<unknown>) => void
     }
   ) {}
 
@@ -52,7 +53,7 @@ export class JournalEpochController {
     receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt,
     providerHandle = agentSessionJournalProviderHandle(this.deps.identity)
   ): Promise<AgentJournalCursor> {
-    return rewindJournalContext({
+    const replaced = rewindJournalContext({
       state: this.deps.state,
       writer: this.deps.writer,
       cards: this.deps.cards,
@@ -62,5 +63,7 @@ export class JournalEpochController {
       inputReceipt: this.deps.inputReceipt,
       boundary: { reason, providerHandle }
     })
+    this.deps.replacing?.(replaced)
+    return replaced
   }
 }

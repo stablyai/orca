@@ -1,4 +1,5 @@
 import { readJournalSqlWorkAnswer } from './journal-sql-work-answer'
+import { JournalEpochReplacements } from './context-epochs/journal-epoch-replacements'
 import { journalWroteBeforeOpen } from './replay/journal-cursor'
 import type { AgentJournalCursor } from '../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
@@ -67,6 +68,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   private closed = false
   private admitted: Promise<unknown> = Promise.resolve()
   private listener: ((commit: JournalWriterCommit) => void) | undefined
+  readonly epochReplacements = new JournalEpochReplacements()
 
   private constructor(
     private readonly database: JournalSqlDatabase,
@@ -140,7 +142,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     prepare?: JournalSqlStorePrepare,
     answerFacts?: JournalSqlStoreAnswerFacts
   ): Promise<JournalWriterCommit> {
-    return this.admit(async (writer) => {
+    const written = this.admit(async (writer) => {
       const savedAt = this.now()
       let needs: JournalHostFactsNeeded | undefined
       const mail: (readonly [string, boolean])[] = []
@@ -206,6 +208,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
         return commit
       }
     })
+    return this.epochReplacements.notifyFor(operation.kind, written)
   }
 
   /** Queue ownership is selected in the writer, after every earlier admitted command. */
