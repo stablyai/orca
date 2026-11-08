@@ -11,7 +11,7 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 
@@ -58,6 +58,7 @@ export function RichMarkdownSearchBar({
   onToggleReplaceMode,
   onToggleWholeWord
 }: RichMarkdownSearchBarProps): React.JSX.Element | null {
+  const t = useTranslate()
   // Show the effective source-editor replace binding, including user remaps and platform formatting.
   const replaceShortcut = useOptionalShortcutLabel('editor.replace')
   const readOnlyExplanationId = React.useId()
@@ -72,13 +73,13 @@ export function RichMarkdownSearchBar({
   }
 
   const noMatches = matchCount === 0
-  const readOnlyReplaceExplanation = translate(
+  const readOnlyReplaceExplanation = t(
     'auto.components.editor.RichMarkdownSearchBar.preservedRichContentReadOnly',
     'Preserved rich content is read-only in rich mode.'
   )
   const toggleReplaceLabel = isReplaceMode
-    ? translate('auto.components.editor.RichMarkdownSearchBar.e8c147435f', 'Hide replace')
-    : translate('auto.components.editor.RichMarkdownSearchBar.9cdc38be33', 'Toggle replace')
+    ? t('auto.components.editor.RichMarkdownSearchBar.e8c147435f', 'Hide replace')
+    : t('auto.components.editor.RichMarkdownSearchBar.9cdc38be33', 'Toggle replace')
   const toggleReplaceTitle = replaceShortcut
     ? `${toggleReplaceLabel} (${replaceShortcut})`
     : toggleReplaceLabel
@@ -92,10 +93,7 @@ export function RichMarkdownSearchBar({
         onMouseDown={keepSearchFocus}
         onClick={onToggleReplaceMode}
         title={toggleReplaceTitle}
-        aria-label={translate(
-          'auto.components.editor.RichMarkdownSearchBar.9cdc38be33',
-          'Toggle replace'
-        )}
+        aria-label={t('auto.components.editor.RichMarkdownSearchBar.9cdc38be33', 'Toggle replace')}
         aria-expanded={isReplaceMode}
         className="rich-markdown-search-toggle"
       >
@@ -128,12 +126,12 @@ export function RichMarkdownSearchBar({
                   onClose()
                 }
               }}
-              placeholder={translate(
+              placeholder={t(
                 'auto.components.editor.RichMarkdownSearchBar.98b89276f3',
                 'Find in rich editor'
               )}
               className="rich-markdown-search-input h-7 !border-0 bg-transparent px-2 shadow-none focus-visible:!border-0 focus-visible:ring-0"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.editor.RichMarkdownSearchBar.158c645829',
                 'Find in rich markdown editor'
               )}
@@ -146,11 +144,8 @@ export function RichMarkdownSearchBar({
               onClick={onToggleMatchCase}
               data-active={matchCase ? 'true' : undefined}
               aria-pressed={matchCase}
-              title={translate(
-                'auto.components.editor.RichMarkdownSearchBar.482b637099',
-                'Match case'
-              )}
-              aria-label={translate(
+              title={t('auto.components.editor.RichMarkdownSearchBar.482b637099', 'Match case')}
+              aria-label={t(
                 'auto.components.editor.RichMarkdownSearchBar.482b637099',
                 'Match case'
               )}
@@ -166,11 +161,11 @@ export function RichMarkdownSearchBar({
               onClick={onToggleWholeWord}
               data-active={wholeWord ? 'true' : undefined}
               aria-pressed={wholeWord}
-              title={translate(
+              title={t(
                 'auto.components.editor.RichMarkdownSearchBar.68d090241d',
                 'Match whole word'
               )}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.editor.RichMarkdownSearchBar.68d090241d',
                 'Match whole word'
               )}
@@ -181,7 +176,7 @@ export function RichMarkdownSearchBar({
           </div>
           <div className="rich-markdown-search-status">
             {query && noMatches
-              ? translate('auto.components.editor.RichMarkdownSearchBar.a86958d508', 'No results')
+              ? t('auto.components.editor.RichMarkdownSearchBar.a86958d508', 'No results')
               : `${noMatches ? 0 : activeMatchIndex + 1}/${matchCount}`}
           </div>
           <Button
@@ -191,11 +186,8 @@ export function RichMarkdownSearchBar({
             onMouseDown={keepSearchFocus}
             onClick={() => onMoveToMatch(-1)}
             disabled={noMatches}
-            title={translate(
-              'auto.components.editor.RichMarkdownSearchBar.32ae8d7d57',
-              'Previous match'
-            )}
-            aria-label={translate(
+            title={t('auto.components.editor.RichMarkdownSearchBar.32ae8d7d57', 'Previous match')}
+            aria-label={t(
               'auto.components.editor.RichMarkdownSearchBar.32ae8d7d57',
               'Previous match'
             )}
@@ -210,14 +202,8 @@ export function RichMarkdownSearchBar({
             onMouseDown={keepSearchFocus}
             onClick={() => onMoveToMatch(1)}
             disabled={noMatches}
-            title={translate(
-              'auto.components.editor.RichMarkdownSearchBar.f7bcecbe26',
-              'Next match'
-            )}
-            aria-label={translate(
-              'auto.components.editor.RichMarkdownSearchBar.f7bcecbe26',
-              'Next match'
-            )}
+            title={t('auto.components.editor.RichMarkdownSearchBar.f7bcecbe26', 'Next match')}
+            aria-label={t('auto.components.editor.RichMarkdownSearchBar.f7bcecbe26', 'Next match')}
             className="rich-markdown-search-button"
           >
             <ChevronDown size={14} />
@@ -229,11 +215,8 @@ export function RichMarkdownSearchBar({
             size="icon-xs"
             onMouseDown={keepSearchFocus}
             onClick={onClose}
-            title={translate(
-              'auto.components.editor.RichMarkdownSearchBar.de68b75bde',
-              'Close search'
-            )}
-            aria-label={translate(
+            title={t('auto.components.editor.RichMarkdownSearchBar.de68b75bde', 'Close search')}
+            aria-label={t(
               'auto.components.editor.RichMarkdownSearchBar.de68b75bde',
               'Close search'
             )}
@@ -263,12 +246,12 @@ export function RichMarkdownSearchBar({
                     onClose()
                   }
                 }}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.editor.RichMarkdownSearchBar.fd97c7e585',
                   'Replace'
                 )}
                 className="rich-markdown-search-input h-7 !border-0 bg-transparent px-2 shadow-none focus-visible:!border-0 focus-visible:ring-0"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.editor.RichMarkdownSearchBar.44682b4159',
                   'Replace in rich markdown editor'
                 )}
@@ -285,12 +268,9 @@ export function RichMarkdownSearchBar({
               title={
                 replaceDisabled
                   ? readOnlyReplaceExplanation
-                  : translate('auto.components.editor.RichMarkdownSearchBar.fd97c7e585', 'Replace')
+                  : t('auto.components.editor.RichMarkdownSearchBar.fd97c7e585', 'Replace')
               }
-              aria-label={translate(
-                'auto.components.editor.RichMarkdownSearchBar.fd97c7e585',
-                'Replace'
-              )}
+              aria-label={t('auto.components.editor.RichMarkdownSearchBar.fd97c7e585', 'Replace')}
               className="rich-markdown-search-button"
             >
               <Replace size={14} />
@@ -305,12 +285,9 @@ export function RichMarkdownSearchBar({
               title={
                 replaceDisabled
                   ? readOnlyReplaceExplanation
-                  : translate(
-                      'auto.components.editor.RichMarkdownSearchBar.c2884f5e95',
-                      'Replace all'
-                    )
+                  : t('auto.components.editor.RichMarkdownSearchBar.c2884f5e95', 'Replace all')
               }
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.editor.RichMarkdownSearchBar.c2884f5e95',
                 'Replace all'
               )}

@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
@@ -14,13 +14,14 @@ export function useNativeChatHostSendGate(
   agent: AgentType,
   outage: NativeChatHostOutage | null
 ): NativeChatHostPermissionGate {
+  const t = useTranslate()
   const permission = useNativeChatHostPermissionGate(target, agent, structuredAgentLabel(agent))
   if (permission.sendBlockedReason !== null || outage?.kind !== 'stopped') {
     return permission
   }
   return {
     ...permission,
-    sendBlockedReason: translate(
+    sendBlockedReason: t(
       'components.native-chat.hostOutage.startToSend',
       'Start {{distro}} to send.',
       {

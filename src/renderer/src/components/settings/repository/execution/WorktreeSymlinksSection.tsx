@@ -11,7 +11,7 @@ import {
   getWorktreeSymlinkPathFilterState,
   type WorktreeSymlinkPathSuggestion
 } from '../../../../lib/directory-path-suggestion-filter'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID
@@ -34,6 +34,7 @@ export function WorktreeSymlinksSection({
   repo,
   updateRepo
 }: WorktreeSymlinksSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
 
@@ -101,11 +102,11 @@ export function WorktreeSymlinksSection({
 
   return (
     <SearchableSetting
-      title={translate(
+      title={t(
         'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
         'Worktree Shared Paths'
       )}
-      description={translate(
+      description={t(
         'auto.components.settings.WorktreeSymlinksSection.b07ef5a8b6',
         'Paths to materialize from the primary checkout into newly created worktrees.'
       )}
@@ -124,11 +125,11 @@ export function WorktreeSymlinksSection({
       ]}
     >
       <SettingsGroup
-        title={translate(
+        title={t(
           'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
           'Worktree Shared Paths'
         )}
-        description={translate(
+        description={t(
           'auto.components.settings.WorktreeSymlinksSection.7ff265071d',
           'When a new worktree is created, each path listed here is APFS clone-copied on macOS when possible, otherwise symlinked from the primary checkout.'
         )}
@@ -137,16 +138,13 @@ export function WorktreeSymlinksSection({
             <PopoverTrigger asChild>
               <Button type="button" variant="outline" size="sm">
                 <Plus className="size-3.5" />
-                {translate(
-                  'auto.components.settings.WorktreeSymlinksSection.241325302c',
-                  'Add Path'
-                )}
+                {t('auto.components.settings.WorktreeSymlinksSection.241325302c', 'Add Path')}
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-72 p-0">
               <Command shouldFilter={false}>
                 <CommandInput
-                  placeholder={translate(
+                  placeholder={t(
                     'auto.components.settings.WorktreeSymlinksSection.4cd2a4c077',
                     'Type a path (e.g. .env or node_modules)…'
                   )}
@@ -155,7 +153,7 @@ export function WorktreeSymlinksSection({
                 />
                 <CommandList>
                   <CommandEmpty>
-                    {translate(
+                    {t(
                       'auto.components.settings.WorktreeSymlinksSection.ab40b8a5f1',
                       'No matches. Keep typing to add a custom path.'
                     )}
@@ -168,10 +166,7 @@ export function WorktreeSymlinksSection({
                     >
                       <Plus className="size-3.5 text-muted-foreground" />
                       <span className="text-xs">
-                        {translate(
-                          'auto.components.settings.WorktreeSymlinksSection.b2429aeb31',
-                          'Add'
-                        )}{' '}
+                        {t('auto.components.settings.WorktreeSymlinksSection.b2429aeb31', 'Add')}{' '}
                         <code className="rounded bg-muted px-1 py-0.5 text-[11px]">
                           {queryTrimmed}
                         </code>
@@ -203,7 +198,7 @@ export function WorktreeSymlinksSection({
                         <span className="truncate text-xs">{entry.name}</span>
                         {alreadyAdded ? (
                           <span className="ml-auto text-[10px] uppercase tracking-wide text-muted-foreground">
-                            {translate(
+                            {t(
                               'auto.components.settings.WorktreeSymlinksSection.ea06227efa',
                               'added'
                             )}
@@ -220,7 +215,7 @@ export function WorktreeSymlinksSection({
       >
         {paths.length === 0 ? (
           <div className="py-4 text-sm text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.WorktreeSymlinksSection.31ebab5403',
               'No shared paths configured for this repository.'
             )}
@@ -234,18 +229,15 @@ export function WorktreeSymlinksSection({
               <div className="min-w-0 flex-1 space-y-2">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <h4 className="text-sm font-medium">
-                    {translate(
+                    {t(
                       'auto.components.settings.WorktreeSymlinksSection.b814c618e2',
                       'Linked paths'
                     )}
                   </h4>
                   <span className="text-[11px] text-muted-foreground">
                     {paths.length === 1
-                      ? translate(
-                          'auto.components.settings.WorktreeSymlinksSection.9ea912d811',
-                          '1 path'
-                        )
-                      : translate(
+                      ? t('auto.components.settings.WorktreeSymlinksSection.9ea912d811', '1 path')
+                      : t(
                           'auto.components.settings.WorktreeSymlinksSection.d72ba8dc68',
                           '{{value0}} paths',
                           { value0: paths.length }
@@ -264,7 +256,7 @@ export function WorktreeSymlinksSection({
                         size="icon-xs"
                         variant="ghost"
                         onClick={() => handleRemove(path)}
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.settings.WorktreeSymlinksSection.1c1e35b219',
                           'Remove {{value0}}',
                           { value0: path }

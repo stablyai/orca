@@ -21632,6 +21632,30 @@
       "loading": "Chargement des modifications du sous-module…",
       "empty": "Aucune modification dans le sous-module",
       "loadFailed": "Impossible de charger les modifications du sous-module"
+    },
+    "branchPicker": {
+      "switch": "Changer de branche : {{branch}}",
+      "search": "Rechercher des branches",
+      "recover": "Passer à {{branch}}",
+      "create": "Créer la branche {{name}} à partir de {{branch}}",
+      "open": "Ouvrir l’espace de travail",
+      "occupied": "Extraite dans {{path}}",
+      "remote": "distante",
+      "statusFailed": "Orca n’a pas pu lire les modifications de cette copie de travail. Actualisez le contrôle de code source avant de changer.",
+      "statusUnknown": "Lisez les modifications de cette copie de travail avant de changer.",
+      "conflict": "Terminez ou annulez le {{operation}} avant de changer de branche.",
+      "dirty_one": "Validez ou abandonnez {{count}} fichier modifié avant de changer de branche.",
+      "dirty_other": "Validez ou abandonnez {{count}} fichiers modifiés avant de changer de branche.",
+      "dirty_many": "Validez ou abandonnez {{count}} fichiers modifiés avant de changer de branche.",
+      "agentWorking": "Un agent travaille dans cet espace de travail. Changez de branche une fois qu’il a terminé, ou fermez son onglet s’il s’est arrêté.",
+      "listFailed": "Orca n’a pas pu lister les branches locales. Rouvrez le sélecteur.",
+      "discoveryFailed": "Orca n’a trouvé aucune branche distante. Vous pouvez toujours passer à une branche locale ou créer une branche.",
+      "switchFailed": "Orca n’a pas pu changer de branche. Réessayez.",
+      "switchFailedTitle": "Impossible de changer de branche",
+      "switchFailedIn": "Impossible de changer de branche dans {{workspace}}",
+      "switchedIn": "Dans {{workspace}}",
+      "thisComputer": "cet ordinateur",
+      "updateHost": "Mettez à jour Orca sur {{host}} pour changer de branche d’ici."
     }
   },
   "agentsSidebarIntro": {

@@ -22088,6 +22088,30 @@
       "loading": "Cargando cambios del submódulo…",
       "empty": "No hay cambios en el submódulo",
       "loadFailed": "No se pudieron cargar los cambios del submódulo"
+    },
+    "branchPicker": {
+      "switch": "Cambiar de rama: {{branch}}",
+      "search": "Buscar ramas",
+      "recover": "Cambiar a {{branch}}",
+      "create": "Crear la rama {{name}} desde {{branch}}",
+      "open": "Abrir espacio de trabajo",
+      "occupied": "Activa en {{path}}",
+      "remote": "remota",
+      "statusFailed": "Orca no pudo leer los cambios de esta copia de trabajo. Actualiza Control de código fuente antes de cambiar.",
+      "statusUnknown": "Lee los cambios de esta copia de trabajo antes de cambiar.",
+      "conflict": "Termina o cancela el {{operation}} antes de cambiar de rama.",
+      "dirty_one": "Confirma o descarta {{count}} archivo modificado antes de cambiar de rama.",
+      "dirty_other": "Confirma o descarta {{count}} archivos modificados antes de cambiar de rama.",
+      "dirty_many": "Confirma o descarta {{count}} archivos modificados antes de cambiar de rama.",
+      "agentWorking": "Un agente está trabajando en este espacio de trabajo. Cambia de rama cuando termine, o cierra su pestaña si se ha detenido.",
+      "listFailed": "Orca no pudo listar las ramas locales. Vuelve a abrir el selector.",
+      "discoveryFailed": "Orca no encontró ramas remotas. Aún puedes cambiar a ramas locales o crear una rama.",
+      "switchFailed": "Orca no pudo cambiar de rama. Inténtalo de nuevo.",
+      "switchFailedTitle": "No se pudo cambiar de rama",
+      "switchFailedIn": "No se pudo cambiar de rama en {{workspace}}",
+      "switchedIn": "En {{workspace}}",
+      "thisComputer": "este equipo",
+      "updateHost": "Actualiza Orca en {{host}} para cambiar de rama desde aquí."
     }
   },
   "aiVault": {

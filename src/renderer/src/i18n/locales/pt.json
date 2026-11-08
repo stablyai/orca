@@ -290,6 +290,30 @@
       "loading": "Carregando alterações do submódulo…",
       "empty": "Nenhuma alteração no submódulo",
       "loadFailed": "Não foi possível carregar as alterações do submódulo"
+    },
+    "branchPicker": {
+      "switch": "Trocar de branch: {{branch}}",
+      "search": "Pesquisar branches",
+      "recover": "Trocar para {{branch}}",
+      "create": "Criar branch {{name}} a partir de {{branch}}",
+      "open": "Abrir espaço de trabalho",
+      "occupied": "Em uso em {{path}}",
+      "remote": "remoto",
+      "statusFailed": "O Orca não conseguiu ler as alterações desta cópia de trabalho. Atualize o Controle de código-fonte antes de trocar.",
+      "statusUnknown": "Leia as alterações desta cópia de trabalho antes de trocar.",
+      "conflict": "Conclua ou cancele o {{operation}} antes de trocar de branch.",
+      "dirty_one": "Faça commit ou descarte {{count}} arquivo alterado antes de trocar de branch.",
+      "dirty_other": "Faça commit ou descarte {{count}} arquivos alterados antes de trocar de branch.",
+      "dirty_many": "Faça commit ou descarte {{count}} arquivos alterados antes de trocar de branch.",
+      "agentWorking": "Um agente está trabalhando neste workspace. Troque de branch quando ele terminar ou feche a aba dele se ele tiver parado.",
+      "listFailed": "O Orca não conseguiu listar os branches locais. Tente reabrir o seletor.",
+      "discoveryFailed": "O Orca não encontrou branches remotos. Você ainda pode trocar para branches locais ou criar um branch.",
+      "switchFailed": "O Orca não conseguiu trocar de branch. Tente novamente.",
+      "switchFailedTitle": "Não foi possível trocar de branch",
+      "switchFailedIn": "Não foi possível trocar de branch em {{workspace}}",
+      "switchedIn": "Em {{workspace}}",
+      "thisComputer": "este computador",
+      "updateHost": "Atualize o Orca em {{host}} para trocar de branch daqui."
     }
   },
   "githubChecks": {

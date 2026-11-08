@@ -1,5 +1,5 @@
 import { useContext, useLayoutEffect, useMemo, useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   NativeChatForkContext,
   NativeChatSideChatForkPointContext
@@ -27,6 +27,7 @@ export function useNativeChatSideChat(
 ): NativeChatSideChat | undefined {
   // Nothing drawn yet means no response to fork through.
   const [point, reportForkPoint] = useState<NativeChatSideChatForkPoint>({ kind: 'no-reply' })
+  const t = useTranslate()
   return useMemo(() => {
     if (!fork) {
       return undefined
@@ -35,7 +36,7 @@ export function useNativeChatSideChat(
       // Another fork from this chat is still opening.
       if (fork.support.kind === 'unknown' || fork.pendingItemId !== null) {
         return {
-          refused: translate(
+          refused: t(
             'components.native-chat.sideChat.notReady',
             'Side chats are not ready yet. Try again in a moment.'
           )
@@ -44,7 +45,7 @@ export function useNativeChatSideChat(
       // A rewind may have dropped the reported response before the list said so.
       return point.kind === 'ready' && fork.forkableItemIds.has(point.throughItemId)
         ? { throughItemId: point.throughItemId }
-        : { refused: sideChatRefusal(point.kind === 'ready' ? { kind: 'no-reply' } : point) }
+        : { refused: sideChatRefusal(point.kind === 'ready' ? { kind: 'no-reply' } : point, t) }
     }
     const now = start()
     return {
@@ -59,14 +60,15 @@ export function useNativeChatSideChat(
         return { started: question ? outcome?.question === 'sent' : outcome?.chat !== undefined }
       }
     }
-  }, [fork, point])
+  }, [fork, point, t])
 }
 
 /** What the transcript needs to find the response `/btw` forks through; undefined where nothing
  *  listens, so it does no fork work at all. */
 export function useNativeChatSideChatForkOffer(
-  latestTurnKey: string | undefined
+  turnKeys: readonly (string | undefined)[]
 ): NativeChatSideChatForkOffer | undefined {
+  const latestTurnKey = turnKeys.findLast((key) => key !== undefined)
   const fork = useContext(NativeChatForkContext)
   const listening = useContext(NativeChatSideChatForkPointContext) !== undefined
   const mode = fork?.support.kind === 'known' ? fork.support.fork : undefined
@@ -102,12 +104,12 @@ export function useNativeChatSideChatForkPointReport(
   useLayoutEffect(() => () => report?.({ kind: 'no-reply' }), [report])
 }
 
-function sideChatRefusal(point: Exclude<NativeChatSideChatForkPoint, { kind: 'ready' }>): string {
+function sideChatRefusal(
+  point: Exclude<NativeChatSideChatForkPoint, { kind: 'ready' }>,
+  t: Translate
+): string {
   if (point.kind === 'reply-running') {
-    return translate(
-      'components.native-chat.sideChat.replyRunning',
-      'Available when this reply finishes.'
-    )
+    return t('components.native-chat.sideChat.replyRunning', 'Available when this reply finishes.')
   }
-  return translate('components.native-chat.sideChat.noReply', 'Available after the first reply.')
+  return t('components.native-chat.sideChat.noReply', 'Available after the first reply.')
 }

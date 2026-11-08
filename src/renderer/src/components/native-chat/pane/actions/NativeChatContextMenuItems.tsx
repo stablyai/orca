@@ -4,7 +4,7 @@ import { formatOptionalPrimaryShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import type { LinkAction } from '@/components/link-actions/link-action-request'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatContextMenuTarget } from './native-chat-context-menu-target'
 import type { NativeChatRewindSurface } from '../../messages/actions/use-native-chat-rewind-host'
 
@@ -23,6 +23,7 @@ export function NativeChatContextMenuTargetItems({
   onQuote: (text: string) => void
   rewind: NativeChatRewindSurface | undefined
 }): React.JSX.Element {
+  const t = useTranslate()
   const { quoteText, link, codeText, messageText, rewindItemId } = target
   const linkRows = link ? [link.primary, link.alternate, ...(link.secondaryActions ?? [])] : []
   return (
@@ -30,7 +31,7 @@ export function NativeChatContextMenuTargetItems({
       {quoteText ? (
         <DropdownMenuItem onSelect={() => onQuote(quoteText)}>
           <Quote />
-          {translate('components.native-chat.addSelectionToChat', 'Add to chat')}
+          {t('components.native-chat.addSelectionToChat', 'Add to chat')}
         </DropdownMenuItem>
       ) : null}
       {linkRows.map((action) =>
@@ -45,23 +46,20 @@ export function NativeChatContextMenuTargetItems({
         <DropdownMenuItem onSelect={() => copyText(link.destination)}>
           <Copy />
           {link.kind === 'url'
-            ? translate(
-                'auto.components.terminal.pane.TerminalLinkActionPopover.copyLink',
-                'Copy link'
-              )
-            : translate('auto.components.activity.ActivityThreadContextMenu.copyPath', 'Copy Path')}
+            ? t('auto.components.terminal.pane.TerminalLinkActionPopover.copyLink', 'Copy link')
+            : t('auto.components.activity.ActivityThreadContextMenu.copyPath', 'Copy Path')}
         </DropdownMenuItem>
       ) : null}
       {codeText ? (
         <DropdownMenuItem onSelect={() => copyText(codeText)}>
           <Copy />
-          {translate('components.native-chat.copyCode', 'Copy code')}
+          {t('components.native-chat.copyCode', 'Copy code')}
         </DropdownMenuItem>
       ) : null}
       {messageText ? (
         <DropdownMenuItem onSelect={() => copyText(messageText)}>
           <Copy />
-          {translate('components.native-chat.copyMessage.copy', 'Copy message')}
+          {t('components.native-chat.copyMessage.copy', 'Copy message')}
         </DropdownMenuItem>
       ) : null}
       {rewindItemId && rewind ? (
@@ -72,12 +70,13 @@ export function NativeChatContextMenuTargetItems({
 }
 
 export function NativeChatFindMenuItem({ onSelect }: { onSelect: () => void }): React.JSX.Element {
+  const t = useTranslate()
   const keybindings = useAppStore((state) => state.keybindings)
   const shortcut = formatOptionalPrimaryShortcutLabel('chat.find', keybindings)
   return (
     <DropdownMenuItem onSelect={onSelect}>
       <Search />
-      {translate('components.native-chat.find.label', 'Find in chat')}
+      {t('components.native-chat.find.label', 'Find in chat')}
       {shortcut ? <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut> : null}
     </DropdownMenuItem>
   )
@@ -91,6 +90,7 @@ function NativeChatRewindMenuItem({
   itemId: string
   rewind: NativeChatRewindSurface
 }): React.JSX.Element {
+  const t = useTranslate()
   const confirm = useConfirmationDialog()
   return (
     <DropdownMenuItem
@@ -99,7 +99,7 @@ function NativeChatRewindMenuItem({
     >
       <Undo2 />
       <span className="grid min-w-0">
-        {translate('components.native-chat.rewind.action', 'Rewind to here')}
+        {t('components.native-chat.rewind.action', 'Rewind to here')}
         {/* A disabled row cannot show the button's tooltip, so its reason sits under the label. */}
         {rewind.disabledReason ? (
           <span className="text-xs whitespace-normal text-muted-foreground">

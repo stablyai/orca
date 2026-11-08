@@ -2,6 +2,7 @@ import { createContext, useContext } from 'react'
 import { NodeViewWrapper, type NodeViewProps } from '@tiptap/react'
 import { ImageIcon, ImageOff } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { NativeChatPromptPill } from './NativeChatPromptPill'
 
 /** The ids of the composer's thumbnail row, in order: what numbers a chip and its thumbnail. */
@@ -9,11 +10,12 @@ const ImageRowContext = createContext<readonly string[]>([])
 
 export const NativeChatImageRowProvider = ImageRowContext.Provider
 
-export function nativeChatImageNumberLabel(number: number): string {
-  return translate('components.native-chat.composer.imageNumber', 'Image #{{number}}', { number })
+export function nativeChatImageNumberLabel(number: number, t: Translate = translate): string {
+  return t('components.native-chat.composer.imageNumber', 'Image #{{number}}', { number })
 }
 
 export function NativeChatImageReferencePill({ node, selected }: NodeViewProps): React.JSX.Element {
+  const t = useTranslate()
   const attachmentId = String(node.attrs.attachmentId)
   const index = useContext(ImageRowContext).indexOf(attachmentId)
   return (
@@ -22,8 +24,8 @@ export function NativeChatImageReferencePill({ node, selected }: NodeViewProps):
         icon={index === -1 ? ImageOff : ImageIcon}
         label={
           index === -1
-            ? translate('components.native-chat.composer.imageReferenceMissing', 'Image removed')
-            : nativeChatImageNumberLabel(index + 1)
+            ? t('components.native-chat.composer.imageReferenceMissing', 'Image removed')
+            : nativeChatImageNumberLabel(index + 1, t)
         }
         selected={selected}
         data-native-chat-image-reference={attachmentId}

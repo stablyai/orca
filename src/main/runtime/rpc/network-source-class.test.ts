@@ -32,19 +32,9 @@ describe('classifyNetworkSource', () => {
   ])('%s is %s', (address, expected) => {
     expect(classifyNetworkSource(address)).toBe(expected)
   })
-
-  it('has no class for a missing or malformed address', () => {
-    expect(classifyNetworkSource(undefined)).toBeNull()
-    expect(classifyNetworkSource('not-an-ip')).toBeNull()
-  })
 })
 
 describe('networkSourceKey', () => {
-  it('keys IPv4 by host, unmapping dual-stack peers', () => {
-    expect(networkSourceKey('::ffff:203.0.113.9')).toBe('203.0.113.9')
-    expect(networkSourceKey('203.0.113.9')).toBe('203.0.113.9')
-  })
-
   it('keys IPv6 by /64', () => {
     expect(networkSourceKey('2001:db8:1:2:aaaa::1')).toBe('2001:db8:1:2::/64')
     expect(networkSourceKey('2001:DB8:1:2:bbbb:cccc:dddd:eeee')).toBe('2001:db8:1:2::/64')

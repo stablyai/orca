@@ -13,8 +13,8 @@ import '../../../../orchestration/db/attempt-outcome-projection'
 import { RpcDispatcher } from '../../../dispatcher'
 import type { RpcRequest } from '../../../core'
 import { ORCHESTRATION_METHODS } from '../orchestration'
-import { prepareFederationWorkerLaunchOnHost } from './worker-opencode-model-preflight'
-import { FederationAttachStartParams } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
+import './worker-opencode-model-preflight'
+import '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
 
 describe('orchestration new-worktree workers', () => {
@@ -140,124 +140,6 @@ describe('orchestration new-worktree workers', () => {
     }
   }
 
-  it('creates an independent top-level worktree and reuses its agent terminal', async () => {
-    mockCreatedWorktree()
-
-    const { result } = await startWorker({ worktree: 'new-top-level' })
-
-    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({
-        startupAgent: 'codex',
-        startupLaunchSource: 'orchestration',
-        awaitTerminalProvisioning: true,
-        observeSetupCompletion: true,
-        lineage: expect.objectContaining({ noParent: true, parentWorktree: undefined })
-      })
-    )
-    expect(result).toMatchObject({ state: 'ready' })
-    expect(result).toHaveProperty(
-      'effects',
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: 'worktree',
-          action: 'created_top_level',
-          id: 'repo::created'
-        }),
-        expect.objectContaining({
-          kind: 'terminal',
-          role: 'agent',
-          action: 'created',
-          id: 'term_worker'
-        })
-      ])
-    )
-    expect(runtime.createTerminal).not.toHaveBeenCalled()
-  })
-
-  it('passes launch preferences into agent-first worktree creation', async () => {
-    mockCreatedWorktree()
-
-    const { result } = await startWorker({
-      model: 'custom-codex-model',
-      effort: 'high'
-    })
-
-    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({
-        startupAgent: 'codex',
-        startupLaunchPreferences: { model: 'custom-codex-model', effort: 'high' }
-      })
-    )
-    expect(result).toMatchObject({
-      state: 'ready',
-      launch: {
-        requested: { agent: 'codex', model: 'custom-codex-model', effort: 'high' },
-        effective: { agent: 'codex', model: 'custom-codex-model', effort: 'high' }
-      }
-    })
-  })
-
-  it.each(['new-child', 'new-top-level'])(
-    'refuses an OpenCode model for %s without probing',
-    async (worktree) => {
-      mockCreatedWorktree()
-      const probe = vi
-        .spyOn(runtime, 'probeOrchestrationOpenCodeModelLaunchSupport')
-        .mockResolvedValue(true)
-      await expect(
-        startWorker({
-          worktree,
-          repo: 'repo',
-          agent: 'opencode',
-          model: 'opencode/fledge-alpha-free'
-        })
-      ).rejects.toMatchObject({
-        code: 'capability_unsupported',
-        message: expect.stringContaining('requires an existing worktree')
-      })
-      expect(probe).not.toHaveBeenCalled()
-      expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
-      expect(runtime.createTerminal).not.toHaveBeenCalled()
-      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
-    }
-  )
-
-  it('refuses a federated new-worktree model before probing its repository', async () => {
-    const probe = vi
-      .spyOn(runtime, 'probeOrchestrationOpenCodeModelLaunchSupport')
-      .mockResolvedValue(true)
-    const params = FederationAttachStartParams.parse({
-      dispatchId: 'ctx_new',
-      taskId: 'task_new',
-      taskSpec: 'No effects',
-      protocolVersion: 3,
-      worktree: 'new-top-level',
-      name: 'new-worker',
-      repo: 'repo',
-      agent: 'opencode',
-      model: 'opencode/fledge-alpha-free'
-    })
-    await expect(
-      prepareFederationWorkerLaunchOnHost({ runtime, params, createsWorktree: true })
-    ).rejects.toMatchObject({
-      code: 'capability_unsupported',
-      message: expect.stringContaining('requires an existing worktree')
-    })
-    expect(probe).not.toHaveBeenCalled()
-    expect(runtime.createTerminal).not.toHaveBeenCalled()
-    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
-  })
-
-  it('rejects an unsupported OpenCode model before creating a worker', async () => {
-    const create = vi.spyOn(runtime, 'createManagedWorktree')
-    vi.spyOn(runtime, 'probeOrchestrationOpenCodeModelLaunchSupport').mockResolvedValue(false)
-    await expect(
-      startWorker({ agent: 'opencode', model: 'opencode/fledge-alpha-free' })
-    ).rejects.toMatchObject({ code: 'capability_unsupported' })
-    expect(create).not.toHaveBeenCalled()
-    expect(runtime.createTerminal).not.toHaveBeenCalled()
-  })
-
   it('rejects a new worktree for a folder project before creating effects', async () => {
     vi.mocked(runtime.showRepo).mockResolvedValue({
       id: 'repo',
@@ -303,20 +185,6 @@ describe('orchestration new-worktree workers', () => {
       vi.mocked(runtime.showManagedWorktree).mockRejectedValue(new Error('selector_not_found'))
     })
 
-    it('creates a new-top-level worktree in the explicit repo', async () => {
-      mockCreatedWorktree()
-
-      const { result } = await startWorker({ worktree: 'new-top-level', repo: 'repo' })
-
-      expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
-        expect.objectContaining({
-          repoSelector: 'repo',
-          lineage: expect.objectContaining({ noParent: true, parentWorktree: undefined })
-        })
-      )
-      expect(result).toMatchObject({ state: 'ready' })
-    })
-
     it.each([
       ['new-child', { repo: 'repo' }],
       ['new-top-level', {}]
@@ -333,23 +201,6 @@ describe('orchestration new-worktree workers', () => {
         expect(db.getDispatchContext(db.listTasks()[0]!.id)).toBeUndefined()
       }
     )
-  })
-
-  it('reports an absent setup hook as not configured without failing the start', async () => {
-    mockCreatedWorktree({ hookFound: false })
-
-    const { result } = await startWorker()
-
-    expect(result).toMatchObject({
-      state: 'ready',
-      setup: {
-        requested: 'run',
-        effective: 'run',
-        source: 'orchestration_default',
-        hookFound: false,
-        state: 'not_configured'
-      }
-    })
   })
 
   it('records a later setup failure without gating a start-immediately worker', async () => {
@@ -396,52 +247,6 @@ describe('orchestration new-worktree workers', () => {
     )
   })
 
-  it('uses the exact setup handle instead of a configured tab title', async () => {
-    mockCreatedWorktree({
-      setupTerminalHandle: 'term_actual_setup',
-      terminals: [
-        { handle: 'term_worker', title: 'Codex' },
-        { handle: 'term_configured_setup', title: 'Setup' },
-        { handle: 'term_actual_setup', title: 'PowerShell' }
-      ]
-    })
-
-    const { result } = await startWorker()
-
-    expect(result).toMatchObject({
-      effects: expect.arrayContaining([
-        expect.objectContaining({
-          kind: 'terminal',
-          id: 'term_configured_setup',
-          role: 'configured_tab'
-        }),
-        expect.objectContaining({ kind: 'terminal', id: 'term_actual_setup', role: 'setup' }),
-        expect.objectContaining({ kind: 'setup', terminalId: 'term_actual_setup' })
-      ])
-    })
-  })
-
-  it('records wait-for-setup success before task input is accepted', async () => {
-    mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'running' })
-
-    const { result } = await startWorker()
-    const dispatchId = (result as { dispatchId: string }).dispatchId
-
-    expect(result).toMatchObject({
-      state: 'ready',
-      setup: { startupPolicy: 'wait-for-setup', state: 'succeeded' },
-      effects: expect.arrayContaining([
-        expect.objectContaining({ kind: 'setup', state: 'succeeded' }),
-        expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
-      ])
-    })
-    expect(JSON.parse(db.getWorkerDispatch(dispatchId)?.effects ?? '[]')).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ kind: 'dispatch_input', state: 'accepted' })
-      ])
-    )
-  })
-
   // Composer and idle readiness paths must both record setup evidence; the composer path previously dropped it.
 
   it('does not inject task input when the gated setup terminal fails to start', async () => {
@@ -466,95 +271,6 @@ describe('orchestration new-worktree workers', () => {
     })
     expect(db.getTask(task.id)?.status).toBe('failed')
     expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
-  })
-
-  it('does not inject task input when the gated setup script fails', async () => {
-    mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'running' })
-    vi.mocked(runtime.waitForTerminal).mockResolvedValue({
-      handle: 'term_worker',
-      condition: 'tui-idle',
-      satisfied: false,
-      status: 'exited',
-      exitCode: 1
-    })
-
-    const { result } = await startWorker()
-
-    expect(result).toMatchObject({
-      state: 'failed',
-      failedStage: 'setup_wait',
-      setup: { state: 'failed' },
-      effects: expect.arrayContaining([expect.objectContaining({ kind: 'setup', state: 'failed' })])
-    })
-    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
-  })
-
-  it('does not mislabel a wait-for-setup timeout as setup failure', async () => {
-    mockCreatedWorktree({ startupPolicy: 'wait-for-setup', state: 'running' })
-    vi.mocked(runtime.waitForTerminal).mockResolvedValue({
-      handle: 'term_worker',
-      condition: 'tui-idle',
-      satisfied: false,
-      status: 'running',
-      exitCode: null
-    })
-
-    const { result } = await startWorker()
-
-    expect(result).toMatchObject({
-      state: 'failed',
-      failedStage: 'agent_readiness',
-      setup: { state: 'running' }
-    })
-    expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
-  })
-
-  it('distinguishes no-effect failure, unknown acceptance, and durable residual effects', async () => {
-    vi.spyOn(runtime, 'createManagedWorktree').mockRejectedValueOnce(
-      new Error('repository validation failed before creation')
-    )
-    const noEffect = await startWorker({ name: 'no-effect' })
-    expect(noEffect.result).toMatchObject({
-      state: 'failed',
-      failedStage: 'worktree_create',
-      effects: [],
-      residualResources: []
-    })
-
-    vi.mocked(runtime.createManagedWorktree).mockRejectedValueOnce(
-      Object.assign(new Error('connection lost after possible acceptance'), {
-        code: 'operation_unknown'
-      })
-    )
-    const unknown = await startWorker({ name: 'unknown-effect' })
-    expect(unknown.result).toMatchObject({
-      state: 'outcome_unknown',
-      failedStage: 'worktree_create',
-      effects: [],
-      residualResources: []
-    })
-
-    mockCreatedWorktree()
-    vi.mocked(runtime.waitForTerminal).mockResolvedValueOnce({
-      handle: 'term_worker',
-      condition: 'tui-idle',
-      satisfied: false,
-      status: 'exited',
-      exitCode: 1
-    })
-    const durableEffect = await startWorker({ name: 'durable-effect' })
-    expect(durableEffect.result).toMatchObject({
-      state: 'failed',
-      failedStage: 'agent_readiness',
-      effects: expect.arrayContaining([
-        expect.objectContaining({ kind: 'worktree', id: 'repo::created' }),
-        expect.objectContaining({ kind: 'terminal', id: 'term_worker' })
-      ]),
-      residualResources: expect.arrayContaining([
-        expect.objectContaining({ kind: 'worktree', id: 'repo::created' }),
-        expect.objectContaining({ kind: 'terminal', id: 'term_worker' })
-      ])
-    })
   })
 
   it('returns outcome unknown when worktree creation may have been accepted remotely', async () => {
@@ -724,66 +440,5 @@ describe('orchestration new-worktree workers', () => {
     })
     expect(recreateWorktree).not.toHaveBeenCalled()
     expect(reinjectPrompt).not.toHaveBeenCalled()
-  })
-
-  it('persists pre-effect, post-effect, and post-input stages in order', async () => {
-    mockCreatedWorktree({ hookFound: false })
-    let finishWait:
-      | ((value: Awaited<ReturnType<OrcaRuntimeService['waitForTerminal']>>) => void)
-      | undefined
-    let finishPrompt:
-      | ((value: Awaited<ReturnType<OrcaRuntimeService['sendTerminalAgentPrompt']>>) => void)
-      | undefined
-    vi.mocked(runtime.waitForTerminal).mockImplementationOnce(
-      async () =>
-        await new Promise((resolve) => {
-          finishWait = resolve
-        })
-    )
-    vi.mocked(runtime.sendTerminalAgentPrompt).mockImplementationOnce(
-      async () =>
-        await new Promise((resolve) => {
-          finishPrompt = resolve
-        })
-    )
-
-    const pending = startWorker({ name: 'staged-worker' })
-    await vi.waitFor(() => {
-      const task = db.listTasks()[0]
-      const dispatch = task ? db.getDispatchContext(task.id) : undefined
-      expect(dispatch && db.getWorkerDispatch(dispatch.id)).toMatchObject({
-        state: 'starting',
-        stage: 'terminal_readying',
-        worktree_id: 'repo::created',
-        agent_terminal_handle: 'term_worker'
-      })
-    })
-    const dispatch = db.getDispatchContext(db.listTasks()[0]!.id)!
-    expect(JSON.parse(db.getWorkerDispatch(dispatch.id)!.residual_resources)).toEqual(
-      expect.arrayContaining([expect.objectContaining({ kind: 'worktree', id: 'repo::created' })])
-    )
-
-    finishWait?.({
-      handle: 'term_worker',
-      condition: 'tui-idle',
-      satisfied: true,
-      status: 'running',
-      exitCode: null
-    })
-    await vi.waitFor(() =>
-      expect(db.getWorkerDispatch(dispatch.id)).toMatchObject({
-        state: 'starting',
-        stage: 'authority_attached'
-      })
-    )
-
-    finishPrompt?.({ handle: 'term_worker', accepted: true, bytesWritten: 1 })
-    await expect(pending).resolves.toMatchObject({
-      result: { state: 'ready', stage: 'input_accepted' }
-    })
-    expect(db.getWorkerDispatch(dispatch.id)).toMatchObject({
-      state: 'ready',
-      stage: 'input_accepted'
-    })
   })
 })

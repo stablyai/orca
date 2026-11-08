@@ -62,4 +62,11 @@ describe('text growing a character at a time', () => {
       { type: 'math', value: 'x\n\ny', source: '$$\nx\n\ny\n$$' }
     ])
   })
+
+  it('ends a quote at a display formula that closes past a blank line', () => {
+    expect(grown('> a\n$$\n\nb\n$$')).toEqual([
+      { type: 'blockquote', children: [paragraph('a')] },
+      { type: 'math', value: 'b', source: '$$\n\nb\n$$' }
+    ])
+  })
 })

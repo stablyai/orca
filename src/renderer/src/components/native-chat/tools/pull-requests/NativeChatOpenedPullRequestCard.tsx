@@ -8,7 +8,7 @@ import {
   useState
 } from 'react'
 import { GitPullRequest } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { getReviewStateIcon } from '@/components/github/review-state-presentation'
 import { DiffLineCounts } from '@/components/right-sidebar/source-control/listing/diff-line-counts'
@@ -216,6 +216,7 @@ export function NativeChatOpenedPullRequestCard({
 }: {
   pullRequests: readonly NativeChatOpenedPullRequest[]
 }): React.JSX.Element {
+  const t = useTranslate()
   const [first] = pullRequests
   const { githubRepo } = useContext(NativeChatLinkPeekContext)
   return (
@@ -225,23 +226,23 @@ export function NativeChatOpenedPullRequestCard({
       <div className="flex min-w-0 items-center gap-1.5 px-1 pb-1 text-xs text-chat-foreground-faint">
         <span className="min-w-0 truncate">
           {pullRequests.length === 1 && first
-            ? translate('components.native-chat.openedPullRequests.one', 'Opened {{name}}', {
+            ? t('components.native-chat.openedPullRequests.one', 'Opened {{name}}', {
                 name: pullRequestName(first, githubRepo)
               })
-            : translate(
+            : t(
                 'components.native-chat.openedPullRequests.many',
                 'Opened {{count}} pull requests',
                 { count: pullRequests.length, defaultValue_one: 'Opened {{count}} pull request' }
               )}
         </span>
         <NativeChatCardHideButton
-          ariaLabel={translate(
+          ariaLabel={t(
             'components.native-chat.openedPullRequests.hide',
             "Don't show opened pull requests"
           )}
           updates={{ nativeChatOpenedPullRequests: false }}
           settingSectionId={NATIVE_CHAT_OPENED_PULL_REQUESTS_SETTING_SECTION_ID}
-          hiddenMessage={translate(
+          hiddenMessage={t(
             'components.native-chat.openedPullRequests.hidden',
             "Orca won't show opened pull requests anymore"
           )}

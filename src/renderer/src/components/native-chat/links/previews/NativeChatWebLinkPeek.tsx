@@ -1,5 +1,5 @@
 import { Globe } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { loadWebLinkPreview, readCachedWebLinkPreview } from './native-chat-web-link-preview'
 import { useNativeChatHoverPreview } from './use-native-chat-hover-preview'
 
@@ -11,6 +11,7 @@ export function NativeChatWebPeekBody({
   url: string
   runtimeEnvironmentId: string | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const { state } = useNativeChatHoverPreview(
     `${runtimeEnvironmentId ?? 'local'}:${url}`,
     () => readCachedWebLinkPreview(url, runtimeEnvironmentId),
@@ -53,7 +54,7 @@ export function NativeChatWebPeekBody({
         </div>
       ) : (
         <div className="text-xs text-muted-foreground">
-          {translate('components.native-chat.webPeek.unavailable', 'No preview for this page.')}
+          {t('components.native-chat.webPeek.unavailable', 'No preview for this page.')}
         </div>
       )}
     </div>

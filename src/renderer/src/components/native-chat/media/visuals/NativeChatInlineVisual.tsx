@@ -9,7 +9,7 @@ import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishBut
 import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { fileArtifactSourceKey } from '@/lib/file-artifact-source-key'
 import { openFileInBrowserTab } from '@/lib/file-preview'
 import { basename } from '@/lib/path'
@@ -25,9 +25,10 @@ import { readNativeChatVisual } from './native-chat-visual-read-client'
 import { useNativeChatVisualDocument } from './use-native-chat-visual-document'
 
 export function NativeChatVisualUnavailable(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <p className="my-2 text-xs text-chat-foreground-faint">
-      {translate('components.native-chat.visualUnavailable', 'Visualization unavailable')}
+      {t('components.native-chat.visualUnavailable', 'Visualization unavailable')}
     </p>
   )
 }
@@ -85,6 +86,7 @@ export function NativeChatInlineVisual({
   file: string
   title: string | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const boxRef = useRef<HTMLDivElement | null>(null)
   const [near, setNear] = useState(false)
   const [retired, setRetired] = useState(false)
@@ -112,7 +114,7 @@ export function NativeChatInlineVisual({
     return <NativeChatVisualUnavailable />
   }
   const label = title ?? file
-  const openLabel = translate('components.native-chat.visualOpenInNewTab', 'Open in new tab')
+  const openLabel = t('components.native-chat.visualOpenInNewTab', 'Open in new tab')
 
   return (
     <div ref={boxRef} className="group/visual my-3">
@@ -158,7 +160,7 @@ export function NativeChatInlineVisual({
       ) : (
         <div
           role="status"
-          aria-label={translate('components.native-chat.visualLoading', 'Loading visualization')}
+          aria-label={t('components.native-chat.visualLoading', 'Loading visualization')}
           className="w-full rounded-md bg-muted/30"
           style={{ height: NATIVE_CHAT_VISUAL_RESERVED_HEIGHT }}
         />

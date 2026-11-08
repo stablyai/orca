@@ -20993,6 +20993,29 @@
       "loading": "하위 모듈 변경 사항을 불러오는 중…",
       "empty": "하위 모듈에 변경 사항 없음",
       "loadFailed": "하위 모듈 변경 사항을 불러오지 못했습니다"
+    },
+    "branchPicker": {
+      "switch": "브랜치 전환: {{branch}}",
+      "search": "브랜치 검색",
+      "recover": "{{branch}}(으)로 전환",
+      "create": "{{branch}}에서 {{name}} 브랜치 만들기",
+      "open": "작업 공간 열기",
+      "occupied": "{{path}}에서 체크아웃됨",
+      "remote": "원격",
+      "statusFailed": "Orca가 이 체크아웃의 변경 사항을 읽지 못했습니다. 전환하기 전에 소스 제어를 새로 고치세요.",
+      "statusUnknown": "전환하기 전에 이 체크아웃의 변경 사항을 읽으세요.",
+      "conflict": "브랜치를 전환하기 전에 {{operation}}을(를) 완료하거나 중단하세요.",
+      "dirty_one": "브랜치를 전환하기 전에 변경된 파일 {{count}}개를 커밋하거나 버리세요.",
+      "dirty_other": "브랜치를 전환하기 전에 변경된 파일 {{count}}개를 커밋하거나 버리세요.",
+      "agentWorking": "이 워크스페이스에서 에이전트가 작업 중입니다. 작업이 끝난 후 브랜치를 전환하거나, 멈춘 경우 해당 탭을 닫으세요.",
+      "listFailed": "Orca가 로컬 브랜치를 나열하지 못했습니다. 선택기를 다시 열어 보세요.",
+      "discoveryFailed": "Orca가 원격 브랜치를 찾지 못했습니다. 로컬 브랜치로 전환하거나 브랜치를 만들 수는 있습니다.",
+      "switchFailed": "Orca가 브랜치를 전환하지 못했습니다. 다시 시도하세요.",
+      "switchFailedTitle": "브랜치를 전환하지 못했습니다",
+      "switchFailedIn": "{{workspace}}에서 브랜치를 전환하지 못했습니다",
+      "switchedIn": "{{workspace}}에서",
+      "thisComputer": "이 컴퓨터",
+      "updateHost": "여기서 브랜치를 전환하려면 {{host}}의 Orca를 업데이트하세요."
     }
   },
   "rendererRecovery": {

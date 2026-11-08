@@ -1,5 +1,6 @@
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import {
   nativeChatReasoningDisclosureKey,
@@ -13,15 +14,18 @@ import {
 import { NativeChatToolRunIcon } from '../../tools/lines/NativeChatToolIcon'
 import { useNativeChatDisclosure } from '../disclosure/native-chat-disclosure-store'
 
-function translatedHeadline(headline: NativeChatReasoningHeadline): string {
+function translatedHeadline(
+  headline: NativeChatReasoningHeadline,
+  t: Translate = translate
+): string {
   if (headline.kind === 'thoughtFor') {
-    return translate('components.native-chat.thoughtForDuration', 'Thought for {{duration}}', {
+    return t('components.native-chat.thoughtForDuration', 'Thought for {{duration}}', {
       duration: headline.duration
     })
   }
   return headline.kind === 'thought'
-    ? translate('components.native-chat.thought', 'Thought')
-    : translate('components.native-chat.reasoning', 'Reasoning')
+    ? t('components.native-chat.thought', 'Thought')
+    : t('components.native-chat.reasoning', 'Reasoning')
 }
 
 export function NativeChatReasoningRow({
@@ -34,14 +38,18 @@ export function NativeChatReasoningRow({
   /** The row's own turn (or subagent) is still running; an open row there has not ended. */
   turnIsWorking?: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   // Keyed like the live line, so a block opened while it streamed lands open, and windowing keeps it.
   const disclosureKey = nativeChatReasoningDisclosureKey(message.id)
   const disclosure = useNativeChatDisclosure(disclosureKey, false)
   if (!markdown.trim()) {
     return null
   }
-  const label = translate('components.native-chat.reasoning', 'Reasoning')
-  const headline = translatedHeadline(nativeChatReasoningHeadline(message, { live: turnIsWorking }))
+  const label = t('components.native-chat.reasoning', 'Reasoning')
+  const headline = translatedHeadline(
+    nativeChatReasoningHeadline(message, { live: turnIsWorking }),
+    t
+  )
 
   return (
     <div className="min-w-0 text-sm text-chat-foreground-faint">

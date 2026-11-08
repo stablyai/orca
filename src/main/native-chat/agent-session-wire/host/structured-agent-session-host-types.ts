@@ -30,6 +30,7 @@ import type {
   AgentSessionNamingError,
   AgentSessionStatusSummary
 } from '../../../../shared/agent-session/agent-session-wire'
+import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
 import type { AgentSessionWireRefusal } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { AgentSessionUserNameWrite } from '../../../runtime/agent-session/records/agent-session-record-conversation-name'
@@ -206,6 +207,12 @@ export type StructuredAgentSessionHostDeps = {
    *  drop exactly the failures nobody sees in the UI. */
   logger: StructuredAgentSessionLogger
   onRequestFailure?: (failure: StructuredAgentSessionRequestFailure) => void
+  /** Every committed journal batch, after request-failure observation; must not throw. */
+  observeCommittedRows?: (
+    sessionId: string,
+    journal: AgentSessionJournal,
+    rows: readonly JournalRow[] | undefined
+  ) => void
   /** replay distinguishes restored/projected state from fresh journal events. */
   onSessionStatusChanged?: (
     summary: AgentSessionStatusSummary,

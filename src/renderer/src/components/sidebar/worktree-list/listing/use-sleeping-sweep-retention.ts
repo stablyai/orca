@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { hasActiveWorkspaceActivity } from '@/lib/worktree-activity-state'
+import { recomputeOn } from '@/lib/recompute-on'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import type { Worktree } from '../../../../../../shared/worktree/types'
@@ -39,7 +40,6 @@ export function useSleepingSweepRetention(
   const [graceTick, setGraceTick] = useState(0)
 
   const pass = useMemo(() => {
-    void graceTick
     if (!enabled) {
       return { retainedIds: undefined, nextExpiryInMs: null, state: null }
     }
@@ -61,7 +61,7 @@ export function useSleepingSweepRetention(
       isUnverifiableGap: (worktreeId) =>
         !hasWorktreeSleepIntent(worktreeId) && (tabsByWorktree?.[worktreeId]?.length ?? 0) > 0,
       // oxlint-disable-next-line react/purity -- Grace windows need wall time; the agent epoch sample stalls between bumps.
-      nowMs: Date.now()
+      nowMs: recomputeOn([graceTick], () => Date.now())
     })
     return { retainedIds, nextExpiryInMs, state }
   }, [

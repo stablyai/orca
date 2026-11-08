@@ -12,6 +12,25 @@ import type { MobileSessionTab, Terminal } from './mobile-session-route-types'
 import type { MobileSessionContentCreateActionsModel } from './use-mobile-session-content-create-actions'
 import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
 import { closeMobileNativeChatTabDraft } from './native-chat/composer/mobile-native-chat-draft-store'
+import { defineHostMutation, useHostMutation, type HostMutationPhase } from '../query/host-mutation'
+import type { RpcClient } from '../transport/rpc-client'
+
+async function sendTerminalRename(
+  client: RpcClient,
+  vars: { terminal: string; title: string }
+): Promise<void> {
+  const reply = await sessionTerminalRename.request(client, vars)
+  if (!reply.ok) {
+    throw new Error(reply.error.message)
+  }
+}
+
+const terminalRename = defineHostMutation({
+  offline: 'draft',
+  send: sendTerminalRename,
+  // Renaming is idempotent, so a lost reply is settled by sending the same title again.
+  confirm: sendTerminalRename
+})
 
 export function useMobileSessionCloseActions(scope: MobileSessionContentCreateActionsModel) {
   const {
@@ -24,6 +43,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     setFileDocs,
     setMarkdownDocs,
     sessionTabsRef,
+    forgetLastSessionTab,
     closedTabTombstonesRef,
     setActiveHandle,
     setActiveSessionTabId,
@@ -41,20 +61,18 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
     subscribeToTerminal,
     fetchTerminals
   } = scope
+  const terminalRenameWrite = useHostMutation(terminalRename, { hostId, client })
   // Throws on refusal so the sheet keeps the typed name and offers Retry.
-  async function handleRenameTerminal(value: string): Promise<void> {
+  async function handleRenameTerminal(
+    value: string,
+    onPhase?: (phase: HostMutationPhase) => void
+  ): Promise<void> {
     const target = renameTarget
     if (!target) {
       return
     }
-    if (!client) {
-      throw new Error('Not connected')
-    }
     const title = value.trim()
-    const reply = await sessionTerminalRename.request(client, { terminal: target.handle, title })
-    if (!reply.ok) {
-      throw new Error(reply.error.message)
-    }
+    await terminalRenameWrite.mutate({ terminal: target.handle, title }, { onPhase })
     setTerminals((prev) => {
       const next = prev.map((terminal) =>
         terminal.handle === target.handle ? { ...terminal, title: title || 'Terminal' } : terminal
@@ -152,6 +170,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         }
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)
+        forgetLastSessionTab(tab.id)
         // Tombstone closed tabs until snapshots confirm them; immediate refetch can resurrect a pending close.
         closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
         if (selectedSessionTabIdRef.current === tab.id) {
@@ -175,6 +194,7 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
   }
   return {
     handleRenameTerminal,
+    terminalRenameWrite,
     handleCloseTerminal,
     handleCloseSessionTab
   }

@@ -9,7 +9,7 @@ import type { AgentChildWorkView } from '../../../../../../shared/agent-status/c
 import { AgentChildRowContent } from '@/components/AgentChildRowContent'
 import { agentChildRowName } from '@/components/agent-child-row-text'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useNow } from '@/hooks/use-now'
 import {
   backgroundTasksHeaderText,
@@ -75,6 +75,7 @@ function BackgroundTaskRow(props: {
   onStop: (taskId: string) => void
   onShowAgent?: (providerId: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const { row, now } = props
   const Icon = KIND_ICONS[row.kind]
   const meta = backgroundTaskRowMeta(row, now)
@@ -107,7 +108,7 @@ function BackgroundTaskRow(props: {
           <button
             type="button"
             className="-mx-1 flex h-6 min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-md px-1 text-left outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring"
-            aria-label={translate(
+            aria-label={t(
               'components.native-chat.backgroundTasks.showAgent',
               'Show {{value0}} in the conversation',
               { value0: agentChildRowName(row) }

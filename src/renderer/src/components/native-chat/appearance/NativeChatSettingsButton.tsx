@@ -1,6 +1,6 @@
 import { Settings } from 'lucide-react'
 import { useAppStore } from '../../../store/index'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import {
   DropdownMenu,
@@ -15,8 +15,9 @@ import { getChatWidthOptions } from '../../settings/appearance/chat/chat-appeara
 import { writeNativeChatAppearance } from './native-chat-appearance-write'
 
 export function NativeChatSettingsButton(): React.JSX.Element {
+  const t = useTranslate()
   const width = useAppStore((state) => state.settings?.nativeChatAppearance?.width ?? 'comfortable')
-  const label = translate('components.native-chat.settings', 'Chat settings')
+  const label = t('components.native-chat.settings', 'Chat settings')
 
   return (
     <DropdownMenu>
@@ -39,11 +40,9 @@ export function NativeChatSettingsButton(): React.JSX.Element {
         </TooltipContent>
       </Tooltip>
       <DropdownMenuContent align="end" onClick={(event) => event.stopPropagation()}>
-        <DropdownMenuLabel>
-          {translate('settings.appearance.chat.width', 'Width')}
-        </DropdownMenuLabel>
+        <DropdownMenuLabel>{t('settings.appearance.chat.width', 'Width')}</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={width}>
-          {getChatWidthOptions().map((option) => (
+          {getChatWidthOptions(t).map((option) => (
             <DropdownMenuRadioItem
               key={option.value}
               value={option.value}

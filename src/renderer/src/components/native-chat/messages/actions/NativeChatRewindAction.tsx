@@ -1,7 +1,7 @@
 import { Undo2 } from 'lucide-react'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { NativeChatRewindSurface } from './use-native-chat-rewind-host'
 
 export function NativeChatRewindAction({
@@ -11,8 +11,9 @@ export function NativeChatRewindAction({
   itemId: string
   rewind: NativeChatRewindSurface
 }) {
+  const t = useTranslate()
   const confirm = useConfirmationDialog()
-  const label = translate('components.native-chat.rewind.action', 'Rewind to here')
+  const label = t('components.native-chat.rewind.action', 'Rewind to here')
   return (
     <Tooltip>
       <TooltipTrigger asChild>

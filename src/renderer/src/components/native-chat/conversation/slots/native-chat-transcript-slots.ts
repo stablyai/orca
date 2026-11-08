@@ -40,6 +40,7 @@ import {
   nativeChatSlotOffersFork,
   type NativeChatSideChatForkPoint
 } from '../../messages/actions/native-chat-side-chat-fork-point'
+import type { Translate } from '../../../../i18n/use-translate'
 
 export type NativeChatTranscriptSlot =
   | NativeChatMessageSlot
@@ -85,13 +86,17 @@ export type NativeChatMessageSlot = {
 }
 
 export function buildNativeChatTranscriptSlots(
-  input: NativeChatTranscriptSlotsInput
+  input: NativeChatTranscriptSlotsInput,
+  t?: Translate
 ): NativeChatTranscriptSlot[] {
-  return buildNativeChatTranscript(input).slots
+  return buildNativeChatTranscript(input, t).slots
 }
 
 /** The transcript's slots and, when asked (`forkOffer`), where a side chat forks. */
-export function buildNativeChatTranscript(input: NativeChatTranscriptSlotsInput): {
+export function buildNativeChatTranscript(
+  input: NativeChatTranscriptSlotsInput,
+  t?: Translate
+): {
   slots: NativeChatTranscriptSlot[]
   forkPoint: NativeChatSideChatForkPoint | null
 } {
@@ -238,9 +243,9 @@ export function buildNativeChatTranscript(input: NativeChatTranscriptSlotsInput)
     if (!slot.drawsMessage || slot.message.role !== 'assistant') {
       continue
     }
-    if (nativeChatAgentRowWords(slot.message).length > 0) {
+    if (nativeChatAgentRowWords(slot.message, t).length > 0) {
       lastWordsByTurn.set(slot.turnKey, slot)
-    } else if (nativeChatAgentRowHasImages(slot.message)) {
+    } else if (nativeChatAgentRowHasImages(slot.message, t)) {
       lastImageByTurn.set(slot.turnKey, slot)
     }
   }

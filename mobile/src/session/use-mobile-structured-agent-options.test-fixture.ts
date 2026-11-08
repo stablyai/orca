@@ -148,6 +148,7 @@ type ProbeProps = {
   coherentCatalog?: boolean
   modelEffortDiscovery?: boolean
   permissionOwn?: boolean
+  onOptionError?: (message: string) => void
   onRender: (controller: Controller) => void
 }
 
@@ -160,6 +161,7 @@ function Probe(props: ProbeProps): null {
     fence: props.fence,
     unloadedTurnRevisions: undefined,
     mutate: props.mutate,
+    onOptionError: props.onOptionError,
     turnId: props.turnId ?? null,
     ...(props.optionStamp ? { optionStamp: props.optionStamp } : {}),
     hostSupport: {

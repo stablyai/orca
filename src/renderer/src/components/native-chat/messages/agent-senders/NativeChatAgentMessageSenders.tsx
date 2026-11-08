@@ -1,7 +1,7 @@
 import { Fragment } from 'react'
 import { ArrowUpRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { openAgentMessageSender } from '@/lib/open-agent-message-sender'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
@@ -32,6 +32,7 @@ export function NativeChatAgentMessageSenders({
   queued?: boolean
   dispatchId?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const { shown, more } = agentMessageSendersShown(from)
   const owner = useNativeChatVisualOwner()
   const worktreeId = owner?.worktreeId ?? chatWorktreeId
@@ -39,12 +40,10 @@ export function NativeChatAgentMessageSenders({
     <div
       className={`flex min-w-0 max-w-full ${compact ? 'flex-nowrap' : 'flex-wrap'} items-center ${queued ? 'text-xs text-chat-foreground-faint' : compact ? 'text-sm text-foreground' : '-ml-2.5 text-sm text-foreground'}`}
     >
-      <span>
-        {queued ? translate('components.native-chat.queuedMessages.fromSender', 'From') : null}
-      </span>
+      <span>{queued ? t('components.native-chat.queuedMessages.fromSender', 'From') : null}</span>
       {shown.length === 0 ? (
         <span className={compact ? 'min-w-0 truncate' : queued ? 'px-2' : 'px-2.5'}>
-          {unnamedSenderLabel()}
+          {unnamedSenderLabel(t)}
         </span>
       ) : null}
       {shown.map((sender, index) => (
@@ -88,6 +87,7 @@ function SenderName({
   queued: boolean
   compact: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target, dispatchId)
   const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, dispatchId)
   if (!opens || !chatWorktreeId) {
@@ -109,7 +109,7 @@ function SenderName({
       title={
         queued || compact
           ? label
-          : translate('components.native-chat.agentMessage.goToAgent', 'Go to agent')
+          : t('components.native-chat.agentMessage.goToAgent', 'Go to agent')
       }
       onClick={() =>
         void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)

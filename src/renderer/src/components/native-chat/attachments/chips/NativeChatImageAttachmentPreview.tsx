@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { FileText, Image as ImageIcon, ImageOff, X } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { basename } from '@/lib/path'
 import { useLocalImageSrc } from '@/components/editor/document-images/useLocalImageSrc'
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
@@ -66,25 +67,23 @@ function ImageNumberBadge({ number }: { number?: number }): React.JSX.Element | 
   )
 }
 
-function numberedLabel(number: number | undefined, label: string): string {
-  return number === undefined ? label : `${nativeChatImageNumberLabel(number)}: ${label}`
+function numberedLabel(number: number | undefined, label: string, t?: Translate): string {
+  return number === undefined ? label : `${nativeChatImageNumberLabel(number, t)}: ${label}`
 }
 
-function attachmentLabel(path: string): string {
+function attachmentLabel(path: string, t: Translate = translate): string {
   return isNativeChatPastedImagePath(path)
-    ? translate('components.native-chat.composer.pastedImageLabel', 'Pasted image')
+    ? t('components.native-chat.composer.pastedImageLabel', 'Pasted image')
     : basename(path)
 }
 
 function RemoveAttachmentButton({ onRemove }: { onRemove: () => void }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <button
       type="button"
       onClick={onRemove}
-      aria-label={translate(
-        'components.native-chat.composer.removeAttachment',
-        'Remove attachment'
-      )}
+      aria-label={t('components.native-chat.composer.removeAttachment', 'Remove attachment')}
       className="absolute -right-1.5 -top-1.5 flex size-4 items-center justify-center rounded-full border border-border bg-chat-canvas text-muted-foreground shadow-xs transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
     >
       <X className="size-3" />
@@ -104,26 +103,27 @@ function NativeChatUnavailableImageChip({
   number?: number
   onRemove: (id: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const pasted = isNativeChatPastedImagePath(name)
-  const label = attachmentLabel(name)
+  const label = attachmentLabel(name, t)
   const explanation = pasted
-    ? translate(
+    ? t(
         'components.native-chat.composer.pastedImageNotBroughtBack',
         "This pasted image couldn't be brought back with this draft. Remove it, and paste it again if you still need it."
       )
-    : translate(
+    : t(
         'components.native-chat.composer.imageNotBroughtBack',
         "{{name}} couldn't be brought back with this draft. Attach it again or remove it.",
         { name: label }
       )
   const hint = pasted
-    ? translate('components.native-chat.composer.pastedImageNotKeptLabel', 'Not kept')
-    : translate('components.native-chat.composer.imageAttachAgainLabel', 'Attach again')
+    ? t('components.native-chat.composer.pastedImageNotKeptLabel', 'Not kept')
+    : t('components.native-chat.composer.imageAttachAgainLabel', 'Attach again')
   return (
     <div className="relative h-14 max-w-40 shrink-0">
       <div
         role="img"
-        aria-label={numberedLabel(number, explanation)}
+        aria-label={numberedLabel(number, explanation, t)}
         title={explanation}
         className="flex h-full items-center gap-2 rounded-md border border-dashed border-border bg-background px-2"
       >
@@ -145,6 +145,7 @@ function NativeChatImageThumbnail({
   number,
   onRemove
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const [isOpen, setIsOpen] = useState(false)
   const [isNearViewport, setIsNearViewport] = useState(false)
   const thumbnailRef = useRef<HTMLDivElement>(null)
@@ -197,12 +198,12 @@ function NativeChatImageThumbnail({
   // Use the immediate clipboard preview for thumbnails and prefer the stored file for full-size viewing.
   const thumbnailSrc = attachment.previewUrl ?? localSrc
   const fullSizeSrc = localSrc ?? attachment.previewUrl
-  const filename = attachmentLabel(attachment.path)
+  const filename = attachmentLabel(attachment.path, t)
   const pendingLabel = attachment.pendingName
-    ? translate('components.native-chat.composer.uploadingFile', 'Uploading {{name}}…', {
+    ? t('components.native-chat.composer.uploadingFile', 'Uploading {{name}}…', {
         name: attachment.pendingName
       })
-    : translate('components.native-chat.composer.imageSaving', 'Saving pasted image…')
+    : t('components.native-chat.composer.imageSaving', 'Saving pasted image…')
   const label = isPending ? (attachment.pendingName ?? pendingLabel) : filename
   // A dropped document uploads as a chip too, and becomes an `@` reference once stored.
   const isFile = attachment.pendingName !== undefined && !isImageDropPath(attachment.pendingName)
@@ -219,7 +220,8 @@ function NativeChatImageThumbnail({
             number,
             isPending
               ? pendingLabel
-              : `${translate('components.native-chat.composer.viewAttachment', 'View image')}: ${label}`
+              : `${t('components.native-chat.composer.viewAttachment', 'View image')}: ${label}`,
+            t
           )}
           aria-busy={isPending}
           title={label}
@@ -272,7 +274,7 @@ function NativeChatImageThumbnail({
             ) : (
               <>
                 <ImageIcon className="size-4" />
-                {translate(
+                {t(
                   'components.native-chat.composer.imagePreviewUnavailable',
                   'Preview unavailable'
                 )}

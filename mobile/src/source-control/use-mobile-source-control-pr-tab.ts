@@ -89,7 +89,7 @@ export function useMobileSourceControlPrTab({
       if (committed) {
         setCommitMessage('')
       }
-      void loadStatus({ preserveReadyOnFailure: true, force: true })
+      void loadStatus({ force: true })
       if (!created) {
         return
       }

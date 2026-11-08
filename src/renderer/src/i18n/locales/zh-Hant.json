@@ -20962,6 +20962,29 @@
       "loading": "正在載入子模組變更…",
       "empty": "子模組中沒有變更",
       "loadFailed": "無法載入子模組變更"
+    },
+    "branchPicker": {
+      "switch": "切換分支：{{branch}}",
+      "search": "搜尋分支",
+      "recover": "切換到 {{branch}}",
+      "create": "從 {{branch}} 建立分支 {{name}}",
+      "open": "開啟工作區",
+      "occupied": "已在 {{path}} 中簽出",
+      "remote": "遠端",
+      "statusFailed": "Orca 無法讀取此簽出的變更。請先重新整理原始碼控制再切換。",
+      "statusUnknown": "切換前請先讀取此簽出的變更。",
+      "conflict": "切換分支前，請完成或中止 {{operation}}。",
+      "dirty_one": "切換分支前，請提交或捨棄 {{count}} 個已變更的檔案。",
+      "dirty_other": "切換分支前，請提交或捨棄 {{count}} 個已變更的檔案。",
+      "agentWorking": "有代理正在此工作區中工作。請在其完成後再切換分支；如果它已停止，請關閉其分頁。",
+      "listFailed": "Orca 無法列出本機分支。請嘗試重新開啟選擇器。",
+      "discoveryFailed": "Orca 找不到遠端分支。你仍然可以切換本機分支或建立分支。",
+      "switchFailed": "Orca 無法切換分支。請再試一次。",
+      "switchFailedTitle": "無法切換分支",
+      "switchFailedIn": "無法在 {{workspace}} 中切換分支",
+      "switchedIn": "在 {{workspace}} 中",
+      "thisComputer": "這台電腦",
+      "updateHost": "請在 {{host}} 上更新 Orca，以便從這裡切換分支。"
     }
   },
   "agentsSidebarIntro": {
