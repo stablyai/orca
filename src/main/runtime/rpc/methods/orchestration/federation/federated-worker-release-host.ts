@@ -1,20 +1,20 @@
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
-import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/types'
+import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/db/orchestration-records'
 import type {
   WorkerTerminalArchiveRow,
   WorkerTerminalResourceRow,
   WorkerTerminalRetainedReason
-} from '../../../../orchestration/worker-terminal-ownership'
+} from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import {
   captureWorkerOutputArchive,
   releaseCommitFieldsForCapturedArchive,
   releaseCommitFieldsForStoredArchive,
   summarizeWorkerOutputArchive
-} from '../../../../orchestration/worker-output-archive'
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
+} from '../../../../orchestration/workers/archives/worker-output-archive'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import { readRemoteAttachmentArchive } from './remote-attachment-archive-read'
 import { WorkerTerminalReleaseSingleFlight } from '../worker/worker-terminal-release-single-flight'
-import { yieldAutoReleaseToWorkingAgent } from '../../../../orchestration/worker-terminal-auto-release-working-yield'
+import { yieldAutoReleaseToWorkingAgent } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-working-yield'
 import { archiveSummary } from '../worker/worker-terminal-resource-presentation'
 import {
   releaseUnknownRecovery,

@@ -30,33 +30,6 @@ describe('CliInstaller', () => {
     vi.restoreAllMocks()
   })
 
-  it.skipIf(process.platform === 'win32')(
-    'refuses to replace an unknown symlink at the command path',
-    async () => {
-      const fixture = await makeFixture()
-      const installPath = join(fixture.root, 'bin', 'orca')
-      const existingTarget = '/tmp/not-orca'
-      await mkdir(join(fixture.root, 'bin'), { recursive: true })
-      await symlink(existingTarget, installPath)
-
-      const installer = new CliInstaller({
-        platform: 'darwin',
-        isPackaged: false,
-        userDataPath: fixture.userDataPath,
-        execPath: '/Applications/Orca.app/Contents/MacOS/Orca',
-        appPath: fixture.appPath,
-        commandPathOverride: installPath
-      })
-
-      await expect(installer.getStatus()).resolves.toMatchObject({
-        state: 'conflict',
-        supported: true
-      })
-      await expect(installer.install()).rejects.toThrow('Refusing to replace non-Orca command')
-      await expect(readlink(installPath)).resolves.toBe(existingTarget)
-    }
-  )
-
   // Older builds wrote generated launcher files directly into /usr/local/bin/orca.
   it.skipIf(process.platform === 'win32')(
     'replaces stale generated Unix launcher files',

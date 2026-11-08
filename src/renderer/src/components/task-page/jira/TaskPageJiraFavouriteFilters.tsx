@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Check, Star } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
@@ -17,6 +17,7 @@ export function TaskPageJiraFavouriteFilters({
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const {
     jiraFavouriteFiltersEnabled: enabled,
@@ -63,27 +64,27 @@ export function TaskPageJiraFavouriteFilters({
           title={active?.name}
           aria-label={
             active
-              ? translate('jira.favourites.activeLabel', 'Jira favourites: {{name}}', {
+              ? t('jira.favourites.activeLabel', 'Jira favourites: {{name}}', {
                   name: active.name
                 })
-              : translate('jira.favourites.label', 'Jira favourites')
+              : t('jira.favourites.label', 'Jira favourites')
           }
         >
           <Star />
           <span className="truncate">
-            {active ? active.name : translate('jira.favourites.label', 'Jira favourites')}
+            {active ? active.name : t('jira.favourites.label', 'Jira favourites')}
           </span>
         </Button>
       </PopoverTrigger>
       <PopoverContent
-        aria-label={translate('jira.favourites.label', 'Jira favourites')}
+        aria-label={t('jira.favourites.label', 'Jira favourites')}
         align="start"
         sideOffset={6}
         className="w-72"
       >
         {!enabled ? (
           <p className="p-3 text-xs text-muted-foreground">
-            {translate(
+            {t(
               'jira.favourites.chooseSite',
               'Choose one connected Jira site to use its favourites.'
             )}
@@ -91,10 +92,10 @@ export function TaskPageJiraFavouriteFilters({
         ) : unsupported ? (
           <div className="space-y-2 p-3">
             <p className="text-xs text-muted-foreground">
-              {translate('jira.favourites.unsupported', 'Update the Jira host to use favourites.')}
+              {t('jira.favourites.unsupported', 'Update the Jira host to use favourites.')}
             </p>
             <Button variant="outline" size="xs" onClick={retry}>
-              {translate('jira.favourites.refresh', 'Refresh')}
+              {t('jira.favourites.refresh', 'Refresh')}
             </Button>
             {active ? (
               <Button
@@ -105,18 +106,16 @@ export function TaskPageJiraFavouriteFilters({
                   setOpen(false)
                 }}
               >
-                {translate('jira.favourites.clear', 'Clear Jira favourite')}
+                {t('jira.favourites.clear', 'Clear Jira favourite')}
               </Button>
             ) : null}
           </div>
         ) : (
           <>
             <div className="flex items-center justify-between gap-2 border-b border-border/50 px-3 py-2">
-              <p className="text-xs font-medium">
-                {translate('jira.favourites.label', 'Jira favourites')}
-              </p>
+              <p className="text-xs font-medium">{t('jira.favourites.label', 'Jira favourites')}</p>
               <Button variant="ghost" size="xs" disabled={loading || pending} onClick={retry}>
-                {translate('jira.favourites.refresh', 'Refresh')}
+                {t('jira.favourites.refresh', 'Refresh')}
               </Button>
             </div>
             {error ? (
@@ -126,20 +125,18 @@ export function TaskPageJiraFavouriteFilters({
             ) : null}
             {loading ? (
               <p role="status" className="p-3 text-xs text-muted-foreground">
-                {translate('jira.favourites.loading', 'Loading favourites…')}
+                {t('jira.favourites.loading', 'Loading favourites…')}
               </p>
             ) : (
-              <Command label={translate('jira.favourites.label', 'Jira favourites')}>
-                <CommandInput
-                  placeholder={translate('jira.favourites.find', 'Find a Jira favourite')}
-                />
+              <Command label={t('jira.favourites.label', 'Jira favourites')}>
+                <CommandInput placeholder={t('jira.favourites.find', 'Find a Jira favourite')} />
                 <CommandList
-                  label={translate('jira.favourites.label', 'Jira favourites')}
+                  label={t('jira.favourites.label', 'Jira favourites')}
                   className="max-h-72"
                 >
                   {!error ? (
                     <CommandEmpty>
-                      {translate('jira.favourites.empty', 'No Jira favourites found.')}
+                      {t('jira.favourites.empty', 'No Jira favourites found.')}
                     </CommandEmpty>
                   ) : null}
                   {filters.map((filter) => (
@@ -176,7 +173,7 @@ export function TaskPageJiraFavouriteFilters({
             )}
             {truncated ? (
               <p className="px-3 py-2 text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'jira.favourites.truncated',
                   'Some favourites could not be listed. Manage your favourites in Jira to narrow the list.'
                 )}
@@ -193,7 +190,7 @@ export function TaskPageJiraFavouriteFilters({
                     setOpen(false)
                   }}
                 >
-                  {translate('jira.favourites.clear', 'Clear Jira favourite')}
+                  {t('jira.favourites.clear', 'Clear Jira favourite')}
                 </Button>
               </div>
             ) : null}

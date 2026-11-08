@@ -24,6 +24,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     terminalRefs,
     terminalUnsubsRef,
     initializedHandlesRef,
+    terminalResume,
     terminalDiagnosticsRef,
     webReadyHandlesRef,
     activeHandleRef,
@@ -35,6 +36,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     getTerminalPaneViewport,
     terminalPaneViewportsRef,
     connState,
+    terminalTextScale,
     showNativeChat,
     switchTab,
     handleTerminalTap: focusTerminalTap,
@@ -126,13 +128,21 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         wasAlreadyReady,
         handle === activeHandleRef.current
       )
-      if (wasAlreadyReady && initializedHandlesRef.current.has(handle)) {
+      // A pending resume would only append to the reloaded, empty buffer.
+      const showedOutput =
+        initializedHandlesRef.current.has(handle) || terminalResume.isCatchingUp(handle)
+      if (wasAlreadyReady && showedOutput) {
         // Reload loses the xterm buffer; request fresh scrollback.
         unsubscribeTerminal(handle)
+        terminalResume.forget(handle)
         if (visibleTerminalHandlesRef.current.includes(handle)) {
           subscribeToTerminal(handle)
         }
         return
+      }
+      if (wasAlreadyReady) {
+        // A hidden document that reloaded lost its buffer too.
+        terminalResume.forget(handle)
       }
       // Lagging snapshots can clear a new tab’s active handle; its pending marker still authorizes ready subscribe.
       const isIntendedActive =
@@ -142,7 +152,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         subscribeToTerminal(handle)
       }
     },
-    [nativeChatStream, subscribeToTerminal, unsubscribeTerminal]
+    [nativeChatStream, subscribeToTerminal, terminalResume, unsubscribeTerminal]
   )
 
   const notifyTerminalFrame = useCallback(
@@ -238,10 +248,14 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
   )
 
   const visibleKey = visibleTerminalHandles.join('\0')
+  const connStateSeenRef = useRef(connState)
   useEffect(() => {
     const visible = visibleTerminalHandlesRef.current
+    // Cancel resumable streams on a lost connection, or the shell replays them as snapshots; connected resubscribes each from where its xterm stopped.
+    const lostConnection = connStateSeenRef.current === 'connected' && connState !== 'connected'
+    connStateSeenRef.current = connState
     for (const handle of terminalUnsubsRef.current.keys()) {
-      if (!visible.includes(handle)) {
+      if (!visible.includes(handle) || (lostConnection && terminalResume.canResume(handle))) {
         unsubscribeTerminal(handle)
       }
     }
@@ -250,7 +264,12 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
         subscribeToTerminal(handle)
       }
     }
-  }, [visibleKey, connState, subscribeToTerminal, unsubscribeTerminal])
+  }, [visibleKey, connState, subscribeToTerminal, terminalResume, unsubscribeTerminal])
+
+  // Hidden xterms reflow to a new text size on their own, so the host's record of their screens no longer fits them.
+  useEffect(() => {
+    terminalResume.forget()
+  }, [terminalResume, terminalTextScale])
 
   useEffect(() => {
     if (activeSessionTab?.type !== 'markdown') {

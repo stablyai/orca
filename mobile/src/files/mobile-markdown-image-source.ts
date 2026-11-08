@@ -7,7 +7,7 @@ import { routeMarkdownHref } from '../components/markdown-href-routing'
 import type { MobileFilePreviewRpcSender } from './mobile-file-preview-operations'
 import { loadMobileFilePreview } from './mobile-file-preview-request'
 import { classifyMobileArtifact } from '../session/mobile-artifact-kind'
-import { svgMarkupDataUri } from '../../../src/shared/svg-document'
+import { svgMarkupDataUri } from '../../../src/shared/file-preview/svg-document'
 
 // Absolute paths leave the workspace; an external-file tab's document has no workspace images.
 function isOutsideWorkspace(path: string): boolean {

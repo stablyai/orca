@@ -46,12 +46,16 @@ export function clientEventStreamMountAdapters(
       const startHostWorktreeRefresh = modules.load<
         typeof import('../../../worktree/host-worktree-refresh')
       >('mobile/src/worktree/host-worktree-refresh.ts').startHostWorktreeRefresh
-      const counts = { fetchWorktrees: 0, fetchRepoMetadata: 0 }
+      const counts = { refreshWorktrees: 0, syncViewSettings: 0 }
       let stop: (() => void) | null = null
       // Keep absent options distinct from empty objects; record counts because ordering/options are already captured on the wire.
-      const fetching = (fetch: 'fetchWorktrees' | 'fetchRepoMetadata') => (options?: unknown) => {
-        counts[fetch]++
-        effect(fetch, { options })
+      const refreshWorktrees = () => {
+        counts.refreshWorktrees++
+        effect('refreshWorktrees', {})
+      }
+      const syncViewSettings = (options?: unknown) => {
+        counts.syncViewSettings++
+        effect('syncViewSettings', { options })
         return Promise.resolve()
       }
       return {
@@ -59,9 +63,8 @@ export function clientEventStreamMountAdapters(
           if (name === 'start') {
             stop = startHostWorktreeRefresh({
               client,
-              fetchWorktrees: fetching('fetchWorktrees'),
-              fetchRepoMetadata: fetching('fetchRepoMetadata'),
-              syncViewSettings: () => Promise.resolve(),
+              refreshWorktrees,
+              syncViewSettings,
               appState: {
                 currentState: 'active',
                 addEventListener: () => ({ remove: () => {} })

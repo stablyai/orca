@@ -54,10 +54,15 @@ export function structuredChatUnavailableText(reason?: string): string {
           'components.native-chat.explicitChatSsh',
           'Chat is not available over SSH. Open the agent in a terminal instead.'
         )
-      : translate(
-          'components.native-chat.explicitChatUnavailable',
-          'This workspace cannot run the chat. Check the agent installation or open it in a terminal.'
-        )
+      : reason === 'windows'
+        ? translate(
+            'components.native-chat.explicitChatWindows',
+            "This agent's chat isn't available on Windows yet. Open it in a terminal instead."
+          )
+        : translate(
+            'components.native-chat.explicitChatUnavailable',
+            'This workspace cannot run the chat. Check the agent installation or open it in a terminal.'
+          )
 }
 
 /** The host's refusal behind a failed launch; undefined when the failure carried none. */

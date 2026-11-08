@@ -78,17 +78,17 @@ const { publicRuntimeEnvironment } = await vi.importActual<{
   publicRuntimeEnvironment(
     fields: Pick<PublicKnownRuntimeEnvironment, 'id'> & Partial<PublicKnownRuntimeEnvironment>
   ): PublicKnownRuntimeEnvironment
-}>('../../../renderer/src/runtime/paired-runtime-environment-test-fixture')
+}>('../../../renderer/src/runtime/rpc/testing/paired-runtime-environment-test-fixture')
 const runtime = await vi.importActual<typeof ClientHostRuntime>(
   '../client-hosts/lifecycle/paired-runtime-browser-client-host-runtime'
 )
 
 const { replaceRuntimeEnvironmentRevisions } = await vi.importActual<{
   replaceRuntimeEnvironmentRevisions(environments: PublicKnownRuntimeEnvironment[]): void
-}>('../../../renderer/src/runtime/runtime-environment-revision')
+}>('../../../renderer/src/runtime/rpc/environment-revisions/runtime-environment-revision')
 const { createTestStore } = await vi.importActual<{
   createTestStore(): BrowserTestStore
-}>('../../../renderer/src/store/slices/browser-slice-test-harness')
+}>('../../../renderer/src/store/slices/browser/browser-slice-test-harness')
 const { captureGoogleCookieClearTarget, confirmAndClearGoogleCookies } = await vi.importActual<{
   captureGoogleCookieClearTarget(
     hostId: string,
@@ -100,7 +100,7 @@ const { captureGoogleCookieClearTarget, confirmAndClearGoogleCookies } = await v
     target: GoogleCookieClearTarget,
     confirm: () => Promise<boolean>
   ): Promise<void>
-}>('../../../renderer/src/lib/browser-google-cookie-clear')
+}>('../../../renderer/src/lib/browser/cookies/browser-google-cookie-clear')
 import { registerBrowserHandlers } from '../../ipc/browser/browser'
 import { setTrustedBrowserRendererWebContentsId } from '../../ipc/browser/browser-renderer-trust'
 import { importCookiesIntoClientRoutePartition } from './client-route/browser-client-route-cookie-import'

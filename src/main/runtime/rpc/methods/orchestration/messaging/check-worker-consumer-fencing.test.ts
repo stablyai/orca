@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../../../core'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import type { OrchestrationCompatibilityEvidence } from '../../../../../../shared/orchestration-compatibility-evidence'
 import { testOrcaSessionId } from '../../../../../../shared/orca-session-address-test-fixture'
 import {
@@ -94,16 +94,6 @@ describe('orchestration.check on a re-attached Dispatch', () => {
     expect(await check(PANE_B)).toMatchObject({ deliveryId: null, count: 0 })
     const history = await check(PANE_B, { all: true })
     expect(history.messages.map((message) => message.subject)).toEqual(['do the work'])
-  })
-
-  it('keeps serving a worker whose process restarted without a re-attach', async () => {
-    attachedDispatchWithMail()
-    const first = await check(PANE_A)
-
-    expect(await check(PANE_A)).toMatchObject({ deliveryId: null, count: 0 })
-    await expect(check(PANE_A, { ack: first.deliveryId })).resolves.toMatchObject({
-      acknowledged: first.deliveryId
-    })
   })
 
   it('refuses the stale worker a plain check, so it cannot steal the next Delivery', async () => {

@@ -10,7 +10,7 @@ import { AgentDashboardSettingsMenu } from './AgentDashboardSettingsMenu'
 import { useLiveDashboardSnapshot } from './useLiveDashboardSnapshot'
 import { useAgentDashboardTelemetry } from '../dashboard-popout/use-agent-dashboard-telemetry'
 import { RunHistoryBrowser } from '../orchestration-history/RunHistoryBrowser'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type Props = {
   onClose: () => void
@@ -43,6 +43,7 @@ function AgentDashboardBoard({
   onMenuOpenChange: (open: boolean) => void
   onOpenHistory: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const snapshot = useLiveDashboardSnapshot()
   useAgentDashboardTelemetry('in_window')
 
@@ -80,7 +81,7 @@ function AgentDashboardBoard({
         <>
           <Button variant="ghost" size="sm" onClick={onOpenHistory}>
             <History aria-hidden="true" />
-            {translate('orchestrationHistory.title', 'Run history')}
+            {t('orchestrationHistory.title', 'Run history')}
           </Button>
           <AgentDashboardSettingsMenu
             onSwitchToPopout={handleSwitchToPopout}

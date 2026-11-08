@@ -27,7 +27,13 @@ import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-envi
 import { createOrchestrationEnvironmentTransport } from '../ipc/runtime-environments/orchestration-environment-transport'
 import { mainProcessState as state } from './main-process-state'
 import { suspendEphemeralVmWorkspace } from '../ephemeral-vm/workspace-suspend'
-import { resumeEphemeralVmWorkspace } from '../ephemeral-vm/workspace-resume'
+import {
+  acceptEphemeralVmWorkspaceWake,
+  resumeEphemeralVmWorkspace
+} from '../ephemeral-vm/workspace-resume'
+import { registerRecipeVmWaker } from '../runtime/workspaces/sleep/recipe-vm-waker-registry'
+import { openRecipeVmEnvironment } from '../ipc/runtime-environments/runtime-environment-recipe-vm-wake'
+import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
 import { installWslOrcadAccountShim } from './wsl-orcad-account-env-wiring'
 import {
@@ -38,11 +44,11 @@ import { resolveHostAgentBaseEnvironment } from '../runtime/agent-session/enviro
 import type { RuntimeDesktopWindowStatus } from '../../shared/runtime-types'
 import { ArtifactCloudService } from '../artifacts/artifact-cloud-service'
 import { SkillCloudService } from '../skills/skill-cloud-service'
-import { isArtifactSharingEnabled } from '../../shared/artifact-sharing-gate'
+import { isArtifactSharingEnabled } from '../../shared/artifacts/artifact-sharing-gate'
 import {
   AgentStatusObservedPaneIdentities,
   recordObservedAgentStatusPaneIdentity
-} from '../runtime/agent-status-observed-pane-identity'
+} from '../runtime/terminal/identity/agent-status-observed-pane-identity'
 import { startAgentStateRulesLiveUpdates } from '../runtime/agent-state-rules/agent-state-rules-live-update'
 import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-breadcrumb'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
@@ -121,7 +127,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
       ownsVm: (workspaceId) =>
         findWorkspaceEphemeralVmRuntime(app.getPath('userData'), workspaceId) !== undefined,
       suspendVm: (workspaceId) => suspendEphemeralVmWorkspace(store, workspaceId),
-      resumeVm: (workspaceId) => resumeEphemeralVmWorkspace(store, workspaceId)
+      acceptWake: (workspaceId) => acceptEphemeralVmWorkspaceWake(workspaceId),
+      resumeVm: (workspaceId, request) => resumeEphemeralVmWorkspace(store, workspaceId, request)
     },
     // Paired/local settings writes must reconcile the scanner child through the same path.
     applySessionSearchSettings: applySessionSearchSettingsChange,
@@ -140,6 +147,17 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
   state.runtime = runtime
+  // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
+  registerRecipeVmWaker({
+    state: (workspaceId, suspended) => runtime.workspaceVmState(workspaceId, suspended),
+    noteOpened: (workspaceId) => runtime.noteWorkspaceReopened(workspaceId),
+    holdOpen: (workspaceId, suspended, timeoutMs, signal) =>
+      runtime.holdWorkspaceVmOpen(workspaceId, suspended, timeoutMs, signal),
+    openEnvironment: (selector) => {
+      const root = getRuntimeEnvironmentRegistryRoot()
+      return openRecipeVmEnvironment(root, resolveEnvironment(root, selector))
+    }
+  })
   runtime.attachAgentStatusStore(agentHookServer)
   agentHookServer.subscribeEnrichedStatus((enriched) =>
     recordObservedAgentStatusPaneIdentity(observedPaneIdentities, enriched, runtime)

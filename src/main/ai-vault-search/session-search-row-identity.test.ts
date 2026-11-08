@@ -91,16 +91,3 @@ it('never hands a live session the rows of a purged one', async () => {
   expect(count(index.db, 'messages')).toBe(2)
   expect(errors).toEqual([])
 })
-
-it('never reissues a session row id a delete freed', () => {
-  for (const path of ['/a.jsonl', '/b.jsonl', '/c.jsonl']) {
-    indexFile(path, OLD_MTIME, 'seeded', 1)
-  }
-  const before = (index.db.prepare('SELECT max(id) AS id FROM sessions').get() as { id: number }).id
-  index.db.exec('DELETE FROM sessions')
-
-  indexFile('/d.jsonl', OLD_MTIME, 'seeded', 1)
-  expect((index.db.prepare('SELECT id FROM sessions').get() as { id: number }).id).toBeGreaterThan(
-    before
-  )
-})

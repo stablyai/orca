@@ -1,5 +1,5 @@
 import { normalizePRCheckHeadSha } from '../../../src/shared/github/pr-check-head'
-import { z } from 'zod'
+import * as z from 'zod'
 import { openEnum, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
 import type { GitHubReaction, PRComment } from '../../../src/shared/github/comment-types'
 import type {
@@ -226,8 +226,10 @@ const prCommentSchema = z
   }))
 
 // Preserve upstream order because timeline thread grouping depends on it.
+export const prCommentsSchema = salvagingArray(prCommentSchema)
+
 export function prCommentList(name: string) {
-  return salvagedOptional(name, salvagingArray(prCommentSchema))
+  return salvagedOptional(name, prCommentsSchema)
 }
 
 const checkDetailSchema = z

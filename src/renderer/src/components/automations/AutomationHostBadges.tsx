@@ -11,6 +11,7 @@ import {
   type AutomationHostStatusDescriptor,
   type AutomationHostStatusTone
 } from './automation-host-status-descriptors'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Keep host load and connectivity as independent health chips: freshly loaded data can belong to a disconnected host. */
 
@@ -103,9 +104,10 @@ export function AutomationHostStatusBadges({
   showHealthy = false,
   className
 }: AutomationHostStatusBadgesProps): React.JSX.Element | null {
-  const authority = authorityHealthDescriptor(entry.authorityHealth)
-  const execution = executionHealthDescriptor(entry.executionHealth)
-  const query = hostScopeDescriptor(entry)
+  const t = useTranslate()
+  const authority = authorityHealthDescriptor(entry.authorityHealth, t)
+  const execution = executionHealthDescriptor(entry.executionHealth, t)
+  const query = hostScopeDescriptor(entry, t)
   const showAuthority = showHealthy || !authority.isDefault
   const showExecution = showHealthy || !execution.isDefault
 

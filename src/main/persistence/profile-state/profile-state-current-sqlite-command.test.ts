@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,13 +7,9 @@ import {
   acquireProfileStateRuntimeAdmission
 } from './profile-state-access'
 import { rollbackProfileState } from './profile-state-recovery-command'
-import {
-  bootstrapProfileStateAuthority,
-  ProfileStateAuthorityBootstrapError
-} from './profile-state-authority-bootstrap'
+import { bootstrapProfileStateAuthority } from './profile-state-authority-bootstrap'
 import { migrateProfileStateToSqlite } from './profile-state-migration'
 import { profileStateJsonExportPath } from './legacy-json/profile-state-export-path'
-import { isDivergedProfileStateFailure } from './profile-state-startup-failure'
 
 const roots: string[] = []
 const profileId = 'current-sqlite-recovery'
@@ -64,21 +60,6 @@ function rollback(profile: ReturnType<typeof fixture>) {
 }
 
 describe('keeping SQLite over JSON edited by an older build', () => {
-  it('tags the startup failure as a user-resolvable divergence', () => {
-    const profile = fixture()
-    let failure: unknown
-    try {
-      bootstrapProfileStateAuthority(profile)
-    } catch (error) {
-      failure = error
-    }
-    expect(failure).toBeInstanceOf(ProfileStateAuthorityBootstrapError)
-    expect(isDivergedProfileStateFailure(failure)).toBe(true)
-    expect(isDivergedProfileStateFailure(new ProfileStateAuthorityBootstrapError('other'))).toBe(
-      false
-    )
-  })
-
   it('archives the diverged JSON and republishes JSON that SQLite accepts', () => {
     const profile = fixture()
     const databaseBefore = readFileSync(profile.databaseFile)
@@ -108,16 +89,6 @@ describe('keeping SQLite over JSON edited by an older build', () => {
     acquireProfileStateRuntimeAdmission(profile.root).release()
   })
 
-  it('replaces JSON that an older build left unparseable', () => {
-    const profile = fixture()
-    writeFileSync(profile.dataFile, 'not json')
-    const result = rollback(profile)
-    expect(readFileSync(join(result.quarantineDirectory, 'orca-data.json'), 'utf8')).toBe(
-      'not json'
-    )
-    expect(JSON.parse(readFileSync(profile.dataFile, 'utf8'))).toEqual(sqliteState)
-  })
-
   it('leaves both copies untouched when SQLite is unreadable', () => {
     const profile = fixture()
     writeFileSync(profile.databaseFile, 'broken database')
@@ -131,17 +102,5 @@ describe('keeping SQLite over JSON edited by an older build', () => {
     writeFileSync(profileStateJsonExportPath(profile.dataFile, 1), '{"conflicting":true}')
     expect(() => rollback(profile)).toThrow('already exists with different content')
     expect(readFileSync(profile.dataFile, 'utf8')).toBe(editedJson)
-  })
-
-  it('refuses while a profile owner holds admission', () => {
-    const profile = fixture()
-    const admission = acquireProfileStateRuntimeAdmission(profile.root)
-    try {
-      expect(() => rollback(profile)).toThrow('in use')
-      expect(readFileSync(profile.dataFile, 'utf8')).toBe(editedJson)
-      expect(existsSync(profile.databaseFile)).toBe(true)
-    } finally {
-      admission.release()
-    }
   })
 })

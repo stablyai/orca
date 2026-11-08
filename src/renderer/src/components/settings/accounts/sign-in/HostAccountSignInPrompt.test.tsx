@@ -10,7 +10,7 @@ const client = vi.hoisted(() => {
   return state
 })
 
-vi.mock('@/runtime/runtime-host-account-sign-in-client', () => ({
+vi.mock('@/runtime/provider-accounts/sign-in/runtime-host-account-sign-in-client', () => ({
   cancelHostAccountSignIn: vi.fn(),
   isLostHostAnswer: () => false,
   hasHostAccountSignIn: () => client.running,

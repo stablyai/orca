@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 
@@ -15,13 +15,11 @@ export function ProjectsCollapseAllButton({
   allCollapsed: boolean
   onToggle: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const shortcut = useShortcutKeyDetails('sidebar.projects.toggleCollapse')
   const label = allCollapsed
-    ? translate('auto.components.sidebar.SidebarHeader.expandAllProjects', 'Expand all projects')
-    : translate(
-        'auto.components.sidebar.SidebarHeader.collapseAllProjects',
-        'Collapse all projects'
-      )
+    ? t('auto.components.sidebar.SidebarHeader.expandAllProjects', 'Expand all projects')
+    : t('auto.components.sidebar.SidebarHeader.collapseAllProjects', 'Collapse all projects')
   const Icon = allCollapsed ? ChevronsUpDown : ChevronsDownUp
   const announcing = useAppStore((s) => s.activeContextualTourId === 'projects-collapse-all')
 

@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import { runSleepWorktrees } from './sleep-worktree-flow'
@@ -20,6 +20,7 @@ function readStrings(value: unknown): string[] {
 }
 
 const SleepTwinWorkspaceDialog = React.memo(function SleepTwinWorkspaceDialog() {
+  const t = useTranslate()
   useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
@@ -56,10 +57,10 @@ const SleepTwinWorkspaceDialog = React.memo(function SleepTwinWorkspaceDialog() 
       <DialogContent className="max-w-sm sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.sidebar.SleepTwinWorkspaceDialog.title', 'Sleep Workspace')}
+            {t('auto.components.sidebar.SleepTwinWorkspaceDialog.title', 'Sleep Workspace')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.sidebar.SleepTwinWorkspaceDialog.alsoSleeps',
               'Also sleeps the copy on {{hosts}}',
               { hosts: hostLabels }
@@ -68,10 +69,10 @@ const SleepTwinWorkspaceDialog = React.memo(function SleepTwinWorkspaceDialog() 
         </DialogHeader>
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
-            {translate('auto.components.sidebar.SleepTwinWorkspaceDialog.cancel', 'Cancel')}
+            {t('auto.components.sidebar.SleepTwinWorkspaceDialog.cancel', 'Cancel')}
           </Button>
           <Button onClick={handleConfirm}>
-            {translate('auto.components.sidebar.SleepTwinWorkspaceDialog.confirm', 'Sleep')}
+            {t('auto.components.sidebar.SleepTwinWorkspaceDialog.confirm', 'Sleep')}
           </Button>
         </DialogFooter>
       </DialogContent>

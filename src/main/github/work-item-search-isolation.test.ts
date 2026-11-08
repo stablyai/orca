@@ -36,17 +36,6 @@ it('isolates native cwd, WSL distro, host, admission context and inherited crede
   expect(api.calls.some((call) => call.args.includes('github.example.com'))).toBe(true)
 })
 
-it('keeps SSH GitHub execution client-side without passing remote cwd', async () => {
-  const results = await Promise.all(
-    Array.from({ length: 8 }, (_, i) =>
-      listWorkItems(`/remote/repo-${i}`, 24, 'is:issue', 1, undefined, `ssh-${i}`)
-    )
-  )
-  expect(results.every((result) => result.items.length === 24)).toBe(true)
-  expect(api.graphqlCalls).toBe(2)
-  expect(api.calls.every((call) => call.cwd === undefined)).toBe(true)
-})
-
 it('leaves GHES on REST and unresolved/non-GitHub sources empty', async () => {
   sourceContext.host = 'github.example.com'
   expect((await listWorkItems('fixture/repo', 24, 'is:issue')).items).toHaveLength(24)

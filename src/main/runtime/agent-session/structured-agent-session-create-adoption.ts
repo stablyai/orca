@@ -22,9 +22,9 @@ import {
   type AgentSessionExecutionLocation,
   agentSessionExecutionLocationsEqual
 } from '../../../shared/agent-session/lifecycle/agent-session-record'
-import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/structured-agent-session-attach'
-import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-host'
-import { listStructuredProviderSessionOwnership } from '../../native-chat/agent-session-wire/structured-provider-session-ownership'
+import type { AgentSessionAttachParams } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-attach'
+import type { StructuredAgentSessionHost } from '../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { listStructuredProviderSessionOwnership } from '../../native-chat/agent-session-wire/host/structured-provider-session-ownership'
 import {
   findCommittedStructuredAgentSessionAdoptionReplay,
   findConflictingStructuredAdoption,

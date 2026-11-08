@@ -22,6 +22,8 @@ export type NativeAudioEngine = {
   // Hold the screen with an open mic because locking suspends capture; inject the device wake API for tests.
   readonly screenLock: MicrophoneScreenLock
   readonly onMicrophoneData: (handler: (bytes: Uint8Array) => void) => { remove: () => void }
+  // The on-device recognizer hears the same samples the page drains; it ignores them with no session.
+  readonly feedSpeech: (bytes: Uint8Array) => void
   readonly onInterruption: (handler: (kind: BridgeAudioInterruption) => void) => {
     remove: () => void
   }
@@ -130,6 +132,7 @@ export function createNativeAudioCapture(engine: NativeAudioEngine): NativeAudio
     const ring = new NativeAudioRing()
     const microphone = engine.onMicrophoneData((bytes) => {
       ring.append(bytes)
+      engine.feedSpeech(bytes)
     })
     const interruptions = engine.onInterruption((kind) => {
       if (capture === null) {

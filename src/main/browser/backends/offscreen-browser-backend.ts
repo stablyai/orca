@@ -8,7 +8,7 @@ import type { BrowserManager } from '../browser-manager'
 import type { AgentBrowserBridge } from '../agent-browser/agent-browser-bridge'
 import { browserSessionRegistry } from '../sessions/browser-session-registry'
 import { installBrowserJavaScriptDialogs } from '../guest-lifecycle/prompts/browser-javascript-dialogs'
-import type { ServeBrowserPageState } from '../../runtime/serve-browser-tab-layout'
+import type { ServeBrowserPageState } from '../../runtime/browser/headless/serve-browser-tab-layout'
 
 // orca serve has no renderer for webviews; hidden BrowserWindows host its pages.
 // Headless Linux requires Xvfb; Electron --headless segfaults.

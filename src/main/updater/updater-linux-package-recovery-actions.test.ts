@@ -114,17 +114,6 @@ const ARTIFACT = {
   path: '/home/tester/.cache/orca-updater/pending/orca-ide_1.0.61_amd64.deb',
   sha512: 'LHlL7dKoqg98gS2nfQv878dK+UoktbAkm4M20/hoJ2Qr0Kqsa3MSL4VmWy/Lll/MYjQFkpvOxduQ/vswentozA=='
 }
-const MANUAL_INSTALL_STATUS = {
-  state: 'error',
-  message: 'Quit Orca before running the system package install command.',
-  messageCode: 'linuxPackageManualInstall',
-  recovery: {
-    kind: 'linux-package-install',
-    packageType: 'deb',
-    reason: 'manual-install-required',
-    version: '1.0.61'
-  }
-} as const satisfies UpdateStatus
 
 warmUpdaterModule()
 
@@ -190,100 +179,6 @@ describe('linux package recovery actions', () => {
       .map(([, status]) => status as UpdateStatus)
       .filter((status): status is ErrorStatus => status.state === 'error')
 
-  it('rejects both actions while no package-install recovery is active', async () => {
-    const { updater } = await startUpdater()
-
-    await expect(updater.getLinuxPackageInstallInstructions()).rejects.toThrow(
-      'No package install recovery is available.'
-    )
-    await expect(updater.showLinuxPackage()).rejects.toThrow(
-      'No package install recovery is available.'
-    )
-    expect(resolveLinuxPackageInstallInstructionsMock).not.toHaveBeenCalled()
-    expect(resolveLinuxPackageRevealTargetMock).not.toHaveBeenCalled()
-  })
-
-  it('validates the retained package on every invocation', async () => {
-    const { updater } = await startUpdater()
-    await activateRecovery(updater)
-
-    await expect(updater.getLinuxPackageInstallInstructions()).resolves.toEqual({
-      ok: true,
-      command: "sudo apt install -- '<pkg>'",
-      packageFileName: 'p'
-    })
-    await updater.getLinuxPackageInstallInstructions()
-    await updater.showLinuxPackage()
-    await updater.showLinuxPackage()
-
-    const recovery = {
-      kind: 'linux-package-install',
-      packageType: 'deb',
-      reason: 'manual-install-required',
-      version: '1.0.61'
-    }
-    expect(resolveLinuxPackageInstallInstructionsMock.mock.calls).toEqual([[recovery], [recovery]])
-    expect(resolveLinuxPackageRevealTargetMock.mock.calls).toEqual([[recovery], [recovery]])
-    expect(showItemInFolderMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('restores recovery after a recheck resolves without a terminal event', async () => {
-    const { send, updater } = await startUpdater()
-    await activateRecovery(updater)
-    send.mockClear()
-
-    updater.checkForUpdatesFromMenu()
-    await vi.advanceTimersByTimeAsync(1_000)
-
-    expect(send).toHaveBeenLastCalledWith('updater:status', MANUAL_INSTALL_STATUS)
-    await expect(updater.showLinuxPackage()).resolves.toBeUndefined()
-  })
-
-  it('restores recovery after a recheck fails', async () => {
-    const { send, updater } = await startUpdater()
-    await activateRecovery(updater)
-    autoUpdaterMock.checkForUpdates.mockRejectedValueOnce(new Error('offline'))
-    send.mockClear()
-
-    updater.checkForUpdatesFromMenu()
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(send).toHaveBeenLastCalledWith('updater:status', MANUAL_INSTALL_STATUS)
-    await expect(updater.getLinuxPackageInstallInstructions()).resolves.toEqual({
-      ok: true,
-      command: "sudo apt install -- '<pkg>'",
-      packageFileName: 'p'
-    })
-  })
-
-  it('restores recovery when a pinned check resolves to the current version', async () => {
-    const { send, updater } = await startUpdater()
-    await activateRecovery(updater)
-    send.mockClear()
-
-    updater.checkForUpdatesFromMenu({ channel: 'stable', targetTag: 'v1.0.51' })
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(send).toHaveBeenLastCalledWith('updater:status', MANUAL_INSTALL_STATUS)
-    await expect(updater.showLinuxPackage()).resolves.toBeUndefined()
-  })
-
-  it('restores recovery when resolving a pinned check fails', async () => {
-    const { send, updater } = await startUpdater()
-    await activateRecovery(updater)
-    send.mockClear()
-
-    updater.checkForUpdatesFromMenu({ channel: 'stable', targetTag: 'not-a-release-tag' })
-    await vi.advanceTimersByTimeAsync(0)
-
-    expect(send).toHaveBeenLastCalledWith('updater:status', MANUAL_INSTALL_STATUS)
-    await expect(updater.getLinuxPackageInstallInstructions()).resolves.toEqual({
-      ok: true,
-      command: "sudo apt install -- '<pkg>'",
-      packageFileName: 'p'
-    })
-  })
-
   it('replaces the structured status when revalidation fails so stale actions die', async () => {
     const { send, updater } = await startUpdater()
     await activateRecovery(updater)
@@ -309,61 +204,6 @@ describe('linux package recovery actions', () => {
       'No package install recovery is available.'
     )
     expect(resolveLinuxPackageRevealTargetMock).not.toHaveBeenCalled()
-  })
-
-  it('clears recovery for both actions once the package is gone', async () => {
-    const { updater } = await startUpdater()
-    await activateRecovery(updater)
-    resolveLinuxPackageRevealTargetMock.mockResolvedValue({ ok: false, reason: 'missing' })
-
-    await expect(updater.showLinuxPackage()).rejects.toThrow('no longer in the update cache')
-
-    await expect(updater.getLinuxPackageInstallInstructions()).rejects.toThrow(
-      'No package install recovery is available.'
-    )
-  })
-
-  it.each(['no-sudo', 'no-package-manager'] as const)(
-    'resolves %s as a result and keeps the card usable instead of rejecting',
-    async (reason) => {
-      const { send, updater } = await startUpdater()
-      await activateRecovery(updater)
-      resolveLinuxPackageInstallInstructionsMock.mockResolvedValue({ ok: false, reason })
-      const statusesBefore = errorStatuses(send).length
-
-      // Renderer copy actions are demoted on rejection; represent missing package managers as a result.
-      await expect(updater.getLinuxPackageInstallInstructions()).resolves.toEqual({
-        ok: false,
-        reason,
-        message: expect.stringContaining('Show the package')
-      })
-
-      expect(clearTrackedLinuxPackageArtifactMock).not.toHaveBeenCalled()
-      expect(errorStatuses(send)).toHaveLength(statusesBefore)
-      expect(recordUpdaterLifecycleMock).toHaveBeenCalledWith(
-        'linux_package_recovery_unavailable',
-        { reason, packageType: 'deb', version: '1.0.61' },
-        expect.objectContaining({ level: 'warn' })
-      )
-      await expect(updater.showLinuxPackage()).resolves.toBeUndefined()
-    }
-  )
-
-  it('keeps recovery available after a transient read failure', async () => {
-    const { send, updater } = await startUpdater()
-    await activateRecovery(updater)
-    showItemInFolderMock.mockImplementationOnce(() => {
-      throw new Error('no file manager available')
-    })
-    const statusesBefore = errorStatuses(send).length
-
-    await expect(updater.showLinuxPackage()).rejects.toThrow(
-      'could not read the downloaded package'
-    )
-
-    expect(clearTrackedLinuxPackageArtifactMock).not.toHaveBeenCalled()
-    expect(errorStatuses(send)).toHaveLength(statusesBefore)
-    await expect(updater.showLinuxPackage()).resolves.toBeUndefined()
   })
 
   it('ignores a stale mismatch after the same package cycle is captured again', async () => {

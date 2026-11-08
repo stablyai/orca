@@ -2,7 +2,7 @@ import { Columns3, List } from 'lucide-react'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { JiraViewMode } from '../../jira-view-mode-storage'
 
 type Props = {
@@ -20,6 +20,7 @@ export function TaskPageJiraViewControls({
   onCurrentSprintChange,
   sprintDisabled = false
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-wrap items-center justify-end gap-3">
       <div className="flex items-center gap-2">
@@ -30,7 +31,7 @@ export function TaskPageJiraViewControls({
           disabled={sprintDisabled}
         />
         <Label htmlFor="jira-current-sprint">
-          {translate('jira.board.currentSprint', 'Current sprint')}
+          {t('jira.board.currentSprint', 'Current sprint')}
         </Label>
       </div>
       <ToggleGroup
@@ -41,17 +42,17 @@ export function TaskPageJiraViewControls({
             onModeChange(value)
           }
         }}
-        aria-label={translate('jira.board.viewMode', 'Jira view')}
+        aria-label={t('jira.board.viewMode', 'Jira view')}
         variant="outline"
         size="sm"
       >
         <ToggleGroupItem value="list">
           <List />
-          {translate('jira.board.list', 'List')}
+          {t('jira.board.list', 'List')}
         </ToggleGroupItem>
         <ToggleGroupItem value="board">
           <Columns3 />
-          {translate('jira.board.board', 'Board')}
+          {t('jira.board.board', 'Board')}
         </ToggleGroupItem>
       </ToggleGroup>
     </div>

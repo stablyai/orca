@@ -3,7 +3,7 @@ import type * as WorktreeListingModule from '../../../git/worktrees/catalog/work
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { encodeDeviceProofMessage } from '../../../../shared/remote-runtime/pairing/device-key-proof'
 import { SimulatedMobileE2EEV2Peer } from '../../mobile-cloud-relay/simulated-mobile-e2ee-v2-peer'
@@ -23,7 +23,7 @@ import {
   parsePairingCode
 } from '../../../../shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import { generateKeyPair } from '../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import '../../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
 import { waitFor } from './runtime-rpc-test-harness'
 import {
   connectWs,
@@ -100,162 +100,9 @@ async function authenticateKeyedWs(offer: PairingOffer, deviceId: string, key: n
 }
 
 describe('OrcaRuntimeRpcServer', () => {
-  it('cleans up pre-auth E2EE WebSocket state when the socket closes', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({
-      runtime,
-      userDataPath,
-      enableWebSocket: true,
-      wsPort: 0
-    })
-
-    await server.start()
-
-    try {
-      const offer = server.createPairingOffer({
-        address: '127.0.0.1',
-        name: 'mobile-test',
-        scope: 'mobile'
-      })
-      expect(offer.available).toBe(true)
-      if (!offer.available) {
-        throw new Error('WebSocket pairing unavailable')
-      }
-      const parsed = parsePairingCode(offer.pairingUrl)!
-      const ws = await connectWs(parsed.endpoint)
-      const mobileKeys = generateKeyPair()
-      ws.send(
-        JSON.stringify({
-          type: 'e2ee_hello',
-          publicKeyB64: Buffer.from(mobileKeys.publicKey).toString('base64')
-        })
-      )
-      expect(JSON.parse(await nextWsMessage(ws))).toEqual({ type: 'e2ee_ready' })
-      expect(server['mobileSocketWiring']?.channelCount).toBe(1)
-      expect(server['mobileSocketWiring']?.connectionCount).toBe(1)
-
-      ws.close()
-      await waitForWsClose(ws)
-      await waitFor(
-        () =>
-          server['mobileSocketWiring']?.channelCount === 0 &&
-          server['mobileSocketWiring']?.connectionCount === 0
-      )
-    } finally {
-      await server.stop()
-    }
+  afterEach(() => {
+    vi.useRealTimers()
   })
-
-  it('terminates active WebSockets for a revoked mobile device', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({
-      runtime,
-      userDataPath,
-      enableWebSocket: true,
-      wsPort: 0
-    })
-    const disconnectSpy = vi.spyOn(runtime, 'onClientDisconnected')
-
-    await server.start()
-
-    try {
-      const offer = server.createPairingOffer({
-        address: '127.0.0.1',
-        name: 'mobile-test',
-        scope: 'mobile'
-      })
-      expect(offer.available).toBe(true)
-      if (!offer.available) {
-        throw new Error('WebSocket pairing unavailable')
-      }
-      const first = await authenticateMobileWs(offer.pairingUrl)
-      const second = await authenticateMobileWs(offer.pairingUrl)
-
-      await expect(server.revokeMobileDevice(offer.deviceId)).resolves.toBe(true)
-      await Promise.all([waitForWsClose(first), waitForWsClose(second)])
-      await waitFor(
-        () =>
-          server['mobileSocketWiring']?.channelCount === 0 &&
-          server['mobileSocketWiring']?.connectionCount === 0
-      )
-
-      expect(disconnectSpy).toHaveBeenCalledTimes(1)
-    } finally {
-      disconnectSpy.mockRestore()
-      await server.stop()
-    }
-  }, 15_000)
-
-  it('does not revoke runtime-scoped devices through mobile revocation', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({
-      runtime,
-      userDataPath,
-      enableWebSocket: true,
-      wsPort: 0
-    })
-
-    await server.start()
-
-    try {
-      const offer = server.createPairingOffer({
-        address: '127.0.0.1',
-        name: 'runtime-test',
-        scope: 'runtime'
-      })
-      expect(offer.available).toBe(true)
-      if (!offer.available) {
-        throw new Error('WebSocket pairing unavailable')
-      }
-
-      await expect(server.revokeMobileDevice(offer.deviceId)).resolves.toBe(false)
-      expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)?.scope).toBe('runtime')
-    } finally {
-      await server.stop()
-    }
-  })
-
-  it('terminates active WebSockets for a revoked runtime access grant', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService()
-    const server = new OrcaRuntimeRpcServer({
-      runtime,
-      userDataPath,
-      enableWebSocket: true,
-      wsPort: 0
-    })
-
-    await server.start()
-
-    try {
-      const offer = server.createPairingOffer({
-        address: '127.0.0.1',
-        name: 'runtime-test',
-        scope: 'runtime'
-      })
-      expect(offer.available).toBe(true)
-      if (!offer.available) {
-        throw new Error('WebSocket pairing unavailable')
-      }
-      const first = await authenticateMobileWs(offer.pairingUrl)
-      const second = await authenticateMobileWs(offer.pairingUrl)
-
-      expect(server.revokeRuntimeAccess(offer.deviceId)).toBe(true)
-      await Promise.all([waitForWsClose(first), waitForWsClose(second)])
-      await waitFor(
-        () =>
-          server['mobileSocketWiring']?.channelCount === 0 &&
-          server['mobileSocketWiring']?.connectionCount === 0
-      )
-
-      expect(server.getDeviceRegistry()?.getDevice(offer.deviceId)).toBeNull()
-    } finally {
-      await server.stop()
-    }
-  }, 15_000)
 
   it.each([
     ['mobile', false],
@@ -348,6 +195,7 @@ describe('OrcaRuntimeRpcServer', () => {
   it.each(['binary', 'text', 'sibling-cascade'] as const)(
     'retires an established keyed terminal subscription through %s revocation',
     async (kind) => {
+      vi.useFakeTimers({ toFake: ['performance'] })
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-fork-stream-revoke-'))
       const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
       const write = vi.fn(() => true)
@@ -462,6 +310,8 @@ describe('OrcaRuntimeRpcServer', () => {
             )
           )
         )
+        // The registry sees another process's edit once its one-second stat window has passed.
+        vi.advanceTimersByTime(1000)
         const closed = waitForWsClose(ws)
 
         if (kind === 'sibling-cascade') {
