@@ -50,8 +50,8 @@ function hostQueryPersistOf(query: Query): HostQueryPersist<unknown> | undefined
 const restoredKeys = new WeakMap<QueryClient, Set<string>>()
 
 /**
- * Whether a key still holds what an earlier launch stored. Such data is shown, but a read never builds on
- * it: it may be days old, and nothing this document did confirmed it.
+ * Whether a key still holds what an earlier launch stored: shown, but possibly days old and unconfirmed by
+ * any read in this document. Fetches are told so (`previousFromStore`).
  */
 export function holdsRestoredHostQueryData(queryClient: QueryClient, queryHash: string): boolean {
   return restoredKeys.get(queryClient)?.has(queryHash) === true
