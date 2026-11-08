@@ -88,6 +88,7 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
           (total, chunk) => total + chunk.bytes.byteLength,
           0
         )
+        releaseAckPendingHoldbackIfDrained(state, stream)
       }
       stream.ackPendingOutputOverflowed = false
       stream.ackRecoveryHistoryOwed = !carriesHistory
@@ -136,8 +137,8 @@ export function installMultiplexFlowControl(state: TerminalMultiplexConnection):
         (total, pending) => total + pending.bytes.byteLength,
         0
       )
-      releaseAckPendingHoldbackIfDrained(state, stream)
     }
+    releaseAckPendingHoldbackIfDrained(state, stream)
     if (
       stream.ackRecoveryHistoryOwed &&
       stream.ackPendingOutput.length === 0 &&

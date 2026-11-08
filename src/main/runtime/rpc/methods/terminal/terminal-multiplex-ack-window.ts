@@ -6,7 +6,6 @@ import {
 } from '../../../../../shared/terminal/stream/terminal-multiplex-flow-control'
 import type { TerminalMultiplexConnectionBase } from './terminal-multiplex-connection'
 import type { TerminalMultiplexStream } from './terminal-stream-types'
-
 import { PACED_WINDOW_MIN_BYTES } from './terminal-multiplex-link-estimate'
 
 type AckWindowConnection = Pick<
@@ -64,7 +63,7 @@ export function noteAckGatedSend(
   })
 }
 
-// Bytes pacing keeps off the wire wait here instead, so overflow recovery fires no earlier than on legacy windows.
+// Bytes pacing keeps off the wire wait here instead, so in steady state overflow fires no earlier than on legacy windows.
 export function ackPendingOutputBudgetBytes(
   connection: AckWindowConnection,
   stream: TerminalMultiplexStream
@@ -165,7 +164,7 @@ export function ackLinkHasRoomForHistory(
   return (
     stream.ackInFlightBytes <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES &&
     connection.ackTotalInFlightBytes <= TERMINAL_MULTIPLEX_ACK_BATCH_BYTES &&
-    // Paced in-flight always sits under the batch size, so only a fully drained paced stream proves room.
+    // Paced in-flight is small by design, so only a fully drained paced stream proves the link has room.
     (stream.ackInFlightBytes === 0 ||
       !isPacedStream(connection, stream) ||
       connection.linkEstimate.steadyWindowBytes() === null)

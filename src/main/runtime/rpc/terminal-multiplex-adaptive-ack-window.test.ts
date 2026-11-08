@@ -82,7 +82,7 @@ describe('terminal multiplex adaptive ACK window', () => {
     vi.unstubAllEnvs()
   })
 
-  it('keeps legacy windows and overflow when pacing is not opted in, even on a measured slow link', async () => {
+  it('keeps legacy windows when pacing is not opted in, even on a measured slow link', async () => {
     measureSlowLink()
     const stream = await openAltScreenStream()
     stream.write(10)

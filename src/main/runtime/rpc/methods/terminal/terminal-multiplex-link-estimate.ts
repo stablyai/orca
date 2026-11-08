@@ -18,6 +18,7 @@ const PACED_DIVERGENCE_HOLD_MS = 2 * ESTIMATE_WINDOW_MS
 const PROBE_RTT_MAX_MS = 4_000
 const PROBE_RTT_RETRY_AFTER_FAILURE_MS = 60_000
 const MAX_SEND_RECORDS_PER_STREAM = 1024
+const LEDGER_COMPACT_AFTER_RECORDS = 256
 
 type SendRecord = {
   endOffset: number
@@ -150,7 +151,7 @@ export class TerminalMultiplexLinkEstimate {
       acked = ledger.records[ledger.head]
       ledger.head += 1
     }
-    if (ledger.head > 256 && ledger.head * 2 > ledger.records.length) {
+    if (ledger.head > LEDGER_COMPACT_AFTER_RECORDS && ledger.head * 2 > ledger.records.length) {
       ledger.records.splice(0, ledger.head)
       ledger.head = 0
     }
