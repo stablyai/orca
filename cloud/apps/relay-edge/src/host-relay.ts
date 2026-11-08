@@ -60,6 +60,21 @@ export class HostRelay extends HostRelayPhones {
     return { outcome: 'erased' }
   }
 
+  // The director takes the host off the edge: every control gets the lease-expiry drain (the
+  // desktop re-asks the director), and goes through the same path as that expiry. The assignment,
+  // devices and splices are left as they are.
+  async adminDrain(): Promise<{ outcome: 'idle' } | { outcome: 'drained'; controls: number }> {
+    // A socket whose attachment is cleared is already gone (closing, still listed).
+    const controls = this.ctx.getWebSockets('control').filter((ws) => this.attachment(ws) !== null)
+    if (controls.length === 0) { return { outcome: 'idle' } }
+    for (const ws of controls) {
+      this.send(ws, { type: 'drain', graceMs: 0, recovery: 'resolve-director' })
+      this.close(ws, RELAY_CLOSE_CODE.DRAINING, 'host leaving edge')
+      await this.onSocketGone(ws, RELAY_CLOSE_CODE.DRAINING, '')
+    }
+    return { outcome: 'drained', controls: controls.length }
+  }
+
   async fetch(request: Request): Promise<Response> {
     const kind = request.headers.get('x-edge-kind')
     if (kind === 'abort' && this.env.SPIKE_ADMIN === '1') {
