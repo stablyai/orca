@@ -44,20 +44,10 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { RuntimeRpcFailureError } from './runtime/types'
 import { okFixture } from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 const FOLDER_RECORD = { id: 'folder:hub-a', path: '/work/hub', displayName: 'Hub' }
-
-function rpcFailure(code: string, data?: unknown): RuntimeRpcFailureError {
-  return new RuntimeRpcFailureError({
-    id: 'req_failed',
-    ok: false,
-    error: { code, message: code, ...(data ? { data } : {}) },
-    _meta: { runtimeId: 'runtime-1' }
-  })
-}
 
 function answerFolder(overrides: Record<string, () => unknown> = {}) {
   return async (method: string) => {
@@ -66,6 +56,9 @@ function answerFolder(overrides: Record<string, () => unknown> = {}) {
     }
     if (method === 'worktree.show') {
       return okFixture('req_show', { worktree: FOLDER_RECORD })
+    }
+    if (method === 'status.get') {
+      return okFixture('req_status', { capabilities: ['folder-workspace.unique-id-mutation.v1'] })
     }
     if (method === 'folderWorkspace.update') {
       return okFixture('req_update', { folderWorkspace: { id: 'hub-a', name: 'Renamed' } })
@@ -121,6 +114,7 @@ describe('worktree set and rm on folder workspaces', () => {
 
     expect(callMock).toHaveBeenCalledWith('folderWorkspace.update', {
       folderWorkspaceId: 'hub-a',
+      requireUniqueId: true,
       updates: { name: 'Renamed', comment: 'triaging' }
     })
     expect(lastJson(log).result).toEqual({ worktree: FOLDER_RECORD })
@@ -132,32 +126,26 @@ describe('worktree set and rm on folder workspaces', () => {
 
     await main(['worktree', 'rm', '--worktree', 'folder:hub-a', '--json'], '/tmp')
 
-    expect(callMock).toHaveBeenCalledWith('folderWorkspace.delete', { folderWorkspaceId: 'hub-a' })
+    expect(callMock).toHaveBeenCalledWith('folderWorkspace.delete', {
+      folderWorkspaceId: 'hub-a',
+      requireUniqueId: true
+    })
     expect(callMock).not.toHaveBeenCalledWith('worktree.rm', expect.anything(), expect.anything())
     expect(lastJson(log).result).toEqual({ removed: true })
   })
 
   it.each([[['set', '--display-name', 'x']], [['rm']]])(
-    'a duplicated folder id is refused before any change (%s)',
+    'an Orca without the unique-id guarantee is refused before any change (%s)',
     async (command) => {
       const log = vi.spyOn(console, 'log').mockImplementation(() => {})
       callMock.mockImplementation(
-        answerFolder({
-          'worktree.show': () => {
-            throw rpcFailure('selector_ambiguous', {
-              selector: 'folder:hub-a',
-              duplicateFolderId: 'hub-a',
-              candidates: [],
-              nextSteps: []
-            })
-          }
-        })
+        answerFolder({ 'status.get': () => okFixture('req_status', { capabilities: [] }) })
       )
 
       const [verb, ...rest] = command
       await main(['worktree', verb, '--worktree', 'folder:hub-a', ...rest, '--json'], '/tmp')
 
-      expect(lastJson(log).error?.code).toBe('selector_ambiguous')
+      expect(lastJson(log).error?.code).toBe('incompatible_runtime')
       expect(folderMutations()).toEqual([])
     }
   )
@@ -176,24 +164,6 @@ describe('worktree set and rm on folder workspaces', () => {
 
     expect(lastJson(log).error?.code).toBe('invalid_argument')
     expect(folderMutations()).toEqual([])
-  })
-
-  it('an Orca without the folder update method is reported as incompatible', async () => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-    callMock.mockImplementation(
-      answerFolder({
-        'folderWorkspace.update': () => {
-          throw rpcFailure('method_not_found')
-        }
-      })
-    )
-
-    await main(
-      ['worktree', 'set', '--worktree', 'folder:hub-a', '--comment', 'x', '--json'],
-      '/tmp'
-    )
-
-    expect(lastJson(log).error?.code).toBe('incompatible_runtime')
   })
 
   it('activate refuses a folder workspace without asking the runtime to open it', async () => {

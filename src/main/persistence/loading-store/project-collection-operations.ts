@@ -159,9 +159,10 @@ export class ProjectCollectionOperations {
     return getFolderWorkspaceOperations(this).updateFolderWorkspace(id, updates)
   }
 
-  removeFolderWorkspace(id: string): boolean {
-    const removed = getFolderWorkspaceOperations(this).removeFolderWorkspace(id)
-    if (removed) {
+  removeFolderWorkspace(id: string, only?: FolderWorkspace): boolean {
+    const operations = getFolderWorkspaceOperations(this)
+    const removed = operations.removeFolderWorkspace(id, only)
+    if (removed && !operations.getFolderWorkspace(id)) {
       const workspaceKey = folderWorkspaceKey(id)
       dropOrcadTerminalRestoreHintsForWorktrees(
         this[projectCollectionOperationsContext].runtime.orcadTerminalRestoreHints,

@@ -270,13 +270,18 @@ export class FolderWorkspacePersistenceOperations {
     return workspace
   }
 
-  removeFolderWorkspace(id: string): boolean {
-    const before = this.state.folderWorkspaces?.length ?? 0
-    this.state.folderWorkspaces = (this.state.folderWorkspaces ?? []).filter(
-      (workspace) => workspace.id !== id
-    )
-    if ((this.state.folderWorkspaces?.length ?? 0) === before) {
+  /** `only` removes that one row, never a twin that shares its id. */
+  removeFolderWorkspace(id: string, only?: FolderWorkspace): boolean {
+    const rows = this.state.folderWorkspaces ?? []
+    const kept = rows.filter((workspace) => (only ? workspace !== only : workspace.id !== id))
+    if (kept.length === rows.length) {
       return false
+    }
+    this.state.folderWorkspaces = kept
+    if (kept.some((workspace) => workspace.id === id)) {
+      // A remaining twin still owns the folder key's sessions and lineage.
+      this.scheduleSave()
+      return true
     }
     removeWorkspaceSessionOwnerEverywhere(this.state, folderWorkspaceKey(id))
     this.removeWorkspaceLineageForRemovedFolder(id)

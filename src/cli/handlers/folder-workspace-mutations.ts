@@ -1,9 +1,11 @@
 import type {
+  RuntimeStatus,
   RuntimeWorktreeRecord,
   RuntimeWorktreeRemoveResult,
   RuntimeWorktreeSetResult
 } from '../../shared/runtime-types'
 import type { FolderWorkspace } from '../../shared/folder-workspaces/folder-workspace-types'
+import { FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import { folderIdOfSelector, folderWorkspaceKey } from '../../shared/workspace-scope'
 import { formatWorktreeShow, printResult } from '../format'
 import { getOptionalStringFlag, getOptionalStringFlagAllowingEmpty } from '../flags'
@@ -22,8 +24,7 @@ function refuseFolderFlags(flags: Flags, refusals: readonly [string, string][]):
   }
 }
 
-/** The runtime refuses a folder id that several folder workspaces share, so nothing below acts on the wrong copy. */
-async function showUniqueFolderWorkspace(
+async function showFolderWorkspace(
   client: RuntimeClient,
   folderId: string
 ): Promise<RuntimeRpcSuccess<{ worktree: RuntimeWorktreeRecord }>> {
@@ -33,21 +34,16 @@ async function showUniqueFolderWorkspace(
   })
 }
 
-async function callFolderWorkspaceMethod<TResult>(
-  client: RuntimeClient,
-  method: 'folderWorkspace.update' | 'folderWorkspace.delete',
-  params: unknown
-): Promise<RuntimeRpcSuccess<TResult>> {
-  try {
-    return await client.call<TResult>(method, params)
-  } catch (error) {
-    if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
-      throw new RuntimeClientError(
-        'incompatible_runtime',
-        'This Orca cannot change folder workspaces from the CLI. Update Orca on the computer that owns the folder workspace. Nothing was changed.'
-      )
-    }
-    throw error
+/** Older Orcas edit the first folder that shares an id and delete every one, so they are refused before any change. */
+async function assertUniqueIdMutationSupported(client: RuntimeClient): Promise<void> {
+  const status = await client.call<RuntimeStatus>('status.get')
+  if (
+    !status.result.capabilities?.includes(FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY)
+  ) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'This Orca cannot change folder workspaces from the CLI safely. Update Orca on the computer that owns the folder workspace. Nothing was changed.'
+    )
   }
 }
 
@@ -94,12 +90,12 @@ async function setFolderWorkspace(
   const comment = getOptionalStringFlagAllowingEmpty(flags, 'comment')
   const workspaceStatus = getOptionalStringFlag(flags, 'workspace-status')
   const { isUnread } = getWorktreeReadFlags(flags)
-  await showUniqueFolderWorkspace(client, folderId)
-  const updated = await callFolderWorkspaceMethod<{ folderWorkspace: FolderWorkspace | null }>(
-    client,
+  await assertUniqueIdMutationSupported(client)
+  const updated = await client.call<{ folderWorkspace: FolderWorkspace | null }>(
     'folderWorkspace.update',
     {
       folderWorkspaceId: folderId,
+      requireUniqueId: true,
       updates: {
         ...(displayName !== undefined ? { name: displayName } : {}),
         ...(comment !== undefined ? { comment } : {}),
@@ -111,7 +107,7 @@ async function setFolderWorkspace(
   if (!updated.result.folderWorkspace) {
     throw folderGone(folderId)
   }
-  return showUniqueFolderWorkspace(client, folderId)
+  return showFolderWorkspace(client, folderId)
 }
 
 /** `worktree rm` on a folder workspace: Orca forgets it; the folder stays on disk. False for any other selector. */
@@ -144,12 +140,11 @@ async function removeFolderWorkspace(
     ['run-hooks', noGit],
     ['allow-failed-archive-hook', noGit]
   ])
-  await showUniqueFolderWorkspace(client, folderId)
-  const removal = await callFolderWorkspaceMethod<{ deleted: boolean }>(
-    client,
-    'folderWorkspace.delete',
-    { folderWorkspaceId: folderId }
-  )
+  await assertUniqueIdMutationSupported(client)
+  const removal = await client.call<{ deleted: boolean }>('folderWorkspace.delete', {
+    folderWorkspaceId: folderId,
+    requireUniqueId: true
+  })
   if (!removal.result.deleted) {
     throw folderGone(folderId)
   }
