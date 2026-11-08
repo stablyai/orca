@@ -6,7 +6,7 @@ import { readBranchCompareHead } from '../../../shared/git/branches/git-branch-c
 import { resolveWorktreeAddBaseRef } from '../../../shared/worktree/base-ref'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { resolveWorktreeBaseCommitOid } from '../worktrees/creation/worktree-base-ref-probe'
-import { loadBranchChanges } from './branch-change-entries'
+import { loadBranchChangesThroughCache } from './branch-change-list-cache'
 import {
   commitPairDivergences,
   commitPairMergeBases,
@@ -122,7 +122,14 @@ export async function getBranchCompare(
     }
 
     const [entries, divergence] = await Promise.all([
-      loadBranchChanges(worktreePath, mergeBase, headOid, options),
+      loadBranchChangesThroughCache(
+        worktreePath,
+        pairScope,
+        rereadPairScope,
+        mergeBase,
+        headOid,
+        options
+      ),
       rememberCommitPair(commitPairDivergences, pairScope, rereadPairScope, baseOid, headOid, () =>
         countCompareDivergence(worktreePath, baseOid, headOid, options)
       )
