@@ -1,4 +1,4 @@
-import type { Automation } from '../../../../shared/automations-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import { useAppStore } from '@/store'
 import type { AutomationCreateDestination } from './automation-create-destination'
 import type { AutomationSaveContext } from './automation-save-context'

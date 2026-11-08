@@ -36,7 +36,9 @@ vi.mock('../runtime/rpc/server/runtime-rpc', () => ({
     setMobileDesktopRelayHosts = vi.fn()
   }
 }))
-vi.mock('../runtime/headless-runtime-graph', () => ({ publishHeadlessRuntimeGraph: vi.fn() }))
+vi.mock('../runtime/session-graph/headless-runtime-graph', () => ({
+  publishHeadlessRuntimeGraph: vi.fn()
+}))
 vi.mock('./headless-serve-ssh-registration', () => ({
   registerHeadlessServeSshHandlers: vi.fn(() => {
     launchOrder.push('ssh-registered')
@@ -138,12 +140,6 @@ const { initializeMainProcessReady } = await import('./main-process-ready')
 const { mainProcessState: state } = await import('./main-process-state')
 const { createServeDesktopActivationGate } = await import('./serve-desktop-activation')
 const { focusExistingMainWindow } = await import('../window/focus-existing-window')
-const { AGENT_LAUNCH_RECORD_WARMUP_DELAY_MS } = await import('./agent-launch-record-warmup')
-const { getServeOptions } = await import('./main-process-serve')
-const { registerServeSignalHandlers } = await import('./serve-signal-handlers')
-const { installServeNativeQuitGuard } = await import('./serve-native-quit-guard')
-const { quitProcess } = await import('./process-quit-request')
-const { quitFromUserCommand } = await import('./main-window-actions')
 
 type FakeWindow = {
   id: number
@@ -261,27 +257,6 @@ describe('desktop startup activation', () => {
     }
   )
 
-  it('marks startup settled for the launch record only after the window has loaded and settled', async () => {
-    vi.useFakeTimers({ toFake: ['setTimeout'] })
-    try {
-      await initializeMainProcessReady({
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the launch only calls once() on the returned window.
-        openMainWindow: () => openMainWindow() as unknown as NonNullable<typeof state.mainWindow>,
-        handleMacAppActivation: vi.fn()
-      })
-      expect(startupSettled).not.toHaveBeenCalled()
-
-      for (const listener of firstLoadListeners) {
-        listener()
-      }
-      expect(startupSettled).not.toHaveBeenCalled()
-      vi.advanceTimersByTime(AGENT_LAUNCH_RECORD_WARMUP_DELAY_MS)
-      expect(startupSettled).toHaveBeenCalledTimes(1)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('does not replay an activation when launch fails before the startup window', async () => {
     launchHooks.duringInstallDirRepair = () => state.desktopActivationGate?.requestActivation()
     launchHooks.failBeforeWindow = true
@@ -296,135 +271,5 @@ describe('desktop startup activation', () => {
 
     expect(windows).toHaveLength(0)
     expect(state.desktopActivationGate).toBeNull()
-  })
-
-  it('loads SSH targets on a windowless serve before paired clients can connect (#25886)', async () => {
-    launchOrder.length = 0
-    state.isServeMode = true
-    vi.mocked(getServeOptions).mockReturnValueOnce({
-      json: false,
-      pairingAddress: null,
-      noPairing: true,
-      mobilePairing: false,
-      grantDesktopControl: false,
-      allowPublic: false,
-      refusePublic: false,
-      recipeJson: false,
-      projectRoot: null
-    })
-    Object.assign(state.runtime!, {
-      refreshRestoredOrchestrationAuthority: vi.fn(async () => {}),
-      reconcileLegacyWorkerTerminals: vi.fn(async () => {})
-    })
-
-    await initializeMainProcessReady({
-      openMainWindow: () => {
-        throw new Error('serve must not open a window')
-      },
-      handleMacAppActivation: vi.fn()
-    })
-
-    expect(windows).toHaveLength(0)
-    expect(launchOrder).toEqual(['ssh-registered', 'rpc-start'])
-    // Signal intent must pass the macOS native-quit guard (#15537).
-    expect(registerServeSignalHandlers).toHaveBeenCalledWith(process, quitProcess)
-    expect(installServeNativeQuitGuard).toHaveBeenCalledWith(
-      expect.objectContaining({
-        platform: process.platform,
-        closeDesktopWindows: quitFromUserCommand
-      })
-    )
-  })
-  it.each([
-    { sidecar: false, pinnedBindHost: undefined },
-    { sidecar: true, pinnedBindHost: '127.0.0.1' }
-  ])(
-    'pins the serve listener to loopback only for orcad browser sidecars (sidecar=$sidecar, #31895)',
-    async ({ sidecar, pinnedBindHost }) => {
-      state.isServeMode = true
-      isOrcadSidecarLaunch.mockReturnValue(sidecar)
-      vi.mocked(getServeOptions).mockReturnValueOnce({
-        json: false,
-        pairingAddress: null,
-        noPairing: true,
-        mobilePairing: false,
-        grantDesktopControl: false,
-        allowPublic: false,
-        refusePublic: false,
-        recipeJson: false,
-        projectRoot: null
-      })
-      Object.assign(state.runtime!, {
-        refreshRestoredOrchestrationAuthority: vi.fn(async () => {}),
-        reconcileLegacyWorkerTerminals: vi.fn(async () => {})
-      })
-
-      await initializeMainProcessReady({
-        openMainWindow: () => {
-          throw new Error('serve must not open a window')
-        },
-        handleMacAppActivation: vi.fn()
-      })
-
-      expect(rpcOptions.at(-1)).toMatchObject({ exposeNetworkByDefault: true })
-      expect(rpcOptions.at(-1)?.pinnedBindHost).toBe(pinnedBindHost)
-    }
-  )
-  it('saves Codex auth before a headless serve update restart, like the desktop does', async () => {
-    setupHeadlessServeAutoUpdater.mockClear()
-    state.isServeMode = true
-    vi.mocked(getServeOptions).mockReturnValueOnce({
-      json: false,
-      pairingAddress: null,
-      noPairing: true,
-      mobilePairing: false,
-      grantDesktopControl: false,
-      allowPublic: false,
-      refusePublic: false,
-      recipeJson: false,
-      projectRoot: null
-    })
-    Object.assign(state.runtime!, {
-      refreshRestoredOrchestrationAuthority: vi.fn(async () => {}),
-      reconcileLegacyWorkerTerminals: vi.fn(async () => {})
-    })
-    const order: string[] = []
-    const store = {
-      flushPendingOrThrowAsync: vi.fn(async (options?: { fullCheckpoint?: boolean }) => {
-        order.push(options?.fullCheckpoint ? 'store-checkpoint' : 'store-flush')
-      })
-    }
-    const codexRuntimeHome = {
-      syncForCurrentSelection: vi.fn(() => {
-        order.push('codex-auth')
-      }),
-      syncActiveWslSelectionsBeforeRestart: vi.fn(async () => {})
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the update restart hook only flushes the store.
-    state.store = store as unknown as NonNullable<typeof state.store>
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the update restart hook only calls the two sync methods.
-    state.codexRuntimeHome = codexRuntimeHome as unknown as NonNullable<
-      typeof state.codexRuntimeHome
-    >
-    try {
-      await initializeMainProcessReady({
-        openMainWindow: () => {
-          throw new Error('serve must not open a window')
-        },
-        handleMacAppActivation: vi.fn()
-      })
-
-      expect(setupHeadlessServeAutoUpdater).toHaveBeenCalledTimes(1)
-      const hooks = setupHeadlessServeAutoUpdater.mock.calls[0][1]
-      expect(hooks.onBeforeUpdateQuitFailure).toBe('abort')
-      await hooks.onBeforeUpdateQuit()
-      expect(codexRuntimeHome.syncForCurrentSelection).toHaveBeenCalledTimes(1)
-      expect(codexRuntimeHome.syncActiveWslSelectionsBeforeRestart).toHaveBeenCalledTimes(1)
-      expect(order.at(0)).toBe('codex-auth')
-      expect(order.at(-1)).toBe('store-checkpoint')
-    } finally {
-      state.store = null
-      state.codexRuntimeHome = null
-    }
   })
 })

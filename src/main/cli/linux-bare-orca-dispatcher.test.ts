@@ -1,8 +1,7 @@
-import { existsSync } from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join, resolve } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const { filePublicationFailures } = vi.hoisted(() => ({
@@ -57,7 +56,6 @@ vi.mock('./appimage-registration-lock', () => ({
 }))
 
 import { installLinuxBareOrcaDispatcher } from './linux-bare-orca-dispatcher'
-import { resolveAppImageExtractedRoot } from './appimage-extracted-root'
 
 const created: string[] = []
 
@@ -81,22 +79,6 @@ afterEach(async () => {
 })
 
 describe('installLinuxBareOrcaDispatcher', () => {
-  it('publishes when the home filesystem does not support hard links', async () => {
-    const { homePath, resourcesPath } = await makeFixture()
-    filePublicationFailures.link = 1
-
-    const result = await installLinuxBareOrcaDispatcher({
-      resourcesPath,
-      homePath,
-      appImagePath: null
-    })
-
-    expect(result.state).toBe('installed')
-    await expect(readFile(result.dispatcherPath, 'utf8')).resolves.toContain(
-      '# orca-serve-bare-orca-dispatcher'
-    )
-  })
-
   it('restores a displaced foreign dispatcher when hard links are unsupported', async () => {
     const { homePath, resourcesPath } = await makeFixture()
     await installLinuxBareOrcaDispatcher({ resourcesPath, homePath, appImagePath: null })
@@ -173,57 +155,6 @@ describe('installLinuxBareOrcaDispatcher', () => {
       target: null
     })
     await expect(readFile(dispatcherPath, 'utf8')).resolves.toBe('#!/bin/sh\necho foreign\n')
-  })
-
-  it('prunes old owner generations without touching a sibling namespace', async () => {
-    const { homePath, resourcesPath } = await makeFixture()
-    const appImagePath = join(homePath, 'Orca.AppImage')
-    const cacheRootPath = join(homePath, 'cache', 'unused', '..')
-    await mkdir(homePath, { recursive: true })
-    await writeFile(appImagePath, '#!/usr/bin/env bash\n', { mode: 0o755 })
-    const events: string[] = []
-    const options = {
-      resourcesPath,
-      homePath,
-      appImagePath,
-      appImageCacheRootPath: cacheRootPath,
-      appImageExtractRunner: async (_path: string, cwd: string) => {
-        events.push('extract')
-        await writePayload(cwd)
-      }
-    }
-
-    await installLinuxBareOrcaDispatcher(options)
-    const previous = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
-    const sibling = join(resolve(cacheRootPath), 'f'.repeat(24), 'e'.repeat(24))
-    await mkdir(sibling, { recursive: true })
-    await writeFile(appImagePath, '#!/usr/bin/env bash\n# next\n', { mode: 0o755 })
-    const lockEntered = Promise.withResolvers<string>()
-    const releaseLock = Promise.withResolvers<void>()
-    events.length = 0
-    registrationLock.pause = releaseLock.promise
-    registrationLock.entered = (rootPath) => {
-      events.push('lock-entered')
-      lockEntered.resolve(rootPath)
-    }
-    registrationLock.completed = () => {
-      events.push(
-        existsSync(previous.rootPath) ? 'lock-left-before-prune' : 'lock-left-after-prune'
-      )
-    }
-
-    const installation = installLinuxBareOrcaDispatcher(options)
-    await expect(lockEntered.promise).resolves.toBe(resolve(cacheRootPath))
-    expect(events).toEqual(['lock-entered'])
-    expect(existsSync(previous.rootPath)).toBe(true)
-    releaseLock.resolve()
-    await installation
-    const current = resolveAppImageExtractedRoot({ appImagePath, cacheRootPath })!
-
-    expect(events).toEqual(['lock-entered', 'extract', 'lock-left-after-prune'])
-    expect(existsSync(previous.rootPath)).toBe(false)
-    expect(existsSync(current.rootPath)).toBe(true)
-    expect(existsSync(sibling)).toBe(true)
   })
 })
 

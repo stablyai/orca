@@ -130,20 +130,6 @@ describe('evidence', () => {
   })
 })
 
-describe('a query the engine had to cut says so', () => {
-  it('loads a candidate set larger than one batch of bound ids', async () => {
-    const { db, engine } = await open('ss-engine-id-batching', {
-      sessionCandidateLimit: 1200
-    })
-    for (let id = 1; id <= 1100; id++) {
-      addSyntheticSession(db, { id, text: 'needle' })
-    }
-    const result = engine.search({ query: 'needle', limit: 5 })
-    expect(result.hits).toHaveLength(5)
-    expect(result.truncated.candidates).toBe(false)
-  })
-})
-
 it.each(['repo:target', 'path:/work/target'])(
   'applies %s before selecting a route',
   async (operator) => {

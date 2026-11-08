@@ -1,4 +1,4 @@
-import { ipcMain, BrowserWindow, systemPreferences } from 'electron'
+import { ipcMain, BrowserWindow, systemPreferences, type MessagePortMain } from 'electron'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import { join } from 'node:path'
 import { writeFile, unlink } from 'node:fs/promises'
@@ -109,19 +109,32 @@ export function registerSpeechHandlers(store: Store): void {
 
   const dictationListeners = new Map<number, { owner: string; cleanup: () => void }>()
 
+  // The preload posts a session's audio port just before its start, on the same ordered pipe.
+  const pendingAudioPorts = new Map<string, MessagePortMain>()
+  ipcMain.on('speech:audioPort', (event, sessionId: string) => {
+    const port = event.ports[0]
+    if (port) {
+      pendingAudioPorts.set(getDesktopOwner(event.sender.id, sessionId), port)
+    }
+  })
+
   ipcMain.handle(
     'speech:startDictation',
     async (event, modelId: string, hotwords?: string[], sessionId = 'desktop') => {
+      const senderId = event.sender.id
+      const owner = getDesktopOwner(senderId, sessionId)
+      const audioPort = pendingAudioPorts.get(owner)
+      pendingAudioPorts.delete(owner)
+      let directAudio = false
       const window = BrowserWindow.fromWebContents(event.sender)
       if (!window) {
-        return
+        audioPort?.close()
+        return { directAudio }
       }
       let resolvedHotwordsPath: string | undefined
       let releaseHotwords: ((written: boolean) => void) | undefined
       let rendererRetired = false
       const rendererLifetime = abortWhenRendererGone(event.sender)
-      const senderId = event.sender.id
-      const owner = getDesktopOwner(senderId, sessionId)
       let sessionListenerRemoved = false
       let sessionReady = false
       const cleanupOnRendererGone = (): void => {
@@ -171,7 +184,7 @@ export function registerSpeechHandlers(store: Store): void {
 
         if (rendererRetired || window.isDestroyed()) {
           cleanupSessionListener()
-          return
+          return { directAudio }
         }
 
         await getSpeechSttService(store).startDictation(
@@ -212,6 +225,8 @@ export function registerSpeechHandlers(store: Store): void {
         )
         // Coalesced starts install no sink; only an accepted start supersedes the close hook.
         if (sessionReady) {
+          directAudio =
+            audioPort !== undefined && getSpeechSttService(store).attachAudioPort(owner, audioPort)
           dictationListeners.get(senderId)?.cleanup()
           if (!sessionListenerRemoved) {
             dictationListeners.set(senderId, { owner, cleanup: cleanupSessionListener })
@@ -219,11 +234,15 @@ export function registerSpeechHandlers(store: Store): void {
         } else {
           cleanupSessionListener()
         }
+        return { directAudio }
       } catch (err) {
         cleanupSessionListener()
         throw err
       } finally {
         releaseHotwords?.(resolvedHotwordsPath !== undefined)
+        if (!directAudio) {
+          audioPort?.close()
+        }
       }
     }
   )

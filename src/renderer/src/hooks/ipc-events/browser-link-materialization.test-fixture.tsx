@@ -65,6 +65,7 @@ export function installBrowserLinkMaterializationProbe() {
       primarySelectionMiddleClickPaste: false,
       primarySelectionDefaultedForLinux: false,
       terminalFontFamily: 'monospace',
+      terminalFontWeight: 500,
       terminalInactivePaneOpacity: 1,
       terminalRightClickToPaste: false,
       notifications: {
@@ -89,7 +90,8 @@ export function installBrowserLinkMaterializationProbe() {
         userModels: [],
         openAiApiKeyConfigured: false,
         microphoneDeviceId: null,
-        microphoneDeviceLabel: null
+        microphoneDeviceLabel: null,
+        unloadModelAfterMinutes: 15
       }
     })
   useAppStore.setState({

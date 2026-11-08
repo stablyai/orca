@@ -3,7 +3,7 @@ import type React from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { useAppStore } from '@/store'
 import { joinPath } from '@/lib/path'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { DiffSection } from '../../diff/sections/diff-section-types'
 import { getLargeDiffRenderLimit } from '../../../../../../shared/large-diff-render-limit'
 import {
@@ -12,7 +12,7 @@ import {
   isPrunedTextDiffResult
 } from '../../diff/large-files/large-diff-section-content'
 import { removeDiffSectionMeasuredHeight } from '../../diff/sections/diff-section-height-cache'
-import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 import { writeEditorSave } from '../../save/queue/editor-save-disk-precondition'
 import { withEditorFileWriteLock } from '../../save/queue/editor-file-write-lock'
 import { editorPathHoldKey } from '../../autosave/editor-autosave-holds'

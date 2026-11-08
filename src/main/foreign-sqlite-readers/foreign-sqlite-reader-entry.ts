@@ -22,7 +22,8 @@ function isOpenCodeRequest(request: ReaderRequest): request is OpenCodeSqliteWor
     request.kind === 'parse' ||
     request.kind === 'capture' ||
     request.kind === 'native-page' ||
-    request.kind === 'native-signal'
+    request.kind === 'native-signal' ||
+    request.kind === 'fork-coverage'
   )
 }
 

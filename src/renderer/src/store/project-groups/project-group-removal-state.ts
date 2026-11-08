@@ -1,7 +1,7 @@
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
+import { catalogOwnsHost, getProjectGroupHostId } from './project-group-owner-routing'
 import type { RepoSlice } from '../repos/repo-state'
 import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'

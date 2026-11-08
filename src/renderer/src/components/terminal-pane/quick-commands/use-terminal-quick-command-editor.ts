@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { useAppStore } from '../../../store'
-import { useRepoById } from '@/store/selectors'
+import { useRepoById } from '@/store/repos/use-repository-catalog'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import type {

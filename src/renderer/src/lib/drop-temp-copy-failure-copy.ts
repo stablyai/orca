@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import type { NativeFileDropCopyFailureReason } from '../../../shared/native-file-drop'
+import type { NativeFileDropCopyFailureReason } from '../../../shared/file-import/native-file-drop'
 import { describeDropSkipReason } from './drop-skip-reason-copy'
 
 export function describeDropTempCopyFailure(

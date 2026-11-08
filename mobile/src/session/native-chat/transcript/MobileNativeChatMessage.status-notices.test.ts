@@ -9,6 +9,7 @@ import { agentSessionFailureFact } from '../../../../../src/shared/agent-session
 import { agentSessionFailureWords } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { colors } from '../../../theme/mobile-theme'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
+import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
 import {
   MobileNativeChatNoticeContext,
   type MobileNativeChatNoticeView
@@ -51,6 +52,8 @@ vi.mock('lucide-react-native', () => ({
   Check: 'Check',
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight',
+  CircleCheck: 'CircleCheck',
+  CircleX: 'CircleX',
   Copy: 'Copy',
   Eye: 'Eye',
   FileMinus2: 'FileMinus2',
@@ -118,6 +121,48 @@ describe('MobileNativeChatMessage status notices', () => {
       (node) => String(node.type) === 'Text' && node.props.selectable === true
     )[0]!
   }
+
+  it('links a CI result line to its pull request and commit through the link sheet', () => {
+    const openLink = vi.fn()
+    act(() => {
+      renderer = create(
+        createElement(
+          MarkdownLinkHandlerContext.Provider,
+          { value: openLink },
+          createElement(MobileNativeChatMessage, {
+            message: {
+              // The journal key percent-encodes the line's client message id.
+              id: 'orca:pr-event%3Agithub.com%2Facme%2Frepo%233%3A8d5f74b0c1%3A1',
+              role: 'system',
+              blocks: [
+                {
+                  type: 'text',
+                  text: 'CI failing on repo#3 at 8d5f74b',
+                  presentation: 'pull-request-event',
+                  tone: 'failure'
+                }
+              ],
+              timestamp: 0,
+              source: 'transcript'
+            }
+          })
+        )
+      )
+    })
+    const links = renderer!.root.findAll(
+      (node) => String(node.type) === 'Text' && node.props.accessibilityRole === 'link'
+    )
+    // The whole lead is the PR's target, so a lead the ellipsis cuts still opens it.
+    expect(links.map((link) => link.props.accessibilityLabel ?? link.props.children)).toEqual([
+      'CI failing on repo#3',
+      '8d5f74b'
+    ])
+    links.forEach((link) => act(() => link.props.onPress()))
+    expect(openLink.mock.calls).toEqual([
+      ['https://github.com/acme/repo/pull/3'],
+      ['https://github.com/acme/repo/commit/8d5f74b0c1']
+    ])
+  })
 
   it.each(['without reset', 'with reset', 'from an old host'] as const)(
     'draws an OpenCode usage warning %s',

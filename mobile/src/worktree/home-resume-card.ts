@@ -1,5 +1,5 @@
 import { isSyntheticWorkspaceRoute } from '../session/synthetic-workspace-route'
-import type { ConnectionState } from '../transport/types'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import type { HomeWorktreeSummary, HostWorktreeInfo } from './home-worktree-info'
 
 // Reserve Resume’s slot from persisted history before connection so Tasks cannot move under the user’s thumb.

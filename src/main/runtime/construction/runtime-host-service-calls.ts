@@ -1,3 +1,8 @@
+import type {
+  WorkspaceSelectorCandidate,
+  WorkspaceSelectorOptions
+} from '../workspaces/catalog/workspace-selector-candidates'
+import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import type { LegacyWorkerTerminalSurface } from '../orchestration/terminal-authority/legacy-worker-terminal-surface'
 import type { OrcaRuntimeWithMarkPtyLivenessUnverifiable as MarkPtyLivenessUnverifiable } from '../terminal/layout/terminal-input-floor'
 import type { OrcaRuntimeWithStopTerminalsForWorktree as StopTerminalsForWorktree } from '../terminal/stop/worktree-terminal-stop'
@@ -102,3 +107,7 @@ export type ResolveTerminalWorkspaceLaunchScopeArgs = Parameters<
 export type ResolveTerminalWorkspaceLaunchScopeResult = ReturnType<
   ResolveBrowserNetworkExecutionHostForWorktree['resolveTerminalWorkspaceLaunchScope']
 >
+
+export type SelectorArgs = [selector: string, options?: WorkspaceSelectorOptions]
+export type SelectorResult = Promise<ResolvedWorktree>
+export type CandidateResult = Promise<WorkspaceSelectorCandidate>

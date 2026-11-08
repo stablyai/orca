@@ -1,12 +1,9 @@
 import type { GlobalSettings } from './global-settings-types'
 import type { NotificationSettings } from './notification-settings-types'
 import type { VoiceSettings } from './speech-types'
-import {
-  DEFAULT_TERMINAL_FONT_WEIGHT,
-  DEFAULT_TERMINAL_FONT_WEIGHT_BOLD
-} from './terminal/appearance/terminal-fonts'
+import { DEFAULT_TERMINAL_FONT_WEIGHT_BOLD } from './terminal/appearance/terminal-fonts'
 import { getDefaultTerminalQuickCommands } from './terminal/quick-commands/terminal-quick-commands'
-import { TASK_PROVIDERS } from './task-providers'
+import { TASK_PROVIDERS } from './work-items/task-providers'
 import { getDefaultSourceControlAiSettings } from './source-control/ai/settings/source-control-ai-settings'
 import { DEFAULT_APP_ICON_ID } from './app-icon'
 import { DEFAULT_OPEN_IN_APPLICATIONS } from './open-in-applications'
@@ -19,7 +16,7 @@ import {
 } from './left-sidebar-appearance'
 import { DEFAULT_SOURCE_CONTROL_GROUP_ORDER } from './source-control/listing/source-control-group-order'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal/replay/terminal-scrollback-policy'
-import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from './nested-worker-depth'
+import { NESTED_WORKER_MAX_DEPTH_DEFAULT } from './orchestration/workers/nested-worker-depth'
 
 export function buildDefaultSettings(args: {
   workspaceDir: string
@@ -28,6 +25,8 @@ export function buildDefaultSettings(args: {
   primarySelectionMiddleClickPaste: boolean
   primarySelectionDefaultedForLinux: boolean
   terminalFontFamily: string
+  terminalFontWeight: number
+  terminalFontWeightWindowsRegular?: GlobalSettings['terminalFontWeightWindowsRegular']
   terminalInactivePaneOpacity: number
   terminalRightClickToPaste: boolean
   notifications: NotificationSettings
@@ -76,7 +75,8 @@ export function buildDefaultSettings(args: {
       args.primarySelectionMiddleClickPaste,
     terminalFontSize: 14,
     terminalFontFamily: args.terminalFontFamily,
-    terminalFontWeight: DEFAULT_TERMINAL_FONT_WEIGHT,
+    terminalFontWeight: args.terminalFontWeight,
+    terminalFontWeightWindowsRegular: args.terminalFontWeightWindowsRegular,
     terminalFontWeightBold: DEFAULT_TERMINAL_FONT_WEIGHT_BOLD,
     terminalLineHeight: 1,
     terminalScrollSensitivity: 1.15,
@@ -97,6 +97,7 @@ export function buildDefaultSettings(args: {
     terminalUseSeparateLightTheme: true,
     terminalColorOverridesSplit: true,
     terminalThemeLight: 'Builtin Tango Light',
+    claudeCodeThemeSync: true,
     terminalCustomThemes: [],
     terminalDividerColorLight: '#d4d4d8',
     terminalInactivePaneOpacity: args.terminalInactivePaneOpacity,

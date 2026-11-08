@@ -1,5 +1,5 @@
 import type { ZCodeInteractiveCapability } from '../../shared/zcode-missing-tui'
-import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../shared/execution-host/project-execution-runtime'
 import type {
   PathSource,
   ShellHydrationFailureReason

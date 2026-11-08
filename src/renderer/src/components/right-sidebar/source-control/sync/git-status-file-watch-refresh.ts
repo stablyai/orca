@@ -7,12 +7,12 @@ import {
   normalizeRuntimePathForComparison,
   relativePathInsideRoot
 } from '../../../../../../shared/cross-platform-path'
-import type { FsChangedPayload } from '../../../../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../../../../shared/file-watch/filesystem-change-event'
 import type {
   ActiveRightSidebarTab,
   RightSidebarExplorerView
 } from '../../../../../../shared/ui-chrome-types'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import {
   ORCA_WORKTREE_FILE_CHANGE_EVENT,
   type WorktreeFileChangeEventDetail

@@ -1,7 +1,7 @@
 // Ask layout-owner main to start, wait for its bound terminal, then attach without a window-owned spawn.
 
 import { useAppStore } from '@/store/index'
-import { sendLayoutApply } from '@/runtime/layout-apply-send'
+import { sendLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-send'
 import { parsePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { recordPtyConnectDiagnostic } from '../instrumentation/pty-connect-diagnostics'
 import {

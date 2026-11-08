@@ -1,13 +1,13 @@
-import { useAppStateViewActive, useAppStateValue } from '@/store/app-state-view'
+import { useAppStateViewActive, useAppStateValue } from '@/store/retained-views/app-state-view'
 import { useSourceControlScope } from '../../source-control/panel/worktree-scope'
 import { translate } from '@/i18n/i18n'
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { findRepoForHost } from '@/store/repos/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import {
   getRuntimeRepoBaseRefDefault,
   searchRuntimeRepoBaseRefDetails
-} from '@/runtime/runtime-repo-client'
+} from '@/runtime/source-control/references/runtime-repo-client'
 import {
   normalizeHostedReviewBaseRef as stripBaseRef,
   normalizeCreateReviewBaseSearchResults

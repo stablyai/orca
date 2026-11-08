@@ -1,4 +1,4 @@
-import type { RuntimeFilePreviewResult } from '../../../shared/runtime-file-contracts'
+import type { RuntimeFilePreviewResult } from '../../../shared/file-content/runtime-file-read'
 import { callRuntimeEnvironment } from '../../ipc/runtime-environments/runtime-environment-transport-routing'
 import { getRuntimeEnvironmentRegistryRoot } from '../../ipc/runtime-environments/runtime-environment-registry-root'
 import {

@@ -8,7 +8,7 @@ import {
   humanizeTerminalError
 } from './terminal-error-display'
 import { useEffect, useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { isAgentLaunchOnlyError } from '../launch-outcome/agent-launch-pane-notice-text'
 import { hasClientEnvironmentFooter } from '../../../../../shared/client-environment-info'
@@ -44,6 +44,7 @@ export function TerminalErrorToast({
   /** Dismissing only hides the toast; the dead pane needs a way out from where the user is looking (#21342). */
   onClosePane?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   // An SSH host state (reconnecting, or waiting for the user to sign in), not a bug to report.
   const ssh = isSshSignInRequiredTerminalError(error) || isSshReconnectOwnedTerminalError(error)
   // Why: the client's OS and shell describe neither the host nor its shell, and the renderer knows neither.
@@ -59,7 +60,7 @@ export function TerminalErrorToast({
     !isExplainedTerminalError(error) &&
     !isFolderWorkspacePathOnlyError(error) &&
     !isWslDistroHoldText(error)
-  const humanizedError = humanizeTerminalError(error, agentId)
+  const humanizedError = humanizeTerminalError(error, agentId, t)
   // Why: the toast appends its own linked request, so the host's plain-text one would repeat it.
   const displayError = showIssueLink
     ? withoutTerminalSpawnIssueRequest(humanizedError)
@@ -144,7 +145,7 @@ export function TerminalErrorToast({
           {showDaemonRestart ? (
             <>
               {'\n'}
-              {translate(
+              {t(
                 'auto.components.terminal.pane.TerminalErrorToast.cc6d997c65',
                 'Restart the terminal daemon from here to clear stale daemon state.'
               )}
@@ -152,7 +153,7 @@ export function TerminalErrorToast({
           ) : showIssueLink ? (
             <>
               {'\n'}
-              {translate(
+              {t(
                 'auto.components.terminal.pane.TerminalErrorToast.5c8ce20be6',
                 'If this persists, please'
               )}{' '}
@@ -160,17 +161,14 @@ export function TerminalErrorToast({
                 href="https://github.com/stablyai/orca/issues"
                 style={{ color: 'inherit', textDecoration: 'underline' }}
               >
-                {translate(
-                  'auto.components.terminal.pane.TerminalErrorToast.a7e2fd2699',
-                  'file an issue'
-                )}
+                {t('auto.components.terminal.pane.TerminalErrorToast.a7e2fd2699', 'file an issue')}
               </a>
               .
             </>
           ) : null}
           {showClientEnvironment && footer ? `\n\n${footer}` : null}
           {paneOwnerUnverified && retryFailed
-            ? `\n${translate(
+            ? `\n${t(
                 'auto.components.terminal.pane.TerminalErrorToast.retryUnavailable',
                 'Retry could not reconnect yet. Try again shortly.'
               )}`
@@ -192,10 +190,7 @@ export function TerminalErrorToast({
               flexShrink: 0
             }}
           >
-            {translate(
-              'auto.components.terminal.pane.TerminalErrorToast.e4aa243f8c',
-              'Restart daemon'
-            )}
+            {t('auto.components.terminal.pane.TerminalErrorToast.e4aa243f8c', 'Restart daemon')}
           </button>
         ) : null}
         {paneOwnerUnverified && onRetry ? (
@@ -207,14 +202,14 @@ export function TerminalErrorToast({
             className="ml-3 border-amber-500/50 bg-popover text-popover-foreground hover:bg-amber-500/20"
           >
             {retrying
-              ? translate('auto.components.terminal.pane.TerminalErrorToast.retrying', 'Retrying…')
-              : translate('auto.components.terminal.pane.TerminalErrorToast.retry', 'Retry')}
+              ? t('auto.components.terminal.pane.TerminalErrorToast.retrying', 'Retrying…')
+              : t('auto.components.terminal.pane.TerminalErrorToast.retry', 'Retry')}
           </Button>
         ) : null}
         {/* Why: an owner can stay unverifiable, so Retry alone can loop forever. */}
         {paneOwnerUnverified && onOpenNewTerminal ? (
           <Button variant="outline" size="xs" onClick={onOpenNewTerminal} className="ml-2">
-            {translate(
+            {t(
               'auto.components.terminal.pane.TerminalErrorToast.openNewTerminal',
               'Open new terminal'
             )}
@@ -222,10 +217,7 @@ export function TerminalErrorToast({
         ) : null}
         {onClosePane && isRemoteTerminalClosedError(error) ? (
           <Button variant="outline" size="xs" onClick={onClosePane} className="ml-3">
-            {translate(
-              'auto.components.terminal.pane.TerminalContextMenu.8c17d6786d',
-              'Close Pane'
-            )}
+            {t('auto.components.terminal.pane.TerminalContextMenu.8c17d6786d', 'Close Pane')}
           </Button>
         ) : null}
         <button

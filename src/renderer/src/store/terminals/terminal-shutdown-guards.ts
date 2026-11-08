@@ -16,7 +16,7 @@ import {
   settleDeferredPtyShutdownExits
 } from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-exit-deferral'
 import type { TerminalStoreGet, TerminalStoreSet } from './terminal-state'
-import { copyOnWriteRecord } from '../copy-on-write-record'
+import { copyOnWriteRecord } from './terminal-shutdown-record'
 
 export type TerminalShutdownGuardController = {
   commitHandlerSnapshots: () => void

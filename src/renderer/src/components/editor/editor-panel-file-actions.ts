@@ -1,6 +1,5 @@
 import { useAppStore } from '@/store'
 import { editorViewPlacement } from '@/store/slices/editor/tabs/editor-view-placement'
-import { openFilePreviewToSide } from '@/lib/file-preview'
 import { detectLanguage } from '@/lib/language-detect'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { getEditorPanelRenderModel } from './editor-panel-render-model'
@@ -10,17 +9,6 @@ export function editorPanelFileActions(
   viewStateId: string | null,
   model: Pick<ReturnType<typeof getEditorPanelRenderModel>, 'openFileState' | 'resolvedLanguage'>
 ) {
-  const handleOpenPreviewToSide = (): void => {
-    const state = useAppStore.getState()
-    const placement = editorViewPlacement(state, file, viewStateId)
-    openFilePreviewToSide({
-      language: model.resolvedLanguage,
-      filePath: file.filePath,
-      worktreeId: file.worktreeId,
-      placementWorkspaceId: placement.placementWorkspaceId,
-      sourceGroupId: placement.targetGroupId ?? null
-    })
-  }
   const handleOpenDiffTargetFile = (preferredMarkdownViewMode?: 'rich'): void => {
     if (!model.openFileState.canOpen) {
       return
@@ -57,5 +45,5 @@ export function editorPanelFileActions(
       }
     )
   }
-  return { handleOpenPreviewToSide, handleOpenDiffTargetFile, handleOpenMarkdownPreview }
+  return { handleOpenDiffTargetFile, handleOpenMarkdownPreview }
 }

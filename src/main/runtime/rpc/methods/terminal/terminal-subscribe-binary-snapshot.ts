@@ -16,14 +16,16 @@ import type {
 } from './terminal-subscribe-types'
 import { deepenHeadlessCopyToDesktopDepth } from './headless-copy-desktop-depth'
 import { sendTerminalSubscribeRecoverySnapshot } from './terminal-subscribe-recovery-snapshot'
+import type { TerminalStreamToken } from './terminal-stream-tokens'
+import { tryPublishResumedOutput } from './terminal-subscribe-binary-resume'
 
 const MOBILE_RENDERER_MOUNT_READY_TIMEOUT_MS = 3_000
 
 export async function publishTerminalSubscribeBinarySnapshot(
   args: TerminalSubscriptionArgs,
   state: TerminalSubscribeBinaryState,
-  /** Set when this stream's output is credited; the client acks under this token. */
-  streamToken: string | null
+  /** Set when this stream's output is credited; the client acks and later resumes under this token. */
+  streamToken: TerminalStreamToken | null
 ): Promise<void> {
   const {
     params,
@@ -47,6 +49,10 @@ export async function publishTerminalSubscribeBinarySnapshot(
     state.pendingRemoteDesktopViewport = params.viewport
   }
   if (state.closed) {
+    return
+  }
+  // After presence: fitting the PTY to this phone first is what lets a quick tab flip land on an unchanged grid.
+  if (params.resume && tryPublishResumedOutput(args, state, streamToken, params.resume)) {
     return
   }
 
@@ -197,7 +203,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
     rows: serialized?.rows ?? size?.rows,
     displayMode: state.displayMode,
     seq: layoutSeq,
-    ...(streamToken ? { outputAck: true, streamToken } : {})
+    ...(streamToken ? { outputAck: true, streamToken: streamToken.token } : {})
   })
   const snapshotStats = sendSnapshotFrames(state.sendFrame, {
     ...scrollbackFrame,
@@ -250,6 +256,7 @@ export async function publishTerminalSubscribeBinarySnapshot(
     state.pendingOutputBytes = trimmed.bytes
     snapshotOutputSeq = recoverySeq
   }
+  streamToken?.ledger?.anchor(initialOutputOverflowed ? undefined : snapshotOutputSeq)
   state.buffering = false
   const bufferedOutput = state.pendingOutput.splice(0)
   const queryReplayData = state.pendingQueryOverflowed

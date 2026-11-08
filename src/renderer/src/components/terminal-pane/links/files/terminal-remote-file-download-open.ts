@@ -3,11 +3,11 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { basename } from '@/lib/path'
-import { downloadRuntimeFile } from '@/runtime/runtime-file-read-client'
-import { downloadGrantedRuntimeFile } from '@/runtime/runtime-remote-file-download'
-import { hostStreamsGrantedFiles } from '@/runtime/runtime-terminal-artifact-grant'
+import { downloadRuntimeFile } from '@/runtime/files/reads/runtime-file-read-client'
+import { downloadGrantedRuntimeFile } from '@/runtime/files/reads/runtime-remote-file-download'
+import { hostStreamsGrantedFiles } from '@/runtime/files/grants/runtime-terminal-artifact-grant'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 
 /**
  * Remote counterpart of "Open with default app": the OS can only launch a local

@@ -191,9 +191,11 @@ export function registerPluginHandlers(
   })
 
   ipcMain.handle('plugins:invokeCommand', async (_event, args: unknown) => {
+    // Why before whenReady: the caller's deadline started when it asked, not when plugins loaded.
+    const askedAt = Date.now()
     await pluginService.whenReady()
     const parsed = invokeCommandArgsSchema.parse(args)
-    const startBy = parsed.timeoutMs === undefined ? undefined : Date.now() + parsed.timeoutMs
+    const startBy = parsed.timeoutMs === undefined ? undefined : askedAt + parsed.timeoutMs
     return pluginService.invokeCommand(parsed.pluginKey, parsed.commandId, parsed.args, startBy)
   })
 

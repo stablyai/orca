@@ -5,7 +5,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function AccountSwitchList({
   heading,
@@ -24,9 +24,10 @@ export function AccountSwitchList({
 
 /** Groups accounts that need a sign-in below the usable ones. */
 export function AccountSwitchSignedOutHeading(): React.JSX.Element {
+  const t = useTranslate()
   return (
     <DropdownMenuLabel className="mt-1">
-      {translate('auto.components.status.bar.StatusBar.signedOutAccounts', 'Signed out')}
+      {t('auto.components.status.bar.StatusBar.signedOutAccounts', 'Signed out')}
     </DropdownMenuLabel>
   )
 }
@@ -48,16 +49,14 @@ export function AccountSwitchSection({
   onOpenSettings: () => void
   children: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   if (panelShowsActiveAccount && targets.length === 1 && targets[0].active) {
     return (
       <>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onOpenSettings}>
           <UserPlus className="size-3.5" />
-          {translate(
-            'auto.components.status.bar.StatusBar.addAnotherAccount',
-            'Add another account…'
-          )}
+          {t('auto.components.status.bar.StatusBar.addAnotherAccount', 'Add another account…')}
         </DropdownMenuItem>
       </>
     )
@@ -67,7 +66,7 @@ export function AccountSwitchSection({
       <AccountSwitchList heading={heading}>{children}</AccountSwitchList>
       <DropdownMenuSeparator />
       <DropdownMenuItem onSelect={onOpenSettings}>
-        {translate('auto.components.status.bar.StatusBar.75ded02687', 'Manage Accounts…')}
+        {t('auto.components.status.bar.StatusBar.75ded02687', 'Manage Accounts…')}
       </DropdownMenuItem>
     </>
   )

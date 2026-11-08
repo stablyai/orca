@@ -5,10 +5,10 @@ const mocks = vi.hoisted(() => ({
   runtimePathsExist: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-file-read-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
-vi.mock('@/runtime/runtime-path-existence-batch', () => ({
+vi.mock('@/runtime/files/metadata/runtime-path-existence-batch', () => ({
   runtimePathsExist: mocks.runtimePathsExist
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
@@ -20,9 +20,9 @@ vi.mock('@/lib/file-owner-runtime-target', () => {
   }
 })
 
-import { createTestStore } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { attachRestoredTabConflictScan } from './editor-restored-tab-conflict-scan'
-import { getDiskBaselineSignature } from '../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../shared/file-write/disk-baseline-signature'
 
 const FILE = '/repo/a.ts'
 let store: ReturnType<typeof createTestStore>

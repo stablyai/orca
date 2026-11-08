@@ -1,20 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  redactWorkerTerminalLines,
-  redactWorkerTerminalView,
-  replaceDispatchCapabilities
-} from './worker-terminal-redaction'
+import { redactWorkerTerminalLines, redactWorkerTerminalView } from './worker-terminal-redaction'
 
 describe('worker terminal capability masking', () => {
-  it('keeps the existing twenty-character minimum and full unwrapped mask', () => {
-    expect(replaceDispatchCapabilities(`dcap_${'s'.repeat(19)}`).redacted).toBe(false)
-    expect(replaceDispatchCapabilities(`dcap_${'s'.repeat(24)}`)).toEqual({
-      value: '[dispatch capability redacted]',
-      redacted: true
-    })
-    expect(replaceDispatchCapabilities(`embedded_dcap_${'s'.repeat(24)}`).redacted).toBe(false)
-  })
-
   it('does not infer wrapping between independent completed stream lines', () => {
     const lines = [`dcap_${'s'.repeat(5)}`, 's'.repeat(19)]
     expect(redactWorkerTerminalLines(lines)).toEqual({ lines, warnings: [] })

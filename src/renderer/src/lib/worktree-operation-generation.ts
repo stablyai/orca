@@ -3,10 +3,10 @@ import { authorityKey, type HostAuthority } from '../../../shared/host-authority
 import {
   getEnvironmentSshStateGeneration,
   getEnvironmentSshTargetConnectionGeneration
-} from '@/store/slices/runtime-environment-ssh'
-import { getLocalSshTargetConnectionGeneration } from '@/store/slices/ssh'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+} from '@/store/slices/ssh/runtime-environment-ssh'
+import { getLocalSshTargetConnectionGeneration } from '@/store/slices/ssh/create-ssh-slice'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import {
   resolveWorktreeOperationRoute,
   type WorktreeOperationRoute

@@ -1,5 +1,5 @@
 import type { AppState } from '@/store/types'
-import { getIndexedWorktreeById } from '@/store/worktree-repo-index'
+import { getIndexedWorktreeById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import {
   findLocalFolderWorkspaceRuntimeRepo,
@@ -8,7 +8,7 @@ import {
 import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import type { Worktree } from '../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type RuntimeWorkspaceState = Pick<AppState, 'activeWorktreeId' | 'repos' | 'worktreesByRepo'> &
   Partial<Pick<AppState, 'folderWorkspaces' | 'projectGroups' | 'activeWorkspaceExecutionHostId'>>

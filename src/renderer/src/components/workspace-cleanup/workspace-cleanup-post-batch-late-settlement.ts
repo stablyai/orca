@@ -3,7 +3,7 @@ import type {
   WorkspaceCleanupFailure,
   WorkspaceCleanupRemoveOptions,
   WorkspaceCleanupRemoveResult
-} from '@/store/slices/workspace-cleanup'
+} from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import {
   getSkippedAncestorMessage,
   isStrictWorkspaceCleanupDescendant,

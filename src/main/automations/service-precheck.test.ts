@@ -13,7 +13,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import { AutomationService } from './service'
-import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
+import { runAutomationLaunch } from './automation-launch-runner'
 import { createAutomationRunWriter } from './automation-run-writer'
 import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type * as PrecheckRunner from './precheck-runner'
@@ -167,11 +167,11 @@ describe('AutomationService prechecks', () => {
     const service = new AutomationService(store, {
       tickMs: 60_000,
       allowRemoteHostScheduling: true,
-      headlessDispatcher
+      terminalLauncher: { launch: headlessDispatcher, available: () => true }
     })
     const run = store.createAutomationRun(automation, Date.now(), 'scheduled')
 
-    await runHeadlessAutomationDispatch({
+    await runAutomationLaunch({
       automation,
       run,
       target: { ok: true, cwd: '/repo', repo: store.getRepo('r1')! },
@@ -231,9 +231,12 @@ describe('AutomationService prechecks', () => {
     const service = new AutomationService(store, {
       tickMs: 60_000,
       allowRemoteHostScheduling: true,
-      headlessDispatcher: async ({ run }) => {
-        dispatched.push(run.trigger)
-        return { workspaceId: 'wt-1', terminalSessionId: null }
+      terminalLauncher: {
+        launch: async ({ run }) => {
+          dispatched.push(run.trigger)
+          return { workspaceId: 'wt-1', terminalSessionId: null }
+        },
+        available: () => true
       }
     })
     vi.setSystemTime(automation.nextRunAt + 30_000)

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeEnvironmentStatus } from '../../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { getDefaultSettings } from '../../../../../../shared/constants'
-import { makeWorktree } from '../../../../store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
 import type { AiVaultResumePlatformState } from './ai-vault-resume-platform'
 import { buildAiVaultDropRepinStartup } from './ai-vault-resume-command'
 

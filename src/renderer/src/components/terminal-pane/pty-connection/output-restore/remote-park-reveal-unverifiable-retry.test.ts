@@ -32,14 +32,12 @@ const STRUCTURAL_CLEAR = '\x1b[2J\x1b[3J'
 
 const {
   resetAndRefreshAllTerminalWebglAtlases,
-  scheduleTerminalWebglAtlasRecovery,
   scheduleRuntimeGraphSync,
   shouldSeedCacheTimerOnInitialTitle,
   toastInfo,
   notifyCodexPaneBoundForStaleSweep
 } = vi.hoisted(() => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
-  scheduleTerminalWebglAtlasRecovery: vi.fn(),
   scheduleRuntimeGraphSync: vi.fn(),
   shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
   toastInfo: vi.fn(),
@@ -50,17 +48,13 @@ let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
 
-vi.mock('@/runtime/sync-runtime-graph', () => ({
+vi.mock('@/runtime/sync-runtime-graph/graph-sync-scheduler', () => ({
   scheduleRuntimeGraphSync
 }))
 
 vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   resetAndRefreshAllTerminalWebglAtlases
-}))
-
-vi.mock('../../render-health/terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalWebglAtlasRecovery
 }))
 
 vi.mock('@/store/index', () => ({

@@ -1,5 +1,8 @@
+import type * as MobileDiffReviewLoadersModule from '../../../source-control/review/mobile-diff-review-loaders'
 import type { MountAdapter } from '../recording-scenario'
-import type * as CommitLoader from '../../../session/mobile-diff-review-commit-loader'
+import type * as CommitLoader from '../../../source-control/review/mobile-diff-review-commit-loader'
+import type * as SnapshotLoader from '../../../source-control/review/mobile-diff-review-snapshot-loader'
+import type * as GitStatusQuery from '../../../source-control/mobile-git-status-query'
 import type { operationModuleLoader } from '../operation-module-loader'
 
 const WORKTREE = 'repo-9::/w'
@@ -26,8 +29,8 @@ export function diffReviewMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.diff-review-load': ({ client }) => {
-      const loaders = modules.load<typeof import('../../../session/mobile-diff-review-loaders')>(
-        'mobile/src/session/mobile-diff-review-loaders.ts'
+      const loaders = modules.load<typeof MobileDiffReviewLoadersModule>(
+        'mobile/src/source-control/review/mobile-diff-review-loaders.ts'
       )
       let snapshot: unknown = 'unloaded'
       let branchCompare: unknown = 'unloaded'
@@ -60,14 +63,33 @@ export function diffReviewMountAdapters(
       return {
         action(name, args) {
           if (name === 'snapshot') {
-            return loaders.loadMobileDiffReviewSnapshot(client, WORKTREE, false).then((value) => {
-              snapshot = value
-              return value
-            })
+            const statusQuery = modules.load<typeof GitStatusQuery>(
+              'mobile/src/source-control/mobile-git-status-query.ts'
+            ).gitStatusQuery
+            return modules
+              .load<typeof SnapshotLoader>(
+                'mobile/src/source-control/review/mobile-diff-review-snapshot-loader.ts'
+              )
+              .loadMobileDiffReviewSnapshot(client, WORKTREE, {
+                status: statusQuery.fetch(
+                  client,
+                  { exec: 'local', worktree: WORKTREE },
+                  {},
+                  undefined,
+                  { live: false, previousFromStore: false }
+                ),
+                compareAgainstUpstream: false
+              })
+              .then((value) => {
+                snapshot = value
+                return value
+              })
           }
           if (name === 'commit-snapshot') {
             return modules
-              .load<typeof CommitLoader>('mobile/src/session/mobile-diff-review-commit-loader.ts')
+              .load<typeof CommitLoader>(
+                'mobile/src/source-control/review/mobile-diff-review-commit-loader.ts'
+              )
               .loadMobileDiffReviewCommitSnapshot(client, WORKTREE, COMMIT_OID)
               .then((value) => {
                 snapshot = value
@@ -81,27 +103,26 @@ export function diffReviewMountAdapters(
             })
           }
           if (name === 'diff') {
-            return loaders
-              .loadMobileDiffReviewDiff({
-                client,
-                worktreeId: WORKTREE,
-                // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the loader reads only scope, filePath, oldPath, status and key.
-                item: reviewItem(args) as Parameters<
-                  typeof loaders.loadMobileDiffReviewDiff
-                >[0]['item'],
+            const input = loaders.mobileReviewDiffInput(
+              // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the input reads only key, scope, filePath, oldPath and status.
+              reviewItem(args) as Parameters<typeof loaders.mobileReviewDiffInput>[0],
+              {
                 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the branch arm reads only the compare summary's refs and oids.
                 branchCompare: (args.compare === false ? null : BRANCH_COMPARE) as Parameters<
-                  typeof loaders.loadMobileDiffReviewDiff
-                >[0]['branchCompare'],
+                  typeof loaders.mobileReviewDiffInput
+                >[1]['branchCompare'],
                 commit:
                   args.scope === 'commit'
                     ? { commitOid: COMMIT_OID, parentOid: PARENT_OID, entries: [] }
-                    : null
-              })
-              .then((value) => {
-                diff = value
-                return value
-              })
+                    : null,
+                statusRevision: 1,
+                ignoreTrimWhitespace: false
+              }
+            )
+            return loaders.loadMobileDiffReviewDiff(client, WORKTREE, input).then((value) => {
+              diff = value
+              return value
+            })
           }
           throw new Error(`Unknown diff review action: ${name}`)
         },

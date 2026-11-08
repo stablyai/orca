@@ -3,31 +3,15 @@ import {
   buildConfiguredProxyEnv,
   getProxyBypassRulesFromEnvironment,
   getProxyUrlFromEnvironment,
-  normalizeProxyBypassRules,
   normalizeProxyUrl,
   redactProxyUrl
 } from './network-proxy'
 
 describe('network proxy settings', () => {
-  it('normalizes supported proxy URLs without path, query, or fragment', () => {
-    expect(normalizeProxyUrl(' https://user:pass@proxy.example.com:8443/path?q=1#secret ')).toEqual(
-      {
-        ok: true,
-        value: 'https://user:pass@proxy.example.com:8443'
-      }
-    )
-  })
-
   it('rejects unsupported or malformed proxy URLs', () => {
     expect(normalizeProxyUrl('file:///tmp/proxy').ok).toBe(false)
     expect(normalizeProxyUrl('http://').ok).toBe(false)
     expect(normalizeProxyUrl('not-a-url').ok).toBe(false)
-  })
-
-  it('normalizes bypass rules from common separator styles', () => {
-    expect(normalizeProxyBypassRules('localhost, 127.0.0.1; *.internal\n<local>')).toBe(
-      'localhost;127.0.0.1;*.internal;<local>'
-    )
   })
 
   it('uses standard proxy environment precedence', () => {

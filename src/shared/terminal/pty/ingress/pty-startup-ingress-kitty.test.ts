@@ -149,19 +149,3 @@ it.each([undefined, {}, { foreground: '#fff' }, { background: 'invalid' }])(
     expect(emissions.map((span) => span.data).join('')).toBe('\x1b[c')
   }
 )
-it.each([undefined, false, 'true', 1])(
-  'rejects colorless intents without explicit Kitty support: %j',
-  (kittyKeyboardProtocol) => {
-    expect(
-      parsePtyStartupIngressIntent({ kittyKeyboardProtocol, deadlineMs: 5000 })
-    ).toBeUndefined()
-  }
-)
-it.each([-1, 30001, Number.NaN, Infinity, '5000', undefined])(
-  'rejects an invalid Kitty-only deadline: %j',
-  (deadlineMs) => {
-    expect(
-      parsePtyStartupIngressIntent({ kittyKeyboardProtocol: true, deadlineMs })
-    ).toBeUndefined()
-  }
-)

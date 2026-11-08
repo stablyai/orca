@@ -19,7 +19,7 @@ export const BRIDGE_AUDIO_PERMISSIONS = ['granted', 'denied', 'undetermined'] as
 
 export type BridgeAudioPermission = (typeof BRIDGE_AUDIO_PERMISSIONS)[number]
 
-// Return interruptions with the existing 500 ms read poll rather than a new verb/push lane; the page applies the native interruption state.
+// Return interruptions with the page's existing read poll rather than a new verb/push lane; the page applies the native interruption state.
 export const BRIDGE_AUDIO_INTERRUPTIONS = ['began', 'ended', 'blocked'] as const
 
 export type BridgeAudioInterruption = (typeof BRIDGE_AUDIO_INTERRUPTIONS)[number]

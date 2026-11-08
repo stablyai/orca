@@ -34,15 +34,18 @@ import { getKnownExecutionHostIdForWorktree } from '@/lib/workspace/ownership/wo
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { useWslHostStartCardReplacesPaneError } from '../pty-transport/recovery/wsl/use-wsl-host-stopped-pane'
 import { terminalPaneMenuAddToChat } from '../clipboard/terminal-pane-menu-copy-actions'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function TerminalPaneSurface({
   controller
 }: {
   controller: TerminalPaneController
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     activeAgentId,
     activePane,
+    activePaneRuntimeEnvironmentId,
     activePaneCanContinueInNewSession,
     activePaneCanResumeInChat,
     activePaneIsChatLeaf,
@@ -131,9 +134,7 @@ export function TerminalPaneSurface({
   )
   const errorReplacedByStartCard = useWslHostStartCardReplacesPaneError(
     worktreeId,
-    activePane
-      ? (paneTransportsRef.current.get(activePane.id)?.getRuntimeEnvironmentId?.() ?? null)
-      : undefined
+    activePaneRuntimeEnvironmentId
   )
 
   return (
@@ -258,10 +259,7 @@ export function TerminalPaneSurface({
           />,
           activePane.container
         )}
-      <SessionRestoredBannerPortals
-        panes={managerRef.current?.getPanes() ?? []}
-        paneIds={sessionRestoredBannerPaneIds}
-      />
+      <SessionRestoredBannerPortals panes={managedPanes} paneIds={sessionRestoredBannerPaneIds} />
       <TerminalPaneNativeChatPortal controller={controller} />
       <TerminalContextMenu
         open={contextMenu.open}
@@ -273,7 +271,7 @@ export function TerminalPaneSurface({
           showSplitButton,
           isTabPinned
         })}
-        closePaneLabel={terminalPaneCloseLabel(contextMenu.paneCount)}
+        closePaneLabel={terminalPaneCloseLabel(contextMenu.paneCount, t)}
         canExpandPane={contextMenu.paneCount > 1}
         canEqualizePaneSizes={contextMenu.paneCount > 1 && expandedPaneId === null}
         menuPaneIsExpanded={

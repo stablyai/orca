@@ -9,7 +9,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { AUTOMATION_EDITOR_SECTION_LABEL_CLASS, Field } from './automation-page-parts'
 import type { AutomationDraft } from './AutomationEditorDialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type AutomationMissedRunGraceFieldProps = {
   draft: AutomationDraft
@@ -24,20 +24,18 @@ export function AutomationMissedRunGraceField({
   pickerTriggerClassName,
   onDraftChange
 }: AutomationMissedRunGraceFieldProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Field
       labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
       label={
         <span className="inline-flex items-center gap-1">
-          {translate(
-            'auto.components.automations.AutomationMissedRunGraceField.fc089e5fde',
-            'Grace'
-          )}
+          {t('auto.components.automations.AutomationMissedRunGraceField.fc089e5fde', 'Grace')}
           <Tooltip>
             <TooltipTrigger asChild>
               <button
                 type="button"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.automations.AutomationMissedRunGraceField.3df53d554a',
                   'Missed-run grace help'
                 )}
@@ -47,7 +45,7 @@ export function AutomationMissedRunGraceField({
               </button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={6} className="max-w-72">
-              {translate(
+              {t(
                 'auto.components.automations.AutomationMissedRunGraceField.3d70c185c8',
                 'If Orca or the execution host was unavailable at the scheduled time, Orca runs one missed occurrence when it becomes available within this window. Older missed runs are skipped.'
               )}
@@ -68,46 +66,28 @@ export function AutomationMissedRunGraceField({
         </SelectTrigger>
         <SelectContent position="popper" side="bottom" align="start" sideOffset={4}>
           <SelectItem value="0">
-            {translate(
-              'auto.components.automations.AutomationMissedRunGraceField.529dc6c0b7',
-              'No grace'
-            )}
+            {t('auto.components.automations.AutomationMissedRunGraceField.529dc6c0b7', 'No grace')}
           </SelectItem>
           <SelectItem value="30">
-            {translate(
+            {t(
               'auto.components.automations.AutomationMissedRunGraceField.e5ad263ae5',
               '30 minutes'
             )}
           </SelectItem>
           <SelectItem value="60">
-            {translate(
-              'auto.components.automations.AutomationMissedRunGraceField.521f77cd58',
-              '1 hour'
-            )}
+            {t('auto.components.automations.AutomationMissedRunGraceField.521f77cd58', '1 hour')}
           </SelectItem>
           <SelectItem value="180">
-            {translate(
-              'auto.components.automations.AutomationMissedRunGraceField.2dc9ee84d0',
-              '3 hours'
-            )}
+            {t('auto.components.automations.AutomationMissedRunGraceField.2dc9ee84d0', '3 hours')}
           </SelectItem>
           <SelectItem value="720">
-            {translate(
-              'auto.components.automations.AutomationMissedRunGraceField.ba50e2a230',
-              '12 hours'
-            )}
+            {t('auto.components.automations.AutomationMissedRunGraceField.ba50e2a230', '12 hours')}
           </SelectItem>
           <SelectItem value="1440">
-            {translate(
-              'auto.components.automations.AutomationMissedRunGraceField.adbab51feb',
-              '24 hours'
-            )}
+            {t('auto.components.automations.AutomationMissedRunGraceField.adbab51feb', '24 hours')}
           </SelectItem>
           <SelectItem value="2880">
-            {translate(
-              'auto.components.automations.AutomationMissedRunGraceField.0f4459e91d',
-              '48 hours'
-            )}
+            {t('auto.components.automations.AutomationMissedRunGraceField.0f4459e91d', '48 hours')}
           </SelectItem>
         </SelectContent>
       </Select>

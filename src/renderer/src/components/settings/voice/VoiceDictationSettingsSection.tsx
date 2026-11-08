@@ -3,7 +3,7 @@ import { Label } from '../../ui/label'
 import { Separator } from '../../ui/separator'
 import { Switch } from '../../ui/switch'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { VoiceMicrophoneSetting } from './VoiceMicrophoneSetting'
 
 type VoiceDictationSettingsSectionProps = {
@@ -19,6 +19,7 @@ export function VoiceDictationSettingsSection({
   onToggleVoiceDictation,
   onUpdateVoiceSettings
 }: VoiceDictationSettingsSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const shortcutLabel = useShortcutLabel('voice.dictation')
 
   return (
@@ -26,10 +27,10 @@ export function VoiceDictationSettingsSection({
       <div className="flex items-center justify-between gap-4 py-2">
         <div className="space-y-0.5">
           <Label>
-            {translate('auto.components.settings.VoicePane.0121960365', 'Enable Voice Dictation')}
+            {t('auto.components.settings.VoicePane.0121960365', 'Enable Voice Dictation')}
           </Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.VoicePane.dictationShortcutDescription',
               'Press {{shortcut}} to dictate text into any focused pane.',
               { shortcut: shortcutLabel }
@@ -38,10 +39,7 @@ export function VoiceDictationSettingsSection({
         </div>
         <Switch
           checked={voiceSettings.enabled}
-          aria-label={translate(
-            'auto.components.settings.VoicePane.0121960365',
-            'Enable Voice Dictation'
-          )}
+          aria-label={t('auto.components.settings.VoicePane.0121960365', 'Enable Voice Dictation')}
           aria-busy={permissionPending}
           disabled={permissionPending}
           onCheckedChange={() => void onToggleVoiceDictation()}
@@ -53,11 +51,9 @@ export function VoiceDictationSettingsSection({
 
       <div className="flex items-center justify-between gap-4 py-2">
         <div className="space-y-0.5">
-          <Label>
-            {translate('auto.components.settings.VoicePane.ba4a900d1d', 'Dictation Mode')}
-          </Label>
+          <Label>{t('auto.components.settings.VoicePane.ba4a900d1d', 'Dictation Mode')}</Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.VoicePane.dictationModesDescription',
               'Toggle: press {{shortcut}} once to start, again to stop. Hold: dictate while {{shortcut}} is held.',
               { shortcut: shortcutLabel }
@@ -77,8 +73,8 @@ export function VoiceDictationSettingsSection({
               } ${!voiceSettings.enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               {mode === 'toggle'
-                ? translate('auto.components.settings.VoicePane.118b3c2dee', 'Toggle')
-                : translate('auto.components.settings.VoicePane.174da92062', 'Hold')}
+                ? t('auto.components.settings.VoicePane.118b3c2dee', 'Toggle')
+                : t('auto.components.settings.VoicePane.174da92062', 'Hold')}
             </button>
           ))}
         </div>

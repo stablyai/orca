@@ -6,7 +6,7 @@ import {
   planBundledSkillsOnTarget,
   type BundledSkillPlanResult,
   type BundledSkillUnsupportedReason
-} from '@/runtime/runtime-bundled-skills-client'
+} from '@/runtime/skills/bundled/runtime-bundled-skills-client'
 import { INSTALLED_AGENT_SKILLS_CHANGED_EVENT } from './installed-agent-skills-change-event'
 
 // Alt-tab fires focus repeatedly; briefly reuse a completed plan to avoid re-reading and re-hashing every target.

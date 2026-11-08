@@ -1,4 +1,4 @@
-import { linearStatus } from '@/runtime/runtime-linear-client'
+import { linearStatus } from '@/runtime/linear/runtime-linear-client'
 import {
   credentialDecryptionMessage,
   isIntegrationCredentialDecryptionError
@@ -10,7 +10,7 @@ import {
 } from '../../../../../shared/linear/links'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinearConnectionStatus } from '../../../../../shared/linear/workspace-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type {
   LinearIssueRead,
   LinearIssueLease,

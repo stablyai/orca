@@ -1,6 +1,6 @@
 import type { useAppStore } from '@/store/index'
 // Preserve store initialization admitted by the original combined notification owner.
-import '@/store/selectors'
+import '@/store/index'
 
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalPaneLayoutNode } from '../../../../../shared/workspace-layout/terminal-tab-types'

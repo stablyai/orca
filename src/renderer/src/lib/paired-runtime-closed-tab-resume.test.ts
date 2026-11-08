@@ -4,12 +4,13 @@ import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/sna
 import {
   makeSnapshot,
   resetWebSessionTabsSyncTestState
-} from '@/runtime/web-session-tabs-sync-test-harness'
+} from '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import {
   markHostSessionMirrorHydrated,
   resetHostSessionMirrorHydrationForTests
-} from '@/runtime/host-session-mirror-hydration'
-import { useAppStore, type AppState } from '@/store'
+} from '@/runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { Worktree } from '../../../shared/worktree/types'

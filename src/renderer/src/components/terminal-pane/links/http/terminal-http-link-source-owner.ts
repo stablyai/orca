@@ -1,5 +1,5 @@
 import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
-import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/hosted-terminals/identity/remote-runtime-pty-owner'
 import { parseRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseAppSshPtyId } from '../../../../../../shared/ssh-pty-id'
 import type { PtyTransport } from '../../pty-transport/pty-transport-types'

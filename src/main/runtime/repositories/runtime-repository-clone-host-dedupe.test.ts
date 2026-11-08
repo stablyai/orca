@@ -6,7 +6,7 @@ import { pathToFileURL } from 'node:url'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import { RuntimeRepositoryCloneController } from './runtime-repository-clone-controller'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({
   detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})

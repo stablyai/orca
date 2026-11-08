@@ -5,18 +5,18 @@ import { useAppStore } from '@/store/index'
 import { activateAndRevealWorktree } from './worktree-activation'
 import '../../web-runtime-worktree-terminal-after-wake'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync/tracking-lifecycle'
-import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/web-runtime-wake-terminal-respawn'
+import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/hosted-terminals/restoration/web-runtime-wake-terminal-respawn'
 import '@/runtime/web-session-tabs-sync/host-terminal-count-fixture'
 import {
   makeCreatedAgentWorktree as makeWorktree,
   seedEmptyActivatableWorktree
 } from '@/lib/workspace/activation/worktree-activation-created-agent.test-fixture'
-import '../../../runtime/runtime-environment-bridge-fixture'
+import '../../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 

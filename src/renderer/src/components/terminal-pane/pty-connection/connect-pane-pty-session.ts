@@ -1,4 +1,5 @@
-import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
+import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
+import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyConnectionDeps } from './pty-connection-deps'
 import type { PtyTransport } from '../pty-transport/pty-transport-types'
 import type { TerminalIdleCursorReset } from '../emulation/terminal-idle-cursor-reset'

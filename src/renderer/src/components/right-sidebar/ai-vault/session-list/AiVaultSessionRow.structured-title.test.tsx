@@ -9,10 +9,10 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Tab } from '../../../../../../shared/tab-types'
 
 const mocks = vi.hoisted(() => ({ subscribe: vi.fn(), supports: vi.fn() }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionStatus: mocks.subscribe
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   runtimeEnvironmentSupportsCapability: mocks.supports
 }))
@@ -22,7 +22,7 @@ import { useAppStore } from '@/store/index'
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests
-} from '@/runtime/structured-agent-session-status-feed'
+} from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { VaultSessionRow } from './AiVaultSessionRow'
 
 const initialState = useAppStore.getInitialState()

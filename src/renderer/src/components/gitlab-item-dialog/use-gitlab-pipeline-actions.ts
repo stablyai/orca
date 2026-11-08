@@ -1,4 +1,4 @@
-import { gitLabApiFor } from '@/runtime/gitlab-owner-api'
+import { gitLabApiFor } from '@/runtime/repository-gitlab/gitlab-owner-api'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
