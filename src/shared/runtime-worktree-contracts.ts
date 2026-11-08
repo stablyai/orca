@@ -169,7 +169,7 @@ export type RuntimeSpeechSetupState = {
   models: RuntimeSpeechModelSummary[]
 }
 
-export type RuntimeGitSwitchResult = { ok: true; branch: string; warning?: string }
+export type RuntimeGitSwitchResult = { ok: true; branch: string; head?: string; warning?: string }
 
 export type RuntimeGitCheckoutResult = {
   ok: true

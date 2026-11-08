@@ -141,7 +141,8 @@ export function GitGraphRefs({
           <ContextMenuItem onSelect={() => void window.api.ui.writeClipboardText(menuRef.name)}>
             {t('gitGraph.copyBranch', 'Copy branch name')}
           </ContextMenuItem>
-          {!workspaces.has(menuRef.id) &&
+          {menuRef.id !== currentRefId &&
+            !workspaces.has(menuRef.id) &&
             (menuRef.id.startsWith('refs/heads/') || menuRef.id.startsWith('refs/remotes/')) && (
               <>
                 <ContextMenuItem

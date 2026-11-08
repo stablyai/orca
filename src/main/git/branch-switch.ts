@@ -5,7 +5,9 @@ import type {
 import {
   resolveBranchSwitchTarget,
   branchSwitchFailure,
-  branchSwitchTrackingFailure
+  branchSwitchTrackingFailure,
+  readCurrentBranch,
+  readBranchSwitchHead
 } from './branch-switch-target'
 import { access } from 'node:fs/promises'
 import * as path from 'node:path'
@@ -30,7 +32,8 @@ export class BranchSwitchRefusedError extends Error {
 export class BranchSwitchLandedWithWarningError extends Error {
   constructor(
     message: string,
-    readonly branch: string
+    readonly branch: string,
+    readonly head?: string
   ) {
     super(message)
     this.name = 'BranchSwitchLandedWithWarningError'
@@ -57,21 +60,6 @@ function gitFailureLine(stderr: string): string | null {
   return lines.find((line) => /^(error|fatal):/.test(line)) ?? lines.at(-1) ?? null
 }
 
-async function readCurrentBranch(
-  worktreePath: string,
-  options: GitRuntimeOptions
-): Promise<string | null> {
-  try {
-    const { stdout } = await gitExecFileAsync(
-      ['symbolic-ref', '--quiet', '--short', 'HEAD'],
-      gitOptionsForWorktree(worktreePath, options)
-    )
-    return stdout.trim() || null
-  } catch {
-    return null
-  }
-}
-
 export type BranchSwitchDeps = {
   /** Status as the panel reads it, so Orca's own shared-path symlinks don't count as changes. */
   getStatus: () => Promise<GitStatusResult>
@@ -85,6 +73,7 @@ export type BranchSwitchDeps = {
 
 export type BranchSwitchResult = {
   branch: string
+  head?: string
   /** The live branch the checkout left, or null when it was already on `branch`. */
   previousBranch: string | null
 }
@@ -284,7 +273,7 @@ export async function switchBranchGuarded(
       throw new BranchSwitchRefusedError(refusal)
     }
     if (alreadyOnTarget && !creating) {
-      return { branch, previousBranch }
+      return { branch, previousBranch, head: await readBranchSwitchHead(worktreePath, options) }
     }
     let skippedPaths: string[]
     try {
@@ -301,10 +290,13 @@ export async function switchBranchGuarded(
           ).stdout.trim()
         : await readCurrentBranch(worktreePath, options)
       if (
+        (creating && previousBranch === branch) ||
         landedTarget !== branch ||
         (commitTarget && (await readCurrentBranch(worktreePath, options)) !== null)
       ) {
-        throw typeof target === 'string' ? error : branchSwitchFailure(error, branch)
+        throw typeof target === 'string' || commitTarget
+          ? error
+          : branchSwitchFailure(error, branch)
       }
       deps.onSwitched?.()
       const stderr = readGitCommandFailureStderr(error) ?? ''
@@ -322,16 +314,18 @@ export async function switchBranchGuarded(
               : detail
                 ? `Switched to ${branch}. A git hook in this repository failed afterwards and said: ${detail}. The switch itself worked.`
                 : `Switched to ${branch}. A git hook or git step in this repository failed afterwards. The switch itself worked.`,
-        branch
+        branch,
+        commitTarget ? landedTarget : await readBranchSwitchHead(worktreePath, options)
       )
     }
     deps.onSwitched?.()
     if (skippedPaths.length > 0) {
       throw new BranchSwitchLandedWithWarningError(
         filesLeftBehindMessage(branch, skippedPaths),
-        branch
+        branch,
+        await readBranchSwitchHead(worktreePath, options)
       )
     }
-    return { branch, previousBranch }
+    return { branch, previousBranch, head: await readBranchSwitchHead(worktreePath, options) }
   })
 }

@@ -141,7 +141,20 @@ it.each([
     const switching = vi.spyOn(branchActions, 'switchRuntimeGitBranch').mockResolvedValue({
       ok: true,
       branch: 'my-topic',
+      head: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
       warning: 'Tracking configured; hook failed.'
+    })
+    getHistory.mockResolvedValue({
+      ...result,
+      items: [
+        ...result.items,
+        {
+          id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+          subject: 'advanced tracker',
+          message: 'advanced tracker',
+          parentIds: []
+        }
+      ]
     })
     const announce = vi.spyOn(toast, 'message')
     controller.actions.requestBranch(result.items[0]!, { id, name })
@@ -157,7 +170,8 @@ it.each([
       undefined,
       expect.any(Function)
     )
-    expect(controller.view.getState().selectedId).toBe('a')
+    expect(controller.view.getState().selectedId).toBe('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+    expect(announce.mock.calls.at(-1)?.[1]?.description).toContain('bbbbbbb')
     expect(announce.mock.calls.at(-1)?.[1]?.description).toContain(
       'Tracking configured; hook failed.'
     )

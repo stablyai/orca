@@ -151,10 +151,10 @@ export class RuntimeGitStatusCommands {
           onSwitched: () => this.host.recordBranchSwitched?.(target.worktree)
         }
       )
-      return { ok: true, branch: result.branch }
+      return { ok: true, branch: result.branch, head: result.head }
     } catch (error) {
       if (error instanceof BranchSwitchLandedWithWarningError) {
-        return { ok: true, branch: error.branch, warning: error.message }
+        return { ok: true, branch: error.branch, head: error.head, warning: error.message }
       }
       throw error
     }

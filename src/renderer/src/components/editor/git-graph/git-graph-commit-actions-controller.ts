@@ -131,7 +131,7 @@ export class GitGraphCommitActionsController {
         result = {
           outcome: switched.warning ? 'landed-with-warning' : 'landed',
           branch: switched.branch,
-          commitId: item.id,
+          commitId: switched.head,
           message: switched.warning
         }
       } else if (action === 'create-branch') {

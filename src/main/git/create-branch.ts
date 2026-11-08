@@ -1,6 +1,5 @@
-import { BranchSwitchCollisionError } from './branch-switch-target'
+import { BranchSwitchCollisionError, validateNewBranchName } from './branch-switch-target'
 import { readGitCommandFailureStderr } from '../../shared/git/commands/git-command-failure-text'
-import { isBranchNameValid } from '../../shared/git/branch-switch-target'
 import type { GitCommitActionResult } from '../../shared/git/commands/git-commit-action'
 import { withCheckoutLock } from './branch-switch'
 import { gitOptionsForWorktree, type GitRuntimeOptions } from './git-runtime-options'
@@ -13,17 +12,12 @@ export async function createBranch(
   startPoint: string,
   options: GitRuntimeOptions = {}
 ): Promise<GitCommitActionResult> {
-  if (!isBranchNameValid(name)) {
-    throw new Error('This branch name is invalid. Choose a different name.')
-  }
-  if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(startPoint)) {
-    throw new Error('Expected a full git object id')
-  }
   return withCheckoutLock(worktreePath, async () => {
+    await validateNewBranchName(worktreePath, name, options)
+    if (!/^(?:[a-f0-9]{40}|[a-f0-9]{64})$/i.test(startPoint)) {
+      throw new Error('Expected a full git object id')
+    }
     const execution = gitOptionsForWorktree(worktreePath, options)
-    await gitExecFileAsync(['check-ref-format', '--branch', name], execution).catch(() => {
-      throw new Error('This branch name is invalid. Choose a different name.')
-    })
     await runWithGitReadCacheInvalidation(() =>
       gitExecFileAsync(['branch', '--no-track', '--', name, `${startPoint}^{commit}`], execution)
     ).catch((error) => {

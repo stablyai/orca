@@ -13,6 +13,7 @@ import { checkoutBranch } from './checkout'
 import { getStatus } from './source-control/status-read'
 
 let directory: string
+let initialHead: string
 
 async function git(...args: string[]): Promise<string> {
   const result = await runProcess({ program: 'git', args, cwd: directory })
@@ -49,6 +50,7 @@ beforeEach(async () => {
   await git('add', 'file.txt')
   await git('commit', '-qm', 'base')
   await git('branch', 'feature')
+  initialHead = await git('rev-parse', 'HEAD')
 })
 
 afterEach(async () => {
@@ -64,14 +66,14 @@ describe('switchBranchGuarded', () => {
       throw new Error('Expected checkout to fail')
     } catch (error) {
       expect(error).not.toBeInstanceOf(BranchSwitchLandedWithWarningError)
-      expect(String(error)).toContain("Orca couldn't switch branches.")
+      expect(String(error)).toContain('HEAD.lock')
     }
     expect(await currentBranch()).toBe('main')
   })
   it('leaves a reachable detached commit and actually checks out the branch', async () => {
     await git('checkout', '--detach', '-q')
     const result = await switchBranchGuarded(directory, 'feature', {}, deps())
-    expect(result).toEqual({ branch: 'feature', previousBranch: null })
+    expect(result).toEqual({ branch: 'feature', previousBranch: null, head: initialHead })
     expect(await currentBranch()).toBe('feature')
   })
 
@@ -122,7 +124,8 @@ describe('switchBranchGuarded', () => {
       switchBranchGuarded(directory, { commitId: oid }, {}, deps(null, oid))
     ).resolves.toEqual({
       branch: oid,
-      previousBranch: null
+      previousBranch: null,
+      head: oid
     })
   })
 
@@ -147,7 +150,7 @@ describe('switchBranchGuarded', () => {
   it('switches a clean checkout and reports the branch it left', async () => {
     const result = await switchBranchGuarded(directory, 'feature', {}, deps())
 
-    expect(result).toEqual({ branch: 'feature', previousBranch: 'main' })
+    expect(result).toEqual({ branch: 'feature', previousBranch: 'main', head: initialHead })
     expect(await currentBranch()).toBe('feature')
   })
 
