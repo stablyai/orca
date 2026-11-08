@@ -7,32 +7,58 @@ import {
 } from '../../worktree/mobile-workspace-lineage'
 import { getWorktreeRowIdentity } from '../../worktree/worktree-host-row-identity'
 
-/** What the folder list reads of a host row: lineage, then what a row shows. Agent and terminal fields churn, so they're left out. */
-export type FolderListRow = MobileLineageRow &
-  Pick<Worktree, 'repo' | 'displayName' | 'branch' | 'createdAt'>
+/** What a folder list row shows of a host row. */
+export type FolderListRow = Pick<
+  Worktree,
+  'worktreeId' | 'hostId' | 'repo' | 'displayName' | 'branch'
+>
+
+type FolderLineageRow = MobileLineageRow & Pick<Worktree, 'createdAt'>
+
+// Keyed by row object: the catalog query keeps an unchanged row's identity, so only changed rows are read again.
+const lineageKeys = new WeakMap<Worktree, string>()
+const listRows = new WeakMap<Worktree, FolderListRow>()
+
+/** The fields membership and order depend on; labels and agent state are left out so their churn rebuilds nothing. */
+export function folderLineageKey(row: Worktree): string {
+  let key = lineageKeys.get(row)
+  if (key === undefined) {
+    key = JSON.stringify([
+      row.worktreeId,
+      row.hostId,
+      row.repoId,
+      row.workspaceKind,
+      row.isArchived,
+      row.parentWorktreeId,
+      row.worktreeInstanceId,
+      row.lineageWorktreeInstanceId,
+      row.parentWorktreeInstanceId,
+      row.crossStoreParent,
+      row.workspaceLineage,
+      row.createdAt
+    ])
+    lineageKeys.set(row, key)
+  }
+  return key
+}
 
 export function toFolderListRow(row: Worktree): FolderListRow {
-  return {
-    worktreeId: row.worktreeId,
-    hostId: row.hostId,
-    repoId: row.repoId,
-    workspaceKind: row.workspaceKind,
-    isArchived: row.isArchived,
-    parentWorktreeId: row.parentWorktreeId,
-    worktreeInstanceId: row.worktreeInstanceId,
-    lineageWorktreeInstanceId: row.lineageWorktreeInstanceId,
-    parentWorktreeInstanceId: row.parentWorktreeInstanceId,
-    crossStoreParent: row.crossStoreParent,
-    workspaceLineage: row.workspaceLineage,
-    repo: row.repo,
-    displayName: row.displayName,
-    branch: row.branch,
-    createdAt: row.createdAt
+  let listRow = listRows.get(row)
+  if (listRow === undefined) {
+    listRow = {
+      worktreeId: row.worktreeId,
+      hostId: row.hostId,
+      repo: row.repo,
+      displayName: row.displayName,
+      branch: row.branch
+    }
+    listRows.set(row, listRow)
   }
+  return listRow
 }
 
 /** The folder workspace row a Source Control route names; a route without a server means the paired desktop's own. */
-export function findFolderWorkspaceRow<Row extends FolderListRow>(
+export function findFolderWorkspaceRow<Row extends FolderLineageRow>(
   rows: readonly Row[],
   folderWorktreeId: string,
   executionHost: ExecutionHostId | undefined
@@ -46,7 +72,7 @@ export function findFolderWorkspaceRow<Row extends FolderListRow>(
 }
 
 /** Worktrees attached to the folder, as the host list nests them, with their worktree descendants; oldest first, like desktop. */
-export function getFolderAttachedWorktrees<Row extends FolderListRow>(
+export function getFolderAttachedWorktrees<Row extends FolderLineageRow>(
   rows: readonly Row[],
   folder: Row,
   stores?: MobileLineageStores

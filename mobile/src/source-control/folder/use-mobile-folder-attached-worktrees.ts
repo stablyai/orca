@@ -19,10 +19,30 @@ import type { ConnectionState } from '../../transport/connection/connection-stat
 import type { MobileRelayHost } from '../../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
 import {
   findFolderWorkspaceRow,
+  folderLineageKey,
   getFolderAttachedWorktrees,
   toFolderListRow,
   type FolderListRow
 } from './mobile-folder-attached-worktrees'
+import type { Worktree } from '../../worktree/workspace-list-types'
+
+type FolderLineage = {
+  /** The catalog rows last seen. */
+  source: readonly Worktree[]
+  /** The rows membership was resolved over; same lineage keys as `source`, in the same order. */
+  rows: readonly Worktree[]
+  keys: readonly string[]
+}
+
+const NO_ROWS: FolderListRow[] = []
+
+// Reads each row's cached key: only rows the catalog replaced are keyed again.
+function sameLineage(held: FolderLineage | null, rows: readonly Worktree[]): held is FolderLineage {
+  if (!held || held.keys.length !== rows.length) {
+    return false
+  }
+  return rows.every((row, index) => folderLineageKey(row) === held.keys[index])
+}
 
 const NO_CAPABILITIES: readonly string[] = []
 const NO_SERVER_HOSTS: readonly MobileRelayHost[] = []
@@ -30,7 +50,7 @@ const NO_SERVER_HOSTS: readonly MobileRelayHost[] = []
 export type MobileFolderAttachedWorktrees = {
   /** Undefined until the host's list is read; null when the list has no such folder. */
   folder: FolderListRow | null | undefined
-  worktrees: FolderListRow[]
+  worktrees: readonly FolderListRow[]
   desktopCapabilities: readonly string[]
   /** The servers the desktop relays to, for rows it can't open. */
   serverHosts: readonly MobileRelayHost[]
@@ -75,31 +95,40 @@ export function useMobileFolderAttachedWorktrees(
   const ownRows = catalog.data?.worktrees
   const serverRows = servers.data?.worktrees
   const serverHosts = servers.data?.hosts
-  const projected = useMemo(
-    () => ownRows && [...ownRows, ...(serverRows ?? [])].map(toFolderListRow),
+  const allRows = useMemo(
+    () => ownRows && (serverRows?.length ? [...ownRows, ...serverRows] : ownRows),
     [ownRows, serverRows]
   )
-  // Agent, terminal and badge updates rewrite rows constantly; keep the last projection while lineage and labels are unchanged.
-  const [held, setHeld] = useState({ source: projected, rows: projected })
-  let rows = held.rows
-  if (held.source !== projected) {
-    rows = replaceEqualDeep(held.rows, projected)
-    setHeld({ source: projected, rows })
+  // Agent, terminal and label updates rewrite rows constantly; membership is resolved again only when lineage moves.
+  const [lineage, setLineage] = useState<FolderLineage | null>(null)
+  let held = lineage
+  if (allRows && held?.source !== allRows) {
+    held = sameLineage(held, allRows)
+      ? { ...held, source: allRows }
+      : { source: allRows, rows: allRows, keys: allRows.map(folderLineageKey) }
+    setLineage(held)
   }
+  const lineageRows = held?.rows
   const serverRowsRead = serverRows !== undefined
-  const resolved = useMemo(() => {
+  const membership = useMemo(() => {
     // A server's folder is unknown, not missing, until its rows are read.
-    if (!rows || (executionHost && relays && !serverRowsRead)) {
-      return { folder: undefined, worktrees: [] }
+    if (!lineageRows || (executionHost && relays && !serverRowsRead)) {
+      return undefined
     }
-    const folder = findFolderWorkspaceRow(rows, folderWorktreeId, executionHost)
+    const folder = findFolderWorkspaceRow(lineageRows, folderWorktreeId, executionHost)
+    if (!folder) {
+      return null
+    }
     const stores: MobileLineageStores = { ownInstallationId, servers: serverHosts ?? [] }
+    const indexOf = new Map(lineageRows.map((row, index) => [row, index]))
     return {
-      folder: folder ?? null,
-      worktrees: folder ? getFolderAttachedWorktrees(rows, folder, stores) : []
+      folderIndex: indexOf.get(folder)!,
+      memberIndexes: getFolderAttachedWorktrees(lineageRows, folder, stores).map((row) =>
+        indexOf.get(row)!
+      )
     }
   }, [
-    rows,
+    lineageRows,
     serverRowsRead,
     serverHosts,
     folderWorktreeId,
@@ -107,6 +136,30 @@ export function useMobileFolderAttachedWorktrees(
     ownInstallationId,
     relays
   ])
+  // Same lineage means same row order, so the current rows supply the labels shown.
+  const currentRows = held?.source
+  const shown = useMemo(
+    () =>
+      membership && currentRows
+        ? {
+            folder: toFolderListRow(currentRows[membership.folderIndex]),
+            worktrees: membership.memberIndexes.map((index) => toFolderListRow(currentRows[index]))
+          }
+        : null,
+    [membership, currentRows]
+  )
+  const [heldShown, setHeldShown] = useState({ from: shown, value: shown })
+  let stableShown = heldShown.value
+  if (heldShown.from !== shown) {
+    stableShown = replaceEqualDeep(heldShown.value, shown)
+    setHeldShown({ from: shown, value: stableShown })
+  }
+  const resolved =
+    membership === undefined
+      ? { folder: undefined, worktrees: NO_ROWS }
+      : stableShown
+        ? stableShown
+        : { folder: null, worktrees: NO_ROWS }
   const refetchCatalog = catalog.refetch
   const refetchServers = servers.refetch
   return {

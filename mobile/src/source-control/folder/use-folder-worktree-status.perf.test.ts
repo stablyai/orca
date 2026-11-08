@@ -1,4 +1,5 @@
 import { createElement, Fragment } from 'react'
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../../src/shared/execution-host'
@@ -9,6 +10,7 @@ import {
   documentQueryClient,
   settleQueryNotifications
 } from '../../test-support/rpc-recording/hook-mount'
+import { publishGitStatusSummary, type GitStatusRead } from '../mobile-git-status-query'
 import { useFolderWorktreeStatus } from './use-folder-worktree-status'
 
 const STATUS = { branch: 'feature', entries: [] }
@@ -54,6 +56,9 @@ afterEach(async () => {
 })
 
 const REFRESHERS = new Set<() => void>()
+const shown = new Map<string, { data: GitStatusRead | undefined; updatedAt: number }>()
+let queryClient: QueryClient | null = null
+const rowKey = (row: RowSpec) => `${row.routeHost ?? 'local'}|${row.worktreeId}`
 
 function Row(props: {
   client: RpcClient
@@ -61,7 +66,8 @@ function Row(props: {
   routeHost: ExecutionHostId | undefined
   subscribed: boolean
 }): null {
-  useFolderWorktreeStatus({
+  queryClient = useQueryClient()
+  const status = useFolderWorktreeStatus({
     hostId: 'host-1',
     client: props.client,
     routeHost: props.routeHost,
@@ -69,6 +75,7 @@ function Row(props: {
     subscribed: props.subscribed,
     refreshers: REFRESHERS
   })
+  shown.set(rowKey(props), { data: status.data, updatedAt: status.dataUpdatedAt })
   return null
 }
 
@@ -92,7 +99,7 @@ async function mountFolder(rows: RowSpec[], client: RpcClient) {
       createElement(
         Fragment,
         null,
-        rows.map((row) => createElement(Row, { key: row.worktreeId, client, ...row, subscribed }))
+        rows.map((row) => createElement(Row, { key: rowKey(row), client, ...row, subscribed }))
       )
     )
   await act(async () => {
@@ -154,5 +161,50 @@ describe.each([
     await act(async () => host.emit({ type: 'gitStatusChanged', repoId: 'repo-a' }))
     await settleQueryNotifications()
     expect(host.reads).toHaveLength(0)
+  })
+
+  it("shows a child's detailed read on Back with no read of its own", async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    const host = countingClient()
+    // The same worktree id on another server and on the desktop must keep their own summaries.
+    const opened: RowSpec = { worktreeId: 'repo-s::/w0', routeHost: 'runtime:env-0' }
+    const rows = [
+      ...folderRows(n, servers),
+      { worktreeId: 'repo-s::/w0', routeHost: 'runtime:env-x' as ExecutionHostId },
+      { worktreeId: 'repo-s::/w0', routeHost: undefined }
+    ]
+    const setSubscribed = await mountFolder(rows, host.client)
+    const before = new Map(shown)
+    const listed = before.get(rowKey(opened))!
+    if (listed.data?.kind !== 'ready') {
+      throw new Error('summary not read')
+    }
+
+    // The child opens over the list, commits, and its forced reread lands.
+    await setSubscribed(false)
+    host.reads.length = 0
+    vi.setSystemTime(Date.now() + 1_000)
+    const after: GitStatusRead = {
+      kind: 'ready',
+      status: { ...listed.data.status, branch: 'after' }
+    }
+    const target = { exec: opened.routeHost!, worktree: opened.worktreeId }
+    await act(() => publishGitStatusSummary(queryClient!, 'host-1', target, after, Date.now()))
+    // A detailed read older than the summary changes nothing.
+    await act(() =>
+      publishGitStatusSummary(queryClient!, 'host-1', target, listed.data!, listed.updatedAt - 1)
+    )
+
+    // Back within three seconds, then well past them with no focus or signal.
+    vi.setSystemTime(Date.now() + 1_000)
+    await setSubscribed(true)
+    vi.setSystemTime(Date.now() + 10_000)
+    await setSubscribed(true)
+    expect(host.reads).toHaveLength(0)
+    expect(shown.get(rowKey(opened))?.data).toEqual(after)
+    const changed = rows.filter(
+      (row) => shown.get(rowKey(row))?.data !== before.get(rowKey(row))?.data
+    )
+    expect(changed).toEqual([opened])
   })
 })

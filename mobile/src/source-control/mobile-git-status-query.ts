@@ -1,15 +1,17 @@
 import * as z from 'zod'
+import { hashKey, type QueryClient } from '@tanstack/react-query'
 import { translate } from '../i18n/mobile-i18n'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host'
 import { getRepoIdFromWorktreeId, worktreeIdsEqual } from '../../../src/shared/worktree/id'
 import { defineHostQuery, type HostSignalEvent } from '../query/host-query'
-import type { HostQueryTarget } from '../query/host-query-key'
+import { hostQueryKey, type HostQueryTarget } from '../query/host-query-key'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   gitStatusHostPayloadSchema,
   type MobileGitStatusHostPayload
 } from './git-status-reply-schema'
 import { gitStatusHostPayloadRead } from './mobile-git-read-operations'
+import { holdsRestoredHostQueryData } from '../query/host-query-persistence'
 import {
   isMobileGitTransientRefreshError,
   isMobileGitUnavailableReply,
@@ -119,3 +121,37 @@ export const serverGitStatusSummaryQuery = defineHostQuery({
   refetchOnWindowFocus: true,
   fetch: fetchStatusSummary
 })
+
+/** Hands a detailed read to the summary a folder list shows for the same worktree, so Back shows what an action just did. */
+export async function publishGitStatusSummary(
+  queryClient: QueryClient,
+  hostId: string,
+  target: HostQueryTarget,
+  read: GitStatusRead,
+  readAt: number
+): Promise<void> {
+  // An earlier launch's copy is unconfirmed; the summary's own read decides.
+  if (
+    holdsRestoredHostQueryData(
+      queryClient,
+      hashKey(hostQueryKey(hostId, gitStatusQuery.family, target, {}))
+    )
+  ) {
+    return
+  }
+  const summary =
+    target.exec === LOCAL_EXECUTION_HOST_ID ? gitStatusSummaryQuery : serverGitStatusSummaryQuery
+  const queryKey = hostQueryKey(hostId, summary.family, target, {})
+  const state = queryClient.getQueryState(queryKey)
+  // No list reads this worktree, or its summary is newer than this read.
+  if (!state || state.dataUpdatedAt >= readAt) {
+    return
+  }
+  // A summary read already out started before this answer; landing later, it would undo it.
+  if (state.fetchStatus === 'fetching') {
+    await queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
+  }
+  if ((queryClient.getQueryState(queryKey)?.dataUpdatedAt ?? 0) < readAt) {
+    queryClient.setQueryData(queryKey, read, { updatedAt: readAt })
+  }
+}

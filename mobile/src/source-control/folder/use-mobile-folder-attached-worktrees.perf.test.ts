@@ -19,7 +19,7 @@ const host = vi.hoisted(() => ({ client: null as unknown }))
 vi.mock('../../transport/connection/host-client-hooks', () => ({
   useHostClient: () => ({ client: host.client, clientId: 'client-1', state: 'connected' })
 }))
-const lineage = vi.hoisted(() => ({ resolutions: 0 }))
+const lineage = vi.hoisted(() => ({ resolutions: 0, keyed: 0, seen: new WeakSet<object>() }))
 vi.mock('../../worktree/mobile-workspace-lineage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../worktree/mobile-workspace-lineage')>()
   return {
@@ -29,6 +29,20 @@ vi.mock('../../worktree/mobile-workspace-lineage', async (importOriginal) => {
     ) => {
       lineage.resolutions += 1
       return actual.getMobileWorkspaceLineageChildren(...args)
+    }
+  }
+})
+vi.mock('./mobile-folder-attached-worktrees', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./mobile-folder-attached-worktrees')>()
+  return {
+    ...actual,
+    // Counts rows keyed for the first time: the per-row lineage work an update costs.
+    folderLineageKey: (row: Worktree) => {
+      if (!lineage.seen.has(row)) {
+        lineage.seen.add(row)
+        lineage.keyed += 1
+      }
+      return actual.folderLineageKey(row)
     }
   }
 })
@@ -123,11 +137,22 @@ async function rowsChanged(fake: ReturnType<typeof catalogHost>, next: Worktree[
   await settleQueryNotifications()
 }
 
+function churn(rows: Worktree[]): void {
+  const h = rows.length
+  rows[1] = { ...rows[1], liveTerminalCount: 3, unread: true }
+  rows[h - 1] = { ...rows[h - 1], status: 'working' }
+  rows[h - 2] = { ...rows[h - 2], displayName: 'elsewhere', branch: 'other' }
+}
+
+function rename(rows: Worktree[]): void {
+  rows[2] = { ...rows[2], displayName: 'renamed', branch: 'renamed-branch' }
+}
+
 describe.each([
   { h: 750, n: 30 },
   { h: 7_500, n: 300 }
 ])('folder membership over H=$h host rows, N=$n attached', ({ h, n }) => {
-  it('rebuilds lineage only when lineage or a shown label changes', async () => {
+  it('resolves lineage again only for lineage changes, keying only changed rows', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     const fake = catalogHost(catalog(h, n))
     host.client = fake.client
@@ -136,28 +161,44 @@ describe.each([
     fake.emit({ type: 'ready' } as RuntimeClientEventStreamMessage)
     await settleQueryNotifications()
     expect(read.current?.worktrees).toHaveLength(n)
-    const members = read.current?.worktrees
+    const members = read.current!.worktrees
     lineage.resolutions = 0
+    lineage.keyed = 0
 
-    // Agent attention and terminal counts on unrelated rows and on members.
+    // Agent attention and terminal counts on a member and an unrelated row, and an unrelated rename.
+    await rowsChanged(fake, catalog(h, n, churn))
+    expect(lineage.resolutions).toBe(0)
+    expect(lineage.keyed).toBe(3)
+    expect(read.current?.worktrees).toBe(members)
+
+    // A member renamed: shown at once, without resolving lineage or touching the other members.
+    lineage.keyed = 0
     await rowsChanged(
       fake,
       catalog(h, n, (rows) => {
-        rows[1] = { ...rows[1], liveTerminalCount: 3, unread: true }
-        rows[h - 1] = { ...rows[h - 1], status: 'working' }
+        churn(rows)
+        rename(rows)
       })
     )
     expect(lineage.resolutions).toBe(0)
-    expect(read.current?.worktrees).toBe(members)
+    expect(lineage.keyed).toBe(1)
+    const renamed = read.current!.worktrees
+    expect(renamed[1]).toMatchObject({ displayName: 'renamed', branch: 'renamed-branch' })
+    expect(renamed.filter((member, index) => member !== members[index])).toHaveLength(1)
 
-    // A member renamed: the list must show it.
+    // A worktree attached: membership follows.
     await rowsChanged(
       fake,
       catalog(h, n, (rows) => {
-        rows[1] = { ...rows[1], displayName: 'renamed' }
+        churn(rows)
+        rename(rows)
+        rows[h - 1] = {
+          ...rows[h - 1],
+          workspaceLineage: { parentWorkspaceKey: 'folder:f-1', parentInstanceId: null }
+        }
       })
     )
     expect(lineage.resolutions).toBe(1)
-    expect(read.current?.worktrees.some((member) => member.displayName === 'renamed')).toBe(true)
+    expect(read.current?.worktrees).toHaveLength(n + 1)
   })
 })

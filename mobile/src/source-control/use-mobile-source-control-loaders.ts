@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type MutableRefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { MobileSourceControlSettings } from './mobile-source-control-settings-operations'
@@ -16,7 +16,7 @@ import {
   readBranchCompareOutcome,
   type BranchCompareAttempt
 } from './mobile-branch-compare-outcome'
-import { gitStatusQuery } from './mobile-git-status-query'
+import { gitStatusQuery, publishGitStatusSummary } from './mobile-git-status-query'
 import type {
   LoadStatusOptions,
   MobileBranchCompareState,
@@ -103,6 +103,12 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
     enabled: statusEnabled,
     subscribed: focused
   })
+  const { data: publishedRead, dataUpdatedAt: publishedAt } = statusQuery
+  useEffect(() => {
+    if (publishedRead) {
+      void publishGitStatusSummary(queryClient, hostId, target, publishedRead, publishedAt)
+    }
+  }, [hostId, publishedAt, publishedRead, queryClient, target])
   const mountedRef = useRef(true)
   const setRootRef = useCallback((node: View | null): void => {
     // Invalidate route-detached RPC writes without waiting for passive cleanup.
