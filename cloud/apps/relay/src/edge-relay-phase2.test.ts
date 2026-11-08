@@ -179,6 +179,16 @@ async function harness(cohort: 'host' | 'account' = 'host', extra: Partial<EdgeR
   return { database, fake, clock, assignments, assign, insertDevice, postgresDevices, row, leaveCohort }
 }
 
+// Asks every 20 s (desktops retry every 2 s; failures further apart than 30 s restart the clock)
+// until `ms` after the current time, expecting the 503 each time.
+async function keepFailing(h: { clock: { now: number }; assign: () => Promise<Response> }, ms: number) {
+  const end = h.clock.now + ms
+  while (h.clock.now < end) {
+    h.clock.now = Math.min(end, h.clock.now + 20_000)
+    if (h.clock.now < end) { expect((await h.assign()).status).toBe(503) }
+  }
+}
+
 describe('relay edge phase 2: the director moves host data with the host', () => {
   it('pushes the host and its Postgres devices before answering with the edge, with a location hint', async () => {
     const h = await harness()
@@ -256,7 +266,7 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     h.fake.down = true
     h.leaveCohort()
     expect((await h.assign()).status).toBe(503)
-    h.clock.now += EDGE_EXPORT_SKIP_AFTER_MS - 1
+    await keepFailing(h, EDGE_EXPORT_SKIP_AFTER_MS - 1)
     const early = await h.assign()
     expect(early.status).toBe(503)
     expect(early.headers.get('retry-after')).toBe('2')
@@ -289,9 +299,25 @@ describe('relay edge phase 2: the director moves host data with the host', () =>
     h.fake.connected = true
     expect((await h.assign()).status).toBe(503)
     h.fake.down = true
-    h.clock.now += 100_000
+    h.clock.now += 20_000
     expect((await h.assign()).status).toBe(503)
-    h.clock.now += EDGE_EXPORT_SKIP_AFTER_MS - 1
+    await keepFailing(h, EDGE_EXPORT_SKIP_AFTER_MS - 1)
+    expect((await h.assign()).status).toBe(503)
+    h.clock.now += 1
+    expect((await h.assign()).status).toBe(200)
+  })
+
+  it('does not count failures further apart than 30 s as one outage', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const h = await harness()
+    await h.assign()
+    h.leaveCohort()
+    h.fake.down = true
+    expect((await h.assign()).status).toBe(503)
+    // One old failure, then quiet for longer than the skip threshold: the next failure starts over.
+    h.clock.now += EDGE_EXPORT_SKIP_AFTER_MS + 1
+    expect((await h.assign()).status).toBe(503)
+    await keepFailing(h, EDGE_EXPORT_SKIP_AFTER_MS - 1)
     expect((await h.assign()).status).toBe(503)
     h.clock.now += 1
     expect((await h.assign()).status).toBe(200)

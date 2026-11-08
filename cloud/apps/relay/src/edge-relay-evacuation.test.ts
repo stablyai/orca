@@ -9,7 +9,8 @@ import {
   type EdgeAdmin,
   type EdgeDrainResult
 } from './edge-admin-client.js'
-import { EDGE_EVACUATION_BATCH, EDGE_EVACUATION_INTERVAL_MS, EdgeEvacuation } from './edge-relay-evacuation.js'
+import { EDGE_EVACUATION_BATCH, EDGE_EVACUATION_BUSY_INTERVAL_MS,
+  EDGE_EVACUATION_INTERVAL_MS, EdgeEvacuation } from './edge-relay-evacuation.js'
 import { EDGE_CELL_ID, type EdgeRelayConfig } from './edge-relay.js'
 
 const EDGE_URL = 'https://edge.relay.example.test'
@@ -140,14 +141,20 @@ describe('edge evacuation sweep', () => {
     await h.insert(hostId(1))
     const sweep = vi.spyOn(h.evacuation, 'sweep')
     h.evacuation.start()
-    await vi.advanceTimersByTimeAsync(EDGE_EVACUATION_INTERVAL_MS - 1)
+    // First pass soon after start, then the slow interval once nothing more is queued.
+    await vi.advanceTimersByTimeAsync(EDGE_EVACUATION_BUSY_INTERVAL_MS - 1)
     expect(sweep).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1)
     expect(sweep).toHaveBeenCalledTimes(1)
-    await vi.waitFor(() => expect(h.admin.drained).toEqual([hostId(1)]))
+    await vi.advanceTimersByTimeAsync(0)
+    expect(h.admin.drained).toEqual([hostId(1)])
+    await vi.advanceTimersByTimeAsync(EDGE_EVACUATION_BUSY_INTERVAL_MS)
+    expect(sweep).toHaveBeenCalledTimes(1)
+    await vi.advanceTimersByTimeAsync(EDGE_EVACUATION_INTERVAL_MS - EDGE_EVACUATION_BUSY_INTERVAL_MS)
+    expect(sweep).toHaveBeenCalledTimes(2)
     h.evacuation.stop()
     await vi.advanceTimersByTimeAsync(10 * EDGE_EVACUATION_INTERVAL_MS)
-    expect(sweep).toHaveBeenCalledTimes(1)
+    expect(sweep).toHaveBeenCalledTimes(2)
   })
 })
 

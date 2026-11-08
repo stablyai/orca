@@ -7,7 +7,11 @@ import type { RelayDatabase } from './database/database.js'
 import { EdgeAdminUnavailableError, type EdgeAdmin } from './edge-admin-client.js'
 import { inEdgeCohort, text, type EdgeRelayConfig, type Identity } from './edge-relay-cohort.js'
 
-export const EDGE_EVACUATION_INTERVAL_MS = 60_000
+// The cohort only changes when a new revision starts, so a pass soon after start and then a slow
+// background pass are enough; each pass reads the edge rows (cell_id has no index).
+export const EDGE_EVACUATION_INTERVAL_MS = 10 * 60_000
+// First pass after start, and the next pass while more leaving hosts are queued.
+export const EDGE_EVACUATION_BUSY_INTERVAL_MS = 60_000
 // Drains sent per tick (per director), so a cohort cut moves desktops back gradually.
 export const EDGE_EVACUATION_BATCH = 20
 // Edge rows read per tick; the cursor walks the table across ticks.
@@ -21,6 +25,7 @@ export class EdgeEvacuation {
   private readonly drainedAt = new Map<string, number>()
   private timer: ReturnType<typeof setTimeout> | undefined
   private stopped = true
+  private busy = true
 
   constructor(
     private readonly database: RelayDatabase,
@@ -49,6 +54,7 @@ export class EdgeEvacuation {
       if (now - sentAt >= EDGE_EVACUATION_COOLDOWN_MS) { this.drainedAt.delete(key) }
     }
     const leaving = await this.leavingHosts()
+    this.busy = leaving.length >= EDGE_EVACUATION_BATCH || this.cursor !== undefined
     let answered = 0
     for (const identity of leaving) {
       try {
@@ -105,8 +111,9 @@ export class EdgeEvacuation {
 
   private schedule(): void {
     if (this.stopped) { return }
-    // Jittered (45-75 s), so directors do not sweep together.
-    const delay = EDGE_EVACUATION_INTERVAL_MS * (0.75 + this.random() / 2)
+    // Jittered (±25%), so directors do not sweep together.
+    const interval = this.busy ? EDGE_EVACUATION_BUSY_INTERVAL_MS : EDGE_EVACUATION_INTERVAL_MS
+    const delay = interval * (0.75 + this.random() / 2)
     this.timer = setTimeout(() => {
       void this.sweep()
         .catch((error: unknown) =>

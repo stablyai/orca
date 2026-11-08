@@ -5,6 +5,7 @@ import { lockedSelector, registerExistingOnlyCell, requireSelectorMatchesAdmissi
 import type { RelayDatabase, SqlRow } from './database/database.js'
 import { EdgeAdminUnavailableError, edgeLocationHint, type EdgeAdmin } from './edge-admin-client.js'
 import {
+  EDGE_EXPORT_FAILURE_GAP_MS,
   DEVICE_COLUMNS,
   EDGE_EXPORT_SKIP_AFTER_MS,
   EdgeMoveBusyError,
@@ -39,6 +40,7 @@ export class EdgeAssignments {
   private seeded = false
   // When this director's exports started failing as unavailable; any usable answer clears it.
   private exportFailingSince: number | undefined
+  private exportLastFailureAt: number | undefined
 
   // With `admin` (the edge keeps host data in its objects) every move onto the edge pushes the
   // host's devices before the answer, and every move off exports them back first.
@@ -243,8 +245,13 @@ export class EdgeAssignments {
     } catch (error) {
       if (!(error instanceof EdgeAdminUnavailableError)) { throw error }
       const now = this.now()
-      this.exportFailingSince ??= now
-      const failingForMs = now - this.exportFailingSince
+      // Only continuous failures count: a gap longer than EDGE_EXPORT_FAILURE_GAP_MS (desktops retry
+      // every 2 s) starts the clock again, so one old failure cannot skip an export on its own.
+      if (this.exportLastFailureAt === undefined || now - this.exportLastFailureAt > EDGE_EXPORT_FAILURE_GAP_MS) {
+        this.exportFailingSince = now
+      }
+      this.exportLastFailureAt = now
+      const failingForMs = now - (this.exportFailingSince ?? now)
       if (failingForMs < (this.config.exportSkipAfterMs ?? EDGE_EXPORT_SKIP_AFTER_MS)) { throw new EdgeMoveBusyError() }
       // The edge has been unreachable too long: place the host on its Postgres devices (changes
       // made on the edge are lost) rather than refusing every ask until the edge is back.
@@ -252,6 +259,7 @@ export class EdgeAssignments {
       return true
     }
     this.exportFailingSince = undefined
+    this.exportLastFailureAt = undefined
     if (exported.outcome === 'busy') { throw new EdgeMoveBusyError() }
     // An object with no assignment never held this host's data (or was erased): keep Postgres.
     if (!exported.assignment) { return true }

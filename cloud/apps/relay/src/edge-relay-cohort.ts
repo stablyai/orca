@@ -26,6 +26,8 @@ export type EdgeRelayConfig = {
 // An edge outage must not strand every leaving host on 503s: after this long of nothing but
 // failed exports, a leaving host keeps its Postgres devices and is placed anyway.
 export const EDGE_EXPORT_SKIP_AFTER_MS = 120_000
+// Export failures further apart than this are not one outage (see EdgeAssignments.leaveEdge).
+export const EDGE_EXPORT_FAILURE_GAP_MS = 30_000
 
 export function edgeCohortBucket(relayHostId: string): number {
   return createHash('sha256').update(`edge-cohort:${relayHostId}`).digest().readUInt32BE(0) % 100
