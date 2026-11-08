@@ -6,9 +6,7 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   'extension reload': {
     'extension-id':
       '--extension-id <id>   Installed unpacked extension ID; also accepted positionally',
-    path: '--path <folder>        Source folder of exactly one installed unpacked extension',
-    profile:
-      '--profile <id>        Validate this profile (default: default); reload affects all enabled profiles'
+    path: '--path <folder>        Source folder of exactly one installed unpacked extension'
   },
   'reference add': {
     url: '--url <url-or-jira-key> Full review/issue URL or Jira key; use positionals or repeated --url',

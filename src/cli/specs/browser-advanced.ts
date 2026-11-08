@@ -14,12 +14,12 @@ export const BROWSER_ADVANCED_COMMAND_SPECS: CommandSpec[] = withBrowserPageTarg
     path: ['extension', 'reload'],
     summary: 'Reload an installed unpacked browser extension',
     usage:
-      'orca extension reload <extension-id> [--profile <id>] [--json] | orca extension reload --path <folder> [--profile <id>] [--json]',
+      'orca extension reload <extension-id> [--json] | orca extension reload --path <folder> [--json]',
     positionalArgs: ['extension-id'],
-    allowedFlags: [...GLOBAL_FLAGS, 'extension-id', 'path', 'profile'],
+    allowedFlags: [...GLOBAL_FLAGS, 'extension-id', 'path'],
     notes: [
       'Desktop only. --path selects an already installed unpacked source folder; it never installs one.',
-      '--profile validates the profile (default: default). Like the UI, reload restarts the extension across every profile where it is enabled.'
+      'Like the Settings reload button, this restarts the extension in every profile where it is enabled.'
     ]
   },
   {

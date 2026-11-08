@@ -1,18 +1,16 @@
-import { isChromeExtensionId } from '../../shared/browser/extensions/browser-extension-url'
 import type {
-  BrowserExtensionListResult,
+  BrowserExtensionSummaryListResult,
   BrowserExtensionReloadResult
 } from '../../shared/browser/extensions/browser-extension-types'
 import type { CommandHandler } from '../dispatch'
 import { getPresentStringFlag } from '../flags'
 import { printResult } from '../format'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
-import { RuntimeClientError } from '../runtime/types'
 
 export const BROWSER_EXTENSION_HANDLERS: Record<string, CommandHandler> = {
   'extension list': async ({ flags, client, json }) => {
     const profileId = getPresentStringFlag(flags, 'profile')
-    const result = await client.call<BrowserExtensionListResult>(
+    const result = await client.call<BrowserExtensionSummaryListResult>(
       'browser.extensionList',
       profileId !== undefined ? { profileId } : {}
     )
@@ -32,28 +30,13 @@ export const BROWSER_EXTENSION_HANDLERS: Record<string, CommandHandler> = {
   'extension reload': async ({ flags, client, cwd, json }) => {
     const extensionId = getPresentStringFlag(flags, 'extension-id')
     const path = getPresentStringFlag(flags, 'path')
-    const profileId = getPresentStringFlag(flags, 'profile')
-    if ((extensionId === undefined) === (path === undefined)) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Pass either an extension ID or --path <folder>'
-      )
-    }
-    if (extensionId !== undefined && !isChromeExtensionId(extensionId)) {
-      throw new RuntimeClientError('invalid_argument', 'Invalid Chrome extension ID')
-    }
     const result = await client.call<BrowserExtensionReloadResult>('browser.extensionReload', {
-      ...(extensionId !== undefined
-        ? { extensionId }
-        : {
-            path: resolveRepoPathArgument(
-              path ?? '',
-              cwd,
-              client.isRemote,
-              'Remote extension source'
-            )
-          }),
-      ...(profileId !== undefined ? { profileId } : {})
+      ...(extensionId !== undefined ? { extensionId } : {}),
+      ...(path !== undefined
+        ? {
+            path: resolveRepoPathArgument(path, cwd, client.isRemote, 'Remote extension source')
+          }
+        : {})
     })
     printResult(
       result,

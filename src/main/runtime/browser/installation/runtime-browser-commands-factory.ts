@@ -1,8 +1,8 @@
 import type {
   BrowserExtensionListParams,
-  BrowserExtensionListResult,
   BrowserExtensionReloadParams,
-  BrowserExtensionReloadResult
+  BrowserExtensionReloadResult,
+  BrowserExtensionSummaryListResult
 } from '../../../../shared/browser/extensions/browser-extension-types'
 import { BrowserError } from '../../../browser/browser-error'
 import '../../../../shared/runtime-types'
@@ -24,7 +24,7 @@ export type RuntimeBrowserCommandsFactoryOptions = {
   clientHosting?: boolean
   /** Only the desktop installs access to its local extension manager. */
   extensions?: {
-    list(params: BrowserExtensionListParams): Promise<BrowserExtensionListResult>
+    list(params: BrowserExtensionListParams): Promise<BrowserExtensionSummaryListResult>
     reload(params: BrowserExtensionReloadParams): Promise<BrowserExtensionReloadResult>
   }
   supportsGoogleCookieClear?: () => boolean
