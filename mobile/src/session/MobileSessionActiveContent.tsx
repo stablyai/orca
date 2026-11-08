@@ -27,6 +27,7 @@ import { useHostDisplay } from '../transport/use-host-display'
 import { FileReader } from './MobileSessionFileReader'
 import { MobileSessionContentState } from './MobileSessionContentState'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
+import { markdownTabDraftKey } from '../drafts/document-edit-draft-rows'
 import { loadMarkdownPreviewImage } from '../files/mobile-markdown-image-source'
 
 export function MobileSessionActiveContent({
@@ -78,7 +79,7 @@ export function MobileSessionActiveContent({
     sendDiffCommentsToAgent,
     sendingDiffCommentIds,
     updateMarkdownLocalContent,
-    copyMarkdownLocalContent,
+    copyMarkdownText,
     copyMarkdownPath,
     discardMarkdownLocalContent,
     saveMarkdownTab,
@@ -138,6 +139,11 @@ export function MobileSessionActiveContent({
     controller
   )
   const { presentedConnState, showOfflineState, forceReconnectHost } = controller
+  const toast = toastMessage ? (
+    <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
+      <Text style={styles.toastText}>{toastMessage}</Text>
+    </Animated.View>
+  ) : null
   const content =
     showLoadingState || showEmptyState || showOfflineState ? (
       <MobileSessionContentState
@@ -158,11 +164,15 @@ export function MobileSessionActiveContent({
       <View style={styles.markdownFrame}>
         <MarkdownReader
           documentId={activeMarkdownTab.id}
+          draftKey={markdownTabDraftKey(
+            { hostId, executionHost, worktreeId },
+            activeMarkdownTab.id
+          )}
           doc={controller.markdownDocs.get(activeMarkdownTab.id)}
           onRefresh={() => void readMarkdownTab(activeMarkdownTab)}
           onChange={(content) => updateMarkdownLocalContent(activeMarkdownTab.id, content)}
           onSave={() => void saveMarkdownTab(activeMarkdownTab)}
-          onCopy={() => void copyMarkdownLocalContent(activeMarkdownTab.id)}
+          onCopy={(text) => void copyMarkdownText(text)}
           onCopyPath={() => void copyMarkdownPath(activeMarkdownTab)}
           onDiscard={() => discardMarkdownLocalContent(activeMarkdownTab)}
           loadImageSource={(path) =>
@@ -170,11 +180,7 @@ export function MobileSessionActiveContent({
           }
           keyboardLift={keyboardLift}
         />
-        {toastMessage && (
-          <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
-            <Text style={styles.toastText}>{toastMessage}</Text>
-          </Animated.View>
-        )}
+        {toast}
       </View>
     ) : activeFileTab ? (
       <View style={styles.markdownFrame}>
@@ -199,11 +205,7 @@ export function MobileSessionActiveContent({
               : undefined
           }
         />
-        {toastMessage && (
-          <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
-            <Text style={styles.toastText}>{toastMessage}</Text>
-          </Animated.View>
-        )}
+        {toast}
       </View>
     ) : activeBrowserTab ? (
       <View style={styles.browserFrame}>
@@ -218,11 +220,7 @@ export function MobileSessionActiveContent({
           bottomInset={controller.insets.bottom}
           onToast={showToast}
         />
-        {toastMessage && (
-          <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
-            <Text style={styles.toastText}>{toastMessage}</Text>
-          </Animated.View>
-        )}
+        {toast}
       </View>
     ) : activePendingTerminalTab ? (
       <View style={styles.emptyState}>
@@ -371,11 +369,7 @@ export function MobileSessionActiveContent({
             </MobileAgentMessageProvider>
           </MobileDictationMeterContext.Provider>
         </MobileNativeChatDictationPreviewContext.Provider>
-        {toastMessage && (
-          <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
-            <Text style={styles.toastText}>{toastMessage}</Text>
-          </Animated.View>
-        )}
+        {toast}
       </View>
     )
   return (
