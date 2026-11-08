@@ -1,4 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import {
   selectEnclosingWorktreeSelectionOnHost,
   type CatalogRow
@@ -51,6 +54,91 @@ function clientAnswering(answer: (method: string) => ReturnType<typeof okFixture
   vi.spyOn(client, 'call').mockImplementation(async (method: string) => answer(method))
   return client
 }
+
+describe('owners registered at one path', () => {
+  it('refuses distinct registrations without a caller, whatever their repo', () => {
+    const repoA = {
+      id: 'repo-a::checkout',
+      repoId: 'repo-a',
+      path: '/tmp/hub/app',
+      hostId: 'local' as const
+    }
+    const repoB = {
+      id: 'repo-b::checkout',
+      repoId: 'repo-b',
+      path: '/tmp/hub/app',
+      hostId: 'local' as const
+    }
+    for (const rows of [
+      [repoA, repoB],
+      [repoB, repoA]
+    ]) {
+      expect(() => select(rows, '/tmp/hub/app/src')).toThrow(
+        expect.objectContaining({ code: 'selector_ambiguous' })
+      )
+      expect(select(rows, '/tmp/hub/app/src', [repoB.id])).toBe('id:repo-b::checkout')
+    }
+  })
+})
+
+// Symlinks need privileges on Windows; macOS /tmp and Linux bind aliases behave like this fixture.
+describe.skipIf(process.platform === 'win32')('symlink aliases on the caller filesystem', () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'orca-enclosing-alias-')))
+  const real = join(root, 'real')
+  const alias = join(root, 'alias')
+  mkdirSync(join(real, 'hub', 'app', 'src'), { recursive: true })
+  symlinkSync(real, alias)
+  afterAll(() => rmSync(root, { recursive: true, force: true }))
+
+  const outer = (base: string) => ({
+    id: 'folder:outer',
+    path: join(base, 'hub'),
+    hostId: 'local' as const
+  })
+  const inner = (base: string, kind: 'folder' | 'worktree') =>
+    kind === 'folder'
+      ? { id: 'folder:inner', path: join(base, 'hub', 'app'), hostId: 'local' as const }
+      : {
+          id: 'repo::inner',
+          repoId: 'repo',
+          path: join(base, 'hub', 'app'),
+          hostId: 'local' as const
+        }
+
+  it.each([
+    ['folder', real, alias],
+    ['folder', alias, real],
+    ['worktree', real, alias],
+    ['worktree', alias, real]
+  ] as const)(
+    'picks the deeper %s stored under one spelling from cwd under the other',
+    (kind, cwdBase, innerBase) => {
+      const cwd = join(cwdBase, 'hub', 'app', 'src')
+      const expected = kind === 'folder' ? 'folder:inner' : 'id:repo::inner'
+      expect(select([outer(cwdBase), inner(innerBase, kind)], cwd)).toBe(expected)
+      expect(select([inner(innerBase, kind)], cwd)).toBe(expected)
+    }
+  )
+
+  it('keeps an aliased folder in the catalog prefilter', async () => {
+    const client = clientAnswering((method) =>
+      method === 'worktree.list'
+        ? okFixture('list', { worktrees: [] })
+        : method === 'folderWorkspace.list'
+          ? okFixture('folders', {
+              folderWorkspaces: [
+                { id: 'inner', folderPath: join(alias, 'hub', 'app'), projectGroupId: 'g' }
+              ]
+            })
+          : method === 'projectGroup.list'
+            ? okFixture('groups', { groups: [{ id: 'g' }] })
+            : okFixture('repos', { repos: [] })
+    )
+    expect(await readEnclosingWorkspaceCatalog(client, join(real, 'hub', 'app', 'src'))).toEqual([
+      { id: 'folder:inner', path: join(alias, 'hub', 'app'), hostId: 'local' }
+    ])
+  })
+})
 
 describe('a folder workspace whose host is unknown', () => {
   const unresolvedHub = { id: 'folder:hub', path: '/tmp/hub', hostUnresolved: true as const }

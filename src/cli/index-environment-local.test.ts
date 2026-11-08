@@ -415,6 +415,19 @@ describe('--environment local and workspace addresses', () => {
     expect(callMock).not.toHaveBeenCalledWith('worktree.show', expect.anything())
   })
 
+  it('surfaces a worktree-list method_not_found for an omitted target', async () => {
+    callMock.mockImplementation(async (method: string) => {
+      if (method === 'worktree.list') {
+        throw new RuntimeClientError('method_not_found', 'Unknown method: worktree.list')
+      }
+      return okFixture('accepted', { folderWorkspaces: [], marker: 'accepted' })
+    })
+    const { exitCode, output } = await run(['snapshot', '--json'], '/tmp/hub/repo/src')
+    expect(exitCode).toBe(1)
+    expect(JSON.parse(output).error.code).toBe('method_not_found')
+    expect(callMock).not.toHaveBeenCalledWith('browser.snapshot', expect.anything())
+  })
+
   it('quotes address values for the shell', async () => {
     const row = buildWorktree('/tmp/my repo', 'main')
     callMock.mockResolvedValue(okFixture('show', { worktree: { ...row, hostId: 'local' } }))

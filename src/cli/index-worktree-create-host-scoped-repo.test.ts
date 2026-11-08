@@ -205,7 +205,7 @@ describe('worktree create from a worktree another host shares an id with', () =>
           }
         }
       }
-      // An explicit target keeps optional-parent and active/current workspace behavior.
+      // An explicit target keeps optional-parent inference; active/current refuse a two-owner path.
       delete process.env.ORCA_WORKTREE_ID
       for (const parent of [undefined, 'active', 'current']) {
         callMock.mockReset()
@@ -233,14 +233,20 @@ describe('worktree create from a worktree another host shares an id with', () =>
           ],
           path
         )
+        // Two registrations own the path: an explicit current refuses, inference flags the tie.
+        if (parent) {
+          expect(process.exitCode).toBe(1)
+          expect(callMock).not.toHaveBeenCalledWith('worktree.create', expect.anything())
+          process.exitCode = priorExitCode
+          continue
+        }
         expect(process.exitCode).toBe(priorExitCode)
         expect(callMock).toHaveBeenCalledWith(
           'worktree.create',
           expect.objectContaining({
             repo: 'id:repo-b',
-            ...(parent
-              ? { parentWorktree: `id:${root.id}` }
-              : { cwdParentWorktree: `id:${root.id}` })
+            cwdParentWorktree: `id:${root.id}`,
+            cwdParentAmbiguous: true
           })
         )
       }

@@ -1,9 +1,5 @@
 import { resolve as resolvePath } from 'node:path'
 import type { TuiAgent } from '../shared/agent-launch/catalog/tui-agent'
-import {
-  isPathInsideOrEqual,
-  normalizeRuntimePathForComparison
-} from '../shared/cross-platform-path'
 import { projectGroupIdFromRepoId } from '../shared/folder-workspaces/folder-workspace-worktree'
 import { isFloatingWorkspaceId } from '../shared/floating-workspace-worktree'
 import { parseWorkspaceKey } from '../shared/workspace-scope'
@@ -18,6 +14,7 @@ import type { RuntimeWorktreeListResult, RuntimeWorktreeRecord } from '../shared
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
 import { refuseUnresolvedOwner } from './enclosing-workspace-catalog'
+import { createCwdContainment } from './caller-cwd-containment'
 
 export type CatalogRow = Pick<RuntimeWorktreeRecord, 'id' | 'path' | 'hostId'> & {
   identity?: { key: string }
@@ -65,16 +62,16 @@ function enclosingCandidatesOnHost<Row extends CatalogRow>(
   cwd: string,
   hostId: ExecutionHostId
 ): { row: Row; comparisonPath: string }[] {
-  const currentPath = resolvePath(cwd)
+  const contains = createCwdContainment(cwd, hostId)
   const candidates: { row: Row; comparisonPath: string }[] = []
   for (const row of catalog) {
     if (!row.hostUnresolved && !isOnCallerHost(row, hostId)) {
       continue
     }
-    const rawPath = resolvePath(row.path)
-    if (isPathInsideOrEqual(rawPath, currentPath)) {
-      // WSL comparison keys are not raw paths; only use them for rank and equivalence.
-      candidates.push({ row, comparisonPath: normalizeRuntimePathForComparison(rawPath) })
+    // WSL comparison keys are not raw paths; only use them for rank and equivalence.
+    const comparisonPath = contains(row.path, row.hostId)
+    if (comparisonPath !== null) {
+      candidates.push({ row, comparisonPath })
     }
   }
   return candidates
@@ -129,22 +126,12 @@ function enclosingWorkspaceOwners(
   if (own) {
     return [own.row]
   }
-  const firstCheckout = innermost.find(({ row }) => !isFolderRow(row))
   const owners = new Map<string, CatalogRow>()
-  for (const { row, comparisonPath } of innermost) {
-    // Folders are always distinct owners; among checkouts only the same-checkout tie is reported.
-    if (
-      isFolderRow(row) ||
-      (firstCheckout &&
-        comparisonPath === firstCheckout.comparisonPath &&
-        row.repoId === firstCheckout.row.repoId &&
-        (row.hostId ?? LOCAL_EXECUTION_HOST_ID) ===
-          (firstCheckout.row.hostId ?? LOCAL_EXECUTION_HOST_ID))
-    ) {
-      const key = JSON.stringify([row.hostId ?? LOCAL_EXECUTION_HOST_ID, row.id])
-      if (!owners.has(key)) {
-        owners.set(key, row)
-      }
+  for (const { row } of innermost) {
+    // Duplicate registrations of one row collapse; every other owner is a distinct choice.
+    const key = JSON.stringify([row.hostId ?? LOCAL_EXECUTION_HOST_ID, row.id])
+    if (!owners.has(key)) {
+      owners.set(key, row)
     }
   }
   return [...owners.values()]

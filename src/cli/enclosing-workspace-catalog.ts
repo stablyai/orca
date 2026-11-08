@@ -1,5 +1,5 @@
-import { resolve as resolvePath } from 'node:path'
-import { isPathInsideOrEqual } from '../shared/cross-platform-path'
+import { createCwdContainment } from './caller-cwd-containment'
+import { getCallerExecutionHostId } from './caller-host-worktree-selection'
 import { resolveQualifiedFolderWorkspaceResult } from '../shared/folder-workspaces/folder-workspace-execution-host'
 import type { FolderWorkspace } from '../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../shared/project-group-types'
@@ -36,9 +36,10 @@ export async function readEnclosingWorkspaceCatalog(
     readOptional(client.call<{ folderWorkspaces: FolderWorkspace[] }>('folderWorkspace.list'))
   ])
   const rows: CatalogRow[] = worktrees.result.worktrees
-  const currentPath = resolvePath(cwd)
-  const enclosing = (folders?.result.folderWorkspaces ?? []).filter((folder) =>
-    isPathInsideOrEqual(resolvePath(folder.folderPath), currentPath)
+  // A folder's host isn't derived yet; the selection rule applies host scope afterwards.
+  const contains = createCwdContainment(cwd, getCallerExecutionHostId())
+  const enclosing = (folders?.result.folderWorkspaces ?? []).filter(
+    (folder) => contains(folder.folderPath) !== null
   )
   if (enclosing.length === 0) {
     return rows

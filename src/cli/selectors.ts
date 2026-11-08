@@ -162,16 +162,8 @@ export async function getBrowserWorktreeSelector(
   if (client.isRemote) {
     return undefined
   }
-  // Only an Orca without a catalog method keeps the runtime default; any other failure could retarget.
-  const catalog = await readEnclosingWorkspaceCatalog(client, cwd).catch((error: unknown) => {
-    if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
-      return undefined
-    }
-    throw error
-  })
-  if (!catalog) {
-    return undefined
-  }
+  // The folder reads fall back on their own; a worktree-list failure surfaces rather than retargeting.
+  const catalog = await readEnclosingWorkspaceCatalog(client, cwd)
   const hostId = getCallerExecutionHostId()
   const enclosing = selectEnclosingWorktreeSelectionOnHost(
     catalog,
