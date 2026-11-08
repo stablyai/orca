@@ -1,3 +1,4 @@
+import type * as UseMobileSessionTerminalInputModule from '../../../terminal/session/use-mobile-session-terminal-input'
 import type * as MobileTerminalOperations from '../../../terminal/mobile-terminal-operations'
 import { hookScreenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
@@ -30,9 +31,7 @@ export function sessionTerminalGestureMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.terminal-gesture-input': ({ client, effect }) => {
-      const useTerminalInput = modules.load<
-        typeof import('../../../terminal/session/use-mobile-session-terminal-input')
-      >(
+      const useTerminalInput = modules.load<typeof UseMobileSessionTerminalInputModule>(
         'mobile/src/terminal/session/use-mobile-session-terminal-input.ts'
       ).useMobileSessionTerminalInput
 

@@ -1,4 +1,4 @@
-import { terminalInputSend } from '../mobile-terminal-operations'
+import type { terminalInputSend } from '../mobile-terminal-operations'
 import { MobileTerminalInputSender } from '../mobile-terminal-input-sender'
 import '../mobile-terminal-input-owner'
 import type { TerminalInputEnqueueOptions } from '../mobile-terminal-input-owner'

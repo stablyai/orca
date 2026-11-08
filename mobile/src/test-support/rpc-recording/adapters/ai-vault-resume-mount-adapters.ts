@@ -1,3 +1,5 @@
+import type * as AiVaultResumePreparationModule from '../../../agent-history/ai-vault-resume-preparation'
+import type * as AiVaultResumeLaunchModule from '../../../agent-history/ai-vault-resume-launch'
 import type { MountAdapter } from '../recording-scenario'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -11,9 +13,9 @@ export function aiVaultResumeMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'aiVault.resume-preparation': ({ client }) => {
-      const prepare = modules.load<
-        typeof import('../../../agent-history/ai-vault-resume-preparation')
-      >('mobile/src/agent-history/ai-vault-resume-preparation.ts').prepareMobileAiVaultSessionResume
+      const prepare = modules.load<typeof AiVaultResumePreparationModule>(
+        'mobile/src/agent-history/ai-vault-resume-preparation.ts'
+      ).prepareMobileAiVaultSessionResume
       let prepared: unknown = 'unprepared'
       let failure: unknown = null
       return {
@@ -41,7 +43,7 @@ export function aiVaultResumeMountAdapters(
       }
     },
     'aiVault.resume-launch': ({ client }) => {
-      const resume = modules.load<typeof import('../../../agent-history/ai-vault-resume-launch')>(
+      const resume = modules.load<typeof AiVaultResumeLaunchModule>(
         'mobile/src/agent-history/ai-vault-resume-launch.ts'
       ).resumeAiVaultSessionInTerminal
       let launched: unknown = 'unlaunched'

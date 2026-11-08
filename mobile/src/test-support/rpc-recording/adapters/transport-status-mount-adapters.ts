@@ -1,3 +1,6 @@
+import type * as HostStatusGatesModule from '../../../transport/connection/host-status-gates'
+import type * as RuntimeCapabilityProbeModule from '../../../transport/connection/runtime-capability-probe'
+import type * as PairingCandidateRaceModule from '../../../pairing/pairing-candidate-race'
 import type { ConnectionState } from '../../../transport/connection/connection-state'
 import type { MountAdapter, MountContext } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -12,9 +15,9 @@ export function transportStatusMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'transport.host-status-gates': ({ client }: MountContext) => {
-      const useGates = modules.load<
-        typeof import('../../../transport/connection/host-status-gates')
-      >('mobile/src/transport/connection/host-status-gates.ts').useHostStatusGates
+      const useGates = modules.load<typeof HostStatusGatesModule>(
+        'mobile/src/transport/connection/host-status-gates.ts'
+      ).useHostStatusGates
       let connState: ConnectionState = 'connected'
       let gates: ReturnType<typeof useGates> | undefined
       const hook = hookMount(() => {
@@ -46,9 +49,9 @@ export function transportStatusMountAdapters(
       }
     },
     'transport.capability-probe': ({ client }: MountContext) => {
-      const start = modules.load<
-        typeof import('../../../transport/connection/runtime-capability-probe')
-      >('mobile/src/transport/connection/runtime-capability-probe.ts').startRuntimeCapabilityProbe
+      const start = modules.load<typeof RuntimeCapabilityProbeModule>(
+        'mobile/src/transport/connection/runtime-capability-probe.ts'
+      ).startRuntimeCapabilityProbe
       const published: unknown[] = []
       let stop: (() => void) | null = null
       return {
@@ -71,7 +74,7 @@ export function transportStatusMountAdapters(
       }
     },
     'transport.pairing-race': ({ client, effect }: MountContext) => {
-      const race = modules.load<typeof import('../../../pairing/pairing-candidate-race')>(
+      const race = modules.load<typeof PairingCandidateRaceModule>(
         'mobile/src/pairing/pairing-candidate-race.ts'
       ).racePairingCandidates
       let outcome: unknown = 'unraced'

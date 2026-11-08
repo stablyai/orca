@@ -1,3 +1,4 @@
+import type * as UseMobileSessionTerminalStreamDisplayModule from '../../../terminal/session/use-mobile-session-terminal-stream-display'
 import { hookScreenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -13,9 +14,7 @@ export function sessionTerminalDisplayModeMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.terminal-display-mode': ({ client, effect }) => {
-      const useStreamDisplay = modules.load<
-        typeof import('../../../terminal/session/use-mobile-session-terminal-stream-display')
-      >(
+      const useStreamDisplay = modules.load<typeof UseMobileSessionTerminalStreamDisplayModule>(
         'mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts'
       ).useMobileSessionTerminalStreamDisplay
 

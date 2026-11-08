@@ -1,3 +1,7 @@
+import type * as GithubPrRpcModule from '../../../source-control/review/github-pr-rpc'
+import type * as GithubPrMutationsModule from '../../../source-control/review/github-pr-mutations'
+import type * as PrAiTriageLaunchModule from '../../../source-control/review/pr-ai-triage-launch'
+import type * as UseMobilePrBranchContextModule from '../../../source-control/review/use-mobile-pr-branch-context'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type * as LineMutations from '../../../source-control/review/github-pr-review-line-mutations'
@@ -13,7 +17,7 @@ export function githubPrMountAdapters(
   return {
     'session.pr-reads': ({ client: suppliedClient }) => {
       const client = legacyShellStatusFixture(suppliedClient)
-      const reads = modules.load<typeof import('../../../source-control/review/github-pr-rpc')>(
+      const reads = modules.load<typeof GithubPrRpcModule>(
         'mobile/src/source-control/review/github-pr-rpc.ts'
       )
       const results: Record<string, unknown> = {}
@@ -65,9 +69,9 @@ export function githubPrMountAdapters(
       }
     },
     'session.pr-mutations': ({ client }) => {
-      const mutations = modules.load<
-        typeof import('../../../source-control/review/github-pr-mutations')
-      >('mobile/src/source-control/review/github-pr-mutations.ts')
+      const mutations = modules.load<typeof GithubPrMutationsModule>(
+        'mobile/src/source-control/review/github-pr-mutations.ts'
+      )
       const lineMutations = () =>
         modules.load<typeof LineMutations>(
           'mobile/src/source-control/review/github-pr-review-line-mutations.ts'
@@ -189,9 +193,9 @@ export function githubPrMountAdapters(
       }
     },
     'session.pr-triage-launch': ({ client }) => {
-      const launch = modules.load<
-        typeof import('../../../source-control/review/pr-ai-triage-launch')
-      >('mobile/src/source-control/review/pr-ai-triage-launch.ts').launchAgentWithPrompt
+      const launch = modules.load<typeof PrAiTriageLaunchModule>(
+        'mobile/src/source-control/review/pr-ai-triage-launch.ts'
+      ).launchAgentWithPrompt
       let launched: unknown = 'unlaunched'
       return {
         action: (_name, args) =>
@@ -213,9 +217,9 @@ export function githubPrMountAdapters(
       }
     },
     'session.pr-branch-context': ({ client }) => {
-      const context = modules.load<
-        typeof import('../../../source-control/review/use-mobile-pr-branch-context')
-      >('mobile/src/source-control/review/use-mobile-pr-branch-context.ts')
+      const context = modules.load<typeof UseMobilePrBranchContextModule>(
+        'mobile/src/source-control/review/use-mobile-pr-branch-context.ts'
+      )
       let repoContext: unknown = 'unread'
       let identity: unknown = 'unread'
       return {

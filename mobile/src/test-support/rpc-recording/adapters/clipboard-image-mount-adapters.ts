@@ -1,3 +1,5 @@
+import type * as MobileClipboardImageModule from '../../../files/attachments/mobile-clipboard-image'
+import type * as MobileImageAttachmentModule from '../../../files/attachments/mobile-image-attachment'
 import type * as MobileNativeChatImageAttachment from '../../../session/native-chat/composer/mobile-native-chat-image-attachment'
 import type * as MobileNativeChatImageSend from '../../../session/native-chat/composer/mobile-native-chat-image-send'
 import type { MountAdapter } from '../recording-scenario'
@@ -15,7 +17,7 @@ export function clipboardImageMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'clipboard.image-upload': ({ client }) => {
-      const save = modules.load<typeof import('../../../files/attachments/mobile-clipboard-image')>(
+      const save = modules.load<typeof MobileClipboardImageModule>(
         'mobile/src/files/attachments/mobile-clipboard-image.ts'
       ).saveMobileClipboardImageAsTempFile
       let path: unknown = 'unsaved'
@@ -39,9 +41,9 @@ export function clipboardImageMountAdapters(
       }
     },
     'clipboard.image-terminal-attachment': ({ client, effect }) => {
-      const attach = modules.load<
-        typeof import('../../../files/attachments/mobile-image-attachment')
-      >('mobile/src/files/attachments/mobile-image-attachment.ts').attachMobileImageToTerminal
+      const attach = modules.load<typeof MobileImageAttachmentModule>(
+        'mobile/src/files/attachments/mobile-image-attachment.ts'
+      ).attachMobileImageToTerminal
       let attached: unknown = 'unattached'
       let failure: unknown = null
       return {

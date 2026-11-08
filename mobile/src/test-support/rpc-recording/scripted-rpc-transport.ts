@@ -28,7 +28,7 @@ import type { BridgePortObservation } from '../../mobile-web-shell/bridge/bridge
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
-import { RpcClientStreamRegistry } from '../../transport/rpc/rpc-client-stream-registry'
+import type { RpcClientStreamRegistry } from '../../transport/rpc/rpc-client-stream-registry'
 import { createStableLogicalRpcClient } from '../../transport/connection/stable-logical-rpc-client'
 import {
   captureArguments,

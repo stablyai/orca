@@ -1,3 +1,4 @@
+import type * as RpcOperationModule2 from '../../../transport/rpc/rpc-operation'
 import type { MountAdapter, MountContext } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type * as MobileWebBundleOperations from '../../../transport/web-bundle/mobile-web-bundle-operations'
@@ -9,7 +10,7 @@ const RPC_OPERATION_MODULE = 'mobile/src/transport/rpc/rpc-operation.ts'
 
 type OperationsModule = typeof MobileWebBundleOperations
 type FetchModule = typeof MobileWebBundleFetch
-type RpcOperationModule = typeof import('../../../transport/rpc/rpc-operation')
+type RpcOperationModule = typeof RpcOperationModule2
 
 function describeFailure(operations: OperationsModule, error: unknown): string {
   const code = operations.readMobileWebBundleErrorCode(error)

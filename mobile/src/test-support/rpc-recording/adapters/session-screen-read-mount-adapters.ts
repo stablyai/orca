@@ -1,3 +1,5 @@
+import type * as UseMobileSessionDocumentReadersModule from '../../../files/session-documents/use-mobile-session-document-readers'
+import type * as UseMobileSessionTerminalListModule from '../../../terminal/session/use-mobile-session-terminal-list'
 import { hookMount, performHookAction } from '../hook-mount'
 import type {
   FileDocState,
@@ -21,9 +23,7 @@ export function sessionScreenReadMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.tab-documents': ({ client }) => {
-      const useReaders = modules.load<
-        typeof import('../../../files/session-documents/use-mobile-session-document-readers')
-      >(
+      const useReaders = modules.load<typeof UseMobileSessionDocumentReadersModule>(
         'mobile/src/files/session-documents/use-mobile-session-document-readers.ts'
       ).useMobileSessionDocumentReaders
       let markdownDocs = new Map<string, MarkdownDocState>()
@@ -85,9 +85,7 @@ export function sessionScreenReadMountAdapters(
       }
     },
     'session.terminal-inventory': ({ client, effect }) => {
-      const useList = modules.load<
-        typeof import('../../../terminal/session/use-mobile-session-terminal-list')
-      >(
+      const useList = modules.load<typeof UseMobileSessionTerminalListModule>(
         'mobile/src/terminal/session/use-mobile-session-terminal-list.ts'
       ).useMobileSessionTerminalList
       let terminals: TerminalRecord[] = []

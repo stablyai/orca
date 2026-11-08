@@ -1,7 +1,7 @@
 import '../../i18n/mobile-i18n'
 
 export function getActiveTabIdForHandle(
-  tabs: ReadonlyArray<{ id: string; type: string; terminal?: string | null }>,
+  tabs: readonly { id: string; type: string; terminal?: string | null }[],
   terminalHandle: string | null
 ): string | null {
   if (!terminalHandle) {

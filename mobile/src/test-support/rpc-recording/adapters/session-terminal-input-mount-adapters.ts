@@ -1,3 +1,6 @@
+import type * as UseMobileSessionAccessorySelectionModule from '../../../terminal/session/use-mobile-session-accessory-selection'
+import type * as UseMobileTerminalPasteModule from '../../../terminal/session/use-mobile-terminal-paste'
+import type * as UseMobileSessionTerminalSendActionsModule from '../../../terminal/session/use-mobile-session-terminal-send-actions'
 import type * as MobileTerminalOperations from '../../../terminal/mobile-terminal-operations'
 import { hookScreenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
@@ -35,14 +38,12 @@ function mountTerminalClipboard(
   modules: ReturnType<typeof operationModuleLoader>,
   { client, effect }: MountContext
 ) {
-  const useAccessorySelection = modules.load<
-    typeof import('../../../terminal/session/use-mobile-session-accessory-selection')
-  >(
+  const useAccessorySelection = modules.load<typeof UseMobileSessionAccessorySelectionModule>(
     'mobile/src/terminal/session/use-mobile-session-accessory-selection.ts'
   ).useMobileSessionAccessorySelection
-  const useTerminalPaste = modules.load<
-    typeof import('../../../terminal/session/use-mobile-terminal-paste')
-  >('mobile/src/terminal/session/use-mobile-terminal-paste.ts').useMobileTerminalPaste
+  const useTerminalPaste = modules.load<typeof UseMobileTerminalPasteModule>(
+    'mobile/src/terminal/session/use-mobile-terminal-paste.ts'
+  ).useMobileTerminalPaste
   const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(
     'mobile/src/terminal/mobile-terminal-operations.ts'
   )
@@ -135,9 +136,7 @@ function mountTerminalInputSend(
   modules: ReturnType<typeof operationModuleLoader>,
   { client, effect }: MountContext
 ) {
-  const useSendActions = modules.load<
-    typeof import('../../../terminal/session/use-mobile-session-terminal-send-actions')
-  >(
+  const useSendActions = modules.load<typeof UseMobileSessionTerminalSendActionsModule>(
     'mobile/src/terminal/session/use-mobile-session-terminal-send-actions.ts'
   ).useMobileSessionTerminalSendActions
   const { terminalInputSend } = modules.load<typeof MobileTerminalOperations>(

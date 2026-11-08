@@ -1,3 +1,4 @@
+import type * as MobileDiffReviewLoadersModule from '../../../source-control/review/mobile-diff-review-loaders'
 import type { MountAdapter } from '../recording-scenario'
 import type * as CommitLoader from '../../../source-control/review/mobile-diff-review-commit-loader'
 import type * as SnapshotLoader from '../../../source-control/review/mobile-diff-review-snapshot-loader'
@@ -28,9 +29,9 @@ export function diffReviewMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.diff-review-load': ({ client }) => {
-      const loaders = modules.load<
-        typeof import('../../../source-control/review/mobile-diff-review-loaders')
-      >('mobile/src/source-control/review/mobile-diff-review-loaders.ts')
+      const loaders = modules.load<typeof MobileDiffReviewLoadersModule>(
+        'mobile/src/source-control/review/mobile-diff-review-loaders.ts'
+      )
       let snapshot: unknown = 'unloaded'
       let branchCompare: unknown = 'unloaded'
       let diff: unknown = 'unloaded'

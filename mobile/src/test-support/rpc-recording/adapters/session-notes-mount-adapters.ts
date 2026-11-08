@@ -1,3 +1,6 @@
+import type * as UseMobileSessionDiffCommentsModule from '../../../source-control/review/use-mobile-session-diff-comments'
+import type * as UseMobileSessionMarkdownActionsModule from '../../../files/session-documents/use-mobile-session-markdown-actions'
+import type * as UseQuickCommandsModule from '../../../terminal/quick-commands/use-quick-commands'
 import { hookMount, performHookAction } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
@@ -15,9 +18,7 @@ export function sessionNotesMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.diff-notes': ({ client, effect }) => {
-      const useComments = modules.load<
-        typeof import('../../../source-control/review/use-mobile-session-diff-comments')
-      >(
+      const useComments = modules.load<typeof UseMobileSessionDiffCommentsModule>(
         'mobile/src/source-control/review/use-mobile-session-diff-comments.ts'
       ).useMobileSessionDiffComments
       let diffComments: DiffComment[] = []
@@ -78,9 +79,7 @@ export function sessionNotesMountAdapters(
       }
     },
     'session.markdown-save': ({ client, effect }) => {
-      const useMarkdown = modules.load<
-        typeof import('../../../files/session-documents/use-mobile-session-markdown-actions')
-      >(
+      const useMarkdown = modules.load<typeof UseMobileSessionMarkdownActionsModule>(
         'mobile/src/files/session-documents/use-mobile-session-markdown-actions.ts'
       ).useMobileSessionMarkdownActions
       let markdownDocs = new Map<string, MarkdownDocState>([
@@ -143,9 +142,9 @@ export function sessionNotesMountAdapters(
       }
     },
     'settings.quick-commands': ({ client }) => {
-      const useQuickCommands = modules.load<
-        typeof import('../../../terminal/quick-commands/use-quick-commands')
-      >('mobile/src/terminal/quick-commands/use-quick-commands.ts').useQuickCommands
+      const useQuickCommands = modules.load<typeof UseQuickCommandsModule>(
+        'mobile/src/terminal/quick-commands/use-quick-commands.ts'
+      ).useQuickCommands
       let enabled = true
       let model: ReturnType<typeof useQuickCommands>
       const persisted: unknown[] = []

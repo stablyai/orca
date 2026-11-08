@@ -1,3 +1,4 @@
+import type * as UseMobileSessionTerminalCreateActionsModule from '../../../terminal/session/use-mobile-session-terminal-create-actions'
 import type { PendingSessionSelection } from '../../../session/tabs/pending-session-selection'
 import { hookMount } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
@@ -40,9 +41,7 @@ export function sessionTerminalCreateMountAdapters(
 ): Record<string, MountAdapter> {
   return {
     'session.create-terminal': ({ client, effect }) => {
-      const useCreateActions = modules.load<
-        typeof import('../../../terminal/session/use-mobile-session-terminal-create-actions')
-      >(
+      const useCreateActions = modules.load<typeof UseMobileSessionTerminalCreateActionsModule>(
         'mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts'
       ).useMobileSessionTerminalCreateActions
       modules.load('mobile/src/terminal/session/mobile-session-terminal-create-request.ts')
