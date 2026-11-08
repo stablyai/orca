@@ -1,4 +1,3 @@
-import { readdirSync } from 'node:fs'
 import { opendir } from 'node:fs/promises'
 import { join } from 'node:path'
 
@@ -11,32 +10,6 @@ export type CodexSessionBridgeIncrementalOptions = {
 
 const INCREMENTAL_BRIDGE_BATCH_SIZE = 64
 const INCREMENTAL_BRIDGE_YIELD_MS = 10
-
-export function listCodexSessionJsonlFiles(rootPath: string): string[] {
-  const files: string[] = []
-  try {
-    for (const entry of readdirSync(rootPath, { withFileTypes: true })) {
-      const childPath = join(rootPath, entry.name)
-      if (entry.isDirectory()) {
-        appendSessionFilePaths(files, listCodexSessionJsonlFiles(childPath))
-        continue
-      }
-      if (entry.isFile() && entry.name.endsWith('.jsonl')) {
-        files.push(childPath)
-      }
-    }
-  } catch (error) {
-    console.warn('[codex-session-bridge] Failed to list system Codex sessions:', error)
-  }
-  return files.sort()
-}
-
-function appendSessionFilePaths(target: string[], source: readonly string[]): void {
-  // Large histories can exceed V8's argument limit if spread into push().
-  for (const filePath of source) {
-    target.push(filePath)
-  }
-}
 
 /** Yield between batches so large histories cannot monopolize startup. */
 export async function* listCodexSessionJsonlFilesIncrementally(

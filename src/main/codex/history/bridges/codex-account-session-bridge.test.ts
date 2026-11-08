@@ -9,6 +9,11 @@ import {
   stopCodexAccountSessionBridges
 } from './codex-account-session-bridge'
 import { writeCodexStateDbBackfillStatus } from '../index/codex-state-db-test-fixture'
+import {
+  _internals as healInternals,
+  healCodexAccountSessionIndex
+} from '../index/codex-account-session-index-heal'
+import SyncDatabase from '../../../sqlite/sync-database'
 
 let workspaceRoot: string
 const healIndexStub = vi.fn(async () => ({
@@ -28,12 +33,19 @@ function writeRollout(homePath: string, relativePath: string, contents: string):
 function rolloutPath(homePath: string, relativePath: string): string {
   return join(homePath, 'sessions', relativePath)
 }
+const THREAD_A = '019a0000-0000-7000-8000-00000000000a'
 const THREAD_B = '019a0000-0000-7000-8000-00000000000b'
 const ROLLOUT_A = join(
   '2026',
   '07',
   '20',
   'rollout-2026-07-20T10-00-00-019a0000-0000-7000-8000-00000000000a.jsonl'
+)
+const OWN_ROLLOUT = join(
+  '2026',
+  '07',
+  '19',
+  'rollout-2026-07-19T10-00-00-019a0000-0000-7000-8000-0000000000ff.jsonl'
 )
 const ROLLOUT_B = join(
   '2026',
@@ -45,6 +57,7 @@ const ROLLOUT_B = join(
 beforeEach(() => {
   workspaceRoot = mkdtempSync(join(tmpdir(), 'codex-account-session-bridge-'))
   _internals.resetBackgroundBridgeTasks()
+  healInternals.resetFailedThreads()
   healIndexStub.mockClear()
 })
 
@@ -71,6 +84,29 @@ describe('bridgeCodexSessionsIntoAccountHome', () => {
     warn.mockRestore()
     expect(summary.linkedFiles).toBe(1)
     expect(summary.bridgedThreads).toEqual(new Map([[THREAD_B, '2026-07-21T10-00-00']]))
+  })
+
+  it('discovers history added to old date folders and a recreated target on warm passes', async () => {
+    const systemHome = join(workspaceRoot, 'system')
+    const targetHome = join(workspaceRoot, 'account')
+    writeRollout(systemHome, ROLLOUT_A, 'session\n')
+    const bridge = () =>
+      bridgeCodexSessionsIntoAccountHome({
+        targetCodexHomePath: targetHome,
+        sourceCodexHomePaths: [systemHome]
+      })
+    await bridge()
+
+    // An unarchived or imported rollout lands in an old date folder.
+    writeRollout(systemHome, ROLLOUT_B, 'session\n')
+    const warm = await bridge()
+    expect(existsSync(rolloutPath(targetHome, ROLLOUT_B))).toBe(true)
+    expect([...warm.bridgedThreads.keys()].sort()).toEqual([THREAD_A, THREAD_B])
+
+    rmSync(join(targetHome, 'sessions'), { recursive: true, force: true })
+    await bridge()
+    expect(existsSync(rolloutPath(targetHome, ROLLOUT_A))).toBe(true)
+    expect(existsSync(rolloutPath(targetHome, ROLLOUT_B))).toBe(true)
   })
 })
 
@@ -138,5 +174,79 @@ describe('startCodexAccountSessionBridgeInBackground', () => {
 
     expect(existsSync(rolloutPath(targetHome, ROLLOUT_A))).toBe(false)
     expect(healIndexStub).not.toHaveBeenCalled()
+  })
+
+  it('re-checks readiness each launch once a newer Codex starts indexing the home', async () => {
+    const systemHome = join(workspaceRoot, 'system')
+    const targetHome = join(workspaceRoot, 'account')
+    writeRollout(systemHome, ROLLOUT_A, 'session\n')
+    // An older CLI left history but no state DB, so linking is safe.
+    writeRollout(targetHome, OWN_ROLLOUT, 'own\n')
+    await startBridge(targetHome, [systemHome])
+    expect(existsSync(rolloutPath(targetHome, ROLLOUT_A))).toBe(true)
+
+    writeCodexStateDbBackfillStatus(targetHome, 'running')
+    writeRollout(systemHome, ROLLOUT_B, 'session\n')
+    await startBridge(targetHome, [systemHome])
+    expect(existsSync(rolloutPath(targetHome, ROLLOUT_B))).toBe(false)
+
+    // A replaced DB that finished its backfill lets the next launch link again.
+    rmSync(join(targetHome, 'state_5.sqlite'))
+    writeCodexStateDbBackfillStatus(targetHome, 'complete')
+    await startBridge(targetHome, [systemHome])
+    expect(existsSync(rolloutPath(targetHome, ROLLOUT_B))).toBe(true)
+  })
+
+  it('resumes indexing linked history on a later launch after a heal aborts', async () => {
+    const systemHome = join(workspaceRoot, 'system')
+    const targetHome = join(workspaceRoot, 'account')
+    writeRollout(systemHome, ROLLOUT_A, 'session\n')
+    writeCodexStateDbBackfillStatus(targetHome, 'complete')
+    const db = new SyncDatabase(join(targetHome, 'state_5.sqlite'))
+    db.exec('CREATE TABLE threads (id TEXT PRIMARY KEY)')
+    db.close()
+    let transportUp = false
+    const readThreads: string[] = []
+    const healIndex: BridgeDependencies['healIndex'] = (home, threads, options) =>
+      healCodexAccountSessionIndex(home, threads, {
+        ...options,
+        interBatchDelayMs: 0,
+        buildInvocation: (_home, timeoutMs) => ({
+          command: 'codex',
+          args: [],
+          cliPath: null,
+          timeoutMs
+        }),
+        runSession: async (_invocation, body) => {
+          if (!transportUp) {
+            throw new Error('app-server connection closed')
+          }
+          await body({
+            request: async (_method, params) => {
+              const threadId = String(params?.threadId)
+              readThreads.push(threadId)
+              const indexDb = new SyncDatabase(join(targetHome, 'state_5.sqlite'))
+              indexDb.prepare('INSERT INTO threads (id) VALUES (?)').run(threadId)
+              indexDb.close()
+              return {}
+            },
+            notify: () => {}
+          })
+        }
+      })
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await startBridge(targetHome, [systemHome], { healIndex })
+    expect(existsSync(rolloutPath(targetHome, ROLLOUT_A))).toBe(true)
+    expect(readThreads).toEqual([])
+
+    transportUp = true
+    await startBridge(targetHome, [systemHome], { healIndex })
+    expect(readThreads).toEqual([THREAD_A])
+
+    // Indexed history is not read again.
+    await startBridge(targetHome, [systemHome], { healIndex })
+    expect(readThreads).toEqual([THREAD_A])
+    warn.mockRestore()
   })
 })

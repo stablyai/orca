@@ -25,6 +25,7 @@ import {
   getCodexSessionBackfillDate,
   mergeCodexSessionBackfillDates
 } from './codex-session-backfill-scan-dates'
+import { isUnsupportedHardlinkError } from '../rollouts/codex-session-link'
 import type {
   CodexSessionBackfillDate,
   CodexSessionBackfillOptions,
@@ -304,11 +305,6 @@ function isExistsError(error: unknown): boolean {
 
 function isNotFoundError(error: unknown): boolean {
   return (error as NodeJS.ErrnoException | null)?.code === 'ENOENT'
-}
-
-function isUnsupportedHardlinkError(error: unknown): boolean {
-  const code = (error as NodeJS.ErrnoException | null)?.code
-  return code === 'EXDEV' || code === 'ENOTSUP' || code === 'EOPNOTSUPP' || code === 'ENOSYS'
 }
 
 function describeError(error: unknown): string {

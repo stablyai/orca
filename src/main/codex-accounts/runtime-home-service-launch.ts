@@ -76,7 +76,6 @@ export abstract class CodexRuntimeHomeLaunch extends CodexRuntimeHomeRouting {
       !this.isHostHistorySourceInWsl()
     ) {
       void startSystemCodexSessionBridgeInBackground(
-        {},
         resolveHostCodexSessionSourceHome(this.store.getSettings())
       )
     }
