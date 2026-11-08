@@ -1208,6 +1208,9 @@
       "searchProjects": "Search projects",
       "searchHosts": "Search hosts"
     },
+    "hostPicker": {
+      "search": "Search desktops"
+    },
     "newWorktreeQuickPick": {
       "placeholder": "Search projects",
       "noMatches": "No matches",

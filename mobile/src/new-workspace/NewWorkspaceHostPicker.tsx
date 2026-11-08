@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'expo-router'
 import { PickerModal } from '../components/PickerModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { hostPickerOptions } from '../components/use-connected-host-picker'
+import { hostPickerOptions, useHostPickerSearch } from '../components/use-connected-host-picker'
 import { selectConnectableHostProfiles } from '../transport/host-catalog-selection'
 import { loadHostCatalog } from '../transport/host-store'
 import type { HostProfile } from '../transport/types'
@@ -22,6 +22,7 @@ export function NewWorkspaceHostPicker({
   const pickedRef = useRef(false)
   // Exit if no usable desktop remains; otherwise an invisible overlay would block Home.
   const nothingToPick = hosts !== null && hosts.length === 0
+  const hostSearch = useHostPickerSearch(hosts?.length ?? 0)
   useEffect(() => {
     if (nothingToPick) {
       router.back()
@@ -38,6 +39,7 @@ export function NewWorkspaceHostPicker({
         onPick(hostId)
       }}
       onClose={() => setOpen(false)}
+      {...hostSearch}
       onAfterClose={() => {
         if (!pickedRef.current) {
           router.back()

@@ -28,11 +28,18 @@ type Props<T extends string = string> = {
   onAfterClose?: () => void
   zIndex?: number
   searchable?: boolean
+  searchPlaceholder?: string
 }
 
 type PickerModalContentProps<T extends string = string> = Pick<
   Props<T>,
-  'options' | 'selected' | 'onSelect' | 'onLongSelect' | 'onClose' | 'searchable'
+  | 'options'
+  | 'selected'
+  | 'onSelect'
+  | 'onLongSelect'
+  | 'onClose'
+  | 'searchable'
+  | 'searchPlaceholder'
 >
 
 export function PickerModal<T extends string = string>({
@@ -46,7 +53,8 @@ export function PickerModal<T extends string = string>({
   onClose,
   onAfterClose,
   zIndex,
-  searchable
+  searchable,
+  searchPlaceholder
 }: Props<T>) {
   useMobileColorScheme()
   return (
@@ -63,6 +71,7 @@ export function PickerModal<T extends string = string>({
         onLongSelect={onLongSelect}
         onClose={onClose}
         searchable={searchable}
+        searchPlaceholder={searchPlaceholder}
       />
     </BottomDrawer>
   )
@@ -74,7 +83,8 @@ function PickerModalContent<T extends string = string>({
   onSelect,
   onLongSelect,
   onClose,
-  searchable
+  searchable,
+  searchPlaceholder
 }: PickerModalContentProps<T>) {
   const t = useMobileTranslation()
   useMobileColorScheme()
@@ -94,7 +104,7 @@ function PickerModalContent<T extends string = string>({
         <MobileSearchField
           value={query}
           onChangeText={setQuery}
-          placeholder={t('automations.mobile.searchOptions', 'Search options')}
+          placeholder={searchPlaceholder ?? t('automations.mobile.searchOptions', 'Search options')}
         />
       ) : null}
       <ListGroup separatorInset={hasIcons ? LIST_LEADING_INSET : LIST_ROW_PADDING}>
