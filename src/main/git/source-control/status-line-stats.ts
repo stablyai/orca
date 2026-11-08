@@ -11,8 +11,7 @@ import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 import { resolveWorktreeFilesystemPath } from './worktree-filesystem-path'
 import { settledNumstatCache } from './git-read-cache-invalidation'
-import { readGitConfigSnapshot } from './git-config-snapshot'
-import { wslDistroForCommand } from '../command-runner/git-command-resolution'
+import { readStampedGitConfig, type StampedGitConfig } from './stamped-git-config'
 import { readWorktreePathsDiffStamp } from './worktree-diff-stamp'
 
 async function runNumstat(
@@ -58,10 +57,7 @@ function isNumstatReuseEnabled(): boolean {
   return process.env.ORCA_GIT_STATUS_NUMSTAT_REUSE !== '0'
 }
 
-/**
- * Worktree files a numstat pass depends on: unstaged working files (unlisted ones are unchanged or status would list
- * them) and every `.gitattributes` that can apply to a listed path. Null when the pass cannot be stamped.
- */
+/** Unstaged working files (unlisted ones would be status rows) plus every `.gitattributes` that applies; null if unstampable. */
 function numstatStampPaths(entries: readonly GitStatusEntry[], cached: boolean): string[] | null {
   const area = cached ? 'staged' : 'unstaged'
   const workingPaths: string[] = []
@@ -97,21 +93,14 @@ async function readNumstatThroughSettledCache(
   cached: boolean,
   detectRenames: boolean,
   entries: readonly GitStatusEntry[],
+  configRead: Promise<StampedGitConfig | null>,
   options: GitRuntimeOptions
 ): Promise<Map<string, GitLineStats> | null> {
-  const stampPaths = numstatStampPaths(entries, cached)
-  // WSL Git reads config and attributes the host cannot stamp.
-  if (
-    !stampPaths ||
-    !isNumstatReuseEnabled() ||
-    options.wslDistro ||
-    wslDistroForCommand(worktreePath)
-  ) {
-    return runNumstat(worktreePath, cached, detectRenames, options)
-  }
   const readGeneration = settledNumstatCache.beginRead()
-  const config = await readGitConfigSnapshot(worktreePath, options)
-  if (!config?.files || !config.attributeFiles) {
+  const stampPaths = numstatStampPaths(entries, cached)
+  // Null config means reuse is off or Git reads config and attributes the host cannot stamp (WSL).
+  const config = stampPaths ? await configRead : null
+  if (!stampPaths || !config) {
     return runNumstat(worktreePath, cached, detectRenames, options)
   }
   const stamp = await readWorktreePathsDiffStamp(worktreePath, stampPaths, options, [
@@ -142,13 +131,32 @@ export async function attachLineStats(
   const { hasStaged, hasUnstaged, hasStagedRenames, hasUnstagedRenames, untrackedPaths } =
     collectGitStatusLineStatInputs(entries)
   const emptyStats = new Map<string, GitLineStats>()
+  // One config read serves both passes.
+  const configRead =
+    (hasStaged || hasUnstaged) && isNumstatReuseEnabled()
+      ? readStampedGitConfig(worktreePath, options)
+      : Promise.resolve(null)
   // Approximates status's rename policy: -M only for areas where status reported a rename.
   const [stagedStats, unstagedStats, untrackedStats] = await Promise.all([
     hasStaged
-      ? readNumstatThroughSettledCache(worktreePath, true, hasStagedRenames, entries, options)
+      ? readNumstatThroughSettledCache(
+          worktreePath,
+          true,
+          hasStagedRenames,
+          entries,
+          configRead,
+          options
+        )
       : Promise.resolve(emptyStats),
     hasUnstaged
-      ? readNumstatThroughSettledCache(worktreePath, false, hasUnstagedRenames, entries, options)
+      ? readNumstatThroughSettledCache(
+          worktreePath,
+          false,
+          hasUnstagedRenames,
+          entries,
+          configRead,
+          options
+        )
       : Promise.resolve(emptyStats),
     // Node reads need host paths even when Git runs in WSL.
     collectUntrackedAdditions(

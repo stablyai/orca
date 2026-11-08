@@ -1,6 +1,5 @@
-import { wslDistroForCommand } from '../command-runner/git-command-resolution'
 import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
-import { readGitConfigSnapshot } from './git-config-snapshot'
+import { readStampedGitConfig } from './stamped-git-config'
 import type { GetStatusOptions } from './get-status-options'
 import { bulkPathspecCommands } from './git-pathspec'
 
@@ -17,11 +16,8 @@ export async function readUntrackedScan(
   worktreePath: string,
   options: GetStatusOptions
 ): Promise<UntrackedScan> {
-  // Network-share mtimes cannot vouch for the cache; WSL config is not stampable from the host, so reads would spawn.
-  if (isUncPath(worktreePath) || options.wslDistro || wslDistroForCommand(worktreePath)) {
-    return 'uall'
-  }
-  const config = await readGitConfigSnapshot(worktreePath, options)
+  // Network-share mtimes cannot vouch for the cache; unstampable (WSL) config would cost a read per poll.
+  const config = isUncPath(worktreePath) ? null : await readStampedGitConfig(worktreePath, options)
   if (!config) {
     return 'uall'
   }
