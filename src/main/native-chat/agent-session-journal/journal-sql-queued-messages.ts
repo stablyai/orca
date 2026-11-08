@@ -14,7 +14,10 @@ import type {
   QueuedMessageRow
 } from './queued-messages/queued-message-table'
 import type { QueuedMessageUpdate } from './queued-messages/queued-message-update'
-import type { QueuedMessageEditLease } from './queued-messages/queued-message-edit-leases'
+import type {
+  JournalDomainEditLeaseOperation,
+  JournalDomainEditLeaseOutcome
+} from './journal-domain-edit-leases'
 import { journalDomainQueueRow } from './journal-domain-queue-rows'
 import {
   journalDomainQueueAwaitsReopen,
@@ -32,8 +35,6 @@ import { SqlQueuedMessageEditLeases } from './journal-sql-edit-leases'
 /** Host-memory facts a queue read needs, sent as data like the writer's facts. */
 export type JournalSqlQueueFacts = {
   reopenFloor: AgentJournalCursor | null
-  /** Writer-session transport only; reads select persisted holds. */
-  editLeases?: readonly QueuedMessageEditLease[]
   mail?: readonly (readonly [string, boolean])[]
 }
 
@@ -42,7 +43,7 @@ export type JournalSqlQueueRead = { facts: JournalSqlQueueFacts } & (
   | { kind: 'get'; messageId: string }
   | { kind: 'revision' }
   | { kind: 'cleared-through' }
-  | { kind: 'next-input-card'; automatic: boolean; steer: boolean }
+  | { kind: 'next-input-card'; automatic: boolean; steer: boolean; now: number }
   | { kind: 'failure-holds' }
   | { kind: 'pauses' }
   | { kind: 'user-stop-in-force' }
@@ -101,7 +102,7 @@ export function readJournalSqlQueue(
           kind: 'next-input-card',
           card: nextJournalDomainQueueCard(db, target, {
             reopenFloor: facts.reopenFloor,
-            now: Date.now(),
+            now: operation.now,
             steer: operation.steer,
             automatic: operation.automatic,
             mailUnavailable: (card) => {
@@ -160,6 +161,7 @@ export type JournalSqlQueuePort = {
     operation: Extract<JournalSqlQueueRead, { kind: K }>
   ) => Promise<JournalSqlQueueReadResult>
   write: (operation: JournalSqlQueueWrite, receipt?: JournalOperationReceipt) => Promise<unknown>
+  edit: (operation: JournalDomainEditLeaseOperation) => Promise<JournalDomainEditLeaseOutcome>
 }
 
 export type JournalSqlQueueWrite =
@@ -191,17 +193,16 @@ export class SqlJournalQueuedMessages {
 
   constructor(
     private readonly port: JournalSqlQueuePort,
-    private readonly reopenFloor: () => AgentJournalCursor | null
+    private readonly reopenFloor: () => AgentJournalCursor | null,
+    private readonly now: () => number
   ) {
-    this.editLeases = new SqlQueuedMessageEditLeases((id) => this.get(id))
+    this.editLeases = new SqlQueuedMessageEditLeases(port.edit, now)
   }
 
   /** The host facts every queue read and write carries. */
   facts(mail?: readonly (readonly [string, boolean])[]): JournalSqlQueueFacts {
-    const editLeases = this.editLeases.snapshot()
     return {
       reopenFloor: this.reopenFloor(),
-      ...(editLeases.length ? { editLeases } : {}),
       ...(mail?.length ? { mail } : {})
     }
   }
@@ -240,6 +241,7 @@ export class SqlJournalQueuedMessages {
       kind: 'next-input-card',
       automatic: true,
       steer,
+      now: this.now(),
       facts: this.facts()
     })
     return result.kind === 'mail-needed' ? this.answerMail([result.card]) : []
@@ -252,6 +254,7 @@ export class SqlJournalQueuedMessages {
         kind: 'next-input-card',
         automatic,
         steer,
+        now: this.now(),
         facts: this.facts(mail)
       })
       if (result.kind === 'next-input-card') {
@@ -286,7 +289,6 @@ export class SqlJournalQueuedMessages {
       kind: 'queue-update',
       input
     })) as AgentSessionQueuedMessageUpdateResult
-    this.editLeases.retire(input.messageId)
     return result
   }
 

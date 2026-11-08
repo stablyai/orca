@@ -1,40 +1,68 @@
-import {
-  QueuedMessageEditLeases,
-  type EditLeaseKey
-} from './queued-messages/queued-message-edit-leases'
-import type { QueuedMessageRow } from './queued-messages/queued-message-table'
+import type { EditLeaseKey } from './queued-messages/queued-message-edit-leases'
+import type {
+  JournalDomainEditLeaseOperation,
+  JournalDomainEditLeaseOutcome
+} from './journal-domain-edit-leases'
 
-/** The existing ephemeral owner; card reads stay on the SQL reader. */
+/** The deadline wakes the chat lane; only committed SQL rows decide which editors hold a card. */
 export class SqlQueuedMessageEditLeases {
-  private readonly owner = new QueuedMessageEditLeases()
+  private deadline: number | null = null
+  private timer: ReturnType<typeof setTimeout> | undefined
+  private wake: (() => void) | undefined
+  private disposed = false
 
-  constructor(private readonly get: (id: string) => Promise<QueuedMessageRow | null>) {}
+  constructor(
+    private readonly write: (
+      operation: JournalDomainEditLeaseOperation
+    ) => Promise<JournalDomainEditLeaseOutcome>,
+    private readonly now: () => number
+  ) {}
 
-  onDeadline = (wake: () => void): void => this.owner.onDeadline(wake)
-  version = (): number => this.owner.version()
-  snapshot = () => this.owner.snapshot()
-  release = (key: EditLeaseKey, messageId: string): void => this.owner.release(key, messageId)
-  retire = (messageId: string): void => this.owner.retire(messageId)
-  dispose = (): void => this.owner.dispose()
+  onDeadline(wake: () => void): void {
+    this.wake = wake
+    this.schedule()
+  }
+
+  adoptDeadline(deadline: number | null): void {
+    this.deadline = deadline
+    this.schedule()
+  }
 
   async acquire(key: EditLeaseKey, input: { messageId: string; fingerprint: string }) {
-    return this.owner.acquire(key, input, await this.rows(input.messageId))
+    return (await this.write({ kind: 'acquire', ...key, ...input })).result!
   }
 
   async renew(key: EditLeaseKey, messageId: string) {
-    return this.owner.renew(key, messageId, await this.rows(messageId))
+    return (await this.write({ kind: 'renew', ...key, messageId })).result!
   }
 
-  async heldIds(rows?: readonly QueuedMessageRow[]): Promise<ReadonlySet<string>> {
-    return this.owner.heldIds(rows ?? (await this.rows()))
+  async release(key: EditLeaseKey, messageId: string): Promise<void> {
+    await this.write({ kind: 'release', ...key, messageId })
   }
 
-  private async rows(messageId?: string): Promise<QueuedMessageRow[]> {
-    const ids = new Set(this.owner.snapshot().map((lease) => lease.messageId))
-    if (messageId !== undefined) {
-      ids.add(messageId)
+  async expire(): Promise<void> {
+    await this.write({ kind: 'expire' })
+  }
+
+  dispose(): void {
+    this.disposed = true
+    clearTimeout(this.timer)
+    this.timer = undefined
+  }
+
+  private schedule(): void {
+    clearTimeout(this.timer)
+    this.timer = undefined
+    if (this.disposed || !this.wake || this.deadline === null) {
+      return
     }
-    const rows = await Promise.all([...ids].map(this.get))
-    return rows.filter((row) => row !== null)
+    this.timer = setTimeout(
+      () => {
+        this.timer = undefined
+        this.wake?.()
+      },
+      Math.max(1, this.deadline - this.now())
+    )
+    this.timer.unref()
   }
 }

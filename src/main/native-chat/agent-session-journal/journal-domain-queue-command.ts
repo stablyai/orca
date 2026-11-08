@@ -203,10 +203,6 @@ export function applyJournalDomainQueueCommand(
     inputChanged: changes.length > 0 || placements.length > 0,
     ...(referencedUploads?.length ? { referencedUploads } : {})
   }
-  if (!commit.inputChanged) {
-    retireHolds(db, target, retire, commit, savedAt)
-    return commit
-  }
   const sequence = cursor.sequence + 1
   for (const { prior, card, holdOnly } of changes) {
     if (!prior) {
@@ -221,6 +217,9 @@ export function applyJournalDomainQueueCommand(
     placeJournalDomainQueueRow(db, target, messageId, position)
   }
   retireHolds(db, target, retire, commit, savedAt)
+  if (!commit.inputChanged) {
+    return commit
+  }
   appendJournalSqlEvent(db, target, sequence, savedAt, {
     items: [],
     submissions: [],
@@ -238,6 +237,7 @@ function retireHolds(
   now: number
 ): void {
   if (retireJournalDomainEditHolds(db, target, messageIds)) {
+    commit.inputChanged = true
     commit.editDeadline = journalDomainEditLeaseDeadline(db, target, now)
   }
 }

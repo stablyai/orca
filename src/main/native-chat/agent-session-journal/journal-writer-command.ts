@@ -37,6 +37,7 @@ import type { JournalStopEvent } from './durable-rows/journal-row-schema'
 import type { JournalWriterEffect } from './journal-writer-effects'
 import type { JournalWriterHostFacts } from './journal-writer-host-facts'
 import type { JournalWriterStep } from './writing/journal-writer-step'
+import type { JournalDomainEditLeaseOperation } from './journal-domain-edit-leases'
 
 /** The writer chooses the projection epoch; callers identify only their live open handle. */
 export type JournalWriterTarget = { sessionId: string; epoch: string; ownerToken: string }
@@ -75,6 +76,7 @@ export type JournalWriterCommand = {
 }
 
 export type JournalWriterInputOperation =
+  | { kind: 'edit-lease'; operation: JournalDomainEditLeaseOperation }
   | {
       kind: 'submission'
       input: JournalSubmissionInput

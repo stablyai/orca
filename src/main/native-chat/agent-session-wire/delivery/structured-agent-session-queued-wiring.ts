@@ -100,6 +100,7 @@ export function wireStructuredAgentSessionQueuedMessages(
         void context()
           .serialize(sessionId, async () => {
             if (sessions.get(sessionId)?.journal === journal) {
+              await journal.queuedMessages.editLeases.expire()
               republish(context(), sessionId, journal)
             }
           })

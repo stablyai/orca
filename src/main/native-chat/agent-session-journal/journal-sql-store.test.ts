@@ -57,14 +57,51 @@ async function open(root: string) {
   return opened
 }
 
-async function fixture() {
+async function fixture(now: () => number = () => 100) {
   const root = await mkdtemp(join(tmpdir(), 'journal-sql-store-'))
   roots.push(root)
   const { journalDatabase: database, records } = await open(root)
   expect(records.records.size).toBe(0)
-  const journal = await SqlAgentSessionJournal.open({ database, identity, now: () => 100 })
+  const journal = await SqlAgentSessionJournal.open({ database, identity, now })
   return { root, database, journal }
 }
+
+it('holds automatic delivery for every editor until committed release, expiry or handle close', async () => {
+  let now = 100
+  const { database, journal } = await fixture(() => now)
+  const card = await journal.queuedMessages.insert({
+    messageId: 'draft',
+    body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hello' }] }
+  })
+  const desktop = { callerKey: 'desktop', editId: 'editing' }
+  const phone = { callerKey: 'phone', editId: 'editing' }
+  await journal.queuedMessages.editLeases.acquire(desktop, {
+    messageId: 'draft',
+    fingerprint: card.fingerprint
+  })
+  now = 200
+  expect(
+    await journal.queuedMessages.editLeases.acquire(phone, {
+      messageId: 'draft',
+      fingerprint: card.fingerprint
+    })
+  ).toMatchObject({ status: 'held', remainingMs: 120_000 })
+  await journal.queuedMessages.editLeases.release(desktop, 'draft')
+  expect(await journal.queuedMessages.nextInputCard()).toBeNull()
+  now = 120_200
+  await journal.queuedMessages.editLeases.expire()
+  expect(await journal.queuedMessages.nextInputCard()).toMatchObject({ messageId: 'draft' })
+  await journal.queuedMessages.editLeases.acquire(phone, {
+    messageId: 'draft',
+    fingerprint: card.fingerprint
+  })
+  await journal.close()
+  const reopened = await SqlAgentSessionJournal.open({ database, identity, now: () => now })
+  expect(await reopened.queuedMessages.editLeases.renew(phone, 'draft')).toEqual({
+    status: 'expired'
+  })
+  await reopened.close()
+})
 
 function receipt(adopt: (committed: boolean) => void, draft = 'retained'): JournalOperationReceipt {
   return {
@@ -436,7 +473,7 @@ it('drops a revoked history invocation after worker dispatch and preserves dedup
     })
   })
   const lock = new Database(journalDatabasePath(root))
-  let pending: Promise<unknown> | undefined
+  let pending: ReturnType<typeof journal.appendSteps> | undefined
   lock.exec('BEGIN IMMEDIATE')
   try {
     pending = journal.appendSteps([step])
@@ -446,11 +483,11 @@ it('drops a revoked history invocation after worker dispatch and preserves dedup
     lock.exec('ROLLBACK')
     lock.close()
   }
-  expect(await pending).toEqual({ outcomes: [{ kind: 'dropped' }] })
+  expect((await pending)?.outcomes).toEqual([{ kind: 'dropped' }])
   expect(journal.physicalCursor()).toEqual(cursor)
   expect(await journal.reads.item('orca:history')).toBeNull()
   Atomics.store(permit, 0, 1)
-  expect(await journal.appendSteps([step])).toEqual({
+  expect(await journal.appendSteps([step])).toMatchObject({
     outcomes: [{ kind: 'committed', wrote: true }]
   })
   expect(await journal.reads.item('orca:history')).toMatchObject({
@@ -458,7 +495,7 @@ it('drops a revoked history invocation after worker dispatch and preserves dedup
     body: { text: 'Recovered outside turn' }
   })
   Atomics.store(permit, 0, 0)
-  expect(await journal.appendSteps([step])).toEqual({
+  expect(await journal.appendSteps([step])).toMatchObject({
     outcomes: [{ kind: 'committed', wrote: false }]
   })
   expect((await journal.reads.item('orca:history'))?.revision).toBe(1)
@@ -517,7 +554,7 @@ it('resolves related-item placement after an earlier step settles its saved turn
         reservedBytes: 4096
       }
     ])
-  ).toEqual({
+  ).toMatchObject({
     outcomes: [
       { kind: 'committed', wrote: true },
       { kind: 'dropped', reason: 'turn-settled', turnItemId: 'orca:turn' },
@@ -588,7 +625,7 @@ it('refuses stale running items on the writer while permitting completion of exi
         reservedBytes: 4096
       }
     ])
-  ).toEqual({
+  ).toMatchObject({
     outcomes: [
       { kind: 'dropped', reason: 'item-settled' },
       { kind: 'dropped', reason: 'turn-settled', turnItemId: 'orca:turn' },

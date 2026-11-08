@@ -25,6 +25,7 @@ import { SqlJournalAppends } from './journal-sql-appends'
 import type { JournalCurrentWorkAuthority } from './journal-observer-read'
 import type { JournalWorkRead, JournalWorkAnswer } from './journal-work-read'
 import type { JournalDomainHistoryRequest } from './journal-domain-history-page'
+import type { JournalDomainEditLeaseOutcome } from './journal-domain-edit-leases'
 
 /** Every writer command a live handle sends; the open command belongs to the database. */
 export type JournalSqlStoreOperation = Exclude<JournalWriterOperation, { kind: 'open' }>
@@ -51,6 +52,7 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   private readonly openedThrough: AgentJournalCursor
   private acknowledged: AgentJournalCursor
   private closed = false
+  private closing: Promise<void> | undefined
   private admitted: Promise<unknown> = Promise.resolve()
   private listener: ((commit: JournalWriterCommit) => void) | undefined
   readonly epochReplacements = new JournalEpochReplacements()
@@ -70,9 +72,14 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
       {
         read: (operation) => this.reads.queue(operation),
         write: async (operation: JournalSqlQueueWrite, receipt) =>
-          (await this.write(operation, receipt && (() => ({ receipt })))).value
+          (await this.write(operation, receipt && (() => ({ receipt })))).value,
+        edit: (operation) =>
+          this.answerOf<JournalDomainEditLeaseOutcome>(
+            this.write({ kind: 'edit-lease', operation })
+          )
       },
-      this.reopenFloor
+      this.reopenFloor,
+      now
     )
     // The open operation returns its physical position before ordinary recovery.
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the open command returns the physical cursor captured before recovery.
@@ -86,13 +93,15 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
     now?: () => number
   }): Promise<SqlAgentSessionJournal> {
     const { target, commit } = await options.database.openSession(options.identity)
-    return new SqlAgentSessionJournal(
+    const journal = new SqlAgentSessionJournal(
       options.database,
       options.identity,
       target,
       options.now ?? Date.now,
       commit
     )
+    await journal.queuedMessages.editLeases.expire()
+    return journal
   }
 
   /** The immutable physical position this handle opened at; never the reopen floor. */
@@ -178,6 +187,11 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
         this.goalAttachments.adopt(commit.goals)
       }
       this.acknowledged = { ...commit.cursor }
+      if (commit.publication?.editDeadline !== undefined) {
+        this.queuedMessages.editLeases.adoptDeadline(commit.publication.editDeadline)
+      } else if (operation.kind === 'epoch-replace') {
+        this.queuedMessages.editLeases.adoptDeadline(null)
+      }
       this.listener?.(commit)
       return commit
     })
@@ -230,9 +244,14 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
 
   /** Refuse admission now; already admitted work retains its ownership until it drains. */
   close(): Promise<void> {
+    if (this.closing) {
+      return this.closing
+    }
     this.queuedMessages.editLeases.dispose()
+    const released = this.write({ kind: 'edit-lease', operation: { kind: 'release-owner' } })
     this.closed = true
-    return this.admitted.then(() => undefined)
+    this.closing = released.then(() => undefined)
+    return this.closing
   }
 
   private admit<T>(

@@ -86,7 +86,7 @@ export function holdQueuedStructuredAgentMessageEdit(
   return context.serialize(sessionId, async () => {
     if (params.action === 'release') {
       const journal = context.sessions.get(sessionId)?.journal
-      journal?.queuedMessages.editLeases.release(key, messageId)
+      await journal?.queuedMessages.editLeases.release(key, messageId)
       if (journal) {
         republish(context, sessionId, journal)
       }
@@ -116,7 +116,7 @@ export function holdQueuedStructuredAgentMessageEdit(
   })
 }
 
-/** Publish/wake explicitly for nonjournaled leases; publication failure cannot revoke them. */
+/** Publication failure cannot revoke a committed edit hold. */
 export function republish(
   context: StructuredAgentSessionMutationContext,
   sessionId: string,

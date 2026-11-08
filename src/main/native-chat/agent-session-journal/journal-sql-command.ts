@@ -16,6 +16,7 @@ import { applyJournalDomainGenerationSettlement } from './journal-domain-generat
 import { applyJournalDomainLifecycleOperation } from './journal-domain-taken-stop'
 import { applyJournalDomainPromptMutation } from './journal-domain-prompt-mutation'
 import { applyJournalSqlStepCommand } from './journal-sql-step-command'
+import { applyJournalSqlEditLeaseCommand } from './journal-sql-edit-lease-command'
 
 /** Every command decides against current rows at its position on the sole writer. */
 export class JournalSqlCommand {
@@ -32,6 +33,13 @@ export class JournalSqlCommand {
     command = { ...command, savedAt }
     const { operation, target } = command
     switch (operation.kind) {
+      case 'edit-lease':
+        return applyJournalSqlEditLeaseCommand(
+          this.db,
+          this.stateDirectory,
+          { ...command, operation },
+          savedAt
+        )
       case 'item':
       case 'item-claiming':
         return applyJournalSqlItemCommand(
