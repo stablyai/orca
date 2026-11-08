@@ -83,10 +83,11 @@ export function scheduleWorktreeBaseNotification(
     }
     const pendingStructure = [...watch.pendingStructureRepoIds]
     const hasHeadIdentity = watch.pendingHeadIdentityRepoIds.size > 0
-    const sourceControlRepoIds = new Set([
-      ...watch.pendingGitStatusRepoIds,
-      ...watch.pendingHeadIdentityRepoIds
-    ])
+    const sourceControlRepoIds = new Set(
+      [...watch.pendingGitStatusRepoIds, ...watch.pendingHeadIdentityRepoIds].filter(
+        (repoId) => !watch.pendingStructureRepoIds.has(repoId)
+      )
+    )
     const emitHeadIdentities = pendingStructure.length === 0
     const headIdentityScope = watch.pendingHeadIdentityScope
     // Resolve attribution before head refresh rewrites the memo; base watches remain unattributed.
@@ -94,18 +95,17 @@ export function scheduleWorktreeBaseNotification(
       ? cachedWorktreePathsForScope(watch.headIdentityRefresh.cache, watch.pendingGitStatusScope)
       : null
     clearPendingWorktreeBaseNotifications(watch)
-    for (const repoId of pendingStructure) {
-      notifyWatchedWorktreeCatalogChanged(watch.mainWindow, repoId)
-    }
-    if (sourceControlRepoIds.size > 0) {
+    if (pendingStructure.length > 0 || sourceControlRepoIds.size > 0) {
       // Staging can keep a file's status letters, so counts reused by letters must not outlive an index change.
       clearGitStatusLineStatsCache()
     }
+    for (const repoId of pendingStructure) {
+      notifyWatchedWorktreeCatalogChanged(watch.mainWindow, repoId)
+      // The renderer re-reads status on worktrees:changed; phones' Changes doesn't, and HEAD or packed-refs moves arrive only here.
+      notifyGitStatusChangedForRemoteClients(repoId, null)
+    }
     for (const repoId of sourceControlRepoIds) {
-      // The renderer re-reads status on worktrees:changed; phones' Changes doesn't, so they hear every repo.
-      if (!pendingStructure.includes(repoId)) {
-        notifyWorktreeGitStatusMetadataChanged(watch.mainWindow, repoId, gitStatusWorktreePaths)
-      }
+      notifyWorktreeGitStatusMetadataChanged(watch.mainWindow, repoId, gitStatusWorktreePaths)
       notifyGitStatusChangedForRemoteClients(repoId, gitStatusWorktreePaths)
     }
     if (
