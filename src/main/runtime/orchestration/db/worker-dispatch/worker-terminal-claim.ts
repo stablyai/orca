@@ -4,9 +4,10 @@ import type { DispatchContextRow } from '../orchestration-records'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 
 // A starting Dispatch names its terminal only in its start options until its authority attaches.
+// A start stranded by a runtime restart is racing nothing, so only this runtime's starts claim.
 const STARTING_ON_TERMINAL_SQL = `SELECT d.* FROM dispatch_contexts d
   JOIN worker_dispatches w ON w.dispatch_id = d.id
-  WHERE d.status = 'pending' AND w.state = 'starting'
+  WHERE d.status = 'pending' AND w.state = 'starting' AND w.runtime_epoch = ?
     AND json_extract(w.start_options, '$.terminal') = ?
   ORDER BY d.rowid LIMIT 1`
 
@@ -15,7 +16,7 @@ const STARTING_ON_TERMINAL_SQL = `SELECT d.* FROM dispatch_contexts d
 export function refuseClaimedWorkerTerminal(
   db: OrchestrationDb,
   handle: string | undefined,
-  runtime: Pick<OrcaRuntimeService, 'getTerminalPaneKey'>,
+  runtime: Pick<OrcaRuntimeService, 'getTerminalPaneKey' | 'getRuntimeId'>,
   /** A racing follow-up of the same settled Dispatch is left to `follow_up_claimed`, which steers the send into it. */
   followUpOf: string | undefined
 ): void {
@@ -25,7 +26,9 @@ export function refuseClaimedWorkerTerminal(
   const open =
     db.findActiveDispatchForAssignee(handle, runtime.getTerminalPaneKey(handle) ?? undefined) ??
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: selects whole dispatch_contexts rows.
-    (db.db.prepare(STARTING_ON_TERMINAL_SQL).get(handle) as DispatchContextRow | undefined)
+    (db.db.prepare(STARTING_ON_TERMINAL_SQL).get(runtime.getRuntimeId(), handle) as
+      | DispatchContextRow
+      | undefined)
   if (open && !(followUpOf && open.follow_up_of_dispatch_id === followUpOf)) {
     throw terminalBusyError(db, handle, open)
   }
