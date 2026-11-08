@@ -21,6 +21,7 @@ import { SqlJournalStopMarks } from './journal-sql-stop-marks'
 import { SqlJournalAppends } from './journal-sql-appends'
 import type { JournalCurrentWorkAuthority } from './journal-observer-read'
 import type { JournalWorkRead, JournalWorkAnswer } from './journal-work-read'
+import type { JournalDomainHistoryRequest } from './journal-domain-history-page'
 
 /** Every writer command a live handle sends; the open command belongs to the database. */
 export type JournalSqlStoreOperation = Exclude<JournalWriterOperation, { kind: 'open' }>
@@ -201,6 +202,10 @@ export class SqlAgentSessionJournal extends SqlJournalAppends {
   /** Pure readers can join preceding commands without allowing another command between reads. */
   readInOrder<T>(read: (reads: JournalSqlReads) => T | Promise<T>): Promise<T> {
     return this.admit(() => read(this.reads))
+  }
+
+  history(request: Omit<JournalDomainHistoryRequest, 'sessionId'>) {
+    return this.database.readers.domainHistory({ ...request, sessionId: this.identity.sessionId })
   }
 
   readWork<K extends JournalWorkRead['kind']>(
