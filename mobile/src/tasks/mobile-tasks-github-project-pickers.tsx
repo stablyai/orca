@@ -11,6 +11,7 @@ import {
   Pressable,
   AlertTriangle,
   ActivityIndicator,
+  githubProjectHost,
   githubProjectKey,
   PickerModal,
   type GitHubProjectRef
@@ -20,6 +21,7 @@ import { styles } from './mobile-tasks-legacy-styles'
 import { PROJECT_VIEW_DEFAULT_SORT } from './mobile-tasks-legacy-foundation'
 import { pressedStyle } from '../theme/mobile-theme'
 
+/** Renders the bottom drawer for browsing, searching, pinning, and selecting GitHub Projects. */
 export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentationModel) {
   const {
     activeGitHubProject,
@@ -256,7 +258,8 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
                               {
                                 owner: project.owner,
                                 ownerType: project.ownerType,
-                                number: project.number
+                                number: project.number,
+                                host: githubProjectHost(project.host)
                               }
                             ].slice(0, 20)
                           })
@@ -284,7 +287,7 @@ export function renderMobileTasksGitHubProjectPicker(model: ConnectionPresentati
           ) : (
             <ListGroup>
               {browseGitHubProjects.map((project) =>
-                projectRow(project.id, project, project.title, undefined)
+                projectRow(`browse:${githubProjectKey(project)}`, project, project.title, undefined)
               )}
             </ListGroup>
           )}
