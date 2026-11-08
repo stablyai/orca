@@ -94,6 +94,30 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     },
     {
       title: translate(
+        'auto.components.settings.experimental.search.floatingWorkspacePopout.title',
+        'Floating Workspace pop-out'
+      ),
+      description: translate(
+        'auto.components.settings.experimental.search.floatingWorkspacePopout.description',
+        'Open the Floating Workspace terminal in its own window.'
+      ),
+      keywords: [
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.0d24759f14',
+          'experimental'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.floatingWorkspacePopout.floating',
+          'floating'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.experimental.search.agentDashboard.popout',
+          'pop-out'
+        )
+      ]
+    },
+    {
+      title: translate(
         'auto.components.settings.experimental.search.9e4ddf776d',
         'Terminal attention'
       ),
@@ -204,6 +228,12 @@ export function getExperimentalSearchEntry(t: Translate = translate) {
     pet: findEntry(t('auto.components.settings.experimental.search.87d99e634b', 'Pet')),
     agentDashboard: findEntry(
       t('auto.components.settings.experimental.search.agentDashboard.title', 'Agent Dashboard')
+    ),
+    floatingWorkspacePopout: findEntry(
+      translate(
+        'auto.components.settings.experimental.search.floatingWorkspacePopout.title',
+        'Floating Workspace pop-out'
+      )
     ),
     terminalAttention: findEntry(
       t('auto.components.settings.experimental.search.9e4ddf776d', 'Terminal attention')

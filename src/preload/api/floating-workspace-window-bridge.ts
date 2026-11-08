@@ -33,5 +33,9 @@ export const floatingWorkspaceWindowApi = {
   onDockRequested: (callback: () => void): (() => void) =>
     subscribe(CHANNELS.dockRequested, () => callback()),
   onHiddenByUser: (callback: () => void): (() => void) =>
-    subscribe(CHANNELS.hiddenByUser, () => callback())
+    subscribe(CHANNELS.hiddenByUser, () => callback()),
+  onAgentAcked: (callback: (paneKey: string, intent: 'view' | 'explicit') => void): (() => void) =>
+    subscribe(CHANNELS.agentAcked, (ack: { paneKey: string; intent: 'view' | 'explicit' }) =>
+      callback(ack.paneKey, ack.intent)
+    )
 } satisfies PreloadApi['floatingWorkspaceWindow']

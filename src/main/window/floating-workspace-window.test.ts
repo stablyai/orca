@@ -107,7 +107,7 @@ import {
 } from './floating-workspace-window'
 
 function showReady(): InstanceType<typeof FakeWindow> {
-  // SAFETY: the fixture implements the BrowserWindow surface the module uses.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements the BrowserWindow surface the module uses.
   const window = showFloatingWorkspaceWindow(null, { focus: false }) as unknown as InstanceType<
     typeof FakeWindow
   >
@@ -116,7 +116,7 @@ function showReady(): InstanceType<typeof FakeWindow> {
 }
 
 function isRendererOf(window: InstanceType<typeof FakeWindow>): boolean {
-  // SAFETY: the fixture's webContents carries the identity the predicate compares.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture's webContents carries the identity the predicate compares.
   return isFloatingWorkspaceWindowRenderer(window.webContents as never)
 }
 
@@ -198,7 +198,7 @@ describe('floating workspace window', () => {
     configureFloatingWorkspaceWindowLifecycle({ getIsQuitting: () => true })
     const window = showReady()
     const mainWindow = new FakeWindow({})
-    // SAFETY: the fixture implements the BrowserWindow surface the module uses.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements the BrowserWindow surface the module uses.
     destroyFloatingWorkspaceWindowWithMainWindow(mainWindow as unknown as Electron.BrowserWindow)
 
     requestClose(window)

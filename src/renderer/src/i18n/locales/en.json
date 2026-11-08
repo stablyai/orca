@@ -8266,6 +8266,13 @@
             "modeInWindow": "In-window",
             "modePopout": "Pop-out"
           },
+          "floatingWorkspacePopout": {
+            "title": "Floating Workspace pop-out",
+            "description": "Open the Floating Workspace terminal in its own window.",
+            "toggleLabel": "Toggle Floating Workspace pop-out",
+            "modeCopy": "Show the Floating Workspace as an in-window panel or a separate pop-out window.",
+            "modeAriaLabel": "Floating Workspace open mode"
+          },
           "browserExtensions": {
             "copy": "Adds Settings › Browser › Extensions for local browser profiles.",
             "toggleLabel": "Toggle browser extensions"
@@ -10483,6 +10490,11 @@
               "board": "board",
               "inWindow": "in-window",
               "worktrees": "worktrees"
+            },
+            "floatingWorkspacePopout": {
+              "title": "Floating Workspace pop-out",
+              "description": "Open the Floating Workspace terminal in its own window.",
+              "floating": "floating"
             },
             "browserExtensions": {
               "title": "Browser extensions",
@@ -15939,7 +15951,8 @@
             "1c79cba25d": "Restore floating workspace",
             "648352c51f": "Open {{value0}} in floating workspace",
             "109870e023": "Maximize",
-            "b5686fee1e": "Restore"
+            "b5686fee1e": "Restore",
+            "popout": "Pop out floating workspace"
           }
         }
       },

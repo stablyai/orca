@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { Button } from '@/components/ui/button'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppMenuPaste } from '@/hooks/useAppMenuPaste'
 import { useAppMenuSelectionActions } from '@/hooks/useAppMenuSelectionActions'
 import { translate } from '@/i18n/i18n'
@@ -40,7 +41,12 @@ export function FloatingWorkspaceWindowRoot(): React.JSX.Element {
   return (
     <div className="flex h-screen w-screen flex-col bg-background text-foreground">
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-3 py-2">
-        {activeTab ? <AgentStateDot state={activeTab.status} /> : null}
+        {/* Why: the dot's tooltip needs a provider, and this window has no App shell. */}
+        {activeTab ? (
+          <TooltipProvider delayDuration={300}>
+            <AgentStateDot state={activeTab.status} />
+          </TooltipProvider>
+        ) : null}
         <h1 className="min-w-0 flex-1 truncate text-[13px] font-semibold">
           {activeTab?.title ?? ''}
         </h1>

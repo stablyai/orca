@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { Maximize2, Minimize2, Minus } from 'lucide-react'
+import { ExternalLink, Maximize2, Minimize2, Minus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
@@ -14,6 +14,7 @@ import {
 } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { translate } from '@/i18n/i18n'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
+import { canOpenFloatingWorkspacePopout } from './floating-workspace-open-mode'
 
 type FloatingTerminalWindowControlsProps = {
   maximized: boolean
@@ -36,6 +37,15 @@ export function FloatingTerminalWindowControls({
   const defaultTuiAgent = useAppStore((s) => s.settings?.defaultTuiAgent ?? null)
   const setActiveTabForWorktree = useAppStore((s) => s.setActiveTabForWorktree)
   const activateTab = useAppStore((s) => s.activateTab)
+  const updateSettings = useAppStore((s) => s.updateSettings)
+  const popoutAvailable = useAppStore(
+    (s) =>
+      canOpenFloatingWorkspacePopout() && s.settings?.experimentalFloatingWorkspacePopout === true
+  )
+  const popoutLabel = translate(
+    'auto.components.floating.terminal.FloatingTerminalWindowControls.popout',
+    'Pop out floating workspace'
+  )
   const maximizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.maximize')
   const minimizeShortcutLabel = useOptionalShortcutLabel('floatingWorkspace.minimize')
 
@@ -106,6 +116,25 @@ export function FloatingTerminalWindowControls({
               'Open {{value0}} in floating workspace',
               { value0: defaultAgentLabel ?? defaultAgent }
             )}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+      {popoutAvailable ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon-xs"
+              className={controlButtonClassName}
+              aria-label={popoutLabel}
+              onClick={() => void updateSettings({ experimentalFloatingWorkspaceMode: 'popout' })}
+            >
+              <ExternalLink className="size-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom" sideOffset={6}>
+            {popoutLabel}
           </TooltipContent>
         </Tooltip>
       ) : null}

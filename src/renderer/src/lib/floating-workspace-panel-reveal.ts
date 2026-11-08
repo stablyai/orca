@@ -1,5 +1,6 @@
 import type { AppState } from '@/store/types'
 import { selectFloatingWorkspacePanelVisible } from '@/store/workspaces/floating/floating-workspace-panel-selector'
+import { resolveFloatingWorkspaceMode } from '@/components/floating-terminal/floating-workspace-open-mode'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 
 function toggleFloatingWorkspacePanel(): void {
@@ -17,7 +18,15 @@ export function revealFloatingWorkspacePanel(
     return
   }
   if (state.settings.floatingTerminalEnabled === true) {
-    if (!selectFloatingWorkspacePanelVisible(state)) {
+    if (selectFloatingWorkspacePanelVisible(state)) {
+      return
+    }
+    if (
+      state.floatingWorkspacePanelOpen &&
+      resolveFloatingWorkspaceMode(state.settings) === 'popout'
+    ) {
+      void window.api.floatingWorkspaceWindow.show({ focus: true }).catch(() => undefined)
+    } else {
       toggleFloatingWorkspacePanel()
     }
     return

@@ -2,6 +2,7 @@ import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AgentHibernationGate } from '../components/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from '../components/AiVaultTabTitleSyncGate'
+import { canOpenFloatingWorkspacePopout } from '../components/floating-terminal/floating-workspace-open-mode'
 import RetainedAgentsSyncGate from '../components/dashboard/RetainedAgentsSyncGate'
 import { WorkspacePortScanner } from '../components/ports/WorkspacePortScanner'
 import { SavedHostScopeWidenGate } from '../components/sidebar/worktree-list/listing/SavedHostScopeWidenGate'
@@ -14,12 +15,22 @@ import { StructuredAgentSessionStatusBridge } from '../components/native-chat/se
 import { NativeChatVisualGuestThemePublisher } from '../components/native-chat/media/visuals/NativeChatVisualGuestThemePublisher'
 
 const DashboardPopoutBridge = lazy(() => import('../components/dashboard/DashboardPopoutBridge'))
+const FloatingWorkspaceWindowBridge = lazy(
+  () => import('../components/floating-terminal/FloatingWorkspaceWindowBridge')
+)
 
 /** Isolate high-churn subscriptions from App rendering; services outlive their consuming surfaces. */
 export function AppBackgroundServices(): React.JSX.Element {
   const workspaceSessionReady = useAppStore((s) => s.workspaceSessionReady)
   const dashboardPopoutEnabled = useAppStore(
     (s) => s.settings?.experimentalAgentDashboardPopout === true
+  )
+
+  const floatingWindowBridgeEnabled = useAppStore(
+    (s) =>
+      canOpenFloatingWorkspacePopout() &&
+      s.settings?.floatingTerminalEnabled === true &&
+      s.settings.experimentalFloatingWorkspacePopout === true
   )
 
   return (
@@ -37,6 +48,11 @@ export function AppBackgroundServices(): React.JSX.Element {
       {dashboardPopoutEnabled ? (
         <Suspense fallback={null}>
           <DashboardPopoutBridge />
+        </Suspense>
+      ) : null}
+      {floatingWindowBridgeEnabled ? (
+        <Suspense fallback={null}>
+          <FloatingWorkspaceWindowBridge />
         </Suspense>
       ) : null}
       <AgentHibernationGate />

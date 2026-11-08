@@ -13,6 +13,7 @@ export const FLOATING_WORKSPACE_WINDOW_CHANNELS = {
   requestDock: 'floatingWorkspaceWindow:requestDock',
   dockRequested: 'floatingWorkspaceWindow:dockRequested',
   ackAgent: 'floatingWorkspaceWindow:ackAgent',
+  agentAcked: 'floatingWorkspaceWindow:agentAcked',
   hiddenByUser: 'floatingWorkspaceWindow:hiddenByUser'
 } as const
 

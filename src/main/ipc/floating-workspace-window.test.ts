@@ -105,7 +105,7 @@ describe('floating workspace window IPC', () => {
     mocks.windowListeners.clear()
     vi.clearAllMocks()
     settings = { floatingTerminalEnabled: true, experimentalFloatingWorkspacePopout: true }
-    // SAFETY: the fixture implements the Store methods the handlers use.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements the Store methods the handlers use.
     const store = {
       getSettings: () => settings,
       onSettingsChanged: vi.fn()
@@ -156,13 +156,23 @@ describe('floating workspace window IPC', () => {
     expect(mocks.showWindow).toHaveBeenCalledTimes(1)
   })
 
+  it("forwards a floating-window ack once, on its own channel, only for the snapshot's active pane", () => {
+    call('floatingWorkspaceWindow:publishSnapshot', MAIN, snapshotFor(FLOATING_PTY))
+    call('floatingWorkspaceWindow:ackAgent', FLOATING, { paneKey: 'tab-1:leaf-2', intent: 'view' })
+    call('floatingWorkspaceWindow:ackAgent', MAIN, { paneKey: 'tab-1:leaf-1', intent: 'view' })
+    call('floatingWorkspaceWindow:ackAgent', FLOATING, { paneKey: 'tab-1:leaf-1', intent: 'view' })
+    expect(mocks.sendToTrusted.mock.calls).toEqual([
+      ['floatingWorkspaceWindow:agentAcked', { paneKey: 'tab-1:leaf-1', intent: 'view' }]
+    ])
+  })
+
   describe('terminalPreview scoping', () => {
     let runtime: ReturnType<typeof makeRuntime>
 
     beforeEach(() => {
       runtime = makeRuntime()
-      // SAFETY: the fixture implements the runtime methods the preview handlers use.
       registerTerminalPreviewHandlers(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements the runtime methods the preview handlers use.
         runtime as unknown as Parameters<typeof registerTerminalPreviewHandlers>[0]
       )
     })

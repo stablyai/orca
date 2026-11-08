@@ -150,7 +150,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
         <Suspense fallback={null}>
           <OverlayBoundary
             boundaryId="overlay.floating-workspace"
-            resetKey={floatingWorkspace.open}
+            resetKey={floatingWorkspace.panelOpen}
             title={translate('auto.App.1b3024bcd6', 'The floating workspace hit an error.')}
             description={translate(
               'auto.App.7cbfbf622f',
@@ -158,7 +158,7 @@ export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
             )}
           >
             <FloatingTerminalPanel
-              open={floatingWorkspace.open}
+              open={floatingWorkspace.panelOpen}
               onOpenChange={floatingWorkspace.setOpenWithFocus}
               tourInteractionSnapshot={floatingWorkspace.tourInteractionSnapshotRef.current}
             />

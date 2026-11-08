@@ -13,4 +13,6 @@ export type FloatingWorkspaceWindowApi = {
   onSnapshotRequested: (callback: () => void) => () => void
   onDockRequested: (callback: () => void) => () => void
   onHiddenByUser: (callback: () => void) => () => void
+  /** Acks main admitted from this window; separate from the dashboard's so each is applied once. */
+  onAgentAcked: (callback: (paneKey: string, intent: 'view' | 'explicit') => void) => () => void
 }

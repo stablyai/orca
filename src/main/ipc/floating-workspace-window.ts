@@ -132,7 +132,7 @@ export function registerFloatingWorkspaceWindowHandlers(
     ) {
       return
     }
-    sendToTrustedUIRenderer('ui:ackDashboardAgent', {
+    sendToTrustedUIRenderer(CHANNELS.agentAcked, {
       paneKey,
       intent: 'intent' in ack && ack.intent === 'explicit' ? 'explicit' : 'view'
     })

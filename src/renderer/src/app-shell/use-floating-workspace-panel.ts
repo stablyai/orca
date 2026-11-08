@@ -12,6 +12,7 @@ import {
 } from '@/lib/floating-terminal'
 import { createFloatingWorkspaceTourInteractionSnapshot } from '@/lib/floating-workspace-tour-interaction-snapshot'
 import { persistFloatingTerminalPanelOpen } from '../components/floating-terminal/floating-terminal-panel-view-state'
+import { resolveFloatingWorkspaceMode } from '../components/floating-terminal/floating-workspace-open-mode'
 import { useAppStore } from '../store'
 import { selectFloatingVisibleTabCount } from '../store/workspaces/floating/floating-workspace-panel-selector'
 
@@ -35,6 +36,7 @@ export function useFloatingWorkspacePanel() {
   )
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const visibleTabCount = useAppStore(selectFloatingVisibleTabCount)
+  const popout = useAppStore((s) => resolveFloatingWorkspaceMode(s.settings) === 'popout')
 
   // Return focus to the prior surface when hotkey-minimizing the overlay.
   const returnFocusRef = useRef<HTMLElement | null>(null)
@@ -132,6 +134,8 @@ export function useFloatingWorkspacePanel() {
       enabled,
       open,
       openMaximized,
+      // The pop-out window shows the open workspace, so the in-window panel stays closed.
+      panelOpen: open && !popout,
       setOpenWithFocus,
       // Retain panes’ local state while closed once the floating workspace owns tabs.
       shouldMountPanel,
@@ -144,6 +148,7 @@ export function useFloatingWorkspacePanel() {
       enabled,
       open,
       openMaximized,
+      popout,
       setOpenWithFocus,
       shouldMountPanel,
       showToggleButton,

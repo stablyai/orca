@@ -1,6 +1,7 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import type { AppState } from '../../types'
+import { resolveFloatingWorkspaceMode } from '../../../components/floating-terminal/floating-workspace-open-mode'
 
 export type FloatingWorkspacePanelVisibilityState = Pick<
   AppState,
@@ -27,11 +28,21 @@ const EMPTY_UNIFIED_TABS: NonNullable<AppState['unifiedTabsByWorktree'][string]>
 
 let floatingVisibleTabCountCache: FloatingVisibleTabCountCache | null = null
 
-/** Panel is visible only with feature enabled and panel open; closed panels are aria-hidden. */
-export function selectFloatingWorkspacePanelVisible(
+/** On screen in either mode: enabled and open, in the main window or in the pop-out. */
+export function selectFloatingWorkspaceOnScreen(
   state: FloatingWorkspacePanelVisibilityState
 ): boolean {
   return state.settings?.floatingTerminalEnabled === true && state.floatingWorkspacePanelOpen
+}
+
+/** The in-window panel is drawn: on screen and not popped out; closed panels are aria-hidden. */
+export function selectFloatingWorkspacePanelVisible(
+  state: FloatingWorkspacePanelVisibilityState
+): boolean {
+  return (
+    selectFloatingWorkspaceOnScreen(state) &&
+    resolveFloatingWorkspaceMode(state.settings) === 'in-window'
+  )
 }
 
 export function selectFloatingVisibleTabCount(state: FloatingVisibleTabCountState): number {
