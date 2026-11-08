@@ -83,16 +83,21 @@ describe('commit actions', () => {
     expect(await git('show', 'HEAD:file.txt')).toBe('base')
     expect(await git('log', '-1', '--format=%s')).toBe('Revert "topic change"')
   })
-  it('skips an empty cherry-pick and preserves the applied commit', async () => {
+  it('skips an empty graph cherry-pick while preserving unrelated unstaged edits', async () => {
+    await writeFile(join(directory, 'unrelated.txt'), 'original\n')
+    await git('add', 'unrelated.txt')
+    await git('commit', '-qm', 'unrelated file')
     await git('cherry-pick', topic)
+    await writeFile(join(directory, 'unrelated.txt'), 'work in progress\n')
     expect(await applyCommit(directory, 'cherry-pick', topic)).toEqual({
       outcome: 'empty',
       message: 'Already applied, nothing to cherry-pick'
     })
     await expect(git('rev-parse', '--verify', 'CHERRY_PICK_HEAD')).rejects.toThrow()
-    expect(await git('log', '--format=%s')).toBe('topic change\nbase')
+    expect(await git('log', '--format=%s')).toBe('topic change\nunrelated file\nbase')
     expect(await git('show', 'HEAD:file.txt')).toBe('topic')
-    expect(await git('status', '--porcelain')).toBe('')
+    expect(await git('diff', '--', 'unrelated.txt')).toContain('+work in progress')
+    expect(await git('status', '--porcelain')).toBe('M unrelated.txt')
   })
   it.each([
     ['cherry-pick', 'Already applied, nothing to cherry-pick', 'CHERRY_PICK_HEAD'],
@@ -119,7 +124,7 @@ describe('commit actions', () => {
       )
     }
   )
-  it('skips an empty final cherry-pick without losing earlier picks in a terminal sequence', async () => {
+  it('skips an empty final cherry-pick while preserving earlier picks and unrelated unstaged edits', async () => {
     await git('checkout', '-q', 'topic')
     await writeFile(join(directory, 'first.txt'), 'first\n')
     await git('add', 'first.txt')
@@ -130,10 +135,13 @@ describe('commit actions', () => {
     await git('commit', '-qm', 'second pick')
     const last = await commit('last\n', 'last pick')
     await git('checkout', '-q', 'main')
+    await writeFile(join(directory, 'unrelated.txt'), 'original\n')
+    await git('add', 'unrelated.txt')
     await commit('different\n', 'diverged')
     await expect(git('cherry-pick', `${first}^..${last}`)).rejects.toThrow()
     await writeFile(join(directory, 'file.txt'), 'different\n')
     await git('add', 'file.txt')
+    await writeFile(join(directory, 'unrelated.txt'), 'work in progress\n')
 
     expect(await recoverSequencer(directory, 'cherry-pick', 'continue')).toEqual({
       outcome: 'empty',
@@ -144,7 +152,8 @@ describe('commit actions', () => {
     expect(await git('show', 'HEAD:second.txt')).toBe('second')
     expect(await git('show', 'HEAD:file.txt')).toBe('different')
     await expect(git('rev-parse', '--verify', 'CHERRY_PICK_HEAD')).rejects.toThrow()
-    expect(await git('status', '--porcelain')).toBe('')
+    expect(await git('diff', '--', 'unrelated.txt')).toContain('+work in progress')
+    expect(await git('status', '--porcelain')).toBe('M unrelated.txt')
   })
   it('keeps a conflicting revert whose subject contains nothing to commit in progress', async () => {
     await git('checkout', '-q', 'topic')
