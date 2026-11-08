@@ -11,14 +11,19 @@ export function appendJournalSqlEvent(
   target: { sessionId: string; epoch: string },
   sequence: number,
   savedAt: number,
-  changes: JournalDomainEventChanges
+  changes: JournalDomainEventChanges,
+  activity?: { fence: number; observedAt: number }
 ): void {
   const prefix = [target.sessionId, target.epoch] as const
   const json = JSON.stringify(changes)
   const oversized = Buffer.byteLength(json, 'utf8') > MAX_EVENT_BYTES
-  db.prepare(`UPDATE journal_chat_state SET retained_sequence=MAX(retained_sequence,?)
+  db.prepare(`UPDATE journal_chat_state SET last_sequence=?, retained_sequence=MAX(retained_sequence,?),
+    highest_fence=MAX(highest_fence,?), last_activity_at=MAX(last_activity_at,?)
     WHERE session_id=? AND epoch=?`).run(
+    sequence,
     oversized ? sequence : Math.max(0, sequence - MAX_EVENT_SEQUENCES),
+    activity?.fence ?? 0,
+    activity?.observedAt ?? 0,
     ...prefix
   )
   db.prepare(`INSERT INTO journal_events(session_id,epoch,sequence,saved_at,changes_json)

@@ -8,7 +8,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal
 import { agentSessionSendBodyFingerprint } from '../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import { migrateJournalDomainSchema } from './journal-domain-schema'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
-import { writeJournalDomainHistoryBounds } from './journal-domain-history-bounds'
+import { writeJournalDomainItemNames } from './journal-domain-item-names'
 import { JournalSqlBatch } from './journal-sql-batch'
 import {
   commitJournalSqlMessages,
@@ -59,7 +59,7 @@ export function messageFixture(db = new Database(':memory:')) {
     const metadata = journalDomainHistoryMetadata(item, payload)
     db.prepare(`INSERT INTO journal_items
     (session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,payload_json,
-     root,subagent_row,subagent_group_key,turn_marker) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
+     root,subagent_row,subagent_group_key,turn_marker,wire_bytes) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).run(
       target.sessionId,
       target.epoch,
       item.itemId,
@@ -72,9 +72,16 @@ export function messageFixture(db = new Database(':memory:')) {
       metadata.root,
       metadata.subagentRow,
       metadata.subagentGroupKey,
-      metadata.turnMarker
+      metadata.turnMarker,
+      metadata.wireBytes
     )
-    writeJournalDomainHistoryBounds(db, target, item.itemId, metadata)
+    writeJournalDomainItemNames(
+      db,
+      target,
+      item,
+      { ordinal: item.sequence, hidden: false },
+      metadata.namedSubagentIds
+    )
   }
   const seedSend = () => {
     const body: AgentJournalMessageItem = {

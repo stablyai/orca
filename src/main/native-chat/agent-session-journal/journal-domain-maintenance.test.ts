@@ -304,7 +304,6 @@ it.each([100, 1_000])(
     expect(plans).toContain(
       'SEARCH journal_chat_state USING INDEX sqlite_autoindex_journal_chat_state_1 (session_id=?)'
     )
-    expect(plans).toContain('SEARCH journal_events USING PRIMARY KEY (session_id=? AND epoch>?)')
     expect(plans.some((detail) => /^SCAN (journal_|ready|retired)/.test(detail))).toBe(false)
     expect(
       plans

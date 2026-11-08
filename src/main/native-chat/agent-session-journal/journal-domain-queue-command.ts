@@ -221,11 +221,6 @@ export function applyJournalDomainQueueCommand(
     placeJournalDomainQueueRow(db, target, messageId, position)
   }
   retireHolds(db, target, retire, commit, savedAt)
-  db.prepare('UPDATE journal_chat_state SET last_sequence=? WHERE session_id=? AND epoch=?').run(
-    sequence,
-    target.sessionId,
-    target.epoch
-  )
   appendJournalSqlEvent(db, target, sequence, savedAt, {
     items: [],
     submissions: [],

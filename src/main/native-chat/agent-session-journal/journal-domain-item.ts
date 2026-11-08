@@ -32,7 +32,7 @@ import { assertJournalFence } from './writing/journal-write-guards'
 import type { JournalItemRow } from './durable-rows/journal-row-schema'
 import type { QueuedMessageRow } from './queued-messages/queued-message-table'
 import { journalDomainHistoryMetadata } from './journal-domain-history-metadata'
-import { writeJournalDomainHistoryBounds } from './journal-domain-history-bounds'
+import { writeJournalDomainItemNames } from './journal-domain-item-names'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
 import {
   readJournalSqlAcceptedInputs,
@@ -128,7 +128,7 @@ export function applyJournalDomainItem(
     }
   }
   const stored = db
-    .prepare(`SELECT revision, ordinal, owner_fence, execution_owner, payload_json FROM journal_items
+    .prepare(`SELECT revision, ordinal, owner_fence, execution_owner, hidden, payload_json FROM journal_items
     WHERE session_id=? AND epoch=? AND item_id=?`)
     .get(...prefix, itemId)
   const previous: AgentJournalRenderItem | undefined = stored
@@ -197,12 +197,12 @@ export function applyJournalDomainItem(
   const payload = JSON.stringify(next)
   const metadata = journalDomainHistoryMetadata(next, payload)
   db.prepare(`INSERT INTO journal_items(session_id,epoch,item_id,ordinal,revision,sequence,sequence_index,owner_fence,execution_owner,payload_json,
-      root,subagent_row,subagent_group_key,turn_marker)
-    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,epoch,item_id) DO UPDATE SET
+      root,subagent_row,subagent_group_key,turn_marker,wire_bytes)
+    VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,epoch,item_id) DO UPDATE SET
       revision=excluded.revision, sequence=excluded.sequence, sequence_index=excluded.sequence_index,
       execution_owner=excluded.execution_owner, payload_json=excluded.payload_json,
       root=excluded.root, subagent_row=excluded.subagent_row, subagent_group_key=excluded.subagent_group_key,
-      turn_marker=excluded.turn_marker`).run(
+      turn_marker=excluded.turn_marker, wire_bytes=excluded.wire_bytes`).run(
     ...prefix,
     itemId,
     stored?.ordinal ?? sequence,
@@ -215,9 +215,19 @@ export function applyJournalDomainItem(
     metadata.root,
     metadata.subagentRow,
     metadata.subagentGroupKey,
-    metadata.turnMarker
+    metadata.turnMarker,
+    metadata.wireBytes
   )
-  writeJournalDomainHistoryBounds(db, target, itemId, metadata)
+  writeJournalDomainItemNames(
+    db,
+    target,
+    next,
+    { ordinal: Number(stored?.ordinal ?? sequence), hidden: Boolean(stored?.hidden) },
+    metadata.namedSubagentIds,
+    previous
+      ? { item: previous, ordinal: Number(stored!.ordinal), hidden: Boolean(stored!.hidden) }
+      : undefined
+  )
   db.prepare(
     'DELETE FROM journal_item_tombstones WHERE session_id=? AND epoch=? AND item_id=?'
   ).run(...prefix, itemId)
@@ -251,12 +261,19 @@ export function applyJournalDomainItem(
       savedAt
     )
   }
-  db.prepare(`UPDATE journal_chat_state SET last_sequence=?,highest_fence=MAX(highest_fence,?),last_activity_at=MAX(last_activity_at,?)
-    WHERE session_id=? AND epoch=?`).run(sequence, row.fence, row.ts, ...prefix)
-  appendJournalSqlEvent(db, target, sequence, savedAt, {
-    items: [{ itemId, revision, sequence: next.sequence, sequenceIndex: next.sequenceIndex ?? 0 }],
-    submissions: result.receipts.map((receipt) => receipt.clientMessageId),
-    cards: result.cards.map((card) => card.messageId)
-  })
+  appendJournalSqlEvent(
+    db,
+    target,
+    sequence,
+    savedAt,
+    {
+      items: [
+        { itemId, revision, sequence: next.sequence, sequenceIndex: next.sequenceIndex ?? 0 }
+      ],
+      submissions: result.receipts.map((receipt) => receipt.clientMessageId),
+      cards: result.cards.map((card) => card.messageId)
+    },
+    { fence: row.fence, observedAt: row.ts }
+  )
   return result
 }

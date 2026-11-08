@@ -123,7 +123,8 @@ it('keeps revised naming items at their visible history position and removes obs
   ])
 
   // A restored hidden row stays hidden when its body is revised.
-  db.prepare("UPDATE journal_items SET hidden=1 WHERE item_id='orca:first'").run()
+  db.exec(`UPDATE journal_items SET hidden=1 WHERE item_id='orca:first';
+    UPDATE journal_item_subagent_names SET hidden=1 WHERE item_id='orca:first'`)
   await commit(revision)
   expect(read({ direction: 'tail', limit: 1 }).page.subagentRoster).toMatchObject([
     { itemId: 'orca:second', sequence: 2, entry: { id: 'child', label: 'Second' } }

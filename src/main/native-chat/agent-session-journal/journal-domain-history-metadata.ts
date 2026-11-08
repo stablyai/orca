@@ -31,20 +31,22 @@ export function journalDomainHistoryMetadata(
 ): JournalDomainHistoryMetadata {
   const root = isRootAgentJournalItem(item)
   const block = item.body.kind === 'message' ? subagentItemBlock(item.body) : null
-  const named =
-    root && item.body.kind === 'message'
-      ? item.body.blocks.flatMap(namedSubagents).map((entry) => entry.id)
-      : []
   return {
     root: Number(root),
     subagentRow: Number(isSubagentRow(item)),
     subagentGroupKey: block ? subagentFoldKey(block) : null,
-    namedSubagentIds: named,
+    namedSubagentIds: journalDomainNamedSubagentIds(item),
     turnMarker: Number(
       readAgentJournalTurn(item.body) !== null || isAgentSessionContextClear(item.body)
     ),
     wireBytes: wireBytes(item, payloadJson)
   }
+}
+
+export function journalDomainNamedSubagentIds(item: AgentJournalRenderItem): string[] {
+  return isRootAgentJournalItem(item) && item.body.kind === 'message'
+    ? item.body.blocks.flatMap(namedSubagents).map((entry) => entry.id)
+    : []
 }
 
 // The client form cuts tool/diff heads and whole items over the page budget; skipping the

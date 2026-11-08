@@ -79,8 +79,7 @@ CREATE TABLE journal_items (
   wire_bytes INTEGER,
   turn_item_id TEXT,
   PRIMARY KEY(session_id, epoch, item_id)
-) WITHOUT ROWID;
-CREATE INDEX journal_items_position ON journal_items(session_id, epoch, sequence, sequence_index, ordinal);
+);
 CREATE TABLE journal_item_subagent_names (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,
@@ -129,7 +128,7 @@ CREATE TABLE journal_submission_attempts (
   admitted_personal INTEGER NOT NULL DEFAULT 0 CHECK(admitted_personal IN (0,1)),
   payload_json TEXT NOT NULL,
   PRIMARY KEY(session_id, epoch, message_id, attempt_sequence, attempt_index)
-) WITHOUT ROWID;
+);
 CREATE UNIQUE INDEX journal_submission_head ON journal_submission_attempts(session_id, epoch, message_id) WHERE current=1;
 CREATE UNIQUE INDEX journal_submission_item ON journal_submission_attempts(session_id, epoch, item_id) WHERE current=1;
 CREATE INDEX journal_submission_echo ON journal_submission_attempts(session_id, epoch, fingerprint, submitted_at, ordinal) WHERE current=1;
@@ -155,7 +154,7 @@ CREATE TABLE journal_events (
   saved_at INTEGER NOT NULL,
   changes_json TEXT NOT NULL,
   PRIMARY KEY(session_id, epoch, sequence)
-) WITHOUT ROWID;
+);
 CREATE TABLE journal_queue_cards (
   session_id TEXT NOT NULL,
   epoch TEXT NOT NULL,
@@ -166,7 +165,7 @@ CREATE TABLE journal_queue_cards (
   command_turn_item_id TEXT,
   payload_json TEXT NOT NULL,
   PRIMARY KEY(session_id, epoch, message_id)
-) WITHOUT ROWID;
+);
 CREATE INDEX journal_queue_order ON journal_queue_cards(session_id, epoch, position, message_id)
   WHERE state IN ('waiting','returned');
 CREATE INDEX journal_queue_last_position ON journal_queue_cards(session_id, epoch, position);
