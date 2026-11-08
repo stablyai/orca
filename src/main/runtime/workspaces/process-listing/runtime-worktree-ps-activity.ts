@@ -2,11 +2,7 @@ import type { RuntimeSyncedTab } from '../../../../shared/runtime-session-contra
 import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktree-contracts'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import {
-  getConnectionExecutionHostId,
-  getRepoExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getWorkspaceSessionTabActivityIds } from '../../../../shared/workspace-session/workspace-session-tab-activity'
 import type { RuntimeStore } from '../../runtime-store-contract'
@@ -14,7 +10,10 @@ import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
 } from '../../terminal/records/runtime-terminal-state-records'
-import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
+import {
+  connectionEvidenceHostId,
+  type RuntimeWorktreePsSummaryLookup
+} from './runtime-worktree-summary-paths'
 import {
   getLatestPtyTitle,
   getLeafDisplayRecord,
@@ -194,7 +193,7 @@ function addTerminalTitleEvidence(
 export function ptyRecordHostId(
   pty: Pick<RuntimePtyWorktreeRecord, 'connectionId'> | undefined
 ): ExecutionHostId | undefined {
-  return pty ? getConnectionExecutionHostId(pty.connectionId) : undefined
+  return pty ? connectionEvidenceHostId(pty.connectionId) : undefined
 }
 
 export function applyRuntimeWorktreePsSessionActivity(args: {

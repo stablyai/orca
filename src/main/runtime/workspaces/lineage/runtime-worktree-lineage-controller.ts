@@ -18,9 +18,9 @@ import { crossStoreParentRefOfRow } from '../../../../shared/worktree/lineage-ro
 import type { OrchestrationDb } from '../../orchestration/db/orchestration-db'
 import type { RuntimeStore } from '../../runtime-store-contract'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
-import {
-  folderIdOfSelector,
-  type WorkspaceSelectorOptions
+import type {
+  WorkspaceSelectorCandidate,
+  WorkspaceSelectorOptions
 } from '../catalog/workspace-selector-candidates'
 import { readStoreInstallationId } from '../../hosts/platform-probe/host-descriptor'
 import { assertParentInAnotherStore } from './cross-store-parent-store-check'
@@ -41,8 +41,10 @@ import {
 type RuntimeWorktreeLineageDependencies = {
   getStore(): RuntimeStore | null
   getDb(): OrchestrationDb | null
-  /** The runtime matcher; a folder workspace comes back as its `folder:<id>` row. */
-  resolveWorktree(selector: string, options?: WorkspaceSelectorOptions): Promise<ResolvedWorktree>
+  resolveWorkspace(
+    selector: string,
+    options?: WorkspaceSelectorOptions
+  ): Promise<WorkspaceSelectorCandidate>
   showTerminal(handle: string): Promise<{ worktreeId: string }>
 }
 
@@ -155,37 +157,27 @@ export class RuntimeWorktreeLineageController {
   ): Promise<ResolvedWorkspaceParent> {
     const rawSelector = selector.startsWith('id:') ? selector.slice(3) : selector
     const parsed = parseWorkspaceKey(rawSelector)
-    const row = await this.deps.resolveWorktree(
+    const candidate = await this.deps.resolveWorkspace(
       parsed?.type === 'worktree' ? `id:${parsed.worktreeId}` : selector,
       { matchFolders: options.matchFolders, anyFolderHost: true }
     )
-    const folderId = folderIdOfSelector(row.id)
-    if (folderId === undefined) {
-      return worktreeParent(row)
-    }
-    // The matcher proved this id unique, so its one stored row is the parent.
-    const folderWorkspace = this.deps
-      .getStore()
-      ?.getFolderWorkspaces?.()
-      .find((workspace) => workspace.id === folderId)
-    if (!folderWorkspace) {
-      throw new Error('selector_not_found')
-    }
-    return {
-      type: 'folder',
-      workspaceKey: folderWorkspaceKey(folderWorkspace.id),
-      folderWorkspace,
-      instanceId: null
-    }
+    return candidate.kind === 'worktree'
+      ? worktreeParent(candidate.worktree)
+      : {
+          type: 'folder',
+          workspaceKey: folderWorkspaceKey(candidate.folder.id),
+          folderWorkspace: candidate.folder,
+          instanceId: null
+        }
   }
 
   /** Repo-backed only, as older requests meant. */
   async resolveWorktreeParent(selector: string): Promise<ResolvedWorkspaceParent> {
-    const row = await this.deps.resolveWorktree(selector)
-    if (folderIdOfSelector(row.id) !== undefined) {
+    const candidate = await this.deps.resolveWorkspace(selector)
+    if (candidate.kind !== 'worktree') {
       throw new Error('selector_not_found')
     }
-    return worktreeParent(row)
+    return worktreeParent(candidate.worktree)
   }
 
   validateParent(child: ResolvedWorktree, parent: ResolvedWorktree): void {

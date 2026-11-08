@@ -44,14 +44,16 @@ const sshRepo: Repo = {
   connectionId: 'box'
 }
 
-function createRuntime(folders: FolderWorkspace[], repos: Repo[] = []) {
+const GROUPS: { id: string; name: string; parentPath: string; connectionId: string | null }[] = [
+  { id: 'group-1', name: 'Work', parentPath: '/work', connectionId: null }
+]
+
+function createRuntime(folders: FolderWorkspace[], repos: Repo[] = [], groups = GROUPS) {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: fixture supplies only the store reads selector resolution makes.
   const store = withDurableRuntimeStore({
     getRepos: () => repos,
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
-    getProjectGroups: () => [
-      { id: 'group-1', name: 'Work', parentPath: '/work', connectionId: null }
-    ],
+    getProjectGroups: () => groups,
     getFolderWorkspaces: () => folders,
     getAllWorktreeMeta: () => ({}),
     getWorktreeMeta: () => undefined,
@@ -132,6 +134,26 @@ describe('path: and name: selectors on folder workspaces', () => {
         }
       })
     }
+  })
+
+  it('refuses a duplicated folder id even when only one copy has a host', async () => {
+    const runtime = createRuntime(
+      [
+        folder({ id: 'hub-a', executionHostId: 'local' }),
+        folder({ id: 'hub-a', folderPath: '/srv/hub', projectGroupId: 'group-2' })
+      ],
+      [],
+      [
+        ...GROUPS,
+        { id: 'group-2', name: 'Mixed', parentPath: '/srv', connectionId: null },
+        { id: 'group-2', name: 'Mixed', parentPath: '/srv', connectionId: 'box' }
+      ]
+    )
+
+    await expect(show(runtime, 'folder:hub-a')).rejects.toMatchObject({
+      code: 'selector_ambiguous',
+      data: { duplicateFolderId: 'hub-a' }
+    })
   })
 })
 

@@ -27,7 +27,6 @@ import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace
 import {
   folderCatalogOf,
   resolveKeyedFolderWorkspace,
-  type WorkspaceSelectorCandidate,
   type WorkspaceSelectorOptions
 } from '../workspaces/catalog/workspace-selector-candidates'
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
@@ -194,11 +193,6 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
   ): FolderWorkspace | null {
     return resolveKeyedFolderWorkspace(folderCatalogOf(this.store), selector, requiredHostId)
   }
-
-  protected abstract resolveWorkspaceCandidate(
-    selector: string,
-    options?: WorkspaceSelectorOptions
-  ): Promise<WorkspaceSelectorCandidate>
 
   /** Folder workspaces first, then Git worktrees; project-group folders have no repo row (STA-12562). Launching needs the folder on disk; teardown must not. */
   protected async resolveWorkspaceSelector(

@@ -107,7 +107,7 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
   protected readonly worktreeLineage = new RuntimeWorktreeLineageController({
     getStore: () => this.store,
     getDb: () => this.getOrchestrationDbIfAvailable(),
-    resolveWorktree: (selector, options) => this.resolveWorkspaceSelector(selector, options),
+    resolveWorkspace: (selector, options) => this.resolveWorkspaceCandidate(selector, options),
     showTerminal: (handle) => this.showTerminal(handle)
   })
 

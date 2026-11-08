@@ -57,13 +57,13 @@ export function resolveKeyedFolderWorkspace(
   if (folderId === undefined) {
     return null
   }
-  const result = resolveQualifiedFolderWorkspaceResult(catalog, folderId, requiredHostId)
-  if (result.kind === 'missing') {
-    throw new Error('selector_not_found')
-  }
-  if (result.kind === 'ambiguous') {
+  // An unscoped key must name one row; a host-scoped lookup may pick that host's copy.
+  if (requiredHostId === undefined) {
     assertUniqueFolderWorkspaceId(catalog, folderId, selector)
-    throw new Error('selector_ambiguous')
+  }
+  const result = resolveQualifiedFolderWorkspaceResult(catalog, folderId, requiredHostId)
+  if (result.kind !== 'selected') {
+    throw new Error(result.kind === 'missing' ? 'selector_not_found' : 'selector_ambiguous')
   }
   const { workspace, hostId, connectionId } = result.value
   return { ...workspace, executionHostId: hostId, connectionId }

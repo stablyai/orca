@@ -10,7 +10,7 @@ export function mayNameFolderWorkspace(selector: string): boolean {
 /**
  * path: and name: also name folder workspaces. The runtime's matcher (opted in) answers with the
  * folder's key, which every command accepts; an older runtime ignores the opt-in and keeps its
- * repo-only meaning. Only an ambiguity is final here; the command reports any other miss itself.
+ * repo-only meaning. A miss is left for the command to report.
  */
 export async function resolveFolderWorkspaceSelector(
   selector: string,
@@ -27,9 +27,9 @@ export async function resolveFolderWorkspaceSelector(
     const { id } = shown.result.worktree
     return parseWorkspaceKey(id)?.type === 'folder' ? id : selector
   } catch (error) {
-    if (error instanceof RuntimeClientError && error.code === 'selector_ambiguous') {
-      throw error
+    if (error instanceof RuntimeClientError && error.code === 'selector_not_found') {
+      return selector
     }
-    return selector
+    throw error
   }
 }

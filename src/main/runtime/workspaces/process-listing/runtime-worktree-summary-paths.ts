@@ -2,7 +2,12 @@ import type { RuntimeWorktreePsSummary } from '../../../../shared/runtime-worktr
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import { worktreePathComparisonKey } from '../../../workspaces/catalog/worktree-path-comparison-key'
 import { parseRuntimeWorktreeId } from '../catalog/runtime-worktree-path-identity'
-import type { ExecutionHostId } from '../../../../shared/execution-host'
+import {
+  getConnectionExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
+import { isLocalHookConnectionId } from '../../../../shared/wsl-hook-relay-contract'
 
 type RuntimeWorktreeSummaryPathCandidate = { summary: RuntimeWorktreePsSummary; order: number }
 /** One candidate per host, first registration first. */
@@ -64,22 +69,26 @@ export function buildRuntimeWorktreeSummaryPathIndex(
   return index
 }
 
+/** The host an activity's connection proves; a wsl: stamp is this machine's own relay, not SSH. */
+export function connectionEvidenceHostId(connectionId: string | null): ExecutionHostId {
+  return isLocalHookConnectionId(connectionId)
+    ? LOCAL_EXECUTION_HOST_ID
+    : getConnectionExecutionHostId(connectionId)
+}
+
 /** `hostId` is the activity's own host evidence; omit it when the evidence names no host. */
 export type RuntimeWorktreePsSummaryLookup = (
   worktreeId: string,
   hostId?: ExecutionHostId
 ) => RuntimeWorktreePsSummary | null
 
-/** A raw id attaches to its only row; among same-id rows only the provable host copy, else none. */
+/** A raw id attaches to its only row, as before; among same-id rows only the provable host copy. */
 function pickHostCopy<T extends { summary: RuntimeWorktreePsSummary }>(
   candidates: readonly T[] | undefined,
   hostId: ExecutionHostId | undefined
 ): T | null | undefined {
-  if (!candidates || candidates.length === 0) {
-    return undefined
-  }
-  if (candidates.length === 1) {
-    return candidates[0]
+  if (!candidates || candidates.length <= 1) {
+    return candidates?.[0]
   }
   const matches = hostId
     ? candidates.filter((candidate) => candidate.summary.hostId === hostId)

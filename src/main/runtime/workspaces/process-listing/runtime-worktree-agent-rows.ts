@@ -8,12 +8,14 @@ import type {
   RuntimeWorktreePsSummary
 } from '../../../../shared/runtime-worktree-contracts'
 import { mergeWorktreeSummaryStatus } from './runtime-worktree-status-projection'
-import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
 import {
   resolveRuntimeWorktreeSidebarStatus,
   terminalTitleEvidenceMatchesSource
 } from './runtime-worktree-sidebar-status'
-import type { RuntimeWorktreePsSummaryLookup } from './runtime-worktree-summary-paths'
+import {
+  connectionEvidenceHostId,
+  type RuntimeWorktreePsSummaryLookup
+} from './runtime-worktree-summary-paths'
 import type { RuntimeTerminalTitleEvidence } from './runtime-worktree-ps-activity'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
 
@@ -42,7 +44,7 @@ export function attachRuntimeWorktreeAgentRows(args: {
     if (!worktreeId) {
       continue
     }
-    const summary = args.getSummary(worktreeId, getConnectionExecutionHostId(source.connectionId))
+    const summary = args.getSummary(worktreeId, connectionEvidenceHostId(source.connectionId))
     if (!summary) {
       continue
     }

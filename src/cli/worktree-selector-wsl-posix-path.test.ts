@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeWorktreeRecord } from '../shared/runtime-types'
 import type { RuntimeClient } from './runtime-client'
+import { RuntimeClientError } from './runtime/types'
 import { normalizeWorktreeSelectorForCaller } from './selectors'
 
 const UBUNTU = 'Ubuntu-24.04'
@@ -18,6 +19,10 @@ function worktreeRecord(path: string): RuntimeWorktreeRecord {
 
 function makeClient(paths: readonly string[], isRemote = false) {
   const call = vi.fn(async (method: string) => {
+    if (method === 'worktree.show') {
+      // No folder workspace at these paths.
+      throw new RuntimeClientError('selector_not_found', 'selector_not_found')
+    }
     if (method !== 'worktree.list') {
       throw new Error(`unexpected method ${method}`)
     }
