@@ -1,4 +1,5 @@
-import type { MarkdownDocState, MobileSessionTab } from '../../session/mobile-session-route-types'
+import type { MarkdownDocState } from './session-document-state'
+import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
 
 // Keep phone-local document drafts reachable after desktop tab removal so users can copy/discard them.
 export function orphanedMarkdownDraftTabs(

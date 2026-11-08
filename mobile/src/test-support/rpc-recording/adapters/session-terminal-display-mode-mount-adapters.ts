@@ -2,7 +2,7 @@ import { hookScreenMount } from '../mounted-screen-tree'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
-import type { MobileDisplayMode } from '../../../session/mobile-session-route-types'
+import type { MobileDisplayMode } from '../../../terminal/session/mobile-terminal-model'
 
 const HANDLE = 'terminal-1'
 

@@ -1,7 +1,7 @@
 import { translate } from '../i18n/mobile-i18n'
 import { assertAutomationExtraAgentArgs } from '../../../src/shared/automations/launch/automation-extra-agent-args-record'
 import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
-import type { RpcSendParams } from '../transport/rpc-params-contract'
+import type { RpcSendParams } from '../../../src/shared/rpc-contract/rpc-send-params'
 import type { MobileAutomation } from './automation-reply-schema'
 import type { AutomationTargets } from './automation-target-inventory'
 import { AutomationDraftValidationError } from './automation-error'

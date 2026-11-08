@@ -6,13 +6,13 @@ import type {
 import {
   MobileRelayCredentialBundleSchema,
   type MobileRelayCredentialBundle
-} from '../mobile-relay-credential-bundle'
+} from '../hosts/mobile-relay-credential-bundle'
 import { hashMobileRelayCredential } from './mobile-relay-credential-hash'
 import {
   relayCredentialProvision,
   relayPairingEndpointsRead
 } from '../../pairing/mobile-relay-pairing-operations'
-import type { RpcClient } from '../rpc-client'
+import type { RpcClient } from '../rpc/rpc-client-contract'
 
 const CREDENTIAL_ROTATION_WINDOW_MS = 7 * 24 * 60 * 60 * 1000
 

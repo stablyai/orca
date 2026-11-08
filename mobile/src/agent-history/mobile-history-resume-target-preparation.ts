@@ -1,6 +1,6 @@
 import type { AiVaultSession } from '../../../src/shared/ai-vault/contracts/ai-vault-types'
 import type { Worktree } from '../worktree/workspace-list-types'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { loadMobileResumeMetadata } from './mobile-agent-history-resume-metadata'
 import { resolveMobileAiVaultSessionResumeTarget } from './agent-history-resume-target'
 import { resolveMobileAiVaultResumePlatform } from './ai-vault-resume-launch'

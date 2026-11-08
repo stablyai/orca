@@ -1,5 +1,5 @@
 import type { SourceControlLaunchActionId } from '../../../../src/shared/source-control/ai/recipes/source-control-ai-actions'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { TUI_AGENT_DISPLAY_NAMES as MOBILE_TUI_AGENT_LABELS } from '../../../../src/shared/agent-launch/catalog/tui-agent-display-names'
 import { useLocalSearchParams } from 'expo-router'
 import { firstParam } from '../../navigation/route-param-reader'

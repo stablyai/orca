@@ -21,13 +21,13 @@ import {
   confirmsMirroredTabSelection
 } from './session-tab-snapshot-gate'
 import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-health'
-import { getActiveTabIdForHandle } from '../mobile-session-route-helpers'
+import { getActiveTabIdForHandle } from './terminal-tab-selection'
 import { resolveActiveSessionTab } from './active-session-tab'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
 import { releaseTerminalCreateLock } from '../../terminal/session/terminal-create-lock'
 import { withSessionTabStatusReceipts } from './mobile-session-tab-status-clock'
 import { withRememberedNativeChatIdentity } from '../native-chat/mobile-native-chat-eligibility'
-import type { MobileSessionTab, SessionTabsResult } from '../mobile-session-route-types'
+import type { MobileSessionTab, SessionTabsResult } from './mobile-session-tabs'
 import type { MobileSessionTerminalListModel } from '../../terminal/session/use-mobile-session-terminal-list'
 import { pruneMobileNativeChatTabDrafts } from '../native-chat/composer/mobile-native-chat-draft-store'
 import {

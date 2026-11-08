@@ -3,12 +3,13 @@ import {
   withoutPendingHandle,
   withoutPendingTabId
 } from './pending-session-selection'
+import { sessionTabClose } from './mobile-session-tab-write-operations'
 import {
-  sessionTabClose,
   sessionTerminalClose,
   sessionTerminalRename
-} from '../mobile-session-write-operations'
-import type { MobileSessionTab, Terminal } from '../mobile-session-route-types'
+} from '../../terminal/session/mobile-session-terminal-operations'
+import type { MobileSessionTab } from './mobile-session-tabs'
+import type { Terminal } from '../../terminal/session/mobile-terminal-model'
 import type { MobileSessionContentCreateActionsModel } from '../use-mobile-session-content-create-actions'
 import { mobileNativeChatScopeKey } from '../native-chat/mobile-native-chat-scope-key'
 import { closeMobileNativeChatTabDraft } from '../native-chat/composer/mobile-native-chat-draft-store'
@@ -17,7 +18,7 @@ import {
   useHostMutation,
   type HostMutationPhase
 } from '../../query/host-mutation'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 
 async function sendTerminalRename(
   client: RpcClient,

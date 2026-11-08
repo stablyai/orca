@@ -2,12 +2,12 @@ import {
   hostAnsweredStatusProbe,
   hostStatusProbe,
   readPairingCandidateStatus
-} from '../transport/host-status-probe-operations'
+} from '../transport/connection/host-status-probe-operations'
 import type { PairingCandidateClient } from './mobile-relay-physical-client'
-import type { HostStatusReply } from '../transport/host-status-reply-schema'
+import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
 import { MobileE2EEAuthenticationError } from '../transport/encryption/mobile-e2ee-v2-physical-channel'
-import { AUTH_REJECTED } from '../transport/rpc-client-authentication-retry'
-import type { RpcResponse } from '../transport/types'
+import { AUTH_REJECTED } from '../transport/rpc/rpc-client-authentication-retry'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 
 /** The desktop refused the scanned code: it expired or a newer code replaced it. */
 export class PairingCodeRejectedError extends Error {

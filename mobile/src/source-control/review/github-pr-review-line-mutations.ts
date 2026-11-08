@@ -5,7 +5,7 @@ import {
   type GitHubPrMutationOutcome
 } from './github-pr-mutation-outcome'
 import { githubPrRequestParams, type GitHubPrRepoSlug } from './github-pr-repo-slug'
-import type { RpcOperationSender } from '../../transport/rpc-operation-sender'
+import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
 import { translate } from '../../i18n/mobile-i18n'
 
 // The diff screen's writes on a PR file: a new line comment and its viewed mark.

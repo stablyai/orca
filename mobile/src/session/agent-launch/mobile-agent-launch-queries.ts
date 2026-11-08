@@ -9,8 +9,8 @@ import {
   type HostQueryTarget
 } from '../../query/host-query-key'
 import { hostReadClient } from '../../query/host-read-client'
-import type { RpcClient } from '../../transport/rpc-client'
-import { newTabSettingsRead } from '../../transport/settings-read-operations'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { newTabSettingsRead } from './mobile-new-tab-settings-operations'
 import {
   hostRefusesOtherRuntimeWorkspace,
   loadMobileDetectedAgents,

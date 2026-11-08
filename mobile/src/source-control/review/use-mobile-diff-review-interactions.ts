@@ -1,18 +1,18 @@
 import { useRef, type Dispatch, type SetStateAction } from 'react'
 import { translate } from '../../i18n/mobile-i18n'
-import type { ConnectionState } from '../../transport/types'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { ComposerState, ReviewScreenState } from './mobile-diff-review-screen-model'
 import type { ReviewSheet, ReviewSheetIntents } from './mobile-diff-review-sheets'
 import type { MobileReviewTerminalTab } from './review-terminal-reply-schema'
 import { sourceFileDiffOpenRun } from '../mobile-source-file-open-operations'
-import { refusedRpcMessageOrFallback } from '../../transport/rpc-refusal-message'
+import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
 import { useMobileDiffReviewCommentActions } from './use-mobile-diff-review-comment-actions'
 import { useMobileDiffReviewGitActions } from './use-mobile-diff-review-git-actions'
 import { useMobileDiffReviewSendActions } from './use-mobile-diff-review-send-actions'
 import { useMobileDiffReviewRangeNote } from './use-mobile-diff-review-range-note'
-import { connectionRetryAction } from '../../transport/connection-retry-action'
+import { connectionRetryAction } from '../../transport/connection/connection-retry-action'
 
 type InteractionInput = {
   client: RpcClient | null

@@ -1,4 +1,4 @@
-import type { MobileSessionTab } from '../../session/mobile-session-route-types'
+import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
 
 export const PENDING_TERMINAL_HANDLE_RECOVERY_ATTEMPTS = 5
 

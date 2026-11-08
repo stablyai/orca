@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState } from 'react'
-import type { ConnectionState } from '../../transport/types'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { HostConnectionInputs } from '../../transport/client-context-connection-metrics'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { HostConnectionInputs } from '../../transport/connection/client-context-connection-metrics'
 import {
   isPrSidebarDetailsPlaceholder,
   prSidebarResourceKey,

@@ -1,7 +1,7 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import { MOBILE_DESKTOP_RELAY_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcEnvelopeFields } from '../transport/rpc-envelope-fields'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcEnvelopeFields } from '../transport/rpc/rpc-envelope-fields'
 
 const scopedViews = new WeakMap<RpcClient, Map<ExecutionHostId, RpcClient>>()
 

@@ -1,3 +1,4 @@
+import type { MobileRelayRpcSession } from './mobile-relay-rpc-session-contract'
 import {
   throwIfSignalAborted,
   waitForPromiseWithSignal
@@ -11,37 +12,30 @@ import {
 import { MobileRelayE2eeLink } from '../encryption/mobile-relay-e2ee-link'
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
 import { MobileE2EEAuthenticationError } from '../encryption/mobile-e2ee-v2-physical-channel'
-import { markRpcDeliveryUnknown } from '../rpc-delivery-ambiguity'
+import { markRpcDeliveryUnknown } from '../rpc/rpc-delivery-ambiguity'
 import {
   withRpcEnvelopeFields,
   type RpcEnvelopeFields,
   type RpcRequestFrame
-} from '../rpc-envelope-fields'
-import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from '../rpc-request-budget'
-import { isRpcResponse } from '../rpc-response-shape'
-import { RelayDialStageTracker, type RelayDialStageSource } from './relay-dial-stage'
+} from '../rpc/rpc-envelope-fields'
+import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from '../rpc/rpc-request-budget'
+import { isRpcResponse } from '../rpc/rpc-response-shape'
+import { RelayDialStageTracker } from './relay-dial-stage'
 import { RelayPendingRequests } from './relay-pending-requests'
 import { MobileRelayConnectWaiters } from './mobile-relay-connect-waiters'
 import {
   DECISIVE_PROBE_TIMEOUT_MS,
   livenessProbeFrame,
   RpcSessionLivenessWatchdog
-} from '../rpc-session-liveness-watchdog'
-import { settleMobileRuntimeCapabilities } from '../mobile-runtime-capability-negotiation'
+} from '../rpc/rpc-session-liveness-watchdog'
+import { settleMobileRuntimeCapabilities } from '../connection/mobile-runtime-capability-negotiation'
 import type { RelayHostCloseReason } from '../../../../src/shared/relay-host-close-reason'
-import type { RpcClient } from '../rpc-client'
-import type { ConnectionLogSink, ConnectionState, RpcResponse } from '../types'
+
+import type { ConnectionLogSink } from '../../diagnostics/connection/connection-log-types'
+import type { ConnectionState } from '../connection/connection-state'
+import type { RpcResponse } from '../rpc/rpc-wire-types'
 
 let relayRpcSessionSequence = 0
-
-export type MobileRelayRpcSession = RpcClient &
-  RelayDialStageSource & {
-    // Attach reservation is diagnostics only; rotate against getResumeExpiresAt instead.
-    getAttachDeadlineAt(): number | null
-    getResumeExpiresAt(): number | null
-    getResumeConfirmation(): DeviceResumeConfirmed | null
-    getFailure(): Error | null
-  }
 
 export function connectMobileRelayRpcSession(args: {
   relay: MobileRelayEndpoint

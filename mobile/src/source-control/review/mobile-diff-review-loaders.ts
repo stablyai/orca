@@ -16,9 +16,9 @@ import {
   type MobileBranchCompareTarget
 } from '../mobile-branch-base-ref'
 import { isMobileGitUnavailable } from '../mobile-git-status'
-import { refusedRpcMessageOrFallback } from '../../transport/rpc-refusal-message'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { RpcResponse } from '../../transport/types'
+import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import type { MobileDiffReviewQueueItem, MobileDiffReviewSection } from './mobile-diff-review-queue'
 import type { MobileDiffReviewCommit, ReviewDiffState } from './mobile-diff-review-screen-model'
 import { translate } from '../../i18n/mobile-i18n'

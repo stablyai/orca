@@ -2,18 +2,18 @@ import { decodeBrowserScreencastFrame } from '../../browser/browser-screencast-p
 import {
   handleTerminalBinaryFrame,
   type TerminalSnapshotState
-} from '../rpc-client-terminal-binary-frame'
-import { TerminalUnreadableFrameResets } from '../terminal-unreadable-frame-resets'
+} from '../rpc/rpc-client-terminal-binary-frame'
+import { TerminalUnreadableFrameResets } from '../rpc/terminal-unreadable-frame-resets'
 import {
   buildStreamUnsubscribe,
   buildTerminalUnsubscribeParams,
   updateTerminalSubscriptionViewport
-} from '../rpc-client-terminal-subscription'
-import { buildReadyStreamUnsubscribe, isReadyIdStream } from '../rpc-client-server-subscription'
-import { isStreamingOpenerReply } from '../rpc-acceptance-policies'
-import type { RpcClient } from '../rpc-client'
-import type { RpcEnvelopeFields, RpcRequestFrame } from '../rpc-envelope-fields'
-import type { RpcResponse, RpcSuccess } from '../types'
+} from '../rpc/rpc-client-terminal-subscription'
+import { buildReadyStreamUnsubscribe, isReadyIdStream } from '../rpc/rpc-client-server-subscription'
+import { isStreamingOpenerReply } from '../rpc/rpc-acceptance-policies'
+import type { RpcClient } from '../rpc/rpc-client-contract'
+import type { RpcEnvelopeFields, RpcRequestFrame } from '../rpc/rpc-envelope-fields'
+import type { RpcResponse, RpcSuccess } from '../rpc/rpc-wire-types'
 
 type StreamRecord = {
   method: string

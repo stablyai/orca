@@ -1,8 +1,5 @@
-import type {
-  FileDocState,
-  MarkdownDocState,
-  MobileSessionTab
-} from '../../session/mobile-session-route-types'
+import type { FileDocState, MarkdownDocState } from './session-document-state'
+import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
 
 /** Retap of the open markdown or file tab is not a reload; refresh is a separate control. */
 export function isCachedActiveDocumentRetap(

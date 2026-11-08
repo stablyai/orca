@@ -1,4 +1,4 @@
-import type { ConnectionState } from '../types'
+import type { ConnectionState } from '../connection/connection-state'
 
 type RelaySessionStateSource = {
   getState(): ConnectionState

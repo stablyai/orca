@@ -1,6 +1,6 @@
 import { SPECIAL_KEY_LABELS } from '../terminal-key-definitions'
 import { createTerminalLiveAccessoryInput } from '../terminal-live-accessory-input'
-import { isTerminalPhoneDisplayMode } from '../../session/mobile-session-route-helpers'
+import { isTerminalPhoneDisplayMode } from './terminal-phone-display-mode'
 import { isMobileTerminalTabRunningAgent } from './mobile-terminal-tab-agent'
 import { TerminalMoreKeysSheet } from './TerminalMoreKeysSheet'
 import type { MobileSessionController } from '../../session/use-mobile-session-controller'

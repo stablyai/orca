@@ -1,8 +1,8 @@
 import type { MobileQuickCommandLaunch } from '../../terminal/quick-commands'
-import type { MobileSessionTab } from '../mobile-session-route-types'
+import type { MobileSessionTab } from '../tabs/mobile-session-tabs'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import { AGENT_LAUNCH_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../../platform/haptics'
 import {
   launchAgentInExistingWorkspace,

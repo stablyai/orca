@@ -1,5 +1,5 @@
 import { formatPreviewByteLength } from '../mobile-file-preview-response'
-import type { MarkdownDocState } from '../../session/mobile-session-route-types'
+import type { MarkdownDocState } from './session-document-state'
 
 export function markdownReaderStatusText(
   doc: Extract<MarkdownDocState, { status: 'ready' }>

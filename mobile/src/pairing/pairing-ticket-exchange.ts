@@ -4,12 +4,12 @@ import {
   EXCHANGE_PAIRING_TICKET_METHOD,
   PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY
 } from '../../../src/shared/remote-runtime/pairing/ticket-exchange-capability'
-import type { HostStatusReply } from '../transport/host-status-reply-schema'
+import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
 import type { PairingCandidateClient } from './mobile-relay-physical-client'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
-import type { PairingRelayLogger } from '../transport/pairing-relay-log'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import type { PairingRelayLogger } from '../diagnostics/connection/pairing-relay-log'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 
 export const pairingTicketExchange = bindDeferredRpcOperation(
   defineRpcOperation({

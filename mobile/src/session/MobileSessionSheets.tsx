@@ -15,7 +15,7 @@ import { MobileDictationSetupSheet } from '../components/MobileDictationSetupShe
 import { useWorkspaceOnPairedHost } from '../navigation/workspace-execution-host'
 import { MobileBrowserTabActionSheet } from './tabs/MobileBrowserTabActionSheet'
 import { getMobileTerminalActionSheetActions } from '../terminal/session/mobile-terminal-action-sheet-actions'
-import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
+import { isTerminalPhoneDisplayMode } from '../terminal/session/terminal-phone-display-mode'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useMobileAllowAutoCloseActions } from './tabs/mobile-worker-auto-close'
 import { MobileAgentSessionTabActionSheet } from './tabs/MobileAgentSessionTabActionSheet'

@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { MobileDisplayMode } from '../../session/mobile-session-route-types'
+import type { MobileDisplayMode } from './mobile-terminal-model'
 
 /** Records a stream event's layout seq; false for a superseded `resized`. Fresh scrollback resets the mark or reconnect can blank the terminal. */
 export function acceptTerminalLayoutSeq(

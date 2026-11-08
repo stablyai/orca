@@ -3,11 +3,11 @@ import {
   structuredSessionOpenFailure,
   type StructuredSessionOpenFailure
 } from '../../../../src/shared/open-structured-agent-session'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { SendRequestOptions } from '../../transport/unvalidated-rpc-request-port'
-import type { RpcResponse } from '../../transport/types'
-import { sessionTerminalFocus } from '../../session/mobile-session-write-operations'
-import { sessionTabsListRead } from '../../session/mobile-session-read-operations'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
+import { sessionTerminalFocus } from './mobile-session-terminal-operations'
+import { sessionTabsListRead } from '../../session/tabs/mobile-session-tab-read-operations'
 
 const focusSchema = z.object({ focus: z.object({ worktreeId: z.string().min(1) }) })
 const tabsSchema = z.object({

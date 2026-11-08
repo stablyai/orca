@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import type { ConnectionState } from '../../transport/types'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { MobileGitBranchCompareResult } from '../mobile-branch-compare'
 import type { MobileGitStatusResult } from '../mobile-git-status'
 import { resolveMobileBranchCompareBaseRef } from '../mobile-branch-base-ref'

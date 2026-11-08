@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { hashKey, useQueryClient } from '@tanstack/react-query'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { hostConnectionEpoch } from '../../query/host-status-query'
-import type { ConnectionState } from '../../transport/types'
+import type { ConnectionState } from '../../transport/connection/connection-state'
 import { hostQueryKey } from '../../query/host-query-key'
 import {
   detectedAgentsQuery,
@@ -13,7 +13,7 @@ import {
 } from './mobile-agent-launch-queries'
 import { newTabAgentOptionsFrom } from './mobile-new-tab-agent-loader'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
-import type { MobileNewTabAgentLoadState } from '../mobile-session-route-types'
+import type { MobileNewTabAgentLoadState } from './mobile-agent-load-state'
 
 // A login-shell refresh resets shared desktop state, so it runs once per workspace per connection.
 const refreshedTargets = new WeakMap<RpcClient, { epoch: string; targets: Set<string> }>()

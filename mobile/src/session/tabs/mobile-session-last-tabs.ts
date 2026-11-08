@@ -5,7 +5,7 @@ import type { ExecutionHostId } from '../../../../src/shared/execution-host'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 import { hostQueryKey } from '../../query/host-query-key'
 import type { PersistedHostFamily } from '../../query/host-query-persistence'
-import type { MobileSessionTab } from '../mobile-session-route-types'
+import type { MobileSessionTab } from './mobile-session-tabs'
 
 const storedTabSchema = z.looseObject({ type: z.string(), id: z.string(), title: z.string() })
 

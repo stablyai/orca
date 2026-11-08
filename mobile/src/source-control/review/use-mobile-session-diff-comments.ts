@@ -2,10 +2,10 @@ import { useEffect, useCallback, useMemo, useRef, useState } from 'react'
 import { formatDiffComments } from '../../../../src/shared/diff-comments-format'
 import { translate } from '../../i18n/mobile-i18n'
 import { useClipboardWriter } from '../../platform/clipboard'
-import { interpretOrThrowRefusalMessage } from '../../transport/rpc-refusal-message'
-import type { SendRequestOptions } from '../../transport/unvalidated-rpc-request-port'
-import { sessionWorktreeRecordRead } from '../../session/mobile-session-read-operations'
-import { sessionWorktreeNotesWrite } from '../../session/mobile-session-write-operations'
+import { interpretOrThrowRefusalMessage } from '../../transport/rpc/rpc-refusal-message'
+import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
+import { sessionWorktreeRecordRead } from '../../worktree/session-worktree-record-operations'
+import { sessionWorktreeNotesWrite } from './mobile-review-notes-operations'
 import { triggerSelection, triggerSuccess, triggerError } from '../../platform/haptics'
 import {
   addMobileDiffComment,
@@ -22,7 +22,7 @@ import {
   type ReviewNotesSync
 } from './mobile-review-notes-sync'
 import type { DiffComment } from '../../../../src/shared/diff-comment-types'
-import type { DiffNotesDelivery } from '../../session/mobile-session-route-types'
+import type { DiffNotesDelivery } from './mobile-review-comment-state'
 import type { MobileSessionDocumentReadersModel } from '../../files/session-documents/use-mobile-session-document-readers'
 
 // Why: a queued request must not wait untimed for a reconnect and stall the notes behind it.

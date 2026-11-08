@@ -14,7 +14,7 @@ import { AGENT_LAUNCH_TAB_CLOSED_CODE } from '../../../../src/shared/agent-launc
 import { makePaneKey } from '../../../../src/shared/workspace-layout/stable-pane-id'
 import { createStructuredAgentSessionId } from '../../../../src/shared/agent-session/structured-agent-session-create'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { agentLaunchReplayRun } from '../../tasks/mobile-workspace-create-operations'
 import { agentLaunchExistingParams, readAgentLaunchSupport } from '../../tasks/agent-launch-request'
 import {

@@ -10,7 +10,7 @@ import {
   readTerminalViewportDims,
   runTerminalViewportFitPass
 } from './mobile-terminal-viewport-resubscribe'
-import { updateTerminalCwdFromStreamEvent } from '../../session/mobile-session-route-helpers'
+import { updateTerminalCwdFromStreamEvent } from './terminal-stream-cwd'
 import { createTerminalOutputAck, writeTerminalStreamOutput } from '../terminal-output-ack'
 import { acceptTerminalLayoutSeq, terminalDisplayModeAdopter } from './terminal-stream-layout'
 import { createTerminalStreamResumeCursor } from './terminal-stream-resume'

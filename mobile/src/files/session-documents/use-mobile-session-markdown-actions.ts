@@ -6,10 +6,11 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useBackClaim } from '../../navigation/use-back-claim'
 import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-host'
 import { useSessionLeaveGuard } from '../../session/session-leave-guard'
-import { markdownTabSave } from '../../session/mobile-session-write-operations'
+import { markdownTabSave } from './mobile-markdown-tab-operations'
 import { dropDocumentEditDraft, markdownTabDraftKey } from '../../drafts/document-edit-draft-rows'
 import { triggerSuccess, triggerError } from '../../platform/haptics'
-import type { DirtyMarkdownDraft, MobileSessionTab } from '../../session/mobile-session-route-types'
+import type { DirtyMarkdownDraft } from './session-document-state'
+import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
 import type { MobileSessionDiffCommentsModel } from '../../source-control/review/use-mobile-session-diff-comments'
 
 // Depend on the action’s narrow scope so Back behavior can be tested without constructing the whole session model.

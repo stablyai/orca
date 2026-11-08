@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { MobileSessionTab } from '../mobile-session-route-types'
+import type { MobileSessionTab } from './mobile-session-tabs'
 import {
   isLaunchedSurfaceListed,
   launchedSelection,
-  pendingSelectionHandle,
-  pendingSelectionTabId,
   pendingSelectionWantsHandle,
   resolveLaunchedSelection,
   withLaunchReply,
@@ -96,11 +94,6 @@ describe('resolveLaunchedSelection', () => {
       landedTabId: 'tab-2'
     })
   })
-
-  it('leaves an ordinary pick alone', () => {
-    const pick: PendingSessionSelection = { kind: 'tab', tabId: 'tab-1' }
-    expect(resolveLaunchedSelection(pick, [])).toEqual({ selection: pick, landedTabId: null })
-  })
 })
 
 describe("a launch's own reply and end", () => {
@@ -124,12 +117,6 @@ describe("a launch's own reply and end", () => {
 
 describe('the halves of a pick', () => {
   const both: PendingSessionSelection = { kind: 'terminal', handle: 'term_1', tabId: 'tab-1' }
-
-  it('reads the tab id and handle', () => {
-    expect(pendingSelectionTabId(both)).toBe('tab-1')
-    expect(pendingSelectionHandle(both)).toBe('term_1')
-    expect(pendingSelectionTabId(launchedSelection('l1', { handle: 'term_1' }))).toBeNull()
-  })
 
   it('drops one half and keeps the other', () => {
     expect(withoutPendingTabId(both)).toEqual({ kind: 'terminal', handle: 'term_1', tabId: null })

@@ -9,8 +9,9 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { colors, radii, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import type { ConnectionState, HostProfile } from '../../transport/types'
-import { useHostDisplay } from '../../transport/use-host-display'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { HostProfile } from '../../transport/hosts/host-profile'
+import { useHostDisplay } from '../../transport/hosts/use-host-display'
 
 /** The desktop a per-desktop tab shows; it stays put until the user picks another or it is unpaired. */
 export function useHomeTabHost(hosts: readonly HostProfile[], preferred: readonly HostProfile[]) {

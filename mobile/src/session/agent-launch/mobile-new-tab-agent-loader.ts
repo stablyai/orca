@@ -14,17 +14,16 @@ import {
   newTabFolderRepoListRead
 } from './mobile-new-tab-folder-host-operations'
 import { parseExecutionHostId } from '../../../../src/shared/execution-host'
-import { newTabSettingsRead } from '../../transport/settings-read-operations'
+import { newTabSettingsRead } from './mobile-new-tab-settings-operations'
+import { type MobileRuntimeRepoSummary, newTabRepoListRead } from './mobile-runtime-repo-operations'
 import {
-  type MobileRuntimeRepoSummary,
-  newTabRepoListRead,
   preflightDetectAgentsRead,
   preflightDetectRemoteAgentsRead,
   preflightRefreshAgentsRead
-} from '../mobile-session-read-operations'
-import { isMobileMethodUnavailableError } from '../../transport/mobile-method-unavailable'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { RpcResponse } from '../../transport/types'
+} from './mobile-agent-detection-operations'
+import { isMobileMethodUnavailableError } from '../../transport/rpc/mobile-method-unavailable'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import { isFloatingWorkspaceWorktreeId } from '../floating-workspace'
 import {
   buildMobileNewTabAgentOptions,

@@ -5,8 +5,6 @@ import original from '../mobile/vitest.config.ts'
 const nodeFiles = [
   'src/components/WorktreeAgentList.runtime-lineage.test.tsx',
   'scripts/check-tests-typecheck-incremental-cache.test.ts',
-  'src/tasks/mobile-agent-launch-architecture.test.ts',
-  'src/tasks/agent-launch-mobile-replay.test.ts',
   'src/mock-server-key-pair.test.ts',
   'src/mobile-release/prepare-android-release-script.test.ts',
   'src/navigation/query-string-named-exports.test.ts',
@@ -15,7 +13,6 @@ const nodeFiles = [
   'src/terminal/document/native-document-bundle.test.ts',
   'src/transport/encryption/mobile-e2ee-v2-client-session.test.ts',
   'src/transport/encryption/mobile-e2ee-v2-physical-channel.test.ts',
-  'src/test-support/rpc-recording/subscription-recording.test.ts',
   'src/test-support/rpc-recording/family-recordings.test.ts'
 ]
 

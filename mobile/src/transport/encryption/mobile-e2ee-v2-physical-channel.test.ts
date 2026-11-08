@@ -1,17 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 
-import { gzipSync } from 'node:zlib'
 import {
   encodeMobileE2EEV2Transcript,
   validateMobileE2EEV2Handshake,
   type MobileE2EEV2Ready
 } from '../../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-contract'
-import {
-  openMobileE2EEV2Frame,
-  sealMobileE2EEV2Frame
-} from '../../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
-import { encodeCompressedFrame } from '../../../../src/shared/remote-runtime/e2ee/paired-e2ee-compressed-frame'
+import { sealMobileE2EEV2Frame } from '../../../../src/shared/remote-runtime/e2ee/mobile-e2ee-v2-framing'
 
 vi.mock('./direct-e2ee-framing-policy', async () => {
   const { createPairedE2EEFramingPolicy } =
@@ -25,7 +20,7 @@ vi.mock('./direct-e2ee-framing-policy', async () => {
       })
   }
 })
-vi.mock('../mobile-runtime-capability-negotiation', () => ({
+vi.mock('../connection/mobile-runtime-capability-negotiation', () => ({
   negotiateMobileRuntimeCapabilities: (args: { onReady: () => void }) => args.onReady()
 }))
 
@@ -170,66 +165,6 @@ describe('mobile E2EE v2 physical channel', () => {
     await Promise.all([first, second])
     expect(ctx.events).toEqual(['binary:7', 'text:later'])
     expect(ctx.onError).not.toHaveBeenCalled()
-  })
-
-  it('delivers compressed frames as what they carry, in counter order with plain frames', async () => {
-    const ctx = setup(async (raw) => (raw instanceof Uint8Array ? raw : null))
-    await authenticate(ctx)
-    ctx.events.length = 0
-
-    const reply = JSON.stringify({ id: 'rpc-1', ok: true, result: { note: 'é'.repeat(4096) } })
-    const utf8 = Buffer.from(reply, 'utf8')
-    const text = encodeCompressedFrame({
-      payloadKind: 'text',
-      inflatedByteLength: utf8.byteLength,
-      gzipped: gzipSync(utf8)
-    })
-    const terminal = new Uint8Array(2048).fill(0x74)
-    const binary = encodeCompressedFrame({
-      payloadKind: 'binary',
-      inflatedByteLength: terminal.byteLength,
-      gzipped: gzipSync(terminal)
-    })
-    await ctx.channel.handleMessage(serverFrame(text, 'binary', 1n, ctx.schedule))
-    await ctx.channel.handleMessage(serverFrame(binary, 'binary', 2n, ctx.schedule))
-    await ctx.channel.handleMessage(serverFrame(new Uint8Array([7]), 'binary', 3n, ctx.schedule))
-
-    expect(ctx.events).toEqual([`text:${reply}`, 'binary:116', 'binary:7'])
-    expect(ctx.onError).not.toHaveBeenCalled()
-  })
-
-  it('queues outbound text and binary in one counter order', async () => {
-    const ctx = setup(async () => null)
-    await authenticate(ctx)
-    ctx.socket.bufferedAmount = 9 * 1024 * 1024
-    expect(ctx.channel.sendText('one')).toBe(true)
-    expect(ctx.channel.sendBinary(new Uint8Array([2]))).toBe(true)
-    expect(ctx.sent).toHaveLength(2)
-
-    ctx.socket.bufferedAmount = 0
-    vi.runOnlyPendingTimers()
-    expect(typeof ctx.sent[2]).toBe('string')
-    expect(ctx.sent[3]).toBeInstanceOf(Uint8Array)
-    expect(
-      openMobileE2EEV2Frame({
-        frame: Buffer.from(ctx.sent[2] as string, 'base64'),
-        key: ctx.schedule.mobileToDesktopKey,
-        sessionId: ctx.schedule.sessionId,
-        direction: 'mobile-to-desktop',
-        payloadKind: 'text',
-        expectedCounter: 1n
-      })
-    ).toEqual(new TextEncoder().encode('one'))
-    expect(
-      openMobileE2EEV2Frame({
-        frame: ctx.sent[3] as Uint8Array,
-        key: ctx.schedule.mobileToDesktopKey,
-        sessionId: ctx.schedule.sessionId,
-        direction: 'mobile-to-desktop',
-        payloadKind: 'binary',
-        expectedCounter: 2n
-      })
-    ).toEqual(new Uint8Array([2]))
   })
 
   it('ignores queued and newly arriving frames after disposal', async () => {

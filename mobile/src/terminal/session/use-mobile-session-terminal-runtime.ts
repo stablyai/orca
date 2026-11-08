@@ -8,8 +8,8 @@ import { useState, useRef, useCallback } from 'react'
 import type { TerminalFrame } from '../terminal-webview-messages'
 import type { Keyboard, TextInput } from 'react-native'
 import { useFocusEffect } from 'expo-router'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { ConnectionState } from '../../transport/types'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../../transport/connection/connection-state'
 import type { TerminalModes, TerminalWebViewHandle } from '../terminal-webview-contract'
 import { useTerminalLiveInputFocus } from '../use-terminal-live-input-focus'
 import { reopensFocusedInputWhenKeyboardHidden } from '../terminal-live-input-keyboard-reopen'
@@ -21,12 +21,8 @@ import { createInitialSessionAutoCreateState } from './use-initial-session-termi
 import { TerminalViewportResubscribeBudget } from './mobile-terminal-viewport-resubscribe'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 import { useMobileTerminalInventoryRecoveryBridge } from './use-mobile-terminal-inventory-recovery'
-import type {
-  MobileSessionTab,
-  MobileSessionTabType,
-  TerminalGestureInputBucket,
-  TerminalGestureInputQueue
-} from '../../session/mobile-session-route-types'
+import type { MobileSessionTab, MobileSessionTabType } from '../../session/tabs/mobile-session-tabs'
+import type { TerminalGestureInputBucket, TerminalGestureInputQueue } from './mobile-terminal-model'
 import type { MobileSessionScreenStateModel } from '../../session/use-mobile-session-screen-state'
 
 export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateModel) {

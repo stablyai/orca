@@ -1,6 +1,6 @@
 import type { RpcMethodName } from '../../../../src/shared/rpc-contract/rpc-params-catalog.generated'
-import { refusedRpcMessageOrFallback } from '../../transport/rpc-refusal-message'
-import type { RpcResponse } from '../../transport/types'
+import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import type { GitHubPrMutationStatus } from './github-pr-mutation-reply-schema'
 
 export type GitHubPrMutationOutcome = { ok: true } | { ok: false; error: string }

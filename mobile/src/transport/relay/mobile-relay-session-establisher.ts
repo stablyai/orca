@@ -1,15 +1,15 @@
-import type { MobileEndpointSupervisorDependencies } from '../mobile-endpoint-supervisor-contract'
+import type { MobileEndpointSupervisorDependencies } from '../connection/mobile-endpoint-supervisor-contract'
 import {
   dialRelayThroughDirectorFallback,
-  encodeBase64Url,
   RelayDialAbortedError,
   toError
-} from '../mobile-endpoint-supervisor-support'
+} from './mobile-relay-director-fallback'
+import { encodeBase64Url } from '../encryption/mobile-session-id-encoding'
 import { persistResumeConfirmation } from './mobile-relay-credential-rotation'
 import { relayFailureAllowsGraceRetry } from './relay-credential-eligibility'
-import type { MobileRelayCredentialBundle } from '../mobile-relay-credential-bundle'
+import type { MobileRelayCredentialBundle } from '../hosts/mobile-relay-credential-bundle'
 import type { RelayReconnectController } from './mobile-relay-reconnect-controller'
-import type { StableLogicalRpcClient } from '../stable-logical-rpc-client'
+import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
 import type { MobileRelayEndpoint } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
 import { RELAY_HOST_CLOSE_REASON } from '../../../../src/shared/relay-host-close-reason'
 

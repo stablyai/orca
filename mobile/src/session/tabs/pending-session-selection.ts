@@ -1,4 +1,4 @@
-import type { MobileSessionTab } from '../mobile-session-route-types'
+import type { MobileSessionTab } from './mobile-session-tabs'
 
 // Use one pending choice so tab, handle and launch selections cannot each leave stale state; later picks replace launch-owned locks.
 export type PendingSessionSelection =

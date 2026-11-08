@@ -4,7 +4,7 @@ import type {
   BridgeTerminalToolbar
 } from '../../mobile-web-shell/bridge/bridge-terminal-key'
 import { sessionCommandDockShown } from '../../session/mobile-session-command-dock-shown'
-import { isTerminalPhoneDisplayMode } from '../../session/mobile-session-route-helpers'
+import { isTerminalPhoneDisplayMode } from './terminal-phone-display-mode'
 import { isMobileTerminalTabRunningAgent } from './mobile-terminal-tab-agent'
 import { useShellTerminalKeyRail } from './shell-terminal-key-rail'
 import type { MobileSessionController } from '../../session/use-mobile-session-controller'

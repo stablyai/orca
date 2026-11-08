@@ -1,4 +1,4 @@
-import type { MobileRelayCredentialBundle } from '../../transport/mobile-relay-credential-bundle'
+import type { MobileRelayCredentialBundle } from '../../transport/hosts/mobile-relay-credential-bundle'
 import type { MobileRelayPairingJournal } from '../../pairing/mobile-relay-pairing-journal'
 import type { MountContext } from './recording-scenario'
 import type { operationModuleLoader } from './operation-module-loader'

@@ -6,7 +6,7 @@ import {
   type MobileNativeChatDraftDestination
 } from './mobile-native-chat-draft-inputs'
 import { useCallback } from 'react'
-import type { RpcClient } from '../../../transport/rpc-client'
+import type { RpcClient } from '../../../transport/rpc/rpc-client-contract'
 import { useMediaPicker } from '../../../platform/media-picker'
 import type { PickedMobileFile } from '../../../platform/media-picker-contract'
 import { encodeBase64Bytes } from '../../../transport/encryption/base64-byte-codec'

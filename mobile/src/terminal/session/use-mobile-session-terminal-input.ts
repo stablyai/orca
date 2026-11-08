@@ -10,8 +10,8 @@ import {
   TERMINAL_GESTURE_INPUT_MAX_PENDING_SEQUENCES,
   TERMINAL_GESTURE_INPUT_MAX_QUEUE_AGE_MS,
   TERMINAL_GESTURE_INPUT_REFILL_PER_SECOND
-} from '../../session/mobile-session-route-helpers'
-import type { Terminal, TerminalGestureInputQueue } from '../../session/mobile-session-route-types'
+} from './terminal-gesture-input-policy'
+import type { Terminal, TerminalGestureInputQueue } from './mobile-terminal-model'
 import type { TerminalPointerInput } from '../terminal-webview-contract'
 import type { MobileSessionFileActionsModel } from '../../files/session-documents/use-mobile-session-file-actions'
 

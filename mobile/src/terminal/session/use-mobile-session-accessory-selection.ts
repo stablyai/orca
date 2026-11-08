@@ -11,7 +11,7 @@ import { translate } from '../../i18n/mobile-i18n'
 import {
   newTabRepoListRead,
   type MobileRuntimeRepoSummary
-} from '../../session/mobile-session-read-operations'
+} from '../../session/agent-launch/mobile-runtime-repo-operations'
 import {
   triggerSelection,
   triggerSuccess,

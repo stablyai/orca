@@ -1,12 +1,12 @@
 import * as z from 'zod'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { SendRequestOptions } from '../../transport/unvalidated-rpc-request-port'
-import type { RpcOperationSender } from '../../transport/rpc-operation-sender'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
+import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
 import { captureGitHubInvocation, supportsExactGitHubOperations } from './github-target-invocation'
 import {
   readRuntimeStatusProbe,
   recordRuntimeStatusProbe
-} from '../../transport/runtime-status-probe'
+} from '../../transport/connection/runtime-status-probe'
 import { hostConnectionEpoch } from '../../query/host-status-query'
 import { readViewBase } from '../../query/host-read-client'
 import { GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY } from '../../../../src/shared/source-control/runtime/source-control-runtime-capabilities'

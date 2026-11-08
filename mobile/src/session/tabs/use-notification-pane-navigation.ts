@@ -3,8 +3,8 @@ import type { StructuredSessionOpenSource } from '../../../../src/shared/open-st
 import { useEffect, useRef, useState } from 'react'
 import { useLocalSearchParams, useNavigation } from 'expo-router'
 import { firstParam } from '../../navigation/route-param-reader'
-import { usePageBridgeClient } from '../../transport/client-context.web'
-import type { MobileSessionTab } from '../mobile-session-route-types'
+import { usePageBridgeClient } from '../../transport/connection/client-context.web'
+import type { MobileSessionTab } from './mobile-session-tabs'
 import { notificationPaneTab } from './notification-pane-tab'
 
 // The document at / receives pane requests through shell init, except the opening tap of a session reached by an in-page hop.

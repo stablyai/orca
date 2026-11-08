@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import type { ConnectionState } from '../../transport/types'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
   fetchMergePR,
   fetchRemovePRReviewers,
@@ -12,7 +12,7 @@ import {
 } from './github-pr-mutations'
 import { fetchMarkPRDraft, fetchMarkPRReadyForReview } from './github-pr-draft-mutations'
 import type { GitHubPrRepoSlug } from './github-pr-repo-slug'
-import type { RpcOperationSender } from '../../transport/rpc-operation-sender'
+import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
 import { PrActionsEngine, type PrActionBusyKey } from './pr-actions-engine'
 import './pr-action-mutation-contract'
 import type { PrActionMutations } from './pr-action-mutation-contract'

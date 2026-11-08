@@ -1,9 +1,13 @@
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { PendingNativeChatImage } from './composer/mobile-native-chat-image-attachment'
 import type { PendingNativeChatFile } from './composer/mobile-native-chat-file-attachment'
-import { isRpcDeliveryUnknown } from '../../transport/rpc-delivery-ambiguity'
-import { isLogicalClientCutoverError } from '../../transport/stable-logical-rpc-client'
-import { nativeChatTerminalWrite } from '../mobile-session-write-operations'
+import { isRpcDeliveryUnknown } from '../../transport/rpc/rpc-delivery-ambiguity'
+import '../../transport/connection/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../../transport/connection/logical-client-cutover-error'
+import {
+  nativeChatTerminalWrite,
+  nativeChatTerminalDraftRead
+} from '../../terminal/session/mobile-session-terminal-operations'
 import { typeAgentTuiCommand } from '../../../../src/shared/agent-launch/startup/agent-tui-command-typing'
 import { readTerminalSendAcknowledgment } from '../../../../src/shared/terminal/pty/lifecycle/terminal-send-acknowledgment'
 import {
@@ -11,7 +15,7 @@ import {
   countAgentTuiInputLines,
   buildAgentTuiClearInputForText
 } from '../../../../src/shared/agent-launch/startup/agent-tui-input-clear'
-import { nativeChatTerminalDraftRead } from '../mobile-session-read-operations'
+
 import type { AgentJournalSkillRef } from '../../../../src/shared/agent-session/journal/agent-session-journal-types'
 
 export type MobileNativeChatRpcSender = Parameters<typeof nativeChatTerminalWrite.request>[0]

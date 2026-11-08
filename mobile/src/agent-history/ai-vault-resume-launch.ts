@@ -16,8 +16,8 @@ import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agen
 import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
 import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
-import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
 import {
   reviewTerminalCreateRun,
   reviewTerminalSendRun
@@ -26,7 +26,7 @@ import type { MobileReviewTerminalTab } from '../source-control/review/review-te
 import type { AiVaultResumeTargetStatus } from '../../../src/shared/ai-vault/resume/ai-vault-resume-target'
 import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from '../../../src/shared/qoder-terminal-create-capability'
 import { agentHistoryHostStatusSchema } from './agent-history-reply-schema'
-import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
+import { readMobileRuntimeHostPlatform } from '../transport/connection/mobile-runtime-host-platform'
 import { translate } from '../i18n/mobile-i18n'
 
 export function readMobileAiVaultResumeHost(statusResult: unknown) {

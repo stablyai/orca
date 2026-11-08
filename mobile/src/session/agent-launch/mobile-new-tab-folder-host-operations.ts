@@ -1,6 +1,6 @@
 import * as z from 'zod'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc-operation'
-import { rpcResultVariant } from '../../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 
 const connectionFields = {
   connectionId: z.string().nullish(),

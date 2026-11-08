@@ -1,6 +1,6 @@
 import { useRef, useCallback, useEffect, useMemo } from 'react'
-import { sessionTerminalListRead } from '../../session/mobile-session-read-operations'
-import type { Terminal } from '../../session/mobile-session-route-types'
+import { sessionTerminalListRead } from './mobile-session-terminal-operations'
+import type { Terminal } from './mobile-terminal-model'
 import { mergeTerminalListWithKnownRecords, terminalRecordsEqual } from './mobile-terminal-records'
 import {
   createTerminalPrunePredicate,

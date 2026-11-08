@@ -13,15 +13,14 @@ import type { AppliedSnapshotMarker } from './tabs/session-tab-snapshot-gate'
 import { useWorktreeSessionTabsLoaded } from '../terminal/session/use-initial-session-terminal-autocreate'
 import { createMobileSessionCreateWarningState } from './tabs/mobile-session-create-warning-state'
 import type { DiffComment } from '../../../src/shared/diff-comment-types'
+import type { DiffNotesDelivery } from '../source-control/review/mobile-review-comment-state'
 import type {
-  DiffNotesDelivery,
   DirtyMarkdownDraft,
   FileDocState,
-  MarkdownDocState,
-  MobileDisplayMode,
-  MobileSessionTab,
-  Terminal
-} from './mobile-session-route-types'
+  MarkdownDocState
+} from '../files/session-documents/session-document-state'
+import type { MobileDisplayMode, Terminal } from '../terminal/session/mobile-terminal-model'
+import type { MobileSessionTab } from './tabs/mobile-session-tabs'
 import { useMobileSessionTabActionTargets } from './tabs/use-mobile-session-tab-action-targets'
 import type { MobileSessionFoundationModel } from './use-mobile-session-foundation'
 

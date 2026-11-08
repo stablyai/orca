@@ -28,7 +28,7 @@ import type * as AiVault from '../../../src/shared/ai-vault/contracts/ai-vault-t
 import type { Worktree } from '../worktree/workspace-list-types'
 import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { agentHistoryHostStatusRead } from './mobile-agent-history-operations'
-import { interpretOrThrowRefusalMessage } from '../transport/rpc-refusal-message'
+import { interpretOrThrowRefusalMessage } from '../transport/rpc/rpc-refusal-message'
 import { useRefreshHint } from '../query/refresh-hint'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'

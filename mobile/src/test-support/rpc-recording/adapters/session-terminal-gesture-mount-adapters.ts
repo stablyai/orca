@@ -8,7 +8,7 @@ import type {
   Terminal,
   TerminalGestureInputBucket,
   TerminalGestureInputQueue
-} from '../../../session/mobile-session-route-types'
+} from '../../../terminal/session/mobile-terminal-model'
 
 const HANDLE = 'terminal-1'
 const DEVICE_TOKEN = 'device-token-1'

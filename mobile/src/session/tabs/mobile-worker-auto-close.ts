@@ -3,10 +3,10 @@ import * as z from 'zod'
 import { Timer } from 'lucide-react-native'
 import type { ActionSheetAction } from '../../components/ActionSheetModal'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc-operation'
-import { rpcResultVariant } from '../../transport/rpc-operation-result-reader'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { ConnectionState } from '../../transport/types'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../../transport/connection/connection-state'
 import { useOptionalHostProtocolGates } from '../../components/host-protocol-gates-context'
 import { ORCHESTRATION_WORKER_KEEP_OPEN_RUNTIME_CAPABILITY } from '../../../../src/shared/orchestration/orchestration-runtime-capabilities'
 import {
@@ -17,7 +17,7 @@ import {
   subscribeWorkerAutoClose,
   type WorkerAutoCloseState
 } from '../../../../src/shared/orchestration/workers/worker-auto-close'
-import type { MobileSessionTab } from '../mobile-session-route-types'
+import type { MobileSessionTab } from './mobile-session-tabs'
 
 export type MobileWorkerSubject = { terminal: string } | { sessionId: string }
 

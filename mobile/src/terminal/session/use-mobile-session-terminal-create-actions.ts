@@ -1,7 +1,8 @@
-import type { RpcSuccess } from '../../transport/types'
-import { sessionTabCreateTerminal } from '../../session/mobile-session-write-operations'
+import type { RpcSuccess } from '../../transport/rpc/rpc-wire-types'
+import { sessionTabCreateTerminal } from '../../session/tabs/mobile-session-tab-write-operations'
 import { triggerSuccess, triggerError } from '../../platform/haptics'
 import { terminalCreateCopy } from './mobile-session-terminal-create-copy'
+import { createMobileSessionTerminalCreateFeedback } from './mobile-session-terminal-create-feedback'
 import { buildTerminalSendParams } from '../terminal-send-request'
 import { terminalRecordsEqual } from './mobile-terminal-records'
 import type { MobileNewTabAgentOption } from '../../session/agent-launch/mobile-new-tab-agent-options'
@@ -11,7 +12,8 @@ import {
   mobileChatForkCreateReplyMessage,
   mobileChatForkRequestFailureMessage
 } from '../../session/mobile-chat-fork-create-feedback'
-import type { MobileSessionTab, Terminal } from '../../session/mobile-session-route-types'
+import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
+import type { Terminal } from './mobile-terminal-model'
 import type { MobileSessionAttachmentsModel } from '../../files/attachments/use-mobile-session-attachments'
 import { useMobileTerminalCreateRouteOwner } from './use-mobile-terminal-create-route-owner'
 import { launchMobileSessionQuickCommand } from '../quick-commands/mobile-session-quick-command-launch'
@@ -73,14 +75,13 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       sourceFork ? value : undefined
     const agentName = sourceFork ? formatAgentTypeLabel(sourceFork.agent) : ''
     const { isRouteCurrent, isCurrent } = captureCreateOwner(sourceFork?.sessionId)
-    const reportFork = (message: string): void => {
-      if (!sourceFork || !isCurrent()) {
-        return
-      }
-      setCreateError(message)
-      triggerError()
-      showToast(message, 3000)
-    }
+    const { reportFork, reportCreateFailure } = createMobileSessionTerminalCreateFeedback({
+      sourceFork,
+      isCurrent,
+      setCreateError,
+      showToast,
+      options
+    })
     if (
       !client ||
       (sourceFork && (!hostSupportsMobileChatFork(hostCapabilities) || !isCurrent()))
@@ -100,18 +101,6 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
 
     setCreating(true)
     setCreateError('')
-
-    // Surface host-specific create errors so users can distinguish exhausted PTYs, disabled agents and missing ownership.
-    function reportCreateFailure(hostReason: string): void {
-      if (!isCurrent()) {
-        return
-      }
-      const reason = hostReason.trim() || options?.errorToast || terminalCreateCopy.createFailed()
-      setCreateError(reason)
-      // Only empty sessions show inline errors; existing tabs need toast feedback.
-      triggerError()
-      showToast(reason, 1800)
-    }
 
     try {
       if (

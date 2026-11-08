@@ -1,4 +1,4 @@
-import type { RpcClient } from '../rpc-client'
+import type { RpcClient } from '../rpc/rpc-client-contract'
 
 // Separate cell assignment from upgrade because ConnectionState remains connecting through both.
 export type RelayDialStage =

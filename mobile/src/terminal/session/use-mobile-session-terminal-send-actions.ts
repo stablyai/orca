@@ -16,7 +16,7 @@ import { normalizeTerminalTextInput } from '../terminal-text-input-normalization
 import { encodeTerminalKeyForModes } from '../terminal-key-mode-encoding'
 import { useTerminalTextFieldSubmitBinding } from '../use-terminal-text-field-submit-binding'
 import { useAgentSendKeyboardDismissal } from './use-agent-send-keyboard-dismissal'
-import type { MobileSessionTab } from '../../session/mobile-session-route-types'
+import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
 import { useMobileSessionTabActionSheetOpener } from '../../session/tabs/use-mobile-session-tab-action-targets'
 import type { MobileSessionTerminalWebviewModel } from './use-mobile-session-terminal-webview'
 import type { TerminalLiveInputSender } from '../terminal-live-input-sender'

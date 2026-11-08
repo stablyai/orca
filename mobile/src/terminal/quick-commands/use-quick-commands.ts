@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import type { RpcClient } from '../../transport/rpc-client'
-import '../../transport/stable-logical-rpc-client'
-import { isLogicalClientCutoverError } from '../../transport/logical-client-cutover-error'
-import { refusedRpcMessageOrFallback } from '../../transport/rpc-refusal-message'
-import type { RpcResponse } from '../../transport/types'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import '../../transport/connection/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../../transport/connection/logical-client-cutover-error'
+import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import type { TerminalQuickCommand } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
-import { quickCommandsRead } from '../../session/mobile-session-read-operations'
-import { quickCommandsWrite } from '../../session/mobile-session-write-operations'
+import { quickCommandsRead, quickCommandsWrite } from './mobile-quick-command-operations'
+
 import '../quick-commands'
 import {
   applyTerminalQuickCommandMutation,

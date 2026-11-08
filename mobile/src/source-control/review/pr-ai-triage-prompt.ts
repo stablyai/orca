@@ -4,7 +4,7 @@ import {
   hasGitHubCheckHandle
 } from '../../../../src/shared/source-control/checks/pr-checks-fix-prompt'
 import type { PRInfo } from '../../../../src/shared/github/pull-request-types'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { fetchPRCheckDetails } from './github-pr-rpc'
 import { splitWorktreeIdForFilesystem } from '../../../../src/shared/worktree/id'
 import { buildResolvePullRequestConflictsPrompt } from '../../../../src/shared/source-control/recovery/source-control-conflict-prompts'

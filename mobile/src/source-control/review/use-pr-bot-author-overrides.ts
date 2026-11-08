@@ -1,7 +1,7 @@
-import { botOverridesRead } from '../../transport/settings-read-operations'
+import { botOverridesRead } from './mobile-pr-bot-settings-operations'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ConnectionState } from '../../transport/types'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { createBotAuthorOverrideSet } from '../../../../src/shared/source-control/review-comments/pr-bot-author-overrides'
 
 // Settings have no mobile change stream; refresh overrides alongside PR data so desktop bot classifications stay current.

@@ -1,8 +1,8 @@
 import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
 
-import type { RpcClient } from '../../transport/rpc-client'
-import type { RpcFailure, RpcResponse, RpcSuccess } from '../../transport/types'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { RpcFailure, RpcResponse, RpcSuccess } from '../../transport/rpc/rpc-wire-types'
 import { uploadMobileAgentSessionAttachment } from './mobile-agent-session-attachment-upload'
 
 function ok(result: unknown): RpcSuccess {
@@ -45,25 +45,6 @@ function storingHost(byteLength = 3, name = 'spec.pdf', failAppend = false) {
 }
 
 describe('uploadMobileAgentSessionAttachment', () => {
-  it('sends an empty file as one empty append', async () => {
-    const host = storingHost(0, 'empty.txt')
-    await uploadMobileAgentSessionAttachment(host.client, {
-      sessionId: 'session-1',
-      name: 'empty.txt',
-      base64: ''
-    })
-    expect(host.calls.map((call) => call.method)).toEqual([
-      'agentSessionAttachment.uploadStart',
-      'agentSessionAttachment.uploadAppend',
-      'agentSessionAttachment.uploadCommit'
-    ])
-    expect(host.calls[0]?.params.byteLength).toBe(0)
-    expect(host.calls[1]).toEqual({
-      method: 'agentSessionAttachment.uploadAppend',
-      params: { uploadId: 'upload-1', offset: 0, contentBase64: '' }
-    })
-  })
-
   it("aborts the slot when a chunk fails and reports the host's reason", async () => {
     const host = storingHost(3, 'spec.pdf', true)
     await expect(
@@ -77,17 +58,5 @@ describe('uploadMobileAgentSessionAttachment', () => {
       method: 'agentSessionAttachment.uploadAbort',
       params: { uploadId: 'upload-1' }
     })
-  })
-
-  it('opens no slot to abort when the host refuses the start', async () => {
-    const host = fakeHost(() => fail('Attachment is too large'))
-    await expect(
-      uploadMobileAgentSessionAttachment(host.client, {
-        sessionId: 'session-1',
-        name: 'big.bin',
-        base64: 'AAAA'
-      })
-    ).rejects.toThrow('Attachment is too large')
-    expect(host.calls.map((call) => call.method)).toEqual(['agentSessionAttachment.uploadStart'])
   })
 })

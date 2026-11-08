@@ -5,10 +5,10 @@ import {
   requireExactGitHubOperations,
   githubOperationResponse
 } from '../source-control/review/github-target-invocation'
-import { openRpcRequestBudget } from '../transport/rpc-request-budget'
-import type { RpcClient } from '../transport/rpc-client'
-import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import type { RpcResponse } from '../transport/types'
+import { openRpcRequestBudget } from '../transport/rpc/rpc-request-budget'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { markRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { bridgePendingRequestCap } from './bridge/bridge-caps'
 import type { BridgeClientMessage } from './bridge/bridge-envelope'
 import { BridgeHostDisposedError } from './bridge-host-errors'

@@ -1,5 +1,5 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc-operation'
-import { rpcResultVariant } from '../../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 import { reviewGitMutationSchema } from './diff-review-reply-schema'
 import type { GitMutationMethod } from './mobile-diff-review-screen-model'
 

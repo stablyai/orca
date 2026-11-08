@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { AppState } from 'react-native'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { ConnectionState } from '../../transport/types'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../../transport/connection/connection-state'
 
 export type MobileTerminalInventoryRefreshOptions = {
   allowEmptyLoaded?: boolean

@@ -12,7 +12,7 @@ import { createTerminalLiveAccessoryInput } from '../terminal-live-accessory-inp
 import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../terminal-accessory-repeat'
 import { getVisibleTerminalAccessoryKeys } from '../terminal-accessory-layout'
 import { useDirectionPadAvailable } from '../../layout/use-shell-side-rail'
-import { isTerminalPhoneDisplayMode } from '../../session/mobile-session-route-helpers'
+import { isTerminalPhoneDisplayMode } from './terminal-phone-display-mode'
 import { TERMINAL_KEY_HIT_SLOP, terminalDockStyles as styles } from './terminal-dock-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

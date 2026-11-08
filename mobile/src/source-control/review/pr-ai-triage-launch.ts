@@ -1,5 +1,5 @@
 import type { SourceControlLaunchActionId } from '../../../../src/shared/source-control/ai/recipes/source-control-ai-actions'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
   launchAgentInExistingWorkspace,
   supportsMobileExistingAgentLaunch

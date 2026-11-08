@@ -1,4 +1,4 @@
-import '../transport/types'
+import '../transport/hosts/host-profile'
 import {
   PairingOfferSchema,
   type PairingOffer

@@ -7,7 +7,7 @@ import type { AgentStatusEntry } from '../../../../src/shared/agent-status/contr
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
 import { isBlankBrowserUrl } from '../../browser/browser-url'
 import { translate } from '../../i18n/mobile-i18n'
-import type { MobileSessionTab } from '../../session/mobile-session-route-types'
+import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
 
 export type MobileTerminalTabAgentIdentity = {
   title: string

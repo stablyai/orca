@@ -5,7 +5,8 @@ import {
   type MutableRefObject,
   type SetStateAction
 } from 'react'
-import type { MobileSessionTab, Terminal } from '../mobile-session-route-types'
+import type { MobileSessionTab } from './mobile-session-tabs'
+import type { Terminal } from '../../terminal/session/mobile-terminal-model'
 
 type MarkdownTab = Extract<MobileSessionTab, { type: 'markdown' }>
 type FileTab = Extract<MobileSessionTab, { type: 'file' }>

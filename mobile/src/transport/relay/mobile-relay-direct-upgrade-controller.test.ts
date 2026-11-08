@@ -1,8 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { MobileRelayDirectUpgradeController } from './mobile-relay-direct-upgrade-controller'
 import type { MobileRelayDirectUpgradeResult } from './mobile-relay-direct-upgrade'
-import type { StableLogicalRpcClient } from '../stable-logical-rpc-client'
-import type { ConnectionState, HostProfile } from '../types'
+import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
+import type { ConnectionState } from '../connection/connection-state'
+import type { HostProfile } from '../hosts/host-profile'
 
 const directHost: HostProfile = {
   id: 'host-direct',

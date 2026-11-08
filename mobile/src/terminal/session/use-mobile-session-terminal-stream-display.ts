@@ -1,5 +1,5 @@
 import { useRef, useCallback } from 'react'
-import { terminalDisplayModeSet } from '../../session/mobile-session-write-operations'
+import { terminalDisplayModeSet } from './mobile-session-terminal-operations'
 import { useMobileNativeChatTerminalStream } from '../../session/native-chat/use-mobile-native-chat-terminal-stream'
 import type { MobileSessionTerminalSubscriptionModel } from './use-mobile-session-terminal-subscription'
 

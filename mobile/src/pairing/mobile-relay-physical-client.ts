@@ -3,10 +3,14 @@ import { RelayPhoneHelloSchema } from '../../../src/shared/remote-runtime/relay/
 import { latchHostToE2EEV2 } from '../transport/encryption/e2ee-v2-host-latch'
 import { MobileE2EEV2ClientSession } from '../transport/encryption/mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from '../transport/encryption/mobile-e2ee-v2-physical-channel'
-import { createPairingRelayLogger, pairingRelayErrorDetail } from '../transport/pairing-relay-log'
-import { isRpcResponse } from '../transport/rpc-response-shape'
-import { redactSocketEndpoint } from '../transport/socket-event-debug'
-import type { ConnectionLogSink, RpcResponse } from '../transport/types'
+import {
+  createPairingRelayLogger,
+  pairingRelayErrorDetail
+} from '../diagnostics/connection/pairing-relay-log'
+import { isRpcResponse } from '../transport/rpc/rpc-response-shape'
+import { redactSocketEndpoint } from '../diagnostics/connection/socket-event-debug'
+import type { ConnectionLogSink } from '../diagnostics/connection/connection-log-types'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { websocketPayloadToUint8 } from '../transport/encryption/websocket-payload-bytes'
 import { relayConnectWebSocketUrl } from '../transport/relay/mobile-relay-connect-url'
 import { WsInboundMessageQueue } from '../../../src/shared/ws-inbound-message-queue'

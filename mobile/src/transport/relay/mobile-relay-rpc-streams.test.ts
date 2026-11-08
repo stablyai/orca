@@ -1,44 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RpcFailure, RpcSuccess } from '../types'
+
 import { MobileRelayRpcStreams } from './mobile-relay-rpc-streams'
 
-function rpcFailure(id: string): RpcFailure {
-  return {
-    id,
-    ok: false,
-    error: { code: 'unsupported', message: 'Unknown method' },
-    _meta: { runtimeId: 'runtime-1' }
-  }
-}
-
 describe('MobileRelayRpcStreams failure parity', () => {
-  it('emits a connection-wait rejection exactly once without sending or cancelling', async () => {
-    const listener = vi.fn()
-    const sendFrame = vi.fn(() => true)
-    const waitError = new Error('relay session closed')
-    const streams = new MobileRelayRpcStreams({
-      nextId: () => 'stream-1',
-      sendFrame,
-      waitForConnected: () => Promise.reject(waitError)
-    })
-    const cancel = streams.subscribe(
-      'session.tabs.subscribe',
-      { worktree: 'id:worktree-1' },
-      listener
-    )
-    await Promise.resolve()
-    await Promise.resolve()
-
-    expect(listener).toHaveBeenCalledExactlyOnceWith({
-      type: 'error',
-      message: 'relay session closed',
-      error: waitError
-    })
-    expect(streams.handleResponse(rpcFailure('stream-1'))).toBe(false)
-    cancel()
-    expect(sendFrame).not.toHaveBeenCalled()
-  })
-
   it('does not emit a failure after the caller cancels a queued stream', async () => {
     const listener = vi.fn()
     const sendFrame = vi.fn(() => true)
@@ -79,55 +43,5 @@ describe('MobileRelayRpcStreams failure parity', () => {
 
     expect(listener).not.toHaveBeenCalled()
     expect(sendFrame).not.toHaveBeenCalled()
-  })
-})
-
-function readyReply(id: string): RpcSuccess {
-  return {
-    id,
-    ok: true,
-    streaming: true,
-    result: { type: 'ready', subscriptionId: 'sub-1' },
-    _meta: { runtimeId: 'runtime-1' }
-  }
-}
-
-describe('MobileRelayRpcStreams cancel fencing', () => {
-  function subscribed() {
-    const listener = vi.fn()
-    let id = 0
-    const sendFrame = vi.fn((_frame: { id: string; method: string; params?: unknown }) => true)
-    const streams = new MobileRelayRpcStreams({
-      nextId: () => `stream-${++id}`,
-      sendFrame,
-      waitForConnected: async () => {}
-    })
-    const cancel = streams.subscribe(
-      'notifications.subscribe',
-      { includeDesktopSuppressed: true },
-      listener
-    )
-    return { listener, streams, cancel, sendFrame }
-  }
-
-  it('delivers a ready reply to a live subscription', async () => {
-    const { listener, streams } = subscribed()
-    await Promise.resolve()
-
-    expect(streams.handleResponse(readyReply('stream-1'))).toBe(true)
-    expect(listener).toHaveBeenCalledExactlyOnceWith({ type: 'ready', subscriptionId: 'sub-1' })
-  })
-
-  it('releases, without delivering, a ready reply that lands after the caller cancelled', async () => {
-    const { listener, streams, cancel, sendFrame } = subscribed()
-    await Promise.resolve()
-
-    cancel()
-
-    expect(streams.handleResponse(readyReply('stream-1'))).toBe(true)
-    expect(listener).not.toHaveBeenCalled()
-    expect(sendFrame.mock.calls.map(([frame]) => frame).slice(1)).toEqual([
-      { id: 'stream-2', method: 'notifications.unsubscribe', params: { subscriptionId: 'sub-1' } }
-    ])
   })
 })

@@ -1,6 +1,6 @@
-import { sessionTabsListRead } from '../mobile-session-read-operations'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { RpcFailure } from '../../transport/types'
+import { sessionTabsListRead } from './mobile-session-tab-read-operations'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { RpcFailure } from '../../transport/rpc/rpc-wire-types'
 
 export type SessionTabsApplyOutcome<Tab> =
   | { accepted: false }

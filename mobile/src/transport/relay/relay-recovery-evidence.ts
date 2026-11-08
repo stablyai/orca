@@ -1,7 +1,7 @@
 import { RelayHostReachabilityLatch } from './relay-host-reachability-latch'
 import { RelayPairingRejectionLatch } from './relay-pairing-rejection-latch'
 import type { RelayHostReachability } from './relay-host-reachability'
-import type { StableLogicalRpcClient } from '../stable-logical-rpc-client'
+import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
 
 export type RelayRecoveryReporter = Pick<
   StableLogicalRpcClient,

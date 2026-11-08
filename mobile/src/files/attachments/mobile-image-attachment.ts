@@ -4,7 +4,7 @@ import {
   saveMobileClipboardImageAsTempFile
 } from './mobile-clipboard-image'
 import type { MobileImageSource, PickedMobileImage } from '../../platform/media-picker-contract'
-import { nativeChatTerminalWrite } from '../../session/mobile-session-write-operations'
+import { nativeChatTerminalWrite } from '../../terminal/session/mobile-session-terminal-operations'
 import type { MobileClipboardImageRpcSender } from './mobile-clipboard-image-operations'
 
 export type AttachMobileImageDeps = {

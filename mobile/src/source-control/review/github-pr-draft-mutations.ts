@@ -1,4 +1,4 @@
-import type { RpcOperationSender } from '../../transport/rpc-operation-sender'
+import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
 import { githubPrRequestParams, type GitHubPrRepoSlug } from './github-pr-repo-slug'
 import { githubPrDraftMark, githubPrReadyForReviewMark } from './github-pr-mutation-operations'
 import { settleGithubPrMutation, type GitHubPrMutationOutcome } from './github-pr-mutation-outcome'

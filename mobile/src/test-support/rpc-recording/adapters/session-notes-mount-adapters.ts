@@ -1,10 +1,8 @@
 import { hookMount, performHookAction } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { DiffComment } from '../../../../../src/shared/diff-comment-types'
-import type {
-  DiffNotesDelivery,
-  MarkdownDocState
-} from '../../../session/mobile-session-route-types'
+import type { DiffNotesDelivery } from '../../../source-control/review/mobile-review-comment-state'
+import type { MarkdownDocState } from '../../../files/session-documents/session-document-state'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
 

@@ -1,9 +1,9 @@
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { QueryClientProvider, type QueryClient } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { RpcResponse } from '../../transport/types'
-import type { SendRequestOptions } from '../../transport/unvalidated-rpc-request-port'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
+import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
 import '../../../../src/shared/protocol-version'
 import { PREFLIGHT_OTHER_RUNTIME_REFUSAL_RUNTIME_CAPABILITY } from '../../../../src/shared/preflight-runtime-capabilities'
 import type { ExecutionHostId } from '../../../../src/shared/execution-host'
@@ -11,7 +11,7 @@ import { WorkspaceExecutionHostContext } from '../../navigation/workspace-execut
 import { createOrcaQueryClient } from '../../query/orca-query-client'
 import { settleQueryNotifications } from '../../test-support/rpc-recording/hook-mount'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
-import type { MobileNewTabAgentLoadState } from '../mobile-session-route-types'
+import type { MobileNewTabAgentLoadState } from './mobile-agent-load-state'
 import { useMobileNewTabAgentOptions } from './use-mobile-new-tab-agent-options'
 
 const claude: RpcResponse = { id: '1', ok: true, result: ['claude'] }

@@ -6,8 +6,8 @@ import {
   type MobileClipboardImageResizer
 } from './mobile-clipboard-image-downscale'
 import { MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS } from './mobile-clipboard-image-upload-chunk'
-import '../../transport/stable-logical-rpc-client'
-import { isLogicalClientCutoverError } from '../../transport/logical-client-cutover-error'
+import '../../transport/connection/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../../transport/connection/logical-client-cutover-error'
 import {
   clipboardImageSaveAsTempFile,
   clipboardImageUploadAbort,

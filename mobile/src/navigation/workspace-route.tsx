@@ -8,7 +8,7 @@ import {
   useOptionalHostProtocolGates
 } from '../components/host-protocol-gates-context'
 import { PageRouteUnavailableScreen } from '../mobile-web-shell/PageRouteUnavailableScreen'
-import { useHostClient } from '../transport/host-client-hooks'
+import { useHostClient } from '../transport/connection/host-client-hooks'
 import { WorkspaceServerContext } from '../worktree/workspace-server-context'
 import { useWorkspaceServer } from '../worktree/workspace-server'
 

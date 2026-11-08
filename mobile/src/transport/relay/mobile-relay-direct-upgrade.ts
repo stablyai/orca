@@ -4,13 +4,13 @@ import type {
   MobileRelayEndpoint,
   PairingGetEndpointsResult
 } from '../../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
-import { RelayRoutingHostRemovedError, setRelayRouting } from '../host-store'
+import { RelayRoutingHostRemovedError, setRelayRouting } from '../hosts/host-store'
 import {
   MobileRelayCredentialBundleSchema,
   deleteMobileRelayCredentialBundle,
   writeMobileRelayCredentialBundle,
   type MobileRelayCredentialBundle
-} from '../mobile-relay-credential-bundle'
+} from '../hosts/mobile-relay-credential-bundle'
 import {
   createMobileRelayDirectUpgradeJournal,
   deleteMobileRelayDirectUpgradeJournal,
@@ -22,8 +22,8 @@ import {
   relayCredentialProvision,
   relayPairingEndpointsRead
 } from '../../pairing/mobile-relay-pairing-operations'
-import type { RpcClient } from '../rpc-client'
-import type { HostProfile } from '../types'
+import type { RpcClient } from '../rpc/rpc-client-contract'
+import type { HostProfile } from '../hosts/host-profile'
 import { isPairingRelayRpcUnavailable } from '../../pairing/pairing-relay-rpc-unavailable'
 
 export type MobileRelayDirectUpgradeResult = {

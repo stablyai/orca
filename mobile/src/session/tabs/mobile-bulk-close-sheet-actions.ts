@@ -1,4 +1,5 @@
-import type { MarkdownDocState, MobileSessionTab } from '../mobile-session-route-types'
+import type { MarkdownDocState } from '../../files/session-documents/session-document-state'
+import type { MobileSessionTab } from './mobile-session-tabs'
 import type { ActionSheetAction } from '../../components/ActionSheetModal'
 import { selectBulkCloseTabs } from './mobile-tab-close-selection'
 import { closeTabsAfterConfirmation } from '../../../../src/shared/bulk-tab-close-confirmation'

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import type { ConnectionState } from '../transport/types'
-import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { translate } from '../i18n/mobile-i18n'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'

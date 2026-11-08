@@ -37,15 +37,15 @@ export {
   SlidersHorizontal,
   X
 } from 'lucide-react-native'
-export type { RpcClient } from '../transport/rpc-client'
-export type { RpcSuccess } from '../transport/types'
-export { useHostClient } from '../transport/host-client-hooks'
+export type { RpcClient } from '../transport/rpc/rpc-client-contract'
+export type { RpcSuccess } from '../transport/rpc/rpc-wire-types'
+export { useHostClient } from '../transport/connection/host-client-hooks'
 export {
   useLastConnectedAt,
   useRelayRecoveryStatus,
   useReconnectAttempt
-} from '../transport/client-context-connection-metrics'
-export { classifyConnection } from '../transport/connection-health'
+} from '../transport/connection/client-context-connection-metrics'
+export { classifyConnection } from '../transport/connection/connection-health'
 export { StatusDot } from '../components/StatusDot'
 export { ActionSheetModal } from '../components/ActionSheetModal'
 export { ConfirmModal } from '../components/ConfirmModal'

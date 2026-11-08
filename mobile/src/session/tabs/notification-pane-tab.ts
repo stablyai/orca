@@ -3,7 +3,7 @@ import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../../../src/shared/agent-session/view/structured-agent-session-projection'
-import type { MobileSessionTab } from '../mobile-session-route-types'
+import type { MobileSessionTab } from './mobile-session-tabs'
 
 // Keep native/web navigation’s pane lookup separate: importing the native sibling by name on web resolves back to the web file itself.
 export function notificationPaneTab(tabs: readonly MobileSessionTab[], paneKey: string) {

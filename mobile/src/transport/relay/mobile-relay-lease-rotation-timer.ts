@@ -1,4 +1,4 @@
-import type { ScheduleTimer } from '../timer-scheduler'
+import type { ScheduleTimer } from '../../platform/timer-scheduler'
 
 // Refresh resume credentials before expiry and retry missed rotations through one timer slot.
 const LEASE_ROTATION_MARGIN_MS = 30_000

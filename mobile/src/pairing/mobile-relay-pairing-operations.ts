@@ -2,8 +2,8 @@ import {
   DeviceCredentialInstalledSchema,
   PairingGetEndpointsResultSchema
 } from '../../../src/shared/remote-runtime/relay/mobile-relay-credential-contract'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 
 // Preserve unwrapped transport rejections and avoid retries: lost mutation replies must retain unknown/cutover identity.
 // Keep the shipped strict shared credential schemas for this native pairing boundary.

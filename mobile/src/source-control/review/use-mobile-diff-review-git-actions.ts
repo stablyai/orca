@@ -1,8 +1,8 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { translate } from '../../i18n/mobile-i18n'
-import type { ConnectionState } from '../../transport/types'
-import type { RpcClient } from '../../transport/rpc-client'
-import { interpretOrThrowRefusalMessage } from '../../transport/rpc-refusal-message'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { interpretOrThrowRefusalMessage } from '../../transport/rpc/rpc-refusal-message'
 import {
   MOBILE_DIFF_REVIEW_GIT_MUTATIONS,
   reviewGitBulkUnstage

@@ -19,9 +19,9 @@ import {
   startPreProfilePairing,
   type PreProfilePairingAttempt
 } from '../src/pairing/pre-profile-pairing-coordinator'
-import type { ConnectionLogEntry } from '../src/transport/types'
+import type { ConnectionLogEntry } from '../src/diagnostics/connection/connection-log-types'
 import type { PairingOffer } from '../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import { useRefreshHostClient } from '../src/transport/host-client-hooks'
+import { useRefreshHostClient } from '../src/transport/connection/host-client-hooks'
 import { colors, spacing, pressedStyle } from '../src/theme/mobile-theme'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../src/i18n/use-mobile-translation'

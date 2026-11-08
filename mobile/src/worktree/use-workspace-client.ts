@@ -1,8 +1,8 @@
 import { useContext } from 'react'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
-import { useHostClient } from '../transport/host-client-hooks'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import { useHostClient } from '../transport/connection/host-client-hooks'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import {
   useRouteRelaysCapability,
   WorkspaceServerContext,

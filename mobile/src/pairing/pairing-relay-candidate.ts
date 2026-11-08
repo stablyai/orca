@@ -1,12 +1,15 @@
 import type { PairingRelay } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import { hostStatusProbe } from '../transport/host-status-probe-operations'
+import { hostStatusProbe } from '../transport/connection/host-status-probe-operations'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import { RelayOuterError } from '../transport/encryption/mobile-relay-e2ee-link'
 import type { PairingCandidateClient } from './mobile-relay-physical-client'
 import { RelayDirectorMoveNotNewerError } from './mobile-relay-invite-director'
-import { createPairingRelayLogger, pairingRelayErrorDetail } from '../transport/pairing-relay-log'
-import { redactSocketEndpoint } from '../transport/socket-event-debug'
-import type { ConnectionLogSink } from '../transport/types'
+import {
+  createPairingRelayLogger,
+  pairingRelayErrorDetail
+} from '../diagnostics/connection/pairing-relay-log'
+import { redactSocketEndpoint } from '../diagnostics/connection/socket-event-debug'
+import type { ConnectionLogSink } from '../diagnostics/connection/connection-log-types'
 
 export function createRecoveringPairingRelayCandidate(args: {
   journal: MobileRelayPairingJournal

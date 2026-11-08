@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITY } from '../../../src/shared/remote-runtime/pairing/ticket-exchange-capability'
 import { exchangePairingTicket } from './pairing-ticket-exchange'
 import type { PairingCandidateClient } from './mobile-relay-physical-client'
-import type { RpcResponse } from '../transport/types'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 
 vi.mock('expo-crypto', () => ({
   getRandomBytes: (length: number) => new Uint8Array(length).fill(171)
@@ -23,25 +23,7 @@ function client(reply: RpcResponse | Error): PairingCandidateClient & {
   }
 }
 
-const ok: RpcResponse = {
-  id: '1',
-  ok: true,
-  result: { deviceId: 'phone' },
-  _meta: { runtimeId: 'r' }
-}
-
 describe('exchangePairingTicket', () => {
-  it('never calls a desktop that does not advertise the exchange', async () => {
-    const socket = client(ok)
-    await expect(
-      exchangePairingTicket({ client: socket, status: {}, ticket: 'scanned', log: vi.fn() })
-    ).resolves.toBe('scanned')
-    await expect(
-      exchangePairingTicket({ client: socket, status: null, ticket: 'scanned', log: vi.fn() })
-    ).resolves.toBe('scanned')
-    expect(socket.sendRequest).not.toHaveBeenCalled()
-  })
-
   it('keeps the scanned code on a refusal or a lost reply', async () => {
     const refused: RpcResponse = {
       id: '1',

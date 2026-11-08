@@ -12,7 +12,7 @@ import type {
   BridgeTerminalKeyId,
   BridgeTerminalKeyRail
 } from '../../mobile-web-shell/bridge/bridge-terminal-key'
-import { usePageBridgeClient } from '../../transport/client-context.web'
+import { usePageBridgeClient } from '../../transport/connection/client-context.web'
 
 let nextInputOwner = 0
 

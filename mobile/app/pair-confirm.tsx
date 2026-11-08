@@ -11,8 +11,8 @@ import {
   startPreProfilePairing,
   type PreProfilePairingAttempt
 } from '../src/pairing/pre-profile-pairing-coordinator'
-import type { ConnectionLogEntry } from '../src/transport/types'
-import { useRefreshHostClient } from '../src/transport/host-client-hooks'
+import type { ConnectionLogEntry } from '../src/diagnostics/connection/connection-log-types'
+import { useRefreshHostClient } from '../src/transport/connection/host-client-hooks'
 import { colors, spacing, radii, typography, pressedStyle } from '../src/theme/mobile-theme'
 import { themedStyleSheet } from '../src/theme/themed-styles'
 import { useMobileColorScheme } from '../src/theme/use-mobile-color-scheme'

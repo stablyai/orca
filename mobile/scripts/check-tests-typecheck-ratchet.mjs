@@ -18,18 +18,6 @@ export const TESTS_OUTSIDE_PROGRAM = new Map([
   [
     'src/components/WorktreeAgentList.runtime-lineage.test.tsx',
     'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop SQLite assignment projection, which does not check against RN libs, and its implementation sources keep their normal checks'
-  ],
-  [
-    'src/session/mobile-native-command-discovery.test.tsx',
-    'Legacy runtime-only: the test body is not typechecked anywhere; it imports desktop ACP command discovery, which does not check against RN libs, and its implementation sources keep their normal checks'
-  ],
-  [
-    'src/tasks/agent-launch-mobile-replay.test.ts',
-    'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop main process, which does not check against RN libs, and its implementation sources keep their normal checks'
-  ],
-  [
-    'src/tasks/mobile-agent-launch-architecture.test.ts',
-    'Legacy runtime-only: the test body is not typechecked anywhere; it imports the desktop main process, which does not check against RN libs, and its implementation sources keep their normal checks'
   ]
 ])
 

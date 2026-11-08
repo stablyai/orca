@@ -6,8 +6,8 @@ import { readHostQueryLive, useHostQuery } from '../../query/host-query'
 import { isHostNotConnectedError } from '../../query/host-query-errors'
 import { useLastShownData } from '../../query/use-last-shown-data'
 import { hostQueryKey } from '../../query/host-query-key'
-import type { RpcClient } from '../../transport/rpc-client'
-import type { ConnectionState } from '../../transport/types'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../../transport/connection/connection-state'
 import {
   githubRepoSlugQuery,
   NO_BRANCH,

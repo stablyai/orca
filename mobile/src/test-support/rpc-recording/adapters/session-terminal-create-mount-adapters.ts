@@ -5,9 +5,9 @@ import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'
 import type {
   MobileSessionTab,
-  MobileSessionTabType,
-  Terminal
-} from '../../../session/mobile-session-route-types'
+  MobileSessionTabType
+} from '../../../session/tabs/mobile-session-tabs'
+import type { Terminal } from '../../../terminal/session/mobile-terminal-model'
 import type { TuiAgent } from '../../../../../src/shared/agent-launch/catalog/tui-agent'
 import { SESSION_TABS_SPLIT_GROUP_PLACEMENT_RUNTIME_CAPABILITY } from '../../../../../src/shared/protocol-version'
 

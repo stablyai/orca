@@ -4,8 +4,8 @@ import {
   base64DecodedByteLength,
   type AgentSessionAttachmentUploadCommitResult
 } from '../../../../src/shared/agent-session/agent-session-attachments'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc-operation'
-import { rpcResultVariant } from '../../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 
 const uploadSlotSchema = z.looseObject({ uploadId: z.string() })
 const storedAttachmentSchema = z.looseObject({

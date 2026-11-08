@@ -1,7 +1,7 @@
 import { GITHUB_CONNECTION_CHANGED, githubOperationResponse } from './github-target-invocation'
 import { captureMobilePRCheckContract } from './pr-check-observation-contract'
 import { acceptPRCheckObservation } from '../../../../src/shared/github/complete-pr-check-owner'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { withGitHubTargetOperation } from '../../tasks/github-work-item-operation'
 import { requireGitHubWorkItemTargetDetails } from '../../../../src/shared/github/work-item-target'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../src/shared/github/check-types'
@@ -12,8 +12,8 @@ import type {
 } from '../../../../src/shared/github/pull-request-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { HostedReviewInfo } from '../../../../src/shared/source-control/hosted-review/hosted-review-contracts'
-import { refusedRpcMessageOrFallback } from '../../transport/rpc-refusal-message'
-import type { RpcResponse } from '../../transport/types'
+import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import '../mobile-pr-create'
 import { mobileRepoSelectorFromWorktreeId } from '../mobile-hosted-review-service'
 import type { GitHubPrForBranchOutcome } from './github-pr-read-reply-schema'
@@ -28,7 +28,7 @@ import {
 } from './github-pr-read-operations'
 import type { GitHubPrSettleableOperation } from './github-pr-mutation-outcome'
 import { githubPrRequestParams, type GitHubPrRepoSlug } from './github-pr-repo-slug'
-import type { RpcOperationSender } from '../../transport/rpc-operation-sender'
+import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
 import { translate } from '../../i18n/mobile-i18n'
 
 export type GitHubPrReadOutcome<T> = { ok: true; result: T } | { ok: false; error: string }

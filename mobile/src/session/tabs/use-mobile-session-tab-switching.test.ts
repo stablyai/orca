@@ -5,9 +5,9 @@ vi.mock('../../platform/haptics', () => ({
 }))
 import type {
   FileDocState,
-  MarkdownDocState,
-  MobileSessionTab
-} from '../mobile-session-route-types'
+  MarkdownDocState
+} from '../../files/session-documents/session-document-state'
+import type { MobileSessionTab } from './mobile-session-tabs'
 import { isCachedActiveDocumentRetap } from '../../files/session-documents/mobile-session-active-document-retap'
 
 const markdownTab: MobileSessionTab = {

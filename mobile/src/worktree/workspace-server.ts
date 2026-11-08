@@ -6,9 +6,9 @@ import {
   scopeRpcClientToExecutionHost,
   workspaceRouteExecutionHost
 } from './execution-host-scoped-rpc-client'
-import { useHostStatusGates, type HostStatusGates } from '../transport/host-status-gates'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import { useHostStatusGates, type HostStatusGates } from '../transport/connection/host-status-gates'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 
 // Read reachability from the paired desktop and capabilities from the server; null server means local/SSH/folder workspaces.
 export function useWorkspaceServer(args: {

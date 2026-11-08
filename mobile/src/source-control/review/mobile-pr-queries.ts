@@ -21,7 +21,7 @@ import {
   type HostQueryParams,
   type HostQueryTarget
 } from '../../query/host-query-key'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { clearMobileWorktreeReviewLink, fetchWorktreeGitHubPRLink } from '../mobile-pr-link'
 import {
   fetchAssignableUsers,

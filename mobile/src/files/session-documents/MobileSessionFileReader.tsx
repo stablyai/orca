@@ -29,10 +29,9 @@ import type { DiffComment } from '../../../../src/shared/diff-comment-types'
 import type {
   DiffCommentActions,
   DiffSyntaxState,
-  FileDocState,
-  FileSyntaxState,
   RenderableDiffLine
-} from '../../session/mobile-session-route-types'
+} from '../../source-control/review/mobile-review-comment-state'
+import type { FileDocState, FileSyntaxState } from './session-document-state'
 import { DiffLineRow } from '../../source-control/review/MobileSessionDiffLineRow'
 import { sendableMobileDiffComments } from '../../source-control/review/mobile-diff-comments'
 import { MobileLoadErrorState, MobileStateView } from '../../components/MobileStateView'

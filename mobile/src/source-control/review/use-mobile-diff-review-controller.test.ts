@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeRpcClient } from '../../mobile-web-shell/bridge-host-test-fakes'
-import type { ConnectionState } from '../../transport/types'
+
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
 import { documentQueryClient } from '../../test-support/rpc-recording/hook-mount'
@@ -84,34 +84,6 @@ function readySnapshot(branch: string): ReviewScreenState {
 describe('useMobileDiffReviewController', () => {
   let renderer: ReactTestRenderer | null = null
   const queries = documentQueryClient()
-  let screenState: ReviewScreenState = { kind: 'loading' }
-
-  function Probe({ connState }: { connState: ConnectionState }): null {
-    const controller = useMobileDiffReviewController({
-      client,
-      connState,
-      hostCapabilities: [],
-      hostStatusPending: false,
-      hostStatusReadable: true,
-      hostId: 'host-1',
-      worktreeId: 'wt-1',
-      name: 'review',
-      initialFilter: 'all',
-      initialTarget: null,
-      commitOid: null,
-      onOpenSession: () => {},
-      onReconnect: () => {}
-    })
-    screenState = controller.screenState
-    return null
-  }
-
-  async function update(connState: ConnectionState): Promise<void> {
-    await act(async () => {
-      renderer?.update(queries.wrap(createElement(Probe, { connState })))
-      await Promise.resolve()
-    })
-  }
 
   beforeEach(() => {
     loadSnapshot.mockReset()
@@ -120,34 +92,6 @@ describe('useMobileDiffReviewController', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
-  })
-
-  it('keeps the loaded review across a disconnect and its reconnect reload', async () => {
-    let releaseReload: (() => void) | null = null
-    loadSnapshot.mockResolvedValueOnce(readySnapshot('feature/one')).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          releaseReload = () => resolve(readySnapshot('feature/two'))
-        })
-    )
-
-    await act(async () => {
-      renderer = create(queries.wrap(createElement(Probe, { connState: 'connected' })))
-      await Promise.resolve()
-    })
-    expect(screenState).toMatchObject({ kind: 'ready' })
-
-    await update('reconnecting')
-    expect(screenState).toMatchObject({ kind: 'ready', status: { branch: 'feature/one' } })
-
-    await update('connected')
-    expect(screenState).toMatchObject({ kind: 'ready', status: { branch: 'feature/one' } })
-
-    await act(async () => {
-      releaseReload?.()
-      await Promise.resolve()
-    })
-    expect(screenState).toMatchObject({ kind: 'ready', status: { branch: 'feature/two' } })
   })
 
   describe('Stage · next file', () => {

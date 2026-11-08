@@ -11,7 +11,7 @@ import {
   nativeChatInterruptedContinueAccepted,
   type NativeChatInterruptedContinueAttempt
 } from '../../../src/shared/native-chat/native-chat-interrupted-continue'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import { useRouteRelaysCapability } from '../worktree/workspace-server-context'
 import { AGENT_SESSION_PHONE_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../src/shared/agent-session/agent-session-continue-interrupted-capability'

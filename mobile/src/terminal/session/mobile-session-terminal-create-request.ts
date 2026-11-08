@@ -1,7 +1,7 @@
 import type { MobileQuickCommandLaunch } from '../quick-commands'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { MobileNewTabAgentOption } from '../../session/agent-launch/mobile-new-tab-agent-options'
-import { sessionTabCreateTerminal } from '../../session/mobile-session-write-operations'
+import { sessionTabCreateTerminal } from '../../session/tabs/mobile-session-tab-write-operations'
 
 export type MobileSessionTerminalCreateOptions = MobileQuickCommandLaunch['options'] & {
   onPromptSent?: () => void

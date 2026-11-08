@@ -16,7 +16,7 @@ import {
   structuredConversationCommandHold
 } from '../../../src/shared/structured-conversation-command-hold'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { translate } from '../i18n/mobile-i18n'
 import { sayMobileAgentSessionFailure } from './agent-session-failure-copy'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'

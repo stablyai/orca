@@ -1,6 +1,6 @@
 import { hookMount } from '../hook-mount'
 import { mountFixture } from '../recorder-fixture-shape'
-import type { MobileSessionTab } from '../../../session/mobile-session-route-types'
+import type { MobileSessionTab } from '../../../session/tabs/mobile-session-tabs'
 import type * as MobileSessionLastTabsModule from '../../../session/tabs/mobile-session-last-tabs'
 import type { operationModuleLoader } from '../operation-module-loader'
 import type { MountAdapter } from '../recording-scenario'

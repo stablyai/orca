@@ -1,6 +1,6 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc-operation'
-import type { RpcCompatibleReader } from '../../transport/rpc-operation-contract'
-import { rpcResultVariant } from '../../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
+import type { RpcCompatibleReader } from '../../transport/rpc/rpc-operation-contract'
+import { rpcResultVariant } from '../../transport/rpc/rpc-operation-result-reader'
 import type { MobileGitBranchCompareResult } from '../mobile-branch-compare'
 import { gitStatusProjectionReader } from '../mobile-git-read-operations'
 import {

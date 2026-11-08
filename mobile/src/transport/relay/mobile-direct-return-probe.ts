@@ -3,10 +3,10 @@ import { openAuthenticatedDirectEndpoint } from './mobile-direct-endpoint-probe'
 import {
   ARRIVAL_OBSERVATION_MS,
   type MobileEndpointHysteresis
-} from '../mobile-endpoint-hysteresis'
-import type { RpcClient } from '../rpc-client'
-import type { ScheduleTimer } from '../timer-scheduler'
-import type { MobileConnectionPath } from '../stable-logical-rpc-client'
+} from '../connection/mobile-endpoint-hysteresis'
+import type { RpcClient } from '../rpc/rpc-client-contract'
+import type { ScheduleTimer } from '../../platform/timer-scheduler'
+import type { MobileConnectionPath } from '../connection/stable-logical-rpc-client'
 
 const DIRECT_PROBE_INTERVAL_MS = 15_000
 // After a network change the relay redial holds the mutex for about a second.

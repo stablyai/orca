@@ -1,6 +1,6 @@
 import { createContext, useContext } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
 import type { ServerHostDesktopReach } from './server-workspaces'
 
 // WorkspaceRoute supplies server context; null means unreachable, absent means desktop routing.

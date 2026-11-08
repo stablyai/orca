@@ -4,16 +4,16 @@ import type { RuntimeTerminalPathResolution } from '../../../../src/shared/termi
 import { filesystemPathToFileUri } from '../../../../src/shared/file-links/file-uri-path'
 import { createMobileFilePreviewHref } from '../mobile-file-preview-route'
 import { classifyMobileArtifact } from '../mobile-artifact-kind'
-import { fileTapOpenRun } from '../../session/mobile-session-launch-operations'
+import { fileTapOpenRun } from './mobile-file-tap-operations'
 import { terminalArtifactPathResolve as fileTapPathResolve } from '../mobile-file-preview-operations'
 import { mapWithConcurrency } from '../../../../src/shared/map-with-concurrency'
 import {
   shouldActivateOpenedMobileSessionTab,
   type OpenedMobileSessionTabActivationState
 } from '../../session/tabs/opened-mobile-session-tab'
-import { isRendererUnavailableReply } from '../../transport/renderer-unavailable-reply'
-import type { RpcOperationSender } from '../../transport/rpc-operation-sender'
-import type { RpcResponse } from '../../transport/types'
+import { isRendererUnavailableReply } from '../../transport/rpc/renderer-unavailable-reply'
+import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 
 // Hard-wrap guesses can number in the hundreds; stay far below the page bridge's 64 pending requests.
 const FILE_TAP_RESOLVE_CONCURRENCY = 8

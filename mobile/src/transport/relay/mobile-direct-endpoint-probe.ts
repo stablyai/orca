@@ -1,6 +1,6 @@
 import { isTailscaleEndpoint } from '../../../../src/shared/remote-runtime/remote-runtime-tailscale-hint'
-import type { RpcClient } from '../rpc-client'
-import type { MobileConnectionPath } from '../stable-logical-rpc-client'
+import type { RpcClient } from '../rpc/rpc-client-contract'
+import type { MobileConnectionPath } from '../connection/stable-logical-rpc-client'
 
 export function directPathForEndpoint(endpoint: string): Exclude<MobileConnectionPath, 'relay'> {
   return isTailscaleEndpoint(endpoint) ? 'tailscale' : 'lan'

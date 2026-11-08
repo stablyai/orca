@@ -11,7 +11,7 @@ import {
   resolveMarkdownFloatingActionsBottom,
   shouldShowMarkdownFloatingActions
 } from './markdown-floating-actions-layout'
-import type { MarkdownDocState } from '../../session/mobile-session-route-types'
+import type { MarkdownDocState } from './session-document-state'
 import { styles } from '../../session/mobile-session-styles'
 import { MobileLoadErrorState, MobileStateView } from '../../components/MobileStateView'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'

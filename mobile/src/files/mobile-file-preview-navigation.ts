@@ -1,6 +1,6 @@
 import { mobileFileMediaMime } from './mobile-file-media'
 import { classifyMobileArtifact } from './mobile-artifact-kind'
-import { defaultScheduleTimer } from '../transport/timer-scheduler'
+import { defaultScheduleTimer } from '../platform/timer-scheduler'
 import {
   createMobileFilePreviewHref,
   type MobileFilePreviewHref,

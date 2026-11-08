@@ -1,4 +1,4 @@
-import type { RpcFailure, RpcResponse } from '../transport/types'
+import type { RpcFailure, RpcResponse } from '../transport/rpc/rpc-wire-types'
 
 // Old hosts refuse at the mobile allowlist before dispatch, so unavailable pairing probes can answer forbidden.
 // Retain method_not_found compatibility if dispatch ordering changes; callers may then commit LAN-only and retire pending secrets.

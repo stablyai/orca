@@ -3,13 +3,13 @@ import type { PRComment } from '../../../../src/shared/github/comment-types'
 import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import { defineHostMutation } from '../../query/host-mutation'
 import { translate } from '../../i18n/mobile-i18n'
-import { isLogicalClientCutoverError } from '../../transport/logical-client-cutover-error'
+import { isLogicalClientCutoverError } from '../../transport/connection/logical-client-cutover-error'
 import {
   isRpcDeliveryUnknown,
   markRpcDeliveryUnknown
-} from '../../transport/rpc-delivery-ambiguity'
-import type { RpcOperationSender } from '../../transport/rpc-operation-sender'
-import type { RpcClient } from '../../transport/rpc-client'
+} from '../../transport/rpc/rpc-delivery-ambiguity'
+import type { RpcOperationSender } from '../../transport/rpc/rpc-operation-sender'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import {
   fetchAddIssueComment,
   fetchAddPRReviewCommentReply,

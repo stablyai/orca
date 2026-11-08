@@ -1,8 +1,9 @@
 import type { TabActivationIntent } from '../../../../src/shared/tab-activation-intent'
-import '../../transport/stable-logical-rpc-client'
-import { LogicalClientCutoverError } from '../../transport/logical-client-cutover-error'
-import { sessionTabActivate, sessionTerminalFocus } from '../mobile-session-write-operations'
-import type { RpcResponse } from '../../transport/types'
+import '../../transport/connection/stable-logical-rpc-client'
+import { LogicalClientCutoverError } from '../../transport/connection/logical-client-cutover-error'
+import { sessionTabActivate } from './mobile-session-tab-write-operations'
+import { sessionTerminalFocus } from '../../terminal/session/mobile-session-terminal-operations'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import {
   getMobileTerminalDiagnosticErrorName,
   logMobileTerminalDiagnostic,

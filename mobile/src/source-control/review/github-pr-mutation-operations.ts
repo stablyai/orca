@@ -1,6 +1,9 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc-operation'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../../transport/rpc/rpc-operation'
 import type { RpcMethodName } from '../../../../src/shared/rpc-contract/rpc-params-catalog.generated'
-import { rpcResultVariant, rpcResultVariants } from '../../transport/rpc-operation-result-reader'
+import {
+  rpcResultVariant,
+  rpcResultVariants
+} from '../../transport/rpc/rpc-operation-result-reader'
 import {
   githubPrMutationConfirmationSchema,
   githubPrMutationStatusSchemas,

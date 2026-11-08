@@ -3,7 +3,7 @@ import {
   routeRpcClientCalls,
   scopeRpcClientToExecutionHost
 } from '../worktree/execution-host-scoped-rpc-client'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 type RoutedRepo = { id: string; executionHostId?: ExecutionHostId | null }
 

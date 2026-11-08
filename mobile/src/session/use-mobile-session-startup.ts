@@ -5,7 +5,7 @@ import { headlessActivationNeedsHostRenderer } from '../worktree/worktree-activa
 import { createInitialSessionAutoCreateState } from '../terminal/session/use-initial-session-terminal-autocreate'
 import type { MobileSessionKeyboardStateModel } from '../terminal/session/use-mobile-session-keyboard-state'
 import { withoutSessionTabHostOwnership } from './tabs/mobile-session-tab-status-clock'
-import type { RpcResponse } from '../transport/types'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 
 export function useMobileSessionStartup(scope: MobileSessionKeyboardStateModel) {
   const {

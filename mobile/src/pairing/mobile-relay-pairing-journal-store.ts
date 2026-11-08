@@ -11,7 +11,7 @@ import {
   readPairingKeychainItem,
   resetPairingKeychainForTests,
   writePairingKeychainItem
-} from '../transport/pairing-keychain'
+} from '../transport/hosts/pairing-keychain'
 
 const JOURNAL_STORAGE_KEY = 'orca:mobile-relay:pairing-journal:v1'
 const JOURNAL_SECRET_KEY = 'orca.mobile-relay.pairing-journal.v1'

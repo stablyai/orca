@@ -1,6 +1,6 @@
 import { Platform } from 'react-native'
-import { connect, type ConnectOptions } from '../transport/rpc-client'
-import { resolvePairingHostIdentity, savePairedHost } from '../transport/host-store'
+import { connect, type ConnectOptions } from '../transport/rpc/direct-rpc-connect'
+import { resolvePairingHostIdentity, savePairedHost } from '../transport/hosts/host-store'
 import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { isPairingRelayRpcUnavailable } from './pairing-relay-rpc-unavailable'
 import {
@@ -21,21 +21,21 @@ import { settleMobileRelayPairingRecovery } from './mobile-relay-pairing-recover
 import {
   promotePairingJournalCredential,
   writeMobileRelayCredentialBundle
-} from '../transport/mobile-relay-credential-bundle'
+} from '../transport/hosts/mobile-relay-credential-bundle'
 import {
   connectMobileRelayForPairing,
   type PairingCandidateClient
 } from './mobile-relay-physical-client'
 import { racePairingCandidates, type PairingCandidate } from './pairing-candidate-race'
-import { attributePairingLogPath } from '../transport/pairing-log-path'
+import { attributePairingLogPath } from '../diagnostics/connection/pairing-log-path'
 import { resolvePairingInviteThroughDirector } from './mobile-relay-invite-director'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
-import { createPairingRelayLogger } from '../transport/pairing-relay-log'
-import { redactSocketEndpoint } from '../transport/socket-event-debug'
+import { createPairingRelayLogger } from '../diagnostics/connection/pairing-relay-log'
+import { redactSocketEndpoint } from '../diagnostics/connection/socket-event-debug'
 import { assertCommittedInstall, directHost, relayHost } from './pairing-relay-host'
-import { recordHostDescriptorFromStatus } from '../transport/host-descriptor-recorder'
+import { recordHostDescriptorFromStatus } from '../transport/hosts/host-descriptor-recorder'
 import { adoptExchangedToken, exchangePairingTicket } from './pairing-ticket-exchange'
-import type { HostStatusReply } from '../transport/host-status-reply-schema'
+import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
 
 export type PreProfilePairingAttempt = {
   readonly result: Promise<{ hostId: string }>

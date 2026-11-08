@@ -1,10 +1,10 @@
 import { useCallback, useRef, useState } from 'react'
 import { useFocusEffect } from 'expo-router'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
-import type { RpcClient } from '../transport/rpc-client'
-import { subscribeSharedClientEvents } from '../transport/shared-client-events'
-import type { ConnectionState } from '../transport/types'
-import { sessionWorktreeRecordRead } from '../session/mobile-session-read-operations'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { subscribeSharedClientEvents } from '../transport/connection/shared-client-events'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import { sessionWorktreeRecordRead } from './session-worktree-record-operations'
 import { getLiveWorktreeDisplayName } from './worktree-display-name'
 import {
   getFloatingWorkspaceTitle,

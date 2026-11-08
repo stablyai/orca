@@ -7,7 +7,7 @@ import {
   MobileDictationTimer
 } from '../../../dictation/MobileDictationMeter'
 import { MobileDictationMeterContext } from '../../../dictation/mobile-dictation-meter-context'
-import { keepHeldPressThroughLongPress } from '../../held-press-long-press'
+import { keepHeldPressThroughLongPress } from '../../../platform/held-press-long-press'
 import {
   COMPOSER_CONTROL_HIT_SLOP,
   composerInputStyles as inputStyles

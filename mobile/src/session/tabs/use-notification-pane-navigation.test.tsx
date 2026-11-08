@@ -3,7 +3,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BridgeInitRoute } from '../../mobile-web-shell/bridge/bridge-init-route'
-import type { MobileSessionTab } from '../mobile-session-route-types'
+import type { MobileSessionTab } from './mobile-session-tabs'
 
 vi.mock('../../navigation/workspace-execution-host', () => ({
   useWorkspaceExecutionHost: () => 'local'
@@ -41,7 +41,7 @@ vi.mock('expo-router', () => ({
   useNavigation: () => pageUrl
 }))
 
-vi.mock('../../transport/client-context.web', () => ({
+vi.mock('../../transport/connection/client-context.web', () => ({
   usePageBridgeClient: () => ({
     getShellSession: () => ({ route: bridge.route }),
     onRouteUpdate: (listener: RouteUpdateListener) => {

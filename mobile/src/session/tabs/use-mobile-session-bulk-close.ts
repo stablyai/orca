@@ -3,11 +3,11 @@ import {
   createBulkCloseSheetActions,
   createCloseWithBulkActions
 } from './mobile-bulk-close-sheet-actions'
-import type { RpcSuccess } from '../../transport/types'
+import type { RpcSuccess } from '../../transport/rpc/rpc-wire-types'
 import { mobileBulkTabCloseCopy } from './mobile-bulk-tab-close-copy'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { activateMobileSessionTab } from './mobile-session-tab-activation'
-import type { MobileSessionTab, SessionTabsResult } from '../mobile-session-route-types'
+import type { MobileSessionTab, SessionTabsResult } from './mobile-session-tabs'
 import type { MobileSessionCloseActionsModel } from './use-mobile-session-close-actions'
 
 export function useMobileSessionBulkClose(scope: MobileSessionCloseActionsModel) {

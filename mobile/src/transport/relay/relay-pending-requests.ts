@@ -1,5 +1,5 @@
-import { markRpcDeliveryUnknown } from '../rpc-delivery-ambiguity'
-import type { RpcResponse } from '../types'
+import { markRpcDeliveryUnknown } from '../rpc/rpc-delivery-ambiguity'
+import type { RpcResponse } from '../rpc/rpc-wire-types'
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void

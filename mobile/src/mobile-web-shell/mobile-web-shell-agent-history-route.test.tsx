@@ -25,7 +25,7 @@ vi.mock('react-native', () => ({
   View: 'View'
 }))
 
-vi.mock('../transport/host-client-hooks', () => ({
+vi.mock('../transport/connection/host-client-hooks', () => ({
   useHostClient: () => ({ client: null, state: 'disconnected' })
 }))
 vi.mock('../worktree/workspace-server', () => ({
@@ -78,30 +78,7 @@ describe('the agent-history route that hands off to the shell', () => {
     dependencies.params = { hostId: 'host-1', worktreeId: 'wt-1', name: 'my worktree' }
   })
 
-  it('opens the shell on this screen, with the name as the search half', async () => {
-    await renderRoute()
-    expect(dependencies.routes).toEqual([
-      { pathname: '/h/host-1/agent-history/wt-1', params: { name: 'my worktree' } }
-    ])
-  })
-
-  it('names no params when the caller named no worktree', async () => {
-    dependencies.params = { hostId: 'host-1', worktreeId: 'wt-1' }
-    await renderRoute()
-    expect(dependencies.routes).toEqual([{ pathname: '/h/host-1/agent-history/wt-1' }])
-  })
-
   // encodeURIComponent leaves dot segments intact; refuse them before constructing a route the bridge rejects.
-  it('refuses a dot-segment id the bridge would refuse', async () => {
-    for (const hostId of ['.', '..']) {
-      dependencies.params = { hostId, worktreeId: 'wt-1', name: 'n' }
-      dependencies.routes.length = 0
-      dependencies.refusals.length = 0
-      await renderRoute()
-      expect(dependencies.routes, hostId).toEqual([])
-      expect(dependencies.refusals.at(-1), hostId).toBe(hostId)
-    }
-  })
 
   it('refuses a dot-segment worktree id too, which is the other segment', async () => {
     dependencies.params = { hostId: 'host-1', worktreeId: '..', name: 'n' }

@@ -1,7 +1,7 @@
 import { translate } from '../../i18n/mobile-i18n'
 import { gitCommitCompareRead } from '../mobile-git-read-operations'
-import { refusedRpcMessageOrFallback } from '../../transport/rpc-refusal-message'
-import type { RpcClient } from '../../transport/rpc-client'
+import { refusedRpcMessageOrFallback } from '../../transport/rpc/rpc-refusal-message'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 
 /** One commit's files, diffed against its parent; notes and viewed state stay with the worktree's changes. */

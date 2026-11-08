@@ -1,10 +1,6 @@
 import type { MobileFileMedia } from '../mobile-file-media'
 import type { MobileDiffLine } from '../../source-control/review/mobile-diff-lines'
-import type {
-  FileDocState,
-  MarkdownDocState,
-  ReadyFileDocState
-} from '../../session/mobile-session-route-types'
+import type { FileDocState, MarkdownDocState, ReadyFileDocState } from './session-document-state'
 
 export function claimDocumentRead(sequences: Map<string, number>, tabId: string): number {
   const seq = (sequences.get(tabId) ?? 0) + 1

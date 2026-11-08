@@ -1,5 +1,5 @@
-import type { HostClientStoreEntry } from '../host-entry-opener'
-import type { StableLogicalRpcClient } from '../stable-logical-rpc-client'
+import type { HostClientStoreEntry } from '../connection/host-entry-opener'
+import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
 
 export function shouldPreserveActiveRelay(
   entry: HostClientStoreEntry | undefined,

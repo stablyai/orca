@@ -1,5 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
-import type { HostConnectionInputs } from '../transport/client-context-connection-metrics'
+import type { HostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { PrSidebarState } from './review/mobile-pr-sidebar-state'
 import type { MobilePrSidebarController } from './review/use-mobile-pr-sidebar-controller'

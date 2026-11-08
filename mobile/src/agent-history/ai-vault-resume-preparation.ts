@@ -5,8 +5,8 @@ import {
   isPerAccountManagedCodexHome
 } from '../../../src/shared/ai-vault/resume/ai-vault-resume-preparation'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../src/shared/execution-host'
-import { aiVaultResumePreparationRun } from '../session/mobile-session-launch-operations'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import { aiVaultResumePreparationRun } from './mobile-ai-vault-resume-operations'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
 import { translate } from '../i18n/mobile-i18n'
 
 // Why: without an explicit timeout, a socket drop mid-resume parks the request

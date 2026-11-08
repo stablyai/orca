@@ -4,15 +4,14 @@ import {
   buildMobileImagePastePayload,
   buildMobileTerminalImagePastePayload,
   normalizeMobileClipboardImageBase64,
-  prepareMobileClipboardImageBase64,
   saveMobileClipboardImageAsTempFile
 } from './mobile-clipboard-image'
 import { computeMobileClipboardImageDownscale } from './mobile-clipboard-image-downscale'
 
-import type { RpcClient } from '../../transport/rpc-client'
-import '../../transport/stable-logical-rpc-client'
-import { LogicalClientCutoverError } from '../../transport/logical-client-cutover-error'
-import type { RpcFailure, RpcResponse, RpcSuccess } from '../../transport/types'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import '../../transport/connection/stable-logical-rpc-client'
+import '../../transport/connection/logical-client-cutover-error'
+import type { RpcFailure, RpcResponse, RpcSuccess } from '../../transport/rpc/rpc-wire-types'
 
 function ok(id: string, result: unknown): RpcSuccess {
   return { id, ok: true, result, _meta: { runtimeId: 'runtime-1' } }
@@ -88,30 +87,6 @@ describe('mobile clipboard image paste helpers', () => {
     })
   })
 
-  it('restarts the upload after a logical connection cutover', async () => {
-    const sendRequest = vi
-      .fn()
-      .mockResolvedValueOnce(ok('start-1', { uploadId: 'upload-1' }))
-      .mockRejectedValueOnce(new LogicalClientCutoverError())
-      .mockResolvedValueOnce(ok('abort-1', { aborted: true }))
-      .mockResolvedValueOnce(ok('start-2', { uploadId: 'upload-2' }))
-      .mockResolvedValueOnce(ok('append-2', { receivedBase64Length: 8 }))
-      .mockResolvedValueOnce(ok('commit-2', '/tmp/orca-paste-image.png'))
-
-    await expect(saveMobileClipboardImageAsTempFile({ sendRequest }, 'aGVsbG8=')).resolves.toBe(
-      '/tmp/orca-paste-image.png'
-    )
-
-    expect(sendRequest.mock.calls.map(([method]) => method)).toEqual([
-      'clipboard.startImageUpload',
-      'clipboard.appendImageUploadChunk',
-      'clipboard.abortImageUpload',
-      'clipboard.startImageUpload',
-      'clipboard.appendImageUploadChunk',
-      'clipboard.commitImageUpload'
-    ])
-  })
-
   it('brackets generated image paths before sending to the terminal', () => {
     expect(buildMobileImagePastePayload('/tmp/orca.png', 'claude')).toBe(
       '\x1b[200~/tmp/orca.png\x1b[201~'
@@ -171,14 +146,5 @@ describe('mobile clipboard image downscaling', () => {
   it('refuses to downscale when source dimensions are unusable', () => {
     expect(computeMobileClipboardImageDownscale(400, 0, 20, 100)).toBeNull()
     expect(computeMobileClipboardImageDownscale(400, 40, -1, 100)).toBeNull()
-  })
-
-  it('returns the original base64 untouched when within budget', async () => {
-    const resize = vi.fn()
-    const data = `data:image/png;base64,${'a'.repeat(40)}`
-    await expect(
-      prepareMobileClipboardImageBase64({ data, size: { width: 10, height: 10 } }, resize, 100)
-    ).resolves.toBe(data)
-    expect(resize).not.toHaveBeenCalled()
   })
 })

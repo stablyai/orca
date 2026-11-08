@@ -1,9 +1,9 @@
-import { deleteHostDeviceToken } from '../transport/host-device-token-store'
+import { deleteHostDeviceToken } from '../transport/hosts/host-device-token-store'
 import {
   clearHostCredentialWriteRevision,
   getHostCredentialWriteRevision
-} from '../transport/host-credential-write-revision'
-import { deleteMobileRelayCredentialBundle } from '../transport/mobile-relay-credential-bundle'
+} from '../transport/hosts/host-credential-write-revision'
+import { deleteMobileRelayCredentialBundle } from '../transport/hosts/mobile-relay-credential-bundle'
 import { deleteMobileRelayDirectUpgradeJournal } from '../transport/relay/mobile-relay-direct-upgrade-journal'
 
 type DeletionDependencies = {

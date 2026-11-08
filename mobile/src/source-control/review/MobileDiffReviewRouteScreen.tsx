@@ -4,9 +4,9 @@ import { MobileDiffReviewScreenView } from '../../components/MobileDiffReviewScr
 import { firstReviewParam } from './mobile-diff-review-screen-model'
 import { normalizeReviewAreaParam, scopeForTargetArea } from './mobile-diff-review-positioning'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
-import { useForceReconnect } from '../../transport/host-client-hooks'
+import { useForceReconnect } from '../../transport/connection/host-client-hooks'
 import { useWorkspaceClient } from '../../worktree/use-workspace-client'
-import { useHostConnectionInputs } from '../../transport/client-context-connection-metrics'
+import { useHostConnectionInputs } from '../../transport/connection/client-context-connection-metrics'
 import { useHostProtocolGates } from '../../components/host-protocol-gates-context'
 import { useWorkspaceRouteHandoff } from '../../navigation/workspace-route-handoff'
 

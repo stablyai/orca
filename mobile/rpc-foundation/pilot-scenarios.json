@@ -10837,7 +10837,7 @@
       "id": "transport-host-status-gates-ready",
       "operation": "transport.host-status-gates",
       "family": "transport.host-status-gates",
-      "sites": ["mobile/src/transport/host-status-gates.ts"],
+      "sites": ["mobile/src/transport/connection/host-status-gates.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10869,7 +10869,7 @@
       "id": "transport-host-status-gates-refused-degrades",
       "operation": "transport.host-status-gates",
       "family": "transport.host-status-gates",
-      "sites": ["mobile/src/transport/host-status-gates.ts"],
+      "sites": ["mobile/src/transport/connection/host-status-gates.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10898,7 +10898,7 @@
       "id": "transport-host-status-gates-drop-keeps-capabilities",
       "operation": "transport.host-status-gates",
       "family": "transport.host-status-gates",
-      "sites": ["mobile/src/transport/host-status-gates.ts"],
+      "sites": ["mobile/src/transport/connection/host-status-gates.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10940,7 +10940,7 @@
       "id": "transport-capability-probe-publishes",
       "operation": "transport.capability-probe",
       "family": "transport.capability-probe",
-      "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
+      "sites": ["mobile/src/transport/connection/runtime-capability-probe.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10968,7 +10968,7 @@
       "id": "transport-capability-probe-refused-backs-off",
       "operation": "transport.capability-probe",
       "family": "transport.capability-probe",
-      "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
+      "sites": ["mobile/src/transport/connection/runtime-capability-probe.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11015,7 +11015,7 @@
       "id": "transport-capability-probe-non-string-capabilities-drop",
       "operation": "transport.capability-probe",
       "family": "transport.capability-probe",
-      "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
+      "sites": ["mobile/src/transport/connection/runtime-capability-probe.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11907,7 +11907,7 @@
       "id": "transport-capability-probe-cutover-reasks-fast",
       "operation": "transport.capability-probe",
       "family": "transport.capability-probe",
-      "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
+      "sites": ["mobile/src/transport/connection/runtime-capability-probe.ts"],
       "schedules": [],
       "steps": [
         {

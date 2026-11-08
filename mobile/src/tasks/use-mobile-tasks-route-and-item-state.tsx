@@ -1,9 +1,9 @@
 import { useMobileTasksSelection } from './github-task-identity'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   type GitHubIssueSourceError,
   type GitHubIssueSourceFallback,
   type GitHubRepoSlugCacheEntry,
-  type RpcClient,
   useHostClient,
   useHostRepoList,
   useMemo,
@@ -21,7 +21,7 @@ import {
   type TaskProvider,
   normalizeVisibleTaskProviders
 } from '../../../src/shared/work-items/task-providers'
-import { newTabRepoListRead } from '../session/mobile-session-read-operations'
+import { newTabRepoListRead } from '../session/agent-launch/mobile-runtime-repo-operations'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useTaskHostRepos } from './use-task-host-repos'
 import {

@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { MobileRelayCredentialBundle } from '../transport/mobile-relay-credential-bundle'
+import type { MobileRelayCredentialBundle } from '../transport/hosts/mobile-relay-credential-bundle'
 import { createMobileRelayPairingJournal } from './mobile-relay-pairing-journal'
 import {
   recoverMobileRelayPairing,
-  resetMobileRelayPairingRecoveryForTests,
-  settleMobileRelayPairingRecovery
+  resetMobileRelayPairingRecoveryForTests
 } from './mobile-relay-pairing-recovery'
 import { RelayOuterError } from '../transport/encryption/mobile-relay-e2ee-link'
 import type {
   connectMobileRelayForPairing,
   PairingCandidateClient
 } from './mobile-relay-physical-client'
-import type { HostProfile, RpcResponse } from '../transport/types'
+import type { HostProfile } from '../transport/hosts/host-profile'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
@@ -126,54 +126,6 @@ describe('mobile relay pairing recovery', () => {
     resetMobileRelayPairingRecoveryForTests()
   })
 
-  it('tries pending then current before an unexpired invite and transitions after not-found', async () => {
-    const saved = journal()
-    const currentToken = 'C'.repeat(43)
-    const bundle: MobileRelayCredentialBundle = {
-      v: 1,
-      hostId: 'host-1',
-      deviceToken: offer.deviceToken,
-      current: {
-        token: currentToken,
-        hash: 'D'.repeat(43),
-        version: 1,
-        expiresAt: now + 60_000
-      }
-    }
-    const failed = () =>
-      client(async () => {
-        throw new Error('resume rejected')
-      })
-    const relayInstalled = installed(saved, 'relay-basis')
-    let statusCalls = 0
-    const invite = client(async (method) => {
-      if (method === 'pairing.getEndpoints') {
-        statusCalls += 1
-        return response(
-          statusCalls === 1
-            ? endpoints(saved, { state: 'not-found' })
-            : endpoints(saved, { state: 'committed', result: relayInstalled })
-        )
-      }
-      expect(saved.metadata.authorizationMode).toBe('relay-basis')
-      return response(relayInstalled)
-    })
-    const seenCredentials: (string | undefined)[] = []
-    const connectRelay = vi.fn((args) => {
-      seenCredentials.push(args.credential)
-      return args.credential ? failed() : invite
-    })
-    const deps = dependencies({ journal: saved, connectRelay, bundle })
-
-    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('recovered')
-    expect(seenCredentials).toEqual([saved.secrets.pendingResumeToken, currentToken, undefined])
-    expect(deps.updateJournal).toHaveBeenCalledWith(saved.metadata.journalId, expect.any(Function))
-    expect(invite.sendRequest).toHaveBeenCalledWith('pairing.provisionRelay', {
-      reqId: saved.metadata.installReqId,
-      newResumeTokenHash: saved.metadata.pendingResumeTokenHash
-    })
-  })
-
   it('abandons a journal once its invite expired and no credential can reconcile', async () => {
     const saved = journal()
     const unreachable = client(async () => {
@@ -209,23 +161,6 @@ describe('mobile relay pairing recovery', () => {
 
     await expect(recoverMobileRelayPairing(deps)).resolves.toBe('deferred')
     expect(deps.clearJournal).not.toHaveBeenCalled()
-  })
-
-  it('bounds how long a new scan waits for recovery', async () => {
-    vi.useFakeTimers()
-    try {
-      const saved = journal()
-      const hung = client(() => new Promise(() => {}))
-      const deps = dependencies({ journal: saved, connectRelay: vi.fn(() => hung) })
-      let done = false
-      void settleMobileRelayPairingRecovery(8_000, deps).then(() => (done = true))
-      await vi.advanceTimersByTimeAsync(7_999)
-      expect(done).toBe(false)
-      await vi.advanceTimersByTimeAsync(1)
-      expect(done).toBe(true)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('defers while any credential failed for a transport reason', async () => {

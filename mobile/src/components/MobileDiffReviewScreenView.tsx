@@ -23,7 +23,7 @@ import { mobileDiffReviewPositionLabel } from '../source-control/review/mobile-d
 import { getRuntimePathBasename } from '../../../src/shared/cross-platform-path'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import type { HostConnectionInputs } from '../transport/client-context-connection-metrics'
+import type { HostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>

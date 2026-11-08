@@ -3,8 +3,8 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalQuickCommand } from '../../../../src/shared/terminal/quick-commands/terminal-quick-command-types'
 import { QuickCommandsSheet } from './QuickCommandsSheet'
-import { createStableLogicalRpcClient } from '../../transport/stable-logical-rpc-client'
-import { FakeSession } from '../../transport/mobile-endpoint-supervisor-test-fakes'
+import { createStableLogicalRpcClient } from '../../transport/connection/stable-logical-rpc-client'
+import { FakeSession } from '../../transport/connection/mobile-endpoint-supervisor-test-fakes'
 
 import {
   findAllByHostType,

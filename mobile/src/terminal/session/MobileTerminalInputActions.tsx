@@ -7,7 +7,7 @@ import {
 } from '../../components/composer-input/composer-input-styles'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
-import { keepHeldPressThroughLongPress } from '../../session/held-press-long-press'
+import { keepHeldPressThroughLongPress } from '../../platform/held-press-long-press'
 
 type DictationState = {
   readonly isStarting: boolean

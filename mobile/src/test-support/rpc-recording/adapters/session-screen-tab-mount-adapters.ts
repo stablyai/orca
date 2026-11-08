@@ -1,5 +1,5 @@
 import { hookMount, performHookAction } from '../hook-mount'
-import type { MobileSessionTab } from '../../../session/mobile-session-route-types'
+import type { MobileSessionTab } from '../../../session/tabs/mobile-session-tabs'
 import type { TerminalRecord } from '../../../terminal/session/mobile-terminal-records'
 import { mountFixture } from '../recorder-fixture-shape'
 import type { MountAdapter } from '../recording-scenario'

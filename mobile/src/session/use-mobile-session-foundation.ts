@@ -3,12 +3,12 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams } from 'expo-router'
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { HOST_DOCK_MIN_WIDTH } from '../storage/preferences'
-import { useForceReconnect } from '../transport/host-client-hooks'
+import { useForceReconnect } from '../transport/connection/host-client-hooks'
 import { useWorkspaceClient } from '../worktree/use-workspace-client'
 import {
   useLastConnectedAt,
   useReconnectAttempt
-} from '../transport/client-context-connection-metrics'
+} from '../transport/connection/client-context-connection-metrics'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { type ActivePanel, canDockSessionPanel } from './session-panel-host'
 import { useMobilePrBranchContext } from '../source-control/review/use-mobile-pr-branch-context'

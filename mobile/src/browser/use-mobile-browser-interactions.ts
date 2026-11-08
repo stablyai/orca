@@ -4,7 +4,7 @@ import {
   type GestureResponderEvent,
   type PanResponderGestureState
 } from 'react-native'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   createPinchGesture,
   MAX_ZOOM,

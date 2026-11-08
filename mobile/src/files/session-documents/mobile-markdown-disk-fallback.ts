@@ -1,6 +1,6 @@
-import { isRendererUnavailableReply } from '../../transport/renderer-unavailable-reply'
-import type { RpcFailure } from '../../transport/types'
-import type { MarkdownDocState } from '../../session/mobile-session-route-types'
+import { isRendererUnavailableReply } from '../../transport/rpc/renderer-unavailable-reply'
+import type { RpcFailure } from '../../transport/rpc/rpc-wire-types'
+import type { MarkdownDocState } from './session-document-state'
 
 export function shouldReadMarkdownFromDiskAfterReadTabFailure(response: RpcFailure): boolean {
   return isRendererUnavailableReply(response)

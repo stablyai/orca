@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import '../../../../src/shared/protocol-version'
 
 import { loadMobileAgentLaunchContext, newTabAgentOptionsFrom } from './mobile-new-tab-agent-loader'

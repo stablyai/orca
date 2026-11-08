@@ -1,5 +1,5 @@
-import type { MobileEndpointSupervisorDependencies } from '../mobile-endpoint-supervisor-contract'
-import type { StableLogicalRpcClient } from '../stable-logical-rpc-client'
+import type { MobileEndpointSupervisorDependencies } from '../connection/mobile-endpoint-supervisor-contract'
+import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
 
 // Give direct a head start, then race relay so a black-holed LAN cannot block recovery for its whole connect deadline.
 const DIRECT_DIAL_GRACE_MS = 2500

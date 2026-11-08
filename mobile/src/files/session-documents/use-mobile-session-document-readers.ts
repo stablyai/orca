@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef } from 'react'
-import type { RpcFailure } from '../../transport/types'
+import type { RpcFailure } from '../../transport/rpc/rpc-wire-types'
 import { translate } from '../../i18n/mobile-i18n'
 import { resolveMobileFileTabDoc } from '../mobile-file-tab-doc'
 import { shouldIgnoreTrimWhitespace } from '../../../../src/shared/diff-whitespace'
 import { useMobileSourceControlSettings } from '../../source-control/mobile-source-control-settings'
 import { filePreviewTextRead } from '../mobile-file-preview-operations'
-import { markdownTabRead } from '../../session/mobile-session-read-operations'
+import { markdownTabRead } from './mobile-markdown-tab-operations'
 import {
   buildMarkdownDiskFallbackDoc,
   shouldReadMarkdownFromDiskAfterReadTabFailure
@@ -20,11 +20,8 @@ import {
   settleFileRead,
   settleMarkdownRead
 } from './mobile-session-document-read-settlement'
-import type {
-  FileDocState,
-  MarkdownDocState,
-  MobileSessionTab
-} from '../../session/mobile-session-route-types'
+import type { FileDocState, MarkdownDocState } from './session-document-state'
+import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
 import type { MobileSessionTabApplicationModel } from '../../session/tabs/use-mobile-session-tab-application'
 
 export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicationModel) {

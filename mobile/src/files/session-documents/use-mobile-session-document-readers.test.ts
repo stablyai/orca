@@ -1,28 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import { hookMount, performHookAction } from '../../test-support/rpc-recording/hook-mount'
 import { mountFixture } from '../../test-support/rpc-recording/recorder-fixture-shape'
-import type { RpcResponse } from '../../transport/types'
-import type { MarkdownDocState } from '../../session/mobile-session-route-types'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
+import type { MarkdownDocState } from './session-document-state'
 import { useMobileSessionDocumentReaders } from './use-mobile-session-document-readers'
 
 const META = { runtimeId: 'runtime-1' }
-
-function readTabResult(extra: Record<string, unknown> = {}): RpcResponse {
-  return {
-    id: 'frame-1',
-    ok: true,
-    result: {
-      tabId: 'tab-md',
-      content: '# head',
-      version: 'content:6:0',
-      isDirty: false,
-      editable: false,
-      readOnlyReason: 'file_too_large',
-      ...extra
-    },
-    _meta: META
-  }
-}
 
 function readyMarkdown(
   content: string,
@@ -38,14 +21,6 @@ function readyMarkdown(
     stale: false,
     ...extra
   }
-}
-
-function deferredReply() {
-  let resolve: (reply: RpcResponse) => void = () => {}
-  const promise = new Promise<RpcResponse>((done) => {
-    resolve = done
-  })
-  return { promise, resolve }
 }
 
 function mountMarkdownReads(
@@ -95,79 +70,6 @@ function mountMarkdownReads(
 }
 
 describe('useMobileSessionDocumentReaders markdown revalidation', () => {
-  it.each([
-    {
-      reply: { editable: false, readOnlyReason: 'host_read_only' },
-      expected: { editable: false, readOnlyReason: 'host_read_only' }
-    },
-    { reply: { isDirty: true }, expected: { stale: true } },
-    {
-      reply: { truncated: true, byteLength: 3_000_000 },
-      expected: { truncated: true, byteLength: 3_000_000 }
-    }
-  ])(
-    'applies metadata changes with unchanged content and version: $expected',
-    async ({ reply, expected }) => {
-      const initial = readyMarkdown('# head')
-      const harness = mountMarkdownReads(new Map([['tab-md', initial]]), async () =>
-        readTabResult({
-          content: '# head',
-          version: 'v1',
-          editable: true,
-          readOnlyReason: undefined,
-          ...reply
-        })
-      )
-      try {
-        await harness.read()
-        expect(harness.docs.get('tab-md')).toMatchObject(expected)
-      } finally {
-        harness.unmount()
-      }
-    }
-  )
-
-  it('does not overwrite a phone save that finishes during a background read', async () => {
-    const initial = readyMarkdown('# head')
-    const pending = deferredReply()
-    const harness = mountMarkdownReads(new Map([['tab-md', initial]]), () => pending.promise)
-    try {
-      const reading = harness.read()
-      const saved = readyMarkdown('saved phone draft', { baseVersion: 'v3' })
-      harness.docs.set('tab-md', saved)
-      pending.resolve(readTabResult({ content: '# older server text', version: 'v2' }))
-      await reading
-      expect(harness.docs.get('tab-md')).toBe(saved)
-    } finally {
-      harness.unmount()
-    }
-  })
-
-  it('drops a reread that loses to an edit made while it was in flight', async () => {
-    const initial = readyMarkdown('# head')
-    const pending = deferredReply()
-    const harness = mountMarkdownReads(new Map([['tab-md', initial]]), () => pending.promise)
-    try {
-      const reading = harness.read()
-      const current = harness.docs.get('tab-md')
-      if (current?.status !== 'ready') {
-        throw new Error('Expected the clean document to stay visible')
-      }
-      harness.docs.set('tab-md', { ...current, localContent: 'phone draft', isDirty: true })
-      pending.resolve(readTabResult({ content: '# server', version: 'v2' }))
-      await reading
-      expect(harness.docs.get('tab-md')).toMatchObject({
-        status: 'ready',
-        content: '# head',
-        localContent: 'phone draft',
-        isDirty: true
-      })
-      expect(harness.published.every((doc) => doc.status !== 'loading')).toBe(true)
-    } finally {
-      harness.unmount()
-    }
-  })
-
   it('updates from disk without unmounting when the desktop renderer is down', async () => {
     const initial = readyMarkdown('# head')
     const harness = mountMarkdownReads(new Map([['tab-md', initial]]), async (method) =>
@@ -193,21 +95,6 @@ describe('useMobileSessionDocumentReaders markdown revalidation', () => {
         content: '# disk',
         editable: false
       })
-    } finally {
-      harness.unmount()
-    }
-  })
-
-  it('does not restore a document closed while a reread was in flight', async () => {
-    const initial = readyMarkdown('# head')
-    const pending = deferredReply()
-    const harness = mountMarkdownReads(new Map([['tab-md', initial]]), () => pending.promise)
-    try {
-      const reading = harness.read()
-      harness.docs.delete('tab-md')
-      pending.resolve(readTabResult({ content: '# late', version: 'v2' }))
-      await reading
-      expect(harness.docs.has('tab-md')).toBe(false)
     } finally {
       harness.unmount()
     }

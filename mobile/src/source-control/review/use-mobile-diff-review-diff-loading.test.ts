@@ -6,7 +6,7 @@ import {
   documentQueryClient,
   settleQueryNotifications
 } from '../../test-support/rpc-recording/hook-mount'
-import type { RpcResponse } from '../../transport/types'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { ReviewDiffState, ReviewScreenState } from './mobile-diff-review-screen-model'
 import { useMobileDiffReviewDiffLoading } from './use-mobile-diff-review-diff-loading'

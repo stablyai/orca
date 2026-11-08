@@ -2,7 +2,7 @@ import {
   isMobileRelayCloseCode,
   mobileRelayRecoveryFor
 } from '../../../../src/shared/remote-runtime/relay/mobile-relay-close-codes'
-import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
+import type { MobileRelayRpcSession } from './mobile-relay-rpc-session-contract'
 import { MobileE2EEAuthenticationError } from '../encryption/mobile-e2ee-v2-physical-channel'
 import { RelayOuterError } from '../encryption/mobile-relay-e2ee-link'
 import { RELAY_STABLE_CONNECTION_MS, RelayRetryDelays } from './mobile-relay-retry-delays'
@@ -11,9 +11,9 @@ import { RelayCredentialEligibility } from './relay-credential-eligibility'
 import type { RelayHostReachability } from './relay-host-reachability'
 import { RelayRecoveryEvidence, type RelayRecoveryReporter } from './relay-recovery-evidence'
 import { RelayRecoveryFailureCount } from './relay-recovery-failure-count'
-import type { StableLogicalRpcClient } from '../stable-logical-rpc-client'
-import type { ScheduleTimer } from '../timer-scheduler'
-import type { ConnectionState, ForegroundNudgeReason } from '../types'
+import type { StableLogicalRpcClient } from '../connection/stable-logical-rpc-client'
+import type { ScheduleTimer } from '../../platform/timer-scheduler'
+import type { ConnectionState, ForegroundNudgeReason } from '../connection/connection-state'
 
 type RelayCredentialLease = { expiresAt: number; version: number }
 
