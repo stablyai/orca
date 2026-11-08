@@ -43,13 +43,15 @@ const add = (a: Counts, b: Counts): Counts => ({
 // [current window, previous window], with the same 2-min ingestion lag as the Analytics Engine
 // queries; null when the rule is not configured. Throws when the API cannot be read.
 export async function cloudflareErrors(env: AlertsEnv, windowMin: number, lagMin: number, nowMs = Date.now()): Promise<[Counts, Counts] | null> {
-  if (!env.CF_GRAPHQL_TOKEN) { return null }
+  // The Analytics Engine read token also carries Account Analytics: Read when CF_GRAPHQL_USE_AE_TOKEN=1.
+  const token = env.CF_GRAPHQL_TOKEN ?? (env.CF_GRAPHQL_USE_AE_TOKEN === '1' ? env.AE_READ_TOKEN : undefined)
+  if (!token) { return null }
   const namespaceIds = (env.CF_DO_NAMESPACE_IDS ?? '').split(',').map((id) => id.trim()).filter(Boolean)
   const namespaces = namespaceIds.length > 0 ? new Set(namespaceIds) : undefined
   const at = (minutes: number) => new Date(nowMs - minutes * 60_000).toISOString()
   const response = await fetch(GRAPHQL_URL, {
     method: 'POST',
-    headers: { authorization: `Bearer ${env.CF_GRAPHQL_TOKEN}`, 'content-type': 'application/json' },
+    headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
     body: JSON.stringify({
       query: cloudflareQuery(namespaces !== undefined),
       variables: {

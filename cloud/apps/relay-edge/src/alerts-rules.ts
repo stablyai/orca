@@ -19,6 +19,8 @@ export type AlertsEnv = {
   // (comma-separated) adds the edge's Durable Object namespaces. Fires above CF_ERRORS_MIN (20)
   // errors and CF_ERRORS_PCT (1) percent of invocations per window.
   CF_GRAPHQL_TOKEN?: string
+  // '1': use AE_READ_TOKEN for the GraphQL query when CF_GRAPHQL_TOKEN is unset.
+  CF_GRAPHQL_USE_AE_TOKEN?: string
   CF_SCRIPT_NAME?: string
   CF_DO_NAMESPACE_IDS?: string
   CF_ERRORS_MIN?: string
