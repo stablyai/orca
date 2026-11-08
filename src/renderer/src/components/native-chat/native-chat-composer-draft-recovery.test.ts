@@ -6,6 +6,10 @@ import {
   type NativeChatComposerDraftStorage
 } from './drafts/native-chat-composer-draft-storage'
 
+vi.mock('./composer/editor/NativeChatFileReferencePill', () => ({
+  NativeChatFileReferencePill: () => null
+}))
+
 const SCOPE = 'agent-session:recovery'
 const TEXT = 'typed [Image](orca-image:literal) [Image #1] [Image #2]'
 let storage: ReturnType<typeof createMemoryNativeChatComposerDraftStorage>
