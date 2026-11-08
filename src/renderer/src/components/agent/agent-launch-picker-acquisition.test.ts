@@ -87,7 +87,7 @@ it('settles closed catalog reads and resumes their refresh when the picker reope
   })
   await expect
     .poll(() => currentAgentPickerAcquisition('closed-catalog')?.map((entry) => entry.catalogRead))
-    .toEqual(['settled', 'settled'])
+    .toEqual(['deferred', 'deferred'])
 
   const stopReopened = observeAgentPickerAcquisition('closed-catalog', entries, reads, observer)
   expect(published.map((entry) => entry.catalogRead)).toEqual(['pending', 'pending'])
@@ -101,4 +101,69 @@ it('settles closed catalog reads and resumes their refresh when the picker reope
     ])
   stopReopened()
   expect(currentAgentPickerAcquisition('closed-catalog')).toBeUndefined()
+})
+
+it('publishes every saved catalog while earlier refreshes are still pending', async () => {
+  const fresh = Promise.withResolvers<AgentPickerEntry['catalog']>()
+  const entries: AgentPickerEntry[] = [
+    codex,
+    { ...codex, agent: 'claude', label: 'Claude', rows: [{ agent: 'claude', kind: 'cli' }] },
+    { ...codex, agent: 'gemini', label: 'Gemini', rows: [{ agent: 'gemini', kind: 'cli' }] }
+  ]
+  let published: AgentPickerEntry[] = []
+  const stop = observeAgentPickerAcquisition(
+    'independent-saved-catalogs',
+    entries,
+    {
+      catalog: async (entry, waitForListing) =>
+        waitForListing
+          ? fresh.promise
+          : {
+              origin: 'probe',
+              fetchedAt: 1,
+              listingInProgress: true,
+              models: [model(entry.agent)]
+            },
+      support: async () => undefined
+    },
+    { selected: () => 'codex', publish: (next) => (published = next) }
+  )
+  try {
+    await expect
+      .poll(() => published.map((entry) => entry.catalog))
+      .toMatchObject([
+        { models: [{ id: 'codex' }] },
+        { models: [{ id: 'claude' }] },
+        { models: [{ id: 'gemini' }] }
+      ])
+  } finally {
+    stop()
+    fresh.resolve({ origin: 'probe', fetchedAt: 2, models: [model('fresh')] })
+  }
+})
+
+it('keeps an unflagged saved catalog provisional when its read fails', async () => {
+  const fresh = Promise.withResolvers<AgentPickerEntry['catalog']>()
+  let published: AgentPickerEntry[] = []
+  const stop = observeAgentPickerAcquisition(
+    'failed-unflagged-catalog',
+    [{ ...codex, catalog: { origin: 'probe', fetchedAt: 1, models: [model('saved')] } }],
+    { catalog: () => fresh.promise, support: async () => undefined },
+    { selected: () => undefined, publish: (next) => (published = next) }
+  )
+  try {
+    expect(published[0]).toMatchObject({
+      catalogRead: 'pending',
+      catalog: { models: [{ id: 'saved' }] }
+    })
+    fresh.reject(new Error('refresh failed'))
+    await expect
+      .poll(() => published[0])
+      .toMatchObject({
+        catalogRead: 'failed',
+        catalog: { models: [{ id: 'saved' }] }
+      })
+  } finally {
+    stop()
+  }
 })

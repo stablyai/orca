@@ -40,7 +40,10 @@ import {
   applyAgentPickerEdit,
   type AgentPickerEdit
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-edits'
-import { agentPickerArgumentsKnown } from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
+import {
+  agentPickerArgumentsKnown,
+  agentPickerCatalogAuthoritative
+} from '../../../../shared/agent-launch/picker/agent-launch-picker-authority'
 import { agentPickerEffectiveChoices } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type { AgentPickerSurface } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import {
@@ -231,13 +234,7 @@ export function AgentLaunchSetupPanel({
               {catalogMessage}
             </div>
           ) : null}
-          {hasModels &&
-          modelQuery &&
-          entry.catalog.origin !== 'unknown' &&
-          !entry.catalog.listingInProgress &&
-          entry.catalogRead !== 'pending' &&
-          entry.catalogRead !== 'failed' &&
-          entry.catalogRead !== 'unsupported' ? (
+          {hasModels && modelQuery && agentPickerCatalogAuthoritative(entry) ? (
             <CommandEmpty>{t('agentPicker.noModels', 'No models match your search.')}</CommandEmpty>
           ) : null}
           <CommandGroup>

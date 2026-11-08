@@ -39,7 +39,7 @@ export type AgentPickerEntry = {
   structured: AgentDedicatedChoices
   arguments?: string | null
   catalog: AgentSessionModelCatalogResult
-  catalogRead?: 'pending' | 'settled' | 'failed' | 'unsupported'
+  catalogRead?: 'pending' | 'deferred' | 'settled' | 'failed' | 'unsupported'
   ownerKey?: string
   draftTarget?: { key: string; worktreeId?: string; repoId?: string; executionHostId: string }
   /** The workspace the agent launches in, whose files and skills its first prompt can name. */
