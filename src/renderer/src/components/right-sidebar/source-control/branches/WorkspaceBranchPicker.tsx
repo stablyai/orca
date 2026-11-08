@@ -1,24 +1,22 @@
-import { useCallback, useMemo, type ReactNode } from 'react'
+import { useCallback, useMemo, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { basename } from '@/lib/path'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
-import { getActiveWorkspaceExecutionHostId } from '@/lib/active-workspace-host'
+import type { AppState } from '@/store/types'
+import { worktreeGitCopyHostId } from '@/lib/worktree-git-copy'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getIndexedWorktreeMap } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
   getExecutionHostLabel,
-  parseRoutableExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { selectWorktreeAgentActivitySummary } from '@/components/sidebar/workspace-card/activity/worktree-agent-activity-summary'
 import type { BranchWorkspace } from './branch-picker-rows'
 import { BranchPicker } from './BranchPicker'
-
-const NO_ENTRIES: GitStatusEntry[] = []
+import { useWorkspaceCopyStatus } from './use-workspace-copy-status'
 
 export type WorkspaceBranchPickerProps = {
   worktreeId: string
@@ -30,7 +28,8 @@ export type WorkspaceBranchPickerProps = {
   /** Replaces the generic agent notice, e.g. when the working agent is this chat's own. */
   agentNotice?: string
   trigger?: ReactNode
-  onOpen?: () => void
+  /** Reads status when the picker opens; polling already covers the selected workspace. */
+  refreshOnOpen?: boolean
   onCopyBranch?: () => void
   /** Runs after every landed switch. */
   onLanded: () => void
@@ -46,35 +45,36 @@ export function WorkspaceBranchPicker({
   branch,
   agentNotice,
   trigger,
-  onOpen,
+  refreshOnOpen = false,
   onCopyBranch,
   onLanded
 }: WorkspaceBranchPickerProps) {
   const t = useTranslate()
-  // Status slots are keyed by id alone, so while another host's copy of this id is selected they hold its status.
-  const otherCopySelected = useAppStore((state) => {
-    const selected = getActiveWorkspaceExecutionHostId(state, worktreeId)
-    return selected !== null && (parseRoutableExecutionHostId(selected)?.id ?? selected) !== hostId
+  const [open, setOpen] = useState(false)
+  const { statusKnown, statusReadError, conflictOperation, entries } = useWorkspaceCopyStatus({
+    worktreeId,
+    worktreePath,
+    hostId,
+    open,
+    refreshOnOpen
   })
-  const statusRead = useAppStore(
-    (state) => state.gitStatusHeadByWorktree?.[worktreeId] !== undefined
-  )
-  const statusKnown = statusRead && !otherCopySelected
-  const readError = useAppStore((state) => state.gitStatusReadErrorByWorktree?.[worktreeId])
-  const statusReadError = otherCopySelected ? undefined : readError
-  const conflictOperation = useAppStore(
-    (state) => state.gitConflictOperationByWorktree[worktreeId] ?? 'unknown'
-  )
-  const entries = useAppStore((state) => state.gitStatusByWorktree[worktreeId] ?? NO_ENTRIES)
   const environmentId = target.kind === 'environment' ? target.environmentId : null
-  const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
-  const environmentName = useMemo(
-    () =>
-      environmentId
-        ? runtimeEnvironments.find((host) => host.id === environmentId)?.name
-        : undefined,
-    [environmentId, runtimeEnvironments]
-  )
+  // Cache by list identity and select only the name, so other hosts' edits re-render nothing here.
+  const selectEnvironmentName = useMemo(() => {
+    let source: AppState['runtimeEnvironments'] | undefined
+    let name: string | undefined
+    return (state: AppState): string | undefined => {
+      if (!environmentId) {
+        return undefined
+      }
+      if (state.runtimeEnvironments !== source) {
+        source = state.runtimeEnvironments
+        name = source.find((host) => host.id === environmentId)?.name
+      }
+      return name
+    }
+  }, [environmentId])
+  const environmentName = useAppStore(selectEnvironmentName)
   // Workspace rows need every worktree, not a folder section's owner-only map.
   const worktreeMap = useAppStore((state) => getIndexedWorktreeMap(selectWorktreesByRepo(state)))
   const agentWorking = useAppStore(
@@ -102,7 +102,7 @@ export function WorkspaceBranchPicker({
         const state = useAppStore.getState()
         const selected =
           state.activeWorktreeId === worktreeId &&
-          (state.activeWorkspaceExecutionHostId ?? 'local') === hostId
+          worktreeGitCopyHostId(state, worktreeId) === hostId
         if (selected) {
           toast.warning(message, { duration: 15000 })
         } else {
@@ -159,7 +159,7 @@ export function WorkspaceBranchPicker({
       blocker={blocker}
       dirtyOnlyBlocker={showDirtyBlocker && !agentWorking}
       trigger={trigger}
-      onOpen={otherCopySelected ? undefined : onOpen}
+      onOpenChange={setOpen}
       onCopyBranch={onCopyBranch}
       context={{ target, worktreeId, worktreePath }}
       repoId={repoId}

@@ -4,10 +4,7 @@ import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { WorkspaceBranchPicker } from '@/components/right-sidebar/source-control/branches/WorkspaceBranchPicker'
-import {
-  recordWorktreeBranchSwitchLanded,
-  refreshWorktreeCopyStatus
-} from '@/components/right-sidebar/source-control/branches/workspace-branch-switch-status'
+import { recordWorktreeBranchSwitchLanded } from '@/components/right-sidebar/source-control/branches/workspace-branch-switch-status'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 export function NativeChatComposerBranchPicker({
@@ -32,10 +29,6 @@ export function NativeChatComposerBranchPicker({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const target = useMemo(() => ipcOrRuntimeTargetForHostId(hostId), [hostId])
-  const onOpen = useCallback(
-    () => refreshWorktreeCopyStatus(worktreeId, hostId, worktreePath),
-    [worktreeId, hostId, worktreePath]
-  )
   const onLanded = useCallback(
     () => recordWorktreeBranchSwitchLanded(worktreeId, hostId, worktreePath),
     [worktreeId, hostId, worktreePath]
@@ -59,7 +52,7 @@ export function NativeChatComposerBranchPicker({
             )
           : undefined
       }
-      onOpen={onOpen}
+      refreshOnOpen
       onCopyBranch={onCopyBranch}
       onLanded={onLanded}
       trigger={

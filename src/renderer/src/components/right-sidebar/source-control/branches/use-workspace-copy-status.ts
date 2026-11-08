@@ -1,0 +1,115 @@
+import { useEffect, useState } from 'react'
+import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
+import { resolveWorktreeGitCopyNow } from '@/lib/worktree-git-copy'
+import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type {
+  GitConflictOperation,
+  GitStatusEntry,
+  GitStatusResult
+} from '../../../../../../shared/git/status/git-status-types'
+import { copyOwnsStatusSlot, refreshWorktreeCopyStatus } from './workspace-branch-switch-status'
+
+const NO_ENTRIES: GitStatusEntry[] = []
+
+export type WorkspaceCopyStatus = {
+  statusKnown: boolean
+  statusReadError: string | undefined
+  conflictOperation: GitConflictOperation
+  entries: GitStatusEntry[]
+}
+
+type PrivateRead = { key: string; status?: GitStatusResult; error?: string }
+
+/**
+ * The picker's view of one copy's checkout. The owning copy uses the shared slots; a twin of
+ * another selected copy reads its own status into picker state so neither copy sees the other's.
+ */
+export function useWorkspaceCopyStatus({
+  worktreeId,
+  worktreePath,
+  hostId,
+  open,
+  refreshOnOpen
+}: {
+  worktreeId: string
+  worktreePath: string
+  hostId: ExecutionHostId
+  open: boolean
+  refreshOnOpen: boolean
+}): WorkspaceCopyStatus {
+  const owner = useAppStore((state) => copyOwnsStatusSlot(state, worktreeId, hostId))
+  const head = useAppStore((state) =>
+    owner ? state.gitStatusHeadByWorktree?.[worktreeId] : undefined
+  )
+  const slotReadError = useAppStore((state) =>
+    owner ? state.gitStatusReadErrorByWorktree?.[worktreeId] : undefined
+  )
+  const slotConflict = useAppStore((state) =>
+    owner ? state.gitConflictOperationByWorktree[worktreeId] : undefined
+  )
+  const slotEntries = useAppStore((state) =>
+    owner ? state.gitStatusByWorktree[worktreeId] : undefined
+  )
+  const [read, setRead] = useState<PrivateRead | null>(null)
+  const key = `${hostId}\u0000${worktreeId}\u0000${worktreePath}`
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    if (owner) {
+      if (refreshOnOpen) {
+        refreshWorktreeCopyStatus(worktreeId, hostId, worktreePath)
+      }
+      return
+    }
+    const copy = resolveWorktreeGitCopyNow(worktreeId, hostId)
+    if (!copy) {
+      return
+    }
+    let stale = false
+    void getRuntimeGitStatus(
+      { target: copy.transport, worktreeId, worktreePath, connectionId: copy.connectionId },
+      { admissionTier: 'interactive' }
+    ).then(
+      (status) => {
+        if (!stale) {
+          setRead({ key, status })
+        }
+      },
+      (error: unknown) => {
+        if (!stale) {
+          setRead({
+            key,
+            error:
+              error instanceof Error
+                ? error.message
+                : translate(
+                    'sourceControl.branchPicker.statusFailed',
+                    "Orca couldn't read this checkout's changes. Refresh Source Control before switching."
+                  )
+          })
+        }
+      }
+    )
+    return () => {
+      stale = true
+    }
+  }, [open, owner, refreshOnOpen, worktreeId, hostId, worktreePath, key])
+  if (owner) {
+    return {
+      statusKnown: head !== undefined,
+      statusReadError: slotReadError,
+      conflictOperation: slotConflict ?? 'unknown',
+      entries: slotEntries ?? NO_ENTRIES
+    }
+  }
+  const own = read?.key === key ? read : null
+  return {
+    statusKnown: own?.status !== undefined,
+    statusReadError: own?.error,
+    conflictOperation: own?.status?.conflictOperation ?? 'unknown',
+    entries: own?.status?.entries ?? NO_ENTRIES
+  }
+}
