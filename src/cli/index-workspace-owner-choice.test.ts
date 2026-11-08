@@ -179,6 +179,7 @@ describe('cwd workspace ownership at the real CLI boundary', () => {
               if (json) {
                 expect(JSON.parse(output).error.data.workspaces).toEqual(
                   rows.map((row) => ({
+                    kind: 'worktree',
                     id: row.id,
                     path: row.path,
                     hostId: 'local',
@@ -208,7 +209,7 @@ describe('cwd workspace ownership at the real CLI boundary', () => {
             expect(
               callMock.mock.calls.map(([method]) => method),
               JSON.stringify(args)
-            ).toEqual(['worktree.list'])
+            ).toEqual(['worktree.list', 'folderWorkspace.list'])
           }
         }
       } finally {
@@ -466,7 +467,7 @@ describe('cwd workspace ownership at the real CLI boundary', () => {
           expect(
             JSON.parse(log.mock.calls.flat().join('\n')).error.data.validSelectorForms
           ).toEqual(rows.filter((row) => row !== outside).map((row) => `id:${row.id}`))
-          expect(callMock).toHaveBeenCalledTimes(1)
+          expect(callMock).toHaveBeenCalledTimes(2)
         }
       }
     } finally {
@@ -631,6 +632,9 @@ describe('cwd workspace ownership at the real CLI boundary', () => {
                 delete process.env.ORCA_WORKSPACE_ID
               }
               callMock.mockImplementation(async (method) => {
+                if (method === 'worktree.list') {
+                  return worktreeListFixture([])
+                }
                 if (method === 'folderWorkspace.list') {
                   return okFixture('folders', {
                     folderWorkspaces: ids.map((id) => ({
@@ -657,20 +661,20 @@ describe('cwd workspace ownership at the real CLI boundary', () => {
                 return agentLaunchFixture('folder:r')
               })
               await main([...command, ...(json ? ['--json'] : [])], root.path)
-              expect(callMock.mock.calls.slice(0, 3).map(([method]) => method)).toEqual([
+              expect(callMock.mock.calls.slice(0, 4).map(([method]) => method)).toEqual([
+                'worktree.list',
                 'folderWorkspace.list',
                 'projectGroup.list',
                 'repo.list'
               ])
-              expect(callMock).not.toHaveBeenCalledWith('worktree.list', expect.anything())
               if (caller) {
                 expect(process.exitCode, log.mock.calls.flat().join('')).toBe(prior)
                 expect(callMock).toHaveBeenCalledWith(
                   command[0] === 'ports' ? 'workspacePorts.scanHost' : 'agent.launchReplay',
                   command[0] === 'ports'
-                    ? { worktree: 'id:folder:r' }
+                    ? { worktree: 'folder:r' }
                     : expect.objectContaining({
-                        target: { kind: 'existing', worktree: 'id:folder:r' }
+                        target: { kind: 'existing', worktree: 'folder:r' }
                       })
                 )
               } else {
@@ -682,7 +686,7 @@ describe('cwd workspace ownership at the real CLI boundary', () => {
                       output.split('Workspace choices (JSON data):\n')[1]!.split('\nNext step:')[0]!
                     )
                 expect(choices.map((choice: { selector: string }) => choice.selector)).toEqual(
-                  ids.filter((id) => id !== 'remote').map((id) => `id:folder:${id}`)
+                  ids.filter((id) => id !== 'remote').map((id) => `folder:${id}`)
                 )
                 expect(
                   choices.every((choice: { hostId: string }) => choice.hostId === 'local')
@@ -695,7 +699,7 @@ describe('cwd workspace ownership at the real CLI boundary', () => {
                 if (!json) {
                   expect(output.split('Workspace choices (JSON data):')).toHaveLength(2)
                 }
-                expect(callMock).toHaveBeenCalledTimes(3)
+                expect(callMock).toHaveBeenCalledTimes(4)
               }
             }
           }

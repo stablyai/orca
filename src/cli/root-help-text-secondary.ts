@@ -111,7 +111,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   'Output Options:',
   '  --json                    Emit machine-readable JSON instead of human text',
   '  --pairing-code <code>      Connect to a remote Orca runtime using an orca://pair?... code',
-  '  --environment <selector>   Connect using a saved environment id or name',
+  "  --environment <selector>   Connect using a saved environment id or name; `local` is this machine's own Orca",
   '  --help                    Show this help message',
   '',
   'Behavior:',

@@ -33,6 +33,7 @@ import { parseCliAgent, readCliAgentLaunch } from '../agent-launch-request'
 import { createWorktreeWithAgent } from './worktree-create-agent-launch'
 import { printLineageSummary, printSetParentLine } from './worktree-lineage-summary'
 import { resolveCreateParentFields, resolveSetParentFields } from './worktree-parent-fields'
+import { annotatePsRows, annotateShown } from './worktree-address-annotation'
 import { projectWorktreePsTerminalVerdict } from '../worktree-ps-terminal-verdict'
 import {
   assertWorkspaceTargetFlagsCompatible,
@@ -96,9 +97,10 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     )
     await annotateOmittedHostScope(result.result)
-    const worktrees = result.result.worktrees.map(projectWorktreePsTerminalVerdict)
+    const annotate = await annotatePsRows(client, result.result.worktrees)
+    const worktrees = annotate(result.result.worktrees.map(projectWorktreePsTerminalVerdict))
     printResult({ ...result, result: { ...result.result, worktrees } }, json, () =>
-      formatWorktreePs(result.result)
+      formatWorktreePs({ ...result.result, worktrees: annotate(result.result.worktrees) })
     )
   },
   'worktree list': async ({ flags, client, json }) => {
@@ -117,13 +119,13 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       worktree: await getRequiredWorktreeSelector(flags, 'worktree', cwd, client),
       matchFolderWorkspaces: true
     })
-    printResult(result, json, formatWorktreeShow)
+    printResult(await annotateShown(client, result), json, formatWorktreeShow)
   },
   'worktree current': async ({ client, cwd, json }) => {
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
       worktree: await resolveCurrentWorktreeSelector(cwd, client, 'current')
     })
-    printResult(result, json, formatWorktreeShow)
+    printResult(await annotateShown(client, result), json, formatWorktreeShow)
   },
   'worktree create': async (context) => {
     const { flags, client, cwd, json, rawArgs } = context

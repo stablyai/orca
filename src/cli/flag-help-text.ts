@@ -14,7 +14,7 @@ export const FLAG_HELP_TEXT: Record<string, string> = {
     '--direction <dir>      Direction: up|down|left|right for scroll, horizontal|vertical for split',
   'display-name': '--display-name <name>  Override the Orca display name',
   environment:
-    '--environment <selector> Run against a saved paired Orca server (id or name); terminal handles belong to the server that issued them',
+    "--environment <selector> Run against a saved paired Orca server (id or name), or `local` for this machine's own Orca over ORCA_ENVIRONMENT/ORCA_PAIRING_CODE; terminal handles belong to the server that issued them",
   'pairing-code':
     '--pairing-code <code>  Run against a remote Orca server using an orca://pair?... code',
   'element-index': '--element-index <n>   Element index from get-app-state',
