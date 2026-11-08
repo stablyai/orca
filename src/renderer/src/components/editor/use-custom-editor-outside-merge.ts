@@ -3,10 +3,10 @@ import { create } from 'zustand'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { editorTabFileAccess } from '@/lib/local-file-access'
 import { getRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
-import { readRuntimeFileContent } from '@/runtime/runtime-file-read-client'
+import { readRuntimeFileContent } from '@/runtime/files/reads/runtime-file-read-client'
 import { useAppStore } from '@/store'
-import type { OpenFile } from '@/store/slices/editor'
-import { getDiskBaselineSignature } from '../../../../shared/disk-baseline-signature'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
+import { getDiskBaselineSignature } from '../../../../shared/file-write/disk-baseline-signature'
 import {
   editorModelSiblingTabs,
   setEditorDiskBaseline

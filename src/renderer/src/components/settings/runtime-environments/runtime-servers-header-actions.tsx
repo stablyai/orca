@@ -1,5 +1,5 @@
 import { ArrowUpRight, ChevronDown, Cloud, Link2, Plus, TerminalSquare } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { LoadingSpinner } from '../../LoadingSpinner'
 import { Button } from '../../ui/button'
@@ -46,6 +46,7 @@ export function RuntimeServersHeaderActions({
 }: {
   canGeneratePairingUrl: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const { setDialog } = useRuntimeServersPage()
   const remoteServerUpdates = useAppStore((state) => state.remoteServerUpdates)
   const remoteServerUpdatesChecking = useAppStore((state) => state.remoteServerUpdatesChecking)
@@ -75,11 +76,11 @@ export function RuntimeServersHeaderActions({
         >
           {remoteServerUpdatesRunning ? <LoadingSpinner className="size-3.5" /> : null}
           {remoteServerUpdatesRunning
-            ? translate(
+            ? t(
                 'auto.components.settings.RuntimeEnvironmentsPane.updatingServers',
                 'Updating servers…'
               )
-            : translate('auto.components.settings.serverList.updateAll', 'Update all ({{count}})', {
+            : t('auto.components.settings.serverList.updateAll', 'Update all ({{count}})', {
                 count: availableCount
               })}
         </Button>
@@ -87,7 +88,7 @@ export function RuntimeServersHeaderActions({
       <ButtonGroup>
         <Button type="button" variant="outline" size="sm" onClick={() => setDialog('add')}>
           <Plus />
-          {translate('auto.components.settings.serverList.addServer', 'Add server')}
+          {t('auto.components.settings.serverList.addServer', 'Add server')}
         </Button>
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild>
@@ -95,7 +96,7 @@ export function RuntimeServersHeaderActions({
               type="button"
               variant="outline"
               size="icon-sm"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.settings.serverList.moreWaysToAdd',
                 'More ways to add a server'
               )}
@@ -106,11 +107,8 @@ export function RuntimeServersHeaderActions({
           <DropdownMenuContent align="end" className="w-80">
             <AddServerMenuItem
               icon={<Link2 />}
-              label={translate(
-                'auto.components.settings.serverList.pasteAccessLink',
-                'Paste access link'
-              )}
-              description={translate(
+              label={t('auto.components.settings.serverList.pasteAccessLink', 'Paste access link')}
+              description={t(
                 'auto.components.settings.serverList.pasteAccessLinkHelp',
                 'Pair with Orca already running on another machine.'
               )}
@@ -119,11 +117,11 @@ export function RuntimeServersHeaderActions({
             {canInstall ? (
               <AddServerMenuItem
                 icon={<TerminalSquare />}
-                label={translate(
+                label={t(
                   'auto.components.settings.serverList.setUpOnSshHost',
                   'Set up Orca on an SSH host'
                 )}
-                description={translate(
+                description={t(
                   'auto.components.settings.managedServers.description',
                   'Orca installs itself on an empty SSH host and keeps itself up to date.'
                 )}
@@ -132,9 +130,9 @@ export function RuntimeServersHeaderActions({
             ) : null}
             <AddServerMenuItem
               icon={<Cloud />}
-              label={translate('auto.components.settings.serverList.cloudVm', 'Cloud VM')}
+              label={t('auto.components.settings.serverList.cloudVm', 'Cloud VM')}
               trailing={<ArrowUpRight className="ml-auto" />}
-              description={translate(
+              description={t(
                 'auto.components.settings.serverList.cloudVmHelp',
                 'Created per workspace from an environment recipe.'
               )}

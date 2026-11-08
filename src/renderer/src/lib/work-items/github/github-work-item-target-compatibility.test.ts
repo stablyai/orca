@@ -4,9 +4,9 @@ import {
 } from '../../../../../shared/protocol-version'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { callGitHubTargetOperation } from './github-work-item-target-request'
-import '@/runtime/runtime-rpc-client'
-import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-compatibility-cache'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import '@/runtime/rpc/calls/runtime-rpc-call'
+import { clearRuntimeCompatibilityCache } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as capability } from '../../../../../shared/source-control/runtime/source-control-runtime-capabilities'
 
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => ({ repos: [] }) } }))

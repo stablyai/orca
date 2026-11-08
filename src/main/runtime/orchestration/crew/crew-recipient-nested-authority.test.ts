@@ -15,7 +15,6 @@ import {
 } from '../terminal-authority/structured-sessions/structured-worker-identity'
 import { backfillStructuredWorkerOrcaSessionIds } from '../db/schema/structured-worker-orca-session-backfill'
 import * as recipientRouting from '../../rpc/methods/orchestration/messaging/recipient-routing'
-import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))

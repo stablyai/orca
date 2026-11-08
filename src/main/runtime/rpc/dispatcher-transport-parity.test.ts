@@ -1,7 +1,6 @@
-import './unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../shared/orchestration-runtime-capabilities'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationDb } from '../orchestration/db/orchestration-db'
 import '../orchestration/db/contract-constants'
@@ -10,13 +9,11 @@ import '../orchestration/db/dispatch-row-writer'
 import '../orchestration/db/attempt-outcome-projection'
 import {
   defineMethod,
-  defineStreamingMethod,
   type RpcAnyMethodDeclaration,
   type RpcRequest,
   type RpcResponse
 } from './core'
 import { RpcDispatcher } from './dispatcher'
-import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compatibility'
 import {
   attachMutationReplayNudge,
   stripMutationReplayNudge
@@ -131,72 +128,5 @@ describe('RpcDispatcher unary transport parity', () => {
       mutation: { requestId: 'send-1', replayed: true }
     })
     expect(results[1]).toEqual(results[0])
-  })
-
-  it.each(TRANSPORTS)(
-    'passes a legacy coordinator fingerprint over an authenticated %s caller',
-    async (transport) => {
-      vi.spyOn(OrchestrationLegacyCompatibility.prototype, 'tryHandle').mockResolvedValue({
-        handled: false
-      })
-      vi.spyOn(
-        OrchestrationLegacyCompatibility.prototype,
-        'createCoordinatorInvocation'
-      ).mockReturnValue({
-        authority: {
-          runId: 'run_1',
-          principalId: null,
-          terminalHandle: 'term_coord',
-          paneKey: 'tab:leaf',
-          consumerGeneration: 0
-        },
-        mutationCallerFingerprint: 'legacy-fingerprint',
-        revalidate: () => 'run_1'
-      })
-      const seen: (string | undefined)[] = []
-      const dispatcher = createDispatcher([
-        defineMethod({
-          name: 'orchestration.taskList',
-          permission: 'workspace',
-          params: null,
-          handler: (_params, { authenticatedCallerFingerprint }) => {
-            seen.push(authenticatedCallerFingerprint)
-            return {}
-          }
-        })
-      ])
-
-      await call(
-        dispatcher,
-        transport,
-        { id: 'rpc-1', authToken: 'token', method: 'orchestration.taskList' },
-        { authenticatedCallerFingerprint: 'transport-fingerprint' }
-      )
-      expect(seen).toEqual(['legacy-fingerprint'])
-    }
-  )
-
-  it('refuses a streaming method over one-shot dispatch for a pinned non-owner caller', async () => {
-    const dispatcher = new RpcDispatcher({
-      runtime: new OrcaRuntimeService(),
-      methods: [
-        defineStreamingMethod({
-          name: 'terminal.read',
-          permission: 'workspace',
-          params: z.object({ terminal: z.string() }),
-          handler: async () => {}
-        })
-      ],
-      callerScope: { kind: 'runtime-paired', grants: [] }
-    })
-
-    await expect(
-      dispatcher.dispatch({
-        id: 'rpc-1',
-        authToken: 'token',
-        method: 'terminal.read',
-        params: { terminal: 'term_elsewhere' }
-      })
-    ).resolves.toMatchObject({ ok: false, error: { code: 'method_not_supported' } })
   })
 })

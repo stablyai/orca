@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { isAgentSessionId } from '../agent-session/lifecycle/agent-session-record'
 import { AGENT_SESSION_ID_MAX_LENGTH } from '../agent-session/agent-session-wire'
 

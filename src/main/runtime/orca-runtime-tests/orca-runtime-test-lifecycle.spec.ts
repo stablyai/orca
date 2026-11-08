@@ -87,7 +87,7 @@ import { addWorktree } from '../../git/worktrees/creation/worktree-add'
 import { advertisedUrlWatcher } from '../../ports/advertised-url-watcher'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { assertWorktreeCleanForRemoval } from '../../git/worktrees/removal/worktree-removal-preflight'
-import { __cancelLegacyWorkerTerminalRecoveryRetriesForTests as cancelLegacyWorkerTerminalRecoveryRetriesForTests } from '../runtime-legacy-worker-terminal-recovery-controller'
+import { __cancelLegacyWorkerTerminalRecoveryRetriesForTests as cancelLegacyWorkerTerminalRecoveryRetriesForTests } from '../orchestration/terminal-authority/runtime-legacy-worker-terminal-recovery-controller'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../../git/worktrees/content-paths/worktree-shared-directories'
 import {
   createSetupRunnerScript,
@@ -114,12 +114,12 @@ import {
   setRuntimeBrowserCommandsFactory,
   setRuntimeBrowserUnavailableCause
 } from '../browser/installation/runtime-browser-commands-factory'
-import { setRuntimeDesktopSurface } from '../runtime-desktop-surface'
-import { setRuntimeTerminalUnavailableCause } from '../native-terminal-availability'
+import { setRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
+import { setRuntimeTerminalUnavailableCause } from '../terminal/launch/native-terminal-availability'
 import { OrcaRuntimeService as runtimeMockOrcaRuntimeService } from '../orca-runtime'
 import type { MockInstance } from 'vitest'
 import * as worktreeChangeInvalidators from '../../ipc/worktrees/listing/worktree-change-invalidators'
-import { awaitBackgroundRemovalsInRuntimeTests } from '../orca-runtime-background-removal-test-support'
+import { awaitBackgroundRemovalsInRuntimeTests } from '../workspaces/removal/orca-runtime-background-removal-test-support'
 import { commitFakeSpawnsInRuntimeTests } from './bind-first-pane.test-fixture'
 import {
   _resetPendingWorktreeRemovalsForTests,

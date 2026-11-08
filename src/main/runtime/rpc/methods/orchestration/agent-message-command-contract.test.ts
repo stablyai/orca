@@ -45,7 +45,7 @@ import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
-} from '../../../../../shared/protocol-version'
+} from '../../../../../shared/orchestration-runtime-capabilities'
 import {
   agentSessionMessagePayload,
   agentSessionSendBodyFingerprint

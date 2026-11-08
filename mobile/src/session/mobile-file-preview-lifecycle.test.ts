@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { hookMount, performHookAction } from '../test-support/rpc-recording/hook-mount'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
+import { stubRpcClient } from '../transport/rpc-client-test-stub'
 import type { RpcResponse } from '../transport/types'
 import type { FileDocState, MobileSessionTab } from './mobile-session-route-types'
 import { useMobileSessionCloseActions } from './use-mobile-session-close-actions'
@@ -58,7 +59,7 @@ function previewSession() {
   const sessionTabsRef: { current: MobileSessionTab[] } = { current: [keptTab] }
   const reads: ReturnType<typeof pendingReadReply>[] = []
   let closeReply: RpcResponse | Error = acceptedReply({})
-  const client = {
+  const client = stubRpcClient({
     sendRequest: vi.fn(async (method: string): Promise<RpcResponse> => {
       if (method === 'session.tabs.close') {
         if (closeReply instanceof Error) {
@@ -71,7 +72,7 @@ function previewSession() {
       reads.push(read)
       return read.promise
     })
-  }
+  })
   const setFileDocs: Dispatch<SetStateAction<Map<string, FileDocState>>> = (update) => {
     docs = typeof update === 'function' ? update(docs) : update
   }
@@ -85,6 +86,7 @@ function previewSession() {
         sessionTabsRef,
         setSessionTabs: () => {},
         setFileDocs,
+        forgetLastSessionTab: () => {},
         closedTabTombstonesRef: { current: new Map() },
         pendingBrowserFocusPageIdRef: { current: null },
         activeSessionTabIdRef: { current: keptTab.id },

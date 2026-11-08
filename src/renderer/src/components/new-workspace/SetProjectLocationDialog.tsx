@@ -7,7 +7,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { CreateProjectParentBrowser } from '@/components/sidebar/project-admission/create/CreateProjectLocationField'
 import {
@@ -99,6 +99,7 @@ function SetProjectLocationDialogBody({
   exitHostBrowser: RefObject<(() => boolean) | null>
   onReady: (setupId: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const setupProjectExistingFolder = useAppStore((state) => state.setupProjectExistingFolder)
   const setupProjectClone = useAppStore((state) => state.setupProjectClone)
   const [view, setView] = useState<DialogView>('choose')
@@ -206,13 +207,13 @@ function SetProjectLocationDialogBody({
     <>
       <DialogHeader>
         <DialogTitle>
-          {translate(
+          {t(
             'auto.components.new.workspace.SetProjectLocationDialog.title',
             'Set project location'
           )}
         </DialogTitle>
         <DialogDescription>
-          {translate(
+          {t(
             'auto.components.new.workspace.SetProjectLocationDialog.description',
             'Choose where {{project}} lives on {{host}}.',
             { project: projectName, host: option.label }
@@ -223,11 +224,11 @@ function SetProjectLocationDialogBody({
         <div className="space-y-2">
           <LocationActionButton
             icon={FolderOpen}
-            title={translate(
+            title={t(
               'auto.components.new.workspace.SetProjectLocationDialog.browseFolder',
               'Browse folder'
             )}
-            description={translate(
+            description={t(
               'auto.components.new.workspace.SetProjectLocationDialog.browseFolderHelp',
               'Use an existing checkout or folder on this host.'
             )}
@@ -242,11 +243,11 @@ function SetProjectLocationDialogBody({
           {canClone ? (
             <LocationActionButton
               icon={Download}
-              title={translate(
+              title={t(
                 'auto.components.new.workspace.SetProjectLocationDialog.cloneFromUrl',
                 'Clone from URL'
               )}
-              description={translate(
+              description={t(
                 'auto.components.new.workspace.SetProjectLocationDialog.cloneFromUrlHelp',
                 'Clone this repository onto {{host}}.',
                 { host: option.label }

@@ -5,9 +5,9 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import './agent-status'
 import { MAX_LIVE_AGENT_STATUSES } from './agent-status-capacity-eviction'
-import { createTestStore } from '../store-test-helpers'
-import { makeTab } from '../store-session-test-harness'
-import { makeWorktree } from '../worktrees-slice-test-fixtures'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import { makeTab } from '../../terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
 import type { AppState } from '../../types'
 
 // Use the production payload limits so the regression represents the leaked byte weight.

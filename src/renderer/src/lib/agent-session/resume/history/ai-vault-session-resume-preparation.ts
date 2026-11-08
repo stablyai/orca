@@ -17,10 +17,10 @@ import {
   parseExecutionHostId,
   parseRoutableExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { browseRuntimeServerDirectory } from '@/runtime/runtime-server-directory-browser'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import type { FilesystemPathFlavor } from '../../../../../../shared/filesystem-entry-types'
+import { browseRuntimeServerDirectory } from '@/runtime/files/reads/runtime-server-directory-browser'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
+import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
+import type { FilesystemPathFlavor } from '../../../../../../shared/file-access/filesystem-path-flavor'
 import { isWindowsAbsolutePathLike } from '../../../../../../shared/cross-platform-path'
 import { readIpcErrorMessage } from '../../../ipc-error'
 import type { AiVaultResumeCommandSession } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'

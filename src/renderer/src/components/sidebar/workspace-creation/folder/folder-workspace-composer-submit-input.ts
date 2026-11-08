@@ -27,6 +27,7 @@ export type SubmitFolderWorkspaceCreateParams = {
   note: string
   quickAgent: TuiAgent | null
   launchChoice?: AgentLaunchChoice
+  legacyLaunchInputs?: AgentLaunchInputViews
   launchInputs?: AgentLaunchInputViews
   sessionOptions?: Record<string, string>
   chatSessionOptions?: Readonly<Record<string, string>>

@@ -71,6 +71,7 @@ export function PrReviewersSheet({
   const searching = query.trim().length > 0
   // Candidates belong to this open request's repository; closing or a PR departure ends their visit at once.
   const people = useReviewerPeople({
+    hostId: tab.hostId,
     client,
     worktreeId,
     prRepo: readyPrData(tab)?.pr.prRepo ?? null,
@@ -78,12 +79,12 @@ export function PrReviewersSheet({
     search: searching
   })
   const { users, error } = people
-  const { hostConnection } = tab
-  const presentedConnState = useCalmConnectionState(people.state, hostConnection.lastConnectedAt)
+  const { hostConnection, connState } = tab
+  const presentedConnState = useCalmConnectionState(connState, hostConnection.lastConnectedAt)
   // Without candidates, an outage the calm presentation reveals explains the wait with the header's verdict.
   const connectionLabel =
-    !users && !error && people.state !== 'connected' && presentedConnState !== 'connected'
-      ? verdictDisplayLabel(classifyConnection({ state: people.state, ...hostConnection }))
+    !users && !error && connState !== 'connected' && presentedConnState !== 'connected'
+      ? verdictDisplayLabel(classifyConnection({ state: connState, ...hostConnection }))
       : null
 
   const rows = useMemo(

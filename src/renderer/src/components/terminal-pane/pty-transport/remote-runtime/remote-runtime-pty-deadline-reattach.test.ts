@@ -22,7 +22,7 @@ import {
 import type { RuntimeMobileSessionTabsResult } from '../../../../../../shared/runtime-session-contracts'
 import './recovery/remote-runtime-pty-recovery-state'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './recovery/remote-runtime-pty-recovery-limits'
-import { stubRuntimeEnvironmentBridge } from '../../../../runtime/runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from '../../../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 describe('remote runtime pty reattach after the bounded recovery window', () => {
   const runtimeCall = vi.fn()
@@ -162,8 +162,10 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
 
   beforeEach(() => {
     vi.resetModules()
-    vi.doUnmock('../../../../runtime/remote-runtime-terminal-multiplexer')
-    vi.doMock('@/runtime/web-runtime-session-snapshot', () => ({
+    vi.doUnmock(
+      '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
+    )
+    vi.doMock('@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot', () => ({
       refreshWebRuntimeSessionTabsSnapshot: refreshSessionTabsSnapshot
     }))
     vi.clearAllMocks()
@@ -205,7 +207,8 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
     vi.useFakeTimers()
     try {
       const { transport, onPtyExit } = await attachStalePane()
-      const handleEvents = await import('../../../../runtime/web-session-terminal-handle-events')
+      const handleEvents =
+        await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
 
       await vi.advanceTimersByTimeAsync(16_000)
       expect(handleEvents.getWebSessionTerminalHandleSubscriberCountForTests()).toBe(1)
@@ -238,7 +241,8 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
     vi.useFakeTimers()
     try {
       const { transport, onError } = await attachStalePane()
-      const handleEvents = await import('../../../../runtime/web-session-terminal-handle-events')
+      const handleEvents =
+        await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
 
       await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
@@ -266,7 +270,8 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
     vi.useFakeTimers()
     try {
       const { transport } = await attachStalePane()
-      const handleEvents = await import('../../../../runtime/web-session-terminal-handle-events')
+      const handleEvents =
+        await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
 
       await vi.advanceTimersByTimeAsync(16_000)
       expect(transport.getRecoveryState?.().phase).not.toBe('disconnected')
@@ -288,7 +293,8 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
     vi.useFakeTimers()
     try {
       const { transport, onError } = await attachStalePane()
-      const handleEvents = await import('../../../../runtime/web-session-terminal-handle-events')
+      const handleEvents =
+        await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
 
       await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
@@ -319,7 +325,8 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
     vi.useFakeTimers()
     try {
       const { transport, onError } = await attachStalePane()
-      const handleEvents = await import('../../../../runtime/web-session-terminal-handle-events')
+      const handleEvents =
+        await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
       const { retryAllRemoteRuntimePtyRecoveriesNow } =
         await import('./recovery/remote-runtime-pty-recovery-state')
 
@@ -398,7 +405,8 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
     vi.useFakeTimers()
     try {
       const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
-      const handleEvents = await import('../../../../runtime/web-session-terminal-handle-events')
+      const handleEvents =
+        await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
       const transport = createRemoteRuntimePtyTransport('env-1', {
         worktreeId: 'wt-1',
         tabId: 'web-terminal-tab-1',
@@ -451,7 +459,8 @@ describe('remote runtime pty reattach after the bounded recovery window', () => 
     vi.useFakeTimers()
     try {
       const { transport } = await attachStalePane()
-      const handleEvents = await import('../../../../runtime/web-session-terminal-handle-events')
+      const handleEvents =
+        await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
       const { retryAllRemoteRuntimePtyRecoveriesNow } =
         await import('./recovery/remote-runtime-pty-recovery-state')
       await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS + 6_000)

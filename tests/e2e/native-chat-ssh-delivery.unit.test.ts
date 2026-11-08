@@ -1,4 +1,3 @@
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   createSshDelivery,
@@ -8,11 +7,11 @@ import {
 } from './__mocks__/native-chat-ssh-delivery'
 import {
   sendNativeChatAskAnswer,
-  sendNativeChatMessageVerified,
-  resetNativeChatPtySendQueuesForTests
-} from '../../src/renderer/src/components/native-chat/native-chat-runtime-send'
+  sendNativeChatMessageVerified
+} from '../../src/renderer/src/components/native-chat/session/terminal/send/native-chat-runtime-send'
+import { resetNativeChatPtySendQueuesForTests } from '../../src/renderer/src/components/native-chat/session/terminal/send/native-chat-pty-send-queue'
 import { buildAskAnswerKeys } from '../../src/shared/native-chat/input/native-chat-ask-answer'
-import { sendRuntimePtyInputVerified } from '@/runtime/runtime-terminal-verified-input'
+import { sendRuntimePtyInputVerified } from '@/runtime/hosted-terminals/input/runtime-terminal-verified-input'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal'
 import { sendAgentDraftPasteContentNow } from '../../src/renderer/src/lib/agent-draft-paste-content'

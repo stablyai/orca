@@ -1,4 +1,4 @@
-import { inspectRuntimeTerminalProcess } from '@/runtime/runtime-terminal-inspection'
+import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 import { pasteDraftToAgentPtyWhenReady } from '@/lib/agent-paste-draft'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import {

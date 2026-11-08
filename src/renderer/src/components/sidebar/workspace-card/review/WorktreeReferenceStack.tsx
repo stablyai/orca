@@ -12,34 +12,30 @@ import {
   type WorkspaceReferenceDetailsMap
 } from './workspace-reference-details'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import '../activity/worktree-card-empty-inputs'
 import { checksLabel } from './workspace-review-check-label'
 const EMPTY_DETAILS: WorkspaceReferenceDetailsMap = {}
 
-function singleReferenceLabel(item: WorkspaceAttachment): string {
+function singleReferenceLabel(item: WorkspaceAttachment, t: Translate = translate): string {
   if (item.provider === 'linear') {
-    return translate(
-      'auto.components.sidebar.WorktreeCardMeta.b105fd3057',
-      'Linked Linear {{value0}}',
-      { value0: item.identifier ?? item.linearIdentifier }
-    )
+    return t('auto.components.sidebar.WorktreeCardMeta.b105fd3057', 'Linked Linear {{value0}}', {
+      value0: item.identifier ?? item.linearIdentifier
+    })
   }
   if (item.provider === 'jira') {
-    return translate(
-      'auto.components.sidebar.WorktreeCardMeta.linkedJira',
-      'Linked Jira {{value0}}',
-      { value0: item.identifier ?? item.jiraIdentifier }
-    )
+    return t('auto.components.sidebar.WorktreeCardMeta.linkedJira', 'Linked Jira {{value0}}', {
+      value0: item.identifier ?? item.jiraIdentifier
+    })
   }
   return item.type === 'issue'
-    ? translate('auto.components.sidebar.WorktreeCardMeta.3f2649eeb8', 'Linked issue #{{value0}}', {
+    ? t('auto.components.sidebar.WorktreeCardMeta.3f2649eeb8', 'Linked issue #{{value0}}', {
         value0: item.number
       })
-    : translate(
-        'auto.components.sidebar.WorktreeCardMeta.3ea2702e62',
-        'Linked {{value0}} #{{value1}}',
-        { value0: item.type === 'mr' ? 'MR' : 'PR', value1: item.number }
-      )
+    : t('auto.components.sidebar.WorktreeCardMeta.3ea2702e62', 'Linked {{value0}} #{{value1}}', {
+        value0: item.type === 'mr' ? 'MR' : 'PR',
+        value1: item.number
+      })
 }
 
 function ReferenceGlyph({
@@ -114,6 +110,7 @@ export function WorktreeReferenceStack({
   items: readonly WorkspaceAttachment[]
   details?: WorkspaceReferenceDetailsMap
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const ordered = [...items].sort((a, b) => priority(a, details) - priority(b, details))
   const front = ordered[0]
   if (!front) {
@@ -127,7 +124,7 @@ export function WorktreeReferenceStack({
       return [
         workspaceAttachmentLabel(item),
         review?.state ?? detail?.stateName,
-        status === 'cancelled' ? checksLabel(status) : status
+        status === 'cancelled' ? checksLabel(status, t) : status
       ]
         .filter(Boolean)
         .join(' · ')
@@ -166,8 +163,8 @@ export function WorktreeReferenceStack({
       ) : null}
       <span className="sr-only">
         {items.length === 1
-          ? singleReferenceLabel(front)
-          : translate('workspace.links.stackSummary', '{{count}} linked: {{references}}', {
+          ? singleReferenceLabel(front, t)
+          : t('workspace.links.stackSummary', '{{count}} linked: {{references}}', {
               count: items.length,
               references: summary
             })}

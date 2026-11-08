@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
-import { writeDurableSecureJsonFile } from '../../../shared/secure-file'
+import { writeDurableSecureJsonFile } from '../../../shared/secure-storage/secure-file'
 import { wslMoveJournalKey } from '../../../shared/wsl-move/wsl-move-cutover'
 import type { WslMoveOrchestratorRecord } from '../../../shared/wsl-move/wsl-move-orchestrator-types'
 

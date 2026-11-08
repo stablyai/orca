@@ -1,12 +1,11 @@
-import { useEffect, useEffectEvent, useRef, type MutableRefObject } from 'react'
+import { useEffect, useEffectEvent, useRef } from 'react'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../shared/keybindings'
-import type { DictationState } from '../../../../shared/speech-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 type HoldDictationGestureOptions = {
-  dictationStateRef: MutableRefObject<DictationState>
+  canStartDictation: () => boolean
   keybindings: KeybindingOverrides
   settings: GlobalSettings | null
   startDictation: () => Promise<void> | void
@@ -104,7 +103,7 @@ function createHoldDictationReleaseMatcher(event: KeyboardEvent): HoldDictationR
 }
 
 export function useHoldDictationGesture({
-  dictationStateRef,
+  canStartDictation,
   keybindings,
   settings,
   startDictation,
@@ -116,6 +115,7 @@ export function useHoldDictationGesture({
   // Settings and keybinding refreshes re-create these inputs; re-running the effect would end a held dictation.
   const start = useEffectEvent(() => void startDictation())
   const stop = useEffectEvent(() => void stopDictation())
+  const canStart = useEffectEvent(() => canStartDictation())
   const matchesShortcut = useEffectEvent((e: KeyboardEvent) =>
     keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings)
   )
@@ -149,7 +149,7 @@ export function useHoldDictationGesture({
       }
       const hold = activeHoldRef.current
       // One dictation per press: key repeat after an automatic stop must not start another.
-      if (hold && !hold.startedDictation && dictationStateRef.current === 'idle') {
+      if (hold && !hold.startedDictation && canStart()) {
         hold.startedDictation = true
         start()
       }
@@ -179,5 +179,5 @@ export function useHoldDictationGesture({
       window.removeEventListener('blur', endHold)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
-  }, [mode, enabled, dictationStateRef])
+  }, [mode, enabled])
 }

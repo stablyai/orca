@@ -15,7 +15,6 @@ import type {
   AgentSessionCancelResult,
   AgentSessionMutationEnvelope,
   AgentSessionOptionResult,
-  AgentSessionPromptResult,
   AgentSessionQueuedSendReceipt,
   AgentSessionSendResult
 } from '../../../../shared/agent-session/agent-session-wire'
@@ -35,19 +34,11 @@ import {
   STRUCTURED_AGENT_SESSION_COMPACT_COMMAND,
   structuredAgentSessionCompactBody
 } from './structured-agent-session-command-turn'
-import { performSend } from './structured-agent-session-turns'
 import {
-  performPrompt,
-  acceptedPromptAnswer,
-  promptAnswerReceipt,
-  promptRowAnswer,
-  type AgentSessionPromptRequest
-} from './structured-agent-session-turns-prompt'
-
-import type {
-  AgentSessionTurnContext,
-  AgentSessionReplayContext,
-  TurnOutcome
+  performSend,
+  type AgentSessionTurnContext,
+  type AgentSessionReplayContext,
+  type TurnOutcome
 } from './structured-agent-session-turns'
 
 import { queuedSendAnswer } from '../delivery/structured-agent-session-queued-send-answer'
@@ -56,7 +47,6 @@ import { runTargetedCancel } from './structured-agent-session-targeted-cancel'
 import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import type { CommandReceiptResult } from '../../agent-session-journal/writing/command-receipt-schema'
 import type { JournalRow } from '../../agent-session-journal/durable-rows/journal-row-schema'
-import { refusingNewerOrcaJournal } from '../../agent-session-journal/replay/journal-open-failure'
 
 export type MutationPlan<TValue> = {
   method: string
@@ -154,7 +144,6 @@ export function sendPlan(
     recoverUnknownFromDurableState: true,
     // retryUnknown is compatibility-only; recorded sends replay without redelivery.
     run: async (ctx) => {
-      params.beforeRun?.()
       const source = sendSource(params)
       return performSend(ctx, {
         origin: params.userSend ? 'client' : 'host',
@@ -168,12 +157,7 @@ export function sendPlan(
       })
     },
     replay: (ctx, outcome) => {
-      // Replay requested queue sends from card/handoff, including withdrawn cards; direct sends
-      // must answer from submissions readable by clients that never supplied delivery.
-      const queued =
-        params.delivery === 'queue-if-active'
-          ? queuedSendAnswer(ctx.journal, clientMessageId)
-          : null
+      const queued = queuedSendAnswer(ctx.journal, clientMessageId)
       if (queued) {
         return queued
       }
@@ -236,11 +220,7 @@ export function conversationCommandPlan(params: {
       return sent.ok ? { ok: true, value: { clientMessageId } } : sent
     },
     replay: (ctx) => {
-      // Only queue-requesting commands may replay from cards before their submission exists.
-      const queued =
-        params.delivery === 'queue-if-active'
-          ? queuedSendAnswer(ctx.journal, clientMessageId)
-          : null
+      const queued = queuedSendAnswer(ctx.journal, clientMessageId)
       if (queued) {
         return 'queued' in queued
           ? { queued: queued.queued }
@@ -284,27 +264,6 @@ export function cancelPlan(params: {
       runTargetedCancel(ctx, { ...params, clientOperationId: params.envelope.clientOperationId }),
     // Retry must not interrupt again and accidentally cut a later turn.
     replay: () => ({ ...named, cancelled: false })
-  }
-}
-
-export function promptPlan(
-  params: AgentSessionPromptRequest
-): MutationPlan<AgentSessionPromptResult> {
-  return {
-    method: `agentSession.respondTo:${params.kind}`,
-    fields: {
-      itemId: params.itemId,
-      expectedRevision: params.expectedRevision,
-      optionId: params.optionId,
-      answers: params.answers
-    },
-    // Retain the resolved or previously recorded prompt answer in the receipt.
-    commandReceipt: {
-      result: (row) => promptAnswerReceipt(promptRowAnswer(row)),
-      unwritten: (value) => promptAnswerReceipt(value)
-    },
-    run: (ctx) => refusingNewerOrcaJournal(performPrompt(ctx, params)),
-    replay: (_ctx, _outcome, receipt) => acceptedPromptAnswer(receipt)
   }
 }
 

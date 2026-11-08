@@ -16,10 +16,10 @@ import {
   makeWorkspaceSessionWithHeadlessTerminal
 } from './orca-runtime-test-fixtures.spec'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
-import type { PtyProcessInfo } from '../../providers/pty-provider-contract'
+import type { PtyProcessInfo } from '../../providers/pty-process-info'
 import { deterministicAgentSessionUuid } from '../terminal/launch/runtime-agent-launch-resolution'
 import { deriveRemoteRuntimeTerminalCreateHandle } from '../terminal/identity/remote-runtime-terminal-create-identity'
-import type { RuntimePtyController } from '../runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../terminal/lifecycle/runtime-pty-controller-contract'
 import { agentSessionConversationView } from '../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import { AgentSessionRecordStore } from '../agent-session/records/agent-session-record-store'
 import {

@@ -95,7 +95,7 @@ function HostAutomations(props: {
   useMobileColorScheme()
   const desktop = useHostDisplay(props.host).title
   const { client } = useHostClient(props.host.id)
-  const catalog = useAutomationCatalog(client, false)
+  const catalog = useAutomationCatalog(props.host.id, client)
   const history = useAutomationRuns(client, null, catalog.revision, catalog.connected)
   const enabled = useOptimisticEnabled(catalog)
   const reducedMotion = useReducedMotionEnabled() === true

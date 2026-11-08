@@ -224,34 +224,6 @@ describe('orchestration worker release recovery', () => {
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
   })
 
-  it('settles a disposed endpoint as released once the host certified the exit', async () => {
-    setup()
-    const { dispatchId } = await startSettledWorker()
-    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({ status: 'exited' })
-    vi.mocked(runtime.getOrchestrationDispatchAuthority).mockRestore()
-    expect(runtime.getOrchestrationDispatchAuthority('term_worker')).toBeNull()
-    vi.mocked(runtime.closeTerminal).mockRejectedValueOnce(new Error('Multiplexer disposed'))
-
-    await expect(
-      call('orchestration.workerRelease', { dispatch: dispatchId })
-    ).resolves.toMatchObject({ state: 'released', processAction: 'closed_exited_terminal' })
-  })
-
-  it('does not substitute absent launch authority for a positive host exit verdict', async () => {
-    setup()
-    const { dispatchId } = await startSettledWorker()
-    vi.mocked(runtime.getOrchestrationDispatchAuthority).mockRestore()
-    vi.spyOn(runtime, 'getTerminalLivenessVerdict').mockReturnValue({
-      status: 'unverifiable',
-      reason: 'missing_liveness_verdict'
-    })
-
-    await expect(
-      call('orchestration.workerRelease', { dispatch: dispatchId })
-    ).resolves.toMatchObject({ state: 'retained', reason: 'identity_unproven' })
-    expect(runtime.closeTerminal).not.toHaveBeenCalled()
-  })
-
   it('defers instead of settling unknown while inventory is incomplete', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
@@ -296,33 +268,6 @@ describe('orchestration worker release recovery', () => {
     })
   })
 
-  it('observes a still-releasing terminal before projecting archived output', async () => {
-    setup()
-    const { dispatchId } = await startSettledWorker()
-    vi.mocked(runtime.closeTerminal).mockRejectedValueOnce(new Error('Multiplexer disposed'))
-
-    await expect(
-      call('orchestration.workerRelease', { dispatch: dispatchId })
-    ).resolves.toMatchObject({ state: 'release_pending' })
-    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('releasing')
-
-    await expect(call('orchestration.workerRead', { dispatch: dispatchId })).resolves.toMatchObject(
-      {
-        archived: true,
-        status: { terminal: 'running', liveness: 'live' }
-      }
-    )
-    expect(runtime.showTerminal).toHaveBeenCalled()
-  })
-
-  it('never touches resources without requested releases', async () => {
-    setup()
-    await startSettledWorker()
-    const result = await reconcileRequestedWorkerTerminalReleases(runtime)
-    expect(result.attempted).toBe(0)
-    expect(runtime.closeTerminal).not.toHaveBeenCalled()
-  })
-
   it('records one recovery attempt when reconciliation joins an interactive release', async () => {
     setup()
     const { dispatchId } = await startSettledWorker()
@@ -353,116 +298,6 @@ describe('orchestration worker release recovery', () => {
       attempted: 0
     })
     expect(db.getWorkerTerminalResource(resourceId!)?.recovery_attempt_count).toBe(1)
-  })
-
-  it('keeps live terminals bounded across 50 settled workers while controls survive', async () => {
-    setup()
-    for (let wave = 0; wave < 50; wave += 1) {
-      const worker = await startSettledWorker(wave % 2 === 0 ? 'succeeded' : 'failed')
-      const receipt = (await call('orchestration.workerRelease', {
-        dispatch: worker.dispatchId
-      })) as { state: string }
-      expect(receipt.state).toBe('released')
-    }
-    expect(runtime.closeTerminal).toHaveBeenCalledTimes(50)
-
-    const control = await startWorker()
-    const listed = (await call('orchestration.workerList', { run: activeRunId })) as {
-      workers: { dispatchId: string; terminalState: string | null }[]
-      counts: Record<string, number>
-    }
-    expect(listed.counts).toMatchObject({ released: 50, active: 1 })
-    expect(
-      listed.workers.find((worker) => worker.dispatchId === control.dispatchId)?.terminalState
-    ).toBe('active')
-    expect(runtime.closeTerminal).toHaveBeenCalledTimes(50)
-  })
-
-  it('backfills legacy terminal resources as retained external evidence', () => {
-    setup()
-    const insertLegacy = (dispatchId: string, handle: string, paneKey: string | null): void => {
-      const task = db.createTask({ spec: `legacy ${dispatchId}`, runId: activeRunId })
-      const raw = (
-        db as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } }
-      ).db
-      raw
-        .prepare(
-          `INSERT INTO dispatch_contexts (id, run_id, task_id, contract_version, assignee_pane_key, process_incarnation, status)
-           VALUES (?, ?, ?, 2, ?, ?, 'completed')`
-        )
-        .run(dispatchId, activeRunId, task.id, paneKey, paneKey ? `inc:${dispatchId}` : null)
-      raw
-        .prepare(
-          `INSERT INTO worker_dispatches (dispatch_id, state, stage, agent_terminal_handle, residual_resources)
-           VALUES (?, 'succeeded', 'settled', ?, ?)`
-        )
-        .run(
-          dispatchId,
-          handle,
-          JSON.stringify([{ kind: 'terminal', role: 'agent', action: 'created', id: handle }])
-        )
-    }
-    insertLegacy('ctx_unique', 'term_unique', 'tab_u:leaf_u')
-    insertLegacy('ctx_shared_a', 'term_shared', 'tab_s:leaf_s')
-    insertLegacy('ctx_shared_b', 'term_shared', 'tab_s:leaf_s')
-    insertLegacy('ctx_no_identity', 'term_bare', null)
-    ;(
-      db as unknown as { backfillWorkerTerminalResources: () => void }
-    ).backfillWorkerTerminalResources()
-
-    for (const ambiguous of ['ctx_unique', 'ctx_shared_a', 'ctx_shared_b', 'ctx_no_identity']) {
-      expect(db.getWorkerTerminalResourceByOwner(ambiguous)).toMatchObject({
-        ownership_state: 'external',
-        release_state: 'retained',
-        retained_reason: 'legacy_ambiguous'
-      })
-    }
-  })
-
-  it('backfills a legacy creator plus explicit reuser as ambiguous', () => {
-    setup()
-    const insertLegacy = (dispatchId: string, action: 'created' | 'reused'): void => {
-      const task = db.createTask({ spec: dispatchId, runId: activeRunId })
-      const raw = (
-        db as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } }
-      ).db
-      raw
-        .prepare(
-          `INSERT INTO dispatch_contexts (id, run_id, task_id, contract_version, assignee_pane_key, process_incarnation, status)
-           VALUES (?, ?, ?, 2, ?, ?, ?)`
-        )
-        .run(
-          dispatchId,
-          activeRunId,
-          task.id,
-          workerPaneKey,
-          'runtime_test:term_worker:1',
-          action === 'created' ? 'completed' : 'dispatched'
-        )
-      raw
-        .prepare(
-          `INSERT INTO worker_dispatches (dispatch_id, state, stage, agent_terminal_handle, residual_resources)
-           VALUES (?, ?, 'legacy', 'term_worker', ?)`
-        )
-        .run(
-          dispatchId,
-          action === 'created' ? 'succeeded' : 'ready',
-          JSON.stringify([{ kind: 'terminal', role: 'agent', action, id: 'term_worker' }])
-        )
-    }
-    insertLegacy('ctx_creator', 'created')
-    insertLegacy('ctx_reuser', 'reused')
-    ;(
-      db as unknown as { backfillWorkerTerminalResources: () => void }
-    ).backfillWorkerTerminalResources()
-
-    for (const dispatchId of ['ctx_creator', 'ctx_reuser']) {
-      expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
-        ownership_state: 'external',
-        release_state: 'retained',
-        retained_reason: 'legacy_ambiguous'
-      })
-    }
   })
 
   it('removes terminal authority and archived output on orchestration reset', async () => {

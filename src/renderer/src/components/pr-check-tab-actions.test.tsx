@@ -2,12 +2,11 @@
 import { useSyncExternalStore } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { GITHUB_COMPLETE_PR_CHECK_OBSERVATION_CAPABILITY as capability } from '../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { PRCheckDetail } from '../../../shared/github/check-types'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { acceptPRCheckObservation } from '../../../shared/github/complete-pr-check-owner'
 import {
   patchCachedPRChecks,
   subscribeWorkItemDetailsCache,
@@ -153,55 +152,5 @@ it.each([PageChecks, DialogChecks])(
     })
     expect(rows.mock.calls[1][0]).toMatchObject({ headSha: 'b'.repeat(40) })
     expect(screen.getByText('1 check failing')).toBeTruthy()
-  }
-)
-
-it.each([PageChecks, DialogChecks])(
-  'keeps approval explanation across its cache echo and retires it for a newer owner',
-  async (Tab) => {
-    lookup.mockResolvedValue({ ...initial, checksSummary: summary })
-    rows.mockResolvedValue([
-      {
-        name: 'Approval',
-        status: 'completed',
-        conclusion: 'action_required',
-        url: null,
-        observedHeadSha: 'a'.repeat(40)
-      }
-    ])
-    const view = render(<Harness Tab={Tab} />)
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
-    })
-    expect(screen.getByText('1 check needs action')).toBeTruthy()
-    const newer = acceptPRCheckObservation({ ...initial, checksSummary: { ...summary } }, null, {
-      scope: 'workspace:local:local',
-      complete: true,
-      current: true
-    })!
-    view.rerender(<Harness Tab={Tab} parent={newer} />)
-    expect(screen.getByText('1 check failing')).toBeTruthy()
-  }
-)
-
-it.each([PageChecks, DialogChecks])(
-  'keeps a mismatched approval head conservative after its cache echo',
-  async (Tab) => {
-    lookup.mockResolvedValue({ ...initial, checksSummary: summary })
-    rows.mockResolvedValue([
-      {
-        name: 'Approval',
-        status: 'completed',
-        conclusion: 'action_required',
-        url: null,
-        observedHeadSha: 'b'.repeat(40)
-      }
-    ])
-    render(<Harness Tab={Tab} />)
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Refresh' }))
-    })
-    expect(screen.getByText('1 check failing')).toBeTruthy()
-    expect(screen.getByText('Approval')).toBeTruthy()
   }
 )

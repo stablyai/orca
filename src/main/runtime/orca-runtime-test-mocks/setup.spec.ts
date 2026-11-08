@@ -14,7 +14,7 @@ import { setWorktreeWatcherRemoval } from '../../workspaces/removal/worktree-wat
 
 type TestMock = Mock
 
-const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
+export const reconcileClaudeAgentViewMock = vi.hoisted(() => vi.fn(async () => {}))
 vi.mock('../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => {
   const facade = await getWorktreeOwnerMocks()
   return {
@@ -293,6 +293,12 @@ vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) =
   listWorktreesStrict: listWorktreesStrictMock,
   describeCreatedWorktree: (await getWorktreeOwnerMocks()).describeCreatedWorktree
 }))
+
+// Fire-and-forget reclaim runs real Git on fixture paths and warns after the file ends.
+vi.mock(
+  '../../workspaces/creation/preparation/worktree-create-preparation-project-removal',
+  () => ({ releaseWorktreeCreatePreparationsForRepo: vi.fn() })
+)
 
 const { getWorktreeOwnerMocks } = vi.hoisted(() => {
   function createWorktreeOwnerMocks() {
@@ -616,7 +622,8 @@ vi.mock('../../git/repo-default-base-ref', async (importOriginal) => {
 
 vi.mock('../../git/repo-branch-conflict', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  getBranchConflictKind: vi.fn().mockResolvedValue(null)
+  getBranchConflictKind: vi.fn().mockResolvedValue(null),
+  getBranchConflictKindStrict: vi.fn().mockResolvedValue(null)
 }))
 
 vi.mock('../../git/git-username', async () => {
@@ -709,8 +716,6 @@ export {
   getIssueMock,
   deleteWorktreeHistoryDirMock
 }
-
-export { reconcileClaudeAgentViewMock }
 
 vi.mock(import('../../preflight/installed-agent-detection'), async (importOriginal) => ({
   ...(await importOriginal()),

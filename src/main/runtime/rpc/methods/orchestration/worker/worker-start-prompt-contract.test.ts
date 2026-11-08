@@ -1,12 +1,12 @@
 import type * as WorktreeScanCacheModule from '../../../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../../../git/worktrees/catalog/worktree-listing'
-import '../../../unused-default-rpc-methods.test-fixture'
+
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_PROMPT_BRACKETED_PASTE_END } from '../../../../../../shared/agent-launch/startup/agent-prompt-injection'
-import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protocol-version'
+import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/orchestration-runtime-capabilities'
 import {
   AGENT_PROMPT_TEST_WORKTREE_ID,
   createAgentPromptSubmissionRuntime
