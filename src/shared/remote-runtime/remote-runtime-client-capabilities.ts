@@ -53,7 +53,7 @@ export function remoteRuntimeClientCapabilities(
       // Switch point: every desktop socket, browser hosting's included, leaves the unread flag to
       // a host that raises it.
       ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? [WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY] : []),
-      // Every transport sending this list opens frames through remote-runtime-sealed-frame, which inflates.
+      // Every client sending this list inflates (desktop/CLI: remote-runtime-sealed-frame; mobile: its channel).
       ...(compressedFramesDisabled() ? [] : [COMPRESSED_FRAMES_CLIENT_CAPABILITY]),
       ...additionalCapabilities
     ])
