@@ -23951,6 +23951,7 @@
     "createBranch": "Crear rama aquí",
     "branchCreated": "Se creó {{branch}} en {{commit}}",
     "branchName": "Nombre de la rama",
+    "invalidBranchName": "Este nombre de rama no es válido. Elige otro nombre.",
     "createBranchFailed": "Orca no pudo crear la rama. Revisa este repositorio en una terminal e inténtalo de nuevo."
   }
 }

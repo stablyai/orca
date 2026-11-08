@@ -23260,6 +23260,7 @@
     "createBranch": "여기에 브랜치 만들기",
     "branchCreated": "{{commit}}에 {{branch}} 생성됨",
     "branchName": "브랜치 이름",
+    "invalidBranchName": "이 브랜치 이름은 유효하지 않습니다. 다른 이름을 선택하세요.",
     "createBranchFailed": "Orca가 브랜치를 만들지 못했습니다. 터미널에서 이 저장소를 확인한 후 다시 시도하세요."
   }
 }

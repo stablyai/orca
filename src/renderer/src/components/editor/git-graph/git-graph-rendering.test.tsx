@@ -12,6 +12,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { GitGraphTab } from './git-graph-tab'
 import { GitGraphFilter } from './git-graph-filter'
+import * as commitSupport from '@/runtime/source-control/git/git-commit-actions-capability'
 import { useGitGraphHistory } from './use-git-graph-history'
 import type { GitHistoryResult } from '../../../../../shared/git/history/git-history-types'
 
@@ -66,6 +67,62 @@ const result: GitHistoryResult = {
   hasOutgoingChanges: false,
   limit: 50
 }
+
+it('keeps the branch checkout strip open after selecting a badge context-menu action', async () => {
+  vi.spyOn(commitSupport, 'useGitCommitActionsSupport').mockReturnValue({
+    supported: true,
+    reason: undefined
+  })
+  getHistory.mockReset().mockResolvedValue({
+    ...result,
+    items: [
+      {
+        ...result.items[0],
+        references: [{ id: 'refs/heads/topic', name: 'topic' }]
+      }
+    ]
+  })
+  await act(async () =>
+    root.render(
+      <TooltipProvider>
+        <GitGraphTab worktreeId={workspaceId} />
+      </TooltipProvider>
+    )
+  )
+  await act(async () => {
+    container
+      .querySelector('[title="topic"]')!
+      .dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, button: 2 }))
+  })
+  await act(async () => {
+    Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]'))
+      .find((item) => item.textContent === 'Check out branch')!
+      .click()
+  })
+  expect(container.querySelector('form')?.textContent).toContain('Check out branch topic?')
+})
+
+it('renders converging branch lanes and a detached root without duplicate child keys', async () => {
+  const errors = vi.spyOn(console, 'error').mockImplementation(() => {})
+  getHistory.mockReset().mockResolvedValue({
+    ...result,
+    items: [
+      { id: 'a', subject: 'a', message: 'a', parentIds: ['root'] },
+      { id: 'b', subject: 'b', message: 'b', parentIds: ['root'] },
+      { id: 'c', subject: 'c', message: 'c', parentIds: ['root'] },
+      { id: 'detached', subject: 'detached', message: 'detached', parentIds: [] },
+      { id: 'root', subject: 'root', message: 'root', parentIds: [] }
+    ]
+  })
+  await act(async () =>
+    root.render(
+      <TooltipProvider>
+        <GitGraphTab worktreeId={workspaceId} />
+      </TooltipProvider>
+    )
+  )
+  expect(errors.mock.calls.filter(([message]) => String(message).includes('same key'))).toEqual([])
+})
 
 it('recovers silently after each later token expiry and ignores refreshes for other worktrees', async () => {
   let history: ReturnType<typeof useGitGraphHistory>

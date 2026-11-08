@@ -1,4 +1,5 @@
 import { Input } from '@/components/ui/input'
+import { useId } from 'react'
 import { isBranchNameValid } from '../../../../../shared/git/branch-switch-target'
 import { useStore } from 'zustand'
 import { Button } from '@/components/ui/button'
@@ -66,11 +67,13 @@ export function GitGraphCommitConfirmStrip({
 }) {
   const t = useTranslate()
   const { pending } = useStore(controller.view)
+  const branchNameErrorId = useId()
   if (!pending) {
     return null
   }
   const creating = pending.action === 'create-branch'
   const validName = isBranchNameValid(pending.name ?? '')
+  const invalidName = !!pending.name && !validName
   return (
     <form
       onSubmit={(event) => {
@@ -94,13 +97,24 @@ export function GitGraphCommitConfirmStrip({
       </p>
       <p className="truncate text-muted-foreground">{pending.item.subject}</p>
       {creating && (
-        <Input
-          autoFocus
-          aria-label={t('gitGraph.branchName', 'Branch name')}
-          aria-invalid={!!pending.name && !validName}
-          value={pending.name ?? ''}
-          onChange={(event) => controller.setBranchName(event.target.value)}
-        />
+        <>
+          <Input
+            autoFocus
+            aria-label={t('gitGraph.branchName', 'Branch name')}
+            aria-invalid={invalidName}
+            aria-describedby={invalidName ? branchNameErrorId : undefined}
+            value={pending.name ?? ''}
+            onChange={(event) => controller.setBranchName(event.target.value)}
+          />
+          {invalidName && (
+            <p id={branchNameErrorId} role="status" className="text-xs text-muted-foreground">
+              {t(
+                'gitGraph.invalidBranchName',
+                'This branch name is invalid. Choose a different name.'
+              )}
+            </p>
+          )}
+        </>
       )}
       <div className="flex gap-2">
         <Button size="xs" type="submit" disabled={creating && !validName}>

@@ -142,7 +142,8 @@ it.each([
       ok: true,
       branch: 'my-topic',
       head: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
-      warning: 'Tracking configured; hook failed.'
+      warning:
+        "Error invoking remote method 'git:switchBranch': Error: Tracking configured; hook failed."
     })
     getHistory.mockResolvedValue({
       ...result,
@@ -171,9 +172,8 @@ it.each([
       expect.any(Function)
     )
     expect(controller.view.getState().selectedId).toBe('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
-    expect(announce.mock.calls.at(-1)?.[1]?.description).toContain('bbbbbbb')
-    expect(announce.mock.calls.at(-1)?.[1]?.description).toContain(
-      'Tracking configured; hook failed.'
+    expect(announce.mock.calls.at(-1)?.[1]?.description).toBe(
+      'Now at bbbbbbb on my-topic\nTracking configured; hook failed.'
     )
   }
 )
@@ -196,4 +196,22 @@ it('shows refreshed conflict status by the time the action outcome is announced'
   controller.actions.request('cherry-pick', result.items[0]!)
   await controller.actions.confirm()
   expect(operationAtAnnouncement).toBe('cherry-pick')
+})
+
+it('shows a local create-branch refusal without the IPC wrapper', async () => {
+  const controller = gitGraphHistoryForTab(workspaceId)
+  detach = controller.attach()
+  await controller.settledResult()
+  vi.spyOn(commitActions, 'createRuntimeGitBranch').mockRejectedValue(
+    new Error(
+      "Error invoking remote method 'git:createBranch': Error: A local branch named topic already exists. Switch to that branch instead."
+    )
+  )
+  const announce = vi.spyOn(toast, 'message')
+  controller.actions.request('create-branch', result.items[0]!)
+  controller.actions.setBranchName('topic')
+  await controller.actions.confirm()
+  expect(announce.mock.calls.at(-1)?.[1]?.description).toBe(
+    'A local branch named topic already exists. Switch to that branch instead.'
+  )
 })

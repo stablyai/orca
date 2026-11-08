@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { displayIpcErrorMessage } from '@/lib/ipc-error'
 import type { Translate } from '@/i18n/use-translate'
 import type { GitCommitActionResult } from '../../../../../shared/git/commands/git-commit-action'
 
@@ -9,8 +10,9 @@ export type GitGraphCommitAction =
   | 'cherry-pick'
   | 'revert'
 export function gitGraphActionMessage(result: GitCommitActionResult): string | undefined {
+  const message = result.message && displayIpcErrorMessage(result.message)
   if (
-    result.message ===
+    message ===
     "Orca couldn't create the branch. Check this repository in a terminal, then try again."
   ) {
     return translate(
@@ -18,10 +20,10 @@ export function gitGraphActionMessage(result: GitCommitActionResult): string | u
       "Orca couldn't create the branch. Check this repository in a terminal, then try again."
     )
   }
-  if (result.message === 'Commit or stash your changes, then try again.') {
+  if (message === 'Commit or stash your changes, then try again.') {
     return translate('gitGraph.actionDirty', 'Commit or stash your changes, then try again.')
   }
-  if (result.message === 'Git did not create a commit. Check the checkout and try again.') {
+  if (message === 'Git did not create a commit. Check the checkout and try again.') {
     return translate(
       'gitGraph.actionFailed',
       'Git did not create a commit. Check the checkout and try again.'
@@ -29,7 +31,7 @@ export function gitGraphActionMessage(result: GitCommitActionResult): string | u
   }
   const operation =
     /^Finish or abort the (merge|rebase|cherry-pick|revert) in progress before trying again\.$/.exec(
-      result.message ?? ''
+      message ?? ''
     )?.[1]
   if (operation) {
     const label =
@@ -47,7 +49,7 @@ export function gitGraphActionMessage(result: GitCommitActionResult): string | u
       { operation: label }
     )
   }
-  return result.message
+  return message
 }
 export function gitGraphActionLabel(
   action: GitGraphCommitAction,

@@ -23524,6 +23524,7 @@
     "createBranch": "Burada dal oluştur",
     "branchCreated": "{{commit}} üzerinde {{branch}} oluşturuldu",
     "branchName": "Dal adı",
+    "invalidBranchName": "Bu dal adı geçersiz. Farklı bir ad seçin.",
     "createBranchFailed": "Orca dalı oluşturamadı. Bu depoyu terminalde kontrol edip yeniden deneyin."
   }
 }

@@ -23209,6 +23209,7 @@
     "createBranch": "在此建立分支",
     "branchCreated": "已在 {{commit}} 建立 {{branch}}",
     "branchName": "分支名稱",
+    "invalidBranchName": "此分支名稱無效。請選擇其他名稱。",
     "createBranchFailed": "Orca 無法建立分支。請在終端機中檢查此儲存庫，然後重試。"
   }
 }

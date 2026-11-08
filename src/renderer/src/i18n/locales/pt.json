@@ -23924,6 +23924,7 @@
     "createBranch": "Criar branch aqui",
     "branchCreated": "{{branch}} criada em {{commit}}",
     "branchName": "Nome da branch",
+    "invalidBranchName": "Este nome de branch é inválido. Escolha outro nome.",
     "createBranchFailed": "O Orca não conseguiu criar a branch. Verifique este repositório em um terminal e tente novamente."
   }
 }

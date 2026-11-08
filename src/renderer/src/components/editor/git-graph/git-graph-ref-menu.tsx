@@ -122,12 +122,15 @@ export function GitGraphRefs({
         {references.length > inline.length && (
           <Popover open={open} onOpenChange={setOpen}>
             <PopoverTrigger asChild>
-              <button className="shrink-0 text-2xs text-muted-foreground">
+              <button
+                className="shrink-0 text-2xs text-muted-foreground"
+                onClick={(event) => event.stopPropagation()}
+              >
                 +{references.length - inline.length}
               </button>
             </PopoverTrigger>
             {open && (
-              <PopoverContent>
+              <PopoverContent onClick={(event) => event.stopPropagation()}>
                 <div className="max-h-72 space-y-1 overflow-auto scrollbar-sleek">
                   {references.filter((ref) => !inline.includes(ref)).map(badge)}
                 </div>
@@ -137,7 +140,7 @@ export function GitGraphRefs({
         )}
       </div>
       {menuRef && (
-        <ContextMenuContent>
+        <ContextMenuContent onClick={(event) => event.stopPropagation()}>
           <ContextMenuItem onSelect={() => void window.api.ui.writeClipboardText(menuRef.name)}>
             {t('gitGraph.copyBranch', 'Copy branch name')}
           </ContextMenuItem>
