@@ -59,6 +59,15 @@ export function newAutomationDraft(current?: MobileAutomation): AutomationDraft 
   }
 }
 
+// The *Edited flags record how a field changed, not anything the user would lose.
+export function automationDraftChanged(original: AutomationDraft, draft: AutomationDraft): boolean {
+  const before = new Map(Object.entries(original))
+  return Object.entries(draft).some(
+    ([key, value]) =>
+      key !== 'targetEdited' && key !== 'setupDecisionEdited' && value !== before.get(key)
+  )
+}
+
 // The host checks arguments for an agent or surface this build doesn't know.
 function assertKnownExtraAgentArgs(draft: AutomationDraft): void {
   const { agentId, surface } = draft

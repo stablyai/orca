@@ -1,6 +1,7 @@
 import { registerAutomationPresentationTests } from './AutomationManager.presentation.spec'
 import { registerAutomationHostReselectionTests } from './AutomationManager.host-reselection.spec'
 import { registerAutomationRunHistoryTests } from './AutomationManager.run-history.spec'
+import { registerAutomationDraftPersistenceTests } from './AutomationManager.draft-persistence.spec'
 import { AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../src/shared/automation-runtime-capabilities'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { AutomationEditor } from './AutomationEditor'
@@ -8,6 +9,7 @@ import { automationUpdateParams } from './automation-draft'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetAutomationEditorDraftsForTests } from './automation-editor-draft-row'
 import { AutomationManager } from './AutomationManager'
 import { AutomationButton, AutomationChoice, AutomationField } from './AutomationControls'
 import { AutomationRunDetails } from './AutomationRunDetails'
@@ -69,6 +71,8 @@ let tree: ReactTestRenderer | null = null
 afterEach(() => {
   act(() => tree?.unmount())
   tree = null
+  // Unsaved edits outlive the editor for the page's life; each test is a fresh page.
+  resetAutomationEditorDraftsForTests()
 })
 function setTree(value: ReactTestRenderer): void {
   tree = value
@@ -201,6 +205,12 @@ async function mount(
 
 describe('mobile automation navigation and setup', () => {
   registerAutomationRunHistoryTests({ root, setTree })
+  registerAutomationDraftPersistenceTests({
+    root,
+    press,
+    mount,
+    unmount: () => act(() => tree?.unmount())
+  })
   registerAutomationPresentationTests({ inventory, root, press, setTree, mount })
   registerAutomationHostReselectionTests({
     inventory,
@@ -233,6 +243,7 @@ describe('mobile automation navigation and setup', () => {
           capabilities: [],
           onCancel: vi.fn(),
           onDraftChange: vi.fn(),
+          draftKey: 'draft:automation::paired:editor',
           onSave: save
         })
       )
@@ -334,6 +345,7 @@ describe('mobile automation navigation and setup', () => {
             capabilities: [],
             onCancel: vi.fn(),
             onDraftChange: vi.fn(),
+            draftKey: 'draft:automation::paired:editor',
             onSave: vi.fn()
           })
         )
@@ -411,6 +423,7 @@ describe('mobile automation navigation and setup', () => {
       capabilities: [],
       onCancel: vi.fn(),
       onDraftChange: vi.fn(),
+      draftKey: 'draft:automation::paired:editor',
       onSave: vi.fn()
     }
     await act(async () => {
@@ -567,6 +580,7 @@ describe('mobile automation navigation and setup', () => {
         capabilities: [],
         onCancel: vi.fn(),
         onDraftChange: vi.fn(),
+        draftKey: 'draft:automation::paired:editor',
         onSave
       }
       await act(async () => {
