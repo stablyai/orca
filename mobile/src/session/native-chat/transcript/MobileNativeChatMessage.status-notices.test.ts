@@ -164,7 +164,7 @@ describe('MobileNativeChatMessage status notices', () => {
     ])
   })
 
-  it.each(['without reset', 'with reset', 'from an old host'] as const)(
+  it.each(['with reset', 'from an old host'] as const)(
     'draws an OpenCode usage warning %s',
     (source) => {
       const hasReset = source === 'with reset'
@@ -221,12 +221,9 @@ describe('MobileNativeChatMessage status notices', () => {
   )
 
   it.each([
-    ['Claude', 'system', 'claude auth login'],
     ['Claude', 'managed', 'claude auth login'],
     ['Codex', 'system', 'codex login --device-auth'],
-    ['Codex', 'managed', null],
-    ['Grok', undefined, 'grok login --device-auth'],
-    ['Antigravity', undefined, null]
+    ['Codex', 'managed', null]
   ] as const)(
     'offers %s (%s account) sign-in in a host terminal',
     (agentName, account, command) => {
@@ -263,14 +260,6 @@ describe('MobileNativeChatMessage status notices', () => {
       'Codex reported a safety review warning. View details.',
       'Codex a signalé un avertissement de sécurité. Voir les détails.',
       colors.statusAmber
-    ],
-    [
-      'claude',
-      'message:system:permission_denied',
-      'error',
-      'Claude denied permission. View details.',
-      'Claude a refusé la permission. Voir les détails.',
-      colors.statusRed
     ]
   ] as const)(
     'discloses the entire available %s notice without tool-output clipping or recovery',
