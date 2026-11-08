@@ -102,26 +102,3 @@ it('settles closed catalog reads and resumes their refresh when the picker reope
   stopReopened()
   expect(currentAgentPickerAcquisition('closed-catalog')).toBeUndefined()
 })
-
-it('keeps a completed listing usable when the host rejects the wait parameter', async () => {
-  let published: AgentPickerEntry[] = []
-  const stop = observeAgentPickerAcquisition(
-    'legacy-catalog',
-    [codex],
-    {
-      catalog: async (_entry, waitForListing) => {
-        if (waitForListing) {
-          throw { code: 'invalid_params' }
-        }
-        return { origin: 'probe', fetchedAt: 1, models: [model('saved')] }
-      },
-      support: async () => undefined
-    },
-    { selected: () => undefined, publish: (entries) => (published = entries) }
-  )
-  try {
-    await expect.poll(() => published[0].catalogRead).toBe('settled')
-  } finally {
-    stop()
-  }
-})

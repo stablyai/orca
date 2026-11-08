@@ -1,3 +1,7 @@
+import {
+  initializeNewRootProjectGroupOrder,
+  persistProjectGroupUpdate
+} from './project-group-update-persistence'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
@@ -70,20 +74,23 @@ export function createProjectGroupMutationActions(
                   { timeoutMs: 15_000 }
                 )
               ).group
-        const ownedGroup = adoptFromEndpoint(target, { kind: 'projectGroup', row: group })
+        const orderedGroup = await initializeNewRootProjectGroupOrder(target, group, get())
+        const ownedGroup = adoptFromEndpoint(target, { kind: 'projectGroup', row: orderedGroup })
         const ownerHostId = getProjectGroupHostId(ownedGroup)
         set((s) => {
-          // An overlapping catalog refresh may have already inserted a newer copy.
-          if (
-            s.projectGroups.some(
-              (existing) =>
-                existing.id === ownedGroup.id && getProjectGroupHostId(existing) === ownerHostId
-            )
-          ) {
+          const existing = s.projectGroups.find((entry) =>
+            projectGroupMatchesOwnerHost(entry, ownedGroup.id, ownerHostId)
+          )
+          if (existing && orderedGroup === group) {
             return s
           }
+          // Keep newer catalog fields, but include the order confirmed after that refresh.
+          const { rootProjectOrder, tabOrder } = ownedGroup
+          const nextGroup = existing ? { ...existing, rootProjectOrder, tabOrder } : ownedGroup
           return {
-            projectGroups: [...s.projectGroups, ownedGroup],
+            projectGroups: existing
+              ? s.projectGroups.map((entry) => (entry === existing ? nextGroup : entry))
+              : [...s.projectGroups, nextGroup],
             folderWorkspacePathStatuses: {}
           }
         })
@@ -102,17 +109,7 @@ export function createProjectGroupMutationActions(
         if (!target) {
           return false
         }
-        const updated =
-          target.kind === 'local'
-            ? await window.api.projectGroups.update({ groupId, updates })
-            : (
-                await callRuntimeRpc<{ group: ProjectGroup | null }>(
-                  target,
-                  'projectGroup.update',
-                  { groupId, updates },
-                  { timeoutMs: 15_000 }
-                )
-              ).group
+        const updated = await persistProjectGroupUpdate(target, groupId, updates)
         if (!updated) {
           return false
         }
@@ -132,7 +129,6 @@ export function createProjectGroupMutationActions(
 
     deleteProjectGroup: async (groupId, options) => {
       try {
-        // Why: deletion targets the group's owner host (see updateProjectGroup); focus may be elsewhere.
         const ownerHostId = resolveProjectGroupOwnerHostId(get(), groupId, options?.hostId)
         const target = runtimeTargetForProjectGroupOwner(get(), groupId, options?.hostId)
         if (!target) {

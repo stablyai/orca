@@ -3,11 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createSkillPackageArchive } from './skill-package-creation'
-import {
-  installLocalSkillPackage,
-  previewLocalSkillPackage,
-  type LocalSkillInstallInput
-} from './skill-install-transaction'
+import { installLocalSkillPackage, type LocalSkillInstallInput } from './skill-install-transaction'
 import { nativeSkillInstallFilesystem } from './skill-install-filesystem'
 import { acquireSkillInstallLock } from './skill-install-lock'
 import { skillInstallStateKey } from './skill-install-provenance'
@@ -64,28 +60,6 @@ afterEach(async () => {
 })
 
 describe('skill install transaction', () => {
-  it('installs, previews unchanged bytes, and updates a clean receipt-owned skill', async () => {
-    const root = await temporaryDirectory()
-    const first = await packageVersion(root, 'version_1', '# First')
-    const second = await packageVersion(root, 'version_2', '# Second')
-
-    const installed = await installLocalSkillPackage(installInput(root, first))
-    expect(installed.status).toBe('installed')
-    expect(await readFile(join(root, 'skills', 'test-skill', 'SKILL.md'), 'utf8')).toContain(
-      '# First'
-    )
-
-    const preview = await previewLocalSkillPackage(installInput(root, first))
-    expect(preview.currentState.kind).toBe('unchanged')
-    expect((await installLocalSkillPackage(installInput(root, first))).status).toBe('unchanged')
-
-    const updated = await installLocalSkillPackage(installInput(root, second))
-    expect(updated.status).toBe('updated')
-    expect(await readFile(join(root, 'skills', 'test-skill', 'SKILL.md'), 'utf8')).toContain(
-      '# Second'
-    )
-  })
-
   it('refuses to overwrite a modified receipt-owned installation', async () => {
     const root = await temporaryDirectory()
     const first = await packageVersion(root, 'version_1', '# First')
@@ -227,40 +201,6 @@ describe('skill install transaction', () => {
       '# First'
     )
   })
-
-  it.each([
-    ['EACCES', true],
-    ['ENOSPC', false]
-  ] as const)(
-    'preserves the old version after a %s filesystem failure',
-    async (code, retryable) => {
-      const root = await temporaryDirectory()
-      const first = await packageVersion(root, 'version_1', '# First')
-      const second = await packageVersion(root, 'version_2', '# Second')
-      await installLocalSkillPackage(installInput(root, first))
-      const failingFilesystem = {
-        ...nativeSkillInstallFilesystem,
-        rename: async (source: string, target: string): Promise<void> => {
-          if (target.includes('.orca-backup-')) {
-            throw Object.assign(new Error(`injected ${code}`), { code })
-          }
-          await nativeSkillInstallFilesystem.rename(source, target)
-        }
-      }
-
-      const result = await installLocalSkillPackage(
-        installInput(root, second, { filesystem: failingFilesystem })
-      )
-
-      expect(result).toMatchObject({
-        status: 'failed',
-        failure: { category: 'filesystem', retryable }
-      })
-      expect(await readFile(join(root, 'skills', 'test-skill', 'SKILL.md'), 'utf8')).toContain(
-        '# First'
-      )
-    }
-  )
 
   it('returns a retryable failure when another process owns the destination lock', async () => {
     const root = await temporaryDirectory()

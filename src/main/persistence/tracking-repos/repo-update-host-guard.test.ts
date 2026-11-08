@@ -60,6 +60,18 @@ describe('updateRepo host guard', () => {
     expect(state.repos.map((repo) => repo.displayName)).toEqual(['Peer', 'Renamed'])
   })
 
+  it('clears only the addressed host rank so its inherited project order can apply again', () => {
+    const local = makeRepo({ id: 'repo-1', projectGroupOrder: 500, executionHostId: 'local' })
+    const peer = makeRepo({ id: 'repo-1', projectGroupOrder: 750, executionHostId: 'ssh:peer' })
+    const { operations, state } = makeOperations([local, peer])
+
+    const result = operations.updateRepo(local, { projectGroupOrder: null })
+
+    expect(result).not.toHaveProperty('projectGroupOrder')
+    expect(state.repos[0]).not.toHaveProperty('projectGroupOrder')
+    expect(state.repos[1].projectGroupOrder).toBe(750)
+  })
+
   it('addresses an SSH row through its connectionId alone', () => {
     const local = makeRepo({ id: 'repo-1', displayName: 'Local' })
     const peer = makeRepo({ id: 'repo-1', displayName: 'Peer', connectionId: 'peer' })
