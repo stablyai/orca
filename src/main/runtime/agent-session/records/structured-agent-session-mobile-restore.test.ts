@@ -1,4 +1,4 @@
-import { openTestChats } from '../../../native-chat/agent-session-wire/structured-agent-session-open-test-chats.test-support'
+import { openTestChats } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-open-test-chats.test-support'
 import { describe, expect, it } from 'vitest'
 import {
   hostTestState,
@@ -7,22 +7,22 @@ import {
   seedApproval,
   envelope,
   CALLER
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_NOW as NOW,
   hostTestMessage
-} from '../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
-import { claudeAndCodexDeclared } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
+import { claudeAndCodexDeclared } from '../../../native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
-} from '../../runtime-mobile-notification-controller'
+} from '../../push/notifications/runtime-mobile-notification-controller'
 import { createStructuredAttentionMobileDelivery } from '../structured-agent-session-mobile-attention'
-import { MobileNotificationDismissalStore } from '../../mobile-notification-dismissal-store'
+import { MobileNotificationDismissalStore } from '../../push/notifications/mobile-notification-dismissal-store'
 
 function wire(host: StructuredAgentSessionHost, controller: RuntimeMobileNotificationController) {
   const delivery = createStructuredAttentionMobileDelivery({

@@ -1,6 +1,7 @@
 import { claudeProfileTranscriptDirs } from '../claude-usage/transcript-file-discovery'
 import { existsSync } from 'node:fs'
-import { Worker } from 'node:worker_threads'
+import type { Worker } from 'node:worker_threads'
+import { spawnWorkerThread } from '../worker-threads/worker-thread-spawn'
 import {
   currentWorkerEntryLayout,
   resolveWorkerThreadEntryPath
@@ -36,7 +37,7 @@ function defaultWorkerFactory(): Worker {
   if (!existsSync(workerPath)) {
     throw new Error(`Usage scan worker entry not found: ${workerPath}`)
   }
-  return new Worker(workerPath)
+  return spawnWorkerThread(workerPath)
 }
 
 let sharedClient: UsageScanWorkerClient | null = null

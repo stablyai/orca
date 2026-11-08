@@ -1,4 +1,4 @@
-import { guardParserHandler } from '@/components/terminal-pane/terminal-parser-handler-guard'
+import { guardParserHandler } from '@/components/terminal-pane/emulation/terminal-parser-handler-guard'
 import {
   isTerminalViewportAtBottom,
   readTerminalScrollBufferSnapshot

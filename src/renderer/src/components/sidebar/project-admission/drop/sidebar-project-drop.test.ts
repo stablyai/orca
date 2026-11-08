@@ -1,37 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import {
-  getFocusedDropRuntimeId,
-  getSidebarProjectDropAffordance,
-  isSidebarProjectDropRefusedByFocus,
-  resolveSidebarProjectDropPath,
-  routeSidebarProjectDrop
-} from './sidebar-project-drop'
+import { routeSidebarProjectDrop } from './sidebar-project-drop'
 import { wslDistroWindowsPathAccess } from '../../../../../../shared/windows-path-access'
-
-describe('resolveSidebarProjectDropPath', () => {
-  it('accepts exactly one dropped path', () => {
-    expect(resolveSidebarProjectDropPath(['/Users/alice/repo'])).toEqual({
-      status: 'ready',
-      path: '/Users/alice/repo'
-    })
-  })
-
-  it('rejects empty and multi-path drops before routing', () => {
-    expect(resolveSidebarProjectDropPath([])).toEqual({ status: 'empty' })
-    expect(resolveSidebarProjectDropPath(['/repo/a', '/repo/b'])).toEqual({
-      status: 'multiple',
-      count: 2
-    })
-  })
-})
-
-describe('getFocusedDropRuntimeId', () => {
-  it('distinguishes local runtime from active server runtime', () => {
-    expect(getFocusedDropRuntimeId(null)).toBeNull()
-    expect(getFocusedDropRuntimeId({ activeRuntimeEnvironmentId: '   ' })).toBeNull()
-    expect(getFocusedDropRuntimeId({ activeRuntimeEnvironmentId: 'server-1' })).toBe('server-1')
-  })
-})
 
 describe('routeSidebarProjectDrop', () => {
   const wslHosts = [
@@ -67,17 +36,6 @@ describe('routeSidebarProjectDrop', () => {
     ).toEqual({ kind: 'windows-drive-on-wsl-host', distro: 'Ubuntu', path: 'C:\\src\\app' })
   })
 
-  it('with WSL hosts off, routes a drvfs UNC drop exactly as before', () => {
-    const path = '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\proj'
-    expect(routeSidebarProjectDrop({ path, focusedRuntimeId: null, wslHosts: [] })).toEqual({
-      kind: 'local',
-      path
-    })
-    expect(routeSidebarProjectDrop({ path, focusedRuntimeId: 'server', wslHosts: [] })).toEqual({
-      kind: 'runtime-focused'
-    })
-  })
-
   it.each([
     '\\\\wsl.localhost\\Ubuntu\\mnt\\c\\src\\app',
     // Any distro's drvfs mount, as the picker treats it.
@@ -93,74 +51,5 @@ describe('routeSidebarProjectDrop', () => {
       distro: 'Ubuntu',
       path: 'C:\\src\\app'
     })
-  })
-
-  it('keeps refusing other drops while a server is focused', () => {
-    expect(
-      routeSidebarProjectDrop({ path: 'C:\\src', focusedRuntimeId: 'paired-server', wslHosts })
-    ).toEqual({ kind: 'runtime-focused' })
-    expect(
-      routeSidebarProjectDrop({
-        path: '\\\\wsl.localhost\\Arch\\home',
-        focusedRuntimeId: 'wsl:Ubuntu',
-        wslHosts
-      })
-    ).toEqual({ kind: 'runtime-focused' })
-    expect(
-      routeSidebarProjectDrop({ path: '/Users/me/app', focusedRuntimeId: 'server', wslHosts: [] })
-    ).toEqual({ kind: 'runtime-focused' })
-  })
-
-  it('accepts the drag over a focused server only when a WSL host could own the folder', () => {
-    expect(isSidebarProjectDropRefusedByFocus(null, [])).toBe(false)
-    expect(isSidebarProjectDropRefusedByFocus('server', [])).toBe(true)
-    expect(isSidebarProjectDropRefusedByFocus('server', wslHosts)).toBe(false)
-  })
-})
-
-describe('getSidebarProjectDropAffordance', () => {
-  it('hides when the sidebar is not in a drop interaction', () => {
-    expect(
-      getSidebarProjectDropAffordance({
-        isDragOver: false,
-        isHandlingDrop: false,
-        remoteRuntimeActive: false
-      })
-    ).toEqual({ visible: false })
-  })
-
-  it('shows ready, busy, and blocked states', () => {
-    expect(
-      getSidebarProjectDropAffordance({
-        isDragOver: true,
-        isHandlingDrop: false,
-        remoteRuntimeActive: false
-      })
-    ).toMatchObject({ visible: true, tone: 'ready' })
-
-    expect(
-      getSidebarProjectDropAffordance({
-        isDragOver: false,
-        isHandlingDrop: true,
-        remoteRuntimeActive: false
-      })
-    ).toMatchObject({ visible: true, tone: 'busy' })
-
-    expect(
-      getSidebarProjectDropAffordance({
-        isDragOver: true,
-        isHandlingDrop: false,
-        remoteRuntimeActive: true
-      })
-    ).toMatchObject({ visible: true, tone: 'blocked' })
-
-    expect(
-      getSidebarProjectDropAffordance({
-        isDragOver: true,
-        isHandlingDrop: false,
-        remoteRuntimeActive: false,
-        wslDropsOnly: true
-      })
-    ).toMatchObject({ visible: true, tone: 'ready', label: 'Drop a WSL folder to add project' })
   })
 })

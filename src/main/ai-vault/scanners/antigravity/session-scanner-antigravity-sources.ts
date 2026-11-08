@@ -1,4 +1,5 @@
 import { completeAntigravityTranscriptPairs } from './antigravity-transcript-candidates'
+import { recordAntigravityArtifactPath } from './antigravity-session-artifacts'
 import { ANTIGRAVITY_HISTORY_ROOTS } from '../../../../shared/antigravity-session-origin'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
@@ -30,12 +31,17 @@ export function antigravityDiscoveries(
           .filter((origin) => origin !== 'antigravity-cli')
           .map((origin) => join(home, '.gemini', origin, 'brain'))
       : []),
+    // Unowned rows resume only as references, which clients without the opt-in would launch as agy IDs.
+    ...(options.includeAntigravityIdeSessions === true && options.antigravityChatBrainDir
+      ? [options.antigravityChatBrainDir]
+      : []),
     ...wslHomeDirs.flatMap((homeDir) =>
       origins.map((origin) => join(homeDir, '.gemini', origin, 'brain'))
     )
   ]
-  return rootDirs.map((rootDir) =>
-    discoverFiles({
+  return rootDirs.map((rootDir) => {
+    const antigravityArtifactPaths = new Map<string, string>()
+    return discoverFiles({
       rootDir,
       limit,
       agent: 'antigravity',
@@ -43,8 +49,12 @@ export function antigravityDiscoveries(
       extensions: ['.jsonl'],
       filePredicate: isAntigravityTranscriptPath,
       directoryPredicate: shouldDescendAntigravityBrainDirectory,
+      onDirectoryEntries: (dirPath, entries) =>
+        recordAntigravityArtifactPath(antigravityArtifactPaths, rootDir, dirPath, entries),
       keepScopeFiles: scopeWalksAgentFiles('antigravity', options.scopePaths),
       signal: options.signal
-    }).then((discovery) => completeAntigravityTranscriptPairs(discovery, issues))
-  )
+    })
+      .then((discovery) => completeAntigravityTranscriptPairs(discovery, issues))
+      .then((discovery) => ({ ...discovery, antigravityArtifactPaths }))
+  })
 }

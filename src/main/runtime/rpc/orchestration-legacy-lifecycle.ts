@@ -1,8 +1,8 @@
 import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import type { MessageType } from '../orchestration/db'
+import type { MessageType } from '../orchestration/db/orchestration-records'
 import { OrchestrationError } from '../orchestration/orchestration-error'
-import { bindCoordinatorMutationPayload } from '../orchestration/dispatch-message-binding'
+import { bindCoordinatorMutationPayload } from '../orchestration/workers/reports/dispatch-message-binding'
 import type { LegacyCompatibilityAuthority } from './orchestration-legacy-authority'
 import {
   inferLegacyWorkerOutcome,

@@ -6,7 +6,7 @@ import type {
   BrowserExtensionListing,
   BrowserExtensionListResult
 } from '../../../../../../shared/browser/extensions/browser-extension-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import { Label } from '../../../ui/label'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../../../ui/tooltip'
@@ -40,11 +40,12 @@ function ExtensionRow({
   onReviewUpdate: () => void
   onRemove: () => void
 }): React.JSX.Element {
-  const unsupported = describeUnsupportedBrowserExtensionFeatures(extension.permissions)
+  const t = useTranslate()
+  const unsupported = describeUnsupportedBrowserExtensionFeatures(extension.permissions, t)
   const sourceLabel =
     extension.source === 'unpacked'
-      ? translate('settings.browser.extensions.sourceUnpacked', 'Unpacked')
-      : translate('settings.browser.extensions.sourceWebStore', 'Chrome Web Store')
+      ? t('settings.browser.extensions.sourceUnpacked', 'Unpacked')
+      : t('settings.browser.extensions.sourceWebStore', 'Chrome Web Store')
   return (
     <div className="flex w-full items-center gap-3 rounded-md border border-border/70 px-3 py-2.5">
       {extension.iconDataUrl ? (
@@ -59,7 +60,7 @@ function ExtensionRow({
         </p>
         {extension.heldUpdateVersion ? (
           <p className="text-2xs text-muted-foreground">
-            {translate(
+            {t(
               'settings.browser.extensions.heldUpdate',
               'Version {{version}} is waiting for more access.',
               { version: extension.heldUpdateVersion }
@@ -69,7 +70,7 @@ function ExtensionRow({
         {unsupported ? <p className="text-2xs text-muted-foreground">{unsupported}</p> : null}
         {extension.loadError ? (
           <p className="text-2xs break-words text-destructive">
-            {translate('settings.browser.extensions.loadError', 'Could not start: {{error}}', {
+            {t('settings.browser.extensions.loadError', 'Could not start: {{error}}', {
               error: extension.loadError
             })}
           </p>
@@ -78,25 +79,21 @@ function ExtensionRow({
       <div className="flex shrink-0 items-center gap-1">
         {extension.heldUpdateVersion ? (
           <Button variant="outline" size="xs" onClick={onReviewUpdate} disabled={busy}>
-            {translate('settings.browser.extensions.reviewAccess', 'Review access')}
+            {t('settings.browser.extensions.reviewAccess', 'Review access')}
           </Button>
         ) : null}
         {extension.hasOptionsPage && extension.enabled ? (
           <Button variant="ghost" size="xs" onClick={onOpenOptions} disabled={busy}>
             <Settings2 className="size-3" />
-            {translate('settings.browser.extensions.options', 'Options')}
+            {t('settings.browser.extensions.options', 'Options')}
           </Button>
         ) : null}
         <SettingsSwitch
           checked={extension.enabled}
           disabled={busy}
-          ariaLabel={translate(
-            'settings.browser.extensions.toggleLabel',
-            'Turn {{name}} on or off',
-            {
-              name: extension.name
-            }
-          )}
+          ariaLabel={t('settings.browser.extensions.toggleLabel', 'Turn {{name}} on or off', {
+            name: extension.name
+          })}
           onChange={onToggle}
         />
         {extension.source === 'unpacked' ? (
@@ -107,13 +104,13 @@ function ExtensionRow({
                 size="icon-sm"
                 onClick={onReload}
                 disabled={busy}
-                aria-label={translate('settings.browser.extensions.reload', 'Reload from folder')}
+                aria-label={t('settings.browser.extensions.reload', 'Reload from folder')}
               >
                 <RotateCw />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={4}>
-              {translate('settings.browser.extensions.reload', 'Reload from folder')}
+              {t('settings.browser.extensions.reload', 'Reload from folder')}
             </TooltipContent>
           </Tooltip>
         ) : null}
@@ -124,13 +121,13 @@ function ExtensionRow({
               size="icon-sm"
               onClick={onRemove}
               disabled={busy}
-              aria-label={translate('settings.browser.extensions.remove', 'Remove')}
+              aria-label={t('settings.browser.extensions.remove', 'Remove')}
             >
               <Trash2 />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top" sideOffset={4}>
-            {translate('settings.browser.extensions.remove', 'Remove')}
+            {t('settings.browser.extensions.remove', 'Remove')}
           </TooltipContent>
         </Tooltip>
       </div>
@@ -142,6 +139,7 @@ export function BrowserExtensionsSection({
   profileId,
   profileLabel
 }: BrowserExtensionsSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const confirm = useConfirmationDialog()
   const entry = getBrowserExtensionsSearchEntry()
   const [listing, setListing] = useState<{
@@ -199,11 +197,11 @@ export function BrowserExtensionsSection({
 
   const remove = async (extension: BrowserExtensionListing): Promise<void> => {
     const confirmed = await confirm({
-      title: translate('settings.browser.extensions.removeTitle', 'Remove {{name}}?', {
+      title: t('settings.browser.extensions.removeTitle', 'Remove {{name}}?', {
         name: extension.name
       }),
       description: browserExtensionRemovalDescription(extension.source),
-      confirmLabel: translate('settings.browser.extensions.remove', 'Remove'),
+      confirmLabel: t('settings.browser.extensions.remove', 'Remove'),
       confirmVariant: 'destructive',
       surface: 'security'
     })
@@ -220,13 +218,13 @@ export function BrowserExtensionsSection({
       title={entry.title}
       description={entry.description}
       keywords={entry.keywords}
-      className="space-y-3 py-2"
+      className="space-y-3 py-3"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0 space-y-0.5">
           <Label>{entry.title}</Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'settings.browser.extensions.profileDescription',
               'Extensions turned on here run in tabs that use the {{profile}} profile.',
               { profile: profileLabel }
@@ -241,7 +239,7 @@ export function BrowserExtensionsSection({
           onClick={() => void loadUnpacked()}
         >
           <FolderOpen className="size-3" />
-          {translate('settings.browser.extensions.loadUnpacked', 'Load unpacked…')}
+          {t('settings.browser.extensions.loadUnpacked', 'Load unpacked…')}
         </Button>
       </div>
       <BrowserExtensionsWebStoreInstall
@@ -251,7 +249,7 @@ export function BrowserExtensionsSection({
       />
       {active && result.extensions.length === 0 ? (
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'settings.browser.extensions.empty',
             'No extensions installed. Add one from the Chrome Web Store above.'
           )}

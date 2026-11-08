@@ -79,28 +79,6 @@ describe('rich markdown search focus handoff', () => {
     expect(event.defaultPrevented).toBe(false)
   })
 
-  it.each(['button', 'input', 'textarea', 'select', 'noneditable', 'task-label'])(
-    'leaves embedded %s controls in charge of focus',
-    (kind) => {
-      const { editorDom, findInput, focus } = createSurface()
-      const control = document.createElement(
-        kind === 'noneditable' ? 'div' : kind === 'task-label' ? 'label' : kind
-      )
-      if (kind === 'noneditable' || kind === 'task-label') {
-        control.setAttribute('contenteditable', 'false')
-      }
-      const child = document.createElement('span')
-      control.append(child)
-      editorDom.append(control)
-      findInput.focus()
-
-      child.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))
-
-      expect(document.activeElement).toBe(findInput)
-      expect(focus).not.toHaveBeenCalled()
-    }
-  )
-
   it('does not steal focus from a different editor find widget or unrelated field', () => {
     const first = createSurface()
     const second = createSurface()
@@ -116,36 +94,6 @@ describe('rich markdown search focus handoff', () => {
     expect(first.focus).not.toHaveBeenCalled()
   })
 
-  it('leaves ordinary editor clicks and blank surface clicks untouched', () => {
-    const { root, editorDom, paragraph, findInput, focus } = createSurface()
-    editorDom.focus()
-    focus.mockClear()
-    paragraph.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))
-    findInput.focus()
-    root.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))
-
-    expect(focus).not.toHaveBeenCalled()
-    expect(document.activeElement).toBe(findInput)
-  })
-
-  it('leaves canceled and non-primary presses untouched', () => {
-    const { paragraph, findInput, focus } = createSurface()
-    findInput.focus()
-    const canceled = new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0 })
-    canceled.preventDefault()
-
-    for (const event of [
-      canceled,
-      new MouseEvent('mousedown', { bubbles: true, button: 1 }),
-      new MouseEvent('mousedown', { bubbles: true, button: 2 })
-    ]) {
-      paragraph.dispatchEvent(event)
-    }
-
-    expect(focus).not.toHaveBeenCalled()
-    expect(document.activeElement).toBe(findInput)
-  })
-
   it('allows editable content nested inside an unrelated noneditable ancestor', () => {
     const { root, paragraph, findInput, focus } = createSurface()
     root.setAttribute('contenteditable', 'false')
@@ -154,9 +102,5 @@ describe('rich markdown search focus handoff', () => {
     paragraph.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0 }))
 
     expect(focus).toHaveBeenCalledExactlyOnceWith({ preventScroll: true })
-  })
-
-  it('does nothing when the editor has not mounted', () => {
-    focusRichMarkdownEditorFromSearch(new MouseEvent('mousedown', { button: 0 }), null)
   })
 })

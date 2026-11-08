@@ -20,6 +20,22 @@ function taskListFromCall(call: NativeChatToolCallBlock): NativeChatTaskList | n
   return call.state === 'failed' ? null : normalizeNativeChatTaskList(call.name, call.input)
 }
 
+type AcceptedTaskCall = { tool: NativeChatTaskListTool; call: NativeChatToolCallBlock }
+const acceptedTaskCalls = new WeakMap<NativeChatMessage, readonly AcceptedTaskCall[]>()
+
+function taskCalls(message: NativeChatMessage): readonly AcceptedTaskCall[] {
+  const cached = acceptedTaskCalls.get(message)
+  if (cached) {
+    return cached
+  }
+  const calls = pairToolBlocks(message.blocks).flatMap(({ call, result }) => {
+    const tool = call && nativeChatTaskListTool(call.name)
+    return call && tool && !result?.isError && taskListFromCall(call) ? [{ tool, call }] : []
+  })
+  acceptedTaskCalls.set(message, calls)
+  return calls
+}
+
 /** Store call identities so unchanged rows stay memoized, while prepends replace their context. */
 export function nativeChatTaskListPredecessors(
   messages: readonly NativeChatMessage[]
@@ -31,14 +47,8 @@ export function nativeChatTaskListPredecessors(
     if (message.role === 'user') {
       continue
     }
-    for (const { call, result } of pairToolBlocks(message.blocks)) {
-      if (!call || result?.isError) {
-        continue
-      }
-      const tool = nativeChatTaskListTool(call.name)
-      if (tool && taskListFromCall(call)) {
-        previous[tool] = call
-      }
+    for (const { tool, call } of taskCalls(message)) {
+      previous[tool] = call
     }
   }
   return history

@@ -23,7 +23,7 @@ import {
   resetAgentSessionIdsRefreshKeys
 } from './ai-vault-agent-session-refresh-key'
 import { useAiVaultAssociationObservation } from './ai-vault-association-observation'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
 
 // Share the forced-rescan budget across remounts so session creation cannot amplify full scans.
 import {
@@ -50,7 +50,8 @@ type AiVaultRefreshArgs = { force?: boolean; background?: boolean; reuseLoadedDe
 export function useAiVaultSessionRefresh(
   scopePaths: readonly string[],
   executionHostScope: ExecutionHostScope,
-  sessionLimit: AiVaultSessionLimit
+  sessionLimit: AiVaultSessionLimit,
+  scopeOnly = false
 ): {
   error: string | null
   loading: boolean
@@ -64,8 +65,6 @@ export function useAiVaultSessionRefresh(
   const { scan, applyScan } = useAppliedAiVaultScan()
   const associations = useAiVaultAssociationObservation(executionHostScope)
   const associationsRef = useRef(associations)
-  const scanResult = scan?.result ?? null
-  const sessions = scanResult?.sessions ?? EMPTY_AI_VAULT_SESSIONS
   const [loading, setLoading] = useState(false)
   const [failure, setFailure] = useState<{ scopeKey: string; cause: string } | null>(null)
   const [terminalScopeKey, setTerminalScopeKey] = useState<string | null>(null)
@@ -82,24 +81,29 @@ export function useAiVaultSessionRefresh(
   const mountedRef = useRef(true)
   const publicationGateRef = useRef<AiVaultSessionPublicationGate>(undefined!)
   publicationGateRef.current ??= new AiVaultSessionPublicationGate()
-  const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths)}\n${sessionLimit}`
+  const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths, scopeOnly)}\n${sessionLimit}`
+  // Workspace or Project rows would pass for All's list while it loads or after it fails; the filter narrows the rest.
+  const shown = scan?.scopeOnly && !scopeOnly ? null : scan
   // Kept through rescans so a repeat failure doesn't blink; shown only for the scope that failed.
   const error = failure?.scopeKey === scanScopeKey ? aiVaultScanErrorText(failure.cause) : null
   const scopePathsRef = useRef<readonly string[]>(scopePaths)
   scopePathsRef.current = scopePaths
+  const scopeOnlyRef = useRef(scopeOnly)
   const executionHostScopeRef = useRef<ExecutionHostScope>(executionHostScope)
   executionHostScopeRef.current = executionHostScope
   const sessionLimitRef = useRef(sessionLimit)
   // Keep render pure for React Doctor; layout effect still lands before refresh effects.
   useLayoutEffect(() => {
     sessionLimitRef.current = sessionLimit
+    scopeOnlyRef.current = scopeOnly
     associationsRef.current = associations
-  }, [associations, sessionLimit])
+  }, [associations, scopeOnly, sessionLimit])
   const currentScanScopeKey = useCallback(
     () =>
       `${aiVaultSessionResultCacheKey(
         executionHostScopeRef.current,
-        scopePathsRef.current
+        scopePathsRef.current,
+        scopeOnlyRef.current
       )}\n${sessionLimitRef.current}`,
     []
   )
@@ -111,15 +115,15 @@ export function useAiVaultSessionRefresh(
         observation === associationsRef.current && associationRevision === observation.getSnapshot()
       const hostScope = executionHostScopeRef.current
       const selectedLimit = sessionLimitRef.current
-      const baseKey = aiVaultSessionResultCacheKey(hostScope, scopePathsRef.current)
+      const request = {
+        scopePaths: scopePathsRef.current,
+        scopeOnly: scopeOnlyRef.current,
+        executionHostScope: hostScope,
+        sessionLimit: selectedLimit
+      }
+      const baseKey = aiVaultSessionResultCacheKey(hostScope, request.scopePaths, request.scopeOnly)
       const cachedResult =
-        args.reuseLoadedDepth === true
-          ? readCachedAiVaultSessionList({
-              scopePaths: scopePathsRef.current,
-              executionHostScope: hostScope,
-              sessionLimit: selectedLimit
-            })
-          : null
+        args.reuseLoadedDepth === true ? readCachedAiVaultSessionList(request) : null
       if (cachedResult) {
         const scanKey = `${baseKey}\n${selectedLimit}`
         setFailure(null)
@@ -128,7 +132,7 @@ export function useAiVaultSessionRefresh(
           if (!mountedRef.current || scanKey !== currentScanScopeKey() || !associationCurrent()) {
             return
           }
-          applyScan(published, selectedLimit, scanKey, (applied) => {
+          applyScan(published, selectedLimit, scanKey, request.scopeOnly, (applied) => {
             conditionalSnapshotRef.current = published.fingerprint
               ? { scopeKey: scanKey, fingerprint: published.fingerprint, result: applied }
               : null
@@ -167,11 +171,6 @@ export function useAiVaultSessionRefresh(
         refreshIdRef.current === refreshId &&
         scanKey === currentScanScopeKey() &&
         associationCurrent()
-      const request = {
-        scopePaths: scopePathsRef.current,
-        executionHostScope: hostScope,
-        sessionLimit: selectedLimit
-      }
       try {
         const previous = conditionalSnapshotRef.current
         const result = await refreshAiVaultSessionList(
@@ -191,7 +190,7 @@ export function useAiVaultSessionRefresh(
         cacheAiVaultSessionList(request, result, { replaceHostEntries: args.force === true })
         publicationGateRef.current.publish(result, (published) => {
           if (requestCurrent()) {
-            applyScan(published, selectedLimit, scanKey, (applied) => {
+            applyScan(published, selectedLimit, scanKey, request.scopeOnly, (applied) => {
               conditionalSnapshotRef.current = published.fingerprint
                 ? { scopeKey: scanKey, fingerprint: published.fingerprint, result: applied }
                 : null
@@ -322,8 +321,8 @@ export function useAiVaultSessionRefresh(
     loading: loading || scopePending,
     scopePending,
     refresh,
-    scanResult,
-    sessions,
-    loadedSessionLimit: scan?.limit ?? null
+    scanResult: shown?.result ?? null,
+    sessions: shown?.result.sessions ?? EMPTY_AI_VAULT_SESSIONS,
+    loadedSessionLimit: shown?.limit ?? null
   }
 }

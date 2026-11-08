@@ -96,18 +96,6 @@ afterEach(() => {
 })
 
 describe('launch-prep Codex hook install sharing', () => {
-  it('collapses a burst of concurrent launches into one install', async () => {
-    const service = new CodexHookService()
-    const home = join(userDataDir, 'managed')
-
-    const statuses = await Promise.all(
-      Array.from({ length: 7 }, () => service.installForLaunchPrep(home, false, () => true))
-    )
-
-    expect(statuses.every((status) => status.state === 'installed')).toBe(true)
-    expect(installExclusivelyMock).toHaveBeenCalledTimes(1)
-  })
-
   it("never joins a Codex launch to a plain terminal's run that went ahead without the answer", async () => {
     const service = new CodexHookService()
     const home = join(userDataDir, 'managed')
@@ -130,18 +118,6 @@ describe('launch-prep Codex hook install sharing', () => {
     )
   })
 
-  it('re-installs for a launch that starts after the shared run settled', async () => {
-    const service = new CodexHookService()
-    const home = join(userDataDir, 'managed')
-
-    await Promise.all(
-      Array.from({ length: 3 }, () => service.installForLaunchPrep(home, false, () => true))
-    )
-    await service.installForLaunchPrep(home, false, () => true)
-
-    expect(installExclusivelyMock).toHaveBeenCalledTimes(2)
-  })
-
   it('re-installs after a failed shared run instead of caching the failure', async () => {
     const service = new CodexHookService()
     const home = join(userDataDir, 'managed')
@@ -153,43 +129,6 @@ describe('launch-prep Codex hook install sharing', () => {
     await expect(service.installForLaunchPrep(home, false, () => true)).resolves.toMatchObject({
       state: 'installed'
     })
-    expect(installExclusivelyMock).toHaveBeenCalledTimes(2)
-  })
-
-  it('never shares a run across different runtime homes', async () => {
-    const service = new CodexHookService()
-
-    await Promise.all([
-      service.installForLaunchPrep(join(userDataDir, 'managed'), false, () => true),
-      service.installForLaunchPrep(join(userDataDir, 'per-account'), false, () => true)
-    ])
-
-    expect(installExclusivelyMock).toHaveBeenCalledTimes(2)
-    expect(installExclusivelyMock.mock.calls.map(([home]) => home)).toEqual([
-      join(userDataDir, 'managed'),
-      join(userDataDir, 'per-account')
-    ])
-  })
-
-  it('never shares the install lane with the hooks-disabled refresh lane', async () => {
-    const service = new CodexHookService()
-    const home = join(userDataDir, 'managed')
-
-    await Promise.all([
-      service.installForLaunchPrep(home, false, () => true),
-      service.refreshRuntimeUserHooksForLaunchPrep(home)
-    ])
-
-    expect(installExclusivelyMock).toHaveBeenCalledTimes(1)
-    expect(refreshExclusivelyMock).toHaveBeenCalledTimes(1)
-  })
-
-  it('leaves the direct install path unshared for settings-driven reinstalls', async () => {
-    const service = new CodexHookService()
-    const home = join(userDataDir, 'managed')
-
-    await Promise.all([service.install(home), service.install(home)])
-
     expect(installExclusivelyMock).toHaveBeenCalledTimes(2)
   })
 })

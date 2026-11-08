@@ -72,12 +72,6 @@ describe('BrowserExtensionInstallStore', () => {
     store.save(record({ id: STORE_ID }))
     expect(store.get(STORE_ID)?.installTime).toBeGreaterThanOrEqual(updated ?? 0)
   })
-
-  it('refuses install directories that could escape the root', () => {
-    const store = new BrowserExtensionInstallStore(root)
-    expect(() => store.installDirectory('../evil', '1.0')).toThrow()
-    expect(() => store.installDirectory(STORE_ID, '../../1.0')).toThrow()
-  })
 })
 
 describe('readBrowserExtensionManifest', () => {

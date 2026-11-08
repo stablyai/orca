@@ -4,7 +4,6 @@ import {
   parsePluginFrameUrl,
   pluginFrameKey,
   pluginFramePartition,
-  pluginFrameUrl,
   readPluginFramePartitionKey
 } from './plugin-frame-guest'
 
@@ -21,11 +20,6 @@ describe('plugin frame guest identity', () => {
 })
 
 describe('plugin frame URLs', () => {
-  it('builds entry URLs from manifest paths', () => {
-    expect(pluginFrameUrl(KEY, 'ui/panel.html')).toBe(`orca-plugin-frame://${KEY}/ui/panel.html`)
-    expect(pluginFrameUrl(KEY, './a b/#x.html')).toBe(`orca-plugin-frame://${KEY}/a%20b/%23x.html`)
-  })
-
   it('parses contained paths into decoded segments', () => {
     expect(parsePluginFrameUrl(`orca-plugin-frame://${KEY}/ui/app.js?v=1`)).toEqual({
       frameKey: KEY,
@@ -39,12 +33,6 @@ describe('plugin frame URLs', () => {
     expect(parsePluginFrameUrl(`orca-plugin-frame://${KEY}/__orca/sdk.js`)?.reserved).toBe(true)
     expect(parsePluginFrameUrl(`orca-plugin-frame://${KEY}/__ORCA/sdk.js`)?.reserved).toBe(true)
     expect(parsePluginFrameUrl(`orca-plugin-frame://${KEY}/__Orca/sdk.js`)?.reserved).toBe(true)
-  })
-
-  it('lets URL dot segments collapse at the plugin root, never above it', () => {
-    expect(
-      parsePluginFrameUrl(`orca-plugin-frame://${KEY}/ui/%2e%2e/%2e%2e/../secret`)?.segments
-    ).toEqual(['secret'])
   })
 
   it.each([

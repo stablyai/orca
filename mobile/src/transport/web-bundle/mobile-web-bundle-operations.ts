@@ -10,10 +10,11 @@ import {
   MobileWebBundleManifestReplySchema,
   MobileWebBundleRangeReplySchema
 } from './mobile-web-bundle-reply-schemas'
-import { isRpcDeliveryUnknown } from '../rpc-delivery-ambiguity'
-import { defineRpcOperation } from '../rpc-operation'
-import { isLogicalClientCutoverError } from '../stable-logical-rpc-client'
-import { rpcResultVariant } from '../rpc-operation-result-reader'
+import { isRpcDeliveryUnknown } from '../rpc/rpc-delivery-ambiguity'
+import { defineRpcOperation } from '../rpc/rpc-operation'
+import '../connection/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../connection/logical-client-cutover-error'
+import { rpcResultVariant } from '../rpc/rpc-operation-result-reader'
 
 // Require whole results and settle immediately; salvaging would hide corruption, and deferred refusals would leave sibling reads running.
 

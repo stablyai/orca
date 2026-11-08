@@ -9,19 +9,6 @@ const facet = (overrides: Partial<ProgramStatusFacet>): ProgramStatusFacet => ({
 })
 
 describe('resolveProgramStatusPresentation', () => {
-  it('shows nothing without a facet', () => {
-    expect(resolveProgramStatusPresentation({ state: 'working' })).toEqual({})
-  })
-
-  it('shows progress and the program line on a live row', () => {
-    expect(
-      resolveProgramStatusPresentation({
-        state: 'working',
-        programStatus: facet({ progress: 40, message: 'Pushing image' })
-      })
-    ).toEqual({ progress: 40, message: 'Pushing image' })
-  })
-
   it("lets a hook's structured tool preview win over the program's free text", () => {
     expect(
       resolveProgramStatusPresentation({

@@ -1,9 +1,9 @@
 import type { PluginThemeDerivationRule } from './plugin-theme-artifact'
 
-/** A derivation, or `tint`: `color-mix(in srgb, <tint> <percent>%, transparent)`. */
+/** A derivation, or `tint`: `color-mix(in srgb, <tint> <percent>%, <into> or transparent)`. */
 export type PluginThemeCssFallbackRule =
   | PluginThemeDerivationRule
-  | { tint: string; percent: number }
+  | { tint: string; percent: number; into?: string }
 
 const tint = (token: string, light: number, dark: number) => ({
   light: { tint: token, percent: light },
@@ -27,6 +27,7 @@ const PLUGIN_APP_THEME_CSS_FALLBACKS: Record<
   '--tab-active-indicator': ['--tab-active-foreground'],
   '--tab-inactive': { light: { mixForeground: 4, into: '--tab-bar' }, dark: ['--tab-bar'] },
   '--tab-inactive-foreground': ['--muted-foreground'],
+  '--worktree-sidebar-active': tint('--worktree-sidebar-foreground', 8, 10),
   '--host-badge': { light: ['--accent'], dark: { tint: '--accent', percent: 80 } },
   '--host-badge-foreground': ['--muted-foreground'],
   '--diff-added': ['--git-decoration-added'],
@@ -39,12 +40,41 @@ const PLUGIN_APP_THEME_CSS_FALLBACKS: Record<
   '--diff-removed-gutter': tint('--diff-removed', 22, 32),
   '--chat-diff-added': { mixForeground: 30, into: '--diff-added' },
   '--chat-diff-removed': { mixForeground: 30, into: '--diff-removed' },
+  '--chat-link': { mixForeground: 30, into: '--text-link' },
   // At the default chat contrast setting.
   '--chat-canvas': { light: ['--background'], dark: { mixForeground: 5 } },
+  '--chat-foreground': {
+    light: { mixForeground: 82, into: '--chat-canvas' },
+    dark: { mixForeground: 78, into: '--chat-canvas' }
+  },
   '--chat-foreground-strong': {
     light: { mixForeground: 92, into: '--chat-canvas' },
     dark: { mixForeground: 90, into: '--chat-canvas' }
-  }
+  },
+  '--chat-user-message': {
+    light: { mixForeground: 4, into: '--chat-canvas' },
+    dark: { mixForeground: 7, into: '--chat-canvas' }
+  },
+  '--chat-bold-foreground': ['--chat-foreground-strong'],
+  '--chat-muted-foreground': {
+    light: ['--muted-foreground'],
+    dark: { tint: '--muted-foreground', percent: 83, into: '--chat-canvas' }
+  },
+  '--chat-code-foreground': { mixForeground: 85, into: '--chat-canvas' },
+  '--chat-inline-code-foreground': ['--chat-code-foreground'],
+  '--chat-inline-code': {
+    light: { mixForeground: 4, into: '--chat-canvas' },
+    dark: { tint: '--foreground', percent: 6 }
+  },
+  '--chat-code-block': {
+    light: { mixForeground: 2, into: '--chat-canvas' },
+    dark: { tint: '--foreground', percent: 3.5 }
+  },
+  '--chat-selection': {
+    light: { tint: '--text-link', percent: 30, into: '--chat-canvas' },
+    dark: { tint: '--text-link', percent: 40, into: '--chat-canvas' }
+  },
+  '--chat-selection-foreground': ['--foreground']
 }
 
 export function pluginAppThemeCssFallback(

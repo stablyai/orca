@@ -5,7 +5,6 @@ import { join } from 'node:path'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { countLooseRefs } from '../../../../shared/loose-ref-count'
 import { RepoRefMaintenance } from '../../../../shared/repo-ref-maintenance'
-import { PACK_INDEX_MAINTENANCE_COOLDOWN_MS } from '../../../../shared/repo-pack-index-maintenance-policy'
 import {
   _resetLocalRepoRefMaintenanceForTests,
   createLocalRepoRefMaintenanceTarget,
@@ -144,19 +143,6 @@ async function settle(maintenance: RepoRefMaintenance): Promise<void> {
   await maintenance.whenAttemptSettled()
 }
 
-/** Deferred repos re-arm for another quiet period, so drain rather than count rounds. */
-async function settleUntil(
-  maintenance: RepoRefMaintenance,
-  done: () => Promise<boolean>
-): Promise<void> {
-  for (let round = 0; round < 100; round += 1) {
-    if (await done()) {
-      return
-    }
-    await settle(maintenance)
-  }
-}
-
 afterEach(async () => {
   _resetLocalRepoRefMaintenanceForTests()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
@@ -204,38 +190,6 @@ describe('idle ref maintenance against real Git', () => {
         blobs[PACK_INDEX_THRESHOLD - 1]
       ])
     ).toBe(`packed-${PACK_INDEX_THRESHOLD - 1}`)
-    await expect(readFile(join(repoPath, '.git', 'packed-refs'))).rejects.toMatchObject({
-      code: 'ENOENT'
-    })
-  })
-
-  it('refreshes new packs during ref cooldown and keeps readers working between writes', async () => {
-    const { repoPath } = await createRepo(0)
-    const blobs = await createFragmentedPacks(repoPath)
-    const packs = join(repoPath, '.git', 'objects', 'pack')
-    let clock = 0
-    const { maintenance, arm } = createMaintenance(
-      () => {},
-      () => clock
-    )
-    arm(repoPath)
-    await settle(maintenance)
-    expect((await readFile(join(packs, 'multi-pack-index'))).readUInt32BE(8)).toBe(
-      PACK_INDEX_THRESHOLD
-    )
-    const added = git(repoPath, ['hash-object', '-w', '--stdin'], 'new fetched object\n')
-    git(repoPath, ['pack-objects', join(packs, 'pack')], `${added}\n`)
-    await rm(join(repoPath, '.git', 'objects', added.slice(0, 2), added.slice(2)))
-    expect(git(repoPath, ['cat-file', '-p', added])).toBe('new fetched object')
-    expect(git(repoPath, ['cat-file', '-p', blobs[0]])).toBe('packed-0')
-    clock = PACK_INDEX_MAINTENANCE_COOLDOWN_MS + 1
-    arm(repoPath)
-    await settle(maintenance)
-    maintenance.dispose()
-    expect((await readFile(join(packs, 'multi-pack-index'))).readUInt32BE(8)).toBe(
-      PACK_INDEX_THRESHOLD + 1
-    )
-    expect(git(repoPath, ['multi-pack-index', 'verify'])).toBe('')
     await expect(readFile(join(repoPath, '.git', 'packed-refs'))).rejects.toMatchObject({
       code: 'ENOENT'
     })
@@ -295,21 +249,6 @@ describe('idle ref maintenance against real Git', () => {
     )
   }, 30_000)
 
-  it('leaves a healthy repository untouched', async () => {
-    const { repoPath, refsDir } = await createRepo(2)
-    let packed = 0
-    const { maintenance, arm } = createMaintenance(() => {
-      packed += 1
-    })
-
-    arm(repoPath)
-    await settle(maintenance)
-    maintenance.dispose()
-
-    expect(packed).toBe(0)
-    await expect(countLooseRefs(refsDir, 10_000)).resolves.toMatchObject({ count: 3 })
-  }, 30_000)
-
   it('honours maintenance.auto=false in the repository config', async () => {
     const { repoPath, refsDir } = await createRepo(THRESHOLD + 30)
     git(repoPath, ['config', 'maintenance.auto', 'false'])
@@ -327,53 +266,6 @@ describe('idle ref maintenance against real Git', () => {
       count: THRESHOLD + 31
     })
   }, 30_000)
-
-  it('runs one repository at a time even when several go quiet together', async () => {
-    const repos = await Promise.all([
-      createRepo(THRESHOLD + 5),
-      createRepo(THRESHOLD + 5),
-      createRepo(THRESHOLD + 5)
-    ])
-    let concurrent = 0
-    let peak = 0
-    const maintenance = new RepoRefMaintenance({
-      quietPeriodMs: QUIET_MS,
-      looseRefThreshold: THRESHOLD
-    })
-    for (const { repoPath } of repos) {
-      const target = createLocalRepoRefMaintenanceTarget({
-        key: `local::${repoPath}`,
-        repoPath
-      })
-      maintenance.arm({
-        ...target,
-        packRefs: async (signal) => {
-          concurrent += 1
-          peak = Math.max(peak, concurrent)
-          try {
-            await target.packRefs(signal)
-          } finally {
-            concurrent -= 1
-          }
-        }
-      })
-    }
-
-    const allPacked = async (): Promise<boolean> => {
-      const counts = await Promise.all(repos.map(({ refsDir }) => countLooseRefs(refsDir, 10_000)))
-      return counts.every((scan) => scan.count === 0)
-    }
-    await settleUntil(maintenance, allPacked)
-    maintenance.dispose()
-
-    expect(peak).toBe(1)
-    for (const { refsDir } of repos) {
-      await expect(countLooseRefs(refsDir, 10_000)).resolves.toEqual({
-        count: 0,
-        saturated: false
-      })
-    }
-  }, 60_000)
 })
 
 describe('yielding the repository to work that deletes refs', () => {

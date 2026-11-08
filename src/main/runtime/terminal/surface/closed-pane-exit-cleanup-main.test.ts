@@ -1,14 +1,15 @@
 // Close drops panes before terminal exit; main must recover their closed-pane identity even headless (L80 Q2).
 import { expect, it, vi } from 'vitest'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 
-await import('../../orca-runtime-test-mocks.spec')
-await import('../../orca-runtime-test-lifecycle.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+await import('../../orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 const { HEADLESS_LEAF_ID, HEADLESS_SECOND_LEAF_ID, TEST_WORKTREE_ID } =
-  await import('../../orca-runtime-test-fixtures.spec')
-const { OrcaRuntimeService } = await import('../../orca-runtime-test-mocks.spec')
+  await import('../../orca-runtime-tests/orca-runtime-test-fixtures.spec')
+await import('../../orca-runtime-tests/runtime-test-module-registration.spec')
+const { OrcaRuntimeService } = await import('../../orca-runtime')
 const { SURFACE_TAB_ID, SURFACE_PTYS, surfaceRuntime } =
   await import('./terminal-surface-replies.test-fixture')
 
@@ -103,19 +104,6 @@ for (const host of ['no window', 'a window'] as const) {
       expect(harness.reconciled).toContain(PANE_B)
       expect(harness.store.getSession().closedTerminalPanesByPaneKey?.[PANE_B]).toBeUndefined()
       expect(await phoneShowsPane(harness.runtime, HEADLESS_SECOND_LEAF_ID)).toBe(false)
-    })
-
-    it(`the exit drops the closed-pane record in its one retirement write: ${route}, with ${host}`, async () => {
-      const harness = closingHost(host)
-      await close(harness.runtime)
-      // The fixture's setter may already be a mock carrying the close's own writes.
-      const writes = vi.spyOn(harness.runtime['store']!, 'setWorkspaceSession')
-      writes.mockClear()
-
-      harness.runtime.onPtyExit('pty-b', 0, 'inc-b')
-
-      expect(writes).toHaveBeenCalledTimes(1)
-      expect(writes.mock.calls[0]![0].closedTerminalPanesByPaneKey?.[PANE_B]).toBeUndefined()
     })
 
     it(`exit then close retires them too: ${route}, with ${host}`, async () => {

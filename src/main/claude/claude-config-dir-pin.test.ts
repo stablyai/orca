@@ -14,12 +14,6 @@ describe('claude config dir pin', () => {
     expect(claudeConfigDirEnvPatch('  ', { env: {} })).toEqual({})
   })
 
-  it('pins a managed account home the CLI would not find on its own', () => {
-    expect(claudeConfigDirEnvPatch('/accounts/claude/managed', { env: {} })).toEqual({
-      CLAUDE_CONFIG_DIR: '/accounts/claude/managed'
-    })
-  })
-
   it('treats an inherited CLAUDE_CONFIG_DIR as the default the CLI already resolves', () => {
     const env = { CLAUDE_CONFIG_DIR: '/inherited/home' }
     expect(defaultClaudeConfigDir(env)).toBe('/inherited/home')

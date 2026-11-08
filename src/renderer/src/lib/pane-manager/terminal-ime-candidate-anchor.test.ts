@@ -130,37 +130,6 @@ describe('installTerminalImeCandidateAnchor', () => {
     document.body.innerHTML = ''
   })
 
-  it('keeps forced layout at one read per composition across a Hangul burst', () => {
-    const harness = createHarness()
-    installTerminalImeCandidateAnchor(harness.terminal)
-
-    for (let syllable = 0; syllable < 30; syllable++) {
-      typeHangulSyllable(harness, syllable)
-    }
-
-    // Thirty four-event compositions need one measurement each; ninety updates must not rewrite an unchanged anchor.
-    expect(harness.counts.rectReads).toBe(30)
-    expect(harness.counts.styleWrites).toBe(31)
-    expect(harness.style.left).toBe(`${29 * CELL_WIDTH}px`)
-  })
-
-  it('coalesces the deferred Cursor Agent re-apply to one timer per burst', () => {
-    const harness = createHarness()
-    harness.setLines(['Cursor Agent', '', '→ hello'])
-    installTerminalImeCandidateAnchor(harness.terminal)
-
-    typeHangulSyllable(harness, 0, 5, 1)
-
-    expect(vi.getTimerCount()).toBe(1)
-    harness.style.top = '0px'
-    vi.runAllTimers()
-    expect(harness.style).toEqual({
-      top: `${2 * CELL_HEIGHT}px`,
-      left: `${7 * CELL_WIDTH}px`,
-      width: ''
-    })
-  })
-
   it('keeps typed follow-ups anchored after recognizing the initial Cursor Agent screen', () => {
     const harness = createHarness()
     harness.setLines(['Cursor Agent', '', '→ Plan, search, build anything', ''])

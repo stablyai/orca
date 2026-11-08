@@ -1,27 +1,25 @@
 import { expect, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import type { StructuredAgentLaunchHandle } from '../structured-agent-launch-settlement'
-import type { OpenedAgentSessionTab } from '../structured-agent-session-tab-open-through-layout-owner'
-import type { TabsDrawnFromMain } from '@/store/slices/tabs-drawn-from-main.test-fixture'
+import type { StructuredAgentLaunchHandle } from './launch/continuation/structured-agent-launch-settlement'
+import type { OpenedAgentSessionTab } from './launch/pane/structured-agent-session-tab-open-through-layout-owner'
+import type { TabsDrawnFromMain } from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import { getStructuredLaunchStateBySessionId } from './launch/structured-agent-session-launch-registry'
-import {
-  nativeChatComposerDraftWritesSettled,
-  readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
+import { nativeChatComposerDraftWritesSettled } from '@/components/native-chat/drafts/native-chat-composer-draft-persistence'
+import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { promptTextContent } from '@/components/native-chat/composer/editor/native-chat-prompt-document-text'
 import {
   startStructuredAgentLaunch,
   retryStructuredAgentSessionLaunch
 } from './launch/structured-agent-session-launch'
 import { trackStructuredLaunchConfirmationDeadline } from './launch/structured-agent-session-launch-prompt-outcome'
 import { holdStructuredAgentSessionLaunchOption } from './launch/structured-agent-session-launch-options'
-import { structuredSessionSelectionController } from '../structured-agent-session-selection-controller'
+import { structuredSessionSelectionController } from './options/structured-agent-session-selection-controller'
 import type { SelectionOperation } from '../../../../shared/agent-session/options/structured-agent-session-selection-operations'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
 import type * as launchModule from './launch/structured-agent-session-launch-create-call'
-import * as sessionClient from '@/runtime/structured-agent-session-client'
-import * as runtimeRpc from '@/runtime/runtime-rpc-client'
+import * as sessionClient from '@/runtime/native-chat/requests/structured-agent-session-call'
+import * as runtimeRpc from '@/runtime/rpc/calls/runtime-rpc-call'
 
 export async function assertProvisionalSelectionLifetime({
   launch,

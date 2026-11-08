@@ -2,8 +2,8 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { DeviceRegistry } from '../device-registry'
-import { DEVICE_REGISTRY_FILENAME } from '../mobile-pairing-files'
+import { DeviceRegistry } from '../rpc/server/pairing/device-registry'
+import { DEVICE_REGISTRY_FILENAME } from '../rpc/server/pairing/mobile-pairing-files'
 import type { MobilePushRegistration } from '../../../shared/mobile-push-contract'
 
 const REGISTRATION: MobilePushRegistration = {

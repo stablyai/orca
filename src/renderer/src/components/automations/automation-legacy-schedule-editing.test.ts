@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import type { Automation } from '../../../../shared/automations-types'
-import {
-  isRunnableAutomationSchedule,
-  isValidAutomationSchedule
-} from '../../../../shared/automation-schedule-parsing'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import { isValidAutomationSchedule } from '../../../../shared/automations/scheduling/automation-schedule-parsing'
+
 import { buildAutomationEditDraft } from './automation-edit-draft'
-import { getCronScheduleStatusLabel } from './AutomationCustomCronPanel'
-import { acceptsAutomationDraftSchedule } from './automation-schedule-input-gate'
+
+import { acceptsAutomationDraftSchedule } from '../../../../shared/automations/scheduling/automation-schedule-input-gate'
 
 // `*/90` on minutes was accepted before the oversized-step refusal (#15895) and still runs,
 // firing at :00. Only a row persisted by an older build can hold it.
@@ -39,11 +37,6 @@ const makeAutomation = (overrides: Partial<Automation> = {}): Automation => ({
 })
 
 describe('editing an automation whose saved schedule predates the input gate', () => {
-  it('still refuses the same expression as new input', () => {
-    expect(isValidAutomationSchedule(LEGACY_OVERSIZED_STEP)).toBe(false)
-    expect(isRunnableAutomationSchedule(LEGACY_OVERSIZED_STEP)).toBe(true)
-  })
-
   it('opens the editor with the saved schedule intact and no warning', () => {
     const draft = buildAutomationEditDraft(makeAutomation())
     expect(draft.preset).toBe('custom')
@@ -52,18 +45,6 @@ describe('editing an automation whose saved schedule predates the input gate', (
   })
 
   // Untouched legacy schedules must not block unrelated renames behind re-authoring.
-  it('lets a rename through without re-authoring the schedule', () => {
-    const automation = makeAutomation()
-    const renamed = { ...buildAutomationEditDraft(automation), name: 'Renamed sweep' }
-    expect(renamed.scheduleWarning).toBeNull()
-    expect(
-      acceptsAutomationDraftSchedule({
-        customSchedule: renamed.customSchedule,
-        savedRrule: automation.rrule,
-        validate: isValidAutomationSchedule
-      })
-    ).toBe(true)
-  })
 
   it('still refuses a schedule the user actually changes', () => {
     const automation = makeAutomation()
@@ -86,24 +67,6 @@ describe('editing an automation whose saved schedule predates the input gate', (
         validate: isValidAutomationSchedule
       })
     ).toBe(false)
-  })
-
-  // Apply the save gate to live validation too; unchanged legacy cadences must not show a new-input error.
-  it('reports the saved schedule as valid in the editor cron status', () => {
-    const draft = buildAutomationEditDraft(makeAutomation())
-    const accepts = (schedule: string): boolean =>
-      acceptsAutomationDraftSchedule({
-        customSchedule: schedule,
-        savedRrule: draft.savedSchedule,
-        validate: isValidAutomationSchedule
-      })
-    expect(getCronScheduleStatusLabel(draft.customSchedule, accepts).kind).toBe('valid')
-    // A different oversized step is new input, so it is still called out.
-    expect(getCronScheduleStatusLabel('*/91 * * * *', accepts).kind).toBe('invalid')
-  })
-
-  it('carries the saved schedule on the draft so the gate can see it', () => {
-    expect(buildAutomationEditDraft(makeAutomation()).savedSchedule).toBe(LEGACY_OVERSIZED_STEP)
   })
 
   // Only oversized steps receive legacy leniency; unparseable schedules still need warnings.

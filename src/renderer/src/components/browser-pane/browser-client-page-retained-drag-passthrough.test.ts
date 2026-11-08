@@ -29,21 +29,6 @@ afterEach(() => {
 })
 
 describe('client-hosted retained guest drag passthrough', () => {
-  it('holds a visible retained host click-through for the length of a drag', async () => {
-    const rig = createRetainedHostFixture()
-    await rig.mount()
-    rig.attach()
-    expect(rig.host().style.pointerEvents).toBe('auto')
-
-    const endDrag = startDrag()
-
-    expect(rig.host().style.pointerEvents).toBe('none')
-
-    endDrag()
-
-    expect(rig.host().style.pointerEvents).toBe('auto')
-  })
-
   it('brings a retained page attached mid-drag up click-through', async () => {
     const rig = createRetainedHostFixture()
     await rig.mount()

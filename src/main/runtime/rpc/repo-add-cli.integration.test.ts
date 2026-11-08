@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { randomUUID } from 'node:crypto'
 import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -9,10 +8,10 @@ import { z } from 'zod'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { getRuntimeMetadataPath } from '../../../shared/runtime-bootstrap'
 import type { Repo } from '../../../shared/repo-types'
-import { RuntimeRepositoryRegistrationController } from '../runtime-repository-registration-controller'
-import { partialRuntimeStore } from '../runtime-store-partial-fixture'
+import { RuntimeRepositoryRegistrationController } from '../repositories/runtime-repository-registration-controller'
+import { partialRuntimeStore } from '../orca-runtime-tests/runtime-store-partial-fixture'
 import type { RpcRequest } from './core'
-import { repoDispatcher } from './methods/repo-rpc.test-fixture'
+import { repoDispatcher } from './methods/projects/repo-rpc.test-fixture'
 import { UnixSocketTransport } from './unix-socket-transport'
 
 vi.mock('../../repository-icons/repo-icon-autodetect', () => ({

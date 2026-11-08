@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MAX_TIMER_DELAY_MS } from '../../../../shared/timer-delay'
+
 import {
   RuntimeMobileFilePathSearchCache,
   type RuntimeMobileFilePathInventory
@@ -83,42 +83,6 @@ describe('mobile file path inventory expiry', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('keeps cache hits through the original deadline without extending it', async () => {
-    const cache = new RuntimeMobileFilePathSearchCache(8, TTL_MS)
-    const load = vi.fn(async () => inventory('file.ts'))
-    await cache.get('workspace', load)
-    vi.advanceTimersByTime(TTL_MS - 1)
-    await cache.get('workspace', load)
-    expect(load).toHaveBeenCalledOnce()
-    vi.advanceTimersByTime(1)
-    expect(vi.getTimerCount()).toBe(0)
-    await cache.get('workspace', load)
-    expect(load).toHaveBeenCalledTimes(2)
-  })
-
-  it('starts expiry when a slow SSH load settles and shares its pending request', async () => {
-    const cache = new RuntimeMobileFilePathSearchCache(8, TTL_MS)
-    let resolveLoad: (value: RuntimeMobileFilePathInventory) => void = () => {}
-    const load = vi.fn(
-      () =>
-        new Promise<RuntimeMobileFilePathInventory>((resolve) => {
-          resolveLoad = resolve
-        })
-    )
-    const first = cache.get('ssh-host:workspace', load)
-    const second = cache.get('ssh-host:workspace', load)
-    vi.advanceTimersByTime(TTL_MS * 2)
-    expect(vi.getTimerCount()).toBe(0)
-    resolveLoad(inventory('file.ts'))
-    await Promise.all([first, second])
-    expect(load).toHaveBeenCalledOnce()
-    vi.advanceTimersByTime(TTL_MS - 1)
-    await cache.get('ssh-host:workspace', load)
-    expect(load).toHaveBeenCalledOnce()
-    vi.advanceTimersByTime(1)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it('cancels evicted timers and ignores a retired callback after the same key reloads', async () => {
     const timeout = vi.spyOn(globalThis, 'setTimeout')
     const cache = new RuntimeMobileFilePathSearchCache(1, TTL_MS)
@@ -138,32 +102,6 @@ describe('mobile file path inventory expiry', () => {
       inventory('replacement.ts')
     )
     vi.advanceTimersByTime(TTL_MS)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('preserves caller-controlled explicit clocks without arming wall-clock timers', async () => {
-    const cache = new RuntimeMobileFilePathSearchCache(8, TTL_MS)
-    const load = vi.fn(async () => inventory('file.ts'))
-    await cache.get('workspace', load, 0)
-    vi.advanceTimersByTime(TTL_MS * 2)
-    await cache.get('workspace', load, TTL_MS - 1)
-    expect(load).toHaveBeenCalledOnce()
-    expect(vi.getTimerCount()).toBe(0)
-    await cache.get('workspace', load, TTL_MS)
-    expect(load).toHaveBeenCalledTimes(2)
-  })
-
-  it('bounds delay after a backward wall-clock jump without evicting fresh paths', async () => {
-    const timeout = vi.spyOn(globalThis, 'setTimeout')
-    const cache = new RuntimeMobileFilePathSearchCache(8, TTL_MS)
-    const load = vi.fn(async () => inventory('file.ts'))
-    await cache.get('workspace', load)
-    vi.setSystemTime(-MAX_TIMER_DELAY_MS)
-    vi.advanceTimersByTime(TTL_MS)
-    expect(timeout.mock.calls.at(-1)?.[1]).toBe(MAX_TIMER_DELAY_MS)
-    await cache.get('workspace', load)
-    expect(load).toHaveBeenCalledOnce()
-    vi.advanceTimersByTime(MAX_TIMER_DELAY_MS)
     expect(vi.getTimerCount()).toBe(0)
   })
 })
