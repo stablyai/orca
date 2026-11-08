@@ -73,6 +73,7 @@ export function registerEmulatorNativeVideoHandlers(): void {
         stop()
         return
       }
+      clearTimeout(timer)
       timer = setTimeout(() => fail('Native emulator renderer stopped acknowledging frames'), 5000)
     }
     port1.on('message', ({ data }) => {

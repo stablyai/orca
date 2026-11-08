@@ -30,8 +30,23 @@ function openSession(serial: string) {
     frame: () => {},
     end: (retry) => ended.push(retry)
   })
-  return { session, stream, ended }
+  return { session, grpc, stream, ended }
 }
+
+it('rejects reuse when the session closes during the display probe', async () => {
+  const { session, grpc } = openSession('emulator-9940')
+  const display = Promise.withResolvers<{ width: number; height: number }>()
+  vi.spyOn(grpc, 'displaySize').mockReturnValue(display.promise)
+  try {
+    const reusable = session.isReusable()
+    await session.close()
+    display.resolve({ width: 1080, height: 2220 })
+
+    expect(await reusable).toBe(false)
+  } finally {
+    await session.close()
+  }
+})
 
 it('requests scrcpy recovery when an asleep startup stream never delivers pixels', async () => {
   vi.useFakeTimers()

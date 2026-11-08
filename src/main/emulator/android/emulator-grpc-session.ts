@@ -223,7 +223,7 @@ export class EmulatorGrpcSession {
     }
     try {
       Object.assign(this.display, await this.grpc.displaySize())
-      return true
+      return !this.closed
     } catch {
       this.close()
       return false
