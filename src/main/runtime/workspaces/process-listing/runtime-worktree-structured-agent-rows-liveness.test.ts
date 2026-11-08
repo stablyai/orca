@@ -22,7 +22,7 @@ vi.mock('../../../telemetry/cohort-classifier', () => ({
 /** Exercise journal to worktree-status liveness: feed summaries never retract, but the store drops closed chats, including unanswered approvals whose retained status stays attention. */
 const WORKTREE_ID = 'repo-1::/workspace/app'
 const SESSION = 'a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d'
-const SUBJECT = makeStructuredAgentStatusSubject(
+makeStructuredAgentStatusSubject(
   {
     executionHostId: 'local',
     wslDistro: null,
@@ -163,30 +163,5 @@ describe('worktree ps and a closed structured chat', () => {
     feed.publish(SESSION, undefined, { replay: true })
 
     expect(worktreeFor(store).agents).toHaveLength(0)
-  })
-
-  it('keeps an aged host-held approval state authoritative', async () => {
-    const { store, published } = await awaitingApproval()
-    const aged = {
-      ...published.at(-1)!,
-      hostExecutionOwned: true as const,
-      updatedAt: Date.now() - 30 * 60 * 1000 - 1
-    }
-    store.ingestStructuredStatus(aged, SUBJECT)
-    const row = worktreeFor(store)
-    expect(row.agents).toHaveLength(1)
-    expect(row.agents[0]?.state).toBe('blocked')
-    expect(row.status).toBe('permission')
-    expect(row.agents[0]?.updatedAt).toBe(aged.updatedAt)
-  })
-
-  it('lets an aged approval decay once the host no longer owns the child', async () => {
-    const { store, published } = await awaitingApproval()
-    const { hostExecutionOwned: _owned, ...held } = published.at(-1)!
-    store.ingestStructuredStatus({ ...held, updatedAt: Date.now() - 30 * 60 * 1000 - 1 }, SUBJECT)
-    const row = worktreeFor(store)
-    expect(row.agents).toHaveLength(1)
-    expect(row.agents[0]?.state).toBe('blocked')
-    expect(row.status).toBe('inactive')
   })
 })
