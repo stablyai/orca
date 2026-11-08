@@ -3883,6 +3883,7 @@
         "Extend the oracle to mobile observers and to a client with two windows open on one connection."
       ],
       "knownGaps": [
+        "Audit2141: Remove only the in-memory fake-store restart callback from src/main/runtime/client/navigation/multi-client-navigation-isolation.integration.test.ts. Its copied persistence-object alarm is intentionally lost without replacement. All eight actual paired-WebSocket callbacks and five active assertion aliases remain byte-identical. Existing Electron receipt is unchanged and validates only its original source/journey; no fresh validation of the reduced integration selector, disk persistence, live remote/mobile, or cross-platform result is claimed.",
         "No live Windows or Linux server run yet; the reported field topology was a Windows 11 server.",
         "Mobile observers are covered only by the platform-neutral clientKind contract, not by a live phone journey.",
         "Host-originated CLI creates deliberately still reveal on every client; that broader authority question is untouched by this gate.",
