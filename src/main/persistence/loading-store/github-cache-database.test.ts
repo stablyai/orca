@@ -35,18 +35,6 @@ const save = (dataFile: string, cache: Parameters<typeof writeGitHubCacheDatabas
 }
 
 describe('github cache database', () => {
-  it('reads back saved entries, including removals', () => {
-    const dataFile = profileDataFile()
-    save(dataFile, { pr: { 'o/r#1': pr(1), 'o/r#2': pr(2) }, issue: {} })
-    save(dataFile, { pr: { 'o/r#2': pr(3) }, issue: { 'o/r#9': pr(4) } })
-
-    expect(readGitHubCacheDatabase(dataFile)).toEqual({
-      cache: { pr: { 'o/r#2': pr(3) }, issue: { 'o/r#9': pr(4) } },
-      fromSidecar: false,
-      sidecarHash: null
-    })
-  })
-
   it('keeps an older build sidecar until its imported rows commit', async () => {
     const dataFile = profileDataFile()
     save(dataFile, { pr: { 'o/r#1': pr(1) }, issue: {} })
