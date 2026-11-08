@@ -78,6 +78,7 @@ function Probe({
   latest = useMobileNativeChatFork({
     client,
     hostCapabilities,
+    hostStatusPending: false,
     agent: 'claude',
     sessionId: 'session-1',
     messages: [message],
@@ -204,28 +205,63 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
     result: { agents: [{ agent: 'opencode', capabilities: { fork: 'tip' } }] }
   })
   const createFork = vi.fn(async () => {})
-  const copied = { ...message, id: 'legacy:opencode:source:reply-1' }
+  const copied = {
+    ...message,
+    id: 'legacy:opencode:source:reply-1',
+    journalPosition: { sequence: 2, index: 0 }
+  }
+  const copiedPrompt: NativeChatMessage = {
+    ...message,
+    id: 'legacy:opencode:source:user-1',
+    role: 'user',
+    journalPosition: { sequence: 1, index: 0 }
+  }
+  const ownPrompt: NativeChatMessage = {
+    ...message,
+    id: 'legacy:opencode:child:user-2',
+    role: 'user',
+    journalPosition: { sequence: 4, index: 0 }
+  }
   const own = {
     ...message,
     id: 'legacy:opencode:child:reply-2',
-    journalPosition: { sequence: 4, index: 0 }
+    journalPosition: { sequence: 5, index: 0 }
   }
-  function ForkProbe({ hostCapabilities }: { hostCapabilities: readonly string[] }) {
+  function ForkProbe({
+    hostCapabilities,
+    hostStatusPending = false
+  }: {
+    hostCapabilities: readonly string[]
+    hostStatusPending?: boolean
+  }) {
     latest = useMobileNativeChatFork({
       client,
       hostCapabilities,
+      hostStatusPending,
       agent: 'opencode',
       sessionId: 'child',
-      messages: [copied, own],
+      messages: [copiedPrompt, copied, ownPrompt, own],
       turnJournal: {
         items: [
-          { ...reply, itemId: copied.id },
+          {
+            ...reply,
+            itemId: copiedPrompt.id,
+            body: { kind: 'message', role: 'user', blocks: copiedPrompt.blocks }
+          },
+          { ...reply, itemId: copied.id, sequence: 2 },
           {
             ...reply,
             itemId: 'orca:forked-from',
+            sequence: 2,
             body: { kind: 'status', presentation: 'forked-from', text: 'Forked from source' }
           },
-          { ...reply, itemId: own.id, sequence: 4 }
+          {
+            ...reply,
+            itemId: ownPrompt.id,
+            sequence: 4,
+            body: { kind: 'message', role: 'user', blocks: ownPrompt.blocks }
+          },
+          { ...reply, itemId: own.id, sequence: 5 }
         ],
         submissions: []
       },
@@ -245,6 +281,25 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
     renderer!.update(
       createElement(ForkProbe, {
         hostCapabilities: [...FORK_HOST, AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY]
+      })
+    )
+  })
+  expect(latest?.offerFor(copied)).toBe('available')
+  await act(async () => {
+    renderer!.update(
+      createElement(ForkProbe, {
+        hostCapabilities: [...FORK_HOST, AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY],
+        hostStatusPending: true
+      })
+    )
+  })
+  expect(latest?.offerFor(copied)).toBe('reserved')
+  expect(latest?.offerFor(own)).toBe('available')
+  await act(async () => {
+    renderer!.update(
+      createElement(ForkProbe, {
+        hostCapabilities: [...FORK_HOST, AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY],
+        hostStatusPending: false
       })
     )
   })

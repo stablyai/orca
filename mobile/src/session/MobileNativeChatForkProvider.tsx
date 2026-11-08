@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
 import type { StructuredAgentSessionForkSource } from '../../../src/shared/agent-session/structured-agent-session-create'
 import { MobileNativeChatForkedFromContext } from './mobile-native-chat-notice-context'
@@ -19,6 +20,7 @@ export function MobileNativeChatForkProvider({
   children: React.ReactNode
 }): React.JSX.Element {
   const { client, nativeChatController: chat, openNativeSession, worktreeId } = controller
+  const { statusPending } = useHostProtocolGates()
   // The controller is rebuilt each render; a fork reads its session state at the press.
   const latestController = useRef(controller)
   useLayoutEffect(() => {
@@ -32,6 +34,7 @@ export function MobileNativeChatForkProvider({
   const fork = useMobileNativeChatFork({
     client,
     hostCapabilities: controller.hostCapabilities,
+    hostStatusPending: statusPending || controller.connState !== 'connected',
     agent: chat.nativeChatAgent,
     sessionId: resolveMobileNativeChatSessionId(controller.activeSessionTab),
     messages: chat.nativeChatSession.messages,

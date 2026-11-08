@@ -71,18 +71,21 @@ export function useStructuredAgentSessionOwnPermissionState(
  *  host is asked again each time this client regains contact with it. */
 export function useStructuredAgentSessionHostCapabilityState(
   target: RuntimeClientTarget | null,
-  capability: RuntimeCapability
+  capability: RuntimeCapability,
+  requireCurrentContact = false
 ): StructuredAgentSessionHostCapabilityState {
   const key = target ? structuredAgentSessionHostKey(target) : null
+  const [contact, setContact] = useState(0)
   const [answer, setAnswer] = useState<{
     key: string | null
+    contact: number
     state: StructuredAgentSessionHostCapabilityState
   }>(() => ({
     key,
+    contact,
     state: target?.kind === 'local' ? localCapabilityState(capability) : 'unknown'
   }))
   const environmentId = target?.kind === 'environment' ? target.environmentId : null
-  const [contact, setContact] = useState(0)
   useEffect(() => {
     if (environmentId === null) {
       return
@@ -105,15 +108,21 @@ export function useStructuredAgentSessionHostCapabilityState(
       .then((state) => {
         if (!cancelled) {
           setAnswer((current) =>
-            current.key === key && current.state === state ? current : { key, state }
+            current.key === key &&
+            current.state === state &&
+            (!requireCurrentContact || current.contact === contact)
+              ? current
+              : { key, contact, state }
           )
         }
       })
     return () => {
       cancelled = true
     }
-  }, [capability, contact, environmentId, key])
-  return answer.key === key ? answer.state : 'unknown'
+  }, [capability, contact, environmentId, key, requireCurrentContact])
+  return answer.key === key && (!requireCurrentContact || answer.contact === contact)
+    ? answer.state
+    : 'unknown'
 }
 
 function localCapabilityState(

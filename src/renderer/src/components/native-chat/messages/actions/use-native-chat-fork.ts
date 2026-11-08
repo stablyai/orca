@@ -81,7 +81,8 @@ export function useNativeChatFork(input: {
   )
   const inheritedOriginalHost = useStructuredAgentSessionHostCapabilityState(
     input.target,
-    AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
+    AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY,
+    true
   )
   const registered = useHostStructuredAgent(input.target, input.agent)
   const support = nativeChatForkSupport(

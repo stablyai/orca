@@ -156,6 +156,7 @@ function useRegisteredAgent(
 export function useMobileNativeChatFork(input: {
   client: RpcClient | null
   hostCapabilities: readonly string[] | undefined
+  hostStatusPending: boolean
   agent: string | null
   sessionId: string | null
   messages: readonly NativeChatMessage[]
@@ -170,11 +171,12 @@ export function useMobileNativeChatFork(input: {
     : input.hostCapabilities.includes(AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY)
       ? 'supported'
       : 'unsupported'
-  const inheritedOriginal: StructuredAgentSessionHostCapabilityState = !input.hostCapabilities
-    ? 'unknown'
-    : input.hostCapabilities.includes(AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY)
-      ? 'supported'
-      : 'unsupported'
+  const inheritedOriginal: StructuredAgentSessionHostCapabilityState =
+    !input.hostCapabilities || input.hostStatusPending
+      ? 'unknown'
+      : input.hostCapabilities.includes(AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY)
+        ? 'supported'
+        : 'unsupported'
   const registered = useRegisteredAgent(input.client, host, input.agent)
   const support = useMemo(
     () => nativeChatForkSupport(host, registered, input.sessionForkSupport, inheritedOriginal),

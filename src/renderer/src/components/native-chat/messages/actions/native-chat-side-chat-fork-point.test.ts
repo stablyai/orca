@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { createElement } from 'react'
+import { act, createElement } from 'react'
 import { renderHook } from '@testing-library/react'
 import {
   AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
@@ -22,10 +22,28 @@ import type { NativeChatMessage } from '../../../../../../shared/native-chat/nat
 import type { NativeChatTranscriptSlotsInput } from '../../conversation/slots/native-chat-transcript-input'
 import { buildNativeChatTranscript } from '../../conversation/slots/native-chat-transcript-slots'
 
-const host = vi.hoisted(() => ({ capabilities: new Set<string>() }))
-vi.mock('@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability', () => ({
-  useStructuredAgentSessionHostCapabilityState: (_target: unknown, capability: string) =>
-    host.capabilities.has(capability) ? 'supported' : 'unsupported'
+const host = vi.hoisted(
+  (): {
+    capabilities: Set<string>
+    pendingOriginal: Promise<boolean> | null
+    contacts: Set<() => void>
+  } => ({
+    capabilities: new Set<string>(),
+    pendingOriginal: null,
+    contacts: new Set<() => void>()
+  })
+)
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: (_environmentId: string, capability: string) =>
+    capability === AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY && host.pendingOriginal
+      ? host.pendingOriginal
+      : Promise.resolve(host.capabilities.has(capability))
+}))
+vi.mock('@/runtime/hosts/connections/runtime-host-contact-regained', () => ({
+  subscribeRuntimeHostContactRegained: (_environmentId: string, listener: () => void) => {
+    host.contacts.add(listener)
+    return () => host.contacts.delete(listener)
+  }
 }))
 vi.mock('@/runtime/native-chat/agent-catalogs/use-host-structured-agent', () => ({
   useHostStructuredAgent: () => ({ capabilities: { fork: 'tip' } })
@@ -177,7 +195,7 @@ it('offers the inherited source tip while a later child response is running', ()
   ).toEqual({ kind: 'reply-running' })
 })
 
-it('carries target-host original-fork support into desktop response and side-chat offers', () => {
+it('carries current target-host proof into desktop response and side-chat offers', async () => {
   const copied = row('legacy:opencode:source:reply-1', 'assistant', 1)
   const own = row('legacy:opencode:child:reply-2', 'assistant', 4)
   const { input, latestTurnKey } = conversation(
@@ -224,6 +242,7 @@ it('carries target-host original-fork support into desktop response and side-cha
       sessionForkSupport: 'supported'
     })
   )
+  await act(async () => {})
   const responseOffered = () =>
     nativeChatRowOffersFork(
       {
@@ -251,13 +270,47 @@ it('carries target-host original-fork support into desktop response and side-cha
   expect(sidePoint()).toEqual({ kind: 'reply-running' })
 
   host.capabilities.add(AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY)
-  pane.rerender()
+  await act(async () => {
+    host.contacts.forEach((listener) => listener())
+  })
+  side.rerender()
+  expect(responseOffered()).toBe(true)
+  expect(sidePoint()).toEqual({ kind: 'ready', throughItemId: 'legacy:opencode:source:reply-1' })
+
+  let settleOriginal = (_supported: boolean) => {}
+  host.pendingOriginal = new Promise<boolean>((resolve) => {
+    settleOriginal = resolve
+  })
+  await act(async () => {
+    host.contacts.forEach((listener) => listener())
+  })
+  side.rerender()
+  expect(responseOffered()).toBe(false)
+  expect(sidePoint()).toEqual({ kind: 'reply-running' })
+  expect(
+    nativeChatRowOffersFork(
+      {
+        message: own,
+        inSubagentSection: false,
+        turnWorking: false,
+        inLatestTurn: true
+      },
+      pane.result.current!
+    )
+  ).toBe(true)
+
+  await act(async () => {
+    settleOriginal(true)
+  })
+  host.pendingOriginal = null
   side.rerender()
   expect(responseOffered()).toBe(true)
   expect(sidePoint()).toEqual({ kind: 'ready', throughItemId: 'legacy:opencode:source:reply-1' })
 
   host.capabilities.delete(AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY)
-  pane.rerender()
+  await act(async () => {
+    host.contacts.forEach((listener) => listener())
+  })
   side.rerender()
   expect(responseOffered()).toBe(false)
   expect(sidePoint()).toEqual({ kind: 'reply-running' })
