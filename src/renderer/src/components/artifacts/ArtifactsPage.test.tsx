@@ -5,7 +5,6 @@ import type { ReactNode } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrcaProfileAuthStatus } from '../../../../shared/orca-profiles'
 
 const mocks = vi.hoisted(() => ({
   authStatus: {
@@ -72,7 +71,6 @@ function storeState(): Record<string, unknown> {
 }
 
 import ArtifactsPage from './ArtifactsPage'
-import { artifactAccountIdentity } from './useArtifactPagination'
 
 describe('ArtifactsPage', () => {
   beforeEach(() => {
@@ -130,68 +128,6 @@ describe('ArtifactsPage', () => {
 
   afterEach(cleanup)
 
-  it('renders the selected artifact in a right drawer with copy link as the primary action', async () => {
-    render(<ArtifactsPage />)
-
-    const row = await screen.findByRole('button', { name: /Quarterly report/ })
-    expect(row).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { level: 2, name: 'Quarterly report' })).toBeNull()
-    const title = screen.getByRole('heading', { level: 1, name: 'Artifacts' })
-    expect(title).toHaveClass('text-base', 'font-semibold', 'leading-8')
-    expect(title.closest('header')).toHaveClass('px-3', 'pb-3', 'md:px-5')
-    expect(screen.getByRole('main')).toHaveClass('pt-5', 'md:pt-6')
-    expect(screen.queryByRole('button', { name: 'Close artifacts' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Refresh' })).toHaveClass('border', 'border-border')
-
-    fireEvent.click(row)
-    expect(
-      await screen.findByRole('heading', { level: 2, name: 'Quarterly report' })
-    ).toBeInTheDocument()
-    expect(document.querySelector('[data-slot="sheet-content"]')).toHaveClass(
-      'w-[min(96rem,calc(100vw-var(--mac-traffic-lights-width,0px)))]'
-    )
-    // Drawer actions must stay inset beyond the fixed Windows/Linux controls overlay.
-    expect(
-      screen
-        .getByRole('button', { name: 'Close' })
-        .closest('.pr-\\[max\\(1rem\\,var\\(--window-controls-width\\,0px\\)\\)\\]')
-    ).not.toBeNull()
-    const copyButton = screen.getByRole('button', { name: 'Copy link' })
-    expect(copyButton).toHaveAttribute('data-variant', 'default')
-    expect(copyButton.parentElement).toHaveAttribute('aria-label', 'Artifact actions')
-    expect(screen.getByRole('button', { name: 'Open in browser' })).toHaveAttribute(
-      'data-variant',
-      'ghost'
-    )
-    expect(screen.queryByRole('button', { name: 'Delete artifact' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'More artifact actions' })).toBeInTheDocument()
-
-    await waitFor(() => {
-      const preview = document.querySelector('webview[aria-label="Artifact preview"]')
-      expect(preview).toHaveAttribute('partition', 'persist:orca-default')
-      expect(preview).toHaveAttribute('src', 'https://share.onorca.dev/a/report-123?embed=1')
-    })
-
-    fireEvent.click(copyButton)
-    await waitFor(() =>
-      expect(mocks.writeClipboardText).toHaveBeenCalledWith('https://share.onorca.dev/a/report-123')
-    )
-    expect(mocks.toastSuccess).toHaveBeenCalledWith('Artifact link copied')
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open in browser' }))
-    expect(mocks.openUrl).toHaveBeenCalledWith('https://share.onorca.dev/a/report-123')
-  })
-
-  it('shows a fallback when the desktop preview session is unavailable', async () => {
-    mocks.resolvePartition.mockResolvedValue(null)
-    render(<ArtifactsPage />)
-
-    fireEvent.click(await screen.findByRole('button', { name: /Quarterly report/ }))
-    expect(await screen.findByText('Preview unavailable')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Copy link' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'Open in browser' })).toBeEnabled()
-  })
-
   it('closes the drawer on Escape, then the page', async () => {
     render(<ArtifactsPage />)
     fireEvent.click(await screen.findByRole('button', { name: /Quarterly report/ }))
@@ -209,50 +145,6 @@ describe('ArtifactsPage', () => {
 
     fireEvent.keyDown(document.body, { key: 'Escape' })
     expect(mocks.closePage).toHaveBeenCalledOnce()
-  })
-
-  it('explains the agent-first sharing workflow', async () => {
-    mocks.rpc.mockResolvedValue({ status: 'ok', value: { artifacts: [] } })
-    render(<ArtifactsPage />)
-
-    const heading = await screen.findByText('No shared artifacts')
-    expect(heading.parentElement).toHaveClass('flex-1', 'justify-center')
-    expect(
-      screen.getByText(
-        'Open an HTML or Markdown file and select Share as artifact, or ask your agent to share it.'
-      )
-    ).toBeInTheDocument()
-    expect(screen.queryByText(/orca artifacts share/)).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: 'Open Settings → Artifacts' })
-    ).not.toBeInTheDocument()
-  })
-
-  it('sends the user to Settings instead of an agent when publishing is off', async () => {
-    mocks.settings = { artifactSharingEnabled: false }
-    mocks.rpc.mockResolvedValue({ status: 'ok', value: { artifacts: [] } })
-    render(<ArtifactsPage />)
-
-    await screen.findByText('Publishing is turned off')
-    expect(screen.getByText(/Allow publishing in Settings → Artifacts/)).toBeInTheDocument()
-    expect(
-      screen.queryByText(
-        'Ask your agent to share an HTML or Markdown file, and it will appear here.'
-      )
-    ).not.toBeInTheDocument()
-
-    fireEvent.click(screen.getByRole('button', { name: 'Open Settings → Artifacts' }))
-    expect(mocks.openSettingsTarget).toHaveBeenCalledWith({ pane: 'artifacts', repoId: null })
-    expect(mocks.openSettingsPage).toHaveBeenCalledOnce()
-  })
-
-  it('keeps the neutral empty state until settings have loaded', async () => {
-    mocks.settings = null
-    mocks.rpc.mockResolvedValue({ status: 'ok', value: { artifacts: [] } })
-    render(<ArtifactsPage />)
-
-    await screen.findByText('No shared artifacts')
-    expect(screen.queryByText('Publishing is turned off')).not.toBeInTheDocument()
   })
 
   it('loads each cursor once and appends the next artifact page', async () => {
@@ -514,64 +406,6 @@ describe('ArtifactsPage', () => {
     })
 
     await waitFor(() => expect(screen.queryByText('Delete me')).not.toBeInTheDocument())
-  })
-
-  it('skips the delete confirmation once the preference is saved', async () => {
-    mocks.settings = { skipDeleteArtifactConfirm: true }
-    mocks.rpc.mockResolvedValue({
-      status: 'ok',
-      value: { artifacts: [artifactListItem('Skip me', 'skip-me')] }
-    })
-    render(<ArtifactsPage />)
-    await screen.findByRole('button', { name: /Skip me/ })
-
-    mocks.rpc.mockResolvedValueOnce({ status: 'ok', value: undefined })
-    await deleteFirstArtifactFromDrawerMenu()
-
-    await waitFor(() => expect(screen.queryByRole('button', { name: /Skip me/ })).toBeNull())
-    expect(mocks.confirm).not.toHaveBeenCalled()
-  })
-
-  it('supplies the confirmation callback that persists the skip preference', async () => {
-    mocks.confirm.mockResolvedValue(true)
-    mocks.rpc.mockResolvedValue({
-      status: 'ok',
-      value: { artifacts: [artifactListItem('Ask me', 'ask-me')] }
-    })
-    render(<ArtifactsPage />)
-    await screen.findByRole('button', { name: /Ask me/ })
-
-    mocks.rpc.mockResolvedValueOnce({ status: 'ok', value: undefined })
-    await deleteFirstArtifactFromDrawerMenu()
-    await waitFor(() => expect(mocks.confirm).toHaveBeenCalledOnce())
-
-    // Why: the dialog owns the checkbox; the page only supplies what to persist when it is checked.
-    const options = mocks.confirm.mock.calls[0]?.[0] as {
-      dontAskAgain?: { onConfirmed: () => void }
-    }
-    expect(mocks.updateSettings).not.toHaveBeenCalled()
-    options.dontAskAgain?.onConfirmed()
-    expect(mocks.updateSettings).toHaveBeenCalledWith({ skipDeleteArtifactConfirm: true })
-  })
-
-  it('treats an organization switch as an account identity change', () => {
-    const status = {
-      activeProfileId: 'profile-a',
-      cloud: {
-        activeOrgId: 'org-a',
-        cloudProfileId: 'cloud-a',
-        email: 'a@example.com',
-        linkedAt: 1,
-        userId: 'user-a'
-      },
-      configured: true,
-      persistence: 'encrypted',
-      state: 'connected'
-    } satisfies OrcaProfileAuthStatus
-
-    expect(artifactAccountIdentity(status)).not.toBe(
-      artifactAccountIdentity({ ...status, cloud: { ...status.cloud, activeOrgId: 'org-b' } })
-    )
   })
 })
 

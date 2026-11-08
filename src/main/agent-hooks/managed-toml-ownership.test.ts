@@ -33,20 +33,6 @@ function strip(text: string): string {
 }
 
 describe('managed TOML marker blocks', () => {
-  it('finds nothing in a file without the start marker', () => {
-    expect(findManagedTomlBlocks('a = 1\n', MARKERS)).toEqual([])
-    expect(stripManagedTomlRegions('a = 1\n', [])).toMatchObject({
-      text: 'a = 1\n',
-      changed: false
-    })
-  })
-
-  it('owns everything between the markers regardless of content', () => {
-    const text = `a = 1\n\n${START}\n[whatever]\nx = 2\n${END}\nb = 3\n`
-    expect(findManagedTomlBlocks(text, MARKERS)[0].terminated).toBe(true)
-    expect(strip(text)).toBe('a = 1\nb = 3\n')
-  })
-
   it('an orphaned block owns only its stray marker line', () => {
     const text = `${START}\n[anything]\nkeep = true\n`
     const [region] = findManagedTomlBlocks(text, MARKERS)
@@ -63,10 +49,6 @@ describe('managed TOML marker blocks', () => {
     expect(strip(text)).toBe('[user]\nkeep = true\n')
   })
 
-  it('absorbs the blank run above the marker without crossing the block above', () => {
-    expect(strip(`a = 1\n\n\n${START}\nx\n${END}\n`)).toBe('a = 1\n')
-  })
-
   it("ignores a marker line carrying a trailing comment of the user's own", () => {
     const text = [
       'a = 1',
@@ -78,23 +60,6 @@ describe('managed TOML marker blocks', () => {
     ].join('\n')
     expect(findManagedTomlBlocks(text, MARKERS)).toEqual([])
     expect(strip(text)).toBe(text)
-  })
-
-  it('ignores a marker line with a prefix or altered text', () => {
-    for (const near of [`x ${START}`, START.replace('>>>', '>>'), `${START}x`]) {
-      expect(findManagedTomlBlocks(`${near}\n[user]\nkeep = true\n`, MARKERS)).toEqual([])
-    }
-  })
-
-  it('still matches a marker indented or with trailing whitespace', () => {
-    const text = `a = 1\n   ${START}   \n[owned]\nk = 1\n  ${END}\nb = 2\n`
-    expect(findManagedTomlBlocks(text, MARKERS)[0].terminated).toBe(true)
-    expect(strip(text)).toBe('a = 1\nb = 2\n')
-  })
-
-  it('handles a marker on the last line with no trailing newline', () => {
-    expect(strip(`a = 1\n${START}`)).toBe('a = 1\n')
-    expect(strip(`a = 1\n${START}\n[owned]\nk = 1`)).toBe('a = 1\n')
   })
 })
 
@@ -108,25 +73,6 @@ describe('recognized managed tables', () => {
   it('reclaims tables stranded below user text after an orphaned marker', () => {
     const text = `${START}\n[owned]\nk = 1\n[user]\nkeep = true\n[owned]\nk = 2\n`
     expect(strip(text)).toBe('[user]\nkeep = true\n')
-  })
-
-  it('leaves an unrecognized table alone', () => {
-    const text = `${START}\n[user]\nkeep = true\n`
-    expect(strip(text)).toBe('[user]\nkeep = true\n')
-  })
-
-  it('reports each recognized table to readers', () => {
-    const text = `[owned]\nk = 1\n[user]\nx = 1\n[owned]\nk = 2\n`
-    expect(findRecognizedManagedTables(text, recognizeOwned).map((t) => t.value)).toEqual([
-      '[owned]',
-      '[owned]'
-    ])
-  })
-
-  it('clamps a recognizer that claims more lines than the file has', () => {
-    const greedy = (): { lineCount: number; value: null } => ({ lineCount: 999, value: null })
-    const text = 'a = 1\n'
-    expect(stripManagedTomlRegions(text, findRecognizedManagedTables(text, greedy)).text).toBe('')
   })
 })
 

@@ -1,6 +1,6 @@
 import { afterEach, expect, it, vi } from 'vitest'
 import { withFallback } from '@/web/preload-api/web-fallback-api'
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 
 afterEach(() => {
   vi.unstubAllGlobals()

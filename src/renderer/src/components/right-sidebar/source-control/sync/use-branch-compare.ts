@@ -235,6 +235,7 @@ export function useSourceControlBranchCompare({
       run: () => void startBranchCompareRef.current('interval'),
       runOnVisible: () => void recoverBranchCompareRef.current(),
       jitterOnVisible: true,
+      slowWhileUnfocused: true,
       intervalMs: BRANCH_REFRESH_INTERVAL_MS
     })
     return () => {

@@ -3,7 +3,7 @@ import {
   NodeFileReadTooLargeError,
   readNodeFileSyncWithinLimit,
   readNodeFileWithinLimit
-} from '../../shared/node-bounded-file-reader'
+} from '../../shared/file-content/node-bounded-file-reader'
 import { MAX_SSH_IDENTITY_FILE_BYTES } from './ssh-security-key-identity'
 
 /** `problem` is null when the file is simply absent, which is normal for default key paths. */

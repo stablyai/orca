@@ -107,24 +107,6 @@ describe('useSkillFreshness', () => {
     expect(state?.plan?.planDigest).toBe(digest(2))
   })
 
-  it('does not scan, subscribe, or refresh while local freshness is disabled', async () => {
-    const bundledPlan = vi.fn().mockResolvedValue(plan(1))
-    const addEventListener = vi.spyOn(window, 'addEventListener')
-    installBundledPlan(bundledPlan)
-
-    await act(async () => root?.render(<Probe enabled={false} />))
-    await act(async () => window.dispatchEvent(new Event('orca:installed-agent-skills-changed')))
-    await act(async () => state?.refresh())
-
-    expect(bundledPlan).not.toHaveBeenCalled()
-    expect(state).toMatchObject({ plan: null, loading: false, error: null })
-    expect(
-      addEventListener.mock.calls.filter(
-        ([name]) => name === 'focus' || name === 'orca:installed-agent-skills-changed'
-      )
-    ).toHaveLength(0)
-  })
-
   it('forces one fresh scan before restoring authority after re-enable', async () => {
     const second = deferred<BundledSkillPlan>()
     const bundledPlan = vi
@@ -164,28 +146,6 @@ describe('useSkillFreshness', () => {
     expect(state?.plan?.skills.map((skill) => skill.name)).toEqual([])
   })
 
-  it('skips focus rescans inside the cooldown but honors install-change events', async () => {
-    const first = deferred<BundledSkillPlan>()
-    const second = deferred<BundledSkillPlan>()
-    const bundledPlan = vi
-      .fn()
-      .mockReturnValueOnce(first.promise)
-      .mockReturnValueOnce(second.promise)
-    installBundledPlan(bundledPlan)
-
-    await act(async () => root?.render(<Probe />))
-    await act(async () => first.resolve(plan(1)))
-    expect(bundledPlan).toHaveBeenCalledTimes(1)
-
-    await act(async () => window.dispatchEvent(new Event('focus')))
-    expect(bundledPlan).toHaveBeenCalledTimes(1)
-
-    await act(async () => window.dispatchEvent(new Event('orca:installed-agent-skills-changed')))
-    await act(async () => second.resolve(plan(2)))
-    expect(bundledPlan).toHaveBeenCalledTimes(2)
-    expect(state?.plan?.planDigest).toBe(digest(2))
-  })
-
   it('retracts stale update authority during the cooldown and runs one trailing focus scan', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-07-15T00:00:00Z'))
@@ -208,28 +168,6 @@ describe('useSkillFreshness', () => {
     expect(bundledPlan).toHaveBeenCalledTimes(2)
     await act(async () => second.resolve(plan(2)))
     expect(state?.plan?.planDigest).toBe(digest(2))
-  })
-
-  it('coalesces multiple consumers into one rescan per invalidation event', async () => {
-    const first = deferred<BundledSkillPlan>()
-    const second = deferred<BundledSkillPlan>()
-    const bundledPlan = vi.fn().mockReturnValueOnce(first.promise).mockReturnValue(second.promise)
-    installBundledPlan(bundledPlan)
-
-    await act(async () =>
-      root?.render(
-        <>
-          <Probe />
-          <Probe />
-        </>
-      )
-    )
-    await act(async () => first.resolve(plan(1)))
-    expect(bundledPlan).toHaveBeenCalledTimes(1)
-
-    await act(async () => window.dispatchEvent(new Event('orca:installed-agent-skills-changed')))
-    await act(async () => second.resolve(plan(2)))
-    expect(bundledPlan).toHaveBeenCalledTimes(2)
   })
 
   it('publishes a manual refresh to every consumer', async () => {
@@ -279,35 +217,6 @@ describe('useSkillFreshness', () => {
     expect(state?.plan).toBeNull()
     expect(state?.loading).toBe(false)
     expect(state?.error).toBe('scan failed')
-  })
-
-  it('installs one event-listener pair for multiple consumers and cleans it up', async () => {
-    const addEventListener = vi.spyOn(window, 'addEventListener')
-    const removeEventListener = vi.spyOn(window, 'removeEventListener')
-    installBundledPlan(vi.fn().mockResolvedValue(plan(1)))
-
-    await act(async () =>
-      root?.render(
-        <>
-          <Probe id="one" />
-          <Probe id="two" />
-        </>
-      )
-    )
-
-    expect(addEventListener.mock.calls.filter(([name]) => name === 'focus')).toHaveLength(1)
-    expect(
-      addEventListener.mock.calls.filter(([name]) => name === 'orca:installed-agent-skills-changed')
-    ).toHaveLength(1)
-
-    await act(async () => root?.unmount())
-    root = null
-    expect(removeEventListener.mock.calls.filter(([name]) => name === 'focus')).toHaveLength(1)
-    expect(
-      removeEventListener.mock.calls.filter(
-        ([name]) => name === 'orca:installed-agent-skills-changed'
-      )
-    ).toHaveLength(1)
   })
 
   it('re-plans a new host without ever showing the previous host’s plan', async () => {

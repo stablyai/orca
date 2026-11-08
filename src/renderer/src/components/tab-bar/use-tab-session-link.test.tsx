@@ -9,11 +9,19 @@ import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilitie
 import { useTabSessionLink } from './use-tab-session-link'
 
 const rpc = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: rpc,
-  structuredAgentSessionHostSupports: async () => true
+vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: rpc
 }))
-vi.mock('@/runtime/structured-agent-session-status-feed', () => ({
+vi.mock(
+  '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability',
+  async (importOriginal) => ({
+    ...(await importOriginal<
+      typeof import('@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability')
+    >()),
+    structuredAgentSessionHostSupports: async () => true
+  })
+)
+vi.mock('@/runtime/native-chat/status/structured-agent-session-status-feed', () => ({
   getStructuredAgentSessionStatusFeed: () => ({ getNamingSnapshot: () => new Map() })
 }))
 vi.mock('@/i18n/i18n', async (importOriginal) => ({

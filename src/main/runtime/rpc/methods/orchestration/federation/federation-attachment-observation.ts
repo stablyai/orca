@@ -1,7 +1,7 @@
-import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/runtime-types'
+import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/runtime-terminal-contracts'
 import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { parseWorkerTerminalHostScope } from '../../../../../../shared/worker-terminal-host-scope'
+import { parseWorkerTerminalHostScope } from '../../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/db/orchestration-records'
 import { orchestrationTimestampToMs } from '../worker/worker-output'
 

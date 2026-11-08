@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { Tab } from '../../../../shared/tab-types'
-import { structuredAgentSessionOwnerForTab } from '@/runtime/structured-agent-session-owner'
+import { structuredAgentSessionOwnerForTab } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 
 export function isLinkableChatTab(state: AppState, tab: Tab | undefined): tab is Tab {
   return Boolean(

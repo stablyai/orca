@@ -3,6 +3,7 @@ import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import type { SkillUsageExample } from '@/lib/skill-usage-example'
 import { SkillUsageExampleDialog } from './SkillUsageExampleDialog'
+import { SettingsGroup } from '../../settings/section-layout/SettingsGroup'
 
 // Share example-card dialogs so orchestration and Linear stay consistent.
 export function SkillUsageExamplesSection({
@@ -21,12 +22,7 @@ export function SkillUsageExamplesSection({
   const [selectedExampleId, setSelectedExampleId] = useState<string | null>(null)
 
   return (
-    <div className="space-y-4 border-t border-border/60 pt-6">
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium text-foreground">{heading}</h3>
-        <p className="text-xs text-muted-foreground">{description}</p>
-      </div>
-
+    <SettingsGroup title={heading} description={description} bodyClassName="py-4">
       <div className="grid gap-2 sm:grid-cols-2">
         {examples.map((example) => {
           const Icon = resolveIcon(example)
@@ -62,6 +58,6 @@ export function SkillUsageExamplesSection({
           onOpenChange={(open) => setSelectedExampleId(open ? example.id : null)}
         />
       ))}
-    </div>
+    </SettingsGroup>
   )
 }

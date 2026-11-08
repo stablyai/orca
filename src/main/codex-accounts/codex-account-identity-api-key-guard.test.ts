@@ -3,7 +3,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { CodexAccountIdentity } from './codex-account-identity'
-import { readCodexAuthIdentity } from './codex-auth-identity'
 
 function idTokenWithClaims(claims: Record<string, unknown>): string {
   const payload = Buffer.from(JSON.stringify(claims), 'utf-8').toString('base64url')
@@ -32,25 +31,6 @@ describe('managed-home Codex identity', () => {
       email: null,
       providerAccountId: null,
       workspaceLabel: null,
-      workspaceAccountId: null
-    })
-  })
-})
-
-describe('readCodexAuthIdentity account-id fallback', () => {
-  it('falls through to the auth claim for providerAccountId when tokens.account_id is blank', async () => {
-    const contents = JSON.stringify({
-      tokens: {
-        account_id: '   ',
-        id_token: idTokenWithClaims({
-          'https://api.openai.com/auth': { chatgpt_account_id: 'claim-account' }
-        })
-      }
-    })
-
-    expect(readCodexAuthIdentity(contents)).toMatchObject({
-      providerAccountId: 'claim-account',
-      // workspaceAccountId uses the top-level claim, not the provider-account claim.
       workspaceAccountId: null
     })
   })

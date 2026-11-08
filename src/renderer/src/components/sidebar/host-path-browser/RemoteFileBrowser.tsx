@@ -17,8 +17,8 @@ import type { PreviewState } from './remote-file-browser-path-preview-resolver'
 import { useRemoteFileBrowserFilterKeyCommands } from './use-remote-file-browser-filter-key-commands'
 import { useRemoteFileBrowserListing } from './use-remote-file-browser-listing'
 import { useRemoteFileBrowserPathPreview } from './use-remote-file-browser-path-preview'
-import { translate } from '@/i18n/i18n'
-import type { FilesystemPathFlavor } from '../../../../../shared/filesystem-entry-types'
+import { useTranslate } from '@/i18n/use-translate'
+import type { FilesystemPathFlavor } from '../../../../../shared/file-access/filesystem-path-flavor'
 
 // Both IDs select an SSH host owned and listed by the paired server.
 type RemoteFileBrowserProps = (
@@ -40,6 +40,7 @@ export function RemoteFileBrowser({
   onSelect,
   onCancel
 }: RemoteFileBrowserProps): React.JSX.Element {
+  const t = useTranslate()
   const [resolvedPath, setResolvedPath] = useState('')
   const [entries, setEntries] = useState<DirEntry[]>([])
   const [pathFlavor, setPathFlavor] = useState<FilesystemPathFlavor>('posix')
@@ -291,16 +292,13 @@ export function RemoteFileBrowser({
           role="combobox"
           aria-expanded
           aria-autocomplete="list"
-          aria-label={translate(
-            'auto.components.sidebar.RemoteFileBrowser.inputLabel',
-            'Filter or path'
-          )}
+          aria-label={t('auto.components.sidebar.RemoteFileBrowser.inputLabel', 'Filter or path')}
           autoFocus
           value={filter}
           onChange={(e) => handleInputChange(e.target.value)}
           onPaste={handleInputPaste}
           onKeyDown={handleFilterKeyDown}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.sidebar.RemoteFileBrowser.2300612806',
             'Type to filter or enter a path…'
           )}
@@ -349,11 +347,11 @@ export function RemoteFileBrowser({
         title={fileHint ? undefined : resolvedPath}
       >
         {fileHint
-          ? translate(
+          ? t(
               'auto.components.sidebar.RemoteFileBrowser.fileHint',
               "Files can't be opened as a project"
             )
-          : translate(
+          : t(
               'auto.components.sidebar.RemoteFileBrowser.971d85cc84',
               'Opens as a project on this host · {{value0}}',
               { value0: resolvedPath }
@@ -361,7 +359,7 @@ export function RemoteFileBrowser({
       </p>
       <div className="flex items-center justify-end gap-2">
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={onCancel}>
-          {translate('auto.components.sidebar.RemoteFileBrowser.f8b1deb1a4', 'Cancel')}
+          {t('auto.components.sidebar.RemoteFileBrowser.f8b1deb1a4', 'Cancel')}
         </Button>
         <Button
           size="sm"
@@ -370,7 +368,7 @@ export function RemoteFileBrowser({
           disabled={selectDisabled}
           title={resolvedPath}
         >
-          {translate('auto.components.sidebar.RemoteFileBrowser.9e060f5815', 'Select folder')}
+          {t('auto.components.sidebar.RemoteFileBrowser.9e060f5815', 'Select folder')}
         </Button>
       </div>
     </div>

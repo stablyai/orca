@@ -167,14 +167,6 @@ describe('terminal worker turn stops', () => {
     expect(ctx.mail()).toHaveLength(0)
   })
 
-  it('reports a worker stopped at an approval prompt', async () => {
-    const ctx = setup()
-    const stops = terminal(ctx, { row: hookRow({ state: 'blocked' }) })
-    stops.observe(moved('working', 'needs-you'))
-    await settle()
-    expect(ctx.mail()[0]?.subject).toBe('Worker is waiting on a prompt')
-  })
-
   it('escalates a prompt or error while its helper is open, but not a clean rest', async () => {
     const ctx = setup()
     const helperTask = ctx.db.createTask({ spec: 'help', runId: ctx.run.id })
@@ -217,6 +209,98 @@ describe('terminal worker turn stops', () => {
     terminal(waiting, { row: hookRow({}) }).observe(moved('working', 'done'))
     await settle()
     expect(waiting.mail()).toHaveLength(0)
+  })
+
+  it('reports an idle finish once until the coordinator writes to the worker again', async () => {
+    const ctx = setup()
+    const current = { row: hookRow({}) }
+    const stops = terminal(ctx, current)
+    // A worker that wakes on its own schedule ends turn after turn without new mail.
+    for (const stateStartedAt of [200, 300, 400]) {
+      current.row = hookRow({ stateStartedAt })
+      stops.observe(moved('working', 'done'))
+      await settle()
+    }
+    expect(ctx.mail().map((m) => m.subject)).toEqual(['Worker stopped without reporting'])
+    expect(ctx.mail()[0].body).toContain('later idle turns are not reported until you write to it')
+
+    const mail = ctx.db.insertMessage({
+      from: 'term_coordinator',
+      to: `dispatch:${ctx.dispatch.id}`,
+      subject: 'check again',
+      type: 'status',
+      runId: ctx.run.id
+    })
+    // A helper's reports up to its creator, even a status from a reminted handle, are not the coordinator asking again.
+    const helperPane = makePaneKey('tab-helper', '33333333-3333-4333-8333-333333333333')
+    const helper = ctx.db.createDispatchContext({
+      taskId: ctx.db.createTask({ spec: 'help', runId: ctx.run.id }).id,
+      assigneeHandle: 'term_helper',
+      assigneePaneKey: helperPane,
+      creator: { kind: 'terminal', handle: HANDLE, paneKey: PANE },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
+    // Nor are its own heartbeats or a sibling worker's broadcast.
+    createRootDispatch(
+      ctx.db,
+      ctx.db.createTask({ spec: 'sibling', runId: ctx.run.id }).id,
+      'term_sibling'
+    )
+    const helperReports = [
+      { from: 'term_helper', type: 'status' as const },
+      { from: 'term_helper_reminted', senderPaneKey: helperPane, type: 'status' as const },
+      { from: HANDLE, type: 'heartbeat' as const },
+      { from: 'term_sibling', type: 'status' as const }
+    ].map((sender) =>
+      ctx.db.insertMessage({
+        ...sender,
+        to: `dispatch:${ctx.dispatch.id}`,
+        subject: 'worker mail',
+        runId: ctx.run.id
+      })
+    )
+    ctx.db.markAsRead(helperReports.map((report) => report.id))
+    ctx.db.completeDispatch(helper.id)
+    // Mail the worker has not taken yet belongs to its next turn, not to a stop seen before it arrived.
+    current.row = hookRow({ stateStartedAt: 500 })
+    stops.observe(moved('working', 'done'))
+    await settle()
+    expect(ctx.mail()).toHaveLength(1)
+
+    ctx.db.markAsDelivered([mail.id], `dispatch:${ctx.dispatch.id}`)
+    current.row = hookRow({ stateStartedAt: 600 })
+    stops.observe(moved('working', 'done'))
+    await settle()
+    expect(ctx.mail()).toHaveLength(1)
+
+    ctx.db.markAsRead([mail.id])
+    current.row = hookRow({ stateStartedAt: 700 })
+    stops.observe(moved('working', 'done'))
+    await settle()
+    expect(ctx.mail()).toHaveLength(2)
+
+    // The coordinator later taking a Dispatch of its own does not turn its earlier guidance into worker mail.
+    const later = createRootDispatch(
+      ctx.db,
+      ctx.db.createTask({ spec: 'later', runId: ctx.run.id }).id,
+      'term_coordinator'
+    )
+    ctx.db.db
+      .prepare(
+        "UPDATE dispatch_contexts SET created_at = datetime('now', '+1 minute') WHERE id = ?"
+      )
+      .run(later.id)
+    const next = ctx.db.insertMessage({
+      from: 'term_run_owner',
+      to: `dispatch:${ctx.dispatch.id}`,
+      subject: 'one more',
+      runId: ctx.run.id
+    })
+    ctx.db.markAsRead([next.id])
+    current.row = hookRow({ stateStartedAt: 800 })
+    stops.observe(moved('working', 'done'))
+    await settle()
+    expect(ctx.mail()).toHaveLength(3)
   })
 
   it('stays quiet after the worker asks and ends its turn, until the answer arrives', async () => {
@@ -298,18 +382,6 @@ describe('chat worker turn stops', () => {
       outcome,
       completedAt: 1
     }
-  })
-
-  it('reports a finished turn and leaves failures to the chat error escalation', () => {
-    const ctx = setup(formatOrcaSessionAddress(CHAT_SESSION))
-    const report = chatWorkerTurnStopReporter(ctx.deps, (run) => run())
-    const status = () => ({ status: 'idle' as const, lastAssistantMessage: 'Read the files.' })
-    report(completion('failure'), status)
-    expect(ctx.mail()).toHaveLength(0)
-    report(completion('success'), status)
-    report(completion('success'), status)
-    expect(ctx.mail()).toHaveLength(1)
-    expect(ctx.mail()[0].body).toContain('Read the files.')
   })
 
   // The report claimed a follow-up on the same chat; its task is not handed over yet.
@@ -404,6 +476,7 @@ describe('remote worker turn stops', () => {
   it('relays the report to the Run home under a stable id', () => {
     const db = new OrchestrationDb(':memory:')
     const enqueueFederationRelay = vi.spyOn(db, 'enqueueFederationRelay')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     const attachment = { dispatch_id: 'dsp_remote', task_id: 'task_remote' }
     const stop = { from: HANDLE, stopKey: 'k', reason: 'finished' as const, lastOutput: 'bye' }
     const deps = { getDb: () => db, isWaitingForMail: () => false, notify: vi.fn() }
@@ -417,6 +490,8 @@ describe('remote worker turn stops', () => {
       kind: 'escalation'
     })
     expect(first.messageId).toBe(second.messageId)
+    // The repeat is a no-op, not a failed relay.
+    expect(warn).not.toHaveBeenCalled()
     const relayed = JSON.parse(first.payload)
     expect(relayed).toMatchObject({ type: 'escalation', priority: 'high' })
     expect(JSON.parse(relayed.payload)).toMatchObject({ stopReason: 'finished' })

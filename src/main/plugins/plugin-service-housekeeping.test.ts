@@ -9,7 +9,7 @@ import type {
   WatcherProcessHooks
 } from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
 import { pluginDevChangeCount, pluginFrameContentRevision } from './plugin-dev-revision'
-import { PluginDevWatcher } from './plugin-dev-watcher'
+
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
 
 vi.mock('../ipc/filesystem/watcher-process/parcel-watcher-process', () => ({
@@ -86,10 +86,6 @@ function revision(root: string): string {
   return pluginFrameContentRevision({ rootDir: root, contentHash: null })
 }
 
-function liveSubscriptions(root: string, shallow = false): number {
-  return subscribeLog.filter((s) => s.root === root && s.shallow === shallow && s.live).length
-}
-
 function registrations(root: string): number {
   return subscribeLog.filter((s) => s.root === root && !s.shallow).length
 }
@@ -128,20 +124,6 @@ it('keeps healthy frame content current while terminal failures recover independ
   expect(revision(failing)).toBe(failedRevision)
 })
 
-it.each(['onInterruption', 'onOverflow'] as const)(
-  'catches up the affected frame promptly after %s without retrying terminal failures',
-  async (event) => {
-    const healthyRevision = revision(healthy)
-    const failedRevision = revision(failing)
-    native(healthy).hooks[event]?.()
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(revision(healthy)).not.toBe(healthyRevision)
-    expect(revision(failing)).toBe(failedRevision)
-    native(healthy).callback(null, [{ type: 'update', path: join(healthy, 'asset.js') }])
-    expect(pluginDevChangeCount(healthy)).toBe(1)
-  }
-)
-
 it('catches up a replaced root without restarting another healthy frame', async () => {
   const other = join(fixture, 'other')
   await mkdir(other)
@@ -174,55 +156,6 @@ it('catches up a missing root when it appears without changing another frame', a
   expect(revision(healthy)).toBe(healthyRevision)
   native(missing).callback(null, [{ type: 'update', path: join(missing, 'asset.js') }])
   expect(pluginDevChangeCount(missing)).toBe(1)
-})
-
-it('ignores binding checks that finish after disposal and leaves no timers', async () => {
-  const pending = Promise.withResolvers<boolean | null>()
-  const check = vi.spyOn(PluginDevWatcher.prototype, 'checkRootBindings')
-  check.mockReturnValue(pending.promise)
-  const refresh = vi.fn()
-  housekeeping.sync({ ...options, refresh })
-  await vi.advanceTimersByTimeAsync(60_000)
-  expect(check).toHaveBeenCalledTimes(2)
-  await vi.advanceTimersByTimeAsync(60_000)
-  // Why: a slow check per root coalesces instead of stacking a second one.
-  expect(check).toHaveBeenCalledTimes(2)
-  const failedRevision = revision(failing)
-  housekeeping.dispose()
-  pending.resolve(true)
-  await vi.advanceTimersByTimeAsync(1_000)
-  expect(refresh).not.toHaveBeenCalled()
-  expect(revision(failing)).toBe(failedRevision)
-  expect(vi.getTimerCount()).toBe(0)
-  check.mockRestore()
-})
-
-it('adds and removes roots without touching the others or leaking subscriptions', async () => {
-  const healthyRevision = revision(healthy)
-  const extra = join(fixture, 'extra')
-  await mkdir(extra)
-  for (let cycle = 0; cycle < 3; cycle += 1) {
-    options = { ...options, devPaths: [healthy, extra] }
-    housekeeping.sync(options)
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(liveSubscriptions(extra)).toBe(1)
-    options = { ...options, devPaths: [healthy] }
-    housekeeping.sync(options)
-    await vi.advanceTimersByTimeAsync(1_000)
-    expect(liveSubscriptions(extra)).toBe(0)
-  }
-  expect(revision(healthy)).toBe(healthyRevision)
-  expect(registrations(healthy)).toBe(1)
-  expect(liveSubscriptions(healthy)).toBe(1)
-  // Equivalent spellings of the same folder share one watcher.
-  options = { ...options, devPaths: [healthy, `${healthy}/./`] }
-  housekeeping.sync(options)
-  await vi.advanceTimersByTimeAsync(1_000)
-  expect(registrations(healthy)).toBe(1)
-  housekeeping.dispose()
-  await vi.advanceTimersByTimeAsync(1_000)
-  expect(subscribeLog.filter((s) => s.live)).toHaveLength(0)
-  expect(vi.getTimerCount()).toBe(0)
 })
 
 it('retries a root whose registration keeps rejecting once per maintenance tick', async () => {

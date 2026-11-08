@@ -9,7 +9,7 @@ import {
 import { createSetupRunnerScript } from '../../workspace-hooks/worktree-runner-script'
 import { getEffectiveHooks } from '../../workspace-hooks/hooks'
 import { listWorktrees } from '../../git/worktrees/catalog/worktree-scan-cache'
-import { setRuntimeDesktopSurface } from '../runtime-desktop-surface'
+import { setRuntimeDesktopSurface } from '../construction/runtime-desktop-surface'
 import { shouldRunSetupForCreate } from '../../workspace-hooks/effective-hook-config'
 import { makeRuntimeStoreWithWorkspaceSession, store } from './orca-runtime-test-fixtures.spec'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'

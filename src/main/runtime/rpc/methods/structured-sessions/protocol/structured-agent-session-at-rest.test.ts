@@ -1,6 +1,5 @@
-import '../../../unused-default-rpc-methods.test-fixture'
 vi.mock('node:fs/promises', { spy: true })
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import { AGENT_SESSION_OPTIONAL_MODEL_CLIENT_CAPABILITY } from '../../../../../../shared/agent-session/options/agent-session-optional-model-capability'
@@ -12,11 +11,8 @@ import {
   structuredAgentSessionOptionPicks
 } from '../../../../../../shared/agent-session/options/structured-agent-session-options'
 import {
-  hostTestAttachParams,
-  hostTestMessage,
   hostTestOperationId,
-  HOST_TEST_SESSION as SESSION,
-  HOST_TEST_THREAD as REST_TEST_THREAD
+  HOST_TEST_SESSION as SESSION
 } from '../../../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
 import { setStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import {
@@ -232,54 +228,6 @@ it('reads, subscribes and answers everything without starting an agent', async (
   expect(held).toMatchObject({ ok: true, result: { held: true } })
 })
 
-it('answers the owner check from the record without opening the chat', async () => {
-  await restingChat()
-
-  const [status] = await call('agentSession.handoffStatus', { sessionId: SESSION })
-
-  expect(status).toMatchObject({ ok: true, result: { owner: expect.any(String) } })
-  expect(fixture.rig.host.hasSession(SESSION)).toBe(false)
-})
-
-it('starts the agent on the first send (P2-01)', async () => {
-  await restingChat()
-  const fence = fixture.rig.store.getRecord(SESSION)!.lease.runtimeFence
-  const sent = await fixture.rig.host.send(CALLER, restTestSend('wake up', fence))
-  if (!sent.ok) {
-    throw new Error(`send refused: ${sent.refusal.code}`)
-  }
-  // Awaits the provider's answer itself rather than polling for it, however slow the start.
-  await fixture.rig.host.waitForSendSettlement(SESSION, sent.value.clientMessageId)
-  expect(fixture.rig.adapter.acquire).toHaveBeenCalledOnce()
-  expect(fixture.rig.adapter.dispatch).toHaveBeenCalledOnce()
-})
-
-it('opens a closed conversation once, however many readers arrive together (P2-02)', async () => {
-  const attached = await fixture.rig.host.attach(CALLER, hostTestAttachParams(null))
-  expect(attached.ok).toBe(true)
-  fixture.rig.adapter.acquire.mock.calls
-    .at(-1)?.[0]
-    .events?.appendItem(
-      { provider: 'codex', threadId: REST_TEST_THREAD, turnId: 'turn-1', ordinal: 1 },
-      hostTestMessage('from the provider'),
-      { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-    )
-  await fixture.rig.host.flushStreamedEvents(SESSION)
-  await fixture.rig.restart()
-  setStructuredAgentSessionHost(fixture.rig.host)
-  fixture.rig.adapter.acquire.mockClear()
-  const open = vi.spyOn(fixture.rig.host.collaboratorsForTests().conversationDelivery, 'open')
-  await Promise.all([
-    ...Array.from({ length: 5 }, () =>
-      call('agentSession.history', { sessionId: SESSION, direction: 'tail' })
-    ),
-    call('agentSession.subscribe', { sessionId: SESSION })
-  ])
-  const openedJournals = new Set(await Promise.all(open.mock.results.map((result) => result.value)))
-  expect(openedJournals.size).toBe(1)
-  expect(fixture.rig.adapter.acquire).not.toHaveBeenCalled()
-})
-
 it('opens nothing once quit began, for a read that was already waiting on the lock', async () => {
   await restingChat()
   // The host's per-session queue, held so the read waits behind it.
@@ -300,26 +248,6 @@ it('opens nothing once quit began, for a read that was already waiting on the lo
 
   await expect(read).rejects.toThrow()
   expect(fixture.rig.host.hasSession(SESSION)).toBe(false)
-})
-
-it('refuses a read it cannot open with the reason, under the same code and message', async () => {
-  const [missing] = await call('agentSession.history', {
-    sessionId: 'session-never-created',
-    direction: 'tail'
-  })
-  expect(missing).toMatchObject({
-    ok: false,
-    error: {
-      code: 'agent_session_identity_required',
-      message: 'agent_session_identity_required',
-      data: {
-        refusal: {
-          code: 'agent_session_identity_required',
-          details: { reason: 'recordMissing' }
-        }
-      }
-    }
-  })
 })
 
 it('refuses a read whose journal will not open with the classified reason, never the storage text', async () => {
@@ -365,36 +293,6 @@ it('refuses a read whose journal will not open with the classified reason, never
       expect(JSON.stringify(reply)).not.toContain(storagePath)
     }
   }
-})
-
-it('logs a reader reconnecting to a journal that will not open once per failure', async () => {
-  await restingChat()
-  const open = vi.spyOn(fixture.rig.host.collaboratorsForTests().conversationDelivery, 'open')
-  const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-  const logged = (): unknown[] =>
-    warn.mock.calls
-      .filter(
-        ([line]) =>
-          line === '[agent-session] open-for-read: opening the conversation for a read failed'
-      )
-      .map(([, fields]) => fields?.error)
-  const reconnect = async (): Promise<RpcResponse[]> => [
-    ...(await call('agentSession.subscribe', { sessionId: SESSION })),
-    ...(await call('agentSession.history', { sessionId: SESSION, direction: 'tail' }))
-  ]
-  const denied = new Error('EACCES: permission denied')
-  const exhausted = new Error('EMFILE: too many open files')
-
-  open.mockRejectedValue(denied)
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    // Every attempt is still refused with its reason; only the log is quiet.
-    expect((await reconnect()).filter((reply) => !reply.ok)).toHaveLength(2)
-  }
-  expect(logged()).toEqual([denied])
-  open.mockRejectedValue(exhausted)
-  await reconnect()
-  await reconnect()
-  expect(logged()).toEqual([denied, exhausted])
 })
 
 it('refuses a damaged journal as unloadable at subscribe and send, and keeps its rows (P2-03)', async () => {

@@ -21,6 +21,7 @@ import { getWorkspaceSpaceProgressLabel } from './workspace-space-format'
 import type { useWorkspaceSpaceManagerBindings } from './use-workspace-space-manager-bindings'
 import type { useWorkspaceSpaceDecisionProjection } from './use-workspace-space-decision-projection'
 import type { useWorkspaceSpaceGitRefreshAction } from './use-workspace-space-git-refresh-action'
+import { useTranslate } from '@/i18n/use-translate'
 
 const GIT_STATUS_REFRESH_CONCURRENCY = 6
 
@@ -32,6 +33,7 @@ export function useWorkspaceSpaceManagerProjection(args: {
   decision: WorkspaceSpaceDecisionProjection
   refreshWorkspaceGitStatus: ReturnType<typeof useWorkspaceSpaceGitRefreshAction>
 }) {
+  const t = useTranslate()
   const {
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
@@ -220,7 +222,7 @@ export function useWorkspaceSpaceManagerProjection(args: {
       : false
   const isInitialScan = isScanning && !analysis
   const hasRows = sourceRows.length > 0
-  const progressLabel = getWorkspaceSpaceProgressLabel(progress)
+  const progressLabel = getWorkspaceSpaceProgressLabel(progress, t)
   const repoErrors = analysis?.repos.filter((repo) => repo.error !== null) ?? []
   const selectedReclaimableBytes = useMemo(
     () =>

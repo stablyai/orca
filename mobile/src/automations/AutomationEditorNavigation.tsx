@@ -4,7 +4,7 @@ import { ConfirmModal } from '../components/ConfirmModal'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { AutomationButton } from './AutomationControls'
-import type { AutomationDraft } from './automation-draft'
+import { automationDraftChanged, type AutomationDraft } from './automation-draft'
 import { automationStyles as styles } from './automation-styles'
 
 type EditorPosition = { step: number; editing: boolean; busy: boolean }
@@ -20,25 +20,17 @@ export function leaveThrough(slot: AutomationLeaveSlot | undefined, leave: () =>
   }
 }
 
-// The *Edited flags record how a field changed, not anything the user would lose.
-function draftChanged(original: AutomationDraft, draft: AutomationDraft): boolean {
-  const before = new Map(Object.entries(original))
-  return Object.entries(draft).some(
-    ([key, value]) =>
-      key !== 'targetEdited' && key !== 'setupDecisionEdited' && value !== before.get(key)
-  )
-}
-
 /** Asks before a leave drops unsaved edits; fills `slot` while mounted so the tab and host switches ask too. */
 export function useAutomationLeaveGuard(
   draft: AutomationDraft,
   original: RefObject<AutomationDraft>,
-  slot?: AutomationLeaveSlot
+  slot: AutomationLeaveSlot | undefined,
+  onDiscard: () => void
 ) {
   const t = useMobileTranslation()
   const [pendingLeave, setPendingLeave] = useState<(() => void) | null>(null)
   const guard: AutomationLeaveGuard = (leave) => {
-    if (draftChanged(original.current, draft)) {
+    if (automationDraftChanged(original.current, draft)) {
       setPendingLeave(() => leave)
     } else {
       leave()
@@ -64,7 +56,10 @@ export function useAutomationLeaveGuard(
       confirmLabel={t('automations.mobile.discard', 'Discard')}
       cancelLabel={t('automations.mobile.keepEditing', 'Keep editing')}
       destructive
-      onConfirm={() => pendingLeave?.()}
+      onConfirm={() => {
+        onDiscard()
+        pendingLeave?.()
+      }}
       onCancel={() => setPendingLeave(null)}
     />
   )

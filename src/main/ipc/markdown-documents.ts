@@ -4,8 +4,8 @@ import { resolveBundledRipgrepWslRouting } from '../ripgrep/bundled-ripgrep-wsl-
 import {
   collectMarkdownDocuments,
   MARKDOWN_DOCUMENT_LISTING_ARGS
-} from '../../shared/node-markdown-document-listing'
-import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+} from '../../shared/file-listing/node-markdown-document-listing'
+import type { MarkdownDocument } from '../../shared/file-listing/file-document'
 
 export async function listMarkdownDocuments(
   rootPath: string,

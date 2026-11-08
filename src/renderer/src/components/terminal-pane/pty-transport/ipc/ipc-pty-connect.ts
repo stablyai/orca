@@ -1,6 +1,6 @@
-import { resolveAgentWorkspaceTrustOwner } from '../../../../../../shared/agent-workspace-trust-decision'
+import { resolveAgentWorkspaceTrustOwner } from '../../../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { readTerminalSpawnDeferral } from '../../../../../../shared/host-spawn-admission'
+import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { isRuntimeOwnedSshTargetId } from '../../../../../../shared/execution-host'
 import { readIpcErrorDetail } from '@/lib/ipc-error'
 import { ensurePtyDispatcher } from '../delivery/pty-dispatcher'
@@ -13,6 +13,7 @@ import {
   isPreHandlerPtyStateDiscarded
 } from '../delivery/pty-pre-handler-buffer'
 import { projectIpcPtyConnectResult } from './ipc-pty-connect-result'
+import { markTerminalProviderSessionBound } from '../../../terminal/terminal-provider-gone-sessions'
 import { waitAtTerminalPtyPreSpawnE2EBarrier } from './terminal-pty-pre-spawn-e2e-barrier'
 import type { IpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { isSshSessionGoneError } from '../host-ownership/ssh-session-gone-verdict'
@@ -107,6 +108,8 @@ export async function connectIpcPty(
       trustAnswer === 'agent-asks'
     )
     settleAgentLaunchPaneStart(transportOptions.tabId, transportOptions.leafId, spawnResult.id)
+    // Any resolved spawn or cold restore is live under this id, even if this transport was destroyed meanwhile.
+    markTerminalProviderSessionBound(spawnResult.id)
     const retireDisposedFreshSpawn = async (): Promise<void> => {
       if (context.handleExplicitlyClosedConnect?.(spawnResult.id)) {
         return

@@ -14,7 +14,7 @@ import {
   AGENT_LAUNCH_RUNTIME_CAPABILITY
 } from '../../../src/shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
-import type { RpcSendParams } from '../transport/rpc-params-contract'
+import type { RpcSendParams } from '../../../src/shared/rpc-contract/rpc-send-params'
 import type { WorkspaceCreateParams } from './workspace-create-params'
 
 // False identifies older hosts without agent.launch.

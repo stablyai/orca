@@ -7,7 +7,7 @@ import type { waitForAgentReady } from '../../../agent-ready-wait'
 import type { track } from '../../../telemetry'
 import type { toast } from 'sonner'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
-import type { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
+import type { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import type { Project } from '../../../../../../shared/project-types'
 import type * as LaunchAgentKindModule from '../../../../../../shared/agent-kind'
 
@@ -181,7 +181,7 @@ vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () 
 vi.mock('@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery', () => ({
   deliverCreatedWebRuntimeAgentSessionPrompt: vi.fn(async () => true)
 }))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
 }))
 vi.mock('../../../../../../shared/workspace-layout/terminal-surface-id', () => ({

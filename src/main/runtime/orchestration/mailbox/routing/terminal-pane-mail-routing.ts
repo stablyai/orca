@@ -32,7 +32,7 @@ import {
 } from './structured-session-mail-target'
 import { exitedChatDispatchesForSession } from '../../workers/lifecycle/chat-assignee'
 import { OPERATOR_CLOSE_EXIT_CAUSE } from '../../../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
-import { resolveTerminalIdentityFromProbes } from '../../../terminal-identity-probe'
+import { resolveTerminalIdentityFromProbes } from '../../../terminal/identity/terminal-identity-probe'
 
 export abstract class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {
   protected terminalIdentitySources = () => ({

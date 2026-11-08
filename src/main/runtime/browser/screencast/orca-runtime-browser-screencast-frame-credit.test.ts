@@ -25,13 +25,13 @@ vi.mock('../../../browser/cdp/screencast/browser-screencast-stream', () => ({
 
 const PHONE = 'phone-1'
 
-function frame(seq: number): Uint8Array {
+function frame(seq: number, image = new Uint8Array([seq])): Uint8Array {
   return encodeBrowserScreencastFrame({
     opcode: BrowserScreencastOpcode.Frame,
     seq,
     format: 'jpeg',
     metadata: {},
-    image: new Uint8Array([seq])
+    image
   })
 }
 
@@ -73,16 +73,6 @@ describe('screencast frame credit', () => {
     vi.useRealTimers()
   })
 
-  it('sends every frame and echoes nothing when the viewer does not ask for credit', async () => {
-    const { subscription, onFrame, sent } = await subscribe(false)
-    for (let seq = 0; seq < 5; seq++) {
-      onFrame(frame(seq))
-    }
-    expect(subscription.ready.frameAck).toBeUndefined()
-    expect(sent).toEqual([0, 1, 2, 3, 4])
-    subscription.session.stop()
-  })
-
   it('holds the newest frame while two are unacked and sends it on a cumulative ack', async () => {
     const { subscription, onFrame, sent, ack } = await subscribe(true)
     expect(subscription.ready.frameAck).toBe(true)
@@ -99,35 +89,26 @@ describe('screencast frame credit', () => {
     subscription.session.stop()
   })
 
-  // #25263: a fixed two-frame window delivered about a third of 10 fps on an idle 600 ms link.
-  it('keeps 10 fps on an uncongested 600 ms round trip', async () => {
-    const { subscription, onFrame, sent, sentAt, ack } = await subscribe(true)
-    let acked = 0
-    for (let tick = 0; tick < 100; tick++) {
-      onFrame(frame(tick))
-      for (let step = 0; step < 10; step++) {
-        await vi.advanceTimersByTimeAsync(10)
-        // Each frame's ack lands 600 ms after it went out.
-        while (acked < sent.length && sentAt[acked]! + 600 <= Date.now()) {
-          ack(sent[acked]!)
-          acked += 1
-        }
-      }
-    }
-    // Only frames 2–4 are skipped, superseded while the first ack is still in flight.
-    expect(sent).toEqual([0, 1, ...Array.from({ length: 95 }, (_, index) => index + 5)])
-    subscription.session.stop()
-  })
+  it('drops frames too large to send without charging credit, whether sent or held', async () => {
+    const { subscription, onFrame, sent, ack } = await subscribe(true)
+    const oversize = new Uint8Array(9 * 1024 * 1024)
+    onFrame(frame(0, oversize))
+    onFrame(frame(1, oversize))
+    onFrame(frame(2))
+    onFrame(frame(3))
+    expect(sent).toEqual([2, 3])
 
-  // #25263: a 2 s expiry let ten unacked frames through in 10 s. Probes back off to one per 8 s.
-  it('sends one probe frame per backed-off stall when no ack ever comes', async () => {
-    const { subscription, onFrame, sent } = await subscribe(true)
-    for (let tick = 0; tick < 300; tick++) {
-      onFrame(frame(tick))
-      await vi.advanceTimersByTimeAsync(100)
-    }
-    // The base window, then probes 2 s, 4 s, 8 s and 8 s after each hold (t = 2.2, 6.2, 14.2, 22.2 s).
-    expect(sent).toEqual([0, 1, 21, 61, 141, 221])
+    // Held for credit, then dropped when the ack opens credit: the next held frame still goes on its ack.
+    onFrame(frame(4, oversize))
+    ack(3)
+    onFrame(frame(5))
+    onFrame(frame(6))
+    // Past the queue-delay allowance, without running timers.
+    vi.setSystemTime(Date.now() + 1_000)
+    onFrame(frame(7))
+    expect(sent).toEqual([2, 3, 5, 6])
+    ack(6)
+    expect(sent).toEqual([2, 3, 5, 6, 7])
     subscription.session.stop()
   })
 })

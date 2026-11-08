@@ -9,13 +9,13 @@ import {
   getEditorViewLanguage,
   getMarkdownViewModes
 } from '../../view-mode/markdown-preview-controls'
-import type { FileWriteResult } from '../../../../../../shared/file-write-disk-precondition'
-import type { LocalFileAccess } from '../../../../../../shared/local-file-access'
+import type { FileWriteResult } from '../../../../../../shared/file-write/file-write-disk-precondition'
+import type { LocalFileAccess } from '../../../../../../shared/file-access/local-file-access'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { writeRuntimeFile } from '@/runtime/files/mutations/runtime-file-mutation-client'
 import { writeRuntimeTerminalArtifactFile } from '@/runtime/files/grants/runtime-terminal-artifact-write'
 import { getRelativePathInsideWorktree } from '@/runtime/files/runtime-file-routing'
-import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
+import { chatScratchFileAddress } from '@/runtime/files/addressing/runtime-chat-scratch-file-address'
 import { grantRestoredHostFile } from '../../restored-host-file-grant'
 import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 

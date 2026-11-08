@@ -18,7 +18,7 @@ import type {
 } from '../terminal-host/terminal-host-create-contract'
 import type { TerminalHost } from '../terminal-host/terminal-host'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
-import { isSpawnIntent } from '../../../shared/host-spawn-admission'
+import { isSpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import '../../../shared/terminal/pty/ingress/pty-startup-ingress'
 import { parsePtyStartupIngressIntent } from '../../../shared/terminal/pty/ingress/pty-startup-ingress-intent'
 import {

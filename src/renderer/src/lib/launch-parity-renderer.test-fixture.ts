@@ -1,7 +1,7 @@
 // Load each renderer client OS against a real one-workspace store; suites own their vi.mock declarations.
 import { vi } from 'vitest'
 import { useStore } from 'zustand'
-import type * as StoreHelpersNamespace from '@/store/slices/store-test-helpers'
+import type * as StoreHelpersNamespace from '@/store/testing/app-store-test-fixture'
 import type * as CapabilitiesNamespace from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import {
   LAUNCH_FOLDER_ID,
@@ -9,7 +9,7 @@ import {
   launchWorkspaceId,
   type LaunchClient,
   type LaunchWorkspace
-} from '../../../shared/launch-parity-window-request.test-fixture'
+} from '../../../shared/agent-launch/fixtures/launch-parity-window-request.test-fixture'
 
 const USER_AGENT: Record<LaunchClient, string> = {
   darwin: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Orca',
@@ -55,7 +55,7 @@ export function perClientLoader<T>(
       return cached
     }
     vi.resetModules()
-    const helpers: StoreHelpers = await import('@/store/slices/store-test-helpers')
+    const helpers: StoreHelpers = await import('@/store/testing/app-store-test-fixture')
     const capabilities: typeof CapabilitiesNamespace =
       await import('@/runtime/hosts/capabilities/local-runtime-capabilities')
     capabilities.setLocalRuntimeCapabilitiesForTests([])

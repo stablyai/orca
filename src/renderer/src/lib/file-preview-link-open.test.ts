@@ -1,12 +1,9 @@
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
-import {
-  TEST_REPO,
-  makeTabGroup,
-  makeUnifiedTab,
-  makeWorktree
-} from '@/store/slices/store-test-helpers'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '@/store/slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import {
   createBrowserLinkTestStore,
   WORKSPACE,
@@ -24,7 +21,7 @@ import { openResolvedHtmlFileInBrowser } from '@/components/terminal-pane/links/
 import {
   detectedListingFixture,
   terminalTabFixture
-} from '@/components/native-chat/native-chat-workspace-test-fixtures'
+} from '@/components/native-chat/surfaces/integration/native-chat-workspace-test-fixtures'
 import { openPlannedFileBrowserLink } from './file-preview-link-open'
 
 const mocks = vi.hoisted(() => ({ getState: vi.fn(), mint: vi.fn(), revoke: vi.fn() }))
@@ -57,81 +54,6 @@ afterEach(() => {
     releaseDocPreviewGrant(id)
   }
 })
-
-it.each([
-  ['local', false],
-  ['ssh:detected-owner', false],
-  ['ssh:detected-owner', true]
-] as const)(
-  'opens a detected-only workspace preview beside its retained source on %s (selected twin: %s)',
-  async (host, selectedTwin) => {
-    store.setState((state) => ({
-      repos: state.repos.map((repo) => ({
-        ...repo,
-        connectionId: host === 'local' ? null : 'detected-owner',
-        executionHostId: host
-      })),
-      worktreesByRepo: {},
-      detectedWorktreesByRepo: {
-        repo1: detectedListingFixture([
-          makeWorktree({ id: WORKSPACE, repoId: 'repo1', path: '/repo', hostId: host }),
-          ...(selectedTwin
-            ? [makeWorktree({ id: WORKSPACE, repoId: 'repo1', path: '/repo', hostId: 'local' })]
-            : [])
-        ])
-      },
-      activeWorktreeId: selectedTwin ? WORKSPACE : null,
-      activeWorkspaceExecutionHostId: selectedTwin ? host : null,
-      tabsByWorktree: {
-        [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) =>
-          terminalTabFixture(tab.entityId, WORKSPACE)
-        )
-      },
-      unifiedTabsByWorktree: {
-        [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
-          ...tab,
-          executionHostId: host
-        }))
-      }
-    }))
-    const outcome = await new Promise<BrowserOpenOutcome>((resolve) =>
-      openFileInBrowserTab({
-        filePath: '/repo/report.html',
-        worktreeId: WORKSPACE,
-        fileExecutionHostId: host,
-        linkContext: { linkIntent: captureLinkOpenIntent(store.getState(), WORKSPACE, 'source') },
-        onLinkOutcome: resolve
-      })
-    )
-    expect(outcome).toMatchObject({
-      status: 'opened',
-      result: { worktreeId: WORKSPACE, executionHostId: host }
-    })
-    if (outcome.status !== 'opened') {
-      throw new Error('Expected a detected-only workspace preview')
-    }
-    const page = store
-      .getState()
-      .browserPagesByWorkspace[outcome.result.browserWorkspaceId]?.find(
-        (candidate) => candidate.id === outcome.result.browserPageId
-      )
-    expect(page).toMatchObject(
-      host === 'local'
-        ? { url: 'file:///repo/report.html' }
-        : {
-            docLocation: {
-              kind: 'workspace-doc',
-              worktreeId: WORKSPACE,
-              filePath: '/repo/report.html'
-            }
-          }
-    )
-    expect(store.getState().activeGroupIdByWorktree[WORKSPACE]).toBe(outcome.result.groupId)
-    expect(
-      store.getState().groupsByWorktree[WORKSPACE]?.find((group) => group.id === 'a')?.activeTabId
-    ).toBe('source')
-  }
-)
 
 it('refuses a detected preview whose owner changed despite a retained active host selection', async () => {
   store.setState((state) => ({

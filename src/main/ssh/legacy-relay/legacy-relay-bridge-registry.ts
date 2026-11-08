@@ -28,6 +28,7 @@ import {
   listedLeasesByRelayId
 } from './legacy-relay-bridge-leases'
 import { LegacyRelayPaneOwners } from './legacy-relay-pane-owners'
+import { noteBridgedExit, settleBridgedExits } from './legacy-relay-move-retry'
 import { legacyRelayChannels } from './legacy-relay-bridge-connections'
 import {
   PtyExitProof,
@@ -150,6 +151,7 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
         heldPanes.delete(targetId)
         stopsFor(targetId).flush(bridge)
         reportDailyRelayActivity(targetId, bridge.livePaneCount(), installed.report)
+        settleBridgedExits(bridge, () => !bridge.snapshot().length && !hasListedLeases(targetId))
       }
       installed.onPanesChanged(legacyRelayBridgedPanes())
     },
@@ -159,7 +161,7 @@ function bridgeFor(targetId: string): LegacyRelayTargetBridge | null {
       stopsFor(targetId).exited(ptyId)
       installed.onExit(ptyId, code)
     },
-    onTerminalExited: () => installed.report(targetId, 'terminal_exited', 0),
+    onTerminalExited: () => noteBridgedExit(bridge, targetId, installed),
     owners: ownersFor(targetId)
   })
   bridges.set(targetId, bridge)

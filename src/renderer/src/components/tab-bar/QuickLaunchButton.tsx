@@ -1,20 +1,22 @@
+import { readAgentMenuTerminalPending } from './agent-menu-launch-facts'
+import { terminalPendingReason } from './new-tab-agent-menu-model'
 import { useAppStore } from '@/store'
-import { useAppStateValue } from '@/store/app-state-view'
+import { useAppStateValue } from '@/store/retained-views/app-state-view'
 import { SubscribedAgentLaunchPickerMenu } from '@/components/agent/AgentLaunchPickerMenu'
 import {
   agentPickerFreshLaunchInputs,
   type AgentPickerEntry,
   type AgentPickerDraft
 } from '../../../../shared/agent-launch/picker/agent-launch-picker'
-import React, { useCallback, useRef } from 'react'
+import React, { useCallback } from 'react'
 import { toast } from 'sonner'
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
-import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
+import { captureNativeChatComposerFocusIntent } from '@/components/native-chat/composer/focus/native-chat-composer-focus-intent'
 import { agentLaunchPromptOwnership, newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { activeAgentNotesSendFailureMessage } from '@/lib/active-agent-note-send-result'
 import { AgentSettingsMenuItem } from '@/components/agent/AgentSettingsMenuItem'
-import { AgentSurfaceLaunchButton } from '@/components/agent/AgentSurfaceLaunchButton'
+import { TabAgentSurfaceChoiceRow } from './TabAgentSurfaceChoiceRow'
 import {
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -27,6 +29,7 @@ import type { AgentPickerInventorySource } from '../agent/use-agent-launch-picke
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { cn } from '@/lib/utils'
 import type { NewTabAgentMenuRow } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
@@ -53,8 +56,6 @@ export type QuickLaunchAgentMenuItemsProps = {
   disabled?: boolean
 }
 
-const ROW_NAVIGATION_KEYS = new Set(['ArrowLeft', 'ArrowUp', 'ArrowDown', 'Home', 'End'])
-
 const PLACEHOLDER_WIDTHS = ['w-3/5', 'w-1/2', 'w-2/3', 'w-2/5', 'w-3/4', 'w-1/3', 'w-4/5', 'w-1/4']
 
 function getCatalogEntry(agent: TuiAgent): { id: TuiAgent; label: string } | null {
@@ -80,7 +81,12 @@ export function useTabAgentMenuLaunch({
 }) {
   const runLaunch = useCallback(
     (row: NewTabAgentMenuRow, draft?: AgentPickerDraft, pickerEntry?: AgentPickerEntry) => {
-      if (disabled || row.kind === 'chat-unavailable') {
+      if (
+        disabled ||
+        row.kind === 'chat-unavailable' ||
+        (row.kind !== 'chat' &&
+          readAgentMenuTerminalPending(useAppStore.getState(), { worktreeId }))
+      ) {
         return false
       }
       const { agent } = row
@@ -116,14 +122,7 @@ export function useTabAgentMenuLaunch({
         // Notes keep their text until it goes out, so the new chat's composer never gets a copy.
         ...(onPromptHandedOff ? { promptKeptByCaller: true as const } : {})
       })
-      if (!result) {
-        toast.error(
-          translate(
-            'auto.components.tab.bar.QuickLaunchButton.465e432ef1',
-            'Could not build launch command for {{value0}}.',
-            { value0: label }
-          )
-        )
+      if (!result || 'refused' in result) {
         return false
       }
       if (onPromptHandedOff && result.promptDeliveryResult) {
@@ -197,6 +196,7 @@ export function ProjectedAgentMenuItems({
   onSelectPickerAgent?: (agent: AgentPickerEntry['agent']) => void
   hidePickerSearch?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const desktopDefaultAgent = useAppStateValue((s) => s.settings?.defaultTuiAgent)
   const newAgentShortcut = useOptionalShortcutLabel('tab.newAgent')
   const shortcutLabels = useAgentMenuShortcutLabels(pickerInventory ? model : undefined)
@@ -213,7 +213,7 @@ export function ProjectedAgentMenuItems({
             key={width}
             variant="launch"
             disabled
-            aria-label={translate(
+            aria-label={t(
               'auto.components.tab.bar.QuickLaunchButton.agentsLoading',
               'Loading agents'
             )}
@@ -240,29 +240,24 @@ export function ProjectedAgentMenuItems({
           className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 text-muted-foreground"
         >
           {needsServerUpdate
-            ? translate(
+            ? t(
                 'auto.components.tab.bar.QuickLaunchButton.terminalListNeedsServerUpdate',
                 'Update Orca on this server to list terminal agents'
               )
             : detectionFailed
-              ? translate(
+              ? t(
                   'auto.components.tab.bar.QuickLaunchButton.terminalListFailed',
                   'Couldn’t list terminal agents for this workspace'
                 )
               : detectedIds && detectedIds.length > 0
-                ? translate(
-                    'auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf',
-                    'No enabled agents'
-                  )
-                : translate(
-                    'auto.components.tab.bar.QuickLaunchButton.e518f544b1',
-                    'No agents detected'
-                  )}
+                ? t('auto.components.tab.bar.QuickLaunchButton.8dea9b5cdf', 'No enabled agents')
+                : t('auto.components.tab.bar.QuickLaunchButton.e518f544b1', 'No agents detected')}
         </DropdownMenuItem>
       ) : null}
       {pickerInventory ? (
         <SubscribedAgentLaunchPickerMenu
           shortcutLabels={shortcutLabels}
+          model={model}
           inventory={pickerInventory}
           runLaunch={runLaunch}
           onSelectAgent={onSelectPickerAgent}
@@ -280,17 +275,23 @@ export function ProjectedAgentMenuItems({
                 <AgentIcon agent={agent} size={14} />
                 <span className="flex-1">{label}</span>
                 <span className="font-normal text-muted-foreground">
-                  {chatUnavailableLabel(row.reason)}
+                  {chatUnavailableLabel(row.reason, t)}
                 </span>
               </DropdownMenuItem>
             )
           }
           const showsDefaultAgentShortcut =
             newAgentShortcut !== null && defaultAgent !== 'blank' && agent === defaultAgent
+          const pendingReason = terminalPendingReason(model.terminalPending, row, t)
           const rowContent = (
             <>
               <AgentIcon agent={agent} size={14} />
-              <span className="flex-1">{rowLabel(row)}</span>
+              <span className="min-w-0 flex-1 truncate">{rowLabel(row, t)}</span>
+              {pendingReason ? (
+                <span className="min-w-0 shrink truncate text-xs text-muted-foreground">
+                  {pendingReason}
+                </span>
+              ) : null}
               {showsDefaultAgentShortcut ? (
                 <DropdownMenuShortcut>{newAgentShortcut}</DropdownMenuShortcut>
               ) : null}
@@ -301,21 +302,27 @@ export function ProjectedAgentMenuItems({
             <React.Fragment key={rowId(row)}>
               {startsCliGroup ? <DropdownMenuSeparator /> : null}
               {other ? (
-                <SurfaceChoiceRow
+                <TabAgentSurfaceChoiceRow
                   row={row}
                   other={other}
                   label={label}
+                  terminalPending={model.terminalPending}
                   disabled={disabled}
                   runLaunch={runLaunch}
                 >
                   {rowContent}
-                </SurfaceChoiceRow>
+                </TabAgentSurfaceChoiceRow>
               ) : (
                 <DropdownMenuItem
                   variant="launch"
-                  disabled={disabled}
-                  onSelect={() => runLaunch(row)}
-                  title={rowTitle(row, label)}
+                  disabled={disabled || !!pendingReason}
+                  aria-description={pendingReason}
+                  onSelect={(event) => {
+                    if (runLaunch(row) === false) {
+                      event.preventDefault()
+                    }
+                  }}
+                  title={rowTitle(row, label, t)}
                 >
                   {rowContent}
                 </DropdownMenuItem>
@@ -339,88 +346,6 @@ function otherSurfaceRow(
     return detectedIds?.includes(agent) ? { kind: 'cli', agent, executionHostId } : null
   }
   return row.kind === 'cli' && row.chat ? { kind: 'chat', agent, executionHostId } : null
-}
-
-// Why: the row starts its own surface; its trailing button (or ArrowRight, then Enter) opens the other.
-function SurfaceChoiceRow({
-  row,
-  other,
-  label,
-  disabled,
-  runLaunch,
-  children
-}: {
-  row: NewTabAgentMenuRow
-  other: NewTabAgentMenuRow
-  label: string
-  disabled: boolean
-  runLaunch: (row: NewTabAgentMenuRow) => void
-  children: React.ReactNode
-}): React.JSX.Element {
-  const otherButton = useRef<HTMLButtonElement>(null)
-  const releaseTarget = useRef<{ event: PointerEvent; target: EventTarget } | null>(null)
-  const title = rowTitle(row, label)
-  return (
-    <DropdownMenuItem
-      variant="launch"
-      disabled={disabled}
-      title={title}
-      aria-label={title}
-      onPointerUp={(event) => {
-        // Radix synchronously clicks the row on drag release, discarding the release target.
-        const release = { event: event.nativeEvent, target: event.target }
-        releaseTarget.current = release
-        queueMicrotask(() => {
-          if (releaseTarget.current === release) {
-            releaseTarget.current = null
-          }
-        })
-      }}
-      onClick={(event) => {
-        const release = releaseTarget.current
-        releaseTarget.current = null
-        if (disabled) {
-          return
-        }
-        const target =
-          event.target === event.currentTarget && release && release.event.eventPhase !== Event.NONE
-            ? release.target
-            : event.target
-        runLaunch(target instanceof Node && otherButton.current?.contains(target) ? other : row)
-      }}
-      onKeyDown={(event) => {
-        if (event.key === 'ArrowRight') {
-          event.preventDefault()
-          otherButton.current?.focus()
-        }
-      }}
-    >
-      {children}
-      <AgentSurfaceLaunchButton
-        ref={otherButton}
-        surface={other.kind === 'chat' ? 'chat' : 'terminal'}
-        title={rowTitle(other, label)}
-        className="hover:bg-accent focus-visible:bg-accent [[data-highlighted]_&]:opacity-100"
-        onKeyDown={(event) => {
-          // Stopped so the row's own Enter handling does not start the row's surface instead.
-          if (event.key === 'Enter' || event.key === ' ') {
-            event.preventDefault()
-            event.stopPropagation()
-            event.currentTarget.click()
-          } else if (ROW_NAVIGATION_KEYS.has(event.key)) {
-            event.preventDefault()
-            event.stopPropagation()
-            const item = event.currentTarget.closest<HTMLElement>('[role="menuitem"]')
-            item?.focus()
-            // Why: roving focus ignores keys from inside an item, so the row replays the move.
-            if (event.key !== 'ArrowLeft') {
-              item?.dispatchEvent(new KeyboardEvent('keydown', { key: event.key, bubbles: true }))
-            }
-          }
-        }}
-      />
-    </DropdownMenuItem>
-  )
 }
 
 export const QuickLaunchAgentMenuItems = React.memo(QuickLaunchAgentMenuItemsInner)

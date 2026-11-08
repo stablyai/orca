@@ -1,5 +1,5 @@
 # Renderer reads of `worktreesByRepo` / `folderWorkspaces` / `detectedWorktreesByRepo`
-# outside src/renderer/src/store/workspace-record-selectors.ts, as `<count> <file> # <why>`.
+# outside src/renderer/src/store/workspaces/catalog/workspace-record-fields.ts, as `<count> <file> # <why>`.
 # This is a RATCHET: counts may only go DOWN. Read through the selectors instead.
 # `P5b-2 must clear` rows read store state through a loosely typed or optional field: once the
 # fields leave the store they read undefined and silently fall back, so P5b-2 must move them.
@@ -47,7 +47,7 @@
 3 src/renderer/src/lib/workspace/persistence/workspace-session-host-persistence.ts # P5b-2 must clear: loosely typed state param
 1 src/renderer/src/lib/workspace/persistence/workspace-session.ts # P5b-2 must clear: store snapshot read; file at the max-lines limit
 6 src/renderer/src/lib/worktree-operation-route.ts # P5b-2 must clear: optional state fields default to empty
-3 src/renderer/src/runtime/local-structured-session-tab-retirement.ts # P5b-2 must clear: optional state fields default to empty
+3 src/renderer/src/runtime/native-chat/local-sessions/local-structured-session-tab-retirement.ts # P5b-2 must clear: optional state fields default to empty
 2 src/renderer/src/runtime/sync-runtime-graph/sync-key.ts # reads a passed-in copy
 3 src/renderer/src/store/folder-workspaces/folder-workspace-catalog-actions.ts # store writer
 7 src/renderer/src/store/folder-workspaces/folder-workspace-catalog.ts # store writer
@@ -56,7 +56,7 @@
 4 src/renderer/src/store/repos/converted-ssh-host-rows.ts # store writer
 5 src/renderer/src/store/repos/repo-catalog-merge.ts # store writer
 5 src/renderer/src/store/repos/repo-removal.ts # store writer
-6 src/renderer/src/store/slices/diff-comment-persistence.ts # store writer
+6 src/renderer/src/store/slices/diff-comments/diff-comment-persistence.ts # store writer
 12 src/renderer/src/store/slices/workspace-attention/workspace-unread-flag.ts # store writer
 2 src/renderer/src/store/slices/worktrees/create/created-worktree-state-merge.ts # store writer
 1 src/renderer/src/store/slices/worktrees/listing/detected-worktree-meta.ts # P5b-2 must clear: feeds an existing row-type cast

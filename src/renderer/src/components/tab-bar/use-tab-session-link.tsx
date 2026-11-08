@@ -4,7 +4,7 @@ import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
-import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { SESSION_LINK_CAPABILITY } from '../../../../shared/session-link'
 import { SessionLinkControl } from '../native-chat/SessionLinkControl'
 import { tabSessionLinkRequest } from './tab-session-link'

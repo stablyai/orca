@@ -1,4 +1,4 @@
-import type { CreateWebRuntimeSessionBrowserTabArgs } from '@/runtime/web-runtime-browser-creation-context'
+import type { CreateWebRuntimeSessionBrowserTabArgs } from '@/runtime/browser/creation/web-runtime-browser-creation-context'
 
 type PairedBrowserTabCreator = (args: CreateWebRuntimeSessionBrowserTabArgs) => Promise<boolean>
 
@@ -15,6 +15,6 @@ export function getRegisteredPairedBrowserTabCreator(): PairedBrowserTabCreator 
 
 export async function loadPairedBrowserTabCreator(): Promise<PairedBrowserTabCreator> {
   const { createWebRuntimeSessionBrowserTab } =
-    await import('@/runtime/web-runtime-browser-creation')
+    await import('@/runtime/browser/creation/web-runtime-browser-creation')
   return createWebRuntimeSessionBrowserTab
 }

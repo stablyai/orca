@@ -5,8 +5,8 @@ import { formatAskAnswer } from '../../../../shared/native-chat/input/native-cha
 import { AI_VAULT_AGENT_LABELS } from '../../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate as t } from '@/i18n/i18n'
 import { SecuritySurface } from '@/components/ui/security-surface'
-import { NativeChatQuestionCard } from './NativeChatQuestionCard'
-import { NativeChatPromptStrip } from './NativeChatPromptCollapse'
+import { NativeChatQuestionCard } from './prompts/NativeChatQuestionCard'
+import { NativeChatPromptStrip } from './prompts/NativeChatPromptCollapse'
 
 export function SessionLinkOwnerDecision({
   request,

@@ -1,5 +1,5 @@
 import { defineFixture } from '../../component-fixtures/component-fixture'
-import { NativeChatPaneHeader } from './NativeChatPaneHeader'
+import { NativeChatPaneHeader } from './pane/actions/NativeChatPaneHeader'
 import { link, source, partner, report } from './session-link-ui.test-fixture'
 import {
   SessionLinkSnapshot,

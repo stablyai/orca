@@ -1,5 +1,5 @@
 import type * as React from 'react'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { GitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 

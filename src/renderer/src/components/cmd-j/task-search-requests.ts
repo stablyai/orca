@@ -18,8 +18,11 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import {
   normalizeTaskSourceContext,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
-import { normalizeVisibleTaskProviders, type TaskProvider } from '../../../../shared/task-providers'
+} from '../../../../shared/work-items/task-source-context'
+import {
+  normalizeVisibleTaskProviders,
+  type TaskProvider
+} from '../../../../shared/work-items/task-providers'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PaletteFilterState } from './palette-filter'

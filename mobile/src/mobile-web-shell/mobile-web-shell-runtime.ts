@@ -1,5 +1,5 @@
 import * as ExpoCrypto from 'expo-crypto'
-import { encodeBase64Url } from '../transport/mobile-endpoint-supervisor-support'
+import { encodeBase64Url } from '../transport/encryption/mobile-session-id-encoding'
 import { BRIDGE_READY_RETRY_MAX_MS } from './bridge/bridge-client-init-handshake'
 import type { GenerationStore } from './generation-store'
 import { processGenerationStore } from './process-generation-store'

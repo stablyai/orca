@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { dispatchReportMailbox } from '../reports/dispatch-report-mailbox'
+import { readCoordinatorMailCount } from '../../db/messages/dispatch-read-mail'
 import type {
   DispatchContextRow,
   RemoteDispatchAttachmentRow
@@ -16,7 +17,7 @@ export type WorkerTurnStopReason = 'finished' | 'errored' | 'needs-input' | 'exi
 export type WorkerTurnStop = {
   /** The worker's own mailbox identity: terminal handle, chat address or structured worker handle. */
   from: string
-  /** Identifies this stop; a later turn's stop has a new one, so each stop is reported once. */
+  /** Identifies this stop; a later turn's stop has a new one, so each stop is reported once. An idle finish is keyed by the coordinator's latest mail instead. */
   stopKey: string
   reason: WorkerTurnStopReason
   lastOutput: string | undefined
@@ -61,6 +62,11 @@ function describeStop(stop: WorkerTurnStop, task: string, dispatchId: string): s
       ? 'The Dispatch is still open. Stop the worker, then retry it or tell the user.'
       : // The reader runs its own CLI build, so name the subcommand, never an executable.
         `The Dispatch is still open. Answer it with your Orca CLI's \`orchestration send --to dispatch:${dispatchId} --subject "<topic>" --body "<guidance>"\`, retry it, or stop the worker.`,
+    ...(stop.reason === 'finished'
+      ? [
+          'If it is idle on purpose, leave it: its later idle turns are not reported until you write to it.'
+        ]
+      : []),
     ...(output
       ? [
           'Last output:',
@@ -91,8 +97,14 @@ export function reportWorkerTurnStop(
   ) {
     return
   }
+  // An idle finish answers the coordinator's mail the worker took, so it is news once per mail taken: a later
+  // idle turn (a worker on its own schedule, or one the user is talking to) repeats what the coordinator was told.
+  const stopKey =
+    stop.reason === 'finished'
+      ? `finished:${readCoordinatorMailCount(db, dispatchId)}`
+      : stop.stopKey
   const id = `msg_stop_${createHash('sha256')
-    .update(JSON.stringify([dispatchId, stop.stopKey]))
+    .update(JSON.stringify([dispatchId, stopKey]))
     .digest('hex')
     .slice(0, 24)}`
   const payload = { dispatchId, handle: stop.from, stopReason: stop.reason }

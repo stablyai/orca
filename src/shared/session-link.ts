@@ -5,7 +5,7 @@ export {
   SESSION_LINK_CAPABILITY,
   SESSION_LINK_OWNER_CHOICES_CAPABILITY,
   SESSION_LINK_POLICY_CAPABILITY
-} from './orchestration-runtime-capabilities'
+} from './orchestration/orchestration-runtime-capabilities'
 export const SESSION_LINK_TURN_LIMIT = 6
 export const SESSION_LINK_DEFAULT_TURN_LIMIT = 20
 export const SessionLinkPolicy = z

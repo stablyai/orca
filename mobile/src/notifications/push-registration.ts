@@ -18,8 +18,8 @@ import type {
   MobilePushRegisterInput
 } from '../../../src/shared/mobile-push-contract'
 import { NOTIFICATIONS_REMOTE_PUSH_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
-import type { RpcOperationSender as PushClient } from '../transport/rpc-operation-sender'
-import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
+import type { RpcOperationSender as PushClient } from '../transport/rpc/rpc-operation-sender'
+import { startRuntimeCapabilityProbe } from '../transport/connection/runtime-capability-probe'
 import { pushRouteRegister, pushRouteUnregister } from './mobile-push-registration-operations'
 import {
   loadPushNotificationsEnabled,

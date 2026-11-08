@@ -5,7 +5,7 @@ import {
 } from '../../../../../../shared/execution-host'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { getRuntimeEnvironmentRevision } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet } from '../listing/worktree-slice-types'
 import { branchName } from '@/lib/git-utils'
 import {
@@ -21,10 +21,10 @@ import {
 import { isGitHubPRSuppressed } from '../../../../../../shared/worktree/github-pr-suppression'
 import type { WorkspaceAttachment, Worktree } from '../../../../../../shared/worktree/types'
 import { findKnownWorktreeById } from '../listing/detected-worktree-meta'
-import { findRepoForHost } from '../../repo-host-identity'
+import { findRepoForHost } from '../../../repos/repo-host-identity'
 import { readHostedReviewForRepo } from '@/lib/hosted-review-repo-read'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/work-items/github/github-work-item-source-lookup'
-import { buildTaskSourceContextFromRepo } from '../../../../../../shared/task-source-context'
+import { buildTaskSourceContextFromRepo } from '../../../../../../shared/work-items/task-source-context'
 import { PrioritySemaphore } from '../../../../../../shared/priority-semaphore'
 
 function terminalReviewSourceKey(repo: Repo | null | undefined): string {

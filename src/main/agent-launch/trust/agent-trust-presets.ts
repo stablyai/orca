@@ -163,8 +163,9 @@ function canonicalize(p: string): string {
 }
 
 function cursorWorkspaceSlug(absPath: string): string {
-  const stripped = absPath.replace(/^[\\/]+/, '')
-  // Windows paths contain characters forbidden in Cursor’s project-directory names.
-  const slug = stripped.replace(/[\\/:*?"<>|]+/g, '-')
-  return slug
+  // Mirrors cursor-agent's project-directory name; any mismatch leaves the trust menu up.
+  return absPath
+    .replace(/[^a-zA-Z0-9]/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
 }
