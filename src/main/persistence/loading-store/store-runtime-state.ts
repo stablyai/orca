@@ -28,7 +28,7 @@ import type {
   AutomationStorageAuthority
 } from '../scheduling-automations/automation-owner-projection'
 import type { ProfileStatePersistenceAuthority } from './profile-state-authority'
-import type { AutomationRun } from '../../../shared/automations-types'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import { resolveNewPaneShellPath } from '../migrating-orcad-catalog/orcad-shell-history-installer'
 import { OrcadTerminalRestoreHintStore } from '../migrating-orcad-catalog/orcad-terminal-restore-hint-store'
 

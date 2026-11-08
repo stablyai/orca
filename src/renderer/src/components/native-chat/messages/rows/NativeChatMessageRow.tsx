@@ -22,6 +22,7 @@ import type {
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { useNativeChatWorkRun } from '../../tools/runs/use-native-chat-work-run'
 import { useNativeChatRowNavigation } from '../actions/use-native-chat-row-navigation'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Unconfirmed sending status or a failed-delivery notice with an optional dismissal. */
 export type NativeChatDeliveryNotice =
@@ -90,6 +91,7 @@ function rowHasContent(content: ReturnType<typeof deriveNativeChatRowContent>): 
 export const MessageRow = memo(function MessageRow(
   props: MessageRowProps
 ): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     message,
     agentName,
@@ -101,7 +103,7 @@ export const MessageRow = memo(function MessageRow(
     workRun
   } = props
   const rowRef = useRef<HTMLDivElement | null>(null)
-  const blocks = nativeChatMessageRowBlocks(message)
+  const blocks = nativeChatMessageRowBlocks(message, t)
   // Share content derivation with slot selection so invisible rows cannot reserve transcript gaps.
   const content = deriveNativeChatRowContent(blocks)
   const { markdown, prose } = content

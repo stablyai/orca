@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp, Goal, Pause, Play, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useNow } from '@/hooks/use-now'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { NativeChatComposerTabStrip } from '../../composer/controls/NativeChatComposerTabStrip'
 import type { AgentJournalThreadGoal } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -57,11 +57,12 @@ export function NativeChatThreadGoalBanner(props: {
   runningTurn: { startedAt: number | null } | null
   onChange: (change: AgentSessionThreadGoalChange) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const { goal, onChange } = props
   const [expanded, setExpanded] = useState(false)
   const { runningTurn } = props
   const now = useNow(1_000, props.isVisible && goal.status === 'active' && runningTurn !== null)
-  const label = nativeChatThreadGoalStatusLabel(goal.status, runningTurn !== null)
+  const label = nativeChatThreadGoalStatusLabel(goal.status, runningTurn !== null, t)
   const statusChange = props.hostChanges ? agentSessionThreadGoalStatusChange(goal.status) : null
   if (label === null) {
     return null
@@ -70,8 +71,8 @@ export function NativeChatThreadGoalBanner(props: {
     agentSessionThreadGoalElapsedSeconds(goal, now, runningTurn)
   )
   const expandLabel = expanded
-    ? translate('components.native-chat.goal.collapse', 'Hide full goal')
-    : translate('components.native-chat.goal.expand', 'Show full goal')
+    ? t('components.native-chat.goal.collapse', 'Hide full goal')
+    : t('components.native-chat.goal.expand', 'Show full goal')
   return (
     <NativeChatComposerTabStrip data-native-chat-thread-goal={goal.status}>
       <Goal aria-hidden className="mt-1 size-3.5 shrink-0" />
@@ -82,7 +83,7 @@ export function NativeChatThreadGoalBanner(props: {
       </p>
       <div className="flex shrink-0 items-center">
         <GoalAction
-          label={translate('components.native-chat.goal.clear', 'Clear goal')}
+          label={t('components.native-chat.goal.clear', 'Clear goal')}
           // Claude's `/goal clear` must enter a fresh turn, like a composer send.
           disabled={!props.hostChanges && (props.sendUnavailable || props.startsHeld === true)}
           onClick={() => onChange({ kind: 'clear' })}
@@ -91,7 +92,7 @@ export function NativeChatThreadGoalBanner(props: {
         </GoalAction>
         {statusChange === 'paused' ? (
           <GoalAction
-            label={translate('components.native-chat.goal.pause', 'Pause goal')}
+            label={t('components.native-chat.goal.pause', 'Pause goal')}
             disabled={false}
             onClick={() => onChange({ kind: 'status', status: 'paused' })}
           >
@@ -99,7 +100,7 @@ export function NativeChatThreadGoalBanner(props: {
           </GoalAction>
         ) : statusChange === 'active' ? (
           <GoalAction
-            label={translate('components.native-chat.goal.resume', 'Resume goal')}
+            label={t('components.native-chat.goal.resume', 'Resume goal')}
             disabled={props.startsHeld === true}
             onClick={() => onChange({ kind: 'status', status: 'active' })}
           >

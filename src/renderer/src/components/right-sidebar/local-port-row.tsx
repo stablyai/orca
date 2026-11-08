@@ -13,7 +13,7 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const LOCAL_PORT_MENU_CONTENT_CLASS =
   '!rounded-md !border-border/60 !bg-popover !text-popover-foreground !shadow-[0_10px_24px_rgba(0,0,0,0.18)] !backdrop-blur-none'
@@ -33,6 +33,7 @@ export function LocalPortRow({
   /** Absent when this client has no route to the port's host. */
   onOpenInBrowser?: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const handleCopy = useCallback(() => {
     void window.api.ui.writeClipboardText(addressForPort(port))
   }, [port])
@@ -79,18 +80,18 @@ export function LocalPortRow({
     port.processName ??
     (port.pid
       ? `PID ${port.pid}`
-      : translate('auto.components.right.sidebar.PortsPanel.unknownProcess', 'Unknown process'))
+      : t('auto.components.right.sidebar.PortsPanel.unknownProcess', 'Unknown process'))
   const address = addressForPort(port)
   const ownerLabel =
     port.kind === 'workspace'
       ? port.owner.displayName
       : port.kind === 'container'
-        ? translate(
+        ? t(
             'auto.components.right.sidebar.PortsPanel.containerOrForwardedService',
             'Container or forwarded service'
           )
-        : translate('auto.components.right.sidebar.PortsPanel.unassigned', 'Unassigned')
-  const openBrowserLabel = translate(
+        : t('auto.components.right.sidebar.PortsPanel.unassigned', 'Unassigned')
+  const openBrowserLabel = t(
     'auto.components.right.sidebar.PortsPanel.b22b128b2a',
     'Open in Browser'
   )
@@ -106,7 +107,7 @@ export function LocalPortRow({
           <div
             className="flex min-w-0 flex-1 items-center gap-2 rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             tabIndex={0}
-            aria-label={translate(
+            aria-label={t(
               'auto.components.right.sidebar.PortsPanel.5be4f7f727',
               'Port {{value0}} menu',
               { value0: port.port }
@@ -161,7 +162,7 @@ export function LocalPortRow({
                   size="icon-xs"
                   className="text-muted-foreground hover:text-foreground"
                   onClick={handleCopyButtonClick}
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.right.sidebar.PortsPanel.fe2730d050',
                     'Copy {{value0}}',
                     { value0: address }
@@ -171,11 +172,9 @@ export function LocalPortRow({
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top" sideOffset={4}>
-                {translate(
-                  'auto.components.right.sidebar.PortsPanel.1004af16ab',
-                  'Copy {{value0}}',
-                  { value0: address }
-                )}
+                {t('auto.components.right.sidebar.PortsPanel.1004af16ab', 'Copy {{value0}}', {
+                  value0: address
+                })}
               </TooltipContent>
             </Tooltip>
             {canStopProcess && (
@@ -187,7 +186,7 @@ export function LocalPortRow({
                     size="icon-xs"
                     className="text-muted-foreground hover:text-destructive"
                     onClick={handleStopButtonClick}
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.right.sidebar.PortsPanel.f9528da632',
                       'Stop Process'
                     )}
@@ -196,7 +195,7 @@ export function LocalPortRow({
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="top" sideOffset={4}>
-                  {translate('auto.components.right.sidebar.PortsPanel.f9528da632', 'Stop Process')}
+                  {t('auto.components.right.sidebar.PortsPanel.f9528da632', 'Stop Process')}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -218,7 +217,7 @@ export function LocalPortRow({
         )}
         <ContextMenuItem className={LOCAL_PORT_MENU_ITEM_CLASS} onSelect={handleCopy}>
           <Copy size={13} />
-          {translate('auto.components.right.sidebar.PortsPanel.792baeb7ed', 'Copy Address')}
+          {t('auto.components.right.sidebar.PortsPanel.792baeb7ed', 'Copy Address')}
         </ContextMenuItem>
         <ContextMenuItem
           className={LOCAL_PORT_MENU_ITEM_CLASS}
@@ -227,14 +226,14 @@ export function LocalPortRow({
           }}
         >
           <Copy size={13} />
-          {translate('auto.components.right.sidebar.PortsPanel.bdac206faf', 'Copy Details')}
+          {t('auto.components.right.sidebar.PortsPanel.bdac206faf', 'Copy Details')}
         </ContextMenuItem>
         <ContextMenuItem
           className={LOCAL_PORT_MENU_ITEM_CLASS}
           onSelect={() => onShowDetails(port)}
         >
           <Info size={13} />
-          {translate('auto.components.right.sidebar.PortsPanel.a223459512', 'Show Details')}
+          {t('auto.components.right.sidebar.PortsPanel.a223459512', 'Show Details')}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem
@@ -244,7 +243,7 @@ export function LocalPortRow({
           onSelect={() => onStop(port)}
         >
           <Trash2 size={13} />
-          {translate('auto.components.right.sidebar.PortsPanel.f9528da632', 'Stop Process')}
+          {t('auto.components.right.sidebar.PortsPanel.f9528da632', 'Stop Process')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

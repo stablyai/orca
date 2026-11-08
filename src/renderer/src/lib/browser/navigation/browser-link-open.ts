@@ -15,7 +15,10 @@ import {
   type BrowserOpenOutcome
 } from './browser-link-destination'
 import { isLiveLinkOpenGroup } from '../../link-open-intent'
-import { afterPendingEntityTabs, hasPendingEntityTab } from '@/runtime/layout-owner-pending-tabs'
+import {
+  afterPendingEntityTabs,
+  hasPendingEntityTab
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { captureBrowserLinkReveal } from './browser-link-reveal'
 
 export class BrowserLinkPlacementRefused extends Error {}

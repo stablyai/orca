@@ -1,6 +1,6 @@
 import { useAppStateView } from '@/store/retained-views/app-state-view'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { useMemo } from 'react'
 import { isCustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'

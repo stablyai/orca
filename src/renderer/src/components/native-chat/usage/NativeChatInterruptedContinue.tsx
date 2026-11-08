@@ -1,22 +1,22 @@
-import { useNativeChatUsageLimitAutoContinue } from './use-native-chat-usage-limit-auto-continue'
+import { useNativeChatUsageLimitAutoContinue } from '@/components/native-chat/usage/use-native-chat-usage-limit-auto-continue'
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 import { wslHostDistroForTarget } from '@/lib/wsl-host-account-owner'
-import { useAppStore } from '@/store'
+import { useAppStore } from '@/store/index'
 import type { AgentType } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { AGENT_SESSION_SEND_USAGE_LIMIT_CONTINUATION_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
-import { completeNativeChatStructuredUserAction } from '../composer/submit/native-chat-structured-user-action'
+import { completeNativeChatStructuredUserAction } from '@/components/native-chat/composer/submit/native-chat-structured-user-action'
 import {
   getStructuredAgentSessionPendingSends,
   publishStructuredAgentSessionSends,
   type StructuredAgentSessionPendingSend
-} from '../session/structured/delivery/structured-agent-session-pending-sends'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import type {
   AgentJournalRenderItem,
@@ -34,12 +34,12 @@ import {
   NO_NATIVE_CHAT_INTERRUPTED_CONTINUE_ATTEMPT,
   nativeChatInterruptedContinueAccepted
 } from '../../../../../shared/native-chat/native-chat-interrupted-continue'
-import type { NativeChatOrcaStopView } from '../messages/notices/native-chat-orca-stop-context'
-import { useStructuredAgentSessionHostLabel } from '../pane/ownership/use-structured-agent-session-host-label'
-import { useNativeChatTargetRestartResuming } from '../../native-chat-restart-runtimes'
-import { useNativeChatLaunchResumePending } from '../../native-chat-launch-resume-decision'
-import type { NativeChatComposerNoticeContent } from '../composer/controls/native-chat-composer-notice'
-import type { NativeChatStructuredComposerTransport } from '../composer/submit/native-chat-structured-composer-transport'
+import type { NativeChatOrcaStopView } from '@/components/native-chat/messages/notices/native-chat-orca-stop-context'
+import { useStructuredAgentSessionHostLabel } from '@/components/native-chat/pane/ownership/use-structured-agent-session-host-label'
+import { useNativeChatTargetRestartResuming } from '@/components/native-chat-restart-runtimes'
+import { useNativeChatLaunchResumePending } from '@/components/native-chat-launch-resume-decision'
+import type { NativeChatComposerNoticeContent } from '@/components/native-chat/composer/controls/native-chat-composer-notice'
+import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
 
 export type NativeChatInterruptedContinuation = {
   /** Host identity and continuation availability for the cut’s transcript row. */
@@ -65,6 +65,7 @@ export function useNativeChatInterruptedContinuation(input: {
   transport: NativeChatStructuredComposerTransport
   pending: readonly Pick<StructuredAgentSessionPendingSend, 'phase'>[]
 }): NativeChatInterruptedContinuation {
+  const t = useTranslate()
   const { target, sessionId, reportComposerError, focusComposer, transport, agent } = input
   const latestTransport = useRef(transport)
   useLayoutEffect(() => {
@@ -210,7 +211,7 @@ export function useNativeChatInterruptedContinuation(input: {
       continueUsageLimit
     ]
   )
-  const failedText = translate(
+  const failedText = t(
     'components.native-chat.interruptedContinue.failed',
     "Couldn't continue this chat. Try again, or send a message."
   )
@@ -240,10 +241,11 @@ export function NativeChatInterruptedContinueButton({
   /** What Continue does here, when it is not picking up a reply Orca's stop cut off. */
   explanation?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const explanationId = useId()
   const explanation =
     shownExplanation ??
-    translate(
+    t(
       'components.native-chat.interruptedContinue.explanation',
       'Continue, and the agent first checks whether its last step finished.'
     )
@@ -261,7 +263,7 @@ export function NativeChatInterruptedContinueButton({
             disabled={disabled}
           >
             <Play />
-            {label ?? translate('components.native-chat.interruptedContinue.continue', 'Continue')}
+            {label ?? t('components.native-chat.interruptedContinue.continue', 'Continue')}
           </Button>
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={4}>

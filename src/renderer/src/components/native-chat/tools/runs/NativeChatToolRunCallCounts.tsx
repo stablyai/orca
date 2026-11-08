@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { NATIVE_CHAT_TOOL_ACTIVITY_COPY } from '../../../../../../shared/native-chat/tools/native-chat-tool-activity'
 
 /** Count failures separately from calls interrupted by Stop. */
@@ -9,15 +9,16 @@ export function NativeChatToolRunCallCounts({
   failed: number
   interrupted: number
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const marks = [
     failed > 0
       ? {
-          text: translate(
+          text: t(
             'components.native-chat.tool.failedCount',
             NATIVE_CHAT_TOOL_ACTIVITY_COPY.failedCount,
             { value0: failed }
           ),
-          label: translate(
+          label: t(
             'components.native-chat.tool.failedCallsLabel',
             NATIVE_CHAT_TOOL_ACTIVITY_COPY.failedCallsLabel,
             { value0: failed }
@@ -26,12 +27,12 @@ export function NativeChatToolRunCallCounts({
       : null,
     interrupted > 0
       ? {
-          text: translate(
+          text: t(
             'components.native-chat.tool.interruptedCount',
             NATIVE_CHAT_TOOL_ACTIVITY_COPY.interruptedCount,
             { value0: interrupted }
           ),
-          label: translate(
+          label: t(
             'components.native-chat.tool.interruptedCallsLabel',
             NATIVE_CHAT_TOOL_ACTIVITY_COPY.interruptedCallsLabel,
             { value0: interrupted }

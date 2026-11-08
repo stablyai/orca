@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { createStructuredSessionSelectionController } from '../../../src/shared/agent-session/options/structured-agent-session-selection-operations'
 import { persistMobileStructuredOptionPicks } from './native-chat/input/mobile-native-chat-session-option-persistence'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 /** Temporary operations belong to one phone authority, above its queried host answer. */
 export function useMobileStructuredSelectionController(args: {

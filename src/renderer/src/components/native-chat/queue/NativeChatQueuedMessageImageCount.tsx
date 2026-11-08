@@ -5,6 +5,7 @@ import {
   nativeChatImageLabel,
   nativeChatImageLabelCopy
 } from '../media/images/native-chat-image-label'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** Images are named in the tooltip, not drawn: the row stays one line. */
 export function QueuedMessageImageCount({
@@ -12,13 +13,14 @@ export function QueuedMessageImageCount({
 }: {
   images: NonNullable<QueuedMessageCard['images']>
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
           role="img"
           tabIndex={0}
-          aria-label={nativeChatImageLabelCopy().imageCount(images.length)}
+          aria-label={nativeChatImageLabelCopy(t).imageCount(images.length)}
           className="flex shrink-0 items-center gap-0.5 text-xs text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <ImageIcon className="size-3.5" aria-hidden />

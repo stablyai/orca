@@ -12,6 +12,7 @@ import type { useNativeChatInstallSlot } from '../../host-access/NativeChatInsta
 import type { useNativeChatHostSendGate } from '../../host-access/use-native-chat-host-send-gate'
 import type { NativeChatComposerNotice } from '../../composer/controls/native-chat-composer-notice'
 import type { AgentSessionFailureFact } from '../../../../../../shared/agent-session/failures/agent-session-failure'
+import { useTranslate } from '../../../../i18n/use-translate'
 
 export function useNativeChatStructuredPaneNotices({
   props,
@@ -46,6 +47,7 @@ export function useNativeChatStructuredPaneNotices({
   hostSendGate: ReturnType<typeof useNativeChatHostSendGate>
   hostNotice: NativeChatComposerNotice | null
 }) {
+  const t = useTranslate()
   const launch = { ...provisionalLaunch, retry: submits.retryLaunch }
   const signIn = useNativeChatSignIn({
     ...props,
@@ -64,17 +66,21 @@ export function useNativeChatStructuredPaneNotices({
     deliveryNotices
   })
   // While Install shows, it says what to do; a start failure's "send again" or Retry can't help.
-  const notices = structuredSessionNotices({
-    launch: install.slot.kind === 'install' ? { ...launch, lifecycle: null } : launch,
-    agentLabel,
-    // Said once: on the pane when the failure took it, else in the composer's notices.
-    sessionError: viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text,
-    readRefusal: viewState.kind !== 'error' && readFailure ? controller.readRefusal : undefined,
-    composerError: composerError ?? continuation.continueError,
-    signIn,
-    availability,
-    hostPermission: hostSendGate.notice
-  })
+  const notices = structuredSessionNotices(
+    {
+      launch: install.slot.kind === 'install' ? { ...launch, lifecycle: null } : launch,
+      agentLabel,
+      // Said once: on the pane when the failure took it, else in the composer's notices.
+      sessionError:
+        viewState.kind === 'error' || !readFailure ? controller.error : readFailure.text,
+      readRefusal: viewState.kind !== 'error' && readFailure ? controller.readRefusal : undefined,
+      composerError: composerError ?? continuation.continueError,
+      signIn,
+      availability,
+      hostPermission: hostSendGate.notice
+    },
+    t
+  )
   if (hostNotice) {
     notices.push(hostNotice)
   }

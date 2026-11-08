@@ -6,7 +6,7 @@ import { SidebarInputsReadParams } from '../../../../../shared/sidebar-list/side
 import { SidebarSessionBeginParams } from '../../../../../shared/rpc-contract/sidebar-session-params'
 import { RepoIconDataUrlsParams } from '../../../../../shared/sidebar-list/repo-icon-data-urls-contract'
 import { SetCollapsedParams } from '../../../../../shared/rpc-contract/workspace-view-collapse-params'
-import { setCollapsedSection } from '../../../workspace-view-collapse-writes'
+import { setCollapsedSection } from '../../../sidebar-inputs/workspace-view-collapse-writes'
 import { ClientWorkspaceViewParams } from '../../../../../shared/rpc-contract/client-workspace-view-params'
 
 // Registered only with ORCA_SIDEBAR_INPUTS=main, so the producers below always exist.

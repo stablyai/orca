@@ -2,26 +2,34 @@ import { openNativeChatAccountUsageModal } from '@/components/native-chat/usage/
 import { useMemo, type Dispatch, type SetStateAction } from 'react'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
 import { localizeStructuredComposerOutcome } from '@/components/native-chat/composer/submit/structured-composer-command-error-text'
-import { useStructuredAgentAcceptsImages } from '@/runtime/use-host-structured-agent'
+import { useStructuredAgentAcceptsImages } from '@/runtime/native-chat/agent-catalogs/use-host-structured-agent'
 import type { NativeChatOptionPickerRequest } from '@/components/native-chat/session/options/controls/native-chat-option-picker-request'
 import type { NativeChatStructuredComposerTransport } from '@/components/native-chat/composer/submit/native-chat-structured-composer-transport'
 import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
 import type { useStructuredAgentSession } from '@/components/native-chat/session/structured/use-structured-agent-session'
-import type { NativeChatPaneFork } from '@/components/native-chat/messages/actions/use-native-chat-fork'
+import type {
+  NativeChatPaneFork,
+  NativeChatPaneForks
+} from '@/components/native-chat/messages/actions/use-native-chat-fork'
 import type { AgentType } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AgentSessionThreadGoalChange } from '../../../../../../shared/agent-session/agent-session-thread-goal-wire'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { structuredAgentLabel } from '@/lib/agent-session/launch/structured-agent-session-launch-label'
 
-function nativeChatSessionAttachmentNotReadyNotice(agent: AgentType, starting: boolean): string {
+function nativeChatSessionAttachmentNotReadyNotice(
+  agent: AgentType,
+  starting: boolean,
+  t: Translate = translate
+): string {
   const label = structuredAgentLabel(agent)
   return starting
-    ? translate(
+    ? t(
         'components.native-chat.composer.sessionAttachmentsStarting',
         '{{agent}} chat is still opening. Wait for it to open, then attach the files again.',
         { agent: label }
       )
-    : translate(
+    : t(
         'components.native-chat.composer.sessionAttachmentsFailed',
         '{{agent}} chat could not open. Use Retry in the chat, then attach the files again.',
         { agent: label }
@@ -58,10 +66,10 @@ function nativeChatForkCommand(
 }
 
 export function useNativeChatStructuredComposerTransport(args: {
-  props: Pick<NativeChatStructuredViewProps, 'agent' | 'sessionId' | 'target'>
+  props: Pick<NativeChatStructuredViewProps, 'agent' | 'sessionId' | 'tabId' | 'target'>
   controller: ReturnType<typeof useStructuredAgentSession>
-  /** The session's fork, run by `/fork`. */
-  fork: NativeChatPaneFork | undefined
+  /** The session's fork, run by `/fork` and `/btw`. */
+  forks: NativeChatPaneForks
   /** Sends now, restarts a failed start with the message, or refuses while the chat starts. */
   sendThroughLaunch: (
     text: string,
@@ -78,7 +86,7 @@ export function useNativeChatStructuredComposerTransport(args: {
   /** Host reason for refusing turns and holding Send. */
   sendBlockedReason?: string | null
 }): NativeChatStructuredComposerTransport {
-  const { props, controller, fork, sendThroughLaunch, starting, worktreeId, optionPickerRequest } =
+  const { props, controller, forks, sendThroughLaunch, starting, worktreeId, optionPickerRequest } =
     args
   const { setOptionPickerRequest, onError } = args
   const { revealLatest: onSubmitted, captureRevealLatest: captureAdmittedReveal } = args.reveal
@@ -89,6 +97,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     props.agent,
     controller.acceptsImages
   )
+  const { fork, sideChat } = forks
   return useMemo((): NativeChatStructuredComposerTransport => {
     const threadGoal = controller.threadGoal
     // A held host takes no turn; pausing or clearing a goal starts none.
@@ -113,6 +122,7 @@ export function useNativeChatStructuredComposerTransport(args: {
           : undefined,
       fork: nativeChatForkCommand(fork, controller.isWorking),
       capturePresentation: controller.capturePresentation,
+      ...(sideChat ? { sideChat } : {}),
       send: (text, attachments, ...request) =>
         sendBlockedReason === null &&
         sendThroughLaunch(
@@ -185,6 +195,7 @@ export function useNativeChatStructuredComposerTransport(args: {
     acceptsImages,
     controller,
     fork,
+    sideChat,
     worktreeId,
     onError,
     onSubmitted,

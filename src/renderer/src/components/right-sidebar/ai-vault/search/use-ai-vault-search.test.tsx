@@ -11,7 +11,7 @@ import {
   searchHit,
   searchResults
 } from '../../../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import type { AgentSessionStatusEvent } from '../../../../../../shared/agent-session/agent-session-wire'
 import { useAiVaultSearch } from './use-ai-vault-search'
 
@@ -26,7 +26,7 @@ const feeds = vi.hoisted(() => ({
   subscribe: vi.fn(),
   emit: new Map<string, (event: AgentSessionStatusEvent) => void>()
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../../runtime/native-chat/requests/structured-agent-session-subscriptions', () => ({
   subscribeStructuredAgentSessionStatus: feeds.subscribe
 }))
 vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
@@ -229,4 +229,33 @@ it('revalidates active search without losing hits, accepting old pages, or touch
   b.unmount()
   await act(async () => feeds.emit.get('a')?.({ type: 'snapshot', sessions: [] }))
   expect(searchSessions).toHaveBeenCalledTimes(baseline + 2)
+})
+
+it('keeps the last hits on screen until a newer query answers, ignoring the older reply', async () => {
+  const hit = (sessionId: string) => ({ ...searchHit(), sessionId })
+  let answerOld = (_response: AiVaultSearchResponse): void => {}
+  searchSessions
+    .mockResolvedValueOnce({ ...searchResults(), hits: [hit('first')] })
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          answerOld = resolve
+        })
+    )
+    .mockResolvedValueOnce({ ...searchResults(), hits: [hit('newest')] })
+  const { result, rerender, unmount } = renderHook(
+    ({ request }) => useAiVaultSearch(request, 'local', ''),
+    { initialProps: { request: { query: 'n' } } }
+  )
+  await debounce()
+  rerender({ request: { query: 'ne' } })
+  await debounce()
+  rerender({ request: { query: 'nee' } })
+  expect(result.current.hits.map((entry) => entry.sessionId)).toEqual(['first'])
+  expect(result.current.answered).toBe(false)
+  await debounce()
+  await act(async () => answerOld({ ...searchResults(), hits: [hit('older')] }))
+  expect(result.current.hits.map((entry) => entry.sessionId)).toEqual(['newest'])
+  expect(result.current.answered).toBe(true)
+  unmount()
 })

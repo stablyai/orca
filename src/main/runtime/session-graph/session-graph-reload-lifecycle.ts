@@ -1,10 +1,9 @@
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState as TransitionGraphReloadToTerminalStateMethods } from './session-graph-authority'
 import type { OrcaRuntimeWithBindPtyIncarnationHandle as BindPtyIncarnationHandleMethods } from '../terminal/identity/terminal-handle-bindings'
-import type { OrcaRuntimeWithResolveWaiter as ResolveWaiterMethods } from '../orca-runtime-resolve-waiter'
 import { OrcaRuntimeWithSessionTitleAuthority } from '../session-tabs/session-title-publisher'
 import type { RuntimeRendererReloadFence } from './renderer-reload-fence'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
-import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-types'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 
 export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntimeWithSessionTitleAuthority {
   protected abstract assertStableReadyGraph(
@@ -26,10 +25,6 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
   protected abstract refreshWritableFlags(
     ...args: Parameters<BindPtyIncarnationHandleMethods['refreshWritableFlags']>
   ): ReturnType<BindPtyIncarnationHandleMethods['refreshWritableFlags']>
-
-  protected abstract rejectAllWaiters(
-    ...args: Parameters<ResolveWaiterMethods['rejectAllWaiters']>
-  ): ReturnType<ResolveWaiterMethods['rejectAllWaiters']>
 
   protected abstract rememberDetachedPreAllocatedLeaves(
     ...args: Parameters<BindPtyIncarnationHandleMethods['rememberDetachedPreAllocatedLeaves']>
@@ -221,7 +216,7 @@ export abstract class OrcaRuntimeWithHasTerminalsForWorktree extends OrcaRuntime
     this.terminalIdentity.clearLeafBindings()
     this.clearPtyIncarnationHandles()
     // Keep pre-allocated CLI handles for reconnect adoption.
-    this.rejectAllWaiters('terminal_handle_stale')
+    this.terminalWaiters.rejectAll('terminal_handle_stale')
     this.republishSessionTitleAuthorityChanges(titleAuthority, this.republishBrowserSessionTabs())
   }
 

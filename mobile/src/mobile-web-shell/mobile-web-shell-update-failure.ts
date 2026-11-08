@@ -8,7 +8,7 @@ import {
   MOBILE_WEB_BUNDLE_FETCH_REFUSALS,
   MobileWebBundleFetchError
 } from '../transport/web-bundle/mobile-web-bundle-fetch-refusal'
-import { RpcIncompatibleReplyError } from '../transport/rpc-incompatible-reply-error'
+import { RpcIncompatibleReplyError } from '../transport/rpc/rpc-incompatible-reply-error'
 
 // Record closed codes only; error text can contain asset paths, hashes or transport endpoints.
 export const MOBILE_WEB_SHELL_UPDATE_FAILURE_REASONS = [

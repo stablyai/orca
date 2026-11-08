@@ -6,7 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 // A card's sender line opens and names agents through modules this test does not exercise.
 vi.mock('@/lib/open-agent-message-sender', () => ({ openAgentMessageSender: vi.fn() }))
-vi.mock('@/runtime/structured-conversation-name', () => ({
+vi.mock('@/runtime/native-chat/naming/structured-conversation-name', () => ({
   useStructuredChatTabConversationName: () => null
 }))
 vi.mock('../../../store/index', () => {

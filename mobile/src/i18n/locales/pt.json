@@ -210,7 +210,6 @@
     },
     "composerPlaceholder": {
       "prompt": "Enviar uma mensagem…",
-      "reconnecting": "Reconectando…",
       "waitingForTerminal": "Aguardando o terminal…"
     },
     "diffCard": {
@@ -312,6 +311,11 @@
       "signInHint": "Abre um terminal no computador que executa este chat",
       "forkedFrom": "Ramificado de"
     },
+    "ciResultLine": {
+      "failingLead": "CI falhando em",
+      "greenLead": "CI verde em",
+      "at": "em"
+    },
     "orcaStop": {
       "canContinue": "Você pode continuar nesta conversa.",
       "crash": "O Orca ({{machine}}) parou inesperadamente enquanto esta resposta estava em andamento.",
@@ -357,6 +361,13 @@
       "resume": "Retomar",
       "resumeSending": "Retomar o envio das mensagens na fila",
       "title": "Mensagens na fila"
+    },
+    "offlineQueue": {
+      "failed": "Não foi possível enviar — toque em Enviar para tentar de novo",
+      "waitingFor": "Será enviada quando {{host}} voltar",
+      "waiting": "Será enviada quando o computador voltar",
+      "behind": "Aguardando — uma mensagem anterior precisa de atenção",
+      "closed": "Não enviada antes de o Orca fechar"
     },
     "receipt": {
       "cancelled": "Cancelado",
@@ -1346,10 +1357,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} indisponível no celular",
       "loadFolderFailed": "Não foi possível carregar a pasta",
+      "loadedOfTotal": "{{loaded}} de {{total}}",
       "loading": "Carregando…",
       "openFolder": "Abrir pasta {{name}}",
       "previewFile": "Pré-visualizar arquivo {{name}}",
       "retryLoading": "Tentar carregar {{path}} novamente",
+      "searchAll": "Pesquisar tudo",
+      "searchAllIn": "Pesquisar todo o {{folder}}",
+      "searched": "{{loaded}} de {{total}} pesquisados em {{folder}}.",
+      "searching": "Pesquisando {{folder}}… {{loaded}} de {{total}}",
+      "showMore": "Mostrar mais {{rows}}",
       "unavailable": "Indisponível no celular"
     },
     "fileExplorerRowActions": {
@@ -1423,15 +1440,16 @@
       "openFailed": "Não foi possível abrir este PDF",
       "opening": "Abrindo PDF…",
       "updateRequired": "Atualize o Orca Mobile para abrir PDFs"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "Alterado no desktop desde suas edições de {{time}}",
+      "copyMyEdits": "Copiar minhas edições",
+      "discard": "Descartar",
+      "restore": "Restaurar",
+      "unsavedFrom": "Edições não salvas de {{time}}"
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} em atividade",
-      "heading": "Agentes",
-      "showAll": "Mostrar todos ({{count}})",
-      "showFewer": "Mostrar menos"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Descartar atualização do Orca {{version}}",
       "title": "Orca {{version}} está disponível",

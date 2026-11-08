@@ -6,7 +6,7 @@ import { ButtonGroup } from '@/components/ui/button-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { detectLanguage } from '@/lib/language-detect'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   createCommentCodeContextExpansionState,
   resolveCommentCodeContextExpansionState,
@@ -15,7 +15,7 @@ import {
 } from '@/components/comment-code-context-state'
 import { getPrCommentCodeContext } from '@/components/github/pr-comment-code-context'
 import { getPRFileContentsRenderLimit } from '@/components/github/pr-file-diff-mapping'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import type {
   GitHubOwnerRepo,
@@ -64,6 +64,7 @@ export function CommentCodeContext({
   baseSha: string | undefined
   loadPRFileContents: LoadPRFileContents
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const [contents, setContents] = useState<GitHubPRFileContents | null>(null)
   const [error, setError] = useState(false)
   const [contextExpansionState, setContextExpansionState] = useState(() =>
@@ -158,7 +159,7 @@ export function CommentCodeContext({
     return (
       <div className="mb-3 flex items-center gap-2 rounded-md border border-border/40 bg-muted/20 px-3 py-2 text-[12px] text-muted-foreground">
         <LoaderCircle className="size-3.5 animate-spin" />
-        {translate('auto.components.GitHubItemDialog.db61d76cd5', 'Loading code context…')}
+        {t('auto.components.GitHubItemDialog.db61d76cd5', 'Loading code context…')}
       </div>
     )
   }
@@ -195,11 +196,11 @@ export function CommentCodeContext({
   } = codeContext
   const language = detectLanguage(comment.path)
   const blockTooltip = shouldUseBlockRange
-    ? translate(
+    ? t(
         'auto.components.github.CommentCodeContext.showSurroundingCodeBlock',
         'Show surrounding code block'
       )
-    : translate(
+    : t(
         'auto.components.github.CommentCodeContext.showNearbyCodeContext',
         'Show nearby code context'
       )
@@ -212,17 +213,17 @@ export function CommentCodeContext({
           <span className="shrink-0 font-mono">
             L{from}
             {to !== from
-              ? translate('auto.components.GitHubItemDialog.d1c0dad471', '-L{{value0}}', {
+              ? t('auto.components.GitHubItemDialog.d1c0dad471', '-L{{value0}}', {
                   value0: to
                 })
               : ''}
           </span>
           {(from !== commentFrom || to !== commentTo) && (
             <span className="shrink-0 font-mono text-muted-foreground/70">
-              {translate('auto.components.GitHubItemDialog.bd7be7b1fd', 'comment L')}
+              {t('auto.components.GitHubItemDialog.bd7be7b1fd', 'comment L')}
               {commentFrom}
               {commentTo !== commentFrom
-                ? translate('auto.components.GitHubItemDialog.d1c0dad471', '-L{{value0}}', {
+                ? t('auto.components.GitHubItemDialog.d1c0dad471', '-L{{value0}}', {
                     value0: commentTo
                   })
                 : ''}
@@ -231,10 +232,7 @@ export function CommentCodeContext({
         </div>
         <ButtonGroup
           className="text-muted-foreground"
-          aria-label={translate(
-            'auto.components.GitHubItemDialog.d43736d09c',
-            'Code context controls'
-          )}
+          aria-label={t('auto.components.GitHubItemDialog.d43736d09c', 'Code context controls')}
         >
           {(contextBefore > 0 || contextAfter > 0) && (
             <Tooltip>
@@ -248,7 +246,7 @@ export function CommentCodeContext({
                     setContextBefore(0)
                     setContextAfter(0)
                   }}
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.GitHubItemDialog.b1574e8ac2',
                     'Reset code context'
                   )}
@@ -257,7 +255,7 @@ export function CommentCodeContext({
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {translate('auto.components.GitHubItemDialog.b1574e8ac2', 'Reset code context')}
+                {t('auto.components.GitHubItemDialog.b1574e8ac2', 'Reset code context')}
               </TooltipContent>
             </Tooltip>
           )}
@@ -274,7 +272,7 @@ export function CommentCodeContext({
                     Math.min(current + CODE_CONTEXT_EXPAND_STEP, commentFrom - 1)
                   )
                 }
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.GitHubItemDialog.307c98e8e3',
                   'Show {{value0}} more lines above',
                   { value0: CODE_CONTEXT_EXPAND_STEP }
@@ -284,7 +282,7 @@ export function CommentCodeContext({
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              {translate('auto.components.GitHubItemDialog.5664681624', 'Show more lines above')}
+              {t('auto.components.GitHubItemDialog.5664681624', 'Show more lines above')}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -300,7 +298,7 @@ export function CommentCodeContext({
                     Math.min(current + CODE_CONTEXT_EXPAND_STEP, totalLines - commentTo)
                   )
                 }
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.GitHubItemDialog.showMoreLinesBelow',
                   'Show {{value0}} more lines below',
                   { value0: CODE_CONTEXT_EXPAND_STEP }
@@ -310,7 +308,7 @@ export function CommentCodeContext({
               </Button>
             </TooltipTrigger>
             <TooltipContent>
-              {translate('auto.components.GitHubItemDialog.06c06e58ba', 'Show more lines below')}
+              {t('auto.components.GitHubItemDialog.06c06e58ba', 'Show more lines below')}
             </TooltipContent>
           </Tooltip>
           <Tooltip>

@@ -2,12 +2,12 @@ import type {
   OrchestrationCallerShowResult,
   OrchestrationPartyLocationResult,
   OrchestrationSessionAddressResult
-} from '../../../../../shared/orchestration-caller-status'
+} from '../../../../../shared/orchestration/orchestration-caller-status'
 import {
   formatOrcaSessionAddress,
   isOrcaSessionId
 } from '../../../../../shared/orca-session-address'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration-session-caller-codes'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES as CODES } from '../../../../../shared/orchestration/orchestration-session-caller-codes'
 import {
   PartyLocationParams,
   SessionAddressParams

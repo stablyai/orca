@@ -20,7 +20,7 @@ import {
 } from '../../../hooks/agent-skill-recheck-surface-sync'
 import { useBundledSkillInstallAction } from '@/hooks/use-bundled-skill-install-action'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function BundledAgentSkillSetupPanel({
   title,
@@ -48,12 +48,12 @@ function BundledAgentSkillSetupPanel({
   onRecheck,
   freshnessSkillName
 }: AgentSkillSetupPanelProps): React.JSX.Element {
+  const t = useTranslate()
   const resolvedInstallLabel =
-    installLabel ??
-    translate('auto.components.settings.AgentSkillSetupPanel.installLabel', 'Install')
+    installLabel ?? t('auto.components.settings.AgentSkillSetupPanel.installLabel', 'Install')
   const resolvedInstalledInstallLabel =
     installedInstallLabel ??
-    translate('auto.components.settings.AgentSkillSetupPanel.updateLabel', 'Update')
+    t('auto.components.settings.AgentSkillSetupPanel.updateLabel', 'Update')
   const recheckAfterInstall = useCallback(
     () => recheckSurfacesAfterAgentSkillInstall(onRecheck, freshnessSkillName),
     [freshnessSkillName, onRecheck]
@@ -80,8 +80,8 @@ function BundledAgentSkillSetupPanel({
   ) : action.kind === 'loading' || action.kind === 'unknown' ? (
     <IntegrationStatusPill tone={action.kind === 'loading' ? 'neutral' : 'attention'}>
       {action.kind === 'loading'
-        ? translate('auto.components.skills.SkillFreshnessStatusPill.checking', 'Checking...')
-        : translate('auto.components.skills.SkillFreshnessStatusPill.checkFailed', 'Check failed')}
+        ? t('auto.components.skills.SkillFreshnessStatusPill.checking', 'Checking...')
+        : t('auto.components.skills.SkillFreshnessStatusPill.checkFailed', 'Check failed')}
     </IntegrationStatusPill>
   ) : (
     <SkillPlanStatusPill
@@ -125,14 +125,14 @@ function BundledAgentSkillSetupPanel({
             <Download className="size-3.5" />
           )}
           {installing
-            ? translate('auto.components.settings.AgentSkillSetupPanel.installing', 'Installing...')
+            ? t('auto.components.settings.AgentSkillSetupPanel.installing', 'Installing...')
             : installedButton === 'replace'
-              ? translate(
+              ? t(
                   'auto.components.settings.AgentSkillSetupPanel.replaceWithOrcaCopy',
                   "Replace with Orca's copy"
                 )
               : action.kind === 'run' && action.changes
-                ? bundledSkillSetupActionLabel(action.changes)
+                ? bundledSkillSetupActionLabel(action.changes, t)
                 : installed
                   ? resolvedInstalledInstallLabel
                   : resolvedInstallLabel}
@@ -152,12 +152,12 @@ function BundledAgentSkillSetupPanel({
           disabled={loading}
         >
           <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
-          {translate('auto.components.settings.AgentSkillSetupPanel.c689392435', 'Re-check')}
+          {t('auto.components.settings.AgentSkillSetupPanel.c689392435', 'Re-check')}
         </Button>
       ) : null}
       {ready ? null : (
         <p className="basis-full text-[12px] leading-snug text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.AgentSkillSetupPanel.hostUnavailable',
             "Orca can't install skills on this workspace's machine yet."
           )}
@@ -208,26 +208,17 @@ function BundledAgentSkillSetupPanel({
                   freshnessPill
                 ) : failed ? (
                   <IntegrationStatusPill tone="attention">
-                    {translate(
-                      'auto.components.skills.skillPlanOpCopy.needsAttention',
-                      'Needs attention'
-                    )}
+                    {t('auto.components.skills.skillPlanOpCopy.needsAttention', 'Needs attention')}
                   </IntegrationStatusPill>
                 ) : loading && !installed ? (
                   <IntegrationStatusPill tone="neutral">
-                    {translate(
-                      'auto.components.settings.AgentSkillSetupPanel.68a468752e',
-                      'Checking...'
-                    )}
+                    {t('auto.components.settings.AgentSkillSetupPanel.68a468752e', 'Checking...')}
                   </IntegrationStatusPill>
                 ) : effectivelyInstalled ? (
                   freshnessPill
                 ) : (
                   <IntegrationStatusPill tone="attention">
-                    {translate(
-                      'auto.components.settings.AgentSkillSetupPanel.5289300939',
-                      'Not installed'
-                    )}
+                    {t('auto.components.settings.AgentSkillSetupPanel.5289300939', 'Not installed')}
                   </IntegrationStatusPill>
                 )}
               </div>
@@ -242,7 +233,7 @@ function BundledAgentSkillSetupPanel({
           {actionRow}
           {hideHeader && action.kind === 'none' && state.kind === 'idle' ? (
             <p className="mt-2 text-xs text-muted-foreground">
-              {translate('auto.components.skills.skillPlanOpCopy.installed', 'Installed')}
+              {t('auto.components.skills.skillPlanOpCopy.installed', 'Installed')}
             </p>
           ) : null}
           <BundledSkillInstallStatus

@@ -7,6 +7,7 @@ import {
   isStructuredAgentSessionHostCommand,
   structuredAgentSessionCommandChangesConversation
 } from '../../../../../../shared/agent-session/view/structured-agent-session-composer'
+import type { Translate } from '../../../../i18n/use-translate'
 
 export type NativeChatComposerSendState = {
   /** Why Send is disabled, when the user can do something about it. */
@@ -23,29 +24,32 @@ export type NativeChatComposerSendState = {
 }
 
 /** What the composer's Send/Stop button offers now, and whether it can be pressed. */
-export function nativeChatComposerSendState(input: {
-  agent: AgentType
-  draft: string
-  messageDelivery: boolean
-  imageAttachments: readonly NativeChatComposerImageAttachment[]
-  pastedTextSaving: boolean
-  disabled: boolean
-  structuredTransport:
-    | Pick<
-        NativeChatStructuredComposerTransport,
-        'sendOut' | 'sendBlockedReason' | 'threadGoal' | 'sendFollowUp' | 'optionSnapshot'
-      >
-    | undefined
-  editSession: { canSave: boolean } | undefined
-  isWorking: boolean
-  canStop: boolean
-  /** The draft is an Orca command such as /resume, which runs without the agent. */
-  orcaCommand?: boolean
-  /** Goal mode submits the draft as an objective, which starts work. */
-  goalMode?: boolean
-}): NativeChatComposerSendState {
+export function nativeChatComposerSendState(
+  input: {
+    agent: AgentType
+    draft: string
+    messageDelivery: boolean
+    imageAttachments: readonly NativeChatComposerImageAttachment[]
+    pastedTextSaving: boolean
+    disabled: boolean
+    structuredTransport:
+      | Pick<
+          NativeChatStructuredComposerTransport,
+          'sendOut' | 'sendBlockedReason' | 'threadGoal' | 'sendFollowUp' | 'optionSnapshot'
+        >
+      | undefined
+    editSession: { canSave: boolean } | undefined
+    isWorking: boolean
+    canStop: boolean
+    /** The draft is an Orca command such as /resume, which runs without the agent. */
+    orcaCommand?: boolean
+    /** Goal mode submits the draft as an objective, which starts work. */
+    goalMode?: boolean
+  },
+  t?: Translate
+): NativeChatComposerSendState {
   const { structuredTransport: transport } = input
-  const imageBlock = nativeChatImageSendBlock(input.imageAttachments)
+  const imageBlock = nativeChatImageSendBlock(input.imageAttachments, t)
   const localHold =
     input.pastedTextSaving || input.disabled || transport?.sendOut === true || imageBlock.holdsSend
   const hostHold = transport?.sendBlockedReason !== undefined

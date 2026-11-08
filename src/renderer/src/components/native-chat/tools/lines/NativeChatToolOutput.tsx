@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
-import {
-  readStructuredAgentSessionItem,
-  supportsStructuredAgentSessionItemDetail
-} from '@/runtime/structured-agent-session-client'
+import { useTranslate } from '@/i18n/use-translate'
+import { readStructuredAgentSessionItem } from '@/runtime/native-chat/journal/structured-agent-session-journal-reads'
+import { supportsStructuredAgentSessionItemDetail } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import type { AgentJournalBoundedPayload } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatToolResultBlock } from '../../../../../../shared/native-chat/native-chat-types'
 import { truncateToolDetail } from '../../../../../../shared/native-chat/tools/native-chat-tool-summary'
@@ -15,7 +13,7 @@ import {
   nativeChatToolFullPayload,
   nativeChatToolOutputPartialSizes
 } from '../../../../../../shared/native-chat/tools/native-chat-tool-output'
-import { useNativeChatVisualOwner } from '../../media/visuals/native-chat-visual-owner'
+import { useNativeChatVisualOwner } from '@/components/native-chat/media/visuals/native-chat-visual-owner'
 
 /** Read full output from its owning host on request; keep expansion state independent of live revisions. */
 export function NativeChatToolOutput({
@@ -23,6 +21,7 @@ export function NativeChatToolOutput({
 }: {
   body: NativeChatToolResultBlock
 }): React.JSX.Element {
+  const t = useTranslate()
   const owner = useNativeChatVisualOwner()
   const [expanded, setExpanded] = useState(false)
   const [detail, setDetail] = useState<{
@@ -85,7 +84,7 @@ export function NativeChatToolOutput({
       </pre>
       {partial ? (
         <p className="text-xs text-chat-foreground-faint">
-          {translate(
+          {t(
             'components.native-chat.tool.fullOutputPartial',
             NATIVE_CHAT_TOOL_OUTPUT_COPY.partial,
             partial
@@ -101,14 +100,11 @@ export function NativeChatToolOutput({
             disabled={loading}
             onClick={() => void showFull()}
           >
-            {translate('components.native-chat.tool.showFullOutput', 'Show full output')}
+            {t('components.native-chat.tool.showFullOutput', 'Show full output')}
           </Button>
           {failed ? (
             <span className="text-xs text-chat-foreground-faint">
-              {translate(
-                'components.native-chat.tool.fullOutputFailed',
-                "Couldn't load the full output."
-              )}
+              {t('components.native-chat.tool.fullOutputFailed', "Couldn't load the full output.")}
             </span>
           ) : null}
         </div>

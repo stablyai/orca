@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { HostedReviewProvider } from '../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type {
   WorkspaceCleanupAgentState,
@@ -12,44 +13,47 @@ import type {
   WorkspaceCleanupTriState
 } from '../../../../shared/workspace-cleanup/workspace-cleanup-filter-model'
 
-export function getWorkspaceCleanupSortFieldLabel(field: WorkspaceCleanupSortField): string {
+export function getWorkspaceCleanupSortFieldLabel(
+  field: WorkspaceCleanupSortField,
+  t: Translate = translate
+): string {
   switch (field) {
     case 'last-activity':
-      return translate('components.workspace.cleanup.browse.sort.lastActivity', 'Last activity')
+      return t('components.workspace.cleanup.browse.sort.lastActivity', 'Last activity')
     case 'last-visited':
-      return translate('components.workspace.cleanup.browse.sort.lastVisited', 'Last opened')
+      return t('components.workspace.cleanup.browse.sort.lastVisited', 'Last opened')
     case 'created':
-      return translate('components.workspace.cleanup.browse.sort.created', 'Created')
+      return t('components.workspace.cleanup.browse.sort.created', 'Created')
     case 'size':
-      return translate('components.workspace.cleanup.browse.sort.size', 'Size')
+      return t('components.workspace.cleanup.browse.sort.size', 'Size')
     case 'name':
-      return translate('components.workspace.cleanup.browse.sort.name', 'Workspace')
+      return t('components.workspace.cleanup.browse.sort.name', 'Workspace')
     case 'repo':
-      return translate('components.workspace.cleanup.browse.sort.repo', 'Repository')
+      return t('components.workspace.cleanup.browse.sort.repo', 'Repository')
     case 'path':
-      return translate('components.workspace.cleanup.browse.sort.path', 'Path')
+      return t('components.workspace.cleanup.browse.sort.path', 'Path')
     case 'host':
-      return translate('components.workspace.cleanup.browse.sort.host', 'Host')
+      return t('components.workspace.cleanup.browse.sort.host', 'Host')
     case 'workspace-status':
-      return translate('components.workspace.cleanup.browse.sort.workspaceStatus', 'Status')
+      return t('components.workspace.cleanup.browse.sort.workspaceStatus', 'Status')
     case 'agent':
-      return translate('components.workspace.cleanup.browse.sort.agent', 'Agent')
+      return t('components.workspace.cleanup.browse.sort.agent', 'Agent')
     case 'git':
-      return translate('components.workspace.cleanup.browse.sort.git', 'Git')
+      return t('components.workspace.cleanup.browse.sort.git', 'Git')
     case 'ahead':
-      return translate('components.workspace.cleanup.browse.sort.ahead', 'Ahead')
+      return t('components.workspace.cleanup.browse.sort.ahead', 'Ahead')
     case 'behind':
-      return translate('components.workspace.cleanup.browse.sort.behind', 'Behind')
+      return t('components.workspace.cleanup.browse.sort.behind', 'Behind')
     case 'branch':
-      return translate('components.workspace.cleanup.browse.sort.branch', 'Branch')
+      return t('components.workspace.cleanup.browse.sort.branch', 'Branch')
     case 'review':
-      return translate('components.workspace.cleanup.browse.sort.review', 'Review')
+      return t('components.workspace.cleanup.browse.sort.review', 'Review')
     case 'ticket':
-      return translate('components.workspace.cleanup.browse.sort.ticket', 'Ticket')
+      return t('components.workspace.cleanup.browse.sort.ticket', 'Ticket')
     case 'local-context':
-      return translate('components.workspace.cleanup.browse.sort.localContext', 'Open context')
+      return t('components.workspace.cleanup.browse.sort.localContext', 'Open context')
     case 'blocker-count':
-      return translate('components.workspace.cleanup.browse.sort.blockerCount', 'Blockers')
+      return t('components.workspace.cleanup.browse.sort.blockerCount', 'Blockers')
   }
 }
 

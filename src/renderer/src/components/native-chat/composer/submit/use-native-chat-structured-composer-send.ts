@@ -3,7 +3,7 @@ import {
   hasNativeChatStagedFiles,
   captureNativeChatStagedInput
 } from '../../drafts/native-chat-draft-attachment-staging'
-import { mayHoldAgentReferences } from '../../../../../../shared/orchestration-agent-reference'
+import { mayHoldAgentReferences } from '../../../../../../shared/orchestration/mailbox/orchestration-agent-reference'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { formatAgentTypeLabel } from '../../../../../../shared/agent-status/presentation/agent-type-label'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'

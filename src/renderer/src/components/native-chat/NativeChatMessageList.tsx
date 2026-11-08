@@ -4,12 +4,14 @@ import {
   NATIVE_CHAT_TRANSCRIPT_COLUMN_CLASS
 } from './appearance/native-chat-appearance-style'
 import { NativeChatJumpToLatest } from './viewport/scroll/NativeChatJumpToLatest'
+import { withoutPullRequestEventRows } from '../../../../shared/native-chat/native-chat-pull-request-event'
 import { useNativeChatRowTypography } from './viewport/virtualization/use-native-chat-row-typography'
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import {
   nativeChatScrollsToLatestOnSend,
+  nativeChatShowsCiResultLines,
   nativeChatShowsTurnDiffSummary
 } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import type { NativeChatLiveSession } from './session/terminal/read/native-chat-live-session-contract'
@@ -40,6 +42,10 @@ import { useNativeChatHistoryRetention } from './viewport/history/use-native-cha
 import { useNativeChatSubagentSections } from './subagents/use-native-chat-subagent-sections'
 import { toggleNativeChatExpandedKey } from './messages/disclosure/native-chat-expanded-keys'
 import { useNativeChatTurnMembership } from './conversation/slots/use-native-chat-turn-membership'
+import {
+  useNativeChatSideChatForkOffer,
+  useNativeChatSideChatForkPointReport
+} from './messages/actions/use-native-chat-side-chat'
 import { useNativeChatTranscriptScroll } from './viewport/scroll/use-native-chat-transcript-scroll'
 import { useNativeChatOlderHistoryAutoload } from './viewport/history/use-native-chat-older-history-autoload'
 import { NativeChatOlderHistoryRow } from './viewport/history/NativeChatOlderHistoryRow'
@@ -117,6 +123,7 @@ export function NativeChatMessageList({
   stopping?: boolean
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const receipts = useMemo(
     () =>
       journalItems ? desktopStructuredTranscript.transcript(journalItems).receipts : new Map(),
@@ -165,7 +172,14 @@ export function NativeChatMessageList({
     journalSubmissions,
     latestTurn
   )
-  const { messages: rows, turnKeys, liveTurnKey } = turnRows
+  const { liveTurnKey } = turnRows
+  const showCiResultLines = useAppStore((state) => nativeChatShowsCiResultLines(state.settings))
+  // Hidden lines leave the transcript entirely, so they reserve no row or gap.
+  const { messages: rows, turnKeys } = useMemo(
+    () => (showCiResultLines ? turnRows : withoutPullRequestEventRows(turnRows)),
+    [showCiResultLines, turnRows]
+  )
+  const latestTurnKey = turnKeys.findLast((key) => key !== undefined)
   const showTurnDiffs = useAppStore((state) => nativeChatShowsTurnDiffSummary(state.settings))
   const turnDiffs = useNativeChatTurnDiffs(
     showTurnDiffs ? turnRows : null,
@@ -190,7 +204,8 @@ export function NativeChatMessageList({
   const tailRow = transcriptTailRow(isWorking, awaitingInput)
   const lifecycleWorking = session.transcriptLifecycle?.state === 'working'
   const { measureContent, typography } = useNativeChatRowTypography(contentRef)
-  const { slots: allSlots, liveLine } = useNativeChatTranscriptSlots({
+  const forkOffer = useNativeChatSideChatForkOffer(latestTurnKey)
+  const transcript = useNativeChatTranscriptSlots({
     typography,
     messages: rows,
     unresolvedRowIds: turnRows.unresolvedRowIds,
@@ -205,6 +220,7 @@ export function NativeChatMessageList({
     lifecycleWorking,
     subagentSections,
     subagentChoices,
+    forkOffer,
     line: {
       draws: tailRow === 'activity',
       thinking: turnStatuses.active?.thinking === true,
@@ -212,6 +228,8 @@ export function NativeChatMessageList({
       activityText: turnActivity?.text
     }
   })
+  const { slots: allSlots, liveLine } = transcript
+  useNativeChatSideChatForkPointReport(transcript.forkPoint)
   // A message waiting behind the live turn draws after that turn's live activity, not inside it.
   const { slots, waitingSlots } = useMemo(
     () =>
@@ -336,7 +354,7 @@ export function NativeChatMessageList({
     revealedDiff: navigationRequest.revealedDiff,
     taskListPredecessors,
     expandedTurnIds,
-    latestTurnKey: turnKeys.findLast((key) => key !== undefined),
+    latestTurnKey,
     deliveryNotices,
     runtimeContext,
     onToggleExpandedTurn: toggleExpandedTurn,
@@ -357,7 +375,7 @@ export function NativeChatMessageList({
               {...readerInput.scrollerProps}
               // Measurement finds this named scroll root independently of utility classes.
               data-native-chat-scroll
-              aria-label={translate('components.native-chat.transcriptLabel', 'Conversation')}
+              aria-label={t('components.native-chat.transcriptLabel', 'Conversation')}
               // Browser anchoring would add unattributed movement beside the virtualizer's anchor.
               className="scrollbar-sleek relative h-full overflow-y-auto [overflow-anchor:none] [scrollbar-gutter:stable_both-edges] focus-visible:outline-none"
             >

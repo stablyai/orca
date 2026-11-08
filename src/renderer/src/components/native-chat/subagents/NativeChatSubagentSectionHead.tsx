@@ -1,6 +1,6 @@
 import { Bot, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { normalizeSubagentState } from '../../../../../shared/native-chat/transcript/native-chat-subagent-summary'
 import type { NativeChatSubagentEntry } from '../../../../../shared/native-chat/native-chat-types'
 import { StatusDot } from './NativeChatSubagentRun'
@@ -17,6 +17,7 @@ export function NativeChatSubagentSectionHead({
   expanded: boolean
   onSetOpen: (agentId: string, open: boolean) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const state = entry === undefined ? null : normalizeSubagentState(entry.state)
   return (
     <button
@@ -35,7 +36,7 @@ export function NativeChatSubagentSectionHead({
       <Bot aria-hidden className="size-3.5 shrink-0" />
       {state === null ? null : <StatusDot state={state} pulsing={state === 'working'} />}
       <code className="min-w-0 truncate font-mono text-2xs text-chat-foreground">
-        {entry?.label ?? translate('components.native-chat.subagents.unnamed', 'Subagent')}
+        {entry?.label ?? t('components.native-chat.subagents.unnamed', 'Subagent')}
       </code>
     </button>
   )

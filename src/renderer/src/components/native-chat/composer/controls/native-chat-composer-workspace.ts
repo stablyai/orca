@@ -57,6 +57,8 @@ export function createNativeChatComposerWorkspaceSelector(
   let runtimeIds: string[] = []
   const selectMachine = createComposerMachineSelector(!target)
   let presentation: {
+    worktreeId?: string
+    repoId?: string
     hostId?: ExecutionHostId
     machine?: string
     checkout?: string
@@ -128,6 +130,8 @@ export function createNativeChatComposerWorkspaceSelector(
         path: path ?? undefined
       }
       presentation = {
+        worktreeId: row?.id,
+        repoId: repo?.id,
         checkout: row?.displayName,
         kind: row
           ? (repo && isFolderRepo(repo)) ||

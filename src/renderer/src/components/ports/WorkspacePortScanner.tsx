@@ -17,7 +17,7 @@ import {
   type PortScanDebounceState
 } from '@/lib/workspace-ports/workspace-port-scan-debounce'
 import type { WorkspacePortScanResult } from '../../../../shared/workspace-ports'
-import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
+import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
 
 const WORKSPACE_PORT_SCAN_INTERVAL_MS = 30_000
 const WORKSPACE_PORT_ADVERTISED_URL_SETTLE_MS = 1_000
@@ -249,6 +249,7 @@ export function WorkspacePortScanner({ enabled = true }: { enabled?: boolean }):
         }
         void refresh({ force: true })
       },
+      slowWhileUnfocused: true,
       intervalMs: WORKSPACE_PORT_SCAN_INTERVAL_MS
     })
 

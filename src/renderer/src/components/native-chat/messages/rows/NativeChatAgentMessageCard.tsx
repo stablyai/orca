@@ -3,6 +3,7 @@ import { ChevronDown } from 'lucide-react'
 import { AgentStateDot } from '@/components/AgentStateDot'
 import { AgentTypeIcon } from '@/lib/agent-type-icon'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
@@ -26,31 +27,29 @@ import { NativeChatCopyButton } from '../actions/NativeChatCopyButton'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
 import { NativeChatImageAttachments } from '../../media/images/NativeChatImageAttachments'
 
-function heading(from: AgentMessageSource, message: NativeChatMessage): string {
+function heading(
+  from: AgentMessageSource,
+  message: NativeChatMessage,
+  t: Translate = translate
+): string {
   switch (agentMessageHeading(from, message)) {
     case 'started':
-      return translate('components.native-chat.agentMessage.startedWorker', 'Started worker')
+      return t('components.native-chat.agentMessage.startedWorker', 'Started worker')
     case 'handed-off':
-      return translate(
-        'components.native-chat.agentMessage.handedOffToAgent',
-        'Handed off to agent'
-      )
+      return t('components.native-chat.agentMessage.handedOffToAgent', 'Handed off to agent')
     case 'started-agent':
-      return translate('components.native-chat.agentMessage.startedAgent', 'Started agent')
+      return t('components.native-chat.agentMessage.startedAgent', 'Started agent')
     case 'task':
-      return translate(
-        'components.native-chat.agentMessage.taskFromCoordinator',
-        'Task from coordinator'
-      )
+      return t('components.native-chat.agentMessage.taskFromCoordinator', 'Task from coordinator')
     case 'coordinator':
-      return translate(
+      return t(
         'components.native-chat.agentMessage.messageFromCoordinator',
         'Message from coordinator'
       )
     case 'worker':
-      return translate('components.native-chat.agentMessage.updateFromWorker', 'Update from worker')
+      return t('components.native-chat.agentMessage.updateFromWorker', 'Update from worker')
     case 'generic':
-      return translate('components.native-chat.agentMessage.messageFrom', 'Message from')
+      return t('components.native-chat.agentMessage.messageFrom', 'Message from')
   }
 }
 
@@ -69,6 +68,7 @@ export function NativeChatAgentMessageCard({
   textAttachmentContent,
   onRefolded
 }: AgentMessageCardProps): React.JSX.Element {
+  const t = useTranslate()
   const owner = useNativeChatVisualOwner()
   const worktreeId = owner?.worktreeId ?? runtimeContext?.worktreeId ?? null
   const target = owner?.target ?? runtimeContext?.target
@@ -112,7 +112,7 @@ export function NativeChatAgentMessageCard({
           id={labelId}
           className="pointer-events-none max-w-1/3 shrink-0 truncate text-xs text-muted-foreground"
         >
-          {heading(from, message)}
+          {heading(from, message, t)}
         </span>
         <div className="pointer-events-none relative min-w-0 flex-1 [&_button]:pointer-events-auto">
           <NativeChatAgentMessageSenders

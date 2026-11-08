@@ -95,6 +95,7 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
     // A resumed conversation may keep its own model, so only a new one runs the listed default.
     newLaunch,
     ...(launch?.worktree ? { worktree: launch.worktree } : {}),
+    hasTurn: args.hasTurn,
     fence,
     turnId,
     reportedUnpickedModel:

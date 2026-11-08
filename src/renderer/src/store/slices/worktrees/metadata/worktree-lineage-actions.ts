@@ -15,7 +15,7 @@ import {
 } from './worktree-lineage-refresh'
 import { hostRouteForWorktreeOwner } from '../listing/worktree-owner-target'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
-import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
+import { toRuntimeWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 import { buildCrossStoreParentRef } from './cross-store-parent-ref'
 
 // Why: this runs inside a catch, so letting the refresh reject would replace the failure it recovers from.

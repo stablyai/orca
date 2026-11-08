@@ -31,7 +31,10 @@ type WriteContext = {
     encoded: string,
     view: StructuredAgentSessionOptionState
   ) => Promise<SelectionOutcome> | null
-  flush: (isCurrent: () => boolean) => void
+  /** `queued` is true when it sends picks taken before the chat attached. */
+  flush: (isCurrent: () => boolean, queued?: boolean) => void
+  /** The chat has not attached: picks wait for flushQueued, and setOption returns once taken. */
+  queues?: boolean
   capturePresentation?: () => () => boolean
   presentFailure?: (failure: AgentSessionWriteFailure) => void
   revalidate: () => void
@@ -124,6 +127,19 @@ export function createStructuredAgentSessionOptionsWriteOwner(read: () => WriteC
       attachment += 1
       receipt = undefined
     },
+    /** Sends picks taken before attach; the latest one locks the picker as a live pick does. */
+    flushQueued(): void {
+      const context = read()
+      const issuedAttachment = attachment
+      if (receipt && receipt.controller === context.controller && !receipt.operation.transmitted) {
+        receipt = {
+          ...receipt,
+          record: context.record,
+          providerStarting: context.providerStarting
+        }
+      }
+      context.flush(() => issuedAttachment === attachment && context.isCurrentContext(), true)
+    },
     async setOption(id: string, value: SessionOptionValue): Promise<boolean> {
       const context = read()
       const { controller, view } = context
@@ -182,6 +198,10 @@ export function createStructuredAgentSessionOptionsWriteOwner(read: () => WriteC
         pick?.adoptModelAsLaunchDefault === false ? false : undefined
       )
       context.flush(isCurrent)
+      if (context.queues) {
+        void operation.result.then((outcome) => settled(outcome, presents?.() ?? true))
+        return operation.outcome?.kind !== 'refused'
+      }
       const outcome = await operation.result
       settled(outcome, presents?.() ?? true)
       return outcome.kind !== 'refused'

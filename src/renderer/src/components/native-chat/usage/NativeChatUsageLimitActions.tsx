@@ -10,10 +10,10 @@ import {
 } from 'react'
 import { MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
-import { useAppStore } from '@/store'
+import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store/index'
 import { structuredChatTabById } from '@/lib/structured-chat-tab-index'
-import { useStructuredChatTabConversationName } from '@/runtime/structured-conversation-name'
+import { useStructuredChatTabConversationName } from '@/runtime/native-chat/naming/structured-conversation-name'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
 import {
   buildAgentSessionContinuationPrompt,
@@ -22,16 +22,16 @@ import {
 import { ClaudeSwitcherMenu } from '@/components/status-bar/ClaudeSwitcherMenu'
 import { ProviderAccountChatButton } from '@/components/status-bar/ProviderAccountChatButton'
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
 import type { AgentSessionOptionsResult } from '../../../../../shared/agent-session/options/agent-session-options-result'
-import { executionHostIdForStructuredTarget } from '@/runtime/structured-agent-session-owner'
+import { executionHostIdForStructuredTarget } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
   NativeChatOrcaStopContext,
   type NativeChatOrcaStopView
-} from '../messages/notices/native-chat-orca-stop-context'
+} from '@/components/native-chat/messages/notices/native-chat-orca-stop-context'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
-import type { NativeChatStructuredViewProps } from '../native-chat-view-types'
-import type { NativeChatFileLinkContext } from '../links/actions/native-chat-file-link-context'
+import type { NativeChatStructuredViewProps } from '@/components/native-chat/native-chat-view-types'
+import type { NativeChatFileLinkContext } from '@/components/native-chat/links/actions/native-chat-file-link-context'
 import { nativeChatMessageCopyText } from '../../../../../shared/native-chat/transcript/native-chat-message-copy-text'
 
 type UsageLimitActions = {
@@ -248,6 +248,7 @@ export function NativeChatUsageLimitActionsProvider({
 }
 
 export function NativeChatUsageLimitActions(): React.JSX.Element | null {
+  const t = useTranslate()
   const actions = useContext(UsageLimitActionsContext)
   if (!actions || (!actions.account && !actions.handOff)) {
     return null
@@ -255,7 +256,7 @@ export function NativeChatUsageLimitActions(): React.JSX.Element | null {
   return (
     <div className="ml-6 flex flex-wrap items-center gap-2 text-chat-foreground-faint">
       <p className="text-xs">
-        {translate(
+        {t(
           'components.native-chat.usageLimitActions.leadIn',
           'Continue this chat without waiting:'
         )}
@@ -270,7 +271,7 @@ export function NativeChatUsageLimitActions(): React.JSX.Element | null {
           onClick={actions.handOff}
         >
           <MessageSquarePlus />
-          {translate(
+          {t(
             'components.agentSessionContinuation.handOffToAnotherAgent',
             'Hand Off to Another Agent'
           )}

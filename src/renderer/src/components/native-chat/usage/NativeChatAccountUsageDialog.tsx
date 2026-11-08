@@ -3,7 +3,7 @@ import { X } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { NativeChatAccountUsageCard } from './NativeChatAccountUsageCard'
 import {
   readNativeChatAccountUsageModalRequest,
@@ -24,13 +24,14 @@ function UsageDialog({
 }: {
   request: NativeChatAccountUsageModalRequest
 }): React.JSX.Element {
+  const t = useTranslate()
   const closeModal = useAppStore((s) => s.closeModal)
   const usage = useNativeChatAccountUsage(request.sessionId, request.target)
   // Why: the slot has no trigger element for the dialog to hand focus back to.
   const [returnFocusTo] = useState(() =>
     document.activeElement instanceof HTMLElement ? document.activeElement : null
   )
-  const title = translate('components.native-chat.usage.title', 'Codex usage')
+  const title = t('components.native-chat.usage.title', 'Codex usage')
   // Sized to the card, capped at /resume's height. The top is pinned where /resume's top sits,
   // so title and Close stay put while the card grows from its loading layout to the loaded one.
   return (
@@ -55,7 +56,7 @@ function UsageDialog({
               variant="ghost"
               size="icon-xs"
               className="size-6"
-              aria-label={translate('auto.components.ui.dialog.f26c4baeda', 'Close')}
+              aria-label={t('auto.components.ui.dialog.f26c4baeda', 'Close')}
             >
               <X className="size-3" />
             </Button>

@@ -4,7 +4,8 @@ import { NativeChatExpandable } from '../../messages/disclosure/NativeChatExpand
 import { useNativeChatDisclosure } from '../../messages/disclosure/native-chat-disclosure-store'
 import { Check } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
+import { recomputeOn } from '@/lib/recompute-on'
 import {
   isToolCallBlock,
   type NativeChatBackgroundTaskBlock,
@@ -87,6 +88,7 @@ export function NativeChatToolRun({
   asides?: NativeChatToolRunAsides
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element | null {
+  const t = useTranslate()
   // This row owns the language subscription for its tool, diff, and task labels.
   useTranslation()
   const spacing = followsProse ? 'mt-2' : undefined
@@ -148,8 +150,8 @@ export function NativeChatToolRun({
   const hasAskCall = asks.length > 0
   const askSubject = hasAskCall ? nativeChatAskRunSubject(asks) : null
   const showsHeader = !hasAskCall || callCount > 0
-  // A single command is more recognizable than its category summary.
-  const runSentence = nativeChatToolRunSentence(headerBlocks, { live })
+  // A single command is more recognizable than its category summary. Its words read translate(), so key it on `t`.
+  const runSentence = recomputeOn([t], () => nativeChatToolRunSentence(headerBlocks, { live }))
   // The card sits inside the run's own scroll box, so that box has to move too.
   const revealDiff = useMemo(
     () =>
@@ -160,8 +162,8 @@ export function NativeChatToolRun({
   )
   const fallbackLabel =
     fallbackKey === 'result'
-      ? translate('components.native-chat.tool.result', NATIVE_CHAT_TOOL_ACTIVITY_COPY.result)
-      : translate('components.native-chat.tool.callCount', '{{count}} tool calls', {
+      ? t('components.native-chat.tool.result', NATIVE_CHAT_TOOL_ACTIVITY_COPY.result)
+      : t('components.native-chat.tool.callCount', '{{count}} tool calls', {
           count: callCount,
           defaultValue_one: '{{count}} tool call'
         })

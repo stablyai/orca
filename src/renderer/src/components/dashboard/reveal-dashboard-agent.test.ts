@@ -41,7 +41,7 @@ vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
 vi.mock('@/components/native-chat/composer/focus/native-chat-composer-focus-intent', () => ({
   requestNativeChatComposerFocus: mocks.requestNativeChatComposerFocus
 }))
-vi.mock('@/runtime/runtime-worktree-selector', () => ({
+vi.mock('@/runtime/rpc/targets/runtime-worktree-selector', () => ({
   toRuntimeWorktreeSelector: (id: string) => `id:${id}`
 }))
 

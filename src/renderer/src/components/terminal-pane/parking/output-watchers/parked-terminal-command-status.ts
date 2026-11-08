@@ -15,7 +15,7 @@ import {
   setCommandCodeDoneSettleExecutor
 } from '../../agent-completion/command-code/command-code-done-settle'
 import { canCommandCodeOutputOwnPane } from '../../agent-completion/command-code/command-code-output-ownership'
-import { isRemoteExecutionHostPtyId } from '../../../../../../shared/remote-execution-host-pty-id'
+import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
 
 export type ParkedTerminalCommandStatusPolicy = {
   onCommandFinished: (bestEffortExitCode: number | null) => void

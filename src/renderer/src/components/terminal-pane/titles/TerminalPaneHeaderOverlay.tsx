@@ -6,7 +6,7 @@ import type { ManagedPane } from '@/lib/pane-manager/pane-manager-types'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   canCloseTerminalPane,
   terminalPaneCloseLabel
@@ -103,7 +103,8 @@ export default function TerminalPaneHeaderOverlay({
   onRenameCancel,
   onRenameBlur
 }: TerminalPaneHeaderOverlayProps): React.JSX.Element {
-  const splitRightLabel = translate(
+  const t = useTranslate()
+  const splitRightLabel = t(
     'auto.components.terminal.pane.TerminalContextMenu.20e565d865',
     'Split Terminal Right'
   )
@@ -126,7 +127,7 @@ export default function TerminalPaneHeaderOverlay({
         const isActivePane = activePaneId === pane.id
         const isChromeless = showAlwaysOnHeaders && !title && !isEditing
         const showHeader = overlayRect && (showAlwaysOnHeaders || Boolean(title) || isEditing)
-        const closeLabel = terminalPaneCloseLabel(paneCount)
+        const closeLabel = terminalPaneCloseLabel(paneCount, t)
         // Titled split panes use X to clear titles; titled single panes still need a close control.
         const showCloseButton =
           showAlwaysOnHeaders &&
@@ -161,11 +162,11 @@ export default function TerminalPaneHeaderOverlay({
               <ImeInput
                 ref={renameInputRef}
                 className="pane-title-input"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.terminal.pane.TerminalPane.7dbbfcbecc',
                   'Pane title'
                 )}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.terminal.pane.TerminalPane.7dbbfcbecc',
                   'Pane title'
                 )}
@@ -203,7 +204,7 @@ export default function TerminalPaneHeaderOverlay({
                     type="button"
                     className="pane-title-text"
                     onClick={() => onStartRename(pane.id)}
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.terminal.pane.TerminalPane.cc5a2dc706',
                       'Edit pane title: {{value0}}',
                       { value0: title }
@@ -220,7 +221,7 @@ export default function TerminalPaneHeaderOverlay({
                           type="button"
                           variant="pane-title"
                           size="icon-xs"
-                          aria-label={translate(
+                          aria-label={t(
                             'components.agentSessionContinuation.handOffToAnotherAgent',
                             'Hand Off to Another Agent'
                           )}
@@ -233,7 +234,7 @@ export default function TerminalPaneHeaderOverlay({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={4}>
-                        {translate(
+                        {t(
                           'components.agentSessionContinuation.handOffToAnotherAgent',
                           'Hand Off to Another Agent'
                         )}
@@ -247,7 +248,7 @@ export default function TerminalPaneHeaderOverlay({
                           type="button"
                           variant="pane-title"
                           size="icon-xs"
-                          aria-label={translate(
+                          aria-label={t(
                             'components.native-chat.toggle.showTerminal',
                             'Show terminal'
                           )}
@@ -260,7 +261,7 @@ export default function TerminalPaneHeaderOverlay({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={4}>
-                        {translate('components.native-chat.toggle.showTerminal', 'Show terminal')}
+                        {t('components.native-chat.toggle.showTerminal', 'Show terminal')}
                       </TooltipContent>
                     </Tooltip>
                   ) : canResumeInNewNativeChat && isActivePane ? (
@@ -305,7 +306,7 @@ export default function TerminalPaneHeaderOverlay({
                             event.stopPropagation()
                             onRemoveTitle(pane.id)
                           }}
-                          aria-label={translate(
+                          aria-label={t(
                             'auto.components.terminal.pane.TerminalPane.f984ab2a30',
                             'Remove pane title: {{value0}}',
                             { value0: title }
@@ -315,10 +316,7 @@ export default function TerminalPaneHeaderOverlay({
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" sideOffset={4}>
-                        {translate(
-                          'auto.components.terminal.pane.TerminalPane.ac112e9036',
-                          'Remove title'
-                        )}
+                        {t('auto.components.terminal.pane.TerminalPane.ac112e9036', 'Remove title')}
                       </TooltipContent>
                     </Tooltip>
                   ) : null}

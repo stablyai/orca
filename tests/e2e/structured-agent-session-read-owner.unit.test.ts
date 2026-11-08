@@ -23,10 +23,19 @@ import { AgentSessionSubscribers } from '../../src/main/native-chat/agent-sessio
 import { StructuredAgentSessionStatusFeed } from '../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-status-feed'
 
 const mocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call,
-  subscribeStructuredAgentSession: mocks.subscribe
-}))
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-call',
+  () => ({
+    callStructuredAgentSession: mocks.call
+  })
+)
+
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-subscriptions',
+  () => ({
+    subscribeStructuredAgentSession: mocks.subscribe
+  })
+)
 
 import { getStructuredAgentSessionReadOwner } from '../../src/renderer/src/components/native-chat/session/structured/read/structured-agent-session-read-owner'
 import { resetStructuredAgentSessionReadOwnersForTests } from '../../src/renderer/src/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'

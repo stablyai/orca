@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "随心输入，@ 引用文件，/ 使用命令",
-      "reconnecting": "正在重新连接…",
       "waitingForTerminal": "等待终端…"
     },
     "diffCard": {
@@ -308,6 +307,11 @@
       "signInHint": "在运行此聊天的电脑上打开终端",
       "forkedFrom": "分支来源"
     },
+    "ciResultLine": {
+      "failingLead": "CI 失败:",
+      "greenLead": "CI 通过:",
+      "at": "提交"
+    },
     "orcaStop": {
       "canContinue": "您可以在此对话中继续。",
       "crash": "此回复进行期间，{{machine}} 上的 Orca 意外停止。",
@@ -353,6 +357,13 @@
       "resume": "继续",
       "resumeSending": "继续发送排队的消息",
       "title": "排队的消息"
+    },
+    "offlineQueue": {
+      "failed": "无法发送 — 点按“发送”重试",
+      "waitingFor": "{{host}} 恢复连接后发送",
+      "waiting": "桌面端恢复连接后发送",
+      "behind": "等待中 — 前面的消息需要处理",
+      "closed": "Orca 关闭前未发送"
     },
     "receipt": {
       "cancelled": "取消",
@@ -1303,10 +1314,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} 在移动端不可用",
       "loadFolderFailed": "无法加载文件夹",
+      "loadedOfTotal": "{{loaded}} / {{total}}",
       "loading": "加载中…",
       "openFolder": "打开文件夹 {{name}}",
       "previewFile": "预览文件 {{name}}",
       "retryLoading": "重试加载 {{path}}",
+      "searchAll": "全部搜索",
+      "searchAllIn": "搜索整个 {{folder}}",
+      "searched": "已在 {{folder}} 中搜索 {{total}} 项中的 {{loaded}} 项。",
+      "searching": "正在搜索 {{folder}}… {{loaded}} / {{total}}",
+      "showMore": "再显示 {{rows}} 项",
       "unavailable": "移动端不可用"
     },
     "fileExplorerRowActions": {
@@ -1380,15 +1397,16 @@
       "openFailed": "无法打开此 PDF",
       "opening": "正在打开 PDF…",
       "updateRequired": "更新 Orca Mobile 才能打开 PDF"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "自你 {{time}} 的编辑后，桌面上的文件已更改",
+      "copyMyEdits": "复制我的编辑",
+      "discard": "放弃",
+      "restore": "恢复",
+      "unsavedFrom": "{{time}} 的未保存编辑"
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} 个活跃",
-      "heading": "智能体",
-      "showAll": "显示全部 {{count}} 个",
-      "showFewer": "收起"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "关闭 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已可用",
