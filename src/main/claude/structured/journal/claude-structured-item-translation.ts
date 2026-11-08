@@ -25,7 +25,14 @@ export type ClaudeMessageEnvelope = {
 }
 
 export type ClaudeToolUse = { id: string; name: string; input: unknown }
-export type ClaudeToolResult = { toolUseId: string; output: string; failed: boolean }
+/** Base64 image a tool result handed the agent; kept in memory only, never journaled. */
+export type ClaudeToolResultImage = { mediaType: string; data: string }
+export type ClaudeToolResult = {
+  toolUseId: string
+  output: string
+  failed: boolean
+  images: ClaudeToolResultImage[]
+}
 
 export function claudeRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -149,6 +156,21 @@ function resultText(value: unknown): string {
     .join('\n')
 }
 
+function resultImages(value: unknown): ClaudeToolResultImage[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value.flatMap((entry) => {
+    const part = claudeRecord(entry)
+    const source = claudeRecord(part?.source)
+    const mediaType = claudeText(source?.media_type)
+    const data = claudeText(source?.data)
+    return part?.type === 'image' && source?.type === 'base64' && mediaType && data
+      ? [{ mediaType, data }]
+      : []
+  })
+}
+
 export function claudeToolResultId(part: Record<string, unknown> | null): string | null {
   const toolUseId = claudeText(part?.tool_use_id)
   return isClaudeToolResultContent(part) ? toolUseId : null
@@ -166,7 +188,8 @@ export function claudeToolResults(envelope: ClaudeMessageEnvelope): ClaudeToolRe
               part.type === 'tool_result'
                 ? resultText(part.content)
                 : claudeToolResultText(part.content),
-            failed: claudeToolResultFailed(part)
+            failed: claudeToolResultFailed(part),
+            images: part.type === 'tool_result' ? resultImages(part.content) : []
           }
         ]
       : []
@@ -185,6 +208,7 @@ export function claudeThinkingText(envelope: ClaudeMessageEnvelope): string | nu
 export function claudeToolBody(input: {
   tool: ClaudeToolUse
   result?: ClaudeToolResult
+  resultImagePaths?: string[]
 }): AgentJournalItemBody {
   return {
     kind: 'tool-call',
@@ -192,7 +216,8 @@ export function claudeToolBody(input: {
     input: input.tool.input,
     callId: input.tool.id,
     state: input.result ? (input.result.failed ? 'failed' : 'completed') : 'running',
-    ...(input.result ? { output: journalPayload(input.result.output) } : {})
+    ...(input.result ? { output: journalPayload(input.result.output) } : {}),
+    ...(input.resultImagePaths?.length ? { resultImagePaths: input.resultImagePaths } : {})
   }
 }
 
