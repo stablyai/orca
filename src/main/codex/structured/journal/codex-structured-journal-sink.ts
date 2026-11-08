@@ -8,13 +8,13 @@ import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionSinkAdmission
 } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
-import type { StructuredAgentSessionIdentityResolver } from '../../../native-chat/agent-session-wire/journal-ingress/structured-agent-session-journal-views'
 import '../../../native-chat/agent-session-journal/writing/journal-row-builders'
 import {
   journalLifecycleItemMutation,
   type JournalLifecycleIdentityMutationInput
 } from '../../../native-chat/agent-session-journal/writing/journal-lifecycle-mutation'
 import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
+import type { CodexGoalRowChoice } from './codex-goal-journal-identity'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-contracts'
 import { CODEX_JOURNAL_ADMITTED } from './codex-structured-journal-contracts'
 import { CODEX_TURN_ROW_KEPT_BYTES } from './codex-structured-journal-translation-turns'
@@ -124,16 +124,19 @@ export function appendCodexLifecycleItem(
 export function appendCodexLifecycleTransition(
   sink: StructuredAgentSessionEventSink,
   identitySizeBound: AgentJournalItemIdentity,
-  body: AgentJournalItemBody,
-  resolveIdentity: StructuredAgentSessionIdentityResolver,
+  choice: CodexGoalRowChoice,
   attribution: AgentJournalRowAttribution
 ): CodexJournalTranslationAdmission {
   if (sink.tryAppendLifecycleTransition) {
     return criticalAdmission(
-      sink.tryAppendLifecycleTransition(identitySizeBound, body, resolveIdentity, attribution)
+      sink.tryAppendLifecycleTransition(
+        identitySizeBound,
+        { kind: 'thread-goal', choice },
+        attribution
+      )
     )
   }
-  const admission = appendCodexLifecycleItem(sink, identitySizeBound, body, attribution)
+  const admission = appendCodexLifecycleItem(sink, identitySizeBound, choice.body, attribution)
   return admission.accepted ? publishCodexLifecycle(sink) : admission
 }
 

@@ -28,6 +28,11 @@ export type JournalStateQueries = {
   newestTurnBySequence: (state: JournalReducerState) => AgentJournalTurnLifecycle | null
   latestItemForTurn: (state: JournalReducerState, turnId: string) => AgentJournalRenderItem | null
   newestTurnItem: (state: JournalReducerState) => AgentJournalRenderItem | null
+  /** The most recently written visible item whose key starts with this prefix. */
+  newestItemWithKeyPrefix: (
+    state: JournalReducerState,
+    prefix: string
+  ) => AgentJournalRenderItem | null
   contextWindowHeld: (state: JournalReducerState) => boolean
   /** Running turns and calls, pending prompts and live work; null spans every turn. */
   unsettledItems: (

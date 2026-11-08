@@ -28,6 +28,10 @@ import {
   refineAgentJournalQuotaTurnEnd,
   type AgentJournalFailureVoice
 } from '../../agent-session-timeline/agent-journal-turn-failure-revision'
+import {
+  resolveCodexGoalIdentity,
+  type CodexGoalRowChoice
+} from '../../../codex/structured/journal/codex-goal-journal-identity'
 
 export type JournalTimelineItemResolution =
   | { kind: 'text-snapshot'; identity: AgentJournalItemIdentity; body: AgentJournalMessageItem }
@@ -60,6 +64,8 @@ export type JournalTimelineItemResolution =
       body: AgentJournalItemBody
       voice: AgentJournalFailureVoice
     }
+  /** A provider goal row whose identity follows the thread's newest saved goal row. */
+  | { kind: 'thread-goal'; choice: CodexGoalRowChoice }
   | {
       kind: 'quota-turn-end'
       identity: AgentJournalItemIdentity
@@ -112,6 +118,10 @@ export function resolveJournalTimelineItem(
             body: { ...body, providerTurnId: resolution.providerTurnId }
           })
         : nothing
+    }
+    case 'thread-goal': {
+      const identity = resolveCodexGoalIdentity(view.newestWithKeyPrefix, resolution.choice)
+      return identity ? resolved({ identity, body: resolution.choice.body }) : nothing
     }
     case 'turn-failure':
       return resolved(mergeAgentJournalTurnFailure(view, resolution, resolution.voice))

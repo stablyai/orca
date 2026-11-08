@@ -103,19 +103,12 @@ export function createStructuredAgentSessionResolvedAppend(
       revise(reservedBytes, resolution, options, false),
     tryReviseResolvedItemAndPublish: (reservedBytes, resolution, options) =>
       revise(reservedBytes, resolution, options, true),
-    tryAppendLifecycleTransition: (identitySizeBound, body, resolveIdentity, options) =>
-      submit(
-        estimateStructuredAgentSessionItemBytes(identitySizeBound, body),
-        (journal) => {
-          const identity = resolveIdentity(journal)
-          return identity === null ? null : { identity, body }
-        },
+    tryAppendLifecycleTransition: (identitySizeBound, resolution, options) =>
+      revise(
+        estimateStructuredAgentSessionItemBytes(identitySizeBound, resolution.choice.body),
+        resolution,
         options,
-        {
-          publish: true,
-          lifecycle: true,
-          overflow: 'structured agent-session item identity exceeded its reserved size'
-        }
+        true
       )
   }
 }

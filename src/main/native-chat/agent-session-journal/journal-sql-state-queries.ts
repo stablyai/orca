@@ -165,6 +165,21 @@ export function sqlJournalStateQueries(
       scope.examined(row)
       return context.read<AgentJournalRenderItem>('items', String(row.entry_key)) ?? null
     },
+    newestItemWithKeyPrefix(_state, prefix) {
+      facts.flush()
+      // Keys are stored JSON-encoded; a prefix of the key is a prefix of its encoding up to the quote.
+      const start = JSON.stringify(prefix).slice(0, -1)
+      const row = scope.db
+        .prepare(`SELECT entry_key FROM journal_proj_items
+        WHERE session_id=? AND epoch=? AND entry_key>=? AND entry_key<? AND hidden=0
+        ORDER BY sequence DESC, ordinal LIMIT 1`)
+        .get(...scope.prefix, start, `${start}\uffff`)
+      if (!row) {
+        return null
+      }
+      scope.examined(row)
+      return context.read<AgentJournalRenderItem>('items', String(row.entry_key)) ?? null
+    },
     contextWindowHeld() {
       facts.flush()
       // Newest first: the latest turn normally holds the window, so decoding stops at once.

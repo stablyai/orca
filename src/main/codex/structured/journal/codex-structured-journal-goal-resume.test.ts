@@ -38,8 +38,6 @@ function goalJournal() {
   let rowSequence = 0
   let publishes = 0
   let epochNumber = 1
-  let visits = 0
-  let visitedItems = 0
   const rows = new Map<string, AgentJournalRenderItem>()
   const writes: string[] = []
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
@@ -69,10 +67,9 @@ function goalJournal() {
       items: [...rows.values()].sort((left, right) => left.sequence - right.sequence),
       submissions: []
     }),
+    item: (itemId: string) => rows.get(itemId) ?? null,
     visitItems: (visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void) => {
-      visits += 1
       for (const item of rows.values()) {
-        visitedItems += 1
         visit(item.itemId, item.sequence, item.body)
       }
     }
@@ -90,27 +87,6 @@ function goalJournal() {
     writes,
     rows: () => journal.snapshot().items,
     publishes: () => publishes,
-    visits: () => visits,
-    visitedItems: () => visitedItems,
-    seedProviderItems: (count: number) => {
-      for (let index = 0; index < count; index += 1) {
-        rowSequence += 1
-        const identity = {
-          provider: 'codex' as const,
-          threadId: THREAD,
-          turnId: `seed-${index}`,
-          ordinal: 0
-        }
-        const itemId = agentJournalItemKey(identity)
-        rows.set(itemId, {
-          itemId,
-          body: { kind: 'message', role: 'assistant', blocks: [] },
-          revision: 1,
-          sequence: rowSequence,
-          observedAt: rowSequence
-        })
-      }
-    },
     replaceEpoch: () => {
       epochNumber += 1
       rowSequence = 0
@@ -146,7 +122,6 @@ describe('codex goal lifecycle resume', () => {
     expect(texts(journal.rows().map((row) => row.body))).toEqual([
       'Goal set: Keep the current scratch directory tidy.'
     ])
-    expect(journal.visits()).toBe(2)
     goals.dispose()
   })
 

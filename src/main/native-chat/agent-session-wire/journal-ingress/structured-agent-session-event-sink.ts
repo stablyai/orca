@@ -116,11 +116,10 @@ export type StructuredAgentSessionEventSink = StructuredAgentSessionTransitionSi
     resolution: JournalTimelineItemResolution,
     options: StructuredAgentSessionRevisionOptions
   ): StructuredAgentSessionSinkAdmission
-  /** Resolve on the journal lane; null appends nothing. */
+  /** The writer chooses the row's identity at its position and may write nothing. */
   tryAppendLifecycleTransition?(
     identitySizeBound: AgentJournalItemIdentity,
-    body: AgentJournalItemBody,
-    resolveIdentity: StructuredAgentSessionIdentityResolver,
+    resolution: Extract<JournalTimelineItemResolution, { kind: 'thread-goal' }>,
     options: StructuredAgentSessionItemAppendOptions
   ): StructuredAgentSessionSinkAdmission
   journalEpoch?(): string | null

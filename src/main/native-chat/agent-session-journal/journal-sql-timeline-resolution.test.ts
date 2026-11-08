@@ -8,6 +8,10 @@ import { codexProviderHandle } from '../../../shared/agent-session/lifecycle/age
 import { agentJournalTurnBody } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import { openStructuredAgentSessionSqlJournalDatabase } from '../../runtime/agent-session/structured-agent-session-journal-open'
 import type { JournalSqlDatabase } from './database/journal-sql-database'
+import {
+  codexGoalJournalDigest,
+  codexGoalJournalIdentity
+} from '../../codex/structured/journal/codex-goal-journal-identity'
 import { SqlAgentSessionJournal } from './journal-sql-store'
 import {
   journalSqlReaderPath,
@@ -125,5 +129,63 @@ it('chooses request incarnations and settles the session from its unsettled rows
   expect((await sql.reads.item('orca:turn'))?.body).toMatchObject({
     state: 'interrupted',
     completedAt: 300
+  })
+})
+
+it("follows a thread's newest saved goal row when choosing a goal identity", async () => {
+  const sql = await journal()
+  const goal = (timeUsedSeconds: number, objective = 'Ship it') => ({
+    kind: 'status' as const,
+    text: `Goal set: ${objective}`,
+    threadGoal: {
+      state: 'set' as const,
+      goal: {
+        objective,
+        status: 'active' as const,
+        tokenBudget: null,
+        tokensUsed: 0,
+        timeUsedSeconds,
+        createdAt: 1,
+        updatedAt: timeUsedSeconds
+      }
+    }
+  })
+  const thread = 'a'.repeat(64)
+  const step = (signature: string, body: ReturnType<typeof goal>) => ({
+    kind: 'resolved-item' as const,
+    resolution: {
+      kind: 'thread-goal' as const,
+      choice: { thread, signature, body, requirePrevious: false }
+    },
+    options: { fence: 1, turnScope: { kind: 'thread' as const }, lifecycle: true },
+    reservedBytes: 8192
+  })
+  const first = 'b'.repeat(64)
+  const second = 'c'.repeat(64)
+  expect(await sql.appendSteps([step(first, goal(0)), step(first, goal(0))])).toEqual({
+    outcomes: [{ kind: 'committed', wrote: true }, { kind: 'dropped' }]
+  })
+  expect(await sql.appendSteps([step(first, goal(60)), step(second, goal(0, 'Next'))])).toEqual({
+    outcomes: [
+      { kind: 'committed', wrote: true },
+      { kind: 'committed', wrote: true }
+    ]
+  })
+  const occurrence = codexGoalJournalDigest(JSON.stringify([thread, first]))
+  const firstRow = agentJournalItemKey(codexGoalJournalIdentity(thread, first, occurrence))
+  const secondRow = agentJournalItemKey(
+    codexGoalJournalIdentity(
+      thread,
+      second,
+      codexGoalJournalDigest(JSON.stringify([occurrence, second]))
+    )
+  )
+  expect(await sql.reads.item(firstRow)).toMatchObject({
+    revision: 2,
+    body: { threadGoal: { goal: { timeUsedSeconds: 60 } } }
+  })
+  expect(await sql.reads.item(secondRow)).toMatchObject({
+    revision: 1,
+    body: { text: 'Goal set: Next' }
   })
 })

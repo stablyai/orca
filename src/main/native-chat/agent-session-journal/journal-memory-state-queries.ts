@@ -14,6 +14,7 @@ import {
   unsettledJournalTimelineItems
 } from './writing/journal-timeline-view'
 import type { JournalReducerState } from './projection/journal-reducer'
+import type { AgentJournalRenderItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
 
 function* presentedItems(state: JournalReducerState) {
   for (const item of memoryJournalMap(state.items).values()) {
@@ -79,6 +80,15 @@ export const memoryJournalStateQueries: JournalStateQueries = {
     return latest
   },
   newestTurnItem: (state) => newestJournalTimelineTurn(presentedItems(state)),
+  newestItemWithKeyPrefix(state, prefix) {
+    let newest: AgentJournalRenderItem | null = null
+    for (const item of presentedItems(state)) {
+      if (item.itemId.startsWith(prefix) && (!newest || item.sequence > newest.sequence)) {
+        newest = item
+      }
+    }
+    return newest
+  },
   contextWindowHeld: (state) => journalTimelineContextWindowHeld(presentedItems(state)),
   unsettledItems: (state, turnItemId) =>
     unsettledJournalTimelineItems(presentedItems(state), turnItemId),
