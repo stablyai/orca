@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 
-// @vitest-environment happy-dom
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   MAX_FEEDBACK_IMAGE_BYTES,

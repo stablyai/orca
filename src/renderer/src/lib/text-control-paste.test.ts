@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
 
-// @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { pasteTextIntoTextControl } from './text-control-paste'
 
