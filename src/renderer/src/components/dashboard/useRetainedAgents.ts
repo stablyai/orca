@@ -203,6 +203,7 @@ export function useRetainedAgentsSync(): void {
   ])
 }
 
+/** Match snapshots despite delayed provider identity, keeping replacement runs in the same pane distinct. */
 function sameAgentRun(
   previous: Pick<DashboardAgentRow, 'entry' | 'startedAt' | 'agentType'>,
   current: Pick<DashboardAgentRow, 'entry' | 'startedAt' | 'agentType'>
@@ -222,6 +223,7 @@ function sameAgentRun(
   return previous.startedAt === current.startedAt && previous.agentType === current.agentType
 }
 
+/** Retain eligible disappeared runs and consume exit suppressors without discarding a replacement run's result. */
 export function collectRetainedAgentsOnDisappear(args: {
   previousAgents: Map<string, { row: DashboardAgentRow; worktreeId: string }>
   currentAgents: Map<string, { row: DashboardAgentRow; worktreeId: string }>
