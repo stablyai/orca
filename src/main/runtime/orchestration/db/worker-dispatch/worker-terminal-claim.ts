@@ -1,13 +1,7 @@
 import { OrchestrationError } from '../../orchestration-error'
 import type { OrchestrationDb } from '../orchestration-db'
 import type { DispatchContextRow } from '../orchestration-records'
-
-export type WorkerTerminalClaim = {
-  handle: string
-  paneKey?: string
-  /** A racing follow-up of the same settled Dispatch is left to `follow_up_claimed`, which steers the send into it. */
-  followUpOf?: string
-}
+import type { OrcaRuntimeService } from '../../../orca-runtime'
 
 // A starting Dispatch names its terminal only in its start options until its authority attaches.
 const STARTING_ON_TERMINAL_SQL = `SELECT d.* FROM dispatch_contexts d
@@ -18,13 +12,22 @@ const STARTING_ON_TERMINAL_SQL = `SELECT d.* FROM dispatch_contexts d
 
 /** Refuse a worker-start or follow-up onto a terminal another open Dispatch holds or is starting on.
  *  worker-start and the follow-up a send starts both claim through here, so whichever comes second is refused before any wait. */
-export function refuseClaimedWorkerTerminal(db: OrchestrationDb, claim: WorkerTerminalClaim): void {
+export function refuseClaimedWorkerTerminal(
+  db: OrchestrationDb,
+  handle: string | undefined,
+  runtime: Pick<OrcaRuntimeService, 'getTerminalPaneKey'>,
+  /** A racing follow-up of the same settled Dispatch is left to `follow_up_claimed`, which steers the send into it. */
+  followUpOf: string | undefined
+): void {
+  if (!handle) {
+    return
+  }
   const open =
-    db.findActiveDispatchForAssignee(claim.handle, claim.paneKey) ??
+    db.findActiveDispatchForAssignee(handle, runtime.getTerminalPaneKey(handle) ?? undefined) ??
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: selects whole dispatch_contexts rows.
-    (db.db.prepare(STARTING_ON_TERMINAL_SQL).get(claim.handle) as DispatchContextRow | undefined)
-  if (open && !(claim.followUpOf && open.follow_up_of_dispatch_id === claim.followUpOf)) {
-    throw terminalBusyError(db, claim.handle, open)
+    (db.db.prepare(STARTING_ON_TERMINAL_SQL).get(handle) as DispatchContextRow | undefined)
+  if (open && !(followUpOf && open.follow_up_of_dispatch_id === followUpOf)) {
+    throw terminalBusyError(db, handle, open)
   }
 }
 

@@ -1,4 +1,5 @@
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
+import { refuseClaimedWorkerTerminal } from '../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { probeWorkerOpenCodeModelLaunchSupport } from './worker-opencode-model-preflight'
 import { resolveWorkerConfiguredAgentParams } from './worker-configured-agent-preflight'
 import { waitForWorkerAgentReady } from '../../../../terminal/wait/launched-agent-composer-readiness'
@@ -125,20 +126,21 @@ export async function startLocalWorker(args: {
       : requestedWorktree === 'current'
         ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorWorktreeId}`)
         : await runtime.showManagedTerminalWorkspace(requestedWorktree)
-  const claimsTerminal = terminal
-    ? await assertExplicitWorkerUsable({
-        runtime,
-        db,
-        terminal,
-        from: params.from,
-        coordinator,
-        resolvedWorktreeId: resolvedWorktree?.id,
-        followUpOf: args.followUp?.of
-      })
-    : undefined
+  if (terminal) {
+    await assertExplicitWorkerUsable({
+      runtime,
+      db,
+      terminal,
+      from: params.from,
+      coordinator,
+      resolvedWorktreeId: resolvedWorktree?.id
+    })
+  }
   const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
 
+  // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
+  refuseClaimedWorkerTerminal(db, params.terminal, runtime, args.followUp?.of)
   const run = args.bindRun()
   const started = createLocalWorkerStartDispatch(args, {
     params,
@@ -149,8 +151,7 @@ export async function startLocalWorker(args: {
     resolvedWorktreeId: resolvedWorktree?.id,
     repoSelector: creationTarget?.repoSelector,
     agent,
-    launchReceipt: launch.receipt,
-    claimsTerminal
+    launchReceipt: launch.receipt
   })
   releaseRetriedWorkerTerminal(runtime, db, params)
   const effects: WorkerEffect[] = []

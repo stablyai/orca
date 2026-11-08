@@ -12,7 +12,6 @@ import {
   taskNotStartableError
 } from '../../coordinator/dispatch/task-dispatch-refusal'
 import { getFollowUpDispatch, takeFollowUpMail } from '../dispatch-context/worker-follow-up-lineage'
-import { refuseClaimedWorkerTerminal, type WorkerTerminalClaim } from './worker-terminal-claim'
 
 export function createStartingWorkerDispatch(
   this: OrchestrationDb,
@@ -54,8 +53,6 @@ export function createStartingWorkerDispatch(
     acceptedBy?: { callerFingerprint: string; requestId: string }
     /** The Dispatch whose unread mail this follow-up's Task tells it to check, moved to it in the claim. */
     takesMailOf?: string
-    /** The existing terminal this start takes; claimed atomically with the Dispatch row. */
-    claimsTerminal?: WorkerTerminalClaim
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -91,9 +88,6 @@ export function createStartingWorkerDispatch(
         `Dispatch ${params.followUpOf} already continues as Dispatch ${claimedFollowUp.id}.`,
         { followUpDispatchId: claimedFollowUp.id }
       )
-    }
-    if (params.claimsTerminal) {
-      refuseClaimedWorkerTerminal(this, params.claimsTerminal)
     }
     const task = params.taskId
       ? this.getTask(params.taskId)
