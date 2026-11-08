@@ -330,7 +330,9 @@ export function AiVaultSessionVirtualList({
                   row={row}
                   index={virtualRow.index}
                   start={virtualRow.start}
-                  activeStickyHeader={virtualRow.index === activeStickyHeaderIndexRef.current}
+                  activeStickyHeader={
+                    row?.type === 'group' && virtualRow.index === activeStickyHeaderIndexRef.current
+                  }
                   measureElement={virtualizer.measureElement}
                   groupCollapsed={row?.type === 'group' && collapsedGroups.has(row.group.key)}
                   detailsExpanded={

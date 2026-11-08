@@ -65,8 +65,6 @@ export function useAiVaultPanelSessionResume(args: {
     [getSessionRowResumeArgs]
   )
   // Chat resume must preserve the session’s workspace: Claude finds transcripts through launch-cwd-derived paths.
-  // Eligibility reads launch-route store state plus host agent lists and capabilities kept outside the
-  // store; these two change with them, so memoized rows recompute it.
   const launchRoute = useAppStore(selectAgentLaunchRouteView)
   const chatProgramFactsVersion = useChatProgramFactsVersion()
   const getSessionResumeInChat = useCallback(
@@ -75,7 +73,7 @@ export function useAiVaultPanelSessionResume(args: {
         ...getSessionRowResumeArgs(session),
         settings: launchRoute.settings
       }).resumeInChat,
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the version is the invalidation signal
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- both track what eligibility reads outside its arguments
     [getSessionRowResumeArgs, launchRoute, chatProgramFactsVersion]
   )
   return {

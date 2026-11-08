@@ -15,7 +15,7 @@ async function copyText(text: string, label: string): Promise<void> {
   )
 }
 
-const pathHandlers = {
+const staticRowHandlers = {
   onCopyId: (session: AiVaultSession) =>
     void copyText(
       session.sessionId,
@@ -58,5 +58,5 @@ export function useAiVaultSessionRowHandlers({
       void copyResumeCommand(session, worktreeId)
   )
   const onRequestDelete = useLatestHandler((session: AiVaultSession) => void requestDelete(session))
-  return { ...pathHandlers, onJumpToOriginalPane, onCopyResume, onRequestDelete }
+  return { ...staticRowHandlers, onJumpToOriginalPane, onCopyResume, onRequestDelete }
 }

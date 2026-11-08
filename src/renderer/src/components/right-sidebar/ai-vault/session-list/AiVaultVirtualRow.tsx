@@ -1,5 +1,6 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
 import { memo } from 'react'
+import { shallow } from 'zustand/shallow'
 import { isAntigravityReferenceSession } from '../../../../../../shared/antigravity-session-origin'
 import type {
   AiVaultScope,
@@ -83,19 +84,12 @@ type AiVaultVirtualRowProps = {
   onPickSession?: (session: AiVaultSession) => void
 }
 
-// The list rebuilds row objects whenever its groups change; a row only needs to render again when what it shows changed.
-function sameListRow(a: AiVaultListRow | undefined, b: AiVaultListRow | undefined): boolean {
-  return a?.type === 'session' && b?.type === 'session' ? a.session === b.session : a === b
-}
-
-function sameRowProps(prev: AiVaultVirtualRowProps, next: AiVaultVirtualRowProps): boolean {
-  const keys = Object.keys(next) as (keyof AiVaultVirtualRowProps)[]
-  return (
-    keys.length === Object.keys(prev).length &&
-    keys.every((key) =>
-      key === 'row' ? sameListRow(prev.row, next.row) : Object.is(prev[key], next[key])
-    )
-  )
+// Why: the list rebuilds every row wrapper when its groups change, so compare the session it holds.
+function sameRowProps(previous: AiVaultVirtualRowProps, next: AiVaultVirtualRowProps): boolean {
+  const { row: a, ...previousRest } = previous
+  const { row: b, ...nextRest } = next
+  const sameRow = a?.type === 'session' && b?.type === 'session' ? a.session === b.session : a === b
+  return sameRow && shallow(previousRest, nextRest)
 }
 
 export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
@@ -142,7 +136,6 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
     return null
   }
 
-  const isActiveStickyHeader = row.type === 'group' && activeStickyHeader
   const originalPaneTarget = row.type === 'session' ? getOriginalPaneTarget(row.session) : null
   const structuredSessionOpen = row.type === 'session' && isStructuredSessionOpen(row.session)
   const worktreeInfo = row.type === 'session' ? getWorktreeInfo(row.session) : null
@@ -220,9 +213,9 @@ export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
       className={cn(
         'left-0 w-full',
         row.type === 'session' && 'ai-vault-session-row',
-        isActiveStickyHeader ? 'sticky top-0 z-10 bg-sidebar' : 'absolute top-0'
+        activeStickyHeader ? 'sticky top-0 z-10 bg-sidebar' : 'absolute top-0'
       )}
-      style={isActiveStickyHeader ? undefined : { transform: `translateY(${start}px)` }}
+      style={activeStickyHeader ? undefined : { transform: `translateY(${start}px)` }}
     >
       {row.type === 'group' ? (
         <VaultGroupHeader
