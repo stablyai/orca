@@ -1,6 +1,6 @@
 import { createElement } from 'react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_LAUNCH_REPLAY_REQUIRED_RUNTIME_CAPABILITY,
@@ -98,15 +98,7 @@ async function mount(client: ProjectConversationsSource['client']) {
     return null
   }
   await act(async () => {
-    trees.push(
-      create(
-        createElement(
-          QueryClientProvider,
-          { client: new QueryClient({ defaultOptions: { queries: { retry: false } } }) },
-          createElement(Probe)
-        )
-      )
-    )
+    trees.push(createWithQueryClient(createElement(Probe)))
   })
   const [project] = buildProjectConversations({
     workspaces: [workspace],
