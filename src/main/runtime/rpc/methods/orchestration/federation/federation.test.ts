@@ -1,5 +1,4 @@
 import { registerFederationAnswerAtomicityTest } from './federation-answer-atomicity.test-support'
-import '../../../unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCHESTRATION_CONTRACT_VERSION,

@@ -7,7 +7,6 @@ vi.mock('node:fs/promises', async (importOriginal) => {
   return { ...actual, mkdir: vi.fn(actual.mkdir) }
 })
 
-await import('./rpc/unused-default-rpc-methods.test-fixture')
 await import('./orca-runtime-tests/runtime-test-module-registration.spec')
 await import('./orca-runtime-tests/orca-runtime-test-lifecycle.spec')
 await import('./orca-runtime-tests/orca-runtime-test-fixtures.spec')

@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { transport } from './__mocks__/structured-attention-read-surfaces'
 import { cleanup } from '@testing-library/react'
 import { beforeEach, afterEach, vi } from 'vitest'

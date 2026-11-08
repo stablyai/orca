@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, realpath, readFile, writeFile } from 'node:fs/promises'

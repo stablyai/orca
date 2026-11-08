@@ -1,4 +1,3 @@
-import './rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { OrchestrationDb } from './orchestration/db/orchestration-db'

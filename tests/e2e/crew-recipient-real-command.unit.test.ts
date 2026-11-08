@@ -15,7 +15,6 @@ import {
   releaseAgentSessionRecordStore
 } from '../../src/main/runtime/agent-session/records/agent-session-record-store-slot'
 import { testOrcaSessionId } from '../../src/shared/orca-session-address-test-fixture'
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { dispatch } from '../../src/cli/dispatch'

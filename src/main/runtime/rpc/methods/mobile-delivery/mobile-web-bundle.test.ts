@@ -1,4 +1,3 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { mkdirSync, mkdtempSync, rmSync, truncateSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
