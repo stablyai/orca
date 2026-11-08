@@ -19,6 +19,7 @@ export type GitOperationApi = {
     worktreePath: string
     connectionId?: string
     pushTarget?: GitPushTarget
+    submodulePath?: string
   }) => Promise<void>
   syncFork: (args: {
     worktreePath: string
@@ -31,11 +32,13 @@ export type GitOperationApi = {
     forceWithLease?: boolean
     connectionId?: string
     pushTarget?: GitPushTarget
+    submodulePath?: string
   }) => Promise<void>
   pull: (args: {
     worktreePath: string
     connectionId?: string
     pushTarget?: GitPushTarget
+    submodulePath?: string
   }) => Promise<void>
   fastForward: (args: {
     worktreePath: string
