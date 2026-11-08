@@ -56,7 +56,6 @@
 10 src/renderer/src/components/browser-extension-install-dialog.tsx
 4 src/renderer/src/components/browser-webauthn-account-dialog.tsx
 3 src/renderer/src/components/confirmation-dialog.tsx
-3 src/renderer/src/components/diff-comments/DiffCommentPopover.tsx
 1 src/renderer/src/components/diff-comments/useDiffCommentDecorator.tsx
 2 src/renderer/src/components/editor/markdown-preview/render-tree/use-markdown-preview-components.tsx
 3 src/renderer/src/components/editor/review-note-delivery/ReviewNotesSendMenuContent.tsx
