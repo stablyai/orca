@@ -98,7 +98,11 @@ async function drain(): Promise<void> {
     const count = journalSqlMessageBatchSize(queue, ({ command }) =>
       command.type === 'messages' ? command.job : undefined
     )
-    await drainMessages(queue.splice(0, count) as MessageRequest[])
+    await drainMessages(
+      queue
+        .splice(0, count)
+        .filter((request): request is MessageRequest => request.command.type === 'messages')
+    )
     scheduleNextDrain()
     return
   }
