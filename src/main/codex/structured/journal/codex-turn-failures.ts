@@ -176,8 +176,8 @@ export class CodexTurnFailures {
     const existing =
       this.usageLimits.failure(effective) ?? codexAuthenticationFailure(effective, account)
     if (existing) {
-      // The bounded frame owns diagnostics; terminal advice must not quote provider text.
-      return { ...existing, detail: undefined }
+      // Sign-in advice must not quote provider text; the bounded frame retains diagnostics.
+      return existing.kind === 'notSignedIn' ? { ...existing, detail: undefined } : existing
     }
     switch (info?.error ?? 'other') {
       case 'modelNotFound':
