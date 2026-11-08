@@ -84,7 +84,7 @@ import {
   registerClipboardHandlers,
   setTrustedClipboardRendererWebContentsId
 } from '../../window/clipboard-ipc-handlers'
-import { isDashboardPopoutRenderer } from '../../window/dashboard-popout-window'
+import { isDashboardOrFloatingRenderer } from '../../window/floating-workspace-window'
 import type { ClaudeUsageStore } from '../../claude-usage/store'
 import type { CodexUsageStore } from '../../codex-usage/store'
 import type { OpenCodeUsageStore } from '../../opencode-usage/store'
@@ -249,7 +249,7 @@ export function registerCoreHandlers(
   registerShellHandlers(store)
   registerPetHandlers()
   registerSessionHandlers(store, runtime)
-  registerUIHandlers(store, { isDashboardPopoutRenderer })
+  registerUIHandlers(store, { isDashboardPopoutRenderer: isDashboardOrFloatingRenderer })
   registerEmulatorFrameStreamHandlers()
   registerEmulatorVideoStreamHandlers()
   registerEmulatorScrcpyTouchHandler()

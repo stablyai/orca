@@ -35,6 +35,7 @@ import type {
   AgentDashboardMode,
   BranchPrefixStrategy,
   FloatingTerminalTriggerLocation,
+  FloatingWorkspaceMode,
   JiraIssueKeyCasing,
   LeftSidebarAppearanceMode,
   OpenInApplication,
@@ -266,6 +267,10 @@ export type GlobalSettings = GlobalSettingsBase & {
   ctrlTabOrderMode?: CtrlTabOrderMode
   /** Floating Workspace: global surface for terminal/browser/markdown tabs outside repo/worktree context. */
   floatingTerminalEnabled: boolean
+  /** Experimental: lets the Floating Workspace's active terminal run in its own window. */
+  experimentalFloatingWorkspacePopout?: boolean
+  /** How the Floating Workspace opens when the pop-out is enabled; absent means in-window. */
+  experimentalFloatingWorkspaceMode?: FloatingWorkspaceMode
   /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
   browserClientHostedRemoteEnabled?: boolean
   /** Browser profile new tabs in a workspace use; missing = 'shared' (the Default profile). */

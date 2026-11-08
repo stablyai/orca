@@ -24,6 +24,7 @@ import type { BrowserApi } from './api/browser/browser-api'
 import type { CliApi } from './api/cli-install-api'
 import type { CrashReportsApi, FeedbackApi } from './api/crash-report-api'
 import type { DashboardApi, TerminalPreviewApi } from './api/dashboard-api'
+import type { FloatingWorkspaceWindowApi } from './api/floating-workspace-window-api'
 import type { DocPreviewApi } from './api/doc-preview-api'
 import type { EmulatorApi } from './api/emulator-api'
 import type { EphemeralVmApi } from './api/ephemeral-vm-api'
@@ -120,6 +121,7 @@ export type PreloadApi = {
   notifications: NotificationsApi
   onboarding: OnboardingApi
   dashboard: DashboardApi
+  floatingWorkspaceWindow: FloatingWorkspaceWindowApi
   terminalPreview: TerminalPreviewApi
   macosTccPrompts: MacosTccPromptsApi
   developerPermissions: DeveloperPermissionsApi

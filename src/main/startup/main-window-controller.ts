@@ -37,6 +37,8 @@ import {
   stopSyntheticTitleSpinnerTimer
 } from './synthetic-title-runtime'
 import { requireMainWindowServices } from './main-window-service-readiness'
+import { registerFloatingWorkspaceWindowHandlers } from '../ipc/floating-workspace-window'
+import { configureFloatingWorkspaceWindowLifecycle } from '../window/floating-workspace-window'
 import { recordRendererLaunchFailureProbe } from '../window/renderer-launch-failure-probe'
 import { trackBrowserExtensionMainWindow } from '../browser/extensions/tabs-and-windows/browser-extension-window-model'
 
@@ -95,6 +97,10 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   if (state.isServeMode) {
     applyServeDesktopWindowActivationPolicy({ warn: console.warn })
   }
+  registerFloatingWorkspaceWindowHandlers(store, keybindings)
+  configureFloatingWorkspaceWindowLifecycle({
+    getIsQuitting: () => state.isQuitting
+  })
   const window = createMainWindow(store, {
     getIsQuitting: () => state.isQuitting,
     onQuitAborted: () => {

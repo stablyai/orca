@@ -6,6 +6,7 @@ import {
   getNextDefaultOnAppearanceSettingValue
 } from '../menu/register-app-menu'
 import { zoomDashboardPopoutIfFocused } from '../window/dashboard-popout-window'
+import { zoomFloatingWorkspaceWindowIfFocused } from '../window/floating-workspace-window'
 import { zoomWorkspaceSpaceWindowIfFocused } from '../window/workspace-space-window'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { mainProcessState as state } from './main-process-state'
@@ -58,17 +59,29 @@ export async function initializeMainProcessI18nAndMenu(): Promise<void> {
     },
     // Zoom the focused popout rather than changing the main window behind it.
     onZoomIn: () => {
-      if (!zoomDashboardPopoutIfFocused('in') && !zoomWorkspaceSpaceWindowIfFocused('in')) {
+      if (
+        !zoomDashboardPopoutIfFocused('in') &&
+        !zoomFloatingWorkspaceWindowIfFocused('in') &&
+        !zoomWorkspaceSpaceWindowIfFocused('in')
+      ) {
         state.mainWindow?.webContents.send('terminal:zoom', 'in')
       }
     },
     onZoomOut: () => {
-      if (!zoomDashboardPopoutIfFocused('out') && !zoomWorkspaceSpaceWindowIfFocused('out')) {
+      if (
+        !zoomDashboardPopoutIfFocused('out') &&
+        !zoomFloatingWorkspaceWindowIfFocused('out') &&
+        !zoomWorkspaceSpaceWindowIfFocused('out')
+      ) {
         state.mainWindow?.webContents.send('terminal:zoom', 'out')
       }
     },
     onZoomReset: () => {
-      if (!zoomDashboardPopoutIfFocused('reset') && !zoomWorkspaceSpaceWindowIfFocused('reset')) {
+      if (
+        !zoomDashboardPopoutIfFocused('reset') &&
+        !zoomFloatingWorkspaceWindowIfFocused('reset') &&
+        !zoomWorkspaceSpaceWindowIfFocused('reset')
+      ) {
         state.mainWindow?.webContents.send('terminal:zoom', 'reset')
       }
     },

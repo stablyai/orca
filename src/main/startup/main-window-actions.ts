@@ -25,6 +25,7 @@ import { focusExistingMainWindow, safelyRevealWindow } from '../window/focus-exi
 import { mainProcessState as state } from './main-process-state'
 import { quitTeardownStartGate } from './quit/quit-teardown-start-gate'
 import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
+import { getFloatingWorkspaceWindow } from '../window/floating-workspace-window'
 import { getWorkspaceSpaceWindow } from '../window/workspace-space-window'
 import { markUserQuitWindowClose } from '../window/user-quit-window-close'
 import { loadMainWindow } from '../window/createMainWindow'
@@ -272,7 +273,9 @@ function resolveMenuTargetRenderer(targetWindow?: BrowserWindow | null): WebCont
   const invokingWindow = targetWindow && !targetWindow.isDestroyed() ? targetWindow : undefined
   const isCompanion =
     invokingWindow &&
-    (invokingWindow === getDashboardPopoutWindow() || invokingWindow === getWorkspaceSpaceWindow())
+    (invokingWindow === getDashboardPopoutWindow() ||
+      invokingWindow === getFloatingWorkspaceWindow() ||
+      invokingWindow === getWorkspaceSpaceWindow())
   if (invokingWindow && !isCompanion && !isNativeBrowserPopupWindow(invokingWindow)) {
     return invokingWindow.webContents
   }

@@ -30,6 +30,9 @@ export type FloatingTerminalCwdRequest = {
 /** Presentation mode for the experimental Agent Dashboard. */
 export type AgentDashboardMode = 'in-window' | 'popout'
 
+/** Presentation mode for the experimental Floating Workspace pop-out. */
+export type FloatingWorkspaceMode = 'in-window' | 'popout'
+
 export type WorktreeCardProperty =
   | 'status'
   | 'unread'

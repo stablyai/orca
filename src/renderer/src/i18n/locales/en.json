@@ -23660,6 +23660,7 @@
     "dialog": {
       "spaceTitle": "Orca Space Beta",
       "dashboardTitle": "Orca Agent Dashboard",
+      "floatingWorkspaceTitle": "Orca Floating Workspace",
       "importCookies": "Import Cookies",
       "cookieFiles": "Cookie Files",
       "allFiles": "All Files",
