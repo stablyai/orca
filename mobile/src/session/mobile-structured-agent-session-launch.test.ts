@@ -374,8 +374,10 @@ it('settles a proven missing-original fork refusal but keeps a lost earlier atte
   }
   const client = clientReturning({ ok: true, result: { supported: true } }, refusal)
   const forkFrom = { sessionId: 'copied-chat', throughItemId: 'legacy:opencode:source:reply-1' }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this recorded registered-agent input exercises the runtime path beyond its built-in-only parameter type.
+  const openCode = 'opencode' as Parameters<typeof createMobileStructuredAgentSession>[2]
   expect(
-    (await createMobileStructuredAgentSession(client, 'workspace-1', 'opencode', forkFrom)).kind
+    (await createMobileStructuredAgentSession(client, 'workspace-1', openCode, forkFrom)).kind
   ).toBe('failed')
   const lost = clientReturning({ ok: true, result: { supported: true } }, refusal)
   lost.sendRequest
@@ -383,6 +385,6 @@ it('settles a proven missing-original fork refusal but keeps a lost earlier atte
     .mockRejectedValueOnce(markRpcDeliveryUnknown(new Error('reply lost')))
     .mockResolvedValueOnce(refusal)
   expect(
-    (await createMobileStructuredAgentSession(lost, 'workspace-1', 'opencode', forkFrom)).kind
+    (await createMobileStructuredAgentSession(lost, 'workspace-1', openCode, forkFrom)).kind
   ).toBe('unknown')
 })
