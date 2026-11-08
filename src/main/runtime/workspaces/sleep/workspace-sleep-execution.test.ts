@@ -92,6 +92,35 @@ describe('sleepWorkspaces', () => {
     expect(log.indexOf('chats wt-2')).toBeLessThan(log.indexOf('vm wt-1'))
   })
 
+  it('keeps a workspace open when its host cannot prove the stop, and pauses its queue', async () => {
+    const notices: unknown[] = []
+    const { log, deps: d } = deps({
+      notify: (notice) => notices.push(notice),
+      sleepOwnTerminals: async () => ({
+        stopped: 1,
+        stoppedPtyIds: ['pty-a'],
+        livePtyIds: ['pty-a', 'pty-b'],
+        postStopVerified: false,
+        postStopFailure: 'terminal_liveness_unavailable'
+      })
+    })
+    const own = new WorkspaceLifecycleQueue()
+    const [outcome] = await sleepWorkspaces(d, queued(own), { targets: [local('wt-1')] })
+    expect(outcome).toEqual(
+      expect.objectContaining({ worktreeId: 'wt-1', failure: 'terminal_liveness_unavailable' })
+    )
+    // The window rolls back only what was not proven stopped.
+    expect(notices.at(-1)).toEqual({
+      worktreeId: 'wt-1',
+      phase: 'ended',
+      slept: false,
+      stoppedPtyIds: ['pty-a'],
+      records: []
+    })
+    expect(log).not.toContain('vm wt-1')
+    expect(own.pausedKeys().includes('wt-1')).toBe(true)
+  })
+
   it('releases the batch when a delete cancels one workspace’s queued sleep', async () => {
     const own = new WorkspaceLifecycleQueue()
     let releaseHold!: () => void

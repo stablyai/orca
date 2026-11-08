@@ -22,7 +22,7 @@ vi.mock('node:os', async (importOriginal) => ({
   userInfo: userInfoMock
 }))
 
-import { siteConfigMayRestrictHostKeys } from './ssh-g-config-resolution'
+import { siteConfigMayRestrictHostKeys, splitIncludeArguments } from './ssh-g-config-resolution'
 
 describe('siteConfigMayRestrictHostKeys', () => {
   let dir: string
@@ -122,5 +122,32 @@ describe('siteConfigMayRestrictHostKeys', () => {
     } finally {
       await chmod(file, 0o600)
     }
+  })
+})
+
+/** Vectors measured against POSIX OpenSSH10.2p1 and Windows OpenSSH; tokenizer drift can turn existing policy into apparent absence. */
+describe('splitIncludeArguments against a measured ssh', () => {
+  const posix = (pattern: string) => splitIncludeArguments(pattern, false)
+  const windows = (pattern: string) => splitIncludeArguments(pattern, true)
+
+  it('consumes an escaped space INSIDE either quote, as ssh does', () => {
+    // Measured ssh treats backslash-space as a space under both quote styles.
+    expect(posix('"/etc/a\\ b.conf"')).toEqual(['/etc/a b.conf'])
+    expect(posix("'/etc/a\\ b.conf'")).toEqual(['/etc/a b.conf'])
+  })
+
+  it('answers doubt on POSIX for a backslash before an ordinary character', () => {
+    // POSIX argv_split and glob each consume backslashes; unsupported escaping stays uncertain rather than resolving a false absent path.
+    expect(posix('/etc/ssh/conf\\.d/x.conf')).toBeNull()
+    expect(posix('/etc/ssh/a\\\\b/x.conf')).toBeNull()
+  })
+
+  it('keeps backslashes as separators on Windows', () => {
+    // Measured Windows OpenSSH preserves path separators.
+    expect(windows('C:\\Users\\neil\\conf\\x.conf')).toEqual(['C:\\Users\\neil\\conf\\x.conf'])
+    // Backslash-space still escapes amid Windows separators.
+    expect(windows('C:\\Users\\neil\\sp\\ ace\\x.conf')).toEqual([
+      'C:\\Users\\neil\\sp ace\\x.conf'
+    ])
   })
 })

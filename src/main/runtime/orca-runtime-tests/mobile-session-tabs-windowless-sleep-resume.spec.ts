@@ -109,6 +109,17 @@ function spawnedCommand(spawn: ReturnType<typeof vi.fn>, call = 0): string {
 }
 
 describe('opening a workspace-slept running agent on a host with no window', () => {
+  it('resumes its conversation with only the recorded launch flags', async () => {
+    const { runtimeStore } = makeWorkingSleepStore()
+    const { opened, spawn } = openPane(runtimeStore, 'blocked')
+
+    await expect(opened).resolves.toMatchObject({ tabs: [{ status: 'ready' }] })
+    expect(spawn).toHaveBeenCalledOnce()
+    const command = spawnedCommand(spawn)
+    expect(command).toContain('--resume')
+    expect(command).toContain('provider-session-1')
+    expect(command).not.toContain('--dangerously-skip-permissions')
+  })
   it('resumes in the pane on a host that can open a window but has none', async () => {
     const fixture = makeWorkingSleepStore({
       launchConfig: { agentArgs: '--permission-mode plan', agentEnv: {} }
