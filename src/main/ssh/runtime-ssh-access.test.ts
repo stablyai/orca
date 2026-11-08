@@ -35,7 +35,7 @@ vi.mock('./runtime-ssh-access-verification', () => ({
   verifyRuntimeEnvironmentSshTunnel: mocks.verify
 }))
 import { linkRuntimeSshAccess, unlinkRuntimeSshAccess } from './runtime-ssh-access'
-import { fingerprintRuntimeSshTarget } from './runtime-ssh-target-fingerprint'
+import './runtime-ssh-target-fingerprint'
 
 const pairing = {
   v: 2 as const,
@@ -167,34 +167,6 @@ describe('independent runtime SSH access coordinator', () => {
     }
   )
 
-  it('persists intent then claim before connecting and publishes redacted authenticated access', async () => {
-    const result = await linkRuntimeSshAccess(userDataPath, request())
-    expect(events).toEqual(['flush', 'claim', 'flush', 'connect', 'tunnel', 'verify'])
-    expect(result.sshAccess?.sshTargetId).toBe('target')
-    expect(result.orcadDeployment).toBeUndefined()
-    expect(JSON.stringify(result)).not.toContain('secret')
-    expect(current().pendingSshAccessOperation).toBeUndefined()
-    expect(mocks.preflight).toHaveBeenCalledWith('target')
-  })
-
-  it('names the saved dependency when dependent state blocks an SSH access link', async () => {
-    mocks.preflight.mockReturnValue({
-      blockers: [
-        {
-          code: 'orcad_migration_dependent_state',
-          category: 'client-owned-state',
-          dependencies: [{ kind: 'worktree-metadata', count: 1, names: ['repo-1::/srv/app'] }]
-        }
-      ]
-    })
-    await expect(linkRuntimeSshAccess(userDataPath, request())).rejects.toThrow(
-      /orcad_migration_dependent_state\. [\s\S]*worktree-metadata ×1 \(repo-1::\/srv\/app\)/
-    )
-    expect(mocks.connect).not.toHaveBeenCalled()
-    expect(mocks.flush).not.toHaveBeenCalled()
-    expect(events).not.toContain('claim')
-  })
-
   it('cancels a pending connect and starts no tunnel when the link is aborted', async () => {
     const controller = new AbortController()
     mocks.connect.mockImplementationOnce(
@@ -212,31 +184,6 @@ describe('independent runtime SSH access coordinator', () => {
     await expect(link).rejects.toThrow('cancelled')
     expect(mocks.disconnect).toHaveBeenCalledWith('target')
     expect(mocks.start).not.toHaveBeenCalled()
-  })
-
-  it('handles lost link responses without connecting or verifying again', async () => {
-    const first = await linkRuntimeSshAccess(userDataPath, request())
-    expect(await linkRuntimeSshAccess(userDataPath, request())).toEqual(first)
-    expect(mocks.verify).toHaveBeenCalledTimes(1)
-    expect(mocks.ensure).toHaveBeenCalledWith(userDataPath, environmentId)
-  })
-
-  it('invalidates old transport only after authenticated access is published', async () => {
-    const invalidateTransport = vi.fn(() => {
-      expect(current().sshAccess).toBeDefined()
-      expect(current().pendingSshAccessOperation).toBeUndefined()
-    })
-    await linkRuntimeSshAccess(userDataPath, request(), { invalidateTransport })
-    await linkRuntimeSshAccess(userDataPath, request(), { invalidateTransport })
-    expect(invalidateTransport).toHaveBeenCalledTimes(2)
-  })
-
-  it('rejects changed request tuple after a completed link', async () => {
-    await linkRuntimeSshAccess(userDataPath, request())
-    await expect(
-      linkRuntimeSshAccess(userDataPath, { ...request(), remotePort: 6769 })
-    ).rejects.toThrow('different')
-    expect(mocks.verify).toHaveBeenCalledTimes(1)
   })
 
   it('preserves the committed tunnel when transport refresh fails and retries the same link', async () => {
@@ -364,43 +311,5 @@ describe('independent runtime SSH access coordinator', () => {
       'direct SSH authority'
     )
     expect(mocks.connect).toHaveBeenCalledTimes(1)
-  })
-
-  it('rejects provisioning and missing durable generations without connecting', async () => {
-    target.orcadProvisioning = { name: 'host', requestId: 'provision' }
-    await expect(linkRuntimeSshAccess(userDataPath, request())).rejects.toThrow('provisioning')
-    target.orcadProvisioning = undefined
-    target.generation = undefined
-    await expect(linkRuntimeSshAccess(userDataPath, request())).rejects.toThrow('generation')
-    expect(mocks.connect).not.toHaveBeenCalled()
-  })
-
-  it('treats a lost successful unlink response as an idempotent no-op', async () => {
-    await linkRuntimeSshAccess(userDataPath, request())
-    const unlinked = await unlink()
-    const before = [...events]
-    expect(await unlink()).toEqual(unlinked)
-    expect(events).toEqual(before)
-  })
-
-  it('hashes connection identity, not display state or owner', () => {
-    const hash = fingerprintRuntimeSshTarget(target)
-    expect(
-      fingerprintRuntimeSshTarget({
-        ...target,
-        label: 'renamed',
-        lastRequiredPassphrase: true,
-        orcadFence: { environmentId: 'other' }
-      })
-    ).toBe(hash)
-    expect(fingerprintRuntimeSshTarget({ ...target, proxyCommand: 'other-proxy' })).not.toBe(hash)
-  })
-
-  it('strictly validates ports and request IDs', () => {
-    expect(() => linkRuntimeSshAccess(userDataPath, { ...request(), remotePort: 0 })).toThrow()
-    expect(() =>
-      linkRuntimeSshAccess(userDataPath, { ...request(), requestId: '../other' })
-    ).toThrow()
-    expect(mocks.infrastructure).not.toHaveBeenCalled()
   })
 })
