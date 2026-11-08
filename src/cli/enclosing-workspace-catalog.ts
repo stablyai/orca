@@ -28,13 +28,16 @@ async function readOptional<TResult>(read: Promise<TResult>): Promise<TResult | 
  */
 export async function readEnclosingWorkspaceCatalog(
   client: RuntimeClient,
-  cwd: string
+  cwd: string,
+  readWorktrees: () => Promise<RuntimeWorktreeListResult['worktrees']> = async () =>
+    (await client.call<RuntimeWorktreeListResult>('worktree.list', { limit: 10_000 })).result
+      .worktrees
 ): Promise<CatalogRow[]> {
   const [worktrees, folders] = await Promise.all([
-    client.call<RuntimeWorktreeListResult>('worktree.list', { limit: 10_000 }),
+    readWorktrees(),
     readOptional(client.call<{ folderWorkspaces: FolderWorkspace[] }>('folderWorkspace.list'))
   ])
-  const rows: CatalogRow[] = worktrees.result.worktrees
+  const rows: CatalogRow[] = worktrees
   const currentPath = resolvePath(cwd)
   const enclosing = (folders?.result.folderWorkspaces ?? []).filter((folder) =>
     isPathInsideOrEqual(resolvePath(folder.folderPath), currentPath)

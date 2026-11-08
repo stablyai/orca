@@ -1,5 +1,5 @@
 import { resolve as resolvePath } from 'node:path'
-import type { ComputerAppQuery } from '../shared/runtime-types'
+import type { ComputerAppQuery, RuntimeWorktreeListResult } from '../shared/runtime-types'
 import { resolveFolderWorkspaceSelector } from './folder-workspace-selector'
 import { resolveCallerDistroPathSelector } from './wsl-caller-path-selector'
 import type { RuntimeClient } from './runtime-client'
@@ -162,9 +162,24 @@ export async function getBrowserWorktreeSelector(
   if (client.isRemote) {
     return undefined
   }
-  const catalog = await readEnclosingWorkspaceCatalog(client, cwd).catch(() => undefined)
-  // Without the catalog neither cwd nor the terminal id can be checked; keep the runtime default.
-  if (!catalog) {
+  let worktreesUnavailable = false
+  const catalog = await readEnclosingWorkspaceCatalog(client, cwd, () =>
+    client
+      .call<RuntimeWorktreeListResult>('worktree.list', { limit: 10_000 })
+      .then((response) => response.result.worktrees)
+      .catch(() => {
+        worktreesUnavailable = true
+        return []
+      })
+  ).catch((error: unknown) => {
+    // Only a missing worktree list keeps the runtime default; a folder-catalog failure could retarget.
+    if (worktreesUnavailable) {
+      return undefined
+    }
+    throw error
+  })
+  // Without the worktree list neither cwd nor the terminal id can be checked; keep the runtime default.
+  if (worktreesUnavailable || !catalog) {
     return undefined
   }
   const hostId = getCallerExecutionHostId()

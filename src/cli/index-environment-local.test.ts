@@ -47,6 +47,7 @@ vi.mock('child_process', async () => {
 
 import { main } from './index'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
+import { RuntimeClientError } from './runtime/types'
 import { buildWorktree, okFixture, worktreeListFixture } from './test-fixtures'
 
 const SAVED = [
@@ -331,6 +332,60 @@ describe('--environment local and workspace addresses', () => {
     )
     expect(text).toContain('parent: folder:hub-c  environment=unknown (no verified route here)')
     expect(text).toContain('host=runtime:unresolved-owner')
+  })
+
+  it('gives a duplicated folder parent no address, as its own rows have none', async () => {
+    callMock.mockResolvedValue(
+      okFixture('ps', {
+        worktrees: [
+          psRow({
+            worktreeId: 'repo::/srv/child',
+            path: '/srv/child',
+            hostId: 'local',
+            identity: { key: 'wt2:local:child' },
+            workspaceLineage: { parentWorkspaceKey: 'folder:duplicated' }
+          }),
+          ...(['local', 'ssh:box'] as const).map((hostId) =>
+            psRow({
+              workspaceKind: 'folder-workspace',
+              worktreeId: 'folder:duplicated',
+              path: '/srv/shared',
+              hostId
+            })
+          )
+        ],
+        totalCount: 3,
+        truncated: false
+      })
+    )
+    const { output } = await run(['worktree', 'ps', '--json'])
+    const [child, ...parents] = JSON.parse(output).result.worktrees
+    expect(parents.map((row: { addressUnavailable: string }) => row.addressUnavailable)).toEqual([
+      'duplicate-folder-id',
+      'duplicate-folder-id'
+    ])
+    expect(child.parent).toEqual({
+      state: 'known',
+      selector: 'folder:duplicated',
+      environment: { id: 'local', name: 'local' },
+      address: null
+    })
+  })
+
+  it('surfaces a folder-catalog failure for an omitted target instead of using runtime focus', async () => {
+    callMock.mockImplementation(async (method: string) => {
+      if (method === 'worktree.list') {
+        return worktreeListFixture([buildWorktree('/tmp/hub/repo', 'main')])
+      }
+      if (method === 'folderWorkspace.list') {
+        throw new RuntimeClientError('runtime_unavailable', 'folder catalog connection closed')
+      }
+      return okFixture('accepted', { marker: 'accepted' })
+    })
+    const { exitCode, output } = await run(['snapshot', '--json'], '/tmp/hub/repo/src')
+    expect(exitCode).toBe(1)
+    expect(JSON.parse(output).error.code).toBe('runtime_unavailable')
+    expect(callMock).not.toHaveBeenCalledWith('browser.snapshot', expect.anything())
   })
 
   it('quotes address values for the shell', async () => {

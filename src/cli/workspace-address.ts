@@ -158,11 +158,8 @@ function parentOf(
     return sameEnvironment(`id:${row.parentWorktreeId}`, parentRow)
   }
   if (row.parentFolderKey) {
-    const parentRows = listing.rowsById.get(row.parentFolderKey)
-    return sameEnvironment(
-      row.parentFolderKey,
-      parentRows?.length === 1 ? parentRows[0] : undefined
-    )
+    // A listed copy carries the duplicate-folder-id check, so a shared id gets no address.
+    return sameEnvironment(row.parentFolderKey, listing.rowsById.get(row.parentFolderKey)?.[0])
   }
   const ref = row.crossStoreParent
   if (!ref) {
