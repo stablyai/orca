@@ -1,7 +1,10 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useHostStructuredAgent } from '@/runtime/native-chat/agent-catalogs/use-host-structured-agent'
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
-import { AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-session/agent-session-create-capabilities'
+import {
+  AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
+} from '../../../../../../shared/agent-session/agent-session-create-capabilities'
 import {
   agentSessionContextFloorSequence,
   latestAgentSessionContextClearSequence
@@ -76,8 +79,17 @@ export function useNativeChatFork(input: {
     input.target,
     AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY
   )
+  const inheritedOriginalHost = useStructuredAgentSessionHostCapabilityState(
+    input.target,
+    AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
+  )
   const registered = useHostStructuredAgent(input.target, input.agent)
-  const support = nativeChatForkSupport(host, registered, input.sessionForkSupport)
+  const support = nativeChatForkSupport(
+    host,
+    registered,
+    input.sessionForkSupport,
+    inheritedOriginalHost
+  )
   const latest = useRef(input)
   useLayoutEffect(() => {
     latest.current = input
@@ -155,13 +167,14 @@ export function useNativeChatFork(input: {
   }, [request])
   const supportKind = support.kind
   const fork = support.kind === 'known' ? support.fork : undefined
+  const inheritedOriginal = support.kind === 'known' && support.inheritedOriginal === true
   const rowAction = useMemo<NativeChatForkRowAction>(
     () => ({
-      support: fork ? { kind: 'known', fork } : { kind: 'unknown' },
+      support: fork ? { kind: 'known', fork, inheritedOriginal } : { kind: 'unknown' },
       pendingItemId,
       request
     }),
-    [fork, pendingItemId, request]
+    [fork, inheritedOriginal, pendingItemId, request]
   )
   return useMemo(
     () =>

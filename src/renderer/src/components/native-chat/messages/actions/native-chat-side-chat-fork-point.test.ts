@@ -1,9 +1,42 @@
-import { nativeChatForkInventory } from '../../../../../../shared/native-chat/native-chat-fork-offer'
-import { describe, expect, it } from 'vitest'
+// @vitest-environment happy-dom
+import { createElement } from 'react'
+import { renderHook } from '@testing-library/react'
+import {
+  AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
+} from '../../../../../../shared/agent-session/agent-session-create-capabilities'
+import type { AgentJournalRenderItem } from '../../../../../../shared/agent-session/journal/agent-session-journal-types'
+import { useNativeChatFork } from './use-native-chat-fork'
+import { useNativeChatSideChatForkOffer } from './use-native-chat-side-chat'
+import {
+  NativeChatForkContext,
+  NativeChatSideChatForkPointContext
+} from './native-chat-fork-context'
+import {
+  nativeChatRowOffersFork,
+  nativeChatForkInventory
+} from '../../../../../../shared/native-chat/native-chat-fork-offer'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { NativeChatMessage } from '../../../../../../shared/native-chat/native-chat-types'
 import type { NativeChatTranscriptSlotsInput } from '../../conversation/slots/native-chat-transcript-input'
 import { buildNativeChatTranscript } from '../../conversation/slots/native-chat-transcript-slots'
+
+const host = vi.hoisted(() => ({ capabilities: new Set<string>() }))
+vi.mock('@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability', () => ({
+  useStructuredAgentSessionHostCapabilityState: (_target: unknown, capability: string) =>
+    host.capabilities.has(capability) ? 'supported' : 'unsupported'
+}))
+vi.mock('@/runtime/native-chat/agent-catalogs/use-host-structured-agent', () => ({
+  useHostStructuredAgent: () => ({ capabilities: { fork: 'tip' } })
+}))
+vi.mock('@/components/native-chat/messages/actions/native-chat-fork-launch', () => ({
+  launchNativeChatFork: vi.fn(),
+  nativeChatForkSurfaceAddress: vi.fn()
+}))
+vi.mock('@/components/native-chat/messages/actions/native-chat-side-chat-placement', () => ({
+  beginNativeChatSideChatPlacement: vi.fn()
+}))
 
 function row(id: string, role: 'user' | 'assistant', sequence: number): NativeChatMessage {
   return {
@@ -123,10 +156,16 @@ it('offers the inherited source tip while a later child response is running', ()
     }
   ])
   const chat = {
-    support: { kind: 'known', fork: 'tip' },
+    support: { kind: 'known', fork: 'tip', inheritedOriginal: true },
     contextFloorSequence: 0,
     ...inventory
   } as const
+  expect(
+    buildNativeChatTranscript({
+      ...input,
+      forkOffer: { chat: { ...chat, support: { kind: 'known', fork: 'tip' } }, latestTurnKey }
+    }).forkPoint
+  ).toEqual({ kind: 'reply-running' })
   expect(
     buildNativeChatTranscript({ ...input, forkOffer: { chat, latestTurnKey } }).forkPoint
   ).toEqual({ kind: 'ready', throughItemId: 'legacy:opencode:source:reply-1' })
@@ -136,4 +175,90 @@ it('offers the inherited source tip while a later child response is running', ()
       forkOffer: { chat: { ...chat, contextFloorSequence: 2 }, latestTurnKey }
     }).forkPoint
   ).toEqual({ kind: 'reply-running' })
+})
+
+it('carries target-host original-fork support into desktop response and side-chat offers', () => {
+  const copied = row('legacy:opencode:source:reply-1', 'assistant', 1)
+  const own = row('legacy:opencode:child:reply-2', 'assistant', 4)
+  const { input, latestTurnKey } = conversation(
+    [
+      { ask: 'inherited-user', replies: [copied] },
+      { ask: 'own-user', replies: [own] }
+    ],
+    true
+  )
+  const items: AgentJournalRenderItem[] = [
+    {
+      itemId: copied.id,
+      sequence: 1,
+      revision: 1,
+      observedAt: 1,
+      body: { kind: 'message', role: 'assistant', blocks: copied.blocks }
+    },
+    {
+      itemId: 'orca:forked-from',
+      sequence: 1,
+      revision: 1,
+      observedAt: 1,
+      body: { kind: 'status', presentation: 'forked-from', text: 'Forked from source' }
+    },
+    {
+      itemId: own.id,
+      sequence: 4,
+      revision: 1,
+      observedAt: 4,
+      body: { kind: 'message', role: 'assistant', blocks: own.blocks }
+    }
+  ]
+  host.capabilities = new Set([AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY])
+  const pane = renderHook(() =>
+    useNativeChatFork({
+      sessionId: 'child',
+      tabId: 'tab',
+      agent: 'opencode',
+      target: { kind: 'environment', environmentId: 'paired-host' },
+      worktreeId: 'workspace',
+      items,
+      epoch: 'epoch',
+      contextFloor: undefined,
+      sessionForkSupport: 'supported'
+    })
+  )
+  const responseOffered = () =>
+    nativeChatRowOffersFork(
+      {
+        message: copied,
+        inSubagentSection: false,
+        turnWorking: false,
+        inLatestTurn: false
+      },
+      { ...pane.result.current!, support: pane.result.current!.rowAction.support }
+    )
+  const side = renderHook(() => useNativeChatSideChatForkOffer(latestTurnKey), {
+    wrapper: ({ children }) =>
+      createElement(
+        NativeChatForkContext.Provider,
+        { value: pane.result.current },
+        createElement(NativeChatSideChatForkPointContext.Provider, { value: () => {} }, children)
+      )
+  })
+  const sidePoint = () =>
+    buildNativeChatTranscript({
+      ...input,
+      forkOffer: side.result.current
+    }).forkPoint
+  expect(responseOffered()).toBe(false)
+  expect(sidePoint()).toEqual({ kind: 'reply-running' })
+
+  host.capabilities.add(AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY)
+  pane.rerender()
+  side.rerender()
+  expect(responseOffered()).toBe(true)
+  expect(sidePoint()).toEqual({ kind: 'ready', throughItemId: 'legacy:opencode:source:reply-1' })
+
+  host.capabilities.delete(AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY)
+  pane.rerender()
+  side.rerender()
+  expect(responseOffered()).toBe(false)
+  expect(sidePoint()).toEqual({ kind: 'reply-running' })
 })

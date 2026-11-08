@@ -1,7 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import { AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/agent-session-create-capabilities'
+import {
+  AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
+} from '../../../../src/shared/agent-session/agent-session-create-capabilities'
 import type { RpcClient } from '../../transport/rpc-client'
 import type { AgentJournalRenderItem } from '../../../../src/shared/agent-session/journal/agent-session-journal-types'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
@@ -207,10 +210,10 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
     id: 'legacy:opencode:child:reply-2',
     journalPosition: { sequence: 4, index: 0 }
   }
-  function ForkProbe() {
+  function ForkProbe({ hostCapabilities }: { hostCapabilities: readonly string[] }) {
     latest = useMobileNativeChatFork({
       client,
-      hostCapabilities: FORK_HOST,
+      hostCapabilities,
       agent: 'opencode',
       sessionId: 'child',
       messages: [copied, own],
@@ -233,9 +236,18 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
     return null
   }
   await act(async () => {
-    renderer = create(createElement(ForkProbe))
+    renderer = create(createElement(ForkProbe, { hostCapabilities: FORK_HOST }))
   })
   await settle()
+  expect(latest?.offerFor(copied)).toBe('reserved')
+  expect(latest?.offerFor(own)).toBe('available')
+  await act(async () => {
+    renderer!.update(
+      createElement(ForkProbe, {
+        hostCapabilities: [...FORK_HOST, AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY]
+      })
+    )
+  })
   expect(latest?.offerFor(copied)).toBe('available')
   await act(async () => {
     latest?.fork(copied)
@@ -244,4 +256,8 @@ it('offers an inherited OpenCode tip after the child advances and submits its di
     sessionId: 'child',
     throughItemId: 'legacy:opencode:source:reply-1'
   })
+  await act(async () => {
+    renderer!.update(createElement(ForkProbe, { hostCapabilities: FORK_HOST }))
+  })
+  expect(latest?.offerFor(copied)).toBe('reserved')
 })

@@ -12,14 +12,19 @@ import type { NativeChatMessage } from './native-chat-types'
 export type NativeChatForkSupport =
   | { kind: 'none' }
   | { kind: 'unknown' }
-  | { kind: 'known'; fork: NonNullable<AgentSessionCapabilities['fork']> }
+  | {
+      kind: 'known'
+      fork: NonNullable<AgentSessionCapabilities['fork']>
+      inheritedOriginal?: boolean
+    }
 
 /** `agent` is the host's registered row for the chat's agent: undefined until the host has listed it.
  *  `session` is the chat's options answer about its installed agent; absent until that read lands. */
 export function nativeChatForkSupport(
   host: StructuredAgentSessionHostCapabilityState,
   agent: { capabilities: Pick<AgentSessionCapabilities, 'fork'> } | undefined,
-  session: AgentSessionOptionsResult['forkSupport']
+  session: AgentSessionOptionsResult['forkSupport'],
+  inheritedOriginal: StructuredAgentSessionHostCapabilityState = 'unknown'
 ): NativeChatForkSupport {
   const fork = agent?.capabilities.fork
   if (
@@ -30,7 +35,7 @@ export function nativeChatForkSupport(
     return { kind: 'none' }
   }
   return host === 'supported' && fork && session === 'supported'
-    ? { kind: 'known', fork }
+    ? { kind: 'known', fork, inheritedOriginal: inheritedOriginal === 'supported' }
     : { kind: 'unknown' }
 }
 
@@ -113,6 +118,6 @@ export function nativeChatRowOffersFork(
     (chat.support.kind === 'unknown' ||
       chat.support.fork === 'checkpoint' ||
       row.inLatestTurn ||
-      sequence <= (chat.inheritedThroughSequence ?? 0))
+      (chat.support.inheritedOriginal === true && sequence <= (chat.inheritedThroughSequence ?? 0)))
   )
 }

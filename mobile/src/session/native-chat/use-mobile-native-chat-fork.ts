@@ -13,7 +13,10 @@ import {
   type AgentSessionRegisteredAgent
 } from '../../../../src/shared/agent-session/agent-session-registered-agents'
 import type { AgentSessionOptionsResult } from '../../../../src/shared/agent-session/options/agent-session-options-result'
-import { AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY } from '../../../../src/shared/agent-session/agent-session-create-capabilities'
+import {
+  AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY,
+  AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY
+} from '../../../../src/shared/agent-session/agent-session-create-capabilities'
 import { latestAgentSessionContextClearSequence } from '../../../../src/shared/agent-session/agent-session-context-clear'
 import { isTuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent-config'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
@@ -167,10 +170,15 @@ export function useMobileNativeChatFork(input: {
     : input.hostCapabilities.includes(AGENT_SESSION_CREATE_FORK_RUNTIME_CAPABILITY)
       ? 'supported'
       : 'unsupported'
+  const inheritedOriginal: StructuredAgentSessionHostCapabilityState = !input.hostCapabilities
+    ? 'unknown'
+    : input.hostCapabilities.includes(AGENT_SESSION_CREATE_FORK_ORIGINAL_RUNTIME_CAPABILITY)
+      ? 'supported'
+      : 'unsupported'
   const registered = useRegisteredAgent(input.client, host, input.agent)
   const support = useMemo(
-    () => nativeChatForkSupport(host, registered, input.sessionForkSupport),
-    [host, registered, input.sessionForkSupport]
+    () => nativeChatForkSupport(host, registered, input.sessionForkSupport, inheritedOriginal),
+    [host, registered, input.sessionForkSupport, inheritedOriginal]
   )
   const { messages, turnJournal, agentWorking, sessionId, agent, createFork } = input
   const turns = useMemo(() => {
