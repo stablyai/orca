@@ -85,9 +85,11 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
         throwIfAiVaultScanCancelled(options.signal)
         noteAiVaultScanReading(options.signal)
 
+        const scopeOnly = scopeOnlyScan(options)
         const parsedSessions = await parseSessionCandidates({
           candidates: parseCandidates,
-          limit,
+          // Scope-only parses the whole window: its in-scope rows must not depend on bucket agents' rows.
+          limit: scopeOnly ? Number.POSITIVE_INFINITY : limit,
           platform,
           executionHostId,
           issues,
@@ -97,21 +99,23 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
           settled: (candidate, parsed) => workload?.settle(candidate, 'global', parsed)
         })
 
-        const recentSessions = dedupeScannedSessions(parsedSessions)
-          .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
-          .slice(0, limit)
+        const recentSessions = dedupeScannedSessions(parsedSessions).sort(
+          (left, right) => sessionSortTime(right) - sessionSortTime(left)
+        )
         // Scope-only keeps the recency pass for agents without cwd buckets, but returns only its in-scope rows.
         const inScope = createAiVaultScopeCwdMatcher(options.scopePaths ?? [])
-        const cappedSessions = scopeOnlyScan(options)
+        const cappedSessions = scopeOnly
           ? recentSessions.filter((session) => aiVaultSessionInScope(inScope, session))
-          : recentSessions
+          : recentSessions.slice(0, limit)
 
         const scopeSessions = await scanInScopeSessions({
           inventory,
           discoveries,
           options,
           limit,
-          alreadyParsedFilePaths: new Set(recentSessions.map((session) => session.filePath)),
+          alreadyParsedFilePaths: new Set(
+            (scopeOnly ? recentSessions : cappedSessions).map((session) => session.filePath)
+          ),
           platform,
           executionHostId,
           issues,

@@ -24,6 +24,8 @@ async function writeClaudeSession(args: {
   iso: string
   // Records before the first cwd, like a long run of snapshot or summary lines.
   cwdlessLines?: number
+  // File time when it differs from the transcript's own time.
+  mtime?: string
 }): Promise<void> {
   const dir = join(args.claudeRoot, args.dirName)
   await mkdir(dir, { recursive: true })
@@ -40,7 +42,31 @@ async function writeClaudeSession(args: {
   })
   const filePath = join(dir, `${args.sessionId}.jsonl`)
   await writeFile(filePath, records.map((record) => JSON.stringify(record)).join('\n'))
-  const time = new Date(args.iso)
+  const time = new Date(args.mtime ?? args.iso)
+  await utimes(filePath, time, time)
+}
+
+async function writeCodexSession(
+  codexRoot: string,
+  args: { id: string; cwd: string; iso: string; mtime: string }
+): Promise<void> {
+  const dir = join(codexRoot, '2026', '06', '01')
+  await mkdir(dir, { recursive: true })
+  const filePath = join(dir, `rollout-2026-06-01T00-00-00-${args.id}.jsonl`)
+  await writeFile(
+    filePath,
+    [
+      { timestamp: args.iso, type: 'session_meta', payload: { id: args.id, cwd: args.cwd } },
+      {
+        timestamp: args.iso,
+        type: 'response_item',
+        payload: { type: 'message', role: 'user', content: [{ type: 'text', text: 'hi' }] }
+      }
+    ]
+      .map((record) => JSON.stringify(record))
+      .join('\n')
+  )
+  const time = new Date(args.mtime)
   await utimes(filePath, time, time)
 }
 
@@ -137,6 +163,82 @@ describe('scanAiVaultSessions scopeOnly', () => {
     }
 
     // Main shows the recency pass's 2 plus the scope pass's 2 more.
+    const main = await workspaceSessionIds(root, ['/repo/app'], { limit: 2 })
+    expect(main).toHaveLength(4)
+    await expect(
+      workspaceSessionIds(root, ['/repo/app'], { limit: 2, scopeOnly: true })
+    ).resolves.toEqual(main)
+  })
+
+  it('keeps in-scope rows when unverified files are newer than them', async () => {
+    const root = await tempRoot()
+    const claudeRoot = isolatedScanRoots(root).claudeProjectsDir
+    const inScope = (sessionId: string, day: string) =>
+      writeClaudeSession({
+        claudeRoot,
+        dirName: '-repo-app',
+        sessionId,
+        cwd: '/repo/app',
+        iso: `2026-06-${day}T00:00:00.000Z`
+      })
+    await inScope('a1', '10')
+    await inScope('a2', '09')
+    // A sibling whose name also starts `-repo-app`, with cwds past the probe: its files must not take a3's or a4's slot.
+    for (const [sessionId, day] of [
+      ['web-1', '08'],
+      ['web-2', '07']
+    ]) {
+      await writeClaudeSession({
+        claudeRoot,
+        dirName: '-repo-app-web',
+        sessionId,
+        cwd: '/repo/app-web',
+        iso: `2026-06-${day}T00:00:00.000Z`,
+        cwdlessLines: 250
+      })
+    }
+    await inScope('a3', '05')
+    await inScope('a4', '04')
+
+    const main = await workspaceSessionIds(root, ['/repo/app'], { limit: 2 })
+    expect(main).toEqual(['a1', 'a2', 'a3', 'a4'])
+    await expect(
+      workspaceSessionIds(root, ['/repo/app'], { limit: 2, scopeOnly: true })
+    ).resolves.toEqual(main)
+  })
+
+  it('keeps recency rows whose transcript time is older than their file time', async () => {
+    const root = await tempRoot()
+    const codexRoot = isolatedScanRoots(root).codexSessionsDir
+    // Newest file first: a group whose transcripts say they are old, ahead of newer-dated ones (imported logs).
+    const groups: { cwd: string; mtimeDay: string; isoDay: string }[] = [
+      { cwd: '/repo/app', mtimeDay: '20', isoDay: '02' },
+      { cwd: '/elsewhere', mtimeDay: '18', isoDay: '10' },
+      { cwd: '/repo/app', mtimeDay: '16', isoDay: '12' }
+    ]
+    let index = 0
+    for (const group of groups) {
+      for (let copy = 0; copy < 2; copy++) {
+        await writeCodexSession(codexRoot, {
+          id: `019e9693-64fc-7370-9c18-7e625c5950${index++}0`,
+          cwd: group.cwd,
+          iso: `2026-06-${group.isoDay}T0${copy}:00:00.000Z`,
+          mtime: `2026-06-${group.mtimeDay}T0${copy}:00:00.000Z`
+        })
+      }
+    }
+    // Old Claude rows elsewhere with the newest files: main parses past them, scope-only never lists them.
+    for (let copy = 0; copy < 2; copy++) {
+      await writeClaudeSession({
+        claudeRoot: isolatedScanRoots(root).claudeProjectsDir,
+        dirName: '-elsewhere',
+        sessionId: `claude-${copy}`,
+        cwd: '/elsewhere',
+        iso: `2026-01-0${copy + 1}T00:00:00.000Z`,
+        mtime: `2026-06-2${copy + 2}T00:00:00.000Z`
+      })
+    }
+
     const main = await workspaceSessionIds(root, ['/repo/app'], { limit: 2 })
     expect(main).toHaveLength(4)
     await expect(

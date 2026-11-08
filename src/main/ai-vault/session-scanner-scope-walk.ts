@@ -1,5 +1,8 @@
 import { SCAN_ISSUE_LIMIT } from './session-scan-issues'
-import { createAiVaultScopeCwdMatcher } from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
+import {
+  aiVaultSessionInScope,
+  createAiVaultScopeCwdMatcher
+} from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import type {
   AiVaultScanIssue,
   AiVaultSession
@@ -61,11 +64,12 @@ export async function scanInScopeSessions(args: ScopeScanArgs): Promise<AiVaultS
     return []
   }
   const candidates: SessionFileCandidate[] = []
+  const inScope = createAiVaultScopeCwdMatcher(scopePaths)
   const workload = aiVaultScanWorkload(args.options.signal)
   for (const inventory of args.inventory) {
     const files = await selectCwdBucketFiles(inventory, {
       scopePaths,
-      // Without the recency pass, cover what it and this pass show together: its kept rows plus `limit` more.
+      // These agents skip the recency pass, so cover what it and this pass show together.
       limit: scopeOnlyScan(args.options) ? args.limit * 2 : args.limit,
       excludedFilePaths: args.alreadyParsedFilePaths,
       issues: args.issues,
@@ -104,7 +108,11 @@ export async function scanInScopeSessions(args: ScopeScanArgs): Promise<AiVaultS
     issues: args.issues,
     parseStats: args.parseStats,
     signal: args.options.signal,
-    settled: (candidate, parsed) => workload?.settle(candidate, 'bucket', parsed)
+    settled: (candidate, parsed) => workload?.settle(candidate, 'bucket', parsed),
+    // Unverified bucket files are placed by their parsed cwd.
+    admitSession: scopeOnlyScan(args.options)
+      ? (session) => aiVaultSessionInScope(inScope, session)
+      : undefined
   })
   return [...bucketed, ...walked]
 }

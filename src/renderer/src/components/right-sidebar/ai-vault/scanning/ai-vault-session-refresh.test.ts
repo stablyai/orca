@@ -229,6 +229,27 @@ describe('useAiVaultSessionRefresh refocus behavior', () => {
     expect(latest?.sessions).toEqual([])
   })
 
+  it('keeps Workspace rows while a deeper Workspace scan loads and after it fails', async () => {
+    let failDeeper: (error: Error) => void = () => {}
+    listSessionsMock.mockImplementation((args) =>
+      args.limit === 250
+        ? Promise.resolve({ ...EMPTY_RESULT, sessions: [makeVaultSession(1)] })
+        : new Promise((_resolve, reject) => {
+            failDeeper = reject
+          })
+    )
+    await renderHook(['/repo'], 'local', 250, true)
+    await flushMicrotasks()
+
+    await rerenderHook(['/repo'], 'local', 500, true)
+    await flushMicrotasks()
+    expect(latest?.sessions.map((session) => session.id)).toEqual(['session-1'])
+
+    await act(async () => failDeeper(new Error('scan failed')))
+    await flushMicrotasks()
+    expect(latest?.sessions.map((session) => session.id)).toEqual(['session-1'])
+  })
+
   it('replaces a stuck scan on manual Refresh without cancelling an automatic rescan', async () => {
     let resolveInitial: ((result: AiVaultListResult) => void) | null = null
     let resolveReplacement: ((result: AiVaultListResult) => void) | null = null

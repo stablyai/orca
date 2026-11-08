@@ -213,6 +213,8 @@ export async function collectBucketFiles(args: {
   inScope?: ReturnType<typeof createAiVaultScopeCwdMatcher>
   issues: IssueSink
   collected: Map<string, FileWithMtime>
+  // Files whose first lines name no cwd go here, bounded on their own, instead of being dropped.
+  unknown?: Map<string, FileWithMtime>
   limit: number
   excludedFilePaths: ReadonlySet<string>
   signal?: AbortSignal
@@ -222,13 +224,16 @@ export async function collectBucketFiles(args: {
       await yieldToEventLoop()
     }
     throwIfAiVaultScanCancelled(args.signal)
-    if (args.collected.has(path) || args.excludedFilePaths.has(path)) {
+    if (args.collected.has(path) || args.unknown?.has(path) || args.excludedFilePaths.has(path)) {
       continue
     }
     try {
+      let collected = args.collected
       if (args.inScope) {
         const cwd = await readFirstCwd(path, args.issues, args.agent, args.signal)
-        if (!args.inScope(cwd, path)) {
+        if (cwd === null && args.unknown) {
+          collected = args.unknown
+        } else if (!args.inScope(cwd, path)) {
           continue
         }
       }
@@ -240,7 +245,7 @@ export async function collectBucketFiles(args: {
         dev: fileStat.dev,
         ino: fileStat.ino
       })
-      addBoundedFile(args.collected, args.limit, {
+      addBoundedFile(collected, args.limit, {
         path,
         mtimeMs: fileStat.mtimeMs,
         modifiedAt: fileStat.mtime.toISOString(),
