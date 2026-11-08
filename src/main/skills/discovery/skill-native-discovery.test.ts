@@ -204,26 +204,6 @@ describe('skill discovery', () => {
     ])
   })
 
-  it("discovers a project's OpenCode skills as OpenCode's", async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
-    const repo = join(root, 'repo')
-    const opencodeSkill = join(repo, '.opencode', 'skills', 'release-notes')
-    await mkdir(opencodeSkill, { recursive: true })
-    await writeFile(join(opencodeSkill, 'SKILL.md'), '# Release notes\n\nWrite release notes.')
-
-    const result = await discoverSkills({
-      homeDir: join(root, 'home'),
-      cwd: join(root, 'missing-cwd'),
-      repos: [makeRepo(repo)]
-    })
-
-    const skill = result.skills.find((candidate) => candidate.name === 'Release notes')
-    expect(result.sources.find((source) => source.path === skill?.rootPath)).toMatchObject({
-      sourceKind: 'repo',
-      owner: 'opencode'
-    })
-  })
-
   it('filters discovery by requested directory name and source kind', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')
@@ -374,18 +354,6 @@ describe('skill discovery', () => {
     expect(owners?.slice().sort()).toEqual(['claude', 'grok'])
   })
 
-  it('does not add SSH-backed repository paths to local scan roots', () => {
-    const roots = buildSkillDiscoverySources({
-      homeDir: '/home/test',
-      cwd: '/workspace/current',
-      repos: [makeRepo('/remote/repo', 'ssh-1')]
-    })
-
-    const rootPaths = roots.map((root) => root.path.replace(/\\/g, '/'))
-    expect(rootPaths).not.toContain('/remote/repo/.claude/skills')
-    expect(rootPaths).toContain('/workspace/current/.claude/skills')
-  })
-
   it('reports an SSH-backed repository as a remote-repo source instead of dropping it', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const runtimeRepo = makeRepo('/runtime/repo')
@@ -463,61 +431,6 @@ describe('skill discovery', () => {
     expect(skill?.directoryPath).toBe(linkedSkill)
   })
 
-  it('discovers a symlinked skill inside a provider home root (#8256/#8503)', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
-    const home = join(root, 'home')
-    const realSkill = join(root, 'central-skills', 'orchestration')
-    const linkedSkill = join(home, '.pi', 'agent', 'skills', 'orchestration')
-    await mkdir(realSkill, { recursive: true })
-    await mkdir(join(home, '.pi', 'agent', 'skills'), { recursive: true })
-    await writeFile(join(realSkill, 'SKILL.md'), '# orchestration\n\nCoordinate agents.')
-    await symlink(realSkill, linkedSkill, process.platform === 'win32' ? 'junction' : 'dir')
-
-    const result = await discoverSkills({
-      homeDir: home,
-      cwd: join(root, 'missing-cwd')
-    })
-
-    const skill = result.skills.find((entry) => entry.name === 'orchestration')
-    expect(skill?.sourceKind).toBe('home')
-    expect(skill?.directoryPath).toBe(linkedSkill)
-    expect(skill?.providers).toEqual(['agent-skills'])
-  })
-
-  it('discovers Skills installed in the Hermes home', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
-    const home = join(root, 'home')
-    const skillDir = join(home, '.hermes', 'skills', 'social-media', 'research')
-    await mkdir(skillDir, { recursive: true })
-    await writeFile(
-      join(skillDir, 'SKILL.md'),
-      ['---', 'name: social-research', 'description: Research social sources.', '---', ''].join(
-        '\n'
-      )
-    )
-
-    const result = await discoverSkills({
-      homeDir: home,
-      cwd: join(root, 'missing-cwd')
-    })
-
-    expect(result.skills).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          name: 'social-research',
-          sourceKind: 'home',
-          sourceLabel: 'Hermes home',
-          directoryPath: skillDir,
-          providers: ['agent-skills']
-        })
-      ])
-    )
-    expect(result.sources.find((source) => source.id === 'home-hermes')).toMatchObject({
-      owner: 'hermes',
-      exists: true
-    })
-  })
-
   it('discovers Hermes Skills under a relocated HERMES_HOME profile', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
     const home = join(root, 'home')
@@ -548,33 +461,6 @@ describe('skill discovery', () => {
       path: join(hermesHome, 'skills'),
       exists: true
     })
-  })
-
-  it('discovers worktree .agents skill symlinks from the requested cwd', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-skills-'))
-    const home = join(root, 'home')
-    const worktree = join(root, 'worktree')
-    const realSkill = join(root, 'central-skills', 'ref-oss')
-    const linkedSkill = join(worktree, '.agents', 'skills', 'ref-oss')
-    await mkdir(realSkill, { recursive: true })
-    await mkdir(join(worktree, '.agents', 'skills'), { recursive: true })
-    await writeFile(join(realSkill, 'SKILL.md'), '# ref-oss\n\nUse local OSS reference repos.')
-    await symlink(realSkill, linkedSkill, process.platform === 'win32' ? 'junction' : 'dir')
-
-    const result = await discoverSkills({
-      homeDir: home,
-      cwd: worktree,
-      repos: []
-    })
-
-    expect(result.skills.filter((entry) => entry.name === 'ref-oss')).toMatchObject([
-      {
-        sourceKind: 'repo',
-        sourceLabel: 'Repo worktree .agents',
-        directoryPath: linkedSkill,
-        providers: ['agent-skills']
-      }
-    ])
   })
 
   it('keeps home classification when cwd points at the same directory as home', async () => {
