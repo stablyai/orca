@@ -86,8 +86,8 @@ function lastJson(log: ReturnType<typeof vi.spyOn>): {
 
 function folderMutations(): string[] {
   return callMock.mock.calls
-    .map(([method]) => method as string)
-    .filter((method) => method.startsWith('folderWorkspace.') || method.startsWith('worktree.set'))
+    .map(([method]) => String(method))
+    .filter((method) => method.startsWith('folderWorkspace.') || method === 'worktree.set')
 }
 
 describe('worktree set and rm on folder workspaces', () => {
