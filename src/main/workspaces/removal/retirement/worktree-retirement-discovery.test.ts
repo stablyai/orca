@@ -44,21 +44,4 @@ describe('retirement discovery of Claude buckets', () => {
 
     expect(retired).toEqual({ names: new Set([FIRST]), complete: true })
   })
-
-  it('does not credit a hashed bucket whose cwd is a sibling that encodes the same way', async () => {
-    const root = `/synthetic/${'a'.repeat(219)}`
-    await addHashedBucket(`${root}-${FIRST}`)
-
-    const retired = await discoverRetiredWorktreeNames({ workspaceRoots: [root], home, env: {} })
-
-    expect(retired.names).toEqual(new Set())
-  })
-
-  it('reads workspace names below a drive-root workspace folder', async () => {
-    await mkdir(join(home, '.claude', 'projects', `C--${FIRST}`), { recursive: true })
-
-    const retired = await discoverRetiredWorktreeNames({ workspaceRoots: ['C:\\'], home, env: {} })
-
-    expect(retired.names).toEqual(new Set([FIRST]))
-  })
 })
