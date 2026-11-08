@@ -9,6 +9,7 @@ import type {
 import type { AiVaultResumeStartup } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-startup'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
+import { useLatestHandler } from '@/lib/use-latest-handler'
 import { measureVirtualRowRetainingHiddenSize } from '@/hooks/virtualized-hidden-row-measurement'
 import { getActiveStickyHeaderIndexForScroll } from '../../../sidebar/worktree-list/viewport/virtual-rows'
 import { EmptyState, SessionLoadingState } from './AiVaultSessionListStates'
@@ -190,13 +191,17 @@ export function AiVaultSessionVirtualList({
       },
       [stickyHeaderIndexes]
     ),
-    getItemKey: (index) => {
-      const row = vaultRows[index]
-      if (!row) {
-        return `missing:${index}`
-      }
-      return row.type === 'group' ? `group:${row.group.key}` : `session:${row.session.id}`
-    }
+    // A new key function makes the virtualizer re-measure every row, so keep it until the rows change.
+    getItemKey: useCallback(
+      (index: number) => {
+        const row = vaultRows[index]
+        if (!row) {
+          return `missing:${index}`
+        }
+        return row.type === 'group' ? `group:${row.group.key}` : `session:${row.session.id}`
+      },
+      [vaultRows]
+    )
   })
 
   const toggleSessionDetails = useCallback((sessionId: string) => {
@@ -254,6 +259,12 @@ export function AiVaultSessionVirtualList({
       virtualizer.scrollToIndex(index)
     }
   }
+  const selectRow = useLatestHandler(selection.select)
+  const pickSession = useLatestHandler((session: AiVaultSession) => {
+    if (!pickHere(session)) {
+      toggleSessionDetails(session.id)
+    }
+  })
   useAiVaultSessionListKeyboard(keyboardRef, {
     rows: vaultRows,
     selection,
@@ -311,56 +322,57 @@ export function AiVaultSessionVirtualList({
             aria-busy={stale || undefined}
             style={{ height: virtualizer.getTotalSize() }}
           >
-            {virtualItems.map((virtualRow) => (
-              <AiVaultVirtualRow
-                key={virtualRow.key}
-                row={vaultRows[virtualRow.index]}
-                index={virtualRow.index}
-                start={virtualRow.start}
-                activeStickyHeaderIndex={activeStickyHeaderIndexRef.current}
-                measureElement={virtualizer.measureElement}
-                collapsedGroups={collapsedGroups}
-                expandedSessionIds={expandedSessionIds}
-                vaultScope={vaultScope}
-                searchHits={searchHits}
-                searchHitHostLabels={searchHitHostLabels}
-                buildResumeStartup={buildResumeStartup}
-                getOriginalPaneTarget={getOriginalPaneTarget}
-                isStructuredSessionOpen={isStructuredSessionOpen}
-                getSessionLiveState={getSessionLiveState}
-                getWorktreeInfo={getWorktreeInfo}
-                getSessionResumeState={getSessionResumeState}
-                getSessionResumeActions={getSessionResumeActions}
-                getSessionResumeInChat={getSessionResumeInChat}
-                onToggleGroup={onToggleGroup}
-                onToggleSessionDetails={toggleSessionDetails}
-                onJumpToOriginalPane={onJumpToOriginalPane}
-                onJumpToWorktree={onJumpToWorktree}
-                onResume={onResume}
-                onContinueInNewSession={onContinueInNewSession}
-                onResumeInNewChat={onResumeInNewChat}
-                onResumeInNewCli={onResumeInNewCli}
-                onCopyResume={onCopyResume}
-                onCopyId={onCopyId}
-                onCopyPath={onCopyPath}
-                onOpenLog={onOpenLog}
-                onRevealLog={onRevealLog}
-                onOpenCwd={onOpenCwd}
-                onRevealArtifacts={onRevealArtifacts}
-                onRequestDelete={onRequestDelete}
-                selected={keyboardRef ? virtualRow.index === selectedIndex : undefined}
-                onSelect={keyboardRef ? () => selection.select(virtualRow.index) : undefined}
-                onPickSession={
-                  resumeHere
-                    ? (session) => {
-                        if (!pickHere(session)) {
-                          toggleSessionDetails(session.id)
-                        }
-                      }
-                    : undefined
-                }
-              />
-            ))}
+            {virtualItems.map((virtualRow) => {
+              const row = vaultRows[virtualRow.index]
+              return (
+                <AiVaultVirtualRow
+                  key={virtualRow.key}
+                  row={row}
+                  index={virtualRow.index}
+                  start={virtualRow.start}
+                  activeStickyHeader={virtualRow.index === activeStickyHeaderIndexRef.current}
+                  measureElement={virtualizer.measureElement}
+                  groupCollapsed={row?.type === 'group' && collapsedGroups.has(row.group.key)}
+                  detailsExpanded={
+                    row?.type === 'session' && expandedSessionIds.has(row.session.id)
+                  }
+                  vaultScope={vaultScope}
+                  searchHit={row?.type === 'session' ? searchHits?.get(row.session.id) : undefined}
+                  sourceHostLabel={
+                    row?.type === 'session'
+                      ? searchHitHostLabels?.get(row.session.executionHostId)
+                      : undefined
+                  }
+                  buildResumeStartup={buildResumeStartup}
+                  getOriginalPaneTarget={getOriginalPaneTarget}
+                  isStructuredSessionOpen={isStructuredSessionOpen}
+                  getSessionLiveState={getSessionLiveState}
+                  getWorktreeInfo={getWorktreeInfo}
+                  getSessionResumeState={getSessionResumeState}
+                  getSessionResumeActions={getSessionResumeActions}
+                  getSessionResumeInChat={getSessionResumeInChat}
+                  onToggleGroup={onToggleGroup}
+                  onToggleSessionDetails={toggleSessionDetails}
+                  onJumpToOriginalPane={onJumpToOriginalPane}
+                  onJumpToWorktree={onJumpToWorktree}
+                  onResume={onResume}
+                  onContinueInNewSession={onContinueInNewSession}
+                  onResumeInNewChat={onResumeInNewChat}
+                  onResumeInNewCli={onResumeInNewCli}
+                  onCopyResume={onCopyResume}
+                  onCopyId={onCopyId}
+                  onCopyPath={onCopyPath}
+                  onOpenLog={onOpenLog}
+                  onRevealLog={onRevealLog}
+                  onOpenCwd={onOpenCwd}
+                  onRevealArtifacts={onRevealArtifacts}
+                  onRequestDelete={onRequestDelete}
+                  selected={keyboardRef ? virtualRow.index === selectedIndex : undefined}
+                  onSelect={keyboardRef ? selectRow : undefined}
+                  onPickSession={resumeHere ? pickSession : undefined}
+                />
+              )
+            })}
           </div>
         ) : null}
       </div>

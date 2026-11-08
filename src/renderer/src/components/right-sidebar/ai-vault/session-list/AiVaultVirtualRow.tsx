@@ -1,4 +1,5 @@
 import type { AgentDotState } from '@/components/AgentStateDot'
+import { memo } from 'react'
 import { isAntigravityReferenceSession } from '../../../../../../shared/antigravity-session-origin'
 import type {
   AiVaultScope,
@@ -40,52 +41,14 @@ export type AiVaultListRow =
   | { type: 'group'; group: AiVaultSessionGroup }
   | { type: 'session'; groupKey: string; session: AiVaultSession }
 
-export function AiVaultVirtualRow({
-  row,
-  index,
-  start,
-  activeStickyHeaderIndex,
-  measureElement,
-  collapsedGroups,
-  expandedSessionIds,
-  vaultScope,
-  buildResumeStartup,
-  getOriginalPaneTarget,
-  isStructuredSessionOpen,
-  getSessionLiveState,
-  getWorktreeInfo,
-  getSessionResumeState,
-  getSessionResumeActions,
-  getSessionResumeInChat,
-  onToggleGroup,
-  onToggleSessionDetails,
-  onJumpToOriginalPane,
-  onJumpToWorktree,
-  onResume,
-  onContinueInNewSession,
-  onResumeInNewChat,
-  onResumeInNewCli,
-  onCopyResume,
-  onCopyId,
-  onCopyPath,
-  onOpenLog,
-  onRevealLog,
-  onOpenCwd,
-  onRevealArtifacts,
-  onRequestDelete,
-  searchHits,
-  searchHitHostLabels,
-  selected,
-  onSelect,
-  onPickSession
-}: {
+type AiVaultVirtualRowProps = {
   row: AiVaultListRow | undefined
   index: number
   start: number
-  activeStickyHeaderIndex: number | null
+  activeStickyHeader: boolean
   measureElement: (node: Element | null) => void
-  collapsedGroups: ReadonlySet<string>
-  expandedSessionIds: ReadonlySet<string>
+  groupCollapsed: boolean
+  detailsExpanded: boolean
   vaultScope: AiVaultScope
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
@@ -111,20 +74,75 @@ export function AiVaultVirtualRow({
   onOpenCwd: (session: AiVaultSession) => void
   onRevealArtifacts: (session: AiVaultSession) => void
   onRequestDelete: (session: AiVaultSession) => void
-  searchHits?: ReadonlyMap<string, AiVaultSearchHit>
-  searchHitHostLabels?: ReadonlyMap<string, string> | null
+  searchHit?: AiVaultSearchHit
+  sourceHostLabel?: string
   /** Set only where rows are keyboard-selectable. */
   selected?: boolean
-  onSelect?: () => void
+  onSelect?: (index: number) => void
   /** Set in `/resume`'s picker; see VaultSessionRow's `onPick`. */
   onPickSession?: (session: AiVaultSession) => void
-}): React.JSX.Element | null {
+}
+
+// The list rebuilds row objects whenever its groups change; a row only needs to render again when what it shows changed.
+function sameListRow(a: AiVaultListRow | undefined, b: AiVaultListRow | undefined): boolean {
+  return a?.type === 'session' && b?.type === 'session' ? a.session === b.session : a === b
+}
+
+function sameRowProps(prev: AiVaultVirtualRowProps, next: AiVaultVirtualRowProps): boolean {
+  const keys = Object.keys(next) as (keyof AiVaultVirtualRowProps)[]
+  return (
+    keys.length === Object.keys(prev).length &&
+    keys.every((key) =>
+      key === 'row' ? sameListRow(prev.row, next.row) : Object.is(prev[key], next[key])
+    )
+  )
+}
+
+export const AiVaultVirtualRow = memo(function AiVaultVirtualRow({
+  row,
+  index,
+  start,
+  activeStickyHeader,
+  measureElement,
+  groupCollapsed,
+  detailsExpanded,
+  vaultScope,
+  buildResumeStartup,
+  getOriginalPaneTarget,
+  isStructuredSessionOpen,
+  getSessionLiveState,
+  getWorktreeInfo,
+  getSessionResumeState,
+  getSessionResumeActions,
+  getSessionResumeInChat,
+  onToggleGroup,
+  onToggleSessionDetails,
+  onJumpToOriginalPane,
+  onJumpToWorktree,
+  onResume,
+  onContinueInNewSession,
+  onResumeInNewChat,
+  onResumeInNewCli,
+  onCopyResume,
+  onCopyId,
+  onCopyPath,
+  onOpenLog,
+  onRevealLog,
+  onOpenCwd,
+  onRevealArtifacts,
+  onRequestDelete,
+  searchHit,
+  sourceHostLabel,
+  selected,
+  onSelect,
+  onPickSession
+}: AiVaultVirtualRowProps): React.JSX.Element | null {
   const t = useTranslate()
   if (!row) {
     return null
   }
 
-  const isActiveStickyHeader = row.type === 'group' && activeStickyHeaderIndex === index
+  const isActiveStickyHeader = row.type === 'group' && activeStickyHeader
   const originalPaneTarget = row.type === 'session' ? getOriginalPaneTarget(row.session) : null
   const structuredSessionOpen = row.type === 'session' && isStructuredSessionOpen(row.session)
   const worktreeInfo = row.type === 'session' ? getWorktreeInfo(row.session) : null
@@ -148,7 +166,6 @@ export function AiVaultVirtualRow({
       ? aiVaultSessionRowResumeGating(row.session, resumeState)
       : { resumeDisabled: true, canCopyResumeCommand: false }
   const resumeLabel = resumeState ? aiVaultSessionResumeLabel(resumeState, t) : ''
-  const searchHit = row.type === 'session' ? searchHits?.get(row.session.id) : undefined
   const {
     canJumpToOriginalPane,
     resumeDisabled,
@@ -210,14 +227,14 @@ export function AiVaultVirtualRow({
       {row.type === 'group' ? (
         <VaultGroupHeader
           group={row.group}
-          collapsed={collapsedGroups.has(row.group.key)}
+          collapsed={groupCollapsed}
           onToggle={() => onToggleGroup(row.group.key)}
         />
       ) : (
         <VaultSessionRow
           session={row.session}
           searchHit={searchHit}
-          sourceHostLabel={searchHitHostLabels?.get(row.session.executionHostId)}
+          sourceHostLabel={sourceHostLabel}
           liveState={getSessionLiveState(row.session)}
           resumeStartup={resumeStartup}
           realHomeResumeStartup={
@@ -227,18 +244,18 @@ export function AiVaultVirtualRow({
           }
           worktreeInfo={worktreeInfo}
           vaultScope={vaultScope}
-          detailsExpanded={expandedSessionIds.has(row.session.id)}
+          detailsExpanded={detailsExpanded}
           resumeDisabled={resumeDisabled}
           resumeLabel={resumeLabel}
           resumeActions={visibleResumeActions}
           onToggleDetails={() => {
-            onSelect?.()
+            onSelect?.(index)
             onToggleSessionDetails(row.session.id)
           }}
           onPick={
             onPickSession
               ? () => {
-                  onSelect?.()
+                  onSelect?.(index)
                   onPickSession(row.session)
                 }
               : undefined
@@ -310,4 +327,4 @@ export function AiVaultVirtualRow({
       )}
     </div>
   )
-}
+}, sameRowProps)
