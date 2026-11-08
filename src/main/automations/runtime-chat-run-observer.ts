@@ -83,7 +83,7 @@ export async function observeAutomationChatRun(
     // Keys and reads start when called, so a later turn id cannot change an earlier hint's answer.
     const interest = async (): Promise<string> => {
       const journal = currentJournal
-      const card = journal?.queuedMessages.get(messageId)
+      const card = await journal?.queuedMessages.get(messageId)
       const turnId = turnItemId
       const [entry, root] = await Promise.all([
         journal?.reads.submission(card?.consumedAs ?? submissionId),
@@ -176,25 +176,22 @@ export async function observeAutomationChatRun(
           return
         }
         currentJournal = hint.journal
-        const rows = hint.rows
+        const commit = hint.commit
+        const publication = commit?.publication
         const currentCursor = cursor
         const contiguous =
           currentCursor &&
+          commit &&
           hint.cursor?.epoch === currentCursor.epoch &&
-          rows?.every(
-            (row, i) =>
-              row.epoch === currentCursor.epoch && row.seq === currentCursor.sequence + i + 1
-          ) &&
-          hint.cursor.sequence === currentCursor.sequence + rows.length
-        const linked = rows?.some((row) => {
-          if (row.kind === 'submission') {
-            return row.queuedMessageId === messageId && row.clientMessageId !== submissionId
-          }
-          const mutations = row.kind === 'lifecycle-batch' ? row.mutations : [row]
-          return mutations.some((item) => {
-            if (item.kind !== 'item') {
-              return false
-            }
+          hint.cursor.sequence >= currentCursor.sequence
+        const linked =
+          publication?.cards.some(
+            (card) =>
+              card.messageId === messageId &&
+              card.consumedAs !== undefined &&
+              card.consumedAs !== submissionId
+          ) ||
+          publication?.items.some((item) => {
             const turn = readAgentJournalTurn(item.body)
             return (
               (item.body.kind === 'message' && item.body.role === 'user') ||
@@ -206,7 +203,6 @@ export async function observeAutomationChatRun(
                   turn.userItemId === agentJournalSubmissionKey(submissionId)))
             )
           })
-        })
         const structural = source !== hint.source || hint.kind !== 'commit' || !contiguous || linked
         source = hint.source
         cursor = hint.cursor

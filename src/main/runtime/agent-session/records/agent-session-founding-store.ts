@@ -47,7 +47,7 @@ export function createAgentSessionFoundingStore(
       return {
         write: receipt.write,
         committed: () => {
-          receipt.committed()
+          receipt.committed?.()
           founded()
         },
         stage: async (context) => {

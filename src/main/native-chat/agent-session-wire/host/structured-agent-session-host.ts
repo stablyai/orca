@@ -51,7 +51,7 @@ export class StructuredAgentSessionHost {
     (sessionId) => this.backgroundTasks.read(sessionId),
     (sessionId) => this.runtimeState?.startFlights.projectsStarting(sessionId) ?? false,
     this.sessions,
-    (sessionId) => this.usageLimitContinue?.readState(sessionId),
+    (sessionId, cut) => this.usageLimitContinue?.readState(sessionId, cut),
     (sessionId) => this.runtimeState?.currentEventSink(sessionId)?.liveText() ?? []
   )
   private readonly tasks = new StructuredAgentSessionTaskQueue()

@@ -181,21 +181,27 @@ export function finishUploadSweep(db: Database.Database, uploadId: string): void
 /** Recheck chat and disk facts on each sweep so orphan claims cannot preserve unused uploads. */
 export function pruneAgentSessionAttachmentClaims(
   db: Database.Database,
-  facts: { root: string; recordedSessionIds: Pick<ReadonlySet<string>, 'has'> | null }
+  facts: {
+    root: string
+    recordedSessionIds: Pick<ReadonlySet<string>, 'has'> | null
+    pairs?: readonly { uploadId: string; sessionId: string }[]
+  }
 ): number {
-  const rows = db
-    .prepare('SELECT upload_id, session_id FROM agent_session_attachment_claims')
-    .all()
-    .flatMap((row) =>
-      typeof row === 'object' &&
-      row !== null &&
-      'upload_id' in row &&
-      'session_id' in row &&
-      typeof row.upload_id === 'string' &&
-      typeof row.session_id === 'string'
-        ? [{ uploadId: row.upload_id, sessionId: row.session_id }]
-        : []
-    )
+  const rows =
+    facts.pairs ??
+    db
+      .prepare('SELECT upload_id, session_id FROM agent_session_attachment_claims')
+      .all()
+      .flatMap((row) =>
+        typeof row === 'object' &&
+        row !== null &&
+        'upload_id' in row &&
+        'session_id' in row &&
+        typeof row.upload_id === 'string' &&
+        typeof row.session_id === 'string'
+          ? [{ uploadId: row.upload_id, sessionId: row.session_id }]
+          : []
+      )
   const remove = db.prepare(
     'DELETE FROM agent_session_attachment_claims WHERE upload_id = ? AND session_id = ?'
   )

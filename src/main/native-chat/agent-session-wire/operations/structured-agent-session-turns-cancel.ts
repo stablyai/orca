@@ -295,7 +295,7 @@ async function cancelAndNote(
   } else if (interruptFailed) {
     // Failed Stop keeps Stopping on the affected turn without owning that turn’s eventual end.
     binding.failedOn = structuredAgentSessionFailedStopMark(
-      contextStructuredAgentSessionCurrentWork(ctx),
+      await contextStructuredAgentSessionCurrentWork(ctx),
       ctx.journal
     )
   }

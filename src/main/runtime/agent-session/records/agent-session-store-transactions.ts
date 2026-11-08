@@ -160,11 +160,6 @@ export class AgentSessionStoreTransactions {
     options: { insertOperationsIfAbsent?: true; submissionSessionId?: string } = {}
   ): JournalOperationReceipt & Required<Pick<JournalOperationReceipt, 'stage'>> {
     return {
-      // TEMPORARY: the receipt type still requires host-transaction forms; the profile rows have no host connection.
-      write: () => {
-        throw new Error('a record store receipt requires worker staging')
-      },
-      committed: () => {},
       stage: (context) =>
         stageAgentSessionStoreReceipt(
           {

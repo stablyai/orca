@@ -35,7 +35,7 @@ import type { AgentSessionRecordStore } from '../../../runtime/agent-session/rec
 import type { AgentSessionUserNameWrite } from '../../../runtime/agent-session/records/agent-session-record-conversation-name'
 import type { AgentSessionRecoveryCapsule } from '../../../runtime/agent-session/records/agent-session-recovery-capsule'
 import type { AgentSessionSpawnTokenScan } from '../../../runtime/agent-session/ownership/agent-session-spawn-token-process-scan'
-import type { JournalHostDatabase } from '../../agent-session-journal/database/journal-host-database'
+import type { JournalSqlDatabase } from '../../agent-session-journal/database/journal-sql-database'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import type { DeferredStructuredAgentSessionEventSink } from '../journal-ingress/structured-agent-session-event-sink'
 import type { JournalStopSettle } from '../../agent-session-journal/queued-messages/queued-message-pause'
@@ -158,7 +158,7 @@ export type StructuredAgentSessionHostDeps = {
   agents: StructuredAgentRegistry
   /** Advisory recovery storage, independent of conversation backups. */
   recoveryCapsule?: AgentSessionRecoveryCapsule
-  journalDatabase: JournalHostDatabase
+  journalDatabase: JournalSqlDatabase
   claimKeyId: string
   probeOwner?: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
   probeOwners?: (

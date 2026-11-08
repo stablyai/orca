@@ -1,5 +1,5 @@
 import { StructuredAgentSessionRequestFailures } from './structured-agent-session-request-failures'
-import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
+import { readStructuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
 import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
@@ -14,7 +14,7 @@ export function createStructuredAgentSessionHostRequestFailures(
     onFailure: (failure) => deps().onRequestFailure?.(failure),
     capturePendingOutput: (input) => deps().adapter.capturePendingOutput?.(input),
     wordsContext: (sessionId) =>
-      structuredAgentSessionFailureWordsContext(
+      readStructuredAgentSessionFailureWordsContext(
         deps().store.getRecord(sessionId),
         sessions.get(sessionId)?.journal
       )

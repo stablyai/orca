@@ -40,7 +40,7 @@ export type AgentSessionTurnContext = {
   journal: AgentSessionJournal
   fence: number
   /** Read fresh: child exit may change current work mid-operation. */
-  currentWork?: () => StructuredAgentSessionCurrentWork | null
+  currentWork?: () => Promise<StructuredAgentSessionCurrentWork | null>
   readWork?: JournalWorkReader
   adapter: StructuredAgentSessionAdapter
   /** Registry declarations; agents.capabilities(agent) is this session’s answer. */
@@ -132,7 +132,7 @@ export async function performSend(
     selection?: Readonly<Record<string, string>>
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
-  const existing = ctx.journal.submission(input.clientMessageId)
+  const existing = await ctx.journal.reads.submission(input.clientMessageId)
   if (existing && existing.payloadFingerprint !== input.payloadFingerprint) {
     return invalid(
       'messageIdReused',
@@ -183,8 +183,7 @@ export type AgentSessionReplayContext = Pick<
   AgentSessionTurnContext,
   'sessionId' | 'fence' | 'currentWork' | 'agent' | 'persistedOptions' | 'now'
 > & {
-  journal: Pick<
-    AgentSessionJournal,
-    'cursor' | 'submission' | 'inputOrder' | 'epoch' | 'threadGoal' | 'reads'
-  > & { queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'> }
+  journal: Pick<AgentSessionJournal, 'cursor' | 'reads'> & {
+    queuedMessages: Pick<AgentSessionJournal['queuedMessages'], 'get'>
+  }
 }

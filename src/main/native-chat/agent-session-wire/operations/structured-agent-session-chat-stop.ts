@@ -249,7 +249,7 @@ export function mutateWithChatStop<TValue>(
         accepted.value.turnId ??
         (target.named
           ? target.turnId
-          : contextStructuredAgentSessionCurrentWork(ctx).activeTurnId())
+          : (await contextStructuredAgentSessionCurrentWork(ctx)).activeTurnId())
       await noteStructuredAgentSessionStopUnconfirmed(
         ctx,
         { turnId: stoppedTurnId, operationId: envelope.clientOperationId },

@@ -26,7 +26,7 @@ import type {
   StructuredAgentSessionProviderChildIdentity
 } from '../host/structured-agent-session-host-types'
 import { structuredAgentSessionConversationFence } from '../host/structured-agent-session-provider-child'
-import { structuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
+import { readStructuredAgentSessionFailureWordsContext } from '../operations/structured-agent-session-send-preparation'
 import { settleInterruptedStructuredAgentSessionCommands } from '../rewind/structured-rewind-recovery'
 import {
   retireOutgrownStructuredAgentSessionChild,
@@ -173,8 +173,8 @@ export function createStructuredAgentSessionConversationDelivery(input: {
             select: { acceptedThrough: ended.endedAt }
           })
     },
-    failureTextContext: (sessionId) =>
-      structuredAgentSessionFailureWordsContext(
+    failureTextContext: async (sessionId) =>
+      readStructuredAgentSessionFailureWordsContext(
         deps.store.getConversation(sessionId),
         sessions.get(sessionId)?.journal
       ),

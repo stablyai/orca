@@ -1,3 +1,4 @@
+import { agentSessionAttachmentStoreRoot } from '../agent-session-attachments/agent-session-attachment-references'
 import type Database from '../../sqlite/sync-database'
 import type { AgentSessionStoreRowWrites } from '../../runtime/agent-session/records/agent-session-store-draft'
 import {
@@ -8,6 +9,7 @@ import {
   claimAgentSessionAttachmentsInTransaction,
   finishUploadSweep,
   markUnclaimedUploadForSweep,
+  pruneAgentSessionAttachmentClaims,
   type AgentSessionAttachmentClaim
 } from '../agent-session-attachments/agent-session-attachment-claims'
 import type {
@@ -110,14 +112,12 @@ export function applyJournalWriterEffect(
         finishUploadSweep(db, operation.uploadId)
         return null
       }
-      const remove = db.prepare(
-        'DELETE FROM agent_session_attachment_claims WHERE upload_id=? AND session_id=?'
-      )
-      let removed = 0
-      for (const pair of operation.pairs) {
-        removed += Number(remove.run(pair.uploadId, pair.sessionId).changes)
-      }
-      return removed
+      const held = db.prepare('SELECT 1 FROM agent_session_records WHERE session_id=?')
+      return pruneAgentSessionAttachmentClaims(db, {
+        root: agentSessionAttachmentStoreRoot(stateDirectory),
+        recordedSessionIds: { has: (sessionId) => Boolean(held.get(sessionId)) },
+        pairs: operation.pairs
+      })
     }
   }
 }

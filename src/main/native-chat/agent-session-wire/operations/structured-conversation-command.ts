@@ -14,6 +14,7 @@ import { runAfterRewindStart } from './structured-agent-session-ready-operation'
 
 import type { ReadyOperationSelection } from './structured-agent-session-operation-child'
 import type { StructuredAgentSessionCaller } from '../host/structured-agent-session-host-types'
+import { readHostStructuredAgentSessionWork } from '../observations/structured-agent-session-read-work'
 import { hostStructuredAgentSessionCurrentWork } from '../observations/structured-agent-session-host-current-work'
 import { conversationCommandBlocked } from './structured-conversation-command-admission'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session/failures/agent-session-failure'
@@ -88,6 +89,12 @@ async function clearUnderSerialize(
     journal: () => context.sessions.get(sessionId)?.journal,
     currentWork: () =>
       hostStructuredAgentSessionCurrentWork({ store, sessions: context.sessions }, sessionId),
+    readWork: (operation) =>
+      readHostStructuredAgentSessionWork(
+        { store, sessions: context.sessions },
+        sessionId,
+        operation
+      ),
     publish: (journal) => context.publish(sessionId, journal),
     now: context.now,
     plan: {
@@ -118,7 +125,7 @@ async function clearUnderSerialize(
       rerunWhenReplayMissing: () => true,
       run: async (ctx) => {
         const record = store.requireWritableRecord(sessionId)
-        const blocked = conversationCommandBlocked(
+        const blocked = await conversationCommandBlocked(
           ctx,
           record,
           { views: context.readChildWork(sessionId), open: context.childWorkOpen(sessionId) },
@@ -130,7 +137,7 @@ async function clearUnderSerialize(
         await context.stopAgent(sessionId, { cause: 'context-clear' })
         const stopped = store.requireWritableRecord(sessionId)
         const fence = stopped.lease.runtimeFence
-        const rechecked = conversationCommandBlocked(
+        const rechecked = await conversationCommandBlocked(
           { ...ctx, fence },
           stopped,
           { views: context.readChildWork(sessionId), open: context.childWorkOpen(sessionId) },
@@ -151,9 +158,9 @@ async function clearUnderSerialize(
         if (!ctx.operationReceipt) {
           throw new Error('agent_session_clear_receipt_missing')
         }
-        await ctx.journal.context.clear(
-          providerContextBoundaryForClear(clear),
-          ctx.operationReceipt
+        await ctx.journal.write(
+          { kind: 'context-clear', boundary: providerContextBoundaryForClear(clear) },
+          () => ({ receipt: ctx.operationReceipt })
         )
         return { ok: true, value: completed }
       }

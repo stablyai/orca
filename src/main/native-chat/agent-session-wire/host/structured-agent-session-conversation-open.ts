@@ -3,10 +3,13 @@
 // other unhanded sends are rejected (journal-unsent-send-hold.ts / queued-message-pause.ts).
 // Settlement needs no lease and starts no provider child.
 
-import type { JournalHostDatabase } from '../../agent-session-journal/database/journal-host-database'
+import type { JournalSqlDatabase } from '../../agent-session-journal/database/journal-sql-database'
 import type { AgentSessionJournal } from '../../agent-session-journal/journal-store'
 import { openAgentSessionJournal } from '../../agent-session-journal/journal-store-factory'
-import { holdUnsentSends } from '../../agent-session-journal/queued-messages/journal-unsent-send-hold'
+import {
+  restoreJournalSqlFailure,
+  type JournalWriterSettled
+} from '../../agent-session-journal/journal-sql-failure'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session/lifecycle/agent-session-mutation-envelope'
 import type { AgentSessionConversationView } from '../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 import type { UsageLimitContinueIdentity } from '../../../../shared/agent-session/lifecycle/agent-session-usage-limit-continue'
@@ -34,7 +37,7 @@ export type StructuredAgentSessionConversationOpenDeps = {
     AgentSessionRecordStore,
     'getConversation' | 'replacedRuntime' | 'usageLimitContinueCancelReceipt'
   >
-  journalDatabase: JournalHostDatabase
+  journalDatabase: JournalSqlDatabase
   logger: StructuredAgentSessionHostDeps['logger']
 }
 
@@ -109,7 +112,12 @@ export async function openStructuredAgentSessionConversationJournal(
   })
   try {
     // A handed-over row found here stays doubt: it reads as sent, and nothing narrows it later.
-    await journal.markPendingSubmissionsUnknown(fence)
+    const commit = await journal.write({ kind: 'pending-unknown', fence })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: pending-unknown returns the writer recovery result.
+    const result = commit.value as JournalWriterSettled
+    if ('failure' in result) {
+      throw restoreJournalSqlFailure(result.failure)
+    }
   } catch (error) {
     deps.logger.warn('marking pending sends unknown on open failed', {
       scope: 'open-pending-unknown',
@@ -119,7 +127,16 @@ export async function openStructuredAgentSessionConversationJournal(
   }
   try {
     // Preserve leftover personal sends before any Stop can withdraw them.
-    await holdUnsentSends(journal, { fence, hold: { cause: 'hostRestarted' } })
+    const commit = await journal.write({
+      kind: 'hold-unsent',
+      fence,
+      hold: { cause: 'hostRestarted' }
+    })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: hold-unsent returns the writer recovery result.
+    const result = commit.value as JournalWriterSettled
+    if ('failure' in result) {
+      throw restoreJournalSqlFailure(result.failure)
+    }
   } catch (error) {
     // Failed leftovers stay queued; delivery retries before handover or rejects all if recovery still fails.
     deps.logger.warn('settling sends an earlier process left queued failed on open', {

@@ -1,7 +1,6 @@
 // Share mutation admission/planning/publication. Conversation writes need no child lease;
 // provider-only effects start their child before admission, sends start through delivery.
 
-import { latestNativeChatUsageLimitCut } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import { refuse } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type {
   AgentSessionCancelResult,
@@ -89,15 +88,14 @@ export function sendStructuredAgentSessionTurn(
             return blocked
           }
           if (params.usageLimitContinuationOfTurnItemId !== undefined) {
-            const snapshot = ctx.journal.statusRead()
-            const cut = latestNativeChatUsageLimitCut(snapshot.items, snapshot.submissions)
+            const cut = await ctx.journal.reads.usageLimitCut()
             if (
               cut?.turnItemId !== params.usageLimitContinuationOfTurnItemId ||
-              shouldQueueStructuredAgentSessionSend({
+              (await shouldQueueStructuredAgentSessionSend({
                 record,
                 journal: ctx.journal,
-                work: contextStructuredAgentSessionCurrentWork(ctx)
-              })
+                work: await contextStructuredAgentSessionCurrentWork(ctx)
+              }))
             ) {
               return {
                 ok: false as const,

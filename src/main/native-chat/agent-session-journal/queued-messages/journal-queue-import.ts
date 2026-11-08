@@ -190,8 +190,8 @@ export class LegacyQueuedCards {
     }
     const receipt = this.deletion(messageIds)
     try {
-      this.deps.database().transaction((db) => receipt.write(db))
-      receipt.committed()
+      this.deps.database().transaction((db) => receipt.write?.(db))
+      receipt.committed?.()
     } catch (error) {
       console.warn('[journal-queue] legacy cleanup skipped:', {
         sessionId: this.deps.sessionId,

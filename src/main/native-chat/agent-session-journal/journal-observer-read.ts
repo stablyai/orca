@@ -53,6 +53,7 @@ export type JournalObserverResult = {
     liveFence: number | null
     allowsObservation: boolean
     working: boolean
+    commandAdmission: { promptPending: boolean; owesSend: boolean; handoverOwesSend: boolean }
     owesAnySend: boolean
     owedEnteredSubmissions: AgentJournalSubmission[]
     owedSendingSubmissions: AgentJournalSubmission[]

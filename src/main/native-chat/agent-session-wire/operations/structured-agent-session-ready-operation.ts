@@ -98,9 +98,11 @@ export async function runWithReadyStructuredAgentSessionOperation<T>(
         let recorded: boolean
         try {
           recorded =
-            context.deps.store.readCommandReceipt(
-              commandReceiptScope(callerKey, plan.operationIdScope),
-              envelope.clientOperationId
+            (
+              await context.deps.store.readCommandReceipt(
+                commandReceiptScope(callerKey, plan.operationIdScope),
+                envelope.clientOperationId
+              )
             ).verdict !== 'absent'
         } catch (error) {
           context.deps.logger.warn('reading a command receipt failed', {

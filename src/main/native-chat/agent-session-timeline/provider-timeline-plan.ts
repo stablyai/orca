@@ -12,7 +12,7 @@ import type {
 } from '../agent-session-journal/writing/journal-writer-step'
 
 export type ProviderTimelineSink = Required<
-  Pick<StructuredAgentSessionEventSink, 'tryAppendTransition' | 'journalItems'>
+  Pick<StructuredAgentSessionEventSink, 'tryAppendTransition'>
 > &
   Pick<
     StructuredAgentSessionEventSink,
@@ -122,19 +122,17 @@ export function providerTimelineSink(
 ): ProviderTimelineSink | null {
   const {
     tryAppendTransition,
-    journalItems,
     setActivity,
     written,
     observeSettledTurns,
     bindLiveText,
     publishLiveText
   } = sink
-  if (!tryAppendTransition || !journalItems) {
+  if (!tryAppendTransition) {
     return null
   }
   return {
     tryAppendTransition: (transition) => tryAppendTransition.call(sink, transition),
-    journalItems: () => journalItems.call(sink),
     ...(bindLiveText ? { bindLiveText: (source) => bindLiveText.call(sink, source) } : {}),
     ...(publishLiveText ? { publishLiveText: () => publishLiveText.call(sink) } : {}),
     ...(observeSettledTurns

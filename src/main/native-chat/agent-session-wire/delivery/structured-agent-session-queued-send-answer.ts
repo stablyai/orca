@@ -121,7 +121,7 @@ export async function structuredSendAnswer(
       'get' | 'clearedThrough'
     >
   },
-  readReceipt: (operationId: string) => CommandReceiptRead,
+  readReceipt: (operationId: string) => CommandReceiptRead | Promise<CommandReceiptRead>,
   sessionId: string,
   operationId: string
 ): Promise<StructuredSendAnswer> {
@@ -145,7 +145,7 @@ export async function structuredSendAnswer(
     }
     return submissionAnswer(journal, sent)
   }
-  const receipt = readReceipt(operationId)
+  const receipt = await readReceipt(operationId)
   switch (receipt.verdict) {
     case 'absent':
       return { kind: 'absent' }

@@ -1,3 +1,4 @@
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
 import { latestStructuredAgentSessionTurn } from '../../../shared/agent-session/view/structured-agent-session-live-turn'
 import {
@@ -69,7 +70,17 @@ export function readJournalSqlWorkState(
     const displayed = work.isCurrentItem(item.itemId) ? context.displayed(item.itemId) : null
     return displayed ? [displayed] : []
   })
+  const floor =
+    context.select({ kind: 'clear' })[Symbol.iterator]().next().value?.item.sequence ?? 0
+  const owed = context
+    .recoverableSubmissions()
+    .filter((send) => (floor === 0 || (send.acceptedSequence ?? 0) > floor) && work.owesSend(send))
   return {
+    commandAdmission: {
+      promptPending: actionablePrompts.some((item) => item.sequence > floor),
+      owesSend: owed.length > 0,
+      handoverOwesSend: owed.some((send) => !isQueuedAgentJournalSubmission(send))
+    },
     liveFence: work.liveFence,
     allowsObservation: work.allowsObservation(),
     working: work.working(),

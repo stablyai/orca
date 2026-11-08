@@ -1,3 +1,4 @@
+import type { JournalWorkReader } from '../../agent-session-journal/journal-work-read'
 // Delivery opens command turns; provider receipts settle sends and translator frames end turns.
 // Running commands block input; the host ends refused commands or recovers exited children.
 
@@ -16,6 +17,7 @@ import {
   parseAgentJournalItemKey
 } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
 import type {
+  AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session/journal/agent-session-journal-types'
@@ -61,9 +63,9 @@ type AwaitedSubmission = Pick<
 >
 
 export type StructuredAgentSessionAwaitedCommandJournal = {
-  inputOrder?: Pick<AgentSessionJournal['inputOrder'], 'recoverableSubmissions'>
+  inputOrder?: { recoverableSubmissions: () => readonly AwaitedSubmission[] }
   submissions?: () => readonly AwaitedSubmission[]
-  itemBody: AgentSessionJournal['itemBody']
+  itemBody: (itemId: string) => AgentJournalItemBody | null
 }
 
 /** Find the oldest awaited command so failed starts preserve the command for explicit retry. */
@@ -135,10 +137,11 @@ export type StructuredAgentSessionCommandHandoverContext = {
   fence: number
   adapter: StructuredAgentSessionAdapter
   agents: StructuredAgentRegistry
+  readWork?: JournalWorkReader
   failureTextContext?: AgentSessionFailureWordsContext
   record: () => AgentSessionRecord | null
   /** Recheck execution-host ownership at admission and handover. */
-  currentWork?: () => StructuredAgentSessionCurrentWork | null
+  currentWork?: () => Promise<StructuredAgentSessionCurrentWork | null>
   childWork: () => readonly AgentChildWorkView[] | undefined
   childWorkOpen: () => boolean
   now: () => number
@@ -150,7 +153,7 @@ export async function handOverStructuredAgentSessionCommand(
   body: AgentJournalMessageItem
 ): Promise<void> {
   const { clientMessageId } = submission
-  const blocked = commandBlocked(ctx, body)
+  const blocked = await commandBlocked(ctx, body)
   if (blocked) {
     const refused = {
       state: 'rejected' as const,
@@ -213,7 +216,7 @@ async function openCommandTurn(
     clientMessageId: submission.clientMessageId,
     submittedAt: submission.submittedAt,
     fence: ctx.fence,
-    turnScope: contextStructuredAgentSessionCurrentWork(ctx).turnScope()
+    turnScope: (await contextStructuredAgentSessionCurrentWork(ctx)).turnScope()
   })
 }
 
@@ -252,10 +255,10 @@ async function settleUnsentCommand(
   })
 }
 
-function commandBlocked(
+async function commandBlocked(
   ctx: StructuredAgentSessionCommandHandoverContext,
   body: AgentJournalMessageItem
-): SubmissionRejectionFact | null {
+): Promise<SubmissionRejectionFact | null> {
   if (body.command?.name !== STRUCTURED_AGENT_SESSION_COMPACT_COMMAND) {
     return agentSessionFailureFact('commandRefused')
   }
@@ -268,7 +271,7 @@ function commandBlocked(
   if (!capabilities?.compact || (body.command.instructions && !capabilities.compactInstructions)) {
     return agentSessionFailureFact('commandRefused')
   }
-  const refusal = conversationCommandBlocked(
+  const refusal = await conversationCommandBlocked(
     ctx,
     record,
     { views: ctx.childWork(), open: ctx.childWorkOpen() },

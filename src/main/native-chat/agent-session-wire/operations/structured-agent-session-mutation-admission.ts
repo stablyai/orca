@@ -73,7 +73,7 @@ export type AgentSessionMutationRequest<TValue> = {
   plan: MutationPlan<TValue>
   /** Read after preparation; absent if no conversation is held. */
   journal: () => AgentSessionJournal | undefined
-  currentWork?: () => StructuredAgentSessionCurrentWork | null
+  currentWork?: () => Promise<StructuredAgentSessionCurrentWork | null>
   readWork?: JournalWorkReader
   /** Prepare between ledger evaluation and lease admission; return any terminal refusal. */
   prepareSession?: (

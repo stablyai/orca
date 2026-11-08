@@ -19,7 +19,7 @@ export async function readAgentSessionWorkspaceAttention(
       )
       .map(async ({ sessionId, location: scope }) => {
         try {
-          if ((await database.sessionEpoch(sessionId)) === null) {
+          if ((await database.ensureSessionEpoch(sessionId)) === null) {
             return null
           }
           const head = await database.readers.point({ sessionId, operation: { kind: 'metadata' } })

@@ -1,3 +1,4 @@
+import type { NativeChatUsageLimitCut } from '../../../../../shared/native-chat/native-chat-usage-limit-cut'
 import { readForkMarker } from '../history/agent-session-fork-marker'
 import { StructuredAgentSessionJournalObservers } from '../../observations/structured-agent-session-journal-observers'
 import type { StructuredAgentSessionConversations } from '../../host/structured-agent-session-conversations'
@@ -75,7 +76,10 @@ export class StructuredAgentSessionClientDelivery {
       StructuredAgentSessionConversations,
       'publish' | 'endPublications'
     >,
-    readUsageLimitContinue?: (id: string) => AgentSessionStatusSummary['usageLimitContinue'],
+    readUsageLimitContinue?: (
+      id: string,
+      cut: NativeChatUsageLimitCut | null
+    ) => AgentSessionStatusSummary['usageLimitContinue'],
     readLiveText?: (id: string) => readonly AgentJournalRenderItem[]
   ) {
     this.requestFailures = createStructuredAgentSessionHostRequestFailures(sessions, deps)

@@ -25,10 +25,4 @@ export type StructuredAgentSessionSeenEnd = {
   cause?: string
 }
 
-export type StructuredAgentSessionCurrentWorkJournal = Pick<
-  AgentSessionJournal,
-  'runningTurn' | 'itemFence' | 'visitItems' | 'submissions' | 'wroteBeforeOpen' | 'item' | 'cursor'
-> &
-  Partial<Pick<AgentSessionJournal, 'readSince'>> & {
-    inputOrder: Pick<AgentSessionJournal['inputOrder'], 'recoverableSubmissions'>
-  }
+export type StructuredAgentSessionCurrentWorkJournal = Pick<AgentSessionJournal, 'cursor'>

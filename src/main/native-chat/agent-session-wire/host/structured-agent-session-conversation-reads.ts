@@ -65,7 +65,7 @@ export function createStructuredAgentSessionConversationReads(context: () => Rea
       ): Promise<(StructuredAttentionRead & { scope: AgentSessionExecutionLocation })[]> => {
         const { deps, sessions } = context()
         const reads = await Promise.all(
-          deps.store.workspaceAttentionReads(location).map(async (read) => {
+          (await deps.store.workspaceAttentionReads(location)).map(async (read) => {
             const journal = sessions.get(read.sessionId)?.journal
             try {
               return journal

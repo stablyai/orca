@@ -48,7 +48,7 @@ export type StructuredAgentSessionTurnCompletionFeedDeps = {
   readStatusState: (
     sessionId: string,
     journal?: AgentSessionJournal
-  ) => StructuredAgentSessionStatusState | null
+  ) => Promise<StructuredAgentSessionStatusState | null>
   readChildWork: (sessionId: string) => readonly AgentChildWorkLivenessCandidate[] | undefined
 }
 
@@ -95,13 +95,13 @@ export class StructuredAgentSessionTurnCompletionFeed {
 
   /** When prompt and clean completion coincide, keep prompt identity; send completion only to legacy clients.
    * Failures reach everyone; first/historical observations and repeated identities stay silent. */
-  observe(
+  async observe(
     sessionId: string,
     journal?: AgentSessionJournal,
     options?: { historical?: boolean }
-  ): void {
+  ): Promise<void> {
     const session = this.deps.sessions.get(sessionId)
-    const state = session ? this.deps.readStatusState(sessionId, journal) : null
+    const state = session ? await this.deps.readStatusState(sessionId, journal) : null
     if (!session || !state) {
       return
     }

@@ -122,6 +122,10 @@ export class JournalSqlDatabase {
     return this.readEpoch(sessionId)
   }
 
+  ensureSessionEpoch(sessionId: string): Promise<string | null> {
+    return this.serialize(sessionId, () => this.conversions.ensure(sessionId))
+  }
+
   openSession(identity: AgentSessionJournalIdentity) {
     return this.serialize(identity.sessionId, async () => {
       let epoch = await this.conversions.ensure(identity.sessionId)

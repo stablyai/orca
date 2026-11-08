@@ -267,9 +267,9 @@ export async function applyStructuredRewindRecovery(
             cancel,
             childBoundary
           )
-        staged.write(db, row)
+        staged.write?.(db, row)
       },
-      committed: () => staged.committed()
+      committed: () => staged.committed?.()
     }
   }
 }
@@ -301,7 +301,7 @@ function inheritForkName(
     fold: receipt.fold,
     write: receipt.write,
     committed: () => {
-      receipt.committed()
+      receipt.committed?.()
       const record = deps.store.getRecord(sessionId)
       if (record?.rewind?.providerFork?.materialized) {
         deps.nameProviderConversation?.(record)
