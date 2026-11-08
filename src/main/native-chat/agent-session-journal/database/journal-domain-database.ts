@@ -1,4 +1,4 @@
-import { existsSync, linkSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { existsSync, linkSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import Database from '../../../sqlite/sync-database'
 import { hardenSqliteDatabaseFiles } from '../../../sqlite/harden-database-files'
@@ -15,6 +15,7 @@ import {
   JOURNAL_DOMAIN_SCHEMA_VERSION,
   migrateJournalDomainSchema
 } from './journal-domain-migrations'
+import { importJournalDomainProfile } from './journal-domain-profile-import'
 
 export function journalDomainDatabasePath(stateDirectory: string): string {
   return join(stateDirectory, 'agent-session-domain.db')
@@ -23,28 +24,36 @@ export function journalDomainDatabasePath(stateDirectory: string): string {
 /** Run once on the writer worker, before opening its steady-state writable connection. */
 export async function initializeJournalDomainDatabase(stateDirectory: string): Promise<string> {
   const destination = journalDomainDatabasePath(stateDirectory)
+  mkdirSync(stateDirectory, { recursive: true })
+  try {
+    removeAbandonedInitializers(stateDirectory)
+  } catch (error) {
+    console.warn('[agent-session-journal] removing an abandoned initializer failed', error)
+  }
   if (existsSync(destination)) {
     return destination
   }
-  mkdirSync(stateDirectory, { recursive: true })
   const temporary = mkdtempSync(join(stateDirectory, `.journal-domain-import-${process.pid}-`))
   try {
-    const snapshot = join(temporary, 'snapshot.db')
+    const filename = join(temporary, 'snapshot.db')
+    const { db } = openJournalDomainDatabase(filename)
     const sourcePath = journalDatabasePath(stateDirectory)
-    const copied = existsSync(sourcePath)
-    if (copied) {
-      const source = new Database(sourcePath, { readonly: true, fileMustExist: true })
-      try {
-        await source.backup(snapshot)
-      } finally {
-        source.close()
-      }
-    }
-    prepareJournalDomainSnapshot(snapshot, copied)
-    hardenSqliteDatabaseFiles(snapshot)
     try {
-      // A hard link publishes the complete snapshot without replacing another initializer's result.
-      linkSync(snapshot, destination)
+      if (existsSync(sourcePath)) {
+        const source = new Database(sourcePath, { readonly: true, fileMustExist: true })
+        try {
+          await importJournalDomainProfile(source, db)
+        } finally {
+          source.close()
+        }
+      }
+    } finally {
+      // Closing folds the private WAL into the file before it is published.
+      db.close()
+    }
+    try {
+      // Publish complete metadata without replacing another initializer's result.
+      linkSync(filename, destination)
     } catch (error) {
       if (!(error instanceof Error && 'code' in error && error.code === 'EEXIST')) {
         throw error
@@ -56,22 +65,24 @@ export async function initializeJournalDomainDatabase(stateDirectory: string): P
   }
 }
 
-/** Only the private complete snapshot may pay for pointer-map creation and an offline VACUUM. */
-function prepareJournalDomainSnapshot(filename: string, copied: boolean): void {
-  const db = new Database(filename)
-  try {
-    if (journalPragmaNumber(db, 'user_version') > JOURNAL_DOMAIN_SCHEMA_VERSION) {
-      return
+/** Only recognized dead-PID initializers are ours to discard; live and unknown owners stay. */
+function removeAbandonedInitializers(directory: string): void {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const match = /^\.journal-domain-import-([1-9][0-9]*)-[A-Za-z0-9]{6}$/.exec(entry.name)
+    if (!entry.isDirectory() || !match) {
+      continue
     }
-    db.pragma('journal_mode = DELETE')
-    if (journalPragmaNumber(db, 'auto_vacuum') !== 2) {
-      db.pragma('auto_vacuum = INCREMENTAL')
-      if (copied) {
-        db.exec('VACUUM')
+    const pid = Number(match[1])
+    if (!Number.isSafeInteger(pid) || pid > 2147483647) {
+      continue
+    }
+    try {
+      process.kill(pid, 0)
+    } catch (error) {
+      if (error instanceof Error && 'code' in error && error.code === 'ESRCH') {
+        rmSync(join(directory, entry.name), { recursive: true, force: true })
       }
     }
-  } finally {
-    db.close()
   }
 }
 

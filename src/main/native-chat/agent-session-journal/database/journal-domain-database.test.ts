@@ -1,7 +1,15 @@
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import Database from '../../../sqlite/sync-database'
 import {
@@ -17,8 +25,6 @@ import {
 } from './journal-domain-database'
 import { migrateJournalDomainSchema } from '../journal-domain-schema'
 import { migrateJournalDomainPredecessor } from './journal-domain-migrations.test-fixture'
-import { createJournalReducerState } from '../projection/journal-reducer'
-import { readJournalLegacyCards } from '../queued-messages/journal-queue-import'
 
 const cleanup: (() => void)[] = []
 afterEach(() => {
@@ -79,242 +85,192 @@ function seedSource(db: Database.Database): void {
     INSERT INTO journal_outcomes VALUES(1,1,'field','entry',3,'1','source outcome',0)`)
 }
 
-it('creates a fresh incremental store with records, ownership, attachments and receipts in one ledger', async () => {
+it('publishes an empty incremental store that retains new authoritative state on reopen', async () => {
   const stateDirectory = directory()
   const filename = await initializeJournalDomainDatabase(stateDirectory)
   expect(filename).toBe(journalDomainDatabasePath(stateDirectory))
-  expect(filename).not.toBe(journalDatabasePath(stateDirectory))
   const db = open(filename)
-  seedSource(db)
-  db.exec(`INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence)
-    VALUES('chat','epoch',2,1)`)
+  db.exec(`INSERT INTO agent_session_records VALUES('new','{"title":"new chat"}');
+    INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence)
+    VALUES('new','epoch',2,1)`)
   expect(db.pragma('auto_vacuum', { simple: true })).toBe(2)
   expect(db.prepare('PRAGMA integrity_check').get()).toEqual({ integrity_check: 'ok' })
-  expect(
-    db
-      .prepare(`SELECT name FROM sqlite_schema WHERE name='journal_domain_migrations'
-      OR name GLOB 'journal_proj_*'`)
-      .all()
-  ).toEqual([])
-  const reopened = open(filename)
+  const reopened = open(await initializeJournalDomainDatabase(stateDirectory))
   expect(reopened.prepare('SELECT record_json FROM agent_session_records').get()).toEqual({
-    record_json: '{"title":"original"}'
+    record_json: '{"title":"new chat"}'
   })
   expect(reopened.prepare('SELECT last_sequence FROM journal_chat_state').get()).toEqual({
     last_sequence: 2
   })
-  expect(reopened.prepare('SELECT result_json FROM agent_session_command_receipts').get()).toEqual({
-    result_json: '{"kind":"stop"}'
-  })
 })
 
-it('copies committed WAL rows without changing the original and removes mirrors only from the new file', async () => {
+it('copies opaque profile metadata in source order from the committed WAL, without copying transcripts or changing the original', async () => {
   const stateDirectory = directory()
   const source = legacy(stateDirectory)
   seedSource(source)
-  source.exec(`CREATE TABLE journal_proj_obsolete(value TEXT);
-    INSERT INTO journal_proj_obsolete VALUES('derived');
-    CREATE TABLE journal_domain_migrations(version INTEGER PRIMARY KEY);
-    INSERT INTO journal_domain_migrations VALUES(4)`)
-  expect(source.pragma('auto_vacuum', { simple: true })).toBe(0)
+  source.exec(`INSERT INTO agent_session_records VALUES('a','unreadable opaque record');
+    INSERT INTO agent_session_store_meta VALUES('tabs_recorded','1');
+    INSERT INTO agent_session_attachment_sweeps VALUES('owed-upload',123)`)
   const before = sourceHashes(stateDirectory)
-  const filename = await initializeJournalDomainDatabase(stateDirectory)
-  const copied = open(filename)
-  expect(copied.prepare('SELECT row_json FROM journal_rows').get()).toEqual({
-    row_json: 'wal-backed source row'
-  })
-  expect(copied.prepare('SELECT value_json FROM journal_outcomes').get()).toEqual({
-    value_json: 'source outcome'
-  })
-  expect(copied.prepare('SELECT tab_id, session_id FROM agent_session_tabs').get()).toEqual({
-    tab_id: 'tab',
-    session_id: 'chat'
-  })
-  expect(copied.prepare('SELECT row_json FROM agent_session_operations').get()).toEqual({
+  const current = open(await initializeJournalDomainDatabase(stateDirectory))
+  expect(
+    current.prepare('SELECT session_id,record_json FROM agent_session_records ORDER BY rowid').all()
+  ).toEqual([
+    { session_id: 'chat', record_json: '{"title":"original"}' },
+    { session_id: 'a', record_json: 'unreadable opaque record' }
+  ])
+  expect(current.prepare('SELECT * FROM journal_sessions').all()).toEqual([
+    { session_id: 'chat', workspace_id: 'workspace', epoch: 'epoch' }
+  ])
+  expect(
+    current.prepare('SELECT tab_id,session_id,position FROM agent_session_tabs').get()
+  ).toEqual({ tab_id: 'tab', session_id: 'chat', position: 1 })
+  expect(current.prepare('SELECT row_json FROM agent_session_operations').get()).toEqual({
     row_json: '{"owner":"original"}'
   })
-  expect(copied.prepare('SELECT upload_id FROM agent_session_attachment_claims').get()).toEqual({
-    upload_id: 'upload'
+  expect(current.prepare('SELECT * FROM agent_session_retired_claim_keys').get()).toEqual({
+    key_id: 'retired',
+    retired_at: 10
   })
-  expect(copied.prepare('SELECT message_id FROM queued_messages').get()).toEqual({
-    message_id: 'queued'
+  expect(current.prepare('SELECT * FROM agent_session_store_meta').get()).toEqual({
+    key: 'tabs_recorded',
+    value: '1'
   })
-  expect(copied.pragma('auto_vacuum', { simple: true })).toBe(2)
-  expect(
-    copied
-      .prepare(`SELECT name FROM sqlite_schema WHERE name GLOB 'journal_proj_*'
-    OR name='journal_domain_migrations'`)
-      .all()
-  ).toEqual([])
-  expect(source.prepare('SELECT value FROM journal_proj_obsolete').get()).toEqual({
-    value: 'derived'
+  expect(current.prepare('SELECT result_json FROM agent_session_command_receipts').get()).toEqual({
+    result_json: '{"kind":"stop"}'
   })
-  expect(source.pragma('user_version', { simple: true })).toBe(4)
-  expect(source.pragma('auto_vacuum', { simple: true })).toBe(0)
+  expect(current.prepare('SELECT * FROM agent_session_attachment_claims').get()).toEqual({
+    upload_id: 'upload',
+    session_id: 'chat',
+    claimed_at: 100
+  })
+  expect(current.prepare('SELECT * FROM agent_session_attachment_sweeps').get()).toEqual({
+    upload_id: 'owed-upload',
+    started_at: 123
+  })
+  expect(current.prepare('SELECT row_json FROM journal_rows').all()).toEqual([])
+  expect(current.prepare('SELECT value_json FROM journal_outcomes').all()).toEqual([])
+  expect(current.prepare('SELECT message_id FROM queued_messages').all()).toEqual([])
+  expect(source.prepare('SELECT row_json FROM journal_rows').get()).toEqual({
+    row_json: 'wal-backed source row'
+  })
   expect(sourceHashes(stateDirectory)).toEqual(before)
 })
 
-it('reopens the published file without importing later old-build writes or consulting a broken source', async () => {
+it('never reimports metadata or consults a broken original once the new file is published', async () => {
   const stateDirectory = directory()
   const source = legacy(stateDirectory)
   seedSource(source)
   const filename = await initializeJournalDomainDatabase(stateDirectory)
   const current = open(filename)
-  source.exec(`UPDATE journal_rows SET row_json='later old-build edit';
-    INSERT INTO journal_rows VALUES('chat','epoch',2,200,'later old-build message')`)
-  current.exec(`INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence)
-    VALUES('chat','epoch',3,1)`)
+  source.exec(`UPDATE agent_session_records SET record_json='later old-build metadata'`)
+  current.exec(`UPDATE agent_session_records SET record_json='new authoritative metadata'`)
   expect(await initializeJournalDomainDatabase(stateDirectory)).toBe(filename)
-  expect(current.prepare('SELECT row_json FROM journal_rows ORDER BY seq').all()).toEqual([
-    { row_json: 'wal-backed source row' }
-  ])
+  expect(current.prepare('SELECT record_json FROM agent_session_records').get()).toEqual({
+    record_json: 'new authoritative metadata'
+  })
   const isolated = directory()
   const published = await initializeJournalDomainDatabase(isolated)
   writeFileSync(journalDatabasePath(isolated), 'unreadable old database')
   const before = hash(published)
   expect(await initializeJournalDomainDatabase(isolated)).toBe(published)
   expect(hash(published)).toBe(before)
-  expect(open(filename).prepare('SELECT last_sequence FROM journal_chat_state').get()).toEqual({
-    last_sequence: 3
-  })
 })
 
-it('preserves early version-four queue rows without assuming later additive source columns', async () => {
+it('accepts supported early schemas with no additive metadata tables without migrating their source', async () => {
   const stateDirectory = directory()
   const source = new Database(journalDatabasePath(stateDirectory))
-  source.exec(createJournalTablesSql() + createAgentSessionRecordTablesSql())
-  source.exec(`CREATE TABLE queued_messages (
-    session_id TEXT NOT NULL, message_id TEXT NOT NULL, position INTEGER NOT NULL,
-    body_json TEXT NOT NULL, fingerprint TEXT NOT NULL, created_at INTEGER NOT NULL,
-    host_instance TEXT NOT NULL, state TEXT NOT NULL, PRIMARY KEY(session_id,message_id));
-    PRAGMA user_version=4`)
-  const body = '{"kind":"message","role":"user","blocks":[{"type":"text","text":"waiting"}]}'
-  source
-    .prepare(
-      "INSERT INTO queued_messages VALUES('chat','original-message',1,?,'original fingerprint',100,'host','waiting')"
-    )
-    .run(body)
+  source.exec(createJournalTablesSql())
+  source.exec(
+    `INSERT INTO journal_sessions VALUES('early','workspace','epoch'); PRAGMA user_version=3`
+  )
   source.close()
   const before = hash(journalDatabasePath(stateDirectory))
   const current = open(await initializeJournalDomainDatabase(stateDirectory))
-  expect(current.prepare('SELECT * FROM queued_messages').all()).toEqual([
-    {
-      session_id: 'chat',
-      message_id: 'original-message',
-      position: 1,
-      body_json: body,
-      fingerprint: 'original fingerprint',
-      created_at: 100,
-      host_instance: 'host',
-      state: 'waiting'
-    }
+  expect(current.prepare('SELECT * FROM journal_sessions').all()).toEqual([
+    { session_id: 'early', workspace_id: 'workspace', epoch: 'epoch' }
   ])
-  expect(readJournalLegacyCards(current, createJournalReducerState('chat', 'epoch'))).toMatchObject(
-    [
-      {
-        messageId: 'original-message',
-        position: 1,
-        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'waiting' }] },
-        holdReason: null,
-        returnedReason: null,
-        returnedRejection: null,
-        consumedAs: null,
-        queuedAt: null
-      }
-    ]
-  )
+  expect(current.prepare('SELECT record_json FROM agent_session_records').all()).toEqual([])
   expect(hash(journalDatabasePath(stateDirectory))).toBe(before)
 })
 
-it('publishes only a complete snapshot and never replaces another completed initializer', async () => {
+it('publishes complete metadata under competing initialization without replacing the winner or foreign files', async () => {
   const stateDirectory = directory()
   seedSource(legacy(stateDirectory))
   const foreign = join(stateDirectory, '.journal-domain-import-other-process')
   mkdirSync(foreign)
-  writeFileSync(join(foreign, 'snapshot.db'), 'another invocation')
-  const backup = Database.prototype.backup
-  let complete!: () => void
-  let resume!: () => void
-  const copied = new Promise<void>((resolve) => {
-    complete = resolve
+  writeFileSync(join(foreign, 'snapshot.db'), 'foreign evidence')
+  const [first, second] = await Promise.all([
+    initializeJournalDomainDatabase(stateDirectory),
+    initializeJournalDomainDatabase(stateDirectory)
+  ])
+  expect(first).toBe(second)
+  const winner = open(first)
+  expect(winner.prepare('SELECT result_json FROM agent_session_command_receipts').get()).toEqual({
+    result_json: '{"kind":"stop"}'
   })
-  const held = new Promise<void>((resolve) => {
-    resume = resolve
-  })
-  let temporary = ''
-  vi.spyOn(Database.prototype, 'backup').mockImplementationOnce(async function (
-    this: Database.Database,
-    filename,
-    options
-  ) {
-    temporary = dirname(filename)
-    await backup.call(this, filename, options)
-    complete()
-    await held
-  })
-  const first = initializeJournalDomainDatabase(stateDirectory)
-  await copied
-  try {
-    expect(existsSync(journalDomainDatabasePath(stateDirectory))).toBe(false)
-    const winner = await initializeJournalDomainDatabase(stateDirectory)
-    open(winner).exec(`INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence)
-      VALUES('winner','epoch',7,1)`)
-    resume()
-    expect(await first).toBe(winner)
-    expect(
-      open(winner).prepare('SELECT session_id,last_sequence FROM journal_chat_state').get()
-    ).toEqual({
-      session_id: 'winner',
-      last_sequence: 7
-    })
-    expect(existsSync(temporary)).toBe(false)
-    expect(readFileSync(join(foreign, 'snapshot.db'), 'utf8')).toBe('another invocation')
-  } finally {
-    resume()
-    await first
-  }
-})
-
-it('cleans only its private incomplete copy after backup fails and retries from the untouched source', async () => {
-  const stateDirectory = directory()
-  seedSource(legacy(stateDirectory))
-  const before = sourceHashes(stateDirectory)
-  const backup = Database.prototype.backup
-  let temporary = ''
-  vi.spyOn(Database.prototype, 'backup').mockImplementationOnce(async function (
-    this: Database.Database,
-    filename,
-    options
-  ) {
-    temporary = dirname(filename)
-    await backup.call(this, filename, options)
-    throw new Error('interrupted backup')
-  })
-  await expect(initializeJournalDomainDatabase(stateDirectory)).rejects.toThrow(
-    'interrupted backup'
+  winner.exec(
+    `INSERT INTO journal_chat_state(session_id,epoch,last_sequence,highest_fence) VALUES('winner','epoch',7,1)`
   )
-  expect(existsSync(journalDomainDatabasePath(stateDirectory))).toBe(false)
-  expect(existsSync(temporary)).toBe(false)
-  expect(sourceHashes(stateDirectory)).toEqual(before)
-  const filename = await initializeJournalDomainDatabase(stateDirectory)
-  expect(open(filename).prepare('SELECT row_json FROM journal_rows').get()).toEqual({
-    row_json: 'wal-backed source row'
-  })
+  expect(
+    open(await initializeJournalDomainDatabase(stateDirectory))
+      .prepare('SELECT session_id,last_sequence FROM journal_chat_state')
+      .get()
+  ).toEqual({ session_id: 'winner', last_sequence: 7 })
+  expect(readFileSync(join(foreign, 'snapshot.db'), 'utf8')).toBe('foreign evidence')
 })
 
-it('retries a failed numbered migration in the published file without recopying or backfilling again', async () => {
+it('discards an unpublished partial metadata import on failure and retries from the intact original', async () => {
   const stateDirectory = directory()
   const source = legacy(stateDirectory)
   seedSource(source)
-  const filename = await initializeJournalDomainDatabase(stateDirectory)
+  source.exec(
+    'ALTER TABLE agent_session_command_receipts RENAME COLUMN accepted_at TO invalid_column'
+  )
+  const before = sourceHashes(stateDirectory)
+  await expect(initializeJournalDomainDatabase(stateDirectory)).rejects.toThrow(/accepted_at/)
+  expect(existsSync(journalDomainDatabasePath(stateDirectory))).toBe(false)
+  expect(
+    readdirSync(stateDirectory).filter((entry) => entry.startsWith('.journal-domain-import-'))
+  ).toEqual([])
+  expect(sourceHashes(stateDirectory)).toEqual(before)
+  source.exec(
+    'ALTER TABLE agent_session_command_receipts RENAME COLUMN invalid_column TO accepted_at'
+  )
+  const current = open(await initializeJournalDomainDatabase(stateDirectory))
+  expect(current.prepare('SELECT result_json FROM agent_session_command_receipts').get()).toEqual({
+    result_json: '{"kind":"stop"}'
+  })
+})
+
+it.each([1, 100, 'corrupt'])(
+  'refuses source schema %s without publishing an empty successful profile',
+  async (version) => {
+    const stateDirectory = directory()
+    const filename = journalDatabasePath(stateDirectory)
+    if (version === 'corrupt') {
+      writeFileSync(filename, 'corrupt database')
+    } else {
+      const source = new Database(filename)
+      source.pragma(`user_version=${version}`)
+      source.close()
+    }
+    const before = hash(filename)
+    await expect(initializeJournalDomainDatabase(stateDirectory)).rejects.toThrow()
+    expect(existsSync(journalDomainDatabasePath(stateDirectory))).toBe(false)
+    expect(hash(filename)).toBe(before)
+  }
+)
+
+it('retries a failed numbered migration without consulting the original or backfilling an already migrated row again', async () => {
+  const stateDirectory = directory()
+  const filename = journalDomainDatabasePath(stateDirectory)
   const db = new Database(filename)
   cleanup.push(() => db.close())
   migrateJournalDomainPredecessor(db, 5)
   db.exec(`INSERT INTO journal_items VALUES('chat','epoch','item',1,2,1,0,1,NULL,'invalid JSON')`)
   expect(() => openJournalDomainDatabase(filename)).toThrow()
   expect(db.pragma('user_version', { simple: true })).toBe(5)
-  expect(() => db.prepare('SELECT root FROM journal_items')).toThrow()
-  source.exec(`UPDATE journal_rows SET row_json='old-build edit after failed migration'`)
   const item = {
     itemId: 'item',
     revision: 2,
@@ -328,17 +284,13 @@ it('retries a failed numbered migration in the published file without recopying 
     turnScope: { kind: 'thread' }
   }
   db.prepare('UPDATE journal_items SET payload_json=?').run(JSON.stringify(item))
+  writeFileSync(journalDatabasePath(stateDirectory), 'broken original')
   expect(await initializeJournalDomainDatabase(stateDirectory)).toBe(filename)
   const recovered = open(filename)
-  expect(recovered.prepare('SELECT root, revision, payload_json FROM journal_items').get()).toEqual(
-    {
-      root: 1,
-      revision: 2,
-      payload_json: JSON.stringify(item)
-    }
-  )
-  expect(recovered.prepare('SELECT row_json FROM journal_rows').get()).toEqual({
-    row_json: 'wal-backed source row'
+  expect(recovered.prepare('SELECT root,revision,payload_json FROM journal_items').get()).toEqual({
+    root: 1,
+    revision: 2,
+    payload_json: JSON.stringify(item)
   })
   recovered.exec('UPDATE journal_items SET root=0')
   expect(open(filename).prepare('SELECT root FROM journal_items').get()).toEqual({ root: 0 })
@@ -347,15 +299,14 @@ it('retries a failed numbered migration in the published file without recopying 
 it('opens a newer store read-only before changing persistent pragmas or its only version ledger', () => {
   const filename = join(directory(), 'newer.db')
   const seed = new Database(filename)
-  seed.exec(`CREATE TABLE future_records(value TEXT);
-    INSERT INTO future_records VALUES('authoritative future data'); PRAGMA user_version=100`)
+  seed.exec(
+    `CREATE TABLE future_records(value TEXT); INSERT INTO future_records VALUES('authoritative future data'); PRAGMA user_version=100`
+  )
   seed.close()
   const before = hash(filename)
   const { db, readOnly } = openJournalDomainDatabase(filename)
   cleanup.push(() => db.close())
   expect(readOnly).toBe(true)
-  expect(db.pragma('journal_mode', { simple: true })).toBe('delete')
-  expect(db.pragma('auto_vacuum', { simple: true })).toBe(0)
   expect(db.prepare('SELECT value FROM future_records').get()).toEqual({
     value: 'authoritative future data'
   })
@@ -363,6 +314,5 @@ it('opens a newer store read-only before changing persistent pragmas or its only
   expect(() => migrateJournalDomainSchema(db)).toThrow(
     'journal domain schema is newer than this writer'
   )
-  expect(db.pragma('user_version', { simple: true })).toBe(100)
   expect(hash(filename)).toBe(before)
 })
