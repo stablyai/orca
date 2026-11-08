@@ -19785,6 +19785,7 @@
       },
       "delete": {
         "changes": {
+          "permanentLoss": "Git 워크스페이스의 커밋되지 않은 변경 사항이나 추적되지 않은 변경 사항은 영구적으로 삭제됩니다.",
           "unavailable": "변경 사항을 확인할 수 없습니다",
           "checking": "변경 사항 확인 중…",
           "checkingDetails": "확인 중…",

@@ -20182,6 +20182,7 @@
       },
       "delete": {
         "changes": {
+          "permanentLoss": "Git 工作區中任何未提交或未追蹤的變更都將被永久刪除。",
           "unavailable": "無法檢查變更",
           "checking": "正在檢查變更…",
           "checkingDetails": "檢查…",

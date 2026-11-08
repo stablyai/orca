@@ -1,3 +1,4 @@
+// @protected-copy
 import type { JSX } from 'react'
 import { AlertTriangle, ChevronRight } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'

@@ -19726,6 +19726,7 @@
       },
       "delete": {
         "changes": {
+          "permanentLoss": "Git 工作区中任何未提交或未跟踪的更改都将被永久删除。",
           "unavailable": "无法检查更改",
           "checking": "正在检查更改…",
           "checkingDetails": "检查…",

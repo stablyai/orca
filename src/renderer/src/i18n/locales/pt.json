@@ -21485,6 +21485,7 @@
       },
       "delete": {
         "changes": {
+          "permanentLoss": "Quaisquer alterações sem commit ou não rastreadas nos espaços de trabalho Git serão excluídas permanentemente.",
           "unavailable": "Não foi possível verificar as alterações",
           "checking": "Verificando alterações…",
           "checkingDetails": "Verificando…",

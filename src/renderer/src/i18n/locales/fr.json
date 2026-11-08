@@ -20530,6 +20530,7 @@
       },
       "delete": {
         "changes": {
+          "permanentLoss": "Toutes les modifications non validées ou non suivies dans les espaces de travail Git seront définitivement supprimées.",
           "unavailable": "Impossible de vérifier les modifications",
           "checking": "Recherche de modifications…",
           "checkingDetails": "Vérification…",

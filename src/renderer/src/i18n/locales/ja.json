@@ -19785,6 +19785,7 @@
       },
       "delete": {
         "changes": {
+          "permanentLoss": "Git ワークスペース内のコミットされていない変更または未追跡の変更は完全に削除されます。",
           "unavailable": "変更を確認できませんでした",
           "checking": "変更を確認中…",
           "checkingDetails": "確認中…",

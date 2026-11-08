@@ -20498,6 +20498,7 @@
       },
       "delete": {
         "changes": {
+          "permanentLoss": "Alle nicht committeten oder nicht versionierten Änderungen in Git-Arbeitsbereichen werden endgültig gelöscht.",
           "unavailable": "Änderungen konnten nicht geprüft werden",
           "checking": "Änderungen werden geprüft…",
           "checkingDetails": "Wird geprüft…",

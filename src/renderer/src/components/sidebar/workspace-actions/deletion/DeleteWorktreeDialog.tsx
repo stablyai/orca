@@ -180,6 +180,10 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
     gitStatusByWorktreeIdentity,
     repoMap
   ])
+  // Per-target hints only warn once changes are known; pending or failed checks still lose data.
+  const hasUnknownChangeState = [...dirtyChanges.checkStates].some(
+    ([key, state]) => state !== 'complete' && !dirtyChanges.counts.has(key)
+  )
 
   useEffect(() => {
     if (isOpen && worktreeIds.length > 0 && worktrees.length === 0 && !isDeleting) {
@@ -332,6 +336,7 @@ const DeleteWorktreeDialog = React.memo(function DeleteWorktreeDialog() {
               : t('auto.components.sidebar.DeleteWorktreeDialog.fc23c4cbdf', 'Delete Workspace')}
           </DialogTitle>
           <DeleteWorktreeDialogDescription
+            showUnknownChangeLossWarning={hasUnknownChangeState}
             targetClassName={deleteCopy.targetClassName}
             targetName={isBatchDelete ? undefined : worktree?.displayName}
             description={canDeleteAllLineage ? lineageDeleteDescription : deleteCopy.description}

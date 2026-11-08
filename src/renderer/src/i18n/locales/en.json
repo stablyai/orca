@@ -21115,6 +21115,7 @@
       },
       "delete": {
         "changes": {
+          "permanentLoss": "Any uncommitted or untracked changes in Git workspaces will be permanently deleted.",
           "unavailable": "Changes could not be checked",
           "checking": "Checking for changes…",
           "checkingDetails": "Checking…",

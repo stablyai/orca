@@ -20309,6 +20309,7 @@
       },
       "delete": {
         "changes": {
+          "permanentLoss": "Los cambios sin confirmar o sin seguimiento en los espacios de trabajo de Git se eliminarán de forma permanente.",
           "unavailable": "No se pudieron comprobar los cambios",
           "checking": "Comprobando si hay cambios…",
           "checkingDetails": "Comprobando…",

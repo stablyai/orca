@@ -20480,6 +20480,7 @@
       },
       "delete": {
         "changes": {
+          "permanentLoss": "Git çalışma alanlarındaki commit edilmemiş veya izlenmeyen tüm değişiklikler kalıcı olarak silinecek.",
           "unavailable": "Değişiklikler kontrol edilemedi",
           "checking": "Değişiklikler kontrol ediliyor…",
           "checkingDetails": "Kontrol ediliyor…",
