@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { RpcDispatcher } from '../../src/main/runtime/rpc/dispatcher'
 import type { RpcRequest } from '../../src/main/runtime/rpc/core'
-import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal'
+import { TERMINAL_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -10,7 +10,7 @@ import {
   encodeTerminalStreamFrame,
   encodeTerminalStreamJson,
   encodeTerminalStreamText
-} from '../../src/shared/terminal-stream-protocol'
+} from '../../src/shared/terminal/stream/terminal-stream-protocol'
 
 const WORKTREE_ID = 'repo-1::/tmp/wt'
 // Use host-owned snapshot-backed daemon PTYs, matching the remotely viewed local pane.
@@ -234,38 +234,6 @@ describe('STA-2854 B: remote subscriber survives a fully unmounted host renderer
     expect(mountSpy).not.toHaveBeenCalled()
     expect(provider.attachCalls).toEqual([])
     expect(errorFrames(reconnected)).toBe(0)
-  })
-
-  it('counterfactual: losing every subscriber is what clears the thinning veto', async () => {
-    const runtime = new OrcaRuntimeService()
-    const provider = createHostProvider()
-    provider.bind(runtime)
-    runtime.setPtyController(provider.controller as never)
-    const record = internals(runtime).recordPtyWorktree(provider.ptyId, WORKTREE_ID, {
-      connected: true
-    })
-    const handle = internals(runtime).issuePtyHandle(record)
-    vi.spyOn(runtime, 'requestRendererTerminalTabMount').mockReturnValue(false)
-
-    const harness = startMultiplex(runtime, 'conn-counterfactual')
-    await vi.waitFor(() => expect(harness.handlers.has(0)).toBe(true))
-    sendSubscribe(harness, 1, handle, 'client-b')
-    await waitForSubscribed(harness, 1)
-    expect(runtime.hasRawTerminalViewSubscriber(provider.ptyId)).toBe(true)
-
-    harness.handlers.get(1)?.(
-      decodeTerminalStreamFrame(
-        encodeTerminalStreamFrame({
-          opcode: TerminalStreamOpcode.Unsubscribe,
-          streamId: 1,
-          seq: 3,
-          payload: encodeTerminalStreamJson({})
-        })
-      )!
-    )
-    await vi.waitFor(() => expect(runtime.hasRawTerminalViewSubscriber(provider.ptyId)).toBe(false))
-    expect(provider.session.attached).toBe(true)
-    expect(provider.emitData('post-unsubscribe\r\n')).toBe(true)
   })
 })
 

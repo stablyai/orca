@@ -1,21 +1,26 @@
 import React from 'react'
-import { ChevronDown, Settings2 } from 'lucide-react'
-import AgentCombobox from '@/components/agent/AgentCombobox'
+import { ChevronDown, Settings2, Terminal } from 'lucide-react'
+import type AgentCombobox from '@/components/agent/AgentCombobox'
+import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
+import { AgentDefaultContextMenu } from '@/components/agent/agent-combobox-items'
+import { DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
-import type { TuiAgent } from '../../../../shared/tui-agent'
 
 type NewWorkspaceComposerAgentSectionProps = Pick<
   NewWorkspaceComposerCardProps,
   | 'quickAgent'
   | 'agentSurfaceRows'
+  | 'agentPickerDraft'
+  | 'agentSetupDisabled'
+  | 'selectedRepoIsGit'
+  | 'selectedProjectId'
+  | 'projectOptions'
   | 'onQuickAgentChange'
   | 'agentRows'
-  | 'quickSetupOnly'
-  | 'onQuickSetupOnlySelect'
   | 'onOpenAgentSettings'
   | 'createDisabled'
   | 'onCreate'
@@ -33,41 +38,28 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
 export function NewWorkspaceComposerAgentSection({
   quickAgent,
   agentSurfaceRows,
+  agentPickerDraft,
+  agentSetupDisabled,
+  selectedRepoIsGit,
+  selectedProjectId,
+  projectOptions,
   onQuickAgentChange,
-  quickSetupOnly = false,
-  onQuickSetupOnlySelect,
   onOpenAgentSettings,
   createDisabled,
   onCreate,
   advancedOpen,
   advancedLocked = false,
   onToggleAdvanced,
-  visibleQuickAgents,
   defaultTuiAgent,
   handleSetDefaultAgent
 }: NewWorkspaceComposerAgentSectionProps): React.JSX.Element {
-  const comboboxProps = {
-    agents: visibleQuickAgents,
-    value: quickAgent,
-    onValueChange: (agent: TuiAgent | null) => onQuickAgentChange(agent),
-    allowBlankTerminal: true as const,
-    onOpenManageAgents: onOpenAgentSettings,
-    defaultAgent: defaultTuiAgent,
-    onSetDefault: handleSetDefaultAgent,
-    clearSelection: onQuickSetupOnlySelect
-      ? { cleared: quickSetupOnly, onClear: onQuickSetupOnlySelect }
-      : undefined,
-    allowNarrowTrigger: true,
-    triggerClassName:
-      'h-9 w-full min-w-0 border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50',
-    onTriggerEnter: createDisabled ? undefined : onCreate
-  }
+  const t = useTranslate()
   return (
     <>
       <div className="min-w-0 space-y-1" data-contextual-tour-target="workspace-creation-agent">
         <div className="flex items-center justify-between gap-2">
           <label className="text-xs font-medium text-muted-foreground">
-            {translate('components.newWorkspace.agentOptional', 'Agent [Optional]')}
+            {t('components.newWorkspace.agentOptional', 'Agent [Optional]')}
           </label>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -75,10 +67,10 @@ export function NewWorkspaceComposerAgentSection({
                 type="button"
                 variant="ghost"
                 size="icon-xs"
-                onClick={onOpenAgentSettings}
+                onClick={(event) => onOpenAgentSettings(event.currentTarget)}
                 tabIndex={-1}
                 className="size-5 shrink-0 rounded-sm text-muted-foreground hover:text-foreground"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.NewWorkspaceComposerCard.ab63f25397',
                   'Open agent settings'
                 )}
@@ -87,11 +79,39 @@ export function NewWorkspaceComposerAgentSection({
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top" sideOffset={6}>
-              {translate('auto.components.NewWorkspaceComposerCard.ba64270bdb', 'Configure agents')}
+              {t('auto.components.NewWorkspaceComposerCard.ba64270bdb', 'Configure agents')}
             </TooltipContent>
           </Tooltip>
         </div>
-        <AgentCombobox {...comboboxProps} surfaceRows={agentSurfaceRows} />
+        <AgentLaunchPicker
+          model={agentSurfaceRows?.model ?? { state: 'loading', placeholderCount: 2 }}
+          agent={quickAgent}
+          value={agentPickerDraft}
+          cli={agentSurfaceRows?.selection.cli === true}
+          setupDisabled={agentSetupDisabled}
+          matchTriggerWidth={
+            selectedRepoIsGit &&
+            projectOptions?.find((option) => option.id === selectedProjectId)?.kind !==
+              'project-group'
+          }
+          onOpenAgentSettings={onOpenAgentSettings}
+          onTriggerEnter={createDisabled ? undefined : onCreate}
+          emptyLabel={t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
+          defaultAgent={defaultTuiAgent}
+          onSetDefault={handleSetDefaultAgent}
+          onPick={(agent, draft, entry) => onQuickAgentChange(agent, draft?.surface, draft, entry)}
+        >
+          <AgentDefaultContextMenu
+            isDefault={defaultTuiAgent === 'blank'}
+            onSetDefault={() => handleSetDefaultAgent('blank')}
+          >
+            <DropdownMenuItem onSelect={() => onQuickAgentChange(null)}>
+              <Terminal className="size-3.5" />
+              {t('auto.components.agent.AgentCombobox.986f946354', 'Blank Terminal')}
+            </DropdownMenuItem>
+          </AgentDefaultContextMenu>
+          <DropdownMenuSeparator />
+        </AgentLaunchPicker>
       </div>
 
       <div className="!mb-2">
@@ -104,7 +124,7 @@ export function NewWorkspaceComposerAgentSection({
           aria-expanded={advancedOpen}
           className="-ml-2 text-xs focus-visible:ring-inset"
         >
-          {translate('auto.components.NewWorkspaceComposerCard.f0470c7383', 'Advanced')}
+          {t('auto.components.NewWorkspaceComposerCard.f0470c7383', 'Advanced')}
           <ChevronDown
             className={cn('size-4 transition-transform', advancedOpen && 'rotate-180')}
           />

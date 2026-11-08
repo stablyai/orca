@@ -8,11 +8,11 @@ import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtim
 import {
   forgetCodexPaneAccount,
   getCodexPaneAccount,
-  recordCodexPaneAccount,
-  type CodexPaneHomeRoute
-} from '../../../codex/codex-pane-account-registry'
-import { resolveCodexPaneLaunchAccount } from '../../../codex/codex-pane-launch-account'
-import { getSystemCodexHomePath } from '../../../codex/codex-home-paths'
+  recordCodexPaneAccount
+} from '../../../codex/configuration/homes/codex-pane-account-registry'
+import type { CodexPaneHomeRoute } from '../../../codex/configuration/homes/codex-pane-account-registry-types'
+import { resolveCodexPaneLaunchAccount } from '../../../codex/configuration/homes/codex-pane-launch-account'
+import { getSystemCodexHomePath } from '../../../codex/configuration/homes/codex-home-paths'
 import {
   isHostCodexHomeForWsl,
   isWslCodexHomeForHost

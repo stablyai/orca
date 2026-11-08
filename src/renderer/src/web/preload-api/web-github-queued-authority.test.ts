@@ -7,14 +7,14 @@ import {
   RUNTIME_PROTOCOL_VERSION,
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
 } from '../../../../shared/protocol-version'
-import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as exact } from '../../../../shared/source-control-runtime-capabilities'
+import { GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY as exact } from '../../../../shared/source-control/runtime/source-control-runtime-capabilities'
 import { createGitHubApi } from './web-github-api'
 import { callEnvironmentEnvelope } from './web-runtime-calls'
 import {
   clearRuntimeCompatibilityCache,
   markRuntimeEnvironmentCompatible
-} from '@/runtime/runtime-rpc-client'
-import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+} from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 const network = vi.hoisted(() => ({
   client: { connectionEpoch: 1, runtimeId: 'a', call: vi.fn() },

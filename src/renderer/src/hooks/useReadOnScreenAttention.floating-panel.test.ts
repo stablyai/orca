@@ -5,10 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentAutoAckPresence from './agent-auto-ack-presence'
 import { useReadOnScreenAttention } from './useReadOnScreenAttention'
 import { useAppStore } from '../store'
-import { selectFloatingWorkspaceHasUnread } from '../store/selectors'
-import { makeTab, makeTabGroup, makeUnifiedTab } from '../store/slices/store-session-test-harness'
+import { selectFloatingWorkspaceHasUnread } from '../store/workspaces/floating/floating-workspace-unread-selector'
+import { makeTab } from '../store/terminals/terminal-tab.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../store/slices/tabs/tab-group.test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../shared/constants'
-import { makePaneKey } from '../../../shared/stable-pane-id'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 
 vi.mock('./agent-auto-ack-presence', async (importOriginal) => ({
   ...(await importOriginal<typeof AgentAutoAckPresence>()),

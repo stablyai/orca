@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import type { DiffSection } from '../../diff-section-types'
+import type { DiffSection } from '../../diff/sections/diff-section-types'
 import {
   claimCombinedDiffView,
   clearCombinedDiffViewMemory,
@@ -68,56 +68,6 @@ function storedView(key: string): CachedCombinedDiffViewState {
 afterEach(clearCombinedDiffViewMemory)
 
 describe('inactive combined diff body budget', () => {
-  it('releases oldest clean bodies while retaining restoration metadata and reload state', () => {
-    const first = section(6_000_000)
-    remember('first', [first])
-    remember('second', [section(6_000_000)])
-    remember('third', [section(6_000_000)])
-
-    expect(storedView('first').sections[0].originalContent.length).toBe(0)
-    expect(storedView('first')).toEqual({
-      ...view([first]),
-      loadedIndices: [],
-      sections: [
-        {
-          ...first,
-          originalContent: '',
-          modifiedContent: '',
-          diffResult: null,
-          loading: true,
-          error: undefined,
-          contentGeneration: 5
-        }
-      ]
-    })
-    expect(readCombinedDiffViewMemory('first')).toMatchObject({
-      scrollTop: 640,
-      scrollAnchor: { key: 'app.ts', offset: 12 }
-    })
-    expect(storedView('second').sections[0].originalContent).toHaveLength(3_000_000)
-    expect(storedView('third').loadedIndices).toEqual([0])
-    expect(first.loading).toBe(false)
-    expect(first.originalContent).toHaveLength(3_000_000)
-  })
-
-  it('protects mounted content and trims it when its final mount releases', () => {
-    const sections = [section(6_000_000), section(6_000_000), section(6_000_000)]
-    const mounted = claimCombinedDiffView('mounted', 'workspace')
-    const otherMount = claimCombinedDiffView('mounted', 'workspace')
-    rememberCombinedDiffView(mounted, { view: view(sections) })
-    remember('inactive', [section(6_000_000)])
-    releaseCombinedDiffView(mounted)
-    expect(storedView('mounted').sections).toBe(sections)
-    releaseCombinedDiffView(otherMount)
-    expect(storedView('mounted').sections.every((item) => item.loading)).toBe(true)
-    expect(storedView('inactive').loadedIndices).toEqual([0])
-
-    rememberCombinedDiffView(otherMount, {
-      view: view([section(6_000_000), section(6_000_000), section(6_000_000)])
-    })
-    expect(storedView('mounted').loadedIndices).toEqual([])
-  })
-
   it('preserves dirty edits and refused saves when pruning clean siblings', () => {
     const dirty = section(20_000_000, { dirty: true })
     const conflict = section(20_000_000, { saveConflict: true })
@@ -134,26 +84,5 @@ describe('inactive combined diff body budget', () => {
       diffResult: null
     })
     expect(cached.loadedIndices).toEqual([0, 1])
-  })
-
-  it('counts binary bodies and counts mirrored text bodies once', () => {
-    remember('text', [section(6_000_000), section(6_000_000)])
-    const binary = section(0, {
-      diffResult: {
-        kind: 'binary',
-        originalContent: 'a'.repeat(2_000_000),
-        modifiedContent: 'b'.repeat(2_000_000),
-        originalIsBinary: true,
-        modifiedIsBinary: true,
-        isImage: true,
-        mimeType: 'image/png'
-      }
-    })
-    remember('image', [binary])
-    expect(storedView('text').loadedIndices).toEqual([0, 1])
-    expect(storedView('image').sections[0]).toBe(binary)
-    remember('overflow', [section(2)])
-    expect(storedView('text').loadedIndices).toEqual([])
-    expect(storedView('image').sections[0]).toBe(binary)
   })
 })

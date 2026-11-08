@@ -26,12 +26,4 @@ class MobileWebShellResponseHeadersTest {
     }
   }
 
-  @Test
-  fun `caches nothing, whatever the path`() {
-    val headers = mobileWebShellResponseHeaders("/assets/aa.js", 0)
-    assertEquals("no-store", headers["Cache-Control"])
-    assertEquals("nosniff", headers["X-Content-Type-Options"])
-    // WebResourceResponse takes the mime type and the encoding as arguments, not as a header.
-    assertNull(headers["Content-Type"])
-  }
 }

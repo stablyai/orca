@@ -9,6 +9,11 @@ import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import type { TerminalWorkspaceStoreController } from './use-terminal-workspace-store-bindings'
 import { useWorktreeFiles } from './terminal/use-worktree-files'
 
+// Read every render: the titlebar strip can mount after this host. A hook result is never memoized.
+function useTitlebarTabsTarget(): HTMLElement | null {
+  return document.getElementById('titlebar-tabs')
+}
+
 export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStoreController) {
   const {
     activeGroupIdByWorktree,
@@ -53,7 +58,7 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
   const terminalProviderSnapshotCapabilityRevision = useTerminalProviderSnapshotCapability(
     workspaceSessionReady && hydrationSucceeded
   )
-  const titlebarTabsTarget = document.getElementById('titlebar-tabs')
+  const titlebarTabsTarget = useTitlebarTabsTarget()
 
   useEffect(() => {
     if (!activeWorktreeId) {
@@ -83,6 +88,16 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
   const hasSplitTerminalPane = useAppStore((state) =>
     hasFeatureInteraction(state.featureInteractions, 'terminal-pane-split')
   )
+  // After a split the owed tip points into the sidebar; don't watch the page for it while it's closed.
+  const nextTourTipReachable = useAppStore(
+    (state) =>
+      state.sidebarOpen ||
+      (!hasFeatureInteraction(state.featureInteractions, 'terminal-pane-split') &&
+        !hasFeatureInteraction(state.featureInteractions, 'tab-splits'))
+  )
+  const hasSplitTab = useAppStore((state) =>
+    hasFeatureInteraction(state.featureInteractions, 'tab-splits')
+  )
 
   useContextualTour(
     'workspace-agent-sessions',
@@ -90,11 +105,17 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
       activeWorktreeId &&
       activeView === 'terminal' &&
       workspaceSessionReady &&
-      activeTabType === 'terminal' &&
-      Boolean(activeTabId) &&
-      (!hasSplitTerminalPane || activeContextualTourId === 'workspace-agent-sessions')
+      (activeTabType === 'agent-session' ||
+        (activeTabType === 'terminal' && Boolean(activeTabId))) &&
+      nextTourTipReachable
     ),
-    'workspace_agent_sessions_visible'
+    'workspace_agent_sessions_visible',
+    {
+      // Keep this interaction counted only up to the first split, as before the tour could resume.
+      recordFeatureInteraction:
+        !(hasSplitTerminalPane || hasSplitTab) ||
+        activeContextualTourId === 'workspace-agent-sessions'
+    }
   )
 
   return {
@@ -108,7 +129,6 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
     effectiveActiveLayout,
     activeWorktreeBrowserTabIdsKey,
     activeContextualTourId,
-    hasSplitTerminalPane,
     terminalProviderSnapshotCapabilityRevision
   }
 }

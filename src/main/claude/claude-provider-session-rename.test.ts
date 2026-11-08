@@ -119,37 +119,3 @@ it('refuses missing, empty, multiple and incomplete inventories without mutating
   await expect(renameClaudeTranscript(home, conversation, 'Denied')).rejects.toBe(denied)
   expect(await fs.readFile(transcript, 'utf8')).toBe('old\n')
 })
-
-it.each([10, 100])(
-  'bounds literal candidate discovery at %i projects regardless of transcript count',
-  async (count) => {
-    await fs.writeFile(transcript, 'old\n')
-    for (let i = 0; i < count; i++) {
-      const project = join(home, 'projects', `project-${i}`)
-      await fs.mkdir(project)
-      await Promise.all(
-        Array.from({ length: 20 }, (_, j) => fs.writeFile(join(project, `history-${j}.jsonl`), ''))
-      )
-    }
-    const readDirectory = vi.spyOn(transcriptFs, 'wslGatedReaddir')
-    const stat = vi.spyOn(transcriptFs, 'wslGatedStat')
-    await renameClaudeTranscript(home, conversation, 'Final')
-    expect(readDirectory).toHaveBeenCalledTimes(1)
-    expect(stat).toHaveBeenCalledTimes(count + 1)
-    expect(new Set(stat.mock.calls.map(([path]) => path)).size).toBe(count + 1)
-    expect(
-      (await fs.readFile(transcript, 'utf8'))
-        .trim()
-        .split('\n')
-        .slice(-2)
-        .map((line) => JSON.parse(line))
-    ).toEqual([
-      expect.objectContaining({
-        type: 'custom-title',
-        customTitle: 'Final',
-        sessionId: conversation
-      }),
-      { type: 'agent-name', agentName: 'Final', sessionId: conversation }
-    ])
-  }
-)

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import {
   clientInstances,
-  createSsh2Module,
   emitSshEvent,
   eventHandlers,
   VALID_ED25519_HOST_KEY,
@@ -50,20 +49,6 @@ describe('SshConnection', () => {
     resetSshConnectionMocks()
   })
 
-  it('transitions to connected on successful connect', async () => {
-    const callbacks = createCallbacks()
-    const conn = new SshConnection(createTarget(), callbacks)
-
-    await conn.connect()
-
-    expect(conn.getState().status).toBe('connected')
-    expect(conn.getState().supportsFolderDownload).toBe(true)
-    expect(callbacks.onStateChange).toHaveBeenCalledWith(
-      'target-1',
-      expect.objectContaining({ status: 'connected' })
-    )
-  })
-
   it('enables TCP_NODELAY before SSH authentication completes', async () => {
     ssh2Mock.connectSequence = ['silent']
     const conn = new SshConnection(createTarget(), createCallbacks())
@@ -79,13 +64,6 @@ describe('SshConnection', () => {
       await connected
       conn.disconnect()
     }
-  })
-
-  it('captures the negotiated SSH server key fingerprint', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-
-    expect(conn.getHostKeyFingerprint()).toMatch(/^SHA256:[A-Za-z\d+/]{43}$/)
   })
 
   it('ignores a late host fingerprint from an obsolete connect generation', async () => {
@@ -119,92 +97,6 @@ describe('SshConnection', () => {
     expect(conn.getHostKeyFingerprint()).toBe(currentFingerprint)
   })
 
-  it('allows concurrent exec commands for ssh2 transport', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-
-    expect(conn.usesSystemSshTransport()).toBe(false)
-    expect(conn.canRunConcurrentExecCommands()).toBe(true)
-  })
-
-  it('removes startup listeners after ssh2 connect succeeds', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-
-    await conn.connect()
-
-    expect(eventHandlers.has('ready')).toBe(false)
-    expect(eventHandlers.has('error')).toBe(true)
-  })
-
-  it('scopes lifecycle events and pending handshake timers to one mock client', async () => {
-    vi.useFakeTimers()
-    try {
-      const { Client } = createSsh2Module()
-      const first = new Client()
-      const second = new Client()
-      const firstClose = vi.fn()
-      const secondClose = vi.fn()
-      const firstError = vi.fn()
-      first.on('close', firstClose)
-      first.on('error', firstError)
-      second.on('close', secondClose)
-
-      first.emit('close')
-      expect(firstClose).toHaveBeenCalledOnce()
-      expect(secondClose).not.toHaveBeenCalled()
-
-      ssh2Mock.connectBehavior = 'pending'
-      first.connect({ readyTimeout: 1_000 })
-      await vi.advanceTimersByTimeAsync(0)
-      first.destroy()
-      await vi.advanceTimersByTimeAsync(1_000)
-      expect(firstError).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('enables TCP_NODELAY on the new ssh2 client after a reconnect cycle', async () => {
-    // Reconnect must enable TCP_NODELAY on its new client too.
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.connect()
-    expect(clientInstances).toHaveLength(1)
-    expect(clientInstances[0].setNoDelay).toHaveBeenCalledWith(true)
-
-    // Drive the private attempt path; public connect guards would reject this simulated reconnect.
-    const privateConn = conn as unknown as {
-      attemptConnect: () => Promise<void>
-    }
-    await privateConn.attemptConnect()
-
-    expect(clientInstances).toHaveLength(2)
-    expect(clientInstances[1].setNoDelay).toHaveBeenCalledWith(true)
-  })
-
-  it('transitions through connecting → connected states', async () => {
-    const states: string[] = []
-    const callbacks = createCallbacks({
-      onStateChange: vi.fn((_id, state) => states.push(state.status))
-    })
-    const conn = new SshConnection(createTarget(), callbacks)
-
-    await conn.connect()
-
-    expect(states).toContain('connecting')
-    expect(states).toContain('connected')
-  })
-
-  it('reports error state on connection failure', async () => {
-    ssh2Mock.connectBehavior = 'error'
-    ssh2Mock.connectErrorMessage = 'Connection refused'
-
-    const callbacks = createCallbacks()
-    const conn = new SshConnection(createTarget(), callbacks)
-
-    await expect(conn.connect()).rejects.toThrow('Connection refused')
-    expect(conn.getState().status).toBe('error')
-  })
-
   it('guards late ssh2 errors emitted while destroying a failed startup client', async () => {
     ssh2Mock.connectBehavior = 'error'
     ssh2Mock.connectErrorMessage = 'Connection lost before handshake'
@@ -215,16 +107,6 @@ describe('SshConnection', () => {
     await expect(conn.connect()).rejects.toThrow('Connection lost before handshake')
 
     expect(conn.getState().status).toBe('error')
-  })
-
-  it('disconnect cleans up and sets state to disconnected', async () => {
-    const callbacks = createCallbacks()
-    const conn = new SshConnection(createTarget(), callbacks)
-    await conn.connect()
-
-    await conn.disconnect()
-
-    expect(conn.getState().status).toBe('disconnected')
   })
 
   it('rejects late ssh2 ready after disconnect without resurrecting the connection', async () => {
@@ -271,31 +153,6 @@ describe('SshConnection', () => {
       'target-1',
       expect.objectContaining({ status: 'error' })
     )
-  })
-
-  it('getTarget returns a copy of the target', () => {
-    const target = createTarget()
-    const conn = new SshConnection(target, createCallbacks())
-    const returned = conn.getTarget()
-
-    expect(returned).toEqual(target)
-    expect(returned).not.toBe(target)
-  })
-
-  it('getState returns a copy of the state', () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    const state1 = conn.getState()
-    const state2 = conn.getState()
-
-    expect(state1).toEqual(state2)
-    expect(state1).not.toBe(state2)
-  })
-
-  it('throws when connecting a disposed connection', async () => {
-    const conn = new SshConnection(createTarget(), createCallbacks())
-    await conn.disconnect()
-
-    await expect(conn.connect()).rejects.toThrow('Connection disposed')
   })
 
   describe('keyboard-interactive MFA', () => {

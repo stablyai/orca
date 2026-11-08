@@ -1,8 +1,9 @@
-import { formatAgentTypeLabel } from '../../../../src/shared/agent-type-label'
+import { formatAgentTypeLabel } from '../../../../src/shared/agent-status/presentation/agent-type-label'
 import { describeLoadError } from '../../components/load-error-description'
 import type { NativeChatEmptyStateCopy } from '../../../../src/shared/native-chat/native-chat-empty-state'
 import { isRootAgentJournalItem } from '../../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import { stripNoiseMessages } from '../../../../src/shared/native-chat/native-chat-noise'
+import { isPullRequestEventMessage } from '../../../../src/shared/native-chat/native-chat-pull-request-event'
 import { nativeChatStreamingMessage } from '../../../../src/shared/native-chat/native-chat-streaming'
 import { isWordlessProviderFrameMessage } from '../../../../src/shared/native-chat/native-chat-provider-frame-summary'
 import {
@@ -16,8 +17,9 @@ import {
   isImageRefBlock,
   type NativeChatMessage
 } from '../../../../src/shared/native-chat/native-chat-types'
-import type { AgentType } from '../../../../src/shared/agent-status-types'
-import type { MobileNativeChatStatus } from './use-mobile-native-chat-session'
+import type { AgentType } from '../../../../src/shared/agent-status/contracts/agent-status-types'
+import type { MobileNativeChatStatus } from './mobile-native-chat-session-status'
+import { orderNativeChatDisplayMessages } from '../../../../src/shared/native-chat/transcript/native-chat-message-order'
 import { translate } from '../../i18n/mobile-i18n'
 
 function mobileNativeChatEmptyStateCopy(
@@ -91,28 +93,49 @@ export type MobileNativeChatPendingItem = {
   text: string
   images?: string[]
   sentAt?: number
+  pendingSend?: NativeChatMessage['pendingSend']
 }
 
 export function foldMobileNativeChatMessages(
   messages: readonly NativeChatMessage[],
   agent: AgentType
 ): NativeChatMessage[] {
-  // Filter child/noise rows before folding so they cannot split tool runs; project plan updates afterward so they cannot consume another call’s result.
-  return projectNativeChatTaskListFrames(
-    stripNoiseMessages(
-      foldToolMessages(
-        foldSubagentItems(
-          prepareNativeChatMessages(
-            messages.filter(
-              (message) =>
-                isRootAgentJournalItem(message) && !isUndrawnProviderFrameMessage(message)
-            ),
-            agent
-          )
-        )
-      )
-    )
-  ).filter((message) => !isWordlessProviderFrameMessage(message))
+  return finishMobileNativeChatMessages(
+    foldToolMessages(foldSubagentItems(prepareMobileNativeChatMessages(messages, agent)))
+  )
+}
+
+/** CI result lines stay hidden until the phone reads the desktop's setting for them. */
+export function isMobileNativeChatSource(message: NativeChatMessage): boolean {
+  return (
+    isRootAgentJournalItem(message) &&
+    !isUndrawnProviderFrameMessage(message) &&
+    !isPullRequestEventMessage(message)
+  )
+}
+
+export function prepareMobileNativeChatMessages(
+  messages: readonly NativeChatMessage[],
+  agent: AgentType,
+  recordSource?: (message: NativeChatMessage, visible: boolean) => void
+): NativeChatMessage[] {
+  return prepareNativeChatMessages(
+    messages.filter((message) => {
+      const visible = isMobileNativeChatSource(message)
+      recordSource?.(message, visible)
+      return visible
+    }),
+    agent
+  )
+}
+
+export function finishMobileNativeChatMessages(
+  messages: readonly NativeChatMessage[]
+): NativeChatMessage[] {
+  // Plan frames must not consume another call's result.
+  return projectNativeChatTaskListFrames(stripNoiseMessages(messages)).filter(
+    (message) => !isWordlessProviderFrameMessage(message)
+  )
 }
 
 export function buildMobileNativeChatTransientData({
@@ -146,13 +169,12 @@ export function buildMobileNativeChatTransientData({
     }
     return { ...message, blocks }
   })
-  // Desktop order: transcript rows, then the streaming preview, then unmatched echoes in send order.
-  const data: NativeChatMessage[] = [...renderedFolded]
+  const transient: NativeChatMessage[] = []
   if (streaming) {
-    data.push(nativeChatStreamingMessage(streaming))
+    transient.push(nativeChatStreamingMessage(streaming))
   }
   for (const item of pending) {
-    data.push({
+    transient.push({
       id: item.id,
       role: 'user',
       blocks: [
@@ -160,8 +182,13 @@ export function buildMobileNativeChatTransientData({
         ...(item.images ?? []).map((uri) => ({ type: 'image-ref' as const, url: uri }))
       ],
       timestamp: item.sentAt ?? null,
+      pendingSend: item.pendingSend ?? 'active',
       source: 'transcript'
     })
   }
-  return { folded: renderedFolded, streaming, data }
+  return {
+    folded: renderedFolded,
+    streaming,
+    data: [...renderedFolded, ...orderNativeChatDisplayMessages(transient)]
+  }
 }

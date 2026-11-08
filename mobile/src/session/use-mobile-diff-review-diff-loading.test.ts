@@ -1,161 +1,173 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
-import type { ConnectionState } from '../transport/types'
-import { buildMobileDiffReviewQueue } from './mobile-diff-review-queue'
+import { afterEach, expect, it } from 'vitest'
+import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
+import {
+  documentQueryClient,
+  settleQueryNotifications
+} from '../test-support/rpc-recording/hook-mount'
+import type { RpcResponse } from '../transport/types'
+import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { ReviewDiffState, ReviewScreenState } from './mobile-diff-review-screen-model'
 import { useMobileDiffReviewDiffLoading } from './use-mobile-diff-review-diff-loading'
 
-const loadDiff = vi.hoisted(() => vi.fn())
-vi.mock('./mobile-diff-review-loaders', () => ({ loadMobileDiffReviewDiff: loadDiff }))
+const READY: ReviewScreenState = {
+  kind: 'ready',
+  status: { entries: [] },
+  branchCompare: null,
+  comments: [],
+  reviewState: { version: 1, files: {} }
+}
+
+function unstaged(filePath: string): MobileDiffReviewQueueItem {
+  return {
+    key: `unstaged:${filePath}`,
+    scope: 'unstaged',
+    area: 'unstaged',
+    filePath,
+    status: 'modified',
+    title: filePath,
+    subtitle: '',
+    canStage: true,
+    canUnstage: false,
+    canDiscard: true,
+    isGeneratedOrLockFile: false,
+    diffIdentity: filePath,
+    noteCount: 0,
+    unsentNoteCount: 0,
+    staleNoteCount: 0,
+    isReviewed: false,
+    changedSinceReview: false
+  }
+}
+
+const BRANCH: ReviewScreenState = {
+  ...READY,
+  branchCompare: {
+    summary: {
+      baseRef: 'origin/main',
+      changedFiles: 1,
+      status: 'ready',
+      headOid: 'head-1',
+      mergeBase: 'base-1'
+    },
+    entries: []
+  }
+}
+
+function branchDeleted(filePath: string): MobileDiffReviewQueueItem {
+  return {
+    ...unstaged(filePath),
+    key: `branch:${filePath}`,
+    scope: 'branch',
+    area: 'branch',
+    status: 'deleted'
+  }
+}
+
+const REFUSED: RpcResponse = {
+  id: 'diff',
+  ok: false,
+  error: { code: 'internal_error', message: 'git is busy' },
+  _meta: { runtimeId: 'runtime-1' }
+}
 
 const client = createFakeRpcClient()
-const currentItem = buildMobileDiffReviewQueue({
-  worktreeId: 'wt-1',
-  statusEntries: [{ path: 'src/app.ts', status: 'modified', area: 'unstaged' }],
-  branchEntries: [],
-  comments: [],
-  reviewState: { version: 1, files: {} }
-})[0]!
-const readyScreen: ReviewScreenState = {
-  kind: 'ready',
-  branchCompare: null,
-  status: {
-    entries: [],
-    conflictOperation: undefined,
-    branch: undefined,
-    head: undefined,
-    upstreamStatus: undefined
-  },
-  comments: [],
-  reviewState: { version: 1, files: {} }
+const queries = documentQueryClient()
+let tree: ReactTestRenderer | null = null
+let diff: ReviewDiffState = { kind: 'idle' }
+
+function Probe({
+  item,
+  queue,
+  statusRevision,
+  screenState
+}: {
+  item: MobileDiffReviewQueueItem
+  queue: readonly MobileDiffReviewQueueItem[]
+  statusRevision: number
+  screenState: ReviewScreenState
+}) {
+  diff = useMobileDiffReviewDiffLoading({
+    hostId: 'host',
+    client,
+    connState: 'connected',
+    target: { exec: 'local', worktree: 'wt' },
+    currentItem: item,
+    filteredQueue: queue,
+    currentIndex: queue.indexOf(item),
+    screenState,
+    statusRevision
+  })
+  return null
 }
 
-function readyDiff(firstLine: string): ReviewDiffState {
-  return {
-    kind: 'ready',
-    itemKey: currentItem.key,
-    lines: [
-      {
-        kind: 'add',
-        newLineNumber: 1,
-        text: firstLine,
-        segments: [{ text: firstLine, kind: 'plain' }],
-        highlighted: false
-      }
-    ],
-    truncated: false
-  }
+async function show(
+  item: MobileDiffReviewQueueItem,
+  statusRevision = 1,
+  queue: readonly MobileDiffReviewQueueItem[] = [item],
+  screenState: ReviewScreenState = READY
+): Promise<void> {
+  const element = queries.wrap(createElement(Probe, { item, queue, statusRevision, screenState }))
+  await act(async () => {
+    if (tree) {
+      tree.update(element)
+    } else {
+      tree = create(element)
+    }
+  })
 }
 
-describe('useMobileDiffReviewDiffLoading', () => {
-  let renderer: ReactTestRenderer | null = null
-  let diffState: ReviewDiffState = { kind: 'idle' }
+async function answerDiff(filePath: string, modified: string): Promise<void> {
+  await answer(
+    'git.diff',
+    filePath,
+    rpcSuccess('diff', { kind: 'text', originalContent: 'a\n', modifiedContent: modified })
+  )
+}
 
-  function Probe({
-    connState,
-    snapshotVersion = 0
-  }: {
-    connState: ConnectionState
-    snapshotVersion?: number
-  }): null {
-    diffState = useMobileDiffReviewDiffLoading({
-      client,
-      connState,
-      worktreeId: 'wt-1',
-      currentItem,
-      screenState: readyScreen,
-      snapshotVersion
-    })
-    return null
-  }
-
-  async function render(connState: ConnectionState): Promise<void> {
-    await act(async () => {
-      renderer = create(createElement(Probe, { connState }))
-      await Promise.resolve()
-    })
-  }
-
-  async function update(connState: ConnectionState): Promise<void> {
-    await act(async () => {
-      renderer?.update(createElement(Probe, { connState }))
-      await Promise.resolve()
-    })
-  }
-
-  beforeEach(() => {
-    loadDiff.mockReset()
-  })
-
-  afterEach(() => {
-    act(() => renderer?.unmount())
-    renderer = null
-  })
-
-  it('keeps the loaded diff when the reconnect refetch rejects', async () => {
-    loadDiff
-      .mockResolvedValueOnce(readyDiff('before the drop'))
-      .mockRejectedValueOnce(new Error('diff fetch failed'))
-
-    await render('connected')
-    expect(diffState).toMatchObject({ kind: 'ready' })
-
-    await update('reconnecting')
-    await update('connected')
-    expect(diffState).toMatchObject({ kind: 'ready', lines: [{ text: 'before the drop' }] })
-    expect(loadDiff).toHaveBeenCalledTimes(2)
-  })
-
-  it('keeps the loaded diff through a disconnect and its reconnect refetch', async () => {
-    let releaseRefetch: (() => void) | null = null
-    loadDiff.mockResolvedValueOnce(readyDiff('before the drop')).mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          releaseRefetch = () => resolve(readyDiff('after the drop'))
-        })
+async function answer(method: string, filePath: string, reply: RpcResponse): Promise<void> {
+  const request = client.requests.findLast((sent) => {
+    const params = sent.args[1]
+    return (
+      sent.method === method &&
+      typeof params === 'object' &&
+      params !== null &&
+      'filePath' in params &&
+      params.filePath === filePath
     )
-
-    await render('connected')
-    expect(diffState).toMatchObject({ kind: 'ready' })
-
-    await update('reconnecting')
-    expect(diffState).toMatchObject({ kind: 'ready', lines: [{ text: 'before the drop' }] })
-
-    await update('connected')
-    expect(diffState).toMatchObject({ kind: 'ready', lines: [{ text: 'before the drop' }] })
-
-    await act(async () => {
-      releaseRefetch?.()
-      await Promise.resolve()
-    })
-    expect(diffState).toMatchObject({ kind: 'ready', lines: [{ text: 'after the drop' }] })
-    expect(loadDiff).toHaveBeenCalledTimes(2)
   })
+  await act(async () => request?.resolve(reply))
+  await settleQueryNotifications()
+}
 
-  it('waits for the desktop when the drop lands before any diff is loaded', async () => {
-    loadDiff.mockReturnValueOnce(new Promise(() => {}))
+afterEach(async () => {
+  await act(async () => tree?.unmount())
+  tree = null
+  client.requests.length = 0
+  await queries.end()
+})
 
-    await render('connected')
-    expect(diffState).toMatchObject({ kind: 'loading', itemKey: currentItem.key })
+it('shows the failure, not the older lines, when a newer status read of the open file fails', async () => {
+  await show(unstaged('a.ts'), 1)
+  await answerDiff('a.ts', 'a\nolder\n')
+  await show(unstaged('a.ts'), 2)
+  expect(JSON.stringify(diff)).toContain('older')
+  await answer('git.diff', 'a.ts', REFUSED)
+  expect(diff).toMatchObject({ kind: 'error', itemKey: 'unstaged:a.ts', message: 'git is busy' })
+})
 
-    await update('disconnected')
-    expect(diffState).toMatchObject({ kind: 'error', message: 'Waiting for desktop...' })
-  })
-
-  it('reloads the open diff when the review reloads, as Retry does', async () => {
-    loadDiff
-      .mockRejectedValueOnce(new Error('diff fetch failed'))
-      .mockResolvedValueOnce(readyDiff('after retry'))
-
-    await render('connected')
-    expect(diffState).toMatchObject({ kind: 'error' })
-
-    await act(async () => {
-      renderer?.update(createElement(Probe, { connState: 'connected', snapshotVersion: 1 }))
-      await Promise.resolve()
-    })
-    expect(diffState).toMatchObject({ kind: 'ready', lines: [{ text: 'after retry' }] })
-  })
+it('reads a committed deleted file again when its last read was refused', async () => {
+  const deleted = branchDeleted('gone.ts')
+  await show(deleted, 1, [deleted], BRANCH)
+  await answer('git.branchDiff', 'gone.ts', REFUSED)
+  expect(diff).toMatchObject({ kind: 'deleted', itemKey: 'branch:gone.ts' })
+  await show(unstaged('a.ts'))
+  await show(deleted, 1, [deleted], BRANCH)
+  await answer(
+    'git.branchDiff',
+    'gone.ts',
+    rpcSuccess('diff', { kind: 'text', originalContent: 'gone\n', modifiedContent: '' })
+  )
+  expect(diff).toMatchObject({ kind: 'ready', itemKey: 'branch:gone.ts' })
 })

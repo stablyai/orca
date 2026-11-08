@@ -3,11 +3,11 @@ import { useAppStore } from '../store'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/lib/shutdown-checkpoint-guard'
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
-import { runAfterEditorFramesFlush } from './editor/editor-pending-flush'
+import { runAfterEditorFramesFlush } from './editor/save/flush/editor-pending-flush'
 import {
   collectBrowserWebviewIds,
   destroyWebviewsRemovedFromStore
-} from '../store/slices/browser-webview-cleanup'
+} from '../store/slices/browser/cleanup/browser-webview-cleanup'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
 
 export function useTerminalWindowLifecycle(

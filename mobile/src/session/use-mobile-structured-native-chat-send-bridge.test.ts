@@ -4,9 +4,12 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StructuredAgentId } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'
+import type { MobileNativeChatSendIntent } from './native-chat/mobile-native-chat-send'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import {
+  editMobileNativeChatDraft,
   recordMobileNativeChatSkillPick,
+  readMobileNativeChatPickedSkills,
   resetMobileNativeChatDraftStoreForTests
 } from './native-chat/composer/mobile-native-chat-draft-store'
 
@@ -28,6 +31,7 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
   const onSendError = vi.fn()
   const restoreRejectedDraft = vi.fn()
   const sendStructured = vi.fn()
+  const holdUnconfirmed = vi.fn<(clientMessageId: string, onUnconfirmed: () => void) => void>()
 
   function Harness({ agent }: { agent: StructuredAgentId }): null {
     sendWithOutcome = useMobileStructuredNativeChatSendBridge({
@@ -36,7 +40,8 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
       clearDraftForSend,
       onSendError,
       restoreRejectedDraft,
-      sendStructured
+      sendStructured,
+      holdUnconfirmed
     }).sendWithOutcome
     return null
   }
@@ -57,81 +62,75 @@ describe('useMobileStructuredNativeChatSendBridge', () => {
     resetMobileNativeChatDraftStoreForTests()
   })
 
-  it('sends the skills picked into the draft', async () => {
-    const review = { name: 'review', path: '/skills/review/SKILL.md' }
-    recordMobileNativeChatSkillPick(ORIGIN.draftKey, { token: '$review', path: review.path })
-    sendStructured.mockResolvedValue('accepted')
+  it('hands back an unconfirmed send with its skills beside newer picks only at the deadline', async () => {
+    recordMobileNativeChatSkillPick(ORIGIN.draftKey, {
+      token: '$review',
+      path: '/skills/review/SKILL.md'
+    })
+    sendStructured.mockImplementation(
+      async (
+        ...args: [unknown, unknown, unknown, unknown, unknown, MobileNativeChatSendIntent]
+      ) => {
+        args[5].onCreated?.('lost-id')
+        editMobileNativeChatDraft(ORIGIN.draftKey, '$newer work')
+        recordMobileNativeChatSkillPick(ORIGIN.draftKey, {
+          token: '$newer',
+          path: '/skills/newer/SKILL.md'
+        })
+        return 'unknown'
+      }
+    )
     mount('codex')
 
-    await sendWithOutcome('$review this')
+    await expect(sendWithOutcome('/review')).resolves.toBe('unknown')
 
-    expect(sendStructured).toHaveBeenCalledWith('$review this', undefined, undefined, undefined, [
-      review
+    expect(restoreRejectedDraft).not.toHaveBeenCalled()
+    expect(onSendError).not.toHaveBeenCalled()
+    expect(holdUnconfirmed).toHaveBeenCalledWith('lost-id', expect.any(Function))
+    act(() => holdUnconfirmed.mock.calls[0]![1]())
+    expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, '/review')
+    expect(onSendError).toHaveBeenCalledWith('Not confirmed. Restored to the box.')
+    expect(readMobileNativeChatPickedSkills(ORIGIN.draftKey).map((skill) => skill.name)).toEqual([
+      'newer',
+      'review'
     ])
   })
 
-  // Accepted messages remain host-owned; keep the composer cleared.
-  it.each(['accepted', 'unknown', 'queued'] as const)(
-    'leaves a %s send of a command the active agent owns to the structured session',
-    async (outcome) => {
-      sendStructured.mockResolvedValue(outcome)
-      mount('claude')
-
-      await expect(sendWithOutcome('/review')).resolves.toBe(outcome)
-
-      expect(sendStructured).toHaveBeenCalledWith('/review', undefined, undefined, undefined, [])
-      expect(clearDraftForSend).toHaveBeenCalledExactlyOnceWith(ORIGIN, '/review')
-      expect(restoreRejectedDraft).not.toHaveBeenCalled()
-    }
-  )
-
-  it('keeps an unknown provider command with the Codex session', async () => {
+  it('puts a host command whose reply was lost back in the box', async () => {
     sendStructured.mockResolvedValue('unknown')
     mount('codex')
 
-    await expect(sendWithOutcome('/review')).resolves.toBe('unknown')
+    await expect(sendWithOutcome('/compact')).resolves.toBe('unknown')
 
-    expect(restoreRejectedDraft).not.toHaveBeenCalled()
+    expect(holdUnconfirmed).not.toHaveBeenCalled()
+    expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, '/compact', {
+      preserveConversationCommands: true
+    })
   })
 
-  it("reads another agent's sends by that agent's commands, never Codex's", async () => {
-    sendStructured.mockResolvedValue('unknown')
-    mount('grok')
-
-    await expect(sendWithOutcome('/review')).resolves.toBe('unknown')
-
-    expect(restoreRejectedDraft).not.toHaveBeenCalled()
-  })
-
-  it('puts a refused send back in the composer', async () => {
+  it('sends a queued message with its own skills and leaves the composer alone when refused', async () => {
+    recordMobileNativeChatSkillPick(ORIGIN.draftKey, {
+      token: '$draft',
+      path: '/skills/draft/SKILL.md'
+    })
     sendStructured.mockResolvedValue('rejected')
-    mount('claude')
+    mount('codex')
+    const queuedSkill = { name: 'review', path: '/skills/review/SKILL.md' }
 
-    await expect(sendWithOutcome('hello')).resolves.toBe('rejected')
-
-    expect(restoreRejectedDraft).toHaveBeenCalledWith(ORIGIN, 'hello')
-  })
-  it.each(['accepted', 'unknown', 'rejected'] as const)(
-    'carries typed provider commands and attachments through %s',
-    async (outcome) => {
-      sendStructured.mockResolvedValue(outcome)
-      mount('codex')
-      for (const text of ['/fast', '/permissions']) {
-        restoreRejectedDraft.mockClear()
-        await expect(sendWithOutcome(text, ['/shot.png'])).resolves.toBe(outcome)
-        expect(sendStructured).toHaveBeenLastCalledWith(
-          text,
-          ['/shot.png'],
-          undefined,
-          undefined,
-          []
-        )
-        if (outcome === 'rejected') {
-          expect(restoreRejectedDraft).toHaveBeenLastCalledWith(ORIGIN, text)
-        } else {
-          expect(restoreRejectedDraft).not.toHaveBeenCalled()
+    await expect(
+      sendWithOutcome('$review the PR', undefined, undefined, undefined, undefined, {
+        queued: {
+          id: 'queued-1',
+          images: [],
+          files: [],
+          skills: [queuedSkill],
+          skillOrigin: '$review'
         }
-      }
-    }
-  )
+      })
+    ).resolves.toBe('rejected')
+
+    expect(sendStructured.mock.calls[0]![4]).toEqual([queuedSkill])
+    expect(clearDraftForSend).not.toHaveBeenCalled()
+    expect(restoreRejectedDraft).not.toHaveBeenCalled()
+  })
 })

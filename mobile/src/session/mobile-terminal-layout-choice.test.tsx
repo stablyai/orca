@@ -1,4 +1,4 @@
-import { createElement, useLayoutEffect, useRef, useState } from 'react'
+import { createElement, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { act, create } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
@@ -46,9 +46,20 @@ vi.mock('../platform/keyboard-persisting-taps', () => ({ useKeyboardPersistingTa
 vi.mock('../navigation/workspace-execution-host', () => ({ useWorkspaceExecutionHost: () => ({}) }))
 vi.mock('../browser/MobileBrowserPane', () => ({ MobileBrowserPane: () => null }))
 vi.mock('./native-chat/MobileNativeChatOverlay', () => ({ MobileNativeChatOverlay: () => null }))
+vi.mock('./MobileNativeChatForkProvider', () => ({
+  MobileNativeChatForkProvider: ({ children }: { children: ReactNode }) => children
+}))
 vi.mock('./MobileSessionFileReader', () => ({ FileReader: () => null }))
 vi.mock('./MobileSessionMarkdownReader', () => ({ MarkdownReader: () => null }))
 vi.mock('../terminal/TerminalWebView', () => ({ TerminalWebView: 'TerminalWebView' }))
+const keyboard = vi.hoisted(() => ({ lift: 0 }))
+vi.mock('./use-mobile-session-keyboard-lift', () => ({
+  useMobileSessionContentKeyboardLift: () => ({
+    keyboardLift: keyboard.lift,
+    activeTerminalKeyboardLift: 0,
+    toastAnimatedStyle: {}
+  })
+}))
 const stored = vi.hoisted(() => new Map<string, string>())
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
@@ -64,6 +75,9 @@ import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { TerminalPaneView } from './TerminalPaneView'
 import { useMobileSessionTabSwitching } from './use-mobile-session-tab-switching'
 import { useMobileSessionTerminalWebview } from './use-mobile-session-terminal-webview'
+import { TerminalResumeState } from './terminal-stream-resume'
+
+vi.mock('../transport/use-workspace-client', () => ({ useRouteCapability: () => false }))
 import { resolveTerminalPaneHandles } from './mobile-terminal-pane-layout'
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 
@@ -78,8 +92,9 @@ it('lets the split menu override sidebar width and rotation without remounting p
     const [showTerminalLayout, setShowTerminalLayout] = useState(false)
     openLayoutMenu = () => setShowTerminalLayout(true)
     const [active, setActive] = useState('b')
-    const [keyboard, setKeyboardState] = useState(0)
+    const [keyboardLift, setKeyboardState] = useState(0)
     setKeyboard = setKeyboardState
+    keyboard.lift = keyboardLift
     const controller = mountFixture<Controller>({
       ...preference,
       sessionTabs: [],
@@ -107,8 +122,6 @@ it('lets the split menu override sidebar width and rotation without remounting p
         viewportRef: { current: null },
         viewportMeasuredRef: { current: false }
       }),
-      keyboardLift: keyboard,
-      activeTerminalKeyboardLift: 0,
       terminalTextScale: 1,
       nativeChatSendError: {},
       dictation: {},
@@ -259,6 +272,7 @@ it('keeps C paired with A after replacing B and focusing A by its first terminal
       connState: 'connected',
       terminalDiagnosticsRef: useRef(new MobileTerminalDiagnostics()),
       terminalUnsubsRef: useRef(new Map()),
+      terminalResume: new TerminalResumeState(),
       terminalRefs: useRef(new Map()),
       terminalPaneViewportsRef: useRef(new Map()),
       terminalGestureInputBucketsRef: useRef(new Map()),
@@ -268,7 +282,6 @@ it('keeps C paired with A after replacing B and focusing A by its first terminal
       activeSessionTabTypeRef: useRef(null),
       switchSessionTabRef: useRef(null),
       setActiveSessionTabId: vi.fn(),
-      defaultTerminalHandlesToLiveInput: vi.fn(),
       subscribeToTerminal: vi.fn(),
       unsubscribeTerminal: vi.fn(),
       handleTerminalTap: focus

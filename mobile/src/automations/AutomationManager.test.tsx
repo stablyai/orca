@@ -1,6 +1,7 @@
 import { registerAutomationPresentationTests } from './AutomationManager.presentation.spec'
 import { registerAutomationHostReselectionTests } from './AutomationManager.host-reselection.spec'
 import { registerAutomationRunHistoryTests } from './AutomationManager.run-history.spec'
+import { registerAutomationDraftPersistenceTests } from './AutomationManager.draft-persistence.spec'
 import { AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../src/shared/automation-runtime-capabilities'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { AutomationEditor } from './AutomationEditor'
@@ -8,13 +9,17 @@ import { automationUpdateParams } from './automation-draft'
 import { createElement } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  automationEditorDraftKey,
+  resetAutomationEditorDraftsForTests
+} from './automation-editor-draft-row'
 import { AutomationManager } from './AutomationManager'
 import { AutomationButton, AutomationChoice, AutomationField } from './AutomationControls'
 import { AutomationRunDetails } from './AutomationRunDetails'
-import { AutomationRunList } from './AutomationRunList'
+
 import { automationSetupKey } from './automation-target-inventory'
 import type * as AutomationInventoryModule from './automation-target-inventory'
-import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
+
 import {
   deferred,
   automationClient,
@@ -23,6 +28,7 @@ import {
   savedAutomation,
   savedRun
 } from './automation-test-fixtures'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 
 vi.mock('react-native', () => ({
   View: 'View',
@@ -69,6 +75,8 @@ let tree: ReactTestRenderer | null = null
 afterEach(() => {
   act(() => tree?.unmount())
   tree = null
+  // Unsaved edits outlive the editor for the page's life; each test is a fresh page.
+  resetAutomationEditorDraftsForTests()
 })
 function setTree(value: ReactTestRenderer): void {
   tree = value
@@ -185,7 +193,9 @@ async function mount(
     throw new Error(`Unexpected request: ${method}`)
   })
   await act(async () => {
-    tree = create(createElement(AutomationManager, { client: port.client, hostId: 'desktop' }))
+    tree = createWithQueryClient(
+      createElement(AutomationManager, { client: port.client, hostId: 'desktop' })
+    )
   })
   return {
     ...port,
@@ -200,7 +210,13 @@ async function mount(
 }
 
 describe('mobile automation navigation and setup', () => {
-  registerAutomationRunHistoryTests({ mount, root, press })
+  registerAutomationRunHistoryTests({ root, setTree })
+  registerAutomationDraftPersistenceTests({
+    root,
+    press,
+    mount,
+    unmount: () => act(() => tree?.unmount())
+  })
   registerAutomationPresentationTests({ inventory, root, press, setTree, mount })
   registerAutomationHostReselectionTests({
     inventory,
@@ -233,6 +249,7 @@ describe('mobile automation navigation and setup', () => {
           capabilities: [],
           onCancel: vi.fn(),
           onDraftChange: vi.fn(),
+          draftKey: automationEditorDraftKey(),
           onSave: save
         })
       )
@@ -334,6 +351,7 @@ describe('mobile automation navigation and setup', () => {
             capabilities: [],
             onCancel: vi.fn(),
             onDraftChange: vi.fn(),
+            draftKey: automationEditorDraftKey(),
             onSave: vi.fn()
           })
         )
@@ -411,6 +429,7 @@ describe('mobile automation navigation and setup', () => {
       capabilities: [],
       onCancel: vi.fn(),
       onDraftChange: vi.fn(),
+      draftKey: automationEditorDraftKey(),
       onSave: vi.fn()
     }
     await act(async () => {
@@ -507,7 +526,8 @@ describe('mobile automation navigation and setup', () => {
       loading: false,
       error: null,
       loadMore: vi.fn(),
-      reload: vi.fn()
+      reload: vi.fn(),
+      scope: null
     }
     await act(async () => {
       tree = create(
@@ -566,6 +586,7 @@ describe('mobile automation navigation and setup', () => {
         capabilities: [],
         onCancel: vi.fn(),
         onDraftChange: vi.fn(),
+        draftKey: automationEditorDraftKey(),
         onSave
       }
       await act(async () => {
@@ -611,65 +632,23 @@ describe('mobile automation navigation and setup', () => {
       expect(current.enabled).toBe(false)
     }
   )
-
-  it('opens exact historical and returned manual runs with explicit paths back', async () => {
-    const port = await mount()
-    await act(async () => {
-      root().findByType(MobileSegmentedControl).props.onSelect('runs')
-    })
-    const runList = root().findByType(AutomationRunList)
-    const runRow = runList
-      .findAll((node) => String(node.type) === 'Pressable')
-      .find((node) => node.props.accessibilityLabel?.startsWith('Review changes,'))
-    if (!runRow) {
-      throw new Error('History row missing')
-    }
-    await act(async () => {
-      runRow.props.onPress()
-    })
-    expect(root().findByType(AutomationRunDetails).props.run.id).toBe('run-old')
-    expect(
+  it('asks before Cancel drops an edited draft and closes an untouched one at once', async () => {
+    await mount()
+    await press('New automation')
+    await press('Cancel')
+    expect(root().findAllByType(AutomationEditor)).toHaveLength(0)
+    await press('New automation')
+    const name = () =>
       root()
-        .findAll((node) => String(node.type) === 'Text')
-        .some((node) => text(node).includes('Output for run-old'))
-    ).toBe(true)
-    await press('All runs')
-    expect(root().findByType(AutomationRunList)).toBeTruthy()
-    expect(
-      port.send.mock.calls
-        .filter(([method]) => method === 'automation.runs')
-        .every(([, params]) => JSON.stringify(params) === '{"limit":30}')
-    ).toBe(true)
-    await act(async () => {
-      root().findByType(MobileSegmentedControl).props.onSelect('automations')
-    })
-    const entry = root()
-      .findAll((node) => String(node.type) === 'Pressable')
-      .find((node) =>
-        node
-          .findAll((child) => String(child.type) === 'Text')
-          .some((child) => child.props.children === 'Review changes')
-      )
-    if (!entry) {
-      throw new Error('Automation entry missing')
-    }
-    await act(async () => {
-      entry.props.onPress()
-    })
-    await press('Run now')
-    expect(root().findByType(AutomationRunDetails).props.run.id).toBe('manual-run')
-    expect(port.send).toHaveBeenCalledWith(
-      'automation.runNow',
-      {
-        id: 'automation-1',
-        expectedOwner: { selector: { kind: 'self' } }
-      },
-      { failWhenDisconnected: true }
+        .findAllByType(AutomationField)
+        .find((node) => node.props.label === 'Name')!
+    await act(async () => name().props.onChange('Nightly digest'))
+    await press('Cancel')
+    const prompt = root().find(
+      (node) => String(node.type) === 'ConfirmModal' && node.props.visible === true
     )
-    await press('All runs')
-    await act(async () => {
-      root().findByType(MobileSegmentedControl).props.onSelect('automations')
-    })
+    await act(async () => prompt.props.onCancel())
+    expect(name().props.value).toBe('Nightly digest')
   })
   it('preserves an uncertain legacy create without issuing a second uncorrelated write', async () => {
     const port = await mount('legacy')

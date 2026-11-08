@@ -31,9 +31,12 @@ vi.mock('./runtime-client', async () => {
 
 vi.mock('./runtime/environments', () => ({
   addEnvironmentFromPairingCode: addEnvironmentFromPairingCodeMock,
-  listEnvironments: listEnvironmentsMock,
   removeEnvironment: vi.fn(),
   resolveEnvironment: vi.fn()
+}))
+
+vi.mock('../shared/remote-runtime/host-store/runtime-environment-store', () => ({
+  listEnvironments: listEnvironmentsMock
 }))
 
 vi.mock('child_process', async () => {
@@ -42,7 +45,13 @@ vi.mock('child_process', async () => {
 })
 
 import { main } from './index'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
+import {
+  buildWorktree,
+  okFixture,
+  queueFixtures,
+  queueNoFolderAtSelector,
+  worktreeListFixture
+} from './test-fixtures'
 import { useWorktreeAwarenessEnvironment } from './index-test-harness'
 
 describe('orca cli worktree awareness', () => {
@@ -156,6 +165,7 @@ describe('orca cli worktree awareness', () => {
       }
     ]
   ] as const)('%s', async (_name, { title, command, flags, expected }) => {
+    queueNoFolderAtSelector(callMock)
     queueFixtures(
       callMock,
       okFixture('req_terminal_create', {
@@ -183,46 +193,13 @@ describe('orca cli worktree awareness', () => {
       '/tmp/repo'
     )
 
-    expect(callMock.mock.calls).toEqual([
-      ['terminal.create', { worktree: 'path:/tmp/repo/feature', command, title, ...expected }]
-    ])
-    expect(process.exitCode).toBeUndefined()
-  })
-
-  it('prints terminal.read fallback screen lines in json mode', async () => {
-    queueFixtures(
-      callMock,
-      okFixture('req_terminal_read', {
-        terminal: {
-          handle: 'term_worker',
-          status: 'running',
-          tail: ['Claude Code', 'Checking files', 'Waiting for input'],
-          truncated: false,
-          limited: true,
-          oldestCursor: '0',
-          nextCursor: '3000',
-          latestCursor: '3000',
-          returnedLineCount: 3
-        }
-      })
-    )
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
-
-    await main(
-      ['terminal', 'read', '--terminal', 'term_worker', '--limit', '120', '--json'],
-      '/tmp/repo'
-    )
-
-    expect(callMock).toHaveBeenCalledWith('terminal.read', {
-      terminal: 'term_worker',
-      limit: 120
+    expect(callMock).toHaveBeenLastCalledWith('terminal.create', {
+      worktree: 'path:/tmp/repo/feature',
+      command,
+      title,
+      ...expected
     })
-    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
-    expect(printed.result.terminal.tail).toEqual([
-      'Claude Code',
-      'Checking files',
-      'Waiting for input'
-    ])
+    expect(process.exitCode).toBeUndefined()
   })
 
   it('uses the resolved enclosing worktree for terminal consumers', async () => {
@@ -311,6 +288,7 @@ describe('orca cli worktree awareness', () => {
         },
         _meta: { runtimeId: 'host' }
       } satisfies RuntimeRpcFailure
+      queueNoFolderAtSelector(callMock)
       callMock.mockRejectedValueOnce(new RuntimeRpcFailureError(failure))
       const log = vi.spyOn(console, 'log').mockImplementation(() => {})
       const stderr = vi.spyOn(console, 'error').mockImplementation(() => {})

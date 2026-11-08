@@ -1,5 +1,5 @@
 import { app, BrowserWindow } from 'electron'
-import { startBrowserScreencast } from '../browser/browser-screencast-stream'
+import { startBrowserScreencast } from '../browser/cdp/screencast/browser-screencast-stream'
 import { RendererPublicationThrottle } from './renderer-publication-throttle'
 
 async function run(): Promise<void> {

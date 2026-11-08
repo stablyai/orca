@@ -1,12 +1,12 @@
 import { getClaudeAgentViewService } from '../claude/agent-view/agent-view-service'
 import { getAppEnvironment } from '../../shared/app-environment'
-import { startCodexHooks } from '../codex/codex-hook-reconcile'
+import { startCodexHooks } from '../codex/hooks/reconciliation/codex-hook-reconcile'
 import { adoptLoginShellAgentHomes } from '../agent-hooks/agent-home-login-shell'
 import { hydrateAgentCliShellPath } from '../agent-hooks/local-agent-cli-presence'
 import {
   isAgentStatusHooksEnabled,
   isAgentStatusHooksEnabledForAgent
-} from '../agent-hooks/managed-agent-hook-controls'
+} from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 import { reconcileStartupManagedAgentHooks } from '../agent-hooks/managed-agent-hook-startup'
 import { refreshInstalledOpenCodeStatusPlugins } from '../opencode/opencode-status-plugin-startup-refresh'
 import type { ProfilePreferences } from '../persistence/loading-store/profile-preferences'

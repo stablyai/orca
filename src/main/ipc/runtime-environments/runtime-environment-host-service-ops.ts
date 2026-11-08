@@ -1,5 +1,5 @@
-import { classifyRuntimeEnvironmentHost } from '../../../shared/runtime-environment-host-kind'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import { classifyRuntimeEnvironmentHost } from '../../../shared/remote-runtime/host-catalog/runtime-environment-host-kind'
+import type { KnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { WslHostServerStop } from '../../../shared/wsl-host-types'
 import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'
 
@@ -13,6 +13,7 @@ export async function connectThroughOwningService(
       await getWslHostService()?.connect(environment.id)
       break
     case 'network':
+    case 'ssh':
       break
   }
 }
@@ -27,6 +28,7 @@ export function removeThroughOwningService(
       // Also releases the distro's holder and drops the WSL record.
       return getWslHostService()?.remove(environment.id) ?? null
     case 'network':
+    case 'ssh':
       return null
   }
 }

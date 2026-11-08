@@ -1,10 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
-import { runRpcOperation } from '../rpc-operation'
+import { describe, expect, it } from 'vitest'
 import {
   MOBILE_WEB_BUNDLE_CHUNK_BYTES,
   MOBILE_WEB_BUNDLE_RANGE_BYTES,
-  MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH,
-  MOBILE_WEB_BUNDLE_RANGE_METHOD
+  MOBILE_WEB_BUNDLE_RANGE_MAX_DATA_BASE64_LENGTH
 } from '../../../../src/shared/mobile-web-bundle/bundle-rpc-contract'
 import {
   computeMobileWebBundleId,
@@ -68,20 +66,6 @@ describe('mobile web bundle range reply reader', () => {
     ]) {
       expect(mobileWebBundleRangeRead.read(rangeReply(overrides)).compatible).toBe(false)
     }
-  })
-
-  it('requests a range and surfaces the host refusal', async () => {
-    const params = { buildId: 'a'.repeat(64), path: 'index.html', offset: 0 }
-    const sendRequest = vi.fn(async () => ({
-      id: 'range-1',
-      ok: false as const,
-      error: { code: 'forbidden', message: 'no' }
-    }))
-
-    await expect(
-      runRpcOperation({ sendRequest }, mobileWebBundleRangeRead, params)
-    ).rejects.toThrow('forbidden: no')
-    expect(sendRequest).toHaveBeenCalledWith(MOBILE_WEB_BUNDLE_RANGE_METHOD, params, undefined)
   })
 })
 

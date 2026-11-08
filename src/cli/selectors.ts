@@ -1,18 +1,17 @@
 import { resolve as resolvePath } from 'node:path'
 import type { ComputerAppQuery, RuntimeWorktreeListResult } from '../shared/runtime-types'
-import {
-  isWslUncPathForCallerLinuxPath,
-  isWslUncPathForLinuxMountedPath
-} from '../shared/cross-platform-path'
-import { parseWslUncPath } from '../shared/wsl-paths'
+import { resolveFolderWorkspaceSelector } from './folder-workspace-selector'
+import { resolveCallerDistroPathSelector } from './wsl-caller-path-selector'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
+import { isLaunchedByAnotherRuntime } from './runtime/runtime-source-fence'
 import { getOptionalStringFlag, getPresentStringFlag, getRequiredStringFlag } from './flags'
 import {
   getCallerExecutionHostId,
   resolveCallerPaneWorktreeSelector,
   selectWorktreeCreateCwdContext,
   selectEnclosingWorktreeSelectionOnHost,
+  selectCallerTerminalWorkspace,
   selectorPurpose,
   type WorkspaceSelectionPurpose,
   type HostScopedWorktreeSelection
@@ -35,43 +34,19 @@ export function normalizeWorktreeSelector(selector: string, cwd: string): string
   return selector
 }
 
-/** Resolve Linux selectors to stored UNC paths here, where the caller's distro is known. */
-export async function resolveCallerDistroPathSelector(
-  selector: string,
-  cwd: string,
-  client: RuntimeClient
-): Promise<string> {
-  // A UNC cwd proves Windows/WSL routing; WSL_DISTRO_NAME is also set for Linux-native runtimes.
-  const callerDistro = parseWslUncPath(cwd)?.distro
-  const linuxPath = selector.startsWith('path:') ? selector.slice(5) : ''
-  const isLinuxMountedPath = /^\/mnt\/[A-Za-z](?:\/|$)/.test(linuxPath)
-  if (
-    (!callerDistro && !isLinuxMountedPath) ||
-    client.isRemote ||
-    !linuxPath.startsWith('/') ||
-    linuxPath.startsWith('//') ||
-    // Backslash is a legal Linux filename character but a separator once a path reads as UNC.
-    linuxPath.includes('\\')
-  ) {
-    return selector
-  }
-  const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', { limit: 10_000 })
-  const match = worktrees.result.worktrees.find((worktree) =>
-    isLinuxMountedPath
-      ? isWslUncPathForLinuxMountedPath(worktree.path, linuxPath)
-      : isWslUncPathForCallerLinuxPath(worktree.path, linuxPath, callerDistro!)
-  )
-  // Preserve unmatched input verbatim; synthesizing a UNC path could guess the wrong distro.
-  return match ? `path:${match.path}` : selector
-}
-
+/** A parent keeps its selector: the runtime's parent resolver classifies it by kind, with parent rules. */
 export async function normalizeWorktreeSelectorForCaller(
   selector: string,
   cwd: string,
-  client: RuntimeClient
+  client: RuntimeClient,
+  purpose: WorkspaceSelectionPurpose = 'worktree'
 ): Promise<string> {
-  const normalized = normalizeWorktreeSelector(selector, cwd)
-  return resolveCallerDistroPathSelector(normalized, cwd, client)
+  const normalized = await resolveCallerDistroPathSelector(
+    normalizeWorktreeSelector(selector, cwd),
+    cwd,
+    client
+  )
+  return purpose === 'parent' ? normalized : resolveFolderWorkspaceSelector(normalized, client)
 }
 
 export function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient): void {
@@ -143,7 +118,7 @@ export async function getOptionalWorktreeSelector(
     assertLocalCwdWorktreeSelector(value, client)
     return await resolveCurrentWorktreeSelector(cwd, client, selectorPurpose(name))
   }
-  return await normalizeWorktreeSelectorForCaller(value, cwd, client)
+  return await normalizeWorktreeSelectorForCaller(value, cwd, client, selectorPurpose(name))
 }
 
 export async function getRequiredWorktreeSelector(
@@ -157,7 +132,7 @@ export async function getRequiredWorktreeSelector(
     assertLocalCwdWorktreeSelector(value, client)
     return await resolveCurrentWorktreeSelector(cwd, client, selectorPurpose(name))
   }
-  return await normalizeWorktreeSelectorForCaller(value, cwd, client)
+  return await normalizeWorktreeSelectorForCaller(value, cwd, client, selectorPurpose(name))
 }
 
 async function optionalCurrentWorktreeSelector(
@@ -196,7 +171,27 @@ export async function getBrowserWorktreeSelector(
   if (client.isRemote) {
     return undefined
   }
-  return optionalCurrentWorktreeSelector(cwd, client, purpose)
+  const catalog = await client
+    .call<RuntimeWorktreeListResult>('worktree.list', { limit: 10_000 })
+    .then((response) => response.result.worktrees)
+    .catch(() => undefined)
+  // Without the catalog neither cwd nor the terminal id can be checked; keep the runtime default.
+  if (!catalog) {
+    return undefined
+  }
+  const hostId = getCallerExecutionHostId()
+  const enclosing = selectEnclosingWorktreeSelectionOnHost(
+    catalog,
+    cwd,
+    hostId,
+    process.env.ORCA_WORKTREE_ID,
+    purpose
+  )
+  if (enclosing || isLaunchedByAnotherRuntime(process.env, client.userDataPath)) {
+    return enclosing?.selector
+  }
+  // An Orca terminal knows its workspace; without this an unmanaged cwd lands in the focused one.
+  return selectCallerTerminalWorkspace(catalog, hostId)
 }
 
 export async function getTerminalHandle(

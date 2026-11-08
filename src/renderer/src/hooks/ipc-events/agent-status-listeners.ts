@@ -3,14 +3,14 @@ import type {
   AgentStatusClearIpcPayload,
   AgentStatusIpcPayload,
   RefusedPaneResume
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   resolveLegacyWorkerTerminalRecoveryAction,
   rollbackLegacyWorkerTerminalSurfaceInStore
 } from '../legacy-worker-terminal-recovery-event'
 import { useAppStore } from '../../store'
 import { forgetRefusedPaneResume, namesRefusedResume } from '@/lib/forget-refused-pane-resume'
-import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-pane-authority'
+import { resolveAgentPaneAuthorityKey } from '@/store/slices/agent-status/agent-pane-authority'
 import { resolvePaneKey } from './agent-status-routing'
 import type { PendingAgentStatusEvent } from './agent-status-bridge-types'
 

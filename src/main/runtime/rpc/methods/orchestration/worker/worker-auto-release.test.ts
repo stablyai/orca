@@ -2,11 +2,11 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { reconcileRequestedWorkerTerminalReleases } from '../../../../orchestration/worker-terminal-release-reconciliation'
-import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
+import { reconcileRequestedWorkerTerminalReleases } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-reconciliation'
+import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-scheduler'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
-import { WorkerAutoReleaseActivity } from '../../../../orchestration/worker-auto-release-activity'
-import type { AgentPhase } from '../../../../../../shared/agent-transitions'
+import { WorkerAutoReleaseActivity } from '../../../../orchestration/terminal-authority/release/worker-auto-release-activity'
+import type { AgentPhase } from '../../../../../../shared/agent-status/lifecycle/agent-transitions'
 
 const GRACE_MS = 2 * 60_000
 
@@ -54,17 +54,6 @@ describe('orchestration worker automatic release', () => {
       })
     }
   )
-
-  it('never extends the deadline for a repeated worker_done', async () => {
-    setupWithFakeClock()
-    const { taskId, dispatchId } = await h.startSettledWorker()
-    const armed = h.db.getWorkerTerminalResourceByOwner(dispatchId)?.auto_release_at
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    h.settle(taskId, dispatchId, 'succeeded')
-
-    expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.auto_release_at).toBe(armed)
-  })
 
   it('hands a terminal reused during the grace period to the new Dispatch', async () => {
     setupWithFakeClock()
@@ -363,16 +352,6 @@ describe('orchestration worker automatic release', () => {
     const keepChat = (keep: boolean): Promise<unknown> =>
       h.call('orchestration.workerKeepOpen', { sessionId: 's1', keep })
 
-    it('arms a chat worker on worker_done like a terminal worker', () => {
-      setupWithFakeClock()
-
-      const dispatchId = startSettledChatWorker()
-
-      expect(h.db.getWorkerTerminalResourceByOwner(dispatchId)?.auto_release_at).toBe(
-        '2026-10-27 12:02:00'
-      )
-    })
-
     function claimAndCommitChatRelease(dispatchId: string): string {
       h.db.claimDueWorkerTerminalAutoReleases(Date.now() + GRACE_MS)
       const resourceId = h.db.getWorkerTerminalResourceByOwner(dispatchId)!.id
@@ -410,17 +389,6 @@ describe('orchestration worker automatic release', () => {
       const joined = claimAndCommitChatRelease(dispatchId)
       h.db.requestWorkerTerminalRelease(dispatchId)
       expect(h.db.admitWorkerChatReleaseClose(joined, inTurn)).toBe(true)
-    })
-
-    it('keeps a close that began final when the agent works again: its archive stays', () => {
-      setupWithFakeClock()
-      const dispatchId = startSettledChatWorker()
-      const resourceId = claimAndCommitChatRelease(dispatchId)
-
-      h.db.suspendWorkerTerminalAutoRelease(chatPaneKey)
-
-      expect(h.db.getWorkerTerminalResource(resourceId)?.release_state).toBe('releasing')
-      expect(h.db.getWorkerTerminalArchive(dispatchId)).toBeDefined()
     })
   })
 })

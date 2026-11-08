@@ -34,8 +34,10 @@ vi.mock('@/store', () => ({
   )
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: testState.callRuntimeRpc }))
-vi.mock('@/runtime/runtime-rpc-result', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: testState.callRuntimeRpc
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-result', () => ({
   RuntimeRpcCallError: testState.RuntimeRpcCallError
 }))
 
@@ -119,6 +121,64 @@ describe('active agent note send', () => {
       {
         terminal: 'term-2',
         enter: true,
+        requireAgentStatus: 'sendable',
+        client: { id: 'orca-desktop', type: 'desktop' }
+      },
+      { timeoutMs: 15000 }
+    )
+  })
+
+  // Add to chat reuses this guarded paste but leaves the text in the agent's input for the user.
+  it('pastes into an explicit target without Enter when told not to submit', async () => {
+    const methods: string[] = []
+    testState.callRuntimeRpc.mockImplementation(async (_target, method, params) => {
+      methods.push(method)
+      if (method === 'terminal.list') {
+        return {
+          terminals: [
+            {
+              handle: 'term-2',
+              worktreeId: 'wt-1',
+              worktreePath: '/repo',
+              branch: 'main',
+              tabId: 'tab-9',
+              leafId: OTHER_LEAF_ID,
+              title: 'Codex',
+              connected: true,
+              writable: true,
+              lastOutputAt: 1,
+              preview: ''
+            }
+          ],
+          totalCount: 1,
+          truncated: false
+        }
+      }
+      if (method === 'terminal.agentStatus') {
+        return { agentStatus: { handle: 'term-2', isRunningAgent: true, status: 'working' } }
+      }
+      if (method === 'terminal.send') {
+        return { send: { handle: 'term-2', accepted: true, bytesWritten: params.text.length } }
+      }
+      throw new Error(`unexpected method ${method}`)
+    })
+
+    await expect(
+      sendNotesToActiveAgentSession({
+        worktreeId: 'wt-1',
+        prompt: '> quote',
+        noteTarget: { tabId: 'tab-9', leafId: OTHER_LEAF_ID },
+        submit: false
+      })
+    ).resolves.toEqual({ status: 'sent' })
+
+    expect(methods).toEqual(['terminal.list', 'terminal.agentStatus', 'terminal.send'])
+    expect(testState.callRuntimeRpc).toHaveBeenLastCalledWith(
+      { kind: 'local' },
+      'terminal.send',
+      {
+        terminal: 'term-2',
+        text: `${PASTE_BEGIN}> quote${PASTE_END}`,
         requireAgentStatus: 'sendable',
         client: { id: 'orca-desktop', type: 'desktop' }
       },
@@ -534,7 +594,7 @@ describe('active agent note send', () => {
         }
       }
       if (method === 'terminal.agentStatus') {
-        return { agentStatus: { handle: 'term-2', isRunningAgent: true, status: 'idle' } }
+        return { agentStatus: { handle: 'term-2', isRunningAgent: true, status: 'working' } }
       }
       if (method === 'terminal.send') {
         sendCount += 1

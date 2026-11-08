@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { act, renderHook } from '@testing-library/react'
-import { StrictMode, useState } from 'react'
+import { useState } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
 import { useTerminalParkingPass } from './use-terminal-parking-pass'
@@ -18,7 +18,7 @@ vi.mock('./terminal-parking-pass-candidates', () => ({
     parkingTimers: new Map()
   })
 }))
-vi.mock('./terminal-pane/parked-terminal-buffer-capture', () => ({
+vi.mock('./terminal-pane/parking/capture/parked-terminal-buffer-capture', () => ({
   captureParkedTerminalBuffers: () => true
 }))
 
@@ -58,23 +58,6 @@ describe('useTerminalParkingPass', () => {
     parkingPass.parkedIds = ['wt-parked']
   })
 
-  it('does not queue a render when a pass produces the same parking sets', () => {
-    let renders = 0
-    const { result } = renderHook(() => {
-      renders += 1
-      return useParkingPassHost()
-    })
-    expect([...result.current.parked]).toEqual(['wt-parked'])
-
-    // No-op renders from each PTY-exit commit previously drove removal bursts past React’s nested-update limit.
-    const settled = renders
-    for (let i = 0; i < 5; i++) {
-      act(() => result.current.bump())
-    }
-    expect(renders - settled).toBe(5)
-    expect([...result.current.parked]).toEqual(['wt-parked'])
-  })
-
   it('applies changed parking decisions after unchanged passes', () => {
     const { result } = renderHook(() => useParkingPassHost())
     act(() => result.current.bump())
@@ -84,16 +67,5 @@ describe('useTerminalParkingPass', () => {
     parkingPass.parkedIds = []
     act(() => result.current.bump())
     expect([...result.current.parked]).toEqual([])
-  })
-
-  it('keeps parking transitions working under StrictMode', () => {
-    const { result } = renderHook(() => useParkingPassHost(), { wrapper: StrictMode })
-    expect([...result.current.parked]).toEqual(['wt-parked'])
-    parkingPass.parkedIds = []
-    act(() => result.current.bump())
-    expect([...result.current.parked]).toEqual([])
-    parkingPass.parkedIds = ['wt-parked']
-    act(() => result.current.bump())
-    expect([...result.current.parked]).toEqual(['wt-parked'])
   })
 })

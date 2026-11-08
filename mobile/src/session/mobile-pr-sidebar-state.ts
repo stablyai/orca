@@ -1,8 +1,13 @@
+import {
+  resolveGitHubWorkItemTarget,
+  githubWorkItemTargetKey
+} from '../../../src/shared/github/work-item-target'
 import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 import type { PRInfo } from '../../../src/shared/github/pull-request-types'
 import type { GitPushTarget } from '../../../src/shared/worktree/types'
 import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
-import type { GitHubPrReadOutcome, GitHubPrRepoSlug } from './github-pr-rpc'
+import type { HostedReviewInfo } from '../../../src/shared/source-control/hosted-review/hosted-review-contracts'
+import type { GitHubPrReadOutcome } from './github-pr-rpc'
 import { isGitHubPRSuppressed } from '../../../src/shared/worktree/github-pr-suppression'
 import {
   shouldApplyBranchMismatchedLinkedPRClear,
@@ -13,7 +18,6 @@ import {
 import type { MobileWorktreeSummary } from '../source-control/mobile-worktree-metadata-operations'
 import type { WorktreeGitHubPRLink } from '../source-control/mobile-pr-link'
 import { translate } from '../i18n/mobile-i18n'
-import { githubRepoIdentityKey } from '../../../src/shared/github/repository-identity-key'
 
 export type PrSidebarData = {
   pr: PRInfo
@@ -25,17 +29,13 @@ export type PrSidebarData = {
   pushTarget: GitPushTarget | null
 }
 
-// PR numbers repeat across repos (forks, relinks), so details and checks belong to repo + number.
-export function prSidebarReviewKey(pr: PRInfo): string {
-  return `${pr.prRepo ? githubRepoIdentityKey(pr.prRepo) : ''}#${pr.number}`
-}
-
 // Separate permanent auth/permission failures from transient errors to avoid endless revert/retry loops.
 export type PrSidebarState =
   | { kind: 'hidden' }
   | { kind: 'loading' }
-  | { kind: 'ready'; data: PrSidebarData }
-  | { kind: 'none' }
+  // refreshFailed: a current PR read failed while this accepted result stayed on screen.
+  | { kind: 'ready'; data: PrSidebarData; refreshFailed?: true }
+  | { kind: 'none'; refreshFailed?: true }
   | { kind: 'error'; message: string }
   | { kind: 'blocked'; message: string }
 
@@ -59,9 +59,7 @@ export type PrSidebarLoadDeps = {
   fetchForBranch: (
     worktreeId: string,
     args: { branch: string; linkedGitHubPR?: number | null }
-  ) => Promise<
-    GitHubPrReadOutcome<import('../../../src/shared/hosted-review').HostedReviewInfo | null>
-  >
+  ) => Promise<GitHubPrReadOutcome<HostedReviewInfo | null>>
   // Resolve persisted links in parallel so closed/merged PRs add no serial read.
   fetchWorktreeGitHubPRLink: (worktreeId: string) => Promise<WorktreeGitHubPRLink>
   clearWorktreeReviewLink: (
@@ -75,16 +73,9 @@ export type PrSidebarLoadDeps = {
       linkedPRNumber?: number | null
       fallbackPRNumber?: number | null
       currentHeadOid?: string | null
+      refresh?: boolean
     }
   ) => Promise<GitHubPrReadOutcome<PRInfo | null>>
-  fetchWorkItemDetails: (
-    worktreeId: string,
-    args: { prNumber: number }
-  ) => Promise<GitHubPrReadOutcome<GitHubWorkItemDetails | null>>
-  fetchPRChecks: (
-    worktreeId: string,
-    args: { prNumber: number; headSha?: string | null; prRepo?: GitHubPrRepoSlug | null }
-  ) => Promise<GitHubPrReadOutcome<PRCheckDetail[]>>
 }
 
 // The guard desktop applies before persisting the clear, or null when the link still holds.
@@ -118,128 +109,77 @@ function resolveStaleLink(
   return null
 }
 
-// Show PR/checks before heavy body/comments; parallel link resolution also retains closed/merged reviews.
-export async function loadPrSidebarData(
+/** The branch's GitHub review: its PR and the workspace's push target, or none. */
+export type PrBranchReview =
+  | { kind: 'found'; pr: PRInfo; pushTarget: GitPushTarget | null }
+  | { kind: 'none' }
+
+// Parallel link resolution also retains closed/merged reviews. A failed read throws its message, classified when shown.
+export async function loadPrBranchReview(
   deps: PrSidebarLoadDeps,
   args: {
     worktreeId: string
     branch: string
     headSha?: string | null
-    prRepo?: GitHubPrRepoSlug | null
+    refresh?: boolean
   }
-): Promise<PrSidebarState> {
-  try {
-    const [hintOutcome, link] = await Promise.all([
-      deps.fetchForBranch(args.worktreeId, { branch: args.branch }),
-      deps.fetchWorktreeGitHubPRLink(args.worktreeId)
-    ])
-    const branchHint =
-      hintOutcome.ok && hintOutcome.result?.provider === 'github' ? hintOutcome.result.number : null
+): Promise<PrBranchReview> {
+  const [hintOutcome, link] = await Promise.all([
+    deps.fetchForBranch(args.worktreeId, { branch: args.branch }),
+    deps.fetchWorktreeGitHubPRLink(args.worktreeId)
+  ])
+  const branchHint =
+    hintOutcome.ok && hintOutcome.result?.provider === 'github' ? hintOutcome.result.number : null
 
-    const requestHeadOid = args.headSha ?? null
-    // Same as desktop: the explicit link wins; the branch's review is only a fallback.
-    const fetchPR = (linkedPRNumber: number | null) =>
-      deps.fetchPRForBranch(args.worktreeId, {
-        branch: args.branch,
-        linkedPRNumber,
-        fallbackPRNumber: linkedPRNumber === null ? branchHint : null,
-        currentHeadOid: requestHeadOid
-      })
-    let linkedPR = link.linkedPR
-    let prOutcome = await fetchPR(linkedPR)
-    const staleLink = prOutcome.ok
-      ? resolveStaleLink(prOutcome.result, link, args.branch, requestHeadOid)
-      : null
-    // Desktop drops a link the branch has moved past, then resolves by branch.
-    if (staleLink) {
-      linkedPR = null
-      // The refetch sends no link, so it need not wait for the clear to land.
-      ;[, prOutcome] = await Promise.all([
-        deps.clearWorktreeReviewLink(args.worktreeId, staleLink),
-        fetchPR(null)
-      ])
-    }
-    if (!prOutcome.ok) {
-      return failureState(prOutcome.error)
-    }
-    if (
-      !prOutcome.result ||
-      isGitHubPRSuppressed(
-        { linkedPR, suppressedGitHubPR: link.suppressedGitHubPR },
-        prOutcome.result.number
-      )
-    ) {
-      return { kind: 'none' }
-    }
-    const pr = prOutcome.result
-    const checksOutcome = await deps.fetchPRChecks(args.worktreeId, {
-      prNumber: pr.number,
-      // Creating a PR may first commit, making its fetched head fresher than cached git status.
-      headSha: pr.headSha ?? args.headSha ?? null,
-      // Fork checks must use the fetched PR’s repo identity.
-      prRepo: pr.prRepo ?? args.prRepo ?? null
+  const requestHeadOid = args.headSha ?? null
+  // Same as desktop: the explicit link wins; the branch's review is only a fallback.
+  const fetchPR = (linkedPRNumber: number | null) =>
+    deps.fetchPRForBranch(args.worktreeId, {
+      branch: args.branch,
+      linkedPRNumber,
+      fallbackPRNumber: linkedPRNumber === null ? branchHint : null,
+      currentHeadOid: requestHeadOid,
+      ...(args.refresh ? { refresh: true } : {})
     })
-    // A check failure must not hide title, comments or merge controls.
-    if (!checksOutcome.ok) {
-      return {
-        kind: 'ready',
-        data: {
-          pr,
-          details: null,
-          checks: [],
-          checksError: checksOutcome.error,
-          pushTarget: link.pushTarget
-        }
-      }
-    }
-    return {
-      kind: 'ready',
-      data: {
-        pr,
-        details: null,
-        checks: checksOutcome.result,
-        checksError: null,
-        pushTarget: link.pushTarget
-      }
-    }
-  } catch (err) {
-    // Rejected dependencies must settle as UI errors rather than unhandled rejections.
-    return err instanceof Error
-      ? failureState(err.message)
-      : {
-          kind: 'error',
-          message: translate('session.prSidebarState.loadFailed', 'Unable to load pull request')
-        }
+  let linkedPR = link.linkedPR
+  let prOutcome = await fetchPR(linkedPR)
+  const staleLink = prOutcome.ok
+    ? resolveStaleLink(prOutcome.result, link, args.branch, requestHeadOid)
+    : null
+  // Desktop drops a link the branch has moved past, then resolves by branch.
+  if (staleLink) {
+    linkedPR = null
+    // The refetch sends no link, so it need not wait for the clear to land.
+    ;[, prOutcome] = await Promise.all([
+      deps.clearWorktreeReviewLink(args.worktreeId, staleLink),
+      fetchPR(null)
+    ])
   }
+  if (!prOutcome.ok) {
+    throw new Error(prOutcome.error)
+  }
+  if (
+    !prOutcome.result ||
+    isGitHubPRSuppressed(
+      { linkedPR, suppressedGitHubPR: link.suppressedGitHubPR },
+      prOutcome.result.number
+    )
+  ) {
+    return { kind: 'none' }
+  }
+  return { kind: 'found', pr: prOutcome.result, pushTarget: link.pushTarget }
 }
 
-export async function loadPrSidebarDetails(
-  deps: PrSidebarLoadDeps,
-  worktreeId: string,
-  prNumber: number
-): Promise<GitHubWorkItemDetails | null> {
-  try {
-    const outcome = await deps.fetchWorkItemDetails(worktreeId, { prNumber })
-    return outcome.ok ? outcome.result : null
-  } catch {
-    // Details failure leaves the PR usable without comments.
-    return null
-  }
-}
-
-// Null means loading; finish failed loads with prior details or a placeholder so spinners stop.
-export function resolvePrSidebarDetailsAfterPhase2(args: {
-  fetched: GitHubWorkItemDetails | null
-  prior: GitHubWorkItemDetails | null
-  pr: PRInfo
-}): GitHubWorkItemDetails {
-  if (args.fetched != null) {
-    return args.fetched
-  }
-  if (args.prior != null) {
-    return args.prior
-  }
-  return emptyPrSidebarDetails(args.pr)
+// What the screen shows for a PR read that failed with nothing accepted to keep.
+export function prSidebarFailureState(
+  error: unknown
+): { kind: 'error'; message: string } | { kind: 'blocked'; message: string } {
+  return error instanceof Error
+    ? failureState(error.message)
+    : {
+        kind: 'error',
+        message: translate('session.prSidebarState.loadFailed', 'Unable to load pull request')
+      }
 }
 
 export function emptyPrSidebarDetails(pr: PRInfo): GitHubWorkItemDetails {
@@ -271,11 +211,7 @@ export function prSidebarDetailsNeedFetch(
   return details == null || isPrSidebarDetailsPlaceholder(details)
 }
 
-// Head changes refresh visible/in-flight sidebar work only.
-export function shouldSoftRefreshPrSidebarOnHeadChange(kind: PrSidebarState['kind']): boolean {
-  return kind === 'ready' || kind === 'none' || kind === 'loading'
-}
-
-export function shouldApplyResult(resultSeq: number, latestSeq: number): boolean {
-  return resultSeq === latestSeq
+export function prSidebarResourceKey(pr: PRInfo): string {
+  const target = resolveGitHubWorkItemTarget({ ...pr, type: 'pr' })
+  return target ? githubWorkItemTargetKey(target) : pr.url
 }

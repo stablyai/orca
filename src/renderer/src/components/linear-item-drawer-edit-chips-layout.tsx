@@ -12,6 +12,7 @@ import {
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import { getLinearPriorityLabel } from '@/components/task-page/task-page-localized-options'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   LINEAR_EDIT_CHIP_CLASS,
   LINEAR_EDIT_MENU_ITEM_CLASS,
@@ -23,7 +24,8 @@ import {
 import type { LinearIssueEditController } from '@/components/linear-item-drawer-edit-controller'
 
 export function renderLinearIssueChipsLayout(
-  controller: LinearIssueEditController
+  controller: LinearIssueEditController,
+  t: Translate = translate
 ): React.JSX.Element {
   const {
     statePending,
@@ -82,7 +84,7 @@ export function renderLinearIssueChipsLayout(
           ) : states.loading ? (
             <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
               <LoaderCircle className="size-3 animate-spin" />
-              {translate('auto.components.LinearItemDrawer.59b6cd3706', 'Loading states')}
+              {t('auto.components.LinearItemDrawer.59b6cd3706', 'Loading states')}
             </div>
           ) : states.data.length > 0 ? (
             <div>
@@ -106,7 +108,7 @@ export function renderLinearIssueChipsLayout(
             </div>
           ) : (
             <div className="px-2 py-3 text-center text-[12px] text-muted-foreground">
-              {translate('auto.components.LinearItemDrawer.780ea6ed89', 'No states found')}
+              {t('auto.components.LinearItemDrawer.780ea6ed89', 'No states found')}
             </div>
           )}
         </PopoverContent>
@@ -151,7 +153,7 @@ export function renderLinearIssueChipsLayout(
             className={LINEAR_EDIT_CHIP_CLASS}
             aria-busy={estimatePending}
           >
-            <span className="truncate">{formatLinearEstimateLabel(localEstimate)}</span>
+            <span className="truncate">{formatLinearEstimateLabel(localEstimate, t)}</span>
             <LinearEditChipAdornment pending={estimatePending} />
           </button>
         </PopoverTrigger>
@@ -182,10 +184,7 @@ export function renderLinearIssueChipsLayout(
                 }
               }}
               inputMode="numeric"
-              placeholder={translate(
-                'auto.components.LinearItemDrawer.fbb90300e2',
-                'Custom estimate'
-              )}
+              placeholder={t('auto.components.LinearItemDrawer.fbb90300e2', 'Custom estimate')}
               className="h-8 text-sm"
             />
             <div className="flex items-center justify-between gap-2">
@@ -195,7 +194,7 @@ export function renderLinearIssueChipsLayout(
                 size="sm"
                 onClick={() => handleEstimateChange(null)}
               >
-                {translate('auto.components.LinearItemDrawer.ceeb8c6153', 'Clear')}
+                {t('auto.components.LinearItemDrawer.ceeb8c6153', 'Clear')}
               </Button>
               <Button
                 type="button"
@@ -204,7 +203,7 @@ export function renderLinearIssueChipsLayout(
                 disabled={estimatePending}
               >
                 {estimatePending ? <LoaderCircle className="size-3.5 animate-spin" /> : null}
-                {translate('auto.components.LinearItemDrawer.b5675b0694', 'Save')}
+                {t('auto.components.LinearItemDrawer.b5675b0694', 'Save')}
               </Button>
             </div>
           </div>
@@ -222,7 +221,7 @@ export function renderLinearIssueChipsLayout(
             <span className="truncate">
               {localAssignee
                 ? localAssignee.displayName
-                : translate('auto.components.LinearItemDrawer.d71cd3003e', '+ Assignee')}
+                : t('auto.components.LinearItemDrawer.d71cd3003e', '+ Assignee')}
             </span>
             <LinearEditChipAdornment loading={members.loading} pending={assigneePending} />
           </button>
@@ -234,7 +233,7 @@ export function renderLinearIssueChipsLayout(
               onClick={() => handleAssigneeChange('__unassign__')}
               className={cn(LINEAR_EDIT_MENU_ITEM_CLASS, !localAssignee && 'bg-accent/50')}
             >
-              {translate('auto.components.LinearItemDrawer.866316f22c', 'Unassigned')}
+              {t('auto.components.LinearItemDrawer.866316f22c', 'Unassigned')}
             </button>
             {members.error ? (
               <div className="px-2 py-3 text-center text-[12px] text-destructive">
@@ -243,7 +242,7 @@ export function renderLinearIssueChipsLayout(
             ) : members.loading ? (
               <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
                 <LoaderCircle className="size-3 animate-spin" />
-                {translate('auto.components.LinearItemDrawer.b2376d0179', 'Loading members')}
+                {t('auto.components.LinearItemDrawer.b2376d0179', 'Loading members')}
               </div>
             ) : (
               members.data.map((m) => (
@@ -272,10 +271,10 @@ export function renderLinearIssueChipsLayout(
             className={LINEAR_EDIT_CHIP_CLASS}
             aria-label={
               localLabels.length
-                ? translate('auto.components.LinearItemDrawer.7f7b89b631', 'Labels: {{value0}}', {
+                ? t('auto.components.LinearItemDrawer.7f7b89b631', 'Labels: {{value0}}', {
                     value0: localLabels.join(', ')
                   })
-                : translate('auto.components.LinearItemDrawer.23886c7eec', 'Add label')
+                : t('auto.components.LinearItemDrawer.23886c7eec', 'Add label')
             }
             aria-busy={labelsPending || labels.loading}
           >
@@ -289,7 +288,7 @@ export function renderLinearIssueChipsLayout(
           ) : labels.loading ? (
             <div className="flex items-center gap-2 px-2 py-3 text-[12px] text-muted-foreground">
               <LoaderCircle className="size-3 animate-spin" />
-              {translate('auto.components.LinearItemDrawer.cddd9b04a7', 'Loading labels')}
+              {t('auto.components.LinearItemDrawer.cddd9b04a7', 'Loading labels')}
             </div>
           ) : labels.data.length > 0 ? (
             <div>
@@ -320,7 +319,7 @@ export function renderLinearIssueChipsLayout(
             </div>
           ) : (
             <div className="px-2 py-3 text-center text-[12px] text-muted-foreground">
-              {translate('auto.components.LinearItemDrawer.367f828482', 'No labels found')}
+              {t('auto.components.LinearItemDrawer.367f828482', 'No labels found')}
             </div>
           )}
         </PopoverContent>

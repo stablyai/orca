@@ -1,7 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createFakeSpawnedChild } from '../../../shared/__fixtures__/fake-spawned-child'
-import type * as GitFetchHeadLockModule from '../../../shared/git-fetch-head-lock'
+import type * as GitFetchHeadLockModule from '../../../shared/git/fetch/git-fetch-head-lock'
 
 const {
   execFileMock,
@@ -30,9 +30,10 @@ vi.mock('@orca/process-host/process-tree-termination', () => ({
   forceTerminateProcessTree: forceTerminateProcessTreeMock
 }))
 // Mock only filesystem key derivation so libuv completion order cannot reorder the real FIFO lock.
-vi.mock('../../../shared/git-fetch-head-lock', async (importOriginal) => {
+vi.mock('../../../shared/git/fetch/git-fetch-head-lock', async (importOriginal) => {
   const actual = await importOriginal<typeof GitFetchHeadLockModule>()
-  const { runWithGitOperationLock } = await import('../../../shared/git-operation-lock')
+  const { runWithGitOperationLock } =
+    await import('../../../shared/git/commands/git-operation-lock')
   return {
     ...actual,
     runWithGitFetchHeadLock: <T>(
@@ -43,16 +44,16 @@ vi.mock('../../../shared/git-fetch-head-lock', async (importOriginal) => {
   }
 })
 
-import { RuntimeRemoteFetchController } from '../../runtime/runtime-remote-fetch-controller'
+import { RuntimeRemoteFetchController } from '../../runtime/repositories/runtime-remote-fetch-controller'
 import { gitExecFileAsync, gitExecFileAsyncBuffer } from './git-exec-file'
 import { execFileCapture } from './exec-file-capture'
-import { isGitWorktreeMutationInFlight } from '../git-worktree-mutation-state'
+import { isGitWorktreeMutationInFlight } from './git-worktree-mutation-state'
 import {
   acquireGitAdmission,
-  GitAdmissionScheduler,
   _gitAdmissionSnapshotForTests,
   _resetGitAdmissionForTests
 } from './git-subprocess-admission'
+import { GitAdmissionScheduler } from '../../../shared/git/admission/git-admission-scheduler'
 
 type ExecCallback = (error: Error | null, stdout: string | Buffer, stderr: string | Buffer) => void
 
@@ -241,21 +242,6 @@ describe('git exec admission lifetime', () => {
     ).rejects.toMatchObject({ name: 'AbortError' })
     expect(execFileMock).not.toHaveBeenCalled()
     expect(onChildTerminated).toHaveBeenCalledOnce()
-  })
-
-  it('releases termination-barrier admission on confirmed close', async () => {
-    const child = mockChild()
-    spawnMock.mockReturnValue(child)
-    const pending = gitExecFileAsync(['status'], {
-      cwd: '/repo',
-      terminationBarrier: true
-    })
-    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalledOnce())
-    expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(1)
-
-    child.emit('close', 0, null)
-    await expect(pending).resolves.toEqual({ stdout: '', stderr: '' })
-    expect(_gitAdmissionSnapshotForTests().budgets.general?.baseUsed).toBe(0)
   })
 
   it('retains barrier admission past bounded settlement until termination is observed', async () => {

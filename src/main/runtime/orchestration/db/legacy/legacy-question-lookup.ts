@@ -1,4 +1,4 @@
-import type { MessageDeliveryContract, MessageRow, QuestionRow } from '../../types'
+import type { MessageDeliveryContract, MessageRow, QuestionRow } from '../orchestration-records'
 import { OrchestrationError } from '../../orchestration-error'
 import { exposeQuestionTimestamps } from '../utc-timestamp'
 import { legacyMessageMatchesQuestion } from '../legacy-question-identity'

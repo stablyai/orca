@@ -1,42 +1,57 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { ConnectionState } from '../transport/types'
-import type { GitHubPRFileViewedState, PRInfo } from '../../../src/shared/github/pull-request-types'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useQueryClient, type UseQueryResult } from '@tanstack/react-query'
+import type { GitHubPRFileViewedState } from '../../../src/shared/github/pull-request-types'
+import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
+import { readHostQueryLive, useHostQuery } from '../query/host-query'
+import { isHostNotConnectedError } from '../query/host-query-errors'
+import { useLastShownData } from '../query/use-last-shown-data'
+import { hostQueryKey } from '../query/host-query-key'
 import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/types'
 import {
-  backgroundReadFailed,
-  keepShownChecks,
-  useForegroundFirstLoad
-} from './pr-sidebar-load-result'
-import { fetchGithubRepoSlug } from './github-pr-rpc'
-import { buildPrSidebarLoadDeps } from './pr-sidebar-load-deps'
+  githubRepoSlugQuery,
+  NO_BRANCH,
+  NO_CHECKS,
+  NO_PR,
+  patchPrDetails,
+  prBranchReviewQuery,
+  prChecksQuery,
+  prDetailsQuery,
+  prDetailsRepo,
+  prRepoParams,
+  type PrChecksInput,
+  type PrDetailsInput,
+  type PrQueryScope,
+  type PrSlice
+} from './mobile-pr-queries'
 import {
-  loadPrSidebarData,
-  loadPrSidebarDetails,
-  prSidebarReviewKey,
-  prSidebarDetailsNeedFetch,
-  resolvePrSidebarDetailsAfterPhase2,
-  shouldApplyResult,
-  shouldSoftRefreshPrSidebarOnHeadChange,
-  type PrSidebarLoadDeps,
+  emptyPrSidebarDetails,
+  prSidebarFailureState,
+  prSidebarResourceKey,
   type PrSidebarState
 } from './mobile-pr-sidebar-state'
 
-type PrSidebarControllerInput = {
+export type PrSidebarControllerInput = {
+  hostId: string
   client: RpcClient | null
   connState: ConnectionState
   worktreeId: string
   branch: string | null
   headSha: string | null
+  /** What the screen always shows; other parts load when asked for. */
+  demand?: 'summary' | 'details'
 }
 
-// Load body/comments only when the PR segment opens; the hub chip needs just PR/checks.
 export type PrSidebarLoadOptions = {
+  // Body and comments load only once a PR screen shows them; the hub chip needs just the PR and its checks.
   includeDetails?: boolean
-  /** A poll the user did not ask for: a failed read leaves the shown PR in place. */
-  background?: boolean
+  /** The user's explicit Refresh: every part is read again, past the host's caches. */
+  refresh?: boolean
 }
 
-// Keep HEAD out of identity: commits soft-refresh checks without clearing ready UI.
+const NO_INPUT = {}
+
+// Keep HEAD out of identity: a commit re-reads the PR without clearing what is shown.
 export function buildMobilePrSidebarIdentity(args: {
   worktreeId: string
   branch: string | null
@@ -44,300 +59,276 @@ export function buildMobilePrSidebarIdentity(args: {
   return args.branch ? `${args.worktreeId}\u0000${args.branch}` : null
 }
 
-export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
-  const { client, connState, worktreeId, branch, headSha } = input
-  const [isGithubRepo, setIsGithubRepo] = useState(false)
-  // Wait for the probe before calling this repo unsupported.
-  const [repoProbeLoaded, setRepoProbeLoaded] = useState(false)
-  const [state, setState] = useState<PrSidebarState>({ kind: 'hidden' })
-  const [showPRSidebar, setShowPRSidebar] = useState(false)
-  const repoProbeSeqRef = useRef(0)
-  const loadSeqRef = useRef(0)
-  // Give details their own sequence so chip refreshes and details fetches cannot cancel each other.
-  const detailsSeqRef = useRef(0)
-  // Claim in-flight details by sequence and review (repo + number) to dedupe cold segment opens.
-  const detailsInFlightRef = useRef<{ seq: number; review: string } | null>(null)
-  const stateIdentityRef = useRef<string | null>(null)
-  const stateRef = useRef(state)
-  stateRef.current = state
-  const headShaRef = useRef(headSha)
+// A read the host refused; a dropped connection is not one, the connected edge reads again.
+function readFailed(query: UseQueryResult<unknown>): boolean {
+  return query.isError && !isHostNotConnectedError(query.error)
+}
 
-  // Detached HEAD still needs repo eligibility; branching the probe would strand its spinner.
-  const probeReady = client !== null && connState === 'connected'
-  const identity = buildMobilePrSidebarIdentity({ worktreeId, branch })
-  // Committed identity, so a load closure captured for an earlier branch cannot claim the current one.
-  const identityRef = useRef(identity)
-  useLayoutEffect(() => {
-    identityRef.current = identity
+export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
+  const { hostId, client, worktreeId, branch, headSha } = input
+  const queryClient = useQueryClient()
+  const exec = useWorkspaceExecutionHost() ?? 'local'
+  const target = useMemo(() => ({ exec, worktree: worktreeId }), [exec, worktreeId])
+  const host = useMemo(() => ({ hostId, client }), [hostId, client])
+  const identity = buildMobilePrSidebarIdentity(input)
+  const scope = identity && `${hostId}\u0000${exec}\u0000${identity}`
+
+  // Nothing is read until a screen asks, and each branch is asked again; asking for details includes the PR.
+  const [demand, setDemand] = useState<{ scope: string | null; details: boolean } | null>(null)
+  const raised = demand?.scope === scope ? demand : null
+  const demanded = raised !== null || input.demand !== undefined
+  const detailsDemanded = raised?.details === true || input.demand === 'details'
+  const raiseDemand = useCallback(
+    (details: boolean) =>
+      setDemand((current) =>
+        current?.scope === scope && (current.details || !details) ? current : { scope, details }
+      ),
+    [scope]
+  )
+  const [showPRSidebar, setShowPRSidebar] = useState(false)
+
+  // Detached HEAD still needs repo eligibility, so the probe does not wait for a branch.
+  const slugQuery = useHostQuery(githubRepoSlugQuery, host, target, NO_INPUT, {
+    enabled: worktreeId !== ''
+  })
+  const isGithubRepo = slugQuery.data === true
+  const probeLoaded = slugQuery.data !== undefined || readFailed(slugQuery)
+
+  const branchInput = useMemo(() => (branch ? { branch, head: headSha } : null), [branch, headSha])
+  const reviewQuery = useHostQuery(prBranchReviewQuery, host, target, branchInput ?? NO_BRANCH, {
+    enabled: demanded && isGithubRepo && branchInput !== null
+  })
+  const review = useLastShownData(reviewQuery.data, scope)
+  const pr = review?.kind === 'found' ? review.pr : null
+  const resource = pr ? prSidebarResourceKey(pr) : null
+
+  const checksInput = useMemo(
+    (): PrChecksInput | null =>
+      pr
+        ? {
+            ...prRepoParams(pr.prRepo),
+            number: pr.number,
+            // Creating a PR may first commit, so its fetched head is fresher than the cached git status.
+            head: pr.headSha ?? headSha ?? null
+          }
+        : null,
+    [pr, headSha]
+  )
+  const checksQuery = useHostQuery(prChecksQuery, host, target, checksInput ?? NO_CHECKS, {
+    enabled: demanded && checksInput !== null
+  })
+  const checks = useLastShownData(
+    checksQuery.data,
+    scope && resource && `${scope}\u0000${resource}`
+  )
+
+  const detailsInput = useMemo((): PrDetailsInput | null => {
+    const repository = pr ? prDetailsRepo(pr) : null
+    return pr && repository ? { ...prRepoParams(repository), number: pr.number } : null
+  }, [pr])
+  const detailsQuery = useHostQuery(prDetailsQuery, host, target, detailsInput ?? NO_PR, {
+    enabled: detailsDemanded && detailsInput !== null
   })
 
-  const buildDeps = useCallback(() => (client ? buildPrSidebarLoadDeps(client) : null), [client])
-
-  // Reset eligibility on workspace change, but retain it through disconnects so the chip stays visible.
+  // Details refetch only when the PR's updatedAt moved past what they were read at.
+  const prUpdatedAt = pr?.updatedAt
+  const detailsUpdatedAt = detailsQuery.data?.item.updatedAt
+  const detailsReadAt = detailsQuery.dataUpdatedAt
+  const reviewReadAt = reviewQuery.dataUpdatedAt
   useEffect(() => {
-    setIsGithubRepo(false)
-    setRepoProbeLoaded(false)
-  }, [worktreeId])
-
-  const refreshPRSidebarRepoProbe = useCallback(async () => {
-    if (!probeReady || !client) {
-      return false
-    }
-    const seq = ++repoProbeSeqRef.current
-    const outcome = await fetchGithubRepoSlug(client, worktreeId).catch(() => null)
-    if (seq !== repoProbeSeqRef.current) {
-      return false
-    }
-    setRepoProbeLoaded(true)
-    if (!outcome?.ok) {
-      return false
-    }
-    const supported = outcome.result !== null
-    setIsGithubRepo(supported)
-    if (!supported) {
-      loadSeqRef.current += 1
-      detailsSeqRef.current += 1
-      stateIdentityRef.current = null
-      setState({ kind: 'hidden' })
-    }
-    return supported
-  }, [probeReady, client, worktreeId])
-
-  useEffect(() => {
-    void refreshPRSidebarRepoProbe()
-    return () => {
-      repoProbeSeqRef.current += 1
-    }
-  }, [refreshPRSidebarRepoProbe])
-
-  useEffect(() => {
-    if (!identity) {
-      loadSeqRef.current += 1
-      detailsSeqRef.current += 1
-      stateIdentityRef.current = null
-      setState({ kind: 'hidden' })
-      return
-    }
-    if (stateIdentityRef.current !== null && stateIdentityRef.current !== identity) {
-      // Invalidate branch-scoped data immediately so a switched branch cannot show the previous PR as fresh.
-      loadSeqRef.current += 1
-      detailsSeqRef.current += 1
-      stateIdentityRef.current = null
-      setState({ kind: 'hidden' })
-    }
-  }, [identity])
-
-  // Phase two, claimed by its own sequence so chip refreshes (which advance loadSeq) cannot replace its owner.
-  const loadDetails = useCallback(
-    async (deps: PrSidebarLoadDeps, pr: PRInfo, loadIdentity: string): Promise<void> => {
-      const review = prSidebarReviewKey(pr)
-      const detailsSeq = detailsSeqRef.current + 1
-      detailsSeqRef.current = detailsSeq
-      detailsInFlightRef.current = { seq: detailsSeq, review }
-      const fetchedDetails = await loadPrSidebarDetails(deps, worktreeId, pr.number)
-      // Release only this details claim; a newer load may already own it.
-      if (detailsInFlightRef.current?.seq === detailsSeq) {
-        detailsInFlightRef.current = null
-      }
-      // Patch only details, checked against the latest queued state when React applies it: phase one's
-      // publication may not have rendered yet, and spreading the last render would undo its new PR state.
-      setState((current) => {
-        if (
-          detailsSeq !== detailsSeqRef.current ||
-          stateIdentityRef.current !== loadIdentity ||
-          current.kind !== 'ready' ||
-          prSidebarReviewKey(current.data.pr) !== review
-        ) {
-          return current
-        }
-        // Replace nonfatal null with a placeholder so details cannot spin forever.
-        const details = resolvePrSidebarDetailsAfterPhase2({
-          fetched: fetchedDetails,
-          prior: current.data.details,
-          pr: current.data.pr
-        })
-        return { kind: 'ready', data: { ...current.data, details } }
-      })
-    },
-    [worktreeId]
-  )
-
-  const loadOnce = useCallback(
-    async (options?: PrSidebarLoadOptions, afterWrite = false) => {
-      const includeDetails = options?.includeDetails ?? true
-      const deps = buildDeps()
-      const loadIdentity = identity
-      if (!deps || !branch || !loadIdentity || loadIdentity !== identityRef.current) {
-        return 'stale'
-      }
-      // A details read started before the write would land pre-write content after this reread.
-      const retiredDetails = afterWrite && detailsInFlightRef.current !== null
-      if (afterWrite) {
-        detailsSeqRef.current += 1
-        detailsInFlightRef.current = null
-      }
-      const seq = loadSeqRef.current + 1
-      loadSeqRef.current = seq
-      // Claim details only when this load starts fetching them; superseded phase-one loads must not orphan existing details.
-      const previousIdentity = stateIdentityRef.current
-      stateIdentityRef.current = loadIdentity
-      // Refresh same-branch data in place; reserve loading state for first load or identity replacement.
-      const keepVisible =
-        previousIdentity === loadIdentity &&
-        (stateRef.current.kind === 'ready' ||
-          stateRef.current.kind === 'none' ||
-          stateRef.current.kind === 'loading')
-      if (!keepVisible) {
-        setState({ kind: 'loading' })
-      }
-      const read = await loadPrSidebarData(deps, { worktreeId, branch, headSha })
-      if (
-        !shouldApplyResult(seq, loadSeqRef.current) ||
-        stateIdentityRef.current !== loadIdentity
-      ) {
-        return 'stale'
-      }
-      const keepShown = options?.background || afterWrite
-      const shown = stateRef.current
-      if (keepShown && backgroundReadFailed(shown, read)) {
-        // The shown PR stays, so replace the details read this reread retired rather than leave it spinning.
-        if (retiredDetails && shown.kind === 'ready') {
-          await loadDetails(deps, shown.data.pr, loadIdentity)
-        }
-        return 'failed'
-      }
-      const next = keepShown ? keepShownChecks(shown, read) : read
-      const landed = next === read ? 'applied' : 'failed'
-      stateIdentityRef.current = loadIdentity
-
-      // Keep prior details across phase one so refresh cannot blank the comment tree.
-      const priorDetails =
-        next.kind === 'ready' &&
-        shown.kind === 'ready' &&
-        shown.data.details != null &&
-        prSidebarReviewKey(shown.data.pr) === prSidebarReviewKey(next.data.pr)
-          ? shown.data.details
-          : null
-
-      if (next.kind === 'ready' && priorDetails != null) {
-        setState({ kind: 'ready', data: { ...next.data, details: priorDetails } })
-        if (!includeDetails) {
-          return landed
-        }
-      } else {
-        setState(next)
-        if (next.kind !== 'ready' || !includeDetails) {
-          return next.kind === 'ready' || next.kind === 'none' ? landed : 'failed'
-        }
-      }
-
-      await loadDetails(deps, next.data.pr, loadIdentity)
-      return landed
-    },
-    [buildDeps, branch, headSha, identity, loadDetails, worktreeId]
-  )
-
-  const { load, rereadAfterWrite } = useForegroundFirstLoad(loadOnce)
-
-  const ensurePrSidebarDetails = useCallback(async () => {
-    const current = stateRef.current
-    if (current.kind !== 'ready' || !prSidebarDetailsNeedFetch(current.data.details)) {
-      return
-    }
-    const deps = buildDeps()
-    const loadIdentity = identity
-    if (!deps || !loadIdentity || stateIdentityRef.current !== loadIdentity) {
-      return
-    }
-    const inFlight = detailsInFlightRef.current
     if (
-      inFlight &&
-      inFlight.review === prSidebarReviewKey(current.data.pr) &&
-      inFlight.seq === detailsSeqRef.current
+      detailsInput &&
+      prUpdatedAt &&
+      detailsUpdatedAt &&
+      Date.parse(prUpdatedAt) > Date.parse(detailsUpdatedAt) &&
+      // A details read after the summary already answered for this updatedAt; never loop on a host that disagrees.
+      detailsReadAt < reviewReadAt
     ) {
-      return
+      // A read already out (a Refresh's live one) answers for the new updatedAt; join it rather than restart it.
+      void queryClient.invalidateQueries(
+        {
+          queryKey: hostQueryKey(hostId, prDetailsQuery.family, target, detailsInput),
+          exact: true
+        },
+        { cancelRefetch: false }
+      )
     }
-    await loadDetails(deps, current.data.pr, loadIdentity)
-  }, [buildDeps, identity, loadDetails])
+  }, [
+    detailsInput,
+    detailsReadAt,
+    detailsUpdatedAt,
+    hostId,
+    prUpdatedAt,
+    queryClient,
+    reviewReadAt,
+    target
+  ])
 
-  // Restart same-branch reads on HEAD advance so their check lookup cannot keep a stale SHA.
-  useEffect(() => {
-    if (headShaRef.current === headSha) {
-      return
+  const reviewFailed = readFailed(reviewQuery)
+  const reviewError = reviewQuery.error
+  const checksFailed = readFailed(checksQuery) && !checks
+  const checksError = checksQuery.error
+  const details = detailsQuery.data
+  const detailsFailed = readFailed(detailsQuery)
+  const shown = demanded && isGithubRepo && branch !== null
+  const state = useMemo((): PrSidebarState => {
+    if (!shown) {
+      return { kind: 'hidden' }
     }
-    headShaRef.current = headSha
-    // After identity reset the ref still holds old state; let the hidden-state effects start the new load.
-    if (stateIdentityRef.current === null) {
-      return
+    if (!review) {
+      return reviewFailed ? prSidebarFailureState(reviewError) : { kind: 'loading' }
     }
-    const current = stateRef.current
-    if (!shouldSoftRefreshPrSidebarOnHeadChange(current.kind)) {
-      return
+    // A failed read of a PR or no-PR result keeps it on screen, marked until a read succeeds.
+    const marked = reviewFailed ? { refreshFailed: true as const } : {}
+    if (review.kind === 'none') {
+      return { kind: 'none', ...marked }
     }
-    void load({
-      includeDetails: current.kind === 'ready' && current.data.details != null
-    })
-  }, [headSha, load])
+    // The PR shows with its checks; a checks failure must not hide title, comments or merge controls.
+    if (!checks && !checksFailed) {
+      return { kind: 'loading' }
+    }
+    return {
+      kind: 'ready',
+      data: {
+        pr: review.pr,
+        // Null is still loading; a failed read finishes with a placeholder so spinners stop.
+        details:
+          details ?? (detailsDemanded && detailsFailed ? emptyPrSidebarDetails(review.pr) : null),
+        checks: checks ?? [],
+        checksError: checksFailed ? (checksError?.message ?? null) : null,
+        pushTarget: review.pushTarget
+      },
+      ...marked
+    }
+  }, [
+    shown,
+    review,
+    reviewFailed,
+    reviewError,
+    checks,
+    checksFailed,
+    checksError,
+    details,
+    detailsFailed,
+    detailsDemanded
+  ])
+
+  const scopeQueries = useMemo(
+    (): PrQueryScope => ({ host, target, branchInput, checksInput, detailsInput }),
+    [host, target, branchInput, checksInput, detailsInput]
+  )
+
+  // A live read of each part a write or Refresh changed; failures keep what is shown.
+  const rereadPRSlices = useCallback(
+    async (slices: readonly PrSlice[]): Promise<void> => {
+      // A repo without a GitHub remote has no PR to read, however the caller asks.
+      if (!client || !isGithubRepo) {
+        return
+      }
+      const live = { replace: true }
+      const reader = { hostId, client }
+      await Promise.allSettled([
+        slices.includes('summary') && branchInput
+          ? readHostQueryLive(queryClient, prBranchReviewQuery, reader, target, branchInput, live)
+          : null,
+        slices.includes('checks') && checksInput
+          ? readHostQueryLive(queryClient, prChecksQuery, reader, target, checksInput, live)
+          : null,
+        slices.includes('details') && detailsInput
+          ? readHostQueryLive(queryClient, prDetailsQuery, reader, target, detailsInput, live)
+          : null
+      ])
+    },
+    [branchInput, checksInput, client, detailsInput, hostId, isGithubRepo, queryClient, target]
+  )
+
+  const refetchPRSidebar = useCallback(
+    async (options?: PrSidebarLoadOptions): Promise<void> => {
+      const includeDetails = options?.includeDetails ?? true
+      raiseDemand(includeDetails)
+      // A first ask starts the reads by enabling them; a fresh cache answers without one.
+      if (!demanded) {
+        return
+      }
+      // Refresh reads every part; otherwise the summary, plus details a Retry asks for after they failed.
+      const details = includeDetails && (options?.refresh || detailsFailed)
+      await rereadPRSlices([
+        'summary',
+        ...(options?.refresh ? ['checks' as const] : []),
+        ...(details ? ['details' as const] : [])
+      ])
+    },
+    [demanded, detailsFailed, raiseDemand, rereadPRSlices]
+  )
+
+  // Asking for details only enables their read; a failed one is read again by Retry or Refresh, never in a loop.
+  const ensurePrSidebarDetails = useCallback(() => raiseDemand(true), [raiseDemand])
 
   const openPRSidebar = useCallback(() => {
+    // Opening is full demand even when loaded content needs no request now.
+    raiseDemand(true)
     setShowPRSidebar(true)
-    if (
-      stateIdentityRef.current !== identity ||
-      (state.kind !== 'ready' && state.kind !== 'loading')
-    ) {
-      void load({ includeDetails: true })
-    } else if (state.kind === 'ready' && prSidebarDetailsNeedFetch(state.data.details)) {
-      void ensurePrSidebarDetails()
+  }, [raiseDemand])
+
+  const retryPRSidebar = useCallback(() => {
+    raiseDemand(true)
+    void rereadPRSlices(['summary', 'checks', 'details'])
+  }, [raiseDemand, rereadPRSlices])
+
+  const refreshPRSidebarRepoProbe = useCallback(async (): Promise<boolean> => {
+    if (!client || worktreeId === '') {
+      return false
     }
-  }, [identity, state, load, ensurePrSidebarDetails])
+    try {
+      return await readHostQueryLive(
+        queryClient,
+        githubRepoSlugQuery,
+        { hostId, client },
+        target,
+        NO_INPUT,
+        { replace: false }
+      )
+    } catch {
+      return false
+    }
+  }, [client, hostId, queryClient, target, worktreeId])
 
   // Desktop's patchCachedPRFileViewedState: a viewed tick shows at once, and a failed write puts the old state back.
+  // A write for one PR never lands on another the workspace was relinked to meanwhile.
   const patchPrFileViewed = useCallback(
     (pullRequestId: string, path: string, viewed: GitHubPRFileViewedState) => {
-      setState((prev) => {
-        const files = prev.kind === 'ready' ? prev.data.details?.files : undefined
-        // A write for one PR must not land on another the workspace was relinked to meanwhile.
-        if (
-          prev.kind !== 'ready' ||
-          !prev.data.details ||
-          !files ||
-          prev.data.details.pullRequestId !== pullRequestId
-        ) {
-          return prev
-        }
-        return {
-          kind: 'ready',
-          data: {
-            ...prev.data,
-            details: {
-              ...prev.data.details,
-              files: files.map((file) =>
-                file.path === path ? { ...file, viewerViewedState: viewed } : file
-              )
-            }
-          }
-        }
-      })
+      if (!detailsInput) {
+        return
+      }
+      patchPrDetails(
+        queryClient,
+        hostQueryKey(hostId, prDetailsQuery.family, target, detailsInput),
+        (details) =>
+          details.files && details.pullRequestId === pullRequestId
+            ? {
+                ...details,
+                files: details.files.map((file) =>
+                  file.path === path ? { ...file, viewerViewedState: viewed } : file
+                )
+              }
+            : details
+      )
     },
-    []
+    [detailsInput, hostId, queryClient, target]
   )
-
-  const retry = useCallback(() => {
-    void load({ includeDetails: true })
-  }, [load])
 
   return {
     prSidebarState: state,
     prSidebarIsGithubRepo: isGithubRepo,
-    prSidebarRepoProbeLoaded: repoProbeLoaded,
+    prSidebarRepoProbeLoaded: probeLoaded,
+    prQueries: scopeQueries,
     refreshPRSidebarRepoProbe,
     showPRSidebar,
     setShowPRSidebar,
     openPRSidebar,
-    retryPRSidebar: retry,
-    refetchPRSidebar: load,
-    // Every attempted PR write's follow-up read; its outcome stays the write's own feedback.
-    rereadPRSidebarAfterWrite: rereadAfterWrite,
+    retryPRSidebar,
+    refetchPRSidebar,
+    rereadPRSlices,
     ensurePrSidebarDetails,
     patchPrFileViewed
   }

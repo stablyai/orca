@@ -1,6 +1,6 @@
-import type { ParsedFileLinkLocation } from '../../../src/shared/file-link-location'
+import type { ParsedFileLinkLocation } from '../../../src/shared/file-links/file-link-location'
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
-import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
+import type { TerminalOscLinkRange } from '../../../src/shared/terminal/links/terminal-osc-link-ranges'
 import type { StyleProp, ViewStyle } from 'react-native'
 import type { TerminalFitDimensions } from './terminal-grid-fit'
 import type { TerminalFrame } from './terminal-webview-messages'
@@ -114,6 +114,8 @@ export type TerminalWebViewHandle = {
   // iOS can preserve the view but lose document state; await liveness before foreground replay.
   prepareForForegroundRecovery: () => void
   write: (data: string) => void
+  // Only an in-process document has it: `onParsed` runs once xterm has parsed `data`, or once the write is discarded.
+  writeWithParseAck?: (data: string, onParsed: () => void) => void
   init: (init: TerminalInit) => void
   resize: (cols: number, rows: number, frame: TerminalFrame | null) => void
   // Rewrap local scrollback after PTY width changes; alternate screens use full repaints instead.

@@ -1,4 +1,4 @@
-import type { PendingEditorFocusRequest } from '@/store/slices/editor'
+import type { PendingEditorFocusRequest } from '@/store/slices/editor/types/pending-editor-reveal'
 
 /** Match viewStateId as well as file/workspace so exactly one split pane claims the focus handoff. */
 export function matchesPendingEditorFocusRequest(

@@ -3,9 +3,9 @@ import {
   getTabEntryCannotOpenDirectoryMessage,
   getTabEntryFileNotFoundMessage
 } from './tab-create-entry-copy'
-import { toWorktreeRelativePath } from '../../../../shared/terminal-links'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
-import type { OpenFile } from '@/store/slices/editor'
+import { toWorktreeRelativePath } from '../../../../shared/terminal/links/terminal-links'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import {
   validateNewTabEntryAbsolutePath,
   type TabEntryLocalPlatform

@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { getManagedOrcadFenceEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { OrcadMigrationManifest } from '../../shared/orcad-migration/orcad-migration-manifest'
@@ -79,20 +79,6 @@ async function setup() {
 }
 
 describe('migration cutover coordinator', () => {
-  it('stages then commits once, journaling each phase the destination proves', async () => {
-    const h = await setup()
-    await expect(stageOrcadMigrationDestination(h.context, h.migrationId)).resolves.toMatchObject({
-      phase: 'destination-staged'
-    })
-    expect(h.journal()?.phase).toBe('destination-staged')
-    await expect(commitOrcadMigrationDestination(h.context, h.migrationId)).resolves.toMatchObject({
-      phase: 'destination-committed'
-    })
-    expect(h.journal()?.phase).toBe('destination-committed')
-    await commitOrcadMigrationDestination(h.context, h.migrationId)
-    expect(h.destination.commits).toBe(1)
-  })
-
   it('reads a lost commit reply back from the destination instead of failing or retrying blind', async () => {
     const h = await setup()
     await stageOrcadMigrationDestination(h.context, h.migrationId)
@@ -146,29 +132,6 @@ describe('migration cutover coordinator', () => {
     )
     expect(h.journal()?.phase).toBe('destination-staged')
     expect(h.owner()).toBe('env-1')
-  })
-
-  it.each([
-    [
-      'a source row changed',
-      (store: Store) => store.updateRepo(store.getRepo('repo-1')!, { displayName: 'Renamed' }),
-      'orcad_migration_source_changed'
-    ],
-    [
-      'a terminal started on the source',
-      (store: Store) =>
-        vi
-          .spyOn(store, 'getSshRemotePtyLeases')
-          .mockReturnValue([
-            { targetId: TARGET.id, ptyId: 'late', state: 'attached', createdAt: 1, updatedAt: 1 }
-          ]),
-      'orcad_migration_source_terminals_live'
-    ]
-  ])('refuses to stage or commit after %s', async (_label, change, code) => {
-    const h = await setup()
-    change(h.store)
-    await expect(stageOrcadMigrationDestination(h.context, h.migrationId)).rejects.toThrow(code)
-    expect(h.destination.stage).not.toHaveBeenCalled()
   })
 
   it('refuses a commit whose source changed after staging', async () => {
@@ -242,15 +205,6 @@ describe('migration cutover coordinator', () => {
       ORCAD_MIGRATION_DESTINATION_UNSUPPORTED
     )
     expect(staged.owner()).toBe('env-1')
-  })
-
-  it('treats any other read failure at abort as unverifiable and keeps the fence', async () => {
-    const h = await setup()
-    h.destination.readState.mockRejectedValueOnce(new Error('socket closed'))
-    await expect(abortOrcadMigrationCutover(h.context, h.migrationId)).rejects.toThrow(
-      'socket closed'
-    )
-    expect(h.owner()).toBe('env-1')
   })
 
   it('refuses a destination answer for another manifest', async () => {

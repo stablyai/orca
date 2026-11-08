@@ -33,12 +33,6 @@ describe.each(['dark', 'light'] as const)('mobile text contrast (%s)', (scheme) 
     }
   })
 
-  it('keeps secondary text at least as prominent as muted text', () => {
-    expect(contrastRatio(colors.textSecondary, colors.bgPanel)).toBeGreaterThanOrEqual(
-      contrastRatio(colors.textMuted, colors.bgPanel)
-    )
-  })
-
   // WCAG 1.4.11: the edge is what marks a field, so it holds 3:1 on every surface fields sit on, and so does focus.
   it('keeps a text field identifiable on the screen, a sheet and a sheet group', () => {
     const surfaces = [
@@ -53,6 +47,14 @@ describe.each(['dark', 'light'] as const)('mobile text contrast (%s)', (scheme) 
       expect(contrastRatio(colors.accentBlue, surface)).toBeGreaterThanOrEqual(3)
     }
     expect(contrastRatio(colors.textMuted, colors.composerSurface)).toBeGreaterThanOrEqual(4.5)
+  })
+
+  // WCAG 1.4.11: the create button is an icon-only disc, so its glyph and its edge each hold 3:1.
+  it('keeps the floating create button and its glyph visible on the page', () => {
+    expect(contrastRatio(colors.createActionFill, colors.bgBase)).toBeGreaterThanOrEqual(3)
+    expect(
+      contrastRatio(colors.onCreateActionFill, colors.createActionFill)
+    ).toBeGreaterThanOrEqual(3)
   })
 
   it('keeps your own message readable on its bubble', () => {

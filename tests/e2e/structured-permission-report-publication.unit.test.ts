@@ -1,21 +1,31 @@
 // @vitest-environment happy-dom
+import { join } from 'node:path'
 import {
   fakeCodex,
   THREAD_ID as CODEX_THREAD_ID
-} from '../../src/main/codex/codex-structured-session-adapter-fixture'
-import { structuredAgentRuntimeRegistration } from '../../src/main/runtime/structured-agent-runtime-registrations'
-import { createStructuredAgentEnvironmentResolvers } from '../../src/main/runtime/structured-agent-shell-environment'
+} from '../../src/main/codex/structured/session-lifecycle/codex-structured-session-adapter-fixture'
+import { structuredAgentRuntimeRegistration } from '../../src/main/runtime/agent-session/installation/structured-agent-runtime-registrations'
+import { createStructuredAgentEnvironmentResolvers } from '../../src/main/runtime/agent-session/environment/structured-agent-shell-environment'
 import { act, renderHook, waitFor, cleanup } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { SDKStatusMessage } from '@anthropic-ai/claude-agent-sdk'
 const transport = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: transport.call,
-  subscribeStructuredAgentSessionStatus: transport.subscribe
-}))
-import { useStructuredAgentSessionOptionStamp } from '../../src/renderer/src/components/native-chat/structured-agent-session-status-hooks'
-import { useStructuredAgentSessionOptions } from '../../src/renderer/src/components/native-chat/use-structured-agent-session-options'
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-call',
+  () => ({
+    callStructuredAgentSession: transport.call
+  })
+)
+
+vi.mock(
+  '../../src/renderer/src/runtime/native-chat/requests/structured-agent-session-subscriptions',
+  () => ({
+    subscribeStructuredAgentSessionStatus: transport.subscribe
+  })
+)
+import { useStructuredAgentSessionOptionStamp } from '../../src/renderer/src/components/native-chat/session/status/structured-agent-session-status-hooks'
+import { useStructuredAgentSessionOptions } from '../../src/renderer/src/components/native-chat/session/options/structured/use-structured-agent-session-options'
 import { loadMobileStructuredOptions } from './__mocks__/mobile-structured-options'
 const useMobileStructuredAgentOptions = await loadMobileStructuredOptions()
 import type { RpcClient } from '../../mobile/src/transport/rpc-client'
@@ -27,29 +37,29 @@ import {
   PROVIDER_SESSION_ID
 } from '../../src/main/claude/structured/claude-structured-session-test-support'
 import type { ClaudeStructuredSessionEvent } from '../../src/main/claude/structured/claude-structured-session-state'
-import { structuredClaudeLifecycleEvent } from '../../src/main/runtime/structured-claude-runtime-adapter'
+import { structuredClaudeLifecycleEvent } from '../../src/main/runtime/agent-session/installation/structured-claude-runtime-adapter'
 import {
   hostTestState,
   attachParams,
   envelope,
   CALLER
-} from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-harness'
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'
 import {
   HOST_TEST_NOW,
   HOST_TEST_SESSION as sessionId
-} from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
-import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../src/shared/agent-session/agent-session-permission-modes-capability'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
+import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import { acpLaunchSpecFor } from '../../src/main/acp/acp-launch-specs'
 import { openHostRig, launch } from '../../src/main/acp/acp-structured-host.test-support'
 import { GROK_CONFIG_OPTIONS } from '../../src/main/acp/acp-structured-adapter.test-support'
 import { closeProviderTimelineRigs } from '../../src/main/native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
-import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
+import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 
 import { agentSessionRefusalFailure } from '../../src/shared/agent-session/failures/agent-session-write-failure'
-import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
+import { forgetStructuredSessionSelection } from '@/lib/agent-session/options/structured-agent-session-selection-controller'
 
 beforeEach(() => vi.spyOn(Date, 'now').mockReturnValue(HOST_TEST_NOW))
 afterEach(() => {
@@ -145,6 +155,7 @@ function permissionConsumersFor(
         enabled: true,
         optionStamp: useStructuredAgentSessionOptionStamp(sessionId, target),
         turnId: null,
+        unloadedTurnRevisions: undefined,
         hostSupport: {
           permissionModes: true,
           permissionOwn: true,
@@ -518,7 +529,7 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
       resolveWorkspacePath: async () => root,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' as const }),
-      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
+      resolveCodexCommand: () => ({ command: join(root, 'codex-not-installed'), prefixArgs: [] }),
       readCodexInstallation: async () => ({ version: '0.136.0' }),
       readProcessStartTime: async () => 1_700_000_000_000,
       openCodexConnection: codex.openConnection

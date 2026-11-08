@@ -3,7 +3,7 @@ import { readUtf8CodePointAt } from '../../../src/shared/utf8-byte-limits'
 import {
   encodeModifyOtherKeysEnter,
   TERMINAL_KITTY_SHIFT_ENTER_INPUT
-} from '../../../src/shared/terminal-modified-enter-encoding'
+} from '../../../src/shared/terminal/protocol/input-modes/terminal-modified-enter-encoding'
 
 export type TerminalLiveSpecialKeyDecision =
   | { readonly kind: 'ignore' }

@@ -1,5 +1,5 @@
-import type { HostedReviewInfo } from '../../shared/hosted-review'
-import { hostedReviewInfoFromGitHubPRInfo } from '../../shared/hosted-review-github'
+import type { HostedReviewInfo } from '../../shared/source-control/hosted-review/hosted-review-contracts'
+import { hostedReviewInfoFromGitHubPRInfo } from '../../shared/source-control/hosted-review/hosted-review-github'
 import type { PRInfo } from '../../shared/github/pull-request-types'
 import type { MRInfo } from '../../shared/gitlab-types'
 import type { AzureDevOpsPullRequestInfo } from '../azure-devops/pull-request-mappers'
@@ -41,6 +41,7 @@ export function mapBitbucketReview(pr: BitbucketPullRequestInfo): HostedReviewIn
     state: pr.state,
     url: pr.url,
     status: pr.status,
+    ...(pr.checksSummary ? { checksSummary: pr.checksSummary } : {}),
     updatedAt: pr.updatedAt,
     mergeable: pr.mergeable,
     ...(pr.headSha ? { headSha: pr.headSha } : {})
@@ -55,6 +56,7 @@ export function mapAzureDevOpsReview(pr: AzureDevOpsPullRequestInfo): HostedRevi
     state: pr.state,
     url: pr.url,
     status: pr.status,
+    ...(pr.checksSummary ? { checksSummary: pr.checksSummary } : {}),
     updatedAt: pr.updatedAt,
     mergeable: pr.mergeable,
     ...(pr.headSha ? { headSha: pr.headSha } : {})

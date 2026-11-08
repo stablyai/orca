@@ -1,8 +1,6 @@
 import { cliWriterTopology, type CliWriterObservation } from './cli-writer-observation'
-import type {
-  AgentStatusIpcPayload,
-  ParsedAgentStatusPayload
-} from '../../../shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
+import type { ParsedAgentStatusPayload } from '../../../shared/agent-status/contracts/agent-status-types'
 import {
   ClaudeSessionContinuationTracker,
   resolvePaneClaudeContinuation
@@ -11,8 +9,8 @@ import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/
 import {
   isSameAgentProcess,
   type AgentProcessVerdict
-} from '../../../shared/agent-process-presence'
-import { probeAgentProcessPresence } from '../../../shared/agent-process-presence-probe'
+} from '../../../shared/agent-status/process/agent-process-presence'
+import { probeAgentProcessPresence } from '../../../shared/agent-status/process/agent-process-presence-probe'
 import { AgentHookServerLifecycle } from './server-lifecycle'
 
 export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecycle {

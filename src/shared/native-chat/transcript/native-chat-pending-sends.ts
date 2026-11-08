@@ -21,12 +21,15 @@ export type NativeChatPendingSend = {
   id: string
   /** Definite send outcome; absent while the send is simply awaiting its transcript row. */
   delivery?: 'unconfirmed' | 'rejected'
+  recovery?: true
   /** When a write's acknowledgment was lost, so a remount keeps the original hold deadline. */
   writeUnconfirmedAt?: number
   text: string
   imagePaths?: string[]
-  /** Epoch ms when the send was issued, so the queued bubble sorts to the end. */
+  /** Client clock at send time; display placement never compares it with the host clock. */
   sentAt: number
+  /** Host working epoch observed at send time; absent for an idle send, null for an unknown epoch. */
+  queuedDuringWorkingEpoch?: number | null
   /** Match only after the last authoritative row at send time so repeated prompts cannot bind older turns. */
   afterMessageId?: string | null
   /** Timestamp of that boundary in the transcript host's clock domain. */
@@ -204,10 +207,24 @@ export function visibleNativeChatPendingSends<T extends NativeChatPendingSend>(
   })
 }
 
-/** Scrape-source echoes yield to real transcript rows; send timestamps keep queued bubbles at the end. */
+export function nativeChatPendingSendPlacement(
+  entry: Pick<NativeChatPendingSend, 'queuedDuringWorkingEpoch'>,
+  workingEpoch?: number | null
+): 'active' | 'queued' {
+  return entry.queuedDuringWorkingEpoch !== undefined &&
+    workingEpoch !== undefined &&
+    (entry.queuedDuringWorkingEpoch === null ||
+      workingEpoch === null ||
+      entry.queuedDuringWorkingEpoch === workingEpoch)
+    ? 'queued'
+    : 'active'
+}
+
+/** Scrape-source echoes yield to real transcript rows. */
 export function pendingSendsAsMessages(
   pending: NativeChatPendingSend[],
-  existingMessages: readonly NativeChatMessage[] = []
+  existingMessages: readonly NativeChatMessage[] = [],
+  workingEpoch?: number | null
 ): NativeChatMessage[] {
   return visibleNativeChatPendingSends(pending, existingMessages).map((entry) => ({
     id: `pending:${entry.id}`,
@@ -217,10 +234,15 @@ export function pendingSendsAsMessages(
       ...(entry.text.trim().length > 0 ? [{ type: 'text' as const, text: entry.text }] : [])
     ],
     timestamp: entry.sentAt,
+    pendingSend: nativeChatPendingSendPlacement(entry, workingEpoch),
     source: 'scrape' as const
   }))
 }
 
 export function isPendingMessageId(id: string): boolean {
   return id.startsWith('pending:')
+}
+
+export function isLaunchPromptMessageId(id: string): boolean {
+  return id.startsWith('launch-pending:')
 }

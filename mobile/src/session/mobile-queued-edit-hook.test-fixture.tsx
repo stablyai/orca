@@ -9,8 +9,9 @@ import {
   resetMobileNativeChatDraftInputsForTests
 } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { createElement, type ReactNode } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
-import { afterEach, expect, vi } from 'vitest'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
+import { afterEach, expect, it, vi } from 'vitest'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageEditHoldResult
@@ -22,11 +23,13 @@ import type { RpcResponse } from '../transport/types'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import {
   CAPABLE,
+  batchEvent,
   SESSION_ID,
   fieldsOf,
   mutationOk,
   ok,
-  snapshotEvent
+  snapshotEvent,
+  queuedDraft
 } from './use-mobile-structured-agent-session-queued.test-fixture'
 
 export function withText(body: AgentSessionQueuedMessage['body'], text: string) {
@@ -227,7 +230,9 @@ export function mobileQueuedEditHarness() {
         : readOrHoldReply(method, params)
     )
     await act(async () => {
-      state.renderer = create(createElement(Harness, { editSupport, agent, sessionId }))
+      state.renderer = createWithQueryClient(
+        createElement(Harness, { editSupport, agent, sessionId })
+      )
     })
     const snapshot = snapshotEvent({ queuedMessages: [message], runningTurn: true })
     act(() => state.listener?.({ ...snapshot, sessionId, page: { ...snapshot.page, sessionId } }))
@@ -255,4 +260,76 @@ export function mobileQueuedEditHarness() {
     resolved,
     requestedFingerprint
   }
+}
+
+export function registerQueuedCanonicalInputTest({
+  state,
+  mount,
+  sendRequest
+}: ReturnType<typeof mobileQueuedEditHarness>): void {
+  it('opens full canonical task input and publishes a changed Save as user-authored raw input', async () => {
+    const prefix = 'You are working inside Orca, a multi-agent IDE.\n=== TASK ===\n'
+    const message = queuedDraft({
+      messageId: 'task',
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [
+          { type: 'text', text: `${prefix}  Task 🐋 [Image #1]  ` },
+          { type: 'image-ref', path: '/host/shot.png' }
+        ],
+        from: {
+          kind: 'agent',
+          senders: [
+            {
+              party: { address: 'term_coord', terminalHandle: 'term_coord', orcaSessionId: null },
+              name: 'Coordinator',
+              relation: 'coordinator'
+            }
+          ],
+          orchestration: { message: 'task', runId: 'r', taskId: 't', dispatchId: 'd' }
+        }
+      }
+    })
+    await mount(message)
+    expect(state.hook!.queued.cards[0]).toMatchObject({
+      line: '  Task 🐋',
+      from: { senders: [{ name: 'Coordinator' }] }
+    })
+    expect(state.hook!.queued.cards[0].images).toHaveLength(1)
+    expect(state.hook!.queued.editor!.text).toBe(`${prefix}  Task 🐋 [Image #1]  `)
+    await act(async () => {
+      expect(await state.hook!.queued.editor!.save()).toBe(true)
+    })
+    expect(
+      sendRequest.mock.calls.some(([method]) => method === 'agentSession.queuedMessageUpdate')
+    ).toBe(false)
+    expect(state.hook!.queued.cards[0]).toMatchObject({
+      line: '  Task 🐋',
+      from: { senders: [{ name: 'Coordinator' }] }
+    })
+    await act(async () => {
+      await state.hook!.queued.edit!('task')
+    })
+    act(() => state.hook!.queued.editor!.change(`${prefix}Edited`))
+    await act(async () => {
+      expect(await state.hook!.queued.editor!.save()).toBe(true)
+    })
+    const update = sendRequest.mock.calls.find(
+      ([method]) => method === 'agentSession.queuedMessageUpdate'
+    )
+    expect(fieldsOf(update?.[1]).text).toBe(`${prefix}Edited`)
+    // The current host commits changed content without the original agent attribution.
+    const { from: _sender, ...userBody } = withText(message.body, `${prefix}Edited`)
+    const saved: typeof message = { ...message, body: userBody }
+    act(() => state.listener?.(batchEvent([saved])))
+    const [savedCard] = state.hook!.queued.cards
+    expect(savedCard.line).toBe(`${prefix}Edited`)
+    expect(savedCard.from).toBeUndefined()
+    await act(async () => {
+      await state.hook!.queued.edit!('task')
+    })
+    expect(state.hook!.queued.editor!.text).toBe(`${prefix}Edited`)
+    await act(async () => state.hook!.queued.editor!.cancel())
+  })
 }

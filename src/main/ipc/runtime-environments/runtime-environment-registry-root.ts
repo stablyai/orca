@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { resolveEnvironment } from '../../../shared/runtime-environment-store'
+import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 
 /** Where the paired-runtime registry lives; read per call, after `app.setName` settles the casing. */
 export function getRuntimeEnvironmentRegistryRoot(): string {

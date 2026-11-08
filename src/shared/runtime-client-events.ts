@@ -1,3 +1,4 @@
+import type { NotificationAttentionAcknowledgement } from './notification-settings-types'
 import type { CreateWorktreeResult } from './worktree/create-types'
 import type {
   WorktreeDefaultTabsLaunch,
@@ -5,13 +6,18 @@ import type {
   WorktreeStartupLaunch
 } from './worktree/launch-types'
 import type { SshConnectionState } from './ssh-types'
-import type { TerminalSideEffectBatch } from './terminal-side-effect-facts'
+import type { TerminalSideEffectBatch } from './terminal/output/terminal-side-effect-facts'
 import type { RuntimeNativeChatLaunchDraftResolution } from './runtime-types'
 import type { RuntimeNavigationTarget } from './runtime-navigation'
 import type { WorktreeSortOrderUpdate } from './worktree/sort-order-update'
 import type { SidebarInputsChangedEvent } from './sidebar-list/sidebar-inputs-feed-contract'
+import type { BrowserClientHostRequestEvent } from './browser/client-hosting/browser-client-host-request-protocol'
 
 export type RuntimeClientEvent =
+  | {
+      type: 'notificationAttentionAcknowledged'
+      acknowledgement: NotificationAttentionAcknowledgement
+    }
   | { type: 'reposChanged' }
   | { type: 'nativeChatQueueFollowUpsChanged'; queueFollowUps: boolean }
   /** The Workspace options UI state changed; a mirroring phone re-reads it. */
@@ -23,6 +29,8 @@ export type RuntimeClientEvent =
       // Why: lets a client patch an order save in place instead of refetching the repo (#27268).
       sortOrders?: WorktreeSortOrderUpdate[]
     }
+  /** An agent row changed (coalesced, no ids); phones re-read worktree.ps. Sent only while the sidebar feed is off. */
+  | { type: 'worktreeRowsChanged' }
   | ({ type: 'nativeChatLaunchDraftResolved' } & RuntimeNativeChatLaunchDraftResolution)
   | { type: 'terminalSideEffects'; batch: TerminalSideEffectBatch }
   /** Only while this host's own phone reads the sidebar feed; every other reader drops it. */
@@ -72,6 +80,8 @@ export type RuntimeClientEventStreamMessage =
       }
     })
   | RuntimeClientEvent
+  // Addressed to this subscriber only, never broadcast.
+  | BrowserClientHostRequestEvent
   | { type: 'end' }
 
 export type RuntimeActivateWorktreeEvent = Extract<RuntimeClientEvent, { type: 'activateWorktree' }>

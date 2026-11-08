@@ -1,15 +1,19 @@
+import { browserPageDocLocationsEqual } from '../../../shared/browser-page-doc-location'
 import { openPlannedFileBrowserLink, type FileBrowserLinkTarget } from './file-preview-link-open'
-import type { BrowserLinkOpenContext, BrowserOpenOutcome } from './browser-link-destination'
+import type {
+  BrowserLinkOpenContext,
+  BrowserOpenOutcome
+} from './browser/navigation/browser-link-destination'
 import { toast } from 'sonner'
-import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
+import { absolutePathToFileUri } from '@/components/editor/markdown/link-routing/markdown-internal-links'
 import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import { webClientDocPreviewRefusal } from '@/lib/doc-preview-web-client'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { basename } from '@/lib/path'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
-import { activateBrowserWorkspaceTab } from '@/lib/browser-workspace-tab-activation'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { activateBrowserWorkspaceTab } from '@/lib/browser/workspace/browser-workspace-tab-activation'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { isTwinWorkspace } from '@/lib/resolve-owner'
 import {
   REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
@@ -17,10 +21,13 @@ import {
 } from '@/lib/workspace-file-browser-open-target'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { findSiblingGroupId } from '@/store/slices/tabs'
+import { findSiblingGroupId } from '../../../shared/workspace-layout/tab-group-layout-tree'
 import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { findWorkspaceShowingDoc } from './file-preview-page-conversion'
 
 export { convertBrowserPageToWorkspaceDoc } from './file-preview-page-conversion'
@@ -131,7 +138,12 @@ export function useWorkspaceFileBrowserActionPredicate(
 
 function openDocPreviewTab(
   state: AppState,
-  params: { filePath: string; worktreeId: string; activate: boolean },
+  params: {
+    filePath: string
+    worktreeId: string
+    activate: boolean
+    placementWorkspaceId?: string
+  },
   placement?: Pick<CreateBrowserTabOptions, 'targetGroupId' | 'split'>
 ): void {
   const docLocation = {
@@ -140,12 +152,21 @@ function openDocPreviewTab(
     filePath: params.filePath
   }
   // Reuse the document’s tab; opening another would mint a second grant for the same file.
-  const existing = findWorkspaceShowingDoc(state, docLocation)
+  const placementWorkspaceId = params.placementWorkspaceId ?? params.worktreeId
+  const existing =
+    placementWorkspaceId === params.worktreeId
+      ? findWorkspaceShowingDoc(state, docLocation)
+      : (state.browserTabsByWorktree[placementWorkspaceId] ?? []).flatMap((tab) => {
+          const page = (state.browserPagesByWorkspace[tab.id] ?? []).find((candidate) =>
+            browserPageDocLocationsEqual(candidate.docLocation ?? null, docLocation)
+          )
+          return page ? [{ workspaceId: tab.id, pageId: page.id }] : []
+        })[0]
   if (existing) {
     if (
       !params.activate ||
       !activateBrowserWorkspaceTab({
-        worktreeId: params.worktreeId,
+        worktreeId: placementWorkspaceId,
         ...existing
       })
     ) {
@@ -154,7 +175,7 @@ function openDocPreviewTab(
     }
     return
   }
-  state.createBrowserTab(params.worktreeId, ORCA_BROWSER_BLANK_URL, {
+  state.createBrowserTab(placementWorkspaceId, ORCA_BROWSER_BLANK_URL, {
     docLocation,
     title: basename(params.filePath) || params.filePath,
     ...placement,
@@ -224,14 +245,15 @@ export function openFilePreviewToSide(params: {
   filePath: string
   worktreeId: string
   sourceGroupId: string | null
+  placementWorkspaceId?: string
 }): void {
   if (!canPreviewLanguage(params.language)) {
     return
   }
 
   const state = useAppStore.getState()
-  const worktreeId = params.worktreeId
-  const plan = getWorkspaceFilePreviewPlan(state, worktreeId, params.filePath)
+  const worktreeId = params.placementWorkspaceId ?? params.worktreeId
+  const plan = getWorkspaceFilePreviewPlan(state, params.worktreeId, params.filePath)
   if (plan.status === 'unsupported') {
     toast.error(plan.message)
     return
@@ -257,7 +279,16 @@ export function openFilePreviewToSide(params: {
     : { split: { sourceGroupId, splitDirection: 'right' as const, activate } }
 
   if (plan.status === 'doc-preview') {
-    openDocPreviewTab(state, { filePath: params.filePath, worktreeId, activate: false }, placement)
+    openDocPreviewTab(
+      state,
+      {
+        filePath: params.filePath,
+        worktreeId: params.worktreeId,
+        placementWorkspaceId: worktreeId,
+        activate: false
+      },
+      placement
+    )
     return
   }
 

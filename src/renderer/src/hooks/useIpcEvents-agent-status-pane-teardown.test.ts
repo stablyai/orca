@@ -1,6 +1,6 @@
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status-types'
+import type { AgentStatusClearIpcPayload } from '../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import {
   buildStoreState,
   expectWorktreeRouting,

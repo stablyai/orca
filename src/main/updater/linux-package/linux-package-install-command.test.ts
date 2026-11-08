@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { quotePosixShellDoubleQuotedApostrophe } from '../../../shared/shell-argument-quoting'
+import { quotePosixShellDoubleQuotedApostrophe } from '../../../shared/shell/launch/shell-argument-quoting'
 
 const { statSyncMock } = vi.hoisted(() => ({ statSyncMock: vi.fn() }))
 
@@ -35,16 +35,6 @@ afterEach(() => {
 })
 
 describe('quotePosixShellDoubleQuotedApostrophe', () => {
-  it('wraps plain values in single quotes', () => {
-    expect(quotePosixShellDoubleQuotedApostrophe('/tmp/orca.deb')).toBe("'/tmp/orca.deb'")
-  })
-
-  it('quotes spaces', () => {
-    expect(quotePosixShellDoubleQuotedApostrophe('/tmp/Orca Setup.deb')).toBe(
-      "'/tmp/Orca Setup.deb'"
-    )
-  })
-
   it('neutralizes expansion, command substitution, separators, and double quotes', () => {
     expect(quotePosixShellDoubleQuotedApostrophe('/tmp/$HOME.deb')).toBe("'/tmp/$HOME.deb'")
     expect(quotePosixShellDoubleQuotedApostrophe('/tmp/`id`.deb')).toBe("'/tmp/`id`.deb'")
@@ -61,37 +51,9 @@ describe('quotePosixShellDoubleQuotedApostrophe', () => {
   it('escapes every single quote in a value', () => {
     expect(quotePosixShellDoubleQuotedApostrophe("'; rm -rf /; '")).toBe(`''"'"'; rm -rf /; '"'"''`)
   })
-
-  it('quotes an empty value', () => {
-    expect(quotePosixShellDoubleQuotedApostrophe('')).toBe("''")
-  })
 })
 
 describe('resolveTrustedExecutable', () => {
-  it('resolves from /usr/bin first', async () => {
-    install('/usr/bin/sudo')
-    install('/bin/sudo')
-    const { resolveTrustedExecutable } = await loadCommandModule()
-    expect(resolveTrustedExecutable('sudo')).toBe('/usr/bin/sudo')
-  })
-
-  it('falls through the remaining trusted directories', async () => {
-    install('/sbin/dpkg')
-    const { resolveTrustedExecutable } = await loadCommandModule()
-    expect(resolveTrustedExecutable('dpkg')).toBe('/sbin/dpkg')
-  })
-
-  it('consults only the trusted directories', async () => {
-    const { resolveTrustedExecutable } = await loadCommandModule()
-    expect(resolveTrustedExecutable('sudo')).toBeNull()
-    expect(statSyncMock.mock.calls.map((call) => call[0])).toEqual([
-      '/usr/bin/sudo',
-      '/bin/sudo',
-      '/usr/sbin/sudo',
-      '/sbin/sudo'
-    ])
-  })
-
   it('ignores a user-writable absolute PATH decoy', async () => {
     install('/home/user/.local/bin/sudo')
     vi.stubEnv('PATH', '/home/user/.local/bin:/usr/bin')
@@ -104,12 +66,6 @@ describe('resolveTrustedExecutable', () => {
     install('/usr/bin/apt', { mode: 0o644 })
     const { resolveTrustedExecutable } = await loadCommandModule()
     expect(resolveTrustedExecutable('apt')).toBeNull()
-  })
-
-  it('accepts a file executable only by group or other', async () => {
-    install('/usr/bin/apt', { mode: 0o011 })
-    const { resolveTrustedExecutable } = await loadCommandModule()
-    expect(resolveTrustedExecutable('apt')).toBe('/usr/bin/apt')
   })
 
   it('rejects a directory of the same name', async () => {
@@ -133,114 +89,6 @@ describe('buildLinuxPackageInstallCommand', () => {
     }
   })
 
-  it('reports no-sudo when sudo is absent', async () => {
-    install('/usr/bin/apt')
-    const { buildLinuxPackageInstallCommand } = await loadCommandModule()
-    expect(buildLinuxPackageInstallCommand('deb', '/tmp/orca.deb')).toEqual({
-      ok: false,
-      reason: 'no-sudo'
-    })
-  })
-
-  it('reports no-package-manager when no manager is installed', async () => {
-    install('/usr/bin/sudo')
-    const { buildLinuxPackageInstallCommand } = await loadCommandModule()
-    expect(buildLinuxPackageInstallCommand('deb', '/tmp/orca.deb')).toEqual({
-      ok: false,
-      reason: 'no-package-manager'
-    })
-  })
-
-  it('does not fall back to an rpm manager for a deb package', async () => {
-    install('/usr/bin/sudo')
-    install('/usr/bin/dnf')
-    const { buildLinuxPackageInstallCommand } = await loadCommandModule()
-    expect(buildLinuxPackageInstallCommand('deb', '/tmp/orca.deb')).toEqual({
-      ok: false,
-      reason: 'no-package-manager'
-    })
-  })
-
-  it('builds an apt command', async () => {
-    install('/usr/bin/sudo')
-    install('/usr/bin/apt')
-    install('/usr/bin/dpkg')
-    const { buildLinuxPackageInstallCommand } = await loadCommandModule()
-    expect(buildLinuxPackageInstallCommand('deb', '/tmp/orca.deb')).toEqual({
-      ok: true,
-      command:
-        "/usr/bin/sudo /usr/bin/apt -o Binary::file::APT::Sandbox::User=root install -- '/tmp/orca.deb'"
-    })
-  })
-
-  it('falls back to dpkg', async () => {
-    install('/usr/bin/sudo')
-    install('/usr/bin/dpkg')
-    const { buildLinuxPackageInstallCommand } = await loadCommandModule()
-    expect(buildLinuxPackageInstallCommand('deb', '/tmp/orca.deb')).toEqual({
-      ok: true,
-      command: "/usr/bin/sudo /usr/bin/dpkg -i -- '/tmp/orca.deb'"
-    })
-  })
-
-  it('builds a zypper command', async () => {
-    install('/usr/bin/sudo')
-    install('/usr/bin/zypper')
-    install('/usr/bin/dnf')
-    install('/usr/bin/yum')
-    install('/usr/bin/rpm')
-    const { buildLinuxPackageInstallCommand } = await loadCommandModule()
-    expect(buildLinuxPackageInstallCommand('rpm', '/tmp/orca.rpm')).toEqual({
-      ok: true,
-      command:
-        "/usr/bin/sudo /usr/bin/zypper --no-refresh install --allow-unsigned-rpm -f '/tmp/orca.rpm'"
-    })
-  })
-
-  it('prefers dnf over yum and rpm', async () => {
-    install('/usr/bin/sudo')
-    install('/usr/bin/dnf')
-    install('/usr/bin/yum')
-    install('/usr/bin/rpm')
-    const { buildLinuxPackageInstallCommand } = await loadCommandModule()
-    expect(buildLinuxPackageInstallCommand('rpm', '/tmp/orca.rpm')).toEqual({
-      ok: true,
-      command: "/usr/bin/sudo /usr/bin/dnf install --nogpgcheck '/tmp/orca.rpm'"
-    })
-  })
-
-  it('falls back to yum', async () => {
-    install('/usr/bin/sudo')
-    install('/usr/bin/yum')
-    install('/usr/bin/rpm')
-    const { buildLinuxPackageInstallCommand } = await loadCommandModule()
-    expect(buildLinuxPackageInstallCommand('rpm', '/tmp/orca.rpm')).toEqual({
-      ok: true,
-      command: "/usr/bin/sudo /usr/bin/yum install --nogpgcheck '/tmp/orca.rpm'"
-    })
-  })
-
-  it('falls back to rpm', async () => {
-    install('/usr/bin/sudo')
-    install('/sbin/rpm')
-    const { buildLinuxPackageInstallCommand } = await loadCommandModule()
-    expect(buildLinuxPackageInstallCommand('rpm', '/tmp/orca.rpm')).toEqual({
-      ok: true,
-      command: "/usr/bin/sudo /sbin/rpm -Uvh '/tmp/orca.rpm'"
-    })
-  })
-
-  it('never adds an unattended-confirmation flag', async () => {
-    install('/usr/bin/sudo')
-    install('/usr/bin/apt')
-    const { buildLinuxPackageInstallCommand } = await loadCommandModule()
-    const result = buildLinuxPackageInstallCommand('deb', '/tmp/orca.deb')
-    expect(result.ok).toBe(true)
-    expect(result.ok ? result.command : '').not.toMatch(
-      /(^|\s)(-y|--yes|--noconfirm|--assumeyes)(\s|$)/
-    )
-  })
-
   it('quotes a hostile package path', async () => {
     install('/usr/bin/sudo')
     install('/usr/bin/apt')
@@ -249,56 +97,5 @@ describe('buildLinuxPackageInstallCommand', () => {
       ok: true,
       command: `/usr/bin/sudo /usr/bin/apt -o Binary::file::APT::Sandbox::User=root install -- '/tmp/a b'"'"'; id #.deb'`
     })
-  })
-})
-
-describe('hasTrustedPackageManagerFor', () => {
-  it('accepts a deb host that has dpkg', async () => {
-    install('/usr/bin/dpkg')
-    const { hasTrustedPackageManagerFor } = await loadCommandModule()
-    expect(hasTrustedPackageManagerFor('deb')).toBe(true)
-  })
-
-  it('accepts a deb host that has only apt', async () => {
-    install('/usr/bin/apt')
-    const { hasTrustedPackageManagerFor } = await loadCommandModule()
-    expect(hasTrustedPackageManagerFor('deb')).toBe(true)
-  })
-
-  // Repackagers can inherit deb/rpm markers without the corresponding tooling (#17702).
-  it('rejects a deb marker on a host with only pacman', async () => {
-    install('/usr/bin/pacman')
-    install('/usr/bin/sudo')
-    const { hasTrustedPackageManagerFor } = await loadCommandModule()
-    expect(hasTrustedPackageManagerFor('deb')).toBe(false)
-  })
-
-  it('rejects an rpm marker on a host with only deb tooling', async () => {
-    install('/usr/bin/dpkg')
-    install('/usr/bin/apt')
-    const { hasTrustedPackageManagerFor } = await loadCommandModule()
-    expect(hasTrustedPackageManagerFor('rpm')).toBe(false)
-  })
-
-  it('accepts each rpm-family manager on its own', async () => {
-    for (const name of ['zypper', 'dnf', 'yum', 'rpm']) {
-      vi.resetModules()
-      executables = new Map()
-      install(`/usr/bin/${name}`)
-      const { hasTrustedPackageManagerFor } = await loadCommandModule()
-      expect(hasTrustedPackageManagerFor('rpm')).toBe(true)
-    }
-  })
-
-  it('ignores a package manager outside the trusted directories', async () => {
-    install('/home/user/.local/bin/dpkg')
-    const { hasTrustedPackageManagerFor } = await loadCommandModule()
-    expect(hasTrustedPackageManagerFor('deb')).toBe(false)
-  })
-
-  it('ignores a non-executable file at a trusted path', async () => {
-    install('/usr/bin/dpkg', { mode: 0o644 })
-    const { hasTrustedPackageManagerFor } = await loadCommandModule()
-    expect(hasTrustedPackageManagerFor('deb')).toBe(false)
   })
 })

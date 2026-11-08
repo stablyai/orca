@@ -23,6 +23,7 @@ vi.mock('expo-crypto', async () => {
   }
 })
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
+vi.mock('react-native', () => ({ AppState: {} }))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: async () => null, setItem: async () => undefined }
 }))
@@ -180,7 +181,7 @@ it.each([8, 80])(
       createStore: () => store,
       mintSessionId: () => 'flow-session',
       now: () => 0,
-      setTimer: () => () => {}
+      setForegroundTimer: () => () => {}
     }
     function Probe() {
       latest = useMobileWebShellSession({
@@ -200,11 +201,12 @@ it.each([8, 80])(
     await act(async () => {
       tree?.update(createElement(Probe))
     })
-    expect(latest).toMatchObject({ kind: 'ready', buildId: host.live.manifest.buildId })
-    expect(host.liveReads).toHaveLength(windows)
+    // The superseded reads still hold the connection's read slots until their replies land.
     await act(async () => {
       host.release()
     })
+    expect(latest).toMatchObject({ kind: 'ready', buildId: host.live.manifest.buildId })
+    expect(host.liveReads).toHaveLength(windows)
     const active = await store.readActiveGeneration(deriveHostCacheKey('host-1'))
     expect({
       oldReads: host.oldReads.length,

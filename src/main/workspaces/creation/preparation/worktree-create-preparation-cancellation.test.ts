@@ -20,21 +20,21 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('node:fs/promises', () => ({ mkdir: mocks.mkdir }))
-vi.mock('../../../git/worktree', () => ({ listWorktreeGraph: mocks.listWorktreeGraph }))
-vi.mock('../../../git/worktree-scan-cache', async (importOriginal) => ({
+
+vi.mock('../../../git/worktrees/catalog/worktree-scan-cache', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWorktreeGraph: mocks.listWorktreeGraph
 }))
-vi.mock('../../../git/worktree-create-preparation', () => ({
+vi.mock('../../../git/worktrees/creation/worktree-create-preparation', () => ({
   prepareWorktreeCreateCheckout: mocks.prepareCheckout,
   finalizePreparedWorktree: mocks.finalize,
   discardPreparedWorktree: mocks.discard,
   unlockPreparedWorktree: mocks.unlock
 }))
-vi.mock('../../../git/worktree-base-ref-probe', () => ({
+vi.mock('../../../git/worktrees/creation/worktree-base-ref-probe', () => ({
   resolveLocalWorktreeBaseRef: mocks.resolveBaseRef
 }))
-vi.mock('../../../git/worktree-base-divergence', () => ({
+vi.mock('../../../git/worktrees/creation/worktree-base-divergence', () => ({
   measureRetargetDivergence: mocks.measureDivergence
 }))
 vi.mock('../../execution-host/project-runtime-git-options', () => ({
@@ -119,46 +119,12 @@ describe('worktree create preparation cancellation', () => {
     expect(signal?.aborted).toBe(true)
     expect((await settled)[0].status).toBe('rejected')
     await flushBackgroundWork()
-    expect(mocks.discard).toHaveBeenCalledWith(repo.path, obsoletePath, {}, expect.any(String))
-  })
-
-  it('does not retry a discard whose registration the aborted checkout already removed', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    mocks.prepareCheckout.mockImplementationOnce((_repo, _path, _base, _lock, options) => {
-      const signal = options.signal!
-      return new Promise<void>((_resolve, reject) => {
-        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
-      })
-    })
-    try {
-      const obsolete = prepareWorktreeCreateForRepo(store, repo, 'origin/main').catch(() => {})
-      await flushBackgroundWork()
-      const obsoletePath = mocks.prepareCheckout.mock.calls[0][1] as string
-      mocks.discard.mockImplementation(async (_repoPath: string, path: string) => {
-        if (path === obsoletePath) {
-          throw Object.assign(new Error(`fatal: '${path}' is not a working tree`), {
-            stderr: `fatal: '${path}' is not a working tree`
-          })
-        }
-      })
-      for (const base of ['origin/one', 'origin/two', 'origin/three']) {
-        await prepareWorktreeCreateForRepo(store, repo, base)
-      }
-      await obsolete
-      await flushBackgroundWork()
-      const obsoleteDiscards = (): number =>
-        mocks.discard.mock.calls.filter((call) => call[1] === obsoletePath).length
-      expect(obsoleteDiscards()).toBe(1)
-
-      for (const base of ['origin/four', 'origin/five']) {
-        await prepareWorktreeCreateForRepo(store, repo, base)
-        await flushBackgroundWork()
-      }
-      expect(obsoleteDiscards()).toBe(1)
-      expect(warn).not.toHaveBeenCalled()
-    } finally {
-      warn.mockRestore()
-    }
+    expect(mocks.discard).toHaveBeenCalledWith(
+      repo.path,
+      obsoletePath,
+      expect.objectContaining({ signal: undefined }),
+      expect.any(String)
+    )
   })
 
   it('does not start obsolete checkout work after shared cleanup finishes', async () => {

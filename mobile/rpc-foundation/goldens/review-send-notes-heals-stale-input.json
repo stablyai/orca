@@ -10,37 +10,41 @@
       "settledAt": 0,
       "value": "terminal-1"
     },
-    "148b65856bcb": {
-      "name": "terminal.send#2",
-      "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"File: src/app.ts\\nLine: 4\\nUser comment: \\\"needs a test\\\"\",\"enter\":true}}"
-    },
-    "22d1249a1bc1": {
-      "name": "terminal.send#2",
-      "ordinal": 3,
+    "15a9fbee07a2": {
+      "name": "terminal.read#1",
+      "ordinal": 1,
       "args": [
         {
           "name": "method",
-          "value": "terminal.send"
+          "value": "terminal.read"
         },
         {
           "name": "params",
           "value": {
-            "enter": true,
-            "terminal": "terminal-1",
-            "text": "File: src/app.ts\nLine: 4\nUser comment: \"needs a test\""
+            "limit": 1,
+            "screen": true,
+            "terminal": "terminal-1"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "budgetSpansConnect": true,
+            "timeoutMs": 2000
           }
         }
       ],
       "settlement": {
-        "status": "pending",
-        "startedAt": 0
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "terminal": {}
+          }
+        }
       }
     },
     "2fc890e4b748": {
@@ -78,18 +82,56 @@
         "$rpc": "null"
       }
     },
-    "5a2217c55af2": {
-      "name": "terminal.send#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false}}"
+    "8a39711b3244": {
+      "name": "terminal.send#2",
+      "ordinal": 6,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"File: src/app.ts\\nLine: 4\\nUser comment: \\\"needs a test\\\"\",\"enter\":true}}"
     },
     "9270aeb7d9c6": {
       "status": "pending",
       "startedAt": 0
     },
-    "c638ffbb7699": {
+    "96246abc8742": {
+      "name": "terminal.send#2",
+      "ordinal": 5,
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "File: src/app.ts\nLine: 4\nUser comment: \"needs a test\""
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "abebd0f45ba2": {
+      "name": "terminal.read#1",
+      "ordinal": 2,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.read\",\"params\":{\"terminal\":\"terminal-1\",\"screen\":true,\"limit\":1}}"
+    },
+    "eac83a42a48c": {
       "name": "terminal.send#1",
-      "ordinal": 1,
+      "ordinal": 4,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u0015\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\\u000b\",\"enter\":false}}"
+    },
+    "f56bee9b4829": {
+      "name": "terminal.send#1",
+      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -100,7 +142,7 @@
           "value": {
             "enter": false,
             "terminal": "terminal-1",
-            "text": "\u0015"
+            "text": "\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u0015\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b\u000b"
           }
         },
         {
@@ -116,7 +158,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
+          "id": "frame-2",
           "ok": true,
           "result": {
             "send": {
@@ -133,8 +175,8 @@
       {
         "id": "healed",
         "observation": {
-          "sender": ["c638ffbb7699", "22d1249a1bc1"],
-          "payloads": ["5a2217c55af2", "148b65856bcb"],
+          "sender": ["15a9fbee07a2", "f56bee9b4829", "96246abc8742"],
+          "payloads": ["abebd0f45ba2", "eac83a42a48c", "8a39711b3244"],
           "settlements": {
             "mark-stale": "0db3b6958ec7",
             "send-notes": "9270aeb7d9c6"

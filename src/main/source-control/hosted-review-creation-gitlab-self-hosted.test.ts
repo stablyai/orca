@@ -20,10 +20,23 @@ const {
   getRepoSlugMock: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock,
-  glabExecFileAsync: glabExecFileAsyncMock,
-  ghExecFileAsync: ghExecFileAsyncMock,
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/glab-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  glabExecFileAsync: glabExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ghExecFileAsync: ghExecFileAsyncMock
+}))
+
+vi.mock('../git/exec-error', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   extractExecError: vi.fn()
 }))
 

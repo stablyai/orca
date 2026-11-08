@@ -1,7 +1,7 @@
 import { getLineText } from './cell-geometry'
 import type { TerminalDocumentScope, TerminalDocumentSelection } from './document-scope'
 import type { TerminalDocumentLine } from './document-terminal-shape'
-import { isTerminalWordSeparator } from '../../../../src/shared/terminal-word-separator'
+import { isTerminalWordSeparator } from '../../../../src/shared/terminal/input/terminal-word-separator'
 
 // Match xterm double-click: a space grows over spaces, anything else over non-separators.
 function joinsPressedWord(pressed: string, text: string) {

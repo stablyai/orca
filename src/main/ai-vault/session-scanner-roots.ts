@@ -3,7 +3,7 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/shell-startup/codex-home-wsl-env'
-import { resolveOmpSessionsDir } from './omp-session-root'
+import { resolveOmpSessionsDir } from './scanners/omp/omp-session-root'
 
 /** Where each transcript agent's session tree sits under a home dir (host or WSL guest). */
 export const AGENT_SESSION_HOME_SEGMENTS = {

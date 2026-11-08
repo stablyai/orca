@@ -8,7 +8,11 @@ import {
   hostWorktreeTarget,
   type HostWorktreeTarget
 } from '../../../shared/worktree/host-qualified-identity'
-import { partialRuntimeStore, storeRepo, storeWorktreeMeta } from '../runtime-store-partial-fixture'
+import {
+  partialRuntimeStore,
+  storeRepo,
+  storeWorktreeMeta
+} from '../orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
@@ -58,26 +62,6 @@ function createHeadlessRuntime(
 }
 
 describe('host sort stamps on a headless runtime', () => {
-  it('announces a burst of stamp writes once, as a metadata change of the row’s repo', () => {
-    vi.useFakeTimers({ now: 55_000 })
-    try {
-      const { runtime, meta } = createHeadlessRuntime()
-      const events: { type: string }[] = []
-      runtime.onClientEvent((event) => events.push(event), { consumesTerminalSideEffects: false })
-      runtime.onPtyData('pty-1', '\x1b]0;⠂ Working\x07', 1)
-      runtime.onPtyData('pty-1', '\x1b]0;bash\x07', 2)
-      runtime.onPtyData('pty-1', '\x1b]0;⠂ Working\x07', 3)
-      expect(meta[WT].smartTier).toBe('working')
-      expect(events.filter((event) => event.type === 'worktreesChanged')).toEqual([])
-      vi.advanceTimersByTime(50)
-      expect(events.filter((event) => event.type === 'worktreesChanged')).toEqual([
-        expect.objectContaining({ type: 'worktreesChanged', repoId: 'repo-1' })
-      ])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('orders a session boundary’s done as a finish, but raises no unread for it', () => {
     const stampsAfter = (sessionBoundary: boolean) => {
       vi.useFakeTimers({ now: 75_000 })

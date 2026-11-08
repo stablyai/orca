@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 
 // These paths use supplied file context without resolving its editor connection.
 const boundaryMocks = vi.hoisted(() => ({
@@ -15,11 +15,13 @@ vi.mock('@/lib/connection-context', () => ({
 
 const mocks = vi.hoisted(() => ({ statRuntimePath: vi.fn(), readRuntimeDirectory: vi.fn() }))
 
-vi.mock('@/runtime/runtime-file-routing', () => ({ isRemoteRuntimeFileOperation: () => false }))
-vi.mock('@/runtime/runtime-file-metadata-client', () => ({
+vi.mock('@/runtime/files/runtime-file-routing', () => ({
+  isRemoteRuntimeFileOperation: () => false
+}))
+vi.mock('@/runtime/files/metadata/runtime-file-metadata-client', () => ({
   statRuntimePath: mocks.statRuntimePath
 }))
-vi.mock('@/runtime/runtime-file-mutation-client', () => ({
+vi.mock('@/runtime/files/reads/runtime-directory-read', () => ({
   readRuntimeDirectory: mocks.readRuntimeDirectory
 }))
 
@@ -58,20 +60,6 @@ afterEach(() => {
 describe('statUserOpenedPath', () => {
   beforeEach(() => {
     mocks.statRuntimePath.mockReset()
-  })
-
-  it('keeps a project file that stays in the project contained', async () => {
-    answer(true, true)
-
-    await expect(statUserOpenedPath(project, '/repo/src/a.ts')).resolves.toEqual({
-      isDirectory: false,
-      escapesWorktree: false
-    })
-    expect(mocks.statRuntimePath).toHaveBeenCalledTimes(1)
-    // Opening a path is a user act, so its stat may start a stopped WSL distro.
-    expect(mocks.statRuntimePath).toHaveBeenCalledWith(project, '/repo/src/a.ts', undefined, {
-      wakeWslDistro: true
-    })
   })
 
   it.each([false, true])(

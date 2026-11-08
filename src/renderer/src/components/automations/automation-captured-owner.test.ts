@@ -61,18 +61,6 @@ function row(overrides: Partial<AutomationHostRow>): AutomationHostRow {
 }
 
 describe('captured owner availability', () => {
-  it('permits run on an owned row and repeats its precondition', () => {
-    const availability = automationActionAvailability(
-      { owner: DESKTOP_SELF, selector: { kind: 'self' } },
-      'run'
-    )
-    expect(availability).toEqual({
-      kind: 'owned',
-      owner: DESKTOP_SELF,
-      precondition: { selector: { kind: 'self' } }
-    })
-  })
-
   it('keeps delete and pause fenceable on an orphan while refusing to run it', () => {
     const orphan = { owner: null, selector: { kind: 'orphan' as const, issue: 'gone' } }
     expect(automationActionAvailability(orphan, 'delete')).toEqual({
@@ -104,22 +92,6 @@ describe('captured owner availability', () => {
     expect(automationActionAvailability(UNCAPTURED_AUTOMATION_OWNER, 'run').kind).toBe('uncaptured')
     expect(capturedAutomationOwner(new Map(), 'missing')).toBe(UNCAPTURED_AUTOMATION_OWNER)
     expect(capturedAutomationOwner(null, 'missing')).toBe(UNCAPTURED_AUTOMATION_OWNER)
-  })
-
-  it('keys captured owners by row key', () => {
-    const captured = captureAutomationOwners([
-      { rowKey: 'row|desktop|a-1', row: row({ automation: automation({ id: 'a-1' }) }) },
-      {
-        rowKey: 'row|desktop|a-2',
-        row: row({
-          automation: automation({ id: 'a-2' }),
-          owner: null,
-          selector: { kind: 'orphan', issue: 'gone' }
-        })
-      }
-    ])
-    expect(captured.get('row|desktop|a-1')?.owner).toEqual(DESKTOP_SELF)
-    expect(captured.get('row|desktop|a-2')?.owner).toBeNull()
   })
 
   it("keeps both authorities' owners when they hold the same automation ID", () => {

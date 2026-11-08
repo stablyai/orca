@@ -1,3 +1,4 @@
+import type { GitHubImageIntake } from '@/components/github/use-github-image-uploads'
 import { useCallback, useEffect, useRef } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { createRoot } from 'react-dom/client'
@@ -28,6 +29,7 @@ export type UseDiffCommentDraftZoneArgs = {
     startLine?: number
     body: string
   }) => Promise<boolean>
+  imageUploadAddress?: GitHubImageIntake['address']
   draftPlaceholder?: string
   draftSubmitLabel?: string
   onAddCommentClick?: (args: { lineNumber: number; startLine?: number; top: number }) => void
@@ -47,6 +49,7 @@ export function useDiffCommentDraftZone({
   canOpenDraft = true,
   captureCreateComment = false,
   onCreateComment,
+  imageUploadAddress,
   draftPlaceholder,
   draftSubmitLabel,
   onAddCommentClick
@@ -172,6 +175,7 @@ export function useDiffCommentDraftZone({
         draftZoneRef.current = entry
 
         renderDiffCommentDraftCard(root, draft, {
+          imageUploadAddress,
           placeholder: draftPlaceholder,
           submitLabel: draftSubmitLabel,
           initialBody,
@@ -224,6 +228,7 @@ export function useDiffCommentDraftZone({
       canOpenDraft,
       captureCreateComment,
       disposeDraftZone,
+      imageUploadAddress,
       draftPlaceholder,
       draftSubmitLabel,
       editor,
@@ -326,9 +331,5 @@ export function useDiffCommentDraftZone({
     }
   }, [cancelReanchorFrame, disposeDraftZone, editor])
 
-  return {
-    disposeDraftZone,
-    isDraftOpen,
-    onAddCommentClickRef
-  }
+  return { disposeDraftZone, isDraftOpen, onAddCommentClickRef }
 }

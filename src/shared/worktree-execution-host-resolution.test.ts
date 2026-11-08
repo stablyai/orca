@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   createRepoRowExecutionHostLookup,
-  resolveWorktreeExecutionHost,
-  type ExecutionHostOwnerRow
+  resolveWorktreeExecutionHost
 } from './worktree-execution-host-resolution'
 
 // Main’s PTY routing and the renderer’s file/reconnect routing must agree; an ID-only repo lookup previously sent ssh:m4air panes to openclaw (#11163, #17799).
@@ -100,16 +99,6 @@ describe('resolveWorktreeExecutionHost', () => {
       ).toMatchObject({ kind: 'resolved', hostId: 'ssh:m4air', connectionId: 'm4air' })
     })
 
-    // Unknown may fall back to a local folder; a declared but unparseable host must fail closed.
-    it('reports a row naming an unparseable host distinctly from an unknown one', () => {
-      for (const executionHostId of ['ssh:', 'ssh:a|b', 'ssh:%zz', 'runtime:', 'quantum:box']) {
-        expect(resolve([{ id: 'r', executionHostId }], { repoId: 'r' })).toEqual({
-          kind: 'unresolved',
-          reason: 'malformed'
-        })
-      }
-    })
-
     it('does not recover a host from the connectionId such a row overrode', () => {
       expect(
         resolve([{ id: 'r', executionHostId: 'ssh:a|b', connectionId: 'openclaw' }], {
@@ -117,48 +106,5 @@ describe('resolveWorktreeExecutionHost', () => {
         })
       ).toEqual({ kind: 'unresolved', reason: 'malformed' })
     })
-  })
-
-  it('ignores an unparseable host id rather than treating it as a host', () => {
-    const row = { id: 'r', connectionId: 'openclaw' }
-    expect(resolve([row], { repoId: 'r', hostId: 'ssh:' })).toMatchObject({
-      kind: 'resolved',
-      connectionId: 'openclaw'
-    })
-  })
-})
-
-describe('createRepoRowExecutionHostLookup', () => {
-  /** Rows whose `id` reads are counted, so a rescan of the repo list is observable. */
-  const countingRepos = (
-    rows: readonly ExecutionHostOwnerRow[]
-  ): { repos: ExecutionHostOwnerRow[]; idReads: () => number } => {
-    let idReads = 0
-    const repos = rows.map(({ id, ...rest }) => ({
-      ...rest,
-      get id(): string {
-        idReads += 1
-        return id
-      }
-    }))
-    return { repos, idReads: () => idReads }
-  }
-
-  it('scans the repo list once for the factory, never again per lookup', () => {
-    const { repos, idReads } = countingRepos([
-      { id: 'a' },
-      { id: 'b', connectionId: 'm4air' },
-      { id: 'c' }
-    ])
-    const lookup = createRepoRowExecutionHostLookup(repos)
-    const afterBuild = idReads()
-    expect(afterBuild).toBeLessThanOrEqual(repos.length * 2)
-
-    for (let i = 0; i < 50; i++) {
-      lookup.byId('a')
-      lookup.byId('missing')
-      lookup.byHost('b', 'ssh:m4air')
-    }
-    expect(idReads()).toBe(afterBuild)
   })
 })

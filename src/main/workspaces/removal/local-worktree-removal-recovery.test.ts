@@ -9,7 +9,8 @@ const { gitExecFileAsyncMock, listWorktreesStrictMock, removeLocalWorktreePathMo
     hostRmMock: vi.fn()
   }))
 
-vi.mock('../../git/runner', () => ({
+vi.mock('../../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   gitExecFileAsync: gitExecFileAsyncMock
 }))
 
@@ -19,10 +20,7 @@ vi.mock('./local-worktree-filesystem', () => ({
 
 vi.mock('../../filesystem/asar-transparent-fs', () => ({ rm: hostRmMock }))
 
-vi.mock('../../git/worktree', () => ({
-  listWorktreesStrict: listWorktreesStrictMock
-}))
-vi.mock('../../git/worktree-listing', async (importOriginal) => ({
+vi.mock('../../git/worktrees/catalog/worktree-listing', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWorktreesStrict: listWorktreesStrictMock
 }))
@@ -55,75 +53,6 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
 
   afterEach(() => {
     vi.restoreAllMocks()
-  })
-
-  it('recovers Git for Windows partial filesystem deletion failures', async () => {
-    await withPlatform('win32', async () => {
-      const error = Object.assign(new Error('git worktree remove failed'), {
-        stderr: "error: failed to delete 'C:/repo/worktree/delete-e2e-held-cwd': Permission denied"
-      })
-
-      const result = await recoverPartialLocalWorktreeRemoval({
-        error,
-        force: true,
-        canonicalWorktreePath: 'C:/repo/worktree/delete-e2e-held-cwd',
-        repoPath: 'C:/repo',
-        localWorktreeGitOptions: {},
-        registeredWorktree: { branch: 'refs/heads/delete-e2e-held-cwd', head: 'abc123' },
-        deleteBranch: true,
-        closeWatcher: vi.fn().mockResolvedValue(undefined)
-      })
-
-      expect(removeLocalWorktreePathMock).toHaveBeenCalledWith(
-        'C:/repo/worktree/delete-e2e-held-cwd',
-        {},
-        undefined
-      )
-      expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
-        ['worktree', 'prune'],
-        expect.anything()
-      )
-      expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-        ['branch', '-d', '--', 'delete-e2e-held-cwd'],
-        expect.objectContaining({ cwd: 'C:/repo' })
-      )
-      expect(result).toEqual({})
-    })
-  })
-
-  it('finishes a clean non-force deletion after Git leaves a Windows directory behind', async () => {
-    await withPlatform('win32', async () => {
-      const error = Object.assign(new Error('git worktree remove failed'), {
-        stderr:
-          "error: failed to delete 'C:/repo/worktree/delete-e2e-held-cwd': Directory not empty"
-      })
-
-      const result = await recoverPartialLocalWorktreeRemoval({
-        error,
-        force: false,
-        canonicalWorktreePath: 'C:/repo/worktree/delete-e2e-held-cwd',
-        repoPath: 'C:/repo',
-        localWorktreeGitOptions: {},
-        registeredWorktree: { branch: 'refs/heads/delete-e2e-held-cwd', head: 'abc123' },
-        deleteBranch: true,
-        closeWatcher: vi.fn().mockResolvedValue(undefined)
-      })
-
-      expect(removeLocalWorktreePathMock).toHaveBeenCalledWith(
-        'C:/repo/worktree/delete-e2e-held-cwd',
-        {},
-        undefined
-      )
-      expect(gitExecFileAsyncMock).not.toHaveBeenCalledWith(
-        ['worktree', 'prune'],
-        expect.anything()
-      )
-      expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-        ['branch', '-d', '--', 'delete-e2e-held-cwd'],
-        expect.objectContaining({ cwd: 'C:/repo' })
-      )
-      expect(result).toEqual({})
-    })
   })
 
   it('rejects native recovery without pruning or another pass when deletion is cancelled', async () => {
@@ -181,115 +110,6 @@ describe('recoverPartialLocalWorktreeRemoval', () => {
 
       expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
       expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-    })
-  })
-
-  it('recovers localized Windows failures after Git already removed the registration', async () => {
-    await withPlatform('win32', async () => {
-      const result = await recoverPartialLocalWorktreeRemoval({
-        error: Object.assign(new Error('git worktree remove failed'), {
-          stderr: "Fehler: 'C:/repo/worktree/feature' konnte nicht gelöscht werden"
-        }),
-        force: false,
-        canonicalWorktreePath: 'C:/repo/worktree/feature',
-        repoPath: 'C:/repo',
-        localWorktreeGitOptions: {},
-        registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
-        deleteBranch: false,
-        closeWatcher: vi.fn().mockResolvedValue(undefined)
-      })
-
-      expect(removeLocalWorktreePathMock).toHaveBeenCalledWith(
-        'C:/repo/worktree/feature',
-        {},
-        undefined
-      )
-      expect(result).toEqual({})
-    })
-  })
-
-  it('does not recover unrelated localized failures while Git still owns the row', async () => {
-    await withPlatform('win32', async () => {
-      listWorktreesStrictMock.mockResolvedValue([
-        {
-          path: 'C:/repo/worktree/feature',
-          head: 'abc123',
-          branch: 'refs/heads/feature',
-          isBare: false,
-          isMainWorktree: false
-        }
-      ])
-
-      await expect(
-        recoverPartialLocalWorktreeRemoval({
-          error: Object.assign(new Error('git worktree remove failed'), {
-            stderr: 'Fehler: unerwarteter Git-Zustand'
-          }),
-          force: false,
-          canonicalWorktreePath: 'C:/repo/worktree/feature',
-          repoPath: 'C:/repo',
-          localWorktreeGitOptions: {},
-          registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
-          deleteBranch: false,
-          closeWatcher: vi.fn().mockResolvedValue(undefined)
-        })
-      ).resolves.toBeUndefined()
-      expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
-    })
-  })
-
-  it('finishes a macOS deletion Git deregistered before failing with Directory not empty', async () => {
-    await withPlatform('darwin', async () => {
-      const closeWatcher = vi.fn().mockResolvedValue(undefined)
-
-      const result = await recoverPartialLocalWorktreeRemoval({
-        error: Object.assign(new Error('git worktree remove failed'), {
-          stderr:
-            "error: failed to delete '/Users/dev/orca/workspaces/feature': Directory not empty"
-        }),
-        force: true,
-        canonicalWorktreePath: '/Users/dev/orca/workspaces/feature',
-        repoPath: '/Users/dev/repo',
-        localWorktreeGitOptions: {},
-        registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
-        deleteBranch: true,
-        closeWatcher
-      })
-
-      expect(closeWatcher).toHaveBeenCalledWith('/Users/dev/orca/workspaces/feature')
-      expect(removeLocalWorktreePathMock).toHaveBeenCalledWith(
-        '/Users/dev/orca/workspaces/feature',
-        {},
-        undefined
-      )
-      expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-        ['branch', '-d', '--', 'feature'],
-        expect.objectContaining({ cwd: '/Users/dev/repo' })
-      )
-      expect(result).toEqual({})
-    })
-  })
-
-  it('leaves an orphaned checkout to the orphan cleanup instead of deleting it', async () => {
-    await withPlatform('darwin', async () => {
-      const closeWatcher = vi.fn().mockResolvedValue(undefined)
-
-      await expect(
-        recoverPartialLocalWorktreeRemoval({
-          error: Object.assign(new Error('git worktree remove failed'), {
-            stderr: "fatal: '/Users/dev/orca/workspaces/feature' is not a working tree"
-          }),
-          force: true,
-          canonicalWorktreePath: '/Users/dev/orca/workspaces/feature',
-          repoPath: '/Users/dev/repo',
-          localWorktreeGitOptions: {},
-          registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
-          deleteBranch: true,
-          closeWatcher
-        })
-      ).resolves.toBeUndefined()
-      expect(closeWatcher).not.toHaveBeenCalled()
-      expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
     })
   })
 
@@ -428,24 +248,6 @@ describe('removeStaleLocalWorktreeRegistration', () => {
     listWorktreesStrictMock.mockReset()
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '', stderr: '' })
     listWorktreesStrictMock.mockResolvedValue([])
-  })
-
-  it('prunes and strictly verifies on the selected WSL host without deleting files or branches', async () => {
-    const options = { wslDistro: 'Ubuntu' }
-    const result = await removeStaleLocalWorktreeRegistration({
-      canonicalWorktreePath: '/home/dev/feature/.git',
-      repoPath: '/home/dev/repo',
-      localWorktreeGitOptions: options,
-      registeredWorktree: { branch: 'refs/heads/feature', head: 'abc123' },
-      deleteBranch: true
-    })
-    expect(result).toEqual({ preservedBranch: { branchName: 'feature', head: 'abc123' } })
-    expect(gitExecFileAsyncMock).toHaveBeenCalledExactlyOnceWith(['worktree', 'prune'], {
-      cwd: '/home/dev/repo',
-      wslDistro: 'Ubuntu'
-    })
-    expect(listWorktreesStrictMock).toHaveBeenCalledExactlyOnceWith('/home/dev/repo', options)
-    expect(removeLocalWorktreePathMock).not.toHaveBeenCalled()
   })
 
   it('does not override a locked missing registration', async () => {

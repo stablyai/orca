@@ -1,0 +1,152 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  ORCA_EDITOR_FILE_CACHE_STALE_EVENT,
+  ORCA_EDITOR_SAVE_AND_CLOSE_EVENT,
+  requestEditorFileSave,
+  type EditorSaveAndCloseDetail
+} from '../../autosave/editor-autosave'
+import { attachEditorAutosaveController } from '../../autosave/editor-autosave-controller'
+import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-self-write-registry'
+import { createEditorStore } from '../../autosave/editor-autosave-controller-test-fixture'
+import { keepTabEditsOverExternalChange } from '../../external-changes/ExternalFileChangeBanner'
+
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
+import { GUARDED_PATH, openGuardedFile, stubGuardedDisk } from './editor-save-guarded-disk-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+
+const mocks = vi.hoisted(() => ({ readRuntimeFileContent: vi.fn(), toastError: vi.fn() }))
+const storeRef = vi.hoisted((): { current: ReturnType<typeof createEditorStore> | null } => ({
+  current: null
+}))
+
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: mocks.toastError }) }))
+vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeRef.current?.getState() } }))
+vi.mock('@/lib/file-owner-runtime-target', () => ({
+  getRuntimeTargetForFileOwner: () => ({ kind: 'local' })
+}))
+vi.mock('@/runtime/files/reads/runtime-file-read-client', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  readRuntimeFileContent: mocks.readRuntimeFileContent
+}))
+
+function deferred<T = void>() {
+  let resolve: (value: T) => void = () => undefined
+  const promise = new Promise<T>((done) => {
+    resolve = done
+  })
+  return { promise, resolve }
+}
+
+describe('guarded editor saves under races', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    __clearSelfWriteRegistryForTests()
+    mocks.toastError.mockReset()
+  })
+
+  function openSharedModelTabs(disk: string) {
+    const store = createEditorStore()
+    storeRef.current = store
+    store.setState({
+      worktreesByRepo: {
+        'repo-1': [
+          makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' }),
+          makeWorktree({ id: 'wt-2', repoId: 'repo-1', path: '/repo', hostId: 'local' })
+        ]
+      }
+    })
+    for (const worktreeId of ['wt-1', 'wt-2']) {
+      store.getState().openFile({
+        filePath: GUARDED_PATH,
+        relativePath: 'file.ts',
+        worktreeId,
+        language: 'typescript',
+        mode: 'edit'
+      })
+    }
+    const [a, b] = store.getState().openFiles
+    for (const tab of [a, b]) {
+      store.getState().setLastKnownDiskSignature(tab.id, getDiskBaselineSignature(disk))
+    }
+    return { store, a, b }
+  }
+
+  it('makes Cmd+S in one tab wait for Keep My Edits in its sibling', async () => {
+    const disk = stubGuardedDisk({ [GUARDED_PATH]: 'B' })
+    const { store, a, b } = openSharedModelTabs('A')
+    for (const tab of [a, b]) {
+      store.getState().setEditorDraft(tab.id, 'mine')
+      store.getState().markFileDirty(tab.id, true)
+    }
+    store.getState().setExternalMutation(a.id, 'changed')
+    const read = deferred<{ content: string; isBinary: boolean }>()
+    mocks.readRuntimeFileContent.mockReturnValue(read.promise)
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      keepTabEditsOverExternalChange(store.getState().openFiles[0])
+      const save = requestEditorFileSave({ fileId: b.id })
+      read.resolve({ content: 'B', isBinary: false })
+      await save
+      expect(disk.files.get(GUARDED_PATH)).toBe('mine')
+    } finally {
+      cleanup()
+    }
+  })
+
+  it('after Keep, every view keeps the kept edits and its cache, and the save writes them', async () => {
+    const disk = stubGuardedDisk({ [GUARDED_PATH]: 'agent rewrite' })
+    const { store, a, b } = openSharedModelTabs('A')
+    store.getState().setEditorDraft(a.id, 'kept edits')
+    store.getState().markFileDirty(a.id, true)
+    store.getState().setExternalMutation(a.id, 'changed')
+    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'agent rewrite', isBinary: false })
+    const dropped: string[] = []
+    const onStale = (event: Event): void => {
+      if (event instanceof CustomEvent) {
+        dropped.push(event.detail.fileId)
+      }
+    }
+    window.addEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, onStale)
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      keepTabEditsOverExternalChange(store.getState().openFiles[0])
+      await vi.advanceTimersByTimeAsync(0)
+      expect(store.getState().editorDrafts[b.id]).toBe('kept edits')
+      // Kept unsaved text must prevent cache eviction in every view.
+      expect(dropped).toEqual([])
+
+      await requestEditorFileSave({ fileId: a.id })
+      expect(disk.files.get(GUARDED_PATH)).toBe('kept edits')
+    } finally {
+      cleanup()
+      window.removeEventListener(ORCA_EDITOR_FILE_CACHE_STALE_EVENT, onStale)
+    }
+  })
+
+  it('answers a refused save-and-close at once and keeps the tab open', async () => {
+    stubGuardedDisk({ [GUARDED_PATH]: 'agent rewrite' })
+    const store = createEditorStore()
+    openGuardedFile(store, { baseline: 'original', draft: 'mine' })
+
+    const cleanup = attachEditorAutosaveController(store)
+    try {
+      const reason = await new Promise((resolve) => {
+        const detail: EditorSaveAndCloseDetail = { fileId: GUARDED_PATH, onNotClosed: resolve }
+        window.dispatchEvent(new CustomEvent(ORCA_EDITOR_SAVE_AND_CLOSE_EVENT, { detail }))
+      })
+      expect(reason).toBe('blocked-stale')
+      expect(store.getState().openFiles).toHaveLength(1)
+      expect(store.getState().openFiles[0]?.externalMutation).toBe('changed')
+    } finally {
+      cleanup()
+    }
+  })
+})

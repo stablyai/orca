@@ -3,11 +3,10 @@ import {
   findFolderWorkspaceCandidateRepos,
   resolveFolderWorkspaceHost,
   type FolderWorkspaceHost,
-  type FolderWorkspaceHostState
-} from '../../../shared/folder-workspace-execution-host'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
-
-export type FolderWorkspaceConnectionState = FolderWorkspaceHostState
+  type FolderWorkspaceHostState,
+  type FolderWorkspaceHostState as FolderWorkspaceConnectionState
+} from '../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 type ConnectionsByRepos = WeakMap<
   FolderWorkspaceHostState['repos'],

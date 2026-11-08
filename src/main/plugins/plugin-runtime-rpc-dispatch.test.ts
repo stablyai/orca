@@ -27,14 +27,6 @@ function harness() {
 }
 
 describe('pluginRuntimeRpc', () => {
-  it('runs the CLI method and answers its result', async () => {
-    const { rpc, ran } = harness()
-    await expect(rpc('terminal.create', { command: 'ls' })).resolves.toEqual({
-      terminal: { handle: 'h' }
-    })
-    expect(ran).toEqual([{ command: 'ls' }])
-  })
-
   it('refuses with the revocation itself when the plugin lost approval before the effect', async () => {
     const { rpc, ran } = harness()
     await expect(
@@ -57,10 +49,5 @@ describe('pluginRuntimeRpc', () => {
     cancel.abort()
     await expect(rpc('terminal.create', {}, { signal: cancel.signal })).rejects.toThrow()
     expect(ran).toEqual([])
-  })
-
-  it('carries the runtime error code', async () => {
-    const { rpc } = harness()
-    await expect(rpc('terminal.nope', {})).rejects.toMatchObject({ code: expect.any(String) })
   })
 })

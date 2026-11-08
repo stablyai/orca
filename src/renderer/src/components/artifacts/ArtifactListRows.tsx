@@ -1,5 +1,5 @@
 import { VirtualizedList } from '@/components/virtualized-list'
-import type { ArtifactListItem } from '../../../../shared/artifacts'
+import type { ArtifactListItem } from '../../../../shared/artifacts/artifacts'
 import { ArtifactListRow } from './ArtifactListRow'
 import { ARTIFACTS_TABLE_ROW_HEIGHT_PX } from './artifacts-table-layout'
 

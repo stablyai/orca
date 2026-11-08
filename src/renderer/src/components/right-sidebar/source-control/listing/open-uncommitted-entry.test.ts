@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createEditorStore } from '@/store/slices/editor-slice-test-harness'
-import type { GitStatusEntry } from '../../../../../../shared/git-status-types'
+import { createEditorStore } from '@/store/slices/editor/editor-slice-test-harness'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { openUncommittedEntry } from './open-uncommitted-entry'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
-vi.mock('@/runtime/close-mirrored-editor-tab', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/closing/close-mirrored-editor-tab', () => ({
   notifyHostOfMirroredEditorClose: vi.fn()
 }))
 

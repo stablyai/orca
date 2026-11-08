@@ -11,8 +11,8 @@ import {
   type AgentProviderSessionMetadata,
   type SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { getAgentResumeArgv } from '../../../../../shared/agent-resume-argv'
-import { resolveAgentPaneAuthorityKey } from '../agent-pane-authority'
+import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
+import { resolveAgentPaneAuthorityKey } from './agent-pane-authority'
 import {
   findAgentPaneWorktreeId,
   getTabIdFromPaneKey,
@@ -20,8 +20,8 @@ import {
 } from './agent-status-pane-key-tab-binding'
 import { removePaneKeys } from './agent-status-pane-keyed-records'
 import { registryEntryMatchesStatus } from './agent-status-launch-config'
-import { copyLaunchConfig } from '../../../../../shared/agent-resume-record-from-status'
-import { agentVerdictFields } from '../../../../../shared/agent-main-agent-verdict'
+import { copyLaunchConfig } from '../../../../../shared/agent-session/lifecycle/agent-resume-record-from-status'
+import { agentVerdictFields } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { settleAttentionRemovedBy } from '../workspace-attention/attention-removal-follow-up'
 
 export function createAgentStatusProviderSessionActions(

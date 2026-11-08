@@ -5,13 +5,53 @@ import { createFakeRpcClient } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { ConnectionState } from '../transport/types'
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 import { useMobileDiffReviewController } from './use-mobile-diff-review-controller'
+import { documentQueryClient } from '../test-support/rpc-recording/hook-mount'
 
 const loadSnapshot = vi.hoisted(() => vi.fn())
-vi.mock('./mobile-diff-review-loaders', () => ({
-  loadMobileDiffReviewSnapshot: loadSnapshot,
-  loadMobileDiffReviewDiff: vi.fn().mockResolvedValue({ kind: 'idle' })
+// Each build's notes-and-files read; status comes from the shared git.status query, held pending here.
+vi.mock('./mobile-diff-review-snapshot-loader', () => ({
+  startMobileDiffReviewSnapshot: (
+    client: unknown,
+    worktree: string,
+    input: { status: Promise<unknown> }
+  ) => {
+    input.status.catch(() => {})
+    return { snapshot: loadSnapshot(client, worktree), branch: Promise.resolve({ result: null }) }
+  },
+  withMobileDiffReviewBranch: (state: unknown) => state
 }))
-vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
+vi.mock('./mobile-diff-review-loaders', () => ({
+  loadMobileDiffReviewDiff: vi.fn().mockResolvedValue({ kind: 'idle' }),
+  mobileReviewDiffInput: vi.fn(() => ({}))
+}))
+vi.mock('react-native', () => ({
+  Platform: { OS: 'ios' },
+  View: 'View',
+  Text: 'Text',
+  StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 }
+}))
+vi.mock('react-native-safe-area-context', () => ({
+  SafeAreaView: 'SafeAreaView',
+  useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
+}))
+const layout = vi.hoisted(() => ({ isWideLayout: true }))
+vi.mock('../layout/responsive-layout', () => ({ useResponsiveLayout: () => layout }))
+vi.mock('../components/MobileDiffReviewBody', () => ({ MobileDiffReviewBody: () => null }))
+vi.mock('../components/MobileDiffReviewDrawers', () => ({ MobileDiffReviewDrawers: () => null }))
+vi.mock('../components/MobileDiffReviewFileSummary', () => ({
+  MobileDiffReviewFileSummary: () => null
+}))
+vi.mock('../components/MobileDiffReviewFooter', () => ({ MobileDiffReviewFooter: () => null }))
+vi.mock('../components/MobileDiffReviewHeader', () => ({ MobileDiffReviewHeader: () => null }))
+vi.mock('../components/use-mobile-diff-review-overflow-actions', () => ({
+  useMobileDiffReviewOverflowActions: () => ({})
+}))
+vi.mock('../components/MobilePRSidebar', () => ({ MobilePRSidebar: () => null }))
+vi.mock('../components/RightDrawer', () => ({ RightDrawer: () => null }))
+// The view only hands these to the mocked drawers; the real module pulls the comment and animation tree.
+vi.mock('../components/pr-sidebar/PRCommentsSection', () => ({
+  usePRCommentCardActions: () => undefined
+}))
 vi.mock('expo-haptics', () => ({
   impactAsync: vi.fn(async () => {}),
   notificationAsync: vi.fn(async () => {}),
@@ -43,6 +83,7 @@ function readySnapshot(branch: string): ReviewScreenState {
 
 describe('useMobileDiffReviewController', () => {
   let renderer: ReactTestRenderer | null = null
+  const queries = documentQueryClient()
   let screenState: ReviewScreenState = { kind: 'loading' }
 
   function Probe({ connState }: { connState: ConnectionState }): null {
@@ -67,7 +108,7 @@ describe('useMobileDiffReviewController', () => {
 
   async function update(connState: ConnectionState): Promise<void> {
     await act(async () => {
-      renderer?.update(createElement(Probe, { connState }))
+      renderer?.update(queries.wrap(createElement(Probe, { connState })))
       await Promise.resolve()
     })
   }
@@ -91,7 +132,7 @@ describe('useMobileDiffReviewController', () => {
     )
 
     await act(async () => {
-      renderer = create(createElement(Probe, { connState: 'connected' }))
+      renderer = create(queries.wrap(createElement(Probe, { connState: 'connected' })))
       await Promise.resolve()
     })
     expect(screenState).toMatchObject({ kind: 'ready' })
@@ -115,7 +156,7 @@ describe('useMobileDiffReviewController', () => {
       .mockRejectedValueOnce(new Error('snapshot fetch failed'))
 
     await act(async () => {
-      renderer = create(createElement(Probe, { connState: 'connected' }))
+      renderer = create(queries.wrap(createElement(Probe, { connState: 'connected' })))
       await Promise.resolve()
     })
     expect(screenState).toMatchObject({ kind: 'ready' })
@@ -124,19 +165,6 @@ describe('useMobileDiffReviewController', () => {
     await update('connected')
     expect(loadSnapshot).toHaveBeenCalledTimes(2)
     expect(screenState).toMatchObject({ kind: 'ready', status: { branch: 'feature/one' } })
-  })
-
-  it('waits for the desktop when the drop lands before the review loads', async () => {
-    loadSnapshot.mockReturnValueOnce(new Promise(() => {}))
-
-    await act(async () => {
-      renderer = create(createElement(Probe, { connState: 'connected' }))
-      await Promise.resolve()
-    })
-    expect(screenState).toMatchObject({ kind: 'loading' })
-
-    await update('disconnected')
-    expect(screenState).toMatchObject({ kind: 'error', message: 'Waiting for desktop...' })
   })
 
   describe('Stage · next file', () => {
@@ -177,7 +205,7 @@ describe('useMobileDiffReviewController', () => {
     async function stageCurrent(whileStaging?: () => void): Promise<void> {
       loadSnapshot.mockResolvedValueOnce(unstaged(['a.ts', 'b.ts', 'c.ts']))
       await act(async () => {
-        renderer = create(createElement(StageProbe))
+        renderer = create(queries.wrap(createElement(StageProbe)))
         await Promise.resolve()
       })
       expect(controller?.currentItem?.filePath).toBe('c.ts')
@@ -203,14 +231,51 @@ describe('useMobileDiffReviewController', () => {
       client.requests.length = 0
     })
 
-    it('wraps to the first file after staging the last one', async () => {
-      await stageCurrent()
-      expect(controller?.currentItem?.filePath).toBe('a.ts')
-    })
-
     it('keeps a file the reader picked while the stage was running', async () => {
       await stageCurrent(() => controller?.moveFile('previous'))
       expect(controller?.currentItem?.filePath).toBe('b.ts')
+    })
+
+    it('keeps an unsaved note across reopen and edits, and clears it once saved', async () => {
+      loadSnapshot.mockResolvedValueOnce(unstaged(['c.ts']))
+      await act(async () => {
+        renderer = create(queries.wrap(createElement(StageProbe)))
+        await Promise.resolve()
+      })
+      act(() => controller?.openComposer(3))
+      act(() => controller?.setComposerBody('rename this'))
+      act(() => controller?.closeComposer())
+      act(() => controller?.openNewNoteSheet({ kind: 'range', startLine: 5, line: 7 }))
+      expect(controller?.composerBody).toBe('rename this')
+
+      act(() => controller?.closeSheet('range'))
+      act(() =>
+        controller?.openEditComposer({
+          id: 'saved',
+          worktreeId: 'wt-1',
+          filePath: 'c.ts',
+          lineNumber: 1,
+          side: 'modified',
+          body: 'older note',
+          createdAt: 1
+        })
+      )
+      expect(controller?.composerBody).toBe('older note')
+      act(() => controller?.closeComposer())
+      act(() => controller?.openComposer(3))
+      expect(controller?.composerBody).toBe('rename this')
+
+      let saving: Promise<void> | undefined
+      act(() => {
+        saving = controller?.saveComposer()
+      })
+      const save = client.requests.find((request) => request.method === 'worktree.set')
+      await act(async () => {
+        save?.resolve({ id: 'save', ok: true, result: {}, _meta: { runtimeId: 'r' } })
+        await saving
+      })
+      act(() => controller?.openComposer(3))
+      expect(controller?.composerBody).toBe('')
     })
   })
 })

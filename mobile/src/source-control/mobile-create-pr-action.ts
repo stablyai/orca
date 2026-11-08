@@ -1,7 +1,7 @@
 import { translate } from '../i18n/mobile-i18n'
 import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
-import { supportsHostedReviewCreation } from '../../../src/shared/hosted-review-creation-providers'
-import { resolveCreateReviewIntentEligibility } from '../../../src/shared/source-control-create-review-intent'
+import { supportsHostedReviewCreation } from '../../../src/shared/source-control/hosted-review/hosted-review-creation-providers'
+import { resolveCreateReviewIntentEligibility } from '../../../src/shared/source-control/decisions/source-control-create-review-intent'
 import { hostedReviewCopy } from './hosted-review-copy'
 import { getMobilePrCreateBlockMessage } from './mobile-pr-create'
 

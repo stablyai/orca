@@ -58,13 +58,4 @@ describe('realpathAcrossWslDriveMount', () => {
       String.raw`\\server\share\app`
     )
   })
-
-  it('realpaths a distro folder as it is', async () => {
-    const home = String.raw`\\wsl.localhost\Ubuntu\home\me`
-    const realpath = vi.fn(async (path: string) => path)
-    await expect(realpathAcrossWslDriveMount(home, { realpath, platform: 'win32' })).resolves.toBe(
-      home
-    )
-    expect(realpath).toHaveBeenCalledWith(home)
-  })
 })

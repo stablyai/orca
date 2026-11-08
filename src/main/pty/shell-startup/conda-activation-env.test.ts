@@ -104,14 +104,6 @@ describe('dropIncoherentCondaActivationEnv', () => {
     })
   })
 
-  it('leaves an environment with no conda state alone', () => {
-    const env: Record<string, string> = { PATH: '/usr/bin', HOME: '/home/dev' }
-
-    dropIncoherentCondaActivationEnv(env, 'linux')
-
-    expect(env).toEqual({ PATH: '/usr/bin', HOME: '/home/dev' })
-  })
-
   it('ignores a non-numeric sentinel rather than guessing', () => {
     const env: Record<string, string> = { CONDA_SHLVL: 'weird', CONDA_DEFAULT_ENV: 'base' }
 

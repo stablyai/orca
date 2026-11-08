@@ -1,6 +1,9 @@
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
-import type { RuntimeEnvironmentSetupFailure } from '../../../shared/runtime-environment-subscription-setup'
-import { runtimeEnvironmentSetupFailure } from '../../../shared/runtime-environment-subscription-setup'
+
+import {
+  type RuntimeEnvironmentSetupFailure,
+  runtimeEnvironmentSetupFailure
+} from '../../../shared/remote-runtime/host-catalog/runtime-environment-subscription-setup'
 import type {
   WebRuntimeClient,
   WebRuntimeSubscriptionHandle,

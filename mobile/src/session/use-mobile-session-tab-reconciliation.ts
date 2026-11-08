@@ -1,11 +1,10 @@
 import { useEffect, useRef, useCallback, useMemo, useState } from 'react'
 import { startRuntimeCapabilityProbe } from '../transport/runtime-capability-probe'
-import {
-  supportsMobileQuickCommands,
-  terminalQuickCommandAgentPromptMaxLength
-} from '../terminal/quick-commands'
+import { supportsMobileQuickCommands } from '../terminal/quick-commands'
+import { terminalQuickCommandAgentPromptMaxLength } from '../../../src/shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { MOBILE_AI_VAULT_CAPABILITY } from '../agent-history/agent-history-capability'
-import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import '../../../src/shared/protocol-version'
+import { TERMINAL_QUERY_REPLY_INPUT_RUNTIME_CAPABILITY } from '../../../src/shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import { PROGRAM_STATUS_RUNTIME_CAPABILITY } from '../../../src/shared/program-status/protocol'
 import { structuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import { runAcceptedMobileSessionTabsEffects } from './mobile-session-tabs-accepted-effects'
@@ -17,9 +16,11 @@ import { hasConnectedTerminalAbsentFromSessionTabs } from './mobile-terminal-rec
 import type { MobileSessionTab, SessionTabsResult } from './mobile-session-route-types'
 import type { MobileSessionMarkdownActionsModel } from './use-mobile-session-markdown-actions'
 import { withoutSessionTabHostOwnership } from './mobile-session-tab-status-clock'
+import { useMobileSessionLastTabs } from './mobile-session-last-tabs'
 
 export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownActionsModel) {
   const {
+    hostId,
     worktreeId,
     client,
     connState,
@@ -50,12 +51,20 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
   const [parkedPendingTerminalContext, setParkedPendingTerminalContext] = useState<string | null>(
     null
   )
+  const {
+    readLastSessionTabs,
+    watchLastSessionTabs,
+    rememberLastSessionTabs,
+    forgetLastSessionTab
+  } = useMobileSessionLastTabs(hostId, worktreeId)
   const consumeAcceptedSessionTabs = useCallback(
     (
       _result: SessionTabsResult,
       effectiveTabs: readonly MobileSessionTab[],
       source: SessionTabsStreamSource
     ): void => {
+      // Only host-accepted strips; the controller is per worktree, so the key is always this snapshot's.
+      rememberLastSessionTabs(effectiveTabs)
       runAcceptedMobileSessionTabsEffects<MobileSessionTab>({
         effectiveTabs,
         source,
@@ -77,7 +86,7 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
         }
       })
     },
-    []
+    [rememberLastSessionTabs]
   )
   const hasSessionTabsRecoveryNeed = useCallback(
     () =>
@@ -201,6 +210,9 @@ export function useMobileSessionTabReconciliation(scope: MobileSessionMarkdownAc
     })
   }, [client, connState])
   return {
+    readLastSessionTabs,
+    watchLastSessionTabs,
+    forgetLastSessionTab,
     consumeAcceptedSessionTabs,
     hasSessionTabsRecoveryNeed,
     getSessionTabsApplicationRevision,

@@ -1,5 +1,6 @@
-import { useRef, type ReactElement, type ReactNode } from 'react'
+import { useLayoutEffect, useRef, useState, type ReactElement, type ReactNode } from 'react'
 import { ChevronRight } from 'lucide-react'
+import { autoUpdate } from '@floating-ui/dom'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenuSub,
@@ -23,7 +24,30 @@ export function AgentLaunchSetupSubmenu({
   children: ReactNode
 }) {
   const trigger = useRef<HTMLDivElement>(null)
+  const segment = useRef<HTMLButtonElement>(null)
   const content = useRef<HTMLDivElement>(null)
+  const [sideOffset, setSideOffset] = useState(4)
+  useLayoutEffect(() => {
+    if (!open) {
+      return
+    }
+    const anchor = trigger.current
+    if (!anchor) {
+      return
+    }
+    const measure = () => {
+      const rect = anchor.getBoundingClientRect()
+      const space = Math.max(rect.left - 8, document.documentElement.clientWidth - rect.right - 8)
+      setSideOffset(Math.min(4, space - 416))
+    }
+    const stop = autoUpdate(anchor, null, measure, { animationFrame: false })
+    const observer = new ResizeObserver(measure)
+    observer.observe(document.documentElement)
+    return () => {
+      stop()
+      observer.disconnect()
+    }
+  }, [open])
   const segmentRelease = useRef(false)
   const focusSearch = () =>
     content.current?.querySelector<HTMLInputElement>('[cmdk-input]:not(:disabled)')?.focus({
@@ -31,10 +55,7 @@ export function AgentLaunchSetupSubmenu({
     })
   const close = (returnFocus: 'row' | 'segment') => {
     onOpenChange(false)
-    const target =
-      returnFocus === 'row'
-        ? trigger.current
-        : trigger.current?.querySelector<HTMLButtonElement>('button')
+    const target = returnFocus === 'row' ? trigger.current : segment.current
     target?.focus()
   }
   return (
@@ -54,8 +75,7 @@ export function AgentLaunchSetupSubmenu({
         variant="launch-row"
         disabled={disabled}
         onPointerMove={(event) => {
-          const segment = event.currentTarget.querySelector('button')
-          if (event.target instanceof Node && segment?.contains(event.target)) {
+          if (event.target instanceof Node && segment.current?.contains(event.target)) {
             event.preventDefault()
           }
         }}
@@ -64,8 +84,7 @@ export function AgentLaunchSetupSubmenu({
         }}
         onPointerUpCapture={(event) => {
           segmentRelease.current =
-            event.target instanceof Node &&
-            !!event.currentTarget.querySelector('button')?.contains(event.target)
+            event.target instanceof Node && !!segment.current?.contains(event.target)
         }}
         onClickCapture={(event) => {
           if (segmentRelease.current && event.target === event.currentTarget) {
@@ -78,7 +97,7 @@ export function AgentLaunchSetupSubmenu({
           segmentRelease.current = false
         }}
         onKeyDown={(event) => {
-          if (!disabled && event.target === event.currentTarget && event.key === 'ArrowRight') {
+          if (!disabled && event.key === 'ArrowRight') {
             event.preventDefault()
             onOpenChange(true)
             focusSearch()
@@ -87,6 +106,7 @@ export function AgentLaunchSetupSubmenu({
       >
         {renderAnchor(
           <Button
+            ref={segment}
             variant="menu-segment"
             size="icon-sm"
             type="button"
@@ -130,10 +150,10 @@ export function AgentLaunchSetupSubmenu({
         ref={content}
         aria-label={label}
         aria-labelledby={undefined}
-        sideOffset={4}
+        sideOffset={sideOffset}
         collisionPadding={8}
         variant="picker"
-        className="flex w-96 min-w-64 max-w-(--radix-dropdown-menu-content-available-width) max-h-(--radix-dropdown-menu-content-available-height) flex-col"
+        className="flex w-104 min-w-0 max-w-[calc(100vw-1rem)] max-h-(--radix-dropdown-menu-content-available-height) flex-col"
         onFocusCapture={(event) => {
           if (event.target === event.currentTarget) {
             focusSearch()

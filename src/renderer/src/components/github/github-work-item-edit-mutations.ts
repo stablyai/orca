@@ -1,8 +1,9 @@
 import { getGitHubMutationTarget } from './github-work-item-mutation-target'
 export { getGitHubMutationTarget } from './github-work-item-mutation-target'
-import { callGitHubTargetOperation } from '@/lib/github-work-item-target-request'
+import { callGitHubTargetOperation } from '@/lib/work-items/github/github-work-item-target-request'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import {
   getGitHubRepoRoutingTarget,
   getGitHubRuntimeRepoId,
@@ -43,17 +44,10 @@ export async function runIssueUpdate(args: {
       number: args.number,
       updates: args.updates
     }
-    const res =
-      target.kind === 'environment'
-        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updateIssueBySlug>>>(
-            target,
-            'github.project.updateIssueBySlug',
-            updateArgs,
-            {
-              timeoutMs: 30_000
-            }
-          )
-        : await window.api.gh.updateIssueBySlug({ ...updateArgs, wakeWslDistro: true })
+    const res = await gitHubSlugApiForTarget(target).updateIssueBySlug({
+      ...updateArgs,
+      wakeWslDistro: true
+    })
     if (!res.ok) {
       throw new Error(res.error.message)
     }
@@ -138,17 +132,10 @@ export async function runWorkItemBodyUpdate(args: {
       number: args.item.number,
       updates: { body: args.body }
     }
-    const res =
-      target.kind === 'environment'
-        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePullRequestBySlug>>>(
-            target,
-            'github.project.updatePullRequestBySlug',
-            updateArgs,
-            {
-              timeoutMs: 30_000
-            }
-          )
-        : await window.api.gh.updatePullRequestBySlug({ ...updateArgs, wakeWslDistro: true })
+    const res = await gitHubSlugApiForTarget(target).updatePullRequestBySlug({
+      ...updateArgs,
+      wakeWslDistro: true
+    })
     if (!res.ok) {
       throw new Error(res.error.message)
     }
@@ -199,17 +186,10 @@ export async function runPullRequestStateUpdate(args: {
       number: args.number,
       updates: args.updates
     }
-    const res =
-      target.kind === 'environment'
-        ? await callRuntimeRpc<Awaited<ReturnType<typeof window.api.gh.updatePullRequestBySlug>>>(
-            target,
-            'github.project.updatePullRequestBySlug',
-            updateArgs,
-            {
-              timeoutMs: 30_000
-            }
-          )
-        : await window.api.gh.updatePullRequestBySlug({ ...updateArgs, wakeWslDistro: true })
+    const res = await gitHubSlugApiForTarget(target).updatePullRequestBySlug({
+      ...updateArgs,
+      wakeWslDistro: true
+    })
     if (!res.ok) {
       throw new Error(res.error.message)
     }

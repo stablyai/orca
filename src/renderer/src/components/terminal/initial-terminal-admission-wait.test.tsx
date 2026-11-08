@@ -1,9 +1,10 @@
 // @vitest-environment happy-dom
+import type * as ParkedWatcherRegistryModule from '../terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
+import type { StructuredAgentLaunchSettlement } from '@/lib/agent-session/launch/continuation/structured-agent-launch-settlement'
 
 const mocks = vi.hoisted(() => {
   const answers: ((support: unknown) => void)[] = []
@@ -30,20 +31,29 @@ vi.mock('@/store', async () => {
     )
   }
 })
-vi.mock('@/lib/worktree-agent-activation-gate', () => ({ gateWorktreeAgentActivation: mocks.gate }))
-vi.mock('@/lib/resume-sleeping-agent-session', () => ({
+vi.mock('@/lib/workspace/activation/worktree-agent-activation-gate', () => ({
+  gateWorktreeAgentActivation: mocks.gate
+}))
+vi.mock('@/lib/agent-session/resume/resume-sleeping-agent-session', () => ({
   resumeSleepingAgentSessionsForWorktree: vi.fn()
 }))
 vi.mock('@/lib/workspace-terminal-host-authority', () => ({
   createWorkspaceTerminalHostAuthoritySelector: () => () => 'none'
 }))
-vi.mock('../terminal-pane/terminal-parked-tab-watchers', () => ({
-  pruneParkedTerminalWatchers: vi.fn(),
-  terminalWatcherLiveWorkspaceIds: () => new Set(),
-  syncParkedTerminalTabWatchersForWorkspaces: vi.fn(),
-  disposeAllParkedTerminalWatchers: vi.fn()
+vi.mock('../terminal-pane/parking/output-watchers/terminal-parked-tab-watchers', () => ({
+  syncParkedTerminalTabWatchersForWorkspaces: vi.fn()
 }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+
+vi.mock(
+  '../terminal-pane/parking/output-watchers/terminal-parked-watcher-registry',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof ParkedWatcherRegistryModule>()),
+    pruneParkedTerminalWatchers: vi.fn(),
+    terminalWatcherLiveWorkspaceIds: () => new Set(),
+    disposeAllParkedTerminalWatchers: vi.fn()
+  })
+)
+vi.mock('../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: (_target: unknown, method: string) =>
     method === 'agentSession.createSupport'
       ? new Promise((resolve) => {
@@ -57,30 +67,31 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 // Main answers the window's chat-tab open (switch-on builds).
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
 
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
-import { createTestStore, makeWorktree, seedStore } from '@/store/slices/store-test-helpers'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
-import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
+import { isPendingTab } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { useTerminalWatcherEffects } from '../use-terminal-watcher-effects'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
-import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
-import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
+import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/workspace/activation/initial-surface/empty-workspace-default-surface-claims'
+import type { AgentSessionLaunchPlan } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 let root: Root | undefined

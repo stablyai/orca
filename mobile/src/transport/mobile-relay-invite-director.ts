@@ -1,6 +1,6 @@
-import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
+import type { PairingRelay } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
-import { RelayMovedSchema } from '../../../src/shared/mobile-relay-phone-protocol'
+import { RelayMovedSchema } from '../../../src/shared/remote-runtime/relay/mobile-relay-phone-protocol'
 
 export class RelayDirectorMoveNotNewerError extends Error {
   readonly cellUrl: string

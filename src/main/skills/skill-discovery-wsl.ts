@@ -6,7 +6,7 @@ import {
 export { parseWslSkillDiscoveryOutput } from './skill-discovery-wsl-observation'
 import { posix as pathPosix } from 'node:path'
 import type { SkillDiscoveryResult, SkillSourceKind } from '../../shared/skills'
-import { quotePosixShell as quoteBashString } from '../../shared/shell-argument-quoting'
+import { quotePosixShell as quoteBashString } from '../../shared/shell/launch/shell-argument-quoting'
 import { runWslProcess } from '../wsl/execution/wsl-runner'
 import { buildSkillDiscoverySources, type SkillScanRoot } from './skill-discovery-sources'
 import { rootMayContainSourceKind } from './skill-discovery-source-filter'
@@ -14,6 +14,7 @@ import { discoverClaudePluginSkillSourcesInWsl } from './claude-plugin-skill-sou
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
 import { SKILL_STAGING_GLOB } from './skill-delete/staging-names'
 import { skillFileMaxDepth } from '../../shared/skill-discovery-depth'
+import { bundledSkillNames } from '../../shared/bundled-skill-names'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
 const WSL_SCAN_TIMEOUT_MS = 10_000
@@ -23,7 +24,9 @@ export function buildWslSkillDiscoveryCommand(
   roots: readonly SkillScanRoot[],
   names?: readonly string[]
 ): string {
-  const normalizedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
+  const normalizedNames = names
+    ?.flatMap((name) => bundledSkillNames(name.trim().toLowerCase()))
+    .filter(Boolean)
   const nameFilterHelpers: string[] = []
   const nameFilterBody: string[] = []
   if (normalizedNames?.length) {

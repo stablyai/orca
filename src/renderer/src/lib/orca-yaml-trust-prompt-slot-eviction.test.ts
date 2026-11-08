@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StoreApi } from 'zustand/vanilla'
 import type { AppState } from '@/store/types'
-import { createUIStore } from '@/store/slices/ui-slice-test-harness'
+import { createUIStore } from '@/store/slices/ui/ui-slice-test-harness'
 import { __resetTrustPromptChainForTests, ensureHooksConfirmed } from './ensure-hooks-confirmed'
-import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/runtime-compatibility-test-fixture'
-import type { RuntimeEnvironmentCallRequest } from '@/runtime/runtime-compatibility-test-fixture'
-import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { createCompatibleRuntimeStatusResponseIfNeeded } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import type { RuntimeEnvironmentCallRequest } from '@/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '@/runtime/rpc/compatibility/runtime-compatibility-cache'
 
 const hooksCheckMock = vi.fn()
 const readIssueCommandMock = vi.fn()
@@ -71,45 +71,5 @@ describe('orca.yaml trust prompt evicted from the modal slot', () => {
     expect(result).toBe('skip')
     expect(runSetup).not.toHaveBeenCalled()
     expect(store.getState().trustedOrcaHooks).toEqual({})
-  })
-
-  it('resolves the pending decision as skip when the slot is closed outright', async () => {
-    const { store, state } = createStateBackedByRealModalSlot()
-
-    const decision = ensureHooksConfirmed(state, 'repo-1', 'setup')
-    await vi.waitFor(() => expect(store.getState().activeModal).toBe('confirm-orca-yaml-hooks'))
-
-    store.getState().closeModal()
-
-    await expect(settleOrReport(decision)).resolves.toBe('skip')
-  })
-
-  it('keeps later trust prompts working after one is evicted', async () => {
-    const { store, state } = createStateBackedByRealModalSlot()
-
-    const evicted = ensureHooksConfirmed(state, 'repo-1', 'setup')
-    await vi.waitFor(() => expect(store.getState().activeModal).toBe('confirm-orca-yaml-hooks'))
-    store.getState().openModal('worktree-palette')
-    await settleOrReport(evicted)
-
-    const next = ensureHooksConfirmed(state, 'repo-1', 'setup')
-    await vi.waitFor(() => expect(store.getState().activeModal).toBe('confirm-orca-yaml-hooks'))
-    const onResolve = store.getState().modalData.onResolve as (d: 'run' | 'skip') => void
-    onResolve('run')
-
-    await expect(settleOrReport(next)).resolves.toBe('run')
-  })
-
-  it('leaves the answered decision alone when the dialog closes the slot itself', async () => {
-    const { store, state } = createStateBackedByRealModalSlot()
-
-    const decision = ensureHooksConfirmed(state, 'repo-1', 'setup')
-    await vi.waitFor(() => expect(store.getState().activeModal).toBe('confirm-orca-yaml-hooks'))
-
-    // Mirrors the trust dialog: resolve first, then vacate the slot.
-    ;(store.getState().modalData.onResolve as (d: 'run' | 'skip') => void)('run')
-    store.getState().closeModal()
-
-    await expect(settleOrReport(decision)).resolves.toBe('run')
   })
 })

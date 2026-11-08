@@ -1,14 +1,17 @@
 import { unregisteredFolderRefusal } from '../../../shared/worktree/removal'
-import { usesNativeWindowsRemoval } from '../../git/windows-worktree-removal'
+import { usesNativeWindowsRemoval } from '../../git/worktrees/removal/windows-worktree-removal'
 import type { LocalProjectWorktreeGitOptions } from '../execution-host/project-runtime-git-options'
 import { lstat } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
 import type { GitWorktreeInfo } from '../../../shared/worktree/types'
-import { listWorktreesStrict } from '../../git/worktree-listing'
-import { getErrorCode, normalizeLocalBranchRef } from '../../git/worktree-operation-options'
+import { listWorktreesStrict } from '../../git/worktrees/catalog/worktree-listing'
+import {
+  getErrorCode,
+  normalizeLocalBranchRef
+} from '../../git/worktrees/worktree-operation-options'
 import type { WorktreeRemovalRecord } from './worktree-removal-records'
-import { areWorktreePathsEqual } from '../../git/worktree-path-comparison'
+import { areWorktreePathsEqual } from '../../git/worktrees/catalog/worktree-path-comparison'
 import { CLIENT_REMOVAL_HOME } from './worktree-removal-home-guard'
 import { failedWorktreeRemovals, worktreeCheckoutExists } from './worktree-removal-table'
 import {

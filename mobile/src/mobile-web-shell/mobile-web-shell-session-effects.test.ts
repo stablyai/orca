@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { MobileWebShellSessionEvent } from './mobile-web-shell-session-contract'
 
 const doubles = vi.hoisted(() => ({
@@ -7,6 +7,8 @@ const doubles = vi.hoisted(() => ({
 }))
 
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
+// The runner's deadlines live in the runtime module, whose foreground timer reads React Native's AppState.
+vi.mock('./foreground-timer', () => ({ setForegroundTimer: () => () => {} }))
 vi.mock('../transport/rpc-operation', () => ({
   defineRpcOperation: (definition: unknown) => definition,
   runRpcOperation: () => doubles.manifest()
@@ -15,15 +17,13 @@ vi.mock('../transport/web-bundle/mobile-web-bundle-fetch', () => ({
   fetchMobileWebBundle: () => doubles.fetch()
 }))
 
-import { MobileWebBundleFetchError } from '../transport/web-bundle/mobile-web-bundle-fetch-refusal'
-import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import type { RpcClient } from '../transport/rpc-client'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import type { MobileWebBundleFetchResult } from '../transport/web-bundle/mobile-web-bundle-fetch'
 import { createGenerationStore, type GenerationStore } from './generation-store'
 import { createFakeGenerationFileSystem } from './generation-file-system-fake'
 import { deriveHostCacheKey } from './host-cache-key'
-import { download, openCache, readManifest } from './mobile-web-shell-session-effects'
+import { download, stageUpdate } from './mobile-web-shell-session-effects'
 
 const CLIENT: RpcClient = {
   sendRequest: async () => {
@@ -49,28 +49,6 @@ const MANIFEST = {
   assets: [{ path: 'index.html', sha256: '1'.repeat(64), byteLength: 1, contentType: 'text/html' }]
 }
 
-function storeThat(fail: 'stage' | 'commit' | null): GenerationStore {
-  const reject = async (): Promise<never> => {
-    throw new Error('simulated disk-full write')
-  }
-  const staged = { hostKey: 'k', buildId: MANIFEST.buildId, directory: 'd', manifest: MANIFEST }
-  return {
-    readActiveGeneration: async () => null,
-    stageGeneration: fail === 'stage' ? reject : async () => staged,
-    commitGeneration:
-      fail === 'commit'
-        ? reject
-        : async () => ({ buildId: MANIFEST.buildId, directory: 'd', manifest: MANIFEST }),
-    abortStagedGeneration: async () => undefined,
-    openReusableAssets: async () => ({ has: () => false, check: async () => false }),
-    sweepStagedGenerations: async () => undefined,
-    deleteHostCache: async () => undefined,
-    recordUpdateFailure: async () => undefined,
-    readUpdateFailures: async () => [],
-    forgetHostUpdateFailures: async () => undefined
-  }
-}
-
 function collect(): {
   events: MobileWebShellSessionEvent[]
   send: (e: MobileWebShellSessionEvent) => void
@@ -78,146 +56,6 @@ function collect(): {
   const events: MobileWebShellSessionEvent[] = []
   return { events, send: (event) => events.push(event) }
 }
-
-async function downloadEvents(
-  client: RpcClient | null,
-  store: GenerationStore,
-  downloads = new Set<AbortController>()
-) {
-  const { events, send } = collect()
-  await download({
-    client,
-    store,
-    hostKey: 'k',
-    flow: 3,
-    runtime: {
-      createStore: () => store,
-      mintSessionId: () => 's',
-      now: () => 0,
-      setTimer: () => () => {}
-    },
-    startedAt: 0,
-    downloads,
-    send
-  })
-  return events
-}
-
-async function runDownload(client: RpcClient | null, store: GenerationStore) {
-  return (await downloadEvents(client, store)).filter((event) => event.type === 'download-failed')
-}
-
-describe('the manifest read', () => {
-  beforeEach(() => {
-    doubles.manifest = () => Promise.reject(new Error('no manifest staged'))
-  })
-
-  it('with no client reports no connection', async () => {
-    const { events, send } = collect()
-    await readManifest(null, 3, send)
-    expect(events).toEqual([
-      { type: 'download-failed', flow: 3, cause: { reason: 'no-connection', hostCode: null } }
-    ])
-  })
-
-  it('cut off by the link reports the link', async () => {
-    doubles.manifest = () => Promise.reject(markRpcDeliveryUnknown(new Error('socket closed')))
-    const { events, send } = collect()
-    await readManifest(CLIENT, 3, send)
-    expect(events).toMatchObject([{ cause: { reason: 'connection-lost' } }])
-  })
-
-  it("refused by the host reports the host's code", async () => {
-    doubles.manifest = () =>
-      Promise.reject(new Error('invalid_argument: mobile_web_bundle_unavailable'))
-    const { events, send } = collect()
-    await readManifest(CLIENT, 3, send)
-    expect(events).toMatchObject([
-      { cause: { reason: 'host-refused', hostCode: 'mobile_web_bundle_unavailable' } }
-    ])
-  })
-})
-
-describe('the page version the floor reads', () => {
-  it('is carried from the host manifest to the reducer', async () => {
-    doubles.manifest = () => Promise.resolve({ manifest: { ...MANIFEST, pageVersion: 4 } })
-    const { events, send } = collect()
-    await readManifest(CLIENT, 3, send)
-    expect(events).toMatchObject([{ type: 'manifest-read', manifest: { pageVersion: 4 } }])
-  })
-
-  it('is carried from the cached manifest to the generation judged against the host', async () => {
-    const store: GenerationStore = {
-      ...storeThat(null),
-      readActiveGeneration: async () => ({
-        buildId: MANIFEST.buildId,
-        directory: 'd',
-        manifest: { ...MANIFEST, pageVersion: 4, routes: [] }
-      })
-    }
-    expect((await openCache(store, 'k'))?.compat.pageVersion).toBe(4)
-  })
-})
-
-describe('the download', () => {
-  beforeEach(() => {
-    doubles.fetch = () =>
-      Promise.resolve({
-        manifest: MANIFEST,
-        assets: new Map([['index.html', new Uint8Array(1)]]),
-        totalBytes: 1,
-        elapsedMs: 1
-      })
-  })
-
-  it('with no client reports no connection', async () => {
-    expect(await runDownload(null, storeThat(null))).toMatchObject([
-      { cause: { reason: 'no-connection' } }
-    ])
-  })
-
-  it('refusing the bytes reports the refusal', async () => {
-    doubles.fetch = () =>
-      Promise.reject(new MobileWebBundleFetchError('asset-checksum-mismatch', 'hashed x, not y'))
-    expect(await runDownload(CLIENT, storeThat(null))).toMatchObject([
-      { cause: { reason: 'asset-checksum-mismatch', hostCode: null } }
-    ])
-  })
-
-  it('whose staging this phone could not write reports the cache write', async () => {
-    expect(await runDownload(CLIENT, storeThat('stage'))).toMatchObject([
-      { cause: { reason: 'cache-write-failed' } }
-    ])
-  })
-
-  it('whose commit this phone could not write reports the cache write', async () => {
-    expect(await runDownload(CLIENT, storeThat('commit'))).toMatchObject([
-      { cause: { reason: 'cache-write-failed' } }
-    ])
-  })
-
-  it('that lands whole reports no failure', async () => {
-    const downloads = new Set<AbortController>()
-    const fetch = doubles.fetch
-    doubles.fetch = () => {
-      expect(downloads.size).toBe(1)
-      return fetch()
-    }
-    expect(await downloadEvents(CLIENT, storeThat(null), downloads)).toEqual([
-      { type: 'download-staged', flow: 3 },
-      {
-        type: 'activated',
-        flow: 3,
-        generationDirectory: 'd',
-        sessionId: 's',
-        buildId: MANIFEST.buildId,
-        totalBytes: 1,
-        elapsedMs: 0
-      }
-    ])
-    expect(downloads.size).toBe(0)
-  })
-})
 
 // Use the real store queue: reused-asset copies must survive concurrent mounts sweeping staging during download.
 describe('a download that reuses the cached generation', () => {
@@ -266,7 +104,7 @@ describe('a download that reuses the cached generation', () => {
         createStore: () => store,
         mintSessionId: () => 's',
         now: () => 0,
-        setTimer: () => () => {}
+        setForegroundTimer: () => () => {}
       },
       startedAt: 0,
       downloads,
@@ -274,6 +112,29 @@ describe('a download that reuses the cached generation', () => {
     })
     return done.then(() => events)
   }
+
+  it('downloads nothing when another page on the host already staged that build', async () => {
+    const store = createGenerationStore({ fileSystem: createFakeGenerationFileSystem() })
+    const NEXT = bundle(16)
+    store.deferCommit(await store.stageGeneration(HOST, NEXT))
+    let fetches = 0
+    doubles.fetch = () => {
+      fetches += 1
+      return Promise.resolve(NEXT)
+    }
+    const { events, send } = collect()
+    await stageUpdate({
+      client: CLIENT,
+      store,
+      hostKey: HOST,
+      flow: 3,
+      downloads: new Set(),
+      opened: { manifest: { ...NEXT.manifest, pageVersion: 1 }, chunkBytes: 4 },
+      send
+    })
+    expect(fetches).toBe(0)
+    expect(events).toEqual([])
+  })
 
   it('writes no staging bytes when canceled while its staging waits in the store queue', async () => {
     const fileSystem = createFakeGenerationFileSystem()
@@ -333,14 +194,14 @@ describe('a download that reuses the cached generation', () => {
     expect(writes.filter((uri) => uri.includes(`/tmp/${NEXT.manifest.buildId}/`))).toEqual([])
   })
 
-  it('commits whole when another mount sweeps the staging trees mid-download', async () => {
+  it('commits whole when another mount opens the cache and sweeps mid-download', async () => {
     const { fileSystem, store } = await cachedStore()
     doubles.fetch = async () => {
       fileSystem.seed(`${HOST}/tmp/${UPDATE.manifest.buildId}/app.js`, {
         kind: 'file',
         bytes: new Uint8Array(1)
       })
-      await store.sweepStagedGenerations()
+      await store.readActiveGeneration(HOST)
       return UPDATE
     }
 

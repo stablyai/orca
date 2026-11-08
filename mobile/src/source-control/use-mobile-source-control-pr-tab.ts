@@ -1,4 +1,5 @@
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
+import type { HostConnectionInputs } from '../transport/client-context-connection-metrics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import type { MobilePrSidebarController } from '../session/use-mobile-pr-sidebar-controller'
@@ -22,6 +23,7 @@ type Args = {
   activeTab: SourceControlHubTab
   /** The screen pushed over the hub, so Checks and Comments stay live while open. */
   hubPage: SourceControlHubScreen | null
+  hostId: string
   worktreeId: string
   prController: MobilePrSidebarController
   prBranch: string | null
@@ -35,6 +37,7 @@ type Args = {
   openScreen: (screen: PrTabScreen) => void
   /** The next-step bar's actions engine and launcher, shared so the bar and the tab agree. */
   shared: { actions: MobilePrActions; triage: MobilePrAiTriage }
+  hostConnection: HostConnectionInputs
 }
 
 // The hub's wiring of the PR tab: its state, Create PR follow-through, sheet openers and ⋯ menu.
@@ -42,6 +45,7 @@ export function useMobileSourceControlPrTab({
   state,
   activeTab,
   hubPage,
+  hostId,
   worktreeId,
   prController,
   prBranch,
@@ -51,28 +55,31 @@ export function useMobileSourceControlPrTab({
   onRefresh,
   openersRef,
   openScreen,
-  shared
+  shared,
+  hostConnection
 }: Args) {
   const t = useMobileTranslation()
   const { client, connState, status, worktreeLabel, loadStatus, branchCompareResult } = state
   const isHostedRepo = prController.prSidebarIsGithubRepo
   const refetchPr = prController.refetchPRSidebar
-  // Mid-probe false is still loading; do not flash unavailable.
-  const prTabState: PrSidebarState = !(ready && prController.prSidebarRepoProbeLoaded)
+  // Mid-probe false is still loading; do not flash unavailable. A known branch shows its PR without waiting for status.
+  const prTabState: PrSidebarState = !prController.prSidebarRepoProbeLoaded
     ? { kind: 'loading' }
     : !isHostedRepo
       ? {
           kind: 'blocked',
           message: t(
-            'pullRequest.prViewPanel.providerUnavailable',
-            'Hosted review panel unavailable for this provider.'
+            'pullRequest.prViewPanel.githubRemoteRequired',
+            'This tab needs a GitHub remote to show pull request details. For other supported hosts, create a review from Changes and open it in your browser.'
           )
         }
       : prBranch === null
-        ? {
-            kind: 'error',
-            message: t('pullRequest.prViewPanel.branchUnavailable', 'Current branch unavailable.')
-          }
+        ? ready
+          ? {
+              kind: 'error',
+              message: t('pullRequest.prViewPanel.branchUnavailable', 'Current branch unavailable.')
+            }
+          : { kind: 'loading' }
         : prController.prSidebarState
   const commitMessageRef = useRef(state.commitMessage)
   useLayoutEffect(() => {
@@ -86,7 +93,7 @@ export function useMobileSourceControlPrTab({
       if (committed) {
         setCommitMessage('')
       }
-      void loadStatus({ preserveReadyOnFailure: true, force: true })
+      void loadStatus({ force: true })
       if (!created) {
         return
       }
@@ -120,10 +127,13 @@ export function useMobileSourceControlPrTab({
         : hubPage === 'checks' || activeTab === 'pr'
           ? 'checks'
           : false,
+    hostId,
     state: prTabState,
+    queries: prController.prQueries,
     refetch: refetchPr,
-    rereadAfterWrite: prController.rereadPRSidebarAfterWrite,
+    rereadSlices: prController.rereadPRSlices,
     client,
+    hostConnection,
     connState,
     worktreeId,
     gitBranch: prBranch,

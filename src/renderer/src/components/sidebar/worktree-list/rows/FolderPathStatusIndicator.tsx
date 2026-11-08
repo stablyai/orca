@@ -9,14 +9,16 @@ import {
 import {
   isConfirmedStaleFolderPathStatus,
   type FolderWorkspacePathStatus
-} from '../../../../../../shared/folder-workspace-path-status'
+} from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function FolderPathStatusIndicator({
   status
 }: {
   status: FolderWorkspacePathStatus | null | undefined
 }): React.JSX.Element | null {
-  const title = getFolderWorkspacePathStatusTitle(status)
+  const t = useTranslate()
+  const title = getFolderWorkspacePathStatusTitle(status, t)
   if (!status || status.exists || !title) {
     return null
   }
@@ -38,7 +40,7 @@ export function FolderPathStatusIndicator({
         <div className="space-y-1">
           <div className="font-medium">{title}</div>
           <div className="text-muted-foreground">
-            {getFolderWorkspacePathStatusDescription(status)}
+            {getFolderWorkspacePathStatusDescription(status, t)}
           </div>
         </div>
       </TooltipContent>

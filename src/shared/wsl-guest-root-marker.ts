@@ -1,4 +1,4 @@
-import type { AgentProcessIdentity } from './agent-process-presence'
+import type { AgentProcessIdentity } from './agent-status/process/agent-process-presence'
 
 /** The guest PID and Linux start identity of a WSL pane's root shell, printed once by its
  *  provider-owned bootstrap before any user startup file runs. */
