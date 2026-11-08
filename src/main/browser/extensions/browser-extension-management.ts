@@ -184,6 +184,8 @@ export function reloadUnpackedBrowserExtension(
       }
       store.save(record, true)
       await reloadBrowserExtensionWhereEnabled(record, { refresh: true })
+      // Why: a CLI reload can change name, version or options page while Settings is open.
+      notifyBrowserExtensionListChanged()
     })
   )
 }
