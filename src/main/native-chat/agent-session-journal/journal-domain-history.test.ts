@@ -258,7 +258,7 @@ it('answers every selected read from the snapshot its head came from', () => {
   expect(writer.prepare('SELECT COUNT(*) AS count FROM journal_items').get()!.count).toBe(0)
 })
 
-it('backfills history metadata once from saved v1 rows and refuses a newer domain schema', () => {
+it('backfills history metadata once from the preceding numbered schema and refuses a newer schema', () => {
   const db = new Database(':memory:')
   cleanup.push(() => db.close())
   migrateJournalDomainSchema(db)
@@ -273,7 +273,11 @@ it('backfills history metadata once from saved v1 rows and refuses a newer domai
     ALTER TABLE journal_items DROP COLUMN turn_marker;
     DROP TABLE journal_edit_leases;
     DROP INDEX journal_events_saved_at;
-    DELETE FROM journal_domain_migrations WHERE version>=2`)
+    DROP INDEX journal_card_order;
+    DROP INDEX journal_card_last_position;
+    DROP INDEX journal_submission_source_card;
+    ALTER TABLE journal_card_versions DROP COLUMN position;
+    PRAGMA user_version=5`)
   const rows: AgentJournalRenderItem[] = [
     {
       ...text(1, ''),
@@ -344,7 +348,7 @@ it('backfills history metadata once from saved v1 rows and refuses a newer domai
       payload_json: JSON.stringify(rows[2])
     }
   ])
-  db.exec('INSERT INTO journal_domain_migrations(version) VALUES (5)')
+  db.exec('PRAGMA user_version=10')
   expect(() => migrateJournalDomainSchema(db)).toThrow(
     'journal domain schema is newer than this writer'
   )

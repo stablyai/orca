@@ -20,10 +20,5 @@ export function migrateJournalDomainQueueSchema(db: Database.Database): void {
   if (!db.isTransaction) {
     throw new Error('journal queue schema requires its migration transaction')
   }
-  const installed = db
-    .prepare(`SELECT 1 FROM pragma_table_info('journal_card_versions') WHERE name='position'`)
-    .get()
-  if (!installed) {
-    db.exec(JOURNAL_DOMAIN_QUEUE_SCHEMA)
-  }
+  db.exec(JOURNAL_DOMAIN_QUEUE_SCHEMA)
 }
