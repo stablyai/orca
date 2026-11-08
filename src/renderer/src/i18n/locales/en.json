@@ -638,6 +638,17 @@
       "wordSeparators": {
         "description": "Characters treated as word boundaries for double-click selection, including space.",
         "noSpaceHint": "No space included — double-click will select across spaces."
+      },
+      "emptyWorkspace": {
+        "title": "When a workspace has no tabs",
+        "description": "What opens when you open or wake a workspace and nothing is restored.",
+        "openDefault": "Open a terminal or default agent",
+        "showEmpty": "Show empty workspace",
+        "keywordEmpty": "empty",
+        "keywordWake": "wake",
+        "keywordSleep": "sleep",
+        "keywordWorkspace": "workspace",
+        "keywordTabs": "tabs"
       }
     },
     "appearance": {

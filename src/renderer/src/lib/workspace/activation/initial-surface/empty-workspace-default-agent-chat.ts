@@ -20,6 +20,7 @@ import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agen
 import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-agent-in-new-tab'
 import { readAgentLaunchPreferencesForWorktree } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
+import { showEmptyWorkspaceInsteadOfDefaultSurface } from './automatic-default-surface'
 
 type DefaultChatHost = { target: AgentDetectionTarget; preferences: AgentLaunchPreferences }
 
@@ -65,12 +66,15 @@ export async function loadEmptyWorkspaceDefaultChatDetection(worktreeId: string)
   ).catch(() => undefined)
 }
 
-/** Open the configured default chat for an empty workspace; null or host decline seeds a shell, never an unrequested agent TUI. */
+/** Open the configured default chat (or the chooser, if preferred) for an empty workspace; null or host decline seeds a shell, never an unrequested agent TUI. */
 export function openDefaultAgentChatInEmptyWorkspace(
   worktreeId: string,
   seedShell: () => boolean,
   initialCwd?: string
 ): { primaryTabId: string | null } | null {
+  if (showEmptyWorkspaceInsteadOfDefaultSurface(worktreeId)) {
+    return { primaryTabId: null }
+  }
   const state = useAppStore.getState()
   const host = defaultChatHost(state, worktreeId)
   if (!host) {

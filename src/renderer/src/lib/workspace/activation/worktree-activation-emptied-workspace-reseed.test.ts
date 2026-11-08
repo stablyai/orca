@@ -5,6 +5,7 @@ import * as activationGate from './worktree-agent-activation-gate'
 import { ensureWorktreeHasInitialTerminal } from './initial-surface/worktree-initial-terminal-seeding'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { toSshExecutionHostId } from '../../../../../shared/execution-host'
+import { getDefaultSettings } from '../../../../../shared/constants'
 import {
   makeCreatedAgentWorktree as makeWorktree,
   seedEmptyActivatableWorktree
@@ -179,6 +180,31 @@ describe('activating a workspace whose last terminal was closed', () => {
     await waitForWorktreeAgentActivationGateForTests(worktree.id)
 
     expect(useAppStore.getState().tabsByWorktree[worktree.id]).toEqual([])
+  })
+
+  it('shows the empty-workspace chooser instead of a shell when the user prefers empty workspaces', async () => {
+    const worktree = makeWorktree()
+    seedEmptyActivatableWorktree(worktree)
+    seedClosedLastTerminal(worktree.id)
+    useAppStore.setState({
+      settings: { ...getDefaultSettings('/tmp'), emptyWorkspaceSurface: 'empty' },
+      sleepingAgentSessionsByPaneKey: { 'pane-1': { worktreeId: worktree.id } } as never
+    })
+    const gate = vi.spyOn(activationGate, 'gateWorktreeAgentActivation').mockResolvedValue('empty')
+
+    activateAndRevealWorktree(worktree.id, {
+      navigationIntent: 'user-open',
+      notifyHostRuntime: false
+    })
+    await gate.mock.results[0]?.value
+    await waitForWorktreeAgentActivationGateForTests(worktree.id)
+
+    const state = useAppStore.getState()
+    expect(state.tabsByWorktree[worktree.id]).toEqual([])
+    const groups = state.groupsByWorktree[worktree.id] ?? []
+    expect(groups).toHaveLength(1)
+    expect(groups[0]?.tabOrder).toEqual([])
+    expect(state.splitLandingGroupIds[groups[0]?.id ?? '']).toBe(worktree.id)
   })
 
   it('leaves the row empty for startup hydration, which never opts into re-seeding', () => {

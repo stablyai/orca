@@ -13,3 +13,13 @@ export function shouldSeedDefaultSurface(
     !hasSplitLandingGroup(useAppStore.getState(), worktreeId)
   )
 }
+
+/** "Show empty workspace": a deliberate open with nothing restored shows the chooser instead of starting a process. */
+export function showEmptyWorkspaceInsteadOfDefaultSurface(worktreeId: string): boolean {
+  const state = useAppStore.getState()
+  if (state.settings?.emptyWorkspaceSurface !== 'empty') {
+    return false
+  }
+  state.showEmptyWorkspaceLanding(worktreeId)
+  return true
+}
