@@ -1,10 +1,14 @@
 import type { AgentJournalCursor } from './journal/agent-session-journal-identity'
 import type { AgentSessionSubscribeEvent } from './agent-session-wire'
 import { createStructuredAgentSessionEventCoalescer } from './structured-agent-session-coalescer'
-import { createAgentSessionTextAppendReader } from './agent-session-text-append'
+import {
+  type AgentSessionTextAppendCapabilities,
+  createAgentSessionTextAppendReader
+} from './agent-session-text-append'
 import {
   AGENT_SESSION_UNATTACHED_READ_GRACE_MS,
   agentSessionReadFailureText,
+  agentSessionReadInvalidArgument,
   isFinalAgentSessionReadRefusal,
   isUnattachedAgentSessionReadRefusal
 } from './failures/structured-agent-session-read-refusal'
@@ -20,7 +24,11 @@ import { createReconnectScheduler } from './structured-agent-session-reconnect'
 
 /** One `agentSession.subscribe` stream, opened by whichever transport the client has. */
 export type StructuredAgentSessionLiveSubscribe = (
-  params: { sessionId: string; cursor?: AgentJournalCursor; capabilities?: { textAppend: 1 } },
+  params: {
+    sessionId: string
+    cursor?: AgentJournalCursor
+    capabilities?: AgentSessionTextAppendCapabilities
+  },
   onEvent: (event: AgentSessionSubscribeEvent) => void,
   onError: (error: unknown) => void,
   onClose: () => void
@@ -41,8 +49,8 @@ export function startStructuredAgentSessionLiveRead(args: {
   subscribe: StructuredAgentSessionLiveSubscribe
   /** How long streamed text batches wait to merge; defaults to the coalescer's own window. */
   coalesceMs?: number
-  /** Whether the host advertises AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY; opens wait for it, and a rejection means no. */
-  textAppend?: Promise<boolean>
+  /** The appends the host advertises; opens wait for it, and null or a rejection means none. */
+  textAppend?: Promise<AgentSessionTextAppendCapabilities | null>
   readCurrentRequests: (
     request: AgentSessionCurrentRequestsRead
   ) => Promise<AgentSessionCurrentRequestsPiece>
@@ -212,22 +220,27 @@ export function startStructuredAgentSessionLiveRead(args: {
     args.onHistoryReadInvalidated()
     unsubscribe()
     unsubscribe = (): void => {}
+    let textAppend: AgentSessionTextAppendCapabilities | null = null
+    // A host replaced by an older build refuses the capabilities param; reopen without it.
+    const refuseAppendsOn = (error: unknown): void => {
+      appendsRefused ||= textAppend !== null && agentSessionReadInvalidArgument(error)
+    }
     try {
-      // Desktop passes none, so its subscribe still goes out in the same turn.
+      // Local desktop reads pass none, so their subscribe still goes out in the same turn.
       // A failed support check means no appends; it must not keep the transcript closed.
-      const textAppend =
-        args.textAppend && !appendsRefused ? await args.textAppend.catch(() => false) : false
+      textAppend =
+        args.textAppend && !appendsRefused ? await args.textAppend.catch(() => null) : null
       if (!isCurrentOpenGeneration(currentOpenGeneration)) {
         return
       }
       let closedDuringOpen = false
       const cursor = args.getCursor()
-      readTextAppends = textAppend ? createAgentSessionTextAppendReader() : null
+      readTextAppends = textAppend ? createAgentSessionTextAppendReader(textAppend) : null
       const handle = await args.subscribe(
         {
           sessionId: args.sessionId,
           ...(cursor ? { cursor } : {}),
-          ...(textAppend ? { capabilities: { textAppend: 1 as const } } : {})
+          ...(textAppend ? { capabilities: textAppend } : {})
         },
         (event) => handleEvent(event, currentOpenGeneration),
         (error) => {
@@ -235,6 +248,7 @@ export function startStructuredAgentSessionLiveRead(args: {
             return
           }
           closedDuringOpen = true
+          refuseAppendsOn(error)
           reportReadFailure(error)
           loseContact()
         },
@@ -263,6 +277,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       if (!isCurrentOpenGeneration(currentOpenGeneration)) {
         return
       }
+      refuseAppendsOn(error)
       reportReadFailure(error)
       loseContact()
     } finally {

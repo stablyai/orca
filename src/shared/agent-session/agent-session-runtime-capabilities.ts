@@ -118,6 +118,9 @@ export const AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY =
   'agent-session.background-task-row-stop.v1' as const
 // Strict subscribe params refuse `capabilities` on older hosts; a client sends it only when advertised.
 export const AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY = 'agent-session.text-append.v1' as const
+// Hosts with only text-append.v1 drop `toolOutputAppend`; a reader tracking tool bases could evict a reply base they hold.
+export const AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY =
+  'agent-session.tool-output-append.v1' as const
 
 // The host appends CI result lines to chats that opened or pushed to a PR; older hosts write none.
 export const AGENT_SESSION_PR_EVENTS_RUNTIME_CAPABILITY = 'agent-session.pr-events.v1' as const
@@ -171,5 +174,6 @@ export const AGENT_SESSION_RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     AGENT_SESSION_BACKGROUND_TASK_CHILD_VIEWS_CAPABILITY,
     AGENT_SESSION_PR_EVENTS_RUNTIME_CAPABILITY,
     AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
+    AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY,
     ...AGENT_SESSION_RESUME_RUNTIME_CAPABILITIES
   ] as const)()

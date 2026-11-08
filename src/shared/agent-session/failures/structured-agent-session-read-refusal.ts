@@ -54,3 +54,13 @@ export function agentSessionReadFailureText(error: unknown): string {
   }
   return 'Something went wrong.'
 }
+
+/** The host's params schema refused the request, as strict params on an older build do. */
+export function agentSessionReadInvalidArgument(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'invalid_argument'
+  )
+}
