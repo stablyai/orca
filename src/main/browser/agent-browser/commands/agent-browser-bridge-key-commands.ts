@@ -14,9 +14,9 @@ import {
 import type { ResolvedBrowserCommandTarget } from '../session-routing/agent-browser-command-target'
 import {
   dispatchPageKeyEvents,
-  routePageTextInsertion,
-  type GuestCdpSender
+  routePageTextInsertion
 } from '../../cdp/input/guest-direct-key-input'
+import type { GuestSessionCdpSender } from '../../cdp/input/guest-frame-input-sessions'
 import { assertExpectedPageUrlForStep } from '../../cdp/input/browser-expected-page-url'
 import { sendGuestCdpCommand } from '../../cdp/debugger/guest-cdp-command'
 import { AgentBrowserBridgeCaptureCommands } from './agent-browser-bridge-capture-commands'
@@ -76,7 +76,7 @@ export abstract class AgentBrowserBridgeKeyCommands extends AgentBrowserBridgeCa
     try {
       releaseDebugger = acquireElectronDebugger(wc).release
       await this.waitForPagePaint(wc, target.webContentsId)
-      const send: GuestCdpSender = (method, params, sessionId) =>
+      const send: GuestSessionCdpSender = (method, params, sessionId) =>
         sendGuestCdpCommand(wc, method, params, sessionId)
       const guardFocus = (): Promise<() => void> =>
         this.browserManager.guardUserFocusForAgentInput(target.webContentsId)

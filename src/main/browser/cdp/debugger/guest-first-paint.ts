@@ -1,7 +1,11 @@
 import type { WebContents } from 'electron'
 import type { CapturePaintHold } from '../commands/cdp-screenshot'
-import { isEmbeddedGuest, type GuestCdpSender } from '../input/guest-direct-key-input'
-import { readRecord, settleWithin } from '../input/guest-frame-input-sessions'
+import { isEmbeddedGuest } from '../input/guest-direct-key-input'
+import {
+  readRecord,
+  settleWithin,
+  type GuestSessionCdpSender
+} from '../input/guest-frame-input-sessions'
 
 const PAINTED_EXPRESSION = "performance.getEntriesByType('paint').length > 0"
 const AWAIT_FIRST_PAINT_EXPRESSION = `new Promise((resolve) => {
@@ -14,7 +18,7 @@ const AWAIT_FIRST_PAINT_EXPRESSION = `new Promise((resolve) => {
 const gatedDocumentByGuest = new WeakMap<WebContents, number>()
 
 // Answers the document to gate, or null. A failed or timed-out probe means a busy page.
-async function unpaintedDocument(send: GuestCdpSender): Promise<number | null> {
+async function unpaintedDocument(send: GuestSessionCdpSender): Promise<number | null> {
   const response = await settleWithin(
     send('Runtime.evaluate', {
       expression: `[${PAINTED_EXPRESSION}, performance.timeOrigin]`,
@@ -35,7 +39,7 @@ async function unpaintedDocument(send: GuestCdpSender): Promise<number | null> {
  */
 export async function waitForGuestFirstPaint(
   guest: WebContents,
-  send: GuestCdpSender,
+  send: GuestSessionCdpSender,
   holdPaint: CapturePaintHold
 ): Promise<void> {
   if (!isEmbeddedGuest(guest)) {

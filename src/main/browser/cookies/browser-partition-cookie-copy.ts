@@ -15,12 +15,10 @@ import type { CookieClearIdentity } from './storage/cookie-store-contracts'
 import { isNonTransplantableCookieDomain } from './policy/cookie-import-exclusions'
 import { normalizeCookieDomain } from './policy/cookie-domain'
 
-export type BrowserPartitionCookieCopyCounts = WslMoveBrowserCookieCopyCounts
-
 export type BrowserPartitionCookieCopyPlan = {
   writes: CookieClearIdentity[]
   /** Skip and reject counts; the copy adds the write results. */
-  counts: BrowserPartitionCookieCopyCounts
+  counts: WslMoveBrowserCookieCopyCounts
 }
 
 /** Pure: what to write from `source` into a jar that already holds `destination`. */
@@ -76,7 +74,7 @@ export function planBrowserPartitionCookieCopy(
 export async function copyBrowserPartitionCookies(
   sourcePartition: string,
   destinationPartition: string
-): Promise<BrowserPartitionCookieCopyCounts> {
+): Promise<WslMoveBrowserCookieCopyCounts> {
   if (sourcePartition === destinationPartition) {
     throw new Error('browser_partition_cookie_copy_same_partition')
   }
