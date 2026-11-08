@@ -11,11 +11,11 @@ const METHOD = 'session.tabs.subscribeAll'
 
 function memoryStore() {
   const snapshots = new Map<string, RemoteLayoutSnapshot>()
-  const saves: ('now' | 'later')[] = []
+  let writes = 0
   const store: RemoteLayoutSnapshotStore = {
     getRemoteLayoutSnapshot: (environmentId) => snapshots.get(environmentId),
-    setRemoteLayoutSnapshot: (environmentId, snapshot, save) => {
-      saves.push(save)
+    setRemoteLayoutSnapshot: (environmentId, snapshot) => {
+      writes++
       if (snapshot) {
         snapshots.set(environmentId, snapshot)
       } else {
@@ -23,7 +23,7 @@ function memoryStore() {
       }
     }
   }
-  return { store, snapshots, saves }
+  return { store, snapshots, writes: () => writes }
 }
 
 function tabs(worktree: string, title = 'shell') {
@@ -125,7 +125,7 @@ describe('remote layout snapshot recorder', () => {
   })
 
   it('records nothing from other streams, failures, ends or unreadable frames', () => {
-    const { store, saves } = memoryStore()
+    const { store, writes } = memoryStore()
     const census = { type: 'snapshots', snapshots: [tabs('a')] }
     recordRemoteLayoutFrame(store, 'env', 'session.tabs.subscribe', frame(census))
     recordRemoteLayoutFrame(store, 'env', 'terminal.multiplex', frame(census))
@@ -138,6 +138,6 @@ describe('remote layout snapshot recorder', () => {
     recordRemoteLayoutFrame(store, 'env', METHOD, frame({ type: 'end' }))
     recordRemoteLayoutFrame(store, 'env', METHOD, frame({ type: 'snapshots', snapshots: [{}] }))
     recordRemoteLayoutFrame(store, 'env', METHOD, frame({ type: 'updated', worktree: 'a' }))
-    expect(saves).toEqual([])
+    expect(writes()).toBe(0)
   })
 })

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../shared/constants'
 import { setSecretStore } from '../../shared/secret-store'
 import { recordRemoteLayoutFrame } from './remote-layout-snapshot-recorder'
+import { REMOTE_LAYOUT_SNAPSHOT_SAVE_INTERVAL_MS } from './remote-layout-snapshot-persistence'
 import { openProfileStateDatabaseReadOnly } from '../persistence/profile-state/profile-state-database'
 import { ProfileStateSqliteAuthority } from '../persistence/profile-state/profile-state-sqlite-authority'
 import { Store } from '../persistence/loading-store/store'
@@ -94,6 +95,7 @@ const workspace = {
 }
 
 it('survives a restart and saves only its own domain', () => {
+  vi.useFakeTimers()
   const { open, documentRevisions } = profile()
   const store = open()
   store.flushOrThrow()
@@ -109,6 +111,8 @@ it('survives a restart and saves only its own domain', () => {
     result: { type: 'snapshots', snapshots: [workspace] },
     _meta: { runtimeId: 'server' }
   })
+  vi.advanceTimersByTime(REMOTE_LAYOUT_SNAPSHOT_SAVE_INTERVAL_MS)
+  vi.useRealTimers()
   store.flushOrThrow()
 
   // Not a whole-profile serialization per recorded frame.
@@ -131,8 +135,8 @@ it('reads a snapshot an older build saved with its receipt fields, without them'
   expect(open().getRemoteLayoutSnapshots()).toEqual({ env: { workspaces } })
 })
 
-it('keeps a title-only change without arming a save, and writes it with the next save', () => {
-  const { open } = profile()
+it('coalesces layout updates into one save per interval instead of riding other saves', () => {
+  const { open, documentRevisions } = profile()
   const store = open()
   const record = (result: Record<string, unknown>) =>
     recordRemoteLayoutFrame(store, 'env', 'session.tabs.subscribeAll', {
@@ -141,17 +145,33 @@ it('keeps a title-only change without arming a save, and writes it with the next
       result,
       _meta: { runtimeId: 'server' }
     })
-  record({ type: 'snapshots', snapshots: [workspace] })
   store.flushOrThrow()
+  vi.useFakeTimers()
+  try {
+    record({ type: 'snapshots', snapshots: [workspace] })
+    const retitled = { ...workspace, snapshotVersion: 4 }
+    record({ type: 'updated', ...retitled })
+    const before = documentRevisions().get('remoteLayoutSnapshots')
 
-  const timers = vi.spyOn(globalThis, 'setTimeout')
-  const retitled = { ...workspace, snapshotVersion: 4 }
-  record({ type: 'updated', ...retitled })
-  expect(timers).not.toHaveBeenCalled()
-  timers.mockRestore()
+    // An unrelated save leaves the cached map alone.
+    store.updateSettings({ opencodeSessionCookie: 'cookie' })
+    store.flushOrThrow()
+    expect(documentRevisions().get('remoteLayoutSnapshots')).toBe(before)
 
-  // Another domain's save writes only the domains marked dirty, which must include this one.
-  store.updateSettings({ opencodeSessionCookie: 'cookie' })
+    vi.advanceTimersByTime(REMOTE_LAYOUT_SNAPSHOT_SAVE_INTERVAL_MS)
+    store.flushOrThrow()
+    expect(open().getRemoteLayoutSnapshot('env')?.workspaces[workspace.worktree]).toEqual(retitled)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+it('persists a removed server immediately', () => {
+  const { open } = profile({
+    remoteLayoutSnapshots: { env: { workspaces: { [workspace.worktree]: workspace } } }
+  })
+  const store = open()
+  store.setRemoteLayoutSnapshot('env', null)
   store.flushOrThrow()
-  expect(open().getRemoteLayoutSnapshot('env')?.workspaces[workspace.worktree]).toEqual(retitled)
+  expect(open().getRemoteLayoutSnapshots()).toEqual({})
 })

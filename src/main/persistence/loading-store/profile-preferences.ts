@@ -258,7 +258,8 @@ export function getUIUpdateOperations(owner: ProfilePreferences): UIUpdateOperat
     setActiveView: (activeView) =>
       owner[profilePreferencesContext].runtime.activeViewPreference.set(activeView),
     getUI: () => owner.getUI(),
-    scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling),
+    // UI updates replace only state.ui; a full save would re-serialize every domain.
+    scheduleSave: () => scheduleSave(owner[profilePreferencesContext].scheduling, ['ui']),
     notifyUIChanged: () => notifyUIChanged(owner)
   }
 }

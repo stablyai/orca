@@ -9,11 +9,7 @@ import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-sessio
 
 export type RemoteLayoutSnapshotStore = {
   getRemoteLayoutSnapshot(environmentId: string): RemoteLayoutSnapshot | undefined
-  setRemoteLayoutSnapshot(
-    environmentId: string,
-    snapshot: RemoteLayoutSnapshot | null,
-    save: 'now' | 'later'
-  ): void
+  setRemoteLayoutSnapshot(environmentId: string, snapshot: RemoteLayoutSnapshot | null): void
 }
 
 type SessionTabsFrame =
@@ -46,15 +42,6 @@ function displayed({
   return workspace
 }
 
-// Persist topology immediately; frequently changing titles/status can wait.
-function structure(workspace: RemoteLayoutSnapshotWorkspace | undefined): string {
-  return JSON.stringify([
-    workspace?.tabs.map((tab) => tab.id),
-    workspace?.tabGroups?.map((group) => [group.id, group.tabOrder]),
-    workspace?.tabGroupLayout
-  ])
-}
-
 export function recordRemoteLayoutFrame(
   store: RemoteLayoutSnapshotStore,
   environmentId: string,
@@ -73,27 +60,24 @@ export function recordRemoteLayoutFrame(
     const workspaces = Object.fromEntries(
       frame.snapshots.map((snapshot) => [snapshot.worktree, displayed(snapshot)])
     )
-    store.setRemoteLayoutSnapshot(environmentId, { workspaces }, 'now')
+    store.setRemoteLayoutSnapshot(environmentId, { workspaces })
     return
   }
   const { type: _type, removed, ...result } = frame
-  const { [frame.worktree]: previous, ...others } =
+  const { [frame.worktree]: _previous, ...others } =
     store.getRemoteLayoutSnapshot(environmentId)?.workspaces ?? {}
   if (removed) {
-    store.setRemoteLayoutSnapshot(environmentId, { workspaces: others }, 'now')
+    store.setRemoteLayoutSnapshot(environmentId, { workspaces: others })
     return
   }
-  const workspace = displayed(result)
-  store.setRemoteLayoutSnapshot(
-    environmentId,
-    { workspaces: { ...others, [frame.worktree]: workspace } },
-    structure(previous) === structure(workspace) ? 'later' : 'now'
-  )
+  store.setRemoteLayoutSnapshot(environmentId, {
+    workspaces: { ...others, [frame.worktree]: displayed(result) }
+  })
 }
 
 export function forgetRemoteLayoutSnapshot(
   store: RemoteLayoutSnapshotStore,
   environmentId: string
 ): void {
-  store.setRemoteLayoutSnapshot(environmentId, null, 'now')
+  store.setRemoteLayoutSnapshot(environmentId, null)
 }

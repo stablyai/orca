@@ -5,17 +5,21 @@ import { scheduleSave } from '../persistence/loading-store/write-scheduling'
 
 type RemoteLayoutSnapshotRuntime = Pick<StoreRuntimeState, 'state' | 'dirtyProfileStateDomains'>
 
+/** Display-only cache: coalesce updates instead of rewriting the whole map on every save. */
+export const REMOTE_LAYOUT_SNAPSHOT_SAVE_INTERVAL_MS = 5 * 60_000
+
 const remoteLayoutSnapshotPersistenceContext = Symbol('RemoteLayoutSnapshotPersistence')
 type RemoteLayoutSnapshotPersistenceContext = {
   runtime: RemoteLayoutSnapshotRuntime
   scheduling: WriteSchedulingOperations
+  saveTimer: ReturnType<typeof setTimeout> | null
 }
 
 export class RemoteLayoutSnapshotPersistence {
   readonly [remoteLayoutSnapshotPersistenceContext]: RemoteLayoutSnapshotPersistenceContext
 
   constructor(runtime: RemoteLayoutSnapshotRuntime, scheduling: WriteSchedulingOperations) {
-    this[remoteLayoutSnapshotPersistenceContext] = { runtime, scheduling }
+    this[remoteLayoutSnapshotPersistenceContext] = { runtime, scheduling, saveTimer: null }
   }
 
   getRemoteLayoutSnapshot(environmentId: string): RemoteLayoutSnapshot | undefined {
@@ -36,13 +40,13 @@ export class RemoteLayoutSnapshotPersistence {
     )
   }
 
-  /** Recorder-only writes; later marks dirty without a timer and persists with the next save/quit flush. */
-  setRemoteLayoutSnapshot(
-    environmentId: string,
-    snapshot: RemoteLayoutSnapshot | null,
-    save: 'now' | 'later'
-  ): void {
-    const { runtime, scheduling } = this[remoteLayoutSnapshotPersistenceContext]
+  /**
+   * Recorder-only writes. A removed server is forgotten immediately; layout and title updates are
+   * a display-only cache, saved at most once per interval and by the final full checkpoint at quit.
+   */
+  setRemoteLayoutSnapshot(environmentId: string, snapshot: RemoteLayoutSnapshot | null): void {
+    const context = this[remoteLayoutSnapshotPersistenceContext]
+    const { runtime, scheduling } = context
     const { [environmentId]: previous, ...others } = runtime.state.remoteLayoutSnapshots ?? {}
     if (snapshot === null && previous === undefined) {
       return
@@ -50,11 +54,19 @@ export class RemoteLayoutSnapshotPersistence {
     runtime.state.remoteLayoutSnapshots = snapshot
       ? { ...others, [environmentId]: snapshot }
       : others
-    if (save === 'later') {
-      runtime.dirtyProfileStateDomains?.add('remoteLayoutSnapshots')
+    if (snapshot === null) {
+      // Save only this domain without waking workspace-session listeners.
+      scheduleSave(scheduling, ['remoteLayoutSnapshots'])
       return
     }
-    // Save only this domain without waking workspace-session listeners.
-    scheduleSave(scheduling, ['remoteLayoutSnapshots'])
+    if (context.saveTimer) {
+      return
+    }
+    context.saveTimer = setTimeout(() => {
+      context.saveTimer = null
+      scheduleSave(scheduling, ['remoteLayoutSnapshots'])
+    }, REMOTE_LAYOUT_SNAPSHOT_SAVE_INTERVAL_MS)
+    // Quit's full checkpoint persists the latest snapshot; this timer must not keep the app alive.
+    context.saveTimer.unref?.()
   }
 }

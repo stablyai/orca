@@ -142,14 +142,19 @@ function stallCommit(dir: string) {
   const started = Promise.withResolvers<void>()
   const finish = Promise.withResolvers<void>()
   releases.push(finish.resolve)
-  const original = profile.authority.writeCompleteSerializedDomains.bind(profile.authority)
-  vi.spyOn(profile.authority, 'writeCompleteSerializedDomains').mockImplementationOnce(
-    async (rows) => {
-      started.resolve()
-      await finish.promise
+  // Stall whichever commit comes first: selective domain writes or a full checkpoint.
+  let stalled = false
+  for (const method of ['writeSerializedDomains', 'writeCompleteSerializedDomains'] as const) {
+    const original = profile.authority[method].bind(profile.authority)
+    vi.spyOn(profile.authority, method).mockImplementation(async (rows) => {
+      if (!stalled) {
+        stalled = true
+        started.resolve()
+        await finish.promise
+      }
       await original(rows)
-    }
-  )
+    })
+  }
   return { started: started.promise, release: finish.resolve }
 }
 
