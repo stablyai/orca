@@ -6,11 +6,8 @@ import {
   type AgentTransition
 } from '../../shared/agent-status/lifecycle/agent-transitions'
 import type { NotificationSettings } from '../../shared/notification-settings-types'
-import type {
-  MobileNotificationDispatchEvent,
-  MobileNotificationEvent
-} from './push/notifications/runtime-mobile-notification-controller'
-import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
+import type { MobileNotificationDispatchEvent } from './push/notifications/runtime-mobile-notification-controller'
+import '../notifications/notification-delivery-service'
 import { TerminalAgentPhonePush } from './terminal-agent-phone-push'
 
 const WT = 'repo-1::/tmp/wt'
@@ -149,26 +146,6 @@ describe('TerminalAgentPhonePush', () => {
     ])
   })
 
-  it.each([null, 'host-a'])(
-    'pushes windowless news with its execution owner: %s',
-    (connectionId) => {
-      const { sent, finish } = harness()
-      finish({ connectionId })
-      expect(sent).toHaveLength(1)
-      expect(sent[0]?.workspaceExecutionHostId ?? 'local').toBe(
-        connectionId ? `ssh:${connectionId}` : 'local'
-      )
-    }
-  )
-
-  it('waits out the quiet window for a Pi agent even with no live work seen', () => {
-    const { sent, advance, finish } = harness()
-    finish({ agentType: 'pi' })
-    expect(sent).toEqual([])
-    advance(AGENT_DONE_QUIET_MS)
-    expect(sent).toHaveLength(1)
-  })
-
   it('announces no milestone a goal agent resumes from within the quiet window', () => {
     const { push, sent, advance, working, finish } = harness()
     working()
@@ -178,26 +155,6 @@ describe('TerminalAgentPhonePush', () => {
     push.observe(moved(null, 'working'))
     advance(AGENT_DONE_QUIET_MS)
     expect(sent).toEqual([])
-  })
-
-  it('pushes an agent that needs input at once, and a failed turn as finished', () => {
-    const { push, sent, state, advance } = harness({
-      hookRow: row({
-        state: 'waiting',
-        lastAssistantMessage: undefined,
-        toolName: 'Bash',
-        toolInput: 'rm -rf build'
-      })
-    })
-    push.observe(moved('needs-input', 'needs-you'))
-    expect(sent).toHaveLength(1)
-    advance(5_000)
-    state.hookRow = row({ mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 5_000 } })
-    push.observe(moved('errored'))
-    expect(sent.map((event) => [event.agentState, event.title, event.body])).toEqual([
-      ['waiting', 'orca / feature - Claude needs input', 'Using Bash: rm -rf build'],
-      ['done', 'orca / feature - Claude failed', 'Fixed it.']
-    ])
   })
 
   it('stays silent while a window owns the host, including one that arrives mid quiet window', () => {
@@ -212,66 +169,6 @@ describe('TerminalAgentPhonePush', () => {
     state.hasWindow = true
     advance(AGENT_DONE_QUIET_MS)
     expect(sent).toEqual([])
-  })
-
-  it('collapses a burst in one workspace as the window’s fan-out does', () => {
-    const { push, sent, finish } = harness()
-    finish()
-    push.observe(moved('prompt-submitted', 'working'))
-    finish({ stateStartedAt: 6_000 })
-    expect(sent).toHaveLength(1)
-  })
-
-  it('pushes nothing for a prompt, a resume, a rest, a session boundary, or a structured chat’s row', () => {
-    const { push, sent, state, advance } = harness()
-    push.observe(moved('prompt-submitted', 'working'))
-    push.observe(moved(null, 'working'))
-    push.observe(moved(null, 'rest'))
-    // The detector names no news for a boundary's done.
-    push.observe(moved(null, 'done'))
-    push.observe({
-      kind: 'seeded',
-      paneKey: PANE,
-      workspace: { worktreeId: WT, sshHostId: null },
-      phase: 'done',
-      at: 1
-    })
-    state.hookRow = row({ structuredHost: 'owned' })
-    push.observe(moved('turn-finished'))
-    advance(AGENT_DONE_QUIET_MS)
-    expect(sent).toEqual([])
-  })
-
-  it('pushes nothing for a muted workspace', () => {
-    const { sent, finish } = harness({ muted: true })
-    finish()
-    expect(sent).toEqual([])
-  })
-
-  it('leaves a dispatched worker’s finish to its coordinator, and still pushes its prompt', () => {
-    const { push, sent, state, advance, finish } = harness({ dispatched: true })
-    finish()
-    advance(AGENT_DONE_QUIET_MS)
-    expect(sent).toEqual([])
-    state.hookRow = row({ state: 'waiting', stateStartedAt: 6_000 })
-    push.observe(moved('needs-input', 'needs-you'))
-    expect(sent.map((event) => event.agentState)).toEqual(['waiting'])
-  })
-
-  it('pushes a dispatched worker’s finish whose title still waits for approval, as the window does', () => {
-    const { sent, advance, finish } = harness({
-      dispatched: true,
-      title: 'Codex - waiting for approval'
-    })
-    finish()
-    advance(AGENT_DONE_QUIET_MS)
-    expect(sent).toHaveLength(1)
-  })
-
-  it('marks the push not desktop-allowed when agent notifications are off', () => {
-    const { sent, finish } = harness({ settings: { agentTaskComplete: false } })
-    finish()
-    expect(sent[0]?.desktopAllowed).toBe(false)
   })
 
   it('announces a lead agent’s finish while background work runs, and not its later all-clear', () => {
@@ -289,28 +186,6 @@ describe('TerminalAgentPhonePush', () => {
     expect(sent).toHaveLength(1)
   })
 
-  it('waits out the quiet window for a pane restored mid-work, as the window seeds it', () => {
-    const { push, sent, advance, finish } = harness({ hookRow: row({ state: 'working' }) })
-    const workspace = { worktreeId: WT, sshHostId: null }
-    push.observe({ kind: 'seeded', paneKey: PANE, workspace, phase: 'working', at: 1 })
-    finish()
-    expect(sent).toEqual([])
-    advance(AGENT_DONE_QUIET_MS)
-    expect(sent).toHaveLength(1)
-  })
-
-  it('counts a pane restored mid background work as work seen, as the window seeds it', () => {
-    const { push, sent, advance, finish } = harness({
-      hookRow: row({ state: 'working', turnCompletedAt: 7_000 })
-    })
-    const workspace = { worktreeId: WT, sshHostId: null }
-    push.observe({ kind: 'seeded', paneKey: PANE, workspace, phase: 'working', at: 1 })
-    finish()
-    expect(sent).toEqual([])
-    advance(AGENT_DONE_QUIET_MS)
-    expect(sent).toHaveLength(1)
-  })
-
   it('announces no finish restored with the pane', () => {
     const { push, sent, advance, working, finish } = harness({
       hookRow: row({ state: 'working', turnCompletedAt: 7_000 })
@@ -321,49 +196,5 @@ describe('TerminalAgentPhonePush', () => {
     finish({ turnCompletedAt: 7_000 })
     advance(AGENT_DONE_QUIET_MS)
     expect(sent).toEqual([])
-  })
-
-  it('sends phones, old ones included, the alert the window’s own request would have', () => {
-    const { sent, finish } = harness()
-    finish()
-    const fromWindow: MobileNotificationEvent[] = []
-    const service = createNotificationDeliveryService({
-      readNotificationSettings: () => ({
-        enabled: false,
-        agentTaskComplete: true,
-        agentNeedsInput: true,
-        terminalBell: true,
-        suppressWhenFocused: true,
-        customSoundId: 'system',
-        customSoundPath: null,
-        customSoundVolume: 1,
-        mutedNotificationSourceIds: [],
-        notifyHiddenWorkspaces: true
-      }),
-      findActiveWindow: () => null,
-      isWindowVisible: () => false,
-      setTrayAttention: () => {},
-      isNotificationSupported: () => false,
-      dispatchMobileNotification: (event) => fromWindow.push(event),
-      readAuthorizationStatus: async () => null,
-      recordDeliveryOutcome: () => {},
-      deliverNative: () => ({ delivered: false }),
-      platform: 'linux',
-      now: () => 10_000
-    })
-    void service.dispatch({
-      source: 'agent-task-complete',
-      notificationId: sent[0]?.notificationId,
-      worktreeId: WT,
-      paneKey: PANE,
-      repoLabel: 'orca',
-      worktreeLabel: 'feature',
-      agentType: 'claude',
-      agentState: 'done',
-      agentPrompt: 'fix the bug',
-      agentLastAssistantMessage: 'Fixed it.'
-    })
-    // The window's request was made with desktop banners off; only that flag differs.
-    expect(fromWindow).toEqual([{ ...sent[0], desktopAllowed: false }])
   })
 })

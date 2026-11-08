@@ -121,6 +121,8 @@ Affected tests use Vitest's static import graph. Run suites explicitly for compu
 dynamic imports, fixture files, subprocess inputs, or other dependencies outside that
 graph. Local affected tests do not replace CI.
 
+Use `pnpm test`, not raw `vitest`: only it keeps the transform cache that makes repeat runs fast.
+
 To reduce main-process rebuild CPU and memory when you do not need its source maps,
 set `ORCA_DEV_MAIN_SOURCEMAPS=0` before `pnpm dev`. In Bash/zsh:
 

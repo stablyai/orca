@@ -12,9 +12,11 @@ import {
   PrivacyDiagnosticBundleControls
 } from './PrivacyDiagnosticBundleControls'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { diagnosticsErrorText } from './diagnostics-bundle-error-copy'
 
 export function PrivacyDiagnosticsSection(): React.JSX.Element {
+  const t = useTranslate()
   const [status, setStatus] = useState<DiagnosticsStatusPayload | null>(null)
   const [bundle, setBundle] = useState<DiagnosticsBundlePayload | null>(null)
   const [previewOpened, setPreviewOpened] = useState(false)
@@ -271,11 +273,11 @@ export function PrivacyDiagnosticsSection(): React.JSX.Element {
       <Separator />
       <PrivacyDiagnosticsRow
         icon={<FileText className="size-4" />}
-        title={translate(
+        title={t(
           'auto.components.settings.PrivacyDiagnosticsSection.af2fc82cde',
           'Send app diagnostics to support'
         )}
-        description={getDiagnosticBundleDescription({ bundle, previewOpened, ticketId })}
+        description={getDiagnosticBundleDescription({ bundle, previewOpened, ticketId }, t)}
       >
         <PrivacyDiagnosticBundleControls
           status={status}
@@ -306,28 +308,29 @@ function DiagnosticsDisabledStateNote({
 }: {
   reason: NonNullable<DiagnosticsStatusPayload['disabledReason']>
 }): React.JSX.Element {
+  const t = useTranslate()
   const message =
     reason === 'do_not_track'
-      ? translate(
+      ? t(
           'auto.components.settings.PrivacyDiagnosticsRows.5a7cbe069a',
           'DO_NOT_TRACK=1 is set — creating and sending diagnostic files is disabled.'
         )
       : reason === 'orca_telemetry_disabled'
-        ? translate(
+        ? t(
             'auto.components.settings.PrivacyDiagnosticsRows.63d03261d1',
             'ORCA_TELEMETRY_DISABLED=1 is set — creating and sending diagnostic files is disabled.'
           )
         : reason === 'orca_diagnostics_disabled'
-          ? translate(
+          ? t(
               'auto.components.settings.PrivacyDiagnosticsRows.d37e92a06b',
               'ORCA_DIAGNOSTICS_DISABLED=1 is set — app diagnostics are off.'
             )
           : reason === 'ci'
-            ? translate(
+            ? t(
                 'auto.components.settings.PrivacyDiagnosticsRows.5ebb31e1fb',
                 'Running in CI — diagnostics are off.'
               )
-            : translate(
+            : t(
                 'auto.components.settings.PrivacyDiagnosticsRows.e27c8d45bf',
                 'Diagnostics are disabled by an environment variable.'
               )

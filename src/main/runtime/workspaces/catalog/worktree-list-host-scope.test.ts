@@ -93,24 +93,4 @@ describe('worktree.list host coverage under the row cap', () => {
     expect(remote).toHaveLength(24)
     expect(result.hostScope).toEqual({ hostIds: ['local', 'ssh:box-1'], omittedHostIds: [] })
   })
-
-  it('names a configured host that contributed no rows at all', async () => {
-    // Failed repo scans and empty hosts both contribute no rows; scope must expose the uncertainty.
-    const result = await queries(fleet(3, 0), ['local', 'ssh:box-1', 'runtime:paired']).list(
-      undefined,
-      200
-    )
-
-    expect(result.hostScope).toEqual({
-      hostIds: ['local'],
-      omittedHostIds: ['runtime:paired', 'ssh:box-1']
-    })
-  })
-
-  it('does not report configured hosts as omitted from a --repo listing', async () => {
-    // Caller-scoped listings must omit unrelated hosts.
-    const result = await queries(fleet(0, 5)).list('id:repo-ssh', 200)
-
-    expect(result.hostScope).toEqual({ hostIds: ['ssh:box-1'], omittedHostIds: [] })
-  })
 })

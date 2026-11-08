@@ -18,7 +18,7 @@ import { SharedControlSocketGeneration } from './remote-runtime-shared-control-s
 import { refreshRemoteRuntimeSharedControl } from './remote-runtime-shared-control-refresh'
 import { SharedControlDiagnosticsTracker } from './remote-runtime-shared-control-diagnostics'
 import { ensureSharedControlReady } from './remote-runtime-shared-control-ready-wait'
-import { handleRuntimeControlTextFrame } from './remote-runtime-shared-control-connection-frame'
+import { handleRuntimeControlFrame } from './remote-runtime-shared-control-connection-frame'
 import * as sharedControlActions from './remote-runtime-shared-control-connection-actions'
 import type * as SharedControlTypes from './remote-runtime-shared-control-types'
 import type { SharedControlSocketClosed } from './remote-runtime-shared-control-types'
@@ -186,7 +186,7 @@ export class RemoteRuntimeSharedControlConnection {
         this.handleSocketClosed(error, socketGeneration, cause)
       },
       onOpened: () => this.readiness.armReadyDeadline(socketGeneration),
-      onTextFrame: (frame) => this.handleTextFrame(frame, socketGeneration),
+      onFrame: (frame) => this.handleFrame(frame, socketGeneration),
       onActivity: this.options.onAnswered,
       liveness: {
         options: this.options.liveness,
@@ -205,11 +205,11 @@ export class RemoteRuntimeSharedControlConnection {
     this.publishDiagnostics()
   }
 
-  private handleTextFrame(frame: string, socketGeneration: number): void {
-    handleRuntimeControlTextFrame({
+  private handleFrame(frame: SharedControlTypes.SharedControlFrame, generation: number): void {
+    handleRuntimeControlFrame({
       frame,
-      socketGeneration,
-      isCurrent: (generation) => this.socketGeneration.isCurrent(generation),
+      socketGeneration: generation,
+      isCurrent: (current) => this.socketGeneration.isCurrent(current),
       getState: () => this.state,
       getHandshake: () => this.handshake,
       environmentId: this.options.environmentId,
@@ -221,7 +221,7 @@ export class RemoteRuntimeSharedControlConnection {
       setState: (state) => {
         this.state = state
       },
-      handleSocketClosed: (e) => this.handleSocketClosed(e, socketGeneration, 'protocol_error'),
+      handleSocketClosed: (e) => this.handleSocketClosed(e, generation, 'protocol_error'),
       sendEncrypted: (payload) => this.sendEncrypted(payload),
       clientCapabilities: remoteRuntimeClientCapabilities(this.options.clientCapabilities),
       getSocket: () => this.ws,

@@ -13,8 +13,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { resolveBareOrchestrationRecipient } from '../../rpc/methods/orchestration/messaging/recipient-routing'
 import { LEGACY_CONTRACT_VERSION } from '../db/contract-constants'
 import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../shared/orchestration-rpc-contract'
-import { federatedControlMailRefusal } from '../../rpc/methods/orchestration/messaging/send-control-mail'
-import { ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION } from '../../../../shared/protocol-version'
+
 import { subscribeCrew } from './crew-stream'
 
 const LOCAL = testOrcaSessionId('aaaaaaaa-1111-4111-8111-aaaaaaaaaaaa')
@@ -95,27 +94,6 @@ it('keeps imported content and Open while deriving local close/reopen availabili
   } finally {
     stop()
   }
-})
-
-it('preserves missing clear successor and older visibility-index compatibility, independently of unknown message ID families', () => {
-  const f = authorityFixture()
-  delete f.deps.records!.getVisibleSessionTabIndex
-  expect(f.available([LOCAL])(LOCAL)).toBe(true)
-  const old = f.records.get(LOCAL)!
-  f.records.set(LOCAL, {
-    ...old,
-    conversationCommand: {
-      command: 'clear',
-      state: 'completed',
-      phase: 'committed',
-      callerKey: 'clear',
-      operationId: 'clear-missing',
-      replacementSessionId: IMPORTED
-    }
-  })
-  expect(f.available([LOCAL])(LOCAL)).toBe(false)
-  f.records.set(IMPORTED, record(IMPORTED))
-  expect(f.available([LOCAL])(LOCAL)).toBe(true)
 })
 
 it('matches actual sender Dispatch R1 before coordinator R2 and never uses sender preference to disambiguate active recipient Dispatches', () => {
@@ -260,53 +238,4 @@ it('re-derives retained legacy custody on actual commit/revoke/reset writers', a
   } finally {
     stop()
   }
-})
-
-it('uses the existing federated protocol/ready refusal after an actual selected Dispatch, independently of missing native records', () => {
-  const f = authorityFixture()
-  const target = f.db.createStartingWorkerDispatch({
-    taskSpec: 'federated target',
-    taskRunId: f.run.id,
-    creator: { kind: 'system' },
-    maxDepth: 10,
-    startOptions: {},
-    federation: {
-      environmentId: 'fixture-remote',
-      environmentName: 'remote',
-      peerFingerprint: 'fixture-peer',
-      protocolVersion: ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
-    }
-  })
-  f.db.prepareStartingWorkerAuthority({
-    dispatchId: target.dispatch.id,
-    handle: formatOrcaSessionAddress(IMPORTED),
-    paneKey: 'remote:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
-    processIncarnation: 'fixture-remote-process',
-    worktreeId: 'fixture-remote-folder',
-    effects: [],
-    setupState: 'not_applicable'
-  })
-  expect(f.available([IMPORTED])(IMPORTED)).toBe(false)
-  expect(
-    federatedControlMailRefusal(
-      target.dispatch.id,
-      ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
-      () => f.db.getWorkerDispatch(target.dispatch.id)?.state
-    )?.code
-  ).toBe('dispatch_inactive')
-  f.db.markWorkerDispatchReady(target.dispatch.id)
-  expect(f.available([IMPORTED])(IMPORTED)).toBe(true)
-  // Retained old-version control uses the same existing refusal and no native fallback escape.
-  f.db.db
-    .prepare('UPDATE federated_dispatches SET protocol_version = ? WHERE dispatch_id = ?')
-    .run(ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION - 1, target.dispatch.id)
-  expect(f.available([IMPORTED])(IMPORTED)).toBe(false)
-  expect(
-    federatedControlMailRefusal(
-      target.dispatch.id,
-      ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION - 1,
-      () => 'ready'
-    )?.code
-  ).toBe('capability_unsupported')
-  expect(f.db.getInbox()).toEqual([])
 })

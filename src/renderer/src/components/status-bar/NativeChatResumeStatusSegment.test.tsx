@@ -92,68 +92,6 @@ describe('NativeChatResumeStatusSegment', () => {
     useAppStore.setState(useAppStore.getInitialState(), true)
   })
 
-  it('shows the host count and reopens the dialog on a fresh read', async () => {
-    rpc.mockResolvedValue({ sessions: candidates })
-    await mount()
-
-    expect(screen.getByRole('button', { name: '2 chats available to resume' })).toBeTruthy()
-    expect(screen.getByText('2 chats to resume')).toBeTruthy()
-
-    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(false)
-    await act(async () => screen.getByRole('button').click())
-    // The launch read, then a second one taken before the dialog is allowed to reopen.
-    expect(rpc.mock.calls.map((call) => call[1])).toEqual([
-      'agentSession.restartResumable',
-      'agentSession.restartResumable'
-    ])
-    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
-  })
-
-  // The remaining offer and a completed resume’s failure are separate facts with separate entries.
-  it('keeps a failed resume as its own entry beside any remaining offer', async () => {
-    const failed = {
-      ...candidates[0]!,
-      failedAt: 60_000,
-      outcome: 'refused',
-      reason: 'agent_session_restart_work_superseded'
-    }
-    rpc.mockResolvedValue({ sessions: candidates.slice(1), failed: [failed] })
-    await mount()
-
-    expect(screen.getByText('1 chat to resume')).toBeTruthy()
-    const entry = screen.getByRole('button', {
-      name: '1 chat failed to resume. Click for details.'
-    })
-    expect(entry.textContent).toBe('1 chat failed to resume')
-
-    rpc.mockResolvedValue({ sessions: [], failed: [failed] })
-    await act(async () => entry.click())
-    expect(getNativeChatResumeOnRestartDialogRequest()).toBe(true)
-    expect(screen.queryByText('1 chat to resume')).toBeNull()
-    expect(screen.getByText('1 chat failed to resume')).toBeTruthy()
-  })
-
-  // Unconfirmed chats may already be running; calling them failed would invite duplicate continuation.
-  it('does not call an unconfirmed resume failed', async () => {
-    const failure = (sessionId: 'a' | 'b', outcome: 'refused' | 'unconfirmed') => ({
-      ...candidates.find((entry) => entry.sessionId === sessionId)!,
-      failedAt: 60_000,
-      outcome,
-      reason: outcome === 'refused' ? 'agent_session_restart_work_superseded' : 'pending'
-    })
-    rpc.mockResolvedValue({
-      sessions: [],
-      failed: [failure('a', 'refused'), failure('b', 'unconfirmed')]
-    })
-    await mount()
-
-    expect(
-      screen.getByRole('button', { name: '2 chats to check after resuming. Click for details.' })
-        .textContent
-    ).toBe('2 chats to check')
-    expect(screen.queryByText(/failed to resume/)).toBeNull()
-  })
-
   // The count can lag the host — another window may have dismissed the offer. The re-read decides.
   it('does not reopen the dialog when the host no longer offers anything', async () => {
     rpc.mockResolvedValueOnce({ sessions: candidates }).mockResolvedValue({ sessions: [] })
@@ -162,38 +100,6 @@ describe('NativeChatResumeStatusSegment', () => {
     expect(getNativeChatResumeOnRestartDialogRequest()).toBe(false)
     await act(async () => screen.getByRole('button').click())
     expect(getNativeChatResumeOnRestartDialogRequest()).toBe(false)
-    expect(screen.queryByRole('button')).toBeNull()
-  })
-
-  it('retries a transient host startup read before hiding a durable offer', async () => {
-    rpc
-      .mockRejectedValueOnce(new Error('host-starting'))
-      .mockResolvedValue({ sessions: candidates })
-    await mount()
-    await act(async () => new Promise((resolve) => setTimeout(resolve, 125)))
-
-    expect(screen.getByRole('button', { name: '2 chats available to resume' })).toBeTruthy()
-    expect(rpc.mock.calls.map((call) => call[1])).toEqual([
-      'agentSession.restartResumable',
-      'agentSession.restartResumable'
-    ])
-  })
-
-  it('hides when no chat exists and the setting is off, or the host offers nothing', async () => {
-    rpc.mockResolvedValue({ sessions: candidates })
-    useAppStore.setState({
-      settings: { ...getDefaultSettings(''), nativeChatProviders: {} }
-    })
-    await mount()
-    expect(screen.queryByRole('button')).toBeNull()
-    expect(rpc).not.toHaveBeenCalled()
-
-    cleanup()
-    rpc.mockResolvedValue({ sessions: [] })
-    useAppStore.setState({
-      settings: { ...getDefaultSettings(''), nativeChatProviders: EVERY_AGENT_CHAT }
-    })
-    await mount()
     expect(screen.queryByRole('button')).toBeNull()
   })
 

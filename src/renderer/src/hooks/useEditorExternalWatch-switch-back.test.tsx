@@ -45,7 +45,7 @@ vi.mock('@/runtime/files/reads/runtime-file-read-client', () => ({
 }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
 
-import { createTestStore } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { useEditorExternalWatch } from './useEditorExternalWatch'
 import { attachRestoredTabConflictScan } from '@/components/editor/external-changes/editor-restored-tab-conflict-scan'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'

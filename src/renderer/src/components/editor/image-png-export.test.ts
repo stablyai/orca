@@ -1,5 +1,10 @@
-import { describe, expect, it } from 'vitest'
-import { imagePngLayout } from './image-png-export'
+// @vitest-environment happy-dom
+
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { imageClipboardPngDataUrl, imagePngLayout } from './image-png-export'
+
+const PNG_BASE64 =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII='
 
 describe('imagePngLayout', () => {
   it('doubles small images for crisp text', () => {
@@ -19,5 +24,35 @@ describe('imagePngLayout', () => {
 
   it('refuses an image with no size', () => {
     expect(imagePngLayout({ width: 0, height: 10 })).toBeNull()
+  })
+})
+
+describe('imageClipboardPngDataUrl', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('copies a raster PNG as its own bytes instead of a 2x render', async () => {
+    const bytes = Uint8Array.from(atob(PNG_BASE64), (character) => character.charCodeAt(0))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(new Blob([bytes], { type: 'image/png' })))
+    )
+    vi.stubGlobal(
+      'Image',
+      class {
+        src = ''
+        naturalWidth = 1
+        naturalHeight = 1
+        decode = async (): Promise<void> => undefined
+      }
+    )
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:decode')
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+
+    await expect(
+      imageClipboardPngDataUrl('blob:image', { width: 1, height: 1 }, null)
+    ).resolves.toBe(`data:image/png;base64,${PNG_BASE64}`)
   })
 })

@@ -1,10 +1,13 @@
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
+import { catalogOwnsHost, getProjectGroupHostId } from './project-group-owner-routing'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
-import { adoptFromEndpoint } from '../adopt-from-endpoint'
-import { mergeByIdentity, unchangedMergeSource } from '../catalog-identity'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
+import {
+  mergeByIdentity,
+  unchangedMergeSource
+} from '../../lib/catalog-reconciliation/catalog-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 export type FetchedProjectGroupCatalog = {

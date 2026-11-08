@@ -100,8 +100,8 @@ import {
 } from '@/lib/agent-session/launch/structured-agent-session-launch-surface'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
-import { buildHydratedTabState } from '@/store/slices/tabs-hydration'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { buildHydratedTabState } from '@/store/slices/tabs/tabs-hydration'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { useAppStore } from '@/store'
 
@@ -117,7 +117,7 @@ import { registerSessionTabIpcBridge } from '@/hooks/ipc-events/session-tab-ipc-
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 import {
   SOURCE,

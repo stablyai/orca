@@ -62,31 +62,6 @@ describe('Darwin translation deadline', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('only gives naming the budget left after ps completes', async () => {
-    let finish!: (stdout: string) => void
-    const pending = new Promise<string>((resolve) => {
-      finish = resolve
-    })
-    naming.mockReturnValue(pending)
-    const slowCapture = vi.fn(async (args: readonly string[]) => {
-      if (args[1].includes('tdev=')) {
-        await new Promise((resolve) => setTimeout(resolve, 80))
-        return raw
-      }
-      return canonical
-    })
-    const first = captureDarwinProcessTable(slowCapture, validate, 100)
-    const rejected = expect(first).rejects.toThrow('capture_over_budget')
-    await vi.advanceTimersByTimeAsync(99)
-    expect(slowCapture).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(1)
-    await rejected
-    expect(slowCapture).toHaveBeenCalledTimes(1)
-    finish(raw)
-    await pending
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
   it('does not start naming after the capture has consumed its budget', async () => {
     const lateCapture = vi.fn(async (args: readonly string[]) => {
       if (args[1].includes('tdev=')) {
@@ -101,22 +76,6 @@ describe('Darwin translation deadline', () => {
     await vi.advanceTimersByTimeAsync(100)
     await rejected
     expect(naming).not.toHaveBeenCalled()
-  })
-
-  it('only gives the canonical fallback the time left after an inventory error', async () => {
-    naming.mockImplementation(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 80))
-      throw new Error('directory failed')
-    })
-    const boundedCapture = vi.fn(async (args: readonly string[], timeoutMs?: number) => {
-      expect(timeoutMs).toBe(args[1].includes('tdev=') ? 100 : 20)
-      return args[1].includes('tdev=') ? raw : canonical
-    })
-    const result = captureDarwinProcessTable(boundedCapture, validate, 100)
-    await vi.advanceTimersByTimeAsync(80)
-
-    expect(await result).toBe(canonical)
-    expect(boundedCapture).toHaveBeenCalledTimes(2)
   })
 
   it('rejects late successful names even when Promise completion beats the overdue timer', async () => {

@@ -108,7 +108,7 @@ export async function chat(project = '-work', cwd = '/work') {
     agent: 'claude',
     providerHandle: claudeProviderHandle(SID, 'a1')
   } satisfies AgentSessionJournalIdentity
-  const journal = await journals.open({
+  let journal = await journals.open({
     identity,
     stateDirectory: root,
     now: () => 1_000
@@ -123,8 +123,16 @@ export async function chat(project = '-work', cwd = '/work') {
   const warn: Mock<(...args: unknown[]) => void> = vi.fn()
   return {
     identity,
-    journal,
-    replay: () => journals.open({ identity, stateDirectory: root, now: () => 1_000 }),
+    get journal() {
+      return journal
+    },
+    replay: async () => {
+      await deferred.drained()
+      await journal.close()
+      journal = await journals.open({ identity, stateDirectory: root, now: () => 1_000 })
+      deferred.bind({ journal, fence: 1, publish: () => {} })
+      return journal
+    },
     warn,
     deferred,
     write: (rows: readonly Record<string, unknown>[]) =>

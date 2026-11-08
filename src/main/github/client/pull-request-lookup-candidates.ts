@@ -18,3 +18,21 @@ export async function resolvePullRequestLookupCandidates(
   return (await resolveGitHubApiRepositoryCandidates(repoPath, connectionId, localGitOptions))
     .candidates
 }
+
+/** A CI-line watch's own PR repository: its configured remote, or the repository itself when no
+ *  remote names it, never another remote probed by number. Absent, every candidate. */
+export function exactRepositoryCandidates(
+  candidates: GitHubApiRepository[],
+  exact: GitHubApiRepository | undefined
+): GitHubApiRepository[] {
+  if (!exact) {
+    return candidates
+  }
+  const matches = candidates.filter(
+    (candidate) =>
+      candidate.owner.toLowerCase() === exact.owner.toLowerCase() &&
+      candidate.repo.toLowerCase() === exact.repo.toLowerCase() &&
+      (candidate.host ?? 'github.com').toLowerCase() === (exact.host ?? 'github.com').toLowerCase()
+  )
+  return matches.length > 0 ? matches : [exact]
+}

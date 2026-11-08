@@ -14,7 +14,7 @@ import {
   resolveTerminalScrollOnUserInput
 } from '@/lib/pane-manager/pane-terminal-options'
 import { buildFontFamily } from '@/lib/monospace-font-family'
-import { pluginFontFamilyWhenLoaded } from '@/store/plugin-fonts'
+import { pluginFontFamilyWhenLoaded } from '@/store/plugins/appearance/plugin-fonts'
 import { buildWindowsPtyCompatibilityOptions } from '@/lib/pane-manager/windows-pty-compatibility'
 import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/terminal-keyboard-protocol'
 import { resolvePaneKeyboardProtocolAgent } from '../input/keyboard/terminal-keyboard-protocol-pane-agent'
@@ -25,7 +25,10 @@ import { handleTerminalWebLinkClick } from '../links/http/terminal-web-link-clic
 import { createTerminalPaneCreatedHandler } from './terminal-pane-created-handler'
 import { createTerminalPaneClosedHandler } from './terminal-pane-closed-handler'
 import { formatTerminalUrlTooltip } from '../links/terminal-url-tooltip'
-import { reportActiveRendererPtyForPane } from '../pty-transport/renderer-active-pty'
+import {
+  reportActiveRendererPtyForPane,
+  syncPaneOutputCadences
+} from '../pty-transport/renderer-active-pty'
 import { resolveTerminalLayoutActiveLeafId } from '../layout/ownership/terminal-layout-active-leaf'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
 import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal/images/terminal-inline-images-settings'
@@ -74,6 +77,7 @@ export function createTerminalPaneManagerOptions(
         context.deps.persistLayoutSnapshot()
       }
       reportActiveRendererPtyForPane(paneTransportsRef.current, pane.id)
+      syncPaneOutputCadences(panePtyBindingsRef.current)
       const focusedBinding = panePtyBindingsRef.current.get(pane.id) as
         | (IDisposable & { sampleForegroundAgentOnFocus?: () => void })
         | undefined

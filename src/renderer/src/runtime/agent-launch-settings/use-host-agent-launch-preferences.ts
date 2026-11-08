@@ -1,4 +1,4 @@
-import { useAppViewExternalStore } from '@/store/app-state-view'
+import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'

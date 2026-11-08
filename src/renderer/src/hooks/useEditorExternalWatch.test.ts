@@ -22,7 +22,7 @@ import {
   EXTERNAL_MUTATION_DEBOUNCE_MS
 } from './editor-external-watch-event-reconciliation'
 import { useAppStore } from '@/store'
-import { createTestStore } from '@/store/slices/store-test-helpers'
+import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import {
   getOpenFilesForExternalFileChange,
   notifyEditorExternalFileChange

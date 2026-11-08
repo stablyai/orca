@@ -17,7 +17,7 @@ import type { AppState } from '@/store/types'
 import type { RuntimeLayoutStreamStatus } from './runtime-layout-client'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { publicRuntimeEnvironment } from './rpc/testing/paired-runtime-environment-test-fixture'
-import { createTestStore } from '../store/slices/store-test-helpers'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
 import { installServerLayoutFrames } from './server-layout-frames'
 import { applyWebSessionTabsSnapshotWithContext } from './web-session-tabs-sync/apply-snapshot'
 

@@ -13,6 +13,8 @@ import { structuredAgentSessionHostKey } from './structured-agent-session-host-c
 const snapshots = new Map<string, HostModelCatalogSnapshot>()
 // Bumped when a host's answers are dropped, so a preload sent before then records nothing.
 const generations = new Map<string, number>()
+// Bumped per host and agent by each chat's answer, so an older preload never replaces it.
+const chatAnswers = new Map<string, number>()
 
 function snapshotKey(hostKey: string, agent: string): string {
   return `${hostKey}\u0000${agent}`
@@ -39,6 +41,9 @@ export function recordHostModelCatalogSnapshot(
 ): void {
   const key = snapshotKey(structuredAgentSessionHostKey(target), agent)
   const next = withHostModelCatalogAnswer(snapshots.get(key), worktree, catalog)
+  if (worktree !== null && next !== snapshots.get(key) && next?.byWorktree.has(worktree)) {
+    chatAnswers.set(key, (chatAnswers.get(key) ?? 0) + 1)
+  }
   if (next) {
     snapshots.set(key, next)
   } else {
@@ -78,23 +83,29 @@ export async function preloadHostModelCatalogSnapshots(
   const hostKey = structuredAgentSessionHostKey(target)
   const generation = generations.get(hostKey) ?? 0
   await Promise.all(
-    agents.map((agent) =>
-      callStructuredAgentSession<AgentSessionModelCatalogResult>(
+    agents.map((agent) => {
+      const key = snapshotKey(hostKey, agent)
+      const answersAtSend = chatAnswers.get(key) ?? 0
+      return callStructuredAgentSession<AgentSessionModelCatalogResult>(
         target,
         'agentSession.modelCatalog',
         { agent, ...options }
       )
         .then((catalog) => {
-          if ((generations.get(hostKey) ?? 0) === generation) {
+          if (
+            (generations.get(hostKey) ?? 0) === generation &&
+            (chatAnswers.get(key) ?? 0) === answersAtSend
+          ) {
             recordHostModelCatalogSnapshot(target, agent, null, catalog)
           }
         })
         .catch(() => undefined)
-    )
+    })
   )
 }
 
 export function resetHostModelCatalogSnapshotsForTests(): void {
   snapshots.clear()
   generations.clear()
+  chatAnswers.clear()
 }

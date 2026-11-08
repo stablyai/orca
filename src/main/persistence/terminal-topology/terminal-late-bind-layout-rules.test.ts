@@ -11,7 +11,7 @@ import {
   FIXTURE_GIT_WORKTREE_ID,
   openTopologyStore
 } from './terminal-topology-profile-fixture'
-import { WindowSession, withoutLeaf } from './terminal-topology-window-session-fixture'
+import { WindowSession } from './terminal-topology-window-session-fixture'
 import { checkWorkspaceLayoutRules } from '../../../shared/workspace-layout/workspace-layout-rules'
 
 // Retire this rollback coverage with switch-off code.
@@ -95,38 +95,5 @@ describe('a terminal spawn that lands after its pane changed', () => {
     expect(violations(store)).toEqual([])
     expect(store.getWorkspaceSession().tabsByWorktree[WT] ?? []).toEqual([])
     await store.freezeWritesAsync()
-  })
-
-  // Known switch-off gap: late spawn grafts a moved pane back; the renderer blocks in-flight drags.
-  it.fails('keeps a dragged-out pane in its new tab when its spawn lands late', async () => {
-    const { store, window } = await openWithSplit()
-    await expect(
-      store.moveTerminalLeafToNewTab({
-        worktreeId: WT,
-        sourceTabId: 'tab-a',
-        targetTabId: 'tab-b',
-        leafId: TEST_LEAF_2,
-        ptyId: 'pty-2'
-      })
-    ).resolves.toEqual({ status: 'moved', ptyId: 'pty-2' })
-    const source = window.session.terminalLayoutsByTabId['tab-a']!
-    window.setLayout('tab-a', withoutLeaf(source.root!, TEST_LEAF_2)!, { [TEST_LEAF_1]: 'pty-1' })
-    window.addTab(WT, 'tab-b', TEST_LEAF_2)
-    window.bind('tab-b', TEST_LEAF_2, 'pty-2')
-    store.setWorkspaceSession(window.snapshot())
-    expect(violations(store)).toEqual([])
-
-    // Commit the spawn that began against the old source tab.
-    await store.persistPtyBinding({
-      worktreeId: WT,
-      tabId: 'tab-a',
-      leafId: TEST_LEAF_2,
-      ptyId: 'pty-2b'
-    })
-    try {
-      expect(violations(store)).toEqual([])
-    } finally {
-      await store.freezeWritesAsync()
-    }
   })
 })

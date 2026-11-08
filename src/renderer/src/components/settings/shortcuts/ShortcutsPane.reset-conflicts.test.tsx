@@ -7,7 +7,9 @@ import { ShortcutsPane } from './ShortcutsPane'
 
 vi.hoisted(() => vi.stubGlobal('navigator', { userAgent: 'Macintosh' }))
 const fixtures = vi.hoisted(() => ({ empty: [] }))
-vi.mock('@/store/plugin-panels', () => ({ useEditablePluginCommands: () => fixtures.empty }))
+vi.mock('@/store/plugins/catalog/plugin-contribution-catalog', () => ({
+  useEditablePluginCommands: () => fixtures.empty
+}))
 vi.mock('./use-mac-captured-digit-chords', () => ({
   useMacCapturedDigitChords: () => fixtures.empty
 }))

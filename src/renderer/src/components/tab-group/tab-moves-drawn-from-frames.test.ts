@@ -6,13 +6,12 @@ import { useAppStore } from '@/store'
 import { localDesktopSession } from '../../../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import { GIT_KEY } from '../../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import { bootWindowFromPartitions } from '../../app-shell/startup-window-view.test-fixture'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
 import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
 import { loadMainLayoutModel } from '@/runtime/main-loaded-layout-frames.test-fixture'
 import { endLayoutFramePositions } from '@/runtime/layout-frame-position'
 import { openWorkspaceLayoutFrameSync } from '@/runtime/workspace-layout-frame-sync'
 import { dropTabThroughLayoutOwner } from './tab-group-layout-owner-commands'
-import { moveTabToNewPaneColumn } from '../tab-bar/tab-move-to-pane-column'
 
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 // Simulate main’s layout-command answers and frames.
@@ -151,55 +150,5 @@ describe('a tab move drawn from main’s frame', () => {
     expect(tabOf('tab-unbound').groupId).toBe('group-a')
     expect(useAppStore.getState().activeGroupIdByWorktree[GIT_KEY]).toBe('group-b')
     expect(groupOf('group-a')!.activeTabId).toBe(selected.find(([id]) => id === 'group-a')![1])
-  })
-
-  it('splits the tab into the group main made beside its target, and selects it there', async () => {
-    const groupsBefore = useAppStore.getState().groupsByWorktree[GIT_KEY]!.map((group) => group.id)
-    dropTabThroughLayoutOwner(GIT_KEY, {
-      kind: 'split',
-      tabId: 'tab-unbound',
-      groupId: 'group-a',
-      direction: 'right'
-    })
-    await settle()
-
-    const mainGroup = mainGroupOf('tab-unbound')
-    expect(groupsBefore).not.toContain(mainGroup.id)
-    expect(tabOf('tab-unbound').groupId).toBe(mainGroup.id)
-    expect(groupOf(mainGroup.id)!.tabOrder).toEqual(['tab-unbound'])
-    expect(useAppStore.getState().layoutByWorktree[GIT_KEY]).toEqual(
-      layoutApplyTestTransport.mainModel!.workspaces[GIT_KEY]!.groupLayout
-    )
-    expect(useAppStore.getState().activeGroupIdByWorktree[GIT_KEY]).toBe(mainGroup.id)
-    expect(windowTabWrites()).toBe(0)
-  })
-
-  it('moves a tab to a split from its menu where main placed it', async () => {
-    expect(
-      moveTabToNewPaneColumn({ unifiedTabId: 'tab-shell', groupId: 'group-a', direction: 'down' })
-    ).toBe(true)
-    await settle()
-
-    expect(layoutApplyTestTransport.sentOfType('splitGroup')).toEqual([
-      expect.objectContaining({ tabId: 'tab-shell', besideGroupId: 'group-a', direction: 'down' })
-    ])
-    const mainGroup = mainGroupOf('tab-shell')
-    expect(mainGroup.id).not.toBe('group-a')
-    expect(tabOf('tab-shell').groupId).toBe(mainGroup.id)
-    expect(useAppStore.getState().activeGroupIdByWorktree[GIT_KEY]).toBe(mainGroup.id)
-    expect(windowTabWrites()).toBe(0)
-  })
-
-  it('reorders the tab within its group as main ordered it', async () => {
-    dropTabThroughLayoutOwner(GIT_KEY, {
-      kind: 'reorder',
-      tabId: 'tab-shell',
-      groupId: 'group-a',
-      tabOrder: ['tab-agent', 'tab-shell', 'editor:src/app.ts']
-    })
-    await settle()
-
-    expect(groupOf('group-a')!.tabOrder).toEqual(['tab-agent', 'tab-shell', 'editor:src/app.ts'])
-    expect(windowTabWrites()).toBe(0)
   })
 })

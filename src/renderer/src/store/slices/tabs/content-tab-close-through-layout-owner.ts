@@ -9,7 +9,7 @@ import {
   isTabClosePending
 } from '@/runtime/layout-owner-pending-tabs'
 import type { AppState } from '../../types'
-import { pickNextActiveTab } from '../tab-group-state'
+import { pickNextActiveTab } from './tab-selection-history'
 import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 
 /** Tab kinds whose close main decides; a terminal's goes through its own close. */

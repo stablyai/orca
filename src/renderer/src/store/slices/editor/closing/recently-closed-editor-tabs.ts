@@ -5,8 +5,8 @@ import type { EditorSlice } from '../types/editor-slice'
 import {
   createRecentlyClosedTabPositionIndex,
   restoreRecentlyClosedTabPosition
-} from '../../recently-closed-tab-position'
-import { pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
+} from '../../tabs/recently-closed-tab-position'
+import { pushRecentlyClosedTabKind } from '../../tabs/recently-closed-tabs'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import {
   type ClosedEditorTabSnapshot,

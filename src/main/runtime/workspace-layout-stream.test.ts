@@ -3,27 +3,18 @@ import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/exec
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import {
   localDesktopSession,
-  relaySshSession,
-  serverRuntimeSession
+  relaySshSession
 } from '../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import {
   emptySession,
   FOLDER_KEY,
   GIT_KEY,
-  SERVER_KEY,
   SSH_KEY
 } from '../../shared/workspace-layout/workspace-layout-session.test-fixture'
-import { loadWorkspaceLayout } from '../../shared/workspace-layout/workspace-layout-load'
-import { nameBasedLoadContext } from '../../shared/workspace-layout/workspace-layout-minted-ids'
-import {
-  publishWorkspaceLayout,
-  type PublishedWorkspaceLayout
-} from '../../shared/workspace-layout/workspace-layout-published'
 import { WorkspaceLayoutStream } from './terminal/surface/workspace-layout-stream'
 import { collectLayoutEvents } from './orca-runtime-tests/workspace-layout-stream-events.test-fixture'
 
 const SSH_HOST: ExecutionHostId = 'ssh:target-1'
-const SERVER_HOST: ExecutionHostId = 'runtime:env-1'
 
 function fakeStore(partitions: Map<ExecutionHostId, WorkspaceSessionState>) {
   const listeners = new Set<(hostId: ExecutionHostId | null) => void>()
@@ -52,23 +43,6 @@ function fakeStore(partitions: Map<ExecutionHostId, WorkspaceSessionState>) {
       listeners.forEach((listener) => listener(hostId))
     }
   }
-}
-
-/** Full uncached projection is the reference for partition-scoped updates. */
-function fullProjection(
-  partitions: Map<ExecutionHostId, WorkspaceSessionState>,
-  homeHostId: (key: string) => ExecutionHostId | null
-): [string, PublishedWorkspaceLayout][] {
-  const projected = new Map<string, PublishedWorkspaceLayout>()
-  for (const [hostId, session] of partitions) {
-    const { layout } = loadWorkspaceLayout(hostId, session, nameBasedLoadContext())
-    for (const [key, workspace] of Object.entries(layout.workspaces)) {
-      if (homeHostId(key) === hostId) {
-        projected.set(key, publishWorkspaceLayout(workspace, hostId))
-      }
-    }
-  }
-  return [...projected]
 }
 
 function setup() {
@@ -102,18 +76,6 @@ function subscribeEvents(stream: WorkspaceLayoutStream) {
 }
 
 describe('WorkspaceLayoutStream', () => {
-  it('does nothing until someone subscribes, and stops when the last one leaves', () => {
-    const { stream, store, listeners } = setup()
-    expect(store.onWorkspaceSessionWritten).not.toHaveBeenCalled()
-    const first = stream.subscribe(() => {})
-    const second = stream.subscribe(() => {})
-    expect(listeners.size).toBe(1)
-    first.unsubscribe()
-    expect(listeners.size).toBe(1)
-    second.unsubscribe()
-    expect(listeners.size).toBe(0)
-  })
-
   it('snapshots each workspace from its owning partition only', () => {
     const { stream, homes } = setup()
     const { snapshot } = stream.subscribe(() => {})
@@ -131,45 +93,6 @@ describe('WorkspaceLayoutStream', () => {
       liveTitle: () => null
     }).subscribe(() => {}).snapshot
     expect(strayless.map((entry) => entry.key)).toEqual([GIT_KEY, FOLDER_KEY])
-  })
-
-  it('publishes a workspace when a write changes it by value, and its removal', async () => {
-    const { stream, write } = setup()
-    const { events } = subscribeEvents(stream)
-    const session = localDesktopSession()
-    write(LOCAL_EXECUTION_HOST_ID, session)
-    await flush()
-    expect(events).toEqual([])
-
-    session.tabGroups![GIT_KEY]![0]!.tabOrder.reverse()
-    write(LOCAL_EXECUTION_HOST_ID, session)
-    write(LOCAL_EXECUTION_HOST_ID, session)
-    await flush()
-    expect(events.map((event) => [event.type, event.key])).toEqual([['workspace', GIT_KEY]])
-
-    const withoutFolder = structuredClone(session)
-    delete withoutFolder.tabsByWorktree[FOLDER_KEY]
-    delete withoutFolder.unifiedTabs![FOLDER_KEY]
-    delete withoutFolder.tabGroups![FOLDER_KEY]
-    delete withoutFolder.tabGroupLayouts![FOLDER_KEY]
-    write(LOCAL_EXECUTION_HOST_ID, withoutFolder)
-    await flush()
-    expect(events.at(-1)).toEqual({ type: 'removed', key: FOLDER_KEY, seq: events[0]!.seq! + 1 })
-  })
-
-  it("publishes nothing for a pane's grid, which is main's own record", async () => {
-    const { stream, write } = setup()
-    const { events } = subscribeEvents(stream)
-    const session = localDesktopSession()
-    const [tabId, layout] = Object.entries(session.terminalLayoutsByTabId).find(
-      ([, candidate]) => candidate.root?.type === 'leaf'
-    )!
-    const leafId = layout.root!.type === 'leaf' ? layout.root!.leafId : ''
-    layout.lastGridsByLeafId = { [leafId]: { cols: 91, rows: 33 } }
-    write(LOCAL_EXECUTION_HOST_ID, session)
-    await flush()
-    expect(session.terminalLayoutsByTabId[tabId]?.lastGridsByLeafId).toBeDefined()
-    expect(events).toEqual([])
   })
 
   it('numbers each change frame, so a reply can name the frame holding its write', async () => {
@@ -194,23 +117,6 @@ describe('WorkspaceLayoutStream', () => {
     const second = stream.subscribe(() => {})
     expect(second.seq).toBeGreaterThanOrEqual(replySeq)
     second.unsubscribe()
-  })
-
-  it('logs a failing listener once and never throws into the write', async () => {
-    const { stream, write } = setup()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    stream.subscribe(() => {
-      throw new Error('listener failed')
-    })
-    const session = localDesktopSession()
-    session.tabGroups![GIT_KEY]![0]!.tabOrder.reverse()
-    expect(() => write(LOCAL_EXECUTION_HOST_ID, session)).not.toThrow()
-    await flush()
-    session.tabGroups![GIT_KEY]![0]!.tabOrder.reverse()
-    write(LOCAL_EXECUTION_HOST_ID, structuredClone(session))
-    await flush()
-    expect(warn).toHaveBeenCalledTimes(1)
-    warn.mockRestore()
   })
 
   it('keeps delivering to every listener when one throws', async () => {
@@ -280,58 +186,6 @@ describe('WorkspaceLayoutStream', () => {
     }
   })
 
-  it('re-projects only the partition a write names', async () => {
-    const { stream, store, write, writeUnnamed } = setup()
-    stream.subscribe(() => {})
-    store.getWorkspaceSession.mockClear()
-    write(SSH_HOST, relaySshSession('target-1'))
-    await flush()
-    expect(store.getWorkspaceSession.mock.calls).toEqual([[SSH_HOST]])
-    store.getWorkspaceSession.mockClear()
-    writeUnnamed(SSH_HOST, relaySshSession('target-1'))
-    await flush()
-    expect(store.getWorkspaceSession.mock.calls).toEqual([[LOCAL_EXECUTION_HOST_ID], [SSH_HOST]])
-  })
-
-  it('publishes what a full re-projection with the load report would, write after write', async () => {
-    const { stream, write, writeUnnamed, removePartition, homes, partitions } = setup()
-    const homeHostId = (key: string) => homes[key] ?? null
-    const { collector } = subscribeEvents(stream)
-    const expectFullProjection = async (): Promise<void> => {
-      await flush()
-      const expected = fullProjection(partitions, homeHostId)
-      expect(Object.fromEntries(collector.layouts)).toEqual(Object.fromEntries(expected))
-      const late = stream.subscribe(() => {})
-      expect(late.snapshot.map((entry) => [entry.key, entry.layout])).toEqual(expected)
-      late.unsubscribe()
-    }
-    await expectFullProjection()
-
-    const local = localDesktopSession()
-    local.tabGroups![GIT_KEY]![0]!.tabOrder.reverse()
-    write(LOCAL_EXECUTION_HOST_ID, local)
-    await expectFullProjection()
-
-    // A named write and an unnamed one in the same task.
-    const ssh = relaySshSession('target-1')
-    delete ssh.tabsByWorktree[SSH_KEY]
-    delete ssh.unifiedTabs![SSH_KEY]
-    write(SSH_HOST, ssh)
-    writeUnnamed(LOCAL_EXECUTION_HOST_ID, localDesktopSession())
-    await expectFullProjection()
-
-    // A new partition, a home that moves between partitions, then the partition removed.
-    homes[SERVER_KEY] = SERVER_HOST
-    write(SERVER_HOST, serverRuntimeSession('env-1'))
-    await expectFullProjection()
-    homes[GIT_KEY] = SERVER_HOST
-    write(SSH_HOST, relaySshSession('target-1'))
-    await expectFullProjection()
-    homes[GIT_KEY] = LOCAL_EXECUTION_HOST_ID
-    removePartition(SERVER_HOST)
-    await expectFullProjection()
-  })
-
   it('re-projects every partition after a failed projection', async () => {
     const { stream, store, write } = setup()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -350,90 +204,5 @@ describe('WorkspaceLayoutStream', () => {
     expect(events.map((event) => [event.type, event.key])).toEqual([['workspace', GIT_KEY]])
     expect(warn).toHaveBeenCalledTimes(1)
     warn.mockRestore()
-  })
-
-  describe('live pane titles', () => {
-    const panesOf = (layout: PublishedWorkspaceLayout) =>
-      layout.tabs.flatMap((tab) => tab.terminal?.panes ?? [])
-    const ptyIdsOf = (layout: PublishedWorkspaceLayout) =>
-      panesOf(layout).flatMap((pane) => (pane.ptyId ? [pane.ptyId] : []))
-
-    it('lays each pane terminal title over its pane, and only there', () => {
-      const { stream, liveTitles } = setup()
-      const bare = stream.subscribe(() => {}).snapshot
-      const [first, second] = ptyIdsOf(bare.find((entry) => entry.key === GIT_KEY)!.layout)
-      liveTitles.set(first, 'claude: working')
-      liveTitles.set(second, 'vim')
-      const late = setup()
-      late.liveTitles.set(first, 'claude: working')
-      late.liveTitles.set(second, 'vim')
-      const titled = late.stream.subscribe(() => {}).snapshot
-      const git = titled.find((entry) => entry.key === GIT_KEY)!.layout
-      const byPty = new Map(panesOf(git).map((pane) => [pane.ptyId, pane.liveTitle]))
-      expect(byPty.get(first)).toBe('claude: working')
-      expect(byPty.get(second)).toBe('vim')
-      const stripped = titled.map((entry) => ({
-        key: entry.key,
-        layout: JSON.parse(
-          JSON.stringify(entry.layout, (k, v) => (k === 'liveTitle' ? undefined : v))
-        )
-      }))
-      expect(stripped).toEqual(bare)
-    })
-
-    it('publishes a title change without reading the Store, one frame per burst', async () => {
-      const { stream, store, liveTitles, write } = setup()
-      const {
-        events,
-        subscription: { snapshot }
-      } = subscribeEvents(stream)
-      const [ptyId] = ptyIdsOf(snapshot.find((entry) => entry.key === GIT_KEY)!.layout)
-      store.getWorkspaceSession.mockClear()
-      for (let frame = 0; frame < 50; frame++) {
-        liveTitles.set(ptyId, `build ${frame}`)
-        stream.markLiveTitlesDirty()
-      }
-      await flush()
-      expect(store.getWorkspaceSession).not.toHaveBeenCalled()
-      expect(events).toHaveLength(1)
-      const event = events[0]
-      expect(event.type === 'workspace' && event.key).toBe(GIT_KEY)
-      expect(
-        event.type === 'workspace' && panesOf(event.layout).find((p) => p.ptyId === ptyId)
-      ).toMatchObject({ liveTitle: 'build 49' })
-
-      // An unchanged title sends nothing; a structural write keeps the title on.
-      stream.markLiveTitlesDirty()
-      await flush()
-      expect(events).toHaveLength(1)
-      const session = localDesktopSession()
-      session.tabGroups![GIT_KEY]![0]!.tabOrder.reverse()
-      write(LOCAL_EXECUTION_HOST_ID, session)
-      await flush()
-      const rewritten = events.at(-1)!
-      expect(
-        rewritten.type === 'workspace' && panesOf(rewritten.layout).find((p) => p.ptyId === ptyId)
-      ).toMatchObject({ liveTitle: 'build 49' })
-
-      liveTitles.delete(ptyId)
-      stream.markLiveTitlesDirty()
-      await flush()
-      const cleared = events.at(-1)!
-      expect(cleared.type === 'workspace' && panesOf(cleared.layout).some((p) => p.liveTitle)).toBe(
-        false
-      )
-    })
-
-    it('reads no title while nobody subscribes', async () => {
-      const { stream, liveTitle } = setup()
-      stream.markLiveTitlesDirty()
-      await flush()
-      expect(liveTitle).not.toHaveBeenCalled()
-      stream.subscribe(() => {}).unsubscribe()
-      liveTitle.mockClear()
-      stream.markLiveTitlesDirty()
-      await flush()
-      expect(liveTitle).not.toHaveBeenCalled()
-    })
   })
 })

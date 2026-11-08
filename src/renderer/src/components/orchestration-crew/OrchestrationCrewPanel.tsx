@@ -11,7 +11,7 @@ import type {
   OrchestrationCrewSnapshot
 } from '../../../../shared/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { useOrchestrationCrew } from '../native-chat/use-orchestration-crew'
+import { useOrchestrationCrew } from '../native-chat/worker-lifetime/use-orchestration-crew'
 import { translate } from '@/i18n/i18n'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'

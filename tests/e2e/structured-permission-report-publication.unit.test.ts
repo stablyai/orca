@@ -15,8 +15,8 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: transport.call,
   subscribeStructuredAgentSessionStatus: transport.subscribe
 }))
-import { useStructuredAgentSessionOptionStamp } from '../../src/renderer/src/components/native-chat/structured-agent-session-status-hooks'
-import { useStructuredAgentSessionOptions } from '../../src/renderer/src/components/native-chat/use-structured-agent-session-options'
+import { useStructuredAgentSessionOptionStamp } from '../../src/renderer/src/components/native-chat/session/status/structured-agent-session-status-hooks'
+import { useStructuredAgentSessionOptions } from '../../src/renderer/src/components/native-chat/session/options/structured/use-structured-agent-session-options'
 import { loadMobileStructuredOptions } from './__mocks__/mobile-structured-options'
 const useMobileStructuredAgentOptions = await loadMobileStructuredOptions()
 import type { RpcClient } from '../../mobile/src/transport/rpc-client'

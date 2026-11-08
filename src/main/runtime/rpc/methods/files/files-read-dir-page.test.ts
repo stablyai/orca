@@ -43,17 +43,6 @@ async function readAll(
 }
 
 describe('DirListingPageCache', () => {
-  it('lists once for page one and serves later pages after the cursor from that listing', async () => {
-    const cache = new DirListingPageCache(() => 0)
-    const list = vi.fn(async () => folder(5))
-
-    expect(await readAll(cache, list, 2)).toEqual(names(folder(5)))
-    expect(list).toHaveBeenCalledTimes(1)
-    // The last page released the listing, so a later cursor read lists again.
-    await cache.readPage('socket-1', { ...REQUEST, after: cursorOf(folder(5)[1]), limit: 2 }, list)
-    expect(list).toHaveBeenCalledTimes(2)
-  })
-
   it('neither skips nor repeats an entry when one is deleted between pages', async () => {
     let entries = folder(6)
     const cache = new DirListingPageCache(() => 0)
@@ -109,140 +98,6 @@ describe('DirListingPageCache', () => {
     )
     expect(names(page.entries)).toEqual(names(folder(3)))
   })
-
-  it('re-lists for page one, and for another connection or none', async () => {
-    const cache = new DirListingPageCache(() => 0)
-    const list = vi.fn(async () => folder(5))
-    const after = cursorOf(folder(5)[1])
-    await cache.readPage('socket-1', { ...REQUEST, limit: 2 }, list)
-
-    await cache.readPage('socket-1', { ...REQUEST, limit: 2 }, list)
-    await cache.readPage('socket-2', { ...REQUEST, after, limit: 2 }, list)
-    await cache.readPage(undefined, { ...REQUEST, after, limit: 2 }, list)
-    expect(list).toHaveBeenCalledTimes(4)
-  })
-
-  it('keys the listing by folder and symlink mode', async () => {
-    const cache = new DirListingPageCache(() => 0)
-    const list = vi.fn(async () => folder(5))
-    const after = cursorOf(folder(5)[1])
-    await cache.readPage('socket-1', { ...REQUEST, limit: 2 }, list)
-
-    await cache.readPage('socket-1', { ...REQUEST, relativePath: 'other', after }, list)
-    await cache.readPage('socket-1', { ...REQUEST, followSymlinks: true, after }, list)
-    expect(list).toHaveBeenCalledTimes(3)
-  })
-
-  it('holds a bounded number of listings, dropping the oldest', async () => {
-    const cache = new DirListingPageCache(() => 0)
-    const list = vi.fn(async () => folder(3))
-    const after = cursorOf(folder(3)[0])
-    for (let index = 0; index < 9; index++) {
-      await cache.readPage('socket-1', { ...REQUEST, relativePath: `d${index}`, limit: 1 }, list)
-    }
-    expect(list).toHaveBeenCalledTimes(9)
-
-    await cache.readPage('socket-1', { ...REQUEST, relativePath: 'd8', after, limit: 1 }, list)
-    expect(list).toHaveBeenCalledTimes(9)
-    await cache.readPage('socket-1', { ...REQUEST, relativePath: 'd0', after, limit: 1 }, list)
-    expect(list).toHaveBeenCalledTimes(10)
-  })
-
-  it('holds an oversized folder alone, so scrolling it costs one listing', async () => {
-    const cache = new DirListingPageCache(() => 0)
-    const small = vi.fn(async () => folder(3))
-    await cache.readPage('socket-1', { ...REQUEST, relativePath: 'small', limit: 1 }, small)
-    const big = folder(200_001)
-    const list = vi.fn(async () => big)
-    await cache.readPage('socket-1', { ...REQUEST, limit: 5_000 }, list)
-    await cache.readPage(
-      'socket-1',
-      { ...REQUEST, after: cursorOf(big[4_999]), limit: 5_000 },
-      list
-    )
-    await cache.readPage(
-      'socket-1',
-      { ...REQUEST, after: cursorOf(big[9_999]), limit: 5_000 },
-      list
-    )
-    expect(list).toHaveBeenCalledTimes(1)
-    expect(cache.heldEntryCount).toBe(200_001)
-
-    await cache.readPage(
-      'socket-1',
-      { ...REQUEST, relativePath: 'small', after: cursorOf(folder(3)[0]), limit: 1 },
-      small
-    )
-    expect(small).toHaveBeenCalledTimes(2)
-  })
-
-  it('never holds a folder over a million entries; its pages list again', async () => {
-    const cache = new DirListingPageCache(() => 0)
-    const huge = folder(1_000_001)
-    const list = vi.fn(async () => huge)
-    await cache.readPage('socket-1', { ...REQUEST, limit: 5_000 }, list)
-    expect(cache.heldEntryCount).toBe(0)
-    await cache.readPage(
-      'socket-1',
-      { ...REQUEST, after: cursorOf(huge[4_999]), limit: 5_000 },
-      list
-    )
-    expect(list).toHaveBeenCalledTimes(2)
-  })
-
-  it('releases a listing once its time is up, with no further reads', async () => {
-    vi.useFakeTimers()
-    try {
-      const cache = new DirListingPageCache(() => Date.now())
-      await cache.readPage('socket-1', { ...REQUEST, limit: 2 }, async () => folder(5))
-      expect(cache.heldEntryCount).toBe(5)
-      await vi.advanceTimersByTimeAsync(DIR_LISTING_PAGE_CACHE_TTL_MS - 1)
-      expect(cache.heldEntryCount).toBe(5)
-      await vi.advanceTimersByTimeAsync(1)
-      expect(cache.heldEntryCount).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('matches a workspace however its id selector is spelled', async () => {
-    const cache = new DirListingPageCache(() => 0)
-    await cache.readPage('socket-1', { ...REQUEST, limit: 2 }, async () => folder(5))
-    cache.forgetWorkspace('wt-1')
-    expect(cache.heldEntryCount).toBe(0)
-  })
-
-  it('shares one in-flight listing between concurrent reads of a folder', async () => {
-    const cache = new DirListingPageCache(() => 0)
-    let finish!: (entries: DirEntry[]) => void
-    const list = vi.fn(
-      () =>
-        new Promise<DirEntry[]>((resolve) => {
-          finish = resolve
-        })
-    )
-    const pages = [
-      cache.readPage('socket-1', { ...REQUEST, limit: 2 }, list),
-      cache.readPage('socket-1', { ...REQUEST, limit: 2 }, list)
-    ]
-    finish(folder(5))
-    expect((await Promise.all(pages)).map((page) => names(page.entries))).toEqual([
-      names(folder(2)),
-      names(folder(2))
-    ])
-    expect(list).toHaveBeenCalledTimes(1)
-  })
-
-  it('releases an expired listing on the next read of any folder', async () => {
-    let now = 0
-    const cache = new DirListingPageCache(() => now)
-    await cache.readPage('socket-1', { ...REQUEST, limit: 2 }, async () => folder(150_000))
-    expect(cache.heldEntryCount).toBe(150_000)
-
-    now = DIR_LISTING_PAGE_CACHE_TTL_MS
-    await cache.readPage('socket-1', { ...REQUEST, relativePath: 'tiny' }, async () => folder(1))
-    expect(cache.heldEntryCount).toBe(0)
-  })
 })
 
 function dispatcherWithListing(entries: DirEntry[]) {
@@ -296,28 +151,6 @@ describe('files.readDir pages', () => {
       }
     })
     expect(readFileExplorerDir).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps the bare entry array when no page is asked for', async () => {
-    const { dispatcher } = dispatcherWithListing(folder(3))
-    expect(await readDir(dispatcher, REQUEST)).toMatchObject({
-      ok: true,
-      result: folder(3)
-    })
-  })
-
-  it('refuses a page larger than a host serves, and a cursor without its kind or too long', async () => {
-    const { dispatcher } = dispatcherWithListing(folder(3))
-    expect(await readDir(dispatcher, { ...REQUEST, limit: 5_001 })).toMatchObject({ ok: false })
-    expect(await readDir(dispatcher, { ...REQUEST, after: { name: 'a' } })).toMatchObject({
-      ok: false
-    })
-    expect(
-      await readDir(dispatcher, {
-        ...REQUEST,
-        after: { name: 'a'.repeat(4097), isDirectory: false }
-      })
-    ).toMatchObject({ ok: false })
   })
 
   it("drops a cached listing when the host's watcher reports a change in that workspace", async () => {

@@ -1,7 +1,7 @@
 import { joinPath } from '@/lib/path'
 import type { ImportItemResult } from '../../../../../shared/filesystem-import-result-types'
 import { deconflictCopyName } from '../../../../../shared/import-copy-name'
-import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status-connection-generation'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import type { RuntimeFileOperationArgs } from '../runtime-file-client-types'
 import { captureRuntimeEnvironmentRequestRevision } from '../../rpc/environment-revisions/runtime-environment-revision'
 import { runtimePathExists } from '../metadata/runtime-file-metadata-client'

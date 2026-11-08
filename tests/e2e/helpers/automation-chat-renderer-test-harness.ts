@@ -12,11 +12,9 @@ import { RpcDispatcher } from '../../../src/main/runtime/rpc/dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from '../../../src/main/runtime/rpc/methods/structured-sessions/structured-agent-session'
 import { SESSION_TAB_METHODS } from '../../../src/main/runtime/rpc/methods/session-tabs/session-tabs'
 import { OrcaRuntimeService } from '../../../src/main/runtime/orca-runtime'
-import {
-  createTestStore,
-  makeWorktree,
-  TEST_REPO
-} from '../../../src/renderer/src/store/slices/store-test-helpers'
+import { createTestStore } from '../../../src/renderer/src/store/testing/app-store-test-fixture'
+import { makeWorktree } from '../../../src/renderer/src/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../../src/renderer/src/store/repos/repo.test-fixture'
 import type { SessionTabsStreamEvent } from '../../../src/renderer/src/runtime/web-session-tabs-sync/state'
 import { applyStructuredSessionTabSnapshots } from '../../../src/renderer/src/runtime/local-structured-session-tabs-sync/snapshot-apply'
 import { applyWebSessionTabsSnapshot } from '../../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'

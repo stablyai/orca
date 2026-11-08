@@ -11,7 +11,10 @@ import { parseHostAuthorityKey } from '../../../shared/host-authority'
 import type { AppState } from '@/store/types'
 import { getWorkItemRepo } from './work-item-repo-row'
 import { hostRouteForAuthority } from '@/runtime/rpc/targets/runtime-client-target'
-import { captureHostIdentityFence, type HostIdentityFence } from '@/store/host-catalog-fencing'
+import {
+  captureHostIdentityFence,
+  type HostIdentityFence
+} from '@/runtime/rpc/environment-revisions/host-identity-fence'
 
 export function githubTaskIdentity(item: Pick<GitHubWorkItem, 'url'>): string {
   const link = parseGitHubIssueOrPRLink(item.url)

@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import {
   browserExtensionHostWarning,
   browserExtensionPermissionWarning,
@@ -132,14 +133,15 @@ function featureLabel(feature: UnsupportedBrowserExtensionFeature): string {
 }
 
 /** One calm line naming what the extension asks for that Orca cannot do yet, or null. */
-export function describeUnsupportedBrowserExtensionFeatures(permissions: string[]): string | null {
+export function describeUnsupportedBrowserExtensionFeatures(
+  permissions: string[],
+  t: Translate = translate
+): string | null {
   const features = unsupportedBrowserExtensionFeatures(permissions)
   if (features.length === 0) {
     return null
   }
-  return translate(
-    'browserExtensions.unsupported.line',
-    'Not available in Orca yet: {{features}}.',
-    { features: features.map(featureLabel).join(', ') }
-  )
+  return t('browserExtensions.unsupported.line', 'Not available in Orca yet: {{features}}.', {
+    features: features.map(featureLabel).join(', ')
+  })
 }

@@ -27,8 +27,8 @@ import { startStructuredAgentLaunch } from '../../src/renderer/src/lib/agent-ses
 import { getStructuredAgentSessionLaunchSelection } from '../../src/renderer/src/lib/agent-session/launch/structured-agent-session-launch-options'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
-import { useStructuredAgentSessionOptions } from '@/components/native-chat/use-structured-agent-session-options'
-import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-native-chat-provisional-launch'
+import { useStructuredAgentSessionOptions } from '@/components/native-chat/session/options/structured/use-structured-agent-session-options'
+import { useNativeChatProvisionalLaunch } from '@/components/native-chat/host-access/use-native-chat-provisional-launch'
 import { structuredAgentSessionMessageSelection } from '../../src/shared/agent-session/options/structured-agent-session-option-view'
 import { structuredAgentSessionModelId } from '../../src/shared/agent-session/options/structured-agent-session-option-state'
 import { createGlobalSettingsFixture } from '../../src/shared/global-settings-test-fixture'
@@ -48,7 +48,7 @@ vi.mock('@/runtime/structured-agent-session-host-capability', async (original) =
   useStructuredAgentSessionHostCapability: () => false,
   useStructuredAgentSessionOwnPermissionState: () => 'supported'
 }))
-vi.mock('@/components/native-chat/StructuredAgentSessionStatusBridge', () => ({
+vi.mock('@/components/native-chat/session/status/structured-agent-session-status-hooks', () => ({
   useStructuredAgentSessionPermissionStatus: () => ({
     permissionReport: false,
     observation: 'live'

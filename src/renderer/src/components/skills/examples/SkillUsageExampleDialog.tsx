@@ -11,7 +11,7 @@ import {
   DialogTitle
 } from '@/components/ui/dialog'
 import type { SkillUsageExample } from '@/lib/skill-usage-example'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 function SkillUsageExamplePromptText(props: {
   prompt: string
@@ -46,22 +46,20 @@ export function SkillUsageExampleDialog(props: {
   open: boolean
   onOpenChange: (open: boolean) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const { example, slashCommand, icon: Icon, open, onOpenChange } = props
 
   const copyPrompt = async (prompt: string): Promise<void> => {
     try {
       await window.api.ui.writeClipboardText(prompt)
       toast.success(
-        translate(
-          'auto.components.settings.SkillUsageExampleDialog.copiedPrompt',
-          'Copied example prompt.'
-        )
+        t('auto.components.settings.SkillUsageExampleDialog.copiedPrompt', 'Copied example prompt.')
       )
     } catch (error) {
       toast.error(
         error instanceof Error
           ? error.message
-          : translate(
+          : t(
               'auto.components.settings.SkillUsageExampleDialog.copyFailed',
               'Failed to copy prompt.'
             )
@@ -100,7 +98,7 @@ export function SkillUsageExampleDialog(props: {
               variant="ghost"
               size="icon-xs"
               className="absolute top-2 right-2 shrink-0 opacity-70 transition-opacity group-hover:opacity-100"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.settings.SkillUsageExampleDialog.copyExampleAria',
                 'Copy {{value0}} example prompt',
                 { value0: example.title }
@@ -114,14 +112,11 @@ export function SkillUsageExampleDialog(props: {
 
         <DialogFooter className="gap-2 border-t border-border/60 bg-muted/10 px-6 py-4">
           <Button type="button" variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-            {translate('auto.components.settings.SkillUsageExampleDialog.done', 'Done')}
+            {t('auto.components.settings.SkillUsageExampleDialog.done', 'Done')}
           </Button>
           <Button type="button" size="sm" onClick={() => void copyPrompt(example.prompt)}>
             <Copy className="size-4" />
-            {translate(
-              'auto.components.settings.SkillUsageExampleDialog.copyPrompt',
-              'Copy prompt'
-            )}
+            {t('auto.components.settings.SkillUsageExampleDialog.copyPrompt', 'Copy prompt')}
           </Button>
         </DialogFooter>
       </DialogContent>

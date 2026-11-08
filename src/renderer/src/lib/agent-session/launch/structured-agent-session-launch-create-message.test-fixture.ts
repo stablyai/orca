@@ -14,17 +14,15 @@ import { useAppStore } from '../../../store/index'
 import { registerStructuredSelectionCatalogStore } from '../options/structured-agent-session-selection-controller'
 import { resetStructuredAgentLaunchRegistryForTests } from './structured-agent-session-launch-registry'
 import { resetStructuredAgentLaunchPersistenceForTests } from './structured-agent-session-launch-persistence'
-import { resetStructuredAgentSessionSendsForTests } from '../../../components/native-chat/structured-agent-session-message-sender'
-import '../../../components/native-chat/structured-agent-session-read-owner'
-import { resetStructuredAgentSessionReadOwnersForTests } from '../../../components/native-chat/structured-agent-session-read-owner-registry'
+import { resetStructuredAgentSessionSendsForTests } from '../../../components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import '../../../components/native-chat/session/structured/read/structured-agent-session-read-owner'
+import { resetStructuredAgentSessionReadOwnersForTests } from '../../../components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { resetHostModelCatalogSnapshotsForTests } from '../../../runtime/host-model-catalog-snapshots'
 import { startStructuredAgentLaunch } from './structured-agent-session-launch'
 import { newAgentLaunchRequestId } from './routing/agent-launch-request-id'
-import {
-  clearNativeChatDraftCacheForTests,
-  readNativeChatDraftCache
-} from '../../../components/native-chat/native-chat-draft-cache'
-import { structuredAgentSessionDraftScopeKey } from '../../../components/native-chat/native-chat-composer-draft-store'
+import { clearNativeChatComposerDraftsForTests as clearNativeChatDraftCacheForTests } from '../../../components/native-chat/drafts/native-chat-draft-reset'
+import { readNativeChatDraftCache } from '../../../components/native-chat/drafts/native-chat-draft-views'
+import { structuredAgentSessionDraftScopeKey } from '../../../components/native-chat/drafts/native-chat-draft-scope'
 
 type CreateMessageFixtureMocks = {
   rpc: Mock

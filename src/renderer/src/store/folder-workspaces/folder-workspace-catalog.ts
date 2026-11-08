@@ -12,8 +12,11 @@ import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/worksp
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import '../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../shared/folder-workspaces/folder-workspace-host-id'
-import { catalogOwnsHost, getProjectGroupHostId } from '../slices/project-group-owner-routing'
-import type { FolderWorkspaceUpdateTicket } from '../slices/folder-workspace-update-coordinator'
+import {
+  catalogOwnsHost,
+  getProjectGroupHostId
+} from '../project-groups/project-group-owner-routing'
+import type { FolderWorkspaceUpdateTicket } from './folder-workspace-update-coordinator'
 import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type {
@@ -25,8 +28,11 @@ import {
   mergeFolderWorkspaceUpdateResponse
 } from './folder-workspace-routing'
 import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client-target'
-import { adoptFromEndpoint } from '../adopt-from-endpoint'
-import { mergeByIdentity, unchangedMergeSource } from '../catalog-identity'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
+import {
+  mergeByIdentity,
+  unchangedMergeSource
+} from '../../lib/catalog-reconciliation/catalog-identity'
 
 export type FetchedFolderWorkspaceCatalog = {
   folderWorkspaces: FolderWorkspace[]

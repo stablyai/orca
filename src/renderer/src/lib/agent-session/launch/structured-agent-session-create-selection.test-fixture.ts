@@ -15,12 +15,12 @@ import {
   draft
 } from './structured-agent-session-launch-create-message.test-fixture'
 import { structuredAgentSessionCreateFingerprint } from '../../../../../shared/agent-session/lifecycle/structured-agent-session-mutation'
-import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner'
-import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
+import { getStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner'
+import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import { readStructuredAgentLaunchRecord } from './structured-agent-session-launch-persistence'
 import { getStructuredLaunchStateBySessionId } from './structured-agent-session-launch-registry'
 import { structuredSessionSelectionController } from '../options/structured-agent-session-selection-controller'
-import { setRuntimeEnvironmentConnectionGenerationForTests } from '@/store/slices/runtime-status-connection-generation'
+import { setRuntimeEnvironmentConnectionGenerationForTests } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 
 export function registerCreateSelectionTests(): void {

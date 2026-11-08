@@ -10,7 +10,7 @@ vi.mock('../../src/renderer/src/store/index', () => ({
   }
 }))
 
-import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '../../src/renderer/src/store/slices/runtime-status'
+import { clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests } from '../../src/renderer/src/store/slices/runtime-status/runtime-status-connection-generation'
 import {
   hasHostSessionMirrorHydrated,
   parkUntilHostSessionMirrorHydrates,

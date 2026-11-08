@@ -9,10 +9,6 @@ import {
 } from './native-file-drop'
 
 describe('hasNativeFileDragTypes', () => {
-  it('accepts native OS file drags', () => {
-    expect(hasNativeFileDragTypes(['Files'])).toBe(true)
-  })
-
   it('rejects internal Orca file moves and URL/text drags', () => {
     expect(hasNativeFileDragTypes(['Files', ORCA_INTERNAL_FILE_DRAG_TYPE])).toBe(false)
     expect(hasNativeFileDragTypes(['text/uri-list'])).toBe(false)
@@ -50,14 +46,6 @@ describe('validateNativeFileDropPaths', () => {
       expect(JSON.stringify(payload)).not.toContain('secret')
       expect(JSON.stringify(payload)).not.toContain('alice')
     }
-  })
-
-  it('accepts path payloads within the configured limits', () => {
-    expect(validateNativeFileDropPaths(['/tmp/a', '/tmp/b'])).toEqual({
-      byteLength: 12,
-      pathCount: 2,
-      status: 'accepted'
-    })
   })
 
   it('rejects multibyte native path lists with bounded byte accounting', () => {

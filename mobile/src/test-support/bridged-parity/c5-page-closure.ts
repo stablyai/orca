@@ -5,9 +5,12 @@ import type { PageClosurePins } from './page-closure'
 
 export const C5_PAGE_CLOSURE: PageClosurePins = {
   'aiVault.history': {
+    'aivault-history-scan-association': 'write-ordinal',
     'aivault-history-scan-fulfilled': 'write-ordinal',
+    'aivault-history-scan-refresh': 'write-ordinal',
+    'aivault-history-scan-revisit': 'write-ordinal',
     'aivault-history-scan-unsupported': 'write-ordinal',
-    'aivault-history-scan-worktrees-late': 'write-ordinal',
+    'aivault-history-scan-worktrees-late': 'identical',
     'matrix-aivault.history-aivault.listsessions-1': 'result-absent-settlement',
     'matrix-aivault.history-status.get-1': 'result-absent-settlement'
   },

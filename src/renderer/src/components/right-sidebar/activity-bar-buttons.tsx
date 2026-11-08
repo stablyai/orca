@@ -14,6 +14,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 export type ActivityBarItem = {
   id: ActiveRightSidebarTab
@@ -38,12 +39,16 @@ const STATUS_DOT_COLOR: Record<CheckStatus, string> = {
   cancelled: 'bg-muted-foreground'
 }
 
-function activityItemAriaLabel(item: ActivityBarItem, status?: CheckStatus | null): string {
+function activityItemAriaLabel(
+  item: ActivityBarItem,
+  status?: CheckStatus | null,
+  t: Translate = translate
+): string {
   const base = item.shortcut ? `${item.title} (${item.shortcut})` : item.title
   return status === 'failure'
-    ? `${base} — ${translate('auto.components.right.sidebar.activityBar.error', 'Error')}`
+    ? `${base} — ${t('auto.components.right.sidebar.activityBar.error', 'Error')}`
     : status === 'cancelled'
-      ? `${base} — ${translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}`
+      ? `${base} — ${t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}`
       : base
 }
 
@@ -58,6 +63,7 @@ export function TopActivityOverflowMenu({
   onSelect: (tab: ActiveRightSidebarTab) => void
   checksStatus?: CheckStatus | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const hiddenChecksStatus =
     checksStatus && checksStatus !== 'neutral' && items.some((item) => item.id === 'checks')
       ? checksStatus
@@ -65,7 +71,7 @@ export function TopActivityOverflowMenu({
   const hiddenItemStatus = items.some((item) => item.statusIndicator === 'failure')
     ? 'failure'
     : hiddenChecksStatus
-  const moreTabsLabel = translate(
+  const moreTabsLabel = t(
     'auto.components.right.sidebar.activity.bar.buttons.1fd284e931',
     'More sidebar tabs'
   )
@@ -81,9 +87,9 @@ export function TopActivityOverflowMenu({
           )}
           aria-label={
             hiddenItemStatus === 'failure'
-              ? `${moreTabsLabel} — ${translate('auto.components.right.sidebar.activityBar.error', 'Error')}`
+              ? `${moreTabsLabel} — ${t('auto.components.right.sidebar.activityBar.error', 'Error')}`
               : hiddenItemStatus === 'cancelled'
-                ? `${moreTabsLabel} — ${translate('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}`
+                ? `${moreTabsLabel} — ${t('auto.components.editor.CheckRunDetailsPanel.91a4c7e2b0', 'Cancelled')}`
                 : moreTabsLabel
           }
         >
@@ -109,7 +115,7 @@ export function TopActivityOverflowMenu({
               data-workspace-board-dismiss=""
               className={cn(active && 'bg-accent text-accent-foreground')}
               aria-current={active ? 'page' : undefined}
-              aria-label={activityItemAriaLabel(item, item.statusIndicator)}
+              aria-label={activityItemAriaLabel(item, item.statusIndicator, t)}
             >
               <Icon size={14} />
               <span>{item.title}</span>
@@ -141,6 +147,7 @@ export function ActivityBarButton({
   layout: 'top' | 'side'
   statusIndicator?: CheckStatus | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const Icon = item.icon
   const isTop = layout === 'top'
   const effectiveStatus = item.statusIndicator ?? statusIndicator
@@ -158,7 +165,7 @@ export function ActivityBarButton({
           )}
           onClick={onClick}
           data-workspace-board-dismiss=""
-          aria-label={activityItemAriaLabel(item, effectiveStatus)}
+          aria-label={activityItemAriaLabel(item, effectiveStatus, t)}
         >
           <Icon size={isTop ? 16 : 18} />
 

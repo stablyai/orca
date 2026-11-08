@@ -18,8 +18,8 @@ import {
   bootWindowFromPartitions,
   projectStartupWindowView
 } from '../app-shell/startup-window-view.test-fixture'
-import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
-import { createTestStore } from '../store/slices/store-test-helpers'
+import { createStoreSessionMockApi } from '../store/testing/app-store-session-api.test-fixture'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
 import { withLayoutOwnerTabProps } from '../components/tab-bar/tab-bar-layout-owner-props'
 import { useAppStore } from '@/store'
 import type { AppState } from '../store/types'

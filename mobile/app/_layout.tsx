@@ -1,7 +1,10 @@
 import { startAndroidForegroundPushPresentation } from '../src/notifications/android-foreground-push'
 import { registerPushDismissalTask } from '../src/notifications/push-background-dismissal'
 import { readNativeNotificationData } from '../src/notifications/native-notification-data'
-import { setNotificationViewingWorkspace } from '../src/notifications/notification-viewing-policy'
+import {
+  notificationViewingOfRoute,
+  setNotificationViewingWorkspace
+} from '../src/notifications/notification-viewing-policy'
 import { useCallback, useEffect } from 'react'
 import { View } from 'react-native'
 import { Stack, useGlobalSearchParams, usePathname } from 'expo-router'
@@ -72,9 +75,7 @@ export default function RootLayout() {
   }>()
   useEffect(() => {
     setNotificationViewingWorkspace(
-      pathname.includes('/session/') && typeof hostId === 'string' && typeof worktreeId === 'string'
-        ? { hostId, worktreeId, ...(typeof executionHost === 'string' ? { executionHost } : {}) }
-        : null
+      notificationViewingOfRoute(pathname, { hostId, worktreeId, executionHost })
     )
     return () => setNotificationViewingWorkspace(null)
   }, [pathname, hostId, worktreeId, executionHost])

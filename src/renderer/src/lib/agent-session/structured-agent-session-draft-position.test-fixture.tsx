@@ -4,8 +4,8 @@ import type { createRef } from 'react'
 import {
   NativeChatComposerField,
   type NativeChatComposerFieldProps
-} from '@/components/native-chat/NativeChatComposerField'
-import type { NativeChatComposerInput } from '@/components/native-chat/native-chat-composer-input'
+} from '@/components/native-chat/composer/editor/NativeChatComposerField'
+import type { NativeChatComposerInput } from '@/components/native-chat/composer/editor/native-chat-composer-input'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { afterEach, beforeEach, vi } from 'vitest'
@@ -17,17 +17,15 @@ import { resetStructuredAgentLaunchRegistryForTests } from './launch/structured-
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
-import {
-  clearNativeChatComposerDraftsForTests,
-  hydrateNativeChatComposerDrafts
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/drafts/native-chat-composer-draft-load'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from '@/components/native-chat/native-chat-composer-draft-storage'
-import { clearNativeChatPendingAttachmentsForTests } from '@/components/native-chat/native-chat-pending-attachment-cache'
-import { useNativeChatDraft } from '@/components/native-chat/use-native-chat-draft'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
+import { clearNativeChatPendingAttachmentsForTests } from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+import { useNativeChatDraft } from '@/components/native-chat/drafts/use-native-chat-draft'
 const rpcMock = vi.hoisted(() => ({
   call: vi.fn<(target: unknown, method: string, params: unknown) => Promise<unknown>>()
 }))

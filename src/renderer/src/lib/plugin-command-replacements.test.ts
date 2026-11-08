@@ -14,7 +14,7 @@ vi.mock('@/store', () => ({
     })
   }
 }))
-vi.mock('@/store/plugin-panels', () => ({
+vi.mock('@/store/plugins/catalog/plugin-contribution-catalog', () => ({
   usePluginPanelsStore: { getState: () => ({ plugins: state.plugins }) },
   collectActivePluginCommands: (
     plugins: { pluginKey: string; name: string; commands: object[] }[]

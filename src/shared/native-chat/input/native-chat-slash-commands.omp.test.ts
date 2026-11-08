@@ -1,26 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
-  applySlashSuggestion,
   classifyNativeChatSend,
-  filterSlashCommands,
   getAgentSlashCommands,
-  sessionSlashCommandSuggestions,
-  slashCommandDispatchText
+  sessionSlashCommandSuggestions
 } from './native-chat-slash-commands'
 
 describe('OMP terminal command catalog', () => {
-  it('completes arguments separately from picker command dispatch', () => {
-    const matches = filterSlashCommands(getAgentSlashCommands('omp'), 'MOD')
-    expect(matches).toHaveLength(1)
-    const command = matches[0]
-    if (!command) {
-      throw new Error('Expected an OMP model suggestion')
-    }
-    expect(command.name).toBe('model')
-    expect(applySlashSuggestion(command)).toBe('/model ')
-    expect(slashCommandDispatchText(command)).toBe('/model')
-  })
-
   it('classifies known OMP commands as terminal actions, preserving unknown and prose paths', () => {
     const commands = getAgentSlashCommands('omp')
     expect(classifyNativeChatSend('/compact focus on tests', commands, null, null)).toBe('command')

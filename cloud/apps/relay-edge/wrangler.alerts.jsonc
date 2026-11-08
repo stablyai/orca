@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Edge alerts (src/alerts.ts): separate from the edge so they keep running when it is broken.
+  // Secrets, set from stdin only: AE_READ_TOKEN, ALERT_WEBHOOK_URL. Local only; deployed
+  // environments live in the private deploy config.
+  "name": "orca-relay-edge-alerts-local",
+  "main": "src/alerts.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "vars": {
+    "ACCOUNT_ID": "local",
+    "DATASET": "orca_relay_edge_local",
+    "ENVIRONMENT": "local",
+    "MIN_VOLUME": "200"
+  }
+}

@@ -1,18 +1,17 @@
+import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { planQueuedPaneAgentLaunch } from '../../../../../../main/ipc/pty/pane-agent-launch.test-fixture'
 import {
   FLOATING_TERMINAL_WORKTREE_ID,
   getDefaultSettings
 } from '../../../../../../shared/constants'
-import { createTestStore, seedStore } from '../../../../store/slices/store-test-helpers'
-import {
-  makeWorktree,
-  makeFolderWorkspace
-} from '../../../../store/slices/worktrees-slice-test-fixtures'
+import { createTestStore, seedStore } from '../../../../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
+import { makeFolderWorkspace } from '../../../../store/folder-workspaces/folder-workspace.test-fixture'
 import { resolveQueuedInitialCwd } from '@/components/terminal-pane/mounting/queued-initial-cwd'
 import { settleAgentLaunchPaneStart } from '../pane/agent-launch-pane-start'
 import { sourceControlActionRecipeEntry } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
-import { createStoreCascadesMockApi } from '../../../../store/slices/store-cascades-test-harness'
+import { createStoreCascadesMockApi } from '../../../../store/testing/app-store-cascade-api.test-fixture'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
@@ -150,11 +149,13 @@ describe('launchAgentInNewTab main-window surface', () => {
     const before = store.getState()
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    const result = launchAgentInNewTab({
-      requestId: 'request-1',
-      agent: 'opencode',
-      worktreeId: FLOATING_TERMINAL_WORKTREE_ID
-    })
+    const result = nonRefusedAgentLaunch(
+      launchAgentInNewTab({
+        requestId: 'request-1',
+        agent: 'opencode',
+        worktreeId: FLOATING_TERMINAL_WORKTREE_ID
+      })
+    )
 
     expect(result?.surface.kind).toBe('local-terminal')
     const tabId = result?.surface.kind === 'local-terminal' ? result.surface.tabId : null

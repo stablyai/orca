@@ -8,7 +8,7 @@ import { NameGenerationFailedDialog, AutoRenameFailedDialog } from './AutoRename
 import { useAppStore } from '@/store'
 import { toast } from 'sonner'
 import type { AppState } from '@/store/types'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 

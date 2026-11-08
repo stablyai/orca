@@ -44,6 +44,7 @@ import { runGatedWslMoveDesktopRewritePass } from '../persistence/moving-wsl-pro
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { repairDuplicatePtyPanesOnStart } from '../runtime/moved-pane-owner-rekey'
 import { WslUsageReporter } from '../telemetry/wsl-usage-reporter'
+import { ALL_RPC_METHODS } from '../runtime/rpc/methods/rpc-method-registry'
 
 // Headless serve has no first window; timer fallback must still sweep trash.
 const WORKTREE_TRASH_SWEEP_FALLBACK_MS = 15_000
@@ -73,7 +74,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   runtime.setAgentBrowserBridge(state.agentBrowserBridge)
   // Reclaim browser daemons orphaned by prior crashes/SIGKILL.
   void state.agentBrowserBridge.sweepOrphanedSessions()
-  const browserClientAutomationDispatcher = new RpcDispatcher({ runtime })
+  const browserClientAutomationDispatcher = new RpcDispatcher({ runtime, methods: ALL_RPC_METHODS })
   configureBrowserClientPageAutomationRuntime({
     browserManager,
     getAgentBrowserBridge: () => state.agentBrowserBridge,
