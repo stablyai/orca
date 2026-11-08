@@ -75,9 +75,13 @@ export function cwdBucketScopePrefixes(
 ): Set<string> {
   const prefixes = new Set<string>()
   for (const scopePath of scopePaths) {
-    for (const candidate of scopePathCandidates(scopePath)) {
+    // Encoders add the NFC spelling; a cwd recorded in NFD names its bucket differently.
+    for (const candidate of scopePathCandidates(scopePath).flatMap((path) => [
+      path,
+      path.normalize('NFD')
+    ])) {
       for (const prefix of layout.encodeScopePrefixes(candidate)) {
-        prefixes.add(prefix.normalize('NFC').toLowerCase())
+        prefixes.add(prefix.toLowerCase())
       }
     }
   }
@@ -111,12 +115,11 @@ export async function listProjectDirs(
     recordRefusal(issues, rootDir, err, layout.agent)
     return []
   }
-  // Case- and NFC-folded: Windows cwds differ in case, macOS names can be NFD, and each bucket's cwd is still checked.
+  // Case-folded: Windows cwds differ in case, and each bucket's cwd is still checked afterwards.
   return entries
     .filter(
       (entry) =>
-        entry.isDirectory() &&
-        layout.isDirInScope(entry.name.normalize('NFC').toLowerCase(), scopeProjectPrefixes)
+        entry.isDirectory() && layout.isDirInScope(entry.name.toLowerCase(), scopeProjectPrefixes)
     )
     .map((entry) => join(rootDir, entry.name))
 }

@@ -149,7 +149,7 @@ describe('scanAiVaultSessions scopeOnly', () => {
     await expect(workspaceSessionIds(root, scopePaths, { scopeOnly: true })).resolves.toEqual(main)
   })
 
-  it('matches a CodeBuddy bucket whose name uses the other Unicode form', async () => {
+  it('matches buckets whose names use the other Unicode form', async () => {
     const root = await tempRoot()
     const cwd = '/repo/cafe\u0301'
     const dir = join(isolatedScanRoots(root).codebuddyProjectsDir, 'repo-cafe\u0301')
@@ -165,10 +165,18 @@ describe('scanAiVaultSessions scopeOnly', () => {
         content: [{ type: 'input_text', text: 'hi' }]
       })
     )
+    // Claude turns each non-alphanumeric code unit into a dash, so an NFD cwd names `-repo-cafe-`.
+    await writeClaudeSession({
+      claudeRoot: isolatedScanRoots(root).claudeProjectsDir,
+      dirName: '-repo-cafe-',
+      sessionId: 'claude-nfd',
+      cwd,
+      iso: '2026-06-02T00:00:00.000Z'
+    })
     const scopePaths = [cwd.normalize('NFC')]
 
     const main = await workspaceSessionIds(root, scopePaths, {})
-    expect(main).toEqual(['nfd'])
+    expect(main).toEqual(['claude-nfd', 'nfd'])
     await expect(workspaceSessionIds(root, scopePaths, { scopeOnly: true })).resolves.toEqual(main)
   })
 
