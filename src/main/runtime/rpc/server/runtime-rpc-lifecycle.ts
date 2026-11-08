@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITY } from '../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
@@ -63,7 +63,11 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       for (const dir of runtimeSocketDirs(this.userDataPath)) {
         if (
           dir === this.userDataPath ||
-          (existsSync(dir) && daemonSocketDirIsTrusted(join(dir, basename(transportMeta.endpoint))))
+          ((await stat(dir).then(
+            () => true,
+            () => false
+          )) &&
+            daemonSocketDirIsTrusted(join(dir, basename(transportMeta.endpoint))))
         ) {
           sweepOrphanedRuntimeSockets(dir, this.pid)
         }

@@ -1,5 +1,6 @@
 // Shared-home locks need explicit operator confirmation: local silence cannot prove a remote holder exited.
-import { existsSync, readdirSync, statSync } from 'node:fs'
+import { readdirSync, statSync } from 'node:fs'
+import { readdir } from 'node:fs/promises'
 import { createConnection } from 'node:net'
 import { hostname } from 'node:os'
 import { join } from 'node:path'
@@ -179,7 +180,7 @@ async function checkStaleLock(
   if (!(now - writtenMs >= ORCAD_STALE_LOCK_MIN_AGE_MS)) {
     return { refusal: `The lock is less than ${ORCAD_STALE_LOCK_MIN_AGE_MS / 60_000} minutes old.` }
   }
-  const endpoints = holderEndpoints(dataRoot, holder.pid)
+  const endpoints = await holderEndpoints(dataRoot, holder.pid)
   if (!endpoints) {
     return { refusal: 'The runtime record in the data root cannot be read.' }
   }
@@ -208,7 +209,7 @@ async function checkStaleLock(
 }
 
 /** Null leaves endpoints unverifiable when runtime metadata is unreadable. */
-function holderEndpoints(dataRoot: string, pid: number): string[] | null {
+async function holderEndpoints(dataRoot: string, pid: number): Promise<string[] | null> {
   const endpoints = new Set<string>()
   try {
     const metadata = readRuntimeMetadata(dataRoot)
@@ -218,12 +219,11 @@ function holderEndpoints(dataRoot: string, pid: number): string[] | null {
       }
     }
     for (const dir of runtimeSocketDirs(dataRoot)) {
-      // A long data root relocates the holder's socket; a missing relocated dir holds nothing.
-      for (const entry of dir === dataRoot || existsSync(dir) ? readdirSync(dir) : []) {
-        if (RUNTIME_SOCKET_NAME_REGEX.exec(entry)?.[1] === String(pid)) {
-          endpoints.add(join(dir, entry))
-        }
-      }
+      // A long data root relocates the holder's socket; it only listens in a dir this user can read.
+      const entries = dir === dataRoot ? readdirSync(dir) : await readdir(dir).catch(() => [])
+      entries
+        .filter((entry) => RUNTIME_SOCKET_NAME_REGEX.exec(entry)?.[1] === String(pid))
+        .forEach((entry) => endpoints.add(join(dir, entry)))
     }
   } catch {
     return null
