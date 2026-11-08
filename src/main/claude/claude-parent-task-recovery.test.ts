@@ -48,12 +48,13 @@ it('retains explicit ambient and skip-transcript exclusion when roster omits tho
         tasks: [{ task_id: 'excluded', task_type: 'local_bash', parent_task_id: 'owner' }]
       })
     )
-    expect
-      .soft(
-        run.records().filter((row) => row.kind === 'command'),
-        flag
-      )
-      .toEqual([])
+    run.send(
+      system('task_updated', {
+        task_id: 'excluded',
+        patch: { status: 'running', is_backgrounded: true, description: 'Excluded shell' }
+      })
+    )
+    expect.soft(run.records(), flag).toEqual([])
     expect
       .soft(
         [...run.journalItems.values()].filter(
@@ -180,6 +181,58 @@ it('uses the matching durable generation ownership when an earlier run receives 
   )
   translator.dispose()
   deferred.close()
+  const queued = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  const pending = createClaudeJournalTranslator({ sink: queued.sink, coalesceMs: 0 })
+  const feed = (subtype: string, fields: Record<string, unknown>) =>
+    pending.handle({
+      type: 'message',
+      sessionId: 'orca-session',
+      message: system(subtype, fields)
+    })
+  feed('task_started', {
+    task_id: 'queued',
+    task_type: 'local_bash',
+    tool_use_id: 'queued-old',
+    parent_task_id: 'owner-first',
+    is_backgrounded: true
+  })
+  feed('task_updated', { task_id: 'queued', patch: { status: 'killed' } })
+  feed('task_started', {
+    task_id: 'queued',
+    task_type: 'local_bash',
+    tool_use_id: 'queued-new',
+    parent_task_id: 'owner-second',
+    is_backgrounded: true
+  })
+  feed('task_updated', {
+    task_id: 'queued',
+    tool_use_id: 'queued-old',
+    patch: { status: 'completed' }
+  })
+  feed('task_progress', {
+    task_id: 'queued',
+    tool_use_id: 'queued-old',
+    description: 'Old operation'
+  })
+  queued.bind({ journal, fence: 1, publish: () => {} })
+  expect(await queued.drained()).toEqual({ ok: true })
+  const queuedRows = journal
+    .snapshot()
+    .items.filter(
+      (row) =>
+        row.body.kind === 'message' &&
+        row.body.blocks.some(
+          (block) => block.type === 'background-task' && block.taskId === 'queued'
+        )
+    )
+  expect(queuedRows).toHaveLength(2)
+  const current = queuedRows.find((row) => row.providerParentRef === 'queued-new')
+  expect(current).toMatchObject({ parentAgentId: 'owner-second' })
+  expect(current?.body.kind === 'message' ? current.body.blocks : []).toContainEqual(
+    expect.objectContaining({ parentToolUseId: 'queued-new', state: 'working' })
+  )
+  pending.dispose()
+  queued.close()
   expect(prior).toMatchObject({ parentAgentId: 'owner-first', providerParentRef: 'tool-first' })
 })
 
@@ -231,68 +284,126 @@ it('advances a journaled nested agent attempt rather than replacing it with the 
   })
 })
 
-it('does not carry an earlier owned shell parent into a distinct lead-owned invocation', async () => {
-  const run = await producer()
-  run.send(
-    system('task_started', {
-      task_id: 'owner',
-      task_type: 'local_agent',
-      tool_use_id: 'spawn-owner',
-      is_backgrounded: true
-    })
-  )
-  run.send(
-    system('task_started', {
-      task_id: 'reused',
-      task_type: 'local_bash',
-      tool_use_id: 'tool-first',
-      parent_task_id: 'owner',
-      is_backgrounded: true
-    })
-  )
-  run.send(
-    system('task_notification', { task_id: 'reused', tool_use_id: 'tool-first', status: 'stopped' })
-  )
-  run.send(toolUse('tool-root', 'Bash', { command: 'sleep 1', run_in_background: true }))
-  run.send(
-    system('task_started', {
-      task_id: 'reused',
-      task_type: 'local_bash',
-      tool_use_id: 'tool-root',
-      is_backgrounded: true
-    })
-  )
-  const newer = [...run.journalItems.values()].find(
-    (row) =>
-      row.body.kind === 'message' &&
-      row.body.blocks.some(
-        (block) => block.type === 'background-task' && block.parentToolUseId === 'tool-root'
-      )
-  )
-  expect.soft(newer).toBeDefined()
-  expect.soft(newer?.agentId).toBeUndefined()
-  const owner = run.records().find((row) => row.kind === 'agent')
-  const child = run.records().find((row) => row.kind === 'command')
-  expect(child?.parentChildWorkId).not.toBe(owner?.childWorkId)
-})
-
-it('keeps a monitor tool result out of the transcript when a later parent roster omits its classification', async () => {
-  const run = await producer()
-  run.send(toolUse('tool-monitor', 'Monitor', { command: 'watch' }))
-  run.send({
-    ...toolResult('tool-monitor', 'Started'),
-    tool_use_result: { taskId: 'monitor-task' }
-  })
-  run.send(
-    system('background_tasks_changed', {
-      tasks: [{ task_id: 'monitor-task', task_type: 'local_bash', parent_task_id: 'owner' }]
-    })
-  )
-  expect(
-    [...run.journalItems.values()].filter(
+it.each(['notification', 'killed', 'failed'])(
+  'keeps distinct shell invocations isolated after %s',
+  async (ending) => {
+    const run = await producer()
+    run.send(
+      system('task_started', {
+        task_id: 'owner',
+        task_type: 'local_agent',
+        tool_use_id: 'spawn-owner',
+        is_backgrounded: true
+      })
+    )
+    run.send(
+      system('task_started', {
+        task_id: 'reused',
+        task_type: 'local_bash',
+        tool_use_id: 'tool-first',
+        parent_task_id: 'owner',
+        is_backgrounded: true
+      })
+    )
+    run.send(
+      ending === 'notification'
+        ? system('task_notification', {
+            task_id: 'reused',
+            tool_use_id: 'tool-first',
+            status: 'stopped'
+          })
+        : system('task_updated', { task_id: 'reused', patch: { status: ending } })
+    )
+    run.send(toolUse('tool-root', 'Bash', { command: 'sleep 1', run_in_background: true }))
+    run.send(
+      system('task_started', {
+        task_id: 'reused',
+        task_type: 'local_bash',
+        tool_use_id: 'tool-root',
+        is_backgrounded: true
+      })
+    )
+    run.send(
+      system('task_updated', {
+        task_id: 'reused',
+        tool_use_id: 'tool-first',
+        patch: { status: 'completed' }
+      })
+    )
+    run.send(
+      system('task_progress', {
+        task_id: 'reused',
+        tool_use_id: 'tool-first',
+        description: 'Old operation'
+      })
+    )
+    const newer = [...run.journalItems.values()].find(
       (row) =>
         row.body.kind === 'message' &&
-        row.body.blocks.some((block) => block.type === 'background-task')
+        row.body.blocks.some(
+          (block) => block.type === 'background-task' && block.parentToolUseId === 'tool-root'
+        )
     )
-  ).toEqual([])
-})
+    expect.soft(newer).toBeDefined()
+    expect.soft(newer?.agentId).toBeUndefined()
+    const owner = run.records().find((row) => row.kind === 'agent')
+    const child = run.records().find((row) => row.kind === 'command')
+    expect(child?.parentChildWorkId).not.toBe(owner?.childWorkId)
+    expect(child).toMatchObject({ membership: 'live', stoppable: true })
+    expect(JSON.stringify(child)).not.toContain('Old operation')
+    expect(newer?.body.kind === 'message' ? newer.body.blocks : []).toContainEqual(
+      expect.objectContaining({ parentToolUseId: 'tool-root', state: 'working' })
+    )
+  }
+)
+
+it.each([false, true])(
+  'keeps Monitor invocation reports out of the transcript, reused ID: %s',
+  async (reused) => {
+    const run = await producer()
+    if (reused) {
+      run.send(toolUse('tool-old', 'Bash', { command: 'sleep 1', run_in_background: true }))
+      run.send(
+        system('task_started', {
+          task_id: 'monitor-task',
+          task_type: 'local_bash',
+          tool_use_id: 'tool-old',
+          is_backgrounded: true
+        })
+      )
+      run.send(
+        system('task_notification', {
+          task_id: 'monitor-task',
+          tool_use_id: 'tool-old',
+          status: 'completed'
+        })
+      )
+    }
+    run.send(toolUse('tool-monitor', 'Monitor', { command: 'watch' }))
+    run.send({
+      ...toolResult('tool-monitor', 'Started'),
+      tool_use_result: { taskId: 'monitor-task' }
+    })
+    run.send(
+      system('task_started', {
+        task_id: 'monitor-task',
+        task_type: 'local_bash',
+        tool_use_id: 'tool-monitor',
+        is_backgrounded: true
+      })
+    )
+    run.send(
+      system('background_tasks_changed', {
+        tasks: [{ task_id: 'monitor-task', task_type: 'local_bash', parent_task_id: 'owner' }]
+      })
+    )
+    expect(
+      [...run.journalItems.values()].filter(
+        (row) =>
+          row.body.kind === 'message' &&
+          row.body.blocks.some((block) => block.type === 'background-task')
+      )
+    ).toHaveLength(reused ? 1 : 0)
+    expect(run.records().some((row) => row.membership === 'live')).toBe(true)
+  }
+)

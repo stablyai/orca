@@ -70,6 +70,10 @@ export class ClaudeChildWorkDecoder {
     if (!id) {
       return
     }
+    const selected = this.taskInvocations.selection(message, id)
+    if (selected && (!selected.current || selected.invocation.excluded)) {
+      return
+    }
     switch (message.subtype) {
       case 'task_started':
         this.started(id, message)
@@ -81,9 +85,6 @@ export class ClaudeChildWorkDecoder {
         this.updated(id, record(message.patch), ownerOf)
         return
       case 'task_notification':
-        if (this.taskInvocations.selection(message, id)?.current === false) {
-          return
-        }
         this.end(
           id,
           message.status,
@@ -182,11 +183,8 @@ export class ClaudeChildWorkDecoder {
       return
     }
     // Progress descriptions describe the current activity, not the task.
-    this.upsert(
-      id,
-      { ...task, name: task.name ?? taskName(message) },
-      claudeTaskProgressFacts(message)
-    )
+    const name = task.name ?? taskName(message)
+    this.upsert(id, { ...task, name }, claudeTaskProgressFacts(message))
   }
 
   private updated(
@@ -298,6 +296,7 @@ export class ClaudeChildWorkDecoder {
     ownerOf?: ClaudeToolOwner
   ): void {
     const task = this.live.get(id)
+    this.taskInvocations.settle(id, status, reported.runId ?? task?.toolUseId)
     this.removeOwnerIndex(id)
     this.live.delete(id)
     const outcome = claudeChildWorkOutcome(status)

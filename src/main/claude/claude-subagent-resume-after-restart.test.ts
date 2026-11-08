@@ -133,7 +133,7 @@ const proseRow = (journal: AgentSessionJournal, text: string): AgentJournalRende
     )
 
 describe('a Claude subagent resumed after its provider restarted', () => {
-  it.each(['terminal-only', 'roster-first', 'unbound-roster-first'])(
+  it.each(['terminal-only', 'roster-first', 'unbound-roster-first', 'parent-omitting-roster'])(
     'retains one owned shell across close/reopen: %s',
     async (order) => {
       let journal = await openJournal()
@@ -175,7 +175,18 @@ describe('a Claude subagent resumed after its provider restarted', () => {
       if (!delayed) {
         expect(resumed.translator.childTaskParent?.('shell-child')).toBe('agent-parent')
       }
-      if (order !== 'terminal-only') {
+      if (order === 'parent-omitting-roster') {
+        resumed.translator.handle(
+          frame({
+            type: 'system',
+            subtype: 'background_tasks_changed',
+            tasks: [{ task_id: 'shell-child', task_type: 'local_bash' }]
+          })
+        )
+        await resumed.settle()
+        expect(journal.item(shell!.itemId)).toMatchObject({ parentAgentId: 'agent-parent' })
+        expect(blockOf(journal.item(shell!.itemId)?.body)?.state).toBe('working')
+      } else if (order !== 'terminal-only') {
         resumed.translator.handle(frame(PARENT_TASK_STOP[2]!.frame))
         resumed.translator.handle(frame(PARENT_TASK_STOP[3]!.frame))
       }

@@ -112,10 +112,10 @@ export class ClaudeBackgroundTaskRows {
   }
 
   /** Monitor results may precede announcements; their notifications belong to the tool call. */
-  observeMonitorToolResult(taskId: unknown): void {
+  observeMonitorToolResult(taskId: unknown, toolUseId?: string): void {
     const id = taskAliasId(taskId)
     if (id !== undefined) {
-      this.taskInvocations.excludeMonitor(id)
+      this.taskInvocations.excludeMonitor(id, toolUseId)
     }
   }
 
@@ -155,13 +155,12 @@ export class ClaudeBackgroundTaskRows {
     if (selected?.invocation.excluded || selected?.invocation.monitor) {
       return true
     }
-    if (message.subtype === 'task_notification' && selected?.current === false) {
-      const row = newClaudeBackgroundTaskRowFromNotification(
-        id,
-        message,
-        this.now(),
-        this.ledgers.generations.next(id)
-      )
+    if (selected?.current === false) {
+      if (message.subtype !== 'task_notification') {
+        return true
+      }
+      const generation = this.ledgers.generations.next(id)
+      const row = newClaudeBackgroundTaskRowFromNotification(id, message, this.now(), generation)
       row.invocation = selected.invocation
       this.writeRow(id, row)
       return true
@@ -271,6 +270,7 @@ export class ClaudeBackgroundTaskRows {
     if (this.ledgers.fallbackTaskIds.has(id)) {
       const change = claudeBackgroundTaskPatchChange(message)
       if (change.state && isSettledBackgroundTaskState(change.state)) {
+        this.taskInvocations.settleFrame(id, message)
         this.ledgers.rememberTerminal(this.rows, id, claudeBackgroundTaskToolUseId(message))
         this.overflowTerminalRows.observePatch(id, message, change)
         return true
@@ -289,6 +289,7 @@ export class ClaudeBackgroundTaskRows {
     }
     const change = claudeBackgroundTaskPatchChange(message)
     if (change.state && isSettledBackgroundTaskState(change.state)) {
+      this.taskInvocations.settleFrame(id, message)
       this.ledgers.rememberTerminal(this.rows, id, claudeBackgroundTaskToolUseId(message))
     }
     if (row) {

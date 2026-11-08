@@ -42,35 +42,9 @@ export class ClaudeTaskInvocations {
         continue
       }
       const run = taskAliasId(frame.tool_use_id) ?? taskAliasId(record(frame.patch)?.tool_use_id)
-      let task = this.tasks.get(id)
-      if (!task) {
-        const latest = this.saved?.background(id)
-        const current = this.recover(id, latest ? undefined : run)
-        task = { current, aliases: new Map() }
-        if (current.toolUseId) {
-          task.aliases.set(current.toolUseId, current)
-        }
-        this.tasks.set(id, task)
-      }
-      let invocation = task.aliases.get(run ?? '') ?? task.current
       const start = message.subtype === 'task_started'
-      const distinct =
-        run !== undefined && invocation.toolUseId !== undefined && invocation.toolUseId !== run
-      if (distinct) {
-        const descriptor = this.saved?.background(id, run)
-        if (descriptor?.toolUseId === run) {
-          invocation = this.recover(id, run)
-        } else if (start && (invocation.ended !== undefined || !invocation.observed)) {
-          invocation = this.recover(id, run)
-          task.current = invocation
-        } else {
-          selections.set(id, { invocation, current: false, acceptsStart: false })
-          continue
-        }
-      }
-      const current = this.tasks.get(id)!.current === invocation
-      const acceptsStart =
-        current && (invocation.ended === undefined || (start && invocation.ended === 'completed'))
+      const selection = this.select(id, run, start)
+      const { invocation, acceptsStart } = selection
       if ((!start && !roster) || acceptsStart) {
         invocation.observed = true
         invocation.toolUseId ??= run
@@ -88,7 +62,6 @@ export class ClaudeTaskInvocations {
       if (invocation.toolUseId) {
         this.tasks.get(id)!.aliases.set(invocation.toolUseId, invocation)
       }
-      const selection = { invocation, current, acceptsStart }
       selections.set(id, selection)
       if (roster) {
         this.observations.set(frame, new Map([[id, selection]]))
@@ -117,17 +90,62 @@ export class ClaudeTaskInvocations {
       : (this.saved?.background(id, run)?.linkage.parentAgentId ?? this.saved?.parent(id, run))
   }
 
-  excludeMonitor(id: string): void {
-    const task = this.tasks.get(id)
-    if (task) {
-      task.current.monitor = true
-    } else {
-      this.tasks.set(id, { current: { ...this.recover(id), monitor: true }, aliases: new Map() })
+  excludeMonitor(id: string, run?: string): void {
+    this.select(id, taskAliasId(run), true).invocation.monitor = true
+  }
+
+  settle(id: string, status: unknown, run?: string): void {
+    const invocation = this.get(id, run)
+    if (invocation) {
+      invocation.ended = String(status)
     }
+  }
+
+  settleFrame(id: string, message: Record<string, unknown>): void {
+    this.settle(
+      id,
+      record(message.patch)?.status ?? message.status,
+      taskAliasId(message.tool_use_id) ?? taskAliasId(record(message.patch)?.tool_use_id)
+    )
   }
 
   clear(): void {
     this.tasks.clear()
+  }
+
+  private select(id: string, run: string | undefined, start: boolean): Selection {
+    let task = this.tasks.get(id)
+    if (!task) {
+      const latest = this.saved?.background(id)
+      const current = this.recover(id, latest ? undefined : run)
+      task = { current, aliases: new Map() }
+      if (current.toolUseId) {
+        task.aliases.set(current.toolUseId, current)
+      }
+      this.tasks.set(id, task)
+    }
+    let invocation = task.current
+    if (run !== undefined && invocation.toolUseId !== undefined && invocation.toolUseId !== run) {
+      const saved = this.saved?.background(id, run)
+      invocation = task.aliases.get(run) ?? this.recover(id, run)
+      // A known historical alias cannot replace the current invocation; a pending tool result can.
+      if (
+        start &&
+        !invocation.observed &&
+        saved?.toolUseId !== run &&
+        (task.current.ended !== undefined || !task.current.observed)
+      ) {
+        task.current = invocation
+      }
+      task.aliases.set(run, invocation)
+    }
+    const current = task.current === invocation
+    return {
+      invocation,
+      current,
+      acceptsStart:
+        current && (invocation.ended === undefined || (start && invocation.ended === 'completed'))
+    }
   }
 
   private recover(id: string, run?: string): ClaudeTaskInvocation {

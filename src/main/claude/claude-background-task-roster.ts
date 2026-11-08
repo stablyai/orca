@@ -5,8 +5,7 @@ import {
   record,
   taskDescription,
   taskId,
-  taskName,
-  taskAliasId
+  taskName
 } from './claude-background-task-frames'
 import type {
   ClaudeBackgroundTaskChange,
@@ -23,13 +22,7 @@ export function observeClaudeBackgroundTaskRoster(
   for (const entry of tasks) {
     const task = record(entry)
     const id = task === null ? null : taskId(task)
-    if (
-      task &&
-      id &&
-      taskAliasId(task.parent_task_id) &&
-      task.ambient !== true &&
-      task.skip_transcript !== true
-    ) {
+    if (task && id && task.ambient !== true && task.skip_transcript !== true) {
       if (admitOwned?.(id, task) === false) {
         continue
       }
@@ -69,7 +62,7 @@ export function observeOwnedClaudeBackgroundTaskRoster(input: {
     const row = input.rows.get(id)
     if (row) {
       input.attribute(id, row)
-    } else {
+    } else if (selected.invocation.parentTaskId !== undefined) {
       input.admit(id, task)
     }
     return true
