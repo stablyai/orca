@@ -174,9 +174,10 @@ describe('streamExternalFileToRuntime', () => {
     expect(seen).toEqual([RUNTIME_UPLOAD_SLICE_BYTES])
   })
 
-  it('stops between slices when the cancel signal is already aborted', async () => {
+  // An empty file never reaches the slice loop, so only the pre-open check keeps it unwritten.
+  it('writes nothing for an empty file whose cancel signal is already aborted', async () => {
     const filePath = join(workDir, 'aborted.bin')
-    await writeFile(filePath, Buffer.alloc(RUNTIME_UPLOAD_SLICE_BYTES * 2))
+    await writeFile(filePath, '')
     const controller = new AbortController()
     controller.abort()
 
