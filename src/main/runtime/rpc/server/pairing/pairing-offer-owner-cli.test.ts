@@ -10,7 +10,11 @@ import { DeviceRegistry } from './device-registry'
 
 import { OrcaRuntimeService } from '../../../orca-runtime'
 
-import { createOwnerPairingOffer, type PairingOfferServer } from './pairing-offer-requests'
+import {
+  createOwnerPairingOffer,
+  requestMobilePairingOffer,
+  type PairingOfferServer
+} from './pairing-offer-requests'
 
 import { OrcaRuntimeRpcServer } from '../runtime-rpc'
 
@@ -76,5 +80,14 @@ describe('owner pairing offers', () => {
       await createOwnerPairingOffer(server, { scope: 'runtime', address: '100.64.1.20' })
     ).toMatchObject({ available: false, reason: 'network_exposure_failed' })
     expect(server.createPairingOffer).not.toHaveBeenCalled()
+  })
+
+  it('advertises the pinned interface when no address is given', async () => {
+    const server = fakeServer()
+    server.getNetworkExposureBindHost = () => '100.64.1.20'
+    await requestMobilePairingOffer(server, { connectionMode: 'local-only' })
+    expect(server.createMobilePairingOffer).toHaveBeenCalledWith(
+      expect.objectContaining({ address: '100.64.1.20' })
+    )
   })
 })
