@@ -6785,7 +6785,6 @@
       "src/renderer/src/lib/runtime-host-copy.test.ts": 317,
       "src/renderer/src/lib/script-textarea-rows.test.ts": 93,
       "src/renderer/src/lib/session-write-subscriber-acknowledgment.test.ts": 1823,
-      "src/renderer/src/lib/session-write-subscriber-allocation.test.ts": 427,
       "src/renderer/src/lib/session-write-subscriber.test.ts": 1882,
       "src/renderer/src/lib/shutdown-checkpoint-guard.test.ts": 209,
       "src/renderer/src/lib/sidebar-ended-creations.test.ts": 1889,
