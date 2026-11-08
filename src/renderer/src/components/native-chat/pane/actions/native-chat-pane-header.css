@@ -1,0 +1,55 @@
+.native-chat-pane-header.pane-title-bar[data-chromeless] {
+  height: auto;
+  align-items: flex-start;
+  padding: var(--spacing);
+}
+
+.native-chat-pane-header[data-chromeless] .native-chat-pane-actions {
+  opacity: 0;
+}
+
+.native-chat-pane-header[data-active-pane] .native-chat-pane-actions,
+.native-chat-pane-header:hover .native-chat-pane-actions,
+.native-chat-pane-header:focus-within .native-chat-pane-actions {
+  opacity: 1;
+}
+
+.native-chat-pane-header[data-chromeless] .native-chat-pane-actions .pane-title-split-trigger {
+  width: calc(var(--spacing) * 7);
+  min-width: calc(var(--spacing) * 7);
+  height: calc(var(--spacing) * 7);
+  color: var(--popover-foreground);
+  opacity: 1;
+}
+
+.native-chat-pane-header[data-chromeless]
+  .native-chat-pane-actions
+  .pane-title-split-trigger::before {
+  display: none;
+}
+
+.native-chat-pane-header[data-chromeless] .native-chat-pane-actions .pane-title-split-trigger svg {
+  width: calc(var(--spacing) * 4);
+  height: calc(var(--spacing) * 4);
+  stroke-width: 2;
+}
+
+.native-chat-pane-header[data-chromeless] .native-chat-pane-actions .pane-title-split-trigger:hover,
+.native-chat-pane-header[data-chromeless]
+  .native-chat-pane-actions
+  .pane-title-split-trigger:active,
+.native-chat-pane-header[data-chromeless]
+  .native-chat-pane-actions
+  .pane-title-split-trigger[data-state='delayed-open'],
+.native-chat-pane-header[data-chromeless]
+  .native-chat-pane-actions
+  .pane-title-split-trigger[data-state='instant-open'] {
+  color: var(--accent-foreground);
+  background: var(--accent);
+}
+
+.native-chat-pane-header[data-chromeless]
+  .native-chat-pane-actions
+  .pane-title-split-trigger:disabled {
+  opacity: 0.5;
+}
