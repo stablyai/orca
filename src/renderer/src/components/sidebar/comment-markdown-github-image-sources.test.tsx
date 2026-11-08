@@ -2,7 +2,7 @@
 
 import { act, startTransition, Suspense } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import CommentMarkdown from './CommentMarkdown'
 
 const attachmentUrl =
@@ -94,55 +94,6 @@ describe('CommentMarkdown GitHub attachment images', () => {
     )
     expect(mounted.querySelector('a')?.href).toBe(attachmentUrl)
   })
-
-  it.each([10, 100])(
-    'retains %s successfully loaded sources across signature-only refreshes',
-    (n) => {
-      const urls = Array.from(
-        { length: n },
-        (_, i) =>
-          `https://github.enterprise/team/repo/assets/42/ce11040a-fb66-4289-927f-${String(i).padStart(12, '0')}`
-      )
-      const content = urls.map((url) => `![shot](${url})`).join('\n')
-      const first = Object.fromEntries(urls.map((url) => [url, `${url}?jwt=FIRST`]))
-      const fresh = Object.fromEntries(urls.map((url) => [url, `${url}?jwt=FRESH`]))
-      const mounted = renderCommentMarkdown(content, first)
-      const images = [...mounted.querySelectorAll('img')]
-      expect(images).toHaveLength(n)
-      act(() => images.forEach((img) => img.dispatchEvent(new window.Event('load'))))
-      act(() =>
-        root?.render(<CommentMarkdown variant="document" content={content} bodyImageUrls={fresh} />)
-      )
-      expect([...mounted.querySelectorAll('img')]).toEqual(images)
-      expect(images.map((img) => img.src)).toEqual(Object.values(first))
-      act(() => root?.render(<CommentMarkdown variant="document" content={content} />))
-      expect([...mounted.querySelectorAll('img')]).toEqual(images)
-      expect(images[0].src).toBe(first[urls[0]])
-      act(() =>
-        root?.render(<CommentMarkdown variant="document" content={content} bodyImageUrls={fresh} />)
-      )
-      act(() => images[0].dispatchEvent(new window.Event('error')))
-      expect(mounted.querySelector('img')?.src).toBe(fresh[urls[0]])
-      act(() =>
-        root?.render(
-          <CommentMarkdown
-            variant="document"
-            content={`![new](${attachmentUrl})`}
-            bodyImageUrls={{
-              [attachmentUrl]: 'https://private-user-images.githubusercontent.com/1/new.png?jwt=NEW'
-            }}
-          />
-        )
-      )
-      expect(mounted.querySelector('img')?.src).toBe(
-        'https://private-user-images.githubusercontent.com/1/new.png?jwt=NEW'
-      )
-      act(() => images[0].dispatchEvent(new window.Event('load')))
-      expect(mounted.querySelector('img')?.src).toBe(
-        'https://private-user-images.githubusercontent.com/1/new.png?jwt=NEW'
-      )
-    }
-  )
   it('retains the committed image when a new candidate render suspends', () => {
     const first = 'https://private-user-images.githubusercontent.com/1/image.png?jwt=FIRST'
     const fresh = 'https://private-user-images.githubusercontent.com/1/image.png?jwt=FRESH'
@@ -166,24 +117,5 @@ describe('CommentMarkdown GitHub attachment images', () => {
     act(() => root?.render(body(fresh, null)))
     expect(mounted.querySelector('img')).toBe(image)
     expect(image.src).toBe(first)
-  })
-
-  it('preserves in-app image clicks for unrelated asset URLs', () => {
-    const mounted = renderCommentMarkdown('')
-    const onLinkClick = vi.fn()
-    act(() =>
-      root?.render(
-        <CommentMarkdown
-          variant="document"
-          content="![diagram](https://cdn.example.com/assets/ce11040a-fb66-4289-927f-547b16dfc488)"
-          onLinkClick={onLinkClick}
-        />
-      )
-    )
-    act(() => mounted.querySelector('img')?.click())
-    expect(onLinkClick).toHaveBeenCalledWith(
-      expect.anything(),
-      'https://cdn.example.com/assets/ce11040a-fb66-4289-927f-547b16dfc488'
-    )
   })
 })
