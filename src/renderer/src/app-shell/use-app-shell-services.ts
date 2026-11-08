@@ -21,6 +21,7 @@ import { useTerminalViewerColorPublication } from './use-terminal-viewer-color-p
 import { useBrowserIdentityMigrationNotice } from '../components/browser-pane/browser-user-agent-migration-notice'
 import { useBrowserClientHostedDownloadNotices } from '../components/browser-pane/browser-client-hosted-download-notices'
 import { useCodexTerminalServerIsolationNotice } from '../components/terminal-pane/provider-notices/codex-server-isolation/codex-terminal-server-isolation-notice'
+import { useClaudeThemeSyncOffer } from '../components/terminal-pane/provider-notices/claude-theme-sync/claude-theme-sync-offer'
 import { useVisibleHostedReviewRefresh } from './use-visible-hosted-review-refresh'
 import { useProfileStateSaveDelayNotice } from './use-profile-state-save-delay-notice'
 
@@ -53,4 +54,5 @@ export function useAppShellServices(): void {
   useBrowserIdentityMigrationNotice()
   useBrowserClientHostedDownloadNotices()
   useCodexTerminalServerIsolationNotice()
+  useClaudeThemeSyncOffer()
 }

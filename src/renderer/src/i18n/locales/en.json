@@ -21208,6 +21208,11 @@
           "scrollback": "scrollback",
           "snap": "snap",
           "position": "position"
+        },
+        "claudeCodeThemeSync": {
+          "title": "Match Claude Code to Terminal Theme",
+          "description": "Claude Code on this computer uses your terminal colors and follows theme changes live, including outside Orca. Turning this off restores your previous Claude Code theme. Picking a theme in Claude Code stops the sync.",
+          "claude": "claude"
         }
       },
       "nativeChat": {
@@ -22299,6 +22304,16 @@
       "title": "Terminal text on Windows is now lighter",
       "okay": "Okay",
       "lighterText": "Lighter terminal text"
+    },
+    "claudeThemeSyncOffer": {
+      "title": "Match Claude Code to your Orca theme?",
+      "description": "Claude Code on this computer would use your terminal colors and follow theme changes, including outside Orca. You can change this in Settings.",
+      "accept": "Match Theme",
+      "accepted": "Claude Code theme sync is on",
+      "acceptedDescription": "New Claude Code sessions on this computer use your Orca theme.",
+      "decline": "No Thanks",
+      "failed": "Could not turn on Claude Code theme sync",
+      "failedDescription": "Turn it on in Settings."
     }
   },
   "fileExplorer": {
