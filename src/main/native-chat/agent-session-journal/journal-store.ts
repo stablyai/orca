@@ -298,9 +298,8 @@ export class AgentSessionJournal {
     { fence }: contracts.JournalTombstoneInput,
     receipt?: JournalOperationReceipt
   ) {
-    const itemId = agentJournalItemKey(identity)
     return this.rowWriter.append(
-      journalTombstoneRowBuilder(() => this.state, itemId, fence),
+      journalTombstoneRowBuilder(() => this.state, agentJournalItemKey(identity), fence),
       receipt
     )
   }
@@ -365,8 +364,9 @@ export class AgentSessionJournal {
     return this.submissionWriter.append(...args)
   }
 
-  resolveDispatch: typeof this.submissionWriter.resolveDispatch = (...args) =>
-    this.submissionWriter.resolveDispatch(...args)
+  resolveDispatch(...args: Parameters<typeof this.submissionWriter.resolveDispatch>) {
+    return this.submissionWriter.resolveDispatch(...args)
+  }
 
   acceptLate: typeof this.submissionWriter.acceptLate = (i) => this.submissionWriter.acceptLate(i)
 

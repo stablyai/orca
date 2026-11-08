@@ -273,7 +273,7 @@ describe('a Grok send whose acceptance could not be written', () => {
   it('is Working while Grok holds it, and stops once Grok lets it go', async () => {
     const { rig, host } = await openAttachedHostRig()
     const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
-    vi.spyOn(journal, 'acceptLate').mockRejectedValue(new Error('disk full'))
+    vi.spyOn(journal, 'settleLateDispatch').mockRejectedValue(new Error('disk full'))
     const sent = await send(host, 'hello')
     const prompt = await rig.frame('session/prompt')
     // The first provider frame supplies prompt identity and proves acceptance.

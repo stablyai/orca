@@ -117,7 +117,8 @@ export class StructuredAgentSessionTurnCompletionFeed {
   ): void {
     const session = this.deps.sessions.get(sessionId)
     if (session) {
-      this.observeState(sessionId, session, projection, projection.state, options)
+      const { epoch, sequence } = projection
+      this.observeState(sessionId, session, { epoch, sequence }, projection.state, options)
     }
   }
 
