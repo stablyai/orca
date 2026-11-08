@@ -1,4 +1,4 @@
-import { agentHookServer } from '../../../agent-hooks/server'
+import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 import {
   isResumableTuiAgent,
   normalizeAgentProviderSession

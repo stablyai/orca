@@ -4,9 +4,11 @@ import type { AgentLaunchSetupPanelProps } from './AgentLaunchSetupButton'
 import {
   agentLaunchSetupOptionRows,
   agentLaunchSetupRowGroups,
-  agentLaunchSetupCatalogState as catalogOf
+  agentLaunchSetupCatalogState as catalogOf,
+  agentLaunchSetupModelRows
 } from './agent-launch-setup-option-rows'
 import { useRef, useState } from 'react'
+import { useSetupModelHighlight } from './use-setup-model-highlight'
 import { Check, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import {
@@ -53,6 +55,7 @@ export function AgentLaunchSetupPanel({
   getDraft,
   mode = 'launch',
   disabled,
+  autoFocus = true,
   terminalBlocked,
   onDraftChange,
   onUse
@@ -88,6 +91,15 @@ export function AgentLaunchSetupPanel({
   const { hasModels, catalogPending, catalogMessage } = catalogOf(entry, models, currentModel, mode)
   const modelInArguments = textActionArgumentsOwnModel(entry, draft)
   const modelDisabled = disabled || defaultsPending || catalogPending
+  const modelRows = agentLaunchSetupModelRows(
+    models,
+    currentModel,
+    modelQuery,
+    legacy,
+    modelInArguments
+  )
+  const modelList = useRef<HTMLDivElement>(null)
+  const highlight = useSetupModelHighlight(modelList, modelRows.start, modelQuery)
   const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
   const optionRows = agentLaunchSetupOptionRows({
     options,
@@ -123,10 +135,7 @@ export function AgentLaunchSetupPanel({
     ) : null
   const handleUse = (surface: AgentPickerSurface) => {
     const current = getDraft()
-    if (current) {
-      return onUse({ ...acceptAgentPickerArguments(entry, current), surface })
-    }
-    return false
+    return current ? onUse({ ...acceptAgentPickerArguments(entry, current), surface }) : false
   }
   const use = (surface: AgentPickerSurface) =>
     mode === 'select' ? handleUse(surface) : footer.current?.launch(surface)
@@ -166,6 +175,7 @@ export function AgentLaunchSetupPanel({
         }
       }}
       onKeyDown={(event) => {
+        highlight.endKey()
         event.stopPropagation()
         if (
           !disabled &&
@@ -181,6 +191,8 @@ export function AgentLaunchSetupPanel({
       <Command
         surface="inline"
         density="model"
+        ref={modelList}
+        {...highlight.command}
         onKeyDownCapture={(event) => {
           if (
             !disabled &&
@@ -196,13 +208,14 @@ export function AgentLaunchSetupPanel({
           }
         }}
         onKeyDown={(event) => {
+          highlight.onKeyDown(event)
           if (event.key === 'Enter') {
             event.stopPropagation()
           }
         }}
       >
         <CommandInput
-          autoFocus
+          autoFocus={autoFocus}
           disabled={modelDisabled}
           aria-busy={catalogPending}
           value={modelQuery}
@@ -240,29 +253,28 @@ export function AgentLaunchSetupPanel({
                 {t('agentPicker.legacyModels', 'Legacy models')}
               </CommandItem>
             ) : null}
-            {models
-              .filter(
-                (model) =>
-                  !model.hidden &&
-                  (model.id === currentModel || modelQuery || Boolean(model.isLegacy) === legacy)
-              )
-              .map((model) => (
+            {modelRows.rows.map((model) => {
+              const current = model.unlisted || (currentModel === model.id && !modelInArguments)
+              return (
                 <CommandItem
                   key={model.id}
                   value={model.id}
                   keywords={[model.label]}
                   disabled={modelDisabled}
-                  data-current={currentModel === model.id && !modelInArguments}
-                  onSelect={() => editDraft({ kind: 'choice', patch: { model: model.id } })}
+                  data-current={current}
+                  onSelect={() => {
+                    if (!model.unlisted) {
+                      editDraft({ kind: 'choice', patch: { model: model.id } })
+                    }
+                  }}
                 >
                   {model.label}
                   <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">
-                    {currentModel === model.id && !modelInArguments ? (
-                      <Check className="size-3.5 text-muted-foreground" />
-                    ) : null}
+                    {current ? <Check className="size-3.5 text-muted-foreground" /> : null}
                   </span>
                 </CommandItem>
-              ))}
+              )
+            })}
             {!legacy && !modelQuery && legacyCount > 0 ? (
               <CommandItem value="__legacy__" disabled={disabled} onSelect={() => setLegacy(true)}>
                 <span className="flex min-w-0 flex-col">
@@ -274,17 +286,6 @@ export function AgentLaunchSetupPanel({
                   </span>
                 </span>
                 <ChevronRight className="ml-auto size-3.5 text-muted-foreground" />
-              </CommandItem>
-            ) : null}
-            {currentModel && !models.some((model) => model.id === currentModel) ? (
-              <CommandItem
-                value={currentModel}
-                disabled={modelDisabled}
-                onSelect={() => {}}
-                data-current="true"
-              >
-                {currentModel}
-                <Check className="ml-auto size-3.5 text-muted-foreground" />
               </CommandItem>
             ) : null}
           </CommandGroup>

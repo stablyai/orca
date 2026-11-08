@@ -1,7 +1,7 @@
 /** Parking removes pane byte parsers; run pane-less watchers until reveal, exit or teardown. */
 import { isTerminalLeafId } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { useAppStore } from '@/store/index'
-import { isRemoteExecutionHostPtyId } from '../../../../../../shared/remote-execution-host-pty-id'
+import { isRemoteExecutionHostPtyId } from '../../../../../../shared/execution-host/remote-execution-host-pty-id'
 import { discardPreHandlerPtyState } from '../../pty-transport/delivery/pty-pre-handler-buffer'
 import { terminalProviderAllowsParking } from '../../../terminal/terminal-provider-snapshot-capability'
 import { terminalProviderSessionIsGone } from '../../../terminal/terminal-provider-gone-sessions'

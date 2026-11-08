@@ -1,10 +1,10 @@
-import { posixCurlCommand } from '../agent-hooks/hook-post-command'
-import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installer-utils'
+import { posixCurlCommand } from '../agent-hooks/installation/scripts/hook-post-command'
+import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines
-} from '../agent-hooks/hook-stdin-contract'
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
 
 export type CommandCodeManagedScriptTarget = 'local' | 'posix'
 

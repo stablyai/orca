@@ -14,7 +14,7 @@ import {
 } from './tail/terminal-tail-restore-seed'
 
 import { hookLeadTurnState } from '../wait/tui-idle-hook-lane'
-import { agentHookServer } from '../../../agent-hooks/server'
+import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
 
 export abstract class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged {
   protected abstract serializePreferredRestoredTerminalBuffer(

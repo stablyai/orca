@@ -1,10 +1,10 @@
 import { toast } from 'sonner'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type {
-  AutomationRun,
   ExternalAutomationAction,
   ExternalAutomationJob,
   ExternalAutomationManager
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/external/external-automation'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {

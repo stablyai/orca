@@ -2,12 +2,12 @@ import type { SetupTrustMismatch } from '../../../../shared/worktree/create-type
 import type { RuntimeEnvironmentSshBucket } from '../../store/slices/ssh/runtime-environment-ssh'
 import React, { useRef } from 'react'
 import { cn } from '@/lib/utils'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type {
-  AutomationRun,
   ExternalAutomationAction,
   ExternalAutomationJob,
   ExternalAutomationManager
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/external/external-automation'
 
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
@@ -34,7 +34,7 @@ import {
 import {
   type AutomationHostFilter,
   automationHostFilterStableKey
-} from '../../../../shared/automation-host-filter'
+} from '../../../../shared/automations/ownership/automation-host-filter'
 import type { AutomationTemplate } from './automation-templates'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import type { ExternalAutomationScope } from './external-automation-scope-client'

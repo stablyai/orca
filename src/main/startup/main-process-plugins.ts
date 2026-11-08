@@ -34,7 +34,7 @@ import { isUsablePluginLanguagePack } from '../../shared/plugins/languages/plugi
 import { rebuildAppMenu } from '../menu/register-app-menu'
 import { rebuildSystemTrayMenu } from '../tray/system-tray'
 import { logStartupMilestone } from './startup-diagnostics'
-import { agentHookServer } from '../agent-hooks/server'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import {
   bindPluginRuntime,
   createPluginAgentStatusForwarder,

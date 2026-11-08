@@ -4,10 +4,10 @@ import {
   hostStableKey,
   ownerKey,
   toStableCatalogRef
-} from '../../../../shared/automation-owner-key'
+} from '../../../../shared/automations/ownership/automation-owner-key'
 import { resolveAutomationRunTarget } from './automation-run-open-target'
 import { capturedAutomationOwner, capturedAutomationOwnerKey } from './automation-captured-owner'
-import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree/id'
 import { buildExternalAutomationListEntries } from './external-automation-list-entries'
 import { externalAutomationScopeEntries } from './external-automation-scope-gating'

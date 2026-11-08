@@ -14,7 +14,7 @@ import {
 } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import type { AgentSessionQueuedMessage } from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
 import type { AgentJournalSubmission } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileQueuedEditLease } from './mobile-queued-message-edit-lease'
 import { pickedSkillsInText } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import {

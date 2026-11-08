@@ -307,6 +307,11 @@
       "signInHint": "Bu sohbeti çalıştıran bilgisayarda bir terminal açar",
       "forkedFrom": "Çatallandığı kaynak"
     },
+    "ciResultLine": {
+      "failingLead": "CI başarısız:",
+      "greenLead": "CI başarılı:",
+      "at": "commit"
+    },
     "orcaStop": {
       "canContinue": "Bu konuşmada devam edebilirsiniz.",
       "crash": "Bu yanıt hazırlanırken {{machine}} üzerindeki Orca beklenmedik biçimde durdu.",
@@ -1406,12 +1411,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} etkin",
-      "heading": "Ajanlar",
-      "showAll": "Tümünü göster ({{count}})",
-      "showFewer": "Daha az göster"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} güncellemesini gizle",
       "title": "Orca {{version}} sürümü mevcut",

@@ -11,12 +11,12 @@ import {
   useForgetHostClient,
   useForceReconnect,
   useHostClient
-} from '../transport/host-client-hooks'
+} from '../transport/connection/host-client-hooks'
 import {
   useLastConnectedAt,
   useReconnectAttempt,
   useRelayRecoveryStatus
-} from '../transport/client-context-connection-metrics'
+} from '../transport/connection/client-context-connection-metrics'
 import { useHostDisplayWorktrees, useResolvedHostPlatform } from './use-host-display-worktrees'
 import { useHostListSections } from './use-host-list-sections'
 import { useSwitchedHostSidebarFeed } from './use-host-sidebar-feed'
@@ -28,8 +28,8 @@ import { useHostViewSettings } from './use-host-view-settings'
 import { countActiveWorkspaceFilters } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { useHostWorktreeActions } from './use-host-worktree-actions'
 import { useHostWorktreeCatalog } from './use-host-worktree-catalog'
-import { useHostDisplay } from '../transport/use-host-display'
-import { classifyConnection } from '../transport/connection-health'
+import { useHostDisplay } from '../transport/hosts/use-host-display'
+import { classifyConnection } from '../transport/connection/connection-health'
 
 export type HostScreenProps = {
   embedded?: boolean

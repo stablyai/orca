@@ -26,10 +26,12 @@ import {
 import {
   commitStagedWebStoreExtension,
   discardStagedWebStoreExtension,
-  isBrowserExtensionBusy,
-  stageWebStoreExtension,
-  withBrowserExtensionLock
+  stageWebStoreExtension
 } from '../installation/browser-extension-webstore-install'
+import {
+  isBrowserExtensionBusy,
+  withBrowserExtensionLock
+} from '../installation/browser-extension-mutation-lock'
 import {
   ChromeWebStoreInstallFlow,
   InvalidIconUrlError,

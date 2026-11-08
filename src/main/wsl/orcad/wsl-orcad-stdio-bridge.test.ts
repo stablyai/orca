@@ -1,6 +1,9 @@
 import { connect, type Server, type Socket } from 'node:net'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { checkOrcadStdioBridge, openOrcadStdioBridgeChannel } from '../../ssh/orcad-stdio-bridge'
+import {
+  checkOrcadStdioBridge,
+  openOrcadStdioBridgeChannel
+} from '../../managed-server/lifecycle/orcad-stdio-bridge'
 import { ORCAD_STDIO_BRIDGE_MAX_CHANNELS } from '../../managed-server/lifecycle/orcad-stdio-bridge-listener'
 import { startEchoServer } from '../../managed-server/lifecycle/orcad-stdio-bridge-test-channel'
 import type { StartedPortForward } from '../../ssh/port-forwarding/ssh-port-forward-provider'

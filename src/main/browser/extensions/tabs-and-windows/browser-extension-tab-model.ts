@@ -13,7 +13,7 @@ import {
   type BrowserExtensionCaller
 } from '../api-runtime/browser-extension-namespace-registry'
 import { hasBrowserExtensionHostPermission } from '../permissions/browser-extension-permission-grants'
-import { browserExtensionHostPatternsInSession } from '../api/permissions'
+import { browserExtensionHostPatternsInSession } from '../permissions/browser-extension-session-permissions'
 import { closeBrowserExtensionPopup } from '../actions/browser-extension-popup-host'
 import { hasBrowserExtensionActiveTab } from '../permissions/browser-extension-active-tab'
 import {

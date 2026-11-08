@@ -1,7 +1,7 @@
 import * as z from 'zod'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import type { RpcCompatibleReader } from '../transport/rpc-operation-contract'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import type { RpcCompatibleReader } from '../transport/rpc/rpc-operation-contract'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import {
   gitBranchCompareResultSchema,
   gitCommitCompareResultSchema

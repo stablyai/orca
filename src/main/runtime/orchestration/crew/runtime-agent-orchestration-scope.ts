@@ -1,7 +1,7 @@
 import type { OrchestrationDb } from '../db/orchestration-db'
 import type { RuntimeAgentOrchestrationDependencies } from './runtime-agent-orchestration-projection'
 import { createCanonicalSessionPaneResolver } from '../addressing/session-lineage/structured-session-lineage'
-import { isStructuredWorkerHandle } from '../../../../shared/structured-worker-handle'
+import { isStructuredWorkerHandle } from '../../../../shared/orchestration/workers/structured-worker-handle'
 
 export function createOrchestrationProjectionScope(
   db: OrchestrationDb | null,

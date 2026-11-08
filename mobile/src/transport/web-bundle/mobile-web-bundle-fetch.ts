@@ -6,10 +6,10 @@ import type {
   MobileWebBundleManifestRead,
   MobileWebBundleManifestReply
 } from './mobile-web-bundle-reply-schemas'
-import type { RpcClient } from '../rpc-client'
+import type { RpcClient } from '../rpc/rpc-client-contract'
 import { MobileWebBundleFetchError } from './mobile-web-bundle-fetch-refusal'
-import { markRpcDeliveryUnknown } from '../rpc-delivery-ambiguity'
-import { runRpcOperation } from '../rpc-operation'
+import { markRpcDeliveryUnknown } from '../rpc/rpc-delivery-ambiguity'
+import { runRpcOperation } from '../rpc/rpc-operation'
 import { mobileWebBundleWindowReader } from './mobile-web-bundle-window-reader'
 import {
   assertWindowDescribesAsset,
