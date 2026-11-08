@@ -112,6 +112,30 @@ describe('AgentTerminalDialog', () => {
     expect(screen.getByText('Agents board')).toBeInTheDocument()
     expect(screen.queryByTestId('preview')).not.toBeInTheDocument()
   })
+
+  it('closes the preview with a double-tap modifier shortcut', () => {
+    useAppStore.setState({
+      keybindings: { 'dashboard.closeTerminal': ['DoubleTap+Ctrl'] }
+    })
+    function Host() {
+      const [open, setOpen] = useState(true)
+      return open ? (
+        <AgentTerminalPanel card={card()} onOpenChange={setOpen} onReveal={() => {}} />
+      ) : (
+        <p>Agents board</p>
+      )
+    }
+    render(<Host />)
+    const preview = screen.getByTestId('preview')
+    const firstTap = { key: 'Control', code: 'ControlLeft', ctrlKey: true }
+
+    fireEvent.keyDown(preview, firstTap)
+    fireEvent.keyUp(preview, firstTap)
+    fireEvent.keyDown(preview, firstTap)
+
+    expect(screen.getByText('Agents board')).toBeInTheDocument()
+    expect(screen.queryByTestId('preview')).not.toBeInTheDocument()
+  })
 })
 
 it.each([false, true])(
