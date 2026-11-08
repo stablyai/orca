@@ -17,6 +17,11 @@ import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { rendererPublicationThrottle } from './renderer-publication-throttle'
 import { isQuittingForUpdate } from '../updater/updater-service'
+import {
+  boundsOnCursorDisplay,
+  isUsableOnCursorDisplay,
+  placeOnCursorDisplay
+} from './floating-workspace-window-placement'
 
 const MIN_WIDTH = 480
 const MIN_HEIGHT = 360
@@ -30,6 +35,8 @@ let floatingWindow: BrowserWindow | null = null
 // Why: ready-to-show must not override a hide requested before first paint.
 let shownRequested = false
 let focusRequested = false
+// One-shot: the next show lands on the display under the cursor (set by the global chord).
+let placeAtNextShow = false
 let releaseThrottleLease: (() => void) | null = null
 let getIsQuitting: () => boolean = () => false
 const windowListeners = new Set<(event: FloatingWorkspaceWindowEvent) => void>()
@@ -60,6 +67,26 @@ export function getFloatingWorkspaceWindow(): BrowserWindow | null {
     !floatingWindow.webContents.isDestroyed()
     ? floatingWindow
     : null
+}
+
+export function requestFloatingWorkspaceWindowPlacement(): void {
+  placeAtNextShow = true
+}
+
+/** A chord press while the window is open: bring it to the user's display. False means the press should toggle it closed. */
+export function summonFloatingWorkspaceWindow(): boolean {
+  const window = getFloatingWorkspaceWindow()
+  if (!window || !shownRequested) {
+    return false
+  }
+  if (window.isMinimized()) {
+    window.restore()
+  } else if (window.isVisible() && isUsableOnCursorDisplay(window)) {
+    return false
+  }
+  placeOnCursorDisplay(window)
+  presentWindow(window, true)
+  return true
 }
 
 export function isFloatingWorkspaceWindowRenderer(sender: WebContents): boolean {
@@ -128,6 +155,7 @@ function windowTitle(): string {
 /** Hide, keeping the renderer and its grid claims; the main renderer learns only of user hides. */
 export function hideFloatingWorkspaceWindow(): void {
   shownRequested = false
+  placeAtNextShow = false
   releaseThrottle()
   getFloatingWorkspaceWindow()?.hide()
 }
@@ -140,6 +168,7 @@ function hideByUser(): void {
 /** Last step of dock, flag-off and main-window close; destroy() skips the close event that would hide. */
 export function destroyFloatingWorkspaceWindow(): void {
   shownRequested = false
+  placeAtNextShow = false
   releaseThrottle()
   const window = floatingWindow
   floatingWindow = null
@@ -172,6 +201,8 @@ export function showFloatingWorkspaceWindow(
 ): BrowserWindow {
   shownRequested = true
   focusRequested = options.focus
+  const place = placeAtNextShow
+  placeAtNextShow = false
   acquireThrottleLease()
   const existing = getFloatingWorkspaceWindow()
   if (existing) {
@@ -180,6 +211,9 @@ export function showFloatingWorkspaceWindow(
     }
     if (existing.isMinimized()) {
       existing.restore()
+    }
+    if (place) {
+      placeOnCursorDisplay(existing)
     }
     presentWindow(existing, options.focus)
     return existing
@@ -190,6 +224,7 @@ export function showFloatingWorkspaceWindow(
   const window = new BrowserWindow({
     width: DEFAULT_WIDTH,
     height: DEFAULT_HEIGHT,
+    ...(place ? boundsOnCursorDisplay(DEFAULT_WIDTH, DEFAULT_HEIGHT) : {}),
     minWidth: MIN_WIDTH,
     minHeight: MIN_HEIGHT,
     title: windowTitle(),

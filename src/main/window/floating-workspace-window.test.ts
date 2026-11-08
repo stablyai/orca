@@ -9,8 +9,13 @@ const { instances, FakeWindow, acquireMock, releaseMock, trustedRenderer, update
       private handlers: Record<string, ((...args: unknown[]) => void)[]> = {}
       destroyed = false
       visible = false
+      minimized = false
+      bounds = { x: 0, y: 0, width: 960, height: 640 }
       setAlwaysOnTop = vi.fn()
       setVisibleOnAllWorkspaces = vi.fn()
+      setBounds = vi.fn((next: { x: number; y: number; width: number; height: number }) => {
+        this.bounds = next
+      })
       webContents = {
         id: created.length + 1,
         send: vi.fn(),
@@ -30,7 +35,9 @@ const { instances, FakeWindow, acquireMock, releaseMock, trustedRenderer, update
         this.visible = false
       })
       focus = vi.fn()
-      restore = vi.fn()
+      restore = vi.fn(() => {
+        this.minimized = false
+      })
       loadURL = vi.fn()
       loadFile = vi.fn()
       setTitle = vi.fn()
@@ -66,7 +73,10 @@ const { instances, FakeWindow, acquireMock, releaseMock, trustedRenderer, update
         return false
       }
       isMinimized(): boolean {
-        return false
+        return this.minimized
+      }
+      getBounds(): { x: number; y: number; width: number; height: number } {
+        return this.bounds
       }
       isFullScreen(): boolean {
         return false
@@ -83,10 +93,18 @@ const { instances, FakeWindow, acquireMock, releaseMock, trustedRenderer, update
     }
   })
 
+const { cursorDisplay } = vi.hoisted(() => ({
+  cursorDisplay: { workArea: { x: 0, y: 0, width: 1440, height: 875 } }
+}))
+
 vi.mock('electron', () => ({
   app: { on: vi.fn(), removeListener: vi.fn(), isPackaged: true },
   BrowserWindow: FakeWindow,
-  nativeTheme: { shouldUseDarkColors: true }
+  nativeTheme: { shouldUseDarkColors: true },
+  screen: {
+    getCursorScreenPoint: () => ({ x: 0, y: 0 }),
+    getDisplayNearestPoint: () => cursorDisplay
+  }
 }))
 vi.mock('../ipc/ui', () => ({ getTrustedUIRendererWebContents: () => trustedRenderer }))
 vi.mock('./privileged-window-navigation', () => ({
@@ -103,8 +121,11 @@ import {
   destroyFloatingWorkspaceWindowWithMainWindow,
   getFloatingWorkspaceWindow,
   isFloatingWorkspaceWindowRenderer,
+  hideFloatingWorkspaceWindow,
   onFloatingWorkspaceWindowEvent,
+  requestFloatingWorkspaceWindowPlacement,
   showFloatingWorkspaceWindow,
+  summonFloatingWorkspaceWindow,
   type FloatingWorkspaceWindowEvent
 } from './floating-workspace-window'
 
@@ -128,6 +149,7 @@ function requestClose(window: InstanceType<typeof FakeWindow>): { preventDefault
   return event
 }
 
+const DEFAULT_WORK_AREA = { x: 0, y: 0, width: 1440, height: 875 }
 const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
 
 describe('floating workspace window', () => {
@@ -136,6 +158,7 @@ describe('floating workspace window', () => {
 
   beforeEach(() => {
     instances.length = 0
+    cursorDisplay.workArea = DEFAULT_WORK_AREA
     events = []
     releaseMock.mockReset()
     updateQuitMock.mockReset().mockReturnValue(false)
@@ -236,4 +259,47 @@ describe('floating workspace window', () => {
       )
     }
   )
+
+  it('the chord moves an open window that is off the cursor display there, size kept, and leaves one already there to the toggle', () => {
+    const window = showReady()
+    window.bounds = { x: 2000, y: 100, width: 960, height: 640 }
+    expect(summonFloatingWorkspaceWindow()).toBe(true)
+    expect(window.bounds).toEqual({ x: 240, y: 118, width: 960, height: 640 })
+    expect(window.focus).toHaveBeenCalledTimes(1)
+
+    // Body on this display, title bar above its work area: the window cannot be grabbed.
+    window.bounds = { x: 100, y: -100, width: 960, height: 640 }
+    expect(summonFloatingWorkspaceWindow()).toBe(true)
+    expect(window.bounds).toEqual({ x: 240, y: 118, width: 960, height: 640 })
+
+    expect(summonFloatingWorkspaceWindow()).toBe(false)
+  })
+
+  it('the chord restores a minimized open window, shows one the OS hid, and leaves a closed one to the toggle', () => {
+    const window = showReady()
+    window.minimized = true
+    expect(summonFloatingWorkspaceWindow()).toBe(true)
+    expect(window.restore).toHaveBeenCalledTimes(1)
+
+    // Hidden outside main (Cmd+H on Orca) but still requested open.
+    window.visible = false
+    expect(summonFloatingWorkspaceWindow()).toBe(true)
+    expect(window.visible).toBe(true)
+
+    hideFloatingWorkspaceWindow()
+    expect(summonFloatingWorkspaceWindow()).toBe(false)
+  })
+
+  it('a chord-requested show opens on the cursor display once; a hide drops an unused request', () => {
+    cursorDisplay.workArea = { x: 1440, y: 0, width: 1920, height: 1055 }
+    requestFloatingWorkspaceWindowPlacement()
+    const window = showReady()
+    expect(window.options).toMatchObject({ x: 1920, y: 208, width: 960, height: 640 })
+
+    hideFloatingWorkspaceWindow()
+    requestFloatingWorkspaceWindowPlacement()
+    hideFloatingWorkspaceWindow()
+    showFloatingWorkspaceWindow(null, { focus: false })
+    expect(window.setBounds).not.toHaveBeenCalled()
+  })
 })

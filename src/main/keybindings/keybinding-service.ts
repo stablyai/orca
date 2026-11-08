@@ -27,6 +27,7 @@ export class KeybindingService {
   private readonly defaultOverrides: KeybindingOverrides
   private fallbackOverrides: KeybindingOverrides = {}
   private snapshot: KeybindingFileSnapshot | null = null
+  private readonly changeListeners = new Set<() => void>()
 
   constructor(options: KeybindingServiceOptions) {
     this.configPath = getUserKeybindingsPath(options.homePath)
@@ -56,13 +57,28 @@ export class KeybindingService {
   }
 
   reload(): KeybindingFileSnapshot {
-    this.snapshot = readKeybindingFile(
-      this.configPath,
-      this.platform,
-      this.defaultOverrides,
-      this.fallbackOverrides
+    return this.setSnapshot(
+      readKeybindingFile(
+        this.configPath,
+        this.platform,
+        this.defaultOverrides,
+        this.fallbackOverrides
+      )
     )
-    return this.snapshot
+  }
+
+  /** Called after every reload or write; returns an unsubscribe. */
+  onChange(listener: () => void): () => void {
+    this.changeListeners.add(listener)
+    return () => this.changeListeners.delete(listener)
+  }
+
+  private setSnapshot(snapshot: KeybindingFileSnapshot): KeybindingFileSnapshot {
+    this.snapshot = snapshot
+    for (const listener of this.changeListeners) {
+      listener()
+    }
+    return snapshot
   }
 
   getOverrides(): KeybindingOverrides {
@@ -78,7 +94,7 @@ export class KeybindingService {
     actionId: KeybindingActionId,
     bindings: string[] | null
   ): KeybindingFileSnapshot {
-    this.snapshot = writeKeybindingOverride(
+    const snapshot = writeKeybindingOverride(
       this.configPath,
       this.platform,
       actionId,
@@ -87,6 +103,6 @@ export class KeybindingService {
       this.fallbackOverrides
     )
     this.fallbackOverrides = {}
-    return this.snapshot
+    return this.setSnapshot(snapshot)
   }
 }

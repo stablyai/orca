@@ -39,6 +39,10 @@ import {
 import { requireMainWindowServices } from './main-window-service-readiness'
 import { registerFloatingWorkspaceWindowHandlers } from '../ipc/floating-workspace-window'
 import { configureFloatingWorkspaceWindowLifecycle } from '../window/floating-workspace-window'
+import {
+  installFloatingWorkspaceGlobalToggle,
+  syncFloatingWorkspaceGlobalToggle
+} from '../window/floating-workspace-global-toggle'
 import { recordRendererLaunchFailureProbe } from '../window/renderer-launch-failure-probe'
 import { trackBrowserExtensionMainWindow } from '../browser/extensions/tabs-and-windows/browser-extension-window-model'
 
@@ -101,10 +105,17 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   configureFloatingWorkspaceWindowLifecycle({
     getIsQuitting: () => state.isQuitting
   })
+  installFloatingWorkspaceGlobalToggle({
+    store,
+    keybindings,
+    getIsQuitting: () => state.isQuitting,
+    hasMainWindow: () => state.mainWindow !== null
+  })
   const window = createMainWindow(store, {
     getIsQuitting: () => state.isQuitting,
     onQuitAborted: () => {
       state.isQuitting = false
+      syncFloatingWorkspaceGlobalToggle()
       clearExpectedRendererReload()
     },
     onRendererProcessGone: (details, webContentsId, liveness) => {
@@ -205,6 +216,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   })
   state.mainWindow = window
   state.hasOpenedMainWindow = true
+  syncFloatingWorkspaceGlobalToggle()
   const publishResourceVisibility = (): void => {
     if (!window.isDestroyed()) {
       window.webContents.send('memory:resourceWindowVisibility', isResourceWindowVisible(window))
@@ -236,6 +248,7 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   window.on('closed', () => {
     if (state.mainWindow === window) {
       state.mainWindow = null
+      syncFloatingWorkspaceGlobalToggle()
       if (state.isServeMode) {
         applyBackgroundActivationPolicy({ serveWithoutDesktopWindow: true, warn: console.warn })
       }
