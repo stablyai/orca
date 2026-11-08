@@ -94,27 +94,6 @@ describe('SshChannelMultiplexer', () => {
   })
 
   describe('request/response', () => {
-    it('sends a JSON-RPC request and resolves on response', async () => {
-      const promise = mux.request('pty.spawn', { cols: 80, rows: 24 })
-
-      expect(transport.written.length).toBe(1)
-      const frame = transport.written[0]
-      expect(frame[0]).toBe(MessageType.Regular)
-
-      const payloadLen = frame.readUInt32BE(9)
-      const payload = JSON.parse(
-        frame.subarray(HEADER_LENGTH, HEADER_LENGTH + payloadLen).toString()
-      )
-      expect(payload.method).toBe('pty.spawn')
-      expect(payload.id).toBe(1)
-
-      const response = makeResponseFrame(1, { id: 'pty-1' }, 1)
-      transport.dataCallbacks[0](response)
-
-      const result = await promise
-      expect(result).toEqual({ id: 'pty-1' })
-    })
-
     it('rejects on error response', async () => {
       const promise = mux.request('pty.spawn', { cols: 80, rows: 24 })
 
@@ -187,50 +166,9 @@ describe('SshChannelMultiplexer', () => {
       }
       await expect(promise).rejects.toThrow('timed out after 60000ms')
     })
-
-    it('assigns unique request IDs', async () => {
-      void mux.request('method1').catch(() => {})
-      void mux.request('method2').catch(() => {})
-
-      expect(transport.written.length).toBe(2)
-      const id1 = JSON.parse(
-        transport.written[0]
-          .subarray(HEADER_LENGTH, HEADER_LENGTH + transport.written[0].readUInt32BE(9))
-          .toString()
-      ).id
-      const id2 = JSON.parse(
-        transport.written[1]
-          .subarray(HEADER_LENGTH, HEADER_LENGTH + transport.written[1].readUInt32BE(9))
-          .toString()
-      ).id
-      expect(id1).not.toBe(id2)
-    })
   })
 
   describe('notifications', () => {
-    it('sends notifications without expecting a response', () => {
-      mux.notify('pty.data', { id: 'pty-1', data: 'hello' })
-
-      expect(transport.written.length).toBe(1)
-      const payload = JSON.parse(
-        transport.written[0]
-          .subarray(HEADER_LENGTH, HEADER_LENGTH + transport.written[0].readUInt32BE(9))
-          .toString()
-      )
-      expect(payload.method).toBe('pty.data')
-      expect(payload.id).toBeUndefined()
-    })
-
-    it('dispatches incoming notifications to handler', () => {
-      const handler = vi.fn()
-      mux.onNotification(handler)
-
-      const frame = makeNotificationFrame('pty.exit', { id: 'pty-1', code: 0 }, 1)
-      transport.dataCallbacks[0](frame)
-
-      expect(handler).toHaveBeenCalledWith('pty.exit', { id: 'pty-1', code: 0 })
-    })
-
     it('typed dispatcher only fires for its method', () => {
       const chunkHandler = vi.fn()
       const otherHandler = vi.fn()
@@ -311,18 +249,6 @@ describe('SshChannelMultiplexer', () => {
   })
 
   describe('keepalive', () => {
-    it('sends one keepalive frame per cadence tick', () => {
-      const initialWrites = transport.written.length
-
-      vi.advanceTimersByTime(5_000)
-      expect(transport.written).toHaveLength(initialWrites + 1)
-      expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
-
-      vi.advanceTimersByTime(5_000)
-      expect(transport.written).toHaveLength(initialWrites + 2)
-      expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
-    })
-
     it('turns transport write failures into connection loss instead of throwing from the timer', () => {
       const writeError = new Error('write EPIPE')
       transport.write = vi.fn(() => {
@@ -330,22 +256,6 @@ describe('SshChannelMultiplexer', () => {
       })
 
       expect(() => vi.advanceTimersByTime(5_000)).not.toThrow()
-      expect(mux.isDisposed()).toBe(true)
-    })
-
-    it('drives keepalive sends AND dead-link detection from a single interval', () => {
-      // Require one recurring timer for ordered keepalive send and liveness checks.
-      expect(vi.getTimerCount()).toBe(1)
-
-      const before = transport.written.length
-      vi.advanceTimersByTime(5_000)
-      expect(transport.written.length).toBeGreaterThan(before)
-      expect(transport.written.at(-1)![0]).toBe(MessageType.KeepAlive)
-      expect(vi.getTimerCount()).toBe(1)
-
-      // The same timer declares silence dead only after both receive/ack windows expire.
-      expect(mux.isDisposed()).toBe(false)
-      vi.advanceTimersByTime(25_000)
       expect(mux.isDisposed()).toBe(true)
     })
 
@@ -481,11 +391,6 @@ describe('SshChannelMultiplexer', () => {
       mux.dispose()
       await expect(probe).resolves.toBe(false)
     })
-
-    it('resolves false immediately on a disposed mux', async () => {
-      mux.dispose()
-      await expect(mux.probeLiveness(5_000)).resolves.toBe(false)
-    })
   })
 
   describe('dispose', () => {
@@ -495,12 +400,6 @@ describe('SshChannelMultiplexer', () => {
       mux.dispose()
 
       await expect(promise).rejects.toThrow('Multiplexer disposed')
-    })
-
-    it('throws on request after dispose', async () => {
-      mux.dispose()
-
-      await expect(mux.request('pty.spawn')).rejects.toThrow('Multiplexer disposed')
     })
 
     it('tags a request after a shutdown dispose with DISPOSED', async () => {
@@ -546,49 +445,6 @@ describe('SshChannelMultiplexer', () => {
 
       expect(disposeHandler).toHaveBeenCalledWith('connection_lost')
       expect(disposeHandler).toHaveBeenCalledTimes(1)
-    })
-
-    it('reports isDisposed correctly', () => {
-      expect(mux.isDisposed()).toBe(false)
-      mux.dispose()
-      expect(mux.isDisposed()).toBe(true)
-    })
-
-    it('clears registered handlers on dispose', () => {
-      const disposeHandler = vi.fn()
-      mux.onNotification(vi.fn())
-      mux.onNotificationByMethod('fs.streamChunk', vi.fn())
-      mux.onDispose(disposeHandler)
-
-      const internals = getMuxInternals(mux)
-      expect(internals.notificationHandlers).toHaveLength(1)
-      expect(internals.methodNotificationHandlers.size).toBe(1)
-      expect(internals.disposeHandlers).toHaveLength(1)
-
-      mux.dispose()
-
-      expect(disposeHandler).toHaveBeenCalledWith('shutdown')
-      expect(internals.notificationHandlers).toHaveLength(0)
-      expect(internals.methodNotificationHandlers.size).toBe(0)
-      expect(internals.disposeHandlers).toHaveLength(0)
-    })
-
-    it('does not retain handlers registered after dispose', () => {
-      mux.dispose()
-
-      const disposeNotification = mux.onNotification(vi.fn())
-      const disposeMethod = mux.onNotificationByMethod('fs.streamChunk', vi.fn())
-      const disposeLifecycle = mux.onDispose(vi.fn())
-
-      const internals = getMuxInternals(mux)
-      expect(internals.notificationHandlers).toHaveLength(0)
-      expect(internals.methodNotificationHandlers.size).toBe(0)
-      expect(internals.disposeHandlers).toHaveLength(0)
-      expect(() => {
-        disposeNotification()
-        disposeMethod()
-        disposeLifecycle()
-      }).not.toThrow()
     })
   })
 

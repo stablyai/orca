@@ -7586,7 +7586,8 @@
           "needsInput": "Needs input",
           "running": "Running",
           "idle": "Idle"
-        }
+        },
+        "projectOrderSaveFailed": "Could not save the complete project order"
       },
       "shared": {
         "useDaemonActions": {

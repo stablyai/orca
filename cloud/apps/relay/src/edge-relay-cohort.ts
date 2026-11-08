@@ -5,13 +5,17 @@ import { RELAY_DEFAULT_REGION, type RelayRegion } from '@orca-cloud/relay-contra
 import type { SqlRow } from './database/database.js'
 import { z } from 'zod'
 import type { EdgeDeviceRow } from './edge-admin-client.js'
+import { EDGE_CONTROL_DEFAULTS, edgeRolloutPermille, type EdgeControlFlags } from './edge-relay-control.js'
 
 export type EdgeRelayConfig = {
   cellUrl: string
   // Present: phase 2 (host data in the edge's objects); director → edge admin calls use it.
   adminSigningKey?: Uint8Array
-  // Share of hosts (by hash of relayHostId) in the edge cohort, 0-100.
+  // Share of hosts (by hash of relayHostId) in the edge cohort, 0-100: the boot default, which a
+  // runtime rolloutPermille replaces.
   rolloutPercent: number
+  // Runtime control (director/edge.json), read on every call; absent means the defaults.
+  control?: () => EdgeControlFlags
   allowHosts: ReadonlySet<string>
   // Accounts (relay token `sub`) whose hosts all join, e.g. the team's own accounts.
   allowUsers?: ReadonlySet<string>
@@ -29,22 +33,37 @@ export const EDGE_EXPORT_SKIP_AFTER_MS = 120_000
 // Export failures further apart than this are not one outage (see EdgeAssignments.leaveEdge).
 export const EDGE_EXPORT_FAILURE_GAP_MS = 30_000
 
-export function edgeCohortBucket(relayHostId: string): number {
-  return createHash('sha256').update(`edge-cohort:${relayHostId}`).digest().readUInt32BE(0) % 100
+function edgeCohortHash(relayHostId: string): number {
+  return createHash('sha256').update(`edge-cohort:${relayHostId}`).digest().readUInt32BE(0)
 }
 
-// Deny wins, then host allow, then region scope; within the region, account allow or rollout share.
+export function edgeCohortBucket(relayHostId: string): number {
+  return edgeCohortHash(relayHostId) % 100
+}
+
+// The percent bucket times ten plus a digit from the hash's higher part, so for every percent P a
+// host is under P × 10 permille exactly when it is under P percent: no host moves when the env
+// percent becomes the equal permille.
+export function edgeCohortBucketPermille(relayHostId: string): number {
+  const hash = edgeCohortHash(relayHostId)
+  return (hash % 100) * 10 + (Math.floor(hash / 100) % 10)
+}
+
+// Mode off or down empties the cohort. Otherwise deny wins, then host allow, then region scope;
+// within the region, account allow or the rollout share.
 export function inEdgeCohort(
   config: EdgeRelayConfig,
   relayHostId: string,
   region: RelayRegion | undefined,
   userId?: string
 ): boolean {
+  const flags = config.control?.() ?? EDGE_CONTROL_DEFAULTS
+  if (flags.mode !== 'on') { return false }
   if (config.denyHosts.has(relayHostId)) { return false }
   if (config.allowHosts.has(relayHostId)) { return true }
   if (!config.regions.has(region ?? RELAY_DEFAULT_REGION)) { return false }
   if (userId !== undefined && config.allowUsers?.has(userId)) { return true }
-  return edgeCohortBucket(relayHostId) < config.rolloutPercent
+  return edgeCohortBucketPermille(relayHostId) < edgeRolloutPermille(config.rolloutPercent, flags)
 }
 
 // Another director holds the host's row, or the host is on the edge and cannot leave yet (its

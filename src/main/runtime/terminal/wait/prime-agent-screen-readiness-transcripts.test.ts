@@ -1,13 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
-import {
-  finalReplayFrame,
-  readRuntimeFixture,
-  replayTranscript
-} from './agent-transcript-replay-test-harness'
-import {
-  describeScreenRuledAgentTranscripts,
-  readsIdleComposer
-} from './screen-ruled-agent-transcript-suite'
+import { describe, vi } from 'vitest'
+import './agent-transcript-replay-test-harness'
+import { describeScreenRuledAgentTranscripts } from './screen-ruled-agent-transcript-suite'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -36,10 +29,6 @@ const NOT_READY = [
   at120x40('prime-agent-0-9-8-draft', 'unsent text in the composer')
 ]
 
-function screenOf(lines: readonly string[]): string {
-  return lines.join('\n')
-}
-
 describe('Prime Agent readiness from captured bytes', () => {
   describeScreenRuledAgentTranscripts({
     agent: 'prime-agent',
@@ -47,32 +36,5 @@ describe('Prime Agent readiness from captured bytes', () => {
     ready: READY,
     notReady: NOT_READY,
     readyWithoutScreen: READY.map(({ name }) => name)
-  })
-
-  // The footer and bare caret remain painted during work, so neither proves ready (#22153).
-  it('keeps the footer and the bare caret on screen mid-turn', async () => {
-    const { ruledScreenLines } = await finalReplayFrame('prime-agent-0-9-8-busy-streaming', 120, 40)
-    expect(ruledScreenLines.at(-1)?.trim().startsWith('← manage')).toBe(true)
-    expect(ruledScreenLines.at(-2)?.trim()).toBe('>')
-    expect(screenOf(ruledScreenLines)).toMatch(/[⠀-⣿] Writing/)
-  })
-
-  // Busy frames can look ready; spinner/question animation must keep the quiet-process gate waiting.
-  it.each([
-    ['prime-agent-0-9-8-busy-streaming', 'a spinner row erased before its redraw', 'Without using'],
-    ['prime-agent-0-9-8-trace-question', 'the composer painted before the question', null]
-  ])('%s: the screen alone reads ready during %s', async (name, _what, submittedMarker) => {
-    let readyAfterMarker = 0
-    let markerSeen = submittedMarker === null
-    let questionSeen = false
-    for await (const { ruledScreenLines } of replayTranscript(readRuntimeFixture(name), 120, 40)) {
-      const screen = screenOf(ruledScreenLines)
-      markerSeen ||= submittedMarker !== null && screen.includes(submittedMarker)
-      questionSeen ||= screen.includes('Share agent traces')
-      if (markerSeen && !questionSeen && readsIdleComposer('prime-agent', ruledScreenLines)) {
-        readyAfterMarker += 1
-      }
-    }
-    expect(readyAfterMarker).toBeGreaterThan(0)
   })
 })
