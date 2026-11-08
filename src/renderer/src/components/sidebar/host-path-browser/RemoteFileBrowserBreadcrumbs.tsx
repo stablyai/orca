@@ -31,10 +31,14 @@ export function RemoteFileBrowserBreadcrumbs({
         : null
   const breadcrumbPathTo = useCallback(
     (segmentIndex: number): string =>
-      anchorRoot !== null
-        ? driveBreadcrumbPath(anchorRoot, pathSegments, segmentIndex)
-        : `/${pathSegments.slice(0, segmentIndex + 1).join('/')}`,
-    [anchorRoot, pathSegments]
+      browseParts.kind === 'posix'
+        ? `/${browseParts.segments.slice(0, segmentIndex + 1).join('/')}`
+        : driveBreadcrumbPath(
+            browseParts.kind === 'drive' ? browseParts.driveRoot : browseParts.uncRoot,
+            browseParts.segments,
+            segmentIndex
+          ),
+    [browseParts]
   )
 
   return (
