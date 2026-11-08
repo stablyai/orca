@@ -3,57 +3,94 @@ import { gitExecFileAsync, gitOptionalLocksDisabledEnv, gitStreamStdout } from '
 import type { GetStatusOptions } from './get-status-options'
 import { bulkPathspecCommands } from './git-pathspec'
 
-/** How `git status` without `-u` scans untracked files; `unknown` means the config could not be read. */
-export type UntrackedFilesMode = 'no' | 'normal' | 'all' | 'unknown'
+/**
+ * How to get every untracked file: `expand` lists configured-mode `? dir/` rows, `configured-all` needs nothing,
+ * `uall` passes `-uall` (mode `no`, untracked cache disabled, or unreadable config).
+ */
+export type UntrackedScan = 'expand' | 'configured-all' | 'uall'
 
+const UNTRACKED_SCAN_CONFIG_PATTERN =
+  '^(status\\.showuntrackedfiles|core\\.untrackedcache|feature\\.manyfiles)$'
 const LIST_OTHER_FILES_ARGS = ['ls-files', '--others', '--exclude-standard', '-z', '--']
 
-/** Read `status.showUntrackedFiles`; Git's untracked cache only serves scans in the mode it was stored with. */
-export async function readUntrackedFilesMode(
+/** Git's untracked cache only serves scans in its stored mode, which follows `status.showUntrackedFiles`. */
+export async function readUntrackedScan(
   worktreePath: string,
   options: GetStatusOptions
-): Promise<UntrackedFilesMode> {
+): Promise<UntrackedScan> {
+  let stdout = ''
   try {
-    const { stdout } = await gitExecFileAsync(
-      ['config', '--get', 'status.showUntrackedFiles'],
-      gitReadOptionsForWorktree(worktreePath, options)
-    )
-    return parseUntrackedFilesMode(stdout)
+    stdout = (
+      await gitExecFileAsync(
+        ['config', '--get-regexp', UNTRACKED_SCAN_CONFIG_PATTERN],
+        gitReadOptionsForWorktree(worktreePath, options)
+      )
+    ).stdout
   } catch (error) {
-    // `git config --get` exits 1 when the key is unset, which means the default mode.
-    return (error as { code?: unknown }).code === 1 ? 'normal' : 'unknown'
+    // Exit 1 means none of the keys are set: default mode, cache kept as the index has it.
+    if (!(typeof error === 'object' && error !== null && 'code' in error && error.code === 1)) {
+      return 'uall'
+    }
   }
+  const values = new Map<string, string>()
+  for (const line of stdout.split('\n')) {
+    const separator = line.indexOf(' ')
+    const key = separator === -1 ? line.trim() : line.slice(0, separator)
+    if (key) {
+      // Later lines win, as in Git; a bare key is boolean true.
+      values.set(
+        key,
+        separator === -1
+          ? 'true'
+          : line
+              .slice(separator + 1)
+              .trim()
+              .toLowerCase()
+      )
+    }
+  }
+  const mode = values.get('status.showuntrackedfiles') ?? 'normal'
+  if (mode === 'all') {
+    return 'configured-all'
+  }
+  const cache = values.get('core.untrackedcache')
+  // Without a cache the configured scan costs as much as -uall, so the extra listing would be pure overhead.
+  if (isGitFalse(mode) || (cache !== undefined && isGitFalse(cache))) {
+    return 'uall'
+  }
+  return 'expand'
 }
 
-/** Mirrors Git's parse: newer Git also accepts booleans, where false means `no`. */
-function parseUntrackedFilesMode(value: string): UntrackedFilesMode {
-  const mode = value.trim().toLowerCase()
-  if (mode === 'all') {
-    return 'all'
-  }
-  if (['no', 'false', 'off'].includes(mode) || (/^[+-]?\d+$/.test(mode) && Number(mode) === 0)) {
-    return 'no'
-  }
-  return 'normal'
+/** Git's boolean false spellings; newer Git also accepts them for `status.showUntrackedFiles` (= `no`). */
+function isGitFalse(value: string): boolean {
+  return ['no', 'false', 'off'].includes(value) || (/^[+-]?\d+$/.test(value) && Number(value) === 0)
 }
 
 /**
- * List the files `-uall` would report under each collapsed `? dir/` row, in Git's order.
- * Stops after `maxPaths` (0 = unbounded): the k-th listed file lands at row k or later, so later files sit past any cap.
+ * List the files `-uall` would report under collapsed `? dir/` rows, keyed by row; null asks for a `-uall` rescan.
+ * Stops after `maxPaths` (0 = unbounded): the k-th listed file lands at row k or later, past any cap.
  */
 export async function listUntrackedDirectoryFiles(
   worktreePath: string,
   directories: readonly string[],
   maxPaths: number,
   options: GetStatusOptions
-): Promise<Map<string, string[]>> {
-  const filesByDirectory = new Map<string, string[]>(directories.map((dir) => [dir, []]))
+): Promise<Map<string, string[]> | null> {
+  // Rows outside cwd (status run from a subdirectory) cannot be listed relative to it.
+  if (directories.some((dir) => dir.startsWith('./') || dir.startsWith('../'))) {
+    return null
+  }
   const commands = bulkPathspecCommands(
     LIST_OTHER_FILES_ARGS,
     directories,
     worktreePath,
     options.wslDistro ? { wslDistro: options.wslDistro } : {}
   )
+  // Each extra chunk rereads the index; that many directories favour one -uall scan.
+  if (commands.length !== 1) {
+    return null
+  }
+  const filesByDirectory = new Map<string, string[]>(directories.map((dir) => [dir, []]))
   let listed = 0
   const addPath = (filePath: string): boolean => {
     const files = filesByDirectory.get(owningDirectory(filePath, filesByDirectory))
@@ -63,25 +100,26 @@ export async function listUntrackedDirectoryFiles(
     }
     return maxPaths !== 0 && listed >= maxPaths
   }
-  // Why sequential: chunks exist only past the command-line cap, and the budget carries across them.
-  for (const args of commands) {
-    let carry = ''
-    const result = await gitStreamStdout(args, {
-      cwd: worktreePath,
-      wslDistro: options.wslDistro,
-      admissionTier: options.admissionTier,
-      preferWslDirectGit: true,
-      env: gitOptionalLocksDisabledEnv(),
-      signal: options.signal,
-      onStdout: (chunk) => {
-        const records = (carry + chunk).split('\0')
-        carry = records.pop() ?? ''
-        return records.some((filePath) => filePath.length > 0 && addPath(filePath))
-      }
-    })
-    if (result.stoppedEarly || (carry.length > 0 && addPath(carry))) {
-      break
+  let carry = ''
+  const result = await gitStreamStdout(commands[0], {
+    cwd: worktreePath,
+    wslDistro: options.wslDistro,
+    admissionTier: options.admissionTier,
+    preferWslDirectGit: true,
+    env: gitOptionalLocksDisabledEnv(),
+    signal: options.signal,
+    onStdout: (chunk) => {
+      const records = (carry + chunk).split('\0')
+      carry = records.pop() ?? ''
+      return records.some((filePath) => filePath.length > 0 && addPath(filePath))
     }
+  })
+  if (!result.stoppedEarly && carry.length > 0) {
+    addPath(carry)
+  }
+  // A row status just reported cannot be empty; trust -uall over a race or an older Git's listing quirk.
+  if (!result.stoppedEarly && [...filesByDirectory.values()].some((files) => files.length === 0)) {
+    return null
   }
   return filesByDirectory
 }
