@@ -35,10 +35,10 @@
 7 src/main/bitbucket/credential-store.ts
 1 src/main/browser-passwords/browser-password-chromium-import.ts
 2 src/main/browser-passwords/browser-password-vault-file.ts
-2 src/main/browser/agent-browser/agent-browser-bridge-process.ts
-2 src/main/browser/agent-browser/agent-browser-dependency-binary.ts
-2 src/main/browser/agent-browser/agent-browser-process-environment.ts
-1 src/main/browser/agent-browser/agent-browser-session-reset.ts
+2 src/main/browser/agent-browser/helper-process/agent-browser-binary.ts
+2 src/main/browser/agent-browser/helper-process/agent-browser-dependency-binary.ts
+2 src/main/browser/agent-browser/helper-process/agent-browser-process-environment.ts
+1 src/main/browser/agent-browser/session-lifecycle/agent-browser-session-reset.ts
 2 src/main/browser/client-hosts/file-transfers/browser-client-download-relay.ts
 1 src/main/browser/client-hosts/file-transfers/browser-client-upload-staging.ts
 2 src/main/browser/client-hosts/leases/browser-host-client-identity.ts
