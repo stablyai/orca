@@ -2,7 +2,7 @@ import type { Dirent } from 'node:fs'
 import { readdir, realpath } from 'node:fs/promises'
 import { join, sep } from 'node:path'
 
-// Why: keeps scans from flooding libuv's 4-thread pool. Up to 3 read-ahead reads, plus one demand read from `claim` (the walk claims serially): at most 4 reads, each up to two requests.
+// Why: keeps scans from flooding libuv's 4-thread pool. Up to 3 read-ahead reads, plus one demand read from `claim` (the walk claims serially): at most 4 reads, each up to two requests. Per walk: discovery walks roots concurrently.
 const MAX_IN_FLIGHT_DIRECTORY_READS = 3
 // Finished listings the walk has not claimed yet; bounds memory on wide trees.
 const MAX_UNCLAIMED_DIRECTORY_READS = 512

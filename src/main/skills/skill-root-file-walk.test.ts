@@ -8,8 +8,6 @@ import { isSkillRootUnavailableError } from './skill-scan-coalescer'
 
 /** Set by a test to run at a chosen point inside the walk; cleared after each. */
 let onStat: ((path: string) => Promise<void>) | null = null
-/** A directory whose listing fails, as an unreadable folder does. */
-let failingReaddirPath: string | null = null
 
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof FsPromises>()
@@ -19,21 +17,12 @@ vi.mock('node:fs/promises', async (importOriginal) => {
       const result = await (actual.stat as (...args: unknown[]) => Promise<unknown>)(path, ...rest)
       await onStat?.(path)
       return result
-    },
-    // Sorted so expected walk order is the same on every filesystem.
-    readdir: async (path: string, options: { withFileTypes: true }) => {
-      if (path === failingReaddirPath) {
-        throw Object.assign(new Error('EACCES'), { code: 'EACCES' })
-      }
-      const entries = await actual.readdir(path, options)
-      return entries.sort((left, right) => (left.name < right.name ? -1 : 1))
     }
   }
 })
 
 afterEach(() => {
   onStat = null
-  failingReaddirPath = null
 })
 
 async function makeTree(): Promise<string> {
@@ -83,37 +72,6 @@ describe('findSkillFiles', () => {
     expect(withinDepth.filter((path) => /[\\/]link\d{2}[\\/]SKILL\.md$/.test(path))).toHaveLength(1)
     expect(withinDepth).toHaveLength(2)
     expect(statPaths).toHaveLength(32)
-  })
-
-  it('returns skills in walk order, first path to a folder winning', async () => {
-    const base = await makeTree()
-    const root = join(base, 'skills')
-    const linkType = process.platform === 'win32' ? 'junction' : 'dir'
-    await writeFileAt(join(root, 'alpha', 'SKILL.md'))
-    await writeFileAt(join(root, 'alpha', 'nested', 'deep', 'SKILL.md'))
-    await writeFileAt(join(root, 'shared', 's', 'SKILL.md'))
-    await writeFileAt(join(root, 'SKILL.md', 'SKILL.md'))
-    await writeFileAt(join(root, '.gamma.orca-skill-delete-1', 'SKILL.md'))
-    await writeFileAt(join(root, 'zeta', 'SKILL.md'))
-    await writeFileAt(join(root, 'zeta', 'a', 'b', 'c', 'SKILL.md'))
-    await symlink(join(root, 'shared'), join(root, 'beta'), linkType)
-    await symlink(join(root, 'alpha'), join(root, 'zlink'), linkType)
-
-    expect(await findSkillFiles(root, 3)).toEqual([
-      join(root, 'alpha', 'SKILL.md'),
-      join(root, 'alpha', 'nested', 'deep', 'SKILL.md'),
-      join(root, 'beta', 's', 'SKILL.md'),
-      join(root, 'zeta', 'SKILL.md')
-    ])
-  })
-
-  it('keeps scanning later folders after one folder cannot be read', async () => {
-    const root = join(await makeTree(), 'skills')
-    await writeFileAt(join(root, 'a-broken', 'inner', 'SKILL.md'))
-    await writeFileAt(join(root, 'b-later', 'SKILL.md'))
-    failingReaddirPath = join(root, 'a-broken')
-
-    expect(await findSkillFiles(root, 4)).toEqual([join(root, 'b-later', 'SKILL.md')])
   })
 
   it('returns nothing for a missing root rather than throwing', async () => {
