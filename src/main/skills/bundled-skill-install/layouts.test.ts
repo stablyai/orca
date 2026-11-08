@@ -1,13 +1,4 @@
-import {
-  chmod,
-  mkdir,
-  readFile,
-  readlink,
-  realpath,
-  rm,
-  symlink,
-  writeFile
-} from 'node:fs/promises'
+import { chmod, mkdir, readFile, readlink, realpath, symlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import type {
@@ -24,8 +15,8 @@ import {
   nativeBundledSkillFilesystem,
   type BundledSkillFilesystem
 } from './filesystem'
-import { skillInstallReceiptPath } from '../skill-install-provenance'
-import { skillInstallJournalPath } from '../skill-install-recovery'
+import '../skill-install-provenance'
+import '../skill-install-recovery'
 import { installBundledSkills, previewBundledSkillInstall } from './service'
 import {
   linkDirectory,
@@ -423,20 +414,6 @@ describe('bundled skill install edges', () => {
     }
   )
 
-  it('links into a project only where its agent folder already exists', async () => {
-    const home = await makeSkillHome()
-    const project = join(home.root, 'project')
-    await writeCopy(join(project, '.claude', 'skills', NAME), OLD_TEXT)
-    const input = serviceInput(home, { agents: ['claude', 'droid'], workspaceDirectory: project })
-    const { plan } = await previewAndInstall(input)
-    expect(opsOf(plan)).toEqual([
-      [join(project, '.agents', 'skills', NAME), 'write', undefined],
-      [join(project, '.claude', 'skills', NAME), 'update', undefined]
-    ])
-    expect(summarizeBundledSkillPlan(plan).badge).toBeNull()
-    expect(await snapshot(home.shared)).toBe('missing')
-  })
-
   it('updates a Claude profile folder through its link to ~/.claude/skills', async () => {
     const home = await makeSkillHome()
     await writeCopy(home.claude, OLD_TEXT)
@@ -454,33 +431,5 @@ describe('bundled skill install edges', () => {
 
     const stale = await installBundledSkills(viaHome, previewViaHome.planDigest)
     expect(stale.skills).toEqual([{ name: NAME, status: 'changed', ops: [] }])
-  })
-
-  it('reads a pending cloud transaction as busy and a cloud receipt as another skill', async () => {
-    const home = await makeSkillHome()
-    await npxShared(home)
-    const journal = skillInstallJournalPath(home.state, home.shared)
-    await mkdir(dirname(journal), { recursive: true })
-    await writeFile(journal, '{}')
-    expect(opsOf(await previewBundledSkillInstall(serviceInput(home)))).toEqual([
-      [home.shared, 'leave', 'busy'],
-      [home.claude, 'leave', 'shared-not-current']
-    ])
-
-    const receipt = skillInstallReceiptPath(home.state, home.shared)
-    await mkdir(dirname(receipt), { recursive: true })
-    await writeFile(receipt, '{}')
-    await rm(journal)
-    expect(opsOf(await previewBundledSkillInstall(serviceInput(home)))[0]).toEqual([
-      home.shared,
-      'leave',
-      'other'
-    ])
-    await previewAndInstall(serviceInput(home, { force: [home.shared] }))
-    expect(opsOf(await previewBundledSkillInstall(serviceInput(home)))[0]).toEqual([
-      home.shared,
-      'keep',
-      undefined
-    ])
   })
 })

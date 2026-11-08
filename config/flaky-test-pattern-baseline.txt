@@ -144,7 +144,7 @@
 1 test-no-polling-loop:tests/e2e/slept-workspace-remount-wake.spec.ts
 2 test-no-polling-loop:tests/e2e/terminal-column-desync-repro.spec.ts
 2 test-no-polling-loop:tests/e2e/terminal-column-probes.ts
-2 test-no-polling-loop:tests/e2e/terminal-hidden-view-parking.spec.ts
+1 test-no-polling-loop:tests/e2e/terminal-hidden-view-parking.spec.ts
 4 test-no-polling-loop:tests/e2e/terminal-inline-tui-reveal-convergence.spec.ts
 1 test-no-polling-loop:tests/e2e/terminal-opencode-emoji-table-rendering.spec.ts
 1 test-no-polling-loop:tests/e2e/terminal-pane-close-layout-consistency.spec.ts
@@ -265,7 +265,7 @@
 1 test-no-real-time-wait:src/main/runtime/terminal/wait/launched-agent-crash-guard.live-shell.test.ts
 1 test-no-real-time-wait:src/main/runtime/terminal/wait/launched-agent-shell-handoff-readiness.test.ts
 2 test-no-real-time-wait:src/main/runtime/terminal/wait/tui-idle-name-only-real-pty.integration.test.ts
-4 test-no-real-time-wait:src/main/runtime/workspaces/removal/worktree-teardown-unstopped-pty.test.ts
+3 test-no-real-time-wait:src/main/runtime/workspaces/removal/worktree-teardown-unstopped-pty.test.ts
 3 test-no-real-time-wait:src/main/skills/skill-bundle-process-termination.integration.test.ts
 1 test-no-real-time-wait:src/main/skills/skill-cloud-direct-upload.test.ts
 1 test-no-real-time-wait:src/main/skills/skill-process-contention-child.test.ts
@@ -443,7 +443,7 @@
 2 test-no-real-time-wait:tests/e2e/terminal-document-visibility-webgl-recovery.spec.ts
 2 test-no-real-time-wait:tests/e2e/terminal-hangul-terminating-digit-native.spec.ts
 1 test-no-real-time-wait:tests/e2e/terminal-hangul-wrap-boundary-bytes.spec.ts
-3 test-no-real-time-wait:tests/e2e/terminal-hidden-view-parking.spec.ts
+1 test-no-real-time-wait:tests/e2e/terminal-hidden-view-parking.spec.ts
 1 test-no-real-time-wait:tests/e2e/terminal-ibus-hangul-native.spec.ts
 1 test-no-real-time-wait:tests/e2e/terminal-ime-cdp-composition.ts
 9 test-no-real-time-wait:tests/e2e/terminal-inline-tui-reveal-convergence.spec.ts
@@ -451,7 +451,6 @@
 1 test-no-real-time-wait:tests/e2e/terminal-large-paste-responsiveness.spec.ts
 1 test-no-real-time-wait:tests/e2e/terminal-link-click-ownership.spec.ts
 1 test-no-real-time-wait:tests/e2e/terminal-link-hover-after-worktree-return.spec.ts
-13 test-no-real-time-wait:tests/e2e/terminal-long-table-scroll-restore.spec.ts
 1 test-no-real-time-wait:tests/e2e/terminal-macos-system-key-remap.spec.ts
 3 test-no-real-time-wait:tests/e2e/terminal-opencode-emoji-table-rendering.spec.ts
 4 test-no-real-time-wait:tests/e2e/terminal-pane-close-layout-consistency.spec.ts
@@ -1053,7 +1052,6 @@
 1 test-timeout-needs-reason:tests/e2e/sustained-agent-typing-load-scripts.unit.test.ts
 1 test-timeout-needs-reason:tests/e2e/terminal-cli-split-closed-before-mount.spec.ts
 6 test-timeout-needs-reason:tests/e2e/terminal-column-desync-repro.spec.ts
-1 test-timeout-needs-reason:tests/e2e/terminal-hidden-view-parking.spec.ts
 1 test-timeout-needs-reason:tests/e2e/terminal-inline-images-memory.spec.ts
 1 test-timeout-needs-reason:tests/e2e/terminal-inline-images-paired-runtime.spec.ts
 6 test-timeout-needs-reason:tests/e2e/terminal-inline-tui-reveal-convergence.spec.ts
