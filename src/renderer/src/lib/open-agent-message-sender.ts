@@ -11,7 +11,7 @@ import {
   type StructuredSessionOpenFeedback
 } from './activate-ai-vault-structured-session'
 import { useAppStore } from '@/store'
-import { showAgentPaneUnavailable } from '@/components/terminal-pane/stale-agent-row'
+import { showAgentPaneUnavailable } from '@/components/terminal-pane/agent-status/stale-agent-row'
 import { parseOrcaSessionAddress } from '../../../shared/orca-session-address'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {

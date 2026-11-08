@@ -4,8 +4,8 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import { publicRuntimeEnvironment } from '@/runtime/paired-runtime-environment-test-fixture'
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { publicRuntimeEnvironment } from '@/runtime/rpc/testing/paired-runtime-environment-test-fixture'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type { RunEventsPage } from '../../../../shared/orchestration-run-events'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -23,7 +23,7 @@ const mocks = vi.hoisted(() => ({
   >(),
   open: vi.fn(async () => false)
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.rpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({ callRuntimeRpc: mocks.rpc }))
 vi.mock('@/lib/open-agent-message-sender', () => ({ openOrchestrationAddress: mocks.open }))
 
 const initial = useAppStore.getInitialState()

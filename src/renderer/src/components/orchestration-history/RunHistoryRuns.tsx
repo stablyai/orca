@@ -8,6 +8,7 @@ import type { HistoryRun } from './run-history-client'
 import type { HistoryPages } from './use-run-history-pages'
 import { RunHistoryFeedback } from './RunHistoryFeedback'
 import { runHistoryTime } from './run-history-presentation'
+import { scrollToTop } from './scroll-to-top'
 
 export function RunHistoryRuns({
   page,
@@ -24,9 +25,7 @@ export function RunHistoryRuns({
 }) {
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
   const refresh = () => {
-    if (scrollElement) {
-      scrollElement.scrollTop = 0
-    }
+    scrollToTop(scrollElement)
     onRefresh()
   }
   return (

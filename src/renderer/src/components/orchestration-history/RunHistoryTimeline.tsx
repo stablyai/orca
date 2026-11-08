@@ -13,6 +13,7 @@ import type { HistoryRun } from './run-history-client'
 import type { HistoryPages } from './use-run-history-pages'
 import { RunHistoryFeedback } from './RunHistoryFeedback'
 import { runEventDetails, runEventLabel, runHistoryTime } from './run-history-presentation'
+import { scrollToTop } from './scroll-to-top'
 
 export type RunHistoryTimelineProps = {
   run: HistoryRun
@@ -39,11 +40,7 @@ export function RunHistoryTimeline({
 }: RunHistoryTimelineProps) {
   const [query, setQuery] = useState('')
   const [scrollElement, setScrollElement] = useState<HTMLDivElement | null>(null)
-  const resetScroll = () => {
-    if (scrollElement) {
-      scrollElement.scrollTop = 0
-    }
-  }
+  const resetScroll = () => scrollToTop(scrollElement)
   const refresh = () => {
     resetScroll()
     onRefresh()

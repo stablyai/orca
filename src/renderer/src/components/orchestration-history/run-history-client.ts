@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { RunEventsPageSchema } from '../../../../shared/orchestration-run-events'
 
 const RunSchema = z.object({

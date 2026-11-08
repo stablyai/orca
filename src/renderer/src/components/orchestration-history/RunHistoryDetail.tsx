@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RunEvent } from '../../../../shared/orchestration-run-events'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import { openOrchestrationAddress } from '@/lib/open-agent-message-sender'
 import { loadHistoryEvents, type HistoryRun } from './run-history-client'
 import { useRunHistoryPages } from './use-run-history-pages'
 import { RunHistoryTimeline } from './RunHistoryTimeline'
+
+/** Keeps try/finally out of the component so React Compiler can optimize it. */
+async function runThenSettle(run: () => Promise<void>, settle: () => void): Promise<void> {
+  try {
+    await run()
+  } finally {
+    settle()
+  }
+}
 
 export function RunHistoryDetail({
   environmentId,
@@ -41,23 +50,26 @@ export function RunHistoryDetail({
     }
     setOpeningSequence(event.sequence)
     timer.current = setTimeout(() => setOpeningVisible(true), 200)
-    try {
-      if (
-        (await openOrchestrationAddress(
-          address,
-          runtimeTargetForOwnerEnvironment(environmentId)
-        )) &&
-        mounted.current
-      ) {
-        onReveal()
+    await runThenSettle(
+      async () => {
+        if (
+          (await openOrchestrationAddress(
+            address,
+            runtimeTargetForOwnerEnvironment(environmentId)
+          )) &&
+          mounted.current
+        ) {
+          onReveal()
+        }
+      },
+      () => {
+        clearTimeout(timer.current)
+        if (mounted.current) {
+          setOpeningSequence(null)
+          setOpeningVisible(false)
+        }
       }
-    } finally {
-      clearTimeout(timer.current)
-      if (mounted.current) {
-        setOpeningSequence(null)
-        setOpeningVisible(false)
-      }
-    }
+    )
   }
   return (
     <RunHistoryTimeline
