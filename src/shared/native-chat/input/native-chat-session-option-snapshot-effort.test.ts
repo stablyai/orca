@@ -3,7 +3,7 @@ import { CODEX_SESSION_OPTION_CATALOG } from '../../agent-session/options/agent-
 import { createNativeChatSessionOptionRecord } from './native-chat-session-option-state'
 import { buildNativeChatSessionOptionSnapshot } from './native-chat-session-option-snapshot'
 
-function snapshot(choices: string[], current: string) {
+function snapshot(choices: string[], current: string, supported = true) {
   const record = createNativeChatSessionOptionRecord('codex')
   record.model = { value: 'account-model', source: 'reported' }
   record.valuesByModel['account-model'] = { effort: { value: current, source: 'reported' } }
@@ -23,7 +23,11 @@ function snapshot(choices: string[], current: string) {
               defaultValue: 'low',
               choices: choices.map((value) => ({ value, label: value }))
             },
-            apply: { midSession: { kind: 'unsupported' } }
+            apply: {
+              midSession: supported
+                ? { kind: 'command', build: (value) => `/effort ${String(value)}` }
+                : { kind: 'unsupported' }
+            }
           }
         ]
       }
@@ -36,22 +40,41 @@ function snapshot(choices: string[], current: string) {
 }
 
 describe('catalog effort evidence', () => {
-  it.each([{ choices: [] }, { choices: ['low'] }, { choices: ['low', 'high'] }])(
-    'retains an unlisted effort as text with $choices offered choices',
-    ({ choices }) => {
-      expect(snapshot(choices, 'extra-high')).toMatchObject({
-        kind: {
-          type: 'select',
-          currentValue: 'extra-high',
-          choices: [{ value: 'extra-high', label: 'extra-high' }]
-        },
-        valueSource: 'reported',
-        transport: 'catalog',
-        settable: false
-      })
-      expect(snapshot(choices, 'extra-high')?.action).toBeUndefined()
-    }
-  )
+  it('keeps supported levels selectable when the reported effort is unlisted', () => {
+    expect(snapshot(['low', 'medium', 'high'], 'extra-high')).toMatchObject({
+      kind: {
+        type: 'select',
+        currentValue: 'extra-high',
+        choices: [
+          { value: 'low', label: 'low' },
+          { value: 'medium', label: 'medium' },
+          { value: 'high', label: 'high' }
+        ]
+      },
+      valueSource: 'reported',
+      settable: true
+    })
+  })
+
+  it('retains unlisted effort as read-only when the catalog offers no adjustment', () => {
+    expect(snapshot(['low'], 'extra-high')).toMatchObject({
+      kind: { currentValue: 'extra-high', choices: [{ value: 'extra-high', label: 'extra-high' }] },
+      settable: false
+    })
+  })
+
+  it('preserves unsupported live transport restrictions for unlisted effort', () => {
+    expect(snapshot(['low', 'high'], 'extra-high', false)).toMatchObject({
+      kind: {
+        choices: [
+          { value: 'low', label: 'low' },
+          { value: 'high', label: 'high' }
+        ]
+      },
+      settable: false,
+      disabledReason: 'set-when-session-starts'
+    })
+  })
 
   it('keeps an already listed single effort omitted', () => {
     expect(snapshot(['low'], 'low')).toBeUndefined()

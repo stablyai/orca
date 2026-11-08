@@ -1,6 +1,7 @@
 import { Activity, Edit3, PowerOff, RefreshCw } from 'lucide-react-native'
 import type { ActionSheetAction } from './components/ActionSheetModal'
-import type { ConnectionState, HostProfile } from './transport/types'
+import type { ConnectionState } from './transport/connection/connection-state'
+import type { HostProfile } from './transport/hosts/host-profile'
 import { translate } from './i18n/mobile-i18n'
 
 // Defer navigation and new drawers until this native Modal unmounts; presenting into a live one freezes iOS (#8791).

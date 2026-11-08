@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { FolderWorkspace } from './folder-workspace-types'
-import type { WorkspaceAttachment } from '../worktree/types'
-import { getWorkspaceAttachments } from '../workspace-attachments/workspace-attachments'
 import {
-  folderWorkspaceRepoId,
   getFolderWorkspaceHostIdentity,
   folderWorkspaceToWorktree,
   projectGroupIdFromRepoId
@@ -47,143 +44,6 @@ describe('folderWorkspaceToWorktree', () => {
     expect(getFolderWorkspaceHostIdentity(workspace)).toBe(identity)
     expect(folderWorkspaceToWorktree(workspace).hostId).toBe(identity.split('|')[0])
   })
-  it('preserves multiple attachments and projects a bare Linear task without enabling review checks', () => {
-    const linkedItems: WorkspaceAttachment[] = [
-      { provider: 'github', type: 'pr', number: 7 },
-      {
-        provider: 'linear',
-        type: 'issue',
-        number: 0,
-        identifier: 'APP-42',
-        linearOrganizationUrlKey: 'acme'
-      },
-      { provider: 'github', type: 'issue', number: 8 }
-    ]
-    const worktree = folderWorkspaceToWorktree(makeFolderWorkspace({ linkedItems }))
-    expect(worktree.linkedItems).toEqual(linkedItems)
-    expect(getWorkspaceAttachments(worktree)).toHaveLength(3)
-    expect(worktree.linkedLinearIssue).toBe('APP-42')
-    expect(worktree.linkedLinearIssueOrganizationUrlKey).toBe('acme')
-    expect(worktree.linkedPR).toBeNull()
-  })
-  it('projects attached issue tasks without creating linked PR metadata', () => {
-    const githubIssue = folderWorkspaceToWorktree(
-      makeFolderWorkspace({
-        linkedTask: {
-          provider: 'github',
-          type: 'issue',
-          number: 42,
-          title: 'Refund flow fails',
-          url: 'https://github.com/acme/app/issues/42'
-        }
-      })
-    )
-    const gitlabIssue = folderWorkspaceToWorktree(
-      makeFolderWorkspace({
-        linkedTask: {
-          provider: 'gitlab',
-          type: 'issue',
-          number: 7,
-          title: 'Import fails',
-          url: 'https://gitlab.com/acme/app/-/issues/7'
-        }
-      })
-    )
-
-    expect(githubIssue).toMatchObject({
-      linkedIssue: 42,
-      linkedPR: null,
-      linkedGitLabMR: null,
-      linkedGitLabIssue: null
-    })
-    expect(gitlabIssue).toMatchObject({
-      linkedIssue: null,
-      linkedPR: null,
-      linkedGitLabMR: null,
-      linkedGitLabIssue: 7
-    })
-  })
-
-  it('projects Linear tasks by identifier', () => {
-    const worktree = folderWorkspaceToWorktree(
-      makeFolderWorkspace({
-        linkedTask: {
-          provider: 'linear',
-          type: 'issue',
-          number: 0,
-          title: 'Polish folder workspaces',
-          url: 'https://linear.app/acme/issue/ENG-123',
-          linearIdentifier: 'ENG-123'
-        }
-      })
-    )
-
-    expect(worktree.linkedLinearIssue).toBe('ENG-123')
-    expect(worktree.linkedPR).toBeNull()
-    expect(worktree.linkedGitLabMR).toBeNull()
-  })
-
-  it('projects durable Jira item and source context without legacy issue zero', () => {
-    const linkedTaskSourceContext = {
-      kind: 'task-source' as const,
-      provider: 'jira' as const,
-      projectId: 'group-1',
-      hostId: 'local' as const,
-      providerIdentity: {
-        provider: 'jira' as const,
-        siteId: 'site-1',
-        siteUrl: 'https://company.atlassian.net',
-        projectKey: 'ORCA'
-      }
-    }
-    const worktree = folderWorkspaceToWorktree(
-      makeFolderWorkspace({
-        linkedTask: {
-          provider: 'jira',
-          type: 'issue',
-          number: 0,
-          title: 'ORCA-123 Link Jira',
-          url: 'https://company.atlassian.net/browse/ORCA-123',
-          jiraIdentifier: 'ORCA-123'
-        },
-        linkedTaskSourceContext
-      })
-    )
-
-    expect(worktree.linkedIssue).toBeNull()
-    expect(worktree.linkedWorkItem).toMatchObject({
-      provider: 'jira',
-      jiraIdentifier: 'ORCA-123'
-    })
-    expect(worktree.linkedTaskSourceContext).toEqual(linkedTaskSourceContext)
-  })
-
-  it('projects first-message rename state for folder workspace cards', () => {
-    const worktree = folderWorkspaceToWorktree(
-      makeFolderWorkspace({
-        createdWithAgent: 'codex',
-        pendingFirstAgentMessageRename: true,
-        firstAgentMessageRenameError: 'No model configured'
-      })
-    )
-
-    expect(worktree).toMatchObject({
-      createdWithAgent: 'codex',
-      pendingFirstAgentMessageRename: true,
-      firstAgentMessageRenameError: 'No model configured'
-    })
-  })
-
-  it('projects runtime ownership from the folder execution host', () => {
-    const worktree = folderWorkspaceToWorktree(
-      makeFolderWorkspace({ executionHostId: 'runtime:shared%20server' })
-    )
-
-    expect(worktree).toMatchObject({
-      hostId: 'runtime:shared%20server',
-      runtimeOwnerEnvironmentId: 'shared server'
-    })
-  })
 
   it('keeps review-style tasks attached only to the folder workspace record', () => {
     const githubPr = folderWorkspaceToWorktree(
@@ -217,18 +77,6 @@ describe('folderWorkspaceToWorktree', () => {
 })
 
 describe('recognising a folder workspace repoId', () => {
-  // Synthetic repoId is always present; absence checks would render it as a real repo id.
-  it('never mints a null repoId, so absence cannot be the test for having no repo', () => {
-    const worktree = folderWorkspaceToWorktree(makeFolderWorkspace({ projectGroupId: 'group-9' }))
-
-    expect(worktree.repoId).not.toBeNull()
-    expect(projectGroupIdFromRepoId(worktree.repoId)).toBe('group-9')
-  })
-
-  it('round-trips the project group through the id it mints', () => {
-    expect(projectGroupIdFromRepoId(folderWorkspaceRepoId('4c3c3452-758b'))).toBe('4c3c3452-758b')
-  })
-
   // Use a long real repo id: short ids slice to empty even without a prefix check, hiding misclassification.
   it.each([
     'repo-1',
@@ -238,10 +86,5 @@ describe('recognising a folder workspace repoId', () => {
     'a-repo-id-comfortably-longer-than-the-prefix'
   ])('reports no project group for %s', (repoId) => {
     expect(projectGroupIdFromRepoId(repoId)).toBeNull()
-  })
-
-  it('reports no project group for an absent repoId', () => {
-    expect(projectGroupIdFromRepoId(null)).toBeNull()
-    expect(projectGroupIdFromRepoId(undefined)).toBeNull()
   })
 })

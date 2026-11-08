@@ -3,7 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
-import { writeSecureFile } from '../../../shared/secure-file'
+import { writeSecureFile } from '../../../shared/secure-storage/secure-file'
 import type { PluginThemeRegistration } from '../../../shared/plugins/artifacts/plugin-theme-artifact'
 import type { PluginTerminalThemeRegistration } from '../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 import type {

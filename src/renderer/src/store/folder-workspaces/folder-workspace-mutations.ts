@@ -1,27 +1,25 @@
-import { launchDraftSource } from '@/components/native-chat/native-chat-launch-draft-source'
-import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/runtime-workspace-attachment-capabilities'
+import { launchDraftSource } from '@/components/native-chat/drafts/native-chat-launch-draft-source'
+import { assertWorkspaceAttachmentWriteCapability } from '../../runtime/workspace-links/runtime-workspace-attachment-capabilities'
 import { getWorkspaceAttachments } from '../../../../shared/workspace-attachments/workspace-attachments'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
-import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import {
-  assertRuntimeEnvironmentCapability,
-  callRuntimeRpc
-} from '../../runtime/runtime-rpc-client'
+import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
+import { assertRuntimeEnvironmentCapability } from '../../runtime/rpc/compatibility/runtime-capability-proof'
+import { callRuntimeRpc } from '../../runtime/rpc/calls/runtime-rpc-call'
 import {
   runtimeTargetForOwnerEnvironment,
   getRuntimeTargetHostId
-} from '../../runtime/runtime-client-target'
+} from '../../runtime/rpc/targets/runtime-client-target'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 import { formatFolderWorkspaceCreateError } from '../../lib/folder-workspace-path-status'
 import {
   findFolderWorkspaceOwner,
   getExecutionHostIdForFolderWorkspace
 } from '@/lib/folder-workspace-runtime-owner'
-import { FolderWorkspaceUpdateCoordinator } from '../slices/folder-workspace-update-coordinator'
+import { FolderWorkspaceUpdateCoordinator } from './folder-workspace-update-coordinator'
 import type { FolderWorkspaceUpdates, RepoSlice } from '../repos/repo-state'
-import { adoptFromEndpoint } from '../adopt-from-endpoint'
+import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { holdCreatedSidebarWorkspace } from '@/lib/sidebar-pending-layer'
 import {
   folderWorkspaceOwnerTarget,

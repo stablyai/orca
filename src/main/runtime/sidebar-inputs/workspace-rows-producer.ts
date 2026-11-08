@@ -6,7 +6,7 @@ import {
 import { composeWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import type { ResolvedWorktree } from '../workspaces/catalog/runtime-worktree-path-identity'
 import type { ResolvedWorktreeSnapshot } from '../workspaces/catalog/runtime-resolved-worktree-cache'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { runtimeVisibleFolderWorkspaces } from '../workspaces/catalog/runtime-visible-catalog'
 import type {
@@ -179,7 +179,8 @@ export class WorkspaceRowsProducer {
       folderWorkspaces: runtimeVisibleFolderWorkspaces(store),
       repos: store.getRepos(),
       lineageById: store.getAllWorktreeLineage?.() ?? {},
-      crossStoreLineageByChildKey: store.getAllCrossStoreWorkspaceLineage?.()
+      crossStoreLineageByChildKey: store.getAllCrossStoreWorkspaceLineage?.(),
+      workspaceLineageByChildKey: store.getAllWorkspaceLineage?.()
     })
     for (const row of rows.values()) {
       const terminalPlatform = row.kind === 'git' ? platformByRepoId.get(row.repoId) : undefined

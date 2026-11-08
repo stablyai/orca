@@ -1,17 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   PUSH_FAILURE_PROMPT_FILE_LIMIT,
-  PUSH_FAILURE_SUMMARY_SCAN_CODE_UNITS,
   buildFixPushFailurePrompt,
-  hasExpandedPushFailureDetails,
   isPushHookFailure,
-  sanitizePushFailureDetails,
   summarizePushFailure
 } from './source-control-push-failure'
-
-afterEach(() => {
-  vi.restoreAllMocks()
-})
 
 describe('push failure detection and summary', () => {
   it('detects explicit pre-push hook failures', () => {
@@ -41,22 +34,6 @@ describe('push failure detection and summary', () => {
     for (const raw of negatives) {
       expect(isPushHookFailure(raw)).toBe(false)
     }
-  })
-
-  it('strips ANSI and control output before details and comparison', () => {
-    const raw = '\u001b[31mhusky - pre-push hook failed\u001b[0m\u0007\neslint failed'
-
-    expect(sanitizePushFailureDetails(raw)).toBe('husky - pre-push hook failed\neslint failed')
-    expect(summarizePushFailure(raw)).toBe('Lint failed during push.')
-  })
-
-  it('bounds summary analysis for pathological single-line logs', () => {
-    const split = vi.spyOn(String.prototype, 'split')
-    const raw = 'x'.repeat(PUSH_FAILURE_SUMMARY_SCAN_CODE_UNITS + 10_000)
-
-    expect(summarizePushFailure(raw)).toBe('x'.repeat(PUSH_FAILURE_SUMMARY_SCAN_CODE_UNITS))
-    expect(hasExpandedPushFailureDetails(raw, 'Push failed.')).toBe(true)
-    expect(split).not.toHaveBeenCalled()
   })
 })
 

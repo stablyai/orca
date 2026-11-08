@@ -24,11 +24,11 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
     item: 72,
     note: 'CSV column widths and PDF scale, keyed by worktree id, runtime and file path.'
   },
-  'src/renderer/src/components/native-chat/native-chat-composer-draft-journal.ts':
+  'src/renderer/src/components/native-chat/drafts/native-chat-composer-draft-journal.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
-  'src/renderer/src/components/native-chat/native-chat-composer-draft-storage.ts':
+  'src/renderer/src/components/native-chat/drafts/native-chat-composer-draft-storage.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
-  'src/renderer/src/components/native-chat/structured-agent-session-legacy-outbox.ts':
+  'src/renderer/src/components/native-chat/session/structured/delivery/structured-agent-session-legacy-outbox.ts':
     notApplicableDisposition(45, 'Keyed by session id.'),
   'src/renderer/src/lib/wsl-move-renderer-store-rewrites.ts': notApplicableDisposition(
     62,
@@ -66,7 +66,7 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/jira-view-mode-storage.ts',
       'src/renderer/src/components/landing-preflight-dismissal.ts',
       'src/renderer/src/components/linear-issue-view-storage.ts',
-      'src/renderer/src/components/native-chat/NativeChatStructuredSession.test-harness.tsx',
+      'src/renderer/src/components/native-chat/surfaces/integration/NativeChatStructuredSession.test-harness.tsx',
       'src/renderer/src/components/onboarding/onboarding-feature-setup.ts',
       'src/renderer/src/components/pet/PetOverlay.tsx',
       'src/renderer/src/components/right-sidebar/ai-vault/scope/ai-vault-view-options-persistence.ts',
@@ -78,9 +78,9 @@ export const LOCAL_STORAGE_MODULE_DISPOSITIONS: Record<string, WslMoveFieldDispo
       'src/renderer/src/components/sidebar/mobile-sidebar-onboarding-badge.ts',
       'src/renderer/src/components/sidebar/SeveredTerminalDaemonBanner.tsx',
       'src/renderer/src/components/sidebar/SidebarToolbar.tsx',
-      'src/renderer/src/components/terminal-pane/terminal-freeze-breadcrumbs.ts',
-      'src/renderer/src/components/terminal-pane/terminal-render-desync-trigger.ts',
-      'src/renderer/src/components/terminal-pane/terminal-startup-timing.ts',
+      'src/renderer/src/components/terminal-pane/render-health/diagnostics/terminal-freeze-breadcrumbs.ts',
+      'src/renderer/src/components/terminal-pane/render-health/terminal-render-desync-trigger.ts',
+      'src/renderer/src/components/terminal-pane/diagnostics/startup/terminal-startup-timing.ts',
       'src/renderer/src/components/UnexpectedSignoutCard.tsx',
       'src/renderer/src/lib/document-theme.ts',
       'src/renderer/src/lib/feature-education-telemetry.ts',
@@ -113,11 +113,16 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/browser/cookies/staging/browser-cookie-staged-import.ts': 'browser-cookie-import',
   'src/main/native-chat/agent-session-attachments/agent-session-attachment-claims.ts':
     'agent-session-journal',
-  'src/main/native-chat/agent-session-journal/command-receipt-schema.ts': 'agent-session-journal',
-  'src/main/native-chat/agent-session-journal/journal-database-schema.ts': 'agent-session-journal',
-  'src/main/native-chat/agent-session-journal/journal-outcome-format.ts': 'agent-session-journal',
-  'src/main/native-chat/agent-session-journal/journal-pi-active-branch.ts': 'pi-branch-import',
-  'src/main/native-chat/agent-session-journal/queued-message-schema.ts': 'agent-session-journal',
+  'src/main/native-chat/agent-session-journal/writing/command-receipt-schema.ts':
+    'agent-session-journal',
+  'src/main/native-chat/agent-session-journal/database/journal-database-schema.ts':
+    'agent-session-journal',
+  'src/main/native-chat/agent-session-journal/outcomes/journal-outcome-format.ts':
+    'agent-session-journal',
+  'src/main/native-chat/agent-session-journal/history-import/journal-pi-active-branch.ts':
+    'pi-branch-import',
+  'src/main/native-chat/agent-session-journal/queued-messages/queued-message-schema.ts':
+    'agent-session-journal',
   'src/main/persistence/profile-state/profile-state-database-schema.ts': 'profile-state',
   'src/main/runtime/orchestration/db/schema/create-core-tables-sql.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/create-graph-tables-sql.ts': 'orchestration',
@@ -129,7 +134,8 @@ export const SQLITE_SCHEMA_FILE_DATABASES: Record<string, string> = {
   'src/main/runtime/orchestration/db/schema/migrate-v39.ts': 'orchestration',
   'src/main/runtime/orchestration/db/schema/migrate.ts': 'orchestration',
   'src/main/runtime/orchestration/db/reset/removed-orchestration-work-store.ts': 'orchestration',
-  'src/main/runtime/orchestration/mutation-receipt-capacity.ts': 'orchestration',
+  'src/main/runtime/orchestration/db/mutation-receipts/mutation-receipt-capacity.ts':
+    'orchestration',
   // Test fixtures that mirror third-party agent and browser databases.
   'src/main/ai-vault/scanners/opencode/sqlite/session-scanner-opencode-sqlite-fixture.ts':
     'test-fixture',

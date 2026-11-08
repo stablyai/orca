@@ -1,10 +1,8 @@
-import {
-  buildAgentLaunchRouteInput,
-  workspaceKindForWorktreeId
-} from '@/lib/agent-launch-route-input'
+import { useAppStateView } from '@/store/retained-views/app-state-view'
+import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import { useMemo } from 'react'
-import { useAppStore } from '@/store/index'
 import { isCustomAgentId } from '../../../../../../shared/source-control/ai/generation/commit-message-agent-spec'
 import { pickSourceControlLaunchAgent } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
 import type { SelectedSourceControlActionRecipe } from '../../../../../../shared/source-control/ai/recipes/source-control-action-selection'
@@ -12,14 +10,14 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import type { AgentLaunchSurface } from '@/lib/agent-session-launch-plan'
+import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { useAgentMenuObservation } from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import {
   sourceControlRepoAgentRows,
   sourceControlAgentPickerSelection,
   type SourceControlAgentRows
-} from '@/lib/source-control-agent-picker'
+} from '@/lib/source-control/ai/source-control-agent-picker'
 import { isSourceControlAgentDetectedAndEnabled } from './source-control-agent-action-dialog-support'
 
 const NO_AGENTS: TuiAgent[] = []
@@ -41,7 +39,9 @@ export function useSourceControlActionAgentChoice(args: {
   recipe: SelectedSourceControlActionRecipe
   /** This open's deliberate pick; absent replays the saved recipe. */
   livePick: AgentLaunchSurface | undefined
+  terminalOnly?: boolean
 }) {
+  const store = useAppStateView()
   const { recipe } = args
   const worktreeDetectionTarget = useAgentDetectionTargetForWorktree(args.worktreeId ?? null)
   const rows = useMemo(
@@ -57,8 +57,9 @@ export function useSourceControlActionAgentChoice(args: {
     wakeOnOpen: true
   })
   const { detectedIds, detectionFailed, needsServerUpdate } = observation.detection
-  const detectedAgents =
-    observation.model.state === 'settled'
+  const detectedAgents = args.terminalOnly
+    ? (detectedIds ?? NO_AGENTS)
+    : observation.model.state === 'settled'
       ? [
           ...new Set(
             observation.model.rows
@@ -78,15 +79,18 @@ export function useSourceControlActionAgentChoice(args: {
           detectedAgents: detectedIds ?? NO_AGENTS,
           disabledAgents,
           chosenOpensAsChat: (agent) =>
+            !args.terminalOnly &&
             observation.model.state === 'settled' &&
             observation.model.rows.some((row) => row.kind === 'chat' && row.agent === agent)
         })
   const savedSurface = recipe.agentId === selectedAgent ? recipe.surface : undefined
-  const liveSurface = args.livePick ?? savedSurface
+  const liveSurface = args.terminalOnly ? 'terminal' : (args.livePick ?? savedSurface)
   const selection = observation.selectionFor(
     selectedAgent,
-    args.livePick ?? (savedSurface === 'terminal' ? 'terminal' : undefined),
-    savedSurface === 'chat' ? 'chat' : undefined
+    args.terminalOnly
+      ? 'terminal'
+      : (args.livePick ?? (savedSurface === 'terminal' ? 'terminal' : undefined)),
+    !args.terminalOnly && savedSurface === 'chat' ? 'chat' : undefined
   )
   const enabledDetectedAgents = detectedAgents.filter((agent) =>
     isTuiAgentEnabled(agent, disabledAgents)
@@ -97,7 +101,7 @@ export function useSourceControlActionAgentChoice(args: {
       selectedAgent &&
       !isSourceControlAgentDetectedAndEnabled(selectedAgent, detectedAgents, disabledAgents)
     )
-  const route = buildAgentLaunchRouteInput(useAppStore.getState(), {
+  const route = buildAgentLaunchRouteInput(store.getState(), {
     agent: selectedAgent ?? 'claude',
     workspace: args.worktreeId
       ? { worktreeId: args.worktreeId, kind: workspaceKindForWorktreeId(args.worktreeId) }

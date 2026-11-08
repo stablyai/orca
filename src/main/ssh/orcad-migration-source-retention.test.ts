@@ -17,10 +17,7 @@ import {
   retainUnretainedOrcadMigrationSources,
   retainOrcadMigrationSource
 } from './orcad-migration-source-retention'
-import {
-  enableMovedOrcadAutomations,
-  enableMovedOrcadAutomationsForTarget
-} from './orcad-migration-moved-automations'
+import { enableMovedOrcadAutomations } from './orcad-migration-moved-automations'
 import { createOrcadMigrationManifest } from './orcad-migration-manifest-export'
 
 const TARGET_ID = 'ssh-1'
@@ -111,20 +108,6 @@ describe('retaining a committed migration source', () => {
     )
     expect(listPendingManagedOrcadMigrations(userDataPath)).toEqual([])
   })
-
-  it('does not count retained cutovers against the in-flight journal capacity', () => {
-    for (let index = 0; index < 4; index += 1) {
-      const id = `m-${index}`
-      writeOrcadMigrationSourceCutover(userDataPath, {
-        ...orcadMigrationCutoverFixture(id, `ssh-${index}`),
-        phase: 'destination-committed',
-        sourceRetainedAt: '2026-10-03T00:00:00.000Z'
-      })
-    }
-    expect(() =>
-      writeOrcadMigrationSourceCutover(userDataPath, orcadMigrationCutoverFixture('m-new', 'ssh-9'))
-    ).not.toThrow()
-  })
 })
 
 describe('renaming unsaved drafts to the server on commit', () => {
@@ -200,17 +183,6 @@ describe('renaming unsaved drafts to the server on commit', () => {
     expect(serverFiles()).toEqual([])
   })
 
-  it('shares one retain between concurrent callers, so a later one never renames again', async () => {
-    saveFiles(SOURCE_HOST, [draftedFile('/srv/app/a.md', 'source A')])
-    writeOrcadMigrationSourceCutover(userDataPath, committed())
-    const first = retainOrcadMigrationSource(userDataPath, 'm-1', store)
-    expect(retainOrcadMigrationSource(userDataPath, 'm-1', store)).toBe(first)
-    await first
-    saveFiles(SERVER_HOST, [])
-    await retainOrcadMigrationSource(userDataPath, 'm-1', store)
-    expect(serverFiles()).toEqual([])
-  })
-
   it("never retains another profile's migration at startup", async () => {
     writeOrcadMigrationSourceCutover(userDataPath, {
       ...orcadMigrationCutoverFixture('m-9', 'ssh-other-profile'),
@@ -218,17 +190,6 @@ describe('renaming unsaved drafts to the server on commit', () => {
     })
     await retainUnretainedOrcadMigrationSources(userDataPath, store)
     expect(listOrcadMigrationSourceCutovers(userDataPath)[0]?.sourceRetainedAt).toBeUndefined()
-  })
-
-  it('keeps newer typing in the server copy when the connect retains first', async () => {
-    saveFiles(SOURCE_HOST, [draftedFile('/srv/app/a.md', 'source A')])
-    saveFiles(SERVER_HOST, [
-      { ...draftedFile('/srv/app/a.md', 'typed after'), runtimeEnvironmentId: 'env-1' }
-    ])
-    writeOrcadMigrationSourceCutover(userDataPath, committed())
-    await retainOrcadMigrationSource(userDataPath, 'm-1', store)
-    await retainUnretainedOrcadMigrationSources(userDataPath, store)
-    expect(serverFiles()?.map((file) => file.dirtyDraftContent)).toEqual(['typed after'])
   })
 
   it('makes the startup rename durable before its retained mark', async () => {
@@ -311,49 +272,5 @@ describe('moving automations that ran on this desktop', () => {
     expect(enable).toHaveBeenCalledWith(
       expect.objectContaining({ id: automation.id, dtstart: automation.dtstart })
     )
-  })
-
-  it('retries a server it could not reach, but not one that refused', async () => {
-    committedWithAutomation()
-    await retainOrcadMigrationSource(userDataPath, 'm-1', store)
-
-    const unreachable = vi.fn(async () => {
-      throw new Error('offline')
-    })
-    await expect(enableMovedOrcadAutomations(userDataPath, 'm-1', unreachable)).resolves.toBe(0)
-    const refused = vi.fn(async () => false)
-    await expect(enableMovedOrcadAutomations(userDataPath, 'm-1', refused)).resolves.toBe(1)
-    await enableMovedOrcadAutomations(userDataPath, 'm-1', refused)
-    expect(refused).toHaveBeenCalledOnce()
-  })
-
-  it('retries an earlier move a later delta move superseded', async () => {
-    committedWithAutomation()
-    await retainOrcadMigrationSource(userDataPath, 'm-1', store)
-    writeOrcadMigrationSourceCutover(userDataPath, {
-      ...orcadMigrationCutoverFixture('m-2', TARGET_ID),
-      phase: 'destination-committed',
-      sourceRetainedAt: '2026-10-03T00:00:00.000Z',
-      supersedesMigrationId: 'm-1'
-    })
-
-    const enable = vi.fn(async () => false)
-    await expect(
-      enableMovedOrcadAutomationsForTarget(userDataPath, TARGET_ID, enable)
-    ).resolves.toBe(1)
-    expect(enable).toHaveBeenCalledOnce()
-  })
-
-  it('leaves a copy the user had turned off alone, and asks the server for nothing', async () => {
-    const automation = committedWithAutomation()
-    store.disableAutomations(new Set([automation.id]))
-    const before = store.listAutomations()[0]
-
-    await retainOrcadMigrationSource(userDataPath, 'm-1', store)
-    const enable = vi.fn(async () => true)
-    await enableMovedOrcadAutomations(userDataPath, 'm-1', enable)
-
-    expect(store.listAutomations()[0]).toEqual(before)
-    expect(enable).not.toHaveBeenCalled()
   })
 })

@@ -1,4 +1,5 @@
 import { WORKSPACE_ATTACHMENT_RUNTIME_CAPABILITIES } from './workspace-attachments/workspace-attachment-capabilities'
+import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from './sidebar-inputs-switch'
 
 export const WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY =
   'worktree.rename-error-dismiss.v1' as const
@@ -26,6 +27,9 @@ export const REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY =
   'repo.search-qualified-refs.v1' as const
 export const FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY =
   'folder-workspace.path-status.v1' as const
+// Hosts whose folderWorkspace.update/delete honor `requireUniqueId`; older hosts edit the first twin and delete every row with the id.
+export const FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY =
+  'folder-workspace.unique-id-mutation.v1' as const
 // Replay ambiguous creates only with advertised idempotency support; older hosts strip clientMutationId. status.worktreeCreateIdempotency supplies optional retention policy.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
@@ -47,6 +51,9 @@ export const WORKTREE_BACKGROUND_REMOVAL_RUNTIME_CAPABILITY =
 export const WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY =
   'worktree.create.client-automation-provenance.v1' as const
 
+export const WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY =
+  'worktree.create-agent-options.v1' as const
+
 // Hosts that save a parent from another Orca store; older hosts strip `crossStoreParent` and write no link.
 export const WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY =
   'worktree.lineage.crossMachine' as const
@@ -67,7 +74,43 @@ export function assertCrossStoreLineageSupported(
   }
 }
 
+// Hosts that accept a folder workspace as `worktree.set`'s parent; older hosts refuse it as not found.
+export const WORKTREE_SET_FOLDER_PARENT_RUNTIME_CAPABILITY =
+  'worktree.set.folder-parent.v1' as const
+
+export function supportsFolderParent(capabilities: readonly string[] | undefined): boolean {
+  return capabilities?.includes(WORKTREE_SET_FOLDER_PARENT_RUNTIME_CAPABILITY) === true
+}
+
+/** Refuses before any request, so an older host's "not found" never reads as a mistyped folder. */
+export function assertFolderParentSetSupported(
+  capabilities: readonly string[] | undefined,
+  hostLabel: string
+): void {
+  if (!supportsFolderParent(capabilities)) {
+    throw new Error(
+      `Update Orca on ${hostLabel} to attach a worktree to a folder workspace. Nothing was changed.`
+    )
+  }
+}
+
+// Hosts whose selector RPCs accept `matchFolderWorkspaces`, letting path: and name: also match folder workspaces.
+export const WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY =
+  'workspace-selector.folder-match.v1' as const
+
+// Hosts that run an existing worktree's setup once the user approves that worktree's content.
+export const WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY =
+  'worktree.run-approved-setup.v1' as const
+
+// Hosts that honor branchIntent 'create-exact': the unsuffixed new branch, or a coded refusal.
+export const WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY =
+  'worktree.create.exact-name.v1' as const
+// Hosts that publish worktreeRowsChanged (only while the sidebar feed is off), so a phone's workspace list polls worktree.ps only as a backstop.
+export const WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY =
+  'worktree.rows-changed-event.v1' as const
+
 export const WORKTREE_RUNTIME_CAPABILITIES = [
+  WORKTREE_CREATE_AGENT_OPTIONS_RUNTIME_CAPABILITY,
   WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_RUNTIME_CAPABILITY,
   WORKTREE_OPEN_EXISTING_BRANCH_V2_RUNTIME_CAPABILITY,
@@ -81,11 +124,17 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
   REPO_SEARCH_QUALIFIED_REFS_RUNTIME_CAPABILITY,
   FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY,
+  FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY,
   WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_CLIENT_AUTOMATION_PROVENANCE_RUNTIME_CAPABILITY,
-  WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY
+  WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY,
+  WORKTREE_SET_FOLDER_PARENT_RUNTIME_CAPABILITY,
+  WORKSPACE_SELECTOR_FOLDER_MATCH_RUNTIME_CAPABILITY,
+  WORKTREE_RUN_APPROVED_SETUP_RUNTIME_CAPABILITY,
+  WORKTREE_CREATE_EXACT_NAME_RUNTIME_CAPABILITY,
+  ...(ORCA_SIDEBAR_INPUTS_IS_MAIN ? [] : [WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY])
 ] as const

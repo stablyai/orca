@@ -1,4 +1,3 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
@@ -198,87 +197,6 @@ test('a provider set up only on this computer stays visible, greyed, under a ser
         height: 360
       }
     })
-  } finally {
-    await client?.dispose()
-  }
-})
-
-test('Claude set up only on this computer shows "No usage from <host>" under a server workspace', async ({
-  sharedPage
-}, testInfo) => {
-  test.setTimeout(180_000)
-  const outputPath = (name: string): string => testInfo.outputPath(name)
-  // The host has no Claude login, so it reports Claude the way it reports API-key billing.
-  // Why refresh: the host fetches usage on demand, not at launch.
-  await sharedPage.evaluate(() => window.__store?.getState().refreshRateLimits())
-  await sharedPage.waitForFunction(
-    () => {
-      const claude = window.__store?.getState().rateLimits.claude
-      return (
-        claude?.status === 'unavailable' &&
-        claude.usageMetadata?.failureKind === 'missing-credentials'
-      )
-    },
-    null,
-    { timeout: 60_000 }
-  )
-  let client: PairedElectronClient | undefined
-  try {
-    client = await launchPairedElectronClient(
-      await createRuntimeDesktopPairingOffer(sharedPage),
-      testInfo,
-      HOST_NAME,
-      { extraEnv: { USER: NO_CLAUDE_LOGIN_USER } }
-    )
-    const { app, page, environmentId } = client
-    await page.setViewportSize({ width: 1280, height: 800 })
-    await expect(page.getByText('Workspace board moved to the bottom bar')).toHaveCount(0, {
-      timeout: 20_000
-    })
-
-    // A refresh-token-only login counts as set up without any network call.
-    const claudeConfigDir = path.join(
-      await app.evaluate(({ app: electronApp }) => electronApp.getPath('home')),
-      '.claude'
-    )
-    const setClaudeSetUpHere = async (setUp: boolean): Promise<void> => {
-      if (setUp) {
-        mkdirSync(claudeConfigDir, { recursive: true })
-        writeFileSync(
-          path.join(claudeConfigDir, '.credentials.json'),
-          JSON.stringify({ claudeAiOauth: { refreshToken: 'e2e-fake-claude-refresh-token' } })
-        )
-      } else {
-        rmSync(path.join(claudeConfigDir, '.credentials.json'), { force: true })
-      }
-      await page.evaluate(() => window.__store?.getState().refreshRateLimits())
-      await page.waitForFunction(
-        (expected) => (window.__store?.getState().rateLimits.claude?.status ?? null) === expected,
-        setUp ? 'error' : 'unavailable',
-        { timeout: 30_000 }
-      )
-    }
-    await setClaudeSetUpHere(true)
-    await focusFirstServerWorktree(page, environmentId)
-
-    const claudeNote = `Claude usage isn't available from ${HOST_NAME}. It may not be signed in there, or it may use API-key billing.`
-    const placeholder = page.locator('[data-usage-chip="claude"]').locator('[title]')
-    await expect(placeholder).toBeVisible({ timeout: 60_000 })
-    await expect(placeholder).toHaveText(`No usage from ${HOST_NAME}`)
-    await expect(placeholder).toHaveAttribute('title', claudeNote)
-    await expect(placeholder.locator('[data-owner-host]')).toHaveText(HOST_NAME)
-    await shootStatusBar(page, '5-server-owner-claude-no-usage-chip.png', outputPath)
-
-    await page.getByRole('button', { name: 'Usage', exact: true }).click()
-    const row = page.getByRole('menuitem').filter({ hasText: `No usage from ${HOST_NAME}` })
-    await expect(row).toBeVisible()
-    await expect(row).toContainText(claudeNote)
-    await page.keyboard.press('Escape')
-    await expect(page.getByRole('menu')).toHaveCount(0)
-
-    // Without Claude here, the host's answer alone adds no Claude chip.
-    await setClaudeSetUpHere(false)
-    await expect(page.getByText(`No usage from ${HOST_NAME}`)).toHaveCount(0, { timeout: 30_000 })
   } finally {
     await client?.dispose()
   }

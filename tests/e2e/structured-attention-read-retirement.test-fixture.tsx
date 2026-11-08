@@ -1,5 +1,4 @@
 // @vitest-environment happy-dom
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { transport } from './__mocks__/structured-attention-read-surfaces'
 import { cleanup } from '@testing-library/react'
 import { beforeEach, afterEach, vi } from 'vitest'
@@ -16,8 +15,8 @@ import {
   structuredAgentSessionPaneKey,
   projectStructuredAgentSessionStatusState
 } from '../../src/shared/agent-session/view/structured-agent-session-projection'
-import { getStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
-import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-turn-completion-feed'
+import { getStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
+import { StructuredAgentSessionTurnCompletionFeed } from '../../src/main/native-chat/agent-session-wire/observations/structured-agent-session-turn-completion-feed'
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
@@ -26,23 +25,23 @@ import { createStructuredAttentionMobileDelivery } from '../../src/main/runtime/
 import {
   call,
   installStructuredHostStub,
-  clearStructuredHostStub,
+  clearStructuredHostStub
+} from '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc.test-fixture'
+
+import {
   STRUCTURED_CLIENT,
   SESSION
-} from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
-import {
-  makeUnifiedTab,
-  makeTabGroup,
-  makeWorktree,
-  TEST_REPO
-} from '@/store/slices/store-test-helpers'
+} from '../../src/main/runtime/rpc/methods/structured-sessions/protocol/structured-agent-session-rpc-client.test-fixture'
+import { makeUnifiedTab, makeTabGroup } from '@/store/slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 
 import { useAppStore } from '@/store'
 import { useReadOnScreenAttention } from '@/hooks/useReadOnScreenAttention'
-import { useStructuredAgentSessionRead } from '@/components/native-chat/use-structured-agent-session-read'
-import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/structured-agent-session-read-owner'
-import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/structured-agent-session-turn-completion-feed'
-import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
+import { useStructuredAgentSessionRead } from '@/components/native-chat/session/structured/read/use-structured-agent-session-read'
+import { resetStructuredAgentSessionReadOwnersForTests } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
+import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-turn-completion-feed'
+import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 
 export const WORKSPACE = 'repo1::/tmp/wt'
 export const TAB = 'chat'

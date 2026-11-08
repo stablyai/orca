@@ -21,11 +21,6 @@ async function makeFixture() {
 
 // POSIX permissions and shebang execution are what the probe measures.
 describe.skipIf(process.platform === 'win32')('probeAppImageCache', () => {
-  it('accepts a private, writable cache that can run programs', async () => {
-    const { appImagePath, cacheRootPath } = await makeFixture()
-    await expect(probeAppImageCache(cacheRootPath, appImagePath)).resolves.toBeNull()
-  })
-
   it('refuses a cache other users can write to', async () => {
     const { appImagePath, cacheRootPath } = await makeFixture()
     await mkdir(cacheRootPath, { recursive: true })

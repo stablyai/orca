@@ -1,5 +1,5 @@
 import { isAcpReadySession, type AcpStructuredChild } from './acp-structured-child'
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import type { AcpStructuredSession } from './acp-structured-session'
 

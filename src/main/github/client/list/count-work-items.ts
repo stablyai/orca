@@ -1,7 +1,7 @@
 import { withGitHubRepoExecution } from '../../github-repository-identity'
 import type { IssueSourcePreference } from '../../../../shared/repo-types'
 import { isGitHubWorkItemsQueryTooLarge } from '../../../../shared/github/work-items-query-bounds'
-import { parseTaskQuery, type ParsedTaskQuery } from '../../../../shared/task-query'
+import { parseTaskQuery, type ParsedTaskQuery } from '../../../../shared/work-items/task-query'
 import {
   ghExecFileAsync,
   acquire,

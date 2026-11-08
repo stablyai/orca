@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os'
 import { basename, dirname, join, sep } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as WindowsAcl from '../../shared/secure-path-windows-acl'
+import type * as WindowsAcl from '../../shared/secure-storage/secure-path-windows-acl'
 import type { OrcadManagedStopRequest } from '../../shared/orcad-stop-request'
 import { acquireOrcadInstanceLock, type OrcadInstanceLock } from './orcad-instance-lock'
 import {
@@ -18,7 +18,7 @@ import { runOrcadManagedStopCommand } from './orcad-managed-stop-command'
 
 const hardening = vi.hoisted(() => ({ pending: new Set<Promise<void>>() }))
 
-vi.mock('../../shared/secure-path-windows-acl', async (importOriginal) => {
+vi.mock('../../shared/secure-storage/secure-path-windows-acl', async (importOriginal) => {
   const acl = await importOriginal<typeof WindowsAcl>()
   return {
     ...acl,

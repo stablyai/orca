@@ -1,7 +1,7 @@
 import type { JSX } from 'react'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type SetupGuideProgressRingProps = {
   done: number
@@ -20,6 +20,7 @@ export function SetupGuideProgressRing({
   strokeWidth = 2,
   tooltipLabel
 }: SetupGuideProgressRingProps): JSX.Element {
+  const t = useTranslate()
   const boundedTotal = Math.max(total, 1)
   const boundedDone = Math.min(Math.max(done, 0), boundedTotal)
   const progressLabel = `${boundedDone}/${boundedTotal}`
@@ -38,7 +39,7 @@ export function SetupGuideProgressRing({
             sizeClassName,
             className
           )}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.setup.guide.SetupGuideProgressRing.dac3a4724a',
             '{{value0}} of {{value1}} setup steps complete',
             { value0: boundedDone, value1: boundedTotal }

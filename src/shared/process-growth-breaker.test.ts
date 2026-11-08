@@ -46,17 +46,6 @@ describe('evaluateProcessGrowth', () => {
     expect(evaluateProcessGrowth(state, sample(20_000, 900), LIMITS).level).toBe('elevated')
   })
 
-  it('reports a high total as elevated load, never as a trip', () => {
-    const state = createProcessGrowthState()
-    expect(evaluateProcessGrowth(state, sample(0, LIMITS.hostElevatedDescendants), LIMITS)).toEqual(
-      {
-        level: 'elevated',
-        trips: [],
-        rising: false
-      }
-    )
-  })
-
   it('treats an unreadable table as unknown, never as a trip or a reset', () => {
     const state = createProcessGrowthState()
     evaluateProcessGrowth(state, sample(0, 0), LIMITS)

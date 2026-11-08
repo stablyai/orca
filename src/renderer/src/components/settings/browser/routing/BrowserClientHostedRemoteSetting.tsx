@@ -1,4 +1,4 @@
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
@@ -17,8 +17,9 @@ export function BrowserClientHostedRemoteSetting({
   settings,
   updateSettings
 }: BrowserClientHostedRemoteSettingProps): React.JSX.Element {
-  const title = getBrowserClientHostedRemoteTitle()
-  const description = getBrowserClientHostedRemoteDescription()
+  const t = useTranslate()
+  const title = getBrowserClientHostedRemoteTitle(t)
+  const description = getBrowserClientHostedRemoteDescription(t)
 
   return (
     <SearchableSetting
@@ -53,19 +54,16 @@ export function BrowserClientHostedRemoteSetting({
             options={[
               {
                 value: 'device',
-                label: translate('settings.browser.clientHostedRemote.optionDevice', 'This device'),
-                tooltip: translate(
+                label: t('settings.browser.clientHostedRemote.optionDevice', 'This device'),
+                tooltip: t(
                   'settings.browser.clientHostedRemote.optionDeviceTooltip',
                   'Pages render on this desktop, so input and popups behave natively.'
                 )
               },
               {
                 value: 'server',
-                label: translate(
-                  'settings.browser.clientHostedRemote.optionServer',
-                  'Server (streamed)'
-                ),
-                tooltip: translate(
+                label: t('settings.browser.clientHostedRemote.optionServer', 'Server (streamed)'),
+                tooltip: t(
                   'settings.browser.clientHostedRemote.optionServerTooltip',
                   'Pages render on the remote server and stream to this device.'
                 )

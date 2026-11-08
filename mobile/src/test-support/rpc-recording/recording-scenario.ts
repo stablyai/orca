@@ -1,4 +1,4 @@
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { DeclaredDeviceState } from './declared-device-state'
 import type { RecordedValue } from './recording-values'
 

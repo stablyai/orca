@@ -34,13 +34,13 @@ export type StructuredAgentSessionAdoption = {
 
 export type CommittedStructuredAgentSessionAdoptionReplay = {
   record: AgentSessionRecord
-  providerHandle: AgentSessionProviderHandle
+  providerHandle: AgentSessionProviderHandle | null
 }
 
 /** Attach still validates the committed operation’s fingerprint. */
 export function findCommittedStructuredAgentSessionAdoptionReplay(input: {
   agent: StructuredAgentId
-  providerSessionId: string
+  providerSessionId?: string
   rowSessionId: (link: AgentSessionProviderHandleLink) => string
   selfSessionId: string
   callerKey: string
@@ -59,18 +59,16 @@ export function findCommittedStructuredAgentSessionAdoptionReplay(input: {
   }
   const record = input.record
   const adopted = record?.providerHandleChain[0]
+  if (!record || record.sessionId !== input.selfSessionId || record.provider !== input.agent) {
+    return null
+  }
   if (
-    !record ||
-    record.sessionId !== input.selfSessionId ||
-    record.provider !== input.agent ||
-    adopted?.origin !== 'adopted'
+    input.providerSessionId !== undefined &&
+    (adopted?.origin !== 'adopted' || input.rowSessionId(adopted) !== input.providerSessionId)
   ) {
     return null
   }
-  if (input.rowSessionId(adopted) !== input.providerSessionId) {
-    return null
-  }
-  return { record, providerHandle: adopted.handle }
+  return { record, providerHandle: adopted?.origin === 'adopted' ? adopted.handle : null }
 }
 
 /** Codex does not lock threads: concurrent writers silently diverge, so host ownership must reject them.

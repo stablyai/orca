@@ -42,3 +42,20 @@ export type AgentPickerRetainedSetup = {
   draft: AgentPickerDraft
   active: boolean
 }
+
+/** Launch has no Arguments editor, so Arguments a speed edit copied from older settings yield to the current ones. */
+export function launchAgentPickerDraft(
+  entry: AgentPickerEntry,
+  draft: AgentPickerDraft
+): AgentPickerDraft {
+  if (draft.argumentsOwner === undefined || draft.argumentsOwner === entry.ownerKey) {
+    return draft
+  }
+  const {
+    arguments: _arguments,
+    pendingArguments: _pending,
+    argumentsOwner: _owner,
+    ...rest
+  } = draft
+  return rest
+}

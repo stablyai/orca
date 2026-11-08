@@ -19,6 +19,7 @@ import {
   discoverModelsLocal,
   type CommitMessageModelDiscoveryLocalOptions
 } from './commit-message-model-discovery'
+import { discoverModelsWithHostCache } from './model-discovery-host-cache'
 import { spawnSourceControlAgent } from './source-control-agent-launch'
 import { generateConversationName } from './conversation-name-generation-request'
 import { cancelLocalGeneration } from './source-control-generation-lanes'
@@ -93,24 +94,26 @@ export function commandBackslashMode(
   return resolveCommandBackslashMode(target, platform)
 }
 
-export async function discoverCommitMessageModelsLocal(
+export function discoverCommitMessageModelsLocal(
   agentId: TuiAgent,
   env: NodeJS.ProcessEnv | undefined,
   agentCommandOverride?: string,
   options: CommitMessageModelDiscoveryLocalOptions = {}
 ): Promise<DiscoverCommitMessageModelsResult> {
-  return discoverModelsLocal({
-    agentId,
-    env,
-    agentCommandOverride,
-    options,
-    backslash: commandBackslashMode({
-      kind: 'local',
-      cwd: options.cwd ?? '',
-      wslDistro: options.wslDistro
-    }),
-    spawnAgent: spawnSourceControlAgent
-  })
+  return discoverModelsWithHostCache({ agentId, agentCommandOverride, env, options }, () =>
+    discoverModelsLocal({
+      agentId,
+      env,
+      agentCommandOverride,
+      options,
+      backslash: commandBackslashMode({
+        kind: 'local',
+        cwd: options.cwd ?? '',
+        wslDistro: options.wslDistro
+      }),
+      spawnAgent: spawnSourceControlAgent
+    })
+  )
 }
 
 export function cancelGenerateCommitMessageLocal(cwd: string): void {

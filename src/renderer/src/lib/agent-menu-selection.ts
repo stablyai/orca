@@ -1,8 +1,8 @@
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
-import type { AgentLaunchSurface } from './agent-session-launch-plan'
-import type { AgentLaunchRoute } from './agent-launch-routing'
+import type { AgentLaunchSurface } from './agent-session/launch/routing/agent-session-launch-plan'
+import type { AgentLaunchRoute } from './agent-session/launch/routing/agent-launch-routing'
 import type {
   HostChatAnswer,
   NewTabAgentMenuSettings
@@ -28,7 +28,13 @@ export function resolveAgentMenuSelection(input: {
   answer: HostChatAnswer
   chatPending: boolean
   plain: boolean
-}): { ready: boolean; choice?: AgentLaunchChoice; cli: boolean } {
+}): {
+  ready: boolean
+  choice?: AgentLaunchChoice
+  cli: boolean
+  /** Only the chosen terminal's host is still connecting; the choices themselves are known. */
+  terminalWaiting?: boolean
+} {
   const { agent, surface, answer } = input
   if (agent === null) {
     return { ready: true, cli: false }

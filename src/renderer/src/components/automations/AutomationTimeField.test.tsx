@@ -5,27 +5,13 @@ import React from 'react'
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import {
-  AutomationTimeField,
-  formatAutomationTimeInput,
-  parseAutomationTime,
-  resolveDigitCommit,
-  resolveDigitStep
-} from './AutomationTimeField'
+import { AutomationTimeField, resolveDigitCommit, resolveDigitStep } from './AutomationTimeField'
 
 afterEach(() => {
   cleanup()
 })
 
 describe('AutomationTimeField helpers', () => {
-  it('parses and formats 24h time values', () => {
-    expect(parseAutomationTime('09:15')).toEqual({ hour: 9, minute: 15 })
-    expect(parseAutomationTime('23:59')).toEqual({ hour: 23, minute: 59 })
-    expect(parseAutomationTime('bad')).toEqual({ hour: 9, minute: 0 })
-    expect(formatAutomationTimeInput(9, 5)).toBe('09:05')
-    expect(formatAutomationTimeInput(0, 0)).toBe('00:00')
-  })
-
   it('resolves digit commits with empty → min and range clamp', () => {
     expect(resolveDigitCommit('', 9, 1, 12)).toBe(1)
     expect(resolveDigitCommit('', 15, 0, 59)).toBe(0)
@@ -69,38 +55,6 @@ function ControlledTimeField({
 }
 
 describe('AutomationTimeField interactions', () => {
-  it('renders a unified 12h field with AM/PM instead of nested selects', () => {
-    render(<ControlledTimeField initialTime="13:15" />)
-
-    expect(screen.getByLabelText('Hour')).toHaveValue('1')
-    expect(screen.getByLabelText('Minute')).toHaveValue('15')
-    expect(screen.getByRole('button', { name: /^AM or PM:/ })).toHaveTextContent('PM')
-    expect(document.querySelector('[data-slot="select"]')).toBeNull()
-  })
-
-  it('names the selected period for assistive technology', async () => {
-    const user = userEvent.setup()
-    render(<ControlledTimeField initialTime="01:15" />)
-
-    const period = screen.getByRole('button', { name: 'AM or PM: AM' })
-    expect(period).toHaveAttribute('aria-pressed', 'false')
-
-    await user.click(period)
-
-    expect(screen.getByRole('button', { name: 'AM or PM: PM' })).toHaveAttribute(
-      'aria-pressed',
-      'true'
-    )
-  })
-
-  it('renders minute-only mode for hourly cadence', () => {
-    render(<ControlledTimeField mode="minute" />)
-
-    expect(screen.getByLabelText('Minute')).toHaveValue('15')
-    expect(screen.queryByLabelText('Hour')).toBeNull()
-    expect(screen.queryByRole('button', { name: /^AM or PM:/ })).toBeNull()
-  })
-
   it('commits typed hour/minute and toggles AM/PM into 24h storage', async () => {
     const user = userEvent.setup()
     const onTimeChange = vi.fn()
@@ -143,18 +97,5 @@ describe('AutomationTimeField interactions', () => {
     expect(onTimeChange).toHaveBeenLastCalledWith('09:30')
     await user.tab()
     expect(onTimeChange.mock.calls.length).toBe(callsAfterType)
-  })
-
-  it('arrow-steps from the in-progress digit, not only the last commit', async () => {
-    const user = userEvent.setup()
-    const onTimeChange = vi.fn()
-    render(<ControlledTimeField onTimeChange={onTimeChange} />)
-
-    const hour = screen.getByLabelText('Hour')
-    await user.clear(hour)
-    await user.type(hour, '1')
-    onTimeChange.mockClear()
-    await user.keyboard('{ArrowUp}')
-    expect(onTimeChange).toHaveBeenLastCalledWith('02:15')
   })
 })

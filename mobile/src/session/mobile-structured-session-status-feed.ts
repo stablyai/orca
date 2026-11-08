@@ -11,8 +11,8 @@ import {
   foldAgentSessionConversationNames,
   type AgentSessionConversationNames
 } from '../../../src/shared/agent-session/agent-session-conversation-names'
-import { isMobileMethodUnavailableError } from '../transport/mobile-method-unavailable'
-import type { RpcClient } from '../transport/rpc-client'
+import { isMobileMethodUnavailableError } from '../transport/rpc/mobile-method-unavailable'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 export type MobileStructuredSessionStatusFeed = {
   subscribe: (listener: () => void) => () => void

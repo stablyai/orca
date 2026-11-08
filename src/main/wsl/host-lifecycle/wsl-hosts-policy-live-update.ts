@@ -1,7 +1,7 @@
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import { readFetchResponseTextWithinLimit } from '../../../shared/fetch-response-body'
-import { readNodeFileSyncWithinLimit } from '../../../shared/node-bounded-file-reader'
+import { readNodeFileSyncWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
 import { getVersionChannel, MAIN_RELEASE_REPO } from '../../../shared/release-channel'
 import { isWslHostsInternalGateOpen } from '../../../shared/wsl-host-internal-gate'
 import {

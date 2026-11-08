@@ -1,5 +1,5 @@
 import { vi } from 'vitest'
-import type { RuntimeNotifier } from '../runtime/runtime-notifier-contract'
+import type { RuntimeNotifier } from '../runtime/client/events/runtime-notifier-contract'
 
 type MockFn = ReturnType<typeof vi.fn>
 

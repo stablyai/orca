@@ -4,6 +4,7 @@ import type { MobileNativeChatStructuredComposer } from './native-chat/composer/
 
 export const MobileQueuedMessageComposerContext = createContext<{
   agent: string | null
+  interactionModeSupported?: boolean
   structured: MobileNativeChatStructuredComposer | null
   skillDiscovery?: NativeChatSkillDiscoverySnapshot
   onNeedSkills?: () => void

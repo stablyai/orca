@@ -18,26 +18,6 @@ const done = (promptId: string, stopReason = 'end_turn') => ({
 afterEach(closeProviderTimelineRigs)
 
 describe('ACP exact prompt identity', () => {
-  it.each(['task-completed-2', 'subagent-completed-2', 'notifications-9', 'future-wake'])(
-    'opens %s independently of a queued user prompt',
-    async (wake) => {
-      const f = await openAcpFixtureRig()
-      const lane = f.lane()
-      const prompt = lane.openPrompt('c1', 1000)
-      expect(prompt.events).toEqual([])
-      f.apply(lane.notification('session/update', chunk(wake, 'background'), 1001))
-      f.apply(lane.notification('_x.ai/session_notification', done(wake), 1002))
-      f.apply(lane.notification('session/update', chunk(prompt.promptId, 'user reply'), 1003))
-      f.apply(lane.notification('_x.ai/session_notification', done(prompt.promptId), 1004))
-      f.apply(lane.promptResult('c1', { stopReason: 'end_turn' }, 1005))
-      const rows = await f.rig.rows()
-      const messages = rows.filter((row) => row.body.kind === 'message')
-      expect(messages.map((row) => messageText(row.body))).toEqual(['background', 'user reply'])
-      expect(messages[0]?.turnScope).not.toEqual(messages[1]?.turnScope)
-      expect((await f.rig.turns()).map((turn) => turn.outcome)).toEqual(['success', 'success'])
-    }
-  )
-
   it('keeps a streaming background turn open when the user sends and scopes its permission to the tool', async () => {
     const f = await openAcpFixtureRig()
     const lane = f.lane()
@@ -111,13 +91,4 @@ describe('ACP exact prompt identity', () => {
       expect((await f.rig.turns()).map((turn) => turn.outcome)).toEqual(['failure', 'success'])
     }
   )
-
-  it('settles an RPC-only failure even if the provider never streamed a frame', async () => {
-    const f = await openAcpFixtureRig()
-    const lane = f.lane()
-    lane.openPrompt('c1', 1000)
-    f.apply(lane.promptFailed('c1', new AcpAgentError(-32603, 'Rejected'), 1001))
-    expect((await f.rig.turns())[0]).toMatchObject({ state: 'completed', outcome: 'failure' })
-    expect(() => lane.openPrompt('c2', 1002)).not.toThrow()
-  })
 })

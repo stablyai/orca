@@ -7,6 +7,7 @@ import { installPluginHookRunner } from './hooks/plugin-hook-participants'
 import { installPluginResidentWorkerWarmer } from './workers/plugin-resident-worker'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { pluginRuntimeRpc } from './plugin-runtime-rpc'
+import type { DispatcherOptions } from '../runtime/rpc/dispatcher'
 import type { PluginRuntimeRpc } from './workers/plugin-host-workspace-method-bindings'
 import {
   pluginTerminalTitle,
@@ -47,10 +48,11 @@ export function pluginRuntimeDelegate(
 export function bindPluginRuntime(
   service: PluginService,
   runtime: OrcaRuntimeService,
-  hookServer: { getStatusSnapshot(): readonly PluginAgentStatusRow[] }
+  hookServer: { getStatusSnapshot(): readonly PluginAgentStatusRow[] },
+  methods: DispatcherOptions['methods']
 ): PluginRuntimeDelegate {
   const statuses = () => hookServer.getStatusSnapshot()
-  const delegate = pluginRuntimeDelegate(runtime, statuses, pluginRuntimeRpc(runtime))
+  const delegate = pluginRuntimeDelegate(runtime, statuses, pluginRuntimeRpc(runtime, methods))
   service.setRuntimeDelegate(delegate)
   installPluginHookRunner(service, runtime)
   installPluginResidentWorkerWarmer(service)
@@ -77,29 +79,63 @@ async function listWorkspaceTerminals(
 
 /**
  * `agent.status.changed` with the pane's `terminalId` and title, in arrival order. The lookup runs
- * only while some plugin listens.
+ * only while some plugin listens: events queued behind a slow lookup share one terminal listing per
+ * workspace, and are dropped once the last listener goes away.
  */
 export function createPluginAgentStatusForwarder(
   delegate: PluginRuntimeDelegate,
   events: PluginEvents
 ): (payload: PluginAgentStatusChangedPayload, terminalHandle?: string) => void {
-  let chain: Promise<void> = Promise.resolve()
+  type Pending = { payload: PluginAgentStatusChangedPayload; terminalHandle?: string }
+  const pending: Pending[] = []
+  let draining = false
+  const drain = async (): Promise<void> => {
+    // Why: start a microtask later so a synchronous burst lands in one batch.
+    await Promise.resolve()
+    try {
+      while (pending.length > 0) {
+        const batch = pending.splice(0)
+        const lookups = new Map<string, Promise<PluginWorkspaceTerminal[]>>()
+        for (const { payload, terminalHandle } of batch) {
+          // Why: each listing refreshes every PTY provider and host. Interest is rechecked here,
+          // not only on admission, so a backlog left by a closed panel stops running inventories.
+          if (!events.wantsEvent('agent.status.changed')) {
+            pending.length = 0
+            return
+          }
+          const { workspaceId } = payload
+          let lookup = workspaceId ? lookups.get(workspaceId) : undefined
+          if (workspaceId && !lookup) {
+            lookup = listWorkspaceTerminals(delegate, workspaceId).catch(() => [])
+            lookups.set(workspaceId, lookup)
+          }
+          const terminals = lookup ? await lookup : []
+          const terminal = terminalForPane(terminals, { paneKey: payload.paneKey, terminalHandle })
+          try {
+            events.emitEvent('agent.status.changed', {
+              ...payload,
+              ...(terminal ? { terminalId: terminal.id } : {}),
+              ...(terminal?.title ? { title: terminal.title } : {})
+            })
+          } catch {
+            // Why: one failed delivery must not drop the rest of the batch or strand the queue.
+          }
+        }
+      }
+    } finally {
+      // Why: cleared in the same turn as the last empty-queue check, so no event can strand.
+      draining = false
+    }
+  }
   return (payload, terminalHandle) => {
     if (!events.wantsEvent('agent.status.changed')) {
       return
     }
-    chain = chain.then(async () => {
-      const { workspaceId } = payload
-      const terminals = workspaceId
-        ? await listWorkspaceTerminals(delegate, workspaceId).catch(() => [])
-        : []
-      const terminal = terminalForPane(terminals, { paneKey: payload.paneKey, terminalHandle })
-      events.emitEvent('agent.status.changed', {
-        ...payload,
-        ...(terminal ? { terminalId: terminal.id } : {}),
-        ...(terminal?.title ? { title: terminal.title } : {})
-      })
-    })
+    pending.push({ payload, terminalHandle })
+    if (!draining) {
+      draining = true
+      void drain()
+    }
   }
 }
 

@@ -103,6 +103,7 @@ function optionDescriptor(args: {
       option.id === 'effort' &&
       typeof tracked?.value === 'string' &&
       !choices.some((choice) => choice.value === tracked.value)
+    const readOnlyUnlistedEffort = unlistedEffort && choices.length <= 1
     if (choices.length <= 1 && !unlistedEffort) {
       return null
     }
@@ -115,14 +116,14 @@ function optionDescriptor(args: {
         type: 'select',
         ...(currentValue === undefined ? {} : { currentValue }),
         choices:
-          unlistedEffort && currentValue !== undefined
+          readOnlyUnlistedEffort && currentValue !== undefined
             ? [{ value: currentValue, label: currentValue }]
             : choices
       },
       valueSource,
       transport: liveTransport,
-      ...(unlistedEffort ? { settable: false } : settable),
-      ...(action && !unlistedEffort ? { action } : {})
+      ...(readOnlyUnlistedEffort ? { settable: false } : settable),
+      ...(action && !readOnlyUnlistedEffort ? { action } : {})
     }
   }
   // A switch has no unknown position. Resolve to defaultValue like composed dispatch, but keep unknown/default provenance so pills cannot claim confirmation.

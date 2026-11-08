@@ -57,7 +57,7 @@ export async function discardChanges(
   }
 }
 
-async function listTrackedPathSpecs(
+export async function listTrackedPathSpecs(
   worktreePath: string,
   filePaths: readonly string[],
   options: GitRuntimeOptions = {}

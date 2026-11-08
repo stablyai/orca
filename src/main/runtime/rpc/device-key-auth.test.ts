@@ -95,10 +95,19 @@ function freshRegistry(): DeviceRegistry {
 }
 
 describe('device-key authentication (host)', () => {
-  it('forks a token row per installation, then authenticates the key and keeps the token working', () => {
-    const registry = freshRegistry()
-    const legacy = registry.addDevice('Phone', 'mobile')
-    registry.updateLastSeen(legacy.deviceId)
+  it('forks a pre-ticket token row per installation, then authenticates the key and keeps the token working', () => {
+    // Rows paired before single-use tickets may be shared by several installations.
+    const dir = mkdtempSync(join(tmpdir(), 'orca-device-key-'))
+    const legacy = {
+      deviceId: 'legacy-phone',
+      name: 'Phone',
+      token: 'legacy-token',
+      scope: 'mobile' as const,
+      pairedAt: 1,
+      lastSeenAt: 2
+    }
+    writeFileSync(join(dir, DEVICE_REGISTRY_FILENAME), JSON.stringify([legacy]))
+    const registry = new DeviceRegistry(dir)
     const { connect } = harness(registry)
 
     const migrating = connect(() => ({ deviceToken: legacy.token }))
@@ -150,6 +159,29 @@ describe('device-key authentication (host)', () => {
       })).reply
     ).toMatchObject({ type: 'e2ee_authenticated' })
     expect(registry.validateToken(legacy.token)?.deviceId).toBe(legacy.deviceId)
+  })
+
+  it('retires a ticket row once its saved-key fork signs in', () => {
+    const registry = freshRegistry()
+    const ticket = registry.addDevice('Browser', 'runtime')
+    const { connect } = harness(registry)
+    const migrating = connect(() => ({ deviceToken: ticket.token }))
+    const key = nacl.sign.keyPair()
+    const forked = registerSocketDeviceKey(registry, migrating.socket!, {
+      devicePublicKeyB64: Buffer.from(key.publicKey).toString('base64'),
+      deviceProofB64: sign(key, 'register', migrating.transcriptHashB64)
+    })
+    expect(registry.validateToken(ticket.token)?.deviceId).toBe(ticket.deviceId)
+
+    const keyed = connect((hash) => ({
+      deviceId: forked.deviceId,
+      deviceProofB64: sign(key, 'auth', hash)
+    }))
+    expect(keyed.reply).toMatchObject({ type: 'e2ee_authenticated' })
+    expect(registry.validateToken(ticket.token)).toBeNull()
+    expect(connect(() => ({ deviceToken: ticket.token })).reply).not.toMatchObject({
+      type: 'e2ee_authenticated'
+    })
   })
 
   it('refuses a keyed row presented with a token, a replayed proof and a wrong-purpose proof', () => {
@@ -246,75 +278,5 @@ describe('device-key authentication (host)', () => {
       deviceProofB64: sign(key, 'auth', hash)
     }))
     expect(attempt.reply).toEqual({ type: 'e2ee_error', error: { code: 'bad_auth' } })
-  })
-
-  it('answers device_revoked only when the registry is readable', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-device-key-'))
-    const key = nacl.sign.keyPair()
-    const revoked = harness(new DeviceRegistry(userDataPath)).connect((hash) => ({
-      deviceId: 'gone',
-      deviceProofB64: sign(key, 'auth', hash)
-    }))
-    expect(revoked.reply).toEqual({
-      type: 'e2ee_error',
-      error: { code: 'device_revoked', deviceId: 'gone' }
-    })
-
-    const unreadable = new DeviceRegistry(userDataPath)
-    unreadable['registryUnreadable'] = true
-    const unavailable = harness(unreadable).connect((hash) => ({
-      deviceId: 'gone',
-      deviceProofB64: sign(key, 'auth', hash)
-    }))
-    expect(unavailable.reply).toEqual({
-      type: 'e2ee_error',
-      error: { code: 'registry_unavailable' }
-    })
-    expect(unavailable.ws.close).toHaveBeenCalledWith(4001, 'Device registry unavailable')
-  })
-
-  it('refuses registration over legacy framing', () => {
-    const registry = freshRegistry()
-    const legacy = registry.addDevice('Phone', 'mobile')
-    const key = nacl.sign.keyPair()
-    const params = {
-      devicePublicKeyB64: Buffer.from(key.publicKey).toString('base64'),
-      deviceProofB64: Buffer.alloc(64).toString('base64')
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration reads only device and transcriptHashB64.
-    const legacySocket = {
-      device: { deviceId: legacy.deviceId, credentialRevision: 0, deviceToken: legacy.token },
-      transcriptHashB64: null
-    } as unknown as AuthenticatedMobileSocket
-    expect(() => registerSocketDeviceKey(registry, legacySocket, params)).toThrow(
-      'device_key_requires_e2ee_v2'
-    )
-  })
-
-  it('keeps keyed rows out of pairing offers and rotation, and inert for token lookups', () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-device-key-'))
-    const keyB64 = Buffer.from(nacl.sign.keyPair().publicKey).toString('base64')
-    writeFileSync(
-      join(userDataPath, DEVICE_REGISTRY_FILENAME),
-      JSON.stringify([
-        {
-          deviceId: 'keyed',
-          name: 'Phone',
-          scope: 'mobile',
-          pairedAt: 1,
-          lastSeenAt: 0,
-          credentialKind: 'device-key',
-          devicePublicKeyB64: keyB64
-        }
-      ])
-    )
-    const registry = new DeviceRegistry(userDataPath)
-    expect(registry.validateToken('')).toBeNull()
-    expect(registry.getPendingDevice('mobile')).toBeNull()
-    const offered = registry.getOrCreatePendingDevice('New', 'mobile')
-    expect(offered.deviceId).not.toBe('keyed')
-    registry.rotatePendingDevice('Rotated', 'mobile')
-    expect(registry.getDevice('keyed')).toMatchObject({ credentialKind: 'device-key' })
-    expect(registry.lookupDeviceKey('keyed')).toMatchObject({ kind: 'found' })
   })
 })

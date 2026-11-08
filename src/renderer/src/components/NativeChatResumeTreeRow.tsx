@@ -1,6 +1,6 @@
 import { useContext } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Checkbox } from './ui/checkbox'
 import { ResumeTreeSelectingContext } from './native-chat-resume-tree-state'
 
@@ -49,6 +49,7 @@ export function ResumeTreeRow({
   below?: React.ReactNode
   children: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const selecting = useContext(ResumeTreeSelectingContext)
   const indent = depth * RESUME_TREE_INDENT_PX
   const column = selecting ? RESUME_TREE_CHECKBOX_COLUMN_PX : 0
@@ -92,12 +93,12 @@ export function ResumeTreeRow({
             aria-expanded={expanded}
             aria-label={
               expanded
-                ? translate(
+                ? t(
                     'auto.components.NativeChatResumeOnRestartModal.collapseNode',
                     'Collapse {{value0}}',
                     { value0: name }
                   )
-                : translate(
+                : t(
                     'auto.components.NativeChatResumeOnRestartModal.expandNode',
                     'Expand {{value0}}',
                     { value0: name }
@@ -143,12 +144,13 @@ export function ResumeTreeCount({
   selectedCount: number
   total: number
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (total === 0) {
     return null
   }
   return (
     <span className="ml-auto shrink-0 pl-2 text-[11px] tabular-nums text-muted-foreground">
-      {translate(
+      {t(
         'auto.components.NativeChatResumeOnRestartModal.workspaceSelectedCount',
         '{{value0}} of {{value1}}',
         { value0: selectedCount, value1: total }

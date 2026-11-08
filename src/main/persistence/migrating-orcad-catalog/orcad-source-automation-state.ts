@@ -1,17 +1,20 @@
-import { automationCanonicalDefinition } from '../../../shared/automation-launch-setup'
+import { automationCanonicalDefinition } from '../../../shared/automations/launch/automation-launch-setup'
 import {
   isFinalAutomationRunStatus,
-  type Automation,
   type AutomationRun
-} from '../../../shared/automations-types'
-import { getAutomationRunRepoId } from '../../../shared/automation-run-identity'
+} from '../../../shared/automations/history/automation-run'
+import type { Automation } from '../../../shared/automations/automation-definition'
+import { getAutomationRunRepoId } from '../../../shared/automations/history/automation-run-identity'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type {
   OrcadMigrationCatalogPayload,
   OrcadMigrationManifestSource
 } from '../../../shared/orcad-migration/orcad-migration-manifest'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
+import type {
+  TaskSourceContext,
+  WorkspaceRunContext
+} from '../../../shared/work-items/task-source-context'
 import {
   createOrcadMigrationExportScope,
   orcadMigrationScopeOwnsWholeHost,

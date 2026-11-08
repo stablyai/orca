@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { CacheEntry } from '@/store/github/cache-model'
+import type { CacheEntry } from '@/store/github/cache/cache-model'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import {
   reconcileTaskPagePagesAfterLandingRefresh,

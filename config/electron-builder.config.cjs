@@ -359,7 +359,8 @@ module.exports = {
     'out/main/plugins/plugin-authoring-checks.js',
     // `orca plugin test` and `orca plugin check` load the runtime, kit and hooks in Node.
     'resources/plugins/declarative/*.mjs',
-    'out/main/skills/bundled-skill-install/cli-entry.js',
+    'out/main/skills/bundled-skill-install/bundled-skill-local-host.js',
+    'out/main/skills/bundled-skill-install/bundled-skill-installation.js',
     'out/main/startup/http1-compatibility-marker.js',
     'out/main/daemon-entry.js',
     'out/main/session-scanner-service-entry.js',
@@ -603,6 +604,8 @@ module.exports = {
         rank: 'Alternate'
       }))
     ],
+    // Bundled ONNX Runtime (speech) needs macOS 13.4 (#22690); the update-manifest gate reads this from Info.plist.
+    minimumSystemVersion: '13.4',
     icon: 'resources/build/icon.icns',
     entitlements: 'resources/build/entitlements.mac.plist',
     entitlementsInherit: 'resources/build/entitlements.mac.plist',

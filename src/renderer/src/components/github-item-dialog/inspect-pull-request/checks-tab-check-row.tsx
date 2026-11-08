@@ -10,6 +10,7 @@ import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import { getCheckConclusion } from '@/components/pr-check-counts'
 import { getCheckDetailsKey, getCheckStatusLabel } from '@/components/github/pr-check-presentation'
 import { ChecksTabCheckDetails } from './checks-tab-check-details'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function renderCheckRow({
   check,
@@ -55,10 +56,11 @@ export function ChecksTabCheckRow({
   onToggle: (check: PRCheckDetail) => void
   onRetry: (check: PRCheckDetail, key: string) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const conclusion = getCheckConclusion(check)
   const Icon = CHECK_ICON[conclusion] ?? CircleDashed
   const color = CHECK_COLOR[conclusion] ?? 'text-muted-foreground'
-  const statusLabel = getCheckStatusLabel(check)
+  const statusLabel = getCheckStatusLabel(check, t)
   return (
     <div className="min-w-0">
       <button

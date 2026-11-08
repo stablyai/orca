@@ -8,7 +8,7 @@ import {
 } from '../../shared/editor-formatter'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
-import type { RuntimeStore } from '../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import type { RuntimeFileExplorerPath } from '../runtime/files/file-target'
 import { isENOENT } from '../ipc/filesystem/access/filesystem-path-containment'
 

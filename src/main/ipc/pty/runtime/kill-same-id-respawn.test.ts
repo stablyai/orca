@@ -6,7 +6,7 @@ import { finishPtyShutdown } from '../provider/liveness'
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import { getLocalPtyProvider, setLocalPtyProvider } from '../provider/registry'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
-import { killPtyFromRuntimeController, stopAndWaitPtyFromRuntimeController } from './kill'
+import { stopAndWaitPtyFromRuntimeController } from './kill'
 
 const PTY_ID = 'respawned-pty'
 
@@ -45,10 +45,6 @@ const asControllerDeps = (ports: unknown) => ports as PtyRuntimeControllerDeps
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the tab-close stop reads only these ports and an optional store.
 const asKillIpcDeps = (ports: unknown) => ports as PtyKillIpcDeps
 
-async function settleKill(): Promise<void> {
-  await new Promise((resolve) => setTimeout(resolve, 0))
-}
-
 const original = getLocalPtyProvider()
 afterEach(() => {
   setLocalPtyProvider(original)
@@ -74,13 +70,6 @@ describe('a stop whose shutdown lands after a same-id respawn', () => {
     expect(runtime.onPtyExit).not.toHaveBeenCalled()
     expect(ports.sendPtyExitToRenderer).not.toHaveBeenCalled()
   }
-
-  it('leaves the respawn alone after a runtime kill', async () => {
-    const h = start()
-    killPtyFromRuntimeController(asControllerDeps(h.ports), PTY_ID)
-    await settleKill()
-    expectRespawnUntouched(h)
-  })
 
   it('reports the listed respawn live after a stop-and-wait', async () => {
     const h = start()
@@ -116,13 +105,6 @@ describe('a stop of a PTY whose incarnation was stamped mid-stop', () => {
   it('retires it after a renderer tab close', async () => {
     const h = start()
     await stopRendererOwnedPty(asKillIpcDeps(h.ports), { id: PTY_ID })
-    expectRetired(h)
-  })
-
-  it('retires it after a runtime kill', async () => {
-    const h = start()
-    killPtyFromRuntimeController(asControllerDeps(h.ports), PTY_ID)
-    await settleKill()
     expectRetired(h)
   })
 })

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ActivePluginCommand } from '@/store/plugin-panels'
+import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import type { KeybindingOverrides } from '../../../shared/keybindings'
 import {
   findPluginCommandForKeybinding,
@@ -42,6 +42,55 @@ describe('plugin command keybindings', () => {
     ).toBe(command)
     expect(
       findPluginCommandForKeybinding([command], input, 'linux', { [actionId]: [] }, true)
+    ).toBeNull()
+  })
+
+  // #15642: plugin chords follow the terminal shortcut policy like Orca's own app shortcuts.
+  it('fires in terminal focus under orca-first and stays out under terminal-first', () => {
+    const input = { key: 't', code: 'KeyT', control: true, meta: false, alt: true, shift: false }
+    const find = (
+      terminalShortcutPolicy: 'orca-first' | 'terminal-first' | undefined,
+      overrides?: KeybindingOverrides
+    ) =>
+      findPluginCommandForKeybinding([command], input, 'linux', overrides, true, {
+        context: 'terminal',
+        terminalShortcutPolicy
+      })
+
+    expect(find('orca-first')).toBe(command)
+    // The policy defaults to orca-first, as it does for built-ins.
+    expect(find(undefined)).toBe(command)
+    expect(find('terminal-first')).toBeNull()
+    expect(
+      findPluginCommandForKeybinding([command], input, 'linux', undefined, true, {
+        context: 'app',
+        terminalShortcutPolicy: 'terminal-first'
+      })
+    ).toBe(command)
+  })
+
+  it('matches effective bindings in terminal focus, so rebinds and unbinds apply there too', () => {
+    const actionId = pluginCommandKeybindingActionId(command)
+    const original = { key: 't', code: 'KeyT', control: true, meta: false, alt: true, shift: false }
+    const rebound = { key: 't', code: 'KeyT', control: true, meta: false, alt: false, shift: true }
+    const terminal = { context: 'terminal', terminalShortcutPolicy: 'orca-first' } as const
+    const rebind = { [actionId]: ['Mod+Shift+T'] }
+
+    expect(
+      findPluginCommandForKeybinding([command], rebound, 'linux', rebind, true, terminal)
+    ).toBe(command)
+    expect(
+      findPluginCommandForKeybinding([command], original, 'linux', rebind, true, terminal)
+    ).toBeNull()
+    expect(
+      findPluginCommandForKeybinding(
+        [command],
+        original,
+        'linux',
+        { [actionId]: [] },
+        true,
+        terminal
+      )
     ).toBeNull()
   })
 })

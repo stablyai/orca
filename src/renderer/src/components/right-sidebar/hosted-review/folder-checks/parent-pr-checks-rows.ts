@@ -11,9 +11,9 @@ import { getGitHubRepoCacheKey } from '../../../../../../shared/github/github-ca
 import {
   getHostedReviewCacheKey,
   linkedReviewHintKey
-} from '@/store/slices/hosted-review-cache-identity'
-import { prChecksCacheSuffix } from '@/store/github/cache-identity'
-import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review-cache-state'
+} from '@/store/slices/hosted-review/hosted-review-cache-identity'
+import { prChecksCacheSuffix } from '@/store/github/cache/cache-identity'
+import { isStaleMergedGitHubReviewForHead } from '@/store/slices/hosted-review/hosted-review-cache-state'
 import {
   PARENT_PR_CHECKS_GROUP_LABELS,
   PARENT_PR_CHECKS_GROUP_ORDER,

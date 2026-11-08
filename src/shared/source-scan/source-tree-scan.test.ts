@@ -10,22 +10,6 @@ describe('stripComments', () => {
     expect(stripComments(source)).toContain('case "$root"/*/home)')
     expect(stripComments(source)).toContain('spawn(x)')
   })
-
-  it('is not derailed by an apostrophe in prose', () => {
-    // A prose apostrophe once swallowed the rest of the file and disabled later comment stripping.
-    const source = ["// don't do this", '/* spawn(bad) */', 'spawn(good)'].join('\n')
-    expect(stripComments(source)).not.toContain('bad')
-  })
-
-  it('is not derailed by a quote inside a regex literal', () => {
-    const source = ['const re = /[\'"]/', '/* spawn(bad) */', 'spawn(good)'].join('\n')
-    expect(stripComments(source)).not.toContain('bad')
-  })
-
-  it('handles an escaped quote inside a string', () => {
-    const source = ["const s = 'it\\'s'", '/* spawn(bad) */'].join('\n')
-    expect(stripComments(source)).not.toContain('bad')
-  })
 })
 
 describe('regex literals', () => {

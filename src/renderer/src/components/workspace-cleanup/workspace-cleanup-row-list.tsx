@@ -1,14 +1,14 @@
 import React, { useMemo } from 'react'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
-import { formatBytes } from '../status-bar/workspace-space-format'
+import { formatBytes } from '../../../../shared/format-bytes'
 import { CandidateRow, type WorkspaceCleanupDeletionPhase } from './workspace-cleanup-candidate-row'
 import { WorkspaceCleanupCandidateList } from './workspace-cleanup-candidate-list'
 import { WorkspaceCleanupEmptyState } from './workspace-cleanup-dialog-notices'
 import type { WorkspaceCleanupFacets } from './workspace-cleanup-facets'
 import { formatWorkspaceCleanupRelativeTime } from './workspace-cleanup-relative-time'
-import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
+import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import {
   findWorkspaceCleanupCandidateRepo,
   groupWorkspaceCleanupReposById
@@ -44,6 +44,7 @@ export type WorkspaceCleanupRowListState = {
 }
 
 export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): React.JSX.Element {
+  const t = useTranslate()
   const { rows, loading, hasScanned, scannedCandidates } = props
   const scannedCount = scannedCandidates.length
   const settled = !loading && hasScanned
@@ -61,26 +62,20 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
     <>
       {settled && scannedCount === 0 ? (
         <WorkspaceCleanupEmptyState
-          title={translate(
-            'components.workspace.cleanup.browse.noWorkspaces',
-            'No workspaces found.'
-          )}
+          title={t('components.workspace.cleanup.browse.noWorkspaces', 'No workspaces found.')}
         />
       ) : null}
       {hasScanned && scannedCount > 0 && rows.length === 0 ? (
         <WorkspaceCleanupEmptyState
-          title={translate(
+          title={t(
             'components.workspace.cleanup.browse.noMatches',
             'No workspaces match these filters.'
           )}
-          description={translate(
+          description={t(
             'components.workspace.cleanup.browse.noMatchesDescription',
             'Every workspace is in one list — widen a facet or clear the filters.'
           )}
-          actionLabel={translate(
-            'components.workspace.cleanup.browse.clearFilters',
-            'Clear filters'
-          )}
+          actionLabel={t('components.workspace.cleanup.browse.clearFilters', 'Clear filters')}
           onAction={props.onClearFilters}
         />
       ) : null}

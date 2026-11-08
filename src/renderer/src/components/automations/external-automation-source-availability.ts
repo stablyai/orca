@@ -1,20 +1,24 @@
-import type { ExternalAutomationManager } from '../../../../shared/automations-types'
+import type { ExternalAutomationManager } from '../../../../shared/automations/external/external-automation'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 
 export function isSshConnectionBusy(status: SshConnectionStatus | undefined): boolean {
   return isConnectingSshStatus(status)
 }
 
-export function getExternalAutomationActionDisabledMessage(args: {
-  manager: ExternalAutomationManager
-  providerLabel?: string
-  sshStatus?: SshConnectionStatus
-  actionInProgress?: boolean
-}): string | null {
+export function getExternalAutomationActionDisabledMessage(
+  args: {
+    manager: ExternalAutomationManager
+    providerLabel?: string
+    sshStatus?: SshConnectionStatus
+    actionInProgress?: boolean
+  },
+  t: Translate = translate
+): string | null {
   if (args.actionInProgress) {
-    return translate(
+    return t(
       'auto.components.automations.externalActionDisabled.actionInProgress',
       'Another automation action is still running.'
     )
@@ -25,7 +29,7 @@ export function getExternalAutomationActionDisabledMessage(args: {
   const provider = args.providerLabel ?? 'OpenClaw'
   if (args.manager.target.type === 'ssh') {
     if (isSshConnectionBusy(args.sshStatus)) {
-      return translate(
+      return t(
         'auto.components.automations.externalActionDisabled.sshConnecting',
         'Wait for this SSH host to finish connecting.'
       )
@@ -34,7 +38,7 @@ export function getExternalAutomationActionDisabledMessage(args: {
       return args.manager.error
     }
     if (args.sshStatus !== 'connected') {
-      return translate(
+      return t(
         'auto.components.automations.externalActionDisabled.connectSshHost',
         'Connect this SSH host before managing {{provider}} automations.',
         { provider }
@@ -42,7 +46,7 @@ export function getExternalAutomationActionDisabledMessage(args: {
     }
     return (
       args.manager.error ??
-      translate(
+      t(
         'auto.components.automations.externalActionDisabled.cannotManageOnSshHost',
         '{{provider}} cannot manage automations on this SSH host.',
         { provider }
@@ -51,7 +55,7 @@ export function getExternalAutomationActionDisabledMessage(args: {
   }
   return (
     args.manager.error ??
-    translate(
+    t(
       'auto.components.automations.externalActionDisabled.cannotManageLocally',
       '{{provider}} cannot manage automations on this machine.',
       { provider }
