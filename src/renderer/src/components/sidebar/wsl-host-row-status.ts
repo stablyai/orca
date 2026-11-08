@@ -68,8 +68,8 @@ export function getWslHostsTurnedOffLabel(t: Translate = translate): string {
   )
 }
 
-export function getWslHostsTurnOnLabel(): string {
-  return translate('auto.components.terminal.pane.WslHostUnavailableBanner.turnOn', 'Turn on')
+export function getWslHostsTurnOnLabel(t: Translate = translate): string {
+  return t('auto.components.terminal.pane.WslHostUnavailableBanner.turnOn', 'Turn on')
 }
 
 export function getWslHostRowTurnedOffDetail(t: Translate = translate): string {
