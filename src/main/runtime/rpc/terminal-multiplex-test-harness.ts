@@ -43,6 +43,8 @@ export function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRu
     isRemoteDesktopViewerOwner: vi.fn().mockReturnValue(false),
     serializeAuthoritativeTerminalBuffer,
     getPtyOutputSequence: vi.fn().mockReturnValue(0),
+    // Adaptive pacing asks per send; a normal-screen PTY keeps legacy windows.
+    isTerminalAlternateScreen: vi.fn().mockReturnValue(false),
     registerOwnedSubscriptionCleanup: registry.registerOwnedSubscriptionCleanup,
     ...overrides
   } as OrcaRuntimeService

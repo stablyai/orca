@@ -82,7 +82,8 @@ describe('terminal multiplex adaptive ACK window', () => {
     vi.unstubAllEnvs()
   })
 
-  it('keeps legacy windows when pacing is not opted in, even on a measured slow link', async () => {
+  it('keeps legacy windows when the host kill switch is set, even on a measured slow link', async () => {
+    vi.stubEnv('ORCA_TERMINAL_ADAPTIVE_ACK_WINDOW', '0')
     measureSlowLink()
     const stream = await openAltScreenStream()
     stream.write(10)

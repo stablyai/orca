@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Drive the real terminal multiplex over a modeled link: a TUI floods while the user types, and we report how long
-// the echo takes to reach the client under legacy windows and opt-in adaptive pacing.
+// the echo takes to reach the client under legacy windows and adaptive pacing.
 import { createJiti } from 'jiti'
 
 const jiti = createJiti(import.meta.url)
@@ -45,7 +45,7 @@ async function run({
   echoAtMs,
   endMs
 }) {
-  process.env.ORCA_TERMINAL_ADAPTIVE_ACK_WINDOW = mode === 'legacy' ? '' : '1'
+  process.env.ORCA_TERMINAL_ADAPTIVE_ACK_WINDOW = mode === 'legacy' ? '0' : '1'
   clock = 0
   let seq = 0
   let screen = 'flood'

@@ -40,9 +40,9 @@ type StreamSendLedger = {
   ackedOffset: number
 }
 
-// Opt-in until soaked on real high-latency links.
+// On by default after a shaped-link soak; ORCA_TERMINAL_ADAPTIVE_ACK_WINDOW=0 on the host restores legacy windows.
 export function isAdaptiveAckWindowEnabled(): boolean {
-  return process.env.ORCA_TERMINAL_ADAPTIVE_ACK_WINDOW === '1'
+  return process.env.ORCA_TERMINAL_ADAPTIVE_ACK_WINDOW !== '0'
 }
 
 /** Best sample over the last one-to-two windows of activity; idle time does not expire it. */
