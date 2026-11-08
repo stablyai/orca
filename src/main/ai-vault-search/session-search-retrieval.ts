@@ -141,6 +141,38 @@ export class SessionSearchRetrieval {
     return { sessions, incomplete: incomplete || sessions.length >= scope.candidateLimit }
   }
 
+  /** Sessions whose title contains every query token, ignoring case and accents. */
+  titleMatches(
+    tokens: readonly string[],
+    scope: RetrievalScope
+  ): { sessions: SessionRow[]; incomplete: boolean } {
+    const needles = tokens.map(foldTitleText)
+    if (needles.length === 0) {
+      return { sessions: [], incomplete: false }
+    }
+    const { conditions, values } = scope.filter
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+    // Why: a linear title scan per query is cheap at sidebar scale; index titles in FTS if histories grow large.
+    const rows = this.db
+      .prepare(
+        `SELECT ${SESSION_COLUMN_LIST} FROM sessions ${where} ORDER BY updated_at DESC, id DESC`
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The private sessions schema defines SessionRow; tests compare every projected column and value with that schema.
+      .all(...values) as SessionRow[]
+    const sessions: SessionRow[] = []
+    for (const row of rows) {
+      const title = foldTitleText(row.title)
+      // Why: operators must filter before the limit, or ineligible newer titles hide older eligible ones.
+      if (needles.every((needle) => title.includes(needle)) && scope.matchesOperators(row)) {
+        if (sessions.length >= scope.candidateLimit) {
+          return { sessions, incomplete: true }
+        }
+        sessions.push(row)
+      }
+    }
+    return { sessions, incomplete: false }
+  }
+
   /** Bound SQL parameters independently of the configurable candidate limit. */
   private loadSessions(ids: readonly number[], scope: RetrievalScope): SessionRow[] {
     const rows: SessionRow[] = []
@@ -221,4 +253,9 @@ export class SessionSearchRetrieval {
       .prepare(sql)
       .all(scopedExpression(scope.scope, expression), ...filter.values) as MessageRow[]
   }
+}
+
+// Why: mirror the FTS unicode61 tokenizer, which folds case and strips diacritics ("gestion" finds "Gestión").
+function foldTitleText(text: string): string {
+  return text.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase()
 }
