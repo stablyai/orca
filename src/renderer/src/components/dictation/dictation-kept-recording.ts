@@ -2,6 +2,7 @@ import {
   CLOUD_DICTATION_MAX_SECONDS,
   DICTATION_SAMPLE_RATE
 } from '../../../../shared/rpc-contract/speech-params'
+import type { DictationContext } from '../../../../shared/speech-types'
 import type { DictationInsertionTarget } from './dictation-insertion-target'
 import type { DictationTranscriptDelivery } from './dictation-transcript-delivery'
 import { trimLandedOverlap } from './dictation-retry-overlap'
@@ -17,11 +18,14 @@ export type DictationKeptRecording = {
   complete: boolean
   target: DictationInsertionTarget | null
   deliver: DictationTranscriptDelivery
+  /** A retry spells with the dictionary of the place it started in. */
+  context: DictationContext
 }
 
 export function createDictationKeptRecording(
   target: DictationInsertionTarget | null,
-  deliver: DictationTranscriptDelivery
+  deliver: DictationTranscriptDelivery,
+  context: DictationContext
 ): DictationKeptRecording & {
   keep: (samples: Float32Array) => void
   /** The host stopped accepting audio at its own cap, so the first ten minutes are all it would hear. */
@@ -35,6 +39,7 @@ export function createDictationKeptRecording(
     complete: true,
     target,
     deliver,
+    context,
     keep: (frame: Float32Array): void => {
       const room = MAX_KEPT_SAMPLES - samples
       if (room <= 0) {
@@ -111,7 +116,7 @@ export async function transcribeKeptRecording(args: {
   const retried: string[] = []
   args.routeFinals((text) => retried.push(text))
   try {
-    await window.api.speech.startDictation(args.modelId, undefined, sessionId)
+    await window.api.speech.startDictation(args.modelId, args.recording.context, sessionId)
     for (const block of joinIntoBlocks(args.recording.chunks)) {
       if (!isCurrent()) {
         break

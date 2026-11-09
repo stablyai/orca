@@ -185,6 +185,7 @@ export function useMobileSessionDictation(
   const {
     phoneDictation,
     removeFillerWords,
+    dictationTerms,
     dictationNeedsSetupRef,
     closeDictationSetup,
     refreshDictationMode
@@ -234,7 +235,9 @@ export function useMobileSessionDictation(
         executionHost
       ),
       dictationMode: scope.dictationMode,
-      removeFillerWords
+      removeFillerWords,
+      dictationTerms,
+      worktreeId
     })
   }, [
     activeHandle,
@@ -250,6 +253,7 @@ export function useMobileSessionDictation(
     instance,
     phoneDictation.readyRef,
     removeFillerWords,
+    dictationTerms,
     scope.dictationMode,
     sessionKey,
     setShowDictationSetup,

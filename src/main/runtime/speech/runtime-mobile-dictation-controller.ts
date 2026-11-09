@@ -12,6 +12,7 @@ import {
   type MobileDictationChunk
 } from './mobile-dictation-chunk-order'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { hostDictationTerms } from './runtime-dictation-terms'
 import {
   DictationTranscript,
   type DictationTranscriptSnapshot
@@ -42,6 +43,7 @@ export class RuntimeMobileDictationController {
   async start(params: {
     dictationId: string
     modelId?: string
+    worktreeId?: string
     clientId?: string
   }): Promise<{ dictationId: string; modelId: string; dedupesResentChunks: true }> {
     const store = this.requireStore()
@@ -89,7 +91,7 @@ export class RuntimeMobileDictationController {
       await getSpeechSttService(store).startDictation(
         modelId,
         (event) => acceptEvent(session, event),
-        undefined,
+        hostDictationTerms(store, params.worktreeId),
         owner,
         voice
       )

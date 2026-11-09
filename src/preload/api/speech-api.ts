@@ -1,5 +1,6 @@
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import type {
+  DictationContext,
   OpenAiCompatibleSpeechProvider,
   OpenAiCompatibleSpeechProviderSummary,
   SpeechErrorEvent,
@@ -28,7 +29,7 @@ export type SpeechApi = {
   deleteModel: (modelId: string) => Promise<void>
   startDictation: (
     modelId: string,
-    hotwords: string[] | undefined,
+    context: DictationContext | undefined,
     sessionId: string
   ) => Promise<void>
   /** Resolves true when this chunk filled a cloud session's upload cap. */
