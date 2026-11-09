@@ -26200,8 +26200,8 @@
     "idleSleptMinutes_other": "{{name}} slept after {{count}} minutes idle",
     "moveToComputer": "Move to this computer",
     "moveHere": "Move here",
-    "copiedToComputer": "Copied to this computer",
-    "openLocal": "Open local workspace"
+    "openLocal": "Open local workspace",
+    "copiedOn": "Copied to this computer · {{date}}"
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",

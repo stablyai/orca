@@ -279,24 +279,24 @@ export function CloudWorkspaceStatusPanel({
               />
             ) : null}
             {moved ? (
-              <Fact
-                label={t('orcaCloudWorkspace.copiedToComputer', 'Copied to this computer')}
-                muted
-                value={
-                  <span className="flex items-baseline gap-2">
-                    {formatShortDate(moved.at)}
-                    {moved.localWorktreeId ? (
-                      <button
-                        type="button"
-                        className="text-foreground underline-offset-2 hover:underline focus-visible:outline-[var(--focus-ring)]"
-                        onClick={() => activateAndRevealWorktree(moved.localWorktreeId!)}
-                      >
-                        {t('orcaCloudWorkspace.openLocal', 'Open local workspace')}
-                      </button>
-                    ) : null}
-                  </span>
-                }
-              />
+              <div className="flex flex-col gap-0.5 pt-1">
+                <dt className="text-muted-foreground">
+                  {t('orcaCloudWorkspace.copiedOn', 'Copied to this computer · {{date}}', {
+                    date: formatShortDate(moved.at)
+                  })}
+                </dt>
+                {moved.localWorktreeId ? (
+                  <dd>
+                    <button
+                      type="button"
+                      className="text-foreground underline-offset-2 hover:underline focus-visible:outline-[var(--focus-ring)]"
+                      onClick={() => activateAndRevealWorktree(moved.localWorktreeId!)}
+                    >
+                      {t('orcaCloudWorkspace.openLocal', 'Open local workspace')}
+                    </button>
+                  </dd>
+                ) : null}
+              </div>
             ) : null}
           </dl>
         </>
