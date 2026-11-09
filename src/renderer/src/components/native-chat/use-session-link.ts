@@ -12,7 +12,7 @@ import type { RuntimeClientTarget } from '../../../../shared/runtime-client-targ
 import { translate as t } from '@/i18n/i18n'
 import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
-import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
+import { structuredAgentSessionHostSupports } from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 
 const Candidates = z.object({
   source: SessionLinkParticipant,
