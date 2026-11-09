@@ -4,8 +4,8 @@ import { translateMain } from '../../../i18n/main-i18n'
 import {
   registerNativePopupQuitSurface,
   type NativePopupQuitSurface
-} from './native-browser-popup-windows'
-import { describeCommittedPopupOrigin } from './popup-committed-origin'
+} from './presentation/native-browser-popup-windows'
+import { describeCommittedPopupOrigin } from './presentation/popup-committed-origin'
 
 export const POPUP_ORIGIN_BAR_HEIGHT = 34
 const QUIT_NOTICE_HEIGHT = 64

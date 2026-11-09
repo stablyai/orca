@@ -9,6 +9,18 @@
       "messages_other": "{{count}} messages"
     }
   },
+  "agents": {
+    "desktops": {
+      "agents_one": "{{count}} agent",
+      "agents_other": "{{count}} agents",
+      "needsYou_one": "{{count}} needs you",
+      "needsYou_other": "{{count}} need you"
+    },
+    "list": {
+      "workers_one": "{{count}} worker",
+      "workers_other": "{{count}} workers"
+    }
+  },
   "app": {
     "terminalSettings": {
       "restoreAfterMinutes_one": "After {{count}} minute",
@@ -291,6 +303,12 @@
       "uncommittedFiles_other": "{{count}} uncommitted"
     },
     "failure": {
+      "forkOriginalMissing": "{{agent}} could not find this response in the original chat. Open it and fork from there.",
+      "forkOriginalUnavailable": "{{agent}} cannot fork this response in the original chat. Open it and fork from there.",
+      "forkOriginalMissingNamed": "{{agent}} could not find this response in \"{{detail}}\". Open that chat and fork from there.",
+      "forkOriginalUnavailableNamed": "{{agent}} cannot fork this response in \"{{detail}}\". Open that chat and fork from there.",
+      "forkOriginalLatestOnly": "{{agent}} can only fork the latest response in the original chat. Open that chat and fork its latest response once it has finished.",
+      "forkOriginalLatestOnlyNamed": "{{agent}} can only fork the latest response in \"{{detail}}\". Open that chat and fork its latest response once it has finished.",
       "pluginInputRequired": "{{agent}} stopped because the \"{{plugin}}\" plugin is waiting for input in a terminal pane. Disable the plugin for chat sessions, or run the task in a {{agent}} terminal."
     },
     "fileReader": {

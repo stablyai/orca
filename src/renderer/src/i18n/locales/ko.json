@@ -3667,6 +3667,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "켜기"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "다른 창에 맞춘 크기",
+            "fitHere": "여기에 맞추기"
           }
         }
       },
@@ -15613,6 +15617,7 @@
           "kernelStartFailed": "커널을 시작하지 못했습니다.",
           "noPython": "이 컴퓨터에서 Python을 찾을 수 없습니다. [python.org](https://www.python.org/downloads/)에서 설치한 뒤 셀을 다시 실행하세요.",
           "kernelDied": "커널이 종료되었습니다.",
+          "outputTruncated": "출력이 잘렸습니다: Orca가 이 셀 출력의 앞부분만 보관하고 나머지는 버렸습니다. 전부 보관하려면 파일에 기록하세요.",
           "localOnly": "노트북 셀은 이 컴퓨터의 파일에 대해서만 실행할 수 있습니다.",
           "pythonOnly": "Orca에서는 Python 노트북만 실행할 수 있습니다.",
           "commandCopied": "명령이 복사되었습니다.",
@@ -19485,6 +19490,7 @@
         "copyIdentity": "{{value0}} 복사",
         "folder": "폴더",
         "mainCheckout": "기본 체크아웃",
+        "turnWorking": "이 채팅의 에이전트가 작업 중입니다. 턴이 끝난 후 브랜치를 전환하세요.",
         "worktree": "작업 트리"
       },
       "explicitChatWindows": "이 에이전트의 채팅은 아직 Windows에서 사용할 수 없습니다. 대신 터미널에서 여세요.",
@@ -21012,6 +21018,7 @@
       "switch": "브랜치 전환: {{branch}}",
       "search": "브랜치 검색",
       "recover": "{{branch}}(으)로 전환",
+      "copy": "브랜치 이름 복사",
       "create": "{{branch}}에서 {{name}} 브랜치 만들기",
       "open": "작업 공간 열기",
       "occupied": "{{path}}에서 체크아웃됨",

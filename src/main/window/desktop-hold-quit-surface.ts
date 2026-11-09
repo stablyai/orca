@@ -2,7 +2,7 @@ import { BrowserWindow, webContents, type WebContents } from 'electron'
 import {
   getNativePopupQuitSurface,
   type NativePopupQuitSurface
-} from '../browser/guest-lifecycle/popups/native-browser-popup-windows'
+} from '../browser/guest-lifecycle/popups/presentation/native-browser-popup-windows'
 
 export function getDesktopHoldQuitInspectee(contents: WebContents): WebContents | undefined {
   return webContents

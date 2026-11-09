@@ -11,6 +11,8 @@ export type UiWindowApi = {
   onHoldQuitNotice?: (callback: (notice: HoldQuitNotice) => void) => () => void
   setHoldQuitActivity?: (busy: boolean) => void
   readClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
+  /** The clipboard's HTML when it may carry links; empty otherwise. */
+  readClipboardLinkHtml: () => Promise<string>
   readSelectionClipboardText: (options?: ReadClipboardTextOptions) => Promise<string>
   saveClipboardImageAsTempFile: (args?: {
     connectionId?: string | null

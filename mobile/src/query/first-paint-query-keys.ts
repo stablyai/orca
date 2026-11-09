@@ -10,6 +10,7 @@ import { hostViewFamily, hostViewKey } from '../host-screen/host-view-memory'
 import { hostProjectSectionsQuery } from '../host-screen/use-host-project-sections'
 import { sessionTabsFamily, sessionTabsKey } from '../session/tabs/mobile-session-last-tabs'
 import { gitStatusQuery } from '../source-control/mobile-git-status-query'
+import { firstPaintTaskKeys } from '../tasks/task-query-storage'
 import { hostQueryKey } from './host-query-key'
 import { persistedHostQueryKey, type PersistedHostQueryKey } from './host-query-persistence'
 
@@ -32,6 +33,9 @@ export function firstPaintQueryKeys(hostId: string, route: URL): PersistedHostQu
   const [root, routeHost, screen, worktreeSegment] = route.pathname.split('/').filter(Boolean)
   if (root !== 'h' || routeSegment(routeHost) !== hostId) {
     return []
+  }
+  if (screen === 'tasks') {
+    return firstPaintTaskKeys(hostId)
   }
   const keys =
     screen === undefined

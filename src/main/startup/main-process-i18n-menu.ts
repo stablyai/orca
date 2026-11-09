@@ -28,7 +28,7 @@ import { ensureAutoUpdaterConfigured } from '../window/attach-main-window-servic
 import { logStartupMilestone } from './startup-diagnostics'
 import { installDesktopHoldQuit } from '../window/desktop-hold-quit'
 import { isTrustedUIRenderer } from '../ipc/ui'
-import { browserManager } from '../browser/browser-manager'
+import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
 
 export async function initializeMainProcessI18nAndMenu(): Promise<void> {
   const store = state.store

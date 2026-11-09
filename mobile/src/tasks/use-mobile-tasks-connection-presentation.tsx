@@ -40,12 +40,21 @@ export function useMobileTasksConnectionPresentation(model: ProviderViewProjecti
   // Until the first read settles, an empty list is unread, not empty: keep the spinner up.
   const loading =
     model.loading || (connState === 'connected' && !model.taskListSettled && !model.error)
+  // Before Tasks is ready (connecting, offline, or waiting on its first read), the last list stays up, read-only.
+  // A failed first read on a live connection shows its error and Retry instead.
+  const showsKeptRows =
+    !model.tasksSupported &&
+    !model.tasksUnsupported &&
+    !isGithubProjectSearch &&
+    !(connState === 'connected' && model.error) &&
+    model.items.length > 0
   return Object.assign(model, {
     headerVerdict,
     emptyLabel,
     hasSearch,
     isGithubProjectSearch,
-    loading
+    loading,
+    showsKeptRows
   })
 }
 

@@ -4,7 +4,7 @@ import { getDefaultSettings } from '../../shared/constants'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { HoldQuitWatchEvent } from './hold-quit-gesture'
 import type { KeybindingOverrides } from '../../shared/keybindings'
-import { registerNativePopupQuitSurface } from '../browser/guest-lifecycle/popups/native-browser-popup-windows'
+import { registerNativePopupQuitSurface } from '../browser/guest-lifecycle/popups/presentation/native-browser-popup-windows'
 
 const mocks = vi.hoisted(() => {
   const watches: { emit: (event: HoldQuitWatchEvent) => void; cancel: ReturnType<typeof vi.fn> }[] =

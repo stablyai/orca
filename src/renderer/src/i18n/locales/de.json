@@ -4205,6 +4205,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Aktivieren"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Für ein anderes Fenster angepasst",
+            "fitHere": "Hier anpassen"
           }
         }
       },
@@ -16302,6 +16306,7 @@
           "kernelStartFailed": "Der Kernel konnte nicht gestartet werden.",
           "noPython": "Python wurde auf diesem Computer nicht gefunden. Python von [python.org](https://www.python.org/downloads/) installieren und die Zelle dann erneut ausführen.",
           "kernelDied": "Der Kernel ist abgestürzt.",
+          "outputTruncated": "Ausgabe gekürzt: Orca hat den Anfang der Ausgabe dieser Zelle behalten und den Rest verworfen. Um alles zu behalten, schreibe sie stattdessen in eine Datei.",
           "localOnly": "Notebook-Zellen können nur für Dateien auf diesem Computer ausgeführt werden.",
           "pythonOnly": "In Orca können nur Python-Notebooks ausgeführt werden.",
           "ownerUnresolved": "Orca kann noch nicht feststellen, auf welchem Computer sich dieses Notebook befindet. Daher können seine Zellen nicht ausgeführt werden.",
@@ -20191,6 +20196,7 @@
         "copyIdentity": "{{value0}} kopieren",
         "folder": "Ordner",
         "mainCheckout": "Haupt-Checkout",
+        "turnWorking": "Der Agent dieses Chats arbeitet. Wechsle den Branch, wenn sein Zug beendet ist.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "Der Chat dieses Agenten ist unter Windows noch nicht verfügbar. Öffne ihn stattdessen in einem Terminal.",
@@ -21300,6 +21306,7 @@
       "switch": "Branch wechseln: {{branch}}",
       "search": "Branches suchen",
       "recover": "Zu {{branch}} wechseln",
+      "copy": "Branch-Namen kopieren",
       "create": "Branch {{name}} aus {{branch}} erstellen",
       "open": "Arbeitsbereich öffnen",
       "occupied": "Ausgecheckt in {{path}}",
