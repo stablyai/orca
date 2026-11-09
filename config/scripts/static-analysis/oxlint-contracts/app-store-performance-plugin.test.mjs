@@ -69,6 +69,36 @@ export function useStructuredAgentSessionHostCapabilityState(
       const Sibling = () => useRuntimeStore(s => s.runtimeStatusByEnvironmentId)
       const ShallowMap = () => useStore(useShallow(s => s.runtimeStatusByEnvironmentId))
     `,
+  hotMapTriggers: `
+      import { useEffect } from 'react'
+      import { useAppStore } from '@/store'
+      useAppStore.subscribe((state, previous) => {
+        if (state.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree) rebuildEveryChat()
+      })
+      useAppStore.subscribe((next, prev) => prev.runtimeStatusByEnvironmentId === next.runtimeStatusByEnvironmentId || refresh())
+      const Effect = () => useEffect(() => {
+        for (const tabs of Object.values(useAppStore.getState().tabsByWorktree)) visit(tabs)
+        const snapshot = useAppStore.getState()
+        sweep(snapshot.unifiedTabsByWorktree)
+      }, [])
+    `,
+  focusedHotMapTriggers: `
+      import { useEffect } from 'react'
+      import { useAppStore } from '@/store'
+      useAppStore.subscribe((state, previous) => {
+        if (chatTabsOf(state.unifiedTabsByWorktree) !== chatTabsOf(previous.unifiedTabsByWorktree)) reconcile()
+        if (state.activeWorktreeId !== previous.activeWorktreeId) reconcile()
+        if (state.unifiedTabsByWorktree !== other.unifiedTabsByWorktree) reconcile()
+      })
+      const Effect = () => useEffect(() => {
+        const tabs = useAppStore.getState().tabsByWorktree[worktreeId]
+        const status = useAppStore.getState().runtimeStatusByEnvironmentId.get(hostId)
+        const snapshot = useAppStore.getState()
+        const chats = snapshot.unifiedTabsByWorktree[worktreeId]
+        const other = otherStore.getState().tabsByWorktree
+      }, [worktreeId])
+      const onClick = () => Object.values(useAppStore.getState().tabsByWorktree)
+    `,
   focusedHotMapReads: `
       import { useAppStore } from '@/store'
       import { useShallow } from 'zustand/react/shallow'
@@ -235,7 +265,8 @@ beforeAll(() => {
 describe('app store performance Oxlint plugin', () => {
   it.each([
     ['historicalHotMap', 1],
-    ['hotMapReturns', 9]
+    ['hotMapReturns', 9],
+    ['hotMapTriggers', 4]
   ])('reports whole hot-map results in %s', (name, count) => {
     expect(diagnosticsBySource.get(sources[name]).map((diagnostic) => diagnostic.code)).toEqual(
       Array(count).fill('app-store-performance(no-whole-hot-map-selector)')
@@ -244,6 +275,7 @@ describe('app store performance Oxlint plugin', () => {
 
   it.each([
     'focusedHotMapReads',
+    'focusedHotMapTriggers',
     'fixedHostCapability',
     'parkingProjection',
     'globalHotMapConsumer'

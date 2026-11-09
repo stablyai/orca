@@ -264,8 +264,9 @@ function requireSelectorRule(sourceCode) {
 }
 
 // Judge at Program:exit so selectors declared after call sites resolve.
-function deferredSelectorRule(sourceCode, inspect) {
+function deferredSelectorRule(sourceCode, inspect, inspectOtherCall) {
   const state = createRuleState(sourceCode)
+  const otherCalls = []
   return {
     ImportDeclaration(node) {
       recordImports(node, state)
@@ -273,9 +274,16 @@ function deferredSelectorRule(sourceCode, inspect) {
     CallExpression(node) {
       if (isAppStoreCall(node, state)) {
         state.deferredCalls.push(node)
+      } else if (inspectOtherCall) {
+        otherCalls.push(node)
       }
     },
     'Program:exit'() {
+      for (const node of otherCalls) {
+        for (const report of inspectOtherCall(node, state)) {
+          this.report(report)
+        }
+      }
       for (const node of state.deferredCalls) {
         const { selector: argument, shallow } = unwrapShallowSelector(node.arguments[0], state)
         const report = inspect({
@@ -375,22 +383,141 @@ function selectorValue(expression, selector, state, seen = new Set()) {
     : null
 }
 
-function noWholeHotMapSelectorRule(sourceCode) {
-  return deferredSelectorRule(sourceCode, ({ selector, state }) => {
-    if (!selector) {
-      return null
+// Every tab write replaces the tab maps (terminal title batches included), like host observations do the status map.
+const HOT_TRIGGER_FIELDS = new Set([...HOT_STORE_FIELDS, 'unifiedTabsByWorktree', 'tabsByWorktree'])
+const EFFECT_HOOKS = new Set(['useEffect', 'useLayoutEffect'])
+
+function visitNodes(root, visit) {
+  const walk = (node) => {
+    if (!node || typeof node !== 'object' || typeof node.type !== 'string') {
+      return
     }
-    const result = returnedExpressions(selector).find((expression) =>
-      HOT_STORE_FIELDS.has(selectorValue(expression, selector, state))
-    )
-    return result
-      ? {
-          node: result,
-          message:
-            'This whole host-status map changes for every host. Select the derived answer for your own host/item with a stable result (see paired-runtime-parking-capabilities.ts), or add a disable comment with a reason if this consumer needs every host.'
-        }
-      : null
+    visit(node)
+    for (const [key, child] of Object.entries(node)) {
+      if (key !== 'parent') {
+        ;(Array.isArray(child) ? child : [child]).forEach(walk)
+      }
+    }
+  }
+  walk(root)
+}
+
+function isAppStoreMethodCall(node, method, state) {
+  const object = node.callee.object
+  return (
+    propertyName(node.callee) === method &&
+    object?.type === 'Identifier' &&
+    state.hookNames.has(object.name) &&
+    state.appStoreHooks.has(variableFor(object, state))
+  )
+}
+
+function parameterField(expression, parameter, state) {
+  const field = propertyName(expression)
+  return HOT_TRIGGER_FIELDS.has(field) &&
+    parameter?.type === 'Identifier' &&
+    expression.object.type === 'Identifier' &&
+    variableFor(expression.object, state) === variableFor(parameter, state)
+    ? field
+    : null
+}
+
+// `state.map !== previous.map` in a store listener reruns its work on every write to that whole map.
+function wholeMapListenerTriggers(listener, state) {
+  const [current, previous] = listener?.params ?? []
+  const triggers = []
+  if (!current || !previous) {
+    return triggers
+  }
+  visitNodes(listener.body, (node) => {
+    if (node.type !== 'BinaryExpression' || !['===', '!==', '==', '!='].includes(node.operator)) {
+      return
+    }
+    const sides = [
+      [node.left, node.right],
+      [node.right, node.left]
+    ]
+    const field = sides
+      .map(([own, other]) => [
+        parameterField(own, current, state),
+        parameterField(other, previous, state)
+      ])
+      .find(([own, other]) => own && own === other)?.[0]
+    if (field) {
+      triggers.push({ node, field })
+    }
   })
+  return triggers
+}
+
+// `getState().map` (or a `const s = getState()` alias) used whole, not indexed or `.get`-ed, inside an effect.
+function wholeMapEffectReads(effect, state) {
+  const snapshots = new Set()
+  visitNodes(effect.body, (node) => {
+    if (
+      node.type === 'VariableDeclarator' &&
+      node.id.type === 'Identifier' &&
+      node.init?.type === 'CallExpression' &&
+      isAppStoreMethodCall(node.init, 'getState', state)
+    ) {
+      snapshots.add(variableFor(node.id, state))
+    }
+  })
+  const reads = []
+  visitNodes(effect.body, (node) => {
+    const field = propertyName(node)
+    const object = node.object
+    if (
+      HOT_TRIGGER_FIELDS.has(field) &&
+      ((object?.type === 'CallExpression' && isAppStoreMethodCall(object, 'getState', state)) ||
+        (object?.type === 'Identifier' && snapshots.has(variableFor(object, state)))) &&
+      !(node.parent?.type === 'MemberExpression' && node.parent.object === node)
+    ) {
+      reads.push({ node, field })
+    }
+  })
+  return reads
+}
+
+function wholeHotMapTriggerReports(node, state) {
+  if (isAppStoreMethodCall(node, 'subscribe', state)) {
+    return wholeMapListenerTriggers(functionNode(node.arguments[0]), state).map(
+      ({ node: trigger, field }) => ({
+        node: trigger,
+        message: `This listener reruns on every write to the whole ${field} map. Compare the derived answer it needs (see structured-agent-session-tabs.ts), or add a disable comment with a reason if it needs every entry.`
+      })
+    )
+  }
+  const effect = functionNode(node.arguments[0])
+  if (node.callee.type !== 'Identifier' || !EFFECT_HOOKS.has(node.callee.name) || !effect) {
+    return []
+  }
+  return wholeMapEffectReads(effect, state).map(({ node: read, field }) => ({
+    node: read,
+    message: `This effect reads the whole ${field} map. Read the entry it needs or a derived index, or add a disable comment with a reason if it needs every entry.`
+  }))
+}
+
+function noWholeHotMapSelectorRule(sourceCode) {
+  return deferredSelectorRule(
+    sourceCode,
+    ({ selector, state }) => {
+      if (!selector) {
+        return null
+      }
+      const result = returnedExpressions(selector).find((expression) =>
+        HOT_STORE_FIELDS.has(selectorValue(expression, selector, state))
+      )
+      return result
+        ? {
+            node: result,
+            message:
+              'This whole host-status map changes for every host. Select the derived answer for your own host/item with a stable result (see paired-runtime-parking-capabilities.ts), or add a disable comment with a reason if this consumer needs every host.'
+          }
+        : null
+    },
+    wholeHotMapTriggerReports
+  )
 }
 
 /** useShallow compares one level deep, so a fresh reference nested inside its result never matches. */

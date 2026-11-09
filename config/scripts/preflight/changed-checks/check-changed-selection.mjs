@@ -48,6 +48,7 @@ const RATCHET_INPUTS = {
   'check-repo-host-read-ratchet.mjs': ['src/cli/', 'src/main/', 'src/shared/'],
   'check-runtime-electron-ratchet.mjs': ['src/main/', 'src/cli/', 'src/shared/'],
   'check-unproven-pty-retirement-ratchet.mjs': ['src/main/'],
+  'check-whole-tab-map-trigger-ratchet.mjs': ['src/renderer/src/'],
   'check-workspace-record-read-ratchet.mjs': ['src/renderer/src/'],
   'check-worktree-id-composer-ratchet.mjs': ['src/', 'mobile/src/']
 }

@@ -39,6 +39,7 @@ export const LINT_STEPS = [
   'check:mobile-shared-dependency-versions',
   'check:ts-nocheck-ratchet',
   'check:workspace-record-read-ratchet',
+  'check:whole-tab-map-trigger-ratchet',
   'check:unproven-pty-retirement-ratchet',
   'check:daemon-blocking-call-ratchet',
   'check:main-sync-fs-ratchet',

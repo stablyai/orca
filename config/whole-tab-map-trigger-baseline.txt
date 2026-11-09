@@ -1,0 +1,20 @@
+# Renderer identity comparisons of the whole `unifiedTabsByWorktree` / `tabsByWorktree` map,
+# as `<count> <file>`. Every tab write anywhere replaces these maps, so work gated on them reruns
+# for unrelated workspaces. This is a RATCHET: counts may only go DOWN.
+# Prune after a fix: pnpm check:whole-tab-map-trigger-ratchet --prune
+2 src/renderer/src/components/dashboard/useAgentBucketCounts.ts
+2 src/renderer/src/components/dashboard/useDashboardPopoutBridge.ts
+1 src/renderer/src/components/sidebar/workspace-actions/sleep/use-worktree-sleep-state.ts
+2 src/renderer/src/components/sidebar/workspace-card/activity/worktree-agent-activity-summary.ts
+1 src/renderer/src/components/terminal-pane/provider-notices/agent-presence/agent-terminal-presence.ts
+1 src/renderer/src/hooks/agent-hook-completion-notifications.ts
+1 src/renderer/src/hooks/ipc-events/agent-status-pane-routing-index.ts
+2 src/renderer/src/hooks/ipc-events/agent-status-pending-retry-gate.ts
+2 src/renderer/src/lib/agent-session/history/title-sync/ai-vault-tab-title-sync-inputs.ts
+2 src/renderer/src/lib/unread-badge-count-selector.ts
+1 src/renderer/src/runtime/browser/creation/web-runtime-browser-creation-context.ts
+1 src/renderer/src/runtime/native-chat/naming/legacy-chat-rename-migration.ts
+1 src/renderer/src/runtime/native-chat/naming/structured-chat-name-observation.ts
+4 src/renderer/src/runtime/sync-runtime-graph/sync-key.ts
+1 src/renderer/src/runtime/workspace-layout/frames/workspace-layout-frame-drawn-workspaces.ts
+2 src/renderer/src/store/slices/hosted-review/refresh/visible-hosted-review-refresh-targets.ts

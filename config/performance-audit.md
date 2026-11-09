@@ -17,6 +17,13 @@ It resolves direct returns, module-scope named selectors and selector-local cons
 aliases/destructuring; it does not infer consumer lifetime or follow imported
 helpers. Legitimate fleet consumers also match, so behavior-level render-isolation
 assertions remain the safeguard against actual fanout regressions.
+The same rule also flags inline `useAppStore.subscribe` listeners that compare a
+whole hot map between `state` and `previous`, and effect bodies that use a whole
+hot map from `getState()` (directly or through a `const` snapshot) rather than
+indexing it. For these two forms the hot maps also include `unifiedTabsByWorktree`
+and `tabsByWorktree`, which every tab write replaces. Compare a derived answer
+instead (see `structured-agent-session-tabs.ts`). The gate for tab-map identity
+triggers in any form is `pnpm check:whole-tab-map-trigger-ratchet`.
 
 Tests, generated files, `mobile/` and `cloud/` are outside this source audit.
 
