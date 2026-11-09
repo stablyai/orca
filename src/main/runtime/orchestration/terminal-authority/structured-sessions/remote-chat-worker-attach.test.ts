@@ -195,22 +195,23 @@ describe('a chat worker that a coordinator on another computer starts here', () 
     expect(turnText(worker.turns[1]!)).toContain('Also the changelog')
   })
 
-  it('says plainly that its state cannot be read here yet', async () => {
+  it('shows its state and transcript as a local chat worker does', async () => {
     await startedChatWorker()
 
     await expect(
       federation('orchestration.federationShow', { dispatchId: DISPATCH })
+    ).resolves.toMatchObject({ observation: { status: 'live', exactWorker: true } })
+    await expect(
+      federation('orchestration.federationFleetSnapshot', { dispatchIds: [DISPATCH] })
     ).resolves.toMatchObject({
-      observation: {
-        status: 'unverifiable',
-        reason: expect.stringContaining('cannot read the state of a chat worker on a paired server')
-      }
+      items: [{ dispatchId: DISPATCH, observation: { status: 'live', exactWorker: true } }]
     })
-    for (const read of ['orchestration.federationRead', 'orchestration.federationReadOutput']) {
-      await expect(federation(read, { dispatchId: DISPATCH })).rejects.toThrow(
-        /cannot read the state of a chat worker on a paired server/
-      )
-    }
+    const read = await federation('orchestration.federationReadOutput', { dispatchId: DISPATCH })
+    expect(read).toMatchObject({ output: { source: 'transcript' } })
+    expect(JSON.stringify(read)).toContain('Your task ID is: task_home')
+    await expect(
+      federation('orchestration.federationRead', { dispatchId: DISPATCH })
+    ).rejects.toThrow(/chat worker with no terminal/)
   })
 
   it('closes its chat when its coordinator stops it', async () => {
@@ -220,6 +221,9 @@ describe('a chat worker that a coordinator on another computer starts here', () 
       federation('orchestration.federationStop', { dispatchId: DISPATCH })
     ).resolves.toMatchObject({ state: 'stopped', processAction: 'closed_agent_terminal' })
     expect(host.hasSession(identity.sessionId)).toBe(false)
+    await expect(
+      federation('orchestration.federationShow', { dispatchId: DISPATCH })
+    ).resolves.toMatchObject({ observation: { status: 'exited' } })
   })
 
   it('closes its chat when its coordinator releases it after its report', async () => {
