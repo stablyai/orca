@@ -52,8 +52,8 @@ async function exitWithUnwrittenSettlement(
       throw new Error('disk full')
     }
   }
-  const settleDead = open.journal.settleDeadGeneration
-  const settleStale = open.journal.settleStaleState
+  const settleDead = open.journal.settleDeadGeneration.bind(open.journal)
+  const settleStale = open.journal.settleStaleState.bind(open.journal)
   vi.spyOn(open.journal, 'settleDeadGeneration').mockImplementation(async (input) => {
     refuse()
     return settleDead(input)
@@ -112,8 +112,10 @@ describe('a turn its gone agent left running', () => {
 
     expect(await workingTurnState()).toBe('interrupted')
     // Internal death diagnostics must not reach transcript readers.
-    expect(JSON.stringify(reader.events)).toContain(
-      'Codex stopped while this response was in progress. You can continue in this conversation.'
+    await vi.waitFor(() =>
+      expect(JSON.stringify(reader.events)).toContain(
+        'Codex stopped while this response was in progress. You can continue in this conversation.'
+      )
     )
     expect(rig.adapter.acquire).toHaveBeenCalledOnce()
   })

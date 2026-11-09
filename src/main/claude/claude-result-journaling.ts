@@ -151,7 +151,8 @@ export function journalClaudeResult(
     journalClaudeGoal(sink, goal, turnId, observedAt, endedTurnScope)
   }
   const kind = claudeProviderFrameKind(message)
-  if (terminalFailure && endedTurnIdentity) {
+  const terminalShown = terminalFailure !== null && endedTurnIdentity !== null
+  if (terminalShown && (!stopCheck || isSettledClaudeResultKind(kind))) {
     return
   }
   const alreadyShown = assistantFailures.resultAlreadyShown(message)
@@ -181,6 +182,7 @@ export function journalClaudeResult(
       stopCheck && failure
         ? {
             check: stopCheck,
+            ...(terminalShown ? { ran: null } : {}),
             stopped: isSettledClaudeResultKind(kind) ? null : { options: { reportsFailure: false } }
           }
         : undefined

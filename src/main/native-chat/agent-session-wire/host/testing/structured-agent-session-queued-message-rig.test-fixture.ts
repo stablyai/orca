@@ -166,10 +166,12 @@ export async function createQueuedMessageTestRig(
   }
 
   async function submission(id: string): Promise<AgentJournalSubmission | undefined> {
+    await host.history({ sessionId: SESSION, direction: 'tail' })
     return host.collaboratorsForTests().sessions.get(SESSION)!.journal.reads.submission(id)
   }
 
   async function handoff(draftId: string): Promise<AgentJournalSubmission | undefined> {
+    await host.history({ sessionId: SESSION, direction: 'tail' })
     const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
     return (await journal.reads.input({ kind: 'linked-to', messageId: draftId })).submissions.at(-1)
   }

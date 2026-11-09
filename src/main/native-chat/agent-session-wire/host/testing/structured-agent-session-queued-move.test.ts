@@ -70,7 +70,7 @@ describe('authoritative queue ordering', () => {
       ok: true,
       value: { status: 'moved' }
     })
-    expect(order()).toEqual([c, a, mail, b])
+    expect(await order()).toEqual([c, a, mail, b])
     for (const card of facts) {
       expect(await journal().queuedMessages.get(card.messageId)).toEqual({
         ...card,
@@ -85,7 +85,7 @@ describe('authoritative queue ordering', () => {
       ok: true,
       value: { status: 'moved' }
     })
-    expect(order()).toEqual([a, mail, b, c])
+    expect(await order()).toEqual([a, mail, b, c])
     expect(await move(mail, { beforeMessageId: a })).toMatchObject({
       ok: true,
       value: { status: 'moved' }
@@ -103,7 +103,7 @@ describe('authoritative queue ordering', () => {
       ok: true,
       value: { status: 'moved' }
     })
-    expect(order()).toEqual([mail, a, c, b])
+    expect(await order()).toEqual([mail, a, c, b])
     await rig.host.close(HOST_TEST_SESSION, 'evict')
     await rig.restartHostProcess()
     const reopened = await rig.host.history({ sessionId: HOST_TEST_SESSION, direction: 'tail' })
@@ -117,7 +117,7 @@ describe('authoritative queue ordering', () => {
       ok: true,
       value: { status: 'moved' }
     })
-    expect(order()).toEqual([mail, a, c, b])
+    expect(await order()).toEqual([mail, a, c, b])
     expect((await journal().queuedMessages.get(mail))?.body).toEqual(facts[1]!.body)
     expect(await journal().queuedMessages.list()).toHaveLength(4)
     expect(await rig.deleteQueued(c)).toMatchObject({ ok: true })
@@ -138,7 +138,7 @@ describe('authoritative queue ordering', () => {
     await move(held, { beforeMessageId: a })
     const op = hostTestOperationId()
     await move(mail, { beforeMessageId: a }, op)
-    expect(order()).toEqual([held, mail, a, b])
+    expect(await order()).toEqual([held, mail, a, b])
     for (const card of facts) {
       expect(await journal().queuedMessages.get(card.messageId)).toEqual({
         ...card,
@@ -173,7 +173,7 @@ describe('authoritative queue ordering', () => {
       a,
       b
     ])
-    expect(order()).toEqual([held])
+    expect(await order()).toEqual([held])
     expect(await journal().queuedMessages.get(held)).toEqual({
       ...facts.find((card) => card.messageId === held)!,
       position: facts[0]!.position
