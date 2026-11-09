@@ -26,14 +26,7 @@ export type CheckoutFlow = {
  * Drives Checkout from the plans dialog. Polls the entitlement every 2 s for up to 3 min while
  * Stripe's page is open, and also reacts at once to the orca://billing/return link.
  */
-export function useCheckoutFlow({
-  active,
-  onPaid
-}: {
-  /** False while the dialog is closed: polling stops and the flow resets. */
-  active: boolean
-  onPaid: (seats: number) => void
-}): CheckoutFlow {
+export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void }): CheckoutFlow {
   const [phase, setPhase] = useState<CheckoutPhase>({ kind: 'idle' })
   const [watchKey, setWatchKey] = useState(0)
   const onPaidRef = useRef(onPaid)
@@ -62,12 +55,6 @@ export function useCheckoutFlow({
     runId.current++
     setPhase({ kind: 'idle' })
   }, [])
-
-  useEffect(() => {
-    if (!active) {
-      reset()
-    }
-  }, [active, reset])
 
   const awaiting = phase.kind === 'awaiting-payment' ? phase : null
 

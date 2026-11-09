@@ -16,7 +16,7 @@ export function PlansDialogContent(
   return (
     <DialogContent
       scrollable
-      className="top-[6vh] max-h-[88vh] translate-y-0 sm:max-w-4xl [@media(max-height:800px)]:top-4 [@media(max-height:800px)]:max-h-[calc(100vh-2rem)] [@media(max-height:800px)]:gap-3 [@media(max-height:800px)]:p-5"
+      className="top-[6vh] max-h-[88vh] translate-y-0 sm:max-w-4xl [@media(max-height:800px)]:top-4 [@media(max-height:800px)]:max-h-[calc(100vh-2rem)]"
       onOpenAutoFocus={(event) => {
         // Land on the primary action for this state when it is already rendered (review P1-13);
         // otherwise on the dialog itself so nothing looks pre-selected.

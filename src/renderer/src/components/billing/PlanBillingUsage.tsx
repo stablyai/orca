@@ -172,17 +172,13 @@ export function OverageControls({
               <label htmlFor={capId} className="text-xs font-medium">
                 {t('auto.components.billing.capLabel2', 'Monthly spend cap')}
               </label>
-              <div className="relative w-28">
-                <span
-                  aria-hidden
-                  className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground"
-                >
+              <div className="flex w-28 items-center gap-1.5">
+                <span aria-hidden className="text-sm text-muted-foreground">
                   $
                 </span>
                 <Input
                   id={capId}
                   inputMode="numeric"
-                  className="pl-6 tabular-nums"
                   value={capDollars}
                   aria-invalid={!capValid || undefined}
                   onChange={(event) => {

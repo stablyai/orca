@@ -200,7 +200,6 @@ export function SidebarAccountMenu(): React.JSX.Element {
                     data-account-menu-item={item.id}
                     data-tone={item.tone}
                     onSelect={item.onSelect}
-                    className={cn(item.tone === 'accent' && 'font-medium text-foreground')}
                   >
                     {Icon ? (
                       <Icon

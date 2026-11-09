@@ -32,7 +32,7 @@ export function PlansDialogHost(): React.JSX.Element {
     closePlansPage()
     openTeamPage({ kind: 'checkout-success', seats: paidSeats })
   }, [])
-  const checkout = useCheckoutFlow({ active: open, onPaid })
+  const checkout = useCheckoutFlow({ onPaid })
 
   const openPortal = async (): Promise<void> => {
     setBusy(true)
@@ -61,6 +61,8 @@ export function PlansDialogHost(): React.JSX.Element {
       open={open}
       onOpenChange={(next) => {
         if (!next) {
+          // Closing ends the watch: polling stops and the next open starts from the plans.
+          checkout.reset()
           closePlansPage()
           setNotice(null)
         }
