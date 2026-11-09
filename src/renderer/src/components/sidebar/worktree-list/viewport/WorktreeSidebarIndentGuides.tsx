@@ -31,7 +31,7 @@ export function WorktreeSidebarIndentGuides({
     const index = renderRows.findIndex((row) =>
       renderRowContainsWorktree(row, activeWorktreeId, activeWorkspaceExecutionHostId ?? undefined)
     )
-    return new Set(index === -1 ? [] : ancestors[index])
+    return new Set(index === -1 ? [] : ancestors[index].map((ancestor) => ancestor.key))
   }, [renderRows, ancestors, activeWorktreeId, activeWorkspaceExecutionHostId])
   // Why: rows slide by preview offsets mid-drag; static guides would cut across them.
   if (hidden) {

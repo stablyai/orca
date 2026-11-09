@@ -84,6 +84,9 @@ const rows = [
   card('solo-card')
 ]
 
+const labels = (ancestors: ReturnType<typeof getIndentGuideAncestors>): string[][] =>
+  ancestors.map((row) => row.map(({ key, level }) => `${key}@${level}`))
+
 const spans = (segments: ReturnType<typeof getIndentGuideSegments>): [string, number, number][] =>
   segments
     .map(({ key, top, bottom }): [string, number, number] => [key, top, bottom])
@@ -98,16 +101,34 @@ const measured = (from: number, to: number): { index: number; start: number; end
 
 describe('getIndentGuideAncestors', () => {
   it('lists the headers each row sits under, outermost first', () => {
-    expect(getIndentGuideAncestors(rows, 'repo')).toEqual([
+    expect(labels(getIndentGuideAncestors(rows, 'repo'))).toEqual([
       [],
-      [':work'],
-      [':work'],
-      [':work', ':audio'],
-      [':work', ':audio', ':asr'],
-      [':work'],
-      [':work', ':ana'],
+      [':work@0'],
+      [':work@0'],
+      [':work@0', ':audio@1'],
+      [':work@0', ':audio@1', ':asr@2'],
+      [':work@0'],
+      [':work@0', ':ana@1'],
       [],
-      [':solo']
+      [':solo@0']
+    ])
+  })
+
+  it('keeps each guide at its header depth when a parent header is not shown', () => {
+    const orphanRows = [group('audio', 1), project('asr', 2), card('asr-card')]
+    expect(labels(getIndentGuideAncestors(orphanRows, 'repo'))).toEqual([
+      [],
+      [':audio@1'],
+      [':audio@1', ':asr@2']
+    ])
+    const segments = getIndentGuideSegments(
+      getIndentGuideAncestors(orphanRows, 'repo'),
+      measured(0, 2),
+      new Set()
+    )
+    expect(segments.map(({ key, level }) => `${key}@${level}`).sort()).toEqual([
+      ':asr@2',
+      ':audio@1'
     ])
   })
 
@@ -135,7 +156,7 @@ describe('getIndentGuideSegments', () => {
   })
 
   it('marks the guides above the active row', () => {
-    const active = new Set(ancestors[4])
+    const active = new Set(ancestors[4].map((ancestor) => ancestor.key))
     const segments = getIndentGuideSegments(ancestors, measured(0, 8), active)
     expect(
       segments
