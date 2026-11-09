@@ -15,15 +15,18 @@ import { codexForkHistory } from './codex-fork-history'
 import { CodexAppServerTimeoutError } from './app-server/codex-app-server-session'
 import type { CodexAppServerRpc } from './app-server/codex-app-server-session'
 
-const state = vi.hoisted(() => ({
-  home: '',
-  paths: new Map<string, string>(),
-  request: vi.fn<CodexAppServerRpc['request']>(),
-  initialize: vi.fn(),
-  session: undefined as
-    | ((body: (rpc: CodexAppServerRpc) => Promise<unknown>) => Promise<unknown>)
-    | undefined
-}))
+const state = vi.hoisted(() => {
+  const session: {
+    run?: (body: (rpc: CodexAppServerRpc) => Promise<unknown>) => Promise<unknown>
+  } = {}
+  return {
+    home: '',
+    paths: new Map<string, string>(),
+    request: vi.fn<CodexAppServerRpc['request']>(),
+    initialize: vi.fn(),
+    session
+  }
+})
 vi.mock('../native-chat/codex-local-history', async (importOriginal) => {
   const original = await importOriginal<typeof LocalHistory>()
   return { ...original, readCodexLocalHistory: vi.fn(original.readCodexLocalHistory) }
@@ -42,7 +45,9 @@ vi.mock('./app-server/codex-app-server-session', async (importOriginal) => ({
     body: (rpc: CodexAppServerRpc) => Promise<unknown>
   ) => {
     state.initialize(launch)
-    return state.session ? state.session(body) : body({ request: state.request, notify: () => {} })
+    return state.session.run
+      ? state.session.run(body)
+      : body({ request: state.request, notify: () => {} })
   }
 }))
 
@@ -55,7 +60,7 @@ beforeEach(async () => {
   state.home = root
   state.paths.clear()
   state.request.mockReset()
-  state.session = undefined
+  state.session.run = undefined
   state.initialize.mockReset()
   vi.mocked(readCodexLocalHistory).mockClear()
   vi.mocked(readCodexRolloutBytes).mockClear()
@@ -434,6 +439,8 @@ it('bridges a saved physical reply with an absent command candidate without rest
 
 it('keeps read faults in preparation and a contradictory copied prefix uncertain', async () => {
   const selected = '01a1bdd4-2977-7f81-8495-eb160b46419a'
+  await history(SOURCE, turn(selected, 1))
+  await childPrefix()
   const prepare = () => copy(undefined, true, selected)
   state.request.mockRejectedValue(new Error('read failed'))
   await expect(prepare()).rejects.toMatchObject({
@@ -508,7 +515,7 @@ it('cannot dispatch an abandoned preparation after its lifetime ends, but keeps 
     listed.resolve()
     return release.promise
   })
-  state.session = async (body) => {
+  state.session.run = async (body) => {
     abandoned = body({ request: state.request, notify: () => {}, signal: lifetime.signal })
     return Promise.race([abandoned, expired.promise])
   }
@@ -525,7 +532,7 @@ it('cannot dispatch an abandoned preparation after its lifetime ends, but keeps 
   const forked = Promise.withResolvers<void>()
   const lost = Promise.withResolvers<never>()
   const pending = Promise.withResolvers<unknown>()
-  state.session = async (body) =>
+  state.session.run = async (body) =>
     Promise.race([body({ request: state.request, notify: () => {} }), lost.promise])
   state.request.mockImplementation(async (method) => {
     if (method === 'thread/read') {
@@ -543,7 +550,7 @@ it('cannot dispatch an abandoned preparation after its lifetime ends, but keeps 
   lost.reject(timeout)
   await expect(invoked).rejects.not.toHaveProperty('refusal')
   pending.reject(timeout)
-  state.session = undefined
+  state.session.run = undefined
   const caller = new AbortController()
   caller.abort(new Error('caller cancelled'))
   await expect(copy(undefined, true, 'selected', { signal: caller.signal })).rejects.toBe(
