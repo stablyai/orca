@@ -1,12 +1,7 @@
-name: Windows ConPTY diagnostic
+name: Windows ConPTY native-neighbor diagnostic
 
 on:
   workflow_dispatch:
-    inputs:
-      neighbors:
-        description: Also run bounded native neighbors in a separate shared-worker invocation
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -52,25 +47,15 @@ jobs:
           git rev-parse HEAD | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/source.txt"
           if ((git rev-parse HEAD) -ne '2a9d86a4f3d7ccd29c335df6922c06455b6e99f8') { throw 'Unexpected source SHA' }
           Get-ChildItem out/orcad -Recurse -File | Where-Object { $_.Extension -in '.node', '.dll', '.exe' } | Get-FileHash -Algorithm SHA256 | Format-Table -AutoSize | Out-String -Width 4096 | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/native-sha256.txt"
-      - name: Existing ConPTY case in a fresh isolated worker
-        id: isolated
-        shell: pwsh
-        env:
-          ORCA_VITEST_ISOLATE_EVERY_FILE: '1'
-        run: |
-          pnpm test:node-server --artifact src/main/orcad/orcad-windows-conpty-breakaway.integration.test.ts --maxWorkers=1 2>&1 | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/isolated.log"
-          $testExit = $LASTEXITCODE
-          "exit=$testExit" | Add-Content "$env:RUNNER_TEMP/conpty-diagnostic/isolated.log"
-          exit $testExit
-      - name: Bounded native neighbors in a separate shared-worker invocation
-        if: ${{ !cancelled() && inputs.neighbors && steps.isolated.outcome != 'skipped' }}
+      - name: Native process-table consumer and lifecycle neighbors at default concurrency
         shell: pwsh
         env:
           ORCA_VITEST_ISOLATE_EVERY_FILE: '0'
         run: |
-          pnpm test:node-server --artifact src/main/orcad/orcad-packaged-node-pty.integration.test.ts src/main/orcad/orcad-cli-launcher.integration.test.ts src/main/orcad/orcad-launcher-isolation.integration.test.ts src/main/orcad/orcad-stop-request-shutdown.integration.test.ts src/main/orcad/orcad-windows-conpty-breakaway.integration.test.ts src/main/orcad/orcad-serve-parity.integration.test.ts --maxWorkers=1 2>&1 | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/neighbors.log"
+          node -e "console.log(JSON.stringify({source: '2a9d86a4f3d7ccd29c335df6922c06455b6e99f8', availableParallelism: require('node:os').availableParallelism(), isolation: process.env.ORCA_VITEST_ISOLATE_EVERY_FILE}))" | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/policy.json"
+          pnpm test:node-server --artifact src/main/persistence/profile-state/profile-state-access-windows-native.win32.test.ts src/main/orcad/orcad-packaged-node-pty.integration.test.ts src/main/orcad/orcad-cli-launcher.integration.test.ts src/main/orcad/orcad-launcher-isolation.integration.test.ts src/main/orcad/orcad-stop-request-shutdown.integration.test.ts src/main/orcad/orcad-windows-conpty-breakaway.integration.test.ts src/main/orcad/orcad-serve-parity.integration.test.ts 2>&1 | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/native-neighbors-default.log"
           $testExit = $LASTEXITCODE
-          "exit=$testExit" | Add-Content "$env:RUNNER_TEMP/conpty-diagnostic/neighbors.log"
+          "exit=$testExit" | Add-Content "$env:RUNNER_TEMP/conpty-diagnostic/native-neighbors-default.log"
           exit $testExit
       - name: Upload diagnostic evidence
         if: ${{ !cancelled() }}
