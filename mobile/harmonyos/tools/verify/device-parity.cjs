@@ -140,8 +140,8 @@ function pdfHarness(client, preview = {}) {
     pdfService: { ParseResult: { PARSE_SUCCESS: 0, PARSE_ERROR_PASSWORD: 3 } },
     pdfViewManager: {
       PdfController: class {
-        loadDocument(path) {
-          return preview.load(path)
+        loadDocument(path, password) {
+          return preview.load(path, password)
         }
         releaseDocument() {}
       }
@@ -291,6 +291,26 @@ test('closing the page during in-app PDF parsing cannot replace the visible docu
   await Promise.all([rejected, closing])
   assert.equal(visible(), null)
   assert.ok(removed.includes(path))
+})
+
+test('a protected PDF can be retried in Orca until the viewer closes', async () => {
+  const client = pdfClient(async (request) =>
+    request.method === 'files.stat' ? fileStat : fileChunk
+  )
+  const { viewer, visible, removed } = pdfHarness(client, {
+    load: async (_path, password) => (password === 'fixture passphrase' ? 0 : 3)
+  })
+  await viewer.serve({ action: 'open', worktreeId: 'w', relativePath: 'protected.pdf' })
+  const preview = visible()
+  assert.equal(preview.title, 'protected.pdf')
+  assert.equal(preview.controller, null)
+  assert.equal(await preview.unlock('wrong passphrase'), null)
+  assert.ok(await preview.unlock('fixture passphrase'))
+  assert.equal(removed.includes(preview.path), false)
+  await viewer.serve({ action: 'cancel' })
+  assert.equal(visible(), null)
+  assert.ok(removed.includes(preview.path))
+  await assert.rejects(preview.unlock('fixture passphrase'), /cancelled/)
 })
 
 function preferencesHarness() {

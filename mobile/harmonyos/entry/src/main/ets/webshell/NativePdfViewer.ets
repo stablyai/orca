@@ -12,7 +12,8 @@ const CHUNK_BYTES = 384 * 1024;
 export interface PdfPreview {
   title: string;
   path: string;
-  controller: pdfViewManager.PdfController;
+  controller: pdfViewManager.PdfController | null;
+  unlock: ((password: string) => Promise<pdfViewManager.PdfController | null>) | null;
 }
 
 export class NativePdfViewer {
@@ -25,6 +26,7 @@ export class NativePdfViewer {
   private requests: Set<string> = new Set();
   private path = '';
   private controller: pdfViewManager.PdfController | null = null;
+  private inApp = false;
   private external = false;
   private presentation: Promise<void> = Promise.resolve();
   private disposed = false;
@@ -35,7 +37,7 @@ export class NativePdfViewer {
 
   setClient(client: SpikeRpcClient | null): void {
     if (this.client === client) { return; }
-    this.pause().catch(() => {});
+    if (!this.inApp) { this.pause().catch(() => {}); }
     this.client = client;
   }
 
@@ -104,8 +106,8 @@ export class NativePdfViewer {
         this.active(generation); this.path = path;
         await this.present(path, value['relativePath'].split(/[\\/]/).pop() ?? 'PDF', generation);
       } catch (e) {
+        if (this.path === path) { this.path = ''; this.releaseController(); }
         try { await fs.unlink(path); } catch (ignored) { }
-        if (this.path === path) { this.path = ''; }
         this.external = false;
         throw new Error((e as Error).message);
       }
@@ -118,22 +120,42 @@ export class NativePdfViewer {
 
   private async present(path: string, title: string, generation: number): Promise<void> {
     if (canIUse('SystemCapability.OfficeService.PDFService.Core')) {
-      let controller = new pdfViewManager.PdfController();
-      try {
-        let result = await controller.loadDocument(path);
-        this.active(generation);
-        if (result === pdfService.ParseResult.PARSE_SUCCESS) {
-          this.onPreview({ title: title, path: path, controller: controller });
-          this.controller = controller;
-          return;
-        }
-        if (result !== pdfService.ParseResult.PARSE_ERROR_PASSWORD) { throw new Error('The PDF could not be opened'); }
-      } finally {
-        if (this.controller !== controller) { try { controller.releaseDocument(); } catch (e) { } }
-      }
+      let controller = await this.loadDocument(path, generation, ''); this.active(generation);
+      this.onPreview({ title: title, path: path, controller: controller,
+        unlock: controller ? null : (password: string): Promise<pdfViewManager.PdfController | null> =>
+          this.unlock(path, generation, password) });
+      this.inApp = true;
+      return;
     }
     this.external = true;
     await filePreview.openPreview(this.context, { uri: fileUri.getUriFromPath(path), mimeType: 'application/pdf', title: title });
+  }
+
+  private async loadDocument(path: string, generation: number, password: string): Promise<pdfViewManager.PdfController | null> {
+    let controller = new pdfViewManager.PdfController();
+    try {
+      let result = await controller.loadDocument(path, password); this.active(generation);
+      if (result === pdfService.ParseResult.PARSE_ERROR_PASSWORD) { return null; }
+      if (result !== pdfService.ParseResult.PARSE_SUCCESS) { throw new Error('The PDF could not be opened'); }
+      this.controller = controller;
+      return controller;
+    } finally {
+      if (this.controller !== controller) { try { controller.releaseDocument(); } catch (e) { } }
+    }
+  }
+
+  private unlock(path: string, generation: number, password: string): Promise<pdfViewManager.PdfController | null> {
+    let loaded = this.presentation.then(async (): Promise<pdfViewManager.PdfController | null> => {
+      this.active(generation);
+      return this.controller ?? await this.loadDocument(path, generation, password);
+    });
+    this.presentation = loaded.then((): void => {}, (): void => {});
+    return loaded;
+  }
+
+  private releaseController(): void {
+    let controller = this.controller; this.controller = null;
+    if (controller) { try { controller.releaseDocument(); } catch (e) { } }
   }
 
   pause(): Promise<void> {
@@ -143,15 +165,12 @@ export class NativePdfViewer {
   cancel(): Promise<void> {
     this.generation++;
     this.requests.forEach((id: string): void => { this.client?.cancelById(id); }); this.requests.clear();
+    if (this.inApp) { this.inApp = false; this.onPreview(null); }
     let close = this.presentation.then(async (): Promise<void> => {
       let path = this.path;
       if (!path) { return; }
       this.path = '';
-      let controller = this.controller; this.controller = null;
-      if (controller) {
-        this.onPreview(null);
-        try { controller.releaseDocument(); } catch (e) { }
-      }
+      this.releaseController();
       if (this.external) {
         this.external = false;
         try { await filePreview.closePreview(this.context); } catch (e) { }

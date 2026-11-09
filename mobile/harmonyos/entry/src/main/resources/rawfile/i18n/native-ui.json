@@ -4856,5 +4856,70 @@
     "ko": "공유…",
     "es": "Compartir…",
     "zh-Hant": "分享⋯"
+  },
+  "此 PDF 受密码保护": {
+    "zh": "此 PDF 受密码保护",
+    "tr": "Bu PDF parola korumalı",
+    "ja": "この PDF はパスワードで保護されています",
+    "de": "Diese PDF-Datei ist passwortgeschützt",
+    "ru": "Этот PDF защищён паролем",
+    "pt": "Este PDF está protegido por senha",
+    "en": "This PDF is password protected",
+    "fr": "Ce PDF est protégé par un mot de passe",
+    "ko": "이 PDF는 비밀번호로 보호되어 있습니다",
+    "es": "Este PDF está protegido por contraseña",
+    "zh-Hant": "此 PDF 受密碼保護"
+  },
+  "密码": {
+    "zh": "密码",
+    "tr": "Parola",
+    "ja": "パスワード",
+    "de": "Passwort",
+    "ru": "Пароль",
+    "pt": "Senha",
+    "en": "Password",
+    "fr": "Mot de passe",
+    "ko": "비밀번호",
+    "es": "Contraseña",
+    "zh-Hant": "密碼"
+  },
+  "解锁": {
+    "zh": "解锁",
+    "tr": "Kilidi aç",
+    "ja": "ロック解除",
+    "de": "Entsperren",
+    "ru": "Разблокировать",
+    "pt": "Desbloquear",
+    "en": "Unlock",
+    "fr": "Déverrouiller",
+    "ko": "잠금 해제",
+    "es": "Desbloquear",
+    "zh-Hant": "解鎖"
+  },
+  "密码不正确": {
+    "zh": "密码不正确",
+    "tr": "Parola yanlış",
+    "ja": "パスワードが正しくありません",
+    "de": "Falsches Passwort",
+    "ru": "Неверный пароль",
+    "pt": "Senha incorreta",
+    "en": "Incorrect password",
+    "fr": "Mot de passe incorrect",
+    "ko": "비밀번호가 올바르지 않습니다",
+    "es": "Contraseña incorrecta",
+    "zh-Hant": "密碼不正確"
+  },
+  "无法解锁 PDF": {
+    "zh": "无法解锁 PDF",
+    "tr": "PDF kilidi açılamadı",
+    "ja": "PDF のロックを解除できません",
+    "de": "PDF konnte nicht entsperrt werden",
+    "ru": "Не удалось разблокировать PDF",
+    "pt": "Não foi possível desbloquear o PDF",
+    "en": "Unable to unlock PDF",
+    "fr": "Impossible de déverrouiller le PDF",
+    "ko": "PDF의 잠금을 해제할 수 없습니다",
+    "es": "No se pudo desbloquear el PDF",
+    "zh-Hant": "無法解鎖 PDF"
   }
 }
