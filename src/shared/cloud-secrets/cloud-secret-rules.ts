@@ -77,6 +77,11 @@ const RESERVED_NAMES: ReadonlySet<string> = new Set([
   'GITHUB_TOKEN'
 ])
 const RESERVED_PREFIXES = ['LD_', 'DYLD_', 'ORCA_', 'VERCEL_', 'BASH_FUNC_', 'GIT_CONFIG']
+const MODEL_NAMES: ReadonlySet<string> = new Set([
+  'ANTHROPIC_MODEL',
+  'ANTHROPIC_SMALL_FAST_MODEL',
+  'OPENAI_MODEL'
+])
 const BASE_URL_NAMES: ReadonlySet<string> = new Set(['ANTHROPIC_BASE_URL', 'OPENAI_BASE_URL'])
 const JWT_SHAPE = /^[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}$/
 
@@ -116,7 +121,7 @@ export function cloudSecretValueError(name: string, value: string): CloudSecrets
   if (BASE_URL_NAMES.has(name) && (!bare || !isPublicHttpsUrl(value))) {
     return 'invalid_base_url'
   }
-  if (name.endsWith('_MODEL') && !bare) {
+  if (MODEL_NAMES.has(name) && !bare) {
     return 'invalid_value'
   }
   return null

@@ -1,6 +1,5 @@
 import { ExternalLink } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
-import { Button } from '../ui/button'
 import { Checkbox } from '../ui/checkbox'
 import { Input } from '../ui/input'
 import { Label } from '../ui/label'
@@ -34,15 +33,14 @@ const KEY_PAGES = {
 function GetKeyLink({ url }: { url: string }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <Button
+    <button
       type="button"
-      variant="link"
-      size="inline"
+      className="inline-flex items-center gap-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline [&_svg]:size-3"
       onClick={() => void window.api.shell.openUrl(url).catch(() => undefined)}
     >
       {t('cloudAgentSetup.getKey', 'Get a key')}
-      <ExternalLink />
-    </Button>
+      <ExternalLink aria-hidden />
+    </button>
   )
 }
 
@@ -59,7 +57,7 @@ function Field({
   label: string
   helpId?: string
   help?: string
-  error?: string | null
+  error?: React.ReactNode
   link?: React.ReactNode
   children: React.ReactNode
 }): React.JSX.Element {
@@ -94,9 +92,12 @@ export function CloudAgentSetupFields({
   failure,
   canShare,
   share,
-  onShare
+  onShare,
+  onSignInInstead
 }: {
   option: Exclude<CloudAgentSetupOption, 'sign-in'>
+  /** Shown inline after a refused subscription token. */
+  onSignInInstead?: () => void
   formId: string
   draft: CloudAgentSetupDraft
   onDraft: (patch: Partial<CloudAgentSetupDraft>) => void
@@ -106,8 +107,24 @@ export function CloudAgentSetupFields({
   onShare: (share: boolean) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const errorFor = (field: string): string | null =>
-    failure?.field === field ? cloudSecretsErrorCopy(failure.error, t) : null
+  const errorFor = (field: string): React.ReactNode =>
+    failure?.field === field ? (
+      <>
+        {cloudSecretsErrorCopy(failure.error, t)}
+        {failure.error === 'subscription_token_refused' && onSignInInstead ? (
+          <>
+            {' '}
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2 hover:no-underline"
+              onClick={onSignInInstead}
+            >
+              {t('cloudSecrets.editor.signInInstead', 'Sign in instead')}
+            </button>
+          </>
+        ) : null}
+      </>
+    ) : null
   const ids = (field: string): { id: string; helpId: string } => ({
     id: `${formId}-${field}`,
     helpId: `${formId}-${field}-help`
@@ -122,7 +139,7 @@ export function CloudAgentSetupFields({
       value={draft[field]}
       onChange={(event) => onDraft({ [field]: event.target.value })}
       placeholder={placeholder}
-      aria-invalid={errorFor(field) !== null || undefined}
+      aria-invalid={failure?.field === field || undefined}
       aria-describedby={ids(field).helpId}
       spellCheck={false}
       autoComplete="off"
@@ -134,7 +151,7 @@ export function CloudAgentSetupFields({
       id={ids('key').id}
       value={draft.key}
       onChange={(key) => onDraft({ key })}
-      invalid={errorFor('key') !== null || errorFor('token') !== null}
+      invalid={failure?.field === 'key' || failure?.field === 'token'}
       describedBy={ids('key').helpId}
       placeholder={placeholder}
     />

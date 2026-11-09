@@ -38,6 +38,7 @@ export type VmBuildCloudAgentStepActions = {
   /** The step is done (saved, signing in, or skipped); remember that it ran. */
   onDone: () => void
   onSignIn: () => void
+  onCancelSignIn: () => void
   onLater: () => void
 }
 
@@ -110,8 +111,21 @@ export function VmBuildCloudAgentStepView({
           title={t('cloudAgentSetup.signInPending', 'Agent sign-in')}
           detail={t(
             'cloudAgentSetup.signInPendingDetail',
-            'Opens when the VM is ready. Keep this tab open until then.'
+            'Opens when the VM is ready. Keep Orca open until then.'
           )}
+          actions={
+            <Button
+              type="button"
+              variant="ghost"
+              size="xs"
+              onClick={() => {
+                actions.onCancelSignIn()
+                setMode(OFFER)
+              }}
+            >
+              {t('cloudSecrets.cancel', 'Cancel')}
+            </Button>
+          }
         />
       </li>
     )
@@ -122,7 +136,13 @@ export function VmBuildCloudAgentStepView({
       <li className="py-1.5" data-vm-build-cloud-agent="ready">
         <Row
           icon={DONE_ICON}
-          title={t('cloudAgentSetup.readyTitle', 'Agents ready')}
+          title={
+            model.readiness.claude && model.readiness.codex
+              ? t('cloudAgentSetup.readyTitle', 'Agents ready')
+              : t('cloudAgentSetup.readyOne', '{{agent}} ready', {
+                  agent: model.readiness.claude ? 'Claude' : 'Codex'
+                })
+          }
           detail={cloudAgentReadinessSummary(model.readiness, t)}
           actions={
             <Button
@@ -191,6 +211,7 @@ export function VmBuildCloudAgentStepView({
             readiness={null}
             canShare={model.canShare}
             includeSignIn={false}
+            focusOnOpen
             onSave={actions.onSave}
             onSaved={(saved) => {
               actions.onDone()
@@ -300,6 +321,7 @@ export function VmBuildCloudAgentStep({
         onSave: save,
         onDone: markDone,
         onSignIn: () => setSignInRequested(true),
+        onCancelSignIn: () => setSignInRequested(false),
         onLater: () => {
           markDone()
           setSkipped(true)

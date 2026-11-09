@@ -129,6 +129,10 @@ export function CloudSecretsPasteEnv({
     <div
       className="space-y-3 rounded-lg border border-border bg-background/60 p-3"
       onKeyDown={(event) => {
+        // Escape from a portaled Select or menu bubbles here too; let it close only that.
+        if (!event.currentTarget.contains(event.target as Node)) {
+          return
+        }
         // A big paste is not thrown away by a stray Escape; Cancel still discards it.
         if (event.key === 'Escape' && !saving && text.trim() === '') {
           event.stopPropagation()
@@ -186,14 +190,21 @@ export function CloudSecretsPasteEnv({
           aria-label={t('cloudSecrets.paste.preview', 'Preview')}
           className="max-h-64 divide-y divide-border/60 overflow-y-auto rounded-md border border-border/60 scrollbar-sleek"
         >
-          {entries.map((entry) => (
-            <PreviewLine
-              key={`${entry.line}:${entry.name}`}
-              entry={entry}
-              replaces={existing.has(entry.name)}
-              serverError={serverErrors.get(entry.name) ?? null}
-            />
-          ))}
+          {/* Lines that need a fix first, so they can be checked without scrolling. */}
+          {[...entries]
+            .sort(
+              (a, b) =>
+                Number(a.issue === null || a.issue === 'overridden') -
+                Number(b.issue === null || b.issue === 'overridden')
+            )
+            .map((entry) => (
+              <PreviewLine
+                key={`${entry.line}:${entry.name}`}
+                entry={entry}
+                replaces={existing.has(entry.name)}
+                serverError={serverErrors.get(entry.name) ?? null}
+              />
+            ))}
         </ul>
       ) : null}
 

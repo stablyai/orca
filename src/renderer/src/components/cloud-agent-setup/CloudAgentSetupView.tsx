@@ -101,6 +101,8 @@ export type CloudAgentSetupViewProps = {
   ) => Promise<CloudAgentSetupFailure | null>
   onSaved: (saved: CloudAgentSetupSaved) => void
   onCancel: () => void
+  /** Build sheet: the form opens from a button that unmounts, so focus moves into it. */
+  focusOnOpen?: boolean
   /** Build sheet: a refused subscription token points back at in-VM sign-in. */
   onSignInInstead?: () => void
   /** Fixtures only. */
@@ -117,6 +119,7 @@ export function CloudAgentSetupView({
   onSaved,
   onCancel,
   onSignInInstead,
+  focusOnOpen = false,
   initialOption,
   initialFailure = null
 }: CloudAgentSetupViewProps): React.JSX.Element {
@@ -194,6 +197,10 @@ export function CloudAgentSetupView({
     <form
       onSubmit={(event) => void submit(event)}
       onKeyDown={(event) => {
+        // Escape from a portaled Select or menu bubbles here too; let it close only that.
+        if (!event.currentTarget.contains(event.target as Node)) {
+          return
+        }
         if (event.key === 'Escape' && !saving) {
           event.stopPropagation()
           onCancel()
@@ -202,7 +209,12 @@ export function CloudAgentSetupView({
       className="space-y-3"
       aria-label={t('cloudAgentSetup.title', 'Add an agent')}
     >
-      {summary ? <p className="text-xs leading-5 text-muted-foreground">{summary}</p> : null}
+      {summary ? (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <CircleCheck aria-hidden className="size-3.5 shrink-0" />
+          {summary}
+        </p>
+      ) : null}
       <Tabs
         value={option}
         onValueChange={(next) => {
@@ -216,7 +228,7 @@ export function CloudAgentSetupView({
       >
         <TabsList size="sm">
           {options.map((entry) => (
-            <TabsTrigger key={entry} value={entry}>
+            <TabsTrigger key={entry} value={entry} autoFocus={focusOnOpen && entry === option}>
               {labels[entry].tab}
             </TabsTrigger>
           ))}
@@ -238,20 +250,9 @@ export function CloudAgentSetupView({
                   canShare={canShare}
                   share={share}
                   onShare={setShare}
+                  onSignInInstead={includeSignIn ? () => setOption('sign-in') : onSignInInstead}
                 />
               )}
-              {entry === 'api-key' &&
-              failure?.error === 'subscription_token_refused' &&
-              (includeSignIn || onSignInInstead) ? (
-                <Button
-                  type="button"
-                  variant="link"
-                  size="inline"
-                  onClick={() => (includeSignIn ? setOption('sign-in') : onSignInInstead?.())}
-                >
-                  {t('cloudSecrets.editor.signInInstead', 'Sign in instead')}
-                </Button>
-              ) : null}
             </div>
           </TabsContent>
         ))}

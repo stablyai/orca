@@ -119,6 +119,11 @@ export function CloudSecretsEffectiveView({
       ) : (
         <div className="overflow-hidden rounded-md border border-border/60">
           <table className="w-full table-fixed text-xs">
+            <colgroup>
+              <col />
+              <col className="w-36" />
+              <col className="w-44" />
+            </colgroup>
             <thead className="sr-only">
               <tr>
                 <th>{t('cloudSecrets.effective.name', 'Name')}</th>
@@ -140,7 +145,7 @@ export function CloudSecretsEffectiveView({
                       ) : null}
                     </span>
                   </td>
-                  <td className="w-40 px-3 py-2">
+                  <td className="px-3 py-2">
                     <span className="flex items-center gap-2">
                       <Badge variant="outline">{cloudSecretScopeLabel(secret.scope, t)}</Badge>
                       <span className="font-mono text-muted-foreground">
@@ -148,7 +153,7 @@ export function CloudSecretsEffectiveView({
                       </span>
                     </span>
                   </td>
-                  <td className="w-56 truncate px-3 py-2 text-muted-foreground">
+                  <td className="truncate px-3 py-2 text-muted-foreground">
                     {secret.shadowed.length > 0
                       ? t('cloudSecrets.effective.overrides', 'Overrides {{scopes}}', {
                           scopes: secret.shadowed

@@ -67,6 +67,10 @@ export function CloudSecretEditor({
     <form
       onSubmit={(event) => void submit(event)}
       onKeyDown={(event) => {
+        // Escape from a portaled Select or menu bubbles here too; let it close only that.
+        if (!event.currentTarget.contains(event.target as Node)) {
+          return
+        }
         if (event.key === 'Escape' && !saving) {
           event.stopPropagation()
           onCancel()
@@ -100,11 +104,16 @@ export function CloudSecretEditor({
             }}
             placeholder="DATABASE_URL"
             aria-invalid={errorIsName || undefined}
-            aria-describedby={`${formId}-status`}
+            aria-describedby={errorIsName ? `${formId}-status` : undefined}
             spellCheck={false}
             autoComplete="off"
             className="h-8"
           />
+          {errorIsName && error ? (
+            <p id={`${formId}-status`} role="alert" className="text-2xs text-destructive">
+              {cloudSecretsErrorCopy(error, t)}
+            </p>
+          ) : null}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor={`${formId}-value`} variant="settings">
@@ -121,7 +130,7 @@ export function CloudSecretEditor({
             }}
             autoFocus={target.kind === 'replace'}
             invalid={error !== null && !errorIsName}
-            describedBy={`${formId}-status ${formId}-help`}
+            describedBy={`${formId}-help`}
             placeholder={
               target.kind === 'replace' && target.hint
                 ? t('cloudSecrets.editor.replacePlaceholder', 'Replaces ••••{{hint}}', {
@@ -130,26 +139,33 @@ export function CloudSecretEditor({
                 : undefined
             }
           />
-          <p id={`${formId}-help`} className="text-2xs text-muted-foreground">
-            {t(
-              'cloudSecrets.editor.help',
-              'Hidden once saved. New terminals and agents get it within seconds, no rebuild.'
-            )}
-          </p>
+          {error && !errorIsName ? (
+            <p id={`${formId}-help`} role="alert" className="text-2xs text-destructive">
+              {cloudSecretsErrorCopy(error, t)}
+              {error === 'subscription_token_refused' && onSetUpAgent ? (
+                <>
+                  {' '}
+                  <button
+                    type="button"
+                    className="inline-flex items-center gap-1 font-medium text-foreground underline underline-offset-2 hover:no-underline"
+                    onClick={onSetUpAgent}
+                  >
+                    {t('cloudSecrets.editor.signInInstead', 'Sign in instead')}
+                  </button>
+                </>
+              ) : null}
+            </p>
+          ) : (
+            <p id={`${formId}-help`} className="text-2xs text-muted-foreground">
+              {t(
+                'cloudSecrets.editor.help',
+                'Hidden once saved. New terminals and agents get it within seconds, no rebuild.'
+              )}
+            </p>
+          )}
         </div>
       </div>
-      <div className="flex items-start justify-between gap-3">
-        <p id={`${formId}-status`} role="alert" className="min-h-4 text-xs text-destructive">
-          {error ? cloudSecretsErrorCopy(error, t) : null}
-          {error === 'subscription_token_refused' && onSetUpAgent ? (
-            <>
-              {' '}
-              <Button type="button" variant="link" size="inline" onClick={onSetUpAgent}>
-                {t('cloudSecrets.editor.signInInstead', 'Sign in instead')}
-              </Button>
-            </>
-          ) : null}
-        </p>
+      <div className="flex items-center justify-end gap-3">
         <div className="flex shrink-0 gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={saving}>
             {t('cloudSecrets.cancel', 'Cancel')}

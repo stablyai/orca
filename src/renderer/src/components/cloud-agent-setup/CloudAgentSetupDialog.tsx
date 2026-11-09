@@ -58,6 +58,15 @@ export function CloudAgentSetupDialog({
   onSaved?: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const [visit, setVisit] = useState(0)
+  const [wasOpen, setWasOpen] = useState(open)
+  // A fresh body per visit (fresh readiness, empty form) that stays mounted through the close animation.
+  if (open !== wasOpen) {
+    setWasOpen(open)
+    if (open) {
+      setVisit((value) => value + 1)
+    }
+  }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
@@ -70,8 +79,7 @@ export function CloudAgentSetupDialog({
             )}
           </DialogDescription>
         </DialogHeader>
-        {/* Mounted per open: every visit reads fresh readiness and starts with an empty form. */}
-        {open ? <DialogBody onClose={() => onOpenChange(false)} onSaved={onSaved} /> : null}
+        <DialogBody key={visit} onClose={() => onOpenChange(false)} onSaved={onSaved} />
       </DialogContent>
     </Dialog>
   )

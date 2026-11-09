@@ -181,6 +181,7 @@ function list(
         emptyDetail="Add one or paste a .env file."
         initialMode={mode}
         initialSaved={options.saved}
+        onSetUpAgent={noop}
       />
     </Frame>
   )

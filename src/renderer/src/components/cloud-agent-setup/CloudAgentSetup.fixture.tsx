@@ -13,7 +13,13 @@ import {
 
 const NONE: CloudAgentReadiness = { claude: null, codex: null }
 const noop = (): void => {}
-const actions = { onSave: async () => null, onDone: noop, onSignIn: noop, onLater: noop }
+const actions = {
+  onSave: async () => null,
+  onDone: noop,
+  onSignIn: noop,
+  onCancelSignIn: noop,
+  onLater: noop
+}
 
 const ENTRY: PendingWorktreeCreation = {
   creationId: 'fixture',
