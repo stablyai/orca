@@ -771,6 +771,7 @@
     "gpuFallback.recoveredLaunch.title",
     "gpuFallback.recoveredLaunch.tryHardwareButton",
     "gpuFallback.restartPrompt.detail",
+    "gpuFallback.restartPrompt.detailLinux",
     "gpuFallback.restartPrompt.keepRunningButton",
     "gpuFallback.restartPrompt.message",
     "gpuFallback.restartPrompt.restartButton",

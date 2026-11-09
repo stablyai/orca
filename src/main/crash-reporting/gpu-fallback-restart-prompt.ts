@@ -19,13 +19,18 @@ export function gpuFallbackRestartOptions(
       'gpuFallback.restartPrompt.message',
       "Orca's graphics process has crashed repeatedly."
     ),
-    detail: translateMain(
-      'gpuFallback.restartPrompt.detail',
-      // Linux keeps software rasterization, so software-backed WebGL can remain; only Windows removes it.
+    detail:
       platform === 'linux'
-        ? 'Safe graphics mode disables hardware acceleration for this Orca version. Software rendering may keep WebGL available. Terminals and 3D content may render more slowly. Keep Running leaves graphics settings unchanged.'
-        : 'Safe graphics mode disables hardware acceleration and WebGL for this Orca version. Terminals and 3D content may render more slowly. Keep Running leaves graphics settings unchanged.'
-    )
+        ? // Linux keeps software rasterization, so software-backed WebGL can remain; only Windows removes it.
+          // A distinct key keeps existing non-English catalogs from reusing the Windows WebGL text.
+          translateMain(
+            'gpuFallback.restartPrompt.detailLinux',
+            'Safe graphics mode disables hardware acceleration for this Orca version. Software rendering may keep WebGL available. Terminals and 3D content may render more slowly. Keep Running leaves graphics settings unchanged.'
+          )
+        : translateMain(
+            'gpuFallback.restartPrompt.detail',
+            'Safe graphics mode disables hardware acceleration and WebGL for this Orca version. Terminals and 3D content may render more slowly. Keep Running leaves graphics settings unchanged.'
+          )
   }
 }
 
