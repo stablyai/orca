@@ -103,6 +103,8 @@ describe('scan-local workspace attribution', () => {
       { id: 'second', repoId: 'r', displayName: 'second', path: '/repo/aa' },
       { id: 'root', repoId: 'r', displayName: 'root', path: '/' },
       { id: 'spaces', repoId: 'r', displayName: 'spaces', path: '/a /a' },
+      { id: 'long', repoId: 'r', displayName: 'long', path: '/a /b' },
+      { id: 'suffix', repoId: 'r', displayName: 'suffix', path: '/b' },
       { id: 'unicode', repoId: 'r', displayName: 'unicode', path: '/repo/🌊' }
     ])
     probes.push({ ...probes[1], normalizedPath: '/repo/bb' })
@@ -114,6 +116,9 @@ describe('scan-local workspace attribution', () => {
       { commandLine: 'node /repo/bb-other/server' },
       { commandLine: 'node --dir=/repo/bb:5173' },
       { commandLine: 'z/a /a /a' },
+      { commandLine: 'z/a /b' },
+      { commandLine: 'node /a /b' },
+      { commandLine: 'node --dir=/repo/🌊:3000' },
       { cwd: '/repo/🌊/server' }
     ].map((evidence, i) => ({ host: '127.0.0.1', port: 3000 + i, ...evidence }))
 
@@ -129,6 +134,9 @@ describe('scan-local workspace attribution', () => {
       null,
       ['first', 'command'],
       ['spaces', 'command'],
+      ['suffix', 'command'],
+      ['long', 'command'],
+      ['unicode', 'command'],
       ['unicode', 'cwd']
     ])
   })
