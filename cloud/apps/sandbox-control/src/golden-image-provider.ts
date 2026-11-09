@@ -5,7 +5,8 @@ import type { ProviderSandboxState } from './sandbox-provider'
 export type GoldenImageProviderApi = {
   createBuildSandbox(params: {
     name: string
-    runtime: string
+    /** Vercel Managed Image the build starts from (64 GB disk; the deprecated runtimes give 32 GB). */
+    image: string
     vcpus: number
     region: string
     timeoutMs: number

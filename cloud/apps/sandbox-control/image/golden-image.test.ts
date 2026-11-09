@@ -7,11 +7,12 @@ import { renderVmScriptsModule } from './generate-vm-scripts'
 
 const manifest: BuildInputs['manifest'] = {
   imageVersion: '2026-11-08.1',
-  runtime: 'node24',
+  image: 'vercel/sandbox/node:24',
   region: 'iad1',
   vcpus: 4,
   orcad: { bundleUrl: 'https://artifacts.onorca.dev/orcad-linux-x64.tgz', sha256: 'a'.repeat(64) },
   gh: { version: null, sha256: null },
+  chrome: null,
   agentCliPackages: ['@anthropic-ai/claude-code@2.1.319', '@openai/codex@0.166.0']
 }
 
@@ -28,8 +29,8 @@ function inputs(overrides: Partial<BuildInputs> = {}): BuildInputs {
 function fakeProvider(answers: { provisionExit?: number; wipeStdout?: string } = {}) {
   const calls: string[] = []
   const provider = {
-    async createBuildSandbox(params: { name: string; runtime: string }) {
-      calls.push(`create ${params.name} ${params.runtime}`)
+    async createBuildSandbox(params: { name: string; image: string }) {
+      calls.push(`create ${params.name} ${params.image}`)
       return {
         sandbox: { name: params.name, status: 'running' as const, currentSessionId: 's1', currentSnapshotId: null, tags: {} },
         session: { id: 's1', status: 'running' as const, startedAt: 0, timeoutMs: 0 },
@@ -62,7 +63,7 @@ describe('golden image build', () => {
     const result = await buildGoldenImage(provider, inputs())
     expect(result).toEqual({ imageVersion: '2026-11-08.1', snapshotId: 'snap_golden_1', report: { node: 'v24.11.0', tools: {} } })
     expect(calls).toEqual([
-      'create orca-golden-2026-11-08-1-b1 node24',
+      'create orca-golden-2026-11-08-1-b1 vercel/sandbox/node:24',
       'run bash',
       'run /opt/orca/bin/orca-image-wipe',
       'snapshot expiration=0',

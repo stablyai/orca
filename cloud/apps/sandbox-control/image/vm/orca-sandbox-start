@@ -85,6 +85,10 @@ managed_env=(
 )
 
 agent_env=()
+if command -v google-chrome >/dev/null; then
+  # Orca's browser automation and agent browser tools use the image's headless Chrome.
+  agent_env+=("ORCA_BROWSER_EXECUTABLE=$(command -v google-chrome)")
+fi
 if [ -n "${ORCA_GITHUB_PLACEHOLDER:-}" ]; then
   # The egress layer swaps the placeholder for a short-lived GitHub token; none lives in the VM.
   agent_env+=("GH_TOKEN=$ORCA_GITHUB_PLACEHOLDER" "GITHUB_TOKEN=$ORCA_GITHUB_PLACEHOLDER")

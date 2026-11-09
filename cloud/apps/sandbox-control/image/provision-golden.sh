@@ -2,7 +2,8 @@
 # Runs once inside the build sandbox (as the sandbox user, with sudo). Installs the pinned orcad
 # bundle, agent CLIs and Orca's VM entry points into /opt/orca, then smoke-tests orcad.
 # Inputs (env, from image/golden-image.manifest.json via build-golden-image.ts):
-#   ORCAD_BUNDLE_URL ORCAD_BUNDLE_SHA256 [GH_VERSION GH_SHA256] AGENT_NPM_PACKAGES (space-separated
+#   ORCAD_BUNDLE_URL ORCAD_BUNDLE_SHA256 [GH_VERSION GH_SHA256] [CHROME_VERSION CHROME_SHA256]
+#   AGENT_NPM_PACKAGES (space-separated
 #   name@version) and ORCA_VM_SCRIPT_<name> (base64) for each /opt/orca/bin entry point.
 set -euo pipefail
 ORCA_HOME=/opt/orca
@@ -14,13 +15,20 @@ sudo chown -R "$(id -u):$(id -g)" "$ORCA_HOME"
 log 'system packages'
 if command -v apt-get >/dev/null; then
   sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
+  # Developer basics agents expect (Conductor parity): rg, tmux, vim, git-lfs alongside the build tools.
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-    ca-certificates curl git jq ripgrep build-essential python3 unzip util-linux procps >/dev/null
+    ca-certificates curl git git-lfs jq ripgrep tmux vim-nox less openssh-client build-essential python3 \
+    unzip zip util-linux procps >/dev/null
+  git lfs install --system --skip-repo >/dev/null
 elif command -v dnf >/dev/null; then
-  sudo dnf install -y -q ca-certificates curl-minimal git jq gcc gcc-c++ make python3 unzip util-linux procps-ng >/dev/null
+  sudo dnf install -y -q ca-certificates curl-minimal git git-lfs jq tmux vim-enhanced gcc gcc-c++ make python3 \
+    unzip util-linux procps-ng >/dev/null
 else
   log 'no supported package manager'; exit 1
 fi
+
+# Managed images have no /vercel/sandbox; the project lives at /vercel/sandbox/project on every image.
+sudo install -d -o "$(id -u)" -g "$(id -g)" /vercel/sandbox
 
 fetch_verified() { # url sha256 dest
   curl -fsSL --retry 3 -o "$3" "$1"
@@ -54,6 +62,18 @@ if [ -n "${GH_VERSION:-}" ]; then
   rm -rf /tmp/gh.tgz "/tmp/gh_${GH_VERSION}_linux_amd64"
 fi
 
+if [ -n "${CHROME_VERSION:-}" ] && command -v apt-get >/dev/null; then
+  log "google-chrome $CHROME_VERSION (headless browser for agents and Orca browser automation)"
+  deb="$(mktemp -d)/chrome.deb"
+  fetch_verified "https://dl.google.com/linux/chrome/deb/pool/main/g/google-chrome-stable/google-chrome-stable_${CHROME_VERSION}_amd64.deb" \
+    "$CHROME_SHA256" "$deb"
+  sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends "$deb" >/dev/null
+  rm -rf "$(dirname "$deb")"
+  # The .deb adds Google's apt source; the image stays pinned, so drop it.
+  sudo rm -f /etc/apt/sources.list.d/google-chrome.list /etc/cron.daily/google-chrome
+  google-chrome --headless=new --no-sandbox --disable-gpu --dump-dom 'data:text/html,<p>ok</p>' 2>/dev/null | grep -q '<p>ok</p>'
+fi
+
 log 'agent CLIs'
 # The image's system npm installs them; agents later run on whatever node orcad puts on PATH.
 # shellcheck disable=SC2086 # word splitting is the package list
@@ -65,9 +85,22 @@ for name in orca-sandbox-start orca-sandbox-drain orca-sandbox-env orca-session-
   printf '%s' "${!var}" | base64 -d >"$ORCA_HOME/bin/$name"
   chmod 0755 "$ORCA_HOME/bin/$name"
 done
+# The orca CLI (agents drive worktrees, terminals and the browser through it) talks to this VM's orcad.
+cli="$(find "$ORCA_HOME/runtime" -name orca-cli.cjs -type f | head -n 1)"
+if [ -n "$cli" ]; then
+  printf '#!/usr/bin/env bash\nexport ORCA_USER_DATA_PATH="${ORCA_USER_DATA_PATH:-$HOME/.orcad-data}"\nexec "%s" "%s" "$@"\n' "$node" "$cli" >"$ORCA_HOME/bin/orca"
+  chmod 0755 "$ORCA_HOME/bin/orca"
+else
+  log 'bundle has no orca CLI (orca-cli.cjs): agents will not have `orca` on PATH'
+fi
 printf 'export PATH=%s/tools/bin:%s/bin:$PATH\n' "$ORCA_HOME" "$ORCA_HOME" | sudo tee /etc/profile.d/orca.sh >/dev/null
 # Every new shell (login or not: /etc/bashrc sources profile.d) re-reads the session env file.
 sudo install -m 0644 "$ORCA_HOME/bin/orca-session-env.sh" /etc/profile.d/zz-orca-session-env.sh
+if [ -f /etc/bash.bashrc ]; then
+  # Ubuntu's bash.bashrc does not source profile.d for non-login interactive shells (AL2023's bashrc does).
+  grep -q zz-orca-session-env /etc/bash.bashrc ||
+    echo '[ -r /etc/profile.d/zz-orca-session-env.sh ] && . /etc/profile.d/zz-orca-session-env.sh' | sudo tee -a /etc/bash.bashrc >/dev/null
+fi
 sudo chown -R root:root "$ORCA_HOME"
 
 log 'smoke: orcad reaches ready on loopback (and warms the V8 compile cache: ~1.5 s off every boot)'
@@ -96,4 +129,13 @@ for bin in claude codex opencode gemini gh; do
     versions="$(jq -c --arg k "$bin" --arg v "$v" '. + {($k): $v}' <<<"$versions")"
   fi
 done
-jq -c --arg node "$("$node" --version)" '{node: $node, tools: .}' <<<"$versions"
+for sys in rg vim git-lfs google-chrome; do
+  if command -v "$sys" >/dev/null; then
+    v="$("$sys" --version 2>/dev/null | head -n 1 || echo unknown)"
+    versions="$(jq -c --arg k "$sys" --arg v "$v" '. + {($k): $v}' <<<"$versions")"
+  fi
+done
+command -v tmux >/dev/null && versions="$(jq -c --arg v "$(tmux -V)" '. + {tmux: $v}' <<<"$versions")"
+[ -x "$ORCA_HOME/bin/orca" ] && versions="$(jq -c '. + {orca: "bundled"}' <<<"$versions")"
+jq -c --arg node "$("$node" --version)" --arg disk "$(df -h / | awk 'NR==2{print $2}')" \
+  '{node: $node, disk: $disk, tools: .}' <<<"$versions"

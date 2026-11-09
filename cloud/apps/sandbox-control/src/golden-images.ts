@@ -203,7 +203,7 @@ async function startRelease(deps: GoldenImageDeps, release: { tag: string; bundl
     const manifest: GoldenImageManifest = { ...MANIFEST, orcad: { bundleUrl: release.bundleUrl, sha256: release.sha256 } }
     const box = await provider.createBuildSandbox({
       name,
-      runtime: manifest.runtime,
+      image: manifest.image,
       vcpus: manifest.vcpus,
       region: deps.config.region,
       timeoutMs: BUILD_DEADLINE_MS,

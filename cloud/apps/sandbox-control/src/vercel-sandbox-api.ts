@@ -223,12 +223,12 @@ export function createVercelSandboxApi(
       ),
 
     async createBuildSandbox(params) {
-      // A `runtime` selects /v2: a fresh managed image, not a snapshot.
-      const response = await request('POST', '/v2/sandboxes', {
+      // A managed image (not a deprecated `runtime`): sandboxes cloned from the snapshot get its 64 GB disk.
+      const response = await request('POST', '/v3/sandboxes', {
         body: {
           projectId: config.projectId,
           name: params.name,
-          runtime: params.runtime,
+          image: params.image,
           resources: { vcpus: params.vcpus },
           region: params.region,
           timeout: params.timeoutMs,
