@@ -78,25 +78,10 @@ export function useTerminalTabColdParking(args: {
   } = args
   const parkingInputs = useTerminalParkingWorkspaceInputs(worktreeId)
   const parkingInputRevision = parkingInputs.revision
-  const assignmentProjection = useRef(assignments)
-  if (assignmentProjection.current !== assignments) {
-    const previous = assignmentProjection.current
-    if (
-      previous.size !== assignments.size ||
-      [...assignments].some(([id, assignment]) => {
-        const before = previous.get(id)
-        return (
-          before?.groupId !== assignment.groupId ||
-          before.isActiveInGroup !== assignment.isActiveInGroup
-        )
-      })
-    ) {
-      assignmentProjection.current = assignments
-    }
-  }
   const terminalParkingTabsDependency = coldParkTerminalPanes ? parkingInputRevision : terminalTabs
+  // Accepted assignment changes already advance the workspace revision; renders do not own park clocks.
   const terminalParkingAssignmentsDependency = coldParkTerminalPanes
-    ? assignmentProjection.current
+    ? parkingInputRevision
     : assignments
   const pendingStartupByTabId = usePendingStartupParkPresence(terminalTabs)
   const terminalParkingEnabled = useAppStore(

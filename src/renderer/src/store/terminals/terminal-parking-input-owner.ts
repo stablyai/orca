@@ -6,8 +6,12 @@ import {
   retireParkedTerminalTab
 } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import type { AppState } from '../types'
-import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { readRecordChanges } from '@/store/keyed-record-change-reads'
+import {
+  sameTerminalParkingTab,
+  sameTerminalParkingTitleSlots,
+  sameTerminalParkingAssignments
+} from './terminal-parking-input-equality'
 import { sleepingAgentRecordIndex } from './sleeping-agent-record-index'
 import {
   getTerminalTab,
@@ -38,31 +42,6 @@ const tabIdsByPtyId = new Map<string, Set<string>>()
 const ptyIdsByTabId = new Map<string, Set<string>>()
 const tabIdsByEnvironmentId = new Map<string, Set<string>>()
 let accepted: AppState | null = null
-
-function sameParkingTab(previous: TerminalTab | undefined, next: TerminalTab): boolean {
-  return (
-    previous !== undefined &&
-    previous.id === next.id &&
-    previous.worktreeId === next.worktreeId &&
-    previous.ptyId === next.ptyId &&
-    previous.pendingActivationSpawn === next.pendingActivationSpawn &&
-    previous.generation === next.generation &&
-    previous.startupCwd === next.startupCwd &&
-    previous.launchAgent === next.launchAgent
-  )
-}
-
-function sameTitleSlots(
-  previous: AppState['runtimePaneTitlesByTabId'][string] | undefined,
-  next: AppState['runtimePaneTitlesByTabId'][string] | undefined
-): boolean {
-  if (previous === next) {
-    return true
-  }
-  const before = Object.keys(previous ?? {})
-  const after = Object.keys(next ?? {})
-  return before.length === after.length && before.every((key) => key in (next ?? {}))
-}
 
 function diffUnknownParkingRecordKeys(
   previous: Readonly<Record<string, unknown>>,
@@ -148,7 +127,7 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
       const after = state.tabsByWorktree[id] ?? []
       if (
         before.length === after.length &&
-        after.every((tab, index) => sameParkingTab(before[index], tab))
+        after.every((tab, index) => sameTerminalParkingTab(before[index], tab))
       ) {
         continue
       }
@@ -174,6 +153,23 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
       }
     }
   }
+  if (previous?.unifiedTabsByWorktree !== state.unifiedTabsByWorktree) {
+    const before = previous?.unifiedTabsByWorktree
+    const after = state.unifiedTabsByWorktree
+    for (const id of before ? diffUnknownParkingRecordKeys(before, after) : Object.keys(after)) {
+      if (
+        !dirty.has(id) &&
+        before?.[id] !== after[id] &&
+        !sameTerminalParkingAssignments(
+          before?.[id] ?? [],
+          after[id] ?? [],
+          state.groupsByWorktree[id] ?? []
+        )
+      ) {
+        dirty.add(id)
+      }
+    }
+  }
   for (const field of SEAM_PARKING_TAB_FIELDS) {
     const before = previous?.[field]
     const after = state[field]
@@ -186,7 +182,7 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
       }
       if (
         field === 'runtimePaneTitlesByTabId' &&
-        sameTitleSlots(
+        sameTerminalParkingTitleSlots(
           previous?.runtimePaneTitlesByTabId[tabId],
           state.runtimePaneTitlesByTabId[tabId]
         )
