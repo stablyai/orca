@@ -129,7 +129,8 @@ test('the desktop catalog keeps every listed pane and the workspace runtime targ
           worktreeId: 'folder/workspace',
           repo: 'repo',
           displayName: 'Workspace',
-          sidebarStatus: 'permission',
+          status: 'inactive',
+          unread: true,
           hostId: 'runtime:ssh-host',
           agents: [
             {
@@ -164,8 +165,8 @@ test('the desktop catalog keeps every listed pane and the workspace runtime targ
     })
   )
   assert.deepEqual(
-    Array.from(rows, (row) => row.state),
-    ['inactive', 'permission']
+    Array.from(rows, (row) => row.active),
+    [false, true]
   )
   const catalog = Array.from(rows).flatMap((row) => Array.from(row.agents))
   const host = { id: 'desk', connection: 'connected', catalog, live: true, seenAt: 1000 }

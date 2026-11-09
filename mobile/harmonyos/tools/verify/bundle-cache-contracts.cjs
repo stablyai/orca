@@ -160,6 +160,68 @@ test('a downloaded replacement is ready for the next entry while offline still o
   assert.equal(next.constructor.readPairedBundle(context, host, 100).directory, active)
 })
 
+test('Home can claim an older paired desktop’s cached page after a memory warning cools down', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-bundle-cache-'))
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }))
+  const context = { cacheDir: root }
+  const host = { id: 'a'.repeat(32), lastConnected: 100 }
+  const hosts = [{ id: 'b'.repeat(32), lastConnected: 200 }, host]
+  const loader = fetcher(root, 'paired page')
+  const installed = await loader.fetchManifest()
+  const directory = await loader.ensureBundle(installed)
+  loader.constructor.rememberPairedBundle(context, host.id, host.lastConnected, installed)
+
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] })
+  const {
+    enterHomePrewarm,
+    leaveHomePrewarm,
+    scheduleHomePrewarm,
+    claimHomeDocument,
+    dropPrewarmForMemoryPressure
+  } = loadArkts(
+    'webshell/HomeShellPrewarm.ets',
+    [
+      'enterHomePrewarm',
+      'leaveHomePrewarm',
+      'scheduleHomePrewarm',
+      'claimHomeDocument',
+      'dropPrewarmForMemoryPressure'
+    ],
+    {
+      appManager: { isRamConstrainedDevice: async () => false },
+      systemDateTime: { TimeType: { ACTIVE: 1 }, getUptime: () => Date.now() },
+      webview: { WebviewController: { initializeWebEngine() {} } },
+      WebBundleFetcher: loader.constructor,
+      ShellDocument: class {
+        constructor(_manifest, dir) {
+          this.baseDir = dir
+        }
+        prepare() {}
+        isReady() {
+          return true
+        }
+        dispose() {}
+      }
+    }
+  )
+  const advance = async (ms) => {
+    t.mock.timers.tick(ms)
+    await new Promise(setImmediate)
+  }
+  enterHomePrewarm()
+  scheduleHomePrewarm({}, context, hosts)
+  await advance(1000)
+  dropPrewarmForMemoryPressure()
+  assert.equal(claimHomeDocument(host, directory), null)
+  leaveHomePrewarm()
+  enterHomePrewarm()
+  scheduleHomePrewarm({}, context, hosts)
+  await advance(1000)
+  assert.equal(claimHomeDocument(host, directory), null)
+  await advance(179_000)
+  assert.equal(claimHomeDocument(host, directory)?.baseDir, directory)
+})
+
 test('compatibility distinguishes desktop updates, app updates and stale workspace bundles', async () => {
   let requestedManifest = false
   const noBundle = fetcher('', '', {

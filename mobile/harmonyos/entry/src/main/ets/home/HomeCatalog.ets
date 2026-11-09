@@ -1,7 +1,7 @@
 import { HomeAgentEntry } from './AgentListModel';
 
 export interface HomeWorktree {
-  state: string;
+  active: boolean;
   agents: HomeAgentEntry[];
 }
 
@@ -77,18 +77,12 @@ function readAgent(value: Object): Record<string, Object> | null {
   return agent;
 }
 
-function dotStatus(row: Record<string, Object>): string {
-  let sidebar = stringField(row, 'sidebarStatus');
-  if (['permission', 'failed', 'working', 'monitoring', 'unconfirmed', 'interrupted', 'done'].includes(sidebar)) {
-    return sidebar;
-  }
-  if (row['hasHostSidebarActivity'] === false) { return 'inactive'; }
+function isWorktreeActive(row: Record<string, Object>): boolean {
+  let activity = row['hasHostSidebarActivity'];
+  if (typeof activity === 'boolean') { return activity; }
   let state = stringField(row, 'status');
-  if (['working', 'active', 'permission', 'done'].includes(state)) { return state; }
-  if (row['hasHostSidebarActivity'] === true) { return 'active'; }
-  if (state === 'inactive') { return state; }
   let count = row['liveTerminalCount'];
-  return typeof count === 'number' && count > 0 ? 'active' : 'inactive';
+  return row['unread'] === true || (state ? state !== 'inactive' : typeof count === 'number' && count > 0);
 }
 
 // A full catalog replaces the prior one; removed workspaces must not survive a refresh.
@@ -146,7 +140,7 @@ export function readHomeCatalog(json: string): HomeWorktree[] | null {
           }
         });
       }
-      result.push({ state: dotStatus(row), agents: entries });
+      result.push({ active: isWorktreeActive(row), agents: entries });
     }
     return result;
   } catch (e) { return null; }

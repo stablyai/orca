@@ -1,34 +1,34 @@
 import { appManager, common } from '@kit.AbilityKit';
 import { UIContext } from '@kit.ArkUI';
 import { webview } from '@kit.ArkWeb';
+import { systemDateTime } from '@kit.BasicServicesKit';
 import { appendLog, LOG_LEVEL_INFO } from '../diagnostics/ConnectionLogStore';
-import { SpikeRpcClient } from '../transport/SpikeRpcClient';
-import { WebBundleFetcher } from '../transport/WebBundleFetcher';
+import { HostMeta } from '../storage/HostStore';
+import { BundleManifest, WebBundleFetcher } from '../transport/WebBundleFetcher';
 import { ShellDocument } from './ShellDocument';
 
-interface PrewarmSource {
-  hostId: string;
-  client: SpikeRpcClient;
-  isCurrent: () => boolean;
-}
 interface SpareDocument {
   hostId: string;
+  pairedAt: number;
   document: ShellDocument;
 }
 
+const HOME_SPARE_IDLE_MS = 1000;
+const HOME_SPARE_CLAIM_GRACE_MS = 2000;
+const HOME_SPARE_REFILL_BACKOFF_MS = 30_000;
+const MEMORY_WARNING_BACKOFF_MS = 180_000;
+
 let homeShown = false;
-let suppressed = false;
 let engineReady = false;
 let schedule = -1;
 let dropTimer = -1;
 let revision = 0;
-let source: PrewarmSource | null = null;
+let prewarmAllowedAt = 0;
 let spare: SpareDocument | null = null;
 
 function clearSchedule(): void {
   revision++;
   if (schedule >= 0) { clearTimeout(schedule); schedule = -1; }
-  source = null;
 }
 
 function clearDrop(): void {
@@ -40,14 +40,27 @@ function discardSpare(): void {
   previous?.document.dispose();
 }
 
+function uptime(): number {
+  return systemDateTime.getUptime(systemDateTime.TimeType.ACTIVE);
+}
+
+function deferPrewarm(ms: number): void {
+  prewarmAllowedAt = Math.max(prewarmAllowedAt, uptime() + ms);
+}
+
 export function enterHomePrewarm(): void {
-  if (!homeShown) { suppressed = false; clearSchedule(); }
   homeShown = true; clearDrop();
 }
 
 export function leaveHomePrewarm(): void {
   homeShown = false; clearSchedule(); clearDrop();
-  if (spare) { dropTimer = setTimeout((): void => { dropTimer = -1; discardSpare(); }, 2000); }
+  if (spare) {
+    dropTimer = setTimeout((): void => {
+      dropTimer = -1;
+      deferPrewarm(HOME_SPARE_REFILL_BACKOFF_MS);
+      discardSpare();
+    }, HOME_SPARE_CLAIM_GRACE_MS);
+  }
 }
 
 export function dropHomePrewarm(): void {
@@ -55,46 +68,56 @@ export function dropHomePrewarm(): void {
 }
 
 export function dropPrewarmForMemoryPressure(): void {
-  suppressed = true; clearSchedule(); clearDrop(); discardSpare();
+  deferPrewarm(MEMORY_WARNING_BACKOFF_MS);
+  clearSchedule(); clearDrop(); discardSpare();
 }
 
 export function invalidateHomePrewarm(hostId: string): void {
-  if (source?.hostId === hostId) { clearSchedule(); }
+  clearSchedule();
   if (spare?.hostId === hostId) { clearDrop(); discardSpare(); }
 }
 
 export function scheduleHomePrewarm(ui: UIContext, context: common.UIAbilityContext,
-  hostId: string, client: SpikeRpcClient, isCurrent: () => boolean): void {
-  if (!homeShown || suppressed || (source?.hostId === hostId && source?.client === client)) { return; }
+  hosts: HostMeta[]): void {
+  if (!homeShown) { return; }
   clearSchedule();
-  let planned: PrewarmSource = { hostId: hostId, client: client, isCurrent: isCurrent };
-  source = planned;
+  if (spare) {
+    let hostId = spare.hostId;
+    let pairedAt = spare.pairedAt;
+    if (!hosts.some((host: HostMeta): boolean => host.id === hostId && host.lastConnected === pairedAt)) { discardSpare(); }
+  }
+  if (hosts.length === 0) { return; }
   let currentRevision = revision;
   schedule = setTimeout((): void => {
     schedule = -1;
-    prepare(ui, context, planned, currentRevision).catch(() => {});
-  }, 1000);
+    prepare(ui, context, hosts, currentRevision).catch(() => {});
+  }, Math.max(HOME_SPARE_IDLE_MS, prewarmAllowedAt - uptime()));
 }
 
-async function prepare(ui: UIContext, context: common.UIAbilityContext, planned: PrewarmSource, expected: number): Promise<void> {
-  let allowed = (): boolean => expected === revision && homeShown && !suppressed && planned.isCurrent();
+async function prepare(ui: UIContext, context: common.UIAbilityContext, hosts: HostMeta[], expected: number): Promise<void> {
+  let allowed = (): boolean => expected === revision && homeShown && uptime() >= prewarmAllowedAt;
   if (!allowed() || await appManager.isRamConstrainedDevice() || !allowed()) { return; }
+  for (let i = 0; i < hosts.length; i++) {
+    let host = hosts[i];
+    let cached = WebBundleFetcher.readPairedBundle(context, host.id, host.lastConnected);
+    if (cached) { park(ui, context, host, cached.manifest, cached.directory); return; }
+  }
+  discardSpare();
+}
+
+function park(ui: UIContext, context: common.UIAbilityContext, host: HostMeta,
+  manifest: BundleManifest, dir: string): void {
+  if (spare?.hostId === host.id && spare.pairedAt === host.lastConnected && spare.document.baseDir === dir) { return; }
   if (!engineReady) {
     webview.WebviewController.initializeWebEngine();
     engineReady = true;
   }
-  let fetcher = new WebBundleFetcher(planned.client, context);
-  let manifest = await fetcher.fetchManifest();
-  if (!allowed()) { return; }
-  let dir = await fetcher.ensureBundle(manifest);
-  if (!allowed()) { return; }
-  if (spare?.hostId === planned.hostId && spare?.document.baseDir === dir) { return; }
   discardSpare();
   let document = new ShellDocument(manifest, dir, true);
-  spare = { hostId: planned.hostId, document: document };
+  spare = { hostId: host.id, pairedAt: host.lastConnected, document: document };
   document.onReady = (): void => {
     if (spare?.document === document) {
-      appendLog(context, LOG_LEVEL_INFO, '会话页面已预热', '', planned.hostId, 'web-shell-flow').catch(() => {});
+      appendLog(context, LOG_LEVEL_INFO, '会话页面已预热', '', host.id, 'web-shell-flow').catch(() => {});
     }
   };
   document.onFailure = (): void => {
@@ -104,12 +127,14 @@ async function prepare(ui: UIContext, context: common.UIAbilityContext, planned:
   catch (e) { if (spare?.document === document) { discardSpare(); } }
 }
 
-export function claimHomeDocument(hostId: string, dir: string): ShellDocument | null {
+export function claimHomeDocument(host: HostMeta, dir: string): ShellDocument | null {
   let previous = spare;
   if (!previous) { return null; }
   clearDrop(); spare = null;
   let document = previous.document;
-  if (previous.hostId === hostId && document.baseDir === dir && document.isReady()) { return document; }
+  if (previous.hostId === host.id && previous.pairedAt === host.lastConnected && document.baseDir === dir && document.isReady()) {
+    return document;
+  }
   document.dispose();
   return null;
 }

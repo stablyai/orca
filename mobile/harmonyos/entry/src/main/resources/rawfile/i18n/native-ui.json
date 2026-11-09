@@ -5208,6 +5208,19 @@
     "zh-Hant": "{{label}} — {{hint}}",
     "zh": "{{label}} — {{hint}}"
   },
+  "工作区列表不可用": {
+    "de": "Worktree-Liste nicht verfügbar",
+    "en": "Worktree list unavailable",
+    "es": "Lista de espacios de trabajo no disponible",
+    "fr": "Liste des espaces de travail indisponible",
+    "ja": "ワークスペース一覧を取得できません",
+    "ko": "작업 공간 목록을 사용할 수 없음",
+    "pt": "Lista de espaços de trabalho indisponível",
+    "ru": "Список рабочих областей недоступен",
+    "tr": "Çalışma alanı listesi kullanılamıyor",
+    "zh-Hant": "工作區清單無法使用",
+    "zh": "工作区列表不可用"
+  },
   "components.hostCard.sameNetworkOnlyHint": {
     "de": "Verbindet sich nur im selben WLAN oder über Tailscale. Für Verbindungen von überall auf dem Desktop anmelden und erneut koppeln",
     "en": "Only connects on the same Wi-Fi or Tailscale. To connect from anywhere, sign in on your desktop and pair again",

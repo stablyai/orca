@@ -615,7 +615,7 @@ export struct ShellSurface {
   private mountBundle(client: SpikeRpcClient | null, meta: HostMeta, manifest: BundleManifest, baseDir: string,
     generation: number): void {
       let path = this.desktop?.connection.getActivePath() ?? 'lan';
-    let warm = claimHomeDocument(meta.id, baseDir);
+    let warm = claimHomeDocument(meta, baseDir);
     let document = warm ?? new ShellDocument(manifest, baseDir, false);
     this.document = document;
     let storage = new PageStorageStore(getContext(this), meta.id);

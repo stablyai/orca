@@ -1,6 +1,6 @@
 import { lucideColorFilter } from '../settings/LucideColor';
 import { playHapticFeedback } from '../settings/HapticFeedback';
-import { enterHomePrewarm, invalidateHomePrewarm, leaveHomePrewarm, scheduleHomePrewarm } from '../webshell/HomeShellPrewarm';
+import { enterHomePrewarm, leaveHomePrewarm, scheduleHomePrewarm } from '../webshell/HomeShellPrewarm';
 import { uiText } from '../settings/NativeUi';
 import { router, promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
@@ -292,7 +292,7 @@ struct Home {
       this.statsTotal = totalHomeStats(this.statsByHost, hosts.map((host: HostMeta): string => host.id));
       this.loaded = true;
       this.loadError = '';
-      if (!this.openPendingOnboarding(context)) { this.syncDesktops(); }
+      if (!this.openPendingOnboarding(context)) { this.syncDesktops(); this.schedulePrewarm(); }
     }).catch((_e: Error) => {
       if (!this.visible || loadEpoch !== this.loadEpoch) { return; }
       this.loaded = true;
@@ -374,7 +374,9 @@ struct Home {
 
   private openPickedDesktop(route: ShellRoute): void {
     if (route.pathname.endsWith('/new-workspace')) {
-      if (!this.workspaceDrawer) { this.workspaceDrawerOwner++; this.workspaceDrawer = route; }
+      if (!this.workspaceDrawer) {
+        leaveHomePrewarm(); this.workspaceDrawerOwner++; this.workspaceDrawer = route;
+      }
     }
     else { this.openShellRoute(route); }
   }
@@ -384,6 +386,7 @@ struct Home {
       return false;
     }
     this.workspaceDrawer = null;
+    enterHomePrewarm(); this.schedulePrewarm();
     return true;
   }
 
@@ -414,22 +417,11 @@ struct Home {
     this.hostPhases = phases;
     this.connecting = anyConnecting;
     this.rebuildRows();
-    this.schedulePrewarm();
   }
 
   private schedulePrewarm(): void {
-    if (!this.visible || !this.appInForeground) { return; }
-    let recent = this.hosts.slice().sort((a: HostMeta, b: HostMeta): number =>
-      (this.runtimes.get(b.id)?.lease.connection.getConnectedAt() ?? b.lastConnected) -
-      (this.runtimes.get(a.id)?.lease.connection.getConnectedAt() ?? a.lastConnected));
-    let host = recent.find((item: HostMeta): boolean => this.runtimes.get(item.id)?.online === true);
-    if (!host) { return; }
-    let id = host.id;
-    let client = this.runtimes.get(id)?.client;
-    if (client) {
-      scheduleHomePrewarm(this.getUIContext(), getContext(this) as common.UIAbilityContext, id, client,
-        (): boolean => this.visible && this.runtimes.get(id)?.client === client);
-    }
+    if (!this.visible || !this.appInForeground || this.workspaceDrawer) { return; }
+    scheduleHomePrewarm(this.getUIContext(), getContext(this) as common.UIAbilityContext, this.hosts);
   }
 
   private stopProbes(): void {
@@ -500,7 +492,6 @@ struct Home {
         runtime.catalogState = 'initial'; runtime.catalogPending = null; runtime.catalogRefetch = null;
         runtime.automationPending = null; runtime.automationFetchedAt = 0;
         this.clearLiveDesktopData(hostId);
-        if (!client) { invalidateHomePrewarm(hostId); }
         runtime.client = client;
         if (client && runtime.online) {
           this.subscribeUsage(client, hostId, epoch);
@@ -773,10 +764,17 @@ struct Home {
 
   private refreshSummaries(): void {
     let next: Record<string, string> = {};
-    this.agentCatalogs.forEach((catalog: AgentCatalog, hostId: string): void => {
+    this.hosts.forEach((host: HostMeta): void => {
+      let catalog = this.agentCatalogs.get(host.id);
+      if (!catalog) {
+        if (this.runtimes.get(host.id)?.catalogState === 'unavailable') {
+          next[host.id] = '工作区列表不可用';
+        }
+        return;
+      }
       let rows = catalog.worktrees;
-      let active = rows.filter((row: HomeWorktree): boolean => row.state !== 'inactive').length;
-      next[hostId] = `${rows.length} 个工作区${active > 0 ? ` · ${active} 个活跃` : ''}`;
+      let active = rows.filter((row: HomeWorktree): boolean => row.active).length;
+      next[host.id] = `${rows.length} 个工作区${active > 0 ? ` · ${active} 个活跃` : ''}`;
     });
     this.summaries = next;
   }
