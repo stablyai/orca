@@ -10,7 +10,6 @@ import type {
 } from './mobile-web-shell-session-contract'
 import { onDownloadFailed } from './mobile-web-shell-download-failure'
 import {
-  onActivated,
   onDocumentGates,
   onUpdateFailed,
   onUpdateManifest,
@@ -18,7 +17,6 @@ import {
 } from './mobile-web-shell-shown-document'
 import {
   awaitsGates,
-  cachedGenerationWall,
   CHECKING,
   OFFLINE,
   gateKey,
@@ -27,10 +25,25 @@ import {
   ROUTE_UNAVAILABLE,
   shellRunsGeneration
 } from './mobile-web-shell-gates'
-import { pageRouteRefusalVerdict, routeViewOf, sameRouteView } from './page-route-policy'
+import {
+  isHostIndexPathname,
+  pageRouteRefusalVerdict,
+  routeViewOf,
+  sameRouteView
+} from './page-route-policy'
 import { pageDocumentStatePatch } from './page-document-state'
-import { openByOwnRoutes, openCached, rendersRoute } from './mobile-web-shell-cached-generation'
-import { step } from './mobile-web-shell-session-step'
+import {
+  generationActivated,
+  openByOwnRoutes,
+  reachableCacheRead,
+  reconcileManifestCache,
+  rendersRoute
+} from './mobile-web-shell-cached-generation'
+import {
+  acceptsSessionEventFlow,
+  step,
+  stepNewFlow
+} from './mobile-web-shell-session-step'
 import { reducePageDocumentLifecycle } from './page-document-lifecycle'
 import {
   reduceShellFailed,
@@ -65,6 +78,7 @@ export function createMobileWebShellSession(
     cached: null,
     updateNotice: null,
     requestedBuildId: null,
+    offeredRoutes: null,
     requestedCompat: null,
     verdicted: false,
     flow: 0
@@ -82,6 +96,7 @@ function startFlow(
   const base = {
     updateNotice: null,
     requestedBuildId: null,
+    offeredRoutes: null,
     requestedCompat: null,
     verdicted: false,
     ...patch,
@@ -90,12 +105,13 @@ function startFlow(
   }
   const gated = gateState(gateVerdict(gates), patch.retriedOnce ?? session.retriedOnce)
   if (gated !== null) {
-    return step(session, { ...base, state: gated }, before)
+    return stepNewFlow(session, { ...base, state: gated }, before)
   }
-  // Every other verdict reads cache: cached bytes may render before the host answers, and only talking waits for it.
-  return step(session, { ...base, state: CHECKING }, [...before, { kind: 'open-cache' }])
+  // Every other verdict reads cache, offline included. Bytes may render before the host answers.
+  return stepNewFlow(session, { ...base, state: CHECKING }, [...before, { kind: 'open-cache' }])
 }
 
+/** Holds the generation read off disk. Unreachable opens it alone; connected opens it and asks. */
 function onCacheRead(
   session: MobileWebShellSession,
   generation: CachedGeneration | null
@@ -106,21 +122,7 @@ function onCacheRead(
   }
   const verdict = gateVerdict(gates)
   if (verdict.kind === 'open') {
-    // A reachable host judges cache before it shows; bytes outside its window or routes let the manifest decide, as without cache.
-    if (
-      generation !== null &&
-      shellRunsGeneration(generation.compat) &&
-      cachedGenerationWall(verdict, gates, generation.compat) === null
-    ) {
-      const opened = openByOwnRoutes(session, generation, {
-        unclaimed: CHECKING,
-        patch: { cached: generation }
-      })
-      if (opened.session.state.kind === 'activating') {
-        return opened
-      }
-    }
-    return step(session, { cached: generation, state: CHECKING }, [{ kind: 'read-manifest' }])
+    return reachableCacheRead(session, generation, gates)
   }
   if (generation === null || !shellRunsGeneration(generation.compat)) {
     // Nothing to show yet: offline says so unless the dial is still retrying; dialling and pending wait for the host.
@@ -143,7 +145,8 @@ function onManifestRead(
   if (gates === null) {
     return step(session, {})
   }
-  if (showsDocument(session.state)) {
+  // A page already on screen stages a newer build. Cache activation still reconciles in place.
+  if (session.state.kind === 'ready') {
     return onUpdateManifest(session, gates, manifest)
   }
   // Check version/schema before routes because incompatible manifests cannot reliably describe a screen.
@@ -168,33 +171,36 @@ function onManifestRead(
       refusal === null ? ROUTE_UNAVAILABLE : ({ kind: 'wall', verdict: refusal } as const)
     return step(session, { ...view, state })
   }
-  // Build ids digest assets, so matching ids can open cached bytes unchanged.
-  const cached = session.cached
-  if (cached?.buildId === manifest.buildId) {
-    return openCached(session, cached, { ...view, verdicted: true })
-  }
-  return step(
-    session,
-    {
-      ...view,
-      verdicted: true,
-      requestedBuildId: manifest.buildId,
-      requestedCompat: manifest,
-      state: {
-        kind: 'fetching',
-        completedAssets: 0,
-        totalAssets: manifest.totalAssets,
-        receivedBytes: 0,
-        totalBytes: manifest.totalBytes
-      }
-    },
-    [{ kind: 'download' }]
-  )
+  // Same build id is the same bytes, so a live generation stays up and a newer one fetches behind it.
+  const reconciled = reconcileManifestCache(session, manifest, view)
+  const marked = step(reconciled.session, {
+    verdicted: true,
+    ...(reconciled.session.requestedBuildId !== null ? { requestedCompat: manifest } : {})
+  })
+  return { session: marked.session, effects: reconciled.effects }
 }
 
-// Reenter gates after failure: ready may hold unreadable reconnect status, which must not become a bundle-unavailable wall.
+// Reenter gates after failure. Child routes share the host slot, so only the host page deletes it.
 const refetchAfterDelete: RefetchAfterDelete = (session, gates) =>
-  startFlow(session, gates, { retriedOnce: true, cached: null }, [{ kind: 'delete-cache' }])
+  startFlow(
+    session,
+    gates,
+    { retriedOnce: true, cached: null },
+    isHostIndexPathname(session.routePathname) ? [{ kind: 'delete-cache' }] : []
+  )
+
+// A shell report that the document failed refetches once. The load deadline remounts instead.
+function refetchReportedDocument(session: MobileWebShellSession): MobileWebShellStep {
+  if (session.state.kind !== 'ready') {
+    return step(session, {})
+  }
+  if (session.retriedOnce || session.gates === null) {
+    return step(session, {
+      state: { kind: 'failed', reason: 'document-load-failed', retriedOnce: session.retriedOnce }
+    })
+  }
+  return refetchAfterDelete(session, session.gates)
+}
 
 function onLayoutChanged(session: MobileWebShellSession, wide: boolean): MobileWebShellStep {
   if (session.state.kind === 'failed' && session.state.reason === 'host-profile-unreadable') {
@@ -217,7 +223,7 @@ export function reduceMobileWebShellSession(
   session: MobileWebShellSession,
   event: MobileWebShellSessionEvent
 ): MobileWebShellStep {
-  if ('flow' in event && event.flow !== session.flow) {
+  if (!acceptsSessionEventFlow(session, event)) {
     return step(session, {})
   }
   switch (event.type) {
@@ -250,14 +256,40 @@ export function reduceMobileWebShellSession(
       return session.state.kind === 'fetching'
         ? step(session, { state: { kind: 'activating', source: 'download' } })
         : step(session, {})
-    case 'activated':
-      return onActivated(session, event, startFlow)
+    case 'activated': {
+      // Download landing behind a cached page keeps the offered routes. A late open of the replaced generation does not.
+      const activated = generationActivated(session, event)
+      if (activated.session.state === session.state || activated.session.state.kind !== 'ready') {
+        return activated
+      }
+      const downloadLanded =
+        session.requestedBuildId !== null && activated.session.requestedBuildId === null
+      const compat = downloadLanded ? session.requestedCompat : (session.cached?.compat ?? null)
+      if (compat == null) {
+        return activated
+      }
+      const withCompat = step(activated.session, {
+        state: { ...activated.session.state, compat }
+      })
+      if (withCompat.session.gates === null) {
+        return { session: withCompat.session, effects: activated.effects }
+      }
+      const judged = onDocumentGates(
+        withCompat.session,
+        withCompat.session.gates,
+        compat,
+        startFlow
+      )
+      return { session: judged.session, effects: [...activated.effects, ...judged.effects] }
+    }
     case 'download-failed':
       return showsDocument(session.state)
         ? onUpdateFailed(session, event.cause)
         : onDownloadFailed(session, event.cause)
     case 'shell-failed':
-      return reduceShellFailed(session, event.reason, refetchAfterDelete, event.reclaimed === true)
+      return event.reason === 'document-load-failed'
+        ? refetchReportedDocument(session)
+        : reduceShellFailed(session, event.reason, refetchAfterDelete, event.reclaimed === true)
     case 'remounted':
     case 'document-started':
     case 'document-loaded':
@@ -297,17 +329,20 @@ export function reduceMobileWebShellSession(
         reclaimedOnce: false,
         pageRemountedOnce: false
       }
-      const fresh: MobileWebShellSessionEffect[] = retryDeletesCache(session.state)
-        ? [{ kind: 'delete-cache' }]
-        : []
+      const fresh: MobileWebShellSessionEffect[] =
+        retryDeletesCache(session.state) && isHostIndexPathname(session.routePathname)
+          ? [{ kind: 'delete-cache' }]
+          : []
       return session.gates === null
-        ? step(
+        ? stepNewFlow(
             session,
             {
               ...reset,
               updateNotice: null,
               requestedBuildId: null,
+              offeredRoutes: null,
               requestedCompat: null,
+              verdicted: false,
               state: CHECKING,
               flow: session.flow + 1
             },

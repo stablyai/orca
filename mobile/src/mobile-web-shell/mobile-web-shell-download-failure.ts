@@ -5,7 +5,7 @@ import {
 } from './mobile-web-shell-update-failure'
 import { updateFailureRecordEffect } from './mobile-web-shell-update-failure-outcome'
 import { cachedGenerationWall, gateState, gateVerdict } from './mobile-web-shell-gates'
-import { openByOwnRoutes } from './mobile-web-shell-cached-generation'
+import { cachedFallback } from './mobile-web-shell-cached-generation'
 import { step } from './mobile-web-shell-session-step'
 
 // Record the resulting decision once for Troubleshoot; release builds forward no console logs.
@@ -28,7 +28,7 @@ function decideDownloadFailed(
 ): MobileWebShellStep {
   const cached = session.cached
   const gates = session.gates
-  if (cached === null || gates === null) {
+  if (gates === null) {
     return step(session, {
       state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
     })
@@ -39,8 +39,20 @@ function decideDownloadFailed(
   if (gated !== null) {
     return step(session, { state: gated })
   }
-  return openByOwnRoutes(session, cached, {
-    // Missing cached routes remain a retryable download failure after the new manifest claimed them or never arrived.
+  if (cached === null) {
+    if (session.state.kind === 'ready') {
+      return step(session, {
+        offeredRoutes: null,
+        updateNotice: readFailureSide(cause.reason) === 'bundle' ? 'update-failed' : null
+      })
+    }
+    return step(session, {
+      state: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce }
+    })
+  }
+  return cachedFallback(session, cached, {
+    // The newer manifest claimed this route or never arrived, so the cache lacking it is this
+    // download's failure, with its retry.
     unclaimed: { kind: 'failed', reason: 'download-failed', retriedOnce: session.retriedOnce },
     served: { updateNotice: readFailureSide(cause.reason) === 'bundle' ? 'update-failed' : null },
     wall: cachedGenerationWall(verdict, gates, cached.compat)

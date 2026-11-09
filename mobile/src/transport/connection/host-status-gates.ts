@@ -49,6 +49,41 @@ const UNREADABLE_STATUS_GATES: Omit<HostStatusGates, 'statusPending'> = {
   statusReadable: false
 }
 
+const provenGatesByClient = new WeakMap<RpcClient, Map<string, LoadedHostStatusGates>>()
+
+function readProvenGates(
+  client: RpcClient | null,
+  hostId: string | undefined,
+  connState: ConnectionState
+): LoadedHostStatusGates | null {
+  if (!client || !hostId || connState !== 'connected') {
+    return null
+  }
+  return provenGatesByClient.get(client)?.get(hostId) ?? null
+}
+
+function writeProvenGates(entry: LoadedHostStatusGates): void {
+  if (!entry.hostId) {
+    return
+  }
+  if (!entry.statusReadable) {
+    provenGatesByClient.get(entry.client)?.delete(entry.hostId)
+    return
+  }
+  let byHost = provenGatesByClient.get(entry.client)
+  if (!byHost) {
+    byHost = new Map()
+    provenGatesByClient.set(entry.client, byHost)
+  }
+  byHost.set(entry.hostId, entry)
+}
+
+function dropProvenGates(client: RpcClient | null, hostId: string | undefined): void {
+  if (client && hostId) {
+    provenGatesByClient.get(client)?.delete(hostId)
+  }
+}
+
 /** What a readable status means to this client: the verdict is this build's own window check. */
 export function hostStatusGatesFromStatus(
   status: HostStatusReply
@@ -92,20 +127,25 @@ function readProbedGates(
   return gates
 }
 
+// Reads status.get on connect for capabilities, protocol-compat verdict, and the
+// floating-workspace flag. Compat constants are wide-open today so this never blocks yet.
 export function useHostStatusGates(args: {
   hostId: string | undefined
   client: RpcClient | null
   connState: ConnectionState
 }): HostStatusGates {
   const { hostId, client, connState } = args
-  const [loaded, setLoaded] = useState<LoadedHostStatusGates | null>(null)
+  const [loaded, setLoaded] = useState<LoadedHostStatusGates | null>(() =>
+    readProvenGates(client, hostId, connState)
+  )
   // A page starts from the status its shell already proved, so its first mount skips a round trip.
   const shellStatus = client?.getShellHostStatus?.() ?? null
   const seeded = useMemo(() => {
     const status = shellStatus === null ? null : hostStatusSchema.safeParse(shellStatus)
     return status?.success ? hostStatusGatesFromStatus(status.data) : null
   }, [shellStatus])
-  // Keep proven capabilities across drops while marking them unverified until the reconnect read settles.
+  // Why (F10): a drop must not erase proven capabilities, but it does invalidate them — this keeps
+  // statusPending true across the reconnect refetch, so gates stay "unknown" while the data survives.
   const [unverified, setUnverified] = useState(false)
 
   // Mark during render; only a settled read clears it, and no read runs while disconnected.
@@ -115,10 +155,14 @@ export function useHostStatusGates(args: {
 
   useEffect(() => {
     if (connState !== 'connected' || !client) {
+      dropProvenGates(client, hostId)
+      setUnverified(true)
       return
     }
     return startHostStatusRead(client, hostId, (gates) => {
-      setLoaded({ hostId, client, ...gates })
+      const next: LoadedHostStatusGates = { hostId, client, ...gates }
+      writeProvenGates(next)
+      setLoaded(next)
       setUnverified(false)
     })
   }, [client, connState, hostId])
@@ -128,7 +172,10 @@ export function useHostStatusGates(args: {
     return probed
   }
   // Why: effects run after render, so key loaded gates by host and client to fail closed during route reuse.
-  const proven = loaded && loaded.hostId === hostId && loaded.client === client ? loaded : null
+  const proven =
+    loaded && loaded.hostId === hostId && loaded.client === client
+      ? loaded
+      : readProvenGates(client, hostId, connState)
   // The seed stands only for the connection the shell proved it on; after a drop the page reads again.
   if (!proven && seeded && !unverified && connState === 'connected' && client !== null) {
     return { ...seeded, statusPending: false }

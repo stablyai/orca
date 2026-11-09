@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useHostClient } from '../transport/connection/host-client-hooks'
 import {
@@ -25,9 +25,15 @@ import {
 import { shellPageFrame, type ShellPageFrame } from './shell-page-frame'
 import { createShellPageDeadline } from './shell-page-deadline'
 import {
+  evictRetainedShellSessionForHost,
+  readRetainedShellSession,
+  recordSessionInRetainedStore
+} from './retained-shell-session-store'
+import {
   createMobileWebShellSession,
   reduceMobileWebShellSession
 } from './mobile-web-shell-session'
+import { sessionFlowFloor } from './mobile-web-shell-session-step'
 import type {
   MobileWebShellReportedFailure,
   MobileWebShellSessionEffect,
@@ -74,7 +80,17 @@ export function useMobileWebShellSession(args: {
   const { hostId, routePathname } = args
   const wide = args.wide === true
   const appNamesRoute = args.appNamesRoute !== false
+  const gates = useHostProtocolGates()
   const { client, state: connState } = useHostClient(hostId)
+  const { statusPending, statusReadable, hostCapabilities, hostProtocolWindow } = gates
+  const reachability = readMobileWebShellReachability(connState, client)
+  const sessionGates = {
+    statusPending,
+    statusReadable,
+    reachability,
+    hostCapabilities,
+    hostStatus: hostProtocolWindow
+  }
 
   const runtimeRef = useRef<MobileWebShellRuntime | null>(null)
   runtimeRef.current ??= args.runtime ?? createMobileWebShellRuntime()
@@ -82,7 +98,22 @@ export function useMobileWebShellSession(args: {
   const storeRef = useRef<GenerationStore | null>(null)
   storeRef.current ??= runtime.createStore()
 
-  const sessionRef = useRef(createMobileWebShellSession(routePathname, wide, appNamesRoute))
+  const clientRef = useRef(client)
+  clientRef.current = client
+  const gatesRef = useRef(sessionGates)
+  gatesRef.current = sessionGates
+
+  const [sessionRef] = useState(() => ({
+    current:
+      readRetainedShellSession({
+        hostId,
+        routePathname,
+        wide,
+        appNamesRoute,
+        client,
+        gates: sessionGates
+      }) ?? createMobileWebShellSession(routePathname, wide, appNamesRoute)
+  }))
   const [state, setState] = useState(sessionRef.current.state)
   const [pageReady, setPageReady] = useState(sessionRef.current.pageReady)
   const [pageFrame, setPageFrame] = useState(() => shellPageFrame(sessionRef.current))
@@ -104,9 +135,11 @@ export function useMobileWebShellSession(args: {
     ((epoch: number, flow: number, effect: MobileWebShellSessionEffect) => void) | null
   >(null)
 
-  const cancelPending = useCallback((): void => {
-    downloadsRef.current.forEach((controller) => controller.abort())
-    downloadsRef.current.clear()
+  const cancelPending = useCallback((downloads = true): void => {
+    if (downloads) {
+      downloadsRef.current.forEach((controller) => controller.abort())
+      downloadsRef.current.clear()
+    }
     deadline.cancel()
   }, [deadline])
 
@@ -128,8 +161,9 @@ export function useMobileWebShellSession(args: {
         recordShellLifecycleLine(hostIdRef.current, line)
       }
       sessionRef.current = stepped.session
+      recordSessionInRetainedStore(hostIdRef.current, clientRef.current, stepped.session)
       if (stepped.session.flow !== previous.flow) {
-        cancelPending()
+        cancelPending(sessionFlowFloor(stepped.session) !== sessionFlowFloor(previous))
       }
       const next = stepped.session.state
       // Take the hold before any effect runs, so another shell's open-cache cannot commit under this one.
@@ -147,7 +181,6 @@ export function useMobileWebShellSession(args: {
       setPageFrame(shellPageFrame(stepped.session))
       setBackClaimed(shellPageBackClaimed(stepped.session))
       for (const effect of stepped.effects) {
-        // Echo the resulting flow so reducer restarts can reject superseded completions.
         runEffectRef.current?.(epoch, stepped.session.flow, effect)
       }
     },
@@ -183,26 +216,62 @@ export function useMobileWebShellSession(args: {
     },
     [client, deadline, dispatch, hostId, hostKey, runtime]
   )
-  // Install the runner after commit, before dispatching effects, so discarded renders cannot execute work.
   useEffect(() => {
-    runEffectRef.current = (epoch, flow, effect) => {
-      void runEffect(epoch, flow, effect)
-    }
+    runEffectRef.current = (epoch, flow, effect) => void runEffect(epoch, flow, effect)
   }, [runEffect])
 
+  const mountedIdentityRef = useRef({ hostId, routePathname, appNamesRoute, runtime })
+
+  useLayoutEffect(
+    () => () => {
+      const current = sessionRef.current
+      if (current.state.kind === 'ready' && current.pagePainted) {
+        recordSessionInRetainedStore(hostIdRef.current, clientRef.current, current)
+      }
+    },
+    [appNamesRoute, hostId, routePathname]
+  )
+
   useEffect(() => {
+    const prev = mountedIdentityRef.current
+    if (
+      prev.hostId === hostId &&
+      prev.routePathname === routePathname &&
+      prev.appNamesRoute === appNamesRoute &&
+      prev.runtime === runtime
+    ) {
+      if (sessionRef.current.state.kind === 'ready' && sessionRef.current.pagePainted) {
+        runEffectRef.current?.(epochRef.current, sessionRef.current.flow, { kind: 'read-manifest' })
+      }
+      return
+    }
+    mountedIdentityRef.current = { hostId, routePathname, appNamesRoute, runtime }
     invalidate()
     hostIdRef.current = hostId
     logTraceRef.current = EMPTY_SHELL_LOG_TRACE
-    sessionRef.current = createMobileWebShellSession(routePathname, wide, appNamesRoute)
+    const retained = readRetainedShellSession({
+      hostId,
+      routePathname,
+      wide,
+      appNamesRoute,
+      client: clientRef.current,
+      gates: gatesRef.current
+    })
+    sessionRef.current = retained ?? createMobileWebShellSession(routePathname, wide, appNamesRoute)
     startedAtRef.current = runtime.now()
     setState(sessionRef.current.state)
     setPageReady(sessionRef.current.pageReady)
     setPageFrame(shellPageFrame(sessionRef.current))
-    return invalidate
+    setBackClaimed(shellPageBackClaimed(sessionRef.current))
+    if (retained !== null) {
+      runEffectRef.current?.(epochRef.current, retained.flow, { kind: 'read-manifest' })
+    }
   }, [appNamesRoute, hostId, invalidate, routePathname, runtime])
 
-  // Log once per parked state identity; shared CHECKING keeps its first timer through checking-to-checking steps.
+  useEffect(() => invalidate, [invalidate])
+
+  // Log-only: one warning per parked state object, cancelled by any state, paint, host or route change.
+  // `CHECKING` is one shared object, so checking-to-checking steps keep the first open's timer.
   useEffect(() => {
     if (shellStallLine(state, sessionRef.current, logTraceRef.current) === null) {
       return
@@ -226,7 +295,7 @@ export function useMobileWebShellSession(args: {
     client,
     rearmKey: `${hostId}\0${routePathname}`,
     onGates: useCallback(
-      (gates) => dispatch(epochRef.current, { type: 'gates-changed', gates }),
+      (nextGates) => dispatch(epochRef.current, { type: 'gates-changed', gates: nextGates }),
       [dispatch]
     )
   })
@@ -245,10 +314,12 @@ export function useMobileWebShellSession(args: {
       : null
 
   const retry = useCallback(() => {
+    // A fresh epoch first: a failed download still in flight must not land on the retried session.
+    evictRetainedShellSessionForHost(hostIdRef.current, routePathname)
     invalidate()
     startedAtRef.current = runtime.now()
     dispatch(epochRef.current, { type: 'retry-pressed' })
-  }, [dispatch, invalidate, runtime])
+  }, [dispatch, invalidate, routePathname, runtime])
 
   // A remount mints the replacement's session before React commits it; drop reports queued by the view it retired.
   const viewSessionId = state.kind === 'ready' ? state.sessionId : null
@@ -265,12 +336,24 @@ export function useMobileWebShellSession(args: {
   const reportShellFailure = useCallback(
     (reason: MobileWebShellReportedFailure, reclaimed = false) => {
       const event = { type: 'shell-failed', reason, reclaimed } as const
+      const fromScreen = reason === 'host-profile-unreadable'
+      const live = sessionRef.current.state
+      const accepted =
+        fromScreen ||
+        viewSessionId === null ||
+        (live.kind === 'ready' && live.sessionId === viewSessionId)
+      // A failed shell must not be reused on the next 0ms re-entry.
+      if (accepted) {
+        evictRetainedShellSessionForHost(hostIdRef.current, routePathname)
+      }
       // Profile reads come from the screen, not the view, so no retired document can send one.
-      return reason === 'host-profile-unreadable'
-        ? dispatch(epochRef.current, event)
-        : reportFromView(event)
+      if (fromScreen) {
+        dispatch(epochRef.current, event)
+        return
+      }
+      reportFromView(event)
     },
-    [dispatch, reportFromView]
+    [dispatch, reportFromView, routePathname, viewSessionId]
   )
 
   const reportDocumentStarted = useCallback(

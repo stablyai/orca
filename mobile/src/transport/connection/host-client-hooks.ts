@@ -58,8 +58,11 @@ export function useHostClient(hostId: string | undefined): {
     }
   }, [ctx, hostId])
 
+  const existing = hostId
+    ? (ctx.getAllClients().find((entry) => entry.hostId === hostId)?.client ?? null)
+    : null
   const bound = clientHostIdRef.current === hostId
-  const boundClient = bound ? clientRef.current : null
+  const boundClient = bound ? (clientRef.current ?? existing) : existing
   const boundState = bound
     ? state
     : hostId

@@ -22,9 +22,20 @@ import { createBridgeHostRoute } from './bridge-host-route'
 import { pageStorageForReader } from './page-storage-keys'
 import { BRIDGE_TERMINAL_KEY_FRAME } from './bridge/bridge-terminal-key'
 import { createBridgeVerdictHold, isDesktopBound } from './bridge-host-verdict-hold'
-import type { BridgeHost, BridgeHostOptions } from './bridge-host-contract'
+import type {
+  BridgeHost as BridgeHostContract,
+  BridgeHostOptions
+} from './bridge-host-contract'
 
-export type { BridgeHost, BridgeHostDiagnostic, BridgeHostOptions } from './bridge-host-contract'
+export type { BridgeHostDiagnostic, BridgeHostOptions } from './bridge-host-contract'
+
+export type BridgeHost = BridgeHostContract & {
+  /**
+   * Drops requests, subscriptions and Back state from a document the native view replaced without
+   * a `close` frame (for example when a parked WebView was evicted and a fresh document started).
+   */
+  resetDocument: () => void
+}
 
 // Bind the host structurally to one RPC client; the protocol lets pages name no other host. Native origin checks reject expired sessions, and init caps are enforced here.
 export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
@@ -338,6 +349,15 @@ export function createBridgeHost(options: BridgeHostOptions): BridgeHost {
       ...(pageReadsConnectionPath ? { connectionPathFrames: true as const } : {}),
       ...(railClaimed ? { terminalKeyRailClaim: { inputOwner: railOwner } } : {})
     }),
+    resetDocument(): void {
+      if (closed) {
+        return
+      }
+      settleAll(false)
+      serving = true
+      initSent = false
+      back.drop()
+    },
     dispose
   }
 }

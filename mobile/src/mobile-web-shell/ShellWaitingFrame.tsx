@@ -6,6 +6,9 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 export const SHELL_OPENING_LABEL = 'Opening workspace'
 
+/** The same wait on the host root, which is not a workspace. */
+export const SHELL_HOST_OPENING_LABEL = 'Loading host'
+
 // Ease in to hold opacity while the compositor catches up with the reported renderer paint; linear fade exposed two bare-surface frames.
 export const SHELL_PAGE_COVER_FADE_MS = 100
 

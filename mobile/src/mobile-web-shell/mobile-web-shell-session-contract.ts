@@ -10,6 +10,13 @@ import type {
   MobileWebShellUpdateFailureFacts
 } from './mobile-web-shell-update-failure'
 
+/**
+ * Whether the host can be asked anything right now.
+ *
+ * Three values, not a boolean: a connection still being made is not an offline host. `connecting`
+ * waits. An unreachable host opens the cache with no compat check. A connected host opens a
+ * compatible cache at once and reads the manifest beside it.
+ */
 export type MobileWebShellReachability = 'connected' | 'connecting' | 'unreachable'
 
 export type MobileWebShellGates = {
@@ -171,7 +178,7 @@ export type MobileWebShellSession = {
   readonly routePathname: string
   // Unknown catch-all routes cannot prove the desktop is outdated.
   readonly appNamesRoute: boolean
-  // Wide serving requires canOwnHostArea; the owning host route combines served routes’ grants.
+  /** Wide layout: served only under `canOwnHostArea`. The host route gets every route's grants. */
   readonly wide: boolean
   readonly routes: readonly MobileWebPageRoute[] | undefined
   readonly ownsHostArea: boolean
@@ -198,10 +205,14 @@ export type MobileWebShellSession = {
   // Clear on flow entry so the notice cannot outlive the fallback it explains.
   readonly updateNotice: MobileWebShellUpdateNotice | null
   readonly requestedBuildId: string | null
+  /** Routes of a download running behind a cached page. Applied when that download activates. */
+  readonly offeredRoutes: readonly MobileWebPageRoute[] | null
   // The offered build's window; the download fetches exactly the manifest read, so it is the activated build's.
   readonly requestedCompat: MobileWebBundleCompatManifest | null
   // An open verdict reached this flow's document: from then on it may have talked, so a blocked verdict walls rather than reloads.
   readonly verdicted: boolean
+  /** Which run of the flow the session is on. Bumped by every restart, stamped on the effects that
+   *  run belongs to, and echoed back on their results. */
   // Stamp effects/results with the incremented flow to reject superseded work.
   readonly flow: number
 }
