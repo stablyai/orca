@@ -42,4 +42,17 @@ export type Env = {
   // GitHub App (contents/pull_requests write, metadata read). The PKCS#8 key is a secret.
   GITHUB_APP_ID?: string
   GITHUB_APP_PRIVATE_KEY?: string
+
+  // Secret store (src/secrets.ts). SECRETS_KEK is a base64 32-byte AES key (secret); SECRETS_KEK_ID
+  // names it (default `k1`). After a rotation, SECRETS_KEK_RETIRED (secret, JSON {"<id>":"<b64>"})
+  // keeps older rows readable. Without SECRETS_KEK the /v1/secrets routes answer 503 and sessions
+  // start without injected secrets.
+  SECRETS_KEK?: string
+  SECRETS_KEK_ID?: string
+  SECRETS_KEK_RETIRED?: string
+  /**
+   * `on`: Anthropic/OpenAI API keys reach the VM as placeholders and the egress proxy swaps the real
+   * key in (forwardURL path). Anything else: plain env injection. Needs EGRESS_PROXY_URL.
+   */
+  SECRETS_EGRESS_PLACEHOLDERS?: string
 }

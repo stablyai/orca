@@ -19,10 +19,20 @@ const ID = z
 const ClaimsSchema = z.object({
   sub: ID,
   org: ID.optional(),
+  /** The caller's role in `org`, minted by Orca Cloud auth; absent means no admin rights. */
+  org_role: z.enum(['owner', 'admin', 'member']).optional(),
   purpose: z.literal('sandbox')
 })
 
-export type SandboxCaller = { userId: string; accountId: string }
+export type OrgRole = 'owner' | 'admin' | 'member'
+export type SandboxCaller = {
+  userId: string
+  accountId: string
+  orgId?: string
+  orgRole?: OrgRole
+  /** Dev operator token: every id lives under the `dev:` namespace. */
+  dev?: boolean
+}
 
 const keySets = new Map<string, JWTVerifyGetKey>()
 
@@ -68,7 +78,11 @@ async function verify(
       ...(issuer ? { issuer } : {})
     })
     const claims = ClaimsSchema.parse(payload)
-    return { userId: claims.sub, accountId: accountIdFor(claims) }
+    return {
+      userId: claims.sub,
+      accountId: accountIdFor(claims),
+      ...(claims.org ? { orgId: claims.org, ...(claims.org_role ? { orgRole: claims.org_role } : {}) } : {})
+    }
   } catch {
     return null
   }
@@ -95,5 +109,9 @@ export async function authenticateDesktop(
   }
   // Dev callers land in their own account namespace so they never touch a real user's sandboxes.
   const dev = await verify(token, devKeys.keys, env, DEV_TEST_ISSUER, now)
-  return dev ? { userId: dev.userId, accountId: `dev:${dev.userId}` } : null
+  if (!dev) {
+    return null
+  }
+  // Org-less dev tokens keep their historical `dev:<sub>` account; org dev tokens get `dev:org:<id>`.
+  return { ...dev, accountId: dev.orgId ? `dev:org:${dev.orgId}` : `dev:${dev.userId}`, dev: true }
 }

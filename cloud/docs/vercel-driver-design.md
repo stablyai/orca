@@ -194,6 +194,42 @@ create 5.1s, rollover 12.2s (same host key), destroy 1.0s, no snapshots left. Eg
 sandbox: Bearer and gh `token` placeholders forwarded and re-injected (GitHub answers the injected fake: 401), Node
 fetch completes in 450 ms with chunked framing (the transform-rule hang is gone), attacker token / no auth → 403.
 
+## Secret store and injection (org / personal / repo)
+
+Product decision: "API-key injection" in the Conductor parity matrix (form 2 = this store; form 3 = egress swap).
+- **Store** (`src/secrets.ts`, migration 0003): D1 `secrets` keyed (scope, owner_id, name). Envelope encryption
+  (`src/secrets-crypto.ts`): per-secret random AES-256-GCM DEK; DEK wrapped by the KEK (`SECRETS_KEK`, base64 32
+  bytes, Worker secret only; id `SECRETS_KEK_ID`, default `k1`). Both layers take `["orca-secret-v1", layer, kekId,
+  scope, ownerId, name]` as AAD, so a row copied onto another owner/name fails to open (skipped at injection,
+  logged by name). Rotation: set the new KEK + id, move the old one into `SECRETS_KEK_RETIRED` (`{"k1":"…"}`); rows
+  re-seal on their next write.
+- **API** (desktop JWT): `GET /v1/secrets?scope=org|personal|repo[&repo=owner/name]`, `PUT /v1/secrets/:scope/:NAME`
+  `{value}`, `DELETE …`. Write-only values: responses carry name, scope, kind, updatedAt, updatedBy and a last-4 hint
+  for values ≥16 chars. Owners: org = the org account (`org:<id>`), personal = `user:<sub>`, repo =
+  `<account>#github.com/<owner>/<repo>`. Org secrets and an org account's repo secrets need `org_role` owner/admin on
+  the token (any member lists names); personal secrets are the user's alone; dev tokens stay under `dev:`.
+- **Validation**: `^[A-Z_][A-Z0-9_]*$` ≤128; reserved names (PATH, HOME, NODE_OPTIONS, proxy/CA vars, GIT_SSH*,
+  GH_TOKEN/GITHUB_TOKEN, …) and prefixes (LD_, DYLD_, ORCA_, VERCEL_, BASH_FUNC_, GIT_CONFIG). Values ≤8 KiB, no NUL;
+  100 secrets per owner; 128 KiB injected per start. **Never stored**: `CLAUDE_CODE_OAUTH_TOKEN`, any value starting
+  `sk-ant-oat`, JWT-shaped `ANTHROPIC_API_KEY`/`OPENAI_API_KEY` (ChatGPT/Claude.ai sessions).
+- **Precedence**: env secrets repo > personal > org; agent keys (ANTHROPIC/OPENAI/GEMINI/GOOGLE/CURSOR keys, AWS
+  Bedrock and Vertex vars) org-shared > repo > personal. Per name, so a partial org Bedrock set mixes with personal.
+- **Injection**: every boot (create, resume, rollover) resolves secrets and passes them to `orca-sandbox-start` as
+  `ORCA_SECRET_ENV` (`NAME=<base64>` lines). The script decodes them into orcad's `env -i` launch env (agents inherit
+  it) through a pipe, unsets the variable, and writes nothing to disk, so the stop snapshot never holds them and
+  `orca-image-wipe` has nothing to wipe. Edits apply on the next start/resume, no image rebuild. Values transit
+  Vercel's command API (as the VM's env would anyway); logs carry counts and names only.
+- **Phase 2 egress swap** (`src/secret-egress.ts`, `SECRETS_EGRESS_PLACEHOLDERS=on`, off by default): VM env gets
+  `orca-ph-anthropic-<sbx>` / `orca-ph-openai-<sbx>`; boot records the hosts on the row (`egress_secret_hosts`) and
+  the policy gets forwardURL claims (`api.anthropic.com`: `x-api-key: <ph>` and `Authorization: Bearer <ph>`;
+  `api.openai.com`: `Authorization: Bearer <ph>`) followed by the 403 deny. The egress proxy (OIDC-verified, as for
+  api.github.com) swaps in the real key, cached per session for 60 s. Transform rules are not used: they hang Node
+  clients (Claude Code, Codex), the forwardURL path is the one proven live for api.github.com. Not on by default
+  because (1) SSE model streams through Vercel forwardURL → Worker are not yet tested live, and (2) with a key routed,
+  api.anthropic.com denies everything else, including a subscription OAuth Bearer or a plain `ANTHROPIC_AUTH_TOKEN`
+  in the same VM. Enable on dev after a live streaming test with the rebuilt image.
+- Needs: golden image rebuild (new `orca-sandbox-start`), and Orca Cloud auth minting `org_role` on sandbox tokens.
+
 ## What needs live access (not done)
 
 Vercel Pro team id + project id + a Sandbox-scoped token (as Worker secrets), wrangler auth for a dev D1, a

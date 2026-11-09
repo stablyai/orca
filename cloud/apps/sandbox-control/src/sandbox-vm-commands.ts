@@ -35,6 +35,21 @@ export type StartInputs = {
   githubPlaceholder?: string
   /** git `http.https://github.com/.extraheader` carrying the placeholder, so every git request is claimable. */
   gitExtraHeader?: string
+  /** Secrets for orcad's (and so every agent's) process env. Never written to disk in the VM. */
+  secretEnv?: Record<string, string>
+}
+
+/** `NAME=<base64 utf-8 value>` lines, so values with newlines or quotes survive bash intact. */
+export function encodeSecretEnv(env: Record<string, string>): string {
+  return Object.entries(env)
+    .map(([name, value]) => {
+      let binary = ''
+      for (const byte of new TextEncoder().encode(value)) {
+        binary += String.fromCharCode(byte)
+      }
+      return `${name}=${btoa(binary)}`
+    })
+    .join('\n')
 }
 
 /** Starts orcad (idempotent per boot) and returns its pairing offer; pairing codes are never logged. */
@@ -62,6 +77,9 @@ export async function startOrcad(
   }
   if (inputs.githubPlaceholder) {
     env.ORCA_GITHUB_PLACEHOLDER = inputs.githubPlaceholder
+  }
+  if (inputs.secretEnv && Object.keys(inputs.secretEnv).length > 0) {
+    env.ORCA_SECRET_ENV = encodeSecretEnv(inputs.secretEnv)
   }
   const result = await provider.runCommand(state.session.id, {
     command: START_COMMAND,

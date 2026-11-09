@@ -4,6 +4,9 @@ import type { EntitlementClient, MachineSize } from './entitlements'
 import type { GitHubAppMinter } from './github-app'
 import { compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
 import type { ProviderSandboxState, SandboxProviderApi } from './sandbox-provider'
+import { applySecretPlaceholders, egressSecretHosts, secretPlaceholder } from './secret-egress'
+import { resolveSandboxSecrets } from './secrets'
+import type { Keyring } from './secrets-crypto'
 import { ORCAD_PORT, drainOrcad, startOrcad, type OrcadReady } from './sandbox-vm-commands'
 import {
   NO_SESSION,
@@ -33,6 +36,8 @@ export type LifecycleDeps = {
   entitlements: EntitlementClient
   /** GitHub App installation tokens for the workspace repo; absent until the app is configured. */
   github?: GitHubAppMinter
+  /** Secret store; absent (no SECRETS_KEK) means sessions start without injected secrets. */
+  secrets?: { keyring: Keyring; egressPlaceholders: boolean }
   now: () => number
   config: {
     environment: string
@@ -84,15 +89,28 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
         }
       ]
     : []
-  const credentials: CredentialRoute[] = deps.config.egressProxyUrl
+  const proxyUrl = deps.config.egressProxyUrl
+  const credentials: CredentialRoute[] = proxyUrl
     ? [
         {
           host: 'api.github.com',
           header: 'authorization',
           placeholders: githubPlaceholderHeaders(row),
           via: 'forward',
-          forwardURL: deps.config.egressProxyUrl
-        }
+          forwardURL: proxyUrl
+        },
+        // Model API keys swapped at egress (phase 2); each host also ends in the 403 deny rule.
+        ...egressSecretHosts(row).flatMap((entry) =>
+          Object.entries(entry.headers).map(
+            ([header, format]): CredentialRoute => ({
+              host: entry.host,
+              header,
+              placeholders: [format(secretPlaceholder(row, entry.slug))],
+              via: 'forward',
+              forwardURL: proxyUrl
+            })
+          )
+        )
       ]
     : []
   return compileNetworkPolicy({ mode: 'allowlist', credentials: [...git, ...credentials] })
@@ -133,20 +151,45 @@ async function boot(deps: LifecycleDeps, row: SandboxRow, state: ProviderSandbox
   if (state.sandbox.tags.orcaSandbox !== row.id) {
     throw new LifecycleError('conflict', 'ownership_mismatch')
   }
-  const git = await refreshGitCredentials(deps, row, state.session.id)
+  const secrets = await sessionSecrets(deps, row)
+  const routed: SandboxRow = { ...row, egress_secret_hosts: secrets.hosts.join(',') || null }
+  const git = await refreshGitCredentials(deps, routed, state.session.id)
+  if (!git && (routed.egress_secret_hosts || row.egress_secret_hosts)) {
+    // Model-key routes must be live before any agent starts; the git refresh already wrote them.
+    await deps.provider.updateNetworkPolicy(state.session.id, egressPolicy(deps, routed))
+  }
   const connection = await startOrcad(deps.provider, state, {
     sandboxId: row.id,
     repo,
     githubPlaceholder: deps.config.egressProxyUrl ? githubPlaceholderToken(row) : undefined,
-    gitExtraHeader: git ? `Authorization: ${gitBasicAuthorization(githubPlaceholderToken(row))}` : undefined
+    gitExtraHeader: git ? `Authorization: ${gitBasicAuthorization(githubPlaceholderToken(row))}` : undefined,
+    secretEnv: secrets.env
   })
   const running = await claim(deps, row, {
     status: 'running',
     last_error: null,
     github_token_expires_at: git?.expiresAt ?? null,
+    egress_secret_hosts: routed.egress_secret_hosts,
     ...sessionFields(deps, state)
   })
   return { row: running, connection }
+}
+
+/**
+ * Secrets this session starts with (resolved now, so edits apply on the next start or resume with
+ * no image rebuild). With egress placeholders on, model API keys become placeholders.
+ */
+async function sessionSecrets(deps: LifecycleDeps, row: SandboxRow): Promise<{ env: Record<string, string>; hosts: string[] }> {
+  if (!deps.secrets) {
+    return { env: {}, hosts: [] }
+  }
+  const { env, skipped } = await resolveSandboxSecrets(deps.db, deps.secrets.keyring, row)
+  // Counts only.
+  console.log(JSON.stringify({ event: 'session_secrets', sandboxId: row.id, injected: Object.keys(env).length, skipped }))
+  if (!deps.secrets.egressPlaceholders || !deps.config.egressProxyUrl) {
+    return { env, hosts: [] }
+  }
+  return applySecretPlaceholders(row, env)
 }
 
 /** Mints a fresh repo token and swaps it into the live policy; null when the repo has no app install. */

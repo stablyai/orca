@@ -2,7 +2,8 @@
 # Starts orcad for this boot (idempotent) and prints its recipe line:
 # {"schemaVersion":1,"pairingCode":"orca://pair?...","projectRoot":"/vercel/sandbox/project"}
 # Env from the control plane: ORCA_SANDBOX_ID, ORCA_PUBLIC_WSS, optional ORCA_REPO_URL/ORCA_REPO_REF,
-# ORCA_GITHUB_PLACEHOLDER. Never prints anything else on stdout's last line.
+# ORCA_GITHUB_PLACEHOLDER, ORCA_SECRET_ENV (`NAME=<base64>` lines: org/personal/repo secrets for
+# orcad and its agents). Never prints anything else on stdout's last line.
 set -euo pipefail
 umask 077
 ORCA_HOME=/opt/orca
@@ -38,6 +39,17 @@ agent_env=()
 if [ -n "${ORCA_GITHUB_PLACEHOLDER:-}" ]; then
   # The egress layer swaps the placeholder for a short-lived GitHub token; none lives in the VM.
   agent_env+=("GH_TOKEN=$ORCA_GITHUB_PLACEHOLDER" "GITHUB_TOKEN=$ORCA_GITHUB_PLACEHOLDER")
+fi
+
+if [ -n "${ORCA_SECRET_ENV:-}" ]; then
+  # Secrets live only in orcad's process env (memory): nothing under $HOME or the project, so the
+  # stop snapshot never carries them. Resolved per start by the control plane: no image rebuild.
+  while IFS= read -r line; do
+    name="${line%%=*}" b64="${line#*=}" # not IFS='=': read would strip base64 padding
+    case "$name" in '' | *[!A-Z0-9_]* | [0-9]* | ORCA_* | PATH | HOME | LD_* | DYLD_*) continue ;; esac
+    agent_env+=("$name=$(printf '%s' "$b64" | base64 -d)")
+  done < <(printf '%s\n' "$ORCA_SECRET_ENV") # a pipe, not a here-string temp file
+  unset ORCA_SECRET_ENV
 fi
 
 node="$(find "$ORCA_HOME/runtime/runtimes" -type f -name node | head -n 1)"
