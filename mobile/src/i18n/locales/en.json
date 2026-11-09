@@ -563,7 +563,8 @@
       "cancelled": "Dictation cancelled.",
       "movedTo": "This phone stopped transcribing. Continuing on {{computer}}.",
       "movedToComputer": "This phone stopped transcribing. Continuing on the computer.",
-      "stoppedKept": "Dictation stopped. {{reason}}. Your recording is kept."
+      "stoppedKept": "Dictation stopped. {{reason}}. Your recording is kept.",
+      "stillListening": "Still listening."
     },
     "pill": {
       "open": "Open",

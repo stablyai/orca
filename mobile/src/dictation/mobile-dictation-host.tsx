@@ -10,6 +10,7 @@ import { useMobileDictationSilenceStop } from './use-mobile-dictation-silence-st
 import { insertMobileDictationAway } from './mobile-dictation-away-insert'
 import { nativeChatDictationCopy } from './mobile-session-native-chat-dictation-copy'
 import { dictationAwayCopy } from './mobile-dictation-away-copy'
+import { useMobileDictationAnnouncements } from './use-mobile-dictation-announcements'
 import {
   MobileDictationClearanceContext,
   MobileDictationHostContext,
@@ -136,9 +137,31 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
   useMobileDictationSilenceStop(dictation, owner?.dictationMode, stop, (message) => say(message))
 
   // Screens subscribe to the live dictation; the host's context only changes when its owner or pill does.
-  const liveRef = useRef(dictation)
+  const liveRef = useRef<UseMobileDictationResult>(dictation)
   const listenersRef = useRef(new Set<() => void>())
-  const { meter, start: startDictation, stop: stopDictation, cancel, retry } = dictation
+  const {
+    meter,
+    start: startDictation,
+    stop: stopDictation,
+    cancel: cancelDictation,
+    retry
+  } = dictation
+  // Its screen in front: the in-place controls speak for it; otherwise the pill and its toasts do.
+  const inPlace = owner !== null && screenFor(screensRef.current, owner, false)?.shown() === true
+  const away = owner !== null && isUnderway(dictation) && !inPlace
+  const announcements = useMobileDictationAnnouncements(dictation, {
+    computerName: owner?.computerName ?? null,
+    inPlace,
+    away,
+    toast: toast?.message ?? null
+  })
+  const { noteCancel } = announcements
+  // Every ✕ (in place, the pill, the terminal's long press) ends here, so a cancel is never read as "Inserted."
+  const cancel = useCallback(() => {
+    noteCancel()
+    return cancelDictation()
+  }, [cancelDictation, noteCancel])
+  const published = useMemo(() => ({ ...dictation, cancel }), [cancel, dictation])
   const idle = useMemo<UseMobileDictationResult>(
     () => ({
       status: 'idle',
@@ -159,7 +182,7 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
   )
   const idleRef = useRef(idle)
   useLayoutEffect(() => {
-    liveRef.current = dictation
+    liveRef.current = published
     idleRef.current = idle
     for (const listener of listenersRef.current) {
       listener()
@@ -215,13 +238,11 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
     })
   }, [])
 
-  const away =
-    owner !== null && isUnderway(dictation) && !screenFor(screensRef.current, owner, false)?.shown()
   const title = owner?.title ?? ''
   const clearance = Math.max(0, ...clearances.values())
   const pill = useMemo(
-    () => ({ away, title, open, toast, clearToast, clearance }),
-    [away, clearToast, clearance, open, title, toast]
+    () => ({ away, title, open, toast, clearToast, clearance, liveText: announcements.liveText }),
+    [announcements.liveText, away, clearToast, clearance, open, title, toast]
   )
   const value = useMemo<MobileDictationHost>(
     () => ({

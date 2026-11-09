@@ -1348,7 +1348,8 @@
       "cancelled": "Diktat abgebrochen.",
       "movedTo": "Dieses Telefon hat die Transkription beendet. Weiter auf {{computer}}.",
       "movedToComputer": "Dieses Telefon hat die Transkription beendet. Weiter auf dem Computer.",
-      "stoppedKept": "Diktat gestoppt. {{reason}}. Deine Aufnahme bleibt erhalten."
+      "stoppedKept": "Diktat gestoppt. {{reason}}. Deine Aufnahme bleibt erhalten.",
+      "stillListening": "Hört weiter zu."
     },
     "pill": {
       "open": "Öffnen",

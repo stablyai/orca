@@ -1344,7 +1344,8 @@
       "cancelled": "已取消听写。",
       "movedTo": "此手机已停止转写。在 {{computer}} 上继续。",
       "movedToComputer": "此手机已停止转写。在电脑上继续。",
-      "stoppedKept": "听写已停止。{{reason}}。录音已保留。"
+      "stoppedKept": "听写已停止。{{reason}}。录音已保留。",
+      "stillListening": "仍在听。"
     },
     "pill": {
       "open": "打开",

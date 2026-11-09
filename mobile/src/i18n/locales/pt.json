@@ -1389,7 +1389,8 @@
       "cancelled": "Ditado cancelado.",
       "movedTo": "Este telefone parou de transcrever. Continuando em {{computer}}.",
       "movedToComputer": "Este telefone parou de transcrever. Continuando no computador.",
-      "stoppedKept": "Ditado interrompido. {{reason}}. Sua gravação foi mantida."
+      "stoppedKept": "Ditado interrompido. {{reason}}. Sua gravação foi mantida.",
+      "stillListening": "Ainda ouvindo."
     },
     "pill": {
       "open": "Abrir",

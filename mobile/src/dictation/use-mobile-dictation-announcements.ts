@@ -8,11 +8,22 @@ import { dictationFailureMessage } from './mobile-dictation-setup'
 // Finishing is said only when it is slow; a fast finish goes straight to "Inserted."
 const FINISHING_ANNOUNCE_DELAY_MS = 1000
 
-// The dictation's spoken moments: start, a move to the computer, a slow finish, the outcome, a kept failure.
+// The dictation's spoken moments: start, leaving its screen, a move to the computer, a slow finish, the outcome, a failure, the host's toasts.
 // The shell announces them where it can; otherwise they go to the returned live-region text.
 export function useMobileDictationAnnouncements(
   dictation: Pick<UseMobileDictationResult, 'status' | 'engine' | 'failure' | 'error'>,
-  computerName: string | null
+  {
+    computerName,
+    inPlace,
+    away,
+    toast
+  }: {
+    computerName: string | null
+    // Its session screen is in front, so a landing is said here; away, the host's toast says where it went.
+    inPlace: boolean
+    away: boolean
+    toast: string | null
+  }
 ): { liveText: string; noteCancel: () => void } {
   const announce = useAccessibilityAnnouncer()
   const [liveText, setLiveText] = useState('')
@@ -27,6 +38,8 @@ export function useMobileDictationAnnouncements(
   const cancelled = useRef(false)
   const listeningSaid = useRef(false)
   const movedAtSaid = useRef<number | null>(null)
+  const inPlaceRef = useRef(inPlace)
+  const statusRef = useRef(status)
 
   useEffect(() => {
     const previous = previousStatus.current
@@ -37,14 +50,30 @@ export function useMobileDictationAnnouncements(
     }
     if (status === 'idle' && previous !== 'idle' && previous !== 'error') {
       // A stop goes through finishing; reaching idle any other way, or after ✕, is a cancel.
-      say(
-        cancelled.current || previous !== 'processing'
-          ? dictationAnnounceCopy.cancelled()
-          : dictationAnnounceCopy.inserted()
-      )
+      if (cancelled.current || previous !== 'processing') {
+        say(dictationAnnounceCopy.cancelled())
+      } else if (inPlaceRef.current) {
+        say(dictationAnnounceCopy.inserted())
+      }
       cancelled.current = false
     }
   }, [say, status])
+
+  useEffect(() => {
+    inPlaceRef.current = inPlace
+    statusRef.current = status
+  })
+  // Leaving the screen keeps it going; say so once, then the next screen reads as usual.
+  useEffect(() => {
+    if (away && statusRef.current === 'recording') {
+      say(dictationAnnounceCopy.stillListening())
+    }
+  }, [away, say])
+  useEffect(() => {
+    if (toast) {
+      say(toast)
+    }
+  }, [say, toast])
 
   useEffect(() => {
     if (status === 'recording' && engine && !listeningSaid.current) {

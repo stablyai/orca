@@ -13,6 +13,7 @@ export const dictationAnnounceCopy = {
             'dictation.announce.listeningOnComputer',
             'Listening. Transcribing on the computer.'
           ),
+  stillListening: () => translate('dictation.announce.stillListening', 'Still listening.'),
   finishing: () => translate('dictation.announce.finishing', 'Finishing.'),
   inserted: () => translate('dictation.announce.inserted', 'Inserted.'),
   cancelled: () => translate('dictation.announce.cancelled', 'Dictation cancelled.'),

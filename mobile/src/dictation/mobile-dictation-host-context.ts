@@ -25,6 +25,8 @@ export type MobileDictationOwner = {
   readonly dictationTerms: readonly DictationTerm[] | undefined
   // The computer spells its own words with this worktree's repo terms.
   readonly worktreeId: string
+  // The computer that would transcribe it, for what a screen reader hears; null when the phone lacks its name.
+  readonly computerName: string | null
 }
 
 // A mounted session screen, as the dictation host sees it.
@@ -69,6 +71,8 @@ export type MobileDictationPill = {
   readonly clearToast: () => void
   // The tallest bottom bar a screen reported, so the pill floats above it.
   readonly clearance: number
+  // Announcements the shell could not speak, for the page's live region (TalkBack, older shells).
+  readonly liveText: string
 }
 
 export const MobileDictationHostContext = createContext<MobileDictationHost | null>(null)

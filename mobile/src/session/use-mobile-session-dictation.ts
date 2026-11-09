@@ -22,6 +22,7 @@ import {
 import { useMobileDictationLeaveHold } from '../dictation/mobile-dictation-leave-hold'
 import { useMobileDictationHost } from '../dictation/mobile-dictation-host'
 import { mobileDictationShownOnScreen } from '../dictation/mobile-dictation-shown'
+import { useDictationComputerName } from '../dictation/use-mobile-dictation-live'
 import { nativeChatDictationCopy } from '../dictation/mobile-session-native-chat-dictation-copy'
 import {
   useWorkspaceExecutionHost,
@@ -54,6 +55,7 @@ export function useMobileSessionDictation(
   } = scope
   const { showNativeChat, showNativeChatRef } = nativeChatController
   const host = useMobileDictationHost()
+  const computerName = useDictationComputerName(hostId)
   const { start: startHost } = host
   const executionHost = useWorkspaceExecutionHost()
   const sessionKey = JSON.stringify([hostId, executionHost ?? null, worktreeId])
@@ -237,9 +239,11 @@ export function useMobileSessionDictation(
       dictationMode: scope.dictationMode,
       removeFillerWords,
       dictationTerms,
-      worktreeId
+      worktreeId,
+      computerName
     })
   }, [
+    computerName,
     activeHandle,
     activeSessionTab,
     busyElsewhere,
