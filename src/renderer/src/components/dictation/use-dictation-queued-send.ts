@@ -45,11 +45,11 @@ export function useDictationQueuedSend(
   sessionRef: RefObject<DictationSession>,
   keptRef: RefObject<DictationKeptRecording | null>
 ) {
-  const queuedRef = useRef<{ run: number; send: () => void } | null>(null)
+  const queuedRef = useRef<{ run: number; send: () => void | Promise<void> } | null>(null)
   const [queuedKind, setQueuedKind] = useState<DictationQueuedSendKind | null>(null)
 
   const queue = useCallback(
-    (kind: DictationQueuedSendKind, send: () => void): boolean => {
+    (kind: DictationQueuedSendKind, send: () => void | Promise<void>): boolean => {
       const { phase, run, sessionId } = sessionRef.current
       if (sessionId === null || !(isDictationUnderway(phase) || phase === 'stopping')) {
         return false
@@ -76,11 +76,13 @@ export function useDictationQueuedSend(
   const queueTerminalEnter = useCallback(
     (eventTarget: EventTarget | null): boolean => {
       const target = keptRef.current?.target
+      // Only the pane's own terminal input: its search box and chat cover are portaled into the pane too.
       return (
         target?.kind === 'terminal' &&
-        eventTarget instanceof Node &&
-        target.pane.contains(eventTarget) &&
-        queue('terminal', () => void pressDictationTerminalEnter(target))
+        eventTarget instanceof HTMLElement &&
+        eventTarget.classList.contains('xterm-helper-textarea') &&
+        eventTarget.closest('.pane[data-pane-id]') === target.pane &&
+        queue('terminal', () => pressDictationTerminalEnter(target))
       )
     },
     [keptRef, queue]
@@ -91,17 +93,26 @@ export function useDictationQueuedSend(
     setQueuedKind(null)
   }, [])
 
-  /** Runs this session's queued send once its words land; none if any went to the clipboard. */
+  /** Runs this session's queued send once its words land, none if any went to the clipboard; the pill waits for it. */
   const release = useCallback(
-    (run: number) => {
+    async (run: number): Promise<void> => {
       const queued = queuedRef.current
       const delivery = keptRef.current?.deliver
+      if (queued?.run !== run || !delivery) {
+        clear()
+        return
+      }
+      const landed = await delivery.settled()
+      // A cancel while the words were landing already dropped the send.
+      if (sessionRef.current.run !== run) {
+        return
+      }
       clear()
-      if (queued?.run === run && delivery) {
-        void delivery.settled().then((landed) => landed && queued.send())
+      if (landed) {
+        await queued.send()
       }
     },
-    [keptRef, clear]
+    [keptRef, sessionRef, clear]
   )
 
   return { queuedKind, queueTerminalEnter, release, clear }

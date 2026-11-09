@@ -131,8 +131,10 @@ export function DictationController() {
         showNoSpeechDetectedToast()
       }
       beforeEnd?.()
-      releaseQueuedSend(run)
-      dispatch({ type: 'ended' })
+      await releaseQueuedSend(run)
+      if (sessionRef.current.run === run) {
+        dispatch({ type: 'ended' })
+      }
     },
     [dispatch, finishCapture, getCapturedChunkCount, releaseQueuedSend]
   )
