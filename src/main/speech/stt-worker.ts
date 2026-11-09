@@ -53,6 +53,11 @@ function attachAudioPort(streamId: string, port: MessagePortMain | undefined): v
   if (!port) {
     return
   }
+  // A cancel that arrived while this attach waited in line must not let the port's frames reopen the stream.
+  if (discarded.has(streamId)) {
+    port.close()
+    return
+  }
   const input: AudioPortInput = { port, onEnded: null, ending: false }
   const end = (): void => {
     if (audioPorts.get(streamId) !== input) {
