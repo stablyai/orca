@@ -22,3 +22,12 @@ export function compareWorktreeAgentRows(a: DashboardAgentRow, b: DashboardAgent
     comparePaneKeysOrdinal(a.paneKey, b.paneKey)
   )
 }
+
+// Rows follow the tab bar so a tab drag reorders the sidebar; rows without a current tab trail.
+export function createTabBarAgentRowComparator(
+  currentTabIds: ReadonlySet<string>
+): (a: DashboardAgentRow, b: DashboardAgentRow) => number {
+  const tabBarPosition = (row: DashboardAgentRow): number =>
+    currentTabIds.has(row.tab.id) ? comparableNumber(row.tab.sortOrder) : Number.MAX_SAFE_INTEGER
+  return (a, b) => tabBarPosition(a) - tabBarPosition(b) || compareWorktreeAgentRows(a, b)
+}

@@ -61,7 +61,8 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
         active
           ? selectPaneForegroundAgentsForWorktree(state, worktreeId)
           : EMPTY_PANE_FOREGROUND_AGENTS,
-        active ? selectAgentFreshness(state) : EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE
+        active ? selectAgentFreshness(state) : EMPTY_WORKTREE_AGENT_FRESHNESS_SIGNATURE,
+        state.agentRowOrder
       ] as const
     let previous: ReturnType<typeof readInputs> | undefined
     return (state: AppState) => {
@@ -88,7 +89,8 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     terminalLayoutsByTabId,
     runtimeAgentOrchestrationByPaneKey,
     paneForegroundAgentByPaneKey,
-    agentFreshnessSignature
+    agentFreshnessSignature,
+    agentRowOrder
   ] = useSyncExternalStore(active ? store.subscribe : subscribeToNothing, getInputs, getInputs)
 
   return useMemo<DashboardAgentRow[]>(() => {
@@ -120,6 +122,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
         terminalLayoutsByTabId,
         runtimeAgentOrchestrationByPaneKey,
         paneForegroundAgentByPaneKey,
+        order: agentRowOrder,
         now
       })
     )
@@ -136,6 +139,7 @@ export function useWorktreeAgentRows(worktreeId: string, active = true): Dashboa
     terminalLayoutsByTabId,
     runtimeAgentOrchestrationByPaneKey,
     paneForegroundAgentByPaneKey,
-    agentFreshnessSignature
+    agentFreshnessSignature,
+    agentRowOrder
   ])
 }

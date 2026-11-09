@@ -3,11 +3,13 @@ import { workspaceHostScopeForVisibleHosts } from '../../../../../shared/workspa
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
 import {
   DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE,
+  DEFAULT_AGENT_ROW_ORDER,
   DEFAULT_SHOW_SLEEPING_WORKSPACES,
   DEFAULT_STATUS_BAR_ITEMS,
   DEFAULT_WORKTREE_CARD_PROPERTIES,
   getWorktreeCardModeUpdates,
   normalizeAgentActivityDisplayMode,
+  normalizeAgentRowOrder,
   normalizeWorktreeCardProperties
 } from '../../../../../shared/constants'
 import {
@@ -210,6 +212,12 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       const normalized = normalizeAgentActivityDisplayMode(mode)
       window.api.ui.set({ agentActivityDisplayMode: normalized }).catch(console.error)
       set({ agentActivityDisplayMode: normalized })
+    },
+    agentRowOrder: DEFAULT_AGENT_ROW_ORDER,
+    setAgentRowOrder: (order) => {
+      const normalized = normalizeAgentRowOrder(order)
+      window.api.ui.set({ agentRowOrder: normalized }).catch(console.error)
+      set({ agentRowOrder: normalized })
     },
 
     workspaceStatuses: cloneDefaultWorkspaceStatuses(),

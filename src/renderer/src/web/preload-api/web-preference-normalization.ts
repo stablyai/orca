@@ -13,6 +13,7 @@ import { normalizeAutoRenameBranchFromWorkDefaultOn } from '../../../../shared/a
 import {
   getDefaultSettings,
   normalizeAgentActivityDisplayMode,
+  normalizeAgentRowOrder,
   normalizeWorktreeCardProperties
 } from '../../../../shared/constants'
 import {
@@ -72,6 +73,7 @@ export function mergeWebUIState(
     agentActivityDisplayMode: normalizeAgentActivityDisplayMode(
       safeUpdates.agentActivityDisplayMode ?? base.agentActivityDisplayMode
     ),
+    agentRowOrder: normalizeAgentRowOrder(safeUpdates.agentRowOrder ?? base.agentRowOrder),
     usagePercentageDisplay: normalizeUsagePercentageDisplay(
       safeUpdates.usagePercentageDisplay ?? base.usagePercentageDisplay
     ),

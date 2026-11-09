@@ -24,10 +24,14 @@ import { tabHasLivePty } from '../../../../../../shared/tab-has-live-pty'
 import { buildTitleDerivedAgentRows } from './worktree-title-derived-agent-rows'
 import type { TitleDerivedPaneForeground } from './title-derived-pane-agent-identity'
 import { buildSubagentChildRows } from './worktree-subagent-child-rows'
-import { compareWorktreeAgentRows } from './worktree-agent-row-order'
+import {
+  compareWorktreeAgentRows,
+  createTabBarAgentRowComparator
+} from './worktree-agent-row-order'
 import { tabFromWorktreeAttributedStatusEntry } from './worktree-agent-row-fallback-tab'
 import { agentEntrySessionStartedAt as effectiveWorktreeAgentRowStartedAt } from '../../../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import { resolveRowAgentType } from './worktree-agent-row-type'
+import type { AgentRowOrder } from '../../../../../../shared/ui-chrome-types'
 import { entryWithRuntimeOrchestration } from './worktree-agent-row-orchestration'
 
 function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
@@ -146,6 +150,7 @@ export function buildWorktreeAgentRows(args: {
   terminalLayoutsByTabId?: Record<string, TerminalLayoutSnapshot | undefined>
   runtimeAgentOrchestrationByPaneKey?: Record<string, AgentStatusOrchestrationContext>
   paneForegroundAgentByPaneKey?: Record<string, TitleDerivedPaneForeground>
+  order?: AgentRowOrder
   now: number
 }): DashboardAgentRow[] {
   const rows: DashboardAgentRow[] = []
@@ -273,6 +278,10 @@ export function buildWorktreeAgentRows(args: {
   }
 
   // Status pings can reorder entries; sort equal-start agents deterministically.
-  rows.sort(compareWorktreeAgentRows)
+  rows.sort(
+    args.order === 'tab-bar'
+      ? createTabBarAgentRowComparator(new Set(currentTabsById.keys()))
+      : compareWorktreeAgentRows
+  )
   return rows
 }
