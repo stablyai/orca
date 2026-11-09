@@ -11167,7 +11167,10 @@
               "modelMemoryKeyword": "mémoire",
               "fillerWordsTitle": "Supprimer les hésitations",
               "fillerWordsDescription": "Supprime « euh », « hum » et les sons similaires du texte dicté.",
-              "fillerWordsKeyword": "hésitations"
+              "fillerWordsKeyword": "hésitations",
+              "vocabularyTitle": "Vocabulaire",
+              "vocabularyDescription": "Noms et termes de code que la dictée écrit à votre façon, pour vous ou pour un dépôt.",
+              "vocabularyKeyword": "dictionnaire"
             }
           }
         },
@@ -20851,6 +20854,24 @@
           "local": "Sur cet ordinateur",
           "cloudDescription": "Les modèles cloud envoient votre audio au fournisseur. Ceux de cet ordinateur le gardent ici.",
           "sendsToCompatible": "Envoie votre audio au service que vous avez configuré."
+        },
+        "vocabulary": {
+          "title": "Vocabulaire",
+          "description": "Noms et termes de code à écrire à votre façon. Ajoutez ce que le modèle entend à la place s’il se trompe toujours.",
+          "repoScope": "Utilisé seulement quand vous dictez dans {{repo}}.",
+          "personalScope": "Utilisé dans tous les dépôts.",
+          "scope": "Termes pour",
+          "personal": "Personnel · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "Retirer {{term}}",
+          "term": "Mot ou expression",
+          "heardAs": "Entendu comme (facultatif)",
+          "heardAsLabel": "Entendu comme",
+          "add": "Ajouter",
+          "repoNameHint": "Utiliser le nom du dépôt comme indice",
+          "repoNameHintDescription": "Aide à reconnaître le nom du dépôt.",
+          "repoSaveFailed": "Impossible d’enregistrer les termes du dépôt. L’hôte de ce dépôt doit peut-être mettre Orca à jour."
         }
       },
       "repositoryHooks": {
