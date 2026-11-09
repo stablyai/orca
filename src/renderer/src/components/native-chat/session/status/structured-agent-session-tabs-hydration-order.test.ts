@@ -22,7 +22,7 @@ function chat(id: string, worktreeId: string): Tab {
 }
 
 function session(worktreeIds: readonly string[]): WorkspaceSessionState {
-  const entries = (value: (worktreeId: string) => unknown) =>
+  const entries = <V>(value: (worktreeId: string) => V): Record<string, V> =>
     Object.fromEntries(worktreeIds.map((worktreeId) => [worktreeId, value(worktreeId)]))
   return {
     activeRepoId: null,
@@ -41,7 +41,7 @@ function session(worktreeIds: readonly string[]): WorkspaceSessionState {
       }
     ]),
     activeGroupIdByWorktree: entries((worktreeId) => `group-${worktreeId}`)
-  } as WorkspaceSessionState
+  }
 }
 
 const ids = (tabs: readonly Tab[]) => tabs.map((tab) => tab.id)
