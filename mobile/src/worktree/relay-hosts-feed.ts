@@ -102,8 +102,11 @@ function createFeed(client: RpcClient): RelayHostsFeed {
       return null
     }
   }
+  // A read that landed within a poll interval is as fresh as the poll would make it.
+  const fresh = (): boolean =>
+    snapshot !== null && !lastReadDoubtful && Date.now() - lastReadAt < RELAY_HOSTS_POLL_MS
   const read = (): Promise<readonly MobileRelayHost[] | null> =>
-    inFlight === null && current() ? Promise.resolve(snapshot) : refresh()
+    inFlight === null && (current() || fresh()) ? Promise.resolve(snapshot) : refresh()
   const refresh = (): Promise<readonly MobileRelayHost[] | null> => {
     if (inFlight) {
       return inFlight

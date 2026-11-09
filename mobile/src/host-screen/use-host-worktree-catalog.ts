@@ -1,3 +1,4 @@
+import { MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../src/shared/mobile-desktop-relay-contract'
 import { WORKTREE_ROWS_CHANGED_EVENT_RUNTIME_CAPABILITY } from '../../../src/shared/worktree-runtime-capabilities'
 import { readWorktreeFirstPage } from '../worktree/worktree-catalog-first-page'
 import type { Worktree } from '../worktree/workspace-list-types'
@@ -124,7 +125,10 @@ export function useHostWorktreeCatalog(args: {
   // Until the host's status is read, stored server rows paint and nothing reads them.
   const relaysRuledOut = hostStatusReadable && !relays
   // Held while server rows poll, so a desktop that announces host changes isn't asked for its hosts on every poll.
-  useRelayHosts(subscribed && relays ? client : null, hostCapabilities)
+  const announcesHosts = hostCapabilities.includes(
+    MOBILE_RELAY_HOSTS_CHANGED_EVENT_RUNTIME_CAPABILITY
+  )
+  useRelayHosts(subscribed && relays && announcesHosts ? client : null, hostCapabilities)
   const servers = useHostQuery(
     hostServerWorkspacesQuery,
     host,
