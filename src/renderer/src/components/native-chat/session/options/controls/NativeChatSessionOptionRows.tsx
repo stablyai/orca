@@ -22,6 +22,7 @@ import {
 } from '../../../../../../../shared/native-chat/input/native-chat-session-option-labels'
 import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
+import { NativeChatSessionSpeedButton, speedButtonTiers } from './NativeChatSessionSpeedButton'
 
 type NativeChatSessionOptionRowsProps = {
   /** The current model's options, in display order. */
@@ -136,6 +137,32 @@ function OptionRow(props: {
         <Zap className="size-3" />
         {say('fast')}
       </Toggle>
+    )
+  }
+  const speed = speedButtonTiers(descriptor)
+  if (speed && descriptor.kind.type === 'select') {
+    const button = (
+      <NativeChatSessionSpeedButton
+        label={label}
+        standard={speed.standard}
+        faster={speed.faster}
+        current={gone ? undefined : descriptor.kind.currentValue}
+        disabled={off}
+        onSet={onSet}
+      />
+    )
+    return layout === 'inline' ? (
+      button
+    ) : (
+      <div
+        className={cn(
+          'flex min-h-7 items-center justify-between gap-3 text-xs text-muted-foreground',
+          layout === 'menu' && 'px-2'
+        )}
+      >
+        {label}
+        {button}
+      </div>
     )
   }
   if (descriptor.kind.type === 'boolean') {
