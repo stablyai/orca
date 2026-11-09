@@ -237,9 +237,9 @@ describe('useMobileDiffReviewController', () => {
         })
       )
       act(() => controller?.setComposerBody('older note, edited'))
-      // Past the draft row's typing debounce.
+      // The draft row saves once typing settles.
       await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 300))
+        await vi.waitFor(() => expect(table.size).toBe(1))
       })
       act(() => renderer?.unmount())
       resetDurableDraftFieldsForTests()
