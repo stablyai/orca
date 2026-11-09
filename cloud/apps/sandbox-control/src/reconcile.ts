@@ -85,7 +85,7 @@ async function reconcileRunning(deps: LifecycleDeps, row: SandboxRow, summary: R
 async function repairTransition(deps: LifecycleDeps, row: SandboxRow): Promise<void> {
   const state = await deps.provider.getSandbox(row.provider_name, { resume: false })
   if (state?.session.status === 'running') {
-    await transition(deps.db, row, { status: 'running', ...sessionFields(state, deps.now()) }, deps.now())
+    await transition(deps.db, row, { status: 'running', ...sessionFields(deps, state) }, deps.now())
     return
   }
   await markProviderStopped(deps, row)

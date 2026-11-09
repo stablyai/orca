@@ -77,7 +77,9 @@ function lifecycleDeps(env: Env, deps: Deps): LifecycleDeps | null {
       environment: env.SANDBOX_ENV,
       goldenSnapshotId: env.GOLDEN_SNAPSHOT_ID,
       defaultRegion: env.VERCEL_REGION ?? 'iad1',
-      egressProxyUrl: env.EGRESS_PROXY_URL
+      egressProxyUrl: env.EGRESS_PROXY_URL,
+      sessionDeadlineMs:
+        env.SESSION_DEADLINE_MS && env.SANDBOX_ENV !== 'prod' ? Number(env.SESSION_DEADLINE_MS) : undefined
     }
   }
 }

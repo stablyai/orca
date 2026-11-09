@@ -30,4 +30,6 @@ export type Env = {
 
   /** Public URL of this Worker's /v1/egress/proxy; Vercel forwardURL rules point here. */
   EGRESS_PROXY_URL?: string
+  /** Shortened session deadline (ms) for staging rollover rehearsals; refused when SANDBOX_ENV=prod. */
+  SESSION_DEADLINE_MS?: string
 }

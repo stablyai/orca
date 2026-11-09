@@ -162,6 +162,24 @@ Compiled per sandbox by `compileNetworkPolicy()`:
   recipe adapter; start one scheduler per ready hosted runtime (stop on suspend/destroy); an orcad RPC exposing
   the idle-probe verdict + last PTY input for `readActivity`; header warning + mobile push for `warn`.
 
+## Live results (2026-11-09, Vercel Pro team `lovecast`, project `orca-sandbox-control`, iad1)
+
+Driven by the real Worker handler in-process (real Vercel REST, node:sqlite D1, stub billing) and the real desktop
+driver/scheduler. Base OS is Amazon Linux 2023 (dnf), not Ubuntu.
+- Golden image: orcad built from public stablyai/orca@7c14832 in a 8 vCPU build sandbox in 98s (67 MB tgz);
+  provision 14.3s (gh 2.103.3, Claude Code 2.1.319, Codex 0.166.0; orcad loopback smoke passed); wipe ok;
+  snapshot 8.2s. Bug found and fixed: provision downloaded the bundle over its own source path.
+- Snapshot → orcad ready (`POST /v1/sandboxes`, incl. Vercel create + orca-sandbox-start): 5.4 / 4.1 / 4.9 s; WS open.
+- Suspend (drain + stop) 7.6s; resume → ready 6.0s; same endpoint and same orcad host key (no re-pair).
+- Shortened cap (6 min): scheduler warned T−15, then forced rollover at the deadline in 17.3s (drain, stop, boot,
+  orcad ready), reconnect WS open, new deadline set. Destroy 0.4–0.7s; zero sandboxes/snapshots left.
+- Egress: allowlist resolves npm (200), `example.com` does not resolve (curl rc 6). Policy update 0.25s.
+  Placeholder → injected fake GitHub credential reaches GitHub (curl/gh `token` scheme: 401 Bad credentials);
+  attacker token and placeholder-less git → 403 `orca-egress-denied`. Node fetch under a transform rule still hangs
+  on Pro; `orca-egress-probe` reports `egress_framing_hang` (npm, untransformed: ok). No real GitHub token was used,
+  so a successful authenticated push is still unverified.
+- Not covered live: forwardURL egress proxy (needs a deployed Worker URL), agent auto-resume with a real chat.
+
 ## What needs live access (not done)
 
 Vercel Pro team id + project id + a Sandbox-scoped token (as Worker secrets), wrangler auth for a dev D1, a

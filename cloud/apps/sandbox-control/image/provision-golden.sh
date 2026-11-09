@@ -28,9 +28,10 @@ fetch_verified() { # url sha256 dest
 }
 
 log 'orcad bundle'
-fetch_verified "$ORCAD_BUNDLE_URL" "$ORCAD_BUNDLE_SHA256" /tmp/orcad.tgz
-tar -xzf /tmp/orcad.tgz -C "$ORCA_HOME/runtime"
-rm -f /tmp/orcad.tgz
+bundle="$(mktemp -d)/orcad.tgz"
+fetch_verified "$ORCAD_BUNDLE_URL" "$ORCAD_BUNDLE_SHA256" "$bundle"
+tar -xzf "$bundle" -C "$ORCA_HOME/runtime"
+rm -rf "$(dirname "$bundle")"
 test -s "$ORCA_HOME/runtime/orcad/orcad-server.js"
 node="$(find "$ORCA_HOME/runtime/runtimes" -type f -name node | head -n 1)"
 test -x "$node"
