@@ -33,21 +33,20 @@ export function updateTomlLineScanState(state: TomlLineScanState, line: string):
         index += 2
         continue
       }
-      if (line.startsWith('"""', index)) {
+      const run = countTomlQuoteRun(line, index, '"')
+      // Up to two quotes can precede the closing delimiter and belong to the value.
+      if (run >= 3) {
         mode = null
-        index += 3
-        continue
       }
-      index += 1
+      index += Math.max(run, 1)
       continue
     }
     if (mode === 'literal') {
-      if (line.startsWith("'''", index)) {
+      const run = countTomlQuoteRun(line, index, "'")
+      if (run >= 3) {
         mode = null
-        index += 3
-        continue
       }
-      index += 1
+      index += Math.max(run, 1)
       continue
     }
 
@@ -170,7 +169,14 @@ export function parseTomlStringValue(source: string, offset: number): ParsedToml
   let value = ''
   while (index < source.length) {
     if (source.startsWith(delimiter, index)) {
-      return { value, start, end: index + delimiter.length }
+      const run = countTomlQuoteRun(source, index, delimiter[0])
+      // Up to two quotes before the closing delimiter belong to the value; three close an empty string.
+      const valueQuotes = run <= 5 ? run - 3 : 0
+      return {
+        value: value + delimiter[0].repeat(valueQuotes),
+        start,
+        end: index + run
+      }
     }
 
     if (delimiter === '"""' && source[index] === '\\') {
@@ -197,6 +203,14 @@ export function parseTomlStringValue(source: string, offset: number): ParsedToml
     index += 1
   }
   return null
+}
+
+function countTomlQuoteRun(line: string, startIndex: number, quote: string): number {
+  let index = startIndex
+  while (line[index] === quote) {
+    index += 1
+  }
+  return index - startIndex
 }
 
 function skipTomlBasicString(line: string, startIndex: number): number {
