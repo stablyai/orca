@@ -130,7 +130,7 @@ export function createFakeVercel(now: () => number): FakeVercel {
         if (fake.failStart) {
           return { exitCode: 1, stdout: '', stderr: 'orcad crashed' }
         }
-        const ready = { pairingCode: `orca://pair?code=${box.params.name}`, projectRoot: '/vercel/sandbox/project' }
+        const ready = { schemaVersion: 1, pairingCode: `orca://pair?code=${box.params.name}`, projectRoot: '/vercel/sandbox/project' }
         return { exitCode: 0, stdout: `booting\n${JSON.stringify(ready)}\n`, stderr: '' }
       }
       if (params.command === DRAIN_COMMAND) {

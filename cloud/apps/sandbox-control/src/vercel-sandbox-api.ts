@@ -2,6 +2,7 @@
 // calls the same /v2 + /v3 endpoints its api-client uses (SDK 3.9.1), with Orca's team token.
 import { z } from 'zod'
 import type { NetworkPolicy } from './network-policy'
+import type { GoldenImageProviderApi } from './golden-image-provider'
 import {
   ProviderError,
   type CommandResult,
@@ -46,7 +47,9 @@ const CommandLine = z.looseObject({ command: z.looseObject({ exitCode: z.number(
 const OutputLine = z.looseObject({ stream: z.enum(['stdout', 'stderr']), data: z.string() })
 const FailureLine = z.looseObject({ stream: z.literal('error'), data: z.looseObject({ code: z.string() }) })
 
-export function createVercelSandboxApi(config: VercelSandboxApiConfig): SandboxProviderApi {
+export function createVercelSandboxApi(
+  config: VercelSandboxApiConfig
+): SandboxProviderApi & GoldenImageProviderApi {
   const base = config.baseUrl ?? 'https://vercel.com/api'
   const doFetch = config.fetch ?? fetch
 
@@ -191,6 +194,37 @@ export function createVercelSandboxApi(config: VercelSandboxApiConfig): SandboxP
         request('DELETE', `/v2/sandboxes/${encodeURIComponent(name)}`, {
           query: { projectId: config.projectId, deleteOrphanSnapshots: 'true' }
         })
+      ),
+
+    async createBuildSandbox(params) {
+      // A `runtime` selects /v2: a fresh managed image, not a snapshot.
+      const response = await request('POST', '/v2/sandboxes', {
+        body: {
+          projectId: config.projectId,
+          name: params.name,
+          runtime: params.runtime,
+          resources: { vcpus: params.vcpus },
+          region: params.region,
+          timeout: params.timeoutMs,
+          persistent: false,
+          networkPolicy: { mode: 'allow-all' },
+          tags: params.tags
+        }
+      })
+      return toState(await json(SandboxAndSession, response))
+    },
+
+    async createSnapshot(sessionId, expirationMs) {
+      const response = await request('POST', `/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}/snapshot`, {
+        body: { expiration: expirationMs }
+      })
+      return (await json(z.looseObject({ snapshot: Snapshot }), response)).snapshot.id
+    },
+
+    // Without deleteOrphanSnapshots: the build sandbox goes, the golden snapshot it produced stays.
+    deleteBuildSandbox: (name) =>
+      missingOk(() =>
+        request('DELETE', `/v2/sandboxes/${encodeURIComponent(name)}`, { query: { projectId: config.projectId } })
       ),
 
     async listSnapshots(name) {

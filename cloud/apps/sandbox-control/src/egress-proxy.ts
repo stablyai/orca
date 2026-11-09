@@ -34,7 +34,7 @@ export type EgressProxyDeps = {
   teamId: string
   projectId: string
   findSandbox: (providerName: string) => Promise<SandboxRow | null>
-  placeholderFor: (row: SandboxRow) => string
+  placeholdersFor: (row: SandboxRow) => readonly string[]
   credentials: CredentialBroker
   fetch?: typeof fetch
   /** Tests inject a local key set; production fetches `<issuer>/.well-known/jwks`. */
@@ -103,7 +103,7 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
   if (!row || row.status !== 'running') {
     return deny('sandbox_not_running')
   }
-  if (request.headers.get('authorization') !== deps.placeholderFor(row)) {
+  if (!deps.placeholdersFor(row).includes(request.headers.get('authorization') ?? '')) {
     return deny('placeholder_missing')
   }
   const authorization = await deps.credentials.authorizationFor(row, host)

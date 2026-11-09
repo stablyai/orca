@@ -1,0 +1,15 @@
+{
+  "imageVersion": "2026-11-08.1",
+  "runtime": "node24",
+  "region": "iad1",
+  "vcpus": 4,
+  "orcad": {
+    "bundleUrl": null,
+    "sha256": null
+  },
+  "gh": {
+    "version": null,
+    "sha256": null
+  },
+  "agentCliPackages": ["@anthropic-ai/claude-code@2.1.319", "@openai/codex@0.166.0"]
+}

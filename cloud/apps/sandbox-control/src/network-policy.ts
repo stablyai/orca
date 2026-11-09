@@ -50,9 +50,9 @@ export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = [
 
 export type CredentialRoute = {
   host: string
-  /** Header the VM sends with the placeholder value, matched exactly. */
+  /** Header the VM sends with a placeholder value, matched exactly (one claim rule per value). */
   header: string
-  placeholder: string
+  placeholders: readonly string[]
 } & (
   | { via: 'transform'; value: string }
   | { via: 'forward'; forwardURL: string }
@@ -76,15 +76,15 @@ export function compileNetworkPolicy(input: EgressPolicyInput): NetworkPolicy {
     if (host.startsWith('*.')) {
       throw new Error('credential routes need an exact host')
     }
-    const match = {
-      headers: [{ key: { exact: route.header.toLowerCase() }, value: { exact: route.placeholder } }]
-    }
-    const claim: NetworkPolicyRule =
-      route.via === 'transform'
-        ? { match, transform: [{ headers: { [route.header.toLowerCase()]: route.value } }] }
+    const header = route.header.toLowerCase()
+    const claims = route.placeholders.map((placeholder): NetworkPolicyRule => {
+      const match = { headers: [{ key: { exact: header }, value: { exact: placeholder } }] }
+      return route.via === 'transform'
+        ? { match, transform: [{ headers: { [header]: route.value } }] }
         : { match, forwardURL: route.forwardURL }
+    })
     const rules = allow[host]?.filter((rule) => !('response' in rule)) ?? []
-    allow[host] = [...rules, claim, denyRule()]
+    allow[host] = [...rules, ...claims, denyRule()]
   }
   if (input.mode === 'open') {
     allow['*'] = []

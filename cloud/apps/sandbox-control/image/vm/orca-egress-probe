@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Bounded Node fetch against each credential host. Vercel transform rules have made undici hang on
+# response bodies (no content-length / transfer-encoding); report it instead of letting agents hang.
+# Prints one JSON line: {"host":"api.github.com","status":"ok"|"egress_framing_hang"|"error"}.
+set -euo pipefail
+node="$(find /opt/orca/runtime/runtimes -type f -name node | head -n 1)"
+for host in "$@"; do
+  "$node" -e '
+    const host = process.argv[1]
+    const timer = setTimeout(() => { console.log(JSON.stringify({ host, status: "egress_framing_hang" })); process.exit(0) }, 8000)
+    fetch(`https://${host}/`, { headers: { authorization: process.env.ORCA_PROBE_AUTHORIZATION ?? "" } })
+      .then((r) => r.arrayBuffer())
+      .then(() => { clearTimeout(timer); console.log(JSON.stringify({ host, status: "ok" })) })
+      .catch(() => { clearTimeout(timer); console.log(JSON.stringify({ host, status: "error" })) })
+  ' "$host"
+done
