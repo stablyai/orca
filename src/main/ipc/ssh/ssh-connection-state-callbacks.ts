@@ -4,7 +4,7 @@ import { isSshHostCensusInFlight } from '../../ssh/connection/ssh-connection-att
 import {
   clearSshCredentialDeclined,
   isSshCredentialDeclined
-} from '../../ssh/ssh-credential-decline'
+} from '../../ssh/authentication/ssh-credential-decline'
 import {
   connectInFlight,
   credentialRequestedForTarget,

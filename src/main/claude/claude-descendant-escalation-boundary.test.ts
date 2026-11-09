@@ -64,6 +64,7 @@ async function sweep(
   const tree = createClaudeChildTreeReaper(
     { pid: ROOT_PID, kill: vi.fn(() => true) },
     {
+      site: 'claude-structured-child-close',
       platform: 'linux',
       exited: () => false,
       captureDescendants,

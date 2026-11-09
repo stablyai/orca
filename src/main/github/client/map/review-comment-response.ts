@@ -1,3 +1,4 @@
+import { githubBodyImageUrls } from '../../body-image-urls'
 import type { PRComment } from '../../../../shared/github/comment-types'
 export function mapReviewCommentResponse(
   data: {
@@ -5,6 +6,7 @@ export function mapReviewCommentResponse(
     node_id?: string | null
     user: { login: string; avatar_url: string; type?: string } | null
     body?: string
+    body_html?: string | null
     created_at?: string
     html_url?: string
     path?: string
@@ -22,6 +24,7 @@ export function mapReviewCommentResponse(
     author: data.user?.login ?? 'You',
     authorAvatarUrl: data.user?.avatar_url ?? '',
     body: data.body ?? body,
+    bodyImageUrls: githubBodyImageUrls(data.body ?? body, data.body_html),
     createdAt: data.created_at ?? new Date().toISOString(),
     url: data.html_url ?? '',
     isBot: data.user?.type === 'Bot',

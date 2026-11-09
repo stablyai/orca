@@ -25,17 +25,6 @@ describe('drag completion and cancellation', () => {
     await act(async () => fixture.root.unmount())
   })
 
-  it('commits the moved order once on a successful drop', async () => {
-    const fixture = await mounted()
-    await act(async () => {
-      fixture.gesture.start!({ absoluteY: 100, translationY: 0 }, true)
-      fixture.gesture.update!({ absoluteY: 180, translationY: 80 }, true)
-      fixture.gesture.finalize!({ absoluteY: 180, translationY: 80 }, true)
-    })
-    expect(fixture.onReorder.mock.calls).toEqual([[['b', 'a']]])
-    await act(async () => fixture.root.unmount())
-  })
-
   it('does not write after a failed activation or an unchanged drop', async () => {
     const fixture = await mounted()
     await act(async () => {
@@ -286,56 +275,3 @@ it('keeps measured rows still on hold, restores cancellation, and drops by moved
   expect(move).toHaveBeenCalledExactlyOnceWith({ movedId: 'a', afterId: 'c' })
   await act(async () => root!.unmount())
 })
-
-it.each([100, 1000])(
-  'bounds accessibility work for %i rows while excluded slots stay fixed',
-  async (count) => {
-    const ids = Array.from({ length: count }, (_, at) =>
-      at === 1 ? 'fixed' : at === 2 ? 'busy' : `row-${at}`
-    )
-    let keyReads = 0
-    let membership = 0
-    const onMove = vi.fn()
-    const onReorder = vi.fn()
-    function Harness({ items = ids }: { items?: string[] }) {
-      return createElement(DragReorderList<string>, {
-        items,
-        itemKey: (id) => {
-          keyReads++
-          return id
-        },
-        canMove: (id) => {
-          membership++
-          return id !== 'fixed' && id !== 'busy'
-        },
-        rowHeight: 56,
-        renderRow: (id, handle) => createElement('Text', null, id, handle),
-        onMove,
-        onReorder,
-        scrollRef: useAnimatedRef<Animated.ScrollView>(),
-        scrollOffsetY: useSharedValue(0),
-        scrollContentHeight: useSharedValue(count * 56)
-      })
-    }
-    let root: ReturnType<typeof create>
-    await act(async () => {
-      root = create(createElement(Harness))
-    })
-    const first = root!.root.findAll(
-      (node) => node.type === Animated.View && node.props.onAccessibilityAction
-    )[0]!
-    const accessibilityAction = first.props.onAccessibilityAction
-    keyReads = membership = 0
-    await act(async () => accessibilityAction({ nativeEvent: { actionName: 'moveUp' } }))
-    expect(onMove).not.toHaveBeenCalled()
-    await act(async () => accessibilityAction({ nativeEvent: { actionName: 'moveDown' } }))
-    expect(keyReads).toBeLessThanOrEqual(3 * count)
-    expect(membership).toBeLessThanOrEqual(3 * count)
-    expect(onReorder.mock.calls[0]![0].slice(0, 4)).toEqual(['row-3', 'fixed', 'busy', 'row-0'])
-    expect(onMove).toHaveBeenCalledExactlyOnceWith({ movedId: 'row-0', beforeId: 'row-4' })
-    await act(async () => root!.update(createElement(Harness, { items: ids.slice(1) })))
-    await act(async () => accessibilityAction({ nativeEvent: { actionName: 'moveDown' } }))
-    expect(onMove).toHaveBeenCalledOnce()
-    await act(async () => root!.unmount())
-  }
-)

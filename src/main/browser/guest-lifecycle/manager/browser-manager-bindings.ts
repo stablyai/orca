@@ -1,10 +1,10 @@
 import { resolveRendererWebContents } from '../browser-guest-renderer-target'
 import { setupGuestContextMenu } from '../input/browser-guest-context-menu'
-import { setupGrabShortcutForwarding } from '../input/browser-guest-grab-shortcuts'
+import { setupGrabShortcutForwarding } from '../input/shortcuts/browser-guest-grab-shortcuts'
 import { setupGuestMouseWheelZoomForwarding } from '../input/browser-guest-wheel-zoom'
-import { setupGuestShortcutForwarding } from '../input/browser-guest-shortcut-forwarding'
+import { setupGuestShortcutForwarding } from '../input/shortcuts/browser-guest-shortcut-forwarding'
 import { setupGuestTargetUrlForwarding } from '../input/browser-guest-target-url'
-import { BrowserManagerGrab } from './browser-manager-grab'
+import { BrowserManagerGrab } from './grab/browser-manager-grab'
 
 export abstract class BrowserManagerBindings extends BrowserManagerGrab {
   protected setupContextMenu(browserTabId: string, guest: Electron.WebContents): void {

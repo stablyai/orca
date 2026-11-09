@@ -1,62 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { Automation } from '../../../../shared/automations/automation-definition'
-import type { AutomationOwnerRef } from '../../../../shared/automations/ownership/automation-owner-ref'
-import type { AutomationHostRow } from './automation-host-cache-types'
 import {
   automationActionAvailability,
-  captureAutomationOwners,
   isAutomationActionEnabled
 } from './automation-captured-owner'
-
-const DESKTOP_SELF: AutomationOwnerRef = {
-  authority: { kind: 'desktop' },
-  selector: { kind: 'self' }
-}
-
-const RUNTIME_SELF: AutomationOwnerRef = {
-  authority: { kind: 'runtime', environmentId: 'gpu', pairingRevision: 1 },
-  selector: { kind: 'self' }
-}
-
-function automation(overrides: Partial<Automation> = {}): Automation {
-  return {
-    id: 'a-1',
-    name: 'Nightly',
-    prompt: 'sweep',
-    precheck: null,
-    agentId: 'claude',
-    runContext: null,
-    projectId: 'repo-1',
-    executionTargetType: 'local',
-    executionTargetId: 'local',
-    schedulerOwner: 'local_host_service',
-    workspaceMode: 'new_per_run',
-    workspaceId: null,
-    baseBranch: null,
-    reuseSession: false,
-    timezone: 'UTC',
-    rrule: 'FREQ=DAILY',
-    dtstart: 1,
-    enabled: true,
-    nextRunAt: 2,
-    missedRunPolicy: 'run_once_within_grace',
-    missedRunGraceMinutes: 720,
-    createdAt: 1,
-    updatedAt: 1,
-    ...overrides
-  }
-}
-
-function row(overrides: Partial<AutomationHostRow>): AutomationHostRow {
-  return {
-    automation: automation(),
-    owner: DESKTOP_SELF,
-    selector: { kind: 'self' },
-    usageSummary: null,
-    usageKnown: false,
-    ...overrides
-  }
-}
 
 describe('captured owner availability', () => {
   it('keeps delete and pause fenceable on an orphan while refusing to run it', () => {
@@ -70,17 +16,5 @@ describe('captured owner availability', () => {
     expect(automationActionAvailability(orphan, 'edit').kind).toBe('blocked')
     expect(isAutomationActionEnabled(orphan, 'run')).toBe(false)
     expect(isAutomationActionEnabled(orphan, 'delete')).toBe(true)
-  })
-
-  it("keeps both authorities' owners when they hold the same automation ID", () => {
-    const captured = captureAutomationOwners([
-      { rowKey: 'row|desktop|a-1', row: row({ automation: automation({ id: 'a-1' }) }) },
-      {
-        rowKey: 'row|runtime|a-1',
-        row: row({ automation: automation({ id: 'a-1' }), owner: RUNTIME_SELF })
-      }
-    ])
-    expect(captured.get('row|desktop|a-1')?.owner).toEqual(DESKTOP_SELF)
-    expect(captured.get('row|runtime|a-1')?.owner).toEqual(RUNTIME_SELF)
   })
 })

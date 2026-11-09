@@ -1,3 +1,4 @@
+import './session-search-worker.test-fixture'
 import { appendFile, chmod, mkdir, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -31,7 +32,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  indexer?.close()
+  await indexer?.close()
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
   await harness.cleanup()
@@ -106,7 +107,7 @@ async function indexThenRestart(path: string, content: string): Promise<unknown[
   await writeFile(path, content)
   await newIndexer().start()
   const ids = messageIds()
-  indexer?.close()
+  await indexer?.close()
   resetSessionParseCacheForTests()
   resetTranscriptConsumersForTests()
   return ids

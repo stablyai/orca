@@ -4,7 +4,7 @@ import type {
 } from '../remote-runtime/host-status/runtime-host-status'
 import type { ExecutionHostId, ExecutionHostKind } from '../execution-host'
 import type { RuntimeCompatVerdict } from '../protocol-compat'
-import type { RuntimeStatus } from '../runtime-types'
+import type { RuntimeStatus } from '../runtime-session-contracts'
 import type { SshConnectionStatus } from '../ssh-types'
 import type { RuntimeEnvironmentSource } from '../remote-runtime/host-catalog/runtime-environments'
 import type { ManagedOrcadDeploymentSummary } from './managed-orcad-execution-host'

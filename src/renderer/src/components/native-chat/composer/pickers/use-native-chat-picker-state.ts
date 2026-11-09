@@ -73,6 +73,7 @@ export function useNativeChatPickerState(args: {
   /** Refresh host catalogs on every / or $ menu opening, even in resting chats. */
   onPickerOpened?: () => void
   onPickerDemand?: (open: boolean) => void
+  skillsChecking?: boolean
   textareaRef: RefObject<NativeChatComposerInput | null>
   setDraft: (value: string) => void
   setCaret: Dispatch<SetStateAction<number>>
@@ -93,6 +94,7 @@ export function useNativeChatPickerState(args: {
     commandAvailable,
     onPickerOpened,
     onPickerDemand,
+    skillsChecking = false,
     textareaRef,
     setDraft,
     setCaret,
@@ -119,7 +121,7 @@ export function useNativeChatPickerState(args: {
   const [dismissed, setDismissed] = useState<{ context: string; triggerKey: string } | null>(null)
   const skillOriginRef = useRef<string | null>(null)
   const lastOpenKeyRef = useRef<string | null>(null)
-  const autocomplete = useMemo<ComposerAutocomplete>(
+  const derivedAutocomplete = useMemo<ComposerAutocomplete>(
     () =>
       recalledFromHistory || disabled
         ? { mode: 'none' }
@@ -147,6 +149,13 @@ export function useNativeChatPickerState(args: {
       sessionSkills,
       commandAvailable
     ]
+  )
+  const autocomplete = useMemo(
+    () =>
+      skillsChecking && derivedAutocomplete.mode === 'slash'
+        ? { ...derivedAutocomplete, skillsChecking }
+        : derivedAutocomplete,
+    [derivedAutocomplete, skillsChecking]
   )
 
   useEffect(() => {

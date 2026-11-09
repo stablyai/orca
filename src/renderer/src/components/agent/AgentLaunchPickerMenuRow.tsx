@@ -115,6 +115,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
     return (
       <AgentDefaultContextMenu isDefault={isDefault} onSetDefault={setDefault}>
         <DropdownMenuItem
+          className="min-h-9"
           disabled={disabled || launchBlocked || !entry.surfaces.length}
           data-search-default={searchDefault || undefined}
           aria-description={launchBlocked ? terminalPendingLabel(t) : undefined}
@@ -210,6 +211,7 @@ export const AgentPickerMenuRow = memo(function AgentPickerMenuRow({
               type="button"
               variant="menu-launch"
               size="menu"
+              className="h-9"
               aria-disabled={launchBlocked || undefined}
               aria-describedby={launchBlocked ? reasonId : undefined}
             >

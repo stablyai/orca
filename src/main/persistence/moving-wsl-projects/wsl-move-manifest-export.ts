@@ -24,11 +24,11 @@ import type { Repo } from '../../../shared/repo-types'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId, getRepoMainWorktreeId } from '../../../shared/worktree/id'
 import { computeOrcadMigrationManifestSha256 } from '../../orcad/orcad-migration-manifest-digest'
-import { hasDormantState } from '../../ssh/orcad-migration-manifest-export'
+import { hasDormantState } from '../migrating-orcad-catalog/orcad-migration-dormant-state'
 import {
   rewriteOrcadMigrationPayloadPaths,
   rewriteOrcadMigrationWorktreeId
-} from '../../ssh/orcad-migration-path-rewrite'
+} from '../migrating-orcad-catalog/path-rewrite/orcad-migration-path-rewrite'
 import type { Store } from '../loading-store/store'
 import { compareKeys } from '../migrating-orcad-catalog/orcad-source-key-order'
 import { wslUncPathToLinux } from '../../../shared/wsl-paths'

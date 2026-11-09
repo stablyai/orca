@@ -35,8 +35,9 @@ describe('OpenAiTranscriptionSession', () => {
       if (!(form instanceof FormData)) {
         throw new Error('Expected multipart body')
       }
-      expect(form.get('model')).toBe('gpt-4o-mini-transcribe')
-      expect(form.get('response_format')).toBe('json')
+      expect(form.get('model')).toBe('gpt-transcribe')
+      expect(form.getAll('languages[]')).toEqual(['de'])
+      expect(form.has('language')).toBe(false)
       const file = form.get('file')
       if (!(file instanceof File)) {
         throw new Error('Expected WAV upload')
@@ -46,10 +47,7 @@ describe('OpenAiTranscriptionSession', () => {
       uploads.push(Buffer.from(await file.arrayBuffer()))
       return new Response(JSON.stringify({ text: ' complete dictation ' }))
     })
-    const session = new OpenAiTranscriptionSession(
-      'openai-gpt-4o-mini-transcribe',
-      () => 'test-key'
-    )
+    const session = new OpenAiTranscriptionSession('openai-gpt-transcribe', () => 'test-key', 'de')
     const input = new Float32Array([
       -2,
       -1,

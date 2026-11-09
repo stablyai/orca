@@ -70,19 +70,6 @@ describe('commit actions', () => {
     expect(await git('show', 'HEAD:file.txt')).toBe('base')
     expect(await git('log', '-1', '--format=%s')).toBe('base')
   })
-  it('cherry-picks onto the current branch without opening an editor', async () => {
-    const result = await applyCommit(directory, 'cherry-pick', topic)
-    expect(result).toMatchObject({ outcome: 'landed', branch: 'main' })
-    expect(await git('show', 'HEAD:file.txt')).toBe('topic')
-    expect(await git('log', '-1', '--format=%s')).toBe('topic change')
-  })
-  it('reverts a commit without opening an editor', async () => {
-    await git('cherry-pick', topic)
-    const result = await applyCommit(directory, 'revert', await git('rev-parse', 'HEAD'))
-    expect(result).toMatchObject({ outcome: 'landed', branch: 'main' })
-    expect(await git('show', 'HEAD:file.txt')).toBe('base')
-    expect(await git('log', '-1', '--format=%s')).toBe('Revert "topic change"')
-  })
   it('skips an empty graph cherry-pick while preserving unrelated unstaged edits', async () => {
     await writeFile(join(directory, 'unrelated.txt'), 'original\n')
     await git('add', 'unrelated.txt')

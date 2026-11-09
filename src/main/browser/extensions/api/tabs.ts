@@ -1,6 +1,7 @@
 /// <reference types="chrome" />
+import { requireOpenableUrl } from '../tabs-and-windows/browser-extension-requested-navigation'
+
 import { z } from 'zod'
-import { resolveBrowserExtensionRequestedUrl } from '../../../../shared/browser/extensions/browser-extension-url'
 import {
   BrowserExtensionApiError,
   defineBrowserExtensionMethod,
@@ -75,22 +76,6 @@ const updatePropertiesSchema = z
   .object({ url: z.string(), muted: z.boolean(), active: z.boolean(), highlighted: z.boolean() })
   .partial()
   .loose()
-
-/** Resolves an extension-requested URL through Orca's rules; extension pages must be loaded in `sess`. */
-export function requireOpenableUrl(
-  caller: BrowserExtensionCaller,
-  rawUrl: string | undefined,
-  sess: Electron.Session
-): string {
-  const resolved = resolveBrowserExtensionRequestedUrl(rawUrl, caller.extension.id)
-  if (
-    !resolved ||
-    (resolved.kind === 'extension' && !sess.extensions.getExtension(resolved.extensionId))
-  ) {
-    throw new BrowserExtensionApiError(`Cannot open URL: ${rawUrl ?? ''}`)
-  }
-  return resolved.url
-}
 
 async function createTab(
   caller: BrowserExtensionCaller,

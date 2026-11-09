@@ -99,6 +99,27 @@ describe('structured chat rewind', () => {
     expect([...(view.result.current.surface?.eligibleItemIds ?? [])]).toEqual(['later'])
   })
 
+  it('offers rewind only below the fork divider', async () => {
+    const props = input()
+    const marker: AgentJournalRenderItem = {
+      ...item('orca:forked-from', 11),
+      body: {
+        kind: 'status',
+        presentation: 'forked-from',
+        text: 'Forked from Original',
+        forkedFrom: { sessionId: 'original' }
+      }
+    }
+    const view = render({
+      ...props,
+      state: { ...props.state, items: [...props.state.items, marker] }
+    })
+    expect([...(view.result.current.surface?.eligibleItemIds ?? [])]).toEqual(['later'])
+    const confirm = vi.fn().mockResolvedValue(true)
+    await act(() => view.result.current.request('user', confirm))
+    expect(confirm).not.toHaveBeenCalled()
+  })
+
   it('awaits the suffix sequence in the same epoch before unblocking', async () => {
     const props = input()
     props.send.mockResolvedValue({
