@@ -125,6 +125,54 @@ export function getUnreadRunMailbox(
   )
 }
 
+export type RunEventMessageRow = Pick<
+  MessageRow,
+  'id' | 'type' | 'from_handle' | 'subject' | 'sequence' | 'created_at'
+>
+
+/** Read-only page of Run mail after a sequence; the coordinator handle covers direct mail check later routes in. */
+export function getRunEventMessages(
+  this: OrchestrationDb,
+  run: Pick<RunRow, 'id' | 'coordinator_handle'>,
+  afterSequence: number
+): RunEventMessageRow[] {
+  const handles = [`run:${run.id}`, run.coordinator_handle].filter((handle) => handle !== null)
+  const rows = this.db
+    .prepare(
+      `SELECT id, type, from_handle, subject, sequence, created_at FROM messages
+       WHERE run_id = ? AND sequence > ? AND to_handle IN (${handles.map(() => '?').join(',')})
+         AND delivery_contract = 'current_delivery' AND type != 'heartbeat'
+       ORDER BY sequence LIMIT 100`
+    )
+    .all(run.id, afterSequence, ...handles)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the SELECT names exactly the columns of this row type.
+  return rows as RunEventMessageRow[]
+}
+
+export function getLatestMessageSequence(this: OrchestrationDb): number {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an aggregate SELECT always returns one row with this column.
+  const row = this.db.prepare('SELECT MAX(sequence) AS sequence FROM messages').get() as {
+    sequence: number | null
+  }
+  return row.sequence ?? 0
+}
+
+/** The live Dispatches of a Run that have a pane whose hook state can be read. */
+export function getLiveRunDispatchPanes(
+  this: OrchestrationDb,
+  runId: string
+): { id: string; task_id: string; assignee_pane_key: string }[] {
+  const rows = this.db
+    .prepare(
+      `SELECT id, task_id, assignee_pane_key FROM dispatch_contexts
+       WHERE run_id = ? AND status IN ('pending', 'dispatched') AND assignee_pane_key IS NOT NULL
+       ORDER BY rowid`
+    )
+    .all(runId)
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the SELECT names exactly the columns of this row type.
+  return rows as { id: string; task_id: string; assignee_pane_key: string }[]
+}
+
 export function hasOutstandingRunDelivery(this: OrchestrationDb, runId: string): boolean {
   return this.hasOutstandingMailboxDelivery(`run:${runId}`)
 }
@@ -137,6 +185,9 @@ export type RunDeliveryMethods = {
   getRunMailboxHistory: typeof getRunMailboxHistory
   getUnreadRunMailbox: typeof getUnreadRunMailbox
   hasOutstandingRunDelivery: typeof hasOutstandingRunDelivery
+  getRunEventMessages: typeof getRunEventMessages
+  getLatestMessageSequence: typeof getLatestMessageSequence
+  getLiveRunDispatchPanes: typeof getLiveRunDispatchPanes
 }
 
 export function attachRunDelivery(ctor: { prototype: object }): void {
@@ -147,6 +198,9 @@ export function attachRunDelivery(ctor: { prototype: object }): void {
     acknowledgeRunDelivery,
     getRunMailboxHistory,
     getUnreadRunMailbox,
-    hasOutstandingRunDelivery
+    hasOutstandingRunDelivery,
+    getRunEventMessages,
+    getLatestMessageSequence,
+    getLiveRunDispatchPanes
   })
 }

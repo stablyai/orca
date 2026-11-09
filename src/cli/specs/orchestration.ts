@@ -122,6 +122,19 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'watch'],
+    summary: "Stream a Run's mail arrivals and worker state changes as NDJSON",
+    usage:
+      'orca orchestration watch --run <run_id> [--terminal <handle>] [--types message,worker_state] [--since <cursor>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'run', 'terminal', 'types', 'since'],
+    identityFlagRoles: { terminal: 'caller' },
+    notes: [
+      'Prints one JSON event per line until the watcher is fenced or the Run is gone: message (id, type, from, subject; never the body), worker_state (working, blocked, waiting or done, with since and lastTool), lost (the cursor is unknown here; reading restarts from now) and end.',
+      'Watching marks nothing read and takes no Delivery; read and handle mail with orchestration check. Mail that check routes in from a settled worker keeps its original position and may not be announced.',
+      'The first output is the current state of each live worker, marked snapshot. Every message and worker_state line carries a cursor; pass the last one to --since to resume. Worker state changes after it are replayed, or re-sent as a snapshot after an Orca restart or a long gap. A fenced watcher prints end and exits 1.'
+    ]
+  },
+  {
     path: ['orchestration', 'reply'],
     summary: 'Reply to a message',
     usage:

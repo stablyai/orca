@@ -37,6 +37,7 @@ import {
   RuntimeMessageWaiters,
   type RuntimeMessageWaiter
 } from '../orchestration/mailbox/runtime-message-waiters'
+import { RunEventObservers } from '../orchestration/mailbox/run-event-observers'
 import type { WorkerTurnStopReportDeps } from '../orchestration/workers/turn-stops/worker-turn-stop-report'
 import type { RuntimeSkillCommands } from '../integrations/skill/runtime-skill-command-surface'
 import { RuntimeTerminalStreamConsumers } from '../terminal/output/runtime-terminal-stream-consumers'
@@ -222,8 +223,10 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     getDb: () => this._orchestrationDb,
     getTerminal: (ptyId) => this.getOrchestrationMailboxTerminal(ptyId),
     getTerminalProcessIncarnation: (handle) => this.getTerminalProcessIncarnation(handle),
-    onRoutedMessageTypes: (mailboxHandle, types) =>
-      this.messageWaiters.notifyRouted(mailboxHandle, types),
+    onRoutedMessageTypes: (mailboxHandle, types) => {
+      this.messageWaiters.notifyRouted(mailboxHandle, types)
+      this.runEventObservers.wake()
+    },
     onForeignMailboxRouted: (mailboxHandle, messageType) =>
       this.notifyMessageArrived(mailboxHandle, messageType)
   })
@@ -304,6 +307,8 @@ export abstract class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWith
     })
 
   protected readonly messageWaiters = new RuntimeMessageWaiters()
+
+  readonly runEventObservers = new RunEventObservers()
 
   protected readonly workerTurnStopReportDeps: WorkerTurnStopReportDeps = {
     getDb: () => this._orchestrationDb,

@@ -6,6 +6,7 @@ import { ORCHESTRATION_FEDERATION_METHODS } from './federation/federation-method
 import { ORCHESTRATION_MUTATION_REQUEST_METHODS } from './runs/mutation-request-show'
 import { ORCHESTRATION_SEND_METHODS } from './messaging/send-methods'
 import { ORCHESTRATION_CHECK_METHODS } from './messaging/check-methods'
+import { ORCHESTRATION_EVENTS_METHODS } from './messaging/events-method'
 import { ORCHESTRATION_MESSAGE_METHODS } from './messaging/message-methods'
 import { ORCHESTRATION_DISPATCH_METHODS } from './runs/dispatch-methods'
 import { ORCHESTRATION_ASK_METHODS } from './messaging/ask-methods'
@@ -22,6 +23,7 @@ export const ORCHESTRATION_METHODS = requiringOrcadFeature('orchestration', [
   ...ORCHESTRATION_MUTATION_REQUEST_METHODS,
   ...ORCHESTRATION_SEND_METHODS,
   ...ORCHESTRATION_CHECK_METHODS,
+  ...ORCHESTRATION_EVENTS_METHODS,
   ...ORCHESTRATION_MESSAGE_METHODS,
   ...ORCHESTRATION_DISPATCH_METHODS,
   ...ORCHESTRATION_ASK_METHODS,

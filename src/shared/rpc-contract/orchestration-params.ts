@@ -62,6 +62,17 @@ export const CheckParams = z
     }
   })
 
+export const ORCHESTRATION_EVENT_TYPES = ['message', 'worker_state'] as const
+
+export const EventsParams = z.object({
+  runId: requiredString('Missing --run'),
+  terminal: OptionalString,
+  terminalPaneKey: OptionalString,
+  types: z.array(z.enum(ORCHESTRATION_EVENT_TYPES)).optional(),
+  sinceCursor: OptionalString,
+  timeoutMs: OptionalFiniteNumber
+})
+
 export const ReplyParams = z.object({
   id: requiredString('Missing --id'),
   body: requiredString('Missing --body'),

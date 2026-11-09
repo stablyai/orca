@@ -6,7 +6,7 @@ import {
 } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
 
-async function runtimeLacks(client: RuntimeClient, capability: string): Promise<boolean> {
+export async function runtimeLacks(client: RuntimeClient, capability: string): Promise<boolean> {
   const status = await client.call<RuntimeStatus>('status.get')
   return !status.result.capabilities?.includes(capability)
 }

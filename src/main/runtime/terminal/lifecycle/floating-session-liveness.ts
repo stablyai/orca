@@ -193,5 +193,6 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
       this.messageWaiters.notifyPrefix(questionAnswerWaitPrefix(handle.slice('dispatch:'.length)))
     }
     this.orchestrationMailboxNotifications.notifyMessageArrived(handle, messageType)
+    this.runEventObservers.wake()
   }
 }
