@@ -8,7 +8,7 @@ import {
 import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control/ai/settings/source-control-ai-settings-types'
 import type { GlobalSettings } from '../../../../../../shared/global-settings-types'
 
-type RepoActionRecipe = NonNullable<
+export type RepoActionRecipe = NonNullable<
   NonNullable<RepoSourceControlAiOverrides['actionOverrides']>[SourceControlActionId]
 >
 
