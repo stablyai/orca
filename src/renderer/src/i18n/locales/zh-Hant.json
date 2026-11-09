@@ -20401,7 +20401,10 @@
           "onCloud": "在任何面板中按 {{shortcut}}。{{model}} 在雲端執行。",
           "offTitle": "聽寫已關閉",
           "offDescription": "開啟後，可在任何面板中按 {{shortcut}} 聽寫。",
-          "savedMicrophone": "你的麥克風"
+          "savedMicrophone": "你的麥克風",
+          "description": "在任何面板中用說話取代打字。語音在這台電腦上辨識，你的音訊不會離開這裡。",
+          "setUp": "設定",
+          "asksForMicrophone": "Orca 會要求麥克風權限。"
         },
         "quality": {
           "unsupported": "不支援你的語言",
