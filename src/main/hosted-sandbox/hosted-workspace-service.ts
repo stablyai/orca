@@ -112,14 +112,10 @@ export function installHostedWorkspaceService(deps: {
       if (event.phase === 'ready' || event.phase === 'failed') {
         wakes.delete(event.workspaceId)
       }
-      const runtimeEnvironmentId =
-        event.runtimeEnvironmentId ??
-        findCloudRuntime(deps.userDataPath, event.workspaceId)?.runtime.runtimeEnvironmentId
       broadcast(CH.wakeProgress, {
         ...event,
         source,
-        at: Date.now(),
-        ...(runtimeEnvironmentId ? { runtimeEnvironmentId } : {})
+        at: Date.now()
       } satisfies CloudWakeProgressEvent)
       if (event.phase === 'connecting' && event.source !== 'restart') {
         void announceReadyWhenRunning(event.workspaceId, event.startedAt)

@@ -46,6 +46,11 @@ export function interruptedTurnKey(
   return `${paneKey}\u0000${entry.stateStartedAt ?? entry.updatedAt}`
 }
 
+/** True once some path (a cold-restore resume or a restart nudge) sent this turn's `continue`. */
+export function isInterruptedTurnContinued(key: string): boolean {
+  return continuedInterruptedTurns.has(key)
+}
+
 /** Called when a resume that carries `continue` actually launches (startups are often built and
  *  discarded, e.g. on every reattach check). */
 export function markInterruptedTurnContinued(key: string | undefined): void {

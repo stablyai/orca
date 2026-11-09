@@ -1,13 +1,13 @@
 import { useSyncExternalStore } from 'react'
 import {
-  getWakeInputPreview,
+  getWakeInputCount,
   getWakeInputVersion,
   isWorkspaceWaking,
   subscribeWakeInput
 } from '@/components/terminal-pane/input/wake-input-buffer'
 
-/** Whether typing into this workspace is being held for its woken terminal, and what is held. */
-export function useWakeInput(workspaceId: string): { waking: boolean; pending: string } {
+/** Whether typing into this workspace is being held for its woken terminal, and how much. */
+export function useWakeInput(workspaceId: string): { waking: boolean; pending: number } {
   // Read through the snapshot version: the compiler memoizes plain calls on their arguments, so
   // the reads must depend on the store version to see new typing.
   const version = useSyncExternalStore(subscribeWakeInput, getWakeInputVersion)
@@ -17,6 +17,6 @@ export function useWakeInput(workspaceId: string): { waking: boolean; pending: s
 function readWakeInput(
   workspaceId: string,
   _version: number
-): { waking: boolean; pending: string } {
-  return { waking: isWorkspaceWaking(workspaceId), pending: getWakeInputPreview(workspaceId) }
+): { waking: boolean; pending: number } {
+  return { waking: isWorkspaceWaking(workspaceId), pending: getWakeInputCount(workspaceId) }
 }

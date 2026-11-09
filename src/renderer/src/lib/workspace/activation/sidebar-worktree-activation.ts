@@ -104,8 +104,7 @@ export async function resumeEphemeralVmWorkspace(worktreeId: string): Promise<vo
       }
       // A wake main reports (waking → ready/failed) settles the hold itself; the answer to this
       // call can come before the woken terminal is attached. Settle here only when no wake ran.
-      const reported = getCloudWorkspaceSnapshot().wake[worktreeId]
-      if (reported && reported.startedAt >= startedAt - 5_000) {
+      if (getCloudWorkspaceSnapshot().wake[worktreeId]) {
         return
       }
       endWorkspaceWake(

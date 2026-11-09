@@ -16,10 +16,26 @@ import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../shared/agent-status/
 import { INTERRUPTED_TURN_CONTINUE_PROMPT } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
   interruptedTurnKey,
+  isInterruptedTurnContinued,
   markInterruptedTurnContinued
 } from '@/components/terminal-pane/pty-connection/startup/cold-restore-resume-startup'
+import { paneReceivedWakeTyping } from '@/components/terminal-pane/input/wake-input-buffer'
+import { inspectRuntimeTerminalProcess } from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
+import {
+  isAgentForegroundWrapperProcess,
+  isExpectedAgentProcess
+} from '../../../../../shared/agent-status/process/agent-process-recognition'
 
-type ArmedTurn = { paneKey: string; agent: TuiAgent; turnKey: string; armedAt: number }
+type ArmedTurn = {
+  paneKey: string
+  agent: TuiAgent
+  turnKey: string
+  armedAt: number
+  /** The terminal the agent ran in when armed: only a report from a different one is the relaunch. */
+  terminalHandle: string | null
+  /** The pane's PTY when armed (the relaunch may reuse the id; it is only a hint). */
+  ptyIdAtArm: string | null
+}
 
 /** How long after the restart settles a relaunched agent may take to come up. */
 const RELAUNCH_WAIT_MS = 90_000
@@ -47,6 +63,7 @@ type StatusEntry = {
   worktreeId?: string
   tabId?: string
   paneKey: string
+  terminalHandle?: string
 }
 
 function paneWorkspaceId(entry: StatusEntry, tabWorkspace: Map<string, string>): string | null {
@@ -85,7 +102,9 @@ export function armInterruptedTurnsForHostRestart(workspaceId: string, now = Dat
       paneKey: entry.paneKey,
       agent: entry.agentType as TuiAgent,
       turnKey: interruptedTurnKey(entry, entry.paneKey),
-      armedAt: now
+      armedAt: now,
+      terminalHandle: entry.terminalHandle ?? null,
+      ptyIdAtArm: getPtyIdForPaneKey(entry.paneKey)
     })
   }
   trace(
@@ -109,6 +128,23 @@ function statusSince(paneKey: string, armedAt: number): StatusEntry | null {
   return entry && entry.updatedAt > armedAt ? entry : null
 }
 
+/** A report from the relaunched agent: newer than the restart and not from the terminal that died. */
+function relaunchReport(turn: ArmedTurn): StatusEntry | null {
+  const entry = statusSince(turn.paneKey, turn.armedAt)
+  if (!entry) {
+    return null
+  }
+  // The old process can report its own interruption while dying; that is not the relaunch.
+  if (turn.terminalHandle && entry.terminalHandle === turn.terminalHandle) {
+    return null
+  }
+  return entry
+}
+
+function leafOf(paneKey: string): string {
+  return paneKey.slice(paneKey.lastIndexOf(':') + 1)
+}
+
 function continuedOnItsOwn(paneKey: string, armedAt: number): boolean {
   const entry = statusSince(paneKey, armedAt)
   // Working again with evidence newer than the restart: some other path already carried it on.
@@ -121,20 +157,27 @@ async function continueOne(turn: ArmedTurn, deps: ContinueDeps): Promise<boolean
   }
   const deadline = deps.now() + RELAUNCH_WAIT_MS
   while (deps.now() < deadline) {
-    if (continuedOnItsOwn(turn.paneKey, turn.armedAt)) {
+    if (
+      continuedOnItsOwn(turn.paneKey, turn.armedAt) ||
+      // A cold-restore resume already carried `continue`, or the person is driving the pane.
+      isInterruptedTurnContinued(turn.turnKey) ||
+      paneReceivedWakeTyping(leafOf(turn.paneKey), turn.armedAt)
+    ) {
       return false
     }
     const ptyId = deps.ptyIdFor(turn.paneKey)
     // The relaunched agent already reported (its hooks only run inside the agent), so its TUI is
-    // up and reading input: submit straight away. Some agents (Codex) resume idle and never emit
-    // the paste-readiness signal the generic path waits for.
-    const reported = statusSince(turn.paneKey, turn.armedAt)
+    // up and reading input: submit once it has settled and owns the terminal. Some agents (Codex)
+    // resume idle and never emit the paste-readiness signal the generic path waits for.
+    const reported = relaunchReport(turn)
     if (ptyId && reported) {
       trace(
         `reported ${turn.paneKey.slice(-4)} ${reported.state} age=${deps.now() - reported.updatedAt}`
       )
       if (
         deps.now() - reported.updatedAt >= SETTLE_AFTER_REPORT_MS &&
+        (await deps.agentInForeground(ptyId, turn.agent)) &&
+        !isInterruptedTurnContinued(turn.turnKey) &&
         (await deps.submit({ ptyId, content: INTERRUPTED_TURN_CONTINUE_PROMPT }))
       ) {
         sentTurns.add(turn.turnKey)
@@ -165,6 +208,20 @@ type ContinueDeps = {
   ptyIdFor: (paneKey: string) => string | null
   send: typeof sendFollowupPromptWhenAgentReady
   submit: typeof sendBracketedPasteToRunningAgent
+  /** The relaunched agent (not a shell) is the terminal's foreground process. */
+  agentInForeground: (ptyId: string, agent: TuiAgent) => Promise<boolean>
+}
+
+async function agentOwnsTerminal(ptyId: string, agent: TuiAgent): Promise<boolean> {
+  try {
+    const foreground = (await inspectRuntimeTerminalProcess(ptyId)).foregroundProcess ?? ''
+    return (
+      isExpectedAgentProcess(foreground, TUI_AGENT_CONFIG[agent].expectedProcess) ||
+      isAgentForegroundWrapperProcess(foreground)
+    )
+  } catch {
+    return false
+  }
 }
 
 const defaultDeps: ContinueDeps = {
@@ -172,7 +229,8 @@ const defaultDeps: ContinueDeps = {
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   ptyIdFor: getPtyIdForPaneKey,
   send: sendFollowupPromptWhenAgentReady,
-  submit: sendBracketedPasteToRunningAgent
+  submit: sendBracketedPasteToRunningAgent,
+  agentInForeground: agentOwnsTerminal
 }
 
 /** The host is back: send `continue` to every armed agent once its relaunched TUI reads input. */

@@ -65,7 +65,8 @@ export function CloudWakingOverlay({
   leaving = false,
   autoFocus = true,
   typeThrough = false,
-  pendingInput = '',
+  pendingInput = 0,
+  onClearPending,
   onRetry,
   onRestart,
   onDismiss
@@ -75,8 +76,9 @@ export function CloudWakingOverlay({
   leaving?: boolean
   /** Leave the terminal visible and typeable under a small pill; typing is delivered on wake. */
   typeThrough?: boolean
-  /** Typing held for the woken terminal, shown so the keys read as accepted. */
-  pendingInput?: string
+  /** Characters held for the woken terminal (a count, never the text: it may be a password). */
+  pendingInput?: number
+  onClearPending?: () => void
   /** Move focus into the overlay (only when it covers the pane that had focus). */
   autoFocus?: boolean
   onRetry: () => void
@@ -118,14 +120,6 @@ export function CloudWakingOverlay({
   // Announced once each (the text changes only when crossing 20 s and 60 s).
   const slowAnnouncement = stuck ? hint : slow ? hint : ''
   const passThrough = typeThrough && !failed
-  // Last characters typed, with Enter shown as a return glyph so a typed command reads as queued.
-  const pendingPreview = pendingInput
-    ? pendingInput
-        .slice(-48)
-        .replace(/\r\n?|\n/g, '⏎')
-        .replace(/\t/g, '⇥')
-        .replace(/[\x7f\b]/g, '⌫')
-    : ''
   return (
     <div
       ref={rootRef}
@@ -227,15 +221,35 @@ export function CloudWakingOverlay({
               </span>
             </div>
             {hint ? <p className="text-center text-xs text-muted-foreground">{hint}</p> : null}
-            {passThrough && pendingPreview ? (
+            {passThrough && pendingInput > 0 ? (
               <div
-                className="flex max-w-xs items-center gap-1.5 rounded-md border border-dashed border-border bg-card/95 px-2 py-1 text-xs shadow-xs"
-                data-cloud-pending-input=""
+                className="flex items-center gap-1.5 rounded-md border border-dashed border-border bg-card/95 py-0.5 pr-0.5 pl-2 text-xs shadow-xs"
+                data-cloud-pending-input={pendingInput}
               >
-                <span className="shrink-0 text-muted-foreground">
-                  {t('orcaCloudWorkspace.overlay.pendingInput', 'Sending when awake')}
+                <span className="text-muted-foreground">
+                  {t(
+                    'orcaCloudWorkspace.overlay.pendingKeys',
+                    '{{count}} keys waiting · go to the terminal when it’s up',
+                    {
+                      count: pendingInput,
+                      defaultValue_one: '{{count}} key waiting · goes to the terminal when it’s up'
+                    }
+                  )}
                 </span>
-                <code className="truncate font-mono text-foreground/70">{pendingPreview}</code>
+                {onClearPending ? (
+                  <Button
+                    size="icon-xs"
+                    variant="ghost"
+                    className="text-muted-foreground"
+                    aria-label={t(
+                      'orcaCloudWorkspace.overlay.clearPendingKeys',
+                      'Discard waiting keys'
+                    )}
+                    onClick={onClearPending}
+                  >
+                    <X />
+                  </Button>
+                ) : null}
               </div>
             ) : null}
             {stuck ? (

@@ -1,46 +1,24 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import {
   WAKE_INPUT_CAP,
   WAKE_INPUT_MAX_HOLD_MS,
+  WAKE_INPUT_SETTLED_GRACE_MS,
+  applyWakeInput,
   beginWorkspaceWake,
   captureWakeInput,
+  clearWakeInput,
   endWorkspaceWake,
-  getWakeInputPreview,
+  getWakeInputCount,
   isWorkspaceWaking,
+  paneReceivedWakeTyping,
   pumpWakeInputForTests,
   rebindWakeInputTarget,
   resetWakeInputForTests,
-  sanitizeWakeInput
+  subscribeWakeInputDelivered
 } from './wake-input-buffer'
-
-describe('remount', () => {
-  it('delivers through the newest session of the same leaf', () => {
-    const delivered: { old: string[]; next: string[] } = { old: [], next: [] }
-    let ready = false
-    beginWorkspaceWake('ws', Date.now())
-    captureWakeInput(
-      'ws',
-      'leaf-1',
-      'ls\r',
-      (d) => void delivered.old.push(d),
-      () => false
-    )
-    pumpWakeInputForTests()
-    rebindWakeInputTarget(
-      'ws',
-      'leaf-1',
-      (d) => void delivered.next.push(d),
-      () => ready
-    )
-    ready = true
-    pumpWakeInputForTests()
-    expect(delivered).toEqual({ old: [], next: ['ls\r'] })
-  })
-})
 
 afterEach(() => {
   resetWakeInputForTests()
-  vi.useRealTimers()
 })
 
 function pane(ready = false) {
@@ -54,40 +32,43 @@ function pane(ready = false) {
   }
 }
 
+const T = 1_800_000_000_000
+
 describe('wake input buffer', () => {
   it('does nothing when the workspace is not waking', () => {
     const p = pane(true)
     expect(captureWakeInput('ws', 'leaf-1', 'ls', p.deliver, p.isReady)).toBe(false)
   })
 
-  it('holds typing in order and delivers it exactly once after the pane re-attaches', () => {
+  it('inserts held typing once after re-attach, without ever replaying Enter', () => {
     const p = pane(false)
-    beginWorkspaceWake('ws', Date.now())
+    const deliveries: boolean[] = []
+    subscribeWakeInputDelivered((d) => void deliveries.push(d.submitted))
+    beginWorkspaceWake('ws', T)
     expect(isWorkspaceWaking('ws')).toBe(true)
     expect(captureWakeInput('ws', 'leaf-1', 'ec', p.deliver, p.isReady)).toBe(true)
     expect(captureWakeInput('ws', 'leaf-1', 'ho hi\r', p.deliver, p.isReady)).toBe(true)
-    expect(getWakeInputPreview('ws')).toBe('echo hi\r')
-    pumpWakeInputForTests()
+    expect(getWakeInputCount('ws')).toBe('echo hi'.length)
+    pumpWakeInputForTests(T + 100)
     expect(p.delivered).toEqual([])
     p.state.ready = true
-    pumpWakeInputForTests()
-    pumpWakeInputForTests()
-    expect(p.delivered).toEqual(['echo hi\r'])
-    expect(getWakeInputPreview('ws')).toBe('')
+    pumpWakeInputForTests(T + 200)
+    pumpWakeInputForTests(T + 300)
+    expect(p.delivered).toEqual(['echo hi'])
+    expect(deliveries).toEqual([true])
+    expect(paneReceivedWakeTyping('leaf-1', T)).toBe(true)
   })
 
   it('keeps order for keys typed after the wake ends but before delivery', () => {
     const p = pane(false)
-    beginWorkspaceWake('ws', Date.now())
+    beginWorkspaceWake('ws', T)
     captureWakeInput('ws', 'leaf-1', 'a', p.deliver, p.isReady)
-    pumpWakeInputForTests()
+    pumpWakeInputForTests(T)
     endWorkspaceWake('ws', 'ready')
-    // Still not attached: later keys queue behind the held ones.
     expect(captureWakeInput('ws', 'leaf-1', 'b', p.deliver, p.isReady)).toBe(true)
     p.state.ready = true
     pumpWakeInputForTests()
     expect(p.delivered).toEqual(['ab'])
-    // Delivered: the next key goes straight through.
     expect(captureWakeInput('ws', 'leaf-1', 'c', p.deliver, p.isReady)).toBe(false)
   })
 
@@ -103,58 +84,109 @@ describe('wake input buffer', () => {
 
   it('drops held typing when the wake fails', () => {
     const p = pane(false)
-    beginWorkspaceWake('ws', Date.now())
+    beginWorkspaceWake('ws', T)
     captureWakeInput('ws', 'leaf-1', 'rm -rf build\r', p.deliver, p.isReady)
     endWorkspaceWake('ws', 'failed')
     p.state.ready = true
     pumpWakeInputForTests()
     expect(p.delivered).toEqual([])
-    expect(getWakeInputPreview('ws')).toBe('')
+    expect(getWakeInputCount('ws')).toBe(0)
   })
 
-  it('caps held typing', () => {
+  it('drops (never delivers) at the max hold when nobody settles the wake', () => {
+    const p = pane(true)
+    beginWorkspaceWake('ws', T)
+    captureWakeInput('ws', 'leaf-1', 'late', p.deliver, p.isReady)
+    pumpWakeInputForTests(T + WAKE_INPUT_MAX_HOLD_MS + 1)
+    expect(p.delivered).toEqual([])
+    expect(isWorkspaceWaking('ws')).toBe(false)
+  })
+
+  it('drops typing a pane never re-attached to a while after the wake settles', () => {
     const p = pane(false)
-    beginWorkspaceWake('ws', Date.now())
+    beginWorkspaceWake('ws', T)
+    captureWakeInput('ws', 'leaf-1', 'ls', p.deliver, p.isReady)
+    endWorkspaceWake('ws', 'ready')
+    pumpWakeInputForTests(Date.now() + WAKE_INPUT_SETTLED_GRACE_MS + 1)
+    p.state.ready = true
+    pumpWakeInputForTests()
+    expect(p.delivered).toEqual([])
+    expect(getWakeInputCount('ws')).toBe(0)
+  })
+
+  it('never carries leftovers into the next wake', () => {
+    const p = pane(false)
+    beginWorkspaceWake('ws', T)
+    captureWakeInput('ws', 'leaf-1', 'old', p.deliver, p.isReady)
+    endWorkspaceWake('ws', 'ready')
+    beginWorkspaceWake('ws', T + 60_000)
+    expect(getWakeInputCount('ws')).toBe(0)
+  })
+
+  it('caps held typing, and × clears it', () => {
+    const p = pane(false)
+    beginWorkspaceWake('ws', T)
     captureWakeInput('ws', 'leaf-1', 'a'.repeat(WAKE_INPUT_CAP + 100), p.deliver, p.isReady)
-    expect(getWakeInputPreview('ws')).toHaveLength(WAKE_INPUT_CAP)
+    expect(getWakeInputCount('ws')).toBe(WAKE_INPUT_CAP)
+    clearWakeInput('ws')
+    expect(getWakeInputCount('ws')).toBe(0)
   })
 
   it('keeps panes separate', () => {
     const a = pane(false)
     const b = pane(false)
-    beginWorkspaceWake('ws', Date.now())
+    beginWorkspaceWake('ws', T)
     captureWakeInput('ws', 'leaf-1', 'one', a.deliver, a.isReady)
     captureWakeInput('ws', 'leaf-2', 'two', b.deliver, b.isReady)
-    pumpWakeInputForTests()
+    pumpWakeInputForTests(T)
     a.state.ready = true
     b.state.ready = true
-    pumpWakeInputForTests()
+    pumpWakeInputForTests(T + 1)
     expect(a.delivered).toEqual(['one'])
     expect(b.delivered).toEqual(['two'])
   })
 
-  it('stops holding after the max hold if nobody settles the wake', () => {
-    vi.useFakeTimers()
-    const p = pane(true)
-    beginWorkspaceWake('ws', Date.now())
-    captureWakeInput('ws', 'leaf-1', 'late', p.deliver, p.isReady)
-    vi.setSystemTime(Date.now() + WAKE_INPUT_MAX_HOLD_MS + 1)
-    pumpWakeInputForTests()
-    expect(p.delivered).toEqual(['late'])
-    expect(isWorkspaceWaking('ws')).toBe(false)
+  it('delivers through the newest session of the same leaf after a remount', () => {
+    const delivered: { old: string[]; next: string[] } = { old: [], next: [] }
+    let ready = false
+    beginWorkspaceWake('ws', T)
+    captureWakeInput(
+      'ws',
+      'leaf-1',
+      'ls',
+      (d) => void delivered.old.push(d),
+      () => false
+    )
+    pumpWakeInputForTests(T)
+    rebindWakeInputTarget(
+      'ws',
+      'leaf-1',
+      (d) => void delivered.next.push(d),
+      () => ready
+    )
+    ready = true
+    pumpWakeInputForTests(T + 1)
+    expect(delivered).toEqual({ old: [], next: ['ls'] })
   })
 })
 
-describe('sanitizeWakeInput', () => {
-  it('keeps plain typing, Enter, Tab and Backspace', () => {
-    expect(sanitizeWakeInput('git st\tatus\x7f\r')).toBe('git st\tatus\x7f\r')
+describe('applyWakeInput', () => {
+  const apply = (data: string, text = '') => applyWakeInput({ text, submitted: false }, data)
+
+  it('keeps plain text and Tab; notes Enter without keeping it', () => {
+    expect(apply('git st\tatus\r')).toEqual({ text: 'git st\tatus', submitted: true })
   })
 
-  it('drops Ctrl-C/Ctrl-D and other controls, and escape sequences (arrows, OSC, alt keys)', () => {
-    expect(sanitizeWakeInput('a\x03b\x04c')).toBe('abc')
-    expect(sanitizeWakeInput('\x1b[A\x1b[1;5Cls')).toBe('ls')
-    expect(sanitizeWakeInput('\x1bOPx')).toBe('x')
-    expect(sanitizeWakeInput('\x1b]0;title\x07y')).toBe('y')
-    expect(sanitizeWakeInput('\x1bbz')).toBe('z')
+  it('Backspace edits the held text and Ctrl-C clears it', () => {
+    expect(apply('lss\x7f -la').text).toBe('ls -la')
+    expect(apply('\x03', 'rm -rf /')).toEqual({ text: '', submitted: false })
+  })
+
+  it('drops escape sequences (arrows, OSC, alt keys) and other controls', () => {
+    expect(apply('a\x04b').text).toBe('ab')
+    expect(apply('\x1b[A\x1b[1;5Cls').text).toBe('ls')
+    expect(apply('\x1bOPx').text).toBe('x')
+    expect(apply('\x1b]0;title\x07y').text).toBe('y')
+    expect(apply('\x1bbz').text).toBe('z')
   })
 })

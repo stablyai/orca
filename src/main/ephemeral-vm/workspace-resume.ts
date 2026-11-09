@@ -108,6 +108,11 @@ export async function resumeEphemeralVmWorkspace(
   if (!result.ok) {
     restoreAfterFailedRecovery()
     if (archivedCheck && (await archivedCheck)) {
+      // Not a failed resume: the workspace is archived. Leave the record as it was.
+      updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
+        status: runtime.status,
+        lifecycleLastError: null
+      })
       throw new Error(CLOUD_WORKSPACE_ARCHIVED_ERROR)
     }
     throw new EphemeralVmFailureError({

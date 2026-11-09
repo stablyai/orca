@@ -8,6 +8,10 @@ const state: {
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => state } }))
 vi.mock('@/hooks/pane-key-pty-id', () => ({ getPtyIdForPaneKey: () => null }))
+vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection', () => ({
+  inspectRuntimeTerminalProcess: vi.fn()
+}))
+const continued = new Set<string>()
 vi.mock('@/lib/agent-session/messaging/paste/agent-followup-delivery', () => ({
   sendFollowupPromptWhenAgentReady: vi.fn()
 }))
@@ -17,7 +21,8 @@ vi.mock('@/lib/agent-session/messaging/paste/agent-paste-draft', () => ({
 vi.mock('@/components/terminal-pane/pty-connection/startup/cold-restore-resume-startup', () => ({
   interruptedTurnKey: (entry: { stateStartedAt?: number; updatedAt: number }, paneKey: string) =>
     `${paneKey}|${entry.stateStartedAt ?? entry.updatedAt}`,
-  markInterruptedTurnContinued: vi.fn()
+  markInterruptedTurnContinued: (key: string) => void continued.add(key),
+  isInterruptedTurnContinued: (key: string) => continued.has(key)
 }))
 
 const {
@@ -56,12 +61,17 @@ function deps(over: Partial<Parameters<typeof continueInterruptedTurns>[1]> = {}
       ptyIdFor: () => 'pty-1',
       send,
       submit,
+      agentInForeground: async () => true,
       ...over
     }
   }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  continued.clear()
+  const { resetWakeInputForTests } =
+    await import('@/components/terminal-pane/input/wake-input-buffer')
+  resetWakeInputForTests()
   resetInterruptedTurnContinueForTests()
   state.agentStatusByPaneKey = {}
   state.sleepingAgentSessionsByPaneKey = {}
@@ -162,5 +172,85 @@ describe('relaunched agent already reported', () => {
     expect(await continueInterruptedTurns('ws', d)).toBe(1)
     expect(submit).toHaveBeenCalledWith({ ptyId: 'pty-1', content: 'continue' })
     expect(send).not.toHaveBeenCalled()
+  })
+})
+
+describe('safety', () => {
+  function relaunched(over: Record<string, unknown> = {}) {
+    return working('tab-a:1', 'codex', {
+      state: 'done',
+      updatedAt: NOW + 1,
+      stateStartedAt: NOW + 1,
+      terminalHandle: 'term-new',
+      ...over
+    })
+  }
+
+  it('ignores a report from the terminal that died; accepts one from the relaunched terminal', async () => {
+    state.agentStatusByPaneKey = {
+      'tab-a:1': working('tab-a:1', 'codex', { terminalHandle: 'term-old' })
+    }
+    armInterruptedTurnsForHostRestart('ws', NOW)
+    state.agentStatusByPaneKey = { 'tab-a:1': relaunched({ terminalHandle: 'term-old' }) }
+    const stale = deps({ send: vi.fn(async () => false) })
+    expect(await continueInterruptedTurns('ws', stale.deps)).toBe(0)
+    expect(stale.submit).not.toHaveBeenCalled()
+
+    state.agentStatusByPaneKey = {
+      'tab-a:1': working('tab-a:1', 'codex', {
+        terminalHandle: 'term-old',
+        stateStartedAt: NOW - 1
+      })
+    }
+    armInterruptedTurnsForHostRestart('ws', NOW)
+    state.agentStatusByPaneKey = { 'tab-a:1': relaunched({ stateStartedAt: NOW + 2 }) }
+    const fresh = deps()
+    expect(await continueInterruptedTurns('ws', fresh.deps)).toBe(1)
+    expect(fresh.submit).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not paste into a shell: the agent must be the foreground process', async () => {
+    state.agentStatusByPaneKey = { 'tab-a:1': working('tab-a:1', 'codex') }
+    armInterruptedTurnsForHostRestart('ws', NOW)
+    state.agentStatusByPaneKey = { 'tab-a:1': relaunched() }
+    const { submit, deps: d } = deps({
+      agentInForeground: async () => false,
+      send: vi.fn(async () => false)
+    })
+    expect(await continueInterruptedTurns('ws', d)).toBe(0)
+    expect(submit).not.toHaveBeenCalled()
+  })
+
+  it('never sends twice when a cold-restore resume already carried continue', async () => {
+    state.agentStatusByPaneKey = { 'tab-a:1': working('tab-a:1', 'claude') }
+    armInterruptedTurnsForHostRestart('ws', NOW)
+    continued.add(`tab-a:1|${NOW - 30_000}`)
+    state.agentStatusByPaneKey = { 'tab-a:1': relaunched({ agentType: 'claude' }) }
+    const { send, submit, deps: d } = deps()
+    expect(await continueInterruptedTurns('ws', d)).toBe(0)
+    expect(submit).not.toHaveBeenCalled()
+    expect(send).not.toHaveBeenCalled()
+  })
+
+  it('leaves a pane alone once the person typed into it after the restart', async () => {
+    const buffer = await import('@/components/terminal-pane/input/wake-input-buffer')
+    state.agentStatusByPaneKey = { 'tab-a:1': working('tab-a:1', 'codex') }
+    armInterruptedTurnsForHostRestart('ws', NOW)
+    let ready = false
+    buffer.beginWorkspaceWake('ws', NOW)
+    buffer.captureWakeInput(
+      'ws',
+      '1',
+      'hi',
+      () => {},
+      () => ready
+    )
+    buffer.pumpWakeInputForTests(NOW + 5)
+    ready = true
+    buffer.pumpWakeInputForTests(NOW + 10)
+    state.agentStatusByPaneKey = { 'tab-a:1': relaunched() }
+    const { submit, deps: d } = deps()
+    expect(await continueInterruptedTurns('ws', d)).toBe(0)
+    expect(submit).not.toHaveBeenCalled()
   })
 })
