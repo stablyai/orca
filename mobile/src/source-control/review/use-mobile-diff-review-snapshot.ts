@@ -10,6 +10,11 @@ import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { loadMobileDiffReviewCommitSnapshot } from './mobile-diff-review-commit-loader'
 import type { MobileBranchCompareCache } from './mobile-diff-review-loaders'
+import {
+  readCachedReviewBranchCompare,
+  reviewBranchCompareNeedsRead,
+  type ReviewBranchCompareKey
+} from './mobile-diff-review-branch-compare-cache'
 import type { MobileDiffReviewQueueFilter } from './mobile-diff-review-queue'
 import type { ReviewScreenState } from './mobile-diff-review-screen-model'
 import {
@@ -59,11 +64,17 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
   )
   // The same git.status entry Changes shows, so Review opened from it starts from those rows.
   const worktreeReview = worktreeId !== '' && commitOid === null && filter !== 'commit'
-  const { data: statusRead } = useHostQuery(gitStatusQuery, { hostId, client }, target, NO_INPUT, {
-    enabled: worktreeReview
-  })
+  const { data: statusRead, dataUpdatedAt: statusReadAt } = useHostQuery(
+    gitStatusQuery,
+    { hostId, client },
+    target,
+    NO_INPUT,
+    { enabled: worktreeReview }
+  )
   // The status read the shown snapshot was built from; AWAITING while a build waits for its first read.
   const builtFromRef = useRef<GitStatusRead | typeof AWAITING | undefined>(undefined)
+  // The compare the current build read, so a git change that marked it stale rebuilds even when status held.
+  const builtCompareRef = useRef<ReviewBranchCompareKey | null>(null)
   // Reloads after a write wait for the rebuild they cause, so the screen's buttons match the new files.
   const buildWaitersRef = useRef<(() => void)[]>([])
   const settleWaiters = () => {
@@ -72,23 +83,12 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
     }
   }
 
-  const cacheBranchCompare = useCallback<MobileBranchCompareCache>(
-    async (key, read) => {
-      const queryKey = hostQueryKey(hostId, 'git.branchCompare', target, key)
-      const loaded = await queryClient.fetchQuery({ queryKey, queryFn: read })
-      // Only a compare that landed for this head is worth reusing; cached status can trail a commit.
-      if (loaded.result?.summary.headOid !== key.head) {
-        queryClient.removeQueries({ queryKey, exact: true })
-      }
-      return loaded
-    },
-    [hostId, queryClient, target]
-  )
-
-  const buildSnapshot = useEffectEvent(async (status: GitStatusRead | undefined) => {
+  // `sameStatus`: only the compare moved, so worktree diffs keyed to the shown status read still hold.
+  const buildSnapshot = useEffectEvent(async (status?: GitStatusRead, sameStatus = false) => {
     const generation = loadGenerationRef.current + 1
     loadGenerationRef.current = generation
     const isCurrent = () => generation === loadGenerationRef.current
+    builtCompareRef.current = null
     try {
       if (!worktreeId) {
         setScreenState({
@@ -170,6 +170,14 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
               throw err
             }
           )
+      const cacheBranchCompare: MobileBranchCompareCache = async (key, read) => {
+        // A superseded build's compare is never shown.
+        if (!isCurrent()) {
+          return { result: null }
+        }
+        builtCompareRef.current = key
+        return readCachedReviewBranchCompare(queryClient, { hostId, client }, target, key, read)
+      }
       const { snapshot, branch } = startMobileDiffReviewSnapshot(client, worktreeId, {
         status: statusInput,
         compareAgainstUpstream,
@@ -183,7 +191,9 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
         if (!isCurrent()) {
           return
         }
-        setStatusRevision(queryClient.getQueryState(statusKey)?.dataUpdatedAt ?? 0)
+        if (!sameStatus) {
+          setStatusRevision(queryClient.getQueryState(statusKey)?.dataUpdatedAt ?? 0)
+        }
         if (loaded) {
           setScreenState(withMobileDiffReviewBranch(state, loaded, worktreeId))
           setActionError(loaded.error ?? null)
@@ -224,12 +234,27 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
   }, [client, commitOid, connState, queryClient, reloadNonce, statusKey, worktreeReview])
 
   // A status read that changed what Changes shows rebuilds the snapshot; one in flight already brings its own.
-  useEffect(() => {
+  // A read that lands unchanged rebuilds too once a git change marked the shown compare stale; a compare
+  // still out is read again by its own build when it lands marked.
+  const rebuildOnStatusRead = useEffectEvent((read: GitStatusRead) => {
     const built = builtFromRef.current
-    if (worktreeReview && statusRead !== undefined && built !== AWAITING && statusRead !== built) {
-      void buildSnapshot(statusRead)
+    if (built === AWAITING) {
+      return
     }
-  }, [statusRead, worktreeReview])
+    const compare = builtCompareRef.current
+    const compareMarked =
+      compare !== null && reviewBranchCompareNeedsRead(queryClient, hostId, target, compare)
+    if (read !== built) {
+      void buildSnapshot(read)
+    } else if (compareMarked) {
+      void buildSnapshot(read, true)
+    }
+  })
+  useEffect(() => {
+    if (worktreeReview && statusRead !== undefined) {
+      rebuildOnStatusRead(statusRead)
+    }
+  }, [statusRead, statusReadAt, worktreeReview])
 
   // The compare base is read when a snapshot is built; a later setting change rebuilds without re-reading status.
   const shownCompareSettingRef = useRef(compareAgainstUpstream)

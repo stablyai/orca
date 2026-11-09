@@ -41,6 +41,7 @@ export const ProjectHostSetupClone = z.object({
   hostId: RequestedHostId,
   url: requiredString('Missing clone URL'),
   destination: requiredString('Missing clone destination'),
+  folderName: OptionalString,
   displayName: OptionalString
 })
 

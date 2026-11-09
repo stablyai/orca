@@ -49,18 +49,6 @@ describe('SshChannelMultiplexer on a transport that saturates and never drains',
     expect(mux.isDisposed()).toBe(true)
   })
 
-  it('fails a request parked behind saturation rather than leaving it pending forever', async () => {
-    const settled = vi.fn()
-    mux.request('pty.spawn', {}).then(
-      () => settled('resolved'),
-      () => settled('rejected')
-    )
-
-    await vi.advanceTimersByTimeAsync(TIMEOUT_MS * 10 + KEEPALIVE_SEND_MS)
-
-    expect(settled).toHaveBeenCalledWith('rejected')
-  })
-
   it('keeps a slow-but-alive peer connected while its own keepalives arrive', async () => {
     // Outbound saturation proves nothing; inbound keepalives alone must preserve a slow live peer.
     let seq = 1

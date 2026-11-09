@@ -1,8 +1,8 @@
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { GitGraphOpenButton } from './git-graph-open-button'
+import { CommitsHeaderIconButton } from './commits-header-icon-button'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronDown, CircleHelp, RefreshCw } from 'lucide-react'
-import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
@@ -55,7 +55,8 @@ export function GitHistoryPanel({
   onOpenCommit,
   onLoadCommitFiles,
   onOpenCommitFile,
-  onCommitAction
+  onCommitAction,
+  onOpenGitGraph
 }: {
   worktreeId?: string
   state: GitHistoryPanelState
@@ -70,6 +71,7 @@ export function GitHistoryPanel({
     event?: SourceControlRowOpenEvent
   ) => void
   onCommitAction?: (action: GitHistoryCommitAction, item: GitHistoryItem) => void
+  onOpenGitGraph?: (event: SourceControlRowOpenEvent) => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   const result = state.result
@@ -267,14 +269,10 @@ export function GitHistoryPanel({
             {result && <span className="text-[10px] font-medium tabular-nums">{count}</span>}
             {result?.hasMore && <span className="text-[10px] font-medium">+</span>}
           </button>
-          {worktreeId && <GitGraphOpenButton worktreeId={worktreeId} />}
+          {worktreeId && <GitGraphOpenButton worktreeId={worktreeId} onOpen={onOpenGitGraph} />}
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="my-auto h-auto w-auto p-0.5 text-muted-foreground hover:bg-transparent hover:text-muted-foreground dark:hover:bg-transparent [&_svg]:size-3"
+              <CommitsHeaderIconButton
                 aria-label={t(
                   'auto.components.right.sidebar.GitHistoryPanel.9289ba0cb9',
                   'What are refs?'
@@ -284,7 +282,7 @@ export function GitHistoryPanel({
                 }}
               >
                 <CircleHelp className="size-3.5" />
-              </Button>
+              </CommitsHeaderIconButton>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6} className="max-w-72">
               {t(
@@ -295,11 +293,7 @@ export function GitHistoryPanel({
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-xs"
-                className="my-auto h-auto w-auto p-0.5 text-muted-foreground hover:bg-transparent hover:text-muted-foreground dark:hover:bg-transparent [&_svg]:size-3"
+              <CommitsHeaderIconButton
                 onClick={(event) => {
                   event.stopPropagation()
                   if (collapsed) {
@@ -314,7 +308,7 @@ export function GitHistoryPanel({
                 )}
               >
                 <RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />
-              </Button>
+              </CommitsHeaderIconButton>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
               {t('auto.components.right.sidebar.GitHistoryPanel.d0fb0f4bf2', 'Refresh commits')}

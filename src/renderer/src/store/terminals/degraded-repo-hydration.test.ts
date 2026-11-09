@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type { BrowserTab } from '../../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { getDefaultWorkspaceSession } from '../../../../shared/constants'
 
@@ -27,7 +27,7 @@ const EDITOR_FILE_ID = '/path/degraded/src/App.tsx'
 const BROWSER_ID = 'browser-degraded'
 const GROUP_ID = 'group-degraded'
 
-function makeBrowserTab(): BrowserTab {
+function makeBrowserTab(): BrowserWorkspace {
   return {
     id: BROWSER_ID,
     worktreeId: WORKTREE_ID,

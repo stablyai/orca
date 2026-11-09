@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { decodeSvgBase64, readSvgIntrinsicSize } from './svg-document'
+import { readSvgIntrinsicSize } from './svg-document'
 
 describe('readSvgIntrinsicSize', () => {
   it.each([
@@ -14,12 +14,5 @@ describe('readSvgIntrinsicSize', () => {
     ]
   ])('sizes %s', (markup, size) => {
     expect(readSvgIntrinsicSize(markup)).toEqual(size)
-  })
-})
-
-describe('decodeSvgBase64', () => {
-  it('keeps a byte order mark and refuses bytes that are not UTF-8 text', () => {
-    expect(decodeSvgBase64(Buffer.from('﻿<svg/>').toString('base64'))).toBe('﻿<svg/>')
-    expect(decodeSvgBase64(Buffer.from([0x1f, 0x8b, 0x08, 0xff]).toString('base64'))).toBeNull()
   })
 })

@@ -29,6 +29,7 @@ import { useOpenMobileHostEdit } from '../host-screen/use-open-mobile-host-edit'
 import { mobileConnectionPathLabel } from '../transport/connection/mobile-connection-path-label'
 import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
 import { useMobileHomeData } from './use-mobile-home-data'
+import { useHomeSparePage } from './use-home-spare-page'
 import { HOME_TABS, type HomeTabId } from './tabs/home-tabs'
 import { MobileHomeAgentsTab } from './tabs/MobileHomeAgentsTab'
 import { MobileHomeAutomationsTab } from './tabs/MobileHomeAutomationsTab'
@@ -45,6 +46,7 @@ export function MobileHomeScreen() {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const data = useMobileHomeData()
+  useHomeSparePage(data.hostCatalogLoaded ? data.sortedHosts.map((host) => host.id) : [])
   const insets = useSafeAreaInsets()
   const openMobileHostEdit = useOpenMobileHostEdit()
   const openMobileTasks = useOpenMobileTasks()

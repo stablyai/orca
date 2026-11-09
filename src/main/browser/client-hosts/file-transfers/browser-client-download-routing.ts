@@ -1,7 +1,24 @@
-import type {
-  BrowserClientDownloadRoute,
-  BrowserClientDownloadRouteOutcome
-} from './browser-client-download-relay'
+import type { BrowserDownloadFinishedEvent } from '../../../../shared/browser-guest-events'
+
+export type BrowserClientDownloadRoute = {
+  transferId: string
+  browserPageId: string
+  /** Temp file main hands to Chromium; never the user's Downloads folder. */
+  stagingPath: string
+  complete(
+    filename: string
+  ): Promise<NonNullable<BrowserDownloadFinishedEvent['remoteDestination']>>
+  abort(): Promise<void>
+}
+
+export type BrowserClientDownloadRouteOutcome =
+  /** Another composition may own this WebContents. */
+  | { kind: 'unowned' }
+  | { kind: 'remote'; route: BrowserClientDownloadRoute }
+  /** A legacy host without the file channel permits a local save. */
+  | { kind: 'local-fallback' }
+  /** The owning page has no usable channel; refuse the download. */
+  | { kind: 'unavailable' }
 
 export type BrowserClientDownloadRouter = {
   route(input: { guestWebContentsId: number }): BrowserClientDownloadRouteOutcome

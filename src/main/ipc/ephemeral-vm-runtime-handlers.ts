@@ -22,6 +22,10 @@ import {
 import { invalidateRuntimeEnvironmentTransport } from './runtime-environments/runtime-environments'
 import { retireRemovedRuntimeEnvironment } from './runtime-environments/runtime-environment-removal-cleanup'
 import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm/runtime-attachment'
+import {
+  forgetInterruptedEphemeralVmProvision,
+  isEphemeralVmProvisionLive
+} from '../ephemeral-vm/runtime-provisioning-persistence'
 
 export type EphemeralVmCleanupCommandResult = {
   runtimeId: string
@@ -36,6 +40,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
   ipcMain.removeHandler('ephemeralVm:listRuntimes')
   ipcMain.removeHandler('ephemeralVm:cleanup')
   ipcMain.removeHandler('ephemeralVm:stopCleanup')
+  ipcMain.removeHandler('ephemeralVm:forgetRuntime')
   ipcMain.removeHandler('ephemeralVm:getCleanupCommand')
 
   ipcMain.handle('ephemeralVm:listRuntimes', (): EphemeralVmRuntimeRecord[] => {
@@ -63,8 +68,9 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       if (!runtime) {
         throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
       }
-      if (!runtime.repoId) {
-        throw new Error(`Ephemeral VM runtime has no repo id: ${args.runtimeId}`)
+      if (runtime.status === 'provisioning' && isEphemeralVmProvisionLive(runtime.id)) {
+        // Why: don't mark a create in flight as cleanup_failed; its own outcome settles the row.
+        throw new Error(`Ephemeral VM runtime is still provisioning: ${runtime.id}`)
       }
       let result
       if (runtime.cleanupStatus === 'succeeded') {
@@ -88,7 +94,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
         }
         result = await cleanupEphemeralVmRuntime({
           userDataPath,
-          repoPath: resolved.repo.repo.path,
+          repoPath: resolved.repoPath,
           recipe: resolved.recipe,
           runtimeId: runtime.id
         })
@@ -148,6 +154,10 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
     }
   )
 
+  ipcMain.handle('ephemeralVm:forgetRuntime', (_event, args: { runtimeId: string }): void => {
+    forgetInterruptedEphemeralVmProvision(app.getPath('userData'), args.runtimeId)
+  })
+
   ipcMain.handle(
     'ephemeralVm:getCleanupCommand',
     async (_event, args: { runtimeId: string }): Promise<EphemeralVmCleanupCommandResult> => {
@@ -161,7 +171,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
           projectId: resolved.runtime.projectId,
           workspaceId: resolved.runtime.workspaceId,
           workspaceName: resolved.runtime.workspaceName,
-          repoPath: resolved.repo.repo.path
+          repoPath: resolved.repoPath
         },
         recipeResult: resolved.runtime.recipeResult
       })

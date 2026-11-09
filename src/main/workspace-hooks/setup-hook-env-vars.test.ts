@@ -21,7 +21,18 @@ describe('getSetupEnvVars', () => {
       ORCA_WORKSPACE_NAME: 'Fix login',
       ORCA_WORKTREE_ID: 'repo::/code/acme::workspace:1',
       ORCA_WORKSPACE_ID: 'repo::/code/acme::workspace:1',
-      ORCA_ROOT_PATH: '/code/acme'
+      ORCA_ROOT_PATH: '/code/acme',
+      CONDUCTOR_WORKSPACE_NAME: 'Fix login'
+    })
+  })
+
+  it('sets the workspace variables imported Conductor scripts read', () => {
+    const repo: Pick<Repo, 'path'> = { path: '/repos/acme' }
+    const env = getSetupEnvVars(repo, '/worktrees/acme/fix-login')
+    expect(env).toMatchObject({
+      CONDUCTOR_ROOT_PATH: '/repos/acme',
+      CONDUCTOR_WORKSPACE_PATH: '/worktrees/acme/fix-login',
+      CONDUCTOR_WORKSPACE_NAME: 'fix-login'
     })
   })
 })

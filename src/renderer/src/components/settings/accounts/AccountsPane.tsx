@@ -47,15 +47,11 @@ import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
-  ClaudeAccountAction,
-  CodexAccountAction,
+  ProviderAccountAction,
   RemoveAccountTarget
 } from './accounts-pane-types'
-import {
-  EMPTY_WSL_DISTROS,
-  getRuntimeSentenceLabel,
-  getSelectedAccountRuntime
-} from './scope/accounts-pane-runtime'
+import { EMPTY_WSL_DISTROS, getSelectedAccountRuntime } from './scope/accounts-pane-runtime'
+import { getRuntimeSentenceLabel } from '../../../lib/provider-accounts/account-runtime-label'
 import { watchCodexConfigSyncStatus } from '../../../runtime/provider-accounts/codex-config-sync-observer'
 import {
   createClaudeAccountActionRunner,
@@ -64,10 +60,8 @@ import {
 import { renderAccountsLocationSection } from './scope/accounts-pane-location-section'
 import { renderClaudeAccountsSection } from './claude/accounts-pane-claude-section'
 import { renderCodexAccountsSection } from './codex/accounts-pane-codex-section'
-import {
-  renderGeminiAccountsSection,
-  renderOpenCodeAccountsSection
-} from './providers/accounts-pane-provider-setting-sections'
+import { renderGeminiAccountsSection } from './providers/accounts-pane-gemini-section'
+import { renderOpenCodeAccountsSection } from './providers/accounts-pane-opencode-section'
 import { MiniMaxAccountsSection } from './usage/MiniMaxAccountsSection'
 import { useUsageHostSettings } from './usage/use-usage-host-settings'
 import { ManagedDataAccountsSection } from './providers/ManagedDataAccountsSection'
@@ -148,10 +142,10 @@ export function AccountsPane({
   const [codexAccounts, setCodexAccounts] =
     useState<CodexRateLimitAccountsState>(emptyCodexAccountsState)
   const [codexAccountsLoaded, setCodexAccountsLoaded] = useState(false)
-  const [codexAction, setCodexAction] = useState<CodexAccountAction>('idle')
+  const [codexAction, setCodexAction] = useState<ProviderAccountAction>('idle')
   const [claudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
-  const [claudeAction, setClaudeAction] = useState<ClaudeAccountAction>('idle')
+  const [claudeAction, setClaudeAction] = useState<ProviderAccountAction>('idle')
   // Capture runtime slots at dialog opening; roster updates could remove the slot needed for restart diffs.
   const [removeCodexTarget, setRemoveCodexTarget] = useState<RemoveAccountTarget | null>(null)
   const [removeClaudeTarget, setRemoveClaudeTarget] = useState<RemoveAccountTarget | null>(null)

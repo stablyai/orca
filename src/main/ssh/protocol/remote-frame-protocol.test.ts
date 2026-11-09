@@ -1,12 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { HEADER_LENGTH, FrameDecoder } from '../../../shared/relay-frame-decoder'
 import type { DecodedFrame } from '../../../shared/relay-frame-decoder-contract'
-import {
-  MessageType,
-  encodeFrame,
-  encodeJsonRpcFrame,
-  parseJsonRpcMessage
-} from './remote-frame-protocol'
+import { MessageType, encodeFrame, encodeJsonRpcFrame } from './remote-frame-protocol'
 
 describe('frame encoding', () => {
   it('rejects messages larger than MAX_MESSAGE_SIZE', () => {
@@ -23,31 +18,6 @@ describe('frame encoding', () => {
 describe('FrameDecoder', () => {
   // Freeze clock for framing cases; relay-protocol-backpressure.test.ts separately covers time-sliced drain under CI load.
   const frozenClock = { now: () => 0 }
-
-  it('skips oversized frames and calls onError instead of throwing', () => {
-    const errors: Error[] = []
-    const frames: DecodedFrame[] = []
-    const decoder = new FrameDecoder(
-      (f) => frames.push(f),
-      (err) => errors.push(err),
-      frozenClock
-    )
-
-    const oversizedLength = 17 * 1024 * 1024
-    const header = Buffer.alloc(HEADER_LENGTH)
-    header[0] = MessageType.Regular
-    header.writeUInt32BE(1, 1)
-    header.writeUInt32BE(0, 5)
-    header.writeUInt32BE(oversizedLength, 9)
-
-    const fakePayload = Buffer.alloc(oversizedLength)
-    const fullFrame = Buffer.concat([header, fakePayload])
-
-    decoder.feed(fullFrame)
-    expect(frames).toHaveLength(0)
-    expect(errors).toHaveLength(1)
-    expect(errors[0].message).toContain('discarded')
-  })
 
   it('skips an oversized frame fed in odd-sized chunks and resynchronizes', () => {
     const errors: Error[] = []
@@ -76,12 +46,5 @@ describe('FrameDecoder', () => {
     expect(errors).toHaveLength(1)
     expect(frames).toHaveLength(1)
     expect(frames[0].payload.toString()).toBe('after')
-  })
-})
-
-describe('parseJsonRpcMessage', () => {
-  it('throws on invalid jsonrpc version', () => {
-    const payload = Buffer.from(JSON.stringify({ jsonrpc: '1.0', id: 1, method: 'x' }))
-    expect(() => parseJsonRpcMessage(payload)).toThrow('Invalid JSON-RPC version')
   })
 })

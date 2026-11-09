@@ -1962,8 +1962,7 @@
     "markdownReader": {
       "readOnly": "Read only",
       "changedOnDesktop": "Changed on desktop",
-      "dismissKeyboard": "Dismiss keyboard",
-      "dismissKeyboardHint": "Hides the software keyboard and keeps the markdown editor open.",
+      "previewTruncated": "Preview truncated.",
       "discard": "Discard",
       "copyLoadedSource": "Copy loaded Markdown source",
       "copySource": "Copy Markdown source",
@@ -2543,6 +2542,12 @@
       "fallback": "Worktree"
     },
     "failure": {
+      "forkOriginalMissing": "{{agent}} could not find this response in the original chat. Open it and fork from there.",
+      "forkOriginalUnavailable": "{{agent}} cannot fork this response in the original chat. Open it and fork from there.",
+      "forkOriginalMissingNamed": "{{agent}} could not find this response in \"{{detail}}\". Open that chat and fork from there.",
+      "forkOriginalUnavailableNamed": "{{agent}} cannot fork this response in \"{{detail}}\". Open that chat and fork from there.",
+      "forkOriginalLatestOnly": "{{agent}} can only fork the latest response in the original chat. Open that chat and fork its latest response once it has finished.",
+      "forkOriginalLatestOnlyNamed": "{{agent}} can only fork the latest response in \"{{detail}}\". Open that chat and fork its latest response once it has finished.",
       "backgroundTasksRunning": "Background tasks are still running.",
       "waitForBackgroundTasks": "Wait for the background tasks to finish.",
       "agentStarting": "The agent is still starting.",
@@ -3579,6 +3584,12 @@
     "panel": {
       "unavailableTitle": "Source Control Unavailable",
       "loading": "Loading changes…"
+    },
+    "folder": {
+      "emptyTitle": "No attached worktrees yet",
+      "emptyCopy": "Worktrees created from this workspace will show up here.",
+      "statusUnavailable": "Unavailable",
+      "backToFolder": "Back to folder"
     },
     "hostedReviewCopy": {
       "updatingBranch": "Updating branch...",

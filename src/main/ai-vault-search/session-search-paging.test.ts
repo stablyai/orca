@@ -1,15 +1,16 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { SessionSearchRequest } from './session-search-engine-types'
+import type { SessionSearchRankedCursor } from './session-search-ranked-cursor'
 import {
   addSyntheticSession,
   openSessionSearchHarness,
   type SessionSearchHarness
 } from './session-search-engine-test-fixture'
-import { readIndexGeneration } from './session-search-index-generation'
 import {
   decodeSessionSearchCursor,
   encodeSessionSearchCursor,
-  SessionSearchCursorError
+  SessionSearchCursorError,
+  sessionSearchPageKey
 } from './session-search-page-cursor'
 
 let harness: SessionSearchHarness | null = null
@@ -208,32 +209,40 @@ describe('the candidate limit is a tunable default, and says when it cut', () =>
   })
 })
 
-it.each([false, true])('rejects a write during page assembly (cursor: %s)', async (withCursor) => {
-  const { db, engine, store } = await open('ss-concurrent-page')
-  for (let id = 1; id <= 3; id++) {
-    addSyntheticSession(db, { id, text: 'needle' })
+it('round-trips an existing offset cursor through the engine with its raw generation fence', async () => {
+  const { db, engine } = await withSessions(4)
+  const request = { query: 'needle', limit: 1 }
+  const first = engine.search(request)
+  const incarnation = String(
+    db.prepare("SELECT value FROM meta WHERE key = 'index_incarnation'").get()!.value
+  )
+  const key = sessionSearchPageKey(request)
+  const cursor = encodeSessionSearchCursor(first.generation, 1, key, incarnation)
+  const second = engine.search({ ...request, cursor })
+  expect(second.hits[0]?.sessionId).not.toBe(first.hits[0]?.sessionId)
+  expect(decodeSessionSearchCursor(second.page.cursor!, first.generation, key, incarnation)).toBe(2)
+})
+
+it('validates frozen cursor bounds, query scopes and message ownership before exposing a hit', async () => {
+  const { engine, db } = await withSessions(4)
+  addSyntheticSession(db, { id: 9, cwd: '/private', text: 'hiddenneedle' })
+  const request = { query: 'needle', limit: 1, filters: { scopePaths: ['/repo'] } }
+  const first = engine.search(request)
+  const raw = first.page.cursor!
+  const payload = JSON.parse(Buffer.from(raw.slice(4), 'base64url').toString('utf8'))
+  const forged = (patch: Partial<SessionSearchRankedCursor>) =>
+    `ss2.${Buffer.from(JSON.stringify({ ...payload, ...patch })).toString('base64url')}`
+  for (const patch of [
+    { o: -1 },
+    { hits: Array.from({ length: 601 }, () => payload.hits[0]) },
+    { hits: [{ ...payload.hits[0], s: 9 }], o: 0 },
+    { hits: [{ ...payload.hits[0], m: 5 }], o: 0 }
+  ]) {
+    expect(() => engine.search({ ...request, cursor: forged(patch) })).toThrow(
+      SessionSearchCursorError
+    )
   }
-  const first = engine.search({ query: 'needle', limit: 1 })
-  const prepare = db.prepare.bind(db)
-  let committed = false
-  const hook = vi.spyOn(db, 'prepare').mockImplementation((sql) => {
-    if (!committed && sql.includes('SELECT DISTINCT session_row_id FROM files')) {
-      committed = true
-      store.removeFile('/synthetic/1.jsonl')
-    }
-    return prepare(sql)
-  })
-  try {
-    expect(() =>
-      engine.search({
-        query: 'needle',
-        limit: 1,
-        ...(withCursor ? { cursor: first.page.cursor! } : {})
-      })
-    ).toThrow(SessionSearchCursorError)
-    expect(committed).toBe(true)
-    expect(readIndexGeneration(db)).toBeGreaterThan(first.generation)
-  } finally {
-    hook.mockRestore()
-  }
+  expect(() => engine.search({ ...request, cursor: `ss2.${'x'.repeat(256 * 1024)}` })).toThrow(
+    SessionSearchCursorError
+  )
 })

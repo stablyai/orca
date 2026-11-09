@@ -10,32 +10,36 @@ export type HookWorkspaceIdentity = {
   displayName?: string
 }
 
-// Keep WSL path translation in pty/wsl-orca-env.ts in sync; names and policies are not paths.
+// Path-valued keys only, so WSL and posix-shell launches translate them; names are not paths.
 export const SETUP_RUNNER_PATH_ENV_KEYS = [
   'ORCA_ROOT_PATH',
   'ORCA_WORKTREE_PATH',
   'CONDUCTOR_ROOT_PATH',
+  'CONDUCTOR_WORKSPACE_PATH',
   'GHOSTX_ROOT_PATH'
 ] as const
 
 export function getSetupEnvVars(
-  repo: Repo,
+  repo: Pick<Repo, 'path' | 'kind'>,
   worktreePath: string,
   identity?: HookWorkspaceIdentity
 ): Record<string, string> {
+  const workspaceName =
+    identity?.displayName && isFolderRepo(repo)
+      ? identity.displayName
+      : getRuntimePathBasename(worktreePath)
   return {
     ORCA_ROOT_PATH: repo.path,
     ORCA_WORKTREE_PATH: worktreePath,
-    ORCA_WORKSPACE_NAME:
-      identity?.displayName && isFolderRepo(repo)
-        ? identity.displayName
-        : getRuntimePathBasename(worktreePath),
+    ORCA_WORKSPACE_NAME: workspaceName,
     // Same values a pane sets, so `orca worktree create` in the hook attaches to this workspace.
     ...(identity
       ? { ORCA_WORKSPACE_ID: identity.worktreeId, ORCA_WORKTREE_ID: identity.worktreeId }
       : {}),
-    // Legacy conductor.json compatibility.
+    // Imported Conductor scripts read these names.
     CONDUCTOR_ROOT_PATH: repo.path,
+    CONDUCTOR_WORKSPACE_PATH: worktreePath,
+    CONDUCTOR_WORKSPACE_NAME: workspaceName,
     GHOSTX_ROOT_PATH: repo.path
   }
 }

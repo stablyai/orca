@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -60,6 +60,30 @@ describe('the previous orcad run on a data root', () => {
     expect(acquireOrcadInstanceLock(root, onBoot('boot-a', '1.1.0')).previousUnexpectedExit).toBe(
       null
     )
+  })
+
+  it('keeps reporting that exit after a release that asks to keep it', () => {
+    const root = makeRoot()
+    leaveLockOf(root, 'boot-a')
+
+    acquireOrcadInstanceLock(root, onBoot('boot-a')).release({ keepUnexpectedExit: true })
+
+    expect(acquireOrcadInstanceLock(root, onBoot('boot-a')).previousUnexpectedExit).toMatchObject({
+      pid: 424242
+    })
+  })
+
+  it('never puts the crashed record over a lock another start took meanwhile', () => {
+    const root = makeRoot()
+    leaveLockOf(root, 'boot-a')
+    const reclaimed = acquireOrcadInstanceLock(root, onBoot('boot-a'))
+    unlinkSync(join(root, ORCAD_LOCK_FILE_NAME))
+    const successor = acquireOrcadInstanceLock(root, onBoot('boot-a'))
+
+    reclaimed.release({ keepUnexpectedExit: true })
+
+    successor.release()
+    expect(acquireOrcadInstanceLock(root, onBoot('boot-a')).previousUnexpectedExit).toBe(null)
   })
 
   it('reports nothing when the host rebooted since that run', () => {

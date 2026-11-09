@@ -71,17 +71,33 @@ export function useNativeChatSideChatForkOffer(
   const fork = useContext(NativeChatForkContext)
   const listening = useContext(NativeChatSideChatForkPointContext) !== undefined
   const mode = fork?.support.kind === 'known' ? fork.support.fork : undefined
+  const inheritedOriginal =
+    fork?.support.kind === 'known' && fork.support.inheritedOriginal === true
   const forkableItemIds = fork?.forkableItemIds
   const contextFloorSequence = fork?.contextFloorSequence
+  const inheritedThroughSequence = fork?.inheritedThroughSequence
   return useMemo(
     () =>
       listening && mode && forkableItemIds && contextFloorSequence !== undefined
         ? {
-            chat: { support: { kind: 'known', fork: mode }, contextFloorSequence, forkableItemIds },
+            chat: {
+              support: { kind: 'known', fork: mode, inheritedOriginal },
+              contextFloorSequence,
+              forkableItemIds,
+              inheritedThroughSequence
+            },
             latestTurnKey
           }
         : undefined,
-    [contextFloorSequence, forkableItemIds, latestTurnKey, listening, mode]
+    [
+      contextFloorSequence,
+      forkableItemIds,
+      inheritedThroughSequence,
+      inheritedOriginal,
+      latestTurnKey,
+      listening,
+      mode
+    ]
   )
 }
 

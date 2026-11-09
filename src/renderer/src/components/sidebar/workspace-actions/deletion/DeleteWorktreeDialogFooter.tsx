@@ -10,6 +10,8 @@ import { deleteWorkspacesCountLabel } from '../context-menu/workspace-batch-acti
 export function DeleteWorktreeDialogFooter({
   isMainWorktree,
   isDeleting,
+  isDetachingChildren = false,
+  deleteDisabled = false,
   canForceDelete,
   isBatchDelete,
   worktreeCount,
@@ -24,6 +26,8 @@ export function DeleteWorktreeDialogFooter({
 }: {
   isMainWorktree: boolean
   isDeleting: boolean
+  isDetachingChildren?: boolean
+  deleteDisabled?: boolean
   canForceDelete: boolean
   isBatchDelete: boolean
   worktreeCount: number
@@ -38,20 +42,22 @@ export function DeleteWorktreeDialogFooter({
   confirmButtonRef: Ref<HTMLButtonElement>
 }): JSX.Element {
   const t = useTranslate()
-  const label = isDeleting
-    ? canForceDelete
-      ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.forceDeleting', 'Force Deleting...')
-      : t('auto.components.sidebar.DeleteWorktreeDialogFooter.deleting', 'Deleting...')
-    : isBatchDelete
-      ? deleteWorkspacesCountLabel(worktreeCount, t)
-      : canDeleteAllLineage
-        ? deleteWorkspacesCountLabel(lineageDeleteTargetCount, t)
-        : canForceDelete
-          ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.forceDelete', 'Force Delete')
-          : t(
-              'auto.components.sidebar.DeleteWorktreeDialogFooter.deleteWorkspace',
-              'Delete Workspace'
-            )
+  const label = isDetachingChildren
+    ? t('worktree.delete.detachingChildren', 'Detaching children...')
+    : isDeleting
+      ? canForceDelete
+        ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.forceDeleting', 'Force Deleting...')
+        : t('auto.components.sidebar.DeleteWorktreeDialogFooter.deleting', 'Deleting...')
+      : isBatchDelete
+        ? deleteWorkspacesCountLabel(worktreeCount, t)
+        : canDeleteAllLineage
+          ? deleteWorkspacesCountLabel(lineageDeleteTargetCount, t)
+          : canForceDelete
+            ? t('auto.components.sidebar.DeleteWorktreeDialogFooter.forceDelete', 'Force Delete')
+            : t(
+                'auto.components.sidebar.DeleteWorktreeDialogFooter.deleteWorkspace',
+                'Delete Workspace'
+              )
 
   return (
     <>
@@ -64,7 +70,7 @@ export function DeleteWorktreeDialogFooter({
         <WorktreeForceDeleteButton
           buttonRef={confirmButtonRef}
           size="default"
-          disabled={isDeleting}
+          disabled={isDeleting || deleteDisabled}
           onForceDelete={onForceDelete}
           onSavingChange={onSavingChange}
           onAlwaysForceDelete={() =>
@@ -78,13 +84,13 @@ export function DeleteWorktreeDialogFooter({
         <WorktreeForceDeleteButton
           buttonRef={confirmButtonRef}
           size="default"
-          disabled={isDeleting}
+          disabled={isDeleting || deleteDisabled}
           onForceDelete={onDelete}
           onSavingChange={onSavingChange}
           onAlwaysForceDelete={onAlwaysDelete}
           moreActionsLabel={t('workspaceDeletion.moreDeleteOptions', 'More delete options')}
           alwaysForceDeleteLabel={t('workspaceDeletion.alwaysDelete', 'Always delete')}
-          alwaysForceDeleteTooltip={t(
+          alwaysForceDeleteDescription={t(
             'workspaceDeletion.alwaysDeleteTooltip',
             'Skip this confirmation for future deletions.'
           )}
@@ -97,7 +103,7 @@ export function DeleteWorktreeDialogFooter({
           ref={confirmButtonRef}
           variant="destructive"
           onClick={onDelete}
-          disabled={isDeleting}
+          disabled={isDeleting || deleteDisabled}
         >
           {isDeleting ? <LoaderCircle className="size-4 animate-spin" /> : <Trash2 />}
           {label}
