@@ -71,7 +71,7 @@ function counts(db: SyncDatabase): Record<string, number> {
   }
 }
 
-it('files every row in one FTS table, under the column its role owns', () => {
+it('indexes conversation rows and excludes tool output', () => {
   replayTranscriptRead({
     messages: [
       { role: 'user', text: 'alpha question', timestamp: null },
@@ -80,8 +80,8 @@ it('files every row in one FTS table, under the column its role owns', () => {
     ]
   })
 
-  expect(counts(index.db).full).toBe(3)
-  expect(matches(index.db, 'messages_fts', 'gamma')).toBe(1)
+  expect(counts(index.db).full).toBe(2)
+  expect(matches(index.db, 'messages_fts', 'gamma')).toBe(0)
   expect(matches(index.db, 'messages_fts', '{user_text assistant_text}: gamma')).toBe(0)
   expect(matches(index.db, 'messages_fts', '{user_text assistant_text}: beta')).toBe(1)
 })

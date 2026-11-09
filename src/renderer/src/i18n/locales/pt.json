@@ -794,7 +794,6 @@
       "loadMore": "Carregar mais resultados",
       "indexedHistory": "Histórico indexado · melhores resultados",
       "hostsSkipped": "Não pesquisado: {{value0}}",
-      "consent": "Ativar a busca em texto completo? O Orca cria um índice neste computador a partir das transcrições locais dos agentes, incluindo conversas completas e até 3.072 caracteres por saída de ferramenta. O conteúdo não é ocultado. Clientes pareados autenticados podem pesquisá-lo.",
       "remoteDisabled": "A busca está desativada neste computador. Ative a indexação de transcrições nesse computador para pesquisar suas sessões.",
       "notReady": "O índice de busca ainda não está pronto. Tente novamente em breve.",
       "noService": "A busca não está disponível neste computador. Pode ser necessário atualizar o Orca ou usar um runtime com suporte a busca.",
@@ -894,7 +893,6 @@
       "description": "Pesquise tudo o que seus agentes disseram e fizeram, neste computador e em qualquer servidor Orca pareado.",
       "searchDescription": "Ative a busca de sessões para este computador e servidores pareados, ou limpe os dados de busca.",
       "indexComputers": "Pesquisar dentro das sessões",
-      "computersConsent": "Cada computador mantém uma cópia pesquisável das próprias conversas de agente e saídas de ferramentas. Nada sai desse computador.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "Pesquisar sessões em {{host}}",
       "serverOffline": "Off-line",
@@ -16654,6 +16652,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Ligar"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Dimensionado para outra janela",
+            "fitHere": "Ajustar aqui"
           }
         },
         "quick": {

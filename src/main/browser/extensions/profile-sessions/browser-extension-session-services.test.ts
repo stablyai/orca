@@ -22,7 +22,7 @@ let attachHook: AttachHook | null = null
 vi.mock('electron', () => ({
   webContents: { fromId: (id: number) => ({ session: mocks.sessionByTabId.get(id) }) }
 }))
-vi.mock('../../sessions/browser-session-registry', () => ({
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: {
     updateEnabledExtensionIds: mocks.updateEnabled,
     updatePinnedExtensionIds: mocks.updatePinned,

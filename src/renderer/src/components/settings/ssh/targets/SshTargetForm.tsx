@@ -11,13 +11,13 @@ import {
 } from '../../../ui/dialog'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
-import { SshHostAdvancedFields } from './SshHostAdvancedFields'
+import { SshHostAdvancedFields } from '../../../ssh-host-form/SshHostAdvancedFields'
 import {
   applyParsedSshHostInput,
   hasAdvancedConnectionValues,
   isSshTargetFormDirty,
   type EditingTarget
-} from './ssh-target-draft'
+} from '../../../ssh-host-form/ssh-target-draft'
 import { useTranslate } from '@/i18n/use-translate'
 import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 

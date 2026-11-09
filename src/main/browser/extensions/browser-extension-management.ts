@@ -4,7 +4,7 @@ import type {
   BrowserExtensionListResult,
   InstalledBrowserExtension
 } from '../../../shared/browser/extensions/browser-extension-types'
-import { browserSessionRegistry } from '../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import { openBrowserExtensionOptionsPage } from './tabs-and-windows/browser-extension-options-page'
 import { getBrowserExtensionInstallStore } from './installation/browser-extension-install-store'
 import { reloadBrowserExtensionWhereEnabled } from './profile-sessions/browser-extension-profile-reload'

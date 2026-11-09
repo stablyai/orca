@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { browserManager } from '../browser/guest-lifecycle/manager/browser-manager'
-import { browserSessionRegistry } from '../browser/sessions/browser-session-registry'
+import { browserSessionRegistry } from '../browser/sessions/profiles/browser-session-registry'
 import {
   enforceLocalSshWebRtcPolicyForGuest,
   isLocalSshBrowserPartition

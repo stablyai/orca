@@ -31,7 +31,7 @@ it.each([0, 200, 2000])(
       await parseTranscript(corpus.files[0]!)
       expect(corpus.messageCount).toBe(toolResultWords === 0 ? 3 : 4)
       expect(store.connection.prepare('SELECT count(*) AS n FROM messages').get()).toEqual({
-        n: corpus.messageCount
+        n: 2
       })
     } finally {
       unregister()
