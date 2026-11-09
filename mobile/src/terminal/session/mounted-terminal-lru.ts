@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 
 // Each mounted terminal holds an xterm buffer; three covers a split pair plus the last one left.
 const MOUNTED_TERMINAL_LIMIT = 3
@@ -23,14 +23,24 @@ export function nextMountedTerminalHandles(
   return unchanged ? previous : next
 }
 
-export function useMountedTerminalHandles(
-  visible: readonly string[],
-  live: readonly string[]
-): readonly string[] {
+// Lives with the terminal frame, so a frame mounted again starts with only its visible panes.
+export function MountedTerminalPanes<T extends { handle: string }>({
+  terminals,
+  visibleHandles,
+  children
+}: {
+  terminals: readonly T[]
+  visibleHandles: readonly string[]
+  children: (terminal: T) => ReactNode
+}): ReactNode {
   const [mounted, setMounted] = useState<readonly string[]>([])
-  const next = nextMountedTerminalHandles(mounted, visible, live)
+  const next = nextMountedTerminalHandles(
+    mounted,
+    visibleHandles,
+    terminals.map((terminal) => terminal.handle)
+  )
   if (next !== mounted) {
     setMounted(next)
   }
-  return next
+  return terminals.filter((terminal) => next.includes(terminal.handle)).map(children)
 }

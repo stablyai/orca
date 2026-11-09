@@ -8,7 +8,7 @@ import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from '../terminal/session/TerminalPaneView'
-import { useMountedTerminalHandles } from '../terminal/session/mounted-terminal-lru'
+import { MountedTerminalPanes } from '../terminal/session/mounted-terminal-lru'
 import { MobileNativeChatOverlay } from './native-chat/MobileNativeChatOverlay'
 import { mobileSessionNativeChatHostOutage } from './native-chat/mobile-native-chat-host-outage'
 import { MobileAgentMessageProvider } from './native-chat/transcript/MobileAgentMessageProvider'
@@ -116,13 +116,6 @@ export function MobileSessionActiveContent({
     showEmptyState,
     createTabBusy
   } = controller
-  const mountedTerminalHandles = useMountedTerminalHandles(
-    visibleTerminalHandles,
-    terminals.map((terminal) => terminal.handle)
-  )
-  const mountedTerminals = terminals.filter((terminal) =>
-    mountedTerminalHandles.includes(terminal.handle)
-  )
   const { keyboardLift, activeTerminalKeyboardLift, toastAnimatedStyle } =
     useMobileSessionContentKeyboardLift(controller)
   const openUrlInOrca = useOpenUrlInOrca(controller)
@@ -267,68 +260,70 @@ export function MobileSessionActiveContent({
       </View>
     ) : (
       <View style={styles.terminalFrame}>
-        {mountedTerminals.map((terminal) => (
-          <TerminalPaneView
-            key={terminal.handle}
-            handle={terminal.handle}
-            active={terminal.handle === activeHandle}
-            visible={visibleTerminalHandles.includes(terminal.handle)}
-            splitIndex={
-              terminalSplitActive && visibleTerminalHandles.includes(terminal.handle)
-                ? visibleTerminalHandles.indexOf(terminal.handle)
-                : undefined
-            }
-            splitDirection={paneDirection}
-            splitFrame={paneFrame}
-            keyboardInset={keyboardLift}
-            title={terminal.title}
-            onFrame={notifyTerminalPaneFrame}
-            keyboardLift={
-              terminal.handle !== activeHandle &&
-              !(terminalSplitActive && visibleTerminalHandles.includes(terminal.handle))
-                ? 0
-                : terminalSplitActive
-                  ? computeActiveTerminalKeyboardLift({
-                      keyboardLift: terminalPaneKeyboardLayout(
-                        paneFrame,
-                        paneDirection,
-                        visibleTerminalHandles.indexOf(terminal.handle),
-                        keyboardLift
-                      ).occlusion,
-                      metrics: controller.terminalKeyboardMetrics.get(terminal.handle),
-                      terminalFrameHeight:
-                        controller.getTerminalPaneViewport(terminal.handle).terminalFrameRef.current
-                          ?.height ?? 0
-                    })
-                  : activeTerminalKeyboardLift
-            }
-            terminalTheme={terminal.terminalTheme}
-            textScale={terminalTextScale}
-            onTextScaleChange={(scale) => {
-              // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.
-              terminalTextScaleRevisionRef.current += 1
-              setTerminalTextScale(scale)
-              void saveTerminalTextScale(scale)
-            }}
-            onRef={setTerminalWebViewRef}
-            onDocumentReleased={releaseTerminalDocument}
-            onWebReady={handleTerminalWebReady}
-            onCellBoxChange={notifyTerminalCellBoxChange}
-            onSelectionMode={handleSelectionMode}
-            onSelectionCopy={handleSelectionCopy}
-            onSelectionEvicted={handleSelectionEvicted}
-            onClipboardWrite={handleClipboardWrite}
-            onModesChanged={handleModesChanged}
-            onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
-            onHaptic={handleHaptic}
-            onTerminalInput={handleTerminalInput}
-            onTerminalQueryReply={handleTerminalQueryReply}
-            onTerminalInteraction={handleTerminalInteraction}
-            onTerminalTap={handleTerminalTap}
-            onFileTap={handleFileTap}
-            onOpenUrl={handleTerminalOpenUrl}
-          />
-        ))}
+        <MountedTerminalPanes terminals={terminals} visibleHandles={visibleTerminalHandles}>
+          {(terminal) => (
+            <TerminalPaneView
+              key={terminal.handle}
+              handle={terminal.handle}
+              active={terminal.handle === activeHandle}
+              visible={visibleTerminalHandles.includes(terminal.handle)}
+              splitIndex={
+                terminalSplitActive && visibleTerminalHandles.includes(terminal.handle)
+                  ? visibleTerminalHandles.indexOf(terminal.handle)
+                  : undefined
+              }
+              splitDirection={paneDirection}
+              splitFrame={paneFrame}
+              keyboardInset={keyboardLift}
+              title={terminal.title}
+              onFrame={notifyTerminalPaneFrame}
+              keyboardLift={
+                terminal.handle !== activeHandle &&
+                !(terminalSplitActive && visibleTerminalHandles.includes(terminal.handle))
+                  ? 0
+                  : terminalSplitActive
+                    ? computeActiveTerminalKeyboardLift({
+                        keyboardLift: terminalPaneKeyboardLayout(
+                          paneFrame,
+                          paneDirection,
+                          visibleTerminalHandles.indexOf(terminal.handle),
+                          keyboardLift
+                        ).occlusion,
+                        metrics: controller.terminalKeyboardMetrics.get(terminal.handle),
+                        terminalFrameHeight:
+                          controller.getTerminalPaneViewport(terminal.handle).terminalFrameRef
+                            .current?.height ?? 0
+                      })
+                    : activeTerminalKeyboardLift
+              }
+              terminalTheme={terminal.terminalTheme}
+              textScale={terminalTextScale}
+              onTextScaleChange={(scale) => {
+                // Why: pinch-to-zoom reports a new preset; persist it so the size sticks across panes and launches.
+                terminalTextScaleRevisionRef.current += 1
+                setTerminalTextScale(scale)
+                void saveTerminalTextScale(scale)
+              }}
+              onRef={setTerminalWebViewRef}
+              onDocumentReleased={releaseTerminalDocument}
+              onWebReady={handleTerminalWebReady}
+              onCellBoxChange={notifyTerminalCellBoxChange}
+              onSelectionMode={handleSelectionMode}
+              onSelectionCopy={handleSelectionCopy}
+              onSelectionEvicted={handleSelectionEvicted}
+              onClipboardWrite={handleClipboardWrite}
+              onModesChanged={handleModesChanged}
+              onKeyboardAvoidanceMetrics={handleKeyboardAvoidanceMetrics}
+              onHaptic={handleHaptic}
+              onTerminalInput={handleTerminalInput}
+              onTerminalQueryReply={handleTerminalQueryReply}
+              onTerminalInteraction={handleTerminalInteraction}
+              onTerminalTap={handleTerminalTap}
+              onFileTap={handleFileTap}
+              onOpenUrl={handleTerminalOpenUrl}
+            />
+          )}
+        </MountedTerminalPanes>
         <MobileNativeChatDictationPreviewContext.Provider value={chatDictationPreview}>
           <MobileDictationMeterContext.Provider value={dictation.meter}>
             <MobileAgentMessageProvider
