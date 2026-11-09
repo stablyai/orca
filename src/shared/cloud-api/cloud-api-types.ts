@@ -63,6 +63,8 @@ export const CloudApiGrantSchema = z.object({
   clientName: z.string().max(200).nullable(),
   userId: Id,
   scopes: Scopes,
+  /** Where the app sends people after approval: the real identity behind a self-declared name. */
+  redirectHosts: z.array(z.string().max(253)).max(20).optional(),
   approvedWith: z.union([
     z.object({ apiKeyPrefix: z.string().max(64) }),
     z.object({ approvalCode: z.literal(true) })

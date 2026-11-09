@@ -6,12 +6,8 @@ import type { CloudApiGrant, CloudApiMe } from '../../../../../shared/cloud-api/
 import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { CloudConfirmDialog } from './CloudConfirmDialog'
 import { formatAbsoluteTime, formatKeyPrefix, formatRelativeFromNow } from './cloud-api-format'
-import {
-  CloudApiEmptyState,
-  CloudApiErrorNotice,
-  CloudApiSkeletonRows,
-  ScopeChip
-} from './cloud-api-parts'
+import { CloudApiEmptyState, CloudApiErrorNotice, CloudApiSkeletonRows } from './cloud-api-parts'
+import { ScopeSummary } from './ScopeSummary'
 import type { CloudLoadState } from './cloud-load-state'
 
 function appName(grant: CloudApiGrant, t: Translate): string {
@@ -102,11 +98,19 @@ export function CloudConnectedApps({
                   <Plug className="size-3.5" aria-hidden />
                 </div>
                 <div className="min-w-0 flex-1 space-y-1.5">
-                  <p className="truncate text-sm font-medium">{appName(grant, t)}</p>
-                  <div className="flex flex-wrap gap-1">
-                    {grant.scopes.map((scope) => (
-                      <ScopeChip key={scope} scope={scope} />
-                    ))}
+                  <div className="flex min-w-0 items-baseline gap-2">
+                    <p className="truncate text-sm font-medium" title={appName(grant, t)}>
+                      {appName(grant, t)}
+                    </p>
+                    {grant.redirectHosts?.length ? (
+                      <code
+                        className="truncate font-mono text-xs text-muted-foreground"
+                        title={grant.redirectHosts.join(', ')}
+                      >
+                        {grant.redirectHosts.join(', ')}
+                      </code>
+                    ) : null}
+                    <ScopeSummary scopes={grant.scopes} />
                   </div>
                   <p className="text-xs text-muted-foreground">
                     <span title={formatAbsoluteTime(grant.grantedAt, locale)}>
@@ -185,12 +189,25 @@ export function CloudConnectedApps({
           value0: target ? appName(target, t) : ''
         })}
         description={
-          <p>
-            {t(
-              'auto.components.settings.cloudApi.apps.confirmBody',
-              'It loses access to Orca Cloud right away. To use it again, approve it again from the app.'
-            )}
-          </p>
+          <>
+            <p>
+              {t(
+                'auto.components.settings.cloudApi.apps.confirmBody',
+                'It loses access to Orca Cloud right away. To use it again, approve it again from the app.'
+              )}
+            </p>
+            {target?.redirectHosts?.length ? (
+              <p>
+                {t(
+                  'auto.components.settings.cloudApi.apps.confirmHosts',
+                  'It signs in through {{value0}}.',
+                  {
+                    value0: target.redirectHosts.join(', ')
+                  }
+                )}
+              </p>
+            ) : null}
+          </>
         }
         confirmLabel={t('auto.components.settings.cloudApi.apps.confirm', 'Disconnect')}
         onConfirm={async () => (target ? onRevoke(target) : null)}

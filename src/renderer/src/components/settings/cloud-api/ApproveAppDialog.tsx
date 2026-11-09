@@ -100,7 +100,7 @@ export function ApproveAppDialog({
           <DialogDescription>
             {t(
               'auto.components.settings.cloudApi.approve.description',
-              'When Claude, Cursor or another MCP client opens the Orca Cloud approval page, paste a one-time code from here instead of an API key.'
+              'When Claude, Cursor or another MCP client opens the Orca Cloud approval page, paste a one-time code from here instead of an API key. That page shows which website the app will return to; check it before you paste.'
             )}
           </DialogDescription>
         </DialogHeader>

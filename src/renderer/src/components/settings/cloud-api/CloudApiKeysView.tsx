@@ -2,8 +2,6 @@ import { useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { KeyRound, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { SettingsBadge } from '../form-controls/SettingsFormControls'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type {
@@ -15,7 +13,6 @@ import type {
   CloudApiKeyList,
   CloudApiMe,
   CloudApiResult,
-  CloudApiScope,
   CloudApiSettings,
   CreateCloudApiApprovalInput,
   CreateCloudApiKeyInput
@@ -27,12 +24,8 @@ import { CloudConfirmDialog } from './CloudConfirmDialog'
 import { CloudConnectedApps } from './CloudConnectedApps'
 import type { CloudLoadState } from './cloud-load-state'
 import { CreateApiKeyDialog } from './CreateApiKeyDialog'
-import {
-  formatAbsoluteTime,
-  formatKeyPrefix,
-  formatRelativeFromNow,
-  scopeSummaryKind
-} from './cloud-api-format'
+import { formatAbsoluteTime, formatKeyPrefix, formatRelativeFromNow } from './cloud-api-format'
+import { ScopeSummary } from './ScopeSummary'
 import { CloudApiEmptyState, CloudApiErrorNotice, CloudApiSkeletonRows } from './cloud-api-parts'
 
 const EXPIRY_WARNING_MS = 7 * 86_400_000
@@ -352,39 +345,5 @@ function KeyRow({
         {t('auto.components.settings.cloudApi.keys.revoke', 'Revoke')}
       </Button>
     </li>
-  )
-}
-
-/** "Read only" / "Full access" / "Custom · 5 scopes", with the exact scopes one hover or focus away. */
-function ScopeSummary({ scopes }: { scopes: readonly CloudApiScope[] }): React.JSX.Element {
-  const t = useTranslate()
-  const kind = scopeSummaryKind(scopes)
-  const label =
-    kind === 'read'
-      ? t('auto.components.settings.cloudApi.create.readOnly', 'Read only')
-      : kind === 'full'
-        ? t('auto.components.settings.cloudApi.create.full', 'Full access')
-        : t('auto.components.settings.cloudApi.keys.customScopes', 'Custom · {{value0}} scopes', {
-            value0: String(scopes.length)
-          })
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          type="button"
-          className="shrink-0 cursor-default rounded outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
-          aria-label={t(
-            'auto.components.settings.cloudApi.keys.scopesLabel',
-            '{{value0}}: {{value1}}',
-            { value0: label, value1: scopes.join(', ') }
-          )}
-        >
-          <SettingsBadge tone="muted">{label}</SettingsBadge>
-        </button>
-      </TooltipTrigger>
-      <TooltipContent className="max-w-xs">
-        <span className="font-mono text-[11px] leading-5">{scopes.join(' · ')}</span>
-      </TooltipContent>
-    </Tooltip>
   )
 }
