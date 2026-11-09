@@ -1,0 +1,25 @@
+{
+  "name": "@orca-cloud/sandbox-control",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev --port 8791 --ip 127.0.0.1",
+    "db:migrate:local": "wrangler d1 migrations apply SANDBOX_DB --local",
+    "golden-image": "tsx image/build-golden-image.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "jose": "^6.2.13",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20261103.1",
+    "@types/node": "^24.19.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5",
+    "wrangler": "^4.157.0"
+  }
+}

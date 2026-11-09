@@ -154,13 +154,21 @@ export function resolveRecipeForRepo(
 }
 
 /** Project-owned recipes are authoritative for their repository and shadow
- * same-id global plugin recipes without disabling the rest of the pack. */
+ * same-id global plugin recipes without disabling the rest of the pack. Built-in providers keep
+ * their reserved ids and lead the list. */
 export function combineEphemeralVmRecipes(
   repoRecipes: readonly OrcaVmRecipe[],
   pluginRecipes: readonly OrcaVmRecipe[]
 ): OrcaVmRecipe[] {
-  const repoIds = new Set(repoRecipes.map((recipe) => recipe.id))
-  return [...repoRecipes, ...pluginRecipes.filter((recipe) => !repoIds.has(recipe.id))]
+  const builtIns = pluginRecipes.filter((recipe) => recipe.provider)
+  const reserved = new Set(builtIns.map((recipe) => recipe.id))
+  const repo = repoRecipes.filter((recipe) => !reserved.has(recipe.id))
+  const repoIds = new Set(repo.map((recipe) => recipe.id))
+  return [
+    ...builtIns,
+    ...repo,
+    ...pluginRecipes.filter((recipe) => !recipe.provider && !repoIds.has(recipe.id))
+  ]
 }
 
 function failedRecipeRepo(repoPath: string | null, failure: EphemeralVmFailure): RecipeRepoResult {

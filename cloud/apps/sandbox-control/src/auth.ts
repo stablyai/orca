@@ -1,0 +1,117 @@
+// Desktop callers present a short-lived ES256 JWT minted by Orca Cloud auth (aud=orca-sandbox,
+// purpose=sandbox), verified against the auth JWKS — the billing Worker's pattern.
+import {
+  createLocalJWKSet,
+  createRemoteJWKSet,
+  jwtVerify,
+  type JSONWebKeySet,
+  type JWTVerifyGetKey
+} from 'jose'
+import { z } from 'zod'
+import type { Env } from './env'
+
+const ID = z
+  .string()
+  .min(1)
+  .max(128)
+  .regex(/^[A-Za-z0-9_.:-]+$/)
+
+const ClaimsSchema = z.object({
+  sub: ID,
+  org: ID.optional(),
+  /** The caller's role in `org`, minted by Orca Cloud auth; absent means no admin rights. */
+  org_role: z.enum(['owner', 'admin', 'member']).optional(),
+  purpose: z.literal('sandbox')
+})
+
+export type OrgRole = 'owner' | 'admin' | 'member'
+export type SandboxCaller = {
+  userId: string
+  accountId: string
+  orgId?: string
+  orgRole?: OrgRole
+  /** Dev operator token: every id lives under the `dev:` namespace. */
+  dev?: boolean
+}
+
+const keySets = new Map<string, JWTVerifyGetKey>()
+
+function keysFor(env: Env): JWTVerifyGetKey {
+  const source = env.SANDBOX_JWKS_URL ?? `inline:${env.SANDBOX_JWKS ?? ''}`
+  let keys = keySets.get(source)
+  if (!keys) {
+    keys = env.SANDBOX_JWKS_URL
+      ? createRemoteJWKSet(new URL(env.SANDBOX_JWKS_URL))
+      : createLocalJWKSet(JSON.parse(env.SANDBOX_JWKS ?? '{"keys":[]}') as JSONWebKeySet)
+    keySets.set(source, keys)
+  }
+  return keys
+}
+
+export function readBearer(value: string | null): string | null {
+  return /^Bearer ([^\s]+)$/.exec(value ?? '')?.[1] ?? null
+}
+
+/** Same account rule as billing: an org pays for its members, otherwise the user is the account. */
+export function accountIdFor(claims: { sub: string; org?: string }): string {
+  return claims.org ? `org:${claims.org}` : `user:${claims.sub}`
+}
+
+/** Dev-only operator keys (issuer DEV_TEST_ISSUER) so live tests run before Orca auth mints sandbox tokens. */
+export const DEV_TEST_ISSUER = 'orca-sandbox-dev-test'
+let devKeys: { source: string; keys: JWTVerifyGetKey } | null = null
+
+async function verify(
+  token: string,
+  keys: JWTVerifyGetKey,
+  env: Env,
+  issuer: string | undefined,
+  now: number
+): Promise<SandboxCaller | null> {
+  try {
+    const { payload } = await jwtVerify(token, keys, {
+      audience: env.SANDBOX_JWT_AUDIENCE,
+      algorithms: ['ES256'],
+      maxTokenAge: '15m',
+      requiredClaims: ['exp', 'iat'],
+      currentDate: new Date(now),
+      ...(issuer ? { issuer } : {})
+    })
+    const claims = ClaimsSchema.parse(payload)
+    return {
+      userId: claims.sub,
+      accountId: accountIdFor(claims),
+      ...(claims.org ? { orgId: claims.org, ...(claims.org_role ? { orgRole: claims.org_role } : {}) } : {})
+    }
+  } catch {
+    return null
+  }
+}
+
+export async function authenticateDesktop(
+  env: Env,
+  request: Request,
+  now: number = Date.now()
+): Promise<SandboxCaller | null> {
+  const token = readBearer(request.headers.get('authorization'))
+  if (!token) {
+    return null
+  }
+  const caller = await verify(token, keysFor(env), env, env.SANDBOX_AUTH_ISSUER, now)
+  if (caller || !env.SANDBOX_DEV_JWKS || env.SANDBOX_ENV === 'prod') {
+    return caller
+  }
+  if (devKeys?.source !== env.SANDBOX_DEV_JWKS) {
+    devKeys = {
+      source: env.SANDBOX_DEV_JWKS,
+      keys: createLocalJWKSet(JSON.parse(env.SANDBOX_DEV_JWKS) as JSONWebKeySet)
+    }
+  }
+  // Dev callers land in their own account namespace so they never touch a real user's sandboxes.
+  const dev = await verify(token, devKeys.keys, env, DEV_TEST_ISSUER, now)
+  if (!dev) {
+    return null
+  }
+  // Org-less dev tokens keep their historical `dev:<sub>` account; org dev tokens get `dev:org:<id>`.
+  return { ...dev, accountId: dev.orgId ? `dev:org:${dev.orgId}` : `dev:${dev.userId}`, dev: true }
+}

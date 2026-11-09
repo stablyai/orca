@@ -1,5 +1,9 @@
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
+import type {
+  HostedSessionIdleSleepEvent,
+  HostedSessionWarningEvent
+} from '../../shared/hosted-sandbox/hosted-session-events'
 
 export const ephemeralVmApi = {
   listRecipes: (args) => ipcRenderer.invoke('ephemeralVm:listRecipes', args),
@@ -14,6 +18,20 @@ export const ephemeralVmApi = {
     ): void => callback(event)
     ipcRenderer.on('ephemeralVm:provisionEvent', listener)
     return () => ipcRenderer.removeListener('ephemeralVm:provisionEvent', listener)
+  },
+  onCloudSessionWarning: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, event: HostedSessionWarningEvent): void =>
+      callback(event)
+    ipcRenderer.on('orcaCloud:sessionWarning', listener)
+    return () => ipcRenderer.removeListener('orcaCloud:sessionWarning', listener)
+  },
+  onCloudIdleSleepRequested: (callback) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      event: HostedSessionIdleSleepEvent
+    ): void => callback(event)
+    ipcRenderer.on('orcaCloud:idleSleepRequested', listener)
+    return () => ipcRenderer.removeListener('orcaCloud:idleSleepRequested', listener)
   },
   listRuntimes: () => ipcRenderer.invoke('ephemeralVm:listRuntimes'),
   attachWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:attachWorkspace', args),

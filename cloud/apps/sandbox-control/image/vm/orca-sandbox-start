@@ -1,0 +1,78 @@
+#!/usr/bin/env bash
+# Starts orcad for this boot (idempotent) and prints its recipe line:
+# {"schemaVersion":1,"pairingCode":"orca://pair?...","projectRoot":"/vercel/sandbox/project"}
+# Env from the control plane: ORCA_SANDBOX_ID, ORCA_PUBLIC_WSS, optional ORCA_REPO_URL/ORCA_REPO_REF,
+# ORCA_GITHUB_PLACEHOLDER, ORCA_SECRET_ENV (`NAME=<base64>` lines: org/personal/repo secrets for
+# orcad and its agents). Never prints anything else on stdout's last line.
+set -euo pipefail
+umask 077
+ORCA_HOME=/opt/orca
+STATE="$HOME/.orca-sandbox"
+PROJECT=/vercel/sandbox/project
+mkdir -p "$STATE"
+exec 9>"$STATE/start.lock"
+flock -w 60 9
+
+boot_id="$(cat /proc/sys/kernel/random/boot_id)"
+if [ "$(cat "$STATE/boot-id" 2>/dev/null || true)" = "$boot_id" ] && [ -s "$STATE/ready.json" ] \
+  && kill -0 "$(cat "$STATE/orcad.pid" 2>/dev/null || echo 0)" 2>/dev/null; then
+  tail -n 1 "$STATE/ready.json"
+  exit 0
+fi
+# Resume = reboot from disk: locks and pids from the previous session name dead processes.
+rm -f "$STATE/ready.json" "$STATE/orcad.pid"
+printf '%s' "$boot_id" >"$STATE/boot-id"
+
+if [ -n "${ORCA_GIT_EXTRAHEADER:-}" ]; then
+  # Every github.com request carries the placeholder; the egress policy swaps in a 1h repo token.
+  git config --global http.https://github.com/.extraheader "$ORCA_GIT_EXTRAHEADER"
+fi
+if [ ! -d "$PROJECT" ]; then
+  if [ -n "${ORCA_REPO_URL:-}" ]; then
+    git clone --quiet ${ORCA_REPO_REF:+--branch "$ORCA_REPO_REF"} -- "$ORCA_REPO_URL" "$PROJECT"
+  else
+    mkdir -p "$PROJECT"
+  fi
+fi
+
+agent_env=()
+if [ -n "${ORCA_GITHUB_PLACEHOLDER:-}" ]; then
+  # The egress layer swaps the placeholder for a short-lived GitHub token; none lives in the VM.
+  agent_env+=("GH_TOKEN=$ORCA_GITHUB_PLACEHOLDER" "GITHUB_TOKEN=$ORCA_GITHUB_PLACEHOLDER")
+fi
+
+if [ -n "${ORCA_SECRET_ENV:-}" ]; then
+  # Secrets live only in orcad's process env (memory): nothing under $HOME or the project, so the
+  # stop snapshot never carries them. Resolved per start by the control plane: no image rebuild.
+  while IFS= read -r line; do
+    name="${line%%=*}" b64="${line#*=}" # not IFS='=': read would strip base64 padding
+    case "$name" in '' | *[!A-Z0-9_]* | [0-9]* | ORCA_* | PATH | HOME | LD_* | DYLD_*) continue ;; esac
+    agent_env+=("$name=$(printf '%s' "$b64" | base64 -d)")
+  done < <(printf '%s\n' "$ORCA_SECRET_ENV") # a pipe, not a here-string temp file
+  unset ORCA_SECRET_ENV
+fi
+
+node="$(find "$ORCA_HOME/runtime/runtimes" -type f -name node | head -n 1)"
+env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 TERM=xterm-256color \
+  PATH="$ORCA_HOME/tools/bin:$ORCA_HOME/bin:/usr/local/bin:/usr/bin:/bin" \
+  ORCA_USER_DATA="$HOME/.orcad-data" ORCA_SANDBOX_ID="$ORCA_SANDBOX_ID" "${agent_env[@]}" \
+  setsid nohup "$node" "$ORCA_HOME/runtime/orcad/orcad-server.js" \
+  --port 6768 --bind 0.0.0.0 --pairing-address "$ORCA_PUBLIC_WSS" \
+  --recipe-json --project-root "$PROJECT" \
+  >"$STATE/ready.json" 2>"$STATE/orcad.log" </dev/null &
+echo $! >"$STATE/orcad.pid"
+
+for _ in $(seq 1 1200); do
+  if grep -q '"pairingCode"' "$STATE/ready.json" 2>/dev/null; then
+    tail -n 1 "$STATE/ready.json"
+    exit 0
+  fi
+  if ! kill -0 "$(cat "$STATE/orcad.pid")" 2>/dev/null; then
+    echo 'orcad exited before ready' >&2
+    tail -n 40 "$STATE/orcad.log" | sed -E 's#orca://[^[:space:]]+#[REDACTED_PAIRING]#g' >&2
+    exit 1
+  fi
+  sleep 0.05
+done
+echo 'orcad start timed out' >&2
+exit 1

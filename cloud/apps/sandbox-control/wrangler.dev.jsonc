@@ -1,0 +1,39 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // DEV deployment only (workers.dev, no custom domain). Deploy:
+  //   wrangler deploy -c wrangler.dev.jsonc
+  // Secrets (wrangler secret put -c wrangler.dev.jsonc, never here): VERCEL_TOKEN, SANDBOX_DEV_JWKS,
+  // EGRESS_DEV_STATIC_AUTHORIZATION, CONTROL_PLANE_TOKEN (same value as on
+  // orca-billing-dev), GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY (PKCS#8), SECRETS_KEK (base64 32 bytes),
+  // OPERATOR_TOKEN (/v1/internal/*), GITHUB_STATE_SECRET; for the GitHub connect flow also
+  // GITHUB_APP_CLIENT_ID + GITHUB_APP_CLIENT_SECRET (app settings → generate a client secret).
+  "name": "orca-sandbox-control-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "d1_databases": [
+    {
+      "binding": "SANDBOX_DB",
+      "database_name": "orca-sandbox-control-dev",
+      "database_id": "e9f259e9-94b3-4e18-a132-2d807693a498",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Same-account Workers cannot call each other over workers.dev (error 1042); BILLING_URL names the origin.
+  "services": [{ "binding": "BILLING", "service": "orca-billing-dev" }],
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "vars": {
+    "SANDBOX_ENV": "dev",
+    "SANDBOX_JWT_AUDIENCE": "orca-sandbox",
+    "SANDBOX_JWKS_URL": "https://login.onorca.dev/.well-known/jwks.json",
+    "SANDBOX_AUTH_ISSUER": "https://login.onorca.dev",
+    "VERCEL_TEAM_ID": "team_c5IO9DfEYAxKEUgMxrbEtO0a",
+    "VERCEL_PROJECT_ID": "prj_SkVtv6zJurF9dUHpfTRy4v9avwPq",
+    "VERCEL_REGION": "iad1",
+    "BILLING_URL": "https://orca-billing-dev.lovecast.workers.dev",
+    // Golden image from image/build-golden-image.ts; lifecycle routes answer 503 without one.
+    "GOLDEN_SNAPSHOT_ID": "snap_vpcmcCAgTtISiTZgsCosOlThQbFd",
+    "GITHUB_APP_SLUG": "orca-cloud-dev",
+    "EGRESS_PROXY_URL": "https://orca-sandbox-control-dev.lovecast.workers.dev/v1/egress/proxy"
+  }
+}

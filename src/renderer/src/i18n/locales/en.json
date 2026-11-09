@@ -2149,6 +2149,12 @@
         "backgroundFailed": "Environment checks failed for a new VM workspace. Open it in the sidebar to continue.",
         "openedDegraded": "Creating the workspace on a VM whose environment checks failed.",
         "unreachable": "The environment checks could not finish: {{error}}"
+      },
+      "orcaCloudSession": {
+        "restartSoon": "Cloud workspace restarts in {{minutes}} min",
+        "restartSoonDetail": "{{name}} reaches its 24-hour session limit. Files stay; running agents pick up where they left off.",
+        "thisWorkspace": "This workspace",
+        "seePlans": "See plans"
       }
     },
     "hooks": {
@@ -24461,6 +24467,9 @@
       "cleanupStopped": "Cleanup stopped by user.",
       "cleanupInterrupted": "Cleanup was interrupted. Retry cleanup to continue.",
       "sshTargetRemoveFailed": "Failed to remove the hidden SSH target.",
+      "cloudPlanRequired": "Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.",
+      "cloudSignInRequired": "Sign in to Orca to use Orca Cloud workspaces.",
+      "cloudUnavailable": "Orca Cloud is unavailable right now. Try again in a moment.",
       "recipeExitedWithoutCode": "Recipe exited with code unknown.",
       "destroyExitedWithoutCode": "Destroy exited with code unknown.",
       "suspendExited": "Suspend exited with code {{exitCode}}.",
@@ -24468,7 +24477,8 @@
       "resumeExited": "Resume exited with code {{exitCode}}.",
       "resumeExitedWithoutCode": "Resume exited with code unknown.",
       "recipeTimedOut": "The recipe {{mode}} step did not finish within {{timeout}}, so Orca stopped it. Check the recipe output, or raise timeoutSeconds in orca.yaml if it needs longer.",
-      "provisionInterrupted": "Orca stopped while this VM was being created. Destroy it to release any provider resources."
+      "provisionInterrupted": "Orca stopped while this VM was being created. Destroy it to release any provider resources.",
+      "cloudConcurrencyLimit": "You already have as many Orca Cloud workspaces running as your plan allows. Sleep or delete one, then try again."
     }
   },
   "installDirAcl": {

@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Runs last before the golden snapshot. Every sandbox cloned from the image must start without an
+# orcad identity, device registry, agent sign-in or shell history (clone-safe identity, risk #1).
+set -euo pipefail
+pkill -f orcad-server.js 2>/dev/null || true
+for path in \
+  "$HOME/.orcad-data" "$HOME/.orca-sandbox" "$HOME/.config/orca" "$HOME/.config/orca-dev" \
+  "$HOME/.claude" "$HOME/.claude.json" "$HOME/.codex" "$HOME/.config/gh" "$HOME/.gemini" \
+  "$HOME/.local/share/opencode" "$HOME/.npm" "$HOME/.cache" "$HOME/.bash_history" \
+  /vercel/sandbox/project; do
+  rm -rf -- "$path"
+done
+sudo rm -rf /tmp/* /var/tmp/* 2>/dev/null || true
+for leftover in "$HOME/.orcad-data" "$HOME/.claude" "$HOME/.codex" "$HOME/.config/gh"; do
+  if [ -e "$leftover" ]; then
+    echo "identity survived wipe: $leftover" >&2
+    exit 1
+  fi
+done
+echo '{"wiped":true}'
