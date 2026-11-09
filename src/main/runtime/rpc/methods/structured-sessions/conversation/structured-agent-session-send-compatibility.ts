@@ -12,6 +12,7 @@ import {
 } from '../creation/structured-agent-session-gate'
 import { readsQueuedImageCards } from '../attachments/structured-agent-session-queued-image-capability'
 import { recordMobileChatSend } from '../../../../../telemetry/mobile-client-telemetry'
+import { agentSessionSenderKey, recordDrivingDevice } from '../../../../sender/driving-device-registry'
 
 /** Older clients wait past acceptance until handoff/rejection because they cannot show later failure.
  * Command-queued replies avoid request timeout; clients predating pending replies still wait for provider response. */
@@ -27,6 +28,10 @@ export async function sendStructuredAgentSessionForClient(
     queuedImageCards: readsQueuedImageCards(context)
   })
   recordMobileChatSend(context.clientKind, host.sessionAgent(params.envelope.sessionId), result)
+  if (result.ok) {
+    // The person behind this turn, for tools the agent runs (git as the sender).
+    recordDrivingDevice(agentSessionSenderKey(params.envelope.sessionId), context.caller)
+  }
   const capabilities = context.clientCapabilities ?? []
   if (
     !result.ok ||

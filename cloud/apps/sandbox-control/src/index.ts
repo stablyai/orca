@@ -588,18 +588,23 @@ export function egressPlaceholderMode(value: string | undefined): boolean | Read
 }
 
 /**
- * Git as the sender is opt-in (MEMBER_GIT_IDENTITY = on | accounts:<id>,<id>; default off): members
- * of a shared workspace share one VM user and the sender id is not yet stamped by orcad, so a member
- * could push as another member of the same workspace (to that repository only). Off = app identity.
+ * Git as the sender (MEMBER_GIT_IDENTITY: unset = on for every account, `off`, `on`, or
+ * `accounts:<id>,<id>`). orcad attests which paired device sent each turn and the root-only
+ * orca-git-identity hands an agent only that member's identity. Residual risk: members share the VM
+ * user, so a member with a shell could subvert orcad itself; agents and prompts cannot.
  */
 export function memberGitEnabled(env: Env): (accountId: string) => boolean {
+  // On by default: orcad attests each turn's sender and orca-git-identity refuses any other member.
+  if (env.MEMBER_GIT_IDENTITY === undefined || env.MEMBER_GIT_IDENTITY.trim() === '') {
+    return () => true
+  }
   const mode = egressPlaceholderMode(env.MEMBER_GIT_IDENTITY)
   return (accountId) => mode === true || (mode instanceof Set && mode.has(accountId))
 }
 
 async function memberIdentityFor(env: Env, deps: Deps): Promise<LifecycleDeps['memberIdentity']> {
   const keyring = keyringFor(env)
-  if (!keyring || env.MEMBER_GIT_IDENTITY === undefined || env.MEMBER_GIT_IDENTITY === 'off') {
+  if (!keyring || env.MEMBER_GIT_IDENTITY === 'off') {
     return undefined
   }
   const enabled = memberGitEnabled(env)

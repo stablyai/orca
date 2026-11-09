@@ -122,7 +122,7 @@ async function mintSandboxToken(
 /** Dev builds only: sign with the dev operator key the dev control plane trusts (issuer orca-sandbox-dev-test). */
 async function mintDevSandboxToken(
   keyFile: string,
-  cloud: { userId: string; activeOrgId?: string } | undefined,
+  cloud: { userId: string; activeOrgId?: string; displayName?: string } | undefined,
   env: NodeJS.ProcessEnv
 ): Promise<{ token: string; expiresAt: number }> {
   const userId = cloud?.userId
@@ -144,6 +144,8 @@ async function mintDevSandboxToken(
   })
   const payload = encode({
     sub: userId ?? 'desktop-dogfood',
+    // Auth mints a display-name claim; dev tokens carry one so labels look real.
+    ...(cloud?.displayName ? { name: cloud.displayName.slice(0, 80) } : {}),
     ...org,
     purpose: 'sandbox',
     iss: 'orca-sandbox-dev-test',

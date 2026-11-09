@@ -3,6 +3,7 @@ import {
   Archive,
   ArchiveRestore,
   ArrowUpRight,
+  Eye,
   FolderInput,
   FolderPlus,
   Link2,
@@ -30,14 +31,19 @@ import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import type {
   CloudWorkspace,
-  CloudWorkspacePatch
+  CloudWorkspacePatch,
+  CloudWorkspacePresence
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { MemberAvatar } from './CloudMemberAvatars'
-import type { MemberDirectory } from './cloud-workspace-format'
+import { memberName, presentMembers, type MemberDirectory } from './cloud-workspace-format'
 
 export type RowActions = {
   open: (w: CloudWorkspace) => void
+  /** The link to the chat you have in front when this workspace is in front, else the workspace. */
   copyLink: (w: CloudWorkspace) => void
+  copyWorkspaceLink: (w: CloudWorkspace) => void
+  /** Open the workspace on the chat this teammate has in front. */
+  follow: (w: CloudWorkspace, member: CloudWorkspacePresence) => void
   patch: (w: CloudWorkspace, patch: CloudWorkspacePatch) => void
 }
 
@@ -76,6 +82,9 @@ export function CloudWorkspaceRowMenu({
   const t = useTranslate()
   const keybindings = useAppStore((state) => state.keybindings)
   const copyShortcut = formatOptionalPrimaryShortcutLabel('cloudWorkspace.copyLink', keybindings)
+  const followable = canOpen
+    ? presentMembers(w.presence, selfId).filter((p) => p.userId !== selfId)
+    : []
   // Focus returns to ⋯ on close; after a mouse open that would leave a ring nobody asked for.
   const openedByPointer = useRef(false)
   return (
@@ -120,6 +129,35 @@ export function CloudWorkspaceRowMenu({
           {t('auto.components.cloudWorkspaces.copyLink', 'Copy link')}
           {copyShortcut ? <DropdownMenuShortcut>{copyShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => actions.copyWorkspaceLink(w)}>
+          <Link2 />
+          {t('auto.components.cloudWorkspaces.copyWorkspaceLink', 'Copy workspace link')}
+        </DropdownMenuItem>
+        {followable.length > 0 && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Eye />
+              {t('auto.components.cloudWorkspaces.follow', 'Follow')}
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-56" collisionPadding={SUBMENU_COLLISION_PADDING}>
+              {followable.map((member) => (
+                <DropdownMenuItem key={member.userId} onSelect={() => actions.follow(w, member)}>
+                  <MemberAvatar
+                    userId={member.userId}
+                    directory={directory}
+                    selfId={selfId}
+                    size="sm"
+                  />
+                  <span className="truncate">
+                    {t('auto.components.cloudWorkspaces.followMember', 'Follow {{value0}}', {
+                      value0: memberName(directory, member.userId, selfId, t)
+                    })}
+                  </span>
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
         {canManage && (
           <>
             <DropdownMenuSeparator />

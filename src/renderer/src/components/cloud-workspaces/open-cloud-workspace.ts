@@ -18,7 +18,8 @@ import {
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError } from './cloud-workspace-errors'
 
-export type OpenOutcome = { ok: true } | { ok: false; message: string }
+/** On success, the worktree that was revealed (null when its projects are still syncing). */
+export type OpenOutcome = { ok: true; worktreeId: string | null } | { ok: false; message: string }
 
 // Rejections that mean this device's pairing is no longer accepted (revoked grant, rebuilt VM).
 const PAIRING_REJECTED_CODES = new Set(['unauthorized', 'device_revoked', 'forbidden'])
@@ -100,7 +101,7 @@ async function connectAndReveal(environmentId: string, name: string): Promise<Op
       )
     )
   }
-  return { ok: true }
+  return { ok: true, worktreeId }
 }
 
 /** Drops this device's previous pairing so re-pairing does not leave a dead server and grant. */
@@ -189,7 +190,7 @@ async function openOnce(workspace: CloudWorkspace): Promise<OpenOutcome> {
             ? { executionHostId: toRuntimeExecutionHostId(local.runtimeEnvironmentId) }
             : undefined
         )
-        return { ok: true }
+        return { ok: true, worktreeId: local.worktreeId }
       }
       // Owned but created on another device (or reassigned to me): pair this device like a teammate.
     }

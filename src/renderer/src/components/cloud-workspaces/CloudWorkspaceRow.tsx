@@ -185,7 +185,12 @@ export function CloudWorkspaceRow({
         </span>
       </button>
 
-      <PresenceStack presence={w.presence} directory={directory} selfId={selfId} />
+      <PresenceStack
+        presence={w.presence}
+        directory={directory}
+        selfId={selfId}
+        onFollow={canOpen ? (member) => actions.follow(w, member) : undefined}
+      />
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="w-14 text-right text-xs tabular-nums text-muted-foreground">{cost}</span>

@@ -8,7 +8,8 @@ import { cn } from '@/lib/utils'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import type {
   CloudWorkspace,
-  CloudWorkspacePatch
+  CloudWorkspacePatch,
+  CloudWorkspacePresence
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { useOrgRoster } from '../billing/team/use-org-roster'
 import { CloudWorkspaceRow } from './CloudWorkspaceRow'
@@ -18,6 +19,8 @@ import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudW
 import { formatUsdMicros, type MemberDirectory } from './cloud-workspace-format'
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError } from './cloud-workspace-errors'
+import { focusCloudChat } from './cloud-chat-focus'
+import { frontCloudChat } from './cloud-workspace-links'
 import { copyCloudWorkspaceLink, openCloudWorkspace } from './open-cloud-workspace'
 import { useCloudWorkspaces, useCloudWorkspacesAvailable } from './use-cloud-workspaces'
 
@@ -135,12 +138,15 @@ export function CloudWorkspacesHome({
   )
   const totalCost = visible.reduce((sum, w) => sum + w.cost.totalUsdMicros, 0)
 
-  const open = useCallback(async (w: CloudWorkspace) => {
+  /** Opens the workspace, then (when following a teammate) the chat they have in front. */
+  const open = useCallback(async (w: CloudWorkspace, chatId?: string | null) => {
     setOpening(w.id)
     try {
       const outcome = await openCloudWorkspace(w)
       if (!outcome.ok) {
         toast.error(outcome.message)
+      } else if (chatId) {
+        await focusCloudChat(outcome.worktreeId, chatId)
       }
     } finally {
       setOpening((current) => (current === w.id ? null : current))
@@ -191,7 +197,12 @@ export function CloudWorkspacesHome({
   const actions = useMemo(
     () => ({
       open: (w: CloudWorkspace) => void open(w),
-      copyLink: (w: CloudWorkspace) => void copyCloudWorkspaceLink(w.id),
+      copyLink: (w: CloudWorkspace) => {
+        const front = frontCloudChat()
+        void copyCloudWorkspaceLink(w.id, front?.sandboxId === w.id ? front.chatId : null)
+      },
+      copyWorkspaceLink: (w: CloudWorkspace) => void copyCloudWorkspaceLink(w.id),
+      follow: (w: CloudWorkspace, member: CloudWorkspacePresence) => void open(w, member.chatId),
       patch: (w: CloudWorkspace, change: CloudWorkspacePatch) => void patch(w, change)
     }),
     [open, patch]

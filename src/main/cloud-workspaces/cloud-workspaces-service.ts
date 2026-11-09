@@ -193,6 +193,7 @@ export function createCloudWorkspacesService(deps: {
         return
       }
       const changed = active?.sandboxId !== args.sandboxId
+      const previousChatId = active?.chatId ?? null
       if (changed && active) {
         void client
           .presence(active.sandboxId, { clientId: deps.clientId, state: 'left' })
@@ -200,7 +201,8 @@ export function createCloudWorkspacesService(deps: {
       }
       active = {
         sandboxId: args.sandboxId,
-        chatId: args.chatId ?? active?.chatId ?? null,
+        // undefined keeps the chat (typing beats); null means no chat is in front any more.
+        chatId: args.chatId !== undefined ? args.chatId : changed ? null : (active?.chatId ?? null),
         typingUntil: args.typing
           ? Date.now() + TYPING_HOLD_MS
           : changed
@@ -208,7 +210,7 @@ export function createCloudWorkspacesService(deps: {
             : (active?.typingUntil ?? 0),
         leased: args.leased ?? active?.leased ?? false
       }
-      if (changed || args.typing) {
+      if (changed || args.typing || active.chatId !== previousChatId) {
         void beat()
       }
       renewLeaseIfDue()

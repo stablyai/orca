@@ -385,7 +385,7 @@ export async function syncMemberGit(deps: LifecycleDeps, row: SandboxRow, sessio
     await refreshGitCredentials(deps, row, sessionId)
     const configs = await memberGitConfigs({ db: deps.db, identity: deps.memberIdentity }, row)
     const encoded = btoa(String.fromCharCode(...new TextEncoder().encode(JSON.stringify(configs))))
-    await deps.provider.runCommand(sessionId, { command: MEMBERS_COMMAND, env: { ORCA_MEMBERS_B64: encoded }, timeoutMs: 30_000 })
+    await deps.provider.runCommand(sessionId, { command: MEMBERS_COMMAND, env: { ORCA_MEMBERS_B64: encoded }, sudo: true, timeoutMs: 30_000 })
     return configs.length
   } catch {
     return 0

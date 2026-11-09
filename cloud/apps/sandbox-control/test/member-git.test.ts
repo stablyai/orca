@@ -12,7 +12,7 @@ const KEK = Buffer.alloc(32, 7).toString('base64')
 const OP = 'o'.repeat(40)
 const REPO = 'https://github.com/acme/app'
 
-async function setup(memberGit: string | undefined = 'on') {
+async function setup(memberGit: string | undefined = undefined) {
   const { privateKey, publicKey } = await generateKeyPair('RS256')
   const jwks = { keys: [{ ...(await exportJWK(publicKey)), kid: 'v1', alg: 'RS256' }] }
   const upstream: { url: string; authorization: string | null }[] = []
@@ -109,6 +109,10 @@ describe('git as the sender', () => {
     expect(githubRules).toContain(bobPh)
     const sync = t.h.vercel.commands.filter((c) => c.command === MEMBERS_COMMAND).at(-1)!
     const members = JSON.parse(Buffer.from(sync.env.ORCA_MEMBERS_B64!, 'base64').toString())
+    // orca-git-identity maps orcad's attested sender device to the member (bob's grant device here).
+    expect(members.find((m: { userId: string }) => m.userId === 'bob').deviceIds).toEqual([
+      [...t.h.vercel.boxes.values()][0]!.devices.at(-1)
+    ])
     expect(members.map((m: { userId: string; email: string }) => [m.userId, m.email])).toEqual([
       ['alice', '11+alice-gh@users.noreply.github.com'],
       ['bob', '22+bob-gh@users.noreply.github.com']
@@ -121,7 +125,7 @@ describe('git as the sender', () => {
     expect(await t.proxied('github.com', '/acme/app.git/info/refs', bobPh)).toEqual({ status: 403, body: 'placeholder_missing' })
   })
 
-  it('is off unless the org opted in: member placeholders get no credential, the VM no member configs', async () => {
+  it('MEMBER_GIT_IDENTITY=off turns it off: member placeholders get no credential, the VM no member configs', async () => {
     const t = await setup('off')
     await t.seed('alice', 'alice-gh', 11)
     const alicePh = await memberPlaceholder(t.id, 'alice')

@@ -10,12 +10,15 @@ import { parseCloudWorkspaceLink } from '../../../../shared/cloud-workspaces/clo
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import { describeError } from './cloud-workspace-errors'
 import { copyCloudWorkspaceLink, openCloudWorkspace } from './open-cloud-workspace'
+import { currentCloudChatId, focusCloudChat } from './cloud-chat-focus'
 import { cloudWorkspacesAvailable } from './use-cloud-workspaces'
 
 const HIGHLIGHT_MS = 4_000
 /** No input for this long and the desktop stops reporting presence (and renewing a lease). */
 const IDLE_MS = 15 * 60_000
 const TYPING_REPORT_MS = 3_000
+/** Tab and pane switches settle before the chat in front is re-read (layouts churn while resizing). */
+const CHAT_SYNC_DEBOUNCE_MS = 300
 
 let highlightId: string | null = null
 let highlightTimer: ReturnType<typeof setTimeout> | undefined
@@ -61,12 +64,27 @@ export async function handleCloudWorkspaceLink(link: string): Promise<void> {
   const outcome = await openCloudWorkspace(resolved.value.workspace)
   if (!outcome.ok) {
     toast.error(outcome.message)
+  } else if (resolved.value.chatId) {
+    await focusCloudChat(outcome.worktreeId, resolved.value.chatId)
   }
   setHighlight(parsed.workspaceId, HIGHLIGHT_MS)
 }
 
-type Front = { sandboxId: string; owner: boolean } | null
+type Front = {
+  sandboxId: string
+  owner: boolean
+  worktreeId: string
+  chatId: string | null
+} | null
 let front: Front = null
+
+/** The cloud workspace in front and the chat focused in it, for "Copy link" with the chat. */
+export function frontCloudChat(): { sandboxId: string; chatId: string | null } | null {
+  return front ? { sandboxId: front.sandboxId, chatId: front.chatId } : null
+}
+
+const frontKey = (value: Front): string =>
+  value ? `${value.sandboxId}:${value.owner}:${value.chatId ?? ''}` : ''
 
 async function resolveFront(): Promise<Front> {
   const state = useAppStore.getState()
@@ -79,13 +97,18 @@ async function resolveFront(): Promise<Front> {
     (l) => l.worktreeId === worktreeId
   )
   if (local) {
-    return { sandboxId: local.sandboxId, owner: true }
+    return {
+      sandboxId: local.sandboxId,
+      owner: true,
+      worktreeId,
+      chatId: currentCloudChatId(worktreeId)
+    }
   }
   if (hostId) {
     const bindings = await window.api.cloudWorkspaces.environmentBindings()
     for (const [sandboxId, binding] of Object.entries(bindings)) {
       if (toRuntimeExecutionHostId(binding.environmentId) === hostId) {
-        return { sandboxId, owner: false }
+        return { sandboxId, owner: false, worktreeId, chatId: currentCloudChatId(worktreeId) }
       }
     }
   }
@@ -130,16 +153,32 @@ export function installCloudWorkspaceLinks(): () => void {
     if (ticket !== sequence) {
       return
     }
-    const key = next ? `${next.sandboxId}:${next.owner}` : ''
+    const key = frontKey(next)
     if (key === last) {
       return
     }
     last = key
     front = next
     await api.setActive(
-      next ? { sandboxId: next.sandboxId, leased: !next.owner } : { sandboxId: null }
+      next
+        ? { sandboxId: next.sandboxId, leased: !next.owner, chatId: next.chatId }
+        : { sandboxId: null }
     )
   }
+  // Switching chats inside the same workspace needs no IPC to find the workspace again.
+  const syncChat = (): void => {
+    if (!front) {
+      return
+    }
+    const chatId = currentCloudChatId(front.worktreeId)
+    if (chatId === front.chatId) {
+      return
+    }
+    front = { ...front, chatId }
+    last = frontKey(front)
+    void api.setActive({ sandboxId: front.sandboxId, leased: !front.owner, chatId })
+  }
+  let chatTimer: ReturnType<typeof setTimeout> | undefined
   cleanups.push(
     useAppStore.subscribe((state, previous) => {
       if (
@@ -147,9 +186,20 @@ export function installCloudWorkspaceLinks(): () => void {
         state.activeWorkspaceExecutionHostId !== previous.activeWorkspaceExecutionHostId
       ) {
         void sync()
+        return
+      }
+      if (
+        state.activeGroupIdByWorktree !== previous.activeGroupIdByWorktree ||
+        state.groupsByWorktree !== previous.groupsByWorktree ||
+        state.unifiedTabsByWorktree !== previous.unifiedTabsByWorktree ||
+        state.terminalLayoutsByTabId !== previous.terminalLayoutsByTabId
+      ) {
+        clearTimeout(chatTimer)
+        chatTimer = setTimeout(syncChat, CHAT_SYNC_DEBOUNCE_MS)
       }
     })
   )
+  cleanups.push(() => clearTimeout(chatTimer))
   void sync()
 
   let idleTimer: ReturnType<typeof setTimeout> | undefined
@@ -201,7 +251,7 @@ export function installCloudWorkspaceLinks(): () => void {
       )
     ) {
       event.preventDefault()
-      void copyCloudWorkspaceLink(front.sandboxId)
+      void copyCloudWorkspaceLink(front.sandboxId, front.chatId)
       return
     }
     const editing = target?.isContentEditable || target?.tagName === 'TEXTAREA'

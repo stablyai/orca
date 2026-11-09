@@ -2,9 +2,10 @@
 // grant) who connected GitHub gets a placeholder of their own. The VM's `orca-git-as <member>` sends
 // it; the egress proxy swaps it for that member's GitHub user token, and only for the workspace
 // repository (git smart HTTP on github.com, REST under /repos/<owner>/<repo> on api.github.com).
-// Trust note: members of a shared workspace share one VM user, so a member can push as another
-// member of the same workspace to the same repository; tokens never enter the VM and cannot be
-// used for any other repository or API.
+// Who may use which identity is decided in the VM by orcad's attestation: orca-git-identity (root)
+// maps the paired device that sent the agent's latest turn to a member and refuses any other member;
+// member files are root-only. Tokens never enter the VM and work for this repository only. Residual
+// risk: members share the VM user, so a member with a shell could subvert orcad itself.
 import type { ProxiedRoute } from './egress-proxy'
 import { parseGitHubRepo } from './github-app'
 import { memberPlaceholder, type MemberGitIdentity } from './github-user-tokens'
@@ -86,7 +87,7 @@ export function memberGitRoutes(deps: MemberGitDeps) {
 
 /** What the VM writes per member for `orca-git-as` (no token: the placeholder and author identity). */
 export async function memberGitConfigs(deps: MemberGitDeps, row: SandboxRow) {
-  const out: { userId: string; name: string; email: string; authorization: string }[] = []
+  const out: { userId: string; name: string; email: string; authorization: string; deviceIds: string[] }[] = []
   for (const userId of await connectedMembers(deps.db, row)) {
     const identity = await deps.identity(row, userId)
     if (identity) {
@@ -94,9 +95,21 @@ export async function memberGitConfigs(deps: MemberGitDeps, row: SandboxRow) {
         userId,
         name: identity.name,
         email: identity.email,
-        authorization: gitBasicAuthorization(await memberPlaceholder(row.id, userId))
+        authorization: gitBasicAuthorization(await memberPlaceholder(row.id, userId)),
+        // The member's paired orcad devices: orca-git-identity maps orcad's attested sender to a member.
+        deviceIds: await memberDeviceIds(deps.db, row.id, userId)
       })
     }
   }
   return out
+}
+
+async function memberDeviceIds(db: D1Database, sandboxId: string, userId: string): Promise<string[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT orcad_device_id FROM workspace_grants WHERE sandbox_id = ? AND user_id = ? AND status = 'active' AND orcad_device_id IS NOT NULL`
+    )
+    .bind(sandboxId, userId)
+    .all<{ orcad_device_id: string }>()
+  return results.map((r) => r.orcad_device_id)
 }

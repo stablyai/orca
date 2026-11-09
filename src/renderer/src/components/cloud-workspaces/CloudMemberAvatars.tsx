@@ -52,16 +52,21 @@ export function MemberAvatar({
   )
 }
 
-/** Who is in the workspace right now; typing members are ringed. One avatar per member. */
+/**
+ * Who is in the workspace right now, one avatar per member. A teammate's avatar is a button that
+ * follows them (opens the workspace on the chat they have in front).
+ */
 export function PresenceStack({
   presence,
   directory,
   selfId,
+  onFollow,
   max = 3
 }: {
   presence: CloudWorkspacePresence[]
   directory: MemberDirectory
   selfId: string | null
+  onFollow?: (member: CloudWorkspacePresence) => void
   max?: number
 }): React.JSX.Element | null {
   const t = useTranslate()
@@ -75,17 +80,41 @@ export function PresenceStack({
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span className="flex items-center -space-x-1.5" role="img" aria-label={summary}>
+        <span className="flex items-center -space-x-1.5">
           {/* Viewing is the avatar alone; typing rings it and adds a pulsing dot. Neither reuses
               the workspace status colors, so presence never reads as "running" or "failed". */}
-          {shown.map((p) => (
-            <span key={p.userId} className="relative rounded-full ring-2 ring-background">
-              <MemberAvatar userId={p.userId} directory={directory} selfId={selfId} size="sm" />
-              {p.state === 'typing' && (
-                <span className="absolute -bottom-0.5 -right-0.5 size-2 rounded-full bg-primary ring-2 ring-background motion-safe:animate-pulse" />
-              )}
-            </span>
-          ))}
+          {shown.map((p) => {
+            const avatar = (
+              <>
+                <MemberAvatar userId={p.userId} directory={directory} selfId={selfId} size="sm" />
+                {p.state === 'typing' && (
+                  <span className="absolute -bottom-0.5 -right-0.5 size-2 rounded-full bg-primary ring-2 ring-background motion-safe:animate-pulse" />
+                )}
+              </>
+            )
+            return onFollow && p.userId !== selfId ? (
+              <button
+                key={p.userId}
+                type="button"
+                onClick={() => onFollow(p)}
+                aria-label={t('auto.components.cloudWorkspaces.followMember', 'Follow {{value0}}', {
+                  value0: memberName(directory, p.userId, selfId, t)
+                })}
+                className="relative cursor-default rounded-full ring-2 ring-background outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring"
+              >
+                {avatar}
+              </button>
+            ) : (
+              <span
+                key={p.userId}
+                role="img"
+                aria-label={presenceSummary([p], directory, selfId, t)}
+                className="relative rounded-full ring-2 ring-background"
+              >
+                {avatar}
+              </span>
+            )
+          })}
           {extra > 0 && (
             <span className="relative inline-flex size-5 items-center justify-center rounded-full bg-muted text-[9px] font-medium text-muted-foreground ring-2 ring-background">
               +{extra}

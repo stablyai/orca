@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Root helper behind `orca-git-as` (sudoers: the VM user may run only this). Asks orcad, as the
+# calling agent, which paired device sent the message that started the agent's latest turn
+# (`orca sender`: orcad identifies the agent from its launch evidence, never from arguments), maps
+# that device to a workspace member, and prints that member's git config file for the caller to
+# include. Optional ORCA_GIT_AS: the member the agent expects; any other answer is refused.
+# Exit codes: 0 printed a config path; 3 no member identity (use the workspace identity); 4 refused.
+set -euo pipefail
+DIR=/etc/orca/members
+caller="${SUDO_USER:-}"
+case "$caller" in '' | root | *[!a-z0-9_-]*) echo 'orca-git-identity: run through orca-git-as' >&2; exit 4 ;; esac
+home="$(getent passwd "$caller" | cut -d: -f6)"
+node="$(find /opt/orca/runtime/runtimes -type f -name node | head -n 1)"
+cli=/opt/orca/runtime/orcad/out/cli/index.js
+# Only the evidence variables orcad needs reach the query, which runs as the caller, not root.
+answer="$(sudo -u "$caller" env -i HOME="$home" PATH=/usr/bin:/bin ORCA_USER_DATA_PATH="$home/.orcad-data" \
+  ${ORCA_TERMINAL_HANDLE:+ORCA_TERMINAL_HANDLE="$ORCA_TERMINAL_HANDLE"} \
+  ${ORCA_PANE_KEY:+ORCA_PANE_KEY="$ORCA_PANE_KEY"} \
+  ${ORCA_AGENT_LAUNCH_TOKEN:+ORCA_AGENT_LAUNCH_TOKEN="$ORCA_AGENT_LAUNCH_TOKEN"} \
+  ${ORCA_AGENT_SESSION_ID:+ORCA_AGENT_SESSION_ID="$ORCA_AGENT_SESSION_ID"} \
+  timeout 15 "$node" "$cli" sender --json 2>/dev/null || true)"
+device="$(jq -r '.result.sender.deviceId // empty' <<<"$answer" 2>/dev/null || true)"
+if [ -z "$device" ] || [ ! -s "$DIR/devices.json" ]; then
+  if [ -n "${ORCA_GIT_AS:-}" ]; then
+    echo "orca-git-as: Orca cannot confirm that $ORCA_GIT_AS sent this agent's latest message; refusing to push as them." >&2
+    exit 4
+  fi
+  exit 3
+fi
+member="$(jq -r --arg d "$device" '.[$d] // empty' "$DIR/devices.json")"
+if [ -z "$member" ]; then
+  [ -n "${ORCA_GIT_AS:-}" ] && { echo "orca-git-as: the sender's device is not linked to a workspace member; refusing." >&2; exit 4; }
+  exit 3
+fi
+if [ -n "${ORCA_GIT_AS:-}" ] && [ "$ORCA_GIT_AS" != "$member" ]; then
+  echo "orca-git-as: this agent's latest message came from $member, not $ORCA_GIT_AS; refusing to push as someone else." >&2
+  exit 4
+fi
+file="$DIR/$(printf '%s' "$member" | tr ':' '_').gitconfig"
+[ -s "$file" ] || exit 3
+# The caller reads the identity through this one-shot copy (owned by them, removed by orca-git-as).
+out="$(sudo -u "$caller" mktemp)"
+cat "$file" >"$out"
+echo "$out"

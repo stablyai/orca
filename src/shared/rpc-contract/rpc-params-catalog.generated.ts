@@ -1386,6 +1386,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'orchestration.sessionAddress': SessionAddressParams,
   'orchestration.taskCreate': TaskCreateParams,
   'orchestration.taskList': TaskListParams,
+  'orchestration.turnSender': null,
   'orchestration.workerAbandon': WorkerDispatchParams,
   'orchestration.workerAutoClose': OrchestrationWorkerSubjectParams,
   'orchestration.workerChatTouch': OrchestrationWorkerSubjectParams,
