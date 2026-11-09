@@ -12,6 +12,7 @@ import type {
   ProjectHostSetupUpdateResult
 } from '../../../shared/project-types'
 import { getProjectHostSetupForRepo } from '../../../shared/project-host-setup-lookup'
+import { repoIdForHostLocalProjectId } from '../../../shared/project-host-setup-projection'
 import {
   linkImportedFolderToProject,
   type RepositoryMetadataOwner
@@ -135,15 +136,33 @@ export function registerProjectHostSetupHandlers(
       }
       // A folder project whose folder moved is repointed in place instead of duplicated (#30807).
       if (parsedHost.kind === 'local') {
+        // The same fence the ordinary import path runs: a project mid-WSL-move must not be repointed.
+        const localRepoId = repoIdForHostLocalProjectId(args.projectId)
+        assertWslMoveHostSetupWritable(store, {
+          projectId: args.projectId,
+          hostId: args.hostId,
+          ...(localRepoId ? { repoId: localRepoId } : {})
+        })
         const repoint = await repointMovedFolderProject(store, {
           projectId: args.projectId,
           folderPath: args.path,
           kind: args.kind
         })
         if (repoint.outcome === 'repointed') {
+          // A repointed row must not report the legacy default when the caller named its method.
+          const repointed = repoint.repo.projectHostSetupMethod
+            ? repoint.repo
+            : store.updateRepo(repoint.repo, {
+                projectHostSetupMethod: args.setupMethod ?? 'imported-existing-folder'
+              })
+          if (!repointed) {
+            throw new Error(
+              `Project setup repo disappeared before its method could be set: ${repoint.repo.id}`
+            )
+          }
           invalidateAuthorizedRootsCache()
           notifyReposChanged(mainWindow)
-          return buildProjectHostSetupResult(store, repoint.repo)
+          return buildProjectHostSetupResult(store, repointed)
         }
         if (repoint.outcome === 'refused') {
           throw new Error(repoint.reason)

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserWindow } from 'electron'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { closeTestStores, createStore, testState } from '../../persistence/persistence-test-harness'
@@ -122,6 +122,26 @@ describe('project host setups under a WSL move', () => {
     await expect(invoke('projectHostSetups:delete', { setupId: owned.id })).rejects.toBeInstanceOf(
       WslMoveProjectFencedError
     )
+  })
+
+  it('refuses a repoint of a folder project mid-WSL-move', async () => {
+    const oldPath = join(testState.dir, 'moved-folder')
+    const newPath = join(testState.dir, 'moved-folder-new')
+    store.addRepo(repo('repo-1', { path: oldPath, kind: 'folder' }))
+    mkdirSync(newPath)
+    seedWslMoveCutover(testState.dir, cutover('move-1', 'source-fenced'))
+    registerProjectHostSetupHandlers(new BrowserWindow(), store)
+    const projectId = setupFor('repo-1').projectId
+
+    await expect(
+      invoke('projectHostSetups:setupExistingFolder', {
+        projectId,
+        hostId: 'local',
+        path: newPath,
+        kind: 'folder'
+      })
+    ).rejects.toBeInstanceOf(WslMoveProjectFencedError)
+    expect(store.getRepo('repo-1')?.path).toBe(oldPath)
   })
 
   it('refuses a runtime setup delete for a moving repo', () => {
