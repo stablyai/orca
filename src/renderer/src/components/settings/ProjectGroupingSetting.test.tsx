@@ -57,19 +57,25 @@ function renderSection(
 }
 
 describe('project grouping settings', () => {
-  it('exposes all three grouping choices and writes the selected default', () => {
+  it('exposes all three grouping choices and writes the selected default', async () => {
     const update = vi.fn()
     renderSection(update)
-    const controls = [
-      ...container.querySelectorAll<HTMLButtonElement>('#general-projects [role="radio"]')
-    ]
-    expect(controls.map((button) => button.getAttribute('value'))).toEqual([
-      'repository',
-      'host',
-      'folder'
+    const select = container.querySelector<HTMLButtonElement>(
+      '#general-projects [role="combobox"]'
+    )!
+    expect(select.textContent).toContain('By repository')
+    await act(async () => {
+      select.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))
+    })
+    const options = [...document.querySelectorAll<HTMLElement>('[role="option"]')]
+    expect(options.map((option) => option.textContent)).toEqual([
+      'By repository',
+      'Separate by host',
+      'Separate by folder'
     ])
-    expect(controls[0].getAttribute('aria-checked')).toBe('true')
-    act(() => controls[2].click())
+    await act(async () => {
+      options[2].click()
+    })
     expect(update).toHaveBeenCalledWith({ projectGroupingMode: 'folder' })
   })
 

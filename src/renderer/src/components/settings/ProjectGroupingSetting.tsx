@@ -1,5 +1,4 @@
 import type { SettingsUpdate } from '@/store/slices/settings/create-settings-slice'
-import { RadioGroup, RadioGroupItem } from '../ui/radio-group'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { resolveProjectGroupingMode } from '../../../../shared/project-grouping'
 import { SettingsRow } from './form-controls/SettingsFormControls'
@@ -11,27 +10,15 @@ function groupingOptions(t: Translate) {
   return [
     {
       value: 'repository' as const,
-      label: t('settings.projectGrouping.repository', 'By repository'),
-      description: t(
-        'settings.projectGrouping.repositoryDescription',
-        'Every checkout of the same repository is one project, on every host and in every folder.'
-      )
+      label: t('settings.projectGrouping.repository', 'By repository')
     },
     {
       value: 'host' as const,
-      label: t('settings.projectGrouping.host', 'Separate by host'),
-      description: t(
-        'settings.projectGrouping.hostDescription',
-        'Checkouts on the same host share a project. Each host gets its own project.'
-      )
+      label: t('settings.projectGrouping.host', 'Separate by host')
     },
     {
       value: 'folder' as const,
-      label: t('settings.projectGrouping.folder', 'Separate by folder'),
-      description: t(
-        'settings.projectGrouping.folderDescription',
-        'Every checkout is its own project, so folders on different hosts are separate too.'
-      )
+      label: t('settings.projectGrouping.folder', 'Separate by folder')
     }
   ]
 }
@@ -60,11 +47,14 @@ export function ProjectGroupingSetting({
         'settings.projectGrouping.description',
         'Choose which checkouts of a Git repository count as one project.'
       )
-  const updateOverride = (value: string) => {
-    if (!projectId) {
+  const updateMode = (value: string) => {
+    if (value !== 'default' && value !== 'repository' && value !== 'host' && value !== 'folder') {
       return
     }
-    if (value !== 'default' && value !== 'repository' && value !== 'host' && value !== 'folder') {
+    if (!projectId) {
+      if (value !== 'default') {
+        updateSettings({ projectGroupingMode: value })
+      }
       return
     }
     updateSettings((current) => {
@@ -85,19 +75,18 @@ export function ProjectGroupingSetting({
       keywords={['projects', 'repository', 'host', 'folder', 'group', 'checkout']}
     >
       <SettingsRow
-        className={projectId ? undefined : 'flex-col items-stretch'}
         label={title}
         description={description}
         control={
-          projectId ? (
-            <Select
-              value={settings.projectGroupingOverrides?.[projectId] ?? 'default'}
-              onValueChange={updateOverride}
-            >
-              <SelectTrigger className="w-56" aria-label={title}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
+          <Select
+            value={projectId ? (settings.projectGroupingOverrides?.[projectId] ?? 'default') : mode}
+            onValueChange={updateMode}
+          >
+            <SelectTrigger className="w-56" aria-label={title}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {projectId ? (
                 <SelectItem value="default">
                   {t('settings.projectGrouping.useDefault', 'Use default ({{mode}})', {
                     mode: options.find(
@@ -105,39 +94,14 @@ export function ProjectGroupingSetting({
                     )?.label
                   })}
                 </SelectItem>
-                {options.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : (
-            <RadioGroup
-              value={mode}
-              onValueChange={(value) => {
-                if (value === 'repository' || value === 'host' || value === 'folder') {
-                  updateSettings({ projectGroupingMode: value })
-                }
-              }}
-              aria-label={title}
-            >
+              ) : null}
               {options.map((option) => (
-                <label
-                  key={option.value}
-                  className="flex items-center gap-3 rounded-md border border-border p-3"
-                >
-                  <RadioGroupItem value={option.value} />
-                  <span className="space-y-1 text-sm">
-                    <span className="block font-medium">{option.label}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {option.description}
-                    </span>
-                  </span>
-                </label>
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
               ))}
-            </RadioGroup>
-          )
+            </SelectContent>
+          </Select>
         }
       />
     </SearchableSetting>
