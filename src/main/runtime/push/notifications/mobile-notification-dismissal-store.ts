@@ -211,7 +211,15 @@ export class MobileNotificationDismissalStore {
         this.scheduleRetry()
       }
     }, delay)
-    this.retryTimer.unref?.()
+    const timer: unknown = this.retryTimer
+    if (
+      typeof timer === 'object' &&
+      timer !== null &&
+      'unref' in timer &&
+      typeof timer.unref === 'function'
+    ) {
+      timer.unref()
+    }
   }
 }
 
