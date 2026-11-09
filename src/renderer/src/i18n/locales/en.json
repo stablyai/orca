@@ -24751,5 +24751,103 @@
     "starting": "{{agent}}: starting sign-in…",
     "title": "Agent sign-in",
     "otherAccount": "{{agent}} signed in as {{email}}."
+  },
+  "orcaCloudWorkspace": {
+    "archived": {
+      "prOpen": "Open",
+      "prDraft": "Draft",
+      "prMerged": "Merged",
+      "prClosed": "Closed",
+      "detached": "Detached HEAD",
+      "aheadBehind": "↑{{ahead}} ↓{{behind}} vs {{upstream}}",
+      "uncommitted": "Uncommitted changes",
+      "noCommits": "No commits on this branch yet.",
+      "title": "Archived workspace",
+      "since": "Archived {{when}}",
+      "keptUntil": "kept until {{date}}",
+      "readOnly": "This is a read-only snapshot. Unarchive to open terminals and agents again.",
+      "unarchiving": "Unarchiving…",
+      "loadFailed": "Couldn’t load the archive details.",
+      "pullRequests": "Pull requests",
+      "noPrs": "No pull requests were open from this workspace.",
+      "lastChanges": "Last changes",
+      "noRepo": "No repository details were captured for this workspace.",
+      "files": "Files",
+      "noFiles": "No files were captured.",
+      "moreFiles": "{{count}} more files not shown",
+      "toast": "Workspace archived",
+      "toastDetail": "Its PRs, last changes and files stay browsable. It no longer uses cloud hours."
+    },
+    "unarchive": "Unarchive",
+    "retry": "Retry",
+    "overlay": {
+      "restarting": "Restarting…",
+      "unarchiving": "Restoring from archive…",
+      "connecting": "Connecting…",
+      "waking": "Waking…",
+      "failedTitle": "Couldn’t wake {{name}}",
+      "failedDetail": "Your files and chats are safe on its disk.",
+      "tryAgain": "Try again"
+    },
+    "thisWorkspace": "this workspace",
+    "restart": "Restart",
+    "markLabel": "Orca Cloud: {{state}}",
+    "restartVm": "Restart cloud VM",
+    "archive": "Archive",
+    "oom": {
+      "titleNamed": "A process ({{name}}) ran out of memory",
+      "title": "A process ran out of memory",
+      "detail": "The VM stopped it to stay up. Restart for a clean slate, or use a larger machine for this workload."
+    },
+    "unresponsive": {
+      "title": "This cloud workspace isn’t responding",
+      "detail": "Restart keeps your files and continues interrupted agents."
+    },
+    "restarting": "Restarting…",
+    "dismiss": "Dismiss",
+    "title": "Orca Cloud",
+    "loading": "Loading status",
+    "statusUnavailable": "Status unavailable right now.",
+    "cpu": "CPU",
+    "cpuValue": "{{percent}}% of {{cpus}} vCPU",
+    "memory": "Memory",
+    "disk": "Disk",
+    "uptime": "Up for",
+    "used": "Used",
+    "usedValue": "{{hours}} · {{cost}} so far",
+    "keptUntil": "Kept until",
+    "staleSince": "Last known · {{ago}} ago",
+    "updatedAgo": "Updated {{ago}} ago",
+    "state": {
+      "running": "Running",
+      "sleeping": "Sleeping",
+      "waking": "Waking",
+      "unresponsive": "Unresponsive",
+      "archived": "Archived",
+      "failed": "Couldn’t start",
+      "unknown": "Checking…"
+    },
+    "detail": {
+      "running": "Agents and terminals keep running while your laptop sleeps.",
+      "sleeping": "Files and chats are saved. Opening the workspace wakes it in a few seconds.",
+      "waking": "Starting the VM from its saved disk.",
+      "unresponsive": "The VM stopped answering. Restart keeps your files; interrupted agents continue.",
+      "archived": "Stopped and kept as a snapshot. Unarchive to work in it again.",
+      "failed": "The last start failed. Your files are safe.",
+      "unknown": "Asking Orca Cloud for the latest status."
+    },
+    "error": {
+      "noHours": "Your plan has no cloud hours left. Files are safe; add hours to start it again.",
+      "unavailable": "Orca Cloud is not reachable right now. Try again in a moment."
+    },
+    "restartFailed": "Couldn’t restart the workspace",
+    "restarted": "Workspace restarted",
+    "restartedDetail": "Files kept. Interrupted agents are continuing.",
+    "archiveFailed": "Couldn’t archive the workspace",
+    "unarchiveFailed": "Couldn’t unarchive the workspace",
+    "idleSlept": "{{name}} slept after {{minutes}} min idle",
+    "idleSleptNoTime": "{{name}} went to sleep while idle",
+    "idleSleptDetail": "Files and chats are saved. It stops using cloud hours until you open it.",
+    "wake": "Wake"
   }
 }

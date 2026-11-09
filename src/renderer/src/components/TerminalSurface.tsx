@@ -5,6 +5,7 @@ import { TerminalSplitWorkspaceSurfaces } from './TerminalSplitWorkspaceSurfaces
 import { TerminalLegacyWorkspaceSurface } from './TerminalLegacyWorkspaceSurface'
 import { TerminalWorkspaceDialogs } from './TerminalWorkspaceDialogs'
 import { WslHostStoppedWorkspaceNotice } from './wsl-host-stopped/WslHostStoppedWorkspaceNotice'
+import { OrcaCloudWorkspaceSurface } from './orca-cloud/OrcaCloudWorkspaceSurface'
 import type { TerminalController } from './use-terminal-controller'
 
 export function TerminalSurface({
@@ -31,6 +32,7 @@ export function TerminalSurface({
       <TerminalSplitWorkspaceSurfaces controller={controller} />
       <TerminalLegacyWorkspaceSurface controller={controller} />
       <WslHostStoppedWorkspaceNotice worktreeId={renderedActiveWorktreeId} />
+      <OrcaCloudWorkspaceSurface worktreeId={renderedActiveWorktreeId} />
       <TerminalWorkspaceDialogs controller={controller} />
     </div>
   )
