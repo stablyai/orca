@@ -9,16 +9,6 @@ export class AgentSessionAcquisitionRootExitObservedError extends Error {
   }
 }
 
-/** A root exit settled by delivering a kill, which the close must still report. */
-export function isKillDeliveredRootExit(
-  error: unknown
-): error is AgentSessionAcquisitionRootExitObservedError {
-  return (
-    error instanceof AgentSessionAcquisitionRootExitObservedError &&
-    error.deathEvidenceKind === 'kill-delivered'
-  )
-}
-
 /** Cleanup proved exit: on Windows, graceful root exit or taskkill’s tree-termination report. */
 export class AgentSessionAcquisitionExitProvenError extends Error {
   constructor(cause: unknown) {

@@ -497,19 +497,6 @@
         "missingHost": "代理 URL 必须包含主机。"
       }
     },
-    "voice": {
-      "modelDescriptions": {
-        "parakeetV3": "为 25 种欧洲语言提供最高准确度。支持标点、大小写和词级时间戳。",
-        "parakeetV2": "仅限英语。准确度与 v3 相近，速度更快。支持标点和大小写。",
-        "zipformerStreamingEnRetired": "已不再提供：它会丢失句子开头。删除它以释放空间。",
-        "whisperTiny": "支持 90 多种语言。准确度低于 Parakeet，但语言覆盖最广。",
-        "senseVoice": "支持中文、英语、日语、韩语和粤语，并自动检测语言。",
-        "gptTranscribe": "准确度高的云端转录。需要 OpenAI API 密钥。",
-        "whisperLargeV3Turbo": "日语、韩语和中文准确度最高，支持 90 多种语言。速度比 Parakeet 慢。",
-        "retiredForEngine": "已不再提供：语音引擎已无法运行此模型。删除它以释放空间。",
-        "nemotron": "支持英语、西班牙语、德语等多种语言，可自动识别语言。"
-      }
-    },
     "diagnostics": {
       "errors": {
         "creatingDisabled": "已禁用创建查看文件",
@@ -8236,7 +8223,6 @@
           "7807c11c4d": "通用",
           "6855b0f77d": "完成使 Orca 对于并行智能体工作有用的核心工作流程。",
           "6d119427ef": "入门清单",
-          "eb1176a14e": "使用设备上模型进行本地语音到文本听写。",
           "5063bb47a5": "语音",
           "7118953f14": "使智能体能够控制您计算机上的任何应用程序。",
           "c9841721cb": "计算机控制",
@@ -8746,7 +8732,6 @@
         },
         "VoicePane": {
           "68de13f72c": "删除模型失败。",
-          "1ba81c0ff0": "推荐",
           "cfde55c7b0": "下载模型失败。",
           "43fd4f454b": "语音模型",
           "ba4a900d1d": "听写模式",
@@ -8757,10 +8742,6 @@
           "506df81ba6": "OpenAI API 密钥已保存",
           "91980ce124": "{{value0}} MB",
           "61a16c8141": "正在提取...",
-          "8f4d2a51d7": "离线",
-          "d504ab05f0": "流媒体",
-          "fbe5990716": "选择型号",
-          "e24f7d43d2": "选择语音模型，本地模型离线运行；云模型需要 API 密钥。",
           "174da92062": "按住",
           "118b3c2dee": "切换",
           "ad5d036ecc": "无法请求麦克风权限。未启用语音听写。",
@@ -8769,7 +8750,6 @@
           "cd9fe37556": "已授予麦克风权限",
           "6fa734ed95": "删除 {{value0}}",
           "openAiKeyName": "您的 OpenAI 转录密钥",
-          "dictationShortcutDescription": "按 {{shortcut}} 可将文本听写到当前聚焦的任意窗格中。",
           "dictationModeAuto": "自动",
           "dictationModesWithAutoDescription": "自动：按住 {{shortcut}} 听写，松开即停止；轻按则开始或停止。按住：按住 {{shortcut}} 期间进行听写。切换：按一次 {{shortcut}} 开始，再按一次停止。",
           "speechGpuLabel": "使用 GPU",
@@ -10609,7 +10589,10 @@
               "modelMemoryKeyword": "内存",
               "fillerWordsTitle": "移除语气词",
               "fillerWordsDescription": "从听写文本中去掉“嗯”“呃”之类的语气词。",
-              "fillerWordsKeyword": "语气词"
+              "fillerWordsKeyword": "语气词",
+              "vocabularyTitle": "词汇",
+              "vocabularyDescription": "听写按你的写法拼写的名称和代码术语，可用于个人或某个仓库。",
+              "vocabularyKeyword": "词典"
             }
           }
         },
@@ -19985,6 +19968,85 @@
         "fillerWords": {
           "title": "移除语气词",
           "description": "按听写语言，从听写文本中去掉“嗯”“呃”之类的语气词。"
+        },
+        "sectionDescription": "在任意面板中用说话代替打字。除非你选择云端模型，否则语音都在这台电脑上识别。",
+        "input": {
+          "title": "输入",
+          "shortcut": "快捷键",
+          "shortcutDescription": "在当前聚焦的面板中开始听写。",
+          "changeShortcut": "更改"
+        },
+        "language": {
+          "title": "语言"
+        },
+        "cleanup": {
+          "title": "清理"
+        },
+        "advanced": {
+          "title": "高级"
+        },
+        "setup": {
+          "downloadingDescription": "你可以离开此页面。下载完成后即可使用听写。",
+          "title": "设置听写",
+          "pickModel": "在任意面板中用说话代替打字。先在下方下载一个语音模型；本机模型会把你的音频留在这台电脑上。",
+          "microphoneMissingTitle": "{{microphone}} 未连接",
+          "microphoneMissingDescription": "在它重新连接前，听写会使用系统默认麦克风。",
+          "changeMicrophone": "更换麦克风",
+          "onTitle": "听写已开启",
+          "onLocal": "在任意面板中按 {{shortcut}}。{{model}} 在这台电脑上运行。",
+          "onCloud": "在任意面板中按 {{shortcut}}。{{model}} 在云端运行。",
+          "offTitle": "听写已关闭",
+          "offDescription": "开启后，可在任意面板中按 {{shortcut}} 听写。",
+          "savedMicrophone": "你的麦克风"
+        },
+        "quality": {
+          "unsupported": "不支持你的语言",
+          "unmeasured": "未测量",
+          "poor": "差",
+          "fair": "一般",
+          "good": "良好",
+          "veryGood": "很好",
+          "excellent": "优秀",
+          "characterErrorRate": "字符错误率 {{percent}}%",
+          "wordErrorRate": "词错误率 {{percent}}%",
+          "librispeech": "测试：LibriSpeech（朗读语音），{{clips}} 段音频，测于 {{date}}。",
+          "fleurs": "测试：FLEURS（朗读语音），{{clips}} 段音频，测于 {{date}}。",
+          "bench": "Orca 在 Apple 芯片 Mac 上的基准测试。",
+          "label": "质量：{{word}}"
+        },
+        "models": {
+          "retired": "已不再提供。删除即可释放空间。",
+          "sendsToOpenAi": "会把你的音频发送给 OpenAI。",
+          "delete": "删除",
+          "cancelDownload": "取消下载",
+          "inUse": "使用中",
+          "use": "使用",
+          "setUpCloud": "设置",
+          "download": "下载",
+          "cloud": "云端",
+          "description": "质量按{{language}}评定。将指针悬停在评分上可查看所用测试。",
+          "where": "模型运行位置",
+          "local": "这台电脑",
+          "cloudDescription": "云端模型会把你的音频发送给服务商。本机模型会把音频留在这台电脑上。",
+          "sendsToCompatible": "会把你的音频发送到你设置的服务。"
+        },
+        "vocabulary": {
+          "title": "词汇",
+          "description": "按你的写法拼写的名称和代码术语。如果模型总是听错，可以加上它听成的说法。",
+          "repoScope": "仅在 {{repo}} 中听写时使用。",
+          "personalScope": "在所有仓库中使用。",
+          "scope": "术语范围",
+          "personal": "个人 · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "移除 {{term}}",
+          "term": "词语或短语",
+          "heardAs": "听成（可选）",
+          "heardAsLabel": "听成",
+          "add": "添加",
+          "repoNameHint": "将仓库名用作提示",
+          "repoNameHintDescription": "帮助识别仓库名称。",
+          "repoSaveFailed": "无法保存仓库的术语。运行此仓库的主机可能需要更新 Orca。"
         }
       },
       "repositoryHooks": {

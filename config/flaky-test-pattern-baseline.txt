@@ -264,7 +264,6 @@
 4 test-no-real-time-wait:src/renderer/src/components/activity/activity-auto-mark-read-loop.react185.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/DiagramViewerModal.test.tsx
 1 test-no-real-time-wait:src/renderer/src/components/editor/combined-diff/load-sections/combined-diff-stale-analysis-work-budget.test.tsx
-1 test-no-real-time-wait:src/renderer/src/components/native-chat/drafts/native-chat-composer-draft-lifecycle.test.tsx
 4 test-no-real-time-wait:src/renderer/src/components/native-chat/drafts/native-chat-composer-draft-store.test.ts
 1 test-no-real-time-wait:src/renderer/src/components/terminal-pane/layout/split/resolve-split-cwd.test.ts
 2 test-no-real-time-wait:src/renderer/src/components/terminal-pane/pty-connection/emulation/fish-color-scheme-child-stdin.node-pty.test.ts
@@ -634,7 +633,7 @@
 2 test-no-wall-clock:src/renderer/src/components/dashboard/useLiveDashboardSnapshot.test.ts
 1 test-no-wall-clock:src/renderer/src/components/native-chat/conversation/slots/NativeChatMessageList.opening-send.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/native-chat/conversation/slots/NativeChatMessageList.queued-turn-order.test.tsx
-3 test-no-wall-clock:src/renderer/src/components/native-chat/conversation/turns/NativeChatMessageList.turn-indicator.test.tsx
+2 test-no-wall-clock:src/renderer/src/components/native-chat/conversation/turns/NativeChatMessageList.turn-indicator.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/native-chat/conversation/turns/NativeChatResolvedView.turn-status.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/native-chat/session/structured/delivery/NativeChatMessageList.unsent-message.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/native-chat/surfaces/integration/NativeChatMessageList.test.tsx
