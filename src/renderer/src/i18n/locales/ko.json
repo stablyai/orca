@@ -10609,7 +10609,10 @@
               "modelMemoryKeyword": "메모리",
               "fillerWordsTitle": "군말 제거",
               "fillerWordsDescription": "받아쓴 텍스트에서 “음”, “흠” 같은 소리를 지웁니다.",
-              "fillerWordsKeyword": "군말"
+              "fillerWordsKeyword": "군말",
+              "vocabularyTitle": "어휘",
+              "vocabularyDescription": "받아쓰기가 원하는 대로 표기하는 이름과 코드 용어, 개인용 또는 저장소용.",
+              "vocabularyKeyword": "사전"
             }
           }
         },
@@ -19981,6 +19984,21 @@
         "fillerWords": {
           "title": "군말 제거",
           "description": "받아쓰기 언어에 맞춰 받아쓴 텍스트에서 “음”, “흠” 같은 소리를 지웁니다."
+        },
+        "vocabulary": {
+          "title": "어휘",
+          "description": "원하는 대로 표기할 이름과 코드 용어입니다. 모델이 계속 잘못 들으면 잘못 들리는 말도 추가하세요.",
+          "repoScope": "{{repo}}에서 받아쓸 때만 사용합니다.",
+          "personalScope": "모든 저장소에서 사용합니다.",
+          "scope": "용어 대상",
+          "personal": "개인 · {{total}}",
+          "repo": "{{repo}} 저장소 · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "{{term}} 삭제",
+          "term": "단어 또는 구문",
+          "heardAs": "들리는 말(선택)",
+          "heardAsLabel": "들리는 말",
+          "add": "추가"
         }
       },
       "repositoryHooks": {

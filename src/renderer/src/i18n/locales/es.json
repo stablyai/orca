@@ -10902,7 +10902,10 @@
               "modelMemoryKeyword": "memoria",
               "fillerWordsTitle": "Quitar muletillas",
               "fillerWordsDescription": "Quita «ehm», «em» y sonidos parecidos del texto dictado.",
-              "fillerWordsKeyword": "muletillas"
+              "fillerWordsKeyword": "muletillas",
+              "vocabularyTitle": "Vocabulario",
+              "vocabularyDescription": "Nombres y términos de código que el dictado escribe a tu manera, para ti o para un repo.",
+              "vocabularyKeyword": "diccionario"
             }
           }
         },
@@ -20488,6 +20491,21 @@
         "fillerWords": {
           "title": "Quitar muletillas",
           "description": "Quita sonidos como «ehm» y «em» del texto dictado, según el idioma de dictado."
+        },
+        "vocabulary": {
+          "title": "Vocabulario",
+          "description": "Nombres y términos de código que se escriben a tu manera. Añade cómo lo oye mal el modelo si se equivoca una y otra vez.",
+          "repoScope": "Solo se usa al dictar en {{repo}}.",
+          "personalScope": "Se usa en todos los repos.",
+          "scope": "Términos para",
+          "personal": "Personal · {{total}}",
+          "repo": "Repo {{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "Quitar {{term}}",
+          "term": "Palabra o frase",
+          "heardAs": "Se oye como (opcional)",
+          "heardAsLabel": "Se oye como",
+          "add": "Añadir"
         }
       },
       "repositoryHooks": {

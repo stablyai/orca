@@ -121,6 +121,24 @@ export const getVoicePaneSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate('auto.components.settings.voice.pane.search.vocabularyTitle', 'Vocabulary'),
+    description: translate(
+      'auto.components.settings.voice.pane.search.vocabularyDescription',
+      'Names and code terms dictation spells your way, for you or for one repo.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.voice.pane.search.7640ed9848', 'voice'),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.089d31a45b',
+        'dictation'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.voice.pane.search.vocabularyKeyword',
+        'dictionary'
+      )
+    ]
+  },
+  {
     title: translate(
       'auto.components.settings.voice.pane.search.fillerWordsTitle',
       'Remove Filler Words'

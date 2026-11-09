@@ -11285,7 +11285,10 @@
               "modelMemoryKeyword": "bellek",
               "fillerWordsTitle": "Dolgu seslerini kaldır",
               "fillerWordsDescription": "Dikte edilen metinden “hmm” gibi duraksama seslerini çıkarır.",
-              "fillerWordsKeyword": "dolgu"
+              "fillerWordsKeyword": "dolgu",
+              "vocabularyTitle": "Sözcük dağarcığı",
+              "vocabularyDescription": "Diktenin senin yazımınla yazdığı adlar ve kod terimleri, senin için veya bir depo için.",
+              "vocabularyKeyword": "sözlük"
             }
           }
         },
@@ -20664,6 +20667,21 @@
         "fillerWords": {
           "title": "Dolgu seslerini kaldır",
           "description": "Dikte edilen metinden “hmm” gibi duraksama seslerini dikte diline göre çıkarır."
+        },
+        "vocabulary": {
+          "title": "Sözcük dağarcığı",
+          "description": "Kendi yazımınla yazılacak adlar ve kod terimleri. Model sürekli yanlış duyuyorsa nasıl duyduğunu da ekle.",
+          "repoScope": "Yalnızca {{repo}} içinde dikte ederken kullanılır.",
+          "personalScope": "Her depoda kullanılır.",
+          "scope": "Terimler",
+          "personal": "Kişisel · {{total}}",
+          "repo": "{{repo}} deposu · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "{{term}} kaldır",
+          "term": "Sözcük veya ifade",
+          "heardAs": "Duyulan biçim (isteğe bağlı)",
+          "heardAsLabel": "Duyulan biçim",
+          "add": "Ekle"
         }
       },
       "repositoryHooks": {

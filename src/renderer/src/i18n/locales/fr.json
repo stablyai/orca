@@ -11169,7 +11169,10 @@
               "modelMemoryKeyword": "mémoire",
               "fillerWordsTitle": "Supprimer les hésitations",
               "fillerWordsDescription": "Supprime « euh », « hum » et les sons similaires du texte dicté.",
-              "fillerWordsKeyword": "hésitations"
+              "fillerWordsKeyword": "hésitations",
+              "vocabularyTitle": "Vocabulaire",
+              "vocabularyDescription": "Noms et termes de code que la dictée écrit à votre façon, pour vous ou pour un dépôt.",
+              "vocabularyKeyword": "dictionnaire"
             }
           }
         },
@@ -20787,6 +20790,21 @@
         "fillerWords": {
           "title": "Supprimer les hésitations",
           "description": "Supprime les sons comme « euh » et « hum » du texte dicté, selon la langue de dictée."
+        },
+        "vocabulary": {
+          "title": "Vocabulaire",
+          "description": "Noms et termes de code à écrire à votre façon. Ajoutez ce que le modèle entend à la place s’il se trompe toujours.",
+          "repoScope": "Utilisé seulement quand vous dictez dans {{repo}}.",
+          "personalScope": "Utilisé dans tous les dépôts.",
+          "scope": "Termes pour",
+          "personal": "Personnel · {{total}}",
+          "repo": "Dépôt {{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "Retirer {{term}}",
+          "term": "Mot ou expression",
+          "heardAs": "Entendu comme (facultatif)",
+          "heardAsLabel": "Entendu comme",
+          "add": "Ajouter"
         }
       },
       "repositoryHooks": {

@@ -11122,7 +11122,10 @@
               "modelMemoryKeyword": "記憶體",
               "fillerWordsTitle": "移除語氣詞",
               "fillerWordsDescription": "從聽寫文字中移除「嗯」「呃」之類的語氣詞。",
-              "fillerWordsKeyword": "語氣詞"
+              "fillerWordsKeyword": "語氣詞",
+              "vocabularyTitle": "詞彙",
+              "vocabularyDescription": "聽寫依你的寫法拼寫的名稱和程式碼術語，可用於個人或某個儲存庫。",
+              "vocabularyKeyword": "詞典"
             }
           }
         },
@@ -20366,6 +20369,21 @@
         "fillerWords": {
           "title": "移除語氣詞",
           "description": "依聽寫語言，從聽寫文字中移除「嗯」「呃」之類的語氣詞。"
+        },
+        "vocabulary": {
+          "title": "詞彙",
+          "description": "依你的寫法拼寫的名稱和程式碼術語。如果模型總是聽錯，可以加上它聽成的說法。",
+          "repoScope": "僅在 {{repo}} 中聽寫時使用。",
+          "personalScope": "在所有儲存庫中使用。",
+          "scope": "術語範圍",
+          "personal": "個人 · {{total}}",
+          "repo": "{{repo}} 儲存庫 · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "移除 {{term}}",
+          "term": "詞語或片語",
+          "heardAs": "聽成（選填）",
+          "heardAsLabel": "聽成",
+          "add": "新增"
         }
       },
       "repositoryHooks": {
