@@ -12,8 +12,8 @@ import { writeFileAtomicallyIfUnchanged } from '../../filesystem/atomic-file-pub
 import { isCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
 import { hostShellEnvironment } from '../../runtime/agent-session/environment/structured-agent-shell-environment'
 import { mergeClaudeMcpServers } from './claude-json-mcp-merge'
-import { mergeCodexMcpServers } from './codex-toml-mcp-merge'
-import { parseMcpSyncLedger, type McpSyncLedger } from './mcp-sync-ledger'
+import { codexMcpBlockMarkers, mergeCodexMcpServers } from './codex-toml-mcp-merge'
+import { EMPTY_MCP_SYNC_LEDGER, parseMcpSyncLedger, type McpSyncLedger } from './mcp-sync-ledger'
 
 // Agent configs carry MCP env tokens and headers; keep them owner-only.
 const PRIVATE_FILE = { mode: 0o600 } as const
@@ -31,6 +31,10 @@ export type HostMcpSyncDeps = {
   paths: HostMcpSyncPaths
   commandExists?: (command: string) => Promise<boolean>
   resolves?: (hostname: string) => Promise<boolean>
+}
+
+export function syncerLedgerPath(sharedLedger: string, syncer: string): string {
+  return sharedLedger.replace(/\.json$/, `-${syncer}.json`)
 }
 
 export function defaultHostMcpSyncPaths(userDataPath: string): HostMcpSyncPaths {
@@ -150,13 +154,21 @@ async function syncClaude(
 async function syncCodex(
   paths: HostMcpSyncPaths,
   desired: Record<string, Record<string, unknown>>,
-  ledger: McpSyncLedger
+  ledger: McpSyncLedger,
+  syncer: string | undefined,
+  adoptLegacy: boolean
 ): Promise<Record<string, McpSyncHostOutcome>> {
   for (let attempt = 0; attempt < WRITE_ATTEMPTS; attempt += 1) {
     const text = await readText(paths.codexConfig)
     let merged: ReturnType<typeof mergeCodexMcpServers>
     try {
-      merged = mergeCodexMcpServers(text, desired, ledger.codexBlock)
+      merged = mergeCodexMcpServers(
+        text,
+        desired,
+        ledger.codexBlock,
+        codexMcpBlockMarkers(syncer),
+        adoptLegacy ? codexMcpBlockMarkers(undefined) : undefined
+      )
     } catch {
       return unreadable(desired)
     }
@@ -175,8 +187,17 @@ export async function syncHostMcpServers(
 ): Promise<AgentMcpSyncResult> {
   const commandExists = deps.commandExists ?? defaultCommandExists
   const resolves = deps.resolves ?? defaultResolves
-  const ledgerText = await readText(deps.paths.ledger)
-  const ledger = parseMcpSyncLedger(ledgerText)
+  // Each syncing computer has its own ledger: entries another computer wrote are not this one's to
+  // remove (they read as the host's own), so two computers on one shared sandbox never flap.
+  const ledgerPath = params.syncer
+    ? syncerLedgerPath(deps.paths.ledger, params.syncer)
+    : deps.paths.ledger
+  const ownText = await readText(ledgerPath)
+  // The first computer to sync after per-computer ledgers takes over what the shared ledger recorded.
+  const legacyText = params.syncer && ownText === null ? await readText(deps.paths.ledger) : null
+  const adoptLegacy = legacyText !== null
+  const ledgerText = ownText
+  const ledger = parseMcpSyncLedger(ownText ?? legacyText)
   const result: AgentMcpSyncResult = {}
   if (params.claude) {
     const outcomes: Record<string, McpSyncHostOutcome> = {}
@@ -186,11 +207,22 @@ export async function syncHostMcpServers(
   if (params.codex) {
     const outcomes: Record<string, McpSyncHostOutcome> = {}
     const desired = await runnable(params.codex, commandExists, outcomes)
-    result.codex = { ...outcomes, ...(await syncCodex(deps.paths, desired, ledger)) }
+    result.codex = {
+      ...outcomes,
+      ...(await syncCodex(deps.paths, desired, ledger, params.syncer, adoptLegacy))
+    }
   }
   const nextLedger = `${JSON.stringify(ledger, null, 2)}\n`
   if (nextLedger !== ledgerText) {
-    await writePrivate(deps.paths.ledger, ledgerText, nextLedger)
+    await writePrivate(ledgerPath, ledgerText, nextLedger)
+  }
+  if (adoptLegacy) {
+    // Claimed: a second computer must not adopt the same entries.
+    await writePrivate(
+      deps.paths.ledger,
+      legacyText,
+      `${JSON.stringify(EMPTY_MCP_SYNC_LEDGER, null, 2)}\n`
+    )
   }
   const hostnames = remoteHostnames(params)
   const reachable = await Promise.all(hostnames.map(resolves))

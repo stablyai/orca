@@ -47,7 +47,12 @@ const ServerSet = z
 export const AgentMcpSyncParams = z
   .object({
     claude: ServerSet.optional(),
-    codex: ServerSet.optional()
+    codex: ServerSet.optional(),
+    /** Stable id of the syncing computer: each one owns (and only removes) its own entries. */
+    syncer: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{1,64}$/)
+      .optional()
   })
   .strict()
 export type AgentMcpSyncParams = z.infer<typeof AgentMcpSyncParams>

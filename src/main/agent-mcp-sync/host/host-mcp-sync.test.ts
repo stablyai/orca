@@ -70,4 +70,53 @@ describe('syncHostMcpServers', () => {
       mine: { command: 'host-only' }
     })
   })
+
+  it('two computers syncing one shared sandbox keep each other’s servers (no flapping)', async () => {
+    const a = {
+      claude: { fromA: { command: 'npx' } },
+      codex: { fromA: { command: 'npx' } },
+      syncer: 'aaaa'
+    }
+    const b = {
+      claude: { fromB: { command: 'npx' } },
+      codex: { fromB: { command: 'npx' } },
+      syncer: 'bbbb'
+    }
+    await syncHostMcpServers(a, deps())
+    await syncHostMcpServers(b, deps())
+    const again = await syncHostMcpServers(a, deps())
+    expect(again.claude).toEqual({ fromA: 'unchanged' })
+    expect(again.codex).toEqual({ fromA: 'unchanged' })
+    expect(
+      Object.keys(JSON.parse(readFileSync(paths.claudeConfig, 'utf8')).mcpServers).sort()
+    ).toEqual(['fromA', 'fromB'])
+    const toml = readFileSync(paths.codexConfig, 'utf8')
+    expect(toml).toContain('[aaaa]')
+    expect(toml).toContain('[bbbb]')
+    // A stops syncing fromA: only A's entry goes.
+    await syncHostMcpServers({ claude: {}, codex: {}, syncer: 'aaaa' }, deps())
+    expect(Object.keys(JSON.parse(readFileSync(paths.claudeConfig, 'utf8')).mcpServers)).toEqual([
+      'fromB'
+    ])
+    expect(readFileSync(paths.codexConfig, 'utf8')).not.toContain('fromA')
+  })
+
+  it('the first computer with an id takes over what the shared ledger wrote, once', async () => {
+    await syncHostMcpServers(
+      { claude: { old: { command: 'npx' } }, codex: { old: { command: 'npx' } } },
+      deps()
+    )
+    const adopted = await syncHostMcpServers(
+      { claude: { old: { command: 'npx' } }, codex: { old: { command: 'npx' } }, syncer: 'cccc' },
+      deps()
+    )
+    expect(adopted.claude).toEqual({ old: 'unchanged' })
+    expect(adopted.codex).toEqual({ old: 'unchanged' })
+    const toml = readFileSync(paths.codexConfig, 'utf8')
+    expect(toml.match(/mcp_servers\.old/g)).toHaveLength(1)
+    expect(toml).toContain('[cccc]')
+    // Removing works through the adopted ledger.
+    await syncHostMcpServers({ claude: {}, codex: {}, syncer: 'cccc' }, deps())
+    expect(JSON.parse(readFileSync(paths.claudeConfig, 'utf8')).mcpServers ?? {}).toEqual({})
+  })
 })
