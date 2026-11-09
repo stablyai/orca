@@ -1,5 +1,5 @@
-import { useId, useState } from 'react'
-import { CalendarClock, Github, Loader2, Webhook } from 'lucide-react'
+import { useEffect, useId, useState } from 'react'
+import { Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -30,16 +30,21 @@ import type {
 import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { cloudApiErrorCopy } from './cloud-api-copy'
 import { CloudApiErrorNotice, FormField } from './cloud-api-parts'
-import { RoutineGithubFields, RoutineScheduleFields } from './RoutineTriggerFields'
+import {
+  RoutineGithubFields,
+  RoutineScheduleFields,
+  RoutineTriggerKindControl
+} from './RoutineTriggerFields'
 import { RoutineAgentSection, routineFieldError as fieldError } from './RoutineAgentSection'
 import { GithubAppHint, WebhookTriggerInfo, WebhookUrlStep } from './RoutineWebhookParts'
 import {
   emptyRoutineDraft,
   routineDraftFromRoutine,
+  routinePatchFromInput,
+  withCurrentProject,
   validateRoutineDraft,
   type RoutineDraft,
-  type RoutineDraftField,
-  type RoutineTriggerKind
+  type RoutineDraftField
 } from './routine-draft'
 
 export type RoutineEditorDialogProps = {
@@ -48,6 +53,8 @@ export type RoutineEditorDialogProps = {
   /** Null creates a new routine. */
   routine: Routine | null
   projects: readonly CloudApiProject[]
+  /** The project list could not be loaded (not the same as having none). */
+  projectsFailed?: boolean
   installations: readonly CloudApiInstallation[] | null
   localTimezone: string
   onCreate: (input: RoutineInput) => Promise<CloudApiResult<RoutineCreated>>
@@ -60,7 +67,13 @@ export type RoutineEditorDialogProps = {
 
 export function RoutineEditorDialog(props: RoutineEditorDialogProps): React.JSX.Element {
   const [webhookUrl, setWebhookUrl] = useState<string | null>(props.initialWebhookUrl ?? null)
+  const [busy, setBusy] = useState(false)
+  // A save or rotate in flight keeps the dialog open: its result (maybe a one-time URL) must land
+  // in front of the user, never in a closed dialog.
   const change = (open: boolean): void => {
+    if (!open && busy) {
+      return
+    }
     if (!open) {
       setWebhookUrl(null)
     }
@@ -71,7 +84,11 @@ export function RoutineEditorDialog(props: RoutineEditorDialogProps): React.JSX.
       <DialogContent
         className="sm:max-w-[640px]"
         scrollable
+        // Never lose a half-written routine to a stray click; while the one-time webhook URL is
+        // showing, only its footer button may close the dialog.
         onInteractOutside={(event) => event.preventDefault()}
+        showCloseButton={!webhookUrl}
+        onEscapeKeyDown={webhookUrl ? (event) => event.preventDefault() : undefined}
       >
         {webhookUrl ? (
           <WebhookUrlStep url={webhookUrl} onDone={() => change(false)} />
@@ -81,6 +98,7 @@ export function RoutineEditorDialog(props: RoutineEditorDialogProps): React.JSX.
             key={props.routine?.id ?? 'new'}
             {...props}
             onCancel={() => change(false)}
+            onBusyChange={setBusy}
             onSaved={(url) => (url ? setWebhookUrl(url) : change(false))}
           />
         )}
@@ -92,6 +110,7 @@ export function RoutineEditorDialog(props: RoutineEditorDialogProps): React.JSX.
 function EditorForm({
   routine,
   projects,
+  projectsFailed = false,
   installations,
   localTimezone,
   onCreate,
@@ -99,8 +118,10 @@ function EditorForm({
   onRotateWebhook,
   initialDraft,
   onCancel,
-  onSaved
+  onSaved,
+  onBusyChange
 }: RoutineEditorDialogProps & {
+  onBusyChange: (busy: boolean) => void
   onCancel: () => void
   onSaved: (webhookUrl: string | null) => void
 }): React.JSX.Element {
@@ -120,6 +141,16 @@ function EditorForm({
   const [failure, setFailure] = useState<string | null>(null)
   const [rotated, setRotated] = useState<string | null>(null)
   const [rotating, setRotating] = useState<'idle' | 'confirm' | 'busy'>('idle')
+
+  const projectOptions = withCurrentProject(
+    projects,
+    draft.projectId,
+    t('auto.components.settings.cloudRoutines.editor.currentProject', 'Current project')
+  )
+  const busy = submitting || rotating === 'busy'
+  useEffect(() => {
+    onBusyChange(busy)
+  }, [busy, onBusyChange])
 
   const update = (patch: Partial<RoutineDraft>): void => {
     setDraft((current) => ({ ...current, ...patch }))
@@ -151,7 +182,13 @@ function EditorForm({
     setSubmitting(true)
     setFailure(null)
     if (routine) {
-      const result = await onUpdate(routine.id, validation.input)
+      const patch = routinePatchFromInput(routine, validation.input)
+      if (Object.keys(patch).length === 0) {
+        setSubmitting(false)
+        onSaved(null)
+        return
+      }
+      const result = await onUpdate(routine.id, patch)
       setSubmitting(false)
       if (!result.ok) {
         setFailure(cloudApiErrorCopy(result.error, t, result))
@@ -182,36 +219,6 @@ function EditorForm({
       setFailure(cloudApiErrorCopy(result.error, t, result))
     }
   }
-
-  const triggerOptions: { value: RoutineTriggerKind; label: React.ReactNode }[] = [
-    {
-      value: 'schedule',
-      label: (
-        <span className="inline-flex items-center gap-1.5">
-          <CalendarClock className="size-3.5" aria-hidden />
-          {t('auto.components.settings.cloudRoutines.trigger.schedule', 'Schedule')}
-        </span>
-      )
-    },
-    {
-      value: 'github',
-      label: (
-        <span className="inline-flex items-center gap-1.5">
-          <Github className="size-3.5" aria-hidden />
-          {t('auto.components.settings.cloudRoutines.trigger.github', 'GitHub event')}
-        </span>
-      )
-    },
-    {
-      value: 'webhook',
-      label: (
-        <span className="inline-flex items-center gap-1.5">
-          <Webhook className="size-3.5" aria-hidden />
-          {t('auto.components.settings.cloudRoutines.trigger.webhook', 'Webhook')}
-        </span>
-      )
-    }
-  ]
 
   return (
     <form
@@ -255,12 +262,13 @@ function EditorForm({
       </FormField>
 
       <section className="grid gap-3" aria-labelledby={`${ids}-where`}>
-        <div className="flex items-center justify-between gap-3">
-          <h3 id={`${ids}-where`} className="text-sm font-semibold">
-            {t('auto.components.settings.cloudRoutines.editor.where', 'Where it runs')}
-          </h3>
+        <h3 id={`${ids}-where`} className="text-sm font-semibold">
+          {t('auto.components.settings.cloudRoutines.editor.where', 'Where it runs')}
+        </h3>
+        <div>
           <SettingsSegmentedControl<'project' | 'repo'>
             size="sm"
+            equalWidth
             value={draft.source}
             onChange={(source) => update({ source })}
             ariaLabelledBy={`${ids}-where`}
@@ -282,18 +290,23 @@ function EditorForm({
             label={t('auto.components.settings.cloudRoutines.editor.projectLabel', 'Project')}
             error={err('source')}
             hint={
-              projects.length === 0
+              projectsFailed
                 ? t(
-                    'auto.components.settings.cloudRoutines.editor.noProjects',
-                    'No Orca Cloud projects yet. Use a repository URL instead.'
+                    'auto.components.settings.cloudRoutines.editor.projectsFailed',
+                    'Could not load your projects. Close and reopen to try again, or use a repository URL.'
                   )
-                : undefined
+                : projects.length === 0
+                  ? t(
+                      'auto.components.settings.cloudRoutines.editor.noProjects',
+                      'No Orca Cloud projects yet. Use a repository URL instead.'
+                    )
+                  : undefined
             }
           >
             <Select
               value={draft.projectId}
               onValueChange={(projectId) => update({ projectId })}
-              disabled={projects.length === 0}
+              disabled={projectOptions.length === 0}
             >
               <SelectTrigger
                 id={`${ids}-project`}
@@ -308,7 +321,7 @@ function EditorForm({
                 />
               </SelectTrigger>
               <SelectContent position="popper">
-                {projects.map((project) => (
+                {projectOptions.map((project) => (
                   <SelectItem key={project.id} value={project.id}>
                     {project.name}
                     {project.repo ? (
@@ -363,13 +376,10 @@ function EditorForm({
         <h3 id={`${ids}-when`} className="text-sm font-semibold">
           {t('auto.components.settings.cloudRoutines.editor.when', 'When it runs')}
         </h3>
-        <SettingsSegmentedControl<RoutineTriggerKind>
+        <RoutineTriggerKindControl
           value={draft.triggerKind}
           onChange={(triggerKind) => update({ triggerKind })}
-          ariaLabelledBy={`${ids}-when`}
-          size="sm"
-          equalWidth
-          options={triggerOptions}
+          labelledBy={`${ids}-when`}
         />
         <div className="rounded-lg border border-border/70 bg-muted/15 p-3.5">
           {draft.triggerKind === 'schedule' ? (

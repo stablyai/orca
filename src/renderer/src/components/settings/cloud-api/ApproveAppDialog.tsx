@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react'
-import { Loader2, ShieldCheck, TimerOff } from 'lucide-react'
+import { Loader2, Timer, TimerOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -9,9 +9,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
 import type {
   CloudApiApproval,
   CloudApiResult,
@@ -21,7 +19,8 @@ import type {
 import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { cloudApiErrorCopy } from './cloud-api-copy'
 import { formatCountdown, scopesForPreset } from './cloud-api-format'
-import { CloudApiErrorNotice, CopyValueButton, ScopeChip } from './cloud-api-parts'
+import { CloudApiErrorNotice, ScopeChip } from './cloud-api-parts'
+import { OneTimeSecret, OneTimeSecretDoneButton } from './OneTimeSecret'
 
 /** "Approve an app": a one-time code an MCP client's consent page accepts instead of an API key. */
 export function ApproveAppDialog({
@@ -45,6 +44,7 @@ export function ApproveAppDialog({
   const [access, setAccess] = useState<'read' | 'full'>('full')
   const [approval, setApproval] = useState<CloudApiApproval | null>(initialApproval ?? null)
   const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [now, setNow] = useState(() => nowForFixture ?? Date.now())
 
@@ -64,6 +64,7 @@ export function ApproveAppDialog({
       // A code never outlives the dialog that showed it.
       setApproval(null)
       setError(null)
+      setCopied(false)
     }
     onOpenChange(next)
   }
@@ -87,7 +88,9 @@ export function ApproveAppDialog({
     <Dialog open={open} onOpenChange={change}>
       <DialogContent
         className="sm:max-w-[480px]"
+        showCloseButton={!approval || expired}
         onInteractOutside={approval ? (event) => event.preventDefault() : undefined}
+        onEscapeKeyDown={approval && !expired ? (event) => event.preventDefault() : undefined}
       >
         <DialogHeader>
           <DialogTitle>
@@ -103,55 +106,47 @@ export function ApproveAppDialog({
 
         {approval ? (
           <div className="grid gap-3">
-            <div className="flex items-center gap-2">
-              <label htmlFor={`${ids}-code`} className="sr-only">
-                {t('auto.components.settings.cloudApi.approve.codeLabel', 'Approval code')}
-              </label>
-              <Input
-                id={`${ids}-code`}
-                readOnly
-                value={expired ? '' : approval.code}
-                placeholder={t(
-                  'auto.components.settings.cloudApi.approve.expiredPlaceholder',
-                  'Code expired'
-                )}
-                disabled={expired}
-                spellCheck={false}
-                className="font-mono text-xs"
-                onClick={(event) => event.currentTarget.select()}
-              />
-              {expired ? null : (
-                <CopyValueButton
-                  value={approval.code}
-                  variant="default"
-                  size="sm"
-                  label={t('auto.components.settings.cloudApi.approve.copy', 'Copy approval code')}
-                />
+            <OneTimeSecret
+              label={t('auto.components.settings.cloudApi.approve.codeLabel', 'Approval code')}
+              value={approval.code}
+              expired={expired}
+              copyLabel={t('auto.components.settings.cloudApi.approve.copy', 'Copy approval code')}
+              warningTitle={t(
+                'auto.components.settings.cloudApi.approve.onceTitle',
+                'Works once, for 10 minutes.'
               )}
-            </div>
-            <p
-              className={cn(
-                'flex items-center gap-1.5 text-xs',
-                expired ? 'text-destructive' : 'text-muted-foreground'
+              warningBody={t(
+                'auto.components.settings.cloudApi.approve.onceBody',
+                'Paste it on the approval page now. Orca will not show it again.'
               )}
-            >
-              {expired ? (
-                <TimerOff className="size-3.5" aria-hidden />
-              ) : (
-                <ShieldCheck className="size-3.5" aria-hidden />
-              )}
-              {expired
-                ? t(
-                    'auto.components.settings.cloudApi.approve.expired',
-                    'This code expired. Generate a new one.'
-                  )
-                : t(
-                    'auto.components.settings.cloudApi.approve.expires',
-                    'Works once and expires in {{value0}}. Orca will not show it again.',
-                    { value0: formatCountdown(remaining) }
-                  )}
-            </p>
-            <div className="flex flex-wrap gap-1">
+              onCopied={() => setCopied(true)}
+              footnote={
+                expired ? (
+                  <span role="status" className="flex items-center gap-1.5 text-destructive">
+                    <TimerOff className="size-3.5" aria-hidden />
+                    {t(
+                      'auto.components.settings.cloudApi.approve.expired',
+                      'This code expired. Generate a new one.'
+                    )}
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1.5 tabular-nums">
+                    <Timer className="size-3.5" aria-hidden />
+                    {t(
+                      'auto.components.settings.cloudApi.approve.expiresIn',
+                      'Expires in {{value0}}',
+                      {
+                        value0: formatCountdown(remaining)
+                      }
+                    )}
+                  </span>
+                )
+              }
+            />
+            <div className="flex flex-wrap items-center gap-1">
+              <span className="mr-1 text-xs text-muted-foreground">
+                {t('auto.components.settings.cloudApi.approve.grants', 'The app may use')}
+              </span>
               {approval.scopes.map((scope) => (
                 <ScopeChip key={scope} scope={scope} />
               ))}
@@ -197,9 +192,7 @@ export function ApproveAppDialog({
 
         <DialogFooter>
           {approval && !expired ? (
-            <Button type="button" size="sm" onClick={() => change(false)}>
-              {t('auto.components.settings.cloudApi.secret.done', 'Done')}
-            </Button>
+            <OneTimeSecretDoneButton copied={copied} onDone={() => change(false)} />
           ) : (
             <>
               <Button

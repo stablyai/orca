@@ -70,10 +70,14 @@ export function formatRunDuration(ms: number | null, t: Translate = translate): 
   }
   const minutes = Math.floor(seconds / 60)
   if (minutes < 60) {
-    return t('auto.components.settings.cloudRoutines.duration.minutes', '{{value0}}m {{value1}}s', {
-      value0: String(minutes),
-      value1: String(seconds % 60)
-    })
+    return seconds % 60 === 0
+      ? t('auto.components.settings.cloudRoutines.duration.minutesOnly', '{{value0}}m', {
+          value0: String(minutes)
+        })
+      : t('auto.components.settings.cloudRoutines.duration.minutes', '{{value0}}m {{value1}}s', {
+          value0: String(minutes),
+          value1: String(seconds % 60)
+        })
   }
   return t('auto.components.settings.cloudRoutines.duration.hours', '{{value0}}h {{value1}}m', {
     value0: String(Math.floor(minutes / 60)),
@@ -118,9 +122,7 @@ export function describeRoutineTrigger(
     return t('auto.components.settings.cloudRoutines.trigger.webhook', 'Webhook')
   }
   const events = trigger.events.map((event) => githubEventLabel(event, t)).join(', ')
-  const labels = trigger.labels?.length
-    ? ` ${trigger.labels.map((label) => `\`${label}\``).join(', ')}`
-    : ''
+  const labels = trigger.labels?.length ? ` “${trigger.labels.join('”, “')}”` : ''
   return t('auto.components.settings.cloudRoutines.trigger.githubSummary', 'GitHub: {{value0}}', {
     value0: `${events}${labels}`
   })

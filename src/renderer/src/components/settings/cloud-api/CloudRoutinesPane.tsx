@@ -11,6 +11,7 @@ import { cloudApiErrorCopy } from './cloud-api-copy'
 import { localTimeZone } from './cloud-api-format'
 import { toCloudLoadState, type CloudApiFailure, type CloudLoadState } from './cloud-load-state'
 import { useOrcaCloudApiAvailability } from '@/hooks/useOrcaCloudApiAvailability'
+import { useRequestGeneration } from './use-request-generation'
 
 const RUNS_PAGE_SIZE = 20
 
@@ -20,6 +21,8 @@ export function CloudRoutinesPane(): React.JSX.Element | null {
   const api = window.api.cloudApi
   const [routines, setRoutines] = useState<CloudLoadState<Routine[]>>({ status: 'loading' })
   const [projects, setProjects] = useState<CloudApiProject[]>([])
+  const [projectsFailed, setProjectsFailed] = useState(false)
+  const begin = useRequestGeneration()
   const [installations, setInstallations] = useState<CloudApiInstallation[] | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const timezone = useMemo(() => localTimeZone(), [])
@@ -32,17 +35,22 @@ export function CloudRoutinesPane(): React.JSX.Element | null {
     if (!api) {
       return
     }
+    const isCurrent = begin('page')
     setRoutines({ status: 'loading' })
     const [list, projectList, installs] = await Promise.all([
       api.listRoutines(),
       api.listProjects(),
       api.listInstallations()
     ])
+    if (!isCurrent()) {
+      return
+    }
+    setProjectsFailed(!projectList.ok)
     setRoutines(toCloudLoadState(list.ok ? { ok: true, data: list.data.routines } : list, word))
     setProjects(projectList.ok ? projectList.data.projects : [])
     setInstallations(installs.ok ? installs.data.installations : null)
     setNow(Date.now())
-  }, [api, word])
+  }, [api, begin, word])
 
   // Stable identity: the run history reloads whenever this function changes.
   const loadRuns = useCallback(
@@ -79,6 +87,7 @@ export function CloudRoutinesPane(): React.JSX.Element | null {
     <CloudRoutinesView
       routines={routines}
       projects={projects}
+      projectsFailed={projectsFailed}
       installations={installations}
       now={now}
       localTimezone={timezone}

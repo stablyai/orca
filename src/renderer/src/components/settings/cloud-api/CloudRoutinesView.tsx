@@ -24,6 +24,8 @@ import type { RoutineDraft } from './routine-draft'
 export type CloudRoutinesViewProps = {
   routines: CloudLoadState<Routine[]>
   projects: readonly CloudApiProject[]
+  /** The project list could not be loaded (not the same as having none). */
+  projectsFailed?: boolean
   installations: readonly CloudApiInstallation[] | null
   now: number
   localTimezone: string
@@ -63,7 +65,12 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
     setEditorOpen(true)
   }
   const newButton = (
-    <Button type="button" size="sm" onClick={() => openEditor(null)}>
+    <Button
+      type="button"
+      size="sm"
+      onClick={() => openEditor(null)}
+      disabled={routines.status !== 'ok'}
+    >
       <Plus />
       {t('auto.components.settings.cloudRoutines.new', 'New routine')}
     </Button>
@@ -73,10 +80,10 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
   return (
     <div className="space-y-8">
       <SettingsGroup
-        title={t('auto.components.settings.cloudRoutines.title', 'Routines')}
+        title={t('auto.components.settings.cloudRoutines.listTitle', 'Your routines')}
         description={t(
           'auto.components.settings.cloudRoutines.description',
-          'Agents that run in Orca Cloud on a schedule, on GitHub events or from a webhook, even when this computer is off.'
+          'They run in Orca Cloud, even when this computer is off.'
         )}
         action={
           unavailable ? null : (
@@ -95,7 +102,7 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
                   )}
                 />
               </Button>
-              {routines.status === 'ok' && list.length > 0 ? newButton : null}
+              {routines.status === 'ok' && list.length === 0 ? null : newButton}
             </div>
           )
         }
@@ -109,11 +116,11 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
             icon={CalendarClock}
             title={t(
               'auto.components.settings.cloudRoutines.unavailableTitle',
-              'Routines are on their way'
+              'Routines aren’t on yet'
             )}
             description={t(
               'auto.components.settings.cloudRoutines.unavailableBody',
-              'Your Orca Cloud account does not have routines yet. They will appear here as soon as they are turned on.'
+              'Routines aren’t enabled for your Orca Cloud account yet. There’s nothing to set up; this page fills in once they are.'
             )}
           />
         ) : routines.status === 'error' ? (
@@ -167,6 +174,7 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
         onOpenChange={setEditorOpen}
         routine={editing}
         projects={props.projects}
+        projectsFailed={props.projectsFailed}
         installations={props.installations}
         localTimezone={props.localTimezone}
         onCreate={props.onCreate}

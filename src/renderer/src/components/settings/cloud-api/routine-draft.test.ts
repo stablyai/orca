@@ -4,7 +4,9 @@ import {
   emptyRoutineDraft,
   routineDraftCron,
   routineDraftFromRoutine,
-  validateRoutineDraft
+  routinePatchFromInput,
+  validateRoutineDraft,
+  withCurrentProject
 } from './routine-draft'
 
 const valid = {
@@ -146,5 +148,55 @@ describe('routine draft', () => {
       githubEvents: ['issues.labeled'],
       labels: 'bug, p1'
     })
+  })
+})
+
+describe('routine edits', () => {
+  const input = (draft: Parameters<typeof validateRoutineDraft>[0]) => {
+    const result = validateRoutineDraft(draft)
+    if (!result.ok) {
+      throw new Error('invalid draft')
+    }
+    return result.input
+  }
+
+  it('sends nothing when nothing changed, and never re-sends enabled', () => {
+    const draft = routineDraftFromRoutine(routine, 'UTC')
+    expect(routinePatchFromInput(routine, input({ ...draft, enabled: true }))).toEqual({})
+  })
+
+  it('clears the other source and the time limit with explicit nulls', () => {
+    const draft = routineDraftFromRoutine(routine, 'UTC')
+    expect(
+      routinePatchFromInput(
+        routine,
+        input({ ...draft, source: 'project', projectId: 'prj_9', maxRuntimeMinutes: '' })
+      )
+    ).toEqual({ projectId: 'prj_9', repo: null, maxRuntimeMinutes: null })
+    const projectRoutine = { ...routine, projectId: 'prj_9', repo: null }
+    expect(
+      routinePatchFromInput(
+        projectRoutine,
+        input({
+          ...routineDraftFromRoutine(projectRoutine, 'UTC'),
+          source: 'repo',
+          repoUrl: 'https://github.com/a/b'
+        })
+      )
+    ).toEqual({ repo: { url: 'https://github.com/a/b' }, projectId: null })
+  })
+
+  it('sends only the changed trigger', () => {
+    const draft = routineDraftFromRoutine(routine, 'UTC')
+    expect(routinePatchFromInput(routine, input({ ...draft, time: '07:00' }))).toEqual({
+      trigger: { kind: 'schedule', cron: '0 7 * * 1', timezone: 'Europe/Berlin' }
+    })
+  })
+
+  it('keeps an unknown current project selectable', () => {
+    expect(withCurrentProject([], 'prj_x', 'Current project')).toEqual([
+      { id: 'prj_x', name: 'Current project', repo: null }
+    ])
+    expect(withCurrentProject([], '', 'Current project')).toEqual([])
   })
 })

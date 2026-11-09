@@ -80,7 +80,7 @@ export function RoutineAgentSection({
       <h3 id={`${ids}-what`} className="text-sm font-semibold">
         {t('auto.components.settings.cloudRoutines.editor.what', 'What the agent does')}
       </h3>
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="grid gap-1.5">
         <p id={`${ids}-agent`} className="text-xs font-medium">
           {t('auto.components.settings.cloudRoutines.editor.agent', 'Agent')}
         </p>
@@ -88,6 +88,7 @@ export function RoutineAgentSection({
           size="sm"
           value={draft.agent}
           onChange={(agent) => update({ agent })}
+          equalWidth
           ariaLabelledBy={`${ids}-agent`}
           options={[
             { value: 'claude', label: 'Claude Code' },
@@ -166,6 +167,7 @@ export function RoutineAgentSection({
             inputMode="numeric"
             value={draft.maxRuntimeMinutes}
             aria-invalid={Boolean(errors.maxRuntimeMinutes)}
+            aria-describedby={errors.maxRuntimeMinutes ? `${ids}-runtime-error` : undefined}
             onChange={(event) =>
               update({ maxRuntimeMinutes: event.target.value.replace(/[^0-9]/g, '') })
             }

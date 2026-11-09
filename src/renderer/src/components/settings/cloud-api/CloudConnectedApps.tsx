@@ -62,11 +62,11 @@ export function CloudConnectedApps({
           viewer?.orgId && viewer.role !== 'member'
             ? t(
                 'auto.components.settings.cloudApi.apps.descriptionAdmin',
-                'MCP clients anyone in your org approved. Each connection lasts 90 days, or until its key is revoked.'
+                'MCP clients anyone in your org approved. A connection lasts 90 days, or until you disconnect it or revoke the key that approved it.'
               )
             : t(
                 'auto.components.settings.cloudApi.apps.description',
-                'MCP clients you approved. Each connection lasts 90 days, or until the key that approved it is revoked.'
+                'MCP clients you approved. A connection lasts 90 days, or until you disconnect it or revoke the key that approved it.'
               )
         }
       >
@@ -90,7 +90,7 @@ export function CloudConnectedApps({
             action={
               <Button type="button" variant="outline" size="sm" onClick={onApprove}>
                 <ShieldCheck />
-                {t('auto.components.settings.cloudApi.links.approve', 'Approve an app…')}
+                {t('auto.components.settings.cloudApi.links.approve', 'Approve app')}
               </Button>
             }
           />
@@ -125,9 +125,7 @@ export function CloudConnectedApps({
                             { value0: formatRelativeFromNow(grant.grantedAt, now, locale) }
                           )}
                       {viewer && grant.userId !== viewer.userId
-                        ? ` ${t('auto.components.settings.cloudApi.apps.by', 'by {{value0}}', {
-                            value0: grant.userId
-                          })}`
+                        ? ` ${t('auto.components.settings.cloudApi.apps.byTeammate', 'by a teammate')}`
                         : null}
                     </span>
                     <span aria-hidden> · </span>
@@ -160,7 +158,6 @@ export function CloudConnectedApps({
                   type="button"
                   variant="ghost"
                   size="xs"
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
                   aria-label={t(
                     'auto.components.settings.cloudApi.apps.disconnectLabel',
                     'Disconnect {{value0}}',

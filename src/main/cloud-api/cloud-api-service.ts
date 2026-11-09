@@ -24,8 +24,10 @@ export function classifyTokenError(error: unknown): CloudApiErrorCode {
 
 function resolveClient(): { client: CloudApiClient; controlPlaneUrl: string } | null {
   const userDataPath = app.getPath('userData')
-  // Token caches are per profile: switching profiles must never reuse another account's token.
-  const profileKey = ensureActiveOrcaProfile(userDataPath).profile.id
+  // Token caches are per profile *and* signed-in account: switching profiles, signing out or
+  // signing in as someone else must never reuse the previous account's token.
+  const profile = ensureActiveOrcaProfile(userDataPath).profile
+  const profileKey = `${profile.id}:${profile.cloud?.userId ?? 'signed-out'}`
   if (cached?.key === profileKey) {
     return cached
   }

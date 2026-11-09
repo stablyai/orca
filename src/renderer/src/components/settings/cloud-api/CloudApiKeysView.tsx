@@ -99,7 +99,7 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
   return (
     <div className="space-y-8">
       <SettingsGroup
-        title={t('auto.components.settings.cloudApi.keys.title', 'API keys')}
+        title={t('auto.components.settings.cloudApi.keys.listTitle', 'Keys')}
         description={
           viewer?.orgId
             ? orgAdmin
@@ -132,7 +132,7 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
                 )}
               />
             </Button>
-            {keys.status === 'ok' && keys.data.keys.length > 0 ? createButton : null}
+            {keys.status === 'ok' && keys.data.keys.length === 0 ? null : createButton}
           </div>
         }
       >
@@ -236,7 +236,7 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
 function creatorLabel(key: CloudApiKey, viewer: CloudApiMe | null, t: Translate): string {
   return viewer?.userId === key.createdBy
     ? t('auto.components.settings.cloudApi.keys.createdByYou', 'you')
-    : key.createdBy
+    : t('auto.components.settings.cloudApi.keys.createdByTeammate', 'a teammate')
 }
 
 function KeyRow({
@@ -295,7 +295,7 @@ function KeyRow({
             <>
               <span aria-hidden> · </span>
               <span
-                className={cn(expiresSoon && 'text-amber-700 dark:text-amber-400')}
+                className={cn(expiresSoon && 'text-status-warning-text')}
                 title={formatAbsoluteTime(apiKey.expiresAt, locale)}
               >
                 {apiKey.expiresAt <= now
@@ -312,7 +312,6 @@ function KeyRow({
         type="button"
         variant="ghost"
         size="xs"
-        className="shrink-0 text-muted-foreground hover:text-destructive"
         onClick={onRevoke}
         aria-label={t('auto.components.settings.cloudApi.keys.revokeLabel', 'Revoke {{value0}}', {
           value0: apiKey.name

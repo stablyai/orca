@@ -128,6 +128,39 @@ describe('createCloudApiClient', () => {
   })
 })
 
+describe('response hardening', () => {
+  it('keeps a freshly minted secret even if the key metadata drifted', async () => {
+    const secret = `orca_sk_${'b'.repeat(32)}`
+    const fetchImpl = vi.fn(async () => respond(201, { key: { id: 7 }, secret }))
+    const created = await client(fetchImpl as unknown as typeof fetch).createApiKey({
+      name: 'x',
+      scopes: ['workspaces:read']
+    })
+    expect(created).toEqual({ key: null, secret })
+  })
+
+  it('rejects non-https links from the server', async () => {
+    const run = {
+      id: 'run_1',
+      routineId: 'rt_1',
+      trigger: 'manual',
+      triggerDetail: null,
+      status: 'succeeded',
+      workspaceId: null,
+      result: { prUrl: 'javascript:alert(1)' },
+      error: null,
+      createdAt: 1,
+      startedAt: 1,
+      finishedAt: 2,
+      durationMs: 1
+    }
+    const fetchImpl = vi.fn(async () => respond(202, { run }))
+    expect(await codeOf(client(fetchImpl as unknown as typeof fetch).runRoutine('rt_1'))).toBe(
+      'invalid-response'
+    )
+  })
+})
+
 describe('classifyCloudApiResponse', () => {
   it.each([
     [401, { error: 'unauthorized' }, 'signed-out'],

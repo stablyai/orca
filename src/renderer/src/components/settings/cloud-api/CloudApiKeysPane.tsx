@@ -12,6 +12,7 @@ import { toCloudLoadState, type CloudLoadState } from './cloud-load-state'
 import { CloudApiSignedOutNotice } from './CloudApiSignedOutNotice'
 import { cloudApiErrorCopy } from './cloud-api-copy'
 import { useOrcaCloudApiAvailability } from '@/hooks/useOrcaCloudApiAvailability'
+import { useRequestGeneration } from './use-request-generation'
 
 export function CloudApiKeysPane(): React.JSX.Element | null {
   const t = useTranslate()
@@ -24,6 +25,7 @@ export function CloudApiKeysPane(): React.JSX.Element | null {
   const [grants, setGrants] = useState<CloudLoadState<CloudApiGrant[]>>({ status: 'loading' })
   const [audit, setAudit] = useState<CloudLoadState<CloudApiAuditPage>>({ status: 'loading' })
   const [now, setNow] = useState(() => Date.now())
+  const begin = useRequestGeneration()
 
   const word = useCallback(
     (failure: {
@@ -38,6 +40,10 @@ export function CloudApiKeysPane(): React.JSX.Element | null {
     if (!api) {
       return
     }
+    const isCurrent = begin('page')
+    // A page reload supersedes any in-flight list or grant refresh.
+    begin('keys')
+    begin('grants')
     setKeys({ status: 'loading' })
     setSettings({ status: 'loading' })
     setGrants({ status: 'loading' })
@@ -47,22 +53,33 @@ export function CloudApiKeysPane(): React.JSX.Element | null {
       api.getSettings(),
       api.listGrants()
     ])
+    if (!isCurrent()) {
+      return
+    }
     setGrants(toCloudLoadState(apps.ok ? { ok: true, data: apps.data.grants } : apps, word))
     setSignedOut(!me.ok && me.error === 'signed-out')
     setViewer(me.ok ? me.data : null)
-    setKeys(toCloudLoadState(list, word))
+    // Without knowing who is looking, ownership labels and admin-only parts would be wrong:
+    // surface the failure rather than a quietly degraded page.
+    setKeys(
+      me.ok || me.error === 'signed-out' ? toCloudLoadState(list, word) : toCloudLoadState(me, word)
+    )
     setSettings(toCloudLoadState(current, word))
     setNow(Date.now())
-  }, [api, word])
+  }, [api, begin, word])
 
   const loadAudit = useCallback(async (): Promise<void> => {
     if (!api) {
       return
     }
+    const isCurrent = begin('audit')
     setAudit({ status: 'loading' })
-    setAudit(toCloudLoadState(await api.listAudit({ limit: 25 }), word))
-    setNow(Date.now())
-  }, [api, word])
+    const result = await api.listAudit({ limit: 25 })
+    if (isCurrent()) {
+      setAudit(toCloudLoadState(result, word))
+      setNow(Date.now())
+    }
+  }, [api, begin, word])
 
   useEffect(() => {
     if (availability?.status === 'ready') {
@@ -91,7 +108,12 @@ export function CloudApiKeysPane(): React.JSX.Element | null {
         const result = await api.createApiKey(input)
         if (result.ok) {
           // Refresh the list behind the dialog; the secret stays only in the dialog's state.
-          void api.listApiKeys().then((next) => setKeys(toCloudLoadState(next, word)))
+          const isCurrent = begin('keys')
+          void api.listApiKeys().then((next) => {
+            if (isCurrent()) {
+              setKeys(toCloudLoadState(next, word))
+            }
+          })
         }
         return result
       }}
@@ -121,13 +143,15 @@ export function CloudApiKeysPane(): React.JSX.Element | null {
       onLoadAudit={() => void loadAudit()}
       onCreateApproval={(input) => api.createApproval(input)}
       grants={grants}
-      onRefreshGrants={() =>
-        void api
-          .listGrants()
-          .then((apps) =>
+      onRefreshGrants={() => {
+        const isCurrent = begin('grants')
+        setGrants({ status: 'loading' })
+        void api.listGrants().then((apps) => {
+          if (isCurrent()) {
             setGrants(toCloudLoadState(apps.ok ? { ok: true, data: apps.data.grants } : apps, word))
-          )
-      }
+          }
+        })
+      }}
       onRevokeGrant={async (grant) => {
         const result = await api.revokeGrant(grant.id)
         if (!result.ok && result.error !== 'not-found') {

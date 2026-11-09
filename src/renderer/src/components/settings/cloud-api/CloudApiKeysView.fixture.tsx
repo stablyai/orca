@@ -45,7 +45,7 @@ const KEYS: CloudApiKeyList = {
       name: 'Grafana dashboard',
       prefix: 'orca_sk_Q9zL',
       scopes: ['workspaces:read', 'projects:read', 'routines:read'],
-      createdBy: 'grace@acme.dev',
+      createdBy: 'u_grace',
       createdAt: NOW - 40 * DAY,
       lastUsedAt: NOW - 2 * 3_600_000,
       expiresAt: null
@@ -72,6 +72,7 @@ const AUDIT: CloudApiAuditPage = {
       actor: { type: 'user', id: 'u_ada', userId: 'u_ada' },
       action: 'api_key.create',
       target: { type: 'api_key', id: 'key_ci' },
+      detail: { name: 'GitHub Actions deploy' },
       createdAt: NOW - 3 * DAY
     },
     {
@@ -107,7 +108,7 @@ const GRANTS: CloudApiGrant[] = [
     id: 'fam_cursor',
     clientId: 'cl_4q',
     clientName: 'Cursor',
-    userId: 'grace@acme.dev',
+    userId: 'u_grace',
     scopes: ['workspaces:read', 'projects:read'],
     approvedWith: { apiKeyPrefix: 'orca_sk_Q9zL' },
     grantedAt: NOW - 9 * DAY,
@@ -201,7 +202,10 @@ export const memberView = defineFixture({
     <CloudApiKeysView
       {...base}
       viewer={MEMBER}
-      keys={{ status: 'ok', data: { availableScopes: MEMBER.scopes, keys: KEYS.keys.slice(0, 1) } }}
+      keys={{
+        status: 'ok',
+        data: { availableScopes: MEMBER.scopes, keys: [{ ...KEYS.keys[0]!, createdBy: 'u_linus' }] }
+      }}
       settings={{ status: 'ok', data: { settings: { vmCliEnabled: false }, canEdit: false } }}
       audit={null}
     />

@@ -1,4 +1,5 @@
 import { useId, useMemo } from 'react'
+import { CalendarClock, Github, Webhook } from 'lucide-react'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import {
@@ -27,7 +28,13 @@ import { ROUTINE_GITHUB_EVENTS } from '../../../../../shared/cloud-api/cloud-api
 import { SettingsSearchableSelect } from '../form-controls/SettingsSearchableSelect'
 import { githubEventLabel, timeZoneOptions } from './cloud-api-format'
 import { FormField } from './cloud-api-parts'
-import { routineDraftCron, type RoutineDraft, type RoutineSchedulePreset } from './routine-draft'
+import {
+  routineDraftCron,
+  type RoutineDraft,
+  type RoutineSchedulePreset,
+  type RoutineTriggerKind
+} from './routine-draft'
+import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 
 type Update = (patch: Partial<RoutineDraft>) => void
 
@@ -85,10 +92,10 @@ export function RoutineScheduleFields({
             </SelectContent>
           </Select>
         </FormField>
-        <FormField
-          id={`${ids}-tz`}
-          label={t('auto.components.settings.cloudRoutines.editor.timezone', 'Time zone')}
-        >
+        <div className="min-w-0 space-y-1.5">
+          <p className="text-xs font-medium">
+            {t('auto.components.settings.cloudRoutines.editor.timezone', 'Time zone')}
+          </p>
           <div className="[&>button]:h-9 [&>button]:w-full">
             <SettingsSearchableSelect
               ariaLabel={t('auto.components.settings.cloudRoutines.editor.timezone', 'Time zone')}
@@ -101,12 +108,12 @@ export function RoutineScheduleFields({
               groups={[
                 {
                   key: 'zones',
-                  options: zones.map((zone) => ({ value: zone, label: zone.replaceAll('_', ' ') }))
+                  options: zones.map((zone) => ({ value: zone, label: zone }))
                 }
               ]}
             />
           </div>
-        </FormField>
+        </div>
       </div>
 
       {draft.schedulePreset === 'custom' ? (
@@ -120,7 +127,7 @@ export function RoutineScheduleFields({
             value={draft.customCron}
             placeholder="0 9 * * 1-5"
             spellCheck={false}
-            className="font-mono"
+            variant="code"
             aria-invalid={Boolean(cronError)}
             aria-describedby={`${ids}-cron-status`}
             onChange={(event) => update({ customCron: event.target.value })}
@@ -187,7 +194,7 @@ export function RoutineScheduleFields({
           </div>
         </div>
       )}
-      {draft.schedulePreset !== 'custom' || status.kind === 'valid' ? (
+      {draft.schedulePreset !== 'custom' ? (
         <p className="text-xs text-muted-foreground" aria-live="polite">
           {t(
             'auto.components.settings.cloudRoutines.editor.schedulePreview',
@@ -234,7 +241,7 @@ export function RoutineGithubFields({
           {t('auto.components.settings.cloudRoutines.editor.events', 'Run when')}
         </legend>
         <div className="grid gap-x-4 gap-y-1.5 sm:grid-cols-2">
-          {ROUTINE_GITHUB_EVENTS.map((event) => (
+          {ROUTINE_GITHUB_EVENTS.map((event, index) => (
             <label
               key={event}
               htmlFor={`${ids}-${event}`}
@@ -242,6 +249,8 @@ export function RoutineGithubFields({
             >
               <Checkbox
                 id={`${ids}-${event}`}
+                // The first box carries the group's error so focus-first-invalid lands here.
+                aria-invalid={index === 0 && Boolean(eventsError)}
                 checked={draft.githubEvents.includes(event)}
                 onCheckedChange={(checked) => toggle(event, checked === true)}
               />
@@ -310,5 +319,56 @@ export function RoutineGithubFields({
         </FormField>
       </div>
     </div>
+  )
+}
+
+export function RoutineTriggerKindControl({
+  value,
+  onChange,
+  labelledBy
+}: {
+  value: RoutineTriggerKind
+  onChange: (kind: RoutineTriggerKind) => void
+  labelledBy: string
+}): React.JSX.Element {
+  const t = useTranslate()
+  const options: { value: RoutineTriggerKind; label: React.ReactNode }[] = [
+    {
+      value: 'schedule',
+      label: (
+        <span className="inline-flex items-center gap-1.5">
+          <CalendarClock className="size-3.5" aria-hidden />
+          {t('auto.components.settings.cloudRoutines.trigger.schedule', 'Schedule')}
+        </span>
+      )
+    },
+    {
+      value: 'github',
+      label: (
+        <span className="inline-flex items-center gap-1.5">
+          <Github className="size-3.5" aria-hidden />
+          {t('auto.components.settings.cloudRoutines.trigger.github', 'GitHub event')}
+        </span>
+      )
+    },
+    {
+      value: 'webhook',
+      label: (
+        <span className="inline-flex items-center gap-1.5">
+          <Webhook className="size-3.5" aria-hidden />
+          {t('auto.components.settings.cloudRoutines.trigger.webhook', 'Webhook')}
+        </span>
+      )
+    }
+  ]
+  return (
+    <SettingsSegmentedControl<RoutineTriggerKind>
+      value={value}
+      onChange={onChange}
+      ariaLabelledBy={labelledBy}
+      size="sm"
+      equalWidth
+      options={options}
+    />
   )
 }

@@ -4,10 +4,12 @@ import { classifyAutomationCronSchedule } from '../../../../../shared/automation
 import { isValidAutomationCronSchedule } from '../../../../../shared/automations/scheduling/automation-schedule-parsing'
 import {
   RoutineInputSchema,
+  type CloudApiProject,
   type Routine,
   type RoutineAgent,
   type RoutineGithubEvent,
   type RoutineInput,
+  type RoutinePatch,
   type RoutinePostResults,
   type RoutineTriggerInput
 } from '../../../../../shared/cloud-api/cloud-api-types'
@@ -238,4 +240,65 @@ export function validateRoutineDraft(draft: RoutineDraft): RoutineDraftValidatio
     }
   }
   return { ok: true, input: parsed.data }
+}
+
+/**
+ * The PATCH body for an edit: only fields that changed, with explicit nulls to clear the other
+ * source or the time limit. `enabled` is never sent from the editor (the list's switch owns it).
+ */
+export function routinePatchFromInput(routine: Routine, input: RoutineInput): RoutinePatch {
+  const patch: RoutinePatch = {}
+  const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b)
+  if (input.name !== routine.name) {
+    patch.name = input.name
+  }
+  if (input.projectId) {
+    if (input.projectId !== routine.projectId) {
+      patch.projectId = input.projectId
+    }
+    if (routine.repo) {
+      patch.repo = null
+    }
+  } else if (input.repo) {
+    const current = routine.repo
+      ? { url: routine.repo.url, ...(routine.repo.ref ? { ref: routine.repo.ref } : {}) }
+      : null
+    if (!same(input.repo, current)) {
+      patch.repo = input.repo
+    }
+    if (routine.projectId) {
+      patch.projectId = null
+    }
+  }
+  const { urlHint: _hint, ...currentTrigger } = routine.trigger as RoutineTriggerInput & {
+    urlHint?: unknown
+  }
+  if (!same(input.trigger, currentTrigger)) {
+    patch.trigger = input.trigger
+  }
+  if (input.agent !== routine.agent) {
+    patch.agent = input.agent
+  }
+  if (input.prompt !== routine.prompt) {
+    patch.prompt = input.prompt
+  }
+  if (input.postResults !== routine.postResults) {
+    patch.postResults = input.postResults
+  }
+  const runtime = input.maxRuntimeMinutes ?? null
+  if (runtime !== (routine.maxRuntimeMinutes ?? null)) {
+    patch.maxRuntimeMinutes = runtime
+  }
+  return patch
+}
+
+/** Keep an edited routine's current project selectable even if the list failed or omits it. */
+export function withCurrentProject(
+  projects: readonly CloudApiProject[],
+  projectId: string,
+  fallbackName: string
+): readonly CloudApiProject[] {
+  return projectId && !projects.some((project) => project.id === projectId)
+    ? [...projects, { id: projectId, name: fallbackName, repo: null }]
+    : projects
 }

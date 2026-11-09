@@ -216,7 +216,7 @@ export const notAvailable = defineFixture({
 
 export const runHistory = defineFixture({
   width: 820,
-  render: () => <CloudRoutinesView {...props} initial={{ historyFor: 'rt_triage' }} />
+  render: () => <CloudRoutinesView {...props} initial={{ historyFor: 'rt_review' }} />
 })
 
 export const runHistoryEmpty = defineFixture({

@@ -89,14 +89,14 @@ export function AccessLinks({
         label={t('auto.components.settings.cloudApi.links.mcp', 'MCP server')}
         description={t(
           'auto.components.settings.cloudApi.links.mcpBody',
-          'Add this URL to Claude, Cursor or any MCP client. When it asks for approval, use Approve an app.'
+          'Add this URL to Claude, Cursor or any MCP client. When it asks you to approve, paste a one-time code from Approve app.'
         )}
         url={`${base}/mcp`}
         copyLabel={t('auto.components.settings.cloudApi.links.copyMcp', 'Copy MCP server URL')}
         extra={
           <Button type="button" variant="ghost" size="xs" onClick={onApprove}>
             <ShieldCheck />
-            {t('auto.components.settings.cloudApi.links.approve', 'Approve an app…')}
+            {t('auto.components.settings.cloudApi.links.approve', 'Approve app')}
           </Button>
         }
       />
@@ -146,12 +146,14 @@ export function OrgSettings({
               'auto.components.settings.cloudApi.org.vmCliBody',
               'Agents get a short-lived token for the orca CLI inside their VM, so they can start sibling workspaces and hand work to other agents. Turning this off revokes every outstanding token at once.'
             )}
-            {settings.status === 'ok' && !canEdit
-              ? ` ${t(
+            {settings.status === 'ok' && !canEdit ? (
+              <span className="mt-1 block">
+                {t(
                   'auto.components.settings.cloudApi.org.adminOnly',
                   'Only org owners and admins can change this.'
-                )}`
-              : null}
+                )}
+              </span>
+            ) : null}
           </p>
           {settings.status === 'error' ? (
             <p className="text-xs text-destructive">{settings.message}</p>
@@ -162,24 +164,85 @@ export function OrgSettings({
             </p>
           ) : null}
         </div>
-        <Switch
-          className="mt-0.5"
-          checked={pending ?? current}
-          disabled={!canEdit || pending !== null}
-          aria-labelledby={labelId}
-          aria-describedby={descriptionId}
-          onCheckedChange={(next) => void toggle(next)}
-        />
+        {settings.status === 'loading' ? (
+          <div
+            aria-hidden
+            className="mt-0.5 h-5 w-9 shrink-0 rounded-full bg-muted/60 animate-pulse motion-reduce:animate-none"
+          />
+        ) : (
+          <Switch
+            className="mt-0.5"
+            checked={pending ?? current}
+            disabled={!canEdit || pending !== null}
+            aria-labelledby={labelId}
+            aria-describedby={descriptionId}
+            onCheckedChange={(next) => void toggle(next)}
+          />
+        )}
       </div>
     </SettingsGroup>
   )
+}
+
+const AUDIT_ACTIONS: Record<string, [key: string, fallback: string]> = {
+  'api_key.create': ['auto.components.settings.cloudApi.audit.action.keyCreate', 'Created API key'],
+  'api_key.revoke': ['auto.components.settings.cloudApi.audit.action.keyRevoke', 'Revoked API key'],
+  'settings.update': [
+    'auto.components.settings.cloudApi.audit.action.settings',
+    'Changed agent access'
+  ],
+  'workspace.create': [
+    'auto.components.settings.cloudApi.audit.action.wsCreate',
+    'Started a workspace'
+  ],
+  'workspace.destroy': [
+    'auto.components.settings.cloudApi.audit.action.wsDestroy',
+    'Deleted a workspace'
+  ],
+  'workspace.sleep': [
+    'auto.components.settings.cloudApi.audit.action.wsSleep',
+    'Put a workspace to sleep'
+  ],
+  'workspace.wake': ['auto.components.settings.cloudApi.audit.action.wsWake', 'Woke a workspace'],
+  'workspace.archive': [
+    'auto.components.settings.cloudApi.audit.action.wsArchive',
+    'Archived a workspace'
+  ],
+  'workspace.message': [
+    'auto.components.settings.cloudApi.audit.action.wsMessage',
+    'Messaged an agent'
+  ],
+  'project.create': [
+    'auto.components.settings.cloudApi.audit.action.projectCreate',
+    'Created a project'
+  ],
+  'project.update': [
+    'auto.components.settings.cloudApi.audit.action.projectUpdate',
+    'Edited a project'
+  ],
+  'project.delete': [
+    'auto.components.settings.cloudApi.audit.action.projectDelete',
+    'Deleted a project'
+  ],
+  'mcp.approval_create': [
+    'auto.components.settings.cloudApi.audit.action.approval',
+    'Made an app approval code'
+  ]
+}
+
+/** "Created API key “CI deploy”"; unknown actions fall back to their machine name. */
+function auditActionLabel(entry: CloudApiAuditEntry, t: Translate): string {
+  const known = AUDIT_ACTIONS[entry.action]
+  const base = known ? t(known[0], known[1]) : entry.action
+  const name = entry.detail?.name
+  return typeof name === 'string' && name.length > 0 ? `${base} “${name.slice(0, 80)}”` : base
 }
 
 function actorLabel(entry: CloudApiAuditEntry, viewer: CloudApiMe | null, t: Translate): string {
   const who =
     entry.actor.userId && entry.actor.userId === viewer?.userId
       ? t('auto.components.settings.cloudApi.audit.you', 'You')
-      : (entry.actor.userId ?? entry.actor.id)
+      : t('auto.components.settings.cloudApi.audit.teammate', 'A teammate')
   if (entry.actor.type === 'api_key') {
     return t('auto.components.settings.cloudApi.audit.viaKey', '{{value0}} via API key', {
       value0: who
@@ -225,6 +288,7 @@ export function AuditLog({
           variant="outline"
           size="sm"
           aria-expanded={open}
+          aria-controls="cloud-api-activity"
           onClick={() => {
             if (!open) {
               onLoad()
@@ -254,19 +318,18 @@ export function AuditLog({
           {t('auto.components.settings.cloudApi.audit.empty', 'Nothing has happened yet.')}
         </p>
       ) : (
-        <ul>
+        <ul id="cloud-api-activity">
           {audit.data.entries.slice(0, 25).map((entry) => (
             <li
               key={entry.id}
               data-settings-row=""
               className="flex items-center gap-3 py-2 text-xs"
             >
-              <code className="w-36 shrink-0 truncate font-mono text-foreground/90">
-                {entry.action}
-              </code>
-              <span className="min-w-0 flex-1 truncate text-muted-foreground">
+              <span className="min-w-0 flex-1 truncate text-foreground" title={entry.action}>
+                {auditActionLabel(entry, t)}
+              </span>
+              <span className="w-44 shrink-0 truncate text-muted-foreground">
                 {actorLabel(entry, viewer, t)}
-                {entry.target?.id ? ` · ${entry.target.id}` : ''}
               </span>
               <span
                 className="shrink-0 text-muted-foreground"

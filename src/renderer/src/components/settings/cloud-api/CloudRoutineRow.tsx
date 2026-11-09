@@ -21,8 +21,11 @@ import {
 import { Switch } from '@/components/ui/switch'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
-import type { CloudApiProject, Routine } from '../../../../../shared/cloud-api/cloud-api-types'
-import { SettingsBadge } from '../form-controls/SettingsFormControls'
+import type {
+  CloudApiProject,
+  Routine,
+  RoutineRunStatus
+} from '../../../../../shared/cloud-api/cloud-api-types'
 import { RoutineRunHistory, type LoadRoutineRuns } from './RoutineRunHistory'
 import {
   describeRoutineTrigger,
@@ -30,6 +33,13 @@ import {
   formatRelativeFromNow
 } from './cloud-api-format'
 import { RoutineRunStatusPill } from './cloud-api-parts'
+
+const ACTIVE_STATUSES: ReadonlySet<RoutineRunStatus> = new Set([
+  'queued',
+  'starting',
+  'running',
+  'posting'
+])
 
 function TriggerIcon({ kind }: { kind: Routine['trigger']['kind'] }): React.JSX.Element {
   const Icon = kind === 'schedule' ? CalendarClock : kind === 'github' ? Github : Webhook
@@ -106,25 +116,44 @@ export function RoutineRow({
     )
   }
 
+  const lastRun = routine.lastRun
+  const active = lastRun !== null && ACTIVE_STATUSES.has(lastRun.status)
+
   return (
     <li data-settings-row="" className="py-3.5">
       <div className="flex items-start gap-3">
         <TriggerIcon kind={routine.trigger.kind} />
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex min-w-0 items-center gap-2">
-            <p className={cn('truncate text-sm font-medium', !isOn && 'text-muted-foreground')}>
+        <button
+          type="button"
+          className="group/row -mx-1.5 -my-1 min-w-0 flex-1 cursor-pointer space-y-1 rounded-md px-1.5 py-1 text-left outline-none hover:bg-accent/40 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          aria-expanded={expanded}
+          aria-controls={historyId}
+          onClick={onToggleHistory}
+        >
+          <span className="flex min-w-0 items-center gap-1.5">
+            <span className={cn('truncate text-sm font-medium', !isOn && 'text-muted-foreground')}>
               {routine.name}
-            </p>
+            </span>
             {!isOn ? (
-              <SettingsBadge tone="muted">
+              <span className="sr-only">
                 {t('auto.components.settings.cloudRoutines.paused', 'Paused')}
-              </SettingsBadge>
+              </span>
             ) : null}
-          </div>
-          <p className="truncate text-xs text-foreground/80">
+            <ChevronDown
+              aria-hidden
+              className={cn(
+                'size-3.5 shrink-0 text-muted-foreground transition-transform motion-reduce:transition-none',
+                expanded && 'rotate-180'
+              )}
+            />
+            <span className="sr-only">
+              {t('auto.components.settings.cloudRoutines.history', 'Run history')}
+            </span>
+          </span>
+          <span className="block truncate text-xs text-foreground/80">
             {describeRoutineTrigger(routine.trigger, t, locale)}
-          </p>
-          <p className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
+          </span>
+          <span className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
             {where ? <span className="truncate font-mono text-[11px]">{where}</span> : null}
             {where ? <span aria-hidden>·</span> : null}
             <span>{routine.agent === 'codex' ? 'Codex' : 'Claude Code'}</span>
@@ -138,62 +167,55 @@ export function RoutineRow({
                 </span>
               </>
             ) : null}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-1">
-          {routine.lastRun ? (
-            <span
-              className="mr-1"
-              title={
-                routine.lastRun.finishedAt
-                  ? t('auto.components.settings.cloudRoutines.lastRunAt', 'Last run {{value0}}', {
-                      value0: formatAbsoluteTime(routine.lastRun.finishedAt, locale)
-                    })
-                  : undefined
-              }
-            >
+          </span>
+        </button>
+        <div className="flex w-36 shrink-0 flex-col items-end gap-1 pt-0.5">
+          {lastRun ? (
+            <>
               <span className="sr-only">
-                {t('auto.components.settings.cloudRoutines.lastRun', 'Last run:')}{' '}
+                {t('auto.components.settings.cloudRoutines.lastRun', 'Last run:')}
               </span>
-              <RoutineRunStatusPill status={routine.lastRun.status} />
-            </span>
+              <RoutineRunStatusPill status={lastRun.status} />
+              {lastRun.finishedAt ? (
+                <span
+                  className="text-[11px] text-muted-foreground"
+                  title={formatAbsoluteTime(lastRun.finishedAt, locale)}
+                >
+                  {formatRelativeFromNow(lastRun.finishedAt, now, locale)}
+                </span>
+              ) : null}
+            </>
           ) : (
-            <span className="mr-1 text-xs text-muted-foreground">
+            <span className="text-xs text-muted-foreground">
               {t('auto.components.settings.cloudRoutines.neverRun', 'Never run')}
             </span>
           )}
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
           <Button
             type="button"
             variant="ghost"
             size="xs"
-            disabled={running}
+            disabled={running || active}
             onClick={() => void runNow()}
             aria-label={t(
               'auto.components.settings.cloudRoutines.runNowLabel',
               'Run {{value0}} now',
               { value0: routine.name }
             )}
+            title={
+              active
+                ? t(
+                    'auto.components.settings.cloudRoutines.alreadyRunning',
+                    'A run is already in progress.'
+                  )
+                : undefined
+            }
           >
             {running ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : <Play />}
             {t('auto.components.settings.cloudRoutines.runNow', 'Run now')}
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-            aria-expanded={expanded}
-            aria-controls={historyId}
-            onClick={onToggleHistory}
-          >
-            {t('auto.components.settings.cloudRoutines.history', 'History')}
-            <ChevronDown
-              className={cn(
-                'transition-transform motion-reduce:transition-none',
-                expanded && 'rotate-180'
-              )}
-            />
-          </Button>
-          <DropdownMenu>
+          <DropdownMenu modal={false}>
             <DropdownMenuTrigger asChild>
               <Button
                 type="button"

@@ -50,7 +50,7 @@ describe('formatting', () => {
     expect(describeRoutineTrigger({ kind: 'webhook', urlHint: null })).toBe('Webhook')
     expect(
       describeRoutineTrigger({ kind: 'github', events: ['pull_request.labeled'], labels: ['orca'] })
-    ).toBe('GitHub: PR labeled `orca`')
+    ).toBe('GitHub: PR labeled “orca”')
     expect(
       describeRoutineTrigger({
         kind: 'schedule',

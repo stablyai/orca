@@ -45,7 +45,9 @@ export function cloudApiErrorCopy(
         'Orca Cloud does not offer this yet. Try again after the next update.'
       )
     case 'invalid-request':
-      return options.detail
+      // Server reasons that are bare machine codes ("project_name_taken") read as noise; show
+      // only human sentences (validation messages like "name: Too small").
+      return options.detail && /\s/.test(options.detail)
         ? t(
             'auto.components.settings.cloudApi.error.invalidWithDetail',
             'Orca Cloud rejected that: {{value0}}',

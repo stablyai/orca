@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, Check, Copy, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Label } from '@/components/ui/label'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { RoutineRunStatus } from '../../../../../shared/cloud-api/cloud-api-types'
@@ -24,7 +23,8 @@ export function CopyValueButton({
   variant = 'outline',
   size = 'xs',
   className,
-  onCopied
+  onCopied,
+  idleText
 }: {
   value: string
   /** e.g. "Copy MCP URL". */
@@ -33,6 +33,8 @@ export function CopyValueButton({
   size?: 'xs' | 'sm'
   className?: string
   onCopied?: () => void
+  /** Visible text before copying; defaults to "Copy". */
+  idleText?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle')
@@ -68,16 +70,12 @@ export function CopyValueButton({
         aria-label={label}
         onClick={() => void copy()}
       >
-        {state === 'copied' ? (
-          <Check className="text-emerald-600 dark:text-emerald-400" />
-        ) : (
-          <Copy />
-        )}
+        {state === 'copied' ? <Check className="text-status-success" /> : <Copy />}
         {state === 'copied'
           ? t('auto.components.settings.cloudApi.copied', 'Copied')
           : state === 'failed'
             ? t('auto.components.settings.cloudApi.copyFailed', 'Copy failed')
-            : t('auto.components.settings.cloudApi.copy', 'Copy')}
+            : (idleText ?? t('auto.components.settings.cloudApi.copy', 'Copy'))}
       </Button>
       <span className="sr-only" role="status" aria-live="polite">
         {state === 'copied'
@@ -173,16 +171,16 @@ export function CloudApiEmptyState({
 
 const TONE_CLASSES: Record<RoutineRunTone, { pill: string; dot: string }> = {
   success: {
-    pill: 'border-emerald-600/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-    dot: 'bg-emerald-500'
+    pill: 'border-status-success-border bg-status-success-background text-status-success',
+    dot: 'bg-status-success'
   },
   failure: {
     pill: 'border-destructive/30 bg-destructive/10 text-destructive',
     dot: 'bg-destructive'
   },
   active: {
-    pill: 'border-sky-600/25 bg-sky-500/10 text-sky-700 dark:text-sky-300',
-    dot: 'bg-sky-500 animate-pulse motion-reduce:animate-none'
+    pill: 'border-callout-note/30 bg-callout-note/10 text-callout-note',
+    dot: 'bg-callout-note animate-pulse motion-reduce:animate-none'
   },
   neutral: {
     pill: 'border-border bg-muted/40 text-muted-foreground',
@@ -231,9 +229,9 @@ export function FormField({
 }): React.JSX.Element {
   return (
     <div className={cn('min-w-0 space-y-1.5', className)}>
-      <Label htmlFor={id} className="text-xs font-medium text-foreground">
+      <label htmlFor={id} className="block text-xs font-medium text-foreground">
         {label}
-      </Label>
+      </label>
       {children}
       {error ? (
         <p id={`${id}-error`} className="text-xs text-destructive">

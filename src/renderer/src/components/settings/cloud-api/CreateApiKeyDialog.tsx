@@ -1,4 +1,4 @@
-import { useId, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { KeyRound, Loader2, ShieldAlert } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -30,7 +30,8 @@ import {
 import { SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { cloudApiErrorCopy, cloudApiScopeDescription } from './cloud-api-copy'
 import { isAdminScope, scopesForPreset, type ScopePreset } from './cloud-api-format'
-import { CloudApiErrorNotice, CopyValueButton, FormField, ScopeChip } from './cloud-api-parts'
+import { CloudApiErrorNotice, FormField, ScopeChip } from './cloud-api-parts'
+import { OneTimeSecret, OneTimeSecretDoneButton } from './OneTimeSecret'
 
 const EXPIRY_OPTIONS = ['never', '7', '30', '90', '365'] as const
 type Expiry = (typeof EXPIRY_OPTIONS)[number]
@@ -48,8 +49,13 @@ export type CreateApiKeyDialogProps = {
 export function CreateApiKeyDialog(props: CreateApiKeyDialogProps): React.JSX.Element {
   const { open, onOpenChange } = props
   const [created, setCreated] = useState<CloudApiCreatedKey | null>(props.initialCreated ?? null)
-  // Each open starts fresh; the secret must not survive a close and reopen.
+  const [busy, setBusy] = useState(false)
+  // Each open starts fresh; the secret must not survive a close and reopen. While a create is in
+  // flight the dialog stays open, so its one-time secret always lands in front of the user.
   const handleOpenChange = (next: boolean): void => {
+    if (!next && busy) {
+      return
+    }
     if (!next) {
       setCreated(null)
     }
@@ -59,13 +65,21 @@ export function CreateApiKeyDialog(props: CreateApiKeyDialogProps): React.JSX.El
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         className="sm:max-w-[520px]"
-        // While the secret is on screen, a stray click outside must not throw it away.
+        // While the secret is on screen only the footer button may close it: no stray click,
+        // Escape or × can throw it away.
+        showCloseButton={!created}
         onInteractOutside={created ? (event) => event.preventDefault() : undefined}
+        onEscapeKeyDown={created ? (event) => event.preventDefault() : undefined}
       >
         {created ? (
           <SecretStep created={created} onDone={() => handleOpenChange(false)} />
         ) : (
-          <FormStep {...props} onCreated={setCreated} onCancel={() => handleOpenChange(false)} />
+          <FormStep
+            {...props}
+            onBusyChange={setBusy}
+            onCreated={setCreated}
+            onCancel={() => handleOpenChange(false)}
+          />
         )}
       </DialogContent>
     </Dialog>
@@ -76,8 +90,10 @@ function FormStep({
   availableScopes,
   onCreate,
   onCreated,
-  onCancel
+  onCancel,
+  onBusyChange
 }: CreateApiKeyDialogProps & {
+  onBusyChange: (busy: boolean) => void
   onCreated: (created: CloudApiCreatedKey) => void
   onCancel: () => void
 }): React.JSX.Element {
@@ -92,6 +108,7 @@ function FormStep({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [nameTouched, setNameTouched] = useState(false)
+  const nameRef = useRef<HTMLInputElement>(null)
 
   const scopes = preset === 'custom' ? [...custom] : scopesForPreset(preset, availableScopes)
   const nameMissing = name.trim().length === 0
@@ -102,9 +119,13 @@ function FormStep({
     event.preventDefault()
     setNameTouched(true)
     if (!canSubmit) {
+      if (nameMissing) {
+        nameRef.current?.focus()
+      }
       return
     }
     setSubmitting(true)
+    onBusyChange(true)
     setError(null)
     const result = await onCreate({
       name: name.trim(),
@@ -113,6 +134,7 @@ function FormStep({
       ...(expiry === 'never' ? {} : { expiresInDays: Number(expiry) })
     })
     setSubmitting(false)
+    onBusyChange(false)
     if (result.ok) {
       onCreated(result.data)
     } else {
@@ -161,6 +183,7 @@ function FormStep({
       >
         <Input
           id={`${ids}-name`}
+          ref={nameRef}
           autoFocus
           value={name}
           maxLength={100}
@@ -237,10 +260,13 @@ function FormStep({
                       {scope}
                     </span>
                     <span className="block text-xs text-muted-foreground">
-                      {cloudApiScopeDescription(scope, t)}
                       {isAdminScope(scope) && locked
-                        ? ` · ${t('auto.components.settings.cloudApi.create.adminOnly', 'Admins only')}`
-                        : null}
+                        ? t(
+                            'auto.components.settings.cloudApi.create.adminOnlyScope',
+                            '{{value0}} (admins only)',
+                            { value0: cloudApiScopeDescription(scope, t) }
+                          )
+                        : cloudApiScopeDescription(scope, t)}
                     </span>
                   </span>
                 </label>
@@ -248,7 +274,10 @@ function FormStep({
             })}
           </fieldset>
         ) : (
-          <div className="flex flex-wrap gap-1" aria-live="polite">
+          <div className="flex flex-wrap items-center gap-1" aria-live="polite">
+            <span className="mr-1 text-xs text-muted-foreground">
+              {t('auto.components.settings.cloudApi.create.includes', 'Includes')}
+            </span>
             {scopes.map((scope) => (
               <ScopeChip key={scope} scope={scope} />
             ))}
@@ -268,7 +297,7 @@ function FormStep({
           </p>
         ) : null}
         {preset === 'custom' && scopes.length === 0 ? (
-          <p className="text-xs text-destructive">
+          <p role="alert" className="text-xs text-destructive">
             {t(
               'auto.components.settings.cloudApi.create.scopeRequired',
               'Pick at least one scope.'
@@ -330,7 +359,6 @@ function SecretStep({
   onDone: () => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const ids = useId()
   const [copied, setCopied] = useState(false)
   return (
     <div className="grid gap-5">
@@ -339,67 +367,36 @@ function SecretStep({
           {t('auto.components.settings.cloudApi.secret.title', 'Copy your new key')}
         </DialogTitle>
         <DialogDescription>
-          {t(
-            'auto.components.settings.cloudApi.secret.description',
-            '“{{value0}}” is ready to use.',
-            {
-              value0: created.key.name
-            }
-          )}
+          {created.key
+            ? t(
+                'auto.components.settings.cloudApi.secret.description',
+                '“{{value0}}” is ready to use.',
+                {
+                  value0: created.key.name
+                }
+              )
+            : t(
+                'auto.components.settings.cloudApi.secret.descriptionUnnamed',
+                'Your new key is ready to use.'
+              )}
         </DialogDescription>
       </DialogHeader>
-
-      <div
-        role="note"
-        className="flex items-start gap-2.5 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2.5 text-xs leading-5 text-foreground"
-      >
-        <ShieldAlert
-          className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400"
-          aria-hidden
-        />
-        <p>
-          <span className="font-medium">
-            {t(
-              'auto.components.settings.cloudApi.secret.onceTitle',
-              'This is the only time Orca shows this key.'
-            )}
-          </span>{' '}
-          {t(
-            'auto.components.settings.cloudApi.secret.onceBody',
-            'Store it in a password manager or your CI secrets now. If you lose it, revoke it and create a new one.'
-          )}
-        </p>
-      </div>
-
-      <div className="grid gap-1.5">
-        <label htmlFor={`${ids}-secret`} className="text-xs font-medium">
-          {t('auto.components.settings.cloudApi.secret.label', 'Secret key')}
-        </label>
-        <div className="flex items-center gap-2">
-          <Input
-            id={`${ids}-secret`}
-            readOnly
-            value={created.secret}
-            spellCheck={false}
-            className="font-mono text-xs"
-            onClick={(event) => event.currentTarget.select()}
-          />
-          <CopyValueButton
-            value={created.secret}
-            variant="default"
-            size="sm"
-            label={t('auto.components.settings.cloudApi.secret.copyLabel', 'Copy secret key')}
-            onCopied={() => setCopied(true)}
-          />
-        </div>
-      </div>
-
+      <OneTimeSecret
+        label={t('auto.components.settings.cloudApi.secret.label', 'Secret key')}
+        value={created.secret}
+        copyLabel={t('auto.components.settings.cloudApi.secret.copyLabel', 'Copy secret key')}
+        warningTitle={t(
+          'auto.components.settings.cloudApi.secret.onceTitle',
+          'This is the only time Orca shows this key.'
+        )}
+        warningBody={t(
+          'auto.components.settings.cloudApi.secret.onceBody',
+          'Store it in a password manager or your CI secrets now. If you lose it, revoke it and create a new one.'
+        )}
+        onCopied={() => setCopied(true)}
+      />
       <DialogFooter>
-        <Button type="button" size="sm" variant={copied ? 'default' : 'outline'} onClick={onDone}>
-          {copied
-            ? t('auto.components.settings.cloudApi.secret.done', 'Done')
-            : t('auto.components.settings.cloudApi.secret.doneUncopied', 'I’ve saved it')}
-        </Button>
+        <OneTimeSecretDoneButton copied={copied} onDone={onDone} />
       </DialogFooter>
     </div>
   )

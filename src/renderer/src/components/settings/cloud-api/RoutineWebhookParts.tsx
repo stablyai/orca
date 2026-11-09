@@ -1,13 +1,11 @@
-import { useId } from 'react'
-import { Github, Loader2, RotateCw, ShieldAlert } from 'lucide-react'
+import { useState } from 'react'
+import { Github, Loader2, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { useTranslate } from '@/i18n/use-translate'
 import type { CloudApiInstallation, Routine } from '../../../../../shared/cloud-api/cloud-api-types'
 import { CopyValueButton } from './cloud-api-parts'
-
-const CURL_EXAMPLE = `curl -X POST -H 'content-type: application/json' -d '{"ref":"main"}' <url>`
+import { OneTimeSecret, OneTimeSecretDoneButton } from './OneTimeSecret'
 
 export function GithubAppHint({
   installations
@@ -87,7 +85,8 @@ export function WebhookTriggerInfo({
                 'The current URL stops working. Rotate?'
               )}
             </span>
-            <Button type="button" variant="ghost" size="xs" onClick={onCancelRotate}>
+            {/* Focus moves here: the button that opened the confirm just unmounted. */}
+            <Button type="button" variant="ghost" size="xs" onClick={onCancelRotate} autoFocus>
               {t('auto.components.settings.cloudApi.cancel', 'Cancel')}
             </Button>
             <Button type="button" variant="destructive-chip" size="xs" onClick={onRotate}>
@@ -115,44 +114,29 @@ export function WebhookTriggerInfo({
   )
 }
 
-function WebhookUrlField({ url }: { url: string }): React.JSX.Element {
+function WebhookUrlField({
+  url,
+  onCopied
+}: {
+  url: string
+  onCopied?: () => void
+}): React.JSX.Element {
   const t = useTranslate()
-  const ids = useId()
   return (
-    <div className="grid gap-2.5">
-      <div
-        role="note"
-        className="flex items-start gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 px-2.5 py-2 text-xs leading-5"
-      >
-        <ShieldAlert
-          className="mt-0.5 size-3.5 shrink-0 text-amber-600 dark:text-amber-400"
-          aria-hidden
-        />
-        {t(
-          'auto.components.settings.cloudRoutines.webhook.once',
-          'Copy this URL now. Orca will not show it again, and anyone who has it can start this routine.'
-        )}
-      </div>
-      <div className="flex items-center gap-2">
-        <label htmlFor={`${ids}-url`} className="sr-only">
-          {t('auto.components.settings.cloudRoutines.webhook.label', 'Webhook URL')}
-        </label>
-        <Input
-          id={`${ids}-url`}
-          readOnly
-          value={url}
-          spellCheck={false}
-          className="font-mono text-xs"
-          onClick={(event) => event.currentTarget.select()}
-        />
-        <CopyValueButton
-          value={url}
-          variant="default"
-          size="sm"
-          label={t('auto.components.settings.cloudRoutines.webhook.copy', 'Copy webhook URL')}
-        />
-      </div>
-    </div>
+    <OneTimeSecret
+      label={t('auto.components.settings.cloudRoutines.webhook.label', 'Webhook URL')}
+      value={url}
+      copyLabel={t('auto.components.settings.cloudRoutines.webhook.copy', 'Copy webhook URL')}
+      warningTitle={t(
+        'auto.components.settings.cloudRoutines.webhook.onceTitle',
+        'This is the only time Orca shows this URL.'
+      )}
+      warningBody={t(
+        'auto.components.settings.cloudRoutines.webhook.onceBody',
+        'Anyone who has it can start this routine. Store it as a secret in the system that calls it.'
+      )}
+      onCopied={onCopied}
+    />
   )
 }
 
@@ -164,6 +148,8 @@ export function WebhookUrlStep({
   onDone: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  const [copied, setCopied] = useState(false)
+  const curl = `curl -X POST -H 'content-type: application/json' -d '{"ref":"main"}' ${url}`
   return (
     <div className="grid gap-5">
       <DialogHeader>
@@ -177,14 +163,26 @@ export function WebhookUrlStep({
           )}
         </DialogDescription>
       </DialogHeader>
-      <WebhookUrlField url={url} />
-      <code className="block overflow-x-auto rounded-md border border-border/70 bg-muted/30 px-3 py-2 font-mono text-[11px] leading-5 text-muted-foreground">
-        {CURL_EXAMPLE}
-      </code>
+      <WebhookUrlField url={url} onCopied={() => setCopied(true)} />
+      <div className="grid gap-1.5">
+        <p className="text-xs font-medium">
+          {t('auto.components.settings.cloudRoutines.webhook.example', 'Try it')}
+        </p>
+        <div className="flex items-start gap-2">
+          <code className="min-w-0 flex-1 rounded-md border border-border/70 bg-muted/30 px-3 py-2 font-mono text-[11px] leading-5 break-all text-muted-foreground">
+            {curl}
+          </code>
+          <CopyValueButton
+            value={curl}
+            label={t(
+              'auto.components.settings.cloudRoutines.webhook.copyCurl',
+              'Copy curl command'
+            )}
+          />
+        </div>
+      </div>
       <DialogFooter>
-        <Button type="button" size="sm" onClick={onDone}>
-          {t('auto.components.settings.cloudApi.secret.done', 'Done')}
-        </Button>
+        <OneTimeSecretDoneButton copied={copied} onDone={onDone} />
       </DialogFooter>
     </div>
   )

@@ -19,7 +19,13 @@ export type LoadRoutineRuns = (
 type State =
   | { status: 'loading' }
   | { status: 'error'; message: string }
-  | { status: 'ok'; runs: RoutineRun[]; nextBefore: number | string | null; loadingMore: boolean }
+  | {
+      status: 'ok'
+      runs: RoutineRun[]
+      nextBefore: number | string | null
+      loadingMore: boolean
+      moreError?: string
+    }
 
 /** Inline run history for one routine; loads on mount and on `refreshKey` changes. */
 export function RoutineRunHistory({
@@ -65,7 +71,7 @@ export function RoutineRunHistory({
       return
     }
     const mine = generation.current
-    setState({ ...state, loadingMore: true })
+    setState({ ...state, loadingMore: true, moreError: undefined })
     const result = await loadRuns(routineId, state.nextBefore)
     if (mine !== generation.current) {
       return
@@ -80,7 +86,11 @@ export function RoutineRunHistory({
               nextBefore: result.data.nextBefore,
               loadingMore: false
             }
-          : { ...current, loadingMore: false }
+          : {
+              ...current,
+              loadingMore: false,
+              moreError: cloudApiErrorCopy(result.error, t, result)
+            }
     )
   }
 
@@ -135,6 +145,11 @@ export function RoutineRunHistory({
                 ) : null}
                 {t('auto.components.settings.cloudRoutines.runs.more', 'Show older runs')}
               </Button>
+              {state.moreError ? (
+                <p role="alert" className="mt-1 px-2 text-xs text-destructive">
+                  {state.moreError}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </>
@@ -187,12 +202,13 @@ function RunRow({ run, now }: { run: RoutineRun; now: number }): React.JSX.Eleme
             </Button>
           ) : null}
           {run.workspaceId ? (
-            <code className="font-mono text-[11px] text-muted-foreground">{run.workspaceId}</code>
-          ) : null}
-          {run.workspaceId ? (
             <CopyValueButton
               value={run.workspaceId}
               variant="ghost"
+              idleText={t(
+                'auto.components.settings.cloudRoutines.runs.workspaceId',
+                'Workspace ID'
+              )}
               label={t(
                 'auto.components.settings.cloudRoutines.runs.copyWorkspace',
                 'Copy workspace ID {{value0}}',
