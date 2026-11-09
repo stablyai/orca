@@ -31,10 +31,13 @@ import {
   type SessionIdLookupAgent
 } from './transcript-discovery/session-file-id-layouts'
 import { findWslSessionPath } from './transcript-discovery/wsl-session-path-scan'
+import { findAntigravityBrainTranscript } from './transcript-discovery/session-file-resolver-antigravity-probe'
 import { findClaudeSessionFile } from './transcript-discovery/session-file-resolver-claude-probe'
 import { parseSshTranscriptPath } from './transcript-filesystem/ssh-transcript-path'
-import { wslTranscriptFsRefusal } from './transcript-filesystem/wsl-transcript-fs-error'
-import type { WslTranscriptFsError } from './transcript-filesystem/wsl-transcript-fs-error'
+import {
+  wslTranscriptFsRefusal,
+  type WslTranscriptFsError
+} from './transcript-filesystem/wsl-transcript-fs-error'
 
 // Read shared discovery roots per call; preference order prevents cross-account matches.
 function claudeProjectsDirs(): string[] {
@@ -281,14 +284,7 @@ async function findHostSessionFile(
 ): Promise<string | null> {
   const { signal, strictErrors } = options
   if (agent === 'antigravity' && !strictErrors) {
-    const logsDir = join(root, sessionId, '.system_generated', 'logs')
-    for (const filename of ['transcript_full.jsonl', 'transcript.jsonl']) {
-      const candidate = await toHostReadableTranscriptPath(join(logsDir, filename), { signal })
-      if (candidate) {
-        return candidate
-      }
-    }
-    return null
+    return findAntigravityBrainTranscript(root, sessionId, signal)
   }
   if (agent === 'grok' && !strictErrors) {
     // Bound main-thread work with direct-layout async lookup rather than a recursive scan.
