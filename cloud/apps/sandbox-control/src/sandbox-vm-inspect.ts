@@ -89,7 +89,7 @@ const checkouts = fs.readFileSync("/tmp/orca-archive-wt", "utf8").split("\n").fi
     files: tree.slice(0, ${MAX_TREE}).map((f) => f.slice(0, 1024))
   }
 })
-process.stdout.write(JSON.stringify({ checkouts }) + "\n")
+process.stdout.write(JSON.stringify({ checkouts: checkouts.filter((c) => c.head || c.branch) }) + "\n")
 '
 `.replaceAll('\\${', '${')
 
