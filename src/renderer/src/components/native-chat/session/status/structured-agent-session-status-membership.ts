@@ -1,5 +1,6 @@
 import type { AgentSessionStatusSummary } from '../../../../../../shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionStatusFeedOwner } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
+import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import type { StructuredTab } from './structured-agent-session-tabs'
 
 export type HostGroup = {
@@ -47,13 +48,22 @@ export function sameSemanticTab(previous: StructuredTab, next: StructuredTab): b
 /** Which chat tabs the status bridge projects, updated per changed tab rather than rebuilt. */
 export function createStructuredSessionMembership() {
   const members = new Map<string, Member>()
-  const membersByTabId = new Map<string, Member>()
+  /** Every member per tab; a tab rebound to another session briefly has two until the old retires. */
+  const membersByTabId = new Map<string, Set<Member>>()
+  const indexTab = (member: Member): void => {
+    const tabMembers = membersByTabId.get(member.tab.id)
+    if (tabMembers) {
+      tabMembers.add(member)
+    } else {
+      membersByTabId.set(member.tab.id, new Set([member]))
+    }
+  }
   /** Unstamped tabs resolve their host from workspace owner inputs; stamped tabs never do. */
   const legacy = new Set<Member>()
 
   const attach = (member: Member): void => {
     members.set(member.paneKey, member)
-    membersByTabId.set(member.tab.id, member)
+    indexTab(member)
     const group = member.group
     if (group) {
       group.members.add(member)
@@ -69,7 +79,9 @@ export function createStructuredSessionMembership() {
     if (members.get(member.paneKey) === member) {
       members.delete(member.paneKey)
     }
-    if (membersByTabId.get(member.tab.id) === member) {
+    const tabMembers = membersByTabId.get(member.tab.id)
+    tabMembers?.delete(member)
+    if (tabMembers && !tabMembers.size) {
       membersByTabId.delete(member.tab.id)
     }
     legacy.delete(member)
@@ -108,7 +120,6 @@ export function createStructuredSessionMembership() {
       attach(member)
     }
     member.tab = tab
-    membersByTabId.set(tab.id, member)
     if (tab.executionHostId) {
       legacy.delete(member)
     } else {
@@ -116,10 +127,32 @@ export function createStructuredSessionMembership() {
     }
     return semanticChange ? member : null
   }
+  /** Places listed tabs that changed and returns members no longer listed: all of them, or within `tabIds`. */
+  const reconcileTabs = (
+    listedTabs: Iterable<StructuredTab>,
+    tabIds: ReadonlySet<string> | null,
+    placeTab: (tab: StructuredTab, paneKey: string) => void
+  ): Member[] => {
+    const listed = new Set<string>()
+    for (const tab of listedTabs) {
+      if (tabIds && !tabIds.has(tab.id)) {
+        continue
+      }
+      const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
+      listed.add(paneKey)
+      if (members.get(paneKey)?.tab !== tab) {
+        placeTab(tab, paneKey)
+      }
+    }
+    const candidates = tabIds
+      ? [...tabIds].flatMap((tabId) => [...(membersByTabId.get(tabId) ?? [])])
+      : members.values()
+    return [...candidates].filter((member) => !listed.has(member.paneKey))
+  }
   const clear = (): void => {
     members.clear()
     membersByTabId.clear()
     legacy.clear()
   }
-  return { members, membersByTabId, legacy, place, detach, clear }
+  return { members, membersByTabId, legacy, place, detach, reconcileTabs, clear }
 }

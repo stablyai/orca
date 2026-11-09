@@ -1,6 +1,7 @@
 import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { isStructuredTab } from '../../../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { Tab } from '../../../../../../shared/tab-types'
+import { readTabMapChanges } from '@/store/keyed-record-transitions'
 
 export type StructuredTab = Tab & { contentType: 'agent-session' }
 
@@ -51,6 +52,43 @@ function sameBuckets(
   return true
 }
 
+// Cold path: bootstrap, hydration or an unannotated replacement; the only whole-map walk here.
+function rebuildFromSnapshot(source: TabsByWorktree, previous: Projection | undefined): Projection {
+  const byWorktree = new Map<string, readonly StructuredTab[]>()
+  for (const worktreeId of Object.keys(source)) {
+    const tabs = structuredTabsOf(source[worktreeId] ?? [], previous?.byWorktree.get(worktreeId))
+    if (tabs.length) {
+      byWorktree.set(worktreeId, tabs)
+    }
+  }
+  return previous && sameBuckets(previous.byWorktree, byWorktree)
+    ? previous
+    : { byWorktree, tabs: [...byWorktree.values()].flat() }
+}
+
+function applyAddressed(
+  source: TabsByWorktree,
+  previous: Projection,
+  workspaceIds: ReadonlySet<string>
+): Projection {
+  let byWorktree: Map<string, readonly StructuredTab[]> | null = null
+  for (const worktreeId of workspaceIds) {
+    const before = previous.byWorktree.get(worktreeId)
+    const bucket = Object.hasOwn(source, worktreeId) ? source[worktreeId] : undefined
+    const tabs = bucket ? structuredTabsOf(bucket, before) : NO_TABS
+    if (tabs === (before ?? NO_TABS)) {
+      continue
+    }
+    byWorktree ??= new Map(previous.byWorktree)
+    if (tabs.length) {
+      byWorktree.set(worktreeId, tabs)
+    } else {
+      byWorktree.delete(worktreeId)
+    }
+  }
+  return byWorktree ? { byWorktree, tabs: [...byWorktree.values()].flat() } : previous
+}
+
 function project(source: TabsByWorktree): Projection {
   if (latest?.source === source) {
     return latest.projection
@@ -59,23 +97,11 @@ function project(source: TabsByWorktree): Projection {
   if (cached) {
     return cached
   }
-  const previous = latest
-  const byWorktree = new Map<string, readonly StructuredTab[]>()
-  for (const worktreeId of Object.keys(source)) {
-    const bucket = source[worktreeId] ?? []
-    const previousTabs = previous?.projection.byWorktree.get(worktreeId)
-    const tabs =
-      previous?.source[worktreeId] === bucket
-        ? (previousTabs ?? NO_TABS)
-        : structuredTabsOf(bucket, previousTabs)
-    if (tabs.length) {
-      byWorktree.set(worktreeId, tabs)
-    }
-  }
+  const changes = latest ? readTabMapChanges(source, latest.source) : null
   const projection =
-    previous && sameBuckets(previous.projection.byWorktree, byWorktree)
-      ? previous.projection
-      : { byWorktree, tabs: [...byWorktree.values()].flat() }
+    latest && changes?.kind === 'addressed'
+      ? applyAddressed(source, latest.projection, changes.workspaceIds)
+      : rebuildFromSnapshot(source, latest?.projection)
   projectionsBySnapshot.set(source, projection)
   latest = { source, projection }
   return projection
@@ -102,4 +128,12 @@ export function getStructuredAgentSessionTabsByPaneKey(
   )
   paneTabs.set(structuredTabs, result)
   return result
+}
+
+/** One workspace's structured tabs, from the same per-bucket projection. */
+export function getStructuredAgentSessionTabsInWorkspace(
+  unifiedTabsByWorktree: TabsByWorktree,
+  worktreeId: string
+): readonly StructuredTab[] {
+  return project(unifiedTabsByWorktree).byWorktree.get(worktreeId) ?? NO_TABS
 }

@@ -1,5 +1,4 @@
 import { useEffect } from 'react'
-import { structuredAgentSessionPaneKey } from '../../../../../../shared/agent-session/view/structured-agent-session-projection'
 import { projectStatus } from './structured-agent-session-status-projection'
 import {
   getStructuredAgentSessionLaunchLifecycle,
@@ -14,7 +13,12 @@ import {
   getStructuredAgentSessionStatusFeed,
   structuredAgentSessionStatusFeedKey
 } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
-import { getStructuredAgentSessionTabs, type StructuredTab } from './structured-agent-session-tabs'
+import {
+  getStructuredAgentSessionTabs,
+  getStructuredAgentSessionTabsInWorkspace,
+  type StructuredTab
+} from './structured-agent-session-tabs'
+import { readTabMapChanges } from '@/store/keyed-record-transitions'
 import {
   createTabOwnerCache,
   ownerInputChanged,
@@ -56,6 +60,7 @@ function installStatusProjection(): () => void {
   const { members, membersByTabId, legacy } = membership
   const retired = new Set<Member>()
   let tabs: readonly StructuredTab[] | null = null
+  let tabsSource: AppState['unifiedTabsByWorktree'] | null = null
   const groups = new Map<string, HostGroup>()
   const queue: (() => void)[] = []
   const ownerForTab = createTabOwnerCache()
@@ -144,8 +149,8 @@ function installStatusProjection(): () => void {
         if (!members.has(old.paneKey)) {
           writes.push({ kind: 'slept-at', paneKey: old.paneKey, sleptAt: undefined })
         }
-        const replacement = membersByTabId.get(old.tab.id)
-        if (!replacement || replacement.tab.entityId !== old.tab.entityId) {
+        const replacements = membersByTabId.get(old.tab.id) ?? []
+        if (![...replacements].some((member) => member.tab.entityId === old.tab.entityId)) {
           writes.push({
             kind: 'clear-launch-directory',
             tabId: old.tab.id,
@@ -288,26 +293,33 @@ function installStatusProjection(): () => void {
   }
   const reconcile = (ownersChanged: boolean): void => {
     const state = useAppStore.getState()
-    const nextTabs = getStructuredAgentSessionTabs(state.unifiedTabsByWorktree)
+    const source = state.unifiedTabsByWorktree
     const changed = new Set<Member>()
-    if (nextTabs !== tabs) {
-      const listed = new Set<string>()
-      for (const tab of nextTabs) {
-        const paneKey = structuredAgentSessionPaneKey(tab.id, tab.entityId)
-        listed.add(paneKey)
-        if (members.get(paneKey)?.tab !== tab) {
-          place(state, tab, paneKey, changed)
+    const retiring: Member[] = []
+    const placeTab = (tab: StructuredTab, paneKey: string) => place(state, tab, paneKey, changed)
+    if (source !== tabsSource) {
+      const changes = tabsSource ? readTabMapChanges(source, tabsSource) : null
+      if (changes?.kind === 'addressed') {
+        const listed = [...changes.workspaceIds].flatMap((workspaceId) => [
+          ...getStructuredAgentSessionTabsInWorkspace(source, workspaceId)
+        ])
+        retiring.push(...membership.reconcileTabs(listed, changes.tabIds, placeTab))
+        tabs = null
+      } else {
+        // Cold path (bootstrap, hydration, unannotated replacement): the whole projected chat list.
+        const nextTabs = getStructuredAgentSessionTabs(source)
+        if (nextTabs !== tabs) {
+          retiring.push(...membership.reconcileTabs(nextTabs, null, placeTab))
+          tabs = nextTabs
         }
       }
-      for (const member of members.values()) {
-        if (!listed.has(member.paneKey)) {
-          membership.detach(member)
-          retired.add(member)
-        }
-      }
-      // Advanced only after a normal return, so a throwing pass is retried by the next tab write.
-      tabs = nextTabs
     }
+    for (const member of retiring) {
+      membership.detach(member)
+      retired.add(member)
+    }
+    // Advanced only after a normal return, so a throwing pass is retried by the next tab write.
+    tabsSource = source
     if (ownersChanged) {
       for (const member of legacy) {
         place(state, member.tab, member.paneKey, changed)
@@ -320,17 +332,19 @@ function installStatusProjection(): () => void {
         group.release?.()
       }
     }
-    enqueue(() => {
-      activateGroups()
-      capture(withOwed(changed))
-    })
+    if (changed.size || retiring.length) {
+      enqueue(() => {
+        activateGroups()
+        capture(withOwed(changed))
+      })
+    }
   }
   const unsubscribeApp = useAppStore.subscribe((state: AppState, previous: AppState) => {
     if (disposed) {
       return
     }
     const ownersChanged = ownerInputs.some((key) => ownerInputChanged(state, previous, key))
-    if (ownersChanged || getStructuredAgentSessionTabs(state.unifiedTabsByWorktree) !== tabs) {
+    if (ownersChanged || useAppStore.getState().unifiedTabsByWorktree !== tabsSource) {
       boundary(() => reconcile(ownersChanged))
     }
   })

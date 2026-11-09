@@ -77,6 +77,7 @@ import {
 } from '@/lib/renderer-memory-profile'
 import { estimateStateCollectionKB } from '@/lib/state-collection-byte-estimate'
 import { registerWindowsPathAccessEnvironments } from '@/lib/windows-path-access'
+import { STORE_OBSERVER_INSTALLERS } from './store-observer-installers'
 
 // Dev-only churn probe cannot be armed in shipped builds; avoid its per-write wrapper. Cascade probe stays enabled for field crash telemetry.
 const withDevelopmentStoreProbes = (createState: StateCreator<AppState, [], []>) =>
@@ -158,6 +159,10 @@ export const useAppStore = create<AppState>()(
     import.meta.env.DEV || e2eConfig.exposeStore
   )
 )
+
+for (const install of STORE_OBSERVER_INSTALLERS) {
+  install(useAppStore)
+}
 
 registerStructuredSelectionCatalogStore({
   read: useAppStore.getState,
