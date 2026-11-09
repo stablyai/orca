@@ -154,17 +154,30 @@ export async function launchArm(
     throw new Error(`${arm.name}: launch recorded no PID`)
   }
   const startedAt = processStart(pid)
-  assertElectronResolvedIsolatedHome(
-    await app.evaluate(({ app: electronApp }) => electronApp.getPath('home')),
-    isolation
-  )
-  const page = await app.firstWindow({ timeout: 120_000 })
-  await page.waitForFunction(
-    () => window.__store?.getState().workspaceSessionReady === true,
-    null,
-    { timeout: 600_000, polling: 16 }
-  )
-  return { app, page, pid, startedAt, userDataDir, launchedAtEpochMs, readyEpochMs: Date.now() }
+  try {
+    assertElectronResolvedIsolatedHome(
+      await app.evaluate(({ app: electronApp }) => electronApp.getPath('home')),
+      isolation
+    )
+    const page = await app.firstWindow({ timeout: 120_000 })
+    // Only an e2e-mode build exposes the store; a desktop build would otherwise wait out the full budget.
+    await page
+      .waitForFunction(() => Boolean(window.__store), null, { timeout: 60_000 })
+      .catch(() => {
+        throw new Error(
+          `${arm.name}: no window.__store; build ${arm.root} with VITE_EXPOSE_STORE=true electron-vite build --mode e2e`
+        )
+      })
+    await page.waitForFunction(
+      () => window.__store?.getState().workspaceSessionReady === true,
+      null,
+      { timeout: 600_000, polling: 16 }
+    )
+    return { app, page, pid, startedAt, userDataDir, launchedAtEpochMs, readyEpochMs: Date.now() }
+  } catch (error) {
+    await closeElectronAppForE2E(app, { cleanupDaemonsForUserDataDir: userDataDir })
+    throw error
+  }
 }
 
 export async function stopArm(launch: Launch): Promise<void> {
