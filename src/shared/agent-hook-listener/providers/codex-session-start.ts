@@ -1,7 +1,10 @@
-import { normalizeAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
+import {
+  normalizeAgentStatusPayload,
+  type ParsedAgentStatusPayload
+} from '../../agent-status/contracts/agent-status-types'
 import { sameAgentStatusTerminalOwner } from '../../agent-status/identity/agent-status-terminal-owner'
 import type { AgentLeadStatusResolution } from '../../agent-status/lifecycle/agent-lead-status-fold'
-import { codexRosterToSnapshots } from '../../codex-subagent-roster'
+import { codexRosterToSnapshots, type CodexSubagentRoster } from '../../codex-subagent-roster'
 import type { AgentHookEventPayload } from '../listener-event'
 import type { HookListenerState } from '../listener-state'
 import {
@@ -19,16 +22,26 @@ function clearCodexSessionState(state: HookListenerState, paneKey: string): void
   state.codexLeadStateByPaneKey.delete(paneKey)
 }
 
+function isCodexChildSessionStart(
+  start: { sessionId?: string; agentId?: string },
+  roster: CodexSubagentRoster | undefined,
+  snapshot?: ParsedAgentStatusPayload
+): boolean {
+  return Boolean(
+    start.agentId ||
+    (start.sessionId &&
+      (roster?.has(start.sessionId) ??
+        snapshot?.subagents?.some((child) => child.id === start.sessionId)))
+  )
+}
+
 export function applyCodexSessionStart(
   state: HookListenerState,
   paneKey: string,
   start: { sessionId?: string; source?: string; agentId?: string; model?: string }
 ): (AgentLeadStatusResolution & { updateLead: boolean; sessionBoundary?: true }) | null {
   const lead = state.codexLeadStateByPaneKey.get(paneKey)
-  if (
-    start.agentId ||
-    (start.sessionId && state.codexSubagentRosterByPaneKey.get(paneKey)?.has(start.sessionId))
-  ) {
+  if (isCodexChildSessionStart(start, state.codexSubagentRosterByPaneKey.get(paneKey))) {
     return null
   }
   const idleSource =
@@ -99,26 +112,48 @@ export function reconcileCodexStatusEvent(
     })
     return previous
   }
-  if (replayedStart) {
-    clearCodexSessionState(state, event.paneKey)
+  let context = previous
+  if (event.hookEventName === 'SessionStart' && (replayedStart || !event.hasExplicitPrompt)) {
+    const sameOwner =
+      previous?.payload.agentType === 'codex' && sameAgentStatusTerminalOwner(previous, event)
+    const roster = sameOwner ? state.codexSubagentRosterByPaneKey.get(event.paneKey) : undefined
+    const sessionId = event.providerSession?.id
+    // Classify children before releasing the previous root's roster.
+    if (
+      isCodexChildSessionStart(
+        { sessionId, agentId: event.toolAgentId },
+        roster,
+        sameOwner ? previous.payload : undefined
+      )
+    ) {
+      return null
+    }
+    if (
+      replayedStart ||
+      !sameOwner ||
+      (previous.providerSession?.id && sessionId && previous.providerSession.id !== sessionId)
+    ) {
+      clearCodexSessionState(state, event.paneKey)
+      context = undefined
+    }
   }
   const unconfirmedRoot =
     replayedStart ||
-    (previous?.restoredUnconfirmed &&
+    (context?.restoredUnconfirmed &&
       (event.hookEventName === 'SessionStart' || event.toolAgentId !== undefined))
   if (
     event.hookEventName === 'SessionStart' &&
     ((!event.isReplay && !event.hasExplicitPrompt) || (event.isReplay && !event.payload.mainAgent))
   ) {
-    const codexPrevious = previous?.payload.agentType === 'codex'
+    const codexPrevious = context?.payload.agentType === 'codex'
     if (!codexPrevious) {
       clearCodexSessionState(state, event.paneKey)
     } else {
-      seedCodexStateFromSnapshot(state, event.paneKey, previous.payload)
+      seedCodexStateFromSnapshot(state, event.paneKey, context.payload)
       const lead = state.codexLeadStateByPaneKey.get(event.paneKey)!
       setCodexMainAgentTurnState(state, event.paneKey, {
         ...lead,
-        sessionId: previous.providerSession?.id
+        sessionId: context.providerSession?.id
       })
     }
     const normalizedIdle = event.payload.mainAgent?.state === 'done'
@@ -126,7 +161,7 @@ export function reconcileCodexStatusEvent(
       sessionId: event.providerSession?.id,
       agentId: event.toolAgentId,
       source:
-        normalizedIdle && event.providerSession?.id === previous?.providerSession?.id
+        normalizedIdle && event.providerSession?.id === context?.providerSession?.id
           ? 'compact'
           : event.payload.sessionBoundary
             ? 'startup'
@@ -136,8 +171,18 @@ export function reconcileCodexStatusEvent(
     if (!start) {
       return null
     }
-    if (normalizedIdle) {
-      // A corrected host owns its idle verdict and complete child snapshot, including after compact.
+    if (normalizedIdle || (replayedStart && !event.payload.mainAgent)) {
+      // Cached children describe their own work; an absent root is only session identity.
+      const snapshot = normalizedIdle
+        ? event.payload
+        : {
+            ...event.payload,
+            state: start.stateName,
+            sessionBoundary: start.sessionBoundary,
+            mainAgent: codexMainAgentStatusForPayload(
+              state.codexLeadStateByPaneKey.get(event.paneKey)
+            )
+          }
       state.codexSubagentRosterByPaneKey.delete(event.paneKey)
       return {
         ...event,
@@ -147,7 +192,7 @@ export function reconcileCodexStatusEvent(
           event.paneKey,
           undefined,
           event.toolAgentId,
-          event.payload,
+          snapshot,
           undefined,
           remoteRosterAuthority
         )
@@ -158,11 +203,11 @@ export function reconcileCodexStatusEvent(
       ...event,
       restoredUnconfirmed: unconfirmedRoot ? true : undefined,
       payload: normalizeAgentStatusPayload({
-        ...(start.updateLead ? {} : previous?.payload),
+        ...(start.updateLead ? {} : context?.payload),
         state: start.stateName,
         workingMode: start.workingMode,
         agentType: 'codex',
-        prompt: start.updateLead ? '' : (previous?.payload.prompt ?? ''),
+        prompt: start.updateLead ? '' : (context?.payload.prompt ?? ''),
         model: lead?.model,
         sessionBoundary: start.sessionBoundary,
         mainAgent: codexMainAgentStatusForPayload(lead),
@@ -174,7 +219,7 @@ export function reconcileCodexStatusEvent(
     event.hookEventName === 'SessionStart' &&
     event.hasExplicitPrompt &&
     !event.isReplay &&
-    event.providerSession?.id !== previous?.providerSession?.id
+    event.providerSession?.id !== context?.providerSession?.id
   if (replacement) {
     clearCodexSessionState(state, event.paneKey)
     setCodexMainAgentTurnState(state, event.paneKey, {
@@ -196,7 +241,7 @@ export function reconcileCodexStatusEvent(
         : event.hookEventName,
       event.toolAgentId,
       event.payload,
-      replacement ? undefined : previous?.payload,
+      replacement ? undefined : context?.payload,
       remoteRosterAuthority
     )
   }

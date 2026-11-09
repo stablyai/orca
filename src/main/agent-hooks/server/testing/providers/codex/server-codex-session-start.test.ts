@@ -3,9 +3,207 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
 import { RelayAgentHookServer } from '../../../../../../wsl-guest/agent-hook-server'
+import { buildCachedPaneReplayEnvelope } from '../../../../../../wsl-guest/agent-hook-cached-pane-status'
+import type { AgentHookEventPayload } from '../../../../../../shared/agent-hook-listener/listener-event'
 import { AgentHookServer } from '../../../agent-hook-server'
 import { selectFreshExplicitAgentStatus } from '../../../../../runtime/workspaces/process-listing/runtime-hook-agent-row-selection'
 import { buildBody, postHookEvent, PANE } from '../../server.test-fixtures'
+
+function previousRoot(children: number): AgentHookEventPayload {
+  return {
+    paneKey: PANE,
+    connectionId: null,
+    worktreeId: 'old-owner',
+    source: 'codex',
+    hookEventName: 'SubagentStart',
+    toolAgentId: 'old-0',
+    providerSession: { key: 'session_id', id: 'old-root' },
+    payload: {
+      agentType: 'codex',
+      state: 'working',
+      model: 'old-model',
+      prompt: 'old task',
+      mainAgent: { state: 'done', stateStartedAt: 1000 },
+      subagents: Array.from({ length: children }, (_, index) => ({
+        id: `old-${index}`,
+        state: 'working',
+        startedAt: 1000
+      }))
+    }
+  }
+}
+
+it.each([10, 100])(
+  'retires %i foreign-session children at a cached startup boundary',
+  (children) => {
+    const desktop = new AgentHookServer()
+    desktop.beginRemoteRelaySession('wsl:Ubuntu')
+    desktop.ingestRemote(previousRoot(children), 'wsl:Ubuntu')
+    expect(desktop.getStatusSnapshot()[0].subagents).toHaveLength(children)
+    if (children === 100) {
+      desktop.beginRemoteRelaySession('wsl:Ubuntu')
+    }
+    const incoming: AgentHookEventPayload = {
+      ...previousRoot(0),
+      toolAgentId: undefined,
+      hookEventName: 'SessionStart',
+      providerSession: { key: 'session_id', id: 'new-root' },
+      payload: {
+        agentType: 'codex',
+        state: 'done',
+        sessionBoundary: true,
+        prompt: 'new context',
+        model: 'new-model',
+        mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 2000 }
+      }
+    }
+    desktop.ingestRemote(
+      buildCachedPaneReplayEnvelope({ event: incoming, meta: { source: 'codex' } }),
+      'wsl:Ubuntu'
+    )
+    expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+      state: 'done',
+      restoredUnconfirmed: true,
+      providerSession: { id: 'new-root' },
+      prompt: 'new context',
+      model: 'new-model',
+      mainAgent: { state: 'done', outcome: 'cancellation', stateStartedAt: 2000 }
+    })
+    expect(desktop.getStatusSnapshot()[0].subagents).toBeUndefined()
+    expect(desktop._getStateForTests().codexSubagentRosterByPaneKey.get(PANE)?.size).toBe(0)
+    desktop.ingestRemote({ ...incoming, hookEventName: undefined }, 'wsl:Ubuntu')
+    expect(desktop.getStatusSnapshot()[0].subagents).toBeUndefined()
+  }
+)
+
+it.each([false, true])(
+  'retains only the incoming owner’s child in a legacy=%s replay',
+  (legacy) => {
+    const desktop = new AgentHookServer()
+    desktop.beginRemoteRelaySession('wsl:Ubuntu')
+    desktop.ingestRemote(previousRoot(1), 'wsl:Ubuntu')
+    const incoming: AgentHookEventPayload = {
+      ...previousRoot(0),
+      worktreeId: 'new-owner',
+      toolAgentId: undefined,
+      hookEventName: 'SessionStart',
+      payload: {
+        agentType: 'codex',
+        state: 'working',
+        prompt: 'new context',
+        model: 'new-model',
+        mainAgent: legacy ? undefined : { state: 'done', stateStartedAt: 2000 },
+        subagents: [{ id: 'own-child', state: 'working', startedAt: 2000 }]
+      }
+    }
+    desktop.ingestRemote(
+      buildCachedPaneReplayEnvelope({ event: incoming, meta: { source: 'codex' } }),
+      'wsl:Ubuntu'
+    )
+    expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      restoredUnconfirmed: true,
+      worktreeId: 'new-owner',
+      prompt: 'new context',
+      model: 'new-model',
+      mainAgent: { state: 'done' },
+      subagents: [{ id: 'own-child', state: 'working' }]
+    })
+    expect(desktop._getStateForTests().codexSubagentRosterByPaneKey.get(PANE)?.size).toBe(1)
+    desktop.ingestRemote(
+      {
+        ...incoming,
+        hookEventName: undefined,
+        payload: {
+          ...incoming.payload,
+          state: 'done',
+          mainAgent: { state: 'done', stateStartedAt: 2000 },
+          subagents: undefined
+        }
+      },
+      'wsl:Ubuntu'
+    )
+    expect(desktop.getStatusSnapshot()[0]).toMatchObject({ state: 'done' })
+    expect(desktop.getStatusSnapshot()[0].subagents).toBeUndefined()
+    expect(desktop._getStateForTests().codexSubagentRosterByPaneKey.get(PANE)?.size).toBe(0)
+  }
+)
+
+it.each([false, true])(
+  'does not lend work to a different legacy live session with main=%s',
+  (main) => {
+    const desktop = new AgentHookServer()
+    const previous = previousRoot(1)
+    desktop.ingestRemote(
+      {
+        ...previous,
+        payload: { ...previous.payload, mainAgent: { state: 'working', stateStartedAt: 1000 } }
+      },
+      'wsl:Ubuntu'
+    )
+    expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+      mainAgent: { state: 'working', stateStartedAt: 1000 },
+      subagents: [{ id: 'old-0', state: 'working' }]
+    })
+    desktop.ingestRemote(
+      {
+        ...previous,
+        toolAgentId: undefined,
+        hookEventName: 'SessionStart',
+        providerSession: { key: 'session_id', id: 'new-root' },
+        payload: {
+          agentType: 'codex',
+          state: 'working',
+          prompt: 'old cached text',
+          mainAgent: main ? { state: 'working', stateStartedAt: 1000 } : undefined
+        }
+      },
+      'wsl:Ubuntu'
+    )
+    expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+      providerSession: { id: 'new-root' },
+      state: 'done',
+      sessionBoundary: true,
+      mainAgent: { state: 'done' }
+    })
+    expect(desktop.getStatusSnapshot()[0].subagents).toBeUndefined()
+    expect(desktop.getStatusSnapshot()[0].prompt).toBe('')
+    expect(desktop.getStatusSnapshot()[0].model).toBeUndefined()
+  }
+)
+
+it.each(['previous', 'incoming'] as const)(
+  'preserves live context when the %s session ID is missing',
+  (missing) => {
+    const desktop = new AgentHookServer()
+    const previous = previousRoot(1)
+    desktop.ingestRemote(
+      {
+        ...previous,
+        providerSession: missing === 'previous' ? undefined : previous.providerSession,
+        payload: { ...previous.payload, mainAgent: { state: 'working', stateStartedAt: 1000 } }
+      },
+      'wsl:Ubuntu'
+    )
+    desktop.ingestRemote(
+      {
+        ...previous,
+        toolAgentId: undefined,
+        hookEventName: 'SessionStart',
+        providerSession: missing === 'incoming' ? undefined : { key: 'session_id', id: 'new-root' },
+        payload: { agentType: 'codex', state: 'working', prompt: '' }
+      },
+      'wsl:Ubuntu'
+    )
+    expect(desktop.getStatusSnapshot()[0]).toMatchObject({
+      state: 'working',
+      prompt: 'old task',
+      model: 'old-model',
+      mainAgent: { state: 'working', stateStartedAt: 1000 },
+      subagents: [{ id: 'old-0', state: 'working' }]
+    })
+  }
+)
 
 it.each(['local', 'relay', 'old-relay', 'old-relay-no-main'] as const)(
   'separates Codex session identity from live turns on %s',
