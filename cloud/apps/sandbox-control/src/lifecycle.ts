@@ -35,6 +35,8 @@ export type LifecycleDeps = {
     goldenSnapshotId: string
     defaultRegion: string
     egressProxyUrl?: string
+    /** Staging rehearsals shorten the cap; production uses SESSION_DEADLINE_MS. */
+    sessionDeadlineMs?: number
   }
 }
 
@@ -80,12 +82,13 @@ function egressPolicy(deps: LifecycleDeps, row: SandboxRow) {
   return compileNetworkPolicy({ mode: 'allowlist', credentials })
 }
 
-export function sessionFields(state: ProviderSandboxState, now: number): SessionFields {
+export function sessionFields(deps: LifecycleDeps, state: ProviderSandboxState): SessionFields {
+  const now = deps.now()
   const startedAt = state.session.startedAt ?? now
   return {
     session_id: state.session.id,
     session_started_at: startedAt,
-    session_deadline_at: startedAt + SESSION_DEADLINE_MS,
+    session_deadline_at: startedAt + (deps.config.sessionDeadlineMs ?? SESSION_DEADLINE_MS),
     lease_expires_at: startedAt + state.session.timeoutMs,
     usage_settled_at: startedAt
   }
@@ -116,7 +119,7 @@ async function boot(deps: LifecycleDeps, row: SandboxRow, state: ProviderSandbox
     repo,
     githubPlaceholder: deps.config.egressProxyUrl ? githubPlaceholderToken(row) : undefined
   })
-  const running = await claim(deps, row, { status: 'running', last_error: null, ...sessionFields(state, deps.now()) })
+  const running = await claim(deps, row, { status: 'running', last_error: null, ...sessionFields(deps, state) })
   return { row: running, connection }
 }
 
