@@ -2,7 +2,16 @@
 // a forced stop before the provider's 24h cap, usage metering and write-ahead rows.
 import type { EntitlementClient, MachineSize } from './entitlements'
 import type { GitHubAppMinter } from './github-app'
+import {
+  DEFAULT_GUARDRAILS,
+  GuardrailError,
+  assertAccountCapacity,
+  assertStartsOpen,
+  killSwitchOn,
+  type GuardrailConfig
+} from './guardrails'
 import { compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
+import type { RetentionConfig } from './retention'
 import type { ProviderSandboxState, SandboxProviderApi } from './sandbox-provider'
 import { applySecretPlaceholders, egressSecretHosts, secretPlaceholder } from './secret-egress'
 import { resolveSandboxSecrets } from './secrets'
@@ -29,6 +38,9 @@ const PROVIDER_SESSION_CAP_MS = 24 * 60 * 60_000
 /** Orca stops 10 min early so it, not the provider, ends the session (drain first). */
 export const SESSION_DEADLINE_MS = PROVIDER_SESSION_CAP_MS - 10 * 60_000
 const VCPUS: Record<MachineSize, number> = { standard: 4, large: 8 }
+const DAY_MS = 24 * 60 * 60_000
+/** Provider-side backstop: longer than idle retention (90d) + its warning, so Orca deletes first. */
+export const DEFAULT_SNAPSHOT_EXPIRATION_MS = 104 * DAY_MS
 
 export type LifecycleDeps = {
   db: D1Database
@@ -39,6 +51,8 @@ export type LifecycleDeps = {
   /** Secret store; absent (no SECRETS_KEK) means sessions start without injected secrets. */
   secrets?: { keyring: Keyring; egressPlaceholders: boolean }
   now: () => number
+  /** Orphan/retention policy for the cron; defaults in retention.ts. */
+  retention?: RetentionConfig
   config: {
     environment: string
     goldenSnapshotId: string
@@ -46,6 +60,8 @@ export type LifecycleDeps = {
     egressProxyUrl?: string
     /** Staging rehearsals shorten the cap; production uses SESSION_DEADLINE_MS. */
     sessionDeadlineMs?: number
+    guardrails?: GuardrailConfig
+    snapshotExpirationMs?: number
   }
 }
 
@@ -136,7 +152,12 @@ async function claim(deps: LifecycleDeps, row: SandboxRow, patch: Partial<Sandbo
   return next
 }
 
+export function guardrails(deps: LifecycleDeps): GuardrailConfig {
+  return deps.config.guardrails ?? DEFAULT_GUARDRAILS
+}
+
 async function requireStart(deps: LifecycleDeps, accountId: string, machineSize: MachineSize) {
+  await assertStartsOpen(deps.db, guardrails(deps))
   const runningSandboxes = await countActiveSandboxes(deps.db, accountId)
   const decision = await deps.entitlements.checkStart({ accountId, machineSize, runningSandboxes })
   if (decision.suspendRunning) {
@@ -145,6 +166,7 @@ async function requireStart(deps: LifecycleDeps, accountId: string, machineSize:
   if (!decision.allow) {
     throw new LifecycleError('entitlement_denied', decision.reason ?? 'denied')
   }
+  await assertAccountCapacity(deps.db, guardrails(deps), accountId, decision.seats)
 }
 
 async function boot(deps: LifecycleDeps, row: SandboxRow, state: ProviderSandboxState, repo?: { url: string; ref?: string }): Promise<Ready> {
@@ -168,6 +190,7 @@ async function boot(deps: LifecycleDeps, row: SandboxRow, state: ProviderSandbox
   const running = await claim(deps, row, {
     status: 'running',
     last_error: null,
+    retention_warned_at: null,
     github_token_expires_at: git?.expiresAt ?? null,
     egress_secret_hosts: routed.egress_secret_hosts,
     ...sessionFields(deps, state)
@@ -201,7 +224,7 @@ export async function refreshGitCredentials(
   if (!deps.github || !row.repo_url) {
     return null
   }
-  const minted = await deps.github.tokenForRepo(row.repo_url)
+  const minted = await deps.github.tokenForRepo(row.repo_url, row.account_id)
   if (!minted) {
     return null
   }
@@ -253,6 +276,7 @@ export async function createSandbox(
       timeoutMs: LEASE_MS,
       ports: [ORCAD_PORT],
       networkPolicy: egressPolicy(deps, row),
+      snapshotExpirationMs: deps.config.snapshotExpirationMs ?? DEFAULT_SNAPSHOT_EXPIRATION_MS,
       tags: { orcaSandbox: row.id, orcaEnv: deps.config.environment }
     })
   } catch (error) {
@@ -366,6 +390,9 @@ export async function rolloverSandbox(deps: LifecycleDeps, row: SandboxRow): Pro
   if (row.status !== 'running') {
     throw new LifecycleError('conflict', `sandbox_${row.status}`)
   }
+  if (await killSwitchOn(deps.db, guardrails(deps))) {
+    throw new GuardrailError('maintenance')
+  }
   const suspending = await claim(deps, row, { status: 'suspending' })
   const stopped = await stopForSuspend(deps, suspending)
   await flushUsage(deps.db, deps.entitlements, deps.now(), row.id)
@@ -410,7 +437,13 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
     throw new LifecycleError('provider_unavailable', 'snapshot_cleanup_incomplete')
   }
   await markSnapshotsDeleted(deps.db, row.id, deps.now())
-  const destroyed = await claim(deps, destroying, { status: 'destroyed', ...NO_SESSION, destroyed_at: deps.now() })
+  const destroyed = await claim(deps, destroying, {
+    status: 'destroyed',
+    ...NO_SESSION,
+    destroyed_at: deps.now(),
+    // Tombstone: the row stays for usage/audit, the workspace's repository does not.
+    repo_url: null
+  })
   await flushUsage(deps.db, deps.entitlements, deps.now(), row.id)
   return destroyed
 }

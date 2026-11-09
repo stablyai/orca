@@ -42,6 +42,14 @@ const Snapshot = z.looseObject({
   status: z.enum(['created', 'deleted', 'failed']),
   sourceSessionId: z.string()
 })
+const ProjectSnapshot = Snapshot.extend({ creationMethod: z.string().optional(), createdAt: z.number() })
+const SandboxSummary = z.looseObject({
+  name: z.string(),
+  status: Status,
+  currentSessionId: z.string(),
+  tags: z.record(z.string(), z.string()).optional()
+})
+const MAX_LISTED = 5000
 const ErrorBody = z.looseObject({ error: z.looseObject({ code: z.string().optional() }).optional() })
 const CommandLine = z.looseObject({ command: z.looseObject({ exitCode: z.number().nullable() }) })
 const OutputLine = z.looseObject({ stream: z.enum(['stdout', 'stderr']), data: z.string() })
@@ -129,8 +137,8 @@ export function createVercelSandboxApi(
           timeout: params.timeoutMs,
           ports: params.ports,
           persistent: true,
-          keepLastSnapshots: { count: 2 },
-          snapshotExpiration: 0,
+          keepLastSnapshots: { count: 2, expiration: params.snapshotExpirationMs },
+          snapshotExpiration: params.snapshotExpirationMs,
           networkPolicy: params.networkPolicy,
           tags: params.tags
         }
@@ -245,6 +253,46 @@ export function createVercelSandboxApi(
         cursor = page.pagination.next ?? undefined
       } while (cursor && snapshots.length < 1000)
       return snapshots.map((s) => ({ id: s.id, status: s.status, sourceSessionId: s.sourceSessionId }))
+    },
+
+    async listSandboxes() {
+      const sandboxes: z.infer<typeof SandboxSummary>[] = []
+      let cursor: string | undefined
+      do {
+        const response = await request('GET', '/v2/sandboxes', {
+          query: { project: config.projectId, limit: '50', cursor }
+        })
+        const page = await json(
+          z.looseObject({ sandboxes: z.array(SandboxSummary), pagination: z.looseObject({ next: z.string().nullable() }) }),
+          response
+        )
+        sandboxes.push(...page.sandboxes)
+        cursor = page.pagination.next ?? undefined
+      } while (cursor && sandboxes.length < MAX_LISTED)
+      return {
+        complete: cursor === undefined,
+        sandboxes: sandboxes.map((s) => ({ name: s.name, status: s.status, currentSessionId: s.currentSessionId, tags: s.tags ?? {} }))
+      }
+    },
+
+    async listProjectSnapshots() {
+      const snapshots: z.infer<typeof ProjectSnapshot>[] = []
+      let cursor: string | undefined
+      do {
+        const response = await request('GET', '/v2/sandboxes/snapshots', {
+          query: { project: config.projectId, limit: '50', cursor }
+        })
+        const page = await json(
+          z.looseObject({ snapshots: z.array(ProjectSnapshot), pagination: z.looseObject({ next: z.string().nullable() }) }),
+          response
+        )
+        snapshots.push(...page.snapshots)
+        cursor = page.pagination.next ?? undefined
+      } while (cursor && snapshots.length < MAX_LISTED)
+      return {
+        complete: cursor === undefined,
+        snapshots: snapshots.map((s) => ({ id: s.id, status: s.status, creationMethod: s.creationMethod ?? null, createdAt: s.createdAt }))
+      }
     },
 
     deleteSnapshot: (snapshotId) =>

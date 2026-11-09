@@ -11,6 +11,9 @@ import {
   suspendSandbox,
   type LifecycleDeps
 } from './lifecycle'
+import { guardrails } from './lifecycle'
+import { killSwitchOn } from './guardrails'
+import { drainAll, housekeeping, openHold, type HousekeepingSummary } from './retention'
 import { listByStatus, transition, type SandboxRow } from './store'
 import { flushUsage, queueUsage } from './usage'
 
@@ -19,6 +22,7 @@ const STUCK_MS = 15 * 60_000
 const FORCED_STOP_GRACE_MS = 5 * 60_000
 
 export type ReconcileSummary = Record<
+  | 'drained'
   | 'settled'
   | 'suspendedForDeadline'
   | 'suspendedForBilling'
@@ -27,10 +31,11 @@ export type ReconcileSummary = Record<
   | 'repaired'
   | 'billingErrors',
   number
->
+> & { housekeeping?: HousekeepingSummary }
 
 export async function reconcile(deps: LifecycleDeps): Promise<ReconcileSummary> {
   const summary: ReconcileSummary = {
+    drained: 0,
     settled: 0,
     suspendedForDeadline: 0,
     suspendedForBilling: 0,
@@ -42,10 +47,18 @@ export async function reconcile(deps: LifecycleDeps): Promise<ReconcileSummary> 
   const polled = await guard(async () => {
     for (const accountId of await deps.entitlements.listSuspensions()) {
       summary.suspendedForBilling += await suspendAccountRunning(deps, accountId)
+      // Payment grace expired: the data-retention clock starts (no-op if already running).
+      await openHold(deps.db, accountId, 'payment_grace_expired', deps.now())
     }
   })
   if (!polled) {
     summary.billingErrors++
+  }
+  if (await killSwitchOn(deps.db, guardrails(deps))) {
+    // Kill switch on: keep draining until nothing runs (a drain call may have timed out mid-way).
+    await guard(async () => {
+      summary.drained += (await drainAll(deps)).suspended
+    })
   }
   for (const row of await listByStatus(deps.db, ['running'])) {
     await guard(() => reconcileRunning(deps, row, summary))
@@ -69,6 +82,12 @@ export async function reconcile(deps: LifecycleDeps): Promise<ReconcileSummary> 
     })
   }
   await flushUsage(deps.db, deps.entitlements, deps.now())
+  await guard(async () => {
+    const housekept = await housekeeping(deps)
+    if (housekept.swept) {
+      summary.housekeeping = housekept
+    }
+  })
   return summary
 }
 

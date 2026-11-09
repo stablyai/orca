@@ -23,7 +23,7 @@ type FakeBox = {
 
 export type FakeVercel = SandboxProviderApi & {
   boxes: Map<string, FakeBox>
-  snapshots: Map<string, ProviderSnapshot & { sandboxName: string }>
+  snapshots: Map<string, ProviderSnapshot & { sandboxName: string; creationMethod: string; createdAt: number }>
   commands: { sessionId: string; command: string; env: Record<string, string> }[]
   failStart: boolean
   failCreate: boolean
@@ -58,7 +58,7 @@ export function createFakeVercel(now: () => number): FakeVercel {
   const stop = (box: FakeBox): string => {
     box.status = 'stopped'
     const id = next('snap')
-    snapshots.set(id, { id, status: 'created', sourceSessionId: box.sessionId, sandboxName: box.params.name })
+    snapshots.set(id, { id, status: 'created', sourceSessionId: box.sessionId, sandboxName: box.params.name, creationMethod: 'automatic', createdAt: now() })
     return id
   }
 
@@ -149,6 +149,23 @@ export function createFakeVercel(now: () => number): FakeVercel {
       return [...snapshots.values()]
         .filter((snapshot) => snapshot.sandboxName === name)
         .map(({ id, status, sourceSessionId }) => ({ id, status, sourceSessionId }))
+    },
+    async listSandboxes() {
+      return {
+        complete: true,
+        sandboxes: [...boxes.values()].map((box) => ({
+          name: box.params.name,
+          status: box.status,
+          currentSessionId: box.sessionId,
+          tags: box.params.tags
+        }))
+      }
+    },
+    async listProjectSnapshots() {
+      return {
+        complete: true,
+        snapshots: [...snapshots.values()].map(({ id, status, creationMethod, createdAt }) => ({ id, status, creationMethod, createdAt }))
+      }
     },
     async deleteSnapshot(snapshotId) {
       const snapshot = snapshots.get(snapshotId)
