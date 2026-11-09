@@ -19,6 +19,7 @@
 // Browser (GitHub redirects): GET /v1/github/setup, GET /v1/github/callback
 // Operator (OPERATOR_TOKEN): /v1/internal/* (see operator.ts)
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
+import { z } from 'zod'
 import { maintainPool, poolConfigFromEnv } from './pool'
 import { authenticateDesktop } from './auth'
 import { handleApi, isApiPath, type ApiExtension } from './api/router'
@@ -82,6 +83,14 @@ import {
 } from './workspace-lifecycle'
 
 const MAX_JSON_BYTES = 16 * 1024
+/** Archive bodies carry the desktop's cached repo state (file trees) when the VM is already asleep. */
+const MAX_ARCHIVE_JSON_BYTES = 256 * 1024
+const CentsPerHourSchema = z
+  .object({ standard: z.number().int().nonnegative(), large: z.number().int().nonnegative() })
+  .partial()
+  .strict()
+/** Desktops that understand `archived` say so; older strict clients see it as `suspended`. */
+const FEATURES_HEADER = 'x-orca-sandbox-features'
 
 export type Deps = {
   provider?: SandboxProviderApi
@@ -108,7 +117,8 @@ function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
   const days = Number(env.ARCHIVE_TTL_DAYS)
   let centsPerHour: WorkspaceConfig['centsPerHour']
   try {
-    centsPerHour = env.COST_CENTS_PER_HOUR ? (JSON.parse(env.COST_CENTS_PER_HOUR) as WorkspaceConfig['centsPerHour']) : undefined
+    const parsed = CentsPerHourSchema.safeParse(env.COST_CENTS_PER_HOUR ? JSON.parse(env.COST_CENTS_PER_HOUR) : undefined)
+    centsPerHour = parsed.success ? parsed.data : undefined
   } catch {
     centsPerHour = undefined
   }
@@ -319,9 +329,9 @@ function fail(error: string, status: number, reason?: string): Response {
   return json(reason ? { error, reason } : { error }, status)
 }
 
-async function readJson(request: Request): Promise<unknown> {
+async function readJson(request: Request, maxBytes = MAX_JSON_BYTES): Promise<unknown> {
   const text = await request.text()
-  if (text.length > MAX_JSON_BYTES) {
+  if (text.length > maxBytes) {
     throw new SyntaxError('too_large')
   }
   return text ? JSON.parse(text) : {}
@@ -563,11 +573,13 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       return fail('not_configured', 503)
     }
     const [, id, action] = match
+    const archivedAware = (request.headers.get(FEATURES_HEADER) ?? '').split(',').map((f) => f.trim()).includes('archive')
+    const view = (row: SandboxRow) => sandboxView(row, archivedAware)
     if (!id) {
       if (request.method === 'GET') {
         // Routine runs and other machine-made workspaces stay out of the desktop's list.
         const rows = (await listAccountSandboxes(env.SANDBOX_DB, caller.accountId)).filter((row) => (row as { hidden?: number }).hidden !== 1)
-        return json({ sandboxes: rows.map(sandboxView) })
+        return json({ sandboxes: rows.map(view) })
       }
       if (request.method !== 'POST') {
         return fail('not_found', 404)
@@ -588,11 +600,11 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     const route = `${request.method} ${action ?? ''}`
     switch (route) {
       case 'GET ':
-        return json({ sandbox: sandboxView(row) })
+        return json({ sandbox: view(row) })
       case 'DELETE ':
-        return json({ sandbox: sandboxView(await destroySandbox(life, row)) })
+        return json({ sandbox: view(await destroySandbox(life, row)) })
       case 'POST suspend':
-        return json({ sandbox: sandboxView(await suspendSandbox(life, row)) })
+        return json({ sandbox: view(await suspendSandbox(life, row)) })
       case 'POST resume': {
         const ready = await resumeSandbox(life, row)
         return readyResponse(ready)
@@ -604,17 +616,19 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       case 'POST wake':
         return json(await wakeSandbox(life, row, { waitMs: parseWakeWait(url, await readJson(request)), ...workspaceConfig(env, deps) }))
       case 'POST restart': {
+        // User-triggered and unbounded otherwise: shares the per-account start rate limit.
+        await consumeCreateToken(life.db, life.config.guardrails!, caller.accountId, life.now())
         const ready = await restartSandbox(life, row)
         return json(readyView(ready.row, ready.connection))
       }
       case 'GET status':
-        return json({ sandbox: sandboxView(row), status: await workspaceStatus(life, row, workspaceConfig(env, deps)) })
+        return json({ sandbox: view(row), status: await workspaceStatus(life, row, workspaceConfig(env, deps)) })
       case 'POST archive': {
-        const body = ArchiveRequestSchema.safeParse(await readJson(request))
+        const body = ArchiveRequestSchema.safeParse(await readJson(request, MAX_ARCHIVE_JSON_BYTES))
         if (!body.success) {
           return fail('invalid_request', 400)
         }
-        return json({ sandbox: sandboxView(await archiveSandbox(life, row, body.data, workspaceConfig(env, deps))) })
+        return json({ sandbox: view(await archiveSandbox(life, row, body.data, workspaceConfig(env, deps))) })
       }
       case 'GET archive':
         return json({ archive: await readArchive(env.SANDBOX_DB, row.id) })
@@ -627,7 +641,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         if (!body.success) {
           return fail('invalid_request', 400)
         }
-        return json({ sandbox: sandboxView(await renewLease(life, row, body.data.extendMs)) })
+        return json({ sandbox: view(await renewLease(life, row, body.data.extendMs)) })
       }
       default:
         return fail('not_found', 404)

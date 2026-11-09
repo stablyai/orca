@@ -87,6 +87,8 @@ export function createHostedSandboxControlPlaneClient(
         headers: {
           authorization: `Bearer ${token}`,
           accept: 'application/json',
+          // This client's schemas know the `archived` status.
+          'x-orca-sandbox-features': 'archive',
           ...(init.body === undefined ? {} : { 'content-type': 'application/json' })
         },
         body: init.body === undefined ? undefined : JSON.stringify(init.body),

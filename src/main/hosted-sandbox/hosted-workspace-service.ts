@@ -5,38 +5,38 @@ import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus
 } from '../../shared/ephemeral-vm-runtime-store'
-import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
 import {
   ORCA_CLOUD_WORKSPACE_CHANNELS as CH,
-  type CloudOomEvent,
   type CloudWakeProgressEvent,
-  type CloudWakeSource,
-  type CloudWorkspaceErrorCode,
-  type CloudWorkspaceResult
+  type CloudWakeSource
 } from '../../shared/hosted-sandbox/cloud-workspace-api'
 import type {
-  HostedArchiveCheckout,
   HostedArchivePullRequest,
-  HostedSandboxReadyResponse,
-  HostedWorkspaceStatus
+  HostedSandboxReadyResponse
 } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
-import {
-  isEnvironmentProviderError,
-  type EnvironmentProviderErrorCode
-} from '../environment-providers/environment-provider-driver'
-import {
-  environmentHandleFromRecipeResult,
-  environmentReadyToRecipeResult
-} from '../environment-providers/environment-provider-recipe-adapter'
+import { environmentReadyToRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import { applyResumedRuntimePairing } from '../ephemeral-vm/runtime-resume-pairing'
 import { noteRecipeVmWakePairing } from '../ephemeral-vm/recipe-vm-wake-pairings'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
 import { autoResumeAgentsAfterRollover } from './hosted-agent-auto-resume'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
-import { HOSTED_SANDBOX_DRIVER_ID, toReady } from './hosted-sandbox-driver'
+import { toReady } from './hosted-sandbox-driver'
 import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
+import {
+  NOT_CLOUD,
+  createOomTracker,
+  failure,
+  findCloudRuntime,
+  readCachedCheckouts,
+  type CloudRuntime
+} from './hosted-workspace-runtime'
 
-type CloudRuntime = { runtime: EphemeralVmRuntimeRecord; sandboxId: string }
+export {
+  findCloudRuntime,
+  getHostedWorkspaceService,
+  setArchiveCheckoutsProvider,
+  setHostedWorkspaceService
+} from './hosted-workspace-runtime'
 
 export type HostedWorkspaceService = {
   emitWakeProgress(event: Omit<CloudWakeProgressEvent, 'at'>): void
@@ -49,73 +49,20 @@ export type HostedWorkspaceService = {
 }
 
 /** Git state from the client-side offline cache, used when archiving a VM that is already asleep. */
-let cachedCheckouts: ((workspaceId: string) => Promise<HostedArchiveCheckout[] | null>) | null =
-  null
-export function setArchiveCheckoutsProvider(
-  provider: ((workspaceId: string) => Promise<HostedArchiveCheckout[] | null>) | null
-): void {
-  cachedCheckouts = provider
-}
-
-export function findCloudRuntime(userDataPath: string, workspaceId: string): CloudRuntime | null {
-  for (const runtime of listEphemeralVmRuntimes(userDataPath)) {
-    if (runtime.recipe?.provider !== 'orca-cloud' || runtime.workspaceId !== workspaceId) {
-      continue
-    }
-    const handle = runtime.recipeResult
-      ? environmentHandleFromRecipeResult(runtime.recipeResult, HOSTED_SANDBOX_DRIVER_ID)
-      : null
-    const sandboxId = handle?.driverState.sandboxId
-    if (typeof sandboxId === 'string' && sandboxId) {
-      return { runtime, sandboxId }
-    }
-  }
-  return null
-}
-
-function failure<T>(error: unknown): CloudWorkspaceResult<T> {
-  const codes: (CloudWorkspaceErrorCode & EnvironmentProviderErrorCode)[] = [
-    'unauthorized',
-    'entitlement_denied',
-    'conflict',
-    'not_found'
-  ]
-  for (const code of codes) {
-    if (isEnvironmentProviderError(error, code)) {
-      return { ok: false, code, message: error.message, reason: error.reason ?? null }
-    }
-  }
-  if (
-    isEnvironmentProviderError(error, 'unavailable') ||
-    isEnvironmentProviderError(error, 'timeout')
-  ) {
-    return { ok: false, code: 'unavailable', message: error.message }
-  }
-  return {
-    ok: false,
-    code: 'failed',
-    message: error instanceof Error ? error.message : String(error)
-  }
-}
-
-const NOT_CLOUD = {
-  ok: false,
-  code: 'not_cloud',
-  message: 'Not an Orca Cloud workspace.'
-} as const
-
 export function installHostedWorkspaceService(deps: {
   userDataPath: string
   client: HostedSandboxControlPlaneClient
   windows: () => readonly BrowserWindow[]
   /** Restart lease schedulers after a lifecycle change. */
   syncSessions: () => void
+  /** Stop the lease scheduler of one environment (its session is about to be replaced). */
+  stopSession: (environmentId: string) => void
   log?: (line: string) => void
 }): HostedWorkspaceService {
   const log = deps.log ?? ((line: string) => console.error(line))
   const wakeSources = new Map<string, CloudWakeSource>()
-  // Last OOM-kill count seen per sandbox session, so a banner fires once per new kill.
-  const oomSeen = new Map<string, number>()
+  // Wakes in flight per workspace, so every phase carries the source the first one named.
+  const wakes = new Map<string, { source: CloudWakeSource; startedAt: number }>()
   const broadcast = (channel: string, payload: unknown): void => {
     for (const window of deps.windows()) {
       if (!window.isDestroyed()) {
@@ -123,26 +70,7 @@ export function installHostedWorkspaceService(deps: {
       }
     }
   }
-
-  function noticeOom(workspaceId: string, sandboxId: string, status: HostedWorkspaceStatus): void {
-    const metrics = status.metrics
-    if (!metrics) {
-      return
-    }
-    // Per boot: uptime resets with each session, so key by sandbox and boot time (minute precision).
-    const bootKey = `${sandboxId}:${Math.round((status.checkedAt - metrics.uptimeSeconds * 1000) / 60_000)}`
-    const seen = oomSeen.get(bootKey) ?? 0
-    if (metrics.oomKills > seen) {
-      oomSeen.set(bootKey, metrics.oomKills)
-      const event: CloudOomEvent = {
-        workspaceId,
-        oomKills: metrics.oomKills,
-        victim: metrics.lastOomVictim,
-        at: Date.now()
-      }
-      broadcast(CH.oom, event)
-    }
-  }
+  const oom = createOomTracker((event) => broadcast(CH.oom, event))
 
   async function reconnect(found: CloudRuntime, ready: HostedSandboxReadyResponse): Promise<void> {
     const runtimeEnvironmentId = found.runtime.runtimeEnvironmentId
@@ -166,9 +94,37 @@ export function installHostedWorkspaceService(deps: {
     )
   }
 
+  /** The step answers before the window re-pairs; `ready` fires once the runtime record says running. */
+  async function announceReadyWhenRunning(workspaceId: string, startedAt: number): Promise<void> {
+    const deadline = Date.now() + 60_000
+    while (Date.now() < deadline && wakes.has(workspaceId)) {
+      const runtime = findCloudRuntime(deps.userDataPath, workspaceId)?.runtime
+      if (runtime?.status === 'running') {
+        service.emitWakeProgress({ workspaceId, phase: 'ready', source: 'open', startedAt })
+        return
+      }
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    }
+  }
+
   const service: HostedWorkspaceService = {
     emitWakeProgress(event) {
-      broadcast(CH.wakeProgress, { ...event, at: Date.now() } satisfies CloudWakeProgressEvent)
+      if (event.phase === 'waking') {
+        wakes.set(event.workspaceId, { source: event.source, startedAt: event.startedAt })
+      }
+      const inFlight = wakes.get(event.workspaceId)
+      const source = inFlight?.source ?? event.source
+      if (event.phase === 'ready' || event.phase === 'failed') {
+        wakes.delete(event.workspaceId)
+      }
+      broadcast(CH.wakeProgress, {
+        ...event,
+        source,
+        at: Date.now()
+      } satisfies CloudWakeProgressEvent)
+      if (event.phase === 'connecting' && event.source !== 'restart') {
+        void announceReadyWhenRunning(event.workspaceId, event.startedAt)
+      }
     },
     noteWakeSource(workspaceId, source) {
       wakeSources.set(workspaceId, source)
@@ -179,6 +135,17 @@ export function installHostedWorkspaceService(deps: {
       return source
     },
     async pollOom() {
+      const live = new Set(
+        listEphemeralVmRuntimes(deps.userDataPath)
+          .filter(
+            (runtime) =>
+              runtime.recipe?.provider === 'orca-cloud' &&
+              runtime.status === 'running' &&
+              runtime.workspaceId
+          )
+          .map((runtime) => findCloudRuntime(deps.userDataPath, runtime.workspaceId!)?.sandboxId)
+      )
+      oom.prune(live)
       for (const runtime of listEphemeralVmRuntimes(deps.userDataPath)) {
         if (
           runtime.recipe?.provider !== 'orca-cloud' ||
@@ -193,7 +160,7 @@ export function installHostedWorkspaceService(deps: {
         }
         try {
           const { status } = await deps.client.workspaceStatus(found.sandboxId)
-          noticeOom(runtime.workspaceId, found.sandboxId, status)
+          oom.observe(runtime.workspaceId, found.sandboxId, status)
         } catch {
           // Status is advisory; the next beat retries.
         }
@@ -227,7 +194,7 @@ export function installHostedWorkspaceService(deps: {
     }
     try {
       const { status } = await deps.client.workspaceStatus(found.sandboxId)
-      noticeOom(args.workspaceId, found.sandboxId, status)
+      oom.observe(args.workspaceId, found.sandboxId, status)
       return { ok: true, value: status }
     } catch (error) {
       return failure(error)
@@ -246,6 +213,8 @@ export function installHostedWorkspaceService(deps: {
       source: 'restart',
       startedAt
     })
+    // The scheduler holds the old session's deadline and would warn/roll over the new one; a fresh one starts on sync.
+    deps.stopSession(found.sandboxId)
     try {
       const ready = await deps.client.restart(found.sandboxId)
       service.emitWakeProgress({
@@ -281,6 +250,7 @@ export function installHostedWorkspaceService(deps: {
         startedAt,
         message: error instanceof Error ? error.message : String(error)
       })
+      deps.syncSessions()
       return failure(error)
     }
   })
@@ -293,7 +263,7 @@ export function installHostedWorkspaceService(deps: {
         return NOT_CLOUD
       }
       try {
-        const checkouts = (await cachedCheckouts?.(args.workspaceId).catch(() => null)) ?? undefined
+        const checkouts = (await readCachedCheckouts(args.workspaceId)) ?? undefined
         await deps.client.archive(found.sandboxId, {
           ...(args.pullRequests?.length ? { pullRequests: args.pullRequests.slice(0, 50) } : {}),
           ...(checkouts?.length ? { checkouts: checkouts.slice(0, 20) } : {})
@@ -322,6 +292,7 @@ export function installHostedWorkspaceService(deps: {
     try {
       // The control plane resumes the disk; the window then runs its ordinary wake, which re-pairs.
       await deps.client.unarchive(found.sandboxId)
+      deps.syncSessions()
       return { ok: true, value: null }
     } catch (error) {
       service.emitWakeProgress({
@@ -348,13 +319,4 @@ export function installHostedWorkspaceService(deps: {
   })
 
   return service
-}
-
-let current: HostedWorkspaceService | null = null
-export function setHostedWorkspaceService(next: HostedWorkspaceService | null): void {
-  current = next
-}
-/** Null when Orca Cloud is not configured in this build. */
-export function getHostedWorkspaceService(): HostedWorkspaceService | null {
-  return current
 }

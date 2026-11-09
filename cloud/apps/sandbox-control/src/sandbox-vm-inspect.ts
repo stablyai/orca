@@ -24,7 +24,7 @@ read disk_total disk_used < <(df -B1 --output=size,used ${PROJECT} / 2>/dev/null
 uptime_s=$(awk '{printf "%d", $1}' /proc/uptime)
 oom=$(awk '/^oom_kill /{print $2}' /proc/vmstat 2>/dev/null); oom=\${oom:-0}
 victim=$(sudo -n dmesg 2>/dev/null | grep -oE 'Killed process [0-9]+ \([^)]{1,64}\)' | tail -n 1 | sed -E 's/.*\((.*)\)/\1/' | tr -cd 'A-Za-z0-9._+-' | head -c 64)
-orcad=false; pid=$(cat "$HOME/.orca-sandbox/orcad.pid" 2>/dev/null || echo 0); kill -0 "$pid" 2>/dev/null && orcad=true
+orcad=false; pid=$(cat "$HOME/.orca-sandbox/orcad.pid" 2>/dev/null || echo 0); [ "$pid" -gt 1 ] 2>/dev/null && kill -0 "$pid" 2>/dev/null && orcad=true
 load=$(awk '{print $1}' /proc/loadavg)
 printf '{"cpuPercent":%d,"cpus":%d,"load1":%s,"memTotalBytes":%d,"memUsedBytes":%d,"diskTotalBytes":%d,"diskUsedBytes":%d,"uptimeSeconds":%d,"oomKills":%d,"lastOomVictim":%s,"orcadAlive":%s}\n' \
   "$cpu_pct" "$(nproc)" "$load" "$mem_total" "$((mem_total-mem_avail))" "\${disk_total:-0}" "\${disk_used:-0}" "$uptime_s" "$oom" \
@@ -52,6 +52,8 @@ export type VmMetrics = z.infer<typeof VmMetricsSchema>
 const MAX_TREE = 2000
 const MAX_CHANGED = 300
 const MAX_COMMITS = 20
+/** Under the provider's 256 KiB command-output cap, with room for the stream framing. */
+export const MAX_OUTPUT_BYTES = 200 * 1024
 
 /**
  * Archive metadata for every git checkout in the project (the repo plus its worktrees): branch,
@@ -89,7 +91,14 @@ const checkouts = fs.readFileSync("/tmp/orca-archive-wt", "utf8").split("\n").fi
     files: tree.slice(0, ${MAX_TREE}).map((f) => f.slice(0, 1024))
   }
 })
-process.stdout.write(JSON.stringify({ checkouts: checkouts.filter((c) => c.head || c.branch) }) + "\n")
+// The provider caps command output (256 KiB): keep the answer well under it. The main checkout keeps
+// its file tree first; trees are trimmed, then dropped, until the JSON fits.
+const kept = checkouts.filter((c) => c.head || c.branch)
+const fits = () => Buffer.byteLength(JSON.stringify({ checkouts: kept })) <= ${MAX_OUTPUT_BYTES}
+for (let i = kept.length - 1; i >= 0 && !fits(); i--) { kept[i].files = i === 0 ? kept[i].files.slice(0, 500) : [] }
+for (let i = kept.length - 1; i >= 0 && !fits(); i--) { kept[i].files = []; kept[i].changes = kept[i].changes.slice(0, 50) }
+while (kept.length > 1 && !fits()) kept.pop()
+process.stdout.write(JSON.stringify({ checkouts: kept }) + "\n")
 '
 `.replaceAll('\\${', '${')
 

@@ -57,7 +57,8 @@ export function installHostedSandbox(): void {
     userDataPath,
     client,
     windows: () => BrowserWindow.getAllWindows(),
-    syncSessions: () => void registry.sync()
+    syncSessions: () => void registry.sync(),
+    stopSession: (environmentId) => registry.stopEnvironment(environmentId)
   })
   setHostedWorkspaceService(workspaces)
   // Records land after the step answers and wakes can come from any path, so reconcile on a slow beat too.
@@ -80,6 +81,7 @@ export function installHostedSandbox(): void {
         phase,
         startedAt,
         message,
+        // Later phases inherit the source recorded at `waking`.
         source: phase === 'waking' ? workspaces.takeWakeSource(workspaceId) : 'open'
       })
   })

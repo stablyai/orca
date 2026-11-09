@@ -121,6 +121,9 @@ describe('restart', () => {
     const { h, id } = await running()
     h.raw.prepare(`UPDATE sandboxes SET status = 'resuming', updated_at = ? WHERE id = ?`).run(h.now(), id)
     h.advance(2 * 60_000)
+    // A slow-but-alive wake is not taken over.
+    expect((await h.call('POST', `/v1/sandboxes/${id}/restart`)).status).toBe(409)
+    h.advance(4 * 60_000)
     const res = await h.call('POST', `/v1/sandboxes/${id}/restart`)
     expect(res.status).toBe(200)
     expect(res.body.sandbox.status).toBe('running')
@@ -168,7 +171,14 @@ describe('archive', () => {
       script === ARCHIVE_SCRIPT ? { exitCode: 0, stdout: `${JSON.stringify({ checkouts: [checkout] })}\n`, stderr: '' } : undefined
     const pr = { number: 7, title: 'Add x', state: 'open', url: 'https://github.com/o/r/pull/7', branch: 'feature/x' }
     const archived = await h.call('POST', `/v1/sandboxes/${id}/archive`, { body: { pullRequests: [pr] } })
-    expect(archived.body.sandbox.status).toBe('archived')
+    // Callers that don't advertise `archive` (older strict desktops) see it as suspended.
+    expect(archived.body.sandbox.status).toBe('suspended')
+    const aware = await h.send(
+      new Request(`https://sandbox.test/v1/sandboxes/${id}`, {
+        headers: { authorization: `Bearer ${await h.token('alice')}`, 'x-orca-sandbox-features': 'archive' }
+      })
+    )
+    expect(((await aware.json()) as any).sandbox.status).toBe('archived')
     const name = `orca-test-${id}`
     expect(h.vercel.boxes.get(name)!.status).toBe('stopped')
     expect(h.vercel.snapshotExpirations.get(name)).toBe(37 * DAY)
@@ -235,5 +245,48 @@ describe('desktop client against the real handler', () => {
     expect((await client.archiveInfo(id))?.metadata.checkouts[0]?.branch).toBe('feature/x')
     expect((await client.wake(id, 0)).state).toBe('archived')
     expect((await client.unarchive(id)).sandbox.status).toBe('running')
+  })
+})
+
+describe('wake recovery', () => {
+  it('adopts a wake whose Worker was cut off: running VM gets orcad and an endpoint', async () => {
+    const { h, id } = await running()
+    await h.call('POST', `/v1/sandboxes/${id}/suspend`)
+    // Simulate a wake that booted the VM, then lost its Worker before orcad/claim.
+    await h.vercel.getSandbox(`orca-test-${id}`, { resume: true })
+    h.raw.prepare(`UPDATE sandboxes SET status = 'resuming', updated_at = ? WHERE id = ?`).run(h.now(), id)
+    expect((await h.call('POST', '/v1/workspaces/ws-1/wake')).body.state).toBe('waking')
+    h.advance(61_000)
+    const answer = HostedWakeResponseSchema.parse((await h.call('POST', '/v1/workspaces/ws-1/wake')).body)
+    expect(answer.state).toBe('ready')
+    expect(answer.endpoint).toMatch(/^wss:/)
+  })
+
+  it('a stale wake whose VM never came up goes back to sleep and wakes again', async () => {
+    const { h, id } = await running()
+    await h.call('POST', `/v1/sandboxes/${id}/suspend`)
+    h.raw.prepare(`UPDATE sandboxes SET status = 'resuming', updated_at = ? WHERE id = ?`).run(h.now(), id)
+    h.advance(61_000)
+    expect((await h.call('POST', '/v1/workspaces/ws-1/wake?wait=30s')).body.state).toBe('ready')
+  })
+
+  it('answers failed after a failed wake instead of booting on every poll', async () => {
+    const { h, id } = await running()
+    await h.call('POST', `/v1/sandboxes/${id}/suspend`)
+    h.vercel.failStart = true
+    expect((await h.call('POST', '/v1/workspaces/ws-1/wake?wait=30s')).body.state).toBe('failed')
+    const starts = h.vercel.commands.filter((c) => c.command === START_COMMAND).length
+    expect((await h.call('POST', '/v1/workspaces/ws-1/wake?wait=30s')).body.state).toBe('failed')
+    expect(h.vercel.commands.filter((c) => c.command === START_COMMAND)).toHaveLength(starts)
+    h.vercel.failStart = false
+    h.advance(61_000)
+    expect((await h.call('POST', '/v1/workspaces/ws-1/wake?wait=30s')).body.state).toBe('ready')
+  })
+
+  it('reports a provider-stopped VM as sleeping, not unresponsive', async () => {
+    const { h, id } = await running()
+    h.vercel.expire(`orca-test-${id}`)
+    h.advance(31 * 60_000)
+    expect((await h.call('GET', `/v1/sandboxes/${id}/status`)).body.status.state).toBe('sleeping')
   })
 })

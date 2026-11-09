@@ -549,10 +549,7 @@ export async function resumeSandbox(deps: LifecycleDeps, row: SandboxRow): Promi
     const state = await deps.provider.getSandbox(row.provider_name, { resume: false })
     if (state?.session.status === 'running') {
       // Idempotent: a running, serving sandbox answers at once (desktop wake-on-open after a restart).
-      const connection =
-        (await runningOrcad(deps.provider, state.session.id)) ??
-        (await startOrcad(deps.provider, state, { sandboxId: row.id }))
-      return { row, connection }
+      return adoptRunning(deps, row, state)
     }
     // The provider ended the session (lease lapsed): fall through to a real resume.
     row = await markProviderStopped(deps, row)
@@ -563,6 +560,20 @@ export async function resumeSandbox(deps: LifecycleDeps, row: SandboxRow): Promi
   await requireStart(deps, row.account_id, row.user_id, row.machine_size)
   const resuming = await claim(deps, row, { status: 'resuming' })
   return wake(deps, resuming)
+}
+
+/**
+ * A running session whose orcad may not be up (a retried call, or a row the cron repaired after a
+ * wake died mid-way): start orcad (idempotent per boot) and record its endpoint if missing.
+ */
+export async function adoptRunning(deps: LifecycleDeps, row: SandboxRow, state: ProviderSandboxState): Promise<Ready> {
+  const connection =
+    (await runningOrcad(deps.provider, state.session.id)) ?? (await startOrcad(deps.provider, state, { sandboxId: row.id }))
+  if (row.orcad_endpoint && row.ready_at !== null) {
+    return { row, connection }
+  }
+  const updated = await transition(deps.db, row, { orcad_endpoint: orcadEndpoint(state), ready_at: deps.now() }, deps.now())
+  return { row: updated ?? row, connection }
 }
 
 export async function wake(deps: LifecycleDeps, row: SandboxRow): Promise<Ready> {
@@ -583,7 +594,8 @@ export async function wake(deps: LifecycleDeps, row: SandboxRow): Promise<Ready>
   } catch (error) {
     // Leave it resumable: the disk is intact, only this boot failed.
     const current = await getSandbox(deps.db, row.id)
-    if (current?.status === 'resuming') {
+    // Only undo our own claim: a Restart that took the row over owns it now.
+    if (current?.status === 'resuming' && current.generation === row.generation) {
       await transition(deps.db, current, { status: 'suspended', ...NO_SESSION, last_error: 'resume_failed' }, deps.now())
       await deps.hooks?.afterStop?.(current).catch(() => undefined)
     }

@@ -38,7 +38,8 @@ export const LeaseRequestSchema = z
   })
   .strict()
 
-export function sandboxView(row: SandboxRow) {
+/** `archivedAware`: the caller's schema knows `archived`; older strict desktops see `suspended`. */
+export function sandboxView(row: SandboxRow, archivedAware = false) {
   const session =
     row.session_id !== null &&
     row.session_started_at !== null &&
@@ -54,7 +55,7 @@ export function sandboxView(row: SandboxRow) {
   return {
     id: row.id,
     workspaceId: row.workspace_id,
-    status: row.status,
+    status: row.status === 'archived' && !archivedAware ? ('suspended' as const) : row.status,
     machineSize: row.machine_size,
     region: row.region,
     session,
