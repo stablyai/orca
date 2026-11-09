@@ -2,8 +2,15 @@ import { useMemo, useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { DictationIndicator } from './DictationIndicator'
 import { publishDictationMeter, resetDictationMeter } from './dictation-meter-store'
+import type { DictationFailureKind } from './dictation-toasts'
 
-function PaneWithPill({ captureLive = true }: { captureLive?: boolean }) {
+function PaneWithPill({
+  captureLive = true,
+  failure = null
+}: {
+  captureLive?: boolean
+  failure?: DictationFailureKind | null
+}) {
   const [pane, setPane] = useState<HTMLElement | null>(null)
   const anchor = useMemo(
     () => (pane ? { element: pane, placement: 'over' as const } : null),
@@ -11,7 +18,9 @@ function PaneWithPill({ captureLive = true }: { captureLive?: boolean }) {
   )
   return (
     <div ref={setPane} className="relative h-28 w-full bg-background">
-      {anchor ? <DictationIndicator captureLive={captureLive} anchor={anchor} /> : null}
+      {anchor ? (
+        <DictationIndicator captureLive={captureLive} anchor={anchor} failure={failure} />
+      ) : null}
     </div>
   )
 }
@@ -53,4 +62,16 @@ export const finishing = defineFixture({
   store: { dictationState: 'stopping' },
   setup: resetDictationMeter,
   render: () => <PaneWithPill />
+})
+
+export const transcribeFailed = defineFixture({
+  width: 520,
+  store: { dictationState: 'error' },
+  render: () => <PaneWithPill failure="transcribe" />
+})
+
+export const modelFailed = defineFixture({
+  width: 520,
+  store: { dictationState: 'error' },
+  render: () => <PaneWithPill failure="settings" />
 })

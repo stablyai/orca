@@ -17407,7 +17407,15 @@
           "finishing": "Finishing…",
           "listening": "Listening…",
           "cancel": "Cancel",
-          "finish": "Finish"
+          "finish": "Finish",
+          "oneMinuteLeft": "One minute left."
+        },
+        "DictationPillFailure": {
+          "discard": "Discard recording",
+          "modelFailed": "Speech model couldn't load.",
+          "transcribeFailed": "Couldn't transcribe. Recording kept.",
+          "openSettings": "Open settings",
+          "retry": "Retry"
         }
       },
       "dashboard": {
