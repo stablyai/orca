@@ -213,7 +213,15 @@ export async function setStructuredAgentSessionOption(
           readsWithoutModel: caller.readsOptionsWithoutModel !== false
         })
         if (picked.ok) {
-          confirmIdleStructuredAgentSessionOption(context, ctx, params)
+          const confirming = confirmIdleStructuredAgentSessionOption(context, ctx, params)
+          context.trackProviderOperation?.(confirming)
+          void confirming.catch((error) => {
+            ctx.logger.warn('confirming idle session metadata failed', {
+              scope: 'idle-option',
+              sessionId: ctx.sessionId,
+              error
+            })
+          })
         }
         return picked
       },

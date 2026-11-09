@@ -34,6 +34,10 @@ import { createStructuredAgentSessionLogger } from '../native-chat/agent-session
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
 import { conversationRecordReader } from './orchestration/addressing/session-lineage/structured-session-lineage'
 import './agent-session/structured-agent-session-create-adoption'
+import {
+  journalSqlReaderPath,
+  journalSqlWorkerPath
+} from '../native-chat/agent-session-journal/journal-sql-worker-bundle.test-fixture'
 
 const referenceRuntime = {
   getOrchestrationFleetAgentStatusSnapshot: () => [],
@@ -151,7 +155,9 @@ describe('persisted conversation inventory identity', () => {
       legacySessionTabIds: [],
       stateDirectory: root,
       hostId: 'local',
-      logger: createStructuredAgentSessionLogger()
+      logger: createStructuredAgentSessionLogger(),
+      writerPath: journalSqlWorkerPath(),
+      readerPath: journalSqlReaderPath()
     })
     const db = new OrchestrationDb(':memory:')
     try {

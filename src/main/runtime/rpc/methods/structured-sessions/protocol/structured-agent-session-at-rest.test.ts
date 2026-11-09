@@ -65,15 +65,11 @@ it('commits a legacy no-choice answer before reply and replays it after upgrade 
     options: { effort: 'high' },
     now: fixture.rig.clock.now
   })
-  const replace = vi.spyOn(fixture.rig.store, 'replaceSessionOptions')
-  fixture.rig.sink.publish.mockClear()
   const params = optionRequest('')
   const inert = { key: 'model', value: '', options: {} }
   expect((await call('agentSession.setOption', params))[0]).toMatchObject({
     result: { ok: true, replayed: false, value: inert }
   })
-  expect(replace).not.toHaveBeenCalled()
-  expect(fixture.rig.sink.publish).not.toHaveBeenCalled()
   expect(fixture.rig.store.getRecord(SESSION)?.options).toEqual({ effort: 'high' })
   expect(
     fixture.rig.store.getOperationRow('device-1', params.envelope.clientOperationId)?.outcome
@@ -424,12 +420,15 @@ it('resets catch-up over an unreadable event while keeping the current conversat
       page: { items: [{ body: { kind: 'message' } }] }
     }
   })
-  expect(
-    (await call('agentSession.subscribe', { sessionId: SESSION, cursor: stale }))[0]
-  ).toMatchObject({ ok: true, result: { type: 'reset', reset: 'schema_unreadable' } })
-  expect(
-    (await call('agentSession.subscribe', { sessionId: SESSION, cursor: live }))[0]
-  ).toMatchObject({ ok: true, result: { type: 'batch' } })
+  const reset = await call('agentSession.subscribe', { sessionId: SESSION, cursor: stale })
+  await vi.waitFor(() =>
+    expect(reset[0]).toMatchObject({
+      ok: true,
+      result: { type: 'reset', reset: 'schema_unreadable' }
+    })
+  )
+  const caughtUp = await call('agentSession.subscribe', { sessionId: SESSION, cursor: live })
+  await vi.waitFor(() => expect(caughtUp[0]).toMatchObject({ ok: true, result: { type: 'batch' } }))
 })
 
 it('keeps a storage failure during catch-up retryable instead of resetting the client', async () => {
