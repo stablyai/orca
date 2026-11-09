@@ -235,7 +235,8 @@ it.each([300, 3000])(
       customTitle: null,
       color: null,
       sortOrder: index,
-      createdAt: 1
+      createdAt: 1,
+      isPinned: index === 1
     }))
     const layouts = Object.fromEntries(
       rows.map((row, index) => {
@@ -252,7 +253,7 @@ it.each([300, 3000])(
       })
     )
     const unified = rows.map((row) => ({
-      id: row.id,
+      id: `strip-${row.id}`,
       entityId: row.id,
       groupId: 'group',
       worktreeId: workspace,
@@ -295,6 +296,48 @@ it.each([300, 3000])(
       expect(retirements.mock.calls[0].slice(1, 3)).toEqual([workspace, { id: 'tab-0' }])
       expect(rowVisits).not.toHaveBeenCalled()
       expect(layoutVisits.mock.calls.length).toBeLessThanOrEqual(1)
+      retirements.mockClear()
+      visits.mockClear()
+      expect(
+        await store.applyLayoutCommand({
+          type: 'renameTab',
+          workspace,
+          tabId: 'strip-tab-1',
+          kind: 'custom',
+          title: 'Pinned terminal'
+        })
+      ).toMatchObject({ ok: true })
+      expect(retirements).not.toHaveBeenCalled()
+      expect(visits).not.toHaveBeenCalled()
+      expect(
+        await store.applyLayoutCommand({
+          type: 'closeTabs',
+          workspace,
+          tabIds: ['strip-tab-1'],
+          refusePinned: true
+        })
+      ).toMatchObject({
+        ok: true,
+        result: { closed: [], refused: [{ tabId: 'strip-tab-1', code: 'tab_pinned' }] }
+      })
+      expect(retirements).not.toHaveBeenCalled()
+      expect(visits).not.toHaveBeenCalled()
+      expect(
+        await store.applyLayoutCommand({
+          type: 'closeTabs',
+          workspace,
+          tabIds: ['strip-tab-2'],
+          force: true
+        })
+      ).toMatchObject({ ok: true })
+      // The accepted strip close adds exactly one terminal entity, independent of corpus size.
+      expect(retirements.mock.calls.map((call) => [call[1], call[2]])).toEqual([
+        [workspace, { id: 'tab-2' }]
+      ])
+      expect(visits.mock.calls.map((call) => [call[0], call[2]])).toEqual([
+        ['before', 'tab-2'],
+        ['after', 'tab-2']
+      ])
     } finally {
       visits.mockRestore()
       rowVisits.mockRestore()

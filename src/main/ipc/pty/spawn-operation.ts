@@ -8,7 +8,7 @@ import {
   admitLegacyTerminalRestore,
   locateLegacyTerminalRestore
 } from '../../pty/legacy-terminal-restore-ownership'
-import { retireScopedTerminal } from '../../pty/legacy-terminal-retirement'
+import { retireClosedPtySpawn } from './pane/spawn-registration'
 import type { PaneSpawnOperation } from './pane/pane-spawn-operation'
 import { normalizeFreshPtySessionId } from '../../daemon/sessions/pty-session-id'
 import type { AdoptStablePaneArgs } from './ipc/spawn-types'
@@ -257,18 +257,10 @@ export async function runPtySpawn<State extends PtySpawnOperationState>(
       : fresh(ctx.paneSpawnOperation ?? { mustExist: false }))
   } catch (caught) {
     const attempt = ctx.paneSpawnOperation?.legacyRestore?.attempt ?? restoreAdmission?.attempt
-    if (attempt?.closed && attempt.selectedId) {
+    if (attempt?.closed) {
       const result = ctx.rejectedRegistrationCandidate ?? ctx.result
-      if (result?.id === attempt.selectedId) {
-        try {
-          await retireScopedTerminal(ctx.provider, result)
-        } catch (error) {
-          ctx.deps.runtime?.markPtyLivenessUnverifiable?.(
-            result.id,
-            'closed restore stop could not be verified'
-          )
-          console.warn('[pty] closed restore stop failed', error)
-        }
+      if (result && result.id === (attempt.selectedId ?? ctx.args.sessionId)) {
+        await retireClosedPtySpawn(ctx.provider, result, ctx.deps.runtime, attempt.selectedId)
       }
     }
     const error = adapter.onError?.(caught) ?? caught

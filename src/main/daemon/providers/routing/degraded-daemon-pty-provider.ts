@@ -1,7 +1,6 @@
 import { PendingTerminalHistoryRetirements } from '../../../pty/pending-terminal-history-retirement'
 import { admitProspectivePtySpawn } from '../../../pty/prospective-pty-spawn'
 import { shutdownRoutedDegradedSession } from './daemon-routed-session-shutdown'
-import { normalizeFreshPtySessionId } from '../../sessions/pty-session-id'
 import { terminateResolvedDaemonSession } from '../../server/daemon-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
 import type { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
@@ -97,8 +96,8 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   canProvideAuthoritativeBufferSnapshot = (id: string): boolean =>
     this.freshSpawns.canProvideSnapshot(id)
 
-  spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> =>
-    this.ownerRecovery.spawn(normalizeFreshPtySessionId(opts))
+  spawn = async (opts: PtySpawnOptions): Promise<PtySpawnResult> =>
+    this.ownerRecovery.spawn(await this.freshSpawns.prepareSpawn(opts))
 
   attach = (id: string): ReturnType<IPtyProvider['attach']> =>
     attachDaemonOwnedSession(this.providerFor(id), this.fallback, id)

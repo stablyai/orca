@@ -4,6 +4,9 @@ import type { IPtyProvider, PtySpawnOptions } from '../providers/pty-provider-co
 export const admitProspectivePtySpawn = Symbol('admitProspectivePtySpawn')
 const admissions = Symbol('prospectivePtySpawnAdmissions')
 export type ProspectivePtySpawn = {
+  readonly sessionId?: string
+  readonly isNewSession?: boolean
+  readonly attachOnly?: boolean
   current: () => boolean | Promise<boolean>
   currentSync: () => boolean
   release: () => void
@@ -13,7 +16,10 @@ export type ProspectivePtySpawn = {
 type ProspectiveProvider = IPtyProvider & {
   [admitProspectivePtySpawn]?: (opts: PtySpawnOptions) => Promise<ProspectivePtySpawn | null>
 }
-type SpawnCarrier = Pick<PtySpawnOptions, 'cols' | 'rows'> & {
+type SpawnCarrier = Pick<
+  PtySpawnOptions,
+  'cols' | 'rows' | 'sessionId' | 'isNewSession' | 'attachOnly'
+> & {
   [admissions]?: Map<IPtyProvider | DaemonPtyRuntimeState, ProspectivePtySpawn>
 }
 
@@ -36,6 +42,9 @@ export function bindProspectivePtySpawn(
   provider: IPtyProvider,
   receipt: ProspectivePtySpawn
 ): void {
+  if (!matchesProspectiveIdentity(receipt, options)) {
+    throw new Error('Terminal spawn target changed')
+  }
   const map = options[admissions] ?? new Map()
   map.set(provider, receipt)
   Object.assign(options, { [admissions]: map })
@@ -49,8 +58,17 @@ export async function validateProspectivePtySpawn(
   options: SpawnCarrier
 ): Promise<ProspectivePtySpawn | undefined> {
   const receipt = options[admissions]?.get(provider)
-  if (receipt && !(await receipt.current())) {
+  if (receipt && (!matchesProspectiveIdentity(receipt, options) || !(await receipt.current()))) {
     throw new Error('Terminal spawn target changed')
   }
   return receipt
+}
+
+function matchesProspectiveIdentity(receipt: ProspectivePtySpawn, options: SpawnCarrier): boolean {
+  return (
+    receipt.sessionId === undefined ||
+    (receipt.sessionId === options.sessionId &&
+      (receipt.isNewSession === true) === (options.isNewSession === true) &&
+      (receipt.attachOnly === true) === (options.attachOnly === true))
+  )
 }

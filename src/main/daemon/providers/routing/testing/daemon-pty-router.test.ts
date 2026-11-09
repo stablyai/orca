@@ -1,8 +1,14 @@
+import {
+  admitProspectivePtySpawn,
+  acquireProspectivePtySpawn,
+  bindProspectivePtySpawn
+} from '../../../../pty/prospective-pty-spawn'
+import { DegradedDaemonPtyProvider } from '../degraded-daemon-pty-provider'
 import { createAdapter } from './daemon-pty-router-test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { DaemonPtyRouter } from '../daemon-pty-router'
 import { TerminalSessionOwnerUnverifiedError } from '../../../protocol/daemon-errors'
-import type { PtyProcessInfo } from '../../../../providers/pty-provider-contract'
+import type { PtyProcessInfo, PtySpawnOptions } from '../../../../providers/pty-provider-contract'
 import {
   HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
   PROTOCOL_VERSION
@@ -157,3 +163,66 @@ describe('DaemonPtyRouter', () => {
     expect(current.spawn).not.toHaveBeenCalled()
   })
 })
+
+it.each(['router', 'degraded'] as const)(
+  'chooses one fresh identity before %s admission and never consumes the numeric route',
+  async (kind) => {
+    const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+    const legacy = createAdapter('legacy', ['9'], undefined, PROTOCOL_VERSION)
+    const fallback = createAdapter('fallback', [], undefined, PROTOCOL_VERSION)
+    const target = kind === 'router' ? current : fallback
+    const nestedAdmission = vi.fn(async (_opts: PtySpawnOptions) => ({
+      current: () => true,
+      currentSync: () => true,
+      release: () => {}
+    }))
+    Object.assign(target, { [admitProspectivePtySpawn]: nestedAdmission })
+    const provider =
+      kind === 'router'
+        ? new DaemonPtyRouter({ current, legacy: [legacy] })
+        : new DegradedDaemonPtyProvider({ current, legacy: [legacy], fallback })
+    try {
+      await (provider instanceof DaemonPtyRouter
+        ? provider.discoverLegacySessions()
+        : provider.discoverDaemonSessions())
+      const options: PtySpawnOptions = { sessionId: '9', isNewSession: true, cols: 80, rows: 24 }
+      const admission = await acquireProspectivePtySpawn(provider, options)
+      expect(admission).not.toBeNull()
+      const chosen = admission!.sessionId
+      expect(chosen).toMatch(/^[0-9a-f]{8}-[0-9a-f-]+$/)
+      expect(options.sessionId).toBe(chosen)
+      expect(nestedAdmission.mock.calls[0][0].sessionId).toBe(chosen)
+      const copied = { ...options }
+      bindProspectivePtySpawn(copied, provider, admission!)
+      try {
+        await expect(
+          provider.spawn({ ...copied, sessionId: 'different-scoped-id' })
+        ).rejects.toThrow('Terminal spawn target changed')
+        await expect(provider.spawn({ ...copied, attachOnly: true })).rejects.toThrow(
+          'Terminal spawn target changed'
+        )
+        expect((await provider.spawn(copied)).id).toBe(chosen)
+        expect(target.spawn).toHaveBeenCalledWith(expect.objectContaining({ sessionId: chosen }))
+        expect(legacy.spawn).not.toHaveBeenCalled()
+        const direct = await provider.spawn({
+          sessionId: '9',
+          isNewSession: true,
+          cols: 80,
+          rows: 24
+        })
+        expect(direct.id).not.toBe('9')
+        expect(direct.id).not.toBe(chosen)
+        expect(legacy.hasPty('9')).toBe(true)
+        expect(legacy.spawn).not.toHaveBeenCalled()
+      } finally {
+        admission!.release()
+      }
+    } finally {
+      if (provider instanceof DaemonPtyRouter) {
+        provider.disposeRouterOnly()
+      } else {
+        provider.disposeProviderOnly()
+      }
+    }
+  }
+)

@@ -1,4 +1,5 @@
 import { publishSelectedTerminal } from '../../../pty/selected-terminal-retirement'
+import { retireScopedTerminal } from '../../../pty/legacy-terminal-retirement'
 import {
   hasSelectedTerminalHistory,
   preserveFencedTerminalHistory
@@ -11,7 +12,6 @@ import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { IPtyProvider, PtySpawnResult } from '../../../providers/pty-provider-contract'
 import {
   isCurrentPtyExit,
-  ptyIncarnationById,
   ptyOwnership,
   setAdoptedPtyOwnership,
   setPtyOwnership,
@@ -60,19 +60,39 @@ function exitedBeforeAdmission(
   }
 }
 
+type PtySpawnCleanupRuntime =
+  | (Pick<OrcaRuntimeService, 'markPtyLivenessUnverifiable'> &
+      Partial<Pick<OrcaRuntimeService, 'intentionalPtyStops'>>)
+  | undefined
+
 export async function discardUnpersistedPtySpawn(
   provider: IPtyProvider,
   result: PtySpawnResult,
-  runtime:
-    | (Pick<OrcaRuntimeService, 'markPtyLivenessUnverifiable'> &
-        Partial<Pick<OrcaRuntimeService, 'intentionalPtyStops'>>)
-    | undefined
+  runtime: PtySpawnCleanupRuntime
 ): Promise<void> {
-  if (
-    result.isReattach ||
-    result.agentSessionEnsure?.disposition === 'adopted' ||
-    !isCurrentPtyExit(result)
-  ) {
+  if (!result.isReattach) {
+    await stopUnpersistedPtySpawn(provider, result, runtime)
+  }
+}
+
+export async function retireClosedPtySpawn(
+  provider: IPtyProvider,
+  result: PtySpawnResult,
+  runtime: PtySpawnCleanupRuntime,
+  selectedId: string | undefined
+): Promise<void> {
+  if (!result.isReattach || result.id === selectedId) {
+    await stopUnpersistedPtySpawn(provider, result, runtime, 'preserve')
+  }
+}
+
+async function stopUnpersistedPtySpawn(
+  provider: IPtyProvider,
+  result: PtySpawnResult,
+  runtime: PtySpawnCleanupRuntime,
+  history: 'default' | 'preserve' = 'default'
+): Promise<void> {
+  if (result.agentSessionEnsure?.disposition === 'adopted' || !isCurrentPtyExit(result)) {
     return
   }
   // Discard cleanup is intentional stop, not agent completion; preserve the pane tab.
@@ -85,6 +105,10 @@ export async function discardUnpersistedPtySpawn(
   try {
     let proof: PtyExitProof
     try {
+      if (history === 'preserve') {
+        stopped = await retireScopedTerminal(provider, result)
+        return
+      }
       if (hasSelectedTerminalHistory(result) && result.incarnationId && provider.killFenced) {
         const outcome = await provider.killFenced(
           preserveFencedTerminalHistory({
@@ -112,10 +136,7 @@ export async function discardUnpersistedPtySpawn(
       if (!isPtyAlreadyGoneError(error)) {
         console.warn('[pty] failed to clean up PTY after persistence failure:', error)
         // An observed exit, or a same-id replacement, outranks a lost control reply.
-        if (
-          !ptyOwnership.has(result.id) ||
-          ptyIncarnationById.get(result.id) !== result.incarnationId
-        ) {
+        if ((history === 'default' && !ptyOwnership.has(result.id)) || !isCurrentPtyExit(result)) {
           return
         }
         // Keep potentially live ownership as unverifiable until observed exit or successful cleanup.

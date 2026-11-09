@@ -438,6 +438,34 @@ describe('terminal history migration coordination', () => {
     }
   })
 
+  it('keeps an unknown census conservative until actual host re-registration', async () => {
+    liveProtocols.mockResolvedValue([55])
+    const root = manager.identityRoot!
+    const reservations = vi
+      .fn(async () => ({
+        complete: true as const,
+        authorityGeneration: 'recovered-host',
+        sessionIds: Array<string>()
+      }))
+      .mockRejectedValueOnce(new Error('one transient inventory failure'))
+    let unregister = root.registerHost({ protocolVersion: 55, reservations })
+    try {
+      for (const id of ['9', '10', '11']) {
+        expect(await root.beginMigration([id, `workspace@@${id}`], () => true)).toBeNull()
+      }
+      expect(reservations).toHaveBeenCalledTimes(1)
+      expect(await manager.checkpoint('9', snapshot)).toBe('committed')
+      unregister()
+      unregister = root.registerHost({ protocolVersion: 55, reservations })
+      const recovered = await root.beginMigration(['9', 'workspace@@recovered'], () => true)
+      expect(recovered?.current()).toBe(true)
+      recovered!.release()
+      expect(reservations).toHaveBeenCalledTimes(2)
+    } finally {
+      unregister()
+    }
+  })
+
   it.each([10, 100])(
     'shares one reservation census across %i cold selections until authority changes',
     async (count) => {

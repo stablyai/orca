@@ -601,3 +601,149 @@ it.each(['first conversion', 'committed retry'] as const)(
     expect(f.alive.has(canonical)).toBe(false)
   }
 )
+
+it.each(['common dispatch', 'installed dispatch', 'installed binding'] as const)(
+  'stops only the fresh compatibility incarnation after close during %s',
+  async (interval) => {
+    const f = await restoreFixture()
+    await f.addLegacyPeer()
+    const sourcePath = join(f.profile, 'terminal-history/9/checkpoint.json')
+    const source = readFileSync(sourcePath)
+    const entered = deferred<void>()
+    const release = deferred<void>()
+    const originalBinding = f.store.persistPtyBinding.bind(f.store)
+    const binding =
+      interval === 'installed binding'
+        ? vi.spyOn(f.store, 'persistPtyBinding').mockImplementation(async (...args) => {
+            entered.resolve()
+            await release.promise
+            return originalBinding(...args)
+          })
+        : undefined
+    const pause = binding ? undefined : f.pauseFresh()
+    const installed = interval === 'common dispatch' ? undefined : installedRestore(f)
+    const pending = installed ? installed.create() : f.start()
+    const rejected = expect(pending).rejects.toThrow(
+      interval === 'installed binding'
+        ? 'terminal_split_source_not_found'
+        : 'terminal_pane_owner_changed'
+    )
+    try {
+      await (pause?.started ?? entered.promise)
+      expect(f.alive.has('9')).toBe(true)
+      await f.close()
+      pause?.gate.resolve()
+      release.resolve()
+      await rejected
+      expect(f.alive.has('9')).toBe(false)
+      expect(f.provider.killFenced).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: '9',
+          expectedIncarnationId: 'incarnation-9'
+        })
+      )
+      expect(f.provider.shutdown).not.toHaveBeenCalled()
+      expect(readFileSync(sourcePath)).toEqual(source)
+      expect(f.seen.filter((call) => !call.attachOnly)).toEqual([{ id: '9', attachOnly: false }])
+      expect(f.store.getWorkspaceSession().terminalLayoutsByTabId[tabId]).toBeUndefined()
+      expect(
+        f.store.getWorkspaceSession().terminalLayoutsByTabId['peer-tab'].ptyIdsByLeafId?.[
+          'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
+        ]
+      ).toBe('9')
+    } finally {
+      pause?.gate.resolve()
+      release.resolve()
+      await pending.catch(() => {})
+      binding?.mockRestore()
+    }
+  }
+)
+
+it.each([false, true])(
+  'captures a selected reattach under a distinct saved strip entry (replaced: %s)',
+  async (replaced) => {
+    const f = await restoreFixture()
+    await expect(f.start(true)).rejects.toThrow('crash before bind')
+    const canonical = 'repo-local::/fixture/local@@e2fec859'
+    const snapshot = structuredClone(f.store.getWorkspaceSession())
+    const entry = snapshot.unifiedTabs?.[workspace]?.find((tab) => tab.entityId === tabId)
+    expect(entry).toBeDefined()
+    entry!.id = 'legacy-strip-entry'
+    f.store.setWorkspaceSession(snapshot)
+    expect(
+      await f.store.applyLayoutCommand({
+        type: 'renameTab',
+        workspace,
+        tabId: 'legacy-strip-entry',
+        kind: 'custom',
+        title: 'Saved terminal'
+      })
+    ).toMatchObject({ ok: true })
+    expect(
+      f.store.getWorkspaceSession().unifiedTabs?.[workspace]?.find((tab) => tab.entityId === tabId)
+    ).toMatchObject({
+      id: 'legacy-strip-entry',
+      entityId: tabId
+    })
+    const pause = f.pauseFresh()
+    const { create } = installedRestore(f)
+    const pending = create()
+    const rejected = expect(pending).rejects.toThrow('terminal_pane_owner_changed')
+    try {
+      await pause.started
+      expect(
+        await f.store.applyLayoutCommand({
+          type: 'closeTabs',
+          workspace,
+          tabIds: ['legacy-strip-entry'],
+          force: true,
+          recordClose: 'user'
+        })
+      ).toMatchObject({ ok: true })
+      if (replaced) {
+        f.incarnations.set(canonical, 'successor-incarnation')
+      }
+      pause.gate.resolve()
+      await rejected
+      expect(f.provider.killFenced).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: canonical,
+          expectedIncarnationId: `incarnation-${canonical}`
+        })
+      )
+      expect(f.alive.has(canonical)).toBe(replaced)
+      expect(f.store.getWorkspaceSession().terminalLayoutsByTabId[tabId]).toBeUndefined()
+      expect(existsSync(join(f.profile, 'terminal-history/9/checkpoint.json'))).toBe(true)
+      expect(
+        existsSync(
+          join(f.profile, 'terminal-history', encodeURIComponent(canonical), 'checkpoint.json')
+        )
+      ).toBe(true)
+    } finally {
+      pause.gate.resolve()
+      await pending.catch(() => {})
+    }
+  }
+)
+
+it('does not stop an unselected surviving numeric reattach when its pending surface closes', async () => {
+  const f = await restoreFixture()
+  f.alive.add('9')
+  const pause = f.pauseProbe()
+  const { create } = installedRestore(f)
+  const pending = create()
+  const rejected = expect(pending).rejects.toThrow('client_disconnected')
+  try {
+    await pause.started
+    await f.close()
+    pause.gate.resolve()
+    await rejected
+    expect(f.alive.has('9')).toBe(true)
+    expect(f.provider.killFenced).not.toHaveBeenCalled()
+    expect(f.provider.shutdown).not.toHaveBeenCalled()
+  } finally {
+    pause.gate.resolve()
+    await pending.catch(() => {})
+  }
+})

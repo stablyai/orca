@@ -327,7 +327,11 @@ export type LayoutRefusalCode =
   | 'generated_title_kept'
 
 /** What the runtime does after applying: stop or start terminals. The reply never waits on them. */
-export type LayoutEffects = { stopPtyIds: string[]; startPaneKeys: string[] }
+export type LayoutEffects = {
+  stopPtyIds: string[]
+  startPaneKeys: string[]
+  affectedTerminalTabIds?: readonly string[]
+}
 
 export type LayoutCommandResult = {
   tabId?: string

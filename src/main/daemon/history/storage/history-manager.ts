@@ -287,15 +287,11 @@ export class HistoryManager {
     await removeTerminalHistorySessionTrees(this.basePath, sessionId)
   }
 
-  isSessionDisabled(sessionId: string): boolean {
-    return this.disabledSessions.has(sessionId)
-  }
+  isSessionDisabled = (sessionId: string): boolean => this.disabledSessions.has(sessionId)
 
   disabledSessionCount = (): number => this.disabledSessions.size
 
-  hasWriter(sessionId: string): boolean {
-    return this.writers.has(sessionId)
-  }
+  hasWriter = (sessionId: string): boolean => this.writers.has(sessionId)
 
   hasHistory(sessionId: string): boolean {
     return existsSync(join(this.sessionDir(sessionId), 'meta.json'))
@@ -307,7 +303,10 @@ export class HistoryManager {
 
   dispose = (): Promise<void> => this.releaseIdentity('clean')
 
-  releaseIdentity(disposition: 'clean' | 'detach'): Promise<void> {
+  releaseIdentity(
+    disposition: 'clean' | 'detach',
+    retainedWriters?: ReadonlySet<TerminalHistorySessionWriter>
+  ): Promise<void> {
     this.identityRoot?.cancelMigrations()
     this.identity.closeAdmissions()
     this.identityRelease ??= this.identity
@@ -320,7 +319,8 @@ export class HistoryManager {
           this.lifecycleMutations,
           this.mutations,
           this.recoveryFreezes,
-          this.identity.release
+          this.identity.release,
+          retainedWriters
         )
       )
     return this.identityRelease

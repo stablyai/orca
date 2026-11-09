@@ -18,7 +18,7 @@ import {
 export async function retireScopedTerminal(
   provider: IPtyProvider,
   result: Pick<PtySpawnResult, 'id' | 'incarnationId'>
-): Promise<void> {
+): Promise<boolean> {
   if (result.incarnationId && provider instanceof LocalPtyProvider) {
     await provider.shutdown(result.id, {
       immediate: true,
@@ -31,7 +31,7 @@ export async function retireScopedTerminal(
       undefined,
       PtyExitProof.from('shutdown-acknowledged', result.incarnationId)
     )
-    return
+    return true
   }
   if (!result.incarnationId || !provider.killFenced) {
     throw new Error('Cannot verify the closed terminal incarnation')
@@ -46,7 +46,7 @@ export async function retireScopedTerminal(
   const verdict = await provider.killFenced(request)
   if (verdict.outcome === 'refused') {
     if (verdict.reason === 'replaced') {
-      return
+      return false
     }
     throw new Error(`Closed terminal stop is ${verdict.reason}`)
   }
@@ -56,6 +56,7 @@ export async function retireScopedTerminal(
     undefined,
     PtyExitProof.from('shutdown-acknowledged', result.incarnationId)
   )
+  return true
 }
 
 /** Called by the admitted snapshot's existing membership traversal, before binding publication. */

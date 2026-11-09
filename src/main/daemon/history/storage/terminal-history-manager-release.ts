@@ -71,13 +71,17 @@ export async function releaseTerminalHistoryManager(
   lifecycleMutations: TerminalHistoryMutationTracker,
   mutations: TerminalHistoryMutationTracker,
   recoveryFreezes: TerminalHistoryRecoveryFreezes,
-  unregister?: () => void
+  unregister?: () => void,
+  retainedWriters?: ReadonlySet<TerminalHistorySessionWriter>
 ): Promise<void> {
   await lifecycleMutations.waitAll()
   await mutations.waitAll()
   if (disposition === 'clean') {
     // Orderly teardown ends only this adapter's writers; recoverable disconnect preserves them.
     for (const [sessionId, writer] of writers) {
+      if (retainedWriters?.has(writer)) {
+        continue
+      }
       try {
         updateTerminalHistoryMeta(writer.dir, { endedAt: new Date().toISOString(), exitCode: null })
       } catch {
@@ -85,7 +89,11 @@ export async function releaseTerminalHistoryManager(
       }
     }
   }
-  writers.clear()
+  for (const [id, writer] of writers) {
+    if (!retainedWriters?.has(writer)) {
+      writers.delete(id)
+    }
+  }
   recoveryFreezes.releaseAll()
   unregister?.()
 }

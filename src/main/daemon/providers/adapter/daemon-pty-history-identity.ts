@@ -1,6 +1,7 @@
 import type { DaemonClient } from '../../transport/client/daemon-client'
 import type { HistoryManager } from '../../history/storage/history-manager'
 import type { CheckpointSessionQueue } from '../checkpointing/daemon-checkpoint-session-queue'
+import type { TerminalHistorySessionWriter } from '../../history/storage/terminal-history-session-writer'
 import type { ListSessionsResult } from '../../protocol/daemon-rpc-contract'
 import { sameEndpointIdentity } from '../../endpoint/identity/daemon-endpoint-incarnation'
 
@@ -9,14 +10,20 @@ export function registerDaemonHistoryIdentity(
   queue: CheckpointSessionQueue,
   client: DaemonClient,
   protocolVersion: number
-): { release: (disposition: 'clean' | 'detach') => Promise<void>; retire: () => void } {
+): {
+  release: (
+    disposition: 'clean' | 'detach',
+    retainedWriters?: ReadonlySet<TerminalHistorySessionWriter>
+  ) => Promise<void>
+  retire: () => void
+} {
   const root = manager?.identityRoot
   if (!root) {
     return {
       retire: () => {},
-      release: async (disposition) => {
+      release: async (disposition, retainedWriters) => {
         await queue.drain()
-        await manager?.releaseIdentity(disposition)
+        await manager?.releaseIdentity(disposition, retainedWriters)
       }
     }
   }
@@ -44,11 +51,11 @@ export function registerDaemonHistoryIdentity(
   let release: Promise<void> | undefined
   return {
     retire,
-    release: (disposition) => {
+    release: (disposition, retainedWriters) => {
       root.cancelMigrations()
       release ??= (async () => {
         await queue.drain()
-        await manager?.releaseIdentity(disposition)
+        await manager?.releaseIdentity(disposition, retainedWriters)
         retire()
       })()
       return release

@@ -177,7 +177,10 @@ function applyToSession(
     ? {
         value: { ok: true, result: applied.result },
         session: write(saveWorkspaceLayout({ ...loaded, layout: applied.model })),
-        terminalTabIds: terminalMembershipTabs(command, applied.result),
+        terminalTabIds:
+          command.type === 'closeTabs'
+            ? (applied.effects.affectedTerminalTabIds ?? [])
+            : terminalMembershipTabs(command, applied.result),
         effects: applied.effects,
         ...(keepsViews ? { views: editorViewsOfModel(applied.model) } : {})
       }
@@ -295,9 +298,6 @@ function terminalMembershipTabs(
   result: Extract<LayoutApplyOutcome, { ok: true }>['result']
 ): readonly string[] {
   const created = result?.createdTabs?.map((tab) => tab.tabId) ?? []
-  if (command.type === 'closeTabs') {
-    return command.tabIds
-  }
   if (command.type === 'createTerminalTab') {
     return command.tabId ? [command.tabId] : created
   }

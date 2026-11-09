@@ -2,6 +2,7 @@ import {
   acquireProspectivePtySpawn,
   validateProspectivePtySpawn
 } from '../../../pty/prospective-pty-spawn'
+import { normalizeFreshPtySessionId } from '../../sessions/pty-session-id'
 import type {
   IPtyProvider,
   PtySpawnOptions,
@@ -75,6 +76,8 @@ export class DegradedDaemonFreshSpawnRouter {
   }
 
   async admit(opts: PtySpawnOptions) {
+    Object.assign(opts, normalizeFreshPtySessionId(opts))
+    opts = { ...opts }
     const target =
       (opts.sessionId ? this.sessionProviders.get(opts.sessionId) : undefined) ?? this.target
     const nested = await acquireProspectivePtySpawn(target, opts)
@@ -83,6 +86,9 @@ export class DegradedDaemonFreshSpawnRouter {
     }
     let held = true
     return {
+      sessionId: opts.sessionId,
+      isNewSession: opts.isNewSession,
+      attachOnly: opts.attachOnly,
       target,
       nested,
       currentSync: () =>
@@ -100,6 +106,13 @@ export class DegradedDaemonFreshSpawnRouter {
         nested.release()
       }
     }
+  }
+
+  async prepareSpawn(opts: PtySpawnOptions): Promise<PtySpawnOptions> {
+    if (this.owner) {
+      await validateProspectivePtySpawn(this.owner, opts)
+    }
+    return normalizeFreshPtySessionId(opts)
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {

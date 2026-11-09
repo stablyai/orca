@@ -131,6 +131,7 @@ export function closeTabs(
   let next = model
   const closed: string[] = []
   const recorded: string[] = []
+  const affectedTerminalTabIds = new Set<string>()
   const refused: RefusedClose[] = []
   const stopPtyIds: string[] = []
   for (const tabId of command.tabIds) {
@@ -152,6 +153,7 @@ export function closeTabs(
     next = closeTab(next, command.workspace, tabId)
     closed.push(tabId)
     if (tab.kind === 'terminal') {
+      affectedTerminalTabIds.add(tab.entityId)
       recorded.push(tab.entityId)
     }
   }
@@ -161,7 +163,14 @@ export function closeTabs(
       closedAt: context.now()
     })
   }
-  return applied(next, { closed, refused }, { stopPtyIds })
+  return applied(
+    next,
+    { closed, refused },
+    {
+      stopPtyIds,
+      affectedTerminalTabIds: [...affectedTerminalTabIds]
+    }
+  )
 }
 
 function recordClosedTerminalTabs(

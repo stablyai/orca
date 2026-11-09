@@ -20,7 +20,7 @@ export class DaemonHistoryRetirement {
     private readonly endpoint: DaemonEndpointIdentity,
     private readonly manager: HistoryManager,
     readonly id: string,
-    private readonly writer: NonNullable<ReturnType<HistoryManager['captureWriter']>>,
+    readonly writer: NonNullable<ReturnType<HistoryManager['captureWriter']>>,
     queue: CheckpointSessionQueue,
     private readonly release: () => void
   ) {

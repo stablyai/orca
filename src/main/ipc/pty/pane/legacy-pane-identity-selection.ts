@@ -293,9 +293,9 @@ export function legacyPaneIdentitySelection(
       if (!prospective || !(await prospective.current())) {
         throw new Error('Terminal spawn target changed')
       }
+      target.sessionId = canonicalId
       bindProspectivePtySpawn(target, provider, prospective)
       const selection = { id: canonicalId, attempt }
-      target.sessionId = canonicalId
       Object.assign(target, { [selectedIdentity]: selection })
     }
   }

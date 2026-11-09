@@ -85,12 +85,10 @@ export abstract class DaemonPtyFencedTermination extends DaemonPtyPreservedHostL
           if (this.historyRetirements.get(id) === captured) {
             this.historyRetirements.delete(id)
           }
-          this.keepHistoryShutdowns.delete(captured.completion)
         }
       )
       retirement = captured
       this.historyRetirements.set(id, captured)
-      this.keepHistoryShutdowns.add(captured.completion)
     }
     if (policy.keepHistory && retirement?.incarnationId !== expectedIncarnationId) {
       return { outcome: 'refused', reason: 'replaced' }

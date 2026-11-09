@@ -14,6 +14,7 @@ import type { DaemonRouterRetirement } from './daemon-router-retirement'
 import { findLegacySessionOwner } from './daemon-router-legacy-owner'
 import { routeSpawnOrHold } from './daemon-router-newer-daemon-hold'
 import { isHoldingForNewerProtocolDaemon } from './daemon-newer-protocol-hold'
+import { normalizeFreshPtySessionId } from '../../sessions/pty-session-id'
 export class DaemonRouterSpawnAuthority {
   private closed = false
   constructor(
@@ -36,6 +37,8 @@ export class DaemonRouterSpawnAuthority {
   }
 
   async admit(opts: PtySpawnOptions) {
+    Object.assign(opts, normalizeFreshPtySessionId(opts))
+    opts = { ...opts }
     if (this.closed || this.retirement.admissionClosed) {
       return null
     }
@@ -58,6 +61,9 @@ export class DaemonRouterSpawnAuthority {
         return null
       }
       return {
+        sessionId: opts.sessionId,
+        isNewSession: opts.isNewSession,
+        attachOnly: opts.attachOnly,
         target,
         nested,
         currentSync: () =>
@@ -90,13 +96,14 @@ export class DaemonRouterSpawnAuthority {
     if (this.closed || this.retirement.admissionClosed) {
       throw new Error('Terminal daemon is decommissioning')
     }
+    const admission = await validateProspectivePtySpawn(this.owner, opts)
+    opts = normalizeFreshPtySessionId(opts)
     // Retirement census must account for spawns that have not published their sessions yet.
     this.retirement.spawnInFlight++
     try {
       if (opts.attachOnly && opts.sessionId) {
         return await this.ownerResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
       }
-      const admission = await validateProspectivePtySpawn(this.owner, opts)
       const target = await this.spawnTarget(opts)
       if (admission?.target && admission.target !== target) {
         throw new Error('Terminal spawn target changed')

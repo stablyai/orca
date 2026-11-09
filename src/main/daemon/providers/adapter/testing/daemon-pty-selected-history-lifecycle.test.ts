@@ -1,9 +1,11 @@
+import { DaemonSpawner } from '../../../launch/daemon-spawner'
+import { installDaemonProvider, shutdownDaemon } from '../../lifecycle/daemon-provider-state'
 import { HistoryManager } from '../../../history/storage/history-manager'
 import { HistoryReader } from '../../../history/restoration/history-reader'
 import { pendingTerminalHistoryRetirement } from '../../../../pty/pending-terminal-history-retirement'
 import '../../../pty-subprocess/testing/mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { rmSync, readFileSync, mkdirSync } from 'node:fs'
+import { rmSync, readFileSync, mkdirSync, writeFileSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { PROTOCOL_VERSION } from '../../../protocol/daemon-protocol-version'
 import { DaemonClient } from '../../../transport/client/daemon-client'
@@ -44,7 +46,9 @@ const snapshot: TerminalSnapshot = {
 describe('selected history physical ownership', () => {
   let harness: Awaited<ReturnType<typeof startDaemonAdapterHarness>>
   let adapter: DaemonPtyAdapter
+  let expectedRetirementFailure: unknown
   beforeEach(async () => {
+    expectedRetirementFailure = undefined
     harness = await startDaemonAdapterHarness(() => createMockSubprocess())
     mkdirSync(join(harness.dir, 'history'), { mode: 0o700 })
     adapter = new DaemonPtyAdapter({
@@ -55,11 +59,206 @@ describe('selected history physical ownership', () => {
   })
   afterEach(async () => {
     vi.useRealTimers()
-    await adapter.dispose()
+    await adapter.dispose().catch((error: unknown) => {
+      if (error !== expectedRetirementFailure) {
+        throw error
+      }
+    })
     await harness.adapter.dispose()
     await harness.server.shutdown()
     rmSync(harness.dir, { recursive: true, force: true })
   })
+
+  it('finishes an admitted fenced stop before disconnecting and retains its history', async () => {
+    const result = await adapter.spawn({ sessionId: 'workspace@@d15c0fec', cols: 80, rows: 24 })
+    const manager = adapter.getHistoryManager()!
+    await manager.checkpoint(result.id, snapshot)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: hold the real kill RPC and observe the actual final checkpoint boundary.
+    const internals = adapter as unknown as {
+      client: DaemonClient
+      checkpointAllSessions(): Promise<void>
+    }
+    let release!: () => void
+    const gate = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let entered!: () => void
+    const admitted = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    let killed = false
+    const request = internals.client.request.bind(internals.client)
+    const requests = vi
+      .spyOn(internals.client, 'request')
+      .mockImplementation(async (type, args) => {
+        if (type === 'kill') {
+          entered()
+          await gate
+          expect(internals.client.isConnected()).toBe(true)
+          const outcome = await request(type, args)
+          killed = true
+          return outcome
+        }
+        return request(type, args)
+      })
+    const checkpoint = internals.checkpointAllSessions.bind(internals)
+    const checkpoints = vi
+      .spyOn(internals, 'checkpointAllSessions')
+      .mockImplementation(async () => {
+        expect(killed).toBe(true)
+        await checkpoint()
+      })
+    const stopping = adapter.killFenced(
+      preserveFencedTerminalHistory({
+        id: result.id,
+        expectedIncarnationId: result.incarnationId!,
+        requireNoAgentOwner: false,
+        requireUnattached: false
+      })
+    )
+    await admitted
+    const disconnecting = adapter.disconnectOnly()
+    void disconnecting.catch(() => {})
+    try {
+      // Allow quit's already-admitted continuation to run while the real kill reply is held.
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      release()
+      expect((await stopping).outcome).toBe('ended')
+      await disconnecting
+      expect(
+        await new HistoryReader(join(harness.dir, 'history')).detectColdRestore(result.id)
+      ).toMatchObject({ snapshotAnsi: 'before refused stop' })
+      await expect(adapter.listSessions()).rejects.toThrow()
+    } finally {
+      release()
+      await Promise.allSettled([stopping, disconnecting])
+      checkpoints.mockRestore()
+      requests.mockRestore()
+    }
+  })
+
+  it.each([false, true])(
+    'rejects failed settlement after draining real work and preserves exact retry (successor: %s)',
+    async (successorTakesOver) => {
+      const result = await adapter.spawn({ sessionId: 'workspace@@fa11ed00', cols: 80, rows: 24 })
+      const manager = adapter.getHistoryManager()!
+      await manager.openSession('9', { cwd: '/source', cols: 80, rows: 24 })
+      await manager.checkpoint('9', snapshot)
+      await manager.openSession('workspace@@unrelated', { cwd: '/other', cols: 80, rows: 24 })
+      await manager.checkpoint(result.id, snapshot)
+      const sourcePath = join(harness.dir, 'history/9/checkpoint.json')
+      const source = readFileSync(sourcePath)
+      const metadata = join(
+        harness.dir,
+        'history',
+        getHistorySessionDirName(result.id),
+        'meta.json'
+      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: delay the real adapter-owned persistence queue.
+      const { checkpointQueue } = adapter as unknown as { checkpointQueue: CheckpointSessionQueue }
+      const tailGate = Promise.withResolvers<void>()
+      const tailEntered = Promise.withResolvers<void>()
+      const tail = checkpointQueue.run(result.id, async (receipt) => {
+        tailEntered.resolve()
+        await tailGate.promise
+        await manager.checkpoint(
+          result.id,
+          { ...snapshot, snapshotAnsi: 'last owned screen' },
+          undefined,
+          receipt
+        )
+      })
+      await tailEntered.promise
+      const request = {
+        id: result.id,
+        expectedIncarnationId: result.incarnationId!,
+        requireNoAgentOwner: false,
+        requireUnattached: false
+      }
+      const exit = Promise.withResolvers<void>()
+      const unsubscribe = adapter.onExit((event) => {
+        if (event.id === result.id) {
+          exit.resolve()
+        }
+      })
+      const stopping = adapter.killFenced(preserveFencedTerminalHistory({ ...request }))
+      const retirement = adapter[pendingTerminalHistoryRetirement](request)!
+      const releaseHold = retirement.hold()
+      retirement.removeHistory()
+      const obstruction = join(harness.dir, 'history/.pending-delete')
+      writeFileSync(obstruction, 'owned settlement obstruction')
+      await exit.promise
+      unsubscribe()
+      const spawner = new DaemonSpawner({
+        runtimeDir: harness.dir,
+        launcher: async () => {
+          throw new Error('No process launch in this test')
+        }
+      })
+      const shutdown = vi.spyOn(spawner, 'shutdown').mockResolvedValue()
+      installDaemonProvider(spawner, adapter)
+      let completed = false
+      void retirement.completion.then(() => {
+        completed = true
+      })
+      const disposing = shutdownDaemon()
+      const rejected = expect(disposing).rejects.toThrow()
+      try {
+        expect(manager.hasWriter(result.id)).toBe(true)
+        expect(JSON.parse(readFileSync(metadata, 'utf8')).endedAt).toBeNull()
+        expect(shutdown).not.toHaveBeenCalled()
+        tailGate.resolve()
+        await tail
+        releaseHold()
+        expect((await stopping).outcome).toBe('refused')
+        await disposing.catch((error: unknown) => {
+          expectedRetirementFailure = error
+        })
+        await rejected
+        expect(shutdown).toHaveBeenCalledOnce()
+        expect(completed).toBe(false)
+        expect(manager.hasWriter(result.id)).toBe(true)
+        expect(manager.hasWriter('workspace@@unrelated')).toBe(false)
+        expect(JSON.parse(readFileSync(metadata, 'utf8')).endedAt).toBeNull()
+        expect(
+          await new HistoryReader(join(harness.dir, 'history')).detectColdRestore(result.id)
+        ).toMatchObject({ snapshotAnsi: 'last owned screen' })
+        if (successorTakesOver) {
+          const successor = new HistoryManager(join(harness.dir, 'history'))
+          try {
+            await successor.registerWriter(result.id)
+            expect(
+              await successor.checkpoint(result.id, {
+                ...snapshot,
+                snapshotAnsi: 'successor owns screen'
+              })
+            ).toBe('committed')
+          } finally {
+            await successor.releaseIdentity('detach')
+          }
+        }
+        unlinkSync(obstruction)
+        await retirement.finish(true)
+        await retirement.completion
+        expect(completed).toBe(true)
+        expect(manager.hasWriter(result.id)).toBe(false)
+        expect(readFileSync(sourcePath)).toEqual(source)
+        const screen = await new HistoryReader(join(harness.dir, 'history')).detectColdRestore(
+          result.id
+        )
+        if (successorTakesOver) {
+          expect(screen).toMatchObject({ snapshotAnsi: 'successor owns screen' })
+        } else {
+          expect(screen).toBeNull()
+        }
+      } finally {
+        tailGate.resolve()
+        releaseHold()
+        await Promise.allSettled([tail, stopping, disposing])
+        shutdown.mockRestore()
+      }
+    }
+  )
 
   it.each([3, 30])(
     'only the current adapter answers census after %i real adapter retirements',
