@@ -1,4 +1,7 @@
-import { resolveWorkerLineageFacts } from '../db/dispatch-context/worker-follow-up-plan'
+import {
+  refusesWorkerFollowUp,
+  resolveWorkerLineageFacts
+} from '../db/dispatch-context/worker-follow-up-plan'
 import {
   createWorkerFollowUpQualification,
   planSemanticWorkerFollowUp,
@@ -91,7 +94,7 @@ export function createCrewRecipientMailboxSelection({
               row.id
             ),
           'status',
-          (id) => followUpNode(id)?.protocol_version != null,
+          (id) => refusesWorkerFollowUp(followUpNode(id)?.protocol_version),
           (id) => Boolean(followUpNode(id)?.has_worker)
         )
       : undefined

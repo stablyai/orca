@@ -5,6 +5,8 @@ import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_FOLLOW_UP_PROTOCOL_VERSION,
+  ORCHESTRATION_FEDERATION_FOLLOW_UP_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION,
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
@@ -42,7 +44,7 @@ import {
 } from '../../../../orchestration/workers/launch/worker-launch-observation'
 
 export async function startFederatedWorker(args: FederatedWorkerStartRequest): Promise<unknown> {
-  const { params, runtime, db, task, orchestrationMutation } = args
+  const { params, runtime, db, task, orchestrationMutation, followUp } = args
   const recordStart = prepareWorkerStartCard(runtime, args.callerSession)
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
     throw new OrchestrationError(
@@ -50,7 +52,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
       '--timeout-ms is too large for worker-start transport grace; the derived timeout must fit within the timer limit.'
     )
   }
-  if (!orchestrationMutation) {
+  if (!orchestrationMutation && !followUp) {
     throw new OrchestrationError(
       'invalid_argument',
       'Remote worker-start requires a durable retry request.'
@@ -114,13 +116,18 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
   const supportsControlMail = status.capabilities?.includes(
     ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
   )
-  const federationProtocolVersion =
+  const supportsLifecycleSettlement =
     supportsControlMail &&
     status.capabilities?.includes(ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY)
-      ? ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
-      : supportsControlMail
-        ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
-        : 1
+  const federationProtocolVersion =
+    supportsLifecycleSettlement &&
+    status.capabilities?.includes(ORCHESTRATION_FEDERATION_FOLLOW_UP_RUNTIME_CAPABILITY)
+      ? ORCHESTRATION_FEDERATION_FOLLOW_UP_PROTOCOL_VERSION
+      : supportsLifecycleSettlement
+        ? ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
+        : supportsControlMail
+          ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
+          : 1
 
   const setupDecision = createsWorktree ? (params.setup ?? 'run') : 'not_applicable'
   const runId = args.bindRunId()
@@ -154,6 +161,9 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
     },
     runtimeEpoch: runtime.getRuntimeId(),
     mutationReceipt: orchestrationMutation,
+    followUpOf: followUp?.of,
+    acceptedBy: followUp?.acceptedBy,
+    takesMailOf: followUp?.takesMailOf,
     federation: {
       environmentId: server.environmentId,
       environmentName: server.name,
@@ -206,7 +216,8 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           devMode: params.devMode
         },
         budgets.attachDeadlineMs,
-        { orchestrationRequestId: orchestrationMutation.requestId },
+        // A follow-up's send replays its own receipt, so its Dispatch keys the attach.
+        { orchestrationRequestId: orchestrationMutation?.requestId ?? started.dispatch.id },
         { contractVerified: true, ...pairingFence }
       )
     )

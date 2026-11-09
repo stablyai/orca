@@ -4,7 +4,10 @@ import {
   resolveWorkerLineage,
   type WorkerLineage
 } from '../../db/dispatch-context/worker-follow-up-lineage'
-import { selectWorkerFollowUpPlan } from '../../db/dispatch-context/worker-follow-up-plan'
+import {
+  refusesWorkerFollowUp,
+  selectWorkerFollowUpPlan
+} from '../../db/dispatch-context/worker-follow-up-plan'
 import { hasLifecycleAuthority } from '../lifecycle/lifecycle-reconciliation'
 import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { ReportFollowUpAction } from '../../../../../shared/orchestration/mailbox/orchestration-report-follow-up'
@@ -66,7 +69,7 @@ export function reportFollowUpAction(
     dispatch,
     () => resolveWorkerLineage(db, dispatchId, undefined, lineageCache),
     'status',
-    (id) => Boolean(db.getFederatedDispatch(id)),
+    (id) => refusesWorkerFollowUp(db.getFederatedDispatch(id)?.protocol_version),
     (id) => Boolean(db.getWorkerDispatch(id))
   )
   if (plan?.kind === 'start') {

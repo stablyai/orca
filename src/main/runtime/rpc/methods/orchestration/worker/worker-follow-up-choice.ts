@@ -24,7 +24,7 @@ import {
   reopenWorkerTerminal,
   type WorkerFollowUp
 } from './worker-follow-up-placement'
-import { inspectWorkerTerminal } from './worker-observation'
+import { callFederatedWorkerShow, inspectWorkerTerminal } from './worker-observation'
 import { completeWorkerTerminalRelease } from './worker-release-completion'
 
 const RELEASE_SETTLE_WAIT_MS = 15_000
@@ -36,6 +36,8 @@ export type LeftoverShellRelease = { admit: () => void; requested: (dispatchId: 
 
 export type WorkerFollowUpPlacement = {
   delivery: WorkerFollowUpDelivery
+  /** The paired server the worker ran on; its worktree and terminal ids are that server's. */
+  on?: string
   worktreeId: string
   terminal?: string
   agent?: string
@@ -53,6 +55,9 @@ export async function chooseWorkerFollowUpPlacement(
   found: WorkerTerminalResourceRow | undefined,
   release: LeftoverShellRelease
 ): Promise<WorkerFollowUpPlacement> {
+  if (db.getFederatedDispatch(latest.id)) {
+    return chooseFederatedFollowUpPlacement(runtime, db, latest)
+  }
   const worker = db.getWorkerDispatch(found?.origin_dispatch_id ?? latest.id)
   const worktreeId = found?.worktree_id ?? worker?.worktree_id
   if (!worker || !worktreeId) {
@@ -111,6 +116,66 @@ export async function chooseWorkerFollowUpPlacement(
     ...(options.effort ? { effort: options.effort } : {}),
     earlierWork: earlierWork(db, latest)
   }
+}
+
+/** A worker on a paired server continues in its terminal there while its agent runs; once its agent is proven
+ *  gone or its terminal released, a fresh agent of the same kind starts in its workspace there. Never a guess. */
+async function chooseFederatedFollowUpPlacement(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  latest: DispatchContextRow
+): Promise<WorkerFollowUpPlacement> {
+  // A follow-up that never got a worker there continues the nearest one before it that did.
+  const lineage = federatedLineage(db, latest)
+  const ran = lineage.find((row) => db.getFederatedDispatch(row.id)?.remote_worktree_id)
+  const federated = ran && db.getFederatedDispatch(ran.id)
+  if (!ran || !federated?.remote_worktree_id) {
+    throw notRestartable(latest.id)
+  }
+  const { observation, attachment } = await callFederatedWorkerShow(runtime, federated)
+  const placed = { on: federated.environment_id, worktreeId: federated.remote_worktree_id }
+  if (
+    observation.status === 'live' &&
+    observation.exactWorker &&
+    attachment.terminal_handle &&
+    attachment.stage !== 'released'
+  ) {
+    return { ...placed, delivery: 'follow_up', terminal: attachment.terminal_handle }
+  }
+  if (observation.status !== 'exited' && attachment.stage !== 'released') {
+    throw unverifiable(ran.id, observation.reason ?? `its server reads it as ${observation.status}`)
+  }
+  // An in-place follow-up records no agent of its own, so the kind comes from the start that launched one.
+  const options = lineage
+    .map((row) => parseStartOptions(db.getWorkerDispatch(row.id)?.start_options ?? ''))
+    .find((parsed) => parsed.agent)
+  if (!options?.agent) {
+    throw notRestartable(latest.id)
+  }
+  return {
+    ...placed,
+    delivery: 'started_fresh',
+    agent: options.agent,
+    ...(options.model ? { model: options.model } : {}),
+    ...(options.effort ? { effort: options.effort } : {}),
+    earlierWork: earlierWork(db, latest)
+  }
+}
+
+/** The Dispatch and the ones it follows up, newest first. */
+function federatedLineage(db: OrchestrationDb, latest: DispatchContextRow): DispatchContextRow[] {
+  const rows = [latest]
+  const seen = new Set([latest.id])
+  for (let row = latest; row.follow_up_of_dispatch_id && !seen.has(row.follow_up_of_dispatch_id);) {
+    const prior = db.getDispatchContextById(row.follow_up_of_dispatch_id)
+    if (!prior) {
+      break
+    }
+    seen.add(prior.id)
+    rows.push(prior)
+    row = prior
+  }
+  return rows
 }
 
 /** The handle a follow-up takes in place, or null once its agent is proven gone; never a guess. */

@@ -1,4 +1,5 @@
 import type { crewRecipientOwnerQueries, DispatchInput } from './crew-recipient-owner-queries'
+import { refusesWorkerFollowUp } from '../db/dispatch-context/worker-follow-up-plan'
 
 export function createCrewRecipientFollowUpInputs(
   query: Pick<ReturnType<typeof crewRecipientOwnerQueries>, 'followUps'>
@@ -8,7 +9,7 @@ export function createCrewRecipientFollowUpInputs(
     const seeds = selected
       .filter(
         (row) =>
-          row.protocol_version === null &&
+          !refusesWorkerFollowUp(row.protocol_version) &&
           row.status !== 'pending' &&
           row.status !== 'dispatched' &&
           (row.worker_state !== null ||

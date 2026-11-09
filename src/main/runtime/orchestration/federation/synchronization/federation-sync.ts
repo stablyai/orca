@@ -16,6 +16,7 @@ import {
   resolveFederatedLifecycleSettlementCapability
 } from './federation-sync-capability'
 import { getOrchestrationPeerCapabilityCache } from '../orchestration-peer-capability-cache'
+import { applyConfirmedFederatedReleaseHomeProjection } from '../../../rpc/methods/orchestration/federation/federated-worker-release'
 import {
   parseFederatedLifecycle,
   parseRelayedMessage,
@@ -234,8 +235,13 @@ async function syncFederatedDispatchPages(
       isCurrent
     ).catch(() => undefined)
   }
+  const takesLateMail = db.federatedDispatchTakesLateMail(dispatchId)
+  if (takesLateMail && pulled.retainsWorker === false && isCurrent()) {
+    // Its server no longer holds the finished worker, so nothing more can come from it.
+    applyConfirmedFederatedReleaseHomeProjection(db, dispatchId)
+  }
   const toWorker =
-    db.getWorkerDispatch(dispatchId)?.state === 'ready'
+    db.getWorkerDispatch(dispatchId)?.state === 'ready' || takesLateMail
       ? db.listPendingFederationRelay(dispatchId, 'to_worker')
       : []
   let outgoing = toWorker.map(federationRelayWireItem)

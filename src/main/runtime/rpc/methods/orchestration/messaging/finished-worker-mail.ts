@@ -7,6 +7,9 @@ import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-contex
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
 import type { MessageRouting } from '../routing'
+import type { z } from 'zod'
+import type { SendParams } from './send-params'
+import { findFinishedRemoteWorkerAttachment } from '../../../../orchestration/db/federation/remote-attachment-late-mail'
 
 /** A terminal also proves its process, so a new process in the same pane is not taken for the old worker;
  *  a session caller is already bound to its own identity. */
@@ -85,7 +88,63 @@ export function finishedWorkerSend<P extends { to?: string; type?: string }>(
   }
 }
 
-/** A finished worker on a paired host cannot reach its coordinator yet; say why instead of a bare refusal. */
+/** Late mail from a finished worker this host runs for another computer goes home over its relay as ordinary
+ *  mail, as a finished local worker's does: no report or escalation reopens the Task. Undefined: not such mail. */
+export function relayFinishedRemoteWorkerMail(
+  db: OrchestrationDb,
+  sender: { from: string; paneKey: string | undefined; processIncarnation: string | undefined },
+  params: z.infer<typeof SendParams>
+) {
+  const attachment = findFinishedRemoteWorkerAttachment(
+    db,
+    sender.paneKey,
+    sender.processIncarnation
+  )
+  if (
+    !attachment ||
+    params.type === 'heartbeat' ||
+    (params.to && params.to !== `dispatch:${attachment.dispatch_id}`)
+  ) {
+    refuseFinishedRemoteWorker(db, sender.paneKey, params.to)
+    return undefined
+  }
+  const type = isDispatchMutationMessageType(params.type) ? 'status' : (params.type ?? 'status')
+  // The Run home pulls it; this host never dials home.
+  const relay = db.enqueueFederationRelay({
+    dispatchId: attachment.dispatch_id,
+    direction: 'to_home',
+    kind: type,
+    payload: JSON.stringify({
+      from: sender.from,
+      subject: params.subject,
+      body: params.body ?? '',
+      type,
+      priority: params.priority ?? 'normal',
+      threadId: params.threadId ?? null,
+      payload: params.payload ?? null
+    })
+  })
+  return {
+    relay: {
+      messageId: relay.message_id,
+      sequence: relay.sequence,
+      dispatchId: relay.dispatch_id,
+      destination: 'run_home',
+      accepted: true
+    },
+    ...(params.type === 'worker_done'
+      ? {
+          lifecycle: {
+            action: 'settled',
+            outcome: attachment.state === 'succeeded' ? 'succeeded' : 'failed'
+          },
+          next: 'Delivered to your coordinator as a message; your finished task is unchanged. End your turn.'
+        }
+      : {})
+  }
+}
+
+/** A finished worker on a paired host whose Run home cannot take late mail; say why instead of a bare refusal. */
 export function refuseFinishedRemoteWorker(
   db: OrchestrationDb,
   paneKey: string | undefined,
@@ -95,7 +154,7 @@ export function refuseFinishedRemoteWorker(
   if (attachment && (!to || to === `dispatch:${attachment.dispatch_id}`)) {
     throw new OrchestrationError(
       'run_home_unreachable',
-      `Dispatch ${attachment.dispatch_id} has finished, and its coordinator runs on another computer that a finished worker cannot reach yet. Nothing was sent; give the message to the user instead.`
+      `Dispatch ${attachment.dispatch_id} has finished, and its coordinator runs on another computer whose Orca is too old to take mail from a finished worker. Nothing was sent; give the message to the user instead.`
     )
   }
 }
