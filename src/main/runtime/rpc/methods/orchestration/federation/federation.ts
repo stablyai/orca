@@ -36,6 +36,7 @@ import {
   sendFederatedWorkerBrief,
   type StructuredSession
 } from './federated-worker-brief'
+import { ORCHESTRATION_FEDERATION_CHAT_WORKERS_PROTOCOL_VERSION } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
 import { claimTerminalForRemoteAttach } from '../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
@@ -107,10 +108,13 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
       let terminalHandle = params.terminal
       let terminalCreation: RuntimeTerminalCreate | undefined
       let structuredSession: StructuredSession | null = null
-      // This host decides chat or terminal from its own settings, as a local start does.
+      // This host decides chat or terminal from its own settings, as a local start does; a home too old
+      // to know a chat worker gets the terminal it expects.
       let mode = decideWorkerStartMode({
         params: { agent, terminal: params.terminal, worktree: params.worktree },
-        settings: readWorkerStartModeSettings(runtime)
+        settings: readWorkerStartModeSettings(runtime),
+        terminalOnly:
+          params.protocolVersion < ORCHESTRATION_FEDERATION_CHAT_WORKERS_PROTOCOL_VERSION
       })
       const setupSource = federatedSetupSource(params, createsWorktree)
       let setup = initialFederatedSetup(params, createsWorktree, setupSource)

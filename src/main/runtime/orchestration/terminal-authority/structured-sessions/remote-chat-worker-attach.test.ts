@@ -85,7 +85,7 @@ async function startedChatWorker() {
     dispatchId: DISPATCH,
     taskId: 'task_home',
     taskSpec: 'Check the docs and report.',
-    protocolVersion: 4,
+    protocolVersion: 5,
     worktree: 'id:workspace-1',
     agent: 'codex'
   })
@@ -281,7 +281,7 @@ describe('a chat worker that a coordinator on another computer starts here', () 
       dispatchId: DISPATCH,
       taskId: 'task_home',
       taskSpec: 'Check the docs and report.',
-      protocolVersion: 4,
+      protocolVersion: 5,
       worktree: 'new-top-level',
       repo: 'id:repo',
       agent: 'codex'
@@ -297,5 +297,28 @@ describe('a chat worker that a coordinator on another computer starts here', () 
     const handle = String(db.getRemoteDispatchAttachment(DISPATCH)?.terminal_handle)
     await settleTurn(resolveStructuredWorkerIdentity(handle, db)!.sessionId, 0)
     await expect(started).resolves.toMatchObject({ state: 'ready', mode: { mode: 'structured' } })
+  })
+
+  it('starts a terminal, as before, for a home too old to know a chat worker', async () => {
+    const createTerminal = vi
+      .spyOn(runtime, 'createTerminal')
+      .mockRejectedValue(new Error('terminal launch reached'))
+
+    await expect(
+      federation('orchestration.federationAttachStart', {
+        runId: 'run_home',
+        dispatchId: DISPATCH,
+        taskId: 'task_home',
+        taskSpec: 'Check the docs and report.',
+        protocolVersion: 4,
+        worktree: 'id:workspace-1',
+        agent: 'codex'
+      })
+    ).resolves.toMatchObject({ state: 'failed', lastError: 'terminal launch reached' })
+    expect(createTerminal).toHaveBeenCalledWith(
+      'id:workspace-1',
+      expect.objectContaining({ startupAgent: 'codex' })
+    )
+    expect(sessionCreate.createStructuredAgentSessionForWorktree).not.toHaveBeenCalled()
   })
 })

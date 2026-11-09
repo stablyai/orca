@@ -37,9 +37,14 @@ export const ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY =
 /** A finished remote worker takes follow-ups here and can still mail and ask its Run home. */
 export const ORCHESTRATION_FEDERATION_FOLLOW_UP_RUNTIME_CAPABILITY =
   'orchestration.federation-follow-up.v1' as const
+/** This server starts a remote worker as a chat when its own settings prefer chats and the home asks for it. */
+export const ORCHESTRATION_FEDERATION_CHAT_WORKERS_RUNTIME_CAPABILITY =
+  'orchestration.federation-chat-workers.v1' as const
 export const ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION = 2 as const
 export const ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION = 3 as const
 export const ORCHESTRATION_FEDERATION_FOLLOW_UP_PROTOCOL_VERSION = 4 as const
+/** The home understands a chat worker in the receipt; an older home always gets a terminal. */
+export const ORCHESTRATION_FEDERATION_CHAT_WORKERS_PROTOCOL_VERSION = 5 as const
 export const ORCHESTRATION_CONTRACT_VERSION = 1 as const
 export const ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY = 'orchestration.contract.v1' as const
 
@@ -60,5 +65,38 @@ export const ORCHESTRATION_RUNTIME_CAPABILITIES = [
   ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY,
   ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_FOLLOW_UP_RUNTIME_CAPABILITY,
+  ORCHESTRATION_FEDERATION_CHAT_WORKERS_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY
 ] as const
+
+/** The newest federated protocol both sides speak; each version needs every earlier one's capability. */
+export function federationProtocolVersionFor(
+  capabilities: readonly string[] | undefined
+): 1 | 2 | 3 | 4 | 5 {
+  const ladder = [
+    [
+      ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
+      ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
+    ],
+    [
+      ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
+      ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
+    ],
+    [
+      ORCHESTRATION_FEDERATION_FOLLOW_UP_RUNTIME_CAPABILITY,
+      ORCHESTRATION_FEDERATION_FOLLOW_UP_PROTOCOL_VERSION
+    ],
+    [
+      ORCHESTRATION_FEDERATION_CHAT_WORKERS_RUNTIME_CAPABILITY,
+      ORCHESTRATION_FEDERATION_CHAT_WORKERS_PROTOCOL_VERSION
+    ]
+  ] as const
+  let version: 1 | 2 | 3 | 4 | 5 = 1
+  for (const [capability, next] of ladder) {
+    if (!capabilities?.includes(capability)) {
+      break
+    }
+    version = next
+  }
+  return version
+}

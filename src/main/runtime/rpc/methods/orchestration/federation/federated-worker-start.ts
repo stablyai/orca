@@ -2,13 +2,8 @@ import type { FederatedWorkerStartRequest } from './federated-worker-start-reque
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import {
+  federationProtocolVersionFor,
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
-  ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_FOLLOW_UP_PROTOCOL_VERSION,
-  ORCHESTRATION_FEDERATION_FOLLOW_UP_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION,
-  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
 } from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
@@ -114,21 +109,7 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           serverName: server.name
         })
       : undefined
-  const supportsControlMail = status.capabilities?.includes(
-    ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY
-  )
-  const supportsLifecycleSettlement =
-    supportsControlMail &&
-    status.capabilities?.includes(ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY)
-  const federationProtocolVersion =
-    supportsLifecycleSettlement &&
-    status.capabilities?.includes(ORCHESTRATION_FEDERATION_FOLLOW_UP_RUNTIME_CAPABILITY)
-      ? ORCHESTRATION_FEDERATION_FOLLOW_UP_PROTOCOL_VERSION
-      : supportsLifecycleSettlement
-        ? ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION
-        : supportsControlMail
-          ? ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION
-          : 1
+  const federationProtocolVersion = federationProtocolVersionFor(status.capabilities)
 
   const setupDecision = createsWorktree ? (params.setup ?? 'run') : 'not_applicable'
   const runId = args.bindRunId()
