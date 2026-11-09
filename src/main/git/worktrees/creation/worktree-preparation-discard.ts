@@ -43,7 +43,19 @@ async function verifyDiscardPreparationOwner(
   originalLockPath?: string | null
 ): Promise<string | null> {
   try {
-    return dirname(await verifyWorktreePreparationLock(worktreePath, expectedLockReason, options))
+    const gitDir = dirname(
+      await verifyWorktreePreparationLock(worktreePath, expectedLockReason, options)
+    )
+    if (originalLockPath) {
+      const [actual, original] = await Promise.all([
+        realpath(gitDir),
+        realpath(dirname(originalLockPath))
+      ])
+      if (canonicalWorktreePath(actual) !== canonicalWorktreePath(original)) {
+        throw new WorktreePreparationLockOwnershipError(undefined, true)
+      }
+    }
+    return gitDir
   } catch (error) {
     const hostPath = resolveWorktreeHostPath(worktreePath, options)
     const hostRepo = resolveWorktreeHostPath(repoPath, options)

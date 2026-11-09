@@ -168,3 +168,20 @@ it.runIf(process.platform !== 'win32')('does not follow a symlink ownership mark
   expect(spy.mock.calls.some(([args]) => args.includes('remove'))).toBe(false)
   expect(await readFile(externalLock, 'utf8')).toBe(`${reason}\n`)
 })
+
+it('preserves a replacement even when its ownership text was copied', async () => {
+  const { repo, prepared, lock, reason } = await fixture()
+  const replacement = join(dirname(repo), 'replacement')
+  await runner.gitExecFileAsync(['worktree', 'add', '--detach', replacement, 'HEAD'], { cwd: repo })
+  await runner.gitExecFileAsync(['worktree', 'lock', '--reason', reason, replacement], {
+    cwd: repo
+  })
+  const pointer = await readFile(join(replacement, '.git'), 'utf8')
+  await writeFile(join(prepared, '.git'), pointer)
+  await writeFile(join(prepared, 'user.txt'), 'preserve replacement\n')
+  await expect(performDiscardPreparedWorktree(repo, prepared, {}, reason, lock)).rejects.toThrow(
+    'lock owner changed'
+  )
+  expect(await readFile(join(prepared, 'user.txt'), 'utf8')).toBe('preserve replacement\n')
+  expect(await readFile(lock, 'utf8')).toBe(`${reason}\n`)
+})
