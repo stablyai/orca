@@ -113,7 +113,11 @@ export function useFileExplorerRowScrolling({
     [cancelRevealTimers]
   )
 
+  const followActiveFile = useAppStore(
+    (state) => state.settings?.fileExplorerFollowsActiveFile !== false
+  )
   useFileExplorerAutoReveal({
+    followActiveFile,
     activeFileId,
     activeWorktreeId,
     worktreePath,

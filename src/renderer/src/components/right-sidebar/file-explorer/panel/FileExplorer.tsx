@@ -13,6 +13,7 @@ import {
   getExplorerEffectiveExpanded
 } from '../navigation/file-explorer-display-root'
 import { FileExplorerScopeNotice } from './FileExplorerScopeNotice'
+import { explorerActiveFileId } from './file-explorer-active-file'
 import { useFileExplorerRootNavigation } from '../navigation/use-file-explorer-root-navigation'
 import { useFileExplorerScopeTransition } from '../navigation/use-file-explorer-scope-transition'
 import { basename } from '@/lib/path'
@@ -71,7 +72,7 @@ function FileExplorerFiles(): React.JSX.Element {
     activeWorktreeId ? s.expandedDirs[activeWorktreeId] : undefined
   )
   const collapseAllDirs = useAppStore((s) => s.collapseAllDirs)
-  const activeFileId = useAppStore((s) => s.activeFileId)
+  const activeFileId = useAppStore(explorerActiveFileId)
   const openFiles = useAppStore((s) => s.openFiles)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const showDotfiles = useAppStore((s) =>
