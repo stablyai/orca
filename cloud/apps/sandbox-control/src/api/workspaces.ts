@@ -103,7 +103,8 @@ export async function listWorkspaces(
   const where = [`account_id = ?`, `status <> 'destroyed'`]
   const binds: (string | number)[] = [accountId]
   if (!options.includeHidden) {
-    where.push('hidden = 0')
+    // Routine VMs are hidden once booted; the key prefix keeps them out while they boot too.
+    where.push(`hidden = 0 AND workspace_id NOT LIKE 'routine-%'`)
   }
   if (!options.includeArchived) {
     where.push('archived_at IS NULL')
@@ -146,12 +147,14 @@ export async function createWorkspace(
     origin: WorkspaceOrigin
     originRef?: string | null
     hidden?: boolean
+    /** Caller-chosen sandbox workspace key (routine runs use one derived from the run, so a crash mid-boot is findable). */
+    workspaceId?: string
   }
 ): Promise<WorkspaceRow> {
   const repo = input.repo ?? (input.project?.repo_url ? { url: input.project.repo_url, ...(input.project.default_ref ? { ref: input.project.default_ref } : {}) } : undefined)
   const ready = await createSandbox(life, caller, {
     // The desktop keys sandboxes by its own workspace id; API workspaces get a fresh one.
-    workspaceId: randomId(input.origin === 'routine' ? 'rtn' : 'api'),
+    workspaceId: input.workspaceId ?? randomId(input.origin === 'routine' ? 'rtn' : 'api'),
     machineSize: input.machineSize ?? input.project?.machine_size ?? 'standard',
     ...((input.region ?? input.project?.region) ? { region: (input.region ?? input.project?.region)! } : {}),
     ...(repo ? { repo } : {})

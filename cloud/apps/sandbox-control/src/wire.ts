@@ -24,7 +24,12 @@ export const CreateRequestSchema = z
         ref: z.string().min(1).max(255).optional()
       })
       .strict()
-      .optional()
+      .optional(),
+    environmentBuildId: z
+      .string()
+      .regex(/^bld_[0-9a-f]{8,40}$/)
+      .optional(),
+    useEnvironment: z.boolean().optional()
   })
   .strict()
 
@@ -59,7 +64,9 @@ export function sandboxView(row: SandboxRow, archivedAware = false) {
     machineSize: row.machine_size,
     region: row.region,
     session,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    // Only when set: desktop builds from before environments parse this view strictly.
+    ...(row.environment_build_id ? { environmentBuildId: row.environment_build_id } : {})
   }
 }
 

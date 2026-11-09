@@ -68,6 +68,8 @@ export type CreateSandboxParams = {
   tags: Record<string, string>
   /** Provider-side snapshot expiry after last use (backstop behind Orca's own retention); 0 = never. */
   snapshotExpirationMs: number
+  /** Default true (workspaces). Environment build boxes are throwaway: their output is a manual snapshot. */
+  persistent?: boolean
 }
 
 export type RunCommandParams = {

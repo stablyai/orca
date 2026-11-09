@@ -25,18 +25,29 @@ export function LocalPortRow({
   port,
   onStop,
   onShowDetails,
-  onOpenInBrowser
+  onOpenInBrowser,
+  forwardStatus,
+  forwardMenuItems,
+  forwardActions,
+  copyAddress
 }: {
   port: WorkspacePort
   onStop: (port: WorkspacePort) => void
   onShowDetails: (port: WorkspacePort) => void
   /** Absent when this client has no route to the port's host. */
   onOpenInBrowser?: (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => void
+  /** A remote host's port: where it is forwarded on this computer, or how to forward it. */
+  forwardStatus?: React.ReactNode
+  forwardMenuItems?: React.ReactNode
+  /** Hover actions for the forward (Stop Forwarding), next to Open/Copy. */
+  forwardActions?: React.ReactNode
+  /** Overrides the copied address, e.g. with the forwarded localhost one. */
+  copyAddress?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const handleCopy = useCallback(() => {
-    void window.api.ui.writeClipboardText(addressForPort(port))
-  }, [port])
+    void window.api.ui.writeClipboardText(copyAddress ?? addressForPort(port))
+  }, [copyAddress, port])
 
   const handleOpenBrowser = useCallback(
     (event?: React.MouseEvent<HTMLButtonElement>) => {
@@ -81,7 +92,7 @@ export function LocalPortRow({
     (port.pid
       ? `PID ${port.pid}`
       : t('auto.components.right.sidebar.PortsPanel.unknownProcess', 'Unknown process'))
-  const address = addressForPort(port)
+  const address = copyAddress ?? addressForPort(port)
   const ownerLabel =
     port.kind === 'workspace'
       ? port.owner.displayName
@@ -107,6 +118,7 @@ export function LocalPortRow({
           <div
             className="flex min-w-0 flex-1 items-center gap-2 rounded focus:outline-none focus-visible:ring-1 focus-visible:ring-ring"
             tabIndex={0}
+            role="group"
             aria-label={t(
               'auto.components.right.sidebar.PortsPanel.5be4f7f727',
               'Port {{value0}} menu',
@@ -121,10 +133,13 @@ export function LocalPortRow({
                 <span className="text-xs font-medium text-foreground">:{port.port}</span>
                 <span className="truncate text-xs text-muted-foreground">{processLabel}</span>
               </div>
-              <div className="flex min-w-0 items-center gap-1.5 text-[11px] text-muted-foreground">
-                <span className="truncate">{address}</span>
-              </div>
-              <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground/70">
+              {/* A remote host's own loopback address is not reachable here; the forward line says where it is. */}
+              {forwardStatus ?? (
+                <div className="flex min-w-0 items-center gap-1.5 text-2xs text-muted-foreground">
+                  <span className="truncate">{address}</span>
+                </div>
+              )}
+              <div className="flex min-w-0 items-center gap-1.5 text-3xs text-muted-foreground/70">
                 <span className="truncate">{ownerLabel}</span>
                 {confidenceLabel && (
                   <span className="shrink-0 text-muted-foreground/70">{confidenceLabel}</span>
@@ -135,6 +150,7 @@ export function LocalPortRow({
         </ContextMenuTrigger>
         <TooltipProvider>
           <div className="flex items-center gap-0.5 can-hover:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+            {forwardActions}
             {onOpenInBrowser && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -219,6 +235,7 @@ export function LocalPortRow({
           <Copy size={13} />
           {t('auto.components.right.sidebar.PortsPanel.792baeb7ed', 'Copy Address')}
         </ContextMenuItem>
+        {forwardMenuItems}
         <ContextMenuItem
           className={LOCAL_PORT_MENU_ITEM_CLASS}
           onSelect={() => {

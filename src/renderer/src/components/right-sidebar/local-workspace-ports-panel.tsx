@@ -27,6 +27,9 @@ import {
 import { LocalPortSection } from './local-port-section'
 import { LocalPortDetailsDialog } from './local-port-details-dialog'
 import { SshForwardedPortsSection } from './ssh-forwarded-ports-section'
+import { useRuntimePortRowForwarding } from './use-runtime-port-row-forwarding'
+import { RuntimeForwardedPortsSection } from './runtime-forwarded-ports-section'
+import { RuntimePortsEmptyText } from './runtime-ports-empty-text'
 
 export function LocalWorkspacePortsPanel({
   isVisible,
@@ -57,6 +60,7 @@ export function LocalWorkspacePortsPanel({
   })
 
   const scanKey = runtimeTarget ? `${workspacePortRuntimeTargetKey(runtimeTarget)}:all` : null
+  const runtimeForwarding = useRuntimePortRowForwarding(runtimeTarget)
 
   const refresh = useCallback(() => {
     if (!activeRepoId || !runtimeTarget || !scanKey) {
@@ -152,17 +156,23 @@ export function LocalWorkspacePortsPanel({
 
   const handleOpenPortInBrowser = useCallback(
     async (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => {
+      const openInOrcaBrowser = resolvePortOpenInOrcaBrowser({
+        settings,
+        event,
+        isMac: navigator.userAgent.includes('Mac')
+      })
+      if (runtimeForwarding && !openInOrcaBrowser) {
+        // A remote port reaches the system browser through a forward on this computer's localhost.
+        await runtimeForwarding.openLocally(port)
+        return
+      }
       const result = await openWorkspacePortInBrowser({
         port,
         activeWorktreeId: activeWorktree?.id,
         runtimeTarget,
         createBrowserTab,
         setRemoteBrowserPageHandle,
-        openInOrcaBrowser: resolvePortOpenInOrcaBrowser({
-          settings,
-          event,
-          isMac: navigator.userAgent.includes('Mac')
-        }),
+        openInOrcaBrowser,
         localhostLabelRoute: resolveLocalhostLabelRouteForPort(useAppStore.getState(), port)
       })
       if (!result.ok) {
@@ -175,7 +185,14 @@ export function LocalWorkspacePortsPanel({
         )
       }
     },
-    [activeWorktree?.id, createBrowserTab, runtimeTarget, setRemoteBrowserPageHandle, settings]
+    [
+      activeWorktree?.id,
+      createBrowserTab,
+      runtimeForwarding,
+      runtimeTarget,
+      setRemoteBrowserPageHandle,
+      settings
+    ]
   )
 
   const { activePorts, otherWorkspacePorts, externalPorts } = useMemo(
@@ -248,15 +265,20 @@ export function LocalWorkspacePortsPanel({
             title={t('auto.components.right.sidebar.PortsPanel.935dda7718', 'Active Workspace')}
             ports={activePorts}
             emptyText={
-              refreshing && !displayScan
-                ? t('auto.components.right.sidebar.PortsPanel.0d63d94db3', 'Scanning...')
-                : t('auto.components.right.sidebar.PortsPanel.38b16cfbef', 'No ports detected')
+              refreshing && !displayScan ? (
+                t('auto.components.right.sidebar.PortsPanel.0d63d94db3', 'Scanning...')
+              ) : runtimeForwarding ? (
+                <RuntimePortsEmptyText />
+              ) : (
+                t('auto.components.right.sidebar.PortsPanel.38b16cfbef', 'No ports detected')
+              )
             }
             collapsed={collapsedSections.active ?? false}
             onToggle={() => toggleSection('active')}
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
+            forwarding={runtimeForwarding?.forwarding}
           />
           <LocalPortSection
             id="other"
@@ -267,6 +289,7 @@ export function LocalWorkspacePortsPanel({
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
+            forwarding={runtimeForwarding?.forwarding}
           />
           <LocalPortSection
             id="external"
@@ -277,8 +300,16 @@ export function LocalWorkspacePortsPanel({
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
+            forwarding={runtimeForwarding?.forwarding}
           />
         </>
+      )}
+      {runtimeForwarding && (
+        <RuntimeForwardedPortsSection
+          forwards={runtimeForwarding.forwards.filter(
+            (forward) => !displayScan?.ports.some((port) => port.port === forward.remotePort)
+          )}
+        />
       )}
 
       {!displayScan?.unavailableReason &&
@@ -289,7 +320,11 @@ export function LocalWorkspacePortsPanel({
           <div className="flex flex-col items-center justify-center flex-1 px-4 text-center text-muted-foreground">
             <Server size={32} className="mb-3 opacity-50" />
             <p className="text-sm">
-              {t('auto.components.right.sidebar.PortsPanel.a2a9fc6899', 'No local ports detected')}
+              {runtimeForwarding ? (
+                <RuntimePortsEmptyText />
+              ) : (
+                t('auto.components.right.sidebar.PortsPanel.a2a9fc6899', 'No local ports detected')
+              )}
             </p>
           </div>
         )}

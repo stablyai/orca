@@ -58,7 +58,9 @@ export const HostedSandboxViewSchema = z
     machineSize: z.enum(HOSTED_SANDBOX_MACHINE_SIZES),
     region: z.string().min(1).max(32),
     session: HostedSandboxSessionSchema.nullable(),
-    createdAt: Millis
+    createdAt: Millis,
+    /** Org environment build this workspace booted from; null/absent for the plain image. */
+    environmentBuildId: Id.nullable().optional()
   })
   .strict()
 export type HostedSandboxView = z.infer<typeof HostedSandboxViewSchema>
@@ -85,7 +87,14 @@ export const HostedSandboxCreateRequestSchema = z
         ref: z.string().min(1).max(255).optional()
       })
       .strict()
-      .optional()
+      .optional(),
+    /** Boot from exactly this org environment build (rollback testing, pinned projects). */
+    environmentBuildId: z
+      .string()
+      .regex(/^bld_[0-9a-f]{8,40}$/)
+      .optional(),
+    /** Default true: boot from the active build of the org environment that lists the repo. */
+    useEnvironment: z.boolean().optional()
   })
   .strict()
 export type HostedSandboxCreateRequest = z.infer<typeof HostedSandboxCreateRequestSchema>

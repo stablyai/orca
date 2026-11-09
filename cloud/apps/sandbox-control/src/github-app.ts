@@ -22,6 +22,8 @@ export type GitHubAppMinter = {
   getInstallation(installationId: number): Promise<GitHubInstallation | null>
   /** The installation covering a github.com repo URL, or null. */
   getRepoInstallation(repoUrl: string): Promise<GitHubInstallation | null>
+  /** App-JWT request to an app-level endpoint (operator: /app, /app/hook/config). */
+  appRequest?(method: string, path: '/app' | '/app/hook/config', body?: unknown): Promise<Response>
 }
 
 /** Whether `accountId` holds a live binding to the installation. */
@@ -108,6 +110,8 @@ export function createGitHubAppMinter(config: {
 
   return {
     getInstallation: (installationId) => installationFor(`/app/installations/${installationId}`),
+
+    appRequest: (method, path, body) => github(method, path, body),
 
     async getRepoInstallation(repoUrl) {
       const parsed = parseGitHubRepo(repoUrl)

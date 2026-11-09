@@ -10,13 +10,16 @@ const outlineButtonClasses =
 // A slight press on the solid and outlined buttons; motion-safe so reduced motion keeps them still.
 const pressClasses = 'motion-safe:active:scale-[0.98]'
 
+// Disabled solid buttons fade like every other disabled variant, from a muted fill instead of a primary slab.
+const disabledSolidClasses = 'disabled:bg-muted disabled:text-muted-foreground'
+
 const buttonVariants = cva(
   "inline-flex shrink-0 items-center justify-center gap-2 rounded-md cursor-pointer text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: `bg-primary text-primary-foreground hover:bg-primary/90 ${pressClasses}`,
-        destructive: `bg-destructive text-white hover:bg-destructive/90 ${pressClasses} dark:bg-destructive/60`,
+        default: `bg-primary text-primary-foreground hover:bg-primary/90 ${pressClasses} ${disabledSolidClasses}`,
+        destructive: `bg-destructive text-white hover:bg-destructive/90 ${pressClasses} dark:bg-destructive/60 dark:disabled:bg-muted ${disabledSolidClasses}`,
         outline: `${outlineButtonClasses} ${pressClasses}`,
         'orchestration-tab': `${outlineButtonClasses} border-(--crew-border) bg-(--crew-surface) text-card-foreground shadow-floating dark:border-(--crew-border) dark:bg-(--crew-surface) dark:hover:bg-accent dark:hover:text-accent-foreground`,
         secondary: `bg-secondary text-secondary-foreground hover:bg-secondary/80 ${pressClasses}`,

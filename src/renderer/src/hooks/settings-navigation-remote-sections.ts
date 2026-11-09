@@ -9,6 +9,7 @@ import { getPrivacyPaneSearchEntries } from '@/components/settings/privacy/priva
 import { getRepositoryPaneSearchEntries } from '@/components/settings/repository/repository-search'
 import { buildSettingsProjectList } from '@/components/settings/navigation/settings-project-list'
 import { getSshPaneSearchEntries } from '@/components/settings/ssh/ssh-search'
+import { getPortsPaneSearchEntries } from '@/components/settings/ports/ports-search'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
@@ -20,6 +21,7 @@ import {
   Cable,
   FlaskConical,
   Lock,
+  Plug,
   Server,
   ShieldCheck,
   SlidersHorizontal,
@@ -67,6 +69,21 @@ export function buildRemoteSettingsSections(
       searchEntries: [runtimeEnvironmentsSearchEntry],
       group: 'remote'
     },
+    ...(showDesktopOnlySettings
+      ? [
+          {
+            id: 'ports',
+            title: t('auto.hooks.useSettingsNavigationMetadata.portsTitle', 'Ports'),
+            description: t(
+              'auto.hooks.useSettingsNavigationMetadata.portsDescription',
+              'Forward dev servers on remote hosts to localhost on this computer.'
+            ),
+            icon: Plug,
+            searchEntries: getPortsPaneSearchEntries(),
+            group: 'remote'
+          }
+        ]
+      : []),
     ...(showDesktopOnlySettings && isMac
       ? [
           {
