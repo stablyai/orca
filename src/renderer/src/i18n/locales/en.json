@@ -4090,7 +4090,6 @@
             "turnOnOverage": "Turn on overage",
             "openingGitHub": "Opening GitHub…",
             "connectGitHub": "Connect GitHub",
-            "pushToGitHubFirst": "Push to GitHub first",
             "planBody2": "Cloud workspaces are part of the Team plan. Nothing was created, and you weren’t charged.",
             "planBodyMember2": "Ask an owner or admin to choose a Team plan. Nothing was created, and you weren’t charged.",
             "outOfHoursTitle": "Out of sandbox hours",
@@ -4113,7 +4112,8 @@
             "networkBody3": "Check your internet connection, then try again. Nothing was created, and you weren’t charged.",
             "snapshotBody3": "The sandbox starts from a saved copy of your environment, and that copy couldn’t be found. Nothing was created, and you weren’t charged. Try again, or contact support if it keeps happening.",
             "connectGitHubFailed": "Couldn’t open GitHub. Try again in a moment.",
-            "noGithubRemoteBody2": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again. Nothing was created, and you weren’t charged."
+            "noGithubRemoteBody2": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again. Nothing was created, and you weren’t charged.",
+            "howToPushToGitHub": "How to push to GitHub"
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",
@@ -4122,7 +4122,8 @@
             "label": "Build log",
             "copyFailed": "Couldn’t copy the log.",
             "copiedStatus": "Log copied",
-            "hiddenLines": "Technical lines hidden: {{count}}. Copy log includes them."
+            "hiddenTechnicalLines_one": "{{count}} technical line hidden. Copy log includes it.",
+            "hiddenTechnicalLines_other": "{{count}} technical lines hidden. Copy log includes them."
           },
           "orcaCloudBuildLog": {
             "checkingPlan": "Checking your plan…",
@@ -4131,25 +4132,25 @@
             "connecting": "Connecting to the sandbox…",
             "resuming": "Waking the sandbox…",
             "suspending": "Putting the sandbox to sleep…",
-            "renewing": "Extending the session…",
             "rollingOver": "Starting a fresh session…",
             "destroying": "Deleting the sandbox…",
             "denyNoPlan": "Your account has no active Team plan.",
-            "denyHours": "This month’s included sandbox hours are used up.",
             "denySpendCap": "This month’s spend cap is reached.",
-            "denyPayment": "A payment is overdue.",
-            "denyConcurrency": "Your team’s limit on running cloud workspaces is reached.",
-            "denyMemberConcurrency": "Your limit on running cloud workspaces is reached.",
             "denyGithub": "GitHub isn’t connected to your Orca account.",
-            "denyMachineSize": "This machine size isn’t part of your plan.",
             "refusedBilling": "Orca Cloud couldn’t check your plan.",
-            "refusedProvider": "The sandbox provider is unavailable.",
             "refusedNotConfigured": "Orca Cloud isn’t set up on the server.",
             "refusedSignIn": "Orca Cloud needs you to sign in again.",
             "refused": "Orca Cloud refused the request.",
             "httpError": "Orca Cloud answered with an error.",
             "unreachable": "Couldn’t reach Orca Cloud.",
-            "timeout": "Orca Cloud didn’t answer in time."
+            "timeout": "Orca Cloud didn’t answer in time.",
+            "renewing2": "Keeping the sandbox running…",
+            "denyHours2": "Your team is out of sandbox hours this month.",
+            "denyPayment2": "Payment failed.",
+            "denyConcurrency2": "You’re at your team’s limit of running sandboxes.",
+            "denyMemberConcurrency2": "You’re at your limit of running sandboxes.",
+            "denyMachineSize2": "This sandbox size isn’t part of your plan.",
+            "refusedProvider2": "Orca Cloud is unavailable right now."
           },
           "environmentCheckCopy": {
             "gitMissing": "git isn’t installed.",

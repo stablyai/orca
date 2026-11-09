@@ -118,9 +118,12 @@ export function VmBuildLog({
           {hiddenCount > 0 ? (
             <span className="mr-auto text-xs text-muted-foreground">
               {t(
-                'auto.components.worktree.creation.VmBuildLog.hiddenLines',
-                'Technical lines hidden: {{count}}. Copy log includes them.',
-                { count: hiddenCount }
+                'auto.components.worktree.creation.VmBuildLog.hiddenTechnicalLines',
+                '{{count}} technical lines hidden. Copy log includes them.',
+                {
+                  count: hiddenCount,
+                  defaultValue_one: '{{count}} technical line hidden. Copy log includes it.'
+                }
               )}
             </span>
           ) : null}

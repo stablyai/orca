@@ -40,8 +40,8 @@ function phaseLabel(phase: string, t: Translate): string | null {
       )
     case 'renewing':
       return t(
-        'auto.components.worktree.creation.orcaCloudBuildLog.renewing',
-        'Extending the session…'
+        'auto.components.worktree.creation.orcaCloudBuildLog.renewing2',
+        'Keeping the sandbox running…'
       )
     case 'rolling-over':
       return t(
@@ -69,8 +69,8 @@ function denyLabel(reason: string, t: Translate): string | null {
       )
     case 'included_hours_exhausted':
       return t(
-        'auto.components.worktree.creation.orcaCloudBuildLog.denyHours',
-        'This month’s included sandbox hours are used up.'
+        'auto.components.worktree.creation.orcaCloudBuildLog.denyHours2',
+        'Your team is out of sandbox hours this month.'
       )
     case 'overage_cap_reached':
       return t(
@@ -80,18 +80,18 @@ function denyLabel(reason: string, t: Translate): string | null {
     case 'payment_past_due':
     case 'payment_grace_expired':
       return t(
-        'auto.components.worktree.creation.orcaCloudBuildLog.denyPayment',
-        'A payment is overdue.'
+        'auto.components.worktree.creation.orcaCloudBuildLog.denyPayment2',
+        'Payment failed.'
       )
     case 'concurrency_limit':
       return t(
-        'auto.components.worktree.creation.orcaCloudBuildLog.denyConcurrency',
-        'Your team’s limit on running cloud workspaces is reached.'
+        'auto.components.worktree.creation.orcaCloudBuildLog.denyConcurrency2',
+        'You’re at your team’s limit of running sandboxes.'
       )
     case 'member_concurrency_limit':
       return t(
-        'auto.components.worktree.creation.orcaCloudBuildLog.denyMemberConcurrency',
-        'Your limit on running cloud workspaces is reached.'
+        'auto.components.worktree.creation.orcaCloudBuildLog.denyMemberConcurrency2',
+        'You’re at your limit of running sandboxes.'
       )
     case 'github_not_connected':
       return t(
@@ -100,8 +100,8 @@ function denyLabel(reason: string, t: Translate): string | null {
       )
     case 'machine_size_not_in_plan':
       return t(
-        'auto.components.worktree.creation.orcaCloudBuildLog.denyMachineSize',
-        'This machine size isn’t part of your plan.'
+        'auto.components.worktree.creation.orcaCloudBuildLog.denyMachineSize2',
+        'This sandbox size isn’t part of your plan.'
       )
     default:
       return null
@@ -117,8 +117,8 @@ function refusedLabel(code: string, t: Translate): string {
       )
     case 'provider_unavailable':
       return t(
-        'auto.components.worktree.creation.orcaCloudBuildLog.refusedProvider',
-        'The sandbox provider is unavailable.'
+        'auto.components.worktree.creation.orcaCloudBuildLog.refusedProvider2',
+        'Orca Cloud is unavailable right now.'
       )
     case 'not_configured':
       return t(

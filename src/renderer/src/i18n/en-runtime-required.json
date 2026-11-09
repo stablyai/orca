@@ -1287,6 +1287,14 @@
             }
           }
         }
+      },
+      "worktree": {
+        "creation": {
+          "VmBuildLog": {
+            "hiddenTechnicalLines_one": "{{count}} technical line hidden. Copy log includes it.",
+            "hiddenTechnicalLines_other": "{{count}} technical lines hidden. Copy log includes them."
+          }
+        }
       }
     },
     "hooks": {

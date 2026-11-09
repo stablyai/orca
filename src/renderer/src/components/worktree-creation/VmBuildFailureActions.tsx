@@ -14,6 +14,7 @@ import {
   Trash2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -230,8 +231,8 @@ function failureActions(
           {
             key: 'pushToGitHub',
             label: t(
-              'auto.components.worktree.creation.VmBuildFailureCard.pushToGitHubFirst',
-              'Push to GitHub first'
+              'auto.components.worktree.creation.VmBuildFailureCard.howToPushToGitHub',
+              'How to push to GitHub'
             ),
             icon: <SquareArrowOutUpRight />,
             onClick: actions.onPushToGitHub
@@ -325,7 +326,8 @@ export function FailureActionRow({
         variant={destroys ? 'destructive-chip' : 'ghost'}
         size="xs"
         onClick={actions.onDismiss}
-        className="ml-auto"
+        // Leaving is the quiet way out; only deleting a running sandbox earns the destructive chip.
+        className={cn('ml-auto', !destroys && 'text-muted-foreground hover:text-foreground')}
       >
         {destroys ? <Trash2 /> : null}
         {destroys

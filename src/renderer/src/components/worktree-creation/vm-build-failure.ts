@@ -105,7 +105,9 @@ const ACCOUNT_GATES: ReadonlySet<VmBuildFailure['kind']> = new Set([
 const NOTHING_STARTED: ReadonlySet<VmBuildFailure['kind']> = new Set([
   ...ACCOUNT_GATES,
   'unavailable',
-  'network'
+  'network',
+  // Refused while picking the saved environment, before any sandbox existed.
+  'snapshotMissing'
 ])
 
 export function nothingStarted(failure: VmBuildFailure | null): boolean {
