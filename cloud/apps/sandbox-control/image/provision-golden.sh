@@ -14,12 +14,18 @@ sudo chown -R "$(id -u):$(id -g)" "$ORCA_HOME"
 
 log 'system packages'
 if command -v apt-get >/dev/null; then
+  # Sandbox egress is TLS-only: plain-http apt mirrors time out at runtime (W2, wake on SSH).
+  sudo sed -i 's#http://#https://#g' /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
   sudo DEBIAN_FRONTEND=noninteractive apt-get update -qq
   # Developer basics agents expect (Conductor parity): rg, tmux, vim, git-lfs alongside the build tools.
   sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-    ca-certificates curl git git-lfs jq ripgrep tmux vim-nox less openssh-client build-essential python3 \
+    ca-certificates curl git git-lfs jq ripgrep tmux vim-nox less openssh-client openssh-server build-essential python3 \
     unzip zip util-linux procps >/dev/null
   git lfs install --system --skip-repo >/dev/null
+  # sshd is started on demand by the wake-on-SSH bridge (key-only, loopback); never at boot.
+  sudo systemctl disable ssh.service ssh.socket >/dev/null 2>&1 || true
+  # A locked password field ("!") makes sshd refuse even key logins; '*' = no password, not locked.
+  sudo usermod -p '*' "$(id -un)"
 elif command -v dnf >/dev/null; then
   sudo dnf install -y -q ca-certificates curl-minimal git git-lfs jq tmux vim-enhanced gcc gcc-c++ make python3 \
     unzip util-linux procps-ng >/dev/null

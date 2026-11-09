@@ -495,6 +495,7 @@ async function advanceGoldenImagesFromEnv(env: Env): Promise<void> {
       region: env.VERCEL_REGION ?? 'iad1',
       expirationMs: Number.isFinite(days) && days >= 1 ? Math.floor(days) * 86_400_000 : 0,
       source: env.GOLDEN_IMAGE_SOURCE,
+      github: githubMinter(env)?.sourceRequest,
       seedSnapshotId: env.GOLDEN_SNAPSHOT_ID,
       refreshBeforeMs: env.GOLDEN_REFRESH_BEFORE_HOURS ? Number(env.GOLDEN_REFRESH_BEFORE_HOURS) * 3_600_000 : undefined
     }

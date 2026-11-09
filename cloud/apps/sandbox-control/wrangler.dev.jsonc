@@ -26,6 +26,8 @@
   "vars": {
     "SANDBOX_ENV": "dev",
     "SANDBOX_POOL_SIZE": "2",
+    // The golden orcad tracks this branch (host RPCs ship there first); rebuilt when HEAD touches VM code.
+    "GOLDEN_IMAGE_SOURCE": "git:https://github.com/nwparker/orca-private#cloud/integration",
     "SANDBOX_JWT_AUDIENCE": "orca-sandbox",
     "SANDBOX_JWKS_URL": "https://login.onorca.dev/.well-known/jwks.json",
     "SANDBOX_AUTH_ISSUER": "https://login.onorca.dev",

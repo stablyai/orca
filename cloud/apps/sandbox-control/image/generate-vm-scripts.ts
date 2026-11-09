@@ -17,6 +17,8 @@ export function renderVmScriptsModule(): string {
     `export const MANIFEST: GoldenImageManifest = ${JSON.stringify(manifest)}`,
     `export const PROVISION_SCRIPT: string = ${JSON.stringify(readFileSync(here('./provision-golden.sh'), 'utf8'))}`,
     `export const VM_SCRIPT_SOURCES: BuildInputs['vmScripts'] = ${JSON.stringify(scripts)}`,
+    // The Worker's from-source golden build (GOLDEN_IMAGE_SOURCE=git:…): builds orcad, then provisions.
+    `export const SOURCE_BUILD_SCRIPT: string = ${JSON.stringify(readFileSync(here('./source-build.sh'), 'utf8'))}`,
     // Run by the control plane per environment build / workspace boot; not installed in the image.
     `export const ENVIRONMENT_BUILD_SCRIPT: string = ${JSON.stringify(readFileSync(here('./env/environment-build.sh'), 'utf8'))}`,
     `export const ENVIRONMENT_DEPS_HOOK: string = ${JSON.stringify(readFileSync(here('./env/post-checkout-deps.sh'), 'utf8'))}`,

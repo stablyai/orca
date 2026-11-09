@@ -102,7 +102,7 @@ export function provisionEnv(inputs: BuildInputs): Record<string, string> {
 }
 
 /** Runs in Node (operator CLI) and in Workers (scheduled rotation), so no Buffer. */
-function utf8Base64(text: string): string {
+export function utf8Base64(text: string): string {
   let binary = ''
   for (const byte of new TextEncoder().encode(text)) {
     binary += String.fromCharCode(byte)
