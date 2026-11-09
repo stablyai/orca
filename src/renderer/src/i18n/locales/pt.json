@@ -6611,7 +6611,10 @@
               "modelUnloadTitle": "Descarregar modelo de voz",
               "modelUnloadDescription": "Escolha quando o modelo de voz local é descarregado da memória.",
               "modelUnloadKeyword": "descarregar",
-              "modelMemoryKeyword": "memória"
+              "modelMemoryKeyword": "memória",
+              "fillerWordsTitle": "Remover hesitações",
+              "fillerWordsDescription": "Remove “hã”, “hum” e sons parecidos do texto ditado.",
+              "fillerWordsKeyword": "hesitações"
             }
           }
         },
@@ -21653,6 +21656,10 @@
           "cloud": "Modelos na nuvem rodam nos servidores do provedor, então nada fica carregado aqui.",
           "never": "Nunca",
           "immediately": "Imediatamente"
+        },
+        "fillerWords": {
+          "title": "Remover hesitações",
+          "description": "Remove sons como “hã” e “hum” do texto ditado, conforme o idioma do ditado."
         }
       }
     },
