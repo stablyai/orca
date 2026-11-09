@@ -33,7 +33,13 @@ function tools(rows: AgentJournalRenderItem[]) {
 function commands(rows: AgentJournalRenderItem[], agentId: string) {
   return rows.flatMap((row) =>
     row.agentId === agentId && row.body.kind === 'tool-call'
-      ? [(row.body.input as { command?: unknown } | null)?.command]
+      ? [
+          typeof row.body.input === 'object' &&
+          row.body.input !== null &&
+          'command' in row.body.input
+            ? row.body.input.command
+            : undefined
+        ]
       : []
   )
 }
