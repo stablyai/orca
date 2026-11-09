@@ -68,6 +68,9 @@ export function createTerminalDiscoveryFixture(io: DiscoveryIO) {
       shell?: string
       distro?: string
       repo?: boolean
+      repoKind?: 'folder'
+      repoId?: string
+      executionHostId?: string
       runtime?: { kind: 'wsl'; distro: string; git: 'windows-host' } | { kind: 'windows-host' }
       unstamped?: boolean
       deferred?: boolean
@@ -79,13 +82,14 @@ export function createTerminalDiscoveryFixture(io: DiscoveryIO) {
     })
     const path = options.path ?? 'C:\\plain'
     const repo = {
-      id: 'repo',
+      id: options.repoId ?? 'repo',
+      ...(options.repoKind ? { kind: options.repoKind } : {}),
       path,
       projectGroupId: 'group',
       connectionId: null,
-      executionHostId: 'local'
+      executionHostId: options.executionHostId ?? 'local'
     }
-    const id = `repo::${path}`
+    const id = `${repo.id}::${path}`
     const pushTarget = {
       remoteName: 'contributor',
       branchName: 'fix',

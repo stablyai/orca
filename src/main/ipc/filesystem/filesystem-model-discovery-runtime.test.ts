@@ -159,3 +159,32 @@ it('does not probe natively when the WSL default is unresolved, and retries when
   io.distros = ['Ubuntu']
   expect(await rig.rpc()).toMatchObject({ success: true, models: [{ id: 'ubuntu-model' }] })
 })
+
+it('refuses a foreign runtime folder-backed repo through IPC and RPC before local environment or probe work', async () => {
+  const foreign = fixture({
+    repo: true,
+    repoId: 'foreign',
+    repoKind: 'folder',
+    path: 'C:\\work\\app',
+    executionHostId: 'runtime:other'
+  })
+  for (const read of [foreign.ipc, foreign.rpc]) {
+    expect(await read()).toEqual({
+      success: false,
+      error: 'Terminal model discovery is unavailable on this connection.'
+    })
+  }
+  expect(io.env).not.toHaveBeenCalled()
+  expect(io.discover).not.toHaveBeenCalled()
+  const local = fixture({
+    repo: true,
+    repoKind: 'folder',
+    path: 'C:\\work\\app',
+    executionHostId: 'local'
+  })
+  for (const read of [local.ipc, local.rpc]) {
+    expect(await read()).toMatchObject({ success: true, models: [{ id: 'native-model' }] })
+  }
+  expect(io.env).toHaveBeenCalledTimes(2)
+  expect(io.discover).toHaveBeenCalledTimes(2)
+})

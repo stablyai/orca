@@ -1,3 +1,4 @@
+import { isRepoOnCatalogHost } from '../../../../shared/execution-host'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import {
   selectEffectiveTerminalExecutionContext,
@@ -32,10 +33,21 @@ export async function discoverTerminalModels(
     return { success: false, error: 'Unknown agent.' }
   }
   try {
-    const scope = context.hostGlobal
-      ? { id: '', path: '', connectionId: null, repo: null, folderWorkspace: null }
-      : (await context.resolveTarget()).scope
-    if (scope.connectionId) {
+    const target = context.hostGlobal ? undefined : await context.resolveTarget()
+    const scope = target?.scope ?? {
+      id: '',
+      path: '',
+      connectionId: null,
+      repo: null,
+      folderWorkspace: null
+    }
+    const owner = scope.folderWorkspace ?? scope.repo
+    if (
+      !isRepoOnCatalogHost({
+        executionHostId: target?.managedWorktree?.hostId ?? owner?.executionHostId,
+        connectionId: scope.connectionId ?? owner?.connectionId
+      })
+    ) {
       return {
         success: false,
         error: 'Terminal model discovery is unavailable on this connection.'
