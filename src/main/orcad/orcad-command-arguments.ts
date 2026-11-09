@@ -39,6 +39,8 @@ Options:
 
 Environment:
   ORCA_USER_DATA           Data directory for this instance's profile and state.
+  ORCA_WEB_ICON            Absolute path to a .png/.svg/.ico/.webp file served as
+                           the browser client's icon and web-app manifest icon.
 `
 
 type OrcadCommandArguments = OrcadOptions & { help?: boolean }
