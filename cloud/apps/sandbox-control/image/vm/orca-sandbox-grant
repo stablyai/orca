@@ -24,6 +24,15 @@ case "${ORCA_PUBLIC_WSS:-}" in wss://*) ;; *) echo 'bad endpoint' >&2; exit 2 ;;
 
 node="$(find "$ORCA_HOME/runtime/runtimes" -type f -name node | head -n 1)"
 cli="$ORCA_HOME/runtime/orcad/out/cli/index.js"
+# The workspace's project must exist on this orcad before a phone opens it: phones may not add
+# projects themselves (mobile RPC scope), and a phone may be the first client this VM ever sees.
+project=/vercel/sandbox/project
+if [ -d "$project" ]; then
+  kind=folder
+  [ -d "$project/.git" ] && kind=git
+  ORCA_USER_DATA_PATH="$DATA" timeout 20 "$node" "$cli" repo add --path "$project" --kind "$kind" --json \
+    >/dev/null 2>&1 || true
+fi
 offer="$(ORCA_USER_DATA_PATH="$DATA" timeout 30 "$node" "$cli" pair --json --rotate "${scope[@]}" \
   --address "$ORCA_PUBLIC_WSS" 2>/dev/null)" || { echo 'pair failed' >&2; exit 1; }
 # The offer goes to the sealer on stdin (never argv or disk); only the sealed form is printed.

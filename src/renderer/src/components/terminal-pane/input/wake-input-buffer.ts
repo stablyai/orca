@@ -7,9 +7,12 @@
 // and other control keys are dropped. Held typing is dropped when the wake fails, a while after it
 // settles without a terminal to take it, and when the workspace wakes again.
 
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { applyWakeInput } from './wake-input-text'
+import { noteUserInputForPane, pruneUserInput, resetPaneUserInputForTests } from './pane-user-input'
 
 export { WAKE_INPUT_CAP, applyWakeInput } from './wake-input-text'
+export { noteUserInputForPane, paneHadUserInputSince } from './pane-user-input'
 const FLUSH_POLL_MS = 100
 /** A wake nobody settles stops holding typing after this, and the typing is dropped. */
 export const WAKE_INPUT_MAX_HOLD_MS = 90_000
@@ -42,15 +45,13 @@ export type WakeInputDropped = { workspaceId: string }
 const wakes = new Map<string, WorkspaceWake>()
 if (import.meta.env?.DEV && typeof window !== 'undefined') {
   // Dev builds only: lets e2e drivers read what is held.
-  ;(window as unknown as { __orcaWakeInput?: unknown }).__orcaWakeInput = wakes
+  Reflect.set(window, '__orcaWakeInput', wakes)
 }
 const listeners = new Set<() => void>()
 const deliveryListeners = new Set<(delivery: WakeInputDelivery) => void>()
 const droppedListeners = new Set<(dropped: WakeInputDropped) => void>()
-/** Last time a person's input reached each pane (layout leaf); the continue logic leaves those alone. */
-const lastUserInputByPane = new Map<string, number>()
-const USER_INPUT_MEMORY_MS = 30 * 60_000
-let timer: ReturnType<typeof setInterval> | null = null
+// Runs only while a wake or held typing exists; paused while the window is hidden (no keys arrive then).
+let stopTimer: (() => void) | null = null
 let version = 0
 
 function changed(): void {
@@ -61,17 +62,21 @@ function changed(): void {
 }
 
 function ensureTimer(): void {
-  if (timer) {
+  if (stopTimer) {
     return
   }
-  timer = setInterval(pump, FLUSH_POLL_MS)
-  ;(timer as { unref?: () => void }).unref?.()
+  // No pump on install or on becoming visible: callers are mid-update, the next tick delivers.
+  stopTimer = installWindowVisibilityInterval({
+    run: () => pump(),
+    runOnVisible: () => {},
+    intervalMs: FLUSH_POLL_MS
+  })
 }
 
 function stopTimerIfIdle(): void {
-  if (wakes.size === 0 && timer) {
-    clearInterval(timer)
-    timer = null
+  if (wakes.size === 0 && stopTimer) {
+    stopTimer()
+    stopTimer = null
   }
 }
 
@@ -92,14 +97,6 @@ function discard(workspaceId: string, wake: WorkspaceWake, notify: boolean): voi
   if (lost) {
     for (const listener of droppedListeners) {
       listener({ workspaceId })
-    }
-  }
-}
-
-function pruneUserInput(now = Date.now()): void {
-  for (const [paneId, at] of lastUserInputByPane) {
-    if (now - at > USER_INPUT_MEMORY_MS) {
-      lastUserInputByPane.delete(paneId)
     }
   }
 }
@@ -159,7 +156,7 @@ function pump(now = Date.now()): void {
       }
       try {
         pane.deliver(text)
-        lastUserInputByPane.set(paneId, now)
+        noteUserInputForPane(paneId, now)
         for (const listener of deliveryListeners) {
           listener({ workspaceId, paneId, submitted })
         }
@@ -298,17 +295,6 @@ export function getWakeInputCount(workspaceId: string | null | undefined): numbe
   return count
 }
 
-/** Any person's input reached this pane (layout leaf). Called for every admitted keystroke. */
-export function noteUserInputForPane(paneId: string, at = Date.now()): void {
-  lastUserInputByPane.set(paneId, at)
-}
-
-/** True when a person's input reached this pane since `since` (wake typing included). */
-export function paneHadUserInputSince(paneId: string, since: number): boolean {
-  const at = lastUserInputByPane.get(paneId)
-  return at !== undefined && at >= since
-}
-
 export function subscribeWakeInput(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
@@ -335,11 +321,9 @@ export function getWakeInputVersion(): number {
 /** Tests: drops every wake and stops the pump. */
 export function resetWakeInputForTests(): void {
   wakes.clear()
-  lastUserInputByPane.clear()
-  if (timer) {
-    clearInterval(timer)
-    timer = null
-  }
+  resetPaneUserInputForTests()
+  stopTimer?.()
+  stopTimer = null
   changed()
 }
 

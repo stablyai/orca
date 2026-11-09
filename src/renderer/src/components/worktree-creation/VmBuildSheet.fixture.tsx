@@ -1,82 +1,22 @@
 import React from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
-import { VmBuildSheet } from './VmBuildSheet'
 import { VmBuildAgentSignInRowView, type VmBuildAgentSignInRowModel } from './VmBuildAgentSignInRow'
 import type { AgentSignInGate } from '@/lib/agent-sign-in/agent-sign-in-gate'
-import { formatElapsedTime } from './worktree-creation-clock'
+import {
+  CLOUD_LOG,
+  CLOUD_RECIPE,
+  entry,
+  FAILED_LOG,
+  LOG,
+  frame,
+  LOG_LINES,
+  NOW,
+  sheet,
+  stampsFor,
+  T0
+} from './vm-build-sheet-fixture-support'
 
-const LOG_LINES = [
-  'Creating sandbox from snapshot snap_7f2c…',
-  'Sandbox ready: sbx_41d9 (us-east-1)',
-  'Cloning repository…',
-  'Starting orca serve on :7420',
-  'Pairing code emitted.'
-]
-const LOG = LOG_LINES.join('\n')
-// Every fixture is drawn 102 seconds into its build, with lines arriving a second or so apart.
-const T0 = 1_700_000_000_000
-const NOW = T0 + 102_000
-const stampsFor = (lines: number): number[] =>
-  Array.from({ length: lines }, (_, index) => T0 + 400 + index * 1300)
-
-type Recipe = NonNullable<PendingWorktreeCreation['request']['ephemeralVmRecipe']>
-const LOCAL_RECIPE: Recipe = { sourceRepoId: 'repo', recipeId: 'sandbox', projectId: 'p' }
-const CLOUD_RECIPE: Recipe = { ...LOCAL_RECIPE, recipeId: 'cloud', provider: 'orca-cloud' }
-
-function entry(
-  patch: Partial<PendingWorktreeCreation>,
-  recipe: Recipe = LOCAL_RECIPE
-): PendingWorktreeCreation {
-  const log = patch.provisioningLog ?? LOG
-  return {
-    creationId: 'fixture',
-    phase: 'provisioning-vm',
-    status: 'creating',
-    startedAt: T0,
-    indeterminate: false,
-    loaderVisible: true,
-    provisioningLog: log,
-    provisioningLogStamps: stampsFor(log === '' ? 0 : log.split('\n').length),
-    phaseLog: [{ phase: 'provisioning-vm', at: T0 }],
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sheet reads only name and ephemeralVmRecipe from the request.
-    request: { name: 'fix-login', ephemeralVmRecipe: recipe } as PendingWorktreeCreation['request'],
-    ...patch
-  }
-}
-
-function sheet(
-  value: PendingWorktreeCreation,
-  error: string | null,
-  now: number,
-  agentSignInRow?: React.ReactNode
-) {
-  return (
-    <div className="bg-background p-3">
-      <VmBuildSheet
-        creationId="fixture"
-        entry={value}
-        now={now}
-        elapsedLabel={formatElapsedTime(now - value.startedAt)}
-        error={error}
-        onCancel={() => {}}
-        onRetry={() => {}}
-        onDismiss={() => {}}
-        onEditRecipe={() => {}}
-        agentSignInRow={agentSignInRow}
-      />
-    </div>
-  )
-}
-
-function frame(
-  value: PendingWorktreeCreation,
-  error: string | null = null,
-  now = NOW,
-  agentSignInRow?: React.ReactNode
-) {
-  return defineFixture({ width: 760, render: () => sheet(value, error, now, agentSignInRow) })
-}
 const noop = (): void => {}
 
 function signInRow(model: VmBuildAgentSignInRowModel): React.ReactNode {
@@ -211,16 +151,12 @@ export const checksFailed = frame(
   entry({ environmentCheck: { status: 'failed', checks: FAILED_CHECKS, ...CHECKS_FAILED_AT } })
 )
 
-const FAILED_LOG = `${LOG}\nError: snapshot snap_7f2c not found`
-
 export const provisionFailed = frame(
-  entry({ status: 'error', provisioningLog: FAILED_LOG }),
+  entry({ status: 'error', provisioningLog: FAILED_LOG, errorAt: T0 + 98_000 }),
   'Recipe exited with code 1.'
 )
 
 // Orca Cloud
-
-const CLOUD_LOG = '[orca-cloud] checking-entitlement\n[orca-cloud] provisioning'
 
 export const cloudStarting = frame(
   entry({ provisioningLog: CLOUD_LOG }, CLOUD_RECIPE),
@@ -277,68 +213,11 @@ export const cloudReady = frame(
   T0 + 9_400
 )
 
-function cloudFailure(errorCode: string | undefined, error: string, log = CLOUD_LOG) {
-  return frame(
-    entry({ status: 'error', errorCode, provisioningLog: log }, CLOUD_RECIPE),
-    error,
-    T0 + 2_000
-  )
-}
-
-export const cloudPlanRequired = cloudFailure(
-  'cloudPlanRequired',
-  'Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.',
-  ''
-)
-
-export const cloudConcurrencyLimit = cloudFailure(
-  'cloudConcurrencyLimit',
-  'You already have as many Orca Cloud workspaces running as your plan allows.',
-  ''
-)
-
-export const cloudUnavailable = cloudFailure(
-  'cloudUnavailable',
-  'Orca Cloud is unavailable right now. Try again in a moment.',
-  ''
-)
-
-export const cloudSignInRequired = cloudFailure(
-  'cloudSignInRequired',
-  'Sign in to Orca to use Orca Cloud workspaces.',
-  ''
-)
-
-export const cloudSnapshotMissing = cloudFailure(
-  'recipeExited',
-  'Recipe exited with code 1.',
-  FAILED_LOG
-)
-
-export const cloudFailed = cloudFailure(
-  'recipeExited',
-  'Recipe exited with code 1.',
-  `${LOG}\nfatal: sandbox agent stopped unexpectedly`
-)
-
-export const cloudHoursUsed = cloudFailure(
-  'cloudPlanRequired',
-  'Orca Cloud workspaces need a plan with cloud hours.',
-  `${CLOUD_LOG}\nOrca Cloud: included_hours_exhausted`
-)
-
-export const cloudPaymentDue = cloudFailure(
-  'cloudPlanRequired',
-  'Orca Cloud workspaces need a plan with cloud hours.',
-  `${CLOUD_LOG}\nOrca Cloud: payment_past_due`
-)
-
-export const cloudNetwork = cloudFailure(undefined, 'fetch failed', CLOUD_LOG)
-
 export const cloudCreateFailed = frame(
   entry(
     {
       status: 'error',
+      errorAt: T0 + 8_900,
       phase: 'creating',
       phaseLog: CLOUD_OPENING_PHASES,
       environmentCheck: CLOUD_CHECKS_PASSED,

@@ -338,7 +338,7 @@ describe('model API key egress placeholders (phase 2)', () => {
   })
 
   it('keeps plain env injection and no model routes when the flag is off', async () => {
-    const { h, as, put } = await setup({ EGRESS_PROXY_URL: PROXY_URL })
+    const { h, as, put } = await setup({ SECRETS_EGRESS_PLACEHOLDERS: 'off', EGRESS_PROXY_URL: PROXY_URL })
     const mia = await as('mia', 'acme', 'member')
     await put('personal', 'ANTHROPIC_API_KEY', PERSONAL_KEY, mia)
     await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })

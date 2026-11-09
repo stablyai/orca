@@ -169,6 +169,8 @@ export type PendingWorktreeCreation = {
   error?: string
   /** Machine-readable cause of `error`, e.g. `cloudPlanRequired`, so the sheet can offer the right fix. */
   errorCode?: string
+  /** Set by the store when `status` turns to error. */
+  errorAt?: number
   provisioningLog?: string
   /** Arrival time of each line in `provisioningLog`, index-aligned with its lines. */
   provisioningLogStamps?: readonly number[]
@@ -305,6 +307,12 @@ export function getCreationProgressLabel(
   if (entry.phase === 'provisioning-vm') {
     if (entry.environmentCheck?.status === 'failed') {
       return t('auto.lib.pendingWorktreeCreation.vmChecksFailed', 'Environment checks failed')
+    }
+    // Glossary: an Orca Cloud machine is a sandbox; "VM" stays only for bring-your-own recipes.
+    if (entry.request.ephemeralVmRecipe?.provider === 'orca-cloud') {
+      return entry.environmentCheck
+        ? t('auto.lib.pendingWorktreeCreation.preparingCloudEnvironment', 'Preparing environment…')
+        : t('auto.lib.pendingWorktreeCreation.startingSandbox', 'Starting sandbox…')
     }
     return entry.environmentCheck
       ? t('auto.lib.pendingWorktreeCreation.checkingVmEnvironment', 'Checking VM environment…')

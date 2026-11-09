@@ -51,6 +51,10 @@ export type SandboxRow = {
   orcad_endpoint: string | null
   /** When orcad last became ready (wake callers report it as `readyAt`). */
   ready_at: number | null
+  /** Create-to-ready of this sandbox's first start (0035); never rewritten by wakes. */
+  create_ms?: number | null
+  /** Resume claim to ready of its latest wake (0035). */
+  wake_ms?: number | null
   archived_at: number | null
   archive_expires_at: number | null
   /** Registry (0006). `user_id` is the current owner (reassignable); `created_by` never changes. */
@@ -180,7 +184,7 @@ type Patch = Partial<Omit<SandboxRow, 'id' | 'account_id' | 'generation' | 'crea
 const PATCHABLE = new Set<string>([
   'status', 'session_id', 'session_started_at', 'session_deadline_at', 'lease_expires_at',
   'usage_settled_at', 'last_error', 'destroyed_at', 'github_token_expires_at',
-  'egress_secret_hosts', 'egress_allow_hosts', 'egress_user_hosts', 'repo_url', 'retention_warned_at', 'orcad_endpoint', 'ready_at',
+  'egress_secret_hosts', 'egress_allow_hosts', 'egress_user_hosts', 'repo_url', 'retention_warned_at', 'orcad_endpoint', 'ready_at', 'create_ms', 'wake_ms',
   'archived_at', 'archive_expires_at'
 ])
 

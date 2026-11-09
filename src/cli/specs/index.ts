@@ -36,6 +36,7 @@ import { PLUGIN_AUTHORING_COMMAND_SPECS, PLUGIN_RUNTIME_COMMAND_SPECS } from './
 import { PAIR_COMMAND_SPECS } from './pair'
 import { PLUGIN_VIEW_COMMAND_SPECS } from './plugin-view'
 import { PLUGIN_INSTALL_COMMAND_SPECS } from './plugin-install'
+import { CLOUD_COMMAND_SPECS } from '../cloud/cloud-specs'
 
 export const COMMAND_SPECS: CommandSpec[] = [
   ...CORE_COMMAND_SPECS,
@@ -74,5 +75,6 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...PLUGIN_RUNTIME_COMMAND_SPECS,
   ...PLUGIN_VIEW_COMMAND_SPECS,
   ...PLUGIN_INSTALL_COMMAND_SPECS,
-  ...PAIR_COMMAND_SPECS
+  ...PAIR_COMMAND_SPECS,
+  ...CLOUD_COMMAND_SPECS
 ]

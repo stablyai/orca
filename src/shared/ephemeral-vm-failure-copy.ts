@@ -14,7 +14,7 @@ export const EPHEMERAL_VM_FAILURE_COPY = {
   startRefUnresolved: 'Could not resolve provisioned-root start ref: {{ref}}',
   defaultStartRefUnresolved: 'Could not resolve a default provisioned-root start ref.',
   recipeExited: 'Recipe exited with code {{exitCode}}.',
-  recipeExitedWithoutCode: 'Recipe exited with code unknown.',
+  recipeExitedWithoutCode: 'Recipe exited without an exit code.',
   recipeResultMissing: 'Recipe produced no JSON result.',
   recipeResultNotJsonObject: 'Recipe stdout must be one JSON object.',
   recipeResultPairingCodeInvalid: 'Recipe result pairingCode is not a valid Orca pairing code.',
@@ -24,24 +24,27 @@ export const EPHEMERAL_VM_FAILURE_COPY = {
   provisionedRootNotConfigured:
     'Recipe result requests provisioned-root checkout, but the recipe is not configured for it.',
   suspendExited: 'Suspend exited with code {{exitCode}}.',
-  suspendExitedWithoutCode: 'Suspend exited with code unknown.',
+  suspendExitedWithoutCode: 'Suspend exited without an exit code.',
   resumeExited: 'Resume exited with code {{exitCode}}.',
-  resumeExitedWithoutCode: 'Resume exited with code unknown.',
+  resumeExitedWithoutCode: 'Resume exited without an exit code.',
   recipeTimedOut:
     'The recipe {{mode}} step did not finish within {{timeout}}, so Orca stopped it. Check the recipe output, or raise timeoutSeconds in orca.yaml if it needs longer.',
   destroyExited: 'Destroy exited with code {{exitCode}}.',
-  destroyExitedWithoutCode: 'Destroy exited with code unknown.',
+  destroyExitedWithoutCode: 'Destroy exited without an exit code.',
   destroyFailed: 'Destroy failed.',
   destroyDisabled: 'Destroy is disabled for this recipe.',
   cleanupStopped: 'Cleanup stopped by user.',
   cleanupInterrupted: 'Cleanup was interrupted. Retry cleanup to continue.',
   sshTargetRemoveFailed: 'Failed to remove the hidden SSH target.',
-  cloudPlanRequired:
-    'Orca Cloud needs a Team plan. Open Plan & billing to choose one.',
+  cloudPlanRequired: 'Orca Cloud needs a Team plan. Open Plan & billing to choose one.',
   cloudConcurrencyLimit:
     'You’re at your team’s limit of running sandboxes. Put one to sleep or delete it, then try again.',
   cloudSignInRequired: 'Sign in to Orca to use Orca Cloud workspaces.',
-  cloudUnavailable: 'Orca Cloud is unavailable right now. Try again in a moment.'
+  cloudUnavailable: 'Orca Cloud is unavailable right now. Try again in a moment.',
+  cloudGithubNotConnected:
+    'Connect GitHub to your Orca account so Orca Cloud can clone this repository.',
+  cloudNoGithubRemote:
+    'Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again.'
 } as const
 
 export type EphemeralVmFailureCode = keyof typeof EPHEMERAL_VM_FAILURE_COPY

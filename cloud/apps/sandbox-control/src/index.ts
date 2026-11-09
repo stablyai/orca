@@ -33,6 +33,7 @@
 import { ORCA_CLOUD_IDLE_SLEEP_MINUTES } from '../../../../src/shared/hosted-sandbox/hosted-sandbox-wire'
 import { z } from 'zod'
 import { maintainPool, poolConfigFromEnv } from './pool'
+import { cachedCreateTiming } from './create-timing'
 import { authenticateDesktop } from './auth'
 import { authenticateApi } from './api/caller'
 import { handleApi, handleApiAs, isApiPath, type ApiContext, type ApiExtension } from './api/router'
@@ -147,6 +148,7 @@ import {
   resolveLink,
   workspaceViews
 } from './workspaces'
+import { rememberCallerName } from './member-names'
 import type { SandboxCaller } from './auth'
 
 const MAX_JSON_BYTES = 16 * 1024
@@ -211,6 +213,19 @@ function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
 export function publicOrigin(env: Env, url?: URL): string | undefined {
   const configured = env.PUBLIC_API_URL ?? (env.EGRESS_PROXY_URL ? new URL(env.EGRESS_PROXY_URL).origin : undefined)
   return configured?.replace(/\/+$/, '') ?? url?.origin
+}
+
+/**
+ * Hosts every VM may reach beyond the defaults: EGRESS_EXTRA_HOSTS plus this control plane's public
+ * host, which the in-VM `orca cloud` CLI calls with its workspace token (credentials.json apiUrl).
+ */
+export function extraEgressHostsFor(env: Env): string[] {
+  const hosts = (env.EGRESS_EXTRA_HOSTS ?? '').split(',').map((host) => host.trim()).filter(Boolean)
+  const origin = publicOrigin(env)
+  if (origin) {
+    hosts.push(new URL(origin).hostname)
+  }
+  return [...new Set(hosts)]
 }
 
 function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => Promise<ProxiedRoute[]> {
@@ -494,7 +509,7 @@ async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null
     config: {
       pool: poolConfigFromEnv(env),
       shareLinkSecret: shareSecret(env),
-      extraEgressHosts: (env.EGRESS_EXTRA_HOSTS ?? '').split(',').map((host) => host.trim()).filter(Boolean),
+      extraEgressHosts: extraEgressHostsFor(env),
       guardrails: guardrailsFromEnv(env),
       snapshotExpirationMs:
         env.SNAPSHOT_EXPIRATION_DAYS && Number(env.SNAPSHOT_EXPIRATION_DAYS) >= 1
@@ -629,13 +644,25 @@ async function memberIdentityFor(env: Env, deps: Deps): Promise<LifecycleDeps['m
   }
 }
 
+/**
+ * Model keys stay out of the VM by default (egress swap): unset or `on` = every account, `off` = no
+ * account, `accounts:<id>,<id>` = only those. SECRETS_EGRESS_PLACEHOLDERS_OFF (comma account ids) is
+ * the per-team kill switch back to plain env injection.
+ */
+export function secretsEgressMode(env: Pick<Env, 'SECRETS_EGRESS_PLACEHOLDERS' | 'SECRETS_EGRESS_PLACEHOLDERS_OFF'>) {
+  const value = env.SECRETS_EGRESS_PLACEHOLDERS?.trim()
+  const egressPlaceholders = value === undefined || value === '' ? true : value === 'off' ? false : egressPlaceholderMode(value)
+  const off = new Set((env.SECRETS_EGRESS_PLACEHOLDERS_OFF ?? '').split(',').map((id) => id.trim()).filter(Boolean))
+  return { egressPlaceholders, egressPlaceholdersOff: off }
+}
+
 async function secretsDeps(env: Env): Promise<LifecycleDeps['secrets']> {
   const keyring = keyringFor(env)
   if (!keyring) {
     return undefined
   }
   try {
-    return { keyring: await keyring, egressPlaceholders: egressPlaceholderMode(env.SECRETS_EGRESS_PLACEHOLDERS) }
+    return { keyring: await keyring, ...secretsEgressMode(env) }
   } catch {
     // A malformed KEK must not block sandbox starts; the secrets routes surface it as 503.
     console.log(JSON.stringify({ event: 'secrets_kek_invalid' }))
@@ -769,7 +796,11 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     }
     if (url.pathname === '/v1/config' && request.method === 'GET') {
       // Public product constants (no auth): every client reads these instead of hardcoding them.
-      return json({ idleSleepMinutes: workspaceConfig(env, deps).idleSleepMinutes ?? ORCA_CLOUD_IDLE_SLEEP_MINUTES })
+      const createTiming = await cachedCreateTiming(env.SANDBOX_DB, (deps.now ?? Date.now)())
+      return Response.json(
+        { idleSleepMinutes: workspaceConfig(env, deps).idleSleepMinutes ?? ORCA_CLOUD_IDLE_SLEEP_MINUTES, ...(createTiming ? { createTiming } : {}) },
+        { headers: { 'cache-control': 'public, max-age=300' } }
+      )
     }
     if (url.pathname === '/v1/github/dev-connect' && env.SANDBOX_ENV !== 'prod') {
       // Dev-only, link-shareable start of the user flow: mints a fresh 10-min state per click for a dev:<sub>
@@ -1178,6 +1209,8 @@ async function workspaceRoute(request: Request, url: URL, env: Env, deps: Deps, 
   const db = env.SANDBOX_DB
   const clock = deps.now ?? Date.now
   const now = clock()
+  // Labels for teammates' lists; a failure here must never fail the request itself.
+  await rememberCallerName(db, caller, now).catch((error: unknown) => console.warn('member_name_write_failed', String(error)))
   if (url.pathname === '/v1/team/links/resolve' && request.method === 'GET') {
     return json(await resolveLink(db, caller, url, now))
   }

@@ -7,7 +7,7 @@ import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
 import { gateVmCreateOnEnvironmentCheck } from '@/lib/ephemeral-vm-environment-check'
-import { showOrcaCloudPlanUpsell } from '@/lib/orca-cloud-session-events'
+import { showVmBuildFailureToast } from '@/components/worktree-creation/vm-build-failure-toast'
 import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 import {
@@ -97,8 +97,9 @@ async function prepareEphemeralVmRecipeRequest(
       state.activePendingCreationId !== creationId ||
       !selectWorktreeCreationSurfaceShown(state)
     ) {
-      if (preparedTarget.errorCode === 'cloudPlanRequired') {
-        showOrcaCloudPlanUpsell(preparedTarget.error)
+      const failed = state.pendingWorktreeCreations[creationId]
+      if (failed) {
+        showVmBuildFailureToast(failed, preparedTarget.error, state.repos)
       } else {
         toast.error(ephemeralVmErrorText(preparedTarget))
       }

@@ -19,6 +19,7 @@ import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-ov
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
+import { runtimeEnvironmentDisplayName } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 
 export type ActiveDashboardWorkspace = {
   projectId: string
@@ -48,7 +49,7 @@ function buildHostLabelLookup(
     labels.set(toSshExecutionHostId(targetId), label)
   }
   for (const environment of state.runtimeEnvironments ?? []) {
-    labels.set(toRuntimeExecutionHostId(environment.id), environment.name)
+    labels.set(toRuntimeExecutionHostId(environment.id), runtimeEnvironmentDisplayName(environment))
   }
   for (const [hostId, label] of getHostDisplayLabelOverrides(state.settings)) {
     labels.set(hostId, label)

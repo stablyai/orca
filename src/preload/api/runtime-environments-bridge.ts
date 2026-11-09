@@ -5,6 +5,7 @@ import type {
   RuntimePortForwardOpenResult
 } from '../../shared/runtime-port-forwards'
 import { RUNTIME_PORT_FORWARDS_CHANGED_CHANNEL } from '../../shared/runtime-port-forward-channels'
+import { CLOUD_MCP_SYNC_CHANGED_CHANNEL } from '../../shared/agent-mcp-sync/mcp-sync-preferences'
 import {
   RUNTIME_HOST_STATUS_CHANNEL,
   type RuntimeHostStatusSnapshot
@@ -32,8 +33,11 @@ import {
 import type { PreloadApi } from '../api-types'
 import type {
   AuthCallbackForwardRequest,
-  AuthCallbackForwardResult
+  AuthCallbackForwardResult,
+  LoopbackCallbackForwardRequest
 } from '../../shared/auth-callback-forward'
+import type { McpSyncStatus } from '../../shared/agent-mcp-sync/mcp-sync-contract'
+import type { CloudMcpSyncPreferences } from '../../shared/agent-mcp-sync/mcp-sync-preferences'
 import { managedOrcadApi } from './managed-orcad-api'
 import { getWslHostsApi } from './wsl-hosts-api'
 
@@ -62,6 +66,28 @@ export const runtimeEnvironmentsApi = {
       callback(forwards)
     ipcRenderer.on(RUNTIME_PORT_FORWARDS_CHANGED_CHANNEL, listener)
     return () => ipcRenderer.removeListener(RUNTIME_PORT_FORWARDS_CHANGED_CHANNEL, listener)
+  },
+  openLoopbackCallbackForward: (
+    request: LoopbackCallbackForwardRequest
+  ): Promise<AuthCallbackForwardResult> =>
+    ipcRenderer.invoke('runtimeEnvironments:openLoopbackCallbackForward', request),
+  getMcpSyncStatus: (environmentId: string): Promise<McpSyncStatus | null> =>
+    ipcRenderer.invoke('cloudMcpSync:getStatus', environmentId),
+  syncMcpServersNow: (environmentId: string): Promise<McpSyncStatus | null> =>
+    ipcRenderer.invoke('cloudMcpSync:syncNow', environmentId),
+  getMcpSyncPreferences: (): Promise<CloudMcpSyncPreferences | null> =>
+    ipcRenderer.invoke('cloudMcpSync:getPreferences'),
+  setMcpSyncPreferences: (
+    preferences: Partial<CloudMcpSyncPreferences>
+  ): Promise<CloudMcpSyncPreferences | null> =>
+    ipcRenderer.invoke('cloudMcpSync:setPreferences', preferences),
+  setMcpServerIncluded: (key: string, included: boolean): Promise<CloudMcpSyncPreferences | null> =>
+    ipcRenderer.invoke('cloudMcpSync:setServerIncluded', key, included),
+  onMcpSyncChanged: (callback: (status: McpSyncStatus) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: McpSyncStatus): void =>
+      callback(status)
+    ipcRenderer.on(CLOUD_MCP_SYNC_CHANGED_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(CLOUD_MCP_SYNC_CHANGED_CHANNEL, listener)
   },
   getStatusSnapshots: (): Promise<RuntimeHostStatusSnapshot[]> =>
     ipcRenderer.invoke('runtimeEnvironments:getStatusSnapshots'),
