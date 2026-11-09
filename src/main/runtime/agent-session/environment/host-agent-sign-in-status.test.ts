@@ -105,7 +105,7 @@ describe('HostAgentSignInStatusChecker', () => {
     expect(runStatus).not.toHaveBeenCalled()
   })
 
-  it('falls back to the CLI login when the selected Claude account has no login of its own', async () => {
+  it('reports a selected Claude account without a login as signed out, even when the CLI is signed in', async () => {
     const accounts = emptyAccounts()
     accounts.claude = {
       accounts: [
@@ -125,7 +125,7 @@ describe('HostAgentSignInStatusChecker', () => {
       findCommand: async (command) => ({ status: 'available', binary: `/bin/${command}` }),
       runStatus: async (binary) =>
         binary === '/bin/claude'
-          ? { exitCode: 1, output: CLAUDE_SIGNED_OUT, timedOut: false }
+          ? { exitCode: 0, output: CLAUDE_SUBSCRIPTION, timedOut: false }
           : { exitCode: 1, output: 'Not logged in', timedOut: false },
       readAccounts: () => accounts,
       now: () => 5
@@ -135,5 +135,35 @@ describe('HostAgentSignInStatusChecker', () => {
       { agent: 'claude', state: 'signedOut' },
       { agent: 'codex', state: 'signedOut' }
     ])
+  })
+
+  it('answers a forced recheck with a fresh check, not one begun before the sign-in', async () => {
+    let calls = 0
+    const firstCheck = Promise.withResolvers<void>()
+    const checker = new HostAgentSignInStatusChecker({
+      findCommand: async (command) =>
+        command === 'codex' ? { status: 'available', binary: '/bin/codex' } : { status: 'absent' },
+      runStatus: async () => {
+        // The first check started before the sign-in finished.
+        const signedIn = calls++ > 0
+        if (!signedIn) {
+          await firstCheck.promise
+        }
+        return signedIn
+          ? { exitCode: 0, output: 'Logged in using ChatGPT', timedOut: false }
+          : { exitCode: 1, output: 'Not logged in', timedOut: false }
+      },
+      readAccounts: () => emptyAccounts(),
+      now: () => 1
+    })
+    const before = checker.read()
+    const after = checker.read(true)
+    firstCheck.resolve()
+    expect((await before).agents[1]).toEqual({ agent: 'codex', state: 'signedOut' })
+    expect((await after).agents[1]).toEqual({
+      agent: 'codex',
+      state: 'signedIn',
+      method: 'cliLogin'
+    })
   })
 })

@@ -49,18 +49,25 @@ function hostSelection(state: {
   return state.activeAccountIdsByRuntime?.host ?? state.activeAccountId
 }
 
-/** Whether launches here already use a signed-in Orca account, so the CLI's own login is moot. */
-function usesOrcaAccount(agent: HostAgentSignInAgent, accounts: Accounts | null): boolean {
+/** The verdict a selected Orca account fixes for launches here; null leaves it to the CLI's own login. */
+function orcaAccountVerdict(
+  agent: HostAgentSignInAgent,
+  accounts: Accounts | null
+): 'signedIn' | 'signedOut' | null {
   if (!accounts) {
-    return false
+    return null
   }
   if (agent === 'claude') {
     const id = hostSelection(accounts.claude)
     const account = accounts.claude.accounts.find((entry) => entry.id === id)
-    return Boolean(account && !account.needsSignIn && !account.runsOnSystemDefault)
+    if (!account || account.runsOnSystemDefault) {
+      return null
+    }
+    // Launches use the account's own folder, which holds no login yet.
+    return account.needsSignIn ? 'signedOut' : 'signedIn'
   }
   const id = hostSelection(accounts.codex)
-  return accounts.codex.accounts.some((entry) => entry.id === id)
+  return accounts.codex.accounts.some((entry) => entry.id === id) ? 'signedIn' : null
 }
 
 export function classifyAgentStatusOutput(
@@ -95,17 +102,32 @@ export function classifyAgentStatusOutput(
 export class HostAgentSignInStatusChecker {
   private report: HostAgentSignInReport | null = null
   private inFlight: Promise<HostAgentSignInReport> | null = null
+  private queuedForce: Promise<HostAgentSignInReport> | null = null
 
   constructor(private readonly deps: HostAgentSignInStatusDeps) {}
 
   read(force = false): Promise<HostAgentSignInReport> {
     if (this.inFlight) {
-      return this.inFlight
+      if (!force) {
+        return this.inFlight
+      }
+      // Why: a check begun before a sign-in finished can't answer a forced recheck after it.
+      this.queuedForce ??= this.inFlight
+        .catch(() => undefined)
+        .then(() => {
+          this.queuedForce = null
+          return this.start()
+        })
+      return this.queuedForce
     }
     const cached = this.report
     if (!force && cached && this.deps.now() - cached.checkedAt < REPORT_TTL_MS) {
       return Promise.resolve(cached)
     }
+    return this.start()
+  }
+
+  private start(): Promise<HostAgentSignInReport> {
     const run = this.check().finally(() => {
       if (this.inFlight === run) {
         this.inFlight = null
@@ -141,8 +163,11 @@ export class HostAgentSignInStatusChecker {
     if (probe.status !== 'available') {
       return { agent, state: 'unknown' }
     }
-    if (usesOrcaAccount(agent, accounts)) {
-      return { agent, state: 'signedIn', method: 'orcaAccount' }
+    const verdict = orcaAccountVerdict(agent, accounts)
+    if (verdict) {
+      return verdict === 'signedIn'
+        ? { agent, state: 'signedIn', method: 'orcaAccount' }
+        : { agent, state: 'signedOut' }
     }
     try {
       return classifyAgentStatusOutput(
@@ -156,8 +181,8 @@ export class HostAgentSignInStatusChecker {
 }
 
 function errorField(error: unknown, field: string): unknown {
-  return typeof error === 'object' && error !== null && field in error
-    ? (error as Record<string, unknown>)[field]
+  return typeof error === 'object' && error !== null
+    ? Object.getOwnPropertyDescriptor(error, field)?.value
     : undefined
 }
 
@@ -176,7 +201,8 @@ export async function runAgentStatusCommand(
     const stdout = errorField(error, 'stdout')
     const stderr = errorField(error, 'stderr')
     return {
-      exitCode: typeof code === 'number' ? code : null,
+      // Why: a throw carrying code 0 is truncated output, never a clean exit.
+      exitCode: typeof code === 'number' && code !== 0 ? code : null,
       output: `${typeof stdout === 'string' ? stdout : ''}\n${typeof stderr === 'string' ? stderr : ''}`,
       timedOut: code === 'ETIMEDOUT' || errorField(error, 'killed') === true
     }

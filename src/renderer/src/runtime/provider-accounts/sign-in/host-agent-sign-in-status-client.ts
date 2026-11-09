@@ -3,7 +3,7 @@ import type {
   HostAgentSignInReport
 } from '../../../../../shared/host-agent-sign-in-status'
 import { HOST_AGENT_SIGN_IN_STATUS_RUNTIME_CAPABILITY } from '../../../../../shared/account-runtime-capabilities'
-import { RECIPE_VM_REFUSAL_CODES } from '../../../../../shared/remote-runtime/recipe-vm-wake'
+import { RUNTIME_ENVIRONMENT_ASLEEP_ERROR_CODE } from '../../../../../shared/remote-runtime/recipe-vm-wake'
 import { callRuntimeRpc } from '../../rpc/calls/runtime-rpc-call'
 import { runtimeEnvironmentSupportsCapability } from '../../rpc/compatibility/runtime-capability-proof'
 import {
@@ -28,9 +28,14 @@ export type HostAgentSignInView =
 // Why: sign-in rarely changes on its own; views re-ask only after this or an explicit recheck.
 const VIEW_TTL_MS = 5 * 60_000
 const CALL_TIMEOUT_MS = 30_000
-const RECIPE_VM_REFUSALS: ReadonlySet<string> = new Set(RECIPE_VM_REFUSAL_CODES)
 
-type Entry = { view: HostAgentSignInView; settledAt: number; pending: Promise<void> | null }
+type Entry = {
+  view: HostAgentSignInView
+  settledAt: number
+  pending: Promise<void> | null
+  pendingForced: boolean
+  queuedForce: Promise<void> | null
+}
 
 const IDLE: HostAgentSignInView = { phase: 'idle' }
 const entries = new Map<string, Entry>()
@@ -47,7 +52,9 @@ function setView(environmentId: string, view: HostAgentSignInView, settled: bool
   entries.set(environmentId, {
     view,
     settledAt: settled ? Date.now() : (entry?.settledAt ?? 0),
-    pending: entry?.pending ?? null
+    pending: entry?.pending ?? null,
+    pendingForced: entry?.pendingForced ?? false,
+    queuedForce: entry?.queuedForce ?? null
   })
   notify()
 }
@@ -58,8 +65,12 @@ function lastReport(environmentId: string): HostAgentSignInReport | null {
 }
 
 function errorCode(error: unknown): string | undefined {
-  const code = typeof error === 'object' && error !== null ? Reflect.get(error, 'code') : undefined
-  return typeof code === 'string' ? code : undefined
+  return typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    typeof error.code === 'string'
+    ? error.code
+    : undefined
 }
 
 async function fetchView(environmentId: string, force: boolean): Promise<HostAgentSignInView> {
@@ -81,7 +92,8 @@ async function fetchView(environmentId: string, force: boolean): Promise<HostAge
     return { phase: 'ready', report }
   } catch (error) {
     const code = errorCode(error)
-    if (code && RECIPE_VM_REFUSALS.has(code)) {
+    // Waking or manually disconnected servers fall through to failed, which offers a retry.
+    if (code === RUNTIME_ENVIRONMENT_ASLEEP_ERROR_CODE) {
       return { phase: 'asleep' }
     }
     if (code === 'method_not_found') {
@@ -105,21 +117,35 @@ export function refreshHostAgentSignInStatus(
   environmentId: string,
   options: { force?: boolean } = {}
 ): Promise<void> {
-  const running = entries.get(environmentId)?.pending
-  if (running) {
-    return running
+  const force = options.force === true
+  const running = entries.get(environmentId)
+  if (running?.pending) {
+    if (!force || running.pendingForced) {
+      return running.pending
+    }
+    // Why: a read begun before a sign-in finished can't answer a forced recheck after it.
+    running.queuedForce ??= running.pending.then(() => {
+      const entry = entries.get(environmentId)
+      if (entry) {
+        entry.queuedForce = null
+      }
+      return refreshHostAgentSignInStatus(environmentId, { force: true })
+    })
+    return running.queuedForce
   }
   setView(environmentId, { phase: 'checking', report: lastReport(environmentId) }, false)
-  const pending = fetchView(environmentId, options.force === true).then((view) => {
+  const pending = fetchView(environmentId, force).then((view) => {
     setView(environmentId, view, true)
     const entry = entries.get(environmentId)
     if (entry) {
       entry.pending = null
+      entry.pendingForced = false
     }
   })
   const entry = entries.get(environmentId)
   if (entry) {
     entry.pending = pending
+    entry.pendingForced = force
   }
   return pending
 }
@@ -142,19 +168,25 @@ export function ensureHostAgentSignInStatus(environmentId: string): void {
 }
 
 type HostAccountsState = {
-  accounts: { id: string; createdAt: number; managedAuthRuntime?: 'host' | 'wsl' }[]
+  accounts: {
+    id: string
+    lastAuthenticatedAt: number
+    managedAuthRuntime?: 'host' | 'wsl'
+    managedHomeRuntime?: 'host' | 'wsl'
+  }[]
   activeAccountId: string | null
   activeAccountIdsByRuntime?: { host: string | null }
 }
 
-function newestUnselectedHostAccount(state: HostAccountsState): string | null {
+/** The host account this sign-in just authenticated, when the host has none chosen. */
+function justSignedInUnselectedHostAccount(state: HostAccountsState): string | null {
   if ((state.activeAccountIdsByRuntime?.host ?? state.activeAccountId) !== null) {
     return null
   }
   const hostAccounts = state.accounts.filter(
-    (account) => (account.managedAuthRuntime ?? 'host') === 'host'
+    (account) => (account.managedAuthRuntime ?? account.managedHomeRuntime ?? 'host') === 'host'
   )
-  hostAccounts.sort((a, b) => b.createdAt - a.createdAt)
+  hostAccounts.sort((a, b) => b.lastAuthenticatedAt - a.lastAuthenticatedAt)
   return hostAccounts[0]?.id ?? null
 }
 
@@ -167,12 +199,12 @@ export async function signInAgentOnHost(
   const owner = { kind: 'environment', environmentId } as const
   try {
     if (agent === 'claude') {
-      const accountId = newestUnselectedHostAccount(await addClaudeAccountOnHost(owner))
+      const accountId = justSignedInUnselectedHostAccount(await addClaudeAccountOnHost(owner))
       if (accountId) {
         await selectClaudeProviderAccount(owner, { accountId, runtime: 'host' })
       }
     } else {
-      const accountId = newestUnselectedHostAccount(await addCodexAccountOnHost(owner))
+      const accountId = justSignedInUnselectedHostAccount(await addCodexAccountOnHost(owner))
       if (accountId) {
         await selectCodexProviderAccount(owner, { accountId, runtime: 'host' })
       }

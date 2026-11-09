@@ -58,8 +58,8 @@ describe('host agent sign-in status client', () => {
   it('makes a new sign-in the host account only when none was chosen', async () => {
     mocks.addClaude.mockResolvedValue({
       accounts: [
-        { id: 'old', createdAt: 1 },
-        { id: 'new', createdAt: 2 }
+        { id: 'new', createdAt: 1, lastAuthenticatedAt: 9 },
+        { id: 'old', createdAt: 2, lastAuthenticatedAt: 2 }
       ],
       activeAccountId: null,
       activeAccountIdsByRuntime: { host: null, wsl: {} }
@@ -72,8 +72,8 @@ describe('host agent sign-in status client', () => {
 
     mocks.addCodex.mockResolvedValue({
       accounts: [
-        { id: 'chosen', createdAt: 1 },
-        { id: 'new', createdAt: 2 }
+        { id: 'chosen', lastAuthenticatedAt: 1 },
+        { id: 'new', lastAuthenticatedAt: 2 }
       ],
       activeAccountId: 'chosen'
     })

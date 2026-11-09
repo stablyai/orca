@@ -32,13 +32,12 @@ export function parseClaudeAuthStatusReport(stdout: string): ClaudeAuthStatusRep
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
     return null
   }
-  const record = parsed as Record<string, unknown>
   const report: ClaudeAuthStatusReport = {}
-  if (typeof record.loggedIn === 'boolean') {
-    report.loggedIn = record.loggedIn
+  if ('loggedIn' in parsed && typeof parsed.loggedIn === 'boolean') {
+    report.loggedIn = parsed.loggedIn
   }
   for (const field of STRING_FIELDS) {
-    const value = record[field]
+    const value = Object.getOwnPropertyDescriptor(parsed, field)?.value
     if (typeof value === 'string') {
       report[field] = value
     }

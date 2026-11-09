@@ -22621,7 +22621,7 @@
       "signIn": "Sign in",
       "codexDeviceCodeHint": "Codex signs in with a device code. If it fails, turn on device code login in ChatGPT under Settings → Security, then try again.",
       "title": "Sign in agents",
-      "description": "Each agent runs its own sign-in on {{host}}. Your login stays on {{host}}; Orca only passes along the link and code.",
+      "description": "Each agent signs in on {{host}}, and the login stays there. Orca only passes along the link and code.",
       "apiKeyNote": "Using an API key instead? Set ANTHROPIC_API_KEY or OPENAI_API_KEY in that host’s shell profile.",
       "recheck": "Check again",
       "done": "Done",
