@@ -5523,8 +5523,6 @@
           "888b83bf78": "无法保存设置脚本",
           "a49196d538": "当 Orca 创建新工作树时运行。",
           "savedSetupCommand": "已保存设置命令。",
-          "savedWithSkippedFields_one": "已跳过 {{count}} 个不受支持的字段。设置命令已保存。",
-          "savedWithSkippedFields_other": "已跳过 {{count}} 个不受支持的字段。设置命令已保存。",
           "savedInProjectSettings": "已保存在此<settings>项目的设置</settings>中"
         },
         "SetupScriptPromptCardViews": {
@@ -5537,12 +5535,9 @@
           "eefa756190": "手动配置",
           "ca4efcbc25": "保存",
           "fdbc6cb064": "已检测的安装脚本",
-          "7275f674cc": "已检测的设置",
           "822ff300ad": "关闭",
           "5bfd5c8779": "关闭安装脚本",
-          "detectedFromSource": "从 <source>{{source}}</source> 已检测",
           "ignoresSharedSetup": "此仓库会忽略共享的 <yaml>orca.yaml</yaml> 设置脚本。请添加本地命令，或在“设置”中更改来源。",
-          "foundSetupCommandIn": "在 <source>{{source}}</source> 中找到设置命令。保存后即可在新工作树中运行。",
           "reviewSetupScript": "查看设置脚本"
         },
         "SetupScriptReviewDialog": {

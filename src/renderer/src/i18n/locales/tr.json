@@ -6152,8 +6152,6 @@
           "888b83bf78": "Kurulum betiği kaydedilemedi",
           "a49196d538": "Orca yeni bir worktree oluşturduğunda çalışır.",
           "savedSetupCommand": "Kurulum komutu kaydedildi.",
-          "savedWithSkippedFields_one": "Desteklenmeyen {{count}} alan atlandı. Kurulum komutu kaydedildi.",
-          "savedWithSkippedFields_other": "Desteklenmeyen {{count}} alan atlandı. Kurulum komutu kaydedildi.",
           "savedInProjectSettings": "Bu <settings>projenin ayarlarında</settings> kayıtlı"
         },
         "SetupScriptPromptCardViews": {
@@ -6166,12 +6164,9 @@
           "eefa756190": "Manuel yapılandır",
           "ca4efcbc25": "Kaydet",
           "fdbc6cb064": "Algılanan kurulum betiği",
-          "7275f674cc": "Algılanan kurulum",
           "822ff300ad": "Kapat",
           "5bfd5c8779": "Kurulum betiklerini kapat",
-          "detectedFromSource": "<source>{{source}}</source> kaynağından algılandı",
           "ignoresSharedSetup": "Bu repo, paylaşılan <yaml>orca.yaml</yaml> kurulum betiklerini yok sayıyor. Yerel bir komut ekleyin veya Ayarlar bölümünde kaynağı değiştirin.",
-          "foundSetupCommandIn": "<source>{{source}}</source> içinde bir kurulum komutu bulundu. Yeni worktree'lerde çalıştırmak için kaydedin.",
           "reviewSetupScript": "Kurulum betiğini incele"
         },
         "SetupScriptReviewDialog": {

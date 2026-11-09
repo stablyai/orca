@@ -5523,8 +5523,6 @@
           "888b83bf78": "セットアップスクリプトの保存に失敗しました",
           "a49196d538": "Orca が新規ワークツリーを作成するときに実行されます。",
           "savedSetupCommand": "セットアップコマンドを保存しました。",
-          "savedWithSkippedFields_one": "未対応の項目を {{count}} 件スキップしました。セットアップコマンドを保存しました。",
-          "savedWithSkippedFields_other": "未対応の項目を {{count}} 件スキップしました。セットアップコマンドを保存しました。",
           "savedInProjectSettings": "この<settings>プロジェクトの設定</settings>に保存済み"
         },
         "SetupScriptPromptCardViews": {
@@ -5537,12 +5535,9 @@
           "eefa756190": "手動で構成する",
           "ca4efcbc25": "保存",
           "fdbc6cb064": "検出されたセットアップスクリプト",
-          "7275f674cc": "検出されたセットアップ",
           "822ff300ad": "閉じる",
           "5bfd5c8779": "セットアップスクリプトを閉じる",
-          "detectedFromSource": "<source>{{source}}</source> から検出",
           "ignoresSharedSetup": "このリポジトリは共有の <yaml>orca.yaml</yaml> セットアップスクリプトを無視します。ローカルコマンドを追加するか、設定でソースを変更してください。",
-          "foundSetupCommandIn": "<source>{{source}}</source> でセットアップコマンドが見つかりました。新規ワークツリーで実行するには保存してください。",
           "reviewSetupScript": "セットアップスクリプトを確認"
         },
         "SetupScriptReviewDialog": {

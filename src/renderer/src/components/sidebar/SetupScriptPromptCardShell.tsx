@@ -3,7 +3,6 @@ import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import {
   ConfigureOnlyAction,
   DetectedSetupPreview,
-  DetectedSetupSummary,
   DismissButton,
   InspectionErrorActions,
   PackageManagerActions,
@@ -75,7 +74,7 @@ export function SetupScriptPromptCardShell({
             isInspectionError={isInspectionError}
             sharedSetupIgnored={sharedSetupIgnored}
             isPackageManagerSuggestion={isPackageManagerSuggestion}
-            candidateSource={candidateSource}
+            candidateSource={candidateProvenance ?? candidateSource}
           />
         </p>
 
@@ -83,12 +82,6 @@ export function SetupScriptPromptCardShell({
           <DetectedSetupPreview
             setup={detectedSetupPreview.setup}
             onSetupChange={onSetupDraftChange}
-            provenance={candidateProvenance}
-          />
-        ) : showDetected ? (
-          <DetectedSetupSummary
-            setup={detectedSetupPreview.setup}
-            provenance={candidateProvenance}
           />
         ) : null}
 
@@ -116,6 +109,7 @@ export function SetupScriptPromptCardShell({
           repoDisplayName={repoDisplayName}
           setup={detectedSetupPreview.setup}
           archive={detectedSetupPreview.archive}
+          skippedFields={detectedSetupPreview.skippedFields}
           provenance={candidateProvenance}
           isSaving={isImporting}
           onSave={onImport}
