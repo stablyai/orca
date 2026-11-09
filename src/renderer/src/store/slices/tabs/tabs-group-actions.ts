@@ -178,25 +178,21 @@ export function createTabsGroupActions(
         const remainingGroups = (current.groupsByWorktree[worktreeId] ?? []).filter(
           (candidate) => candidate.id !== groupId
         )
-        const collapsed = collapseGroupLayout(
+        const collapsedState = collapseGroupLayout(
           current.layoutByWorktree,
           current.activeGroupIdByWorktree,
           worktreeId,
           groupId,
           remainingGroups[0]?.id ?? null
         )
-        const collapsedState = {
-          layoutByWorktree: annotateRecordReplacement(
-            current.layoutByWorktree,
-            collapsed.layoutByWorktree,
-            [worktreeId]
-          ),
-          activeGroupIdByWorktree: annotateRecordReplacement(
-            current.activeGroupIdByWorktree,
-            collapsed.activeGroupIdByWorktree,
-            [worktreeId]
-          )
-        }
+        annotateRecordReplacement(current.layoutByWorktree, collapsedState.layoutByWorktree, [
+          worktreeId
+        ])
+        annotateRecordReplacement(
+          current.activeGroupIdByWorktree,
+          collapsedState.activeGroupIdByWorktree,
+          [worktreeId]
+        )
         const nextGroupsByWorktree = replaceRecordEntries(current.groupsByWorktree, [
           [worktreeId, remainingGroups]
         ])

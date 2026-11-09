@@ -14,9 +14,9 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-sw
 import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
 import {
   annotateRecordReplacement,
-  annotateTabBucketReplacement,
-  markFullResync
+  annotateTabBucketReplacement
 } from '../../keyed-record-transitions'
+import { markPatchFullResync, SEAM_WORKSPACE_RECORD_FIELDS } from '../../seam-record-fields'
 
 /** The candidate keys whose entry `next` added, deleted or replaced. */
 function changedWorkspaceKeys(
@@ -30,16 +30,20 @@ function changedWorkspaceKeys(
   )
 }
 
-function replaceWorkspaceRecordKeys<R extends Record<string, unknown>>(
-  current: R,
-  hydrated: R,
+function replaceWorkspaceRecordKeys<V>(
+  current: Record<string, V>,
+  hydrated: Record<string, V>,
   workspaceKeys: ReadonlySet<string>,
-  annotate: (previous: R, next: R, keys: string[]) => R = annotateRecordReplacement
-): R {
-  const next = {
+  annotate: (
+    previous: Record<string, V>,
+    next: Record<string, V>,
+    keys: string[]
+  ) => Record<string, V> = annotateRecordReplacement
+): Record<string, V> {
+  const next: Record<string, V> = {
     ...Object.fromEntries(Object.entries(current).filter(([key]) => !workspaceKeys.has(key))),
     ...Object.fromEntries(Object.entries(hydrated).filter(([key]) => workspaceKeys.has(key)))
-  } as R
+  }
   return annotate(current, next, changedWorkspaceKeys(current, next, workspaceKeys))
 }
 
@@ -68,7 +72,7 @@ function projectWorktreeTabModelReconciliations(
       changedWorkspaceKeys(state.unifiedTabsByWorktree, merged.unifiedTabsByWorktree, worktreeIds)
     )
   }
-  for (const key of ['groupsByWorktree', 'activeGroupIdByWorktree', 'layoutByWorktree'] as const) {
+  for (const key of SEAM_WORKSPACE_RECORD_FIELDS) {
     const next = merged[key]
     if (next) {
       annotateRecordReplacement(
@@ -132,12 +136,7 @@ export function createTabsSessionActions(
       )
       if (!options?.replaceWorkspaceKeys) {
         // Cold path: a full session hydration rebuilds every workspace's tab state.
-        set({
-          unifiedTabsByWorktree: markFullResync(hydrated.unifiedTabsByWorktree, 'hydration'),
-          groupsByWorktree: markFullResync(hydrated.groupsByWorktree, 'hydration'),
-          activeGroupIdByWorktree: markFullResync(hydrated.activeGroupIdByWorktree, 'hydration'),
-          layoutByWorktree: markFullResync(hydrated.layoutByWorktree, 'hydration')
-        })
+        set(markPatchFullResync(hydrated, 'hydration'))
         return
       }
       const replaceWorkspaceKeys = new Set(options.replaceWorkspaceKeys)

@@ -19,7 +19,8 @@ import { resolveRestoredEditorOwnerDestination } from './restored-editor-owner-d
 import { rekeyRestoredEditorTabsInPlace } from './restored-editor-owner-in-place'
 import {
   annotateRecordReplacement,
-  annotateTabBucketReplacement
+  annotateTabBucketReplacement,
+  type KeyedSnapshot
 } from '../../../keyed-record-transitions'
 
 /** The group a moved restored tab joins: the workspace's active one, else its first, else a new one. */
@@ -193,7 +194,7 @@ export function buildRestoredEditorOwnerTransition(
     }
     nextActiveGroupIdByWorktree[targetWorktreeId] = targetGroupId
     const movedWorkspaces = [sourceWorktreeId, targetWorktreeId]
-    const moved = <R extends object>(previous: object, next: R): R =>
+    const moved = <R extends KeyedSnapshot>(previous: KeyedSnapshot, next: R): R =>
       annotateRecordReplacement(previous, next, movedWorkspaces)
     const tabState =
       sourceWorktreeId === targetWorktreeId

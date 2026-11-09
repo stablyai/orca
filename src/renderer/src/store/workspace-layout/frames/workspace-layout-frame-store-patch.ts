@@ -17,6 +17,7 @@ import {
   annotateRecordReplacement,
   annotateTabBucketReplacement
 } from '../../keyed-record-transitions'
+import { isSeamTabMapField } from '../../seam-record-fields'
 
 /** Keep window spawn/recovery and live bindings; main publishes saved bindings until it owns live ones. */
 const WINDOW_TERMINAL_TAB_FIELDS = [
@@ -157,14 +158,9 @@ export function buildLayoutFrameStorePatch(
     if (next !== state[slice]) {
       const previous = state[slice]
       Object.assign(patch, {
-        [slice]:
-          slice === 'tabsByWorktree' || slice === 'unifiedTabsByWorktree'
-            ? annotateTabBucketReplacement(
-                state[slice],
-                next as Record<string, { id: string }[]>,
-                changedKeys
-              )
-            : annotateRecordReplacement(previous, next, changedKeys)
+        [slice]: isSeamTabMapField(slice)
+          ? annotateTabBucketReplacement(state[slice], next, changedKeys)
+          : annotateRecordReplacement(previous, next, changedKeys)
       })
     }
   }

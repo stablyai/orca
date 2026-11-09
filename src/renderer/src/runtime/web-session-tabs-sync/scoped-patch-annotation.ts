@@ -1,38 +1,23 @@
 import type { AppState } from '../../store/types'
 import {
   annotateRecordReplacement,
-  annotateTabBucketReplacement,
-  markFullResync,
-  type FullResyncReason
+  annotateTabBucketReplacement
 } from '../../store/keyed-record-transitions'
+import {
+  markPatchFullResync,
+  SEAM_SCOPED_TAB_RECORD_FIELDS,
+  SEAM_TAB_MAP_FIELDS,
+  SEAM_WORKSPACE_RECORD_FIELDS
+} from '../../store/seam-record-fields'
 
-const TAB_MAPS = ['tabsByWorktree', 'unifiedTabsByWorktree'] as const
-const WORKSPACE_KEYED_RECORDS = [
-  'groupsByWorktree',
-  'layoutByWorktree',
-  'activeGroupIdByWorktree'
-] as const
-const TAB_KEYED_RECORDS = [
-  'ptyIdsByTabId',
-  'terminalLayoutsByTabId',
-  'runtimePaneTitlesByTabId',
-  'pendingStartupByTabId'
-] as const
+const TAB_MAPS = SEAM_TAB_MAP_FIELDS
+const WORKSPACE_KEYED_RECORDS = SEAM_WORKSPACE_RECORD_FIELDS
+const TAB_KEYED_RECORDS = SEAM_SCOPED_TAB_RECORD_FIELDS
 const TRACKED_RECORDS = [...TAB_MAPS, ...WORKSPACE_KEYED_RECORDS, ...TAB_KEYED_RECORDS] as const
 
 type TrackedRecord = (typeof TRACKED_RECORDS)[number]
 type ScopedPatch = Partial<Pick<AppState, TrackedRecord>>
 type ScopedState = Pick<AppState, TrackedRecord>
-
-/** Marks every tracked record `patch` replaces as rebuilt wholesale. */
-export function markScopedPatchFullResync(patch: ScopedPatch, reason: FullResyncReason): void {
-  for (const key of TRACKED_RECORDS) {
-    const next = patch[key]
-    if (next) {
-      markFullResync(next, reason)
-    }
-  }
-}
 
 /** Names the keys a workspace-scoped patch changed: those workspaces' buckets and their tabs. */
 export function annotateWorkspaceScopedPatch(
@@ -97,7 +82,7 @@ export function annotateLayoutFlushPatch<P extends ScopedPatch>(
   const shown = { ...rekeyed, ...patch }
   if (builds.fullBuilt.length > 0) {
     // Cold path: a full build redraws its workspaces through save/Loader.
-    markScopedPatchFullResync(shown, 'host-mirror-frame')
+    markPatchFullResync(shown, 'host-mirror-frame')
     return shown
   }
   annotateWorkspaceScopedPatch(

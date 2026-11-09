@@ -18,17 +18,19 @@ export type TabMapChanges =
   | { kind: 'full-resync'; reason: FullResyncReason }
 
 type Link =
-  | { previous: WeakRef<object>; keys: ReadonlySet<string>; tabIds?: ReadonlySet<string> }
+  | { previous: WeakRef<KeyedSnapshot>; keys: ReadonlySet<string>; tabIds?: ReadonlySet<string> }
   | { reason: FullResyncReason }
 
+/** Any keyed store record a writer replaces: tab buckets or a companion record. */
+export type KeyedSnapshot = Readonly<Record<string, unknown>>
 type KeyedRecord<V> = Readonly<Record<string, V>>
-type Buckets<T> = Readonly<Record<string, readonly T[]>>
+type TabRow = { id: string }
 
-const links = new WeakMap<object, Link>()
+const links = new WeakMap<KeyedSnapshot, Link>()
 // Readers that skipped intermediate states still get an exact union; deeper gaps resync.
 const MAX_CHAIN = 64
 
-function link(next: object, previous: object, keys: ReadonlySet<string>): void {
+function link(next: KeyedSnapshot, previous: KeyedSnapshot, keys: ReadonlySet<string>): void {
   links.set(next, { previous: new WeakRef(previous), keys })
 }
 
@@ -55,12 +57,14 @@ export function replaceRecordEntries<V>(
 }
 
 // Tests prove each builder's named keys cover every entry it changed; production trusts them.
-function verifyNamedKeys(previous: object, next: object, keys: ReadonlySet<string>): void {
+function verifyNamedKeys(
+  before: KeyedSnapshot,
+  after: KeyedSnapshot,
+  keys: ReadonlySet<string>
+): void {
   if (import.meta.env.MODE !== 'test') {
     return
   }
-  const before = previous as Record<string, unknown>
-  const after = next as Record<string, unknown>
   for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
     if (
       !keys.has(key) &&
@@ -72,8 +76,8 @@ function verifyNamedKeys(previous: object, next: object, keys: ReadonlySet<strin
 }
 
 /** For builders that already produced `next`: names the keys it changed (verified under test). */
-export function annotateRecordReplacement<R extends object>(
-  previous: object,
+export function annotateRecordReplacement<R extends KeyedSnapshot>(
+  previous: KeyedSnapshot,
   next: R,
   keys: Iterable<string>
 ): R {
@@ -86,9 +90,14 @@ export function annotateRecordReplacement<R extends object>(
   return next
 }
 
-function changedTabIds<T extends { id: string }>(
-  previous: readonly T[] | undefined,
-  next: readonly T[] | undefined,
+function tabRows(record: KeyedSnapshot, key: string): readonly TabRow[] | undefined {
+  const value = Object.hasOwn(record, key) ? record[key] : undefined
+  return Array.isArray(value) ? value : undefined
+}
+
+function changedTabIds(
+  previous: readonly TabRow[] | undefined,
+  next: readonly TabRow[] | undefined,
   into: Set<string>
 ): void {
   if (previous === next) {
@@ -106,35 +115,31 @@ function changedTabIds<T extends { id: string }>(
   }
 }
 
-function linkTabBuckets<T extends { id: string }>(
-  previous: Buckets<T>,
-  next: Buckets<T>,
+function linkTabBuckets(
+  previous: KeyedSnapshot,
+  next: KeyedSnapshot,
   keys: ReadonlySet<string>
 ): void {
   const tabIds = new Set<string>()
   for (const workspaceId of keys) {
-    changedTabIds(
-      Object.hasOwn(previous, workspaceId) ? previous[workspaceId] : undefined,
-      Object.hasOwn(next, workspaceId) ? next[workspaceId] : undefined,
-      tabIds
-    )
+    changedTabIds(tabRows(previous, workspaceId), tabRows(next, workspaceId), tabIds)
   }
   links.set(next, { previous: new WeakRef(previous), keys, tabIds })
 }
 
 /** Tab-bucket form; tab IDs come from diffing only the replaced buckets. */
-export function replaceTabBuckets<T extends { id: string }>(
-  previous: Buckets<T>,
+export function replaceTabBuckets<T extends TabRow>(
+  previous: KeyedRecord<T[]>,
   replacements: Iterable<readonly [workspaceId: string, tabs: T[] | null]>
 ): Record<string, T[]> {
-  const next = replaceRecordEntries<T[]>(previous as KeyedRecord<T[]>, replacements)
+  const next = replaceRecordEntries(previous, replacements)
   const recorded = links.get(next)
   linkTabBuckets(previous, next, recorded && 'keys' in recorded ? recorded.keys : new Set())
   return next
 }
 
-export function annotateTabBucketReplacement<R extends Buckets<{ id: string }>>(
-  previous: Buckets<{ id: string }>,
+export function annotateTabBucketReplacement<R extends KeyedSnapshot>(
+  previous: KeyedSnapshot,
   next: R,
   workspaceIds: Iterable<string>
 ): R {
@@ -148,17 +153,17 @@ export function annotateTabBucketReplacement<R extends Buckets<{ id: string }>>(
 }
 
 /** Named cold path: the whole record was rebuilt from a snapshot. */
-export function markFullResync<R extends object>(next: R, reason: FullResyncReason): R {
+export function markFullResync<R extends KeyedSnapshot>(next: R, reason: FullResyncReason): R {
   links.set(next, { reason })
   return next
 }
 
 type Walked = { keys: Set<string>; tabIds: Set<string> | null }
 
-function walk(next: object, previous: object): Walked | FullResyncReason {
+function walk(next: KeyedSnapshot, previous: KeyedSnapshot): Walked | FullResyncReason {
   const keys = new Set<string>()
   let tabIds: Set<string> | null = new Set()
-  let current = next
+  let current: KeyedSnapshot = next
   for (let depth = 0; depth < MAX_CHAIN; depth++) {
     const step = links.get(current)
     if (!step) {
@@ -187,7 +192,10 @@ function walk(next: object, previous: object): Walked | FullResyncReason {
 }
 
 /** null: same identity. Addressed only when every write from `previous` to `next` was annotated. */
-export function readRecordChanges(next: object, previous: object): RecordChanges | null {
+export function readRecordChanges(
+  next: KeyedSnapshot,
+  previous: KeyedSnapshot
+): RecordChanges | null {
   if (next === previous) {
     return null
   }
@@ -197,7 +205,10 @@ export function readRecordChanges(next: object, previous: object): RecordChanges
     : { kind: 'addressed', keys: result.keys }
 }
 
-export function readTabMapChanges(next: object, previous: object): TabMapChanges | null {
+export function readTabMapChanges(
+  next: KeyedSnapshot,
+  previous: KeyedSnapshot
+): TabMapChanges | null {
   if (next === previous) {
     return null
   }

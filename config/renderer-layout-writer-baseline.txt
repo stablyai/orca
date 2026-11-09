@@ -27,6 +27,7 @@
 3 src/renderer/src/lib/workspace/persistence/workspace-session-staged-browser-tabs.ts
 1 src/renderer/src/lib/workspace/persistence/workspace-session-unified-tabs.ts
 17 src/renderer/src/lib/workspace/persistence/workspace-session.ts
+13 src/renderer/src/runtime/browser/creation/testing/web-runtime-browser-creation-placement-test-rig.ts
 3 src/renderer/src/runtime/hosted-terminals/recovery/adoption/web-session-terminal-recovery-snapshot-validation.ts
 1 src/renderer/src/runtime/hosted-terminals/recovery/surfaces/web-session-terminal-orphan-recovery-surface.ts
 2 src/renderer/src/runtime/hosted-terminals/recovery/surfaces/web-session-terminal-orphan-topology.ts
@@ -35,15 +36,14 @@
 10 src/renderer/src/runtime/sync-runtime-graph/mobile-session-group-projection.ts
 2 src/renderer/src/runtime/sync-runtime-graph/mobile-session-snapshots.ts
 2 src/renderer/src/runtime/sync-runtime-graph/sync-key.ts
-13 src/renderer/src/runtime/browser/creation/testing/web-runtime-browser-creation-placement-test-rig.ts
-1 src/renderer/src/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot.ts
-3 src/renderer/src/runtime/web-session-tabs-sync/placement/web-session-client-owned-tab-placement.ts
 1 src/renderer/src/runtime/web-session-tabs-sync/agent-status-primitives.ts
 8 src/renderer/src/runtime/web-session-tabs-sync/apply-active-state.ts
 18 src/renderer/src/runtime/web-session-tabs-sync/apply-final-patch.ts
 2 src/renderer/src/runtime/web-session-tabs-sync/apply-preparation-groups.ts
 5 src/renderer/src/runtime/web-session-tabs-sync/apply-terminal-records.ts
 4 src/renderer/src/runtime/web-session-tabs-sync/apply-worktree-records.ts
+1 src/renderer/src/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot.ts
+3 src/renderer/src/runtime/web-session-tabs-sync/placement/web-session-client-owned-tab-placement.ts
 2 src/renderer/src/runtime/web-session-tabs-sync/session-tabs-inventory-absence.ts
 10 src/renderer/src/store/slices/browser/cleanup/browser-close-actions.ts
 2 src/renderer/src/store/slices/browser/create-browser-slice.ts
@@ -95,7 +95,8 @@
 4 src/renderer/src/store/slices/tabs/tabs-session-actions.ts
 1 src/renderer/src/store/slices/tabs/tabs-split-ratio-actions.ts
 5 src/renderer/src/store/slices/tabs/tabs-surface.ts
-24 src/renderer/src/store/slices/tabs/worktree-layout-lifecycle.ts
+21 src/renderer/src/store/slices/tabs/worktree-layout-lifecycle.ts
+3 src/renderer/src/store/slices/tabs/worktree-terminal-tab-respawn.ts # moved unchanged out of worktree-layout-lifecycle.ts (24 -> 21)
 5 src/renderer/src/store/slices/worktrees/session/set-active-worktree.ts
 2 src/renderer/src/store/slices/worktrees/session/worktree-slice-lookups.ts
 6 src/renderer/src/store/terminals/create-terminal-slice.ts
@@ -112,7 +113,7 @@
 10 src/renderer/src/store/terminals/terminal-tab-creation.ts
 7 src/renderer/src/store/terminals/terminal-tab-navigation.ts
 3 src/renderer/src/store/terminals/terminal-tab-presentation.ts
-4 src/renderer/src/store/terminals/terminal-tab-title-batch.ts
+2 src/renderer/src/store/terminals/terminal-tab-title-batch.ts
 5 src/renderer/src/store/terminals/workspace-terminal-hydration-patch.ts
 2 src/renderer/src/store/terminals/workspace-terminal-hydration.ts
 2 src/renderer/src/store/terminals/workspace-terminal-reconnect.ts
