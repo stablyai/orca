@@ -18,8 +18,11 @@ import {
 } from '@/lib/client-creation-action-error'
 import { openNewTerminalTabInWorkspace } from '@/store/terminals/terminal-active-workspace-creation'
 import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
-import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
-import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
+import { openMobileEmulatorTab } from '@/lib/simulator/launch/open-mobile-emulator-tab'
+import {
+  ensureSimulatorTab,
+  getSimulatorTabForWorktree
+} from '@/lib/simulator/tabs/ensure-simulator-tab'
 import { SplitPaneLandingAgentRow } from './SplitPaneLandingAgentRow'
 import {
   LANDING_ROW_CLASS,

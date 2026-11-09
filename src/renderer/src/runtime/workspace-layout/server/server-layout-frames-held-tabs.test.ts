@@ -24,7 +24,7 @@ import {
   _resetStagedBrowserFrameHandoversForTests,
   wasStagedBrowserTabHandedToFrames
 } from '@/lib/staged-browser-frame-handover'
-import { ensureSimulatorTab } from '@/lib/ensure-simulator-tab'
+import { ensureSimulatorTab } from '@/lib/simulator/tabs/ensure-simulator-tab'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { commitTabDragDrop } from '@/components/tab-group/tab-drag-drop-commit'
 import '@/components/tab-bar/tab-move-to-pane-column'

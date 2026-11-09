@@ -8,7 +8,7 @@ import {
   type TabsDrawnFromMain
 } from '../../store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
-vi.mock('@/lib/doc-preview-grants', () => ({
+vi.mock('@/lib/browser/documents/doc-preview-grants', () => ({
   releaseDocPreviewGrant: vi.fn(),
   ensureDocPreviewGrant: vi.fn(),
   buildDocPreviewGrantRequest: vi.fn()

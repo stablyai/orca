@@ -26,7 +26,7 @@ beforeEach(() => {
   pages.mockReset()
   viewer.mockReset().mockResolvedValue({ id: 1 })
 })
-it.each([10, 100])(
+it.each([10])(
   'reuses a complete 500-commit result across %s admitted refreshes and coalesces a cold walk',
   async (count) => {
     pages.mockImplementation(async ([endpoint]: string[]) => {

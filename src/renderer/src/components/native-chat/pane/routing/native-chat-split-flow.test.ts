@@ -64,9 +64,9 @@ beforeEach(async () => {
   createRemote.mockReset().mockResolvedValue({ status: 'created' })
 })
 
-function sourceChat(worktreeId: string, agent: 'claude' | 'codex' = 'codex') {
+function sourceChat(worktreeId: string, agent: 'claude' | 'codex' | null = 'codex') {
   const source = store.getState().createUnifiedTab(worktreeId, 'agent-session', {
-    agentSessionAgent: agent,
+    agentSessionAgent: agent ?? undefined,
     executionHostId: 'local'
   })
   return {
@@ -77,9 +77,10 @@ function sourceChat(worktreeId: string, agent: 'claude' | 'codex' = 'codex') {
 
 it.each([
   ['right', 'claude', null],
-  ['down', 'codex', 'paired-host']
+  ['down', 'codex', 'paired-host'],
+  ['right', null, null]
 ] as const)(
-  'Split %s from %s opens an empty pane beside the chat (host %s)',
+  'Split %s from agent %s opens an empty pane beside the chat (host %s)',
   (direction, agent, host) => {
     const worktreeId = folderWorkspaceKey('chat-folder')
     if (host) {
