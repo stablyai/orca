@@ -139,7 +139,7 @@ describe('response hardening', () => {
     expect(created).toEqual({ key: null, secret })
   })
 
-  it('rejects non-https links from the server', async () => {
+  it('drops non-https links from the server', async () => {
     const run = {
       id: 'run_1',
       routineId: 'rt_1',
@@ -155,9 +155,10 @@ describe('response hardening', () => {
       durationMs: 1
     }
     const fetchImpl = vi.fn(async () => respond(202, { run }))
-    expect(await codeOf(client(fetchImpl as unknown as typeof fetch).runRoutine('rt_1'))).toBe(
-      'invalid-response'
-    )
+    // A bad link is dropped, never opened, and doesn't fail the whole response.
+    const { run: parsed } = await client(fetchImpl as unknown as typeof fetch).runRoutine('rt_1')
+    expect(parsed.result?.prUrl).toBeUndefined()
+    expect(parsed.status).toBe('succeeded')
   })
 })
 
