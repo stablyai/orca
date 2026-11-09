@@ -15,6 +15,8 @@ export type DaemonPtyAdapterOptions = {
   readRunningWslDistros?: ReadRunningWslDistros
   /** Test seam; production reads each distro's boot id through the background-work gate. */
   wslBridgeBootIdentity?: WslBridgeBootIdentity
+  /** Test seam; delays before each reconnect attempt to a dead daemon that cannot respawn. */
+  preservedEndpointLossProbeDelaysMs?: readonly number[]
 }
 
 export type DaemonRespawnReason =
