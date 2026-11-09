@@ -36,11 +36,11 @@ export function federatedFleetHosts(
   dispatchIds: readonly string[]
 ): Map<string, FederatedFleetHost> {
   const hosts = new Map<string, FederatedFleetHost>()
-  for (const dispatchId of dispatchIds) {
-    const federated = db.getFederatedDispatch(dispatchId)
-    if (federated) {
-      hosts.set(dispatchId, { id: federated.environment_id, name: federated.environment_name })
-    }
+  for (const federated of db.listFederatedDispatchesByIds(dispatchIds)) {
+    hosts.set(federated.dispatch_id, {
+      id: federated.environment_id,
+      name: federated.environment_name
+    })
   }
   return hosts
 }
