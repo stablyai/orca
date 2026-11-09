@@ -56,7 +56,7 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
   const refresh = useCallback(() => setRevision((revision) => revision + 1), [])
   const [toast, setToast] = useState<MobileDictationHostToast | null>(null)
   const clearToast = useCallback(() => setToast(null), [])
-  const [clearances, setClearances] = useState<ReadonlyMap<object, number>>(new Map())
+  const [clearances, setClearances] = useState<ReadonlyMap<symbol, number>>(new Map())
   const clipboard = useClipboardWriter()
 
   // Bring a dictation's target back: its screen if one is still mounted, otherwise open the session again.
@@ -198,7 +198,7 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
     },
     [refresh]
   )
-  const setClearance = useCallback((id: object, height: number) => {
+  const setClearance = useCallback((id: symbol, height: number) => {
     setClearances((current) => {
       if ((current.get(id) ?? 0) === height) {
         return current

@@ -84,13 +84,13 @@ export function useMobileDictationHostLive(host: MobileDictationHost): UseMobile
 
 // Bottom bars report the height they cover, so the pill floats above them rather than over their buttons.
 export const MobileDictationClearanceContext = createContext<
-  ((id: object, height: number) => void) | null
+  ((id: symbol, height: number) => void) | null
 >(null)
 
 // A bottom bar's covered height, cleared when it unmounts; a hidden screen's bar lays out at zero.
 export function useMobileDictationClearance(height: number): void {
   const setClearance = useContext(MobileDictationClearanceContext)
-  const [id] = useState(() => ({}))
+  const [id] = useState(() => Symbol('dictation-clearance'))
   useEffect(() => {
     setClearance?.(id, height)
   }, [height, id, setClearance])
