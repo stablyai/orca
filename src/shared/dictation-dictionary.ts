@@ -39,7 +39,7 @@ export function normalizeDictationTerms(value: unknown): DictationTerm[] | undef
     const spelling = term.trim().slice(0, MAX_DICTATION_TERM_LENGTH)
     const alias =
       typeof heardAs === 'string' ? heardAs.trim().slice(0, MAX_DICTATION_TERM_LENGTH) : ''
-    // The same spelling and alias twice is one entry; the settings list keys its chips by the pair.
+    // The same spelling and alias twice is one stored entry.
     const id = `${spelling}\u0000${alias}`
     if (seen.has(id)) {
       continue

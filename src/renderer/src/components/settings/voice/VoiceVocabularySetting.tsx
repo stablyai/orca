@@ -134,8 +134,10 @@ export function VoiceVocabularySetting({
       <VocabularyAddRow
         full={terms.length >= MAX_DICTATION_TERMS}
         onAdd={(entry) => {
+          // A term already keys its own spelling, so a bare one needs no second entry.
           const exists = terms.some(
-            (other) => other.term === entry.term && other.heardAs === entry.heardAs
+            (other) =>
+              other.term === entry.term && (!entry.heardAs || other.heardAs === entry.heardAs)
           )
           if (!exists) {
             saveTerms([...terms, entry])
