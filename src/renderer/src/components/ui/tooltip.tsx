@@ -6,7 +6,8 @@ import { cn } from '@/lib/utils'
 import { PortalContainerContext, usePortalContainer } from './portal-container-context'
 
 function TooltipProvider({
-  delayDuration = 0,
+  delayDuration = 600,
+  skipDelayDuration = 0,
   disableHoverableContent = true,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Provider>) {
@@ -15,6 +16,7 @@ function TooltipProvider({
     <TooltipPrimitive.Provider
       data-slot="tooltip-provider"
       delayDuration={delayDuration}
+      skipDelayDuration={skipDelayDuration}
       disableHoverableContent={disableHoverableContent}
       {...props}
     />

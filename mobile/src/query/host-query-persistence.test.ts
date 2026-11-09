@@ -1,8 +1,12 @@
-import { QueryClient } from '@tanstack/react-query'
+import { hashKey, QueryClient } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaQueryStoreBackend } from '../device-store/query-storage'
 import { hostWorktreeCatalogKey, hostWorktreeCatalogQuery } from '../host-screen/host-list-queries'
-import { createHostQueryPersistence, persistedHostQueryKey } from './host-query-persistence'
+import {
+  createHostQueryPersistence,
+  holdsRestoredHostQueryData,
+  persistedHostQueryKey
+} from './host-query-persistence'
 
 vi.mock('react-native', () => ({ AppState: {} }))
 
@@ -87,36 +91,6 @@ describe('createHostQueryPersistence', () => {
     vi.useRealTimers()
   })
 
-  it('paints the stored host list with its saved time and no agent state before any host read', async () => {
-    const store = memoryStore('host-a')
-    await storeFromEarlierLaunch(store, [liveRow])
-
-    const relaunched = new QueryClient()
-    const restoring = createHostQueryPersistence(relaunched, store.backend).restore(firstPaint)
-    await vi.runAllTimersAsync()
-    await restoring
-
-    expect(relaunched.getQueryData(key)).toEqual({
-      snapshotId: null,
-      worktrees: [
-        {
-          worktreeId: 'repo-1::/w/mobile-redesign',
-          repoId: 'repo-1',
-          repo: 'orca',
-          branch: 'kelvin/mobile-redesign',
-          displayName: 'Mobile redesign',
-          path: '/w/mobile-redesign',
-          liveTerminalCount: 2,
-          hasAttachedPty: true,
-          unread: true,
-          isPinned: false,
-          linkedPR: { number: 38983, state: 'open' }
-        }
-      ]
-    })
-    expect(relaunched.getQueryState(key)?.dataUpdatedAt).toBe(SAVED_AT)
-  })
-
   it('never shows a stored record that fails its data check, and removes it', async () => {
     const store = memoryStore('host-a')
     const { branch: _branch, ...rowWithoutBranch } = liveRow
@@ -149,4 +123,44 @@ describe('createHostQueryPersistence', () => {
 
     expect(relaunched.getQueryData(key)).toBe(live)
   })
+
+  it.each([
+    { replaceOnHearing: false, expected: [true, false] },
+    { replaceOnHearing: true, expected: [true, false, false] }
+  ])(
+    "marks restored data as an earlier launch's before anyone hears of it, until this launch's own answer (a listener's replacement: $replaceOnHearing)",
+    async ({ replaceOnHearing, expected }) => {
+      const store = memoryStore('host-a')
+      await storeFromEarlierLaunch(store, [liveRow])
+
+      const relaunched = new QueryClient()
+      const persistence = createHostQueryPersistence(relaunched, store.backend)
+      relaunched.getQueryCache().build(relaunched, {
+        queryKey: key,
+        meta: { persist: hostWorktreeCatalogQuery.persist }
+      })
+      const heard: boolean[] = []
+      const replacement = { snapshotId: 'snap-8', worktrees: [liveRow] }
+      relaunched.getQueryCache().subscribe((event) => {
+        if (event.type === 'updated' && event.action.type === 'success') {
+          heard.push(holdsRestoredHostQueryData(relaunched, hashKey(key)))
+          // A listener replacing the restored rows as it hears of them.
+          if (replaceOnHearing && heard.length === 1) {
+            relaunched.setQueryData(key, replacement, { updatedAt: SAVED_AT - 2 })
+          }
+        }
+      })
+      const restoring = persistence.restore(firstPaint)
+      await vi.runAllTimersAsync()
+      await restoring
+      // A live answer timed before the stored one, as after a clock correction, is still this launch's.
+      relaunched.setQueryData(
+        key,
+        { snapshotId: 'snap-8', worktrees: [liveRow] },
+        { updatedAt: SAVED_AT - 1 }
+      )
+
+      expect(heard).toEqual(expected)
+    }
+  )
 })

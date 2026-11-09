@@ -8,7 +8,7 @@ import {
   prStringList,
   prText,
   prRepoIdentity
-} from '../session/github-pr-entity-reply-schema'
+} from '../source-control/review/github-pr-entity-reply-schema'
 import {
   assignableUserListSchema,
   detailCheckListSchema,
@@ -74,6 +74,7 @@ export const gitlabWorkItemDetailSchema = z
           name: z.string(),
           stage: z.string(),
           status: z.string(),
+          allowFailure: salvagedOptional('allowFailure', z.boolean()),
           webUrl: prNullableText('webUrl'),
           duration: salvagedOptional('duration', z.number().finite().nullable())
         })

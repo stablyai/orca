@@ -4,7 +4,7 @@ import type { DictationCapture } from '../platform/dictation-capture-contract'
 import type { OnDeviceSpeech } from '../platform/on-device-speech-contract'
 import { openMobileDictationCapture } from './mobile-dictation-capture-open'
 import { createMobileDictationId, type DictationStatus } from './mobile-dictation-session-state'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type {
   MobileDictationAudioPhase,
   MobileDictationTranscriptSoFar
@@ -26,6 +26,7 @@ import {
 } from './mobile-dictation-device-engine'
 import type { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 import type { MobileDictationHeldAudio } from './mobile-dictation-held-audio'
+import type { ShowMobileDictationEngine } from './mobile-dictation-engine-shown'
 
 // What the engines share with useMobileDictation: its refs (read at call time) and its state transitions.
 export type MobileDictationRun = {
@@ -44,8 +45,10 @@ export type MobileDictationRun = {
   readonly sendHeldAudio: RefObject<() => void>
   readonly finish: RefObject<(emptyTranscriptMessage: string) => Promise<void>>
   readonly onTranscript: RefObject<(text: string) => void>
+  readonly onAudioLimitReached: RefObject<(() => void) | undefined>
   readonly keptTranscript: MobileDictationTranscriptSoFar
   readonly applyStatus: (next: DictationStatus) => void
+  readonly showEngine: ShowMobileDictationEngine
   readonly closeDictationAudio: () => void
   readonly reportError: (err: unknown) => void
   readonly failActiveDictation: (dictationId: string, err: unknown) => void
@@ -118,6 +121,7 @@ export async function startMobileDictationOnHost(
       if (run.status.current !== 'processing') {
         run.applyStatus('recording')
       }
+      run.showEngine('computer')
       run.sendHeldAudio.current()
       if (run.stopWhenStarted.current) {
         void run.finish.current(dictationSessionErrorMessage('no-speech'))
@@ -151,6 +155,7 @@ export async function fallBackMobileDictationToHost(
     return
   }
   run.engine.current = { kind: 'host' }
+  run.showEngine('computer', true)
   // A stop that began while the phone was still live is already processing; the computer must finish it too.
   run.stopWhenStarted.current = finishing || run.status.current === 'processing'
   try {
@@ -229,6 +234,7 @@ export function commitMobileDictationOnDevice(
     run.audioPhase.current = 'closed'
   }
   run.applyStatus('recording')
+  run.showEngine('phone')
   if (run.stopWhenStarted.current) {
     void run.finish.current(dictationSessionErrorMessage('no-speech'))
   }

@@ -19,8 +19,8 @@ import {
 import { getBrokenChecks } from '../../../../../shared/source-control/checks/pr-checks-fix-prompt'
 import { sortChecksBySeverity } from '../../../../../shared/source-control/checks/pr-check-severity-order'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { resolvePullRequestRepo } from '@/components/github/github-work-item-identity'
 import {
   canUseGitHubRepoContext,
@@ -28,7 +28,7 @@ import {
 } from '@/lib/github-source-runtime-context'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { resolveRepoExecutionHostPlatform } from '@/lib/execution-host-facts'
+import { resolveRepoExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { resolveSourceControlActionRecipe } from '../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import type {
   GitHubWorkItem,

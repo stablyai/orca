@@ -1,6 +1,6 @@
 import { vi, type Mock, type MockInstance } from 'vitest'
-import { AgentHookServer } from '../../../agent-hooks/server'
-import { agentHookRuntimeDeps } from '../../../agent-hooks/agent-hook-runtime-deps'
+import { AgentHookServer } from '../../../agent-hooks/server/agent-hook-server'
+import { agentHookRuntimeDeps } from '../../../agent-hooks/runtime/agent-hook-runtime-deps'
 import { AgentStatusObservedPaneIdentities } from '../../terminal/identity/agent-status-observed-pane-identity'
 import { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
 import { hostTestState } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-harness'

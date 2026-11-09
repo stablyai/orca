@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import { workspaceTabs } from '@/lib/structured-chat-tab-index'
-import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
 import { getWslDistroFromPath } from '@/lib/local-preflight-context'
 import { selectWslHostDistro } from '@/components/wsl-host-mark/WslHostMark'
@@ -57,6 +57,8 @@ export function createNativeChatComposerWorkspaceSelector(
   let runtimeIds: string[] = []
   const selectMachine = createComposerMachineSelector(!target)
   let presentation: {
+    worktreeId?: string
+    repoId?: string
     hostId?: ExecutionHostId
     machine?: string
     checkout?: string
@@ -128,6 +130,8 @@ export function createNativeChatComposerWorkspaceSelector(
         path: path ?? undefined
       }
       presentation = {
+        worktreeId: row?.id,
+        repoId: repo?.id,
         checkout: row?.displayName,
         kind: row
           ? (repo && isFolderRepo(repo)) ||

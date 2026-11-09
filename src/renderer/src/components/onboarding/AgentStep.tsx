@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ExternalLink } from 'lucide-react'
 import { Trans } from 'react-i18next'
-import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog'
+import { getAgentCatalog, type AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
 import { Button } from '@/components/ui/button'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'

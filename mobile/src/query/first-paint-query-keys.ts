@@ -2,14 +2,18 @@ import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
 import {
   HOST_LIST_TARGET,
   hostRepoCatalogQuery,
+  hostRepoLabelsQuery,
+  hostServerWorkspacesInput,
+  hostServerWorkspacesQuery,
   hostWorktreeCatalogKey,
   hostWorktreeCatalogQuery,
   NO_HOST_LIST_INPUT
 } from '../host-screen/host-list-queries'
 import { hostViewFamily, hostViewKey } from '../host-screen/host-view-memory'
 import { hostProjectSectionsQuery } from '../host-screen/use-host-project-sections'
-import { sessionTabsFamily, sessionTabsKey } from '../session/mobile-session-last-tabs'
+import { sessionTabsFamily, sessionTabsKey } from '../session/tabs/mobile-session-last-tabs'
 import { gitStatusQuery } from '../source-control/mobile-git-status-query'
+import { firstPaintTaskKeys } from '../tasks/task-query-storage'
 import { hostQueryKey } from './host-query-key'
 import { persistedHostQueryKey, type PersistedHostQueryKey } from './host-query-persistence'
 
@@ -33,14 +37,40 @@ export function firstPaintQueryKeys(hostId: string, route: URL): PersistedHostQu
   if (root !== 'h' || routeSegment(routeHost) !== hostId) {
     return []
   }
+  if (screen === 'tasks') {
+    return firstPaintTaskKeys(hostId)
+  }
+  if (screen === 'new-workspace') {
+    // The drawer's existing-workspace check and host labels.
+    return [
+      persistedHostQueryKey(hostWorktreeCatalogQuery, hostWorktreeCatalogKey(hostId)),
+      persistedHostQueryKey(
+        hostRepoLabelsQuery,
+        hostQueryKey(hostId, hostRepoLabelsQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
+      )
+    ].filter((key) => key !== null)
+  }
   const keys =
     screen === undefined
       ? [
           persistedHostQueryKey(hostWorktreeCatalogQuery, hostWorktreeCatalogKey(hostId)),
           persistedHostQueryKey(hostViewFamily, hostViewKey(hostId)),
           persistedHostQueryKey(
+            hostServerWorkspacesQuery,
+            hostQueryKey(
+              hostId,
+              hostServerWorkspacesQuery.family,
+              HOST_LIST_TARGET,
+              hostServerWorkspacesInput(null)
+            )
+          ),
+          persistedHostQueryKey(
             hostRepoCatalogQuery,
             hostQueryKey(hostId, hostRepoCatalogQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
+          ),
+          persistedHostQueryKey(
+            hostRepoLabelsQuery,
+            hostQueryKey(hostId, hostRepoLabelsQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
           ),
           persistedHostQueryKey(
             hostProjectSectionsQuery,

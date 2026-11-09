@@ -1,7 +1,7 @@
 import {
   subscribeSharedClientEvents,
   type SharedClientEventsClient
-} from '../transport/shared-client-events'
+} from '../transport/connection/shared-client-events'
 import type { HostSidebarFeedTriggers } from '../host-screen/host-sidebar-feed-connection'
 
 // Keep lifecycle callers independent of RN types.

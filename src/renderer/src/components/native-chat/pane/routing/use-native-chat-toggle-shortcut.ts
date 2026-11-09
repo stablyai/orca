@@ -18,7 +18,7 @@ import { canToggleNativeChat } from '../../../../../../shared/native-chat/native
 import { isNativeChatTranscriptLocalReadable } from '../../../../../../shared/native-chat/transcript/native-chat-transcript-readability'
 import { matchesNativeChatToggleShortcut } from './native-chat-shortcut'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { resolveKeyboardWorkspaceId } from '@/lib/floating-workspace-terminal-actions'
 import {
   isNativeChatTabWideFallbackSafe,

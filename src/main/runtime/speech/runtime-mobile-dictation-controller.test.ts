@@ -161,3 +161,15 @@ describe('mobile dictation on several phones', () => {
     })
   })
 })
+
+describe('mobile dictation at the cloud length cap', () => {
+  it('tells the phone on every reply after the speech session filled up', async () => {
+    const controller = await startPhoneDictation()
+    controller.feed(chunk)
+    feedAudio.mockReturnValueOnce(true)
+
+    // The second reply is inside the one-second text throttle, so it carries no text.
+    expect(controller.feed(chunk)).toEqual({ dictationId: 'd-1', audioLimitReached: true })
+    expect(controller.feed(chunk)).toEqual({ dictationId: 'd-1', audioLimitReached: true })
+  })
+})

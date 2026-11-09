@@ -8,8 +8,8 @@ import {
   isRemoteRuntimePtyId
 } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { useAppStore } from '@/store'
-import { resolveOwner } from '@/lib/resolve-owner'
-import { resolveWorktreeOperationRoute } from '@/lib/worktree-operation-route'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
+import { resolveWorktreeOperationRoute } from '@/lib/workspace/ownership/worktree-operation-route'
 import { createBrowserLinkHostMatcher } from '@/lib/browser/navigation/browser-link-owner'
 import { getWorkspaceClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import {

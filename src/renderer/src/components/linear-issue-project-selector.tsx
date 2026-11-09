@@ -15,8 +15,8 @@ import { linearListProjects } from '@/runtime/linear/runtime-linear-project-clie
 import { useAppStore } from '@/store'
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearProjectSummary } from '../../../shared/linear/project-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 export function LinearIssueProjectSelector({
   issue,

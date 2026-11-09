@@ -93,7 +93,7 @@ function setDefaultProfiles(
   useAppStore.setState({ settings: { ...settings, browserDefaultProfileIdByHostId } })
 }
 
-function open() {
+function open(explicit = false) {
   return openWorkspaceBrowserTabForLink({
     workspaceId: WT,
     url: URL_TO_OPEN,
@@ -102,7 +102,9 @@ function open() {
     placementPreference: 'server',
     selectWorktree: false,
     linkContext: {
-      linkIntent: captureLinkOpenIntent(useAppStore.getState(), WT, SOURCE.unifiedTabId)
+      linkIntent: captureLinkOpenIntent(useAppStore.getState(), WT, OTHER.unifiedTabId, {
+        explicitSourceGroup: explicit
+      })
     }
   })
 }
@@ -141,22 +143,38 @@ function selectDestination() {
       ENV,
       HOST
     ),
-    captureLinkOpenIntent(state, WT, SOURCE.unifiedTabId)
+    captureLinkOpenIntent(state, WT, OTHER.unifiedTabId, { explicitSourceGroup: true })
   )
 }
 
-it.each([null, 'remote-profile'])(
-  'reuses the host-confirmed default or custom profile (%s)',
-  async (profileId) => {
+it.each([
+  { profileId: null, explicit: false },
+  { profileId: 'remote-profile', explicit: false },
+  { profileId: null, explicit: true },
+  { profileId: 'remote-profile', explicit: true }
+])(
+  'opens with the host-confirmed profile ($profileId, explicit target: $explicit)',
+  async ({ profileId, explicit }) => {
     setDefaultProfiles(profileId ? { [HOST]: profileId } : {})
     publishProfileSnapshot(profileId ?? 'default')
-    const creating = open()
-    pendingCreates[0]?.resolve('unexpected-new-page')
-    expect(await creating).toMatchObject({
-      status: 'opened',
-      result: { browserPageId: OTHER.pageId }
-    })
-    expect(pendingCreates).toHaveLength(0)
+    const creating = open(explicit)
+    pendingCreates[0]?.resolve('new-host-page')
+    const outcome = await creating
+    if (explicit) {
+      expect(outcome).toMatchObject({
+        status: 'opened',
+        result: { browserPageId: OTHER.pageId }
+      })
+      return
+    }
+    expect(outcome.status).toBe('opened')
+    if (outcome.status !== 'opened') {
+      throw new Error('Expected opened link')
+    }
+    expect(outcome.result.browserPageId).not.toBe(OTHER.pageId)
+    expect(
+      useAppStore.getState().remoteBrowserPageHandlesByPageId[outcome.result.browserPageId]
+    ).toMatchObject({ remotePageId: 'new-host-page', environmentId: ENV })
   }
 )
 

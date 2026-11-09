@@ -10,7 +10,7 @@ import type {
   VisibleWorkspaceHostIds,
   WorkspaceHostScope
 } from '../../../../../../shared/ui-chrome-types'
-import { pickerExecutionHosts } from '../../../../../../shared/managed-orcad-execution-host'
+import { pickerExecutionHosts } from '../../../../../../shared/execution-host/managed-orcad-execution-host'
 import {
   getCheckedHostRows,
   toggleAllVisibleHosts,

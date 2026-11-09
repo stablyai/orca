@@ -1,7 +1,7 @@
 import type { SourceControlLaunchActionId } from '../../../src/shared/source-control/ai/recipes/source-control-ai-actions'
-import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState } from '../transport/types'
-import { useMobileLaunchAgentLabel } from '../session/use-mobile-launch-agent-label'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { ConnectionState } from '../transport/connection/connection-state'
+import { useMobileLaunchAgentLabel } from '../session/agent-launch/use-mobile-launch-agent-label'
 
 /**
  * Names the agent an AI action in this workspace would launch, so the button can say "Fix with Claude".

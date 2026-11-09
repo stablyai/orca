@@ -1,11 +1,12 @@
 // Use authority-projected owners: stored target fields survive host removal and re-registration.
 
-import type { Automation, AutomationRun } from '../shared/automations-types'
-import type { AutomationListItem } from '../shared/automation-list-scope'
-import type { AutomationOwnerPrecondition } from '../shared/automation-owner-precondition'
-import { getAutomationLegacyRepoId } from '../shared/automation-run-identity'
-import { formatAutomationPrecheckTimeout } from '../shared/automation-precheck'
-import { formatAutomationSchedule } from '../shared/automation-schedules'
+import type { Automation } from '../shared/automations/automation-definition'
+import type { AutomationRun } from '../shared/automations/history/automation-run'
+import type { AutomationListItem } from '../shared/automations/ownership/automation-list-scope'
+import type { AutomationOwnerPrecondition } from '../shared/automations/ownership/automation-owner-precondition'
+import { getAutomationLegacyRepoId } from '../shared/automations/history/automation-run-identity'
+import { formatAutomationPrecheckTimeout } from '../shared/automations/launch/automation-precheck'
+import { formatAutomationSchedule } from '../shared/automations/scheduling/automation-schedules'
 import { quoteCliCommandArgument } from './shell-command-quote'
 
 export type AutomationListPayload = {

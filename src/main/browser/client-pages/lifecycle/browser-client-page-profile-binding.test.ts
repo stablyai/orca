@@ -25,11 +25,11 @@ vi.mock('electron', () => ({
   webContents: { fromId: browserMocks.webContentsFromIdMock }
 }))
 
-vi.mock('../../guest-lifecycle/popups/popup-origin-bar-window', () => ({
+vi.mock('../../guest-lifecycle/popups/presentation/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: browserMocks.openPopupWithOriginBarMock
 }))
 
-import { browserManager } from '../../browser-manager'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
 import { createBrowserClientPageGuestBinding } from './browser-client-page-guest-binding'
 import {
   resetBrowserManagerMocks,

@@ -24,14 +24,14 @@ import {
   resolveNativeChatSkillDiscoveryContext,
   selectNativeChatSkillStateInputs
 } from '../../src/renderer/src/components/native-chat/composer/pickers/native-chat-skill-discovery-context'
-import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+import { getEditorFileOperationContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
 import { adoptFromEndpoint } from '@/store/host-catalog/endpoint-catalog-adoption'
 import { assertRuntimeFileMutationExpectation } from '../../src/main/runtime/files/file-mutation-expectation'
 import {
   resetSshConnectionGenerations,
   setSshConnectionGeneration
-} from '../../src/main/ssh/connection/ssh-connection-generation'
+} from '../../src/main/ssh/connection/authority/ssh-connection-generation'
 import {
   agentSessionTabFixture,
   nativeChatFanoutFixture,

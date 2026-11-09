@@ -512,8 +512,9 @@ describe('createIpcPtyTransport', () => {
     await installTerminalTestGlobals()
     try {
       const { connectPanePty } = await import('../../pty-connection/connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       for (const proof of ['interleaved', 'covered', 'no-flags'] as const) {
         state = createInitialStoreState(() => state)
         const result = provenSpawnResponse(

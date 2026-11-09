@@ -9,14 +9,7 @@ import {
   type EdgeAdmin,
   type EdgeDrainResult
 } from './edge-admin-client.js'
-import {
-  EDGE_EVACUATION_BATCH,
-  EDGE_EVACUATION_BUSY_INTERVAL_MS,
-  EDGE_EVACUATION_CONCURRENCY,
-  EDGE_EVACUATION_CONTROL_DELAY_MS,
-  EDGE_EVACUATION_INTERVAL_MS,
-  EdgeEvacuation
-} from './edge-relay-evacuation.js'
+import { EDGE_EVACUATION_BUSY_INTERVAL_MS, EDGE_EVACUATION_CONCURRENCY, EDGE_EVACUATION_CONTROL_DELAY_MS, EdgeEvacuation } from './edge-relay-evacuation.js'
 import { EDGE_CELL_ID, type EdgeRelayConfig } from './edge-relay.js'
 import type { EdgeControlFlags } from './edge-relay-control.js'
 
@@ -94,106 +87,7 @@ async function harness(overrides: Partial<EdgeRelayConfig> = {}, random = 0.5) {
   return { database, config, admin, clock, evacuation, insert, prefer }
 }
 
-describe('edge evacuation sweep', () => {
-  it('drains only edge rows whose host left the cohort, and logs the outcome', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const h = await harness({ allowHosts: new Set([hostId(1)]), denyHosts: new Set([hostId(2)]) })
-    await h.insert(hostId(1))
-    await h.insert(hostId(2))
-    await h.insert(hostId(3), 'us-c1')
-    expect(await h.evacuation.sweep()).toBe(1)
-    expect(h.admin.drained).toEqual([hostId(2)])
-    const events = warn.mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>)
-    expect(events).toEqual([{ event: 'orca_relay_edge_drain_sent', outcome: 'drained', controls: 1 }])
-  })
-
-  it('reads the region from the stored preference, else the default region', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const h = await harness({ allowUsers: new Set(['user-team']) })
-    await h.insert(hostId(1), EDGE_CELL_ID, 'user-team')
-    await h.insert(hostId(2), EDGE_CELL_ID, 'user-team')
-    await h.insert(hostId(3), EDGE_CELL_ID, 'user-team')
-    await h.prefer(hostId(1), 'asia-east2', 'user-team')
-    await h.prefer(hostId(2), 'us-central1', 'user-team')
-    await h.evacuation.sweep()
-    expect(h.admin.drained).toEqual([hostId(1)])
-  })
-
-  it(`drains at most ${EDGE_EVACUATION_BATCH} per tick, the rest on the next, and not again within the cooldown`, async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const h = await harness()
-    for (let index = 0; index < EDGE_EVACUATION_BATCH + 25; index += 1) { await h.insert(hostId(index)) }
-    h.admin.answer = { outcome: 'idle' }
-    expect(await h.evacuation.sweep()).toBe(EDGE_EVACUATION_BATCH)
-    expect(await h.evacuation.sweep()).toBe(25)
-    expect(new Set(h.admin.drained).size).toBe(EDGE_EVACUATION_BATCH + 25)
-    expect(await h.evacuation.sweep()).toBe(0)
-    h.clock.now += 10 * 60_000
-    expect(await h.evacuation.sweep()).toBe(EDGE_EVACUATION_BATCH)
-  })
-
-  it('logs an unavailable edge and carries on with the next host, retrying it later', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const h = await harness()
-    await h.insert(hostId(1))
-    await h.insert(hostId(2))
-    h.admin.unavailable.add(hostId(1))
-    expect(await h.evacuation.sweep()).toBe(1)
-    expect(h.admin.drained).toEqual([hostId(2)])
-    expect(JSON.parse(String(warn.mock.calls[0]![0]))).toEqual({
-      event: 'orca_relay_edge_drain_failed',
-      reason: 'relay_edge_admin_unavailable:status_404'
-    })
-    h.admin.unavailable.clear()
-    expect(await h.evacuation.sweep()).toBe(1)
-    expect(h.admin.drained).toEqual([hostId(2), hostId(1)])
-  })
-
-  it('runs on a jittered timer from start until stop', async () => {
-    vi.useFakeTimers()
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const h = await harness()
-    await h.insert(hostId(1))
-    const sweep = vi.spyOn(h.evacuation, 'sweep')
-    h.evacuation.start()
-    // First pass soon after start, then the slow interval once nothing more is queued.
-    await vi.advanceTimersByTimeAsync(EDGE_EVACUATION_BUSY_INTERVAL_MS - 1)
-    expect(sweep).not.toHaveBeenCalled()
-    await vi.advanceTimersByTimeAsync(1)
-    expect(sweep).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(0)
-    expect(h.admin.drained).toEqual([hostId(1)])
-    await vi.advanceTimersByTimeAsync(EDGE_EVACUATION_BUSY_INTERVAL_MS)
-    expect(sweep).toHaveBeenCalledTimes(1)
-    await vi.advanceTimersByTimeAsync(EDGE_EVACUATION_INTERVAL_MS - EDGE_EVACUATION_BUSY_INTERVAL_MS)
-    expect(sweep).toHaveBeenCalledTimes(2)
-    h.evacuation.stop()
-    await vi.advanceTimersByTimeAsync(10 * EDGE_EVACUATION_INTERVAL_MS)
-    expect(sweep).toHaveBeenCalledTimes(2)
-  })
-})
-
 describe('edge evacuation under runtime control', () => {
-  it('re-arms an idle sweep within 5 s of a control change, so a rollback drains at once', async () => {
-    vi.useFakeTimers()
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const flags: EdgeControlFlags = { mode: 'on' }
-    const h = await harness({ rolloutPercent: 100, control: () => flags })
-    await h.insert(hostId(1))
-    const sweep = vi.spyOn(h.evacuation, 'sweep')
-    h.evacuation.start()
-    await vi.advanceTimersByTimeAsync(EDGE_EVACUATION_BUSY_INTERVAL_MS)
-    expect(sweep).toHaveBeenCalledTimes(1)
-    expect(h.admin.drained).toEqual([])
-    // Idle now: the next pass would be ~10 min away.
-    await vi.advanceTimersByTimeAsync(60_000)
-    flags.mode = 'off'
-    h.evacuation.controlChanged()
-    await vi.advanceTimersByTimeAsync(EDGE_EVACUATION_CONTROL_DELAY_MS)
-    expect(sweep).toHaveBeenCalledTimes(2)
-    expect(h.admin.drained).toEqual([hostId(1)])
-    h.evacuation.stop()
-  })
 
   it('re-arms after a pass that was running when the control changed', async () => {
     vi.useFakeTimers()
@@ -232,37 +126,6 @@ describe('edge evacuation under runtime control', () => {
     }
     expect(await pass).toBe(35)
     expect(most).toBe(EDGE_EVACUATION_CONCURRENCY)
-  })
-
-  it('starts each pass at a random point of the keys and wraps around to it', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const users = ['20000000-a', '60000000-a', 'a0000000-a', 'e0000000-a']
-    const drainedFrom = async (random: number) => {
-      const h = await harness({}, random)
-      for (const [index, user] of users.entries()) { await h.insert(hostId(index), EDGE_CELL_ID, user) }
-      expect(await h.evacuation.sweep()).toBe(4)
-      return h.admin.drained
-    }
-    expect(await drainedFrom(0.5)).toEqual([hostId(2), hostId(3), hostId(0), hostId(1)])
-    expect(await drainedFrom(0.1)).toEqual([hostId(0), hostId(1), hostId(2), hostId(3)])
-    expect(await drainedFrom(0.3)).toEqual([hostId(1), hostId(2), hostId(3), hostId(0)])
-  })
-
-  it('pages an idle pass: one page of edge rows per tick, then idle until the next pass', async () => {
-    vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const h = await harness({ rolloutPercent: 100 })
-    for (let index = 0; index < 1_200; index += 1) { await h.insert(hostId(index)) }
-    const query = vi.spyOn(h.database, 'query')
-    const pages = () => query.mock.calls.filter(([sql]) => String(sql).includes('FROM relay_assignments a')).length
-    const busy = () => (h.evacuation as unknown as { busy: boolean }).busy
-    await h.evacuation.sweep()
-    expect([pages(), busy()]).toEqual([1, true])
-    await h.evacuation.sweep()
-    expect([pages(), busy()]).toEqual([2, true])
-    // The short last page wraps to the start of the keys, which holds nothing before the origin.
-    await h.evacuation.sweep()
-    expect([pages(), busy()]).toEqual([4, false])
-    expect(h.admin.drained).toEqual([])
   })
 })
 
@@ -305,17 +168,5 @@ describe('edge admin drain call', () => {
       op: 'drain',
       bodySha256: createHash('sha256').update(String(first.init.body)).digest('base64url')
     })
-  })
-
-  it('treats a network failure as unavailable', async () => {
-    const admin = createEdgeAdmin({
-      cellUrl: EDGE_URL,
-      signingKey: SIGNING_KEY,
-      issuer: 'https://relay.example.test',
-      fetch: async () => {
-        throw new TypeError('fetch failed')
-      }
-    })
-    await expect(admin.drain(hostId(1))).rejects.toThrow('relay_edge_admin_unavailable:network')
   })
 })

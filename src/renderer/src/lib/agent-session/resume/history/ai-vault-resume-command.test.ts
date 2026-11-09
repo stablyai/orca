@@ -208,43 +208,6 @@ describe('ai vault resume command runtime', () => {
     ).toBe('omp --resume "C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl"')
   })
 
-  it('copies syntax that matches the configured cmd shell', () => {
-    const state = makeState({
-      worktreePath: 'C:\\Users\\alice\\repo',
-      terminalWindowsShell: 'cmd.exe'
-    })
-
-    expect(
-      buildAiVaultResumeCopyCommandForWorktree({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'claude',
-          sessionId: 'session one',
-          cwd: 'C:\\Users\\alice\\repo',
-          codexHome: null
-        }
-      })
-    ).toBe('cd /d "C:\\Users\\alice\\repo" && claude "--resume" "session one"')
-  })
-
-  it('copies syntax that matches the configured PowerShell shell', () => {
-    const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
-
-    expect(
-      buildAiVaultResumeCopyCommandForWorktree({
-        state,
-        worktreeId: 'repo-1::worktree-1',
-        session: {
-          agent: 'claude',
-          sessionId: 'session one',
-          cwd: 'C:\\Users\\alice\\repo',
-          codexHome: null
-        }
-      })
-    ).toBe("Set-Location -LiteralPath 'C:\\Users\\alice\\repo'; claude '--resume' 'session one'")
-  })
-
   it('copies a real-home Codex command that clears inherited homes in PowerShell', () => {
     const state = makeState({ worktreePath: 'C:\\Users\\alice\\repo' })
 

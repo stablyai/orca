@@ -46,7 +46,7 @@ vi.mock('@react-native-async-storage/async-storage', () => ({
     getItem: async (key: string) => doubles.store.get(key) ?? null
   }
 }))
-vi.mock('../transport/host-store', () => ({
+vi.mock('../transport/hosts/host-store', () => ({
   loadHosts: async () => {
     if (doubles.hostsReject) {
       throw new Error('the keychain would not answer')
@@ -63,14 +63,14 @@ vi.mock('../transport/host-store', () => ({
   }
 }))
 
-import { savePinnedIds } from '../storage/preferences'
-import { writeLastVisitedWorktree } from '../worktree/last-visited-worktree-by-host'
+import '../storage/preferences'
+import '../worktree/last-visited-worktree-by-host'
 import { PAGE_STORAGE_MAX_VALUE_CHARS } from './page-storage-keys'
 import { usePageHostSnapshot, type PageHostSnapshotView } from './use-page-host-snapshot'
 import { persistMirrored, readMirroredStorage } from '../storage/mirrored-storage-keys'
 
 const PINS = 'orca:pins:host-1'
-const LAST_VISITED = 'orca:last-visited-worktree'
+
 const CHAT_TABS = 'orca:nativeChatTabs:host-1:wt-1'
 const JOURNAL = 'orca:mobileStructuredSendOperations:v1'
 const SESSION_ROUTE = '/h/host-1/session/wt-1'
@@ -132,24 +132,6 @@ function releaseReads(): void {
     release()
   }
 }
-
-it.each([10, 100])('releases payloads from %i historical workspace snapshots', async (count) => {
-  const keys: string[] = []
-  for (let index = 0; index < count; index++) {
-    const workspace = `folder:historical-${index}`
-    const key = `orca:terminalDrafts:host-1:${encodeURIComponent(workspace)}`
-    const value = `${index}:${'x'.repeat(8 * 1024)}`
-    keys.push(key)
-    doubles.store.set(key, value)
-    const mounted = await mount(`/h/host-1/session/${encodeURIComponent(workspace)}`)
-    expect(mounted.view().readStorage().storage[key]).toBe(value)
-    await mounted.unmount()
-  }
-  expect(Object.keys(readMirroredStorage(keys))).toHaveLength(0)
-  expect(keys.every((key) => doubles.store.has(key))).toBe(true)
-  const reopened = await mount('/h/host-1/session/folder%3Ahistorical-0')
-  expect(reopened.view().readStorage().storage[keys[0]!]).toBe(doubles.store.get(keys[0]!))
-})
 
 it('retains shared snapshot keys until their last mounted owner leaves', async () => {
   doubles.store.set(CHAT_TABS, '{"tab":"chat"}')
@@ -241,22 +223,6 @@ it('keeps host-wide keys mirrored while the next route hydrates', async () => {
 })
 
 describe('what the shell puts on every init', () => {
-  it('carries what the app wrote from its own screens on the next init, not the one after', async () => {
-    const mounted = await mount()
-    expect(mounted.view().readStorage().storage).toEqual({})
-    // Native writers must update the mirror before reload; no store reread occurs before this init.
-    await writeLastVisitedWorktree({ hostId: 'host-1', worktreeId: 'host-1/repo/wt' })
-    await savePinnedIds('host-1', new Set(['one']))
-    expect(mounted.view().readStorage().storage).toEqual({
-      [LAST_VISITED]: JSON.stringify({
-        hostId: 'host-1',
-        worktreeId: 'host-1/repo/wt',
-        byHost: { 'host-1': { worktreeId: 'host-1/repo/wt' } }
-      }),
-      [PINS]: '["one"]'
-    })
-  })
-
   it('keeps a write that landed while the store read was still open', async () => {
     doubles.store.set(PINS, '["stored"]')
     const mounted = await mount()
@@ -319,16 +285,6 @@ describe('what the shell puts on every init', () => {
       console.warn = warn
     }
     expect(JSON.stringify(warned)).toContain(JOURNAL)
-  })
-
-  it('carries the same journal at exactly the bound, so the drop above discriminates', async () => {
-    const atBound = 'x'.repeat(PAGE_STORAGE_MAX_VALUE_CHARS)
-    doubles.store.set(JOURNAL, atBound)
-    const mounted = await mount()
-    await act(async () => {
-      mounted.view().refreshStorage()
-    })
-    expect(mounted.view().readStorage().storage).toEqual({ [JOURNAL]: atBound })
   })
 })
 

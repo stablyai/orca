@@ -4,7 +4,7 @@ import {
   getFileTypeIcon,
   getPluginFileTypeIconIndex,
   getPluginFolderIconIndex
-} from '@/lib/file-type-icons'
+} from '@/lib/file-icons/file-type-icons'
 import {
   PLUGIN_ICON_ATTRIBUTE,
   useActivePluginIconTheme

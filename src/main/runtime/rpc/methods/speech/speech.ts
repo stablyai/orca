@@ -35,7 +35,10 @@ export const SPEECH_METHODS = [
       runtime.configureMobileDictation({
         ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
         ...(params.modelId !== undefined ? { modelId: params.modelId } : {}),
-        ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {})
+        ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {}),
+        ...(params.dictationHoldToRecord !== undefined
+          ? { dictationHoldToRecord: params.dictationHoldToRecord }
+          : {})
       })
   }),
   defineMethod({

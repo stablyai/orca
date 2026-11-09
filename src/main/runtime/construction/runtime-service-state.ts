@@ -4,7 +4,7 @@ import { OrchestrationStructuredMailboxPointerDelivery } from '../orchestration/
 import { createStructuredMailboxPointerHost } from '../orchestration/mailbox/structured-pointer/structured-mailbox-pointer-host'
 import { localOrchestrationCliCommand } from '../orchestration/workers/launch/orchestration-cli-command'
 import { RuntimeOrchestrationSenderNames } from '../orchestration/mailbox/senders/runtime-orchestration-sender-names'
-import { isStructuredWorkerHandle } from '../../../shared/structured-worker-handle'
+import { isStructuredWorkerHandle } from '../../../shared/orchestration/workers/structured-worker-handle'
 import { ORCA_SESSION_ADDRESS_PREFIX } from '../../../shared/orca-session-address-prefix'
 import { resolveStructuredWorkerAuthority } from '../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
 import { OrcaRuntimeWithAgentOrchestrationDependencies } from '../orchestration/crew/runtime-agent-orchestration-dependencies'

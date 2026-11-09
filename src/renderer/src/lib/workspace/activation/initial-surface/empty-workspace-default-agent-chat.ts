@@ -11,8 +11,8 @@ import type { AgentDetectionTarget } from '@/hooks/useDetectedAgents'
 import {
   ensureDetectedAgentsForTarget,
   readDetectedAgentsForTarget
-} from '@/lib/agent-detection-target-inventory'
-import { workspaceKindForWorktreeId } from '../../../../../../shared/workspace-launch-kind'
+} from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { chosenAgentChatUnlearned, agentChoiceOpensAsChat } from '@/lib/host-chat-program'
 import { planAgentSessionLaunch } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'

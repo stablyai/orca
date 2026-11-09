@@ -16,10 +16,11 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { cn } from '@/lib/utils'
-import { hasRemoteProviderRuntime } from '@/lib/provider-runtime-context'
+import { hasRemoteProviderRuntime } from '@/runtime/hosts/observations/provider-runtime-context'
 import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 import { bitbucketConnectErrorText } from '@/lib/bitbucket-connect-error-copy'
 import { useTranslate } from '@/i18n/use-translate'
+import { BitbucketApiTokenScopes } from './bitbucket-api-token-scopes'
 
 const API_TOKEN_DOCS_URL = 'https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/'
 
@@ -163,6 +164,7 @@ export function BitbucketCredentialsDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
+        scrollable
         overlayClassName={overlayClassName}
         className={cn('sm:max-w-lg', contentClassName)}
         onPointerDownOutside={guardOutsideDismiss}
@@ -346,6 +348,7 @@ export function BitbucketCredentialsDialog({
                       'Create an Atlassian API token for your account, then pair it with the email address that owns it.'
                     )}
               </p>
+              {!isTokenMode ? <BitbucketApiTokenScopes /> : null}
               <button
                 type="button"
                 className="inline-flex items-center gap-1 text-primary underline-offset-2 hover:underline"

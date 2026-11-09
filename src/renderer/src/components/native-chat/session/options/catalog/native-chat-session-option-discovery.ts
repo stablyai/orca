@@ -7,9 +7,9 @@ import {
   getCommitMessageModelDiscoveryHostKeyForScope,
   LOCAL_COMMIT_MESSAGE_HOST_KEY
 } from '../../../../../../../shared/source-control/ai/generation/commit-message-host-key'
-import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 import { hasExplicitTuiLaunchCommand } from '../../../../../../../shared/agent-launch/startup/tui-agent-launch-command-override'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
   getLocalProjectExecutionRuntimeContext,
   getWslDistroFromPath

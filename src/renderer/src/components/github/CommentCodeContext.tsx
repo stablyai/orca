@@ -4,7 +4,7 @@ import { ArrowDown, ArrowUp, Braces, LoaderCircle, UndoDot } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ButtonGroup } from '@/components/ui/button-group'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -15,7 +15,7 @@ import {
 } from '@/components/comment-code-context-state'
 import { getPrCommentCodeContext } from '@/components/github/pr-comment-code-context'
 import { getPRFileContentsRenderLimit } from '@/components/github/pr-file-diff-mapping'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { PRComment } from '../../../../shared/github/comment-types'
 import type {
   GitHubOwnerRepo,

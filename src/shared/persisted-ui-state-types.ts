@@ -1,6 +1,6 @@
 import type { GitHistoryRefs } from './git/history/git-history-types'
 import type { JiraQuickFilterState } from './jira/jira-quick-filters'
-import type { BrowserDevToolsDockLayout } from './browser-devtools-dock'
+import type { BrowserDevToolsDockLayout } from './browser/devtools/browser-devtools-dock'
 import type { JiraSavedFilterState } from './jira/jira-saved-filters'
 import type { ReleaseChannel } from './release-channel'
 import type { WorkspaceCleanupUIState } from './workspace-cleanup/workspace-cleanup'
@@ -28,7 +28,7 @@ import type {
   WorktreeCardProperty
 } from './ui-chrome-types'
 import type { WorkspaceStatusDefinition } from './worktree/types'
-import type { PersistedAutomationHostFilter } from './automation-host-filter'
+import type { PersistedAutomationHostFilter } from './automations/ownership/automation-host-filter'
 import type { PendingRuntimeRepoRemoval } from './pending-runtime-repo-removal'
 
 export type PersistedUIState = {

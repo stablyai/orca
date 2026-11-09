@@ -3,10 +3,10 @@ import { buildTaskPageGitHubWorkItemMutationPatch } from '@/components/task-page
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import type { ParsedTaskQuery } from '../../../shared/task-query'
+import type { ParsedTaskQuery } from '../../../shared/work-items/task-query'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { useAppStore } from '@/store'
 import {
   beginTaskPageGitHubWorkItemMutation,

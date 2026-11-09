@@ -13,8 +13,8 @@ import { useTranslate } from '@/i18n/use-translate'
 import { linearCreateSubIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { useAppStore } from '@/store'
 import type { LinearIssue, LinearIssueChildSummary } from '../../../shared/linear/issue-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 function mergeLinearSubIssues(
   serverSubIssues: LinearIssueChildSummary[] | undefined,

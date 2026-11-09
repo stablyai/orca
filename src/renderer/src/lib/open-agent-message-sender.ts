@@ -3,7 +3,7 @@
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
-import type { OrchestrationCrewRow } from '../../../shared/orchestration-crew'
+import type { OrchestrationCrewRow } from '../../../shared/orchestration/orchestration-crew'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import {
   openDesktopStructuredSession,

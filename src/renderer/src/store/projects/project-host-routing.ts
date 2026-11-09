@@ -35,6 +35,13 @@ export function getProjectSetupRuntimeTarget(
     : { kind: 'local' }
 }
 
+/** Null for SSH hosts: setup refuses them before a folder check could matter. */
+export function getProjectCloneCheckTarget(
+  hostId: ProjectHostSetupExistingFolderArgs['hostId']
+): RuntimeClientTarget | null {
+  return parseExecutionHostId(hostId)?.kind === 'ssh' ? null : getProjectSetupRuntimeTarget(hostId)
+}
+
 // Why before dispatch: no process sets up `ssh:` hosts (managed ones are `runtime:`), and a
 // paired server's SSH host would otherwise reach this client's own API.
 export function assertNotSshProjectHost(

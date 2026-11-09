@@ -4,7 +4,7 @@ import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../shared/sidebar-inputs-swit
 import { isRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import type { RuntimeTerminalSplit } from '../../../shared/runtime-terminal-contracts'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { isRestoreSpawnIntent } from '../../../shared/host-spawn-admission'
+import { isRestoreSpawnIntent } from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { readWorkspaceRecord, writeWorkspaceRecord } from './sort-stamp-records'
@@ -12,7 +12,7 @@ import { createKeyedTrailingEdgeCoalescer } from '../client/events/keyed-trailin
 import {
   agentPaneWorkspace,
   type AgentPaneWorkspace
-} from '../../agent-hooks/agent-transition-detector'
+} from '../../agent-hooks/observations/agent-transition-detector'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import {
   isWslMoveProjectBlocked,

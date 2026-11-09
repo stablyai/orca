@@ -7,7 +7,7 @@ import {
   agentSessionCreateRequest,
   createAgentSessionTrustWorktreeOptions
 } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
-import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-startup-delayed-delivery'
+import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'
 import {
   planHostedAgentPrompt,
   hostedAgentPromptHostFacts,
@@ -20,7 +20,7 @@ import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from './remote-runtime-
 import { terminalLaunchFacts } from '../../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
 import { runtimeEnvironmentSupportsCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
-import { readTerminalSpawnDeferral } from '../../../../../../shared/host-spawn-admission'
+import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { remoteRestoreSpawnIntentParams } from '../../../../runtime/hosted-terminals/restoration/remote-restore-spawn-intent'
 import { createAgentSessionKeyboardOptions } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-keyboard-capability'
 import { agentProviderSessionForHostEnsure } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-ensure-provider-session'
@@ -76,7 +76,7 @@ import type {
   PtyTransportRecoveryState
 } from '../pty-transport-types'
 import { createPtyOutputProcessor } from '../output/pty-output-processor'
-import { localizeWslDistroHoldText } from '@/lib/wsl-distro-hold-copy'
+import { localizeWslDistroHoldText } from '@/runtime/hosts/wsl/wsl-distro-hold-copy'
 import { isSshSessionGoneError } from '../host-ownership/ssh-session-gone-verdict'
 import {
   RuntimeRpcCallError,

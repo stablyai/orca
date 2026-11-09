@@ -2,7 +2,7 @@
 
 import { useAppStore } from '@/store/index'
 import { hasWorktreeTeardownStarted } from '@/store/slices/worktrees/teardown/worktree-delete-state-types'
-import { readTerminalSpawnDeferral } from '../../../../../../shared/host-spawn-admission'
+import { readTerminalSpawnDeferral } from '../../../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import { releaseDeferredCwdFence } from './fresh-spawn-start'
 import { findTerminalTabForPane } from '../terminal-tab-id'
 import { isHostMirroredSleepingRecord } from '@/lib/agent-session/resume/host-mirrored-pane-liveness'

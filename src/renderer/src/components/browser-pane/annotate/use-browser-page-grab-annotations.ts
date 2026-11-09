@@ -6,8 +6,9 @@ import { imageCopyFailedMessage } from '@/lib/clipboard-image-copy'
 import {
   isBrowserAnnotationPageFull,
   type BrowserAnnotationIntent,
-  type BrowserGrabPayload
-} from '../../../../../shared/browser-grab-types'
+  type BrowserGrabPayload,
+  type GrabIntent
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import { browserAnnotationLimitMessage } from './browser-annotation-limit-message'
 import {
@@ -21,8 +22,7 @@ import { useGrabScreenshotCopy } from './use-grab-screenshot-copy'
 import type {
   BrowserPageGrabAnnotations,
   BrowserPageGrabAnnotationsOptions,
-  BrowserPageGrabToastState,
-  GrabIntent
+  BrowserPageGrabToastState
 } from '../describe-page/browser-page-types'
 
 const copiedGrabToastMessage = (): string =>

@@ -18,6 +18,7 @@ import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 export type ActivityBarItem = {
   id: ActiveRightSidebarTab
+  pluginKey?: string
   icon: React.ComponentType<{ size?: number; className?: string }>
   title: string
   shortcut: string
@@ -113,6 +114,7 @@ export function TopActivityOverflowMenu({
               key={item.id}
               onSelect={() => onSelect(item.id)}
               data-workspace-board-dismiss=""
+              data-activity-plugin-key={item.pluginKey}
               className={cn(active && 'bg-accent text-accent-foreground')}
               aria-current={active ? 'page' : undefined}
               aria-label={activityItemAriaLabel(item, item.statusIndicator, t)}
@@ -165,6 +167,7 @@ export function ActivityBarButton({
           )}
           onClick={onClick}
           data-workspace-board-dismiss=""
+          data-activity-plugin-key={item.pluginKey}
           aria-label={activityItemAriaLabel(item, effectiveStatus, t)}
         >
           <Icon size={isTop ? 16 : 18} />

@@ -7,7 +7,7 @@ import {
 import {
   needsAgentWorkspaceTrustDecision,
   type AgentWorkspaceTrustDecision
-} from '../../../../shared/agent-workspace-trust-decision'
+} from '../../../../shared/agent-launch/permissions/agent-workspace-trust-decision'
 import {
   getConnectionExecutionHostId,
   getRepoExecutionHostId

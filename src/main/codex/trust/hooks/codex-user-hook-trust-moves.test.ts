@@ -3,7 +3,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HookCommandConfig, HookDefinition } from '../../../agent-hooks/installer-utils'
+import type {
+  HookCommandConfig,
+  HookDefinition
+} from '../../../agent-hooks/installation/configuration/hook-config-schema'
 import {
   readHookTrustEntries,
   upsertHookTrustEntries,

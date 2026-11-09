@@ -1,4 +1,3 @@
-import { useId } from 'react'
 import type { SpeechModelManifest, VoiceSettings } from '../../../../../shared/speech-types'
 import {
   DICTATION_LANGUAGE_AUTO,
@@ -8,8 +7,8 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { languageDisplayName, uiCollator } from '@/i18n/ui-intl-formatters'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../../ui/select'
 import { SettingsRow } from '../form-controls/SettingsFormControls'
+import { SettingsSearchableSelect } from '../form-controls/SettingsSearchableSelect'
 
 // Intl formatter caches key on option identity, so this must be a module constant.
 const NAME_COLLATOR: Intl.CollatorOptions = { sensitivity: 'base' }
@@ -54,7 +53,6 @@ export function VoiceDictationLanguageSetting({
 }: VoiceDictationLanguageSettingProps): React.JSX.Element {
   const t = useTranslate()
   const intlLocale = useIntlLocale()
-  const labelId = useId()
   const modelIgnoresLanguage = selectedModel !== undefined && !selectedModel.dictationLanguages
   const language = voiceSettings.dictationLanguage || DICTATION_LANGUAGE_AUTO
   const choices = selectedModel?.dictationLanguages ?? DICTATION_LANGUAGES
@@ -67,10 +65,12 @@ export function VoiceDictationLanguageSetting({
   const options = codes
     .map((code) => ({ code, name: languageDisplayName(code, intlLocale) }))
     .sort((a, b) => collator.compare(a.name, b.name))
+  const label = t('components.settings.voice.dictationLanguage.title', 'Dictation Language')
+  const autoLabel = t('components.settings.voice.dictationLanguage.auto', 'Auto-detect')
 
   return (
     <SettingsRow
-      label={t('components.settings.voice.dictationLanguage.title', 'Dictation Language')}
+      label={label}
       description={describeLanguageSetting(
         selectedModel,
         language,
@@ -78,27 +78,30 @@ export function VoiceDictationLanguageSetting({
         t,
         intlLocale
       )}
-      labelId={labelId}
       control={
-        <Select
+        <SettingsSearchableSelect
+          ariaLabel={label}
           value={language}
+          groups={[
+            {
+              key: 'dictation-languages',
+              options: [
+                { value: DICTATION_LANGUAGE_AUTO, label: autoLabel },
+                ...options.map(({ code, name }) => ({
+                  value: code,
+                  label: name,
+                  keywords: [code]
+                }))
+              ]
+            }
+          ]}
+          searchPlaceholder={t(
+            'auto.components.settings.SettingsSearchableSelect.searchLanguages',
+            'Search languages…'
+          )}
           disabled={!voiceSettings.enabled || modelIgnoresLanguage}
           onValueChange={(value) => onUpdateVoiceSettings({ dictationLanguage: value })}
-        >
-          <SelectTrigger size="sm" className="min-w-32" aria-labelledby={labelId}>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={DICTATION_LANGUAGE_AUTO}>
-              {t('components.settings.voice.dictationLanguage.auto', 'Auto-detect')}
-            </SelectItem>
-            {options.map(({ code, name }) => (
-              <SelectItem key={code} value={code}>
-                {name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        />
       }
     />
   )

@@ -20,8 +20,8 @@ const mocks = vi.hoisted(() => ({
   reconnect: vi.fn(),
   diagnostics: vi.fn()
 }))
-vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequest: mocks.request
+vi.mock('../../../shared/remote-runtime/requests/remote-runtime-request-socket', () => ({
+  sendRemoteRuntimeRequestOnSocket: mocks.request
 }))
 vi.mock('./runtime-environment-request-connections', async () => {
   const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')

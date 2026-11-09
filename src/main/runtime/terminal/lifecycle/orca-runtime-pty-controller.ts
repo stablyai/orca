@@ -3,7 +3,7 @@ import type { RuntimePtyController } from './runtime-pty-controller-contract'
 import type {
   AutomaticWorkResumeOutcome,
   AutomaticWorkStatus
-} from '../../../../shared/host-spawn-admission'
+} from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type {
   TerminalLimitStatus,
   TerminalLimitUpdate

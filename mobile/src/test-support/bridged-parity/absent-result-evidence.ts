@@ -1,8 +1,8 @@
 import { BridgeReplyRefusedError } from '../../mobile-web-shell/bridge/bridge-rpc-client'
 import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-envelope'
 import type { BridgePortPair } from '../../mobile-web-shell/bridge/bridge-port-pair-test-harness'
-import type { RpcClient } from '../../transport/rpc-client'
-import { projectMobileRpcRequestParams } from '../../transport/mobile-rpc-request-projection'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import { projectMobileRpcRequestParams } from '../../transport/rpc/mobile-rpc-request-projection'
 import {
   checkpointKeys,
   checkpointListDifference,

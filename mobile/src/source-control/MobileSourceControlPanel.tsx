@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
-import { useHostConnectionInputs } from '../transport/client-context-connection-metrics'
+import { useHostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
 import { View } from 'react-native'
 import { GitBranch, RefreshCw } from 'lucide-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -10,7 +10,7 @@ import {
 } from '../components/MobileStateView'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { connectionRetryAction } from '../transport/connection-retry-action'
+import { connectionRetryAction } from '../transport/connection/connection-retry-action'
 import { useMobileSourceControlState } from './use-mobile-source-control-state'
 import { useMobileSourceControlRefresh } from './use-mobile-source-control-refresh'
 import { useMobileSourceControlActionSheet } from './use-mobile-source-control-action-sheet'
@@ -35,7 +35,7 @@ import {
   type SourceControlHubRouteTab
 } from './mobile-source-control-hub-tab'
 import { groupMobileSourceControlMenu } from './mobile-source-control-actions'
-import { useMobilePrSidebarController } from '../session/use-mobile-pr-sidebar-controller'
+import { useMobilePrSidebarController } from './review/use-mobile-pr-sidebar-controller'
 import { MobilePrTabBody } from '../components/MobilePRSidebar'
 import { MobilePrTabSheets } from '../components/pr-sidebar/MobilePrTabSheets'
 import { PrTabScreenView } from '../components/pr-sidebar/PrTabScreenView'
@@ -51,6 +51,8 @@ export type MobileSourceControlPanelProps = {
   name?: string
   embedded?: boolean
   initialTab?: SourceControlHubRouteTab
+  /** Back for a hub shown over another screen in place; a route's Back pops it. */
+  backInPlace?: { onPress: () => void; label: string }
   onRequestClose?: () => void
 }
 
@@ -60,6 +62,7 @@ export function MobileSourceControlPanel({
   name = '',
   embedded = false,
   initialTab = 'changes',
+  backInPlace,
   onRequestClose
 }: MobileSourceControlPanelProps) {
   useMobileColorScheme()
@@ -251,6 +254,7 @@ export function MobileSourceControlPanel({
       // Only Changes reads through the query layer so far; the PR tab keeps its own loading UI.
       refreshing={activeTab === 'changes' && state.refreshing}
       onBack={onBack}
+      backInPlace={backInPlace}
       onClose={onClose}
       onRefresh={onRefresh}
       menuGroups={

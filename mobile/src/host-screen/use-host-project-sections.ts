@@ -4,7 +4,7 @@ import type { ProjectGroup } from '../../../src/shared/project-group-types'
 import { ProjectSectionCatalogSchema } from '../../../src/shared/project-section-catalog-schema'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../src/shared/sidebar-inputs-switch'
 import { defineHostQuery, useHostQuery } from '../query/host-query'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   hostProjectGroupsRead,
   projectSectionsRead,

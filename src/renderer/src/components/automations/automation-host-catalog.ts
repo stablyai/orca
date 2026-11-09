@@ -1,10 +1,13 @@
-import { hostStableKey, parseHostStableKey } from '../../../../shared/automation-owner-key'
+import {
+  hostStableKey,
+  parseHostStableKey
+} from '../../../../shared/automations/ownership/automation-owner-key'
 import { translate } from '@/i18n/i18n'
 import type {
   AutomationOwnerRef,
   StableAutomationAuthorityRef,
   StableAutomationCatalogRef
-} from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
 import { isOwnedSshTargetId } from '../../../../shared/execution-host'
 import {
   automationAuthorityCatalogKey,
