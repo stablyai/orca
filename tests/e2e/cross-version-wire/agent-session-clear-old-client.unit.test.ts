@@ -11,7 +11,7 @@ import { eventually } from '../../../src/main/native-chat/agent-session-wire/hos
 import {
   HOST_TEST_SESSION as SESSION,
   hostTestOperationId
-} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { EMPTY_STRUCTURED_AGENT_SESSION } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import type { useNativeChatRewind } from '../../../src/renderer/src/components/native-chat/use-native-chat-rewind'

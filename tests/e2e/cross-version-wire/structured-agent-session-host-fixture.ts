@@ -2,7 +2,7 @@ import { agentSessionRecordFixture } from '../../../src/shared/agent-session/lif
 import { agentSessionConversationView } from '../../../src/shared/agent-session/lifecycle/agent-session-conversation-view'
 import { vi, type Mock } from 'vitest'
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/providers/structured-agent-session-adapter'
-import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-support'
+import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-fixture'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
 import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'

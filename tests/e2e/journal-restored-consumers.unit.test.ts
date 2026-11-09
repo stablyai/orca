@@ -43,7 +43,7 @@ import type { JournalRow } from '../../src/main/native-chat/agent-session-journa
 import {
   hostTestAttachParams,
   HOST_TEST_SESSION as SESSION
-} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { seedQueuedRigLegacyJournal } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-legacy-journal.test-fixture'
 import {
   createRestTestRig,

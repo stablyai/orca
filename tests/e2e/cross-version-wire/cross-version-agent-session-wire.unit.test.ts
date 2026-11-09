@@ -8,7 +8,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 import { emptyAgentSessionBatch } from '../../../src/main/native-chat/agent-session-wire/publication/subscribers/agent-session-empty-batch'
-import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-support'
+import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'

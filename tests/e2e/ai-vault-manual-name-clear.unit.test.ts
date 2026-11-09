@@ -33,7 +33,7 @@ import {
 import { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { structuredAgentsDeclaringNothing } from '../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
-import { recordingStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-logger-test-support'
+import { recordingStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-logger.test-fixture'
 import { createStructuredChatNamingHandler } from '../../src/main/native-chat/structured-chat-naming'
 import { PI_RPC_AGENT } from '../../src/main/pi/rpc-agent-definition'
 import type { AgentSessionStatusEvent } from '../../src/shared/agent-session/agent-session-wire'

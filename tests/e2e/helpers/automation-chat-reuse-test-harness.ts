@@ -22,7 +22,7 @@ import {
   HOST_TEST_NOW,
   HOST_TEST_THREAD,
   HOST_TEST_LOCATION
-} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import { createQueuedMessageTestRig } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 
 import { eventually } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig-provider.test-fixture'

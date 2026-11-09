@@ -19,7 +19,7 @@ import {
   HOST_TEST_SESSION as REST_TEST_SESSION,
   hostTestAttachParams,
   hostTestOperationId
-} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { computeAgentSessionPayloadFingerprint } from '../../../src/shared/agent-session/lifecycle/agent-session-mutation-envelope'

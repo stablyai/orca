@@ -3,7 +3,7 @@ import { importReleaseCheckoutModule, materializeReleaseCheckout } from './relea
 import {
   HOST_TEST_SESSION,
   HOST_TEST_NOW
-} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data'
+} from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-host-test-data.test-fixture'
 import {
   WORKTREE,
   createChat,
