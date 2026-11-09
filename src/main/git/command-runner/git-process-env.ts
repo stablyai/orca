@@ -11,8 +11,6 @@ export function gitOptionalLocksDisabledEnv(
   }
 }
 
-/** Append Git >= 2.31 config-env entries without overwriting the caller's existing entries. */
-
 /** Pin Git diagnostics to English so parsers work under any user locale. */
 export function untranslatedGitOutputEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   return { ...env, ...UNTRANSLATED_GIT_OUTPUT_ENV }

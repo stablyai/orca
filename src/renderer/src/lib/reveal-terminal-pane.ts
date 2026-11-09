@@ -1,5 +1,5 @@
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
 import type { TerminalPaneRevealTarget } from '../../../shared/workspace-layout/terminal-pane-reveal'
 

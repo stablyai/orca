@@ -1,6 +1,6 @@
 import { createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
-import { openOrcadStdioBridgeChannel } from '../../ssh/orcad-stdio-bridge'
+import { openOrcadStdioBridgeChannel } from '../../managed-server/lifecycle/orcad-stdio-bridge'
 import {
   fakeWslBridgeChildren,
   posixOrcadStdioBridge

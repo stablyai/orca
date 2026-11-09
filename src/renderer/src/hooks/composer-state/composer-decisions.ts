@@ -4,14 +4,14 @@ import {
 } from '../../../../shared/workspace-name'
 import { normalizeExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { shouldApplyWorkspaceSourceAutoName } from '../../../../shared/new-workspace/workspace-source'
-import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
+import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-attachments/workspace-linked-item-source-context'
 import {
   getGitHubLinkedWorkItemIdentity,
   type SmartGitHubPrStartPointSelection
 } from './source-selection-decisions'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
 import type { JiraIssueKeyCasing } from '../../../../shared/ui-chrome-types'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'

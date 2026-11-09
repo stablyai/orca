@@ -12,6 +12,7 @@ import {
   type RemoteRuntimeSocketLivenessOptions
 } from '../remote-runtime-socket-liveness'
 import type { SharedControlSocketCloseCause } from './remote-runtime-shared-control-types'
+import type { RemoteRuntimeSealedFrame } from '../remote-runtime-sealed-frame'
 
 export function openSharedControlSocket(
   connection: PairedRuntimeConnection,
@@ -23,7 +24,9 @@ export function openSharedControlSocket(
       cause: SharedControlSocketCloseCause,
       close?: { code: number; reason: string }
     ) => void
-    onTextFrame: (frame: string) => void
+    /** The current socket finished its opening handshake. */
+    onOpened: () => void
+    onFrame: (frame: RemoteRuntimeSealedFrame) => void
     /** Any inbound frame, ping or pong on the current socket. */
     onActivity?: () => void
     // Half-open tunnels never emit close; liveness must trigger the close/reconnect path (#7718).
@@ -40,6 +43,11 @@ export function openSharedControlSocket(
     callbacks.onActivity?.()
   }
   const opened = openRemoteRuntimeWebSocket(connection, {
+    onOpen: (ws) => {
+      if (callbacks.getCurrentSocket() === ws) {
+        callbacks.onOpened()
+      }
+    },
     onClose: (ws, code, reason) => {
       if (callbacks.getCurrentSocket() === ws) {
         callbacks.onSocketClosed(
@@ -55,10 +63,10 @@ export function openSharedControlSocket(
         callbacks.onSocketClosed(error, cause)
       }
     },
-    onTextFrame: (ws, frame) => {
+    onFrame: (ws, frame) => {
       if (callbacks.getCurrentSocket() === ws) {
         noteActivity()
-        callbacks.onTextFrame(frame)
+        callbacks.onFrame(frame)
       }
     },
     onPong: (ws) => {

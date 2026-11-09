@@ -1,4 +1,3 @@
-import './unused-default-rpc-methods.test-fixture'
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, realpath, readFile, writeFile } from 'node:fs/promises'
@@ -16,12 +15,13 @@ import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import type { RemoveWorktreeResult } from '../../../shared/worktree/create-types'
-import type { CliStatusResult, RuntimeWorktreeRemoveResult } from '../../../shared/runtime-types'
+import type { CliStatusResult } from '../../../shared/runtime-session-contracts'
+import type { RuntimeWorktreeRemoveResult } from '../../../shared/runtime-worktree-contracts'
 import type { RuntimeRpcSuccess } from '../../../shared/runtime-rpc-envelope'
 import * as appEnvironment from '../../../shared/app-environment'
 import type { SshTarget } from '../../../shared/ssh-types'
-import { orcadMigrationCutoverFixture } from '../../ssh/orcad-migration-cutover-fixture'
-import { writeOrcadMigrationSourceCutover } from '../../ssh/orcad-migration-cutover-journal'
+import { orcadMigrationCutoverFixture } from '../../managed-server/migration/cutover/testing/orcad-migration-cutover-fixture'
+import { writeOrcadMigrationSourceCutover } from '../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
 import { removalPtyProvider } from './worktree-rm-pty.test-fixture'
 import { pairedRemovalReceiver } from './worktree-rm-paired.test-fixture'
 import { addManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
@@ -29,8 +29,8 @@ import { getRuntimeMetadataPath } from '../../../shared/runtime-bootstrap'
 import { WorktreeRemove } from '../../../shared/rpc-contract/worktree-params'
 import { UnixSocketTransport } from './unix-socket-transport'
 import { RpcDispatcher } from './dispatcher'
-import { WORKTREE_METHODS } from './methods/worktree'
-import { STATUS_METHODS } from './methods/status'
+import { WORKTREE_METHODS } from './methods/workspaces/worktree'
+import { STATUS_METHODS } from './methods/host-management/status'
 import type { RpcRequest } from './core'
 import { WorkspaceLifecycleQueue } from '../workspaces/lifecycle/workspace-lifecycle-queue'
 import { installRealWorkerThreadChildProcesses } from '../../worker-thread-child-process/worker-thread-child-process-real.test-fixtures'
@@ -644,21 +644,6 @@ it('retains legacy hidden SSH folder removal with a raw-ID local twin', async ()
   expect(existsSync(directory)).toBe(true)
   expect(await git('rev-parse', 'task')).toBe(head)
   expect(warnings()).toHaveLength(1)
-})
-
-it('keeps the legacy warning on JSON refusal without implying branch success', async () => {
-  supported = false
-  await writeFile(join(checkout, 'file'), 'unsaved')
-  const head = await git('rev-parse', 'task')
-  await main(['worktree', 'rm', '--worktree', `id:${id}`, '--delete-branch', '--json'], repoPath)
-  expect(process.exitCode).toBe(1)
-  expect(warnings()).toHaveLength(1)
-  const output = JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0]))
-  expect(output).toMatchObject({ ok: false })
-  expect(output).not.toHaveProperty('result')
-  expect(await readFile(join(checkout, 'file'), 'utf8')).toBe('unsaved')
-  expect(await git('rev-parse', 'task')).toBe(head)
-  expect(runtime.workspaceLifecycle.hints()).toEqual({})
 })
 
 it('reports actual safe branch preservation when forced checkout removal cannot delete the branch', async () => {

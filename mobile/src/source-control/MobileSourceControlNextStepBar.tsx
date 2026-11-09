@@ -22,8 +22,8 @@ import type { MobileSourceControlPrimaryAction } from './mobile-source-control-p
 import { AgentLaunchNotice } from '../components/AgentLaunchNotice'
 import { ConfirmModal } from '../components/ConfirmModal'
 import type { MobileMergeConfirm } from './use-mobile-source-control-next-step'
-import type { MobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
-import type { PrAiTriageLaunchNotice } from '../session/use-mobile-pr-ai-triage'
+import type { MobileAgentLaunchAvailability } from '../session/agent-launch/mobile-agent-launch-availability'
+import type { PrAiTriageLaunchNotice } from './review/use-mobile-pr-ai-triage'
 import type {
   MobileNextStepBarView,
   MobileNextStepIcon,

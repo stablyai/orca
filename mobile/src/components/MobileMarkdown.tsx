@@ -5,6 +5,7 @@ import { MARKDOWN_TONES, scaledMarkdownText, styles } from './mobile-markdown-st
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { renderBlocks, type MarkdownBlockContext } from './mobile-markdown-blocks'
 import { MarkdownText } from './mobile-markdown-text'
+import { MobileMarkdownRemoteImage } from './MobileMarkdownRemoteImage'
 import { MarkdownTextContext, type MarkdownTextSetup } from './mobile-markdown-text-setup'
 import { MarkdownLinkHandlerContext } from './markdown-link-handler'
 import { useMobileMarkdownTree } from './use-mobile-markdown-tree'
@@ -27,14 +28,24 @@ type Props = {
   // File targets call this with relative/absolute path and optional :line(:col); omit on screens without viewer to leave paths plain.
   onOpenFile?: (pathText: string) => void
   // Enable ::orca-visual directives only in assistant native-chat prose; keep callback identity stable for memoization.
-  renderImage?: (href: string, alt: string) => ReactNode
+  renderImage?: (href: string, alt: string, width?: number) => ReactNode
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
   // Close incomplete streaming markup like desktop; diagrams remain code until text stops.
   growing?: boolean
   /** The text may end mid-path: chat file links show only answers already known. */
   streaming?: boolean
+  /** Chat's math delimiters, `\(…\)` and `\[…\]` as well as `$`, as desktop chat reads them.
+   *  GitHub text (PRs, Tasks, files) leaves them off, so `\[Bug\]` stays a bracket. */
+  chatMath?: boolean
   /** The surface under the text: `userMessage` inside your own message's bubble. */
   tone?: keyof typeof MARKDOWN_TONES
+}
+
+/** Without a surface's own image renderer, https images draw from the web (GitHub text). */
+function renderRemoteImage(href: string, alt: string, width?: number): ReactNode {
+  return /^https:\/\//i.test(href) ? (
+    <MobileMarkdownRemoteImage uri={href} alt={alt} width={width} />
+  ) : null
 }
 
 function MobileMarkdownContent({
@@ -47,6 +58,7 @@ function MobileMarkdownContent({
   renderImage,
   growing = false,
   streaming = false,
+  chatMath = false,
   tone: toneName = 'default'
 }: Props) {
   useMobileColorScheme()
@@ -60,10 +72,13 @@ function MobileMarkdownContent({
     streaming
   )
   const text = content?.trim() ?? ''
-  const { root, directives } = useMobileMarkdownTree(text, renderVisual !== undefined, growing, {
-    fileLinkExists,
-    githubRepo: links?.githubRepo
-  })
+  const { root, directives } = useMobileMarkdownTree(
+    text,
+    renderVisual !== undefined,
+    growing,
+    chatMath,
+    { fileLinkExists, githubRepo: links?.githubRepo }
+  )
   if (!text) {
     return fallback ? (
       <MarkdownText selectable={rangeSelectable} style={styles.paragraph}>
@@ -74,6 +89,7 @@ function MobileMarkdownContent({
   const tone = MARKDOWN_TONES[toneName]
   const ctx: MarkdownBlockContext = {
     growing,
+    chatMath,
     onOpenFile,
     onOpenLink,
     filePathsLinkedInTree: fileLinkExists !== undefined,
@@ -88,7 +104,7 @@ function MobileMarkdownContent({
     rowLongPress: setup.androidTranscript ? setup.onLongPress : undefined,
     directives,
     renderVisual,
-    renderImage,
+    renderImage: renderImage ?? renderRemoteImage,
     mermaidOccurrences: new Map()
   }
   // Native-chat range selection is set on each block; nested inline spans inherit it.

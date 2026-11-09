@@ -1,8 +1,8 @@
 import { translate } from '../i18n/mobile-i18n'
 import type { MobileHostedReviewEligibilityReply } from './hosted-review-reply-schema'
 import { getRepoIdFromWorktreeId } from '../../../src/shared/worktree/id'
-import type { RpcSendParams } from '../transport/rpc-params-contract'
-import { refusedRpcMessageOrFallback } from '../transport/rpc-refusal-message'
+import type { RpcSendParams } from '../../../src/shared/rpc-contract/rpc-send-params'
+import { refusedRpcMessageOrFallback } from '../transport/rpc/rpc-refusal-message'
 import { hostedReviewCopy } from './hosted-review-copy'
 import {
   hostedReviewCreateRun,
@@ -11,7 +11,7 @@ import {
 } from './mobile-hosted-review-operations'
 import { pushMobileHostedReviewBranch } from './mobile-hosted-review-git-preparation'
 import { linkMobileHostedReview } from './mobile-pr-link'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
 
 // Mobile ids combine repo::path; hosted-review RPCs need separate selectors.
 export function mobileRepoSelectorFromWorktreeId(worktreeId: string): string {

@@ -7,7 +7,7 @@ import {
 } from '../../workspace-hooks/issue-command-file'
 import { isFolderRepo } from '../../../shared/repo-kind'
 import { joinWorktreeRelativePath } from '../files/paths/runtime-relative-paths'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { assertWslMoveRepoWritable } from '../../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
 type RuntimeRepositoryIssueCommandDeps = {
@@ -33,7 +33,10 @@ export class RuntimeRepositoryIssueCommand {
     const connectionId = getRepoDialableSshTargetId(repo)
     if (!connectionId) {
       // A paired client's Settings render must not start this host's stopped distro (E9).
-      return readIssueCommandUnlessWslStopped(repo.path, options)
+      return readIssueCommandUnlessWslStopped(repo.path, {
+        ...options,
+        gitOptions: () => this.deps.getLocalGitArgs(repo)[0] ?? {}
+      })
     }
     // Why: an `ssh:` repo is not served here; it reads as having no command.
     return {

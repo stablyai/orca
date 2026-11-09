@@ -1,6 +1,6 @@
 import type { SshConnectionState, SshTarget } from '../../../../../../shared/ssh-types'
 import type { SshEditableTarget } from '../../../../../../shared/ssh-target-management'
-import { listRuntimeEditableSshTargets } from '@/runtime/runtime-ssh-target-management'
+import { listRuntimeEditableSshTargets } from '@/runtime/hosts/ssh/runtime-ssh-target-management'
 
 export type RemoteRepoTarget = SshTarget & { state?: SshConnectionState }
 

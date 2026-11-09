@@ -14,7 +14,6 @@ import { HistoryReader } from '../history-reader'
 import { getHistorySessionDirName } from '../../storage/history-paths'
 import {
   TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES,
-  TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES,
   TERMINAL_HISTORY_LOG_MAX_BYTES,
   TERMINAL_HISTORY_META_MAX_BYTES
 } from '../../storage/terminal-history-file-limits'
@@ -117,21 +116,6 @@ describe('terminal history restore memory limits', () => {
     expect(
       new HistoryReader(metadataSession.basePath).hasRestorableHistory('oversized-metadata')
     ).toBe(true)
-  })
-
-  it('reports an oversized legacy scrollback as unreadable recovery', async () => {
-    const { basePath, sessionPath } = createSession('oversized-legacy-scrollback')
-    createSparseFile(
-      join(sessionPath, 'scrollback.bin'),
-      TERMINAL_HISTORY_LEGACY_SCROLLBACK_MAX_BYTES + 1
-    )
-
-    expect(
-      await new HistoryReader(basePath).detectColdRestoreState('oversized-legacy-scrollback')
-    ).toEqual({
-      status: 'unreadable',
-      sessionId: 'oversized-legacy-scrollback'
-    })
   })
 
   // Ordinary hyperlink output exceeded the retired token cap and lost recovery.

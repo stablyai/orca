@@ -34,19 +34,29 @@ import {
 import { getWslAccountTarget } from './account-wsl-location'
 import {
   addDataAccount,
-  listDataAccounts,
-  mutateDataAccount,
   redactLoginAnswers,
   rejectOpenCodeLoginFlagsForAgent
 } from './data-account-commands'
-import { formatAccountsBlock, formatDataAccounts } from './account-list-format'
+import {
+  formatAccountsBlock,
+  formatAntigravityAccounts,
+  formatDataAccounts
+} from './account-list-format'
 import { resolveOpenCodeLoginCommand } from './opencode-account-login-command'
+import {
+  listAgentAccounts,
+  readAntigravityAccountsForList,
+  removeAgentAccount,
+  selectAgentAccount
+} from './account-selection'
+import type { AntigravityAccountState } from '../../shared/antigravity-account-types'
 
 type AccountsListSnapshot = {
   opencode?: ManagedDataAccountsState
   devin?: ManagedDataAccountsState
   claude: ClaudeRateLimitAccountsState
   codex: CodexRateLimitAccountsState
+  antigravity?: AntigravityAccountState
 }
 
 function addAgentNodePaths(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
@@ -261,30 +271,35 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
     rejectAccountRemoteSelectionFlags(ctx, 'orca account list')
     const provider = ctx.flags.get('agent')
     if (provider !== undefined) {
-      await listDataAccounts(ctx, provider)
+      await listAgentAccounts(ctx, provider)
       return
     }
     const { client, json } = ctx
     // JSON carries usage: refresh stale windows within throttles; a forced refresh bypasses Retry-After.
-    const result = await client.call<AccountsListSnapshot>('accounts.list', {
+    const response = await client.call<AccountsListSnapshot>('accounts.list', {
       refreshUsage: false,
       ...(json ? { refreshStaleUsage: true } : {})
     })
-    printResult(result, json, (snapshot) =>
+    // Why separate: Antigravity accounts live in their own native vault, not in the
+    // accounts.list snapshot, and an older host simply has none to show.
+    const antigravity = await readAntigravityAccountsForList(ctx)
+    const result = antigravity ? { ...response.result, antigravity } : response.result
+    printResult({ ...response, result }, json, (snapshot) =>
       [
         formatAccountsBlock('Claude', snapshot.claude),
         formatAccountsBlock('Codex', snapshot.codex),
         ...(snapshot.opencode ? [formatDataAccounts('OpenCode', snapshot.opencode)] : []),
-        ...(snapshot.devin ? [formatDataAccounts('Devin', snapshot.devin)] : [])
+        ...(snapshot.devin ? [formatDataAccounts('Devin', snapshot.devin)] : []),
+        ...(snapshot.antigravity ? [formatAntigravityAccounts(snapshot.antigravity)] : [])
       ].join('\n\n')
     )
   },
   'account select': async (ctx) => {
     rejectAccountRemoteSelectionFlags(ctx, 'orca account select')
-    await mutateDataAccount(ctx, 'select')
+    await selectAgentAccount(ctx)
   },
   'account rm': async (ctx) => {
     rejectAccountRemoteSelectionFlags(ctx, 'orca account rm')
-    await mutateDataAccount(ctx, 'remove')
+    await removeAgentAccount(ctx)
   }
 }

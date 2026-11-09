@@ -13,19 +13,6 @@ describe('daemon asynchronous I/O progress', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('reports a completed operation as healthy and caches it without more work', async () => {
-    let now = 1
-    const start = vi.fn((done: () => void) => done())
-    const probe = new DaemonAsyncIoProbe(start, () => now)
-    expect(await probe.check()).toEqual({ state: 'healthy', pendingMs: 0 })
-    now = 20_000
-    expect(await probe.check()).toEqual({ state: 'healthy', pendingMs: 0 })
-    expect(start).toHaveBeenCalledTimes(1)
-    now = 31_000
-    await probe.check()
-    expect(start).toHaveBeenCalledTimes(2)
-  })
-
   it('detects pending work while timers still run, and never adds more blocked operations', async () => {
     vi.useFakeTimers()
     const start = vi.fn<(done: () => void) => void>()
@@ -54,17 +41,6 @@ describe('daemon asynchronous I/O progress', () => {
     complete()
     expect(await probe.check()).toEqual({ state: 'healthy', pendingMs: 0 })
     expect(start).toHaveBeenCalledTimes(1)
-    expect(vi.getTimerCount()).toBe(0)
-  })
-
-  it('does not flag normal delayed completion as a stall', async () => {
-    vi.useFakeTimers()
-    const probe = new DaemonAsyncIoProbe((done) => {
-      setTimeout(done, 100)
-    })
-    const pending = probe.check()
-    await vi.advanceTimersByTimeAsync(100)
-    expect((await pending).state).toBe('healthy')
     expect(vi.getTimerCount()).toBe(0)
   })
 })

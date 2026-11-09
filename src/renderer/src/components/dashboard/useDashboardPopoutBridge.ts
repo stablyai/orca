@@ -1,21 +1,22 @@
 import { createDashboardChatProgramHolds } from './dashboard-chat-program-acquisition'
 import { useEffect } from 'react'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import {
   subscribeStructuredChatTabNames,
   getStructuredChatTabNames
-} from '@/runtime/structured-chat-name-observation'
+} from '@/runtime/native-chat/naming/structured-chat-name-observation'
 import { subscribeChatProgramFacts } from '@/lib/host-chat-program'
 import {
   type AgentLaunchRouteView,
   agentLaunchRouteInputsChanged,
   selectAgentLaunchRouteView
-} from '@/lib/agent-launch-route-input'
+} from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { revealDashboardAgent } from './reveal-dashboard-agent'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
 import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 // Throttle cross-worktree snapshot rebuilds to 4Hz during agent-status bursts.
 const PUBLISH_THROTTLE_MS = 250

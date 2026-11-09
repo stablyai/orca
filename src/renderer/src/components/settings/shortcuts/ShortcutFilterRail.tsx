@@ -9,6 +9,7 @@ import { Input } from '../../ui/input'
 import type { ShortcutTerminalStatus } from './shortcut-terminal-status'
 import { matchesSettingsSearch, type SettingsSearchEntry } from '../search/settings-search'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export type ShortcutFilter = 'all' | 'modified' | 'unassigned' | 'conflicts'
 
@@ -124,6 +125,7 @@ export function ShortcutFilterRail({
   visibleCount: number
   totalCount: number
 }): React.JSX.Element {
+  const t = useTranslate()
   const filters = (Object.keys(SHORTCUT_FILTER_LABELS) as ShortcutFilter[]).map((id) => ({
     id,
     label: SHORTCUT_FILTER_LABELS[id](),
@@ -135,7 +137,7 @@ export function ShortcutFilterRail({
       <div className="shrink-0 space-y-2">
         <div className="flex items-center justify-between gap-3">
           <label htmlFor="shortcut-filter-search" className="text-xs font-medium">
-            {translate('auto.components.settings.ShortcutFilterRail.02dc7d4251', 'Find shortcuts')}
+            {t('auto.components.settings.ShortcutFilterRail.02dc7d4251', 'Find shortcuts')}
           </label>
           <span className="text-[11px] text-muted-foreground">
             {visibleCount}/{totalCount}
@@ -147,7 +149,7 @@ export function ShortcutFilterRail({
             id="shortcut-filter-search"
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.settings.ShortcutFilterRail.f733c4b89f',
               'Search command or keys'
             )}
@@ -158,7 +160,7 @@ export function ShortcutFilterRail({
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.settings.ShortcutFilterRail.df8466f3fc',
                 'Clear shortcut search'
               )}
@@ -172,14 +174,14 @@ export function ShortcutFilterRail({
       </div>
 
       <nav
-        aria-label={translate(
+        aria-label={t(
           'auto.components.settings.ShortcutFilterRail.8a1e78c14b',
           'Shortcut status filters'
         )}
         className="shrink-0 space-y-2"
       >
         <p className="text-[11px] font-semibold tracking-[0.05em] text-muted-foreground uppercase">
-          {translate('auto.components.settings.ShortcutFilterRail.28b63545bf', 'Status')}
+          {t('auto.components.settings.ShortcutFilterRail.28b63545bf', 'Status')}
         </p>
         <div className="grid gap-1">
           {filters.map((option) => (

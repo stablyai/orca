@@ -3,6 +3,7 @@ import type { OrcadManagedRestartResult } from '../../../../../../shared/orcad-m
 import type { SshManagedServerStatus } from '../../../../../../shared/ssh-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import {
   Dialog,
@@ -31,6 +32,7 @@ export function SshHostRestartServerDialog({
   onOpenChange: (open: boolean) => void
   onChanged: () => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const api = getManagedOrcadApi()
   const mountedRef = useMountedRef()
   const [busy, setBusy] = useState(false)
@@ -71,10 +73,10 @@ export function SshHostRestartServerDialog({
       <DialogContent showCloseButton={!busy}>
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.settings.restartServer.title', 'Restart Orca’s server')}
+            {t('auto.components.settings.restartServer.title', 'Restart Orca’s server')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.settings.restartServer.description',
               'Orca restarts its server on this host from your current connection. It restarts only when no terminals are running on the host, because terminals that are still open stay cut off. Close them first.'
             )}
@@ -83,10 +85,10 @@ export function SshHostRestartServerDialog({
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <DialogFooter>
           <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy}>
-            {translate('auto.components.settings.restartServer.cancel', 'Cancel')}
+            {t('auto.components.settings.restartServer.cancel', 'Cancel')}
           </Button>
           <Button onClick={() => void restart()} disabled={busy}>
-            {translate('auto.components.settings.restartServer.confirm', 'Restart')}
+            {t('auto.components.settings.restartServer.confirm', 'Restart')}
           </Button>
         </DialogFooter>
       </DialogContent>

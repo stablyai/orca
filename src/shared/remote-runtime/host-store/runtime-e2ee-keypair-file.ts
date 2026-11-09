@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { readNodeFileSyncWithinLimit } from '../../node-bounded-file-reader'
+import { readNodeFileSyncWithinLimit } from '../../file-content/node-bounded-file-reader'
 
 export const E2EE_KEYPAIR_FILENAME = 'orca-e2ee-keypair.json'
 export const MAX_E2EE_KEYPAIR_FILE_BYTES = 8 * 1024

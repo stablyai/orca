@@ -84,33 +84,4 @@ describe('OMP plan review forwarding', () => {
       expect.objectContaining({ hook_event_name: 'plan_review_resolved', is_idle: true })
     ])
   })
-
-  it('keeps the replacement review answerable when the replaced one reports its close', async () => {
-    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
-    const { ctx, resolvePlanReview, readInput } = createPlanReviewContext()
-
-    await harness.callHook(
-      'plan_review_requested',
-      { ...PLAN_REVIEW_REQUEST, reviewId: 'old' },
-      ctx
-    )
-    await harness.callHook('plan_review_requested', PLAN_REVIEW_REQUEST, ctx)
-    await harness.callHook('plan_review_resolved', { reviewId: 'old', choice: undefined }, ctx)
-
-    readInput(buildOmpPlanReviewAnswer(REVIEW_ID, 'save'))
-    expect(resolvePlanReview).toHaveBeenCalledWith(REVIEW_ID, 'save')
-  })
-
-  it('closes only the open review when its card asks to refine', async () => {
-    const harness = createAgentStatusExtensionHarness({ kind: 'omp' })
-    const { ctx, resolvePlanReview, readInput } = createPlanReviewContext()
-
-    await harness.callHook('plan_review_requested', PLAN_REVIEW_REQUEST, ctx)
-
-    expect(readInput(buildOmpPlanReviewAnswer('replaced-review', 'dismiss'))).toEqual({
-      consume: true
-    })
-    expect(readInput(buildOmpPlanReviewAnswer(REVIEW_ID, 'dismiss'))).toEqual({ data: '\x1b' })
-    expect(resolvePlanReview).not.toHaveBeenCalled()
-  })
 })

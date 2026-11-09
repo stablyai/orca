@@ -1,31 +1,37 @@
 import MarkdownIt from 'markdown-it'
 import cjkFriendly from 'markdown-it-cjk-friendly'
 import footnote from 'markdown-it-footnote'
-import type {
-  AlignType,
-  Code,
-  Nodes,
-  Parent,
-  PhrasingContent,
-  Root,
-  RootContent,
-  Table
-} from 'mdast'
+import type { AlignType, Parent, PhrasingContent, Root, RootContent, Table } from 'mdast'
 import remend from 'remend'
+import { forEachGitHubCallout } from '../../../src/shared/github/github-callouts'
+import { codeNode, type Token } from './mobile-markdown-code-nodes'
+import { inlineTagNode, inlineTagPairs } from './mobile-markdown-inline-html'
+import { readTaskMarker } from './mobile-markdown-task-items'
+import { plainText } from './mobile-markdown-plain-text'
 import { appendHtmlBlock, noteInlineHtml, popContainer } from './mobile-markdown-details'
+import { mobileMarkdownMath, type MathEnv } from './mobile-markdown-math'
+import {
+  displayFormulas,
+  inlineMathNode,
+  mathBlockNode,
+  mathClosed,
+  mathFenceNode,
+  withoutMath
+} from './mobile-markdown-math-nodes'
+import { withImagesSplitOut } from './mobile-markdown-html-images'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { endLinkifyUrlsAtProsePunctuation } from './markdown-linkify-prose-boundary'
 
 // Match desktop CommonMark/GFM tables, strikethrough, autolinks, footnotes and CJK emphasis using phone-efficient parser.
-const markdown = new MarkdownIt({ html: true, linkify: true }).use(footnote).use(cjkFriendly)
+const markdown = new MarkdownIt({ html: true, linkify: true })
+  .use(footnote)
+  .use(cjkFriendly)
+  .use(mobileMarkdownMath)
 // Every href parses as a link, file: included; routeMarkdownHref decides what a tap opens.
 markdown.validateLink = () => true
 endLinkifyUrlsAtProsePunctuation(markdown.linkify)
 
-type Token = ReturnType<MarkdownIt['parse']>[number]
-
 const PATH_FLANK = /[\w\\/]/
-const TASK_MARKER = /^\[([ xX])\](?:\s+|$)/
 const LINE_BREAK_TAG = /^<br\s*\/?>$/i
 const HEADING_DEPTHS = [1, 2, 3, 4, 5, 6] as const
 /** Parents that hold blocks; any other parent holds inline content. */
@@ -43,17 +49,6 @@ const CLOSING_TOKENS = new Set([
   'td_close',
   'footnote_close'
 ])
-
-/** The text a node draws, as mdast-util-to-string reads it. */
-export function plainText(node: Nodes): string {
-  if ('value' in node) {
-    return node.value
-  }
-  if (node.type === 'image') {
-    return node.alt ?? ''
-  }
-  return 'children' in node ? node.children.map(plainText).join('') : ''
-}
 
 function pushText(nodes: PhrasingContent[], value: string): void {
   if (!value) {
@@ -87,9 +82,17 @@ function phrasing(
     } else if (token.type === 'code_inline') {
       nodes.push({ type: 'inlineCode', value: token.content })
     } else if (token.type === 'html_inline') {
-      nodes.push({ type: 'html', value: token.content })
+      const pair = inlineTagPairs(tokens).get(index - 1)
+      if (pair) {
+        nodes.push(inlineTagNode(pair, phrasing(tokens.slice(index, pair.close), 0).nodes))
+        index = pair.close + 1
+      } else {
+        nodes.push({ type: 'html', value: token.content })
+      }
     } else if (token.type === 'image') {
       nodes.push({ type: 'image', url: token.attrGet('src') ?? '', alt: token.content || null })
+    } else if (token.type === 'math_inline') {
+      nodes.push(inlineMathNode(token))
     } else if (token.type === 'footnote_ref') {
       const label = String(token.meta?.label ?? '')
       nodes.push({ type: 'footnoteReference', identifier: label, label })
@@ -100,7 +103,11 @@ function phrasing(
       const before = previous?.type === 'text' ? previous.value.slice(-1) : ''
       const after = tokens[index]?.type === 'text' ? (tokens[index]?.content[0] ?? '') : ''
       if (token.type === 'link_open') {
-        nodes.push({ type: 'link', url: token.attrGet('href') ?? '', children: inner.nodes })
+        nodes.push({
+          type: 'link',
+          url: token.attrGet('href') ?? '',
+          children: withoutMath(inner.nodes)
+        })
       } else if (
         // Keep underscore emphasis literal beside path separators so a/__tests__/x.ts remains whole/tappable.
         token.markup.startsWith('_') &&
@@ -122,64 +129,20 @@ function phrasing(
   return { nodes, next: index }
 }
 
-/** Whether a code block's closing fence has arrived; an unclosed one is still streaming in. */
-export function codeFenceClosed(node: Code): boolean {
-  return !('closed' in node) || node.closed !== false
-}
-
-function codeNode(token: Token, lines: readonly string[]): Code & { closed: boolean } {
-  const [start, end] = token.map ?? [0, 0]
-  // The block's lines in the message, so a reader's choice on it outlives re-parses.
-  const position = token.map
-    ? { start: { line: start + 1, column: 1 }, end: { line: end, column: 1 } }
-    : undefined
-  if (token.type !== 'fence') {
-    return {
-      type: 'code',
-      lang: null,
-      value: token.content.replace(/\n$/, ''),
-      closed: true,
-      position
-    }
-  }
-  // A fence inside a quote carries the quote's marker on its closing line.
-  const closing = end - start > 1 ? (lines[end - 1] ?? '').replace(/^[\s>]*/, '').trim() : ''
-  return {
-    type: 'code',
-    position,
-    lang: token.info.trim().split(/\s+/)[0] || null,
-    value: token.content.replace(/\n$/, ''),
-    closed:
-      closing.length >= token.markup.length &&
-      [...closing].every((char) => char === token.markup[0])
-  }
-}
-
 function alignOf(token: Token): AlignType {
   const align = /text-align:\s*(left|right|center)/.exec(token.attrGet('style') ?? '')?.[1]
   return align === 'left' || align === 'right' || align === 'center' ? align : null
 }
 
-/** GitHub task list items: `[ ]` or `[x]` opening the item's first paragraph. */
-function readTaskMarker(item: Parent & { checked?: boolean | null }): void {
-  const paragraph = item.children[0]
-  const text = paragraph?.type === 'paragraph' ? paragraph.children[0] : undefined
-  const marker = text?.type === 'text' ? TASK_MARKER.exec(text.value) : null
-  if (text?.type === 'text' && marker) {
-    item.checked = marker[1] !== ' '
-    text.value = text.value.slice(marker[0].length)
-  }
-}
-
 /** A `<details>` summary's inline HTML and Markdown as spans. */
-function summaryPhrasing(html: string): PhrasingContent[] {
+function summaryPhrasing(html: string, env: MathEnv): PhrasingContent[] {
   // A summary is one line of spans; heading markup in it (`<h3>`) keeps only its text.
   const text = normalizeMobileMarkdownPreviewHtml(html).replace(/^\s*#{1,6}\s+/gm, '')
-  return phrasing(markdown.parseInline(text, {})[0]?.children ?? [], 0).nodes
+  return phrasing(markdown.parseInline(text, env)[0]?.children ?? [], 0).nodes
 }
 
 /** markdown-it's flat token stream as the mdast tree the renderer draws. */
-function toTree(tokens: readonly Token[], source: string): Root {
+function toTree(tokens: readonly Token[], source: string, env: MathEnv): Root {
   const root: Root = { type: 'root', children: [] }
   const lines = source.split('\n')
   const stack: Parent[] = [root]
@@ -246,19 +209,25 @@ function toTree(tokens: readonly Token[], source: string): Root {
         break
       case 'fence':
       case 'code_block':
-        parent.children.push(codeNode(token, lines))
+        parent.children.push(mathFenceNode(codeNode(token, lines)))
+        break
+      case 'math_block':
+        parent.children.push(mathBlockNode(token))
         break
       case 'hr':
         parent.children.push({ type: 'thematicBreak' })
         break
       case 'html_block':
-        appendHtmlBlock(token.content, stack, open, summaryPhrasing)
+        appendHtmlBlock(token.content, stack, open, (html) => summaryPhrasing(html, env))
         break
       default:
         if (CLOSING_TOKENS.has(token.type)) {
+          const container = stack.at(-2)
           const closed = popContainer(stack)
           if (closed?.type === 'listItem') {
             readTaskMarker(closed)
+          } else if (closed?.type === 'paragraph' && container) {
+            displayFormulas(container, closed)
           }
         }
     }
@@ -267,57 +236,87 @@ function toTree(tokens: readonly Token[], source: string): Root {
 }
 
 // Clean only parser HTML nodes, never code: blocks become preview Markdown, inline tags become remaining text; nested leftover block HTML stays text.
-function withoutHtml(parent: Parent, nested: boolean): void {
+/** Comments go before images are cut out, so an `<img>` in one stays hidden. */
+const withoutComments = (html: string): string =>
+  html.replace(/<!--(?:(?!-->)[\s\S])*(?:-->|$)/g, '')
+
+function withoutHtml(parent: Parent, nested: boolean, env: MathEnv): void {
   const inline = !BLOCK_PARENTS.has(parent.type)
   parent.children = parent.children.flatMap((child): RootContent[] => {
     if (child.type !== 'html') {
       if ('children' in child) {
-        withoutHtml(child, nested)
+        withoutHtml(child, nested, env)
       }
       return [child]
     }
     if (inline && LINE_BREAK_TAG.test(child.value.trim())) {
       return [{ type: 'break' }]
     }
-    const text = normalizeMobileMarkdownPreviewHtml(child.value)
-    if (!text) {
-      return []
-    }
-    if (inline) {
-      return [{ type: 'text', value: text }]
-    }
-    if (nested) {
-      return [{ type: 'paragraph', children: [{ type: 'text', value: text }] }]
-    }
-    const blocks = toTree(markdown.parse(text, {}), text)
-    withoutHtml(blocks, true)
-    return blocks.children
+    // An https `<img>` draws as an image with its authored width; the HTML around it as before.
+    return withImagesSplitOut(withoutComments(child.value)).flatMap((piece): RootContent[] => {
+      if (typeof piece !== 'string') {
+        return inline ? [piece] : [{ type: 'paragraph', children: [piece] }]
+      }
+      const text = normalizeMobileMarkdownPreviewHtml(piece)
+      if (!text) {
+        return []
+      }
+      if (inline) {
+        return [{ type: 'text', value: text }]
+      }
+      if (nested) {
+        return [{ type: 'paragraph', children: [{ type: 'text', value: text }] }]
+      }
+      const blocks = toTree(markdown.parse(text, env), text, env)
+      withoutHtml(blocks, true, env)
+      return blocks.children
+    })
   })
 }
 
 /** The text with the markup its last top-level block leaves open closed, as desktop closes it.
  *  Only that block: a lone `*` earlier in the reply is no opener, and remend would close it. */
-function withLastBlockClosed(source: string, tokens: readonly Token[]): string {
-  const lastBlock = tokens.findLast((token) => token.level === 0 && token.map)?.map?.[0] ?? 0
+function withLastBlockClosed(source: string, tokens: readonly Token[], chatMath: boolean): string {
+  const last = tokens.findLast((token) => token.level === 0 && token.map)
+  const lastBlock = last?.map?.[0] ?? 0
   const lines = source.split('\n')
   const tail = lines.slice(lastBlock).join('\n')
-  const closed = remend(tail, { linkMode: 'text-only' })
+  // Like desktop, unfinished math stays as typed: remend would rewrite TeX as Markdown.
+  const tailTokens = last ? tokens.slice(tokens.indexOf(last)) : []
+  if (tailTokens.some((token) => !mathClosed(token)) || (chatMath && /\\[[(]/.test(tail))) {
+    return source
+  }
+  const closed = remend(tail, { linkMode: 'text-only', katex: false })
   return closed === tail ? source : [...lines.slice(0, lastBlock), closed].join('\n')
 }
 
 /** `growing`: the text is still arriving, so markup its end leaves open is closed first, instead
- *  of flashing raw markers and half-written links. */
-export function parseMobileMarkdownTree(source: string, growing: boolean): Root {
-  let tokens = markdown.parse(source, {})
+ *  of flashing raw markers and half-written links. `chatMath`: chat's `\(` and `\[` math too.
+ *  `parsed`: the source's tokens and their env, when the caller has read them already. */
+export function parseMobileMarkdownTree(
+  source: string,
+  growing: boolean,
+  chatMath = false,
+  parsed?: { env: MathEnv; tokens: readonly Token[] }
+): Root {
+  const env = parsed?.env ?? { chatMath }
+  let tokens = parsed?.tokens ?? markdown.parse(source, env)
   let text = source
   if (growing) {
-    text = withLastBlockClosed(source, tokens)
-    tokens = text === source ? tokens : markdown.parse(text, {})
+    text = withLastBlockClosed(source, tokens, chatMath)
+    tokens = text === source ? tokens : markdown.parse(text, env)
   }
-  const root = toTree(tokens, text)
-  withoutHtml(root, false)
+  const root = toTree(tokens, text, env)
+  withoutHtml(root, false, env)
+  // GitHub's `> [!NOTE]` alerts, read by desktop's rule.
+  forEachGitHubCallout(root, (quote, kind) => {
+    quote.data = { ...quote.data, callout: kind }
+  })
   return root
 }
+
+/** markdown-it's tokens for the text, as every parse here reads them. */
+export const markdownTokens = (source: string, env: MathEnv): Token[] => markdown.parse(source, env)
 
 /** The 0-based lines markdown-it reads as code, at any depth. */
 export function mobileMarkdownCodeLines(source: string): Set<number> {

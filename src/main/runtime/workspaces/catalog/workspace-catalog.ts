@@ -15,10 +15,8 @@ import {
 import {
   joinResolvedWorktreeScans,
   platformsByRepoId,
-  projectResolvedWorktreeScans,
   scanResolvedWorktreeRepos,
   type ResolvedWorktreeRepoScans,
-  type ResolvedWorktreeRowsJoin,
   type ResolvedWorktreeScanJoin
 } from './resolved-worktree-scan-join'
 import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
@@ -28,14 +26,13 @@ import {
 } from './runtime-worktree-filesystem'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { withUnregisteredRemovalCheckouts } from '../../../workspaces/removal/worktree-removal-listing'
 import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
 import { preserveFolderUpgradeWorktreePath } from '../../../workspaces/catalog/folder-upgrade-worktree-path'
 import type { RuntimeWorktreeScanCache } from './runtime-worktree-scan-state'
-import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import * as ScanCache from './runtime-worktree-scan-cache'
 const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
 
@@ -155,38 +152,6 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
           projectRuntimeFolderWorkspaces(this.requireStore(), repo, count)
       }),
       scans
-    )
-  }
-
-  /** The fleet from cached scans for synchronous selector matching, reprojected only when its inputs change. */
-  protected projectCachedWorktrees(): ResolvedWorktreeRowsJoin {
-    const cachedScans = (this.store?.getRepos() ?? []).map((repo) => {
-      const entry = this.worktreeScanCache.get(`${repo.id}\0${getRepoExecutionHostId(repo)}`)
-      return { repo, entry, scan: entry && (entry.listing ?? entry.result) }
-    })
-    return this.resolvedWorktrees.projectCachedScans(
-      this.store,
-      cachedScans.flatMap(({ repo, entry, scan }) => [getRepoHostIdentity(repo), entry, scan]),
-      () => {
-        const scans: ResolvedWorktreeRepoScans = new Map()
-        for (const { repo, entry, scan } of cachedScans) {
-          if (entry && scan) {
-            scans.set(getRepoHostIdentity(repo), {
-              ...scan,
-              gitRun: entry
-            })
-          }
-        }
-        return projectResolvedWorktreeScans(
-          this.store,
-          () => ({
-            ...this.repoWorktreeRowDeps(),
-            listFolderWorkspaces: (repo, count) =>
-              projectRuntimeFolderWorkspaces(this.requireStore(), repo, count)
-          }),
-          scans
-        )
-      }
     )
   }
 

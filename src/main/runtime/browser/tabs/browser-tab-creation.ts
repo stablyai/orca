@@ -6,7 +6,7 @@ import {
   publishCreatedBrowserSessionTab,
   resolveBrowserTabCreateFocus
 } from './browser-tab-create-publication'
-import { browserSessionRegistry } from '../../../browser/sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../../browser/sessions/profiles/browser-session-registry'
 import { BrowserError } from '../../../browser/browser-error'
 import { waitForTabRegistration } from '../../../ipc/browser/browser-tab-registration-wait'
 import type { RuntimeBrowserCommandHost } from '../commands/browser-command-contracts'
@@ -24,6 +24,8 @@ export class RuntimeBrowserTabCreation {
       | 'resolveBrowserWorkspace'
       | 'resolveBrowserNetworkExecutionHost'
       | 'getBrowserHostLeaseRegistry'
+      | 'getBrowserHostRequestRegistry'
+      | 'getPairedDeviceName'
       | 'getRuntimeBrowserPageRegistry'
       | 'getAvailableAuthoritativeWindow'
       | 'getOffscreenBrowserBackend'

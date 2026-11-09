@@ -1,8 +1,9 @@
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { buildByIdIndex, buildWorktreeByIdIndex } from '../slices/worktree-by-id-index'
+import { buildByIdIndex } from '../../../../shared/first-row-by-id-index'
+import { buildWorktreeByIdIndex } from './workspace-terminal-worktree-index'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
-import { selectWorktreesByRepo } from '../workspace-record-selectors'
+import { selectWorktreesByRepo } from '../workspaces/catalog/workspace-record-fields'
 
 export function createWorkspaceTerminalReconnectActions(
   set: TerminalStoreSet,

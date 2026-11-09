@@ -7,7 +7,8 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import { makeWorktree, TEST_REPO } from '../../../../store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '../../../../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../../../store/repos/repo.test-fixture'
 import { useChecksPanelTerminalWorktree } from './use-checks-panel-terminal-worktree'
 
 const initialAppState = useAppStore.getInitialState()

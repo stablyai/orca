@@ -6,7 +6,11 @@ export const TERMINAL_INTERACTIVE_WRITE_DURATION_MS = 180
 // Bound UTF-16 units as backup to server ack flow control; an upstream bug must not grow this buffer forever.
 export const TERMINAL_WRITE_MAX_PENDING_UNITS = 512 * 1024
 
-export function createTerminalWriteCoalescer(deliver: (data: string) => void) {
+// `coalesce: false` delivers at once; the document's write queue joins small writes itself.
+export function createTerminalWriteCoalescer(
+  deliver: (data: string) => void,
+  { coalesce = true }: { coalesce?: boolean } = {}
+) {
   let pendingChunks: string[] = []
   let pendingUnits = 0
   let flushTimer: ReturnType<typeof setTimeout> | null = null
@@ -66,7 +70,7 @@ export function createTerminalWriteCoalescer(deliver: (data: string) => void) {
       return
     }
     const now = Date.now()
-    if (pendingChunks.length === 0 && now - lastFlushAt >= flushWindow()) {
+    if (!coalesce || (pendingChunks.length === 0 && now - lastFlushAt >= flushWindow())) {
       lastFlushAt = now
       deliver(data)
       return

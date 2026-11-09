@@ -1,7 +1,7 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { translate } from '../i18n/mobile-i18n'
 import type { RouteHandoff } from '../navigation/route-handoff'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-generation'
 import { useMobileSourceControlCommitRunners } from './use-mobile-source-control-commit-runners'
@@ -83,7 +83,7 @@ export function useMobileSourceControlRunners(params: Params) {
     async (
       actionId: string,
       runner: () => Promise<void>,
-      options?: { clearCommitMessage?: boolean }
+      options?: { clearCommitMessage?: boolean; refreshOnError?: boolean }
     ) => {
       if (busyActionRef.current) {
         return false
@@ -101,7 +101,7 @@ export function useMobileSourceControlRunners(params: Params) {
           setCommitMessage('')
         }
         triggerSuccess()
-        await loadStatus({ preserveReadyOnFailure: true, force: true })
+        await loadStatus({ force: true })
         return true
       } catch (err) {
         if (!mountedRef.current) {
@@ -110,6 +110,13 @@ export function useMobileSourceControlRunners(params: Params) {
         triggerError()
         const text = translate('sourceControl.runners.actionFailed', 'Source control action failed')
         setActionError(err instanceof Error ? err.message : text)
+        if (options?.refreshOnError) {
+          // Keep the reason visible: a successful reload clears the action error by default.
+          await loadStatus({
+            force: true,
+            clearActionErrorOnSuccess: false
+          })
+        }
         return false
       } finally {
         if (busyActionRef.current === actionId) {
@@ -269,9 +276,16 @@ export function useMobileSourceControlRunners(params: Params) {
   const checkoutBranch = useCallback(
     async (branch: string) => {
       setShowBranchPicker(false)
-      await runGitAction('checkout', 'git.checkout', { branch })
+      // A host can report a switch that landed with files left behind; show the branch it is on.
+      await runGitWorkflow(
+        'checkout',
+        async () => {
+          await sendGitRequest<unknown>('git.checkout', { branch })
+        },
+        { refreshOnError: true }
+      )
     },
-    [runGitAction, setShowBranchPicker]
+    [runGitWorkflow, sendGitRequest, setShowBranchPicker]
   )
 
   const actionSheetRunners = useMobileSourceControlActionSheetRunners({

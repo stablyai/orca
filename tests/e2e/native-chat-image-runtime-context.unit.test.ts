@@ -4,7 +4,7 @@ import { createElement } from 'react'
 import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { AppState } from '@/store/types'
-import type { RuntimeFileOperationArgs } from '../../src/renderer/src/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '../../src/renderer/src/runtime/files/runtime-file-client-types'
 import { useAppStore } from '@/store'
 import type { TerminalTab } from '../../src/shared/workspace-layout/terminal-tab-types'
 
@@ -14,24 +14,24 @@ import {
   resolveNativeChatImageRuntimeContextForOwner,
   selectNativeChatImageOwnerState,
   useNativeChatImageRuntimeContext
-} from '../../src/renderer/src/components/native-chat/native-chat-image-runtime-context'
+} from '../../src/renderer/src/components/native-chat/media/images/native-chat-image-runtime-context'
 import {
   makeFolderWorkspace,
   makeProjectGroup
 } from '../../src/renderer/src/components/sidebar/workspace-creation/folder/folder-workspace-composer-submit-fixtures'
-import { resolveNativeChatFileLinkContext } from '../../src/renderer/src/components/native-chat/native-chat-file-link'
+import { resolveNativeChatFileLinkContext } from '../../src/renderer/src/components/native-chat/links/actions/native-chat-file-link-context'
 import {
   resolveNativeChatSkillDiscoveryContext,
   selectNativeChatSkillStateInputs
-} from '../../src/renderer/src/components/native-chat/native-chat-skill-discovery-context'
+} from '../../src/renderer/src/components/native-chat/composer/pickers/native-chat-skill-discovery-context'
 import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
 import { captureWorktreeSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
-import { adoptFromEndpoint } from '@/store/adopt-from-endpoint'
+import { adoptFromEndpoint } from '@/store/host-catalog/endpoint-catalog-adoption'
 import { assertRuntimeFileMutationExpectation } from '../../src/main/runtime/files/file-mutation-expectation'
 import {
   resetSshConnectionGenerations,
   setSshConnectionGeneration
-} from '../../src/main/ssh/connection/ssh-connection-generation'
+} from '../../src/main/ssh/connection/authority/ssh-connection-generation'
 import {
   agentSessionTabFixture,
   nativeChatFanoutFixture,
@@ -39,7 +39,7 @@ import {
   repoFixture,
   terminalTabFixture,
   worktreeFixture
-} from '../../src/renderer/src/components/native-chat/native-chat-workspace-test-fixtures'
+} from '../../src/renderer/src/components/native-chat/surfaces/integration/native-chat-workspace-test-fixtures'
 
 const originalState = useAppStore.getState()
 afterEach(() => {

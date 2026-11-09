@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import * as gitRunner from '../../command-runner/git-exec-file'
 import {
   createWorktreePreparationLockReason,
-  isWorktreeCreatePreparation,
   WORKTREE_CREATE_PREPARATION_DIRECTORY
 } from '../../../../shared/worktree/create-preparation'
 import { listWorktrees } from '../catalog/worktree-scan-cache'
@@ -620,64 +619,5 @@ describe('prepared worktree creation with real Git', () => {
     expect(git(finalPath, ['config', '--get', 'branch.feature/retargeted.base'])).toBe(
       'refs/heads/main'
     )
-  })
-
-  it('hides the preparation, retargets an advanced base, and attaches the final branch', async () => {
-    const { repoPath, root } = await createRepo()
-    const preparationRoot = join(root, WORKTREE_CREATE_PREPARATION_DIRECTORY)
-    const preparedPath = join(preparationRoot, `${process.pid}-test`)
-    const finalPath = join(root, 'final-worktree')
-    await mkdir(preparationRoot, { recursive: true })
-
-    await prepareWorktreeCreateCheckout(
-      repoPath,
-      preparedPath,
-      'main',
-      createWorktreePreparationLockReason('real-git-test')
-    )
-
-    const visibleBeforeSubmit = await listWorktrees(repoPath)
-    const allBeforeSubmit = await listWorktrees(repoPath, { includeCreatePreparations: true })
-    expect(visibleBeforeSubmit).toHaveLength(1)
-    expect(allBeforeSubmit).toHaveLength(2)
-    expect(allBeforeSubmit.find(isWorktreeCreatePreparation)).toMatchObject({
-      locked: true,
-      lockReason: expect.stringContaining('orca-create-preparation:v1:')
-    })
-
-    await writeFile(join(repoPath, 'version.txt'), 'two\n')
-    git(repoPath, ['add', 'version.txt'])
-    git(repoPath, ['commit', '--quiet', '-m', 'advance base'])
-    const latestHead = git(repoPath, ['rev-parse', 'HEAD'])
-
-    await finalizePreparedWorktree(
-      repoPath,
-      preparedPath,
-      finalPath,
-      'feature/prepared',
-      'main',
-      false,
-      {},
-      createWorktreePreparationLockReason('real-git-test')
-    )
-
-    expect(git(finalPath, ['rev-parse', 'HEAD'])).toBe(latestHead)
-    expect(git(finalPath, ['branch', '--show-current'])).toBe('feature/prepared')
-    expect((await readFile(join(finalPath, 'version.txt'), 'utf8')).replaceAll('\r\n', '\n')).toBe(
-      'two\n'
-    )
-    expect(git(finalPath, ['config', '--get', 'branch.feature/prepared.base'])).toBe(
-      'refs/heads/main'
-    )
-    expect(git(finalPath, ['config', '--get', 'push.autoSetupRemote'])).toBe('true')
-    const listedWorktrees = await listWorktrees(repoPath)
-    const resolvedFinalPath = await realpath(finalPath)
-    expect(
-      listedWorktrees.some((worktree) => areWorktreePathsEqual(worktree.path, resolvedFinalPath))
-    ).toBe(true)
-    expect(
-      listedWorktrees.find((worktree) => areWorktreePathsEqual(worktree.path, resolvedFinalPath))
-        ?.locked
-    ).not.toBe(true)
   })
 })

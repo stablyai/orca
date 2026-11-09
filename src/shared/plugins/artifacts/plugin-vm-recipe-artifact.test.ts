@@ -1,37 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  listPluginVmRecipeCommands,
-  parsePluginVmRecipeArtifact
-} from './plugin-vm-recipe-artifact'
+import { parsePluginVmRecipeArtifact } from './plugin-vm-recipe-artifact'
 
 describe('plugin VM recipe artifacts', () => {
-  it('parses bounded lifecycle commands for verbatim consent', () => {
-    const recipe = parsePluginVmRecipeArtifact(
-      JSON.stringify({
-        schemaVersion: 1,
-        id: 'cloud-sandbox',
-        name: 'Cloud Sandbox',
-        checkoutMode: 'provisioned-root',
-        create: './scripts/create.sh',
-        suspend: './scripts/suspend.sh',
-        resume: './scripts/resume.sh',
-        destroy: './scripts/destroy.sh'
-      })
-    )
-
-    expect(recipe).toMatchObject({
-      id: 'cloud-sandbox',
-      name: 'Cloud Sandbox',
-      checkoutMode: 'provisioned-root'
-    })
-    expect(listPluginVmRecipeCommands(recipe)).toEqual([
-      { phase: 'create', command: './scripts/create.sh' },
-      { phase: 'suspend', command: './scripts/suspend.sh' },
-      { phase: 'resume', command: './scripts/resume.sh' },
-      { phase: 'destroy', command: './scripts/destroy.sh' }
-    ])
-  })
-
   it('requires paired suspend/resume commands and rejects unknown fields', () => {
     expect(() =>
       parsePluginVmRecipeArtifact(

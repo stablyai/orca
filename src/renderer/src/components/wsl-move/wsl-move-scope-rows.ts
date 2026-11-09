@@ -12,7 +12,7 @@ import {
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { collectLeafIdsInOrder } from '../terminal-pane/terminal-layout-leaf-ids'
+import { collectLeafIdsInOrder } from '../terminal-pane/layout/terminal-layout-leaf-traversal'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { Worktree } from '../../../../shared/worktree/types'

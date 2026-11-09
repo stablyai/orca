@@ -9,8 +9,8 @@
  */
 
 import { useEffect, useLayoutEffect, useRef } from 'react'
-import type { AutomationRun } from '../../../../shared/automations-types'
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import type { AutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import {
   capturedAutomationOwner,
   capturedAutomationOwnerKey,
@@ -31,7 +31,7 @@ import {
 import { useAppStore } from '@/store'
 import { automationRuntimePairingRevision } from './automation-authority-identity'
 import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
-import { isSameStableAutomationHost } from '../../../../shared/automation-owner-key'
+import { isSameStableAutomationHost } from '../../../../shared/automations/ownership/automation-owner-key'
 import { subscribeAutomationHostInvalidation } from './automation-host-invalidation-window-events'
 
 export type SelectedAutomationRunNavigation = {
