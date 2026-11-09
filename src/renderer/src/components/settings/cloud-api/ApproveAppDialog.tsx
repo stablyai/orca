@@ -199,7 +199,7 @@ export function ApproveAppDialog({
                   )
                 : t(
                     'auto.components.settings.cloudApi.approve.fullHint',
-                    'Start and stop workspaces, message agents and manage routines as you.'
+                    'Start, sleep, wake and delete workspaces, message agents and manage routines as you.'
                   )}
             </p>
           </div>

@@ -71,7 +71,7 @@ export function cloudApiErrorCopy(
     case 'network':
       return t(
         'auto.components.settings.cloudApi.error.network',
-        'Could not reach Orca Cloud. Check your connection and try again.'
+        'Couldn’t reach Orca Cloud, so nothing was changed. Check your connection and try again.'
       )
     case 'invalid-response':
       return t(
@@ -81,7 +81,7 @@ export function cloudApiErrorCopy(
     case 'server':
       return t(
         'auto.components.settings.cloudApi.error.server',
-        'Orca Cloud had a problem. Try again in a moment.'
+        'Orca Cloud had a problem and nothing was changed. Try again in a moment.'
       )
   }
 }

@@ -155,7 +155,7 @@ function FormStep({
     <form onSubmit={(event) => void submit(event)} className="grid gap-5" noValidate>
       <DialogHeader>
         <DialogTitle>
-          {t('auto.components.settings.cloudApi.create.title', 'Create API key')}
+          {t('auto.components.settings.cloudApi.create.title', 'Create Orca API key')}
         </DialogTitle>
         <DialogDescription>
           {t(

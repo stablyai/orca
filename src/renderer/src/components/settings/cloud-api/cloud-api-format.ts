@@ -45,9 +45,9 @@ export function isAdminScope(scope: CloudApiScope): boolean {
   return CLOUD_API_ADMIN_SCOPES.includes(scope)
 }
 
-/** "orca_sk_Ab3x…" — the stored prefix plus an ellipsis so nobody mistakes it for the secret. */
+/** "orca_sk_Ab3x••••": the stored prefix with a masked tail, so it reads as part of a secret. */
 export function formatKeyPrefix(prefix: string): string {
-  return `${prefix}…`
+  return `${prefix}••••`
 }
 
 export function formatRelativeFromNow(timestamp: number, now: number, intlLocale?: string): string {
@@ -105,10 +105,22 @@ export function describeRoutineTrigger(
     trigger.events.map((event) => githubEventLabel(event, t)),
     intlLocale
   )
-  const labels = trigger.labels?.length ? ` “${trigger.labels.join('”, “')}”` : ''
-  return t('auto.components.settings.cloudRoutines.trigger.githubSummary', 'GitHub: {{value0}}', {
-    value0: `${events}${labels}`
-  })
+  if (!trigger.labels?.length) {
+    return t('auto.components.settings.cloudRoutines.trigger.githubSummary', 'GitHub: {{value0}}', {
+      value0: events
+    })
+  }
+  return t(
+    'auto.components.settings.cloudRoutines.trigger.githubSummaryLabels',
+    'GitHub: {{events}} {{labels}}',
+    {
+      events,
+      labels: formatList(
+        trigger.labels.map((label) => `“${label}”`),
+        intlLocale
+      )
+    }
+  )
 }
 
 export function localTimeZone(): string {

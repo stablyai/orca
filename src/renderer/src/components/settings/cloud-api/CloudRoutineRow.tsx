@@ -11,6 +11,7 @@ import {
   Webhook
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -199,14 +200,22 @@ export function RoutineRow({
             type="button"
             variant="ghost"
             size="xs"
-            aria-disabled={running || active}
+            aria-disabled={running && !active}
             aria-busy={running || active}
+            aria-expanded={active ? expanded : undefined}
+            aria-controls={active ? historyId : undefined}
             onClick={() => void runNow()}
-            aria-label={t(
-              'auto.components.settings.cloudRoutines.runNowLabel',
-              'Run {{value0}} now',
-              { value0: routine.name }
-            )}
+            aria-label={
+              active
+                ? t(
+                    'auto.components.settings.cloudRoutines.runningShowHistory',
+                    '{{value0}} is running. Show run history',
+                    { value0: routine.name }
+                  )
+                : t('auto.components.settings.cloudRoutines.runNowLabel', 'Run {{value0}} now', {
+                    value0: routine.name
+                  })
+            }
             title={
               active
                 ? t(
@@ -261,8 +270,9 @@ export function RoutineRow({
           <Switch
             className="ml-1.5"
             checked={isOn}
-            disabled={enabled !== null}
-            onCheckedChange={(next) => void toggle(next)}
+            aria-disabled={enabled !== null}
+            aria-busy={enabled !== null}
+            onCheckedChange={(next) => (enabled !== null ? undefined : void toggle(next))}
             aria-label={t(
               'auto.components.settings.cloudRoutines.enableLabel',
               'Enable {{value0}}',
@@ -271,16 +281,18 @@ export function RoutineRow({
           />
         </div>
       </div>
-      <p
-        aria-live="polite"
-        className={cn(
-          'pl-7 text-xs',
-          notice ? 'mt-1.5' : 'sr-only',
-          notice?.tone === 'error' ? 'text-destructive' : 'text-muted-foreground'
-        )}
-      >
-        {notice?.text ?? ''}
-      </p>
+      {notice?.tone === 'error' ? (
+        <div className="pl-7">
+          <InlineError title={notice.text} className="mt-2" />
+        </div>
+      ) : (
+        <p
+          aria-live="polite"
+          className={cn('pl-7 text-xs text-muted-foreground', notice ? 'mt-1.5' : 'sr-only')}
+        >
+          {notice?.text ?? ''}
+        </p>
+      )}
       {expanded ? (
         <div id={historyId} className="pl-7">
           <RoutineRunHistory

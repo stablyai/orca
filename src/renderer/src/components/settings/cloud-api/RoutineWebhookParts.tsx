@@ -100,14 +100,7 @@ export function WebhookTriggerInfo({
             // Rotating opens the one-time URL step, which would drop unsaved edits.
             aria-disabled={rotating === 'busy' || dirty}
             aria-busy={rotating === 'busy'}
-            title={
-              dirty
-                ? t(
-                    'auto.components.settings.cloudRoutines.editor.rotateSaveFirst',
-                    'Save or discard your changes before rotating the URL.'
-                  )
-                : undefined
-            }
+            aria-describedby={dirty ? 'routine-rotate-blocked' : undefined}
           >
             {rotating === 'busy' ? (
               <Loader2 className="animate-spin motion-reduce:animate-none" />
@@ -118,6 +111,14 @@ export function WebhookTriggerInfo({
           </Button>
         )}
       </div>
+      {dirty && rotating !== 'confirm' ? (
+        <p id="routine-rotate-blocked" className="text-xs text-muted-foreground">
+          {t(
+            'auto.components.settings.cloudRoutines.editor.rotateSaveFirst',
+            'Save or discard your changes before rotating the URL.'
+          )}
+        </p>
+      ) : null}
     </div>
   )
 }

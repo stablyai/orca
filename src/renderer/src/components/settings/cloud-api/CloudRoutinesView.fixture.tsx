@@ -124,7 +124,8 @@ const RUNS: RoutineRunPage = {
       workspaceId: 'sbx_c8Rk2a',
       result: {
         summary: 'Labeled 6 issues, closed 2 duplicates and asked for repro steps on #311.',
-        commentUrl: 'https://github.com/acme/api/issues/311#issuecomment-1'
+        commentUrl: 'https://github.com/acme/api/issues/311#issuecomment-1',
+        prUrl: 'https://github.com/acme/api/pull/514'
       }
     }),
     run({

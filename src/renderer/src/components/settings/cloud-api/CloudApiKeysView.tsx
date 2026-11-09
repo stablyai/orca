@@ -101,6 +101,7 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
     return next?.querySelector<HTMLElement>('button[data-revoke]') ?? createRef.current
   }
   const revokedIndex = useRef(0)
+  const lastCreatedId = useRef<string | null>(null)
   const available = keys.status === 'ok' ? keys.data.availableScopes : (viewer?.scopes ?? [])
   const orgAdmin = Boolean(viewer?.orgId) && isAdmin(viewer)
 
@@ -146,7 +147,10 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
               onClick={keys.status === 'loading' || props.refreshing ? undefined : props.onRefresh}
               aria-disabled={keys.status === 'loading' || props.refreshing}
               aria-busy={props.refreshing}
-              aria-label={t('auto.components.settings.cloudApi.keys.refresh', 'Refresh API keys')}
+              aria-label={t(
+                'auto.components.settings.cloudApi.keys.refresh',
+                'Refresh Orca API keys'
+              )}
             >
               <RefreshCw
                 className={cn(
@@ -161,7 +165,7 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
       >
         {keys.status === 'loading' ? (
           <CloudApiSkeletonRows
-            label={t('auto.components.settings.cloudApi.keys.loading', 'Loading API keys')}
+            label={t('auto.components.settings.cloudApi.keys.loading', 'Loading Orca API keys')}
           />
         ) : keys.status === 'error' ? (
           <div data-settings-row="" className="py-4">
@@ -170,7 +174,7 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
         ) : keys.data.keys.length === 0 ? (
           <CloudApiEmptyState
             icon={KeyRound}
-            title={t('auto.components.settings.cloudApi.keys.emptyTitle', 'No API keys yet')}
+            title={t('auto.components.settings.cloudApi.keys.emptyTitle', 'No Orca API keys yet')}
             description={t(
               'auto.components.settings.cloudApi.keys.emptyBody',
               'Create a key to start workspaces, message agents and run routines from scripts, CI or any MCP client.'
@@ -180,7 +184,7 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
         ) : (
           <ul
             ref={listRef}
-            aria-label={t('auto.components.settings.cloudApi.keys.listLabel', 'API keys')}
+            aria-label={t('auto.components.settings.cloudApi.keys.listLabel', 'Orca API keys')}
           >
             {keys.data.keys.map((key, index) => (
               <KeyRow
@@ -227,11 +231,25 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
         open={createOpen}
         onOpenChange={setCreateOpen}
         availableScopes={available}
-        onCreate={props.onCreate}
+        onCreate={async (input) => {
+          const result = await props.onCreate(input)
+          if (result.ok) {
+            lastCreatedId.current = result.data.key?.id ?? null
+          }
+          return result
+        }}
         initialCreated={initial?.created}
-        returnFocusTo={() =>
-          listRef.current?.querySelector<HTMLElement>('button[data-revoke]') ?? createRef.current
-        }
+        returnFocusTo={() => {
+          const id = lastCreatedId.current
+          const row = id
+            ? listRef.current?.querySelector<HTMLElement>(`[data-key-id="${CSS.escape(id)}"]`)
+            : null
+          return (
+            row?.querySelector<HTMLElement>('button[data-revoke]') ??
+            listRef.current?.querySelector<HTMLElement>('button[data-revoke]') ??
+            createRef.current
+          )
+        }}
       />
       <ApproveAppDialog
         open={approveOpen}
@@ -267,9 +285,12 @@ export function CloudApiKeysView(props: CloudApiKeysViewProps): React.JSX.Elemen
             {revokingApps > 0 ? (
               <p>
                 {t(
-                  'auto.components.settings.cloudApi.revoke.apps',
-                  'Apps approved with this key are disconnected too ({{value0}}).',
-                  { value0: String(revokingApps) }
+                  'auto.components.settings.cloudApi.revoke.appsCount',
+                  '{{count}} apps approved with this key are disconnected too.',
+                  {
+                    count: revokingApps,
+                    defaultValue_one: 'An app approved with this key is disconnected too.'
+                  }
                 )}
               </p>
             ) : null}

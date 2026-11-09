@@ -268,14 +268,7 @@ export const approveAppCode = defineFixture({
         approval: {
           code: 'orca_ap_7KqW2nV9xLm4Rt8YpZ3cBd6Hs1FgJe0A',
           expiresAt: NOW + 9 * MIN + 42_000,
-          scopes: [
-            'workspaces:read',
-            'workspaces:write',
-            'messages:write',
-            'projects:read',
-            'routines:read',
-            'routines:write'
-          ]
+          scopes: ['workspaces:read', 'projects:read', 'routines:read']
         }
       }}
     />

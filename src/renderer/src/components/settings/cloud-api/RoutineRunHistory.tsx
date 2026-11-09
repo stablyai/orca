@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { ExternalLink, GitPullRequest, History, Loader2, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type {
   CloudApiResult,
@@ -38,10 +40,7 @@ function mergeFirstPage(current: State, page: RoutineRunPage): State {
   const fresh = new Set(page.runs.map((run) => run.id))
   const merged: OkState = {
     ...current,
-    runs: [
-      ...page.runs,
-      ...current.runs.slice(page.runs.length).filter((run) => !fresh.has(run.id))
-    ]
+    runs: [...page.runs, ...current.runs.filter((run) => !fresh.has(run.id))]
   }
   return merged
 }
@@ -59,7 +58,7 @@ type State =
 
 // One grid for every row so status, trigger, start, duration and links line up down the list.
 const ROW_GRID =
-  'grid grid-cols-[7.5rem_minmax(0,1fr)_6.5rem_4.5rem_8.5rem] items-center gap-x-3 text-xs'
+  'grid grid-cols-[7.5rem_minmax(0,1fr)_6.5rem_4.5rem_5rem] items-center gap-x-3 text-xs'
 
 /**
  * Inline run history for one routine. Loads on mount and on `refreshKey` changes (keeping the
@@ -219,11 +218,7 @@ export function RoutineRunHistory({
                 ) : null}
                 {t('auto.components.settings.cloudRoutines.runs.more', 'Show older runs')}
               </Button>
-              {state.moreError ? (
-                <p role="alert" className="mt-1 px-2 text-xs text-destructive">
-                  {state.moreError}
-                </p>
-              ) : null}
+              {state.moreError ? <InlineError title={state.moreError} className="mt-2" /> : null}
             </div>
           ) : null}
         </>
@@ -269,39 +264,31 @@ function RunRow({
           {formatRelativeFromNow(started, now, locale)}
         </time>
         <span className="text-right text-muted-foreground tabular-nums">{duration}</span>
-        <span className="flex items-center justify-end gap-1">
+        {/* Icon-only actions with names in tooltips so three always fit the fixed column. */}
+        <span className="flex items-center justify-end gap-0.5 overflow-hidden">
           {run.result?.prUrl ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
+            <RunAction
+              icon={GitPullRequest}
+              label={t('auto.components.settings.cloudRoutines.runs.pr', 'Pull request')}
               onClick={() => void window.api.shell.openUrl(run.result!.prUrl!)}
-            >
-              <GitPullRequest />
-              {t('auto.components.settings.cloudRoutines.runs.pr', 'Pull request')}
-            </Button>
+            />
           ) : null}
           {run.result?.commentUrl ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
+            <RunAction
+              icon={MessageSquare}
+              label={t('auto.components.settings.cloudRoutines.runs.comment', 'Comment')}
               onClick={() => void window.api.shell.openUrl(run.result!.commentUrl!)}
-            >
-              <MessageSquare />
-              {t('auto.components.settings.cloudRoutines.runs.comment', 'Comment')}
-            </Button>
+            />
           ) : null}
           {run.workspaceId && onOpenWorkspace ? (
-            <Button
-              type="button"
-              variant="ghost"
-              size="xs"
+            <RunAction
+              icon={ExternalLink}
+              label={t(
+                'auto.components.settings.cloudRoutines.runs.openWorkspace',
+                'Open workspace'
+              )}
               onClick={() => onOpenWorkspace(run.workspaceId!)}
-            >
-              <ExternalLink />
-              {t('auto.components.settings.cloudRoutines.runs.openWorkspace', 'Open workspace')}
-            </Button>
+            />
           ) : null}
         </span>
       </div>
@@ -317,5 +304,26 @@ function RunRow({
         </p>
       ) : null}
     </li>
+  )
+}
+
+function RunAction({
+  icon: Icon,
+  label,
+  onClick
+}: {
+  icon: typeof ExternalLink
+  label: string
+  onClick: () => void
+}): React.JSX.Element {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button type="button" variant="ghost" size="icon-xs" aria-label={label} onClick={onClick}>
+          <Icon />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   )
 }

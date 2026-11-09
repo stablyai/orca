@@ -13,9 +13,14 @@ export function ScopeSummary({ scopes }: { scopes: readonly CloudApiScope[] }): 
       ? t('auto.components.settings.cloudApi.create.readOnly', 'Read only')
       : kind === 'full'
         ? t('auto.components.settings.cloudApi.create.full', 'Full access')
-        : t('auto.components.settings.cloudApi.keys.customScopes', 'Custom · {{value0}} scopes', {
-            value0: String(scopes.length)
-          })
+        : t(
+            'auto.components.settings.cloudApi.keys.customScopeCount',
+            'Custom · {{count}} scopes',
+            {
+              count: scopes.length,
+              defaultValue_one: 'Custom · {{count}} scope'
+            }
+          )
   return (
     <Tooltip>
       <TooltipTrigger asChild>

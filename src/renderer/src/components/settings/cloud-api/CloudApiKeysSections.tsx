@@ -160,11 +160,7 @@ export function OrgSettings({
           {settings.status === 'error' ? (
             <InlineError tone="neutral" title={settings.message} className="mt-2" />
           ) : null}
-          {error ? (
-            <p role="alert" className="text-xs text-destructive">
-              {error}
-            </p>
-          ) : null}
+          {error ? <InlineError title={error} className="mt-2" /> : null}
         </div>
         {settings.status === 'loading' ? (
           <Skeleton className="mt-0.5 h-5 w-9 shrink-0" />
@@ -172,10 +168,12 @@ export function OrgSettings({
           <Switch
             className="mt-0.5"
             checked={pending ?? current}
-            disabled={!canEdit || pending !== null}
+            disabled={!canEdit}
+            aria-disabled={pending !== null}
+            aria-busy={pending !== null}
             aria-labelledby={labelId}
             aria-describedby={descriptionId}
-            onCheckedChange={(next) => void toggle(next)}
+            onCheckedChange={(next) => (pending !== null ? undefined : void toggle(next))}
           />
         )}
       </div>
@@ -234,7 +232,12 @@ function auditActionLabel(entry: CloudApiAuditEntry, t: Translate): string {
   const known = AUDIT_ACTIONS[entry.action]
   const base = known ? t(known[0], known[1]) : entry.action
   const name = entry.detail?.name
-  return typeof name === 'string' && name.length > 0 ? `${base} “${name.slice(0, 80)}”` : base
+  return typeof name === 'string' && name.length > 0
+    ? t('auto.components.settings.cloudApi.audit.actionNamed', '{{action}} “{{name}}”', {
+        action: base,
+        name: name.slice(0, 80)
+      })
+    : base
 }
 
 function actorLabel(entry: CloudApiAuditEntry, viewer: CloudApiMe | null, t: Translate): string {

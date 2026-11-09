@@ -34,7 +34,7 @@ describe('scope presets', () => {
 
 describe('formatting', () => {
   it('marks a key prefix as truncated', () => {
-    expect(formatKeyPrefix('orca_sk_Ab3x')).toBe('orca_sk_Ab3x…')
+    expect(formatKeyPrefix('orca_sk_Ab3x')).toBe('orca_sk_Ab3x••••')
   })
 
   it('formats run durations and countdowns', () => {
