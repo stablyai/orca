@@ -170,7 +170,7 @@ export class MobileRelayHostCatalog {
         if (stopped || this.announcedList === null) {
           return
         }
-        const next = JSON.stringify(this.describe())
+        const next = this.describeForAnnouncement()
         if (next !== this.announcedList) {
           this.announcedList = next
           sources.changed()
@@ -196,6 +196,15 @@ export class MobileRelayHostCatalog {
       for (const stop of stops) {
         stop?.()
       }
+    }
+  }
+
+  // A store that can't be read must not throw here, outside any request; phones re-read and get the error.
+  private describeForAnnouncement(): string {
+    try {
+      return JSON.stringify(this.describe())
+    } catch {
+      return 'unreadable'
     }
   }
 

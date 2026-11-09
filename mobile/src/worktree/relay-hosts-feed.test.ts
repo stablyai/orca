@@ -70,5 +70,9 @@ describe('the desktop’s server list', () => {
     emit({ type: 'relayHostsChanged' })
     await vi.advanceTimersByTimeAsync(0)
     expect(reads).toBe(3)
+
+    // The backstop still asks the desktop, in case a notice was lost.
+    await vi.advanceTimersByTimeAsync(60_000)
+    expect(reads).toBe(4)
   })
 })

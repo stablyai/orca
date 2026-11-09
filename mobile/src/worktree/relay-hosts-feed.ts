@@ -41,6 +41,8 @@ function createFeed(client: RpcClient): RelayHostsFeed {
   // The last read failed, or a notice came during it, so its answer may already be old.
   let lastReadDoubtful = false
   let changedDuringRead = false
+  // A read went out after this feed joined the event stream, so a notice for any later change will come.
+  let readSinceJoining = false
 
   // The desktop will tell this feed when its snapshot goes out of date.
   const current = (): boolean =>
@@ -82,7 +84,8 @@ function createFeed(client: RpcClient): RelayHostsFeed {
   const tick = (): void => {
     timer = null
     if (AppState.currentState === 'active') {
-      void read()
+      // The poll (or backstop) always asks the desktop, even while the snapshot is current.
+      void refresh()
       return
     }
     timer = setTimeout(tick, RELAY_HOSTS_POLL_MS)
@@ -99,15 +102,15 @@ function createFeed(client: RpcClient): RelayHostsFeed {
       return null
     }
   }
-  const read = (): Promise<readonly MobileRelayHost[] | null> => {
+  const read = (): Promise<readonly MobileRelayHost[] | null> =>
+    inFlight === null && current() ? Promise.resolve(snapshot) : refresh()
+  const refresh = (): Promise<readonly MobileRelayHost[] | null> => {
     if (inFlight) {
       return inFlight
     }
-    if (current()) {
-      return Promise.resolve(snapshot)
-    }
     const readGeneration = generation
     changedDuringRead = false
+    readSinceJoining = stopEvents !== null
     inFlight = fetchHosts(readGeneration).then((hosts) => {
       if (readGeneration === generation) {
         inFlight = null
@@ -133,8 +136,12 @@ function createFeed(client: RpcClient): RelayHostsFeed {
   const onEvent = (event: SharedClientEvent): void => {
     if (event.type === 'ready') {
       streamLive = true
-      // Every ready: a change between the last read and this stream going live sent no notice.
-      changed()
+      // A stream live before this feed joined covers reads sent since; any other ready may follow missed notices.
+      if (!('joined' in event) || !readSinceJoining) {
+        changed()
+      } else {
+        schedule()
+      }
     } else if (event.type === 'end' || event.type === 'error') {
       // The shared stream opens again by itself; until its ready, poll as an older desktop.
       streamLive = false
@@ -147,6 +154,7 @@ function createFeed(client: RpcClient): RelayHostsFeed {
   const syncEvents = (): void => {
     const wanted = [...listeners.values()].includes(true)
     if (wanted && !stopEvents) {
+      readSinceJoining = false
       stopEvents = subscribeSharedClientEvents(client, onEvent)
     } else if (!wanted && stopEvents) {
       stopEvents()
