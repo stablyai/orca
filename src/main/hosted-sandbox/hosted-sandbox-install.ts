@@ -4,7 +4,7 @@ import { app, BrowserWindow } from 'electron'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
 import { readFreshOrcaCloudSession } from '../orca-profiles/profile-cloud-session-refresh'
-import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
+import type { OrcaCloudAvailability, OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 import { getApprovedPluginVmRecipes } from '../plugins/plugin-approved-vm-recipes'
 import type { PluginService } from '../plugins/plugin-service'
 import { getHostedSandboxConfig } from './hosted-sandbox-config'
@@ -101,30 +101,49 @@ export function installHostedSandbox(): void {
   })
 }
 
-/** Orca Cloud auth's `sandbox` capability rolls it out per account; the dev key bypasses it in dev builds. */
-async function orcaCloudOffered(): Promise<boolean> {
+/**
+ * Orca Cloud auth's `sandbox` capability rolls it out per account; the dev key bypasses it in dev
+ * builds. Builds without a hosted-sandbox control plane never offer it, signed in or not.
+ */
+export async function getOrcaCloudAvailability(): Promise<OrcaCloudAvailability> {
+  if (!installed) {
+    return 'unavailable'
+  }
   if (cloudDevSigningAllowed(app.isPackaged) && process.env.ORCA_CLOUD_SANDBOX_DEV_KEY_FILE) {
-    return true
+    return 'offered'
   }
   const auth = getOrcaCloudAuthConfig(process.env, app.isPackaged)
+  if (!auth.configured) {
+    return 'unavailable'
+  }
   const userDataPath = app.getPath('userData')
   const active = ensureActiveOrcaProfile(userDataPath)
-  if (!auth.configured || !active.profile.cloud) {
-    return false
+  if (!active.profile.cloud) {
+    return 'needs-sign-in'
   }
   const session = await readFreshOrcaCloudSession(auth.config, active, userDataPath).catch(
     () => null
   )
-  return (
-    session?.status === 'found' &&
-    session.session.capabilities.flags[ORCA_CLOUD_SANDBOX_CAPABILITY] === true
-  )
+  // A refresh that failed (offline) is not a sign-out; hide the row rather than ask to sign in.
+  if (session === null) {
+    return 'unavailable'
+  }
+  if (session.status !== 'found') {
+    return 'needs-sign-in'
+  }
+  return session.session.capabilities.flags[ORCA_CLOUD_SANDBOX_CAPABILITY] === true
+    ? 'offered'
+    : 'needs-capability'
 }
 
 /** Built-in providers (Orca Cloud) ride along with approved plugin recipes and lead every list. */
-export async function withProviderRecipes(pluginService?: PluginService): Promise<OrcaVmRecipe[]> {
+export async function withProviderRecipes(
+  pluginService?: PluginService,
+  availability?: OrcaCloudAvailability
+): Promise<OrcaVmRecipe[]> {
+  const orcaCloud = availability ?? (await getOrcaCloudAvailability())
   return [
-    ...(installed && (await orcaCloudOffered()) ? [ORCA_CLOUD_RECIPE] : []),
+    ...(orcaCloud === 'offered' ? [ORCA_CLOUD_RECIPE] : []),
     ...(await getApprovedPluginVmRecipes(pluginService))
   ]
 }

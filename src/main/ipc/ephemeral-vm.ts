@@ -32,6 +32,7 @@ import {
   getRecipeRepo,
   listRecipeCatalog,
   listRecipes,
+  listPickerRecipes,
   resolveRecipeForRepo,
   type EphemeralVmRecipeCatalogEntry
 } from './ephemeral-vm-recipe-context'
@@ -85,7 +86,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
   reconcileInterruptedEphemeralVmProvisionsOnStartup(app.getPath('userData'))
 
   ipcMain.handle('ephemeralVm:listRecipes', async (_event, args: { repoId: string }) => {
-    return listRecipes(store, args.repoId, await withProviderRecipes(pluginService))
+    return listPickerRecipes(store, args.repoId, pluginService)
   })
 
   ipcMain.handle(

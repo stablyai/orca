@@ -149,12 +149,12 @@ export function SidebarHelpSubmenu({
       <DropdownMenuSubContent className="w-52">
         <DropdownMenuItem onSelect={openShortcutsSettings}>
           <Keyboard className="size-3.5" />
-          {t('auto.components.sidebar.SidebarSettingsHelpMenu.e565171a7c', 'Keyboard Shortcuts')}
+          {t('auto.components.sidebar.SidebarSettingsHelpMenu.e565171a7c', 'Keyboard shortcuts')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onOpenFeedback}>
           <MessageSquareText className="size-3.5" />
-          {t('auto.components.sidebar.SidebarSettingsHelpMenu.4cf5b868d7', 'Send Feedback')}
+          {t('auto.components.sidebar.SidebarSettingsHelpMenu.4cf5b868d7', 'Send feedback')}
         </DropdownMenuItem>
         {milestones ? (
           <DropdownMenuItem onSelect={openMilestones}>
@@ -219,7 +219,7 @@ export function SidebarHelpSubmenu({
           ) : (
             <RefreshCw className="size-3.5" />
           )}
-          {t('auto.components.sidebar.SidebarSettingsHelpMenu.29c56f30ee', 'Check for Updates')}
+          {t('auto.components.sidebar.SidebarSettingsHelpMenu.29c56f30ee', 'Check for updates')}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onRestart} disabled={restartPending}>

@@ -1,5 +1,5 @@
 import React from 'react'
-import { FolderOpen } from 'lucide-react'
+import { Check, FolderOpen } from 'lucide-react'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { cn } from '@/lib/utils'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
@@ -119,8 +119,7 @@ export function ProjectOptionRow({
       onClick={onCommit}
       className={cn(
         'flex cursor-default items-start gap-2 rounded-sm px-2 py-1.5 text-sm',
-        armed && 'bg-accent text-accent-foreground',
-        current && !armed && 'bg-accent/60'
+        armed && 'bg-accent text-accent-foreground'
       )}
     >
       <span className="flex h-5 w-4 shrink-0 items-center justify-center">
@@ -138,6 +137,12 @@ export function ProjectOptionRow({
           className={cn('text-xs', ambiguous ? 'text-foreground/80' : 'text-muted-foreground')}
         />
       </span>
+      {/* The committed row gets a check, not a second fill, so only the armed row is shaded. */}
+      {current ? (
+        <span className="flex h-5 shrink-0 items-center">
+          <Check className="size-3.5 text-muted-foreground" />
+        </span>
+      ) : null}
     </div>
   )
 }

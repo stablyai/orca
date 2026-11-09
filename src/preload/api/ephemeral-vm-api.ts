@@ -1,4 +1,4 @@
-import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
+import type { OrcaCloudAvailability, OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type {
   HostedSessionIdleSleepEvent,
   HostedSessionWarningEvent
@@ -21,6 +21,8 @@ export type EphemeralVmApi = {
     message?: string
     messageCode?: string
     messageParams?: Record<string, string | number>
+    /** Absent from older mains and web clients; treat as unavailable. */
+    orcaCloud?: OrcaCloudAvailability
   }>
   listRecipeCatalog: () => Promise<
     {

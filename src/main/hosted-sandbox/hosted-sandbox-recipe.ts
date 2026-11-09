@@ -28,7 +28,7 @@ export const ORCA_CLOUD_RECIPE_ID = 'cloud'
 export const ORCA_CLOUD_RECIPE: OrcaVmRecipe = {
   id: ORCA_CLOUD_RECIPE_ID,
   name: 'Orca Cloud',
-  description: 'A cloud VM run by Orca. Sleeps when idle; files persist.',
+  description: 'Hosted by Orca. Sleeps when idle and keeps your files.',
   provider: 'orca-cloud',
   create: 'orca-cloud create',
   suspend: 'orca-cloud suspend',

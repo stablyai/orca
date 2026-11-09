@@ -2843,7 +2843,10 @@
         "runCommandsNow": "Run commands now",
         "skipForNow": "Skip for now",
         "skipCommands": "Skip commands",
-        "connectProject": "Connect {{name}}"
+        "connectProject": "Connect {{name}}",
+        "customEnvironmentsHint": "Create a workspace from an orca.yaml recipe",
+        "addRemoteOrcaServerSentence": "Add remote Orca server",
+        "customEnvironments": "Custom environments"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
@@ -6602,13 +6605,13 @@
         },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Restart Orca",
-          "29c56f30ee": "Check for Updates",
+          "29c56f30ee": "Check for updates",
           "eb9884e55b": "Discord",
           "5687ab246a": "GitHub",
           "5f83d86d92": "Changelog",
           "cdc87f897e": "Docs",
-          "e565171a7c": "Keyboard Shortcuts",
-          "4cf5b868d7": "Send Feedback",
+          "e565171a7c": "Keyboard shortcuts",
+          "4cf5b868d7": "Send feedback",
           "a428c25998": "Settings",
           "2991a0106c": "Help",
           "4e8f5710d3": "Couldn't restart Orca.",
@@ -15826,7 +15829,20 @@
           "RunTargetCombobox": {
             "listLabel": "Run targets",
             "label": "Run on",
-            "browse": "Browse run targets"
+            "browse": "Browse run targets",
+            "orcaCloudHoursLeft": "{{hours}} h left",
+            "orcaCloudNoHours": "No hours left",
+            "orcaCloudPaymentIssue": "Payment issue",
+            "orcaCloudTeamBadge": "Team",
+            "orcaCloudUpgrade": "Upgrade",
+            "orcaCloudDetail": "Hosted sandbox · 4 vCPU / 8 GB",
+            "orcaCloudRenew": "Renew",
+            "orcaCloudAddHours": "Add hours",
+            "orcaCloudUpdatePayment": "Update payment",
+            "orcaCloudPaymentFailed": "Payment failed",
+            "orcaCloudSignIn": "Sign in to use Orca Cloud",
+            "orcaCloudNeedsTeam": "Needs a Team plan",
+            "orcaCloudSignInButton": "Sign in"
           },
           "projectCombobox": {
             "recentHeading": "Recent",

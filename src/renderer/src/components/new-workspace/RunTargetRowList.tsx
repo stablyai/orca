@@ -5,7 +5,9 @@ import type {
 } from '@/lib/project-host-setup-options'
 import { HostRowIcon, RunTargetRow } from './RunTargetComboboxRow'
 import { ConnectHostButton, NeedsSetupHostIcon, SetLocationButton } from './RunTargetRowActions'
-import { RecipesSubmenuRow } from './RunTargetSubmenus'
+import { RecipesSubmenuRow, type RunTargetSubmenuArm } from './RunTargetSubmenus'
+import { RunTargetOrcaCloudRow } from './RunTargetOrcaCloudRow'
+import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
 import type { EphemeralVmRecipeOption, RunTargetRowModel } from './run-target-options'
 
 /** The scrolling rows of the run-target picker; "Add host" is pinned outside this list. */
@@ -17,6 +19,8 @@ export default function RunTargetRowList({
   selectedRecipeId,
   matchedRecipes,
   recipesOpen,
+  recipesSubmenuArm,
+  orcaCloudAccess,
   connectingHostIds,
   canConnect,
   canSetLocation,
@@ -24,6 +28,8 @@ export default function RunTargetRowList({
   onRecipesOpenChange,
   onSelectHost,
   onSelectRecipe,
+  onSelectOrcaCloud,
+  onOrcaCloudBlockedAction,
   onConnectHost,
   onSetLocation
 }: {
@@ -35,6 +41,8 @@ export default function RunTargetRowList({
   selectedRecipeId: string | null
   matchedRecipes: readonly EphemeralVmRecipeOption[]
   recipesOpen: boolean
+  recipesSubmenuArm: RunTargetSubmenuArm
+  orcaCloudAccess: OrcaCloudRunTargetAccess
   connectingHostIds: ReadonlySet<string>
   canConnect: boolean
   canSetLocation: boolean
@@ -43,6 +51,9 @@ export default function RunTargetRowList({
   onRecipesOpenChange: (open: boolean) => void
   onSelectHost: (option: ReadyProjectHostSetupOption) => void
   onSelectRecipe: (recipeId: string) => void
+  onSelectOrcaCloud: (recipe: EphemeralVmRecipeOption | null) => void
+  /** Plans or billing, for an account that cannot start a sandbox. */
+  onOrcaCloudBlockedAction: () => void
   onConnectHost: (option: NeedsSetupProjectHostOption) => void
   onSetLocation: (option: NeedsSetupProjectHostOption) => void
 }): React.JSX.Element {
@@ -66,6 +77,21 @@ export default function RunTargetRowList({
               optionId={optionId}
               onArm={() => onArm(row.key, null)}
               onCommit={() => onSelectHost(row.option)}
+            />
+          )
+        }
+        if (row.kind === 'orca-cloud') {
+          return (
+            <RunTargetOrcaCloudRow
+              key={row.key}
+              recipe={row.recipe}
+              access={orcaCloudAccess}
+              armed={isArmed}
+              current={row.recipe !== null && row.recipe.id === selectedRecipeId}
+              optionId={optionId}
+              onArm={() => onArm(row.key, null)}
+              onSelect={() => onSelectOrcaCloud(row.recipe)}
+              onBlockedAction={onOrcaCloudBlockedAction}
             />
           )
         }
@@ -117,6 +143,7 @@ export default function RunTargetRowList({
             optionId={optionId}
             recipes={matchedRecipes}
             selectedRecipeId={selectedRecipeId}
+            submenuArm={recipesSubmenuArm}
             onArm={() => onArm(row.key, 'recipes')}
             onSelectRecipe={onSelectRecipe}
           />

@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type { OrcaVmRecipe } from '../../../shared/orca-yaml-hook-types'
+import type { OrcaCloudAvailability, OrcaVmRecipe } from '../../../shared/orca-yaml-hook-types'
+import { useAppStore } from '@/store'
 import type { EphemeralVmFailure } from '../../../shared/ephemeral-vm-failure-copy'
 import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 
 type EphemeralVmRecipeOptionsArgs = {
   enabled: boolean
+  /** Off: only built-in Orca Cloud is offered, and orca.yaml recipe diagnostics stay hidden. */
+  customRecipesEnabled: boolean
   repoId: string | null
   repoIsGit: boolean
   repoConnectionId: string | null
@@ -20,11 +23,16 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
   selectedRecipeId: string | null
   setSelectedRecipeId: (recipeId: string | null) => void
   error: string | null
+  /** Recipes may be picked: custom recipes are on, or the list holds Orca Cloud (all a flag-off list can hold). */
+  offered: boolean
+  /** Orca Cloud for this target as main reports it; `unavailable` where recipe VMs can't run. */
+  orcaCloud: OrcaCloudAvailability
 } {
   const [recipes, setRecipes] = useState<OrcaVmRecipe[]>([])
   const [selectedRecipeId, setSelectedRecipeId] = useState<string | null>(null)
   // Failures stay coded until render so a language switch relocalizes them.
   const [errors, setErrors] = useState<EphemeralVmFailure[]>([])
+  const [orcaCloud, setOrcaCloud] = useState<OrcaCloudAvailability>('unavailable')
   const requestGeneration = useRef(0)
   const canLoad =
     args.enabled &&
@@ -51,8 +59,12 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
           if (generation !== requestGeneration.current) {
             return
           }
-          const nextRecipes = result.recipes ?? []
+          // Orca Cloud rides its account capability, not the experimental VM-recipes flag.
+          const nextRecipes = (result.recipes ?? []).filter(
+            (recipe) => args.customRecipesEnabled || recipe.provider === 'orca-cloud'
+          )
           setRecipes(nextRecipes)
+          setOrcaCloud(result.orcaCloud ?? 'unavailable')
           setSelectedRecipeId((current) => {
             if (resetSelection) {
               return args.initialRecipeId &&
@@ -67,6 +79,10 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
             const fieldLabel = diagnostic.field ? `.${diagnostic.field}` : ''
             return { error: `${recipeLabel}${fieldLabel}: ${diagnostic.message}` }
           })
+          if (!args.customRecipesEnabled) {
+            setErrors([])
+            return
+          }
           setErrors([
             ...(result.status === 'error' && result.message
               ? [
@@ -86,10 +102,14 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
           }
           setRecipes([])
           setSelectedRecipeId(null)
-          setErrors([{ error: cause instanceof Error ? cause.message : String(cause) }])
+          setErrors(
+            args.customRecipesEnabled
+              ? [{ error: cause instanceof Error ? cause.message : String(cause) }]
+              : []
+          )
         })
     },
-    [args.initialRecipeId, args.repoId, canLoad]
+    [args.customRecipesEnabled, args.initialRecipeId, args.repoId, canLoad]
   )
 
   useEffect(() => {
@@ -98,6 +118,20 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
       requestGeneration.current += 1
     }
   }, [load])
+
+  // Signing in or out, or a capability change, adds or drops the Orca Cloud recipe in main.
+  const authKey = useAppStore((state) => {
+    const status = state.orcaProfileAuthStatus
+    return `${status?.state ?? 'none'}:${status?.capabilities?.flags.sandbox === true}`
+  })
+  const lastAuthKey = useRef(authKey)
+  useEffect(() => {
+    if (lastAuthKey.current === authKey) {
+      return
+    }
+    lastAuthKey.current = authKey
+    load(false)
+  }, [authKey, load])
 
   useEffect(() => {
     if (!window.api.plugins?.onChanged) {
@@ -112,5 +146,12 @@ export function useEphemeralVmRecipeOptions(args: EphemeralVmRecipeOptionsArgs):
 
   useUiLanguageRevision()
   const error = errors.map(ephemeralVmErrorText).filter(Boolean).join('\n') || null
-  return { recipes, selectedRecipeId, setSelectedRecipeId, error }
+  return {
+    recipes,
+    selectedRecipeId,
+    setSelectedRecipeId,
+    error,
+    offered: args.customRecipesEnabled || recipes.length > 0,
+    orcaCloud: canLoad ? orcaCloud : 'unavailable'
+  }
 }
