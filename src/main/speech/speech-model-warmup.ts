@@ -12,6 +12,7 @@ type SpeechWarmupStore = {
  * does not wait for it. Returns a call that re-warms it when the user is likely to dictate.
  */
 export function startSpeechModelWarmup(store: SpeechWarmupStore): () => void {
+  let speechGpu = store.getSettings().voice?.speechGpu
   // A settings change retries a model that failed to load; a window focus does not.
   const sync = (retryFailed: boolean): void => {
     const voice = store.getSettings().voice
@@ -22,7 +23,12 @@ export function startSpeechModelWarmup(store: SpeechWarmupStore): () => void {
     try {
       const stt = getSpeechSttService(store)
       stt.setIdleUnloadDelay(voiceModelUnloadDelayMs(voice))
-      void stt.prewarm(voice.sttModel, voice.dictationLanguage, retryFailed)
+      // A loaded recognizer keeps the GPU choice it started with, so reload it for the new one.
+      const gpuChanged = voice.speechGpu !== speechGpu
+      speechGpu = voice.speechGpu
+      const reloaded = gpuChanged ? stt.unloadIdleModel() : Promise.resolve()
+      const { sttModel, dictationLanguage } = voice
+      void reloaded.then(() => stt.prewarm(sttModel, dictationLanguage, retryFailed))
     } catch (error) {
       // Runs inside settings writes; an unusable models folder must not fail the write.
       console.warn('[speech] Could not pre-warm the speech model:', error)
