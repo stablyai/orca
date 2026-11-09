@@ -1,6 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import type { QueryClient } from '@tanstack/react-query'
 import * as z from 'zod'
+import { HOST_LIST_TARGET, NO_HOST_LIST_INPUT } from '../host-screen/host-list-queries'
+import { hostObserverOptions } from '../query/host-query'
 import { persistedHostQueryKey } from '../query/host-query-persistence'
 import { keepNativeHostQueries } from '../query/native-query-persistence'
 import { homeStatsKey, homeStatsQuery } from '../stats/home-stats-summary-read'
@@ -68,6 +70,19 @@ async function seedFromLegacySnapshot(
       activeCount: info.activeCount,
       agents: []
     }
+    // Built with the family's rules first: setQueryData alone makes a query the store never writes.
+    queryClient
+      .getQueryCache()
+      .build(
+        queryClient,
+        hostObserverOptions(
+          homeWorktreeCountsQuery,
+          null,
+          hostId,
+          HOST_LIST_TARGET,
+          NO_HOST_LIST_INPUT
+        )
+      )
     queryClient.setQueryData(key, counts, { updatedAt: info.countsProvenAt ?? snapshot.savedAt })
   }
   await Promise.all(hostIds.map((hostId) => keepNativeHostQueries(queryClient, hostId)?.flush()))

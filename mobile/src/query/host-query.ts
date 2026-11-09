@@ -191,6 +191,8 @@ export function hostObserverOptions<TInput extends HostQueryParams, TData>(
     : {
         queryKey: hostQueryKey(hostId, query.family, target, input),
         queryFn: skipToken,
+        // A family that keeps its answer longer keeps it while no client reads it, too.
+        ...(query.gcTime === undefined ? {} : { gcTime: query.gcTime }),
         meta: { streamBacked: query.streamBacked, signal: query.signal, persist: query.persist }
       }
 }
