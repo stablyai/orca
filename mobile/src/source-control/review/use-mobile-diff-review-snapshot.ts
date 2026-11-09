@@ -170,12 +170,25 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
               throw err
             }
           )
-      const showBuilt = (state: ReviewScreenState, loaded: BranchCompareLoadResult) => {
-        if (!sameStatus) {
+      // Once this build's files show, a later compare goes onto the screen, keeping note edits made since.
+      // Without a compare (null) the shown one holds until the new one lands.
+      let shownBuild = false
+      const showBuilt = (state: ReviewScreenState, loaded: BranchCompareLoadResult | null) => {
+        const onShown = shownBuild
+        shownBuild = true
+        if (!sameStatus && !onShown) {
           setStatusRevision(queryClient.getQueryState(statusKey)?.dataUpdatedAt ?? 0)
         }
-        setScreenState(withMobileDiffReviewBranch(state, loaded, worktreeId))
-        setActionError(loaded.error ?? null)
+        setScreenState((prev) => {
+          const held =
+            prev.kind === 'ready' ? { result: prev.branchCompare, error: prev.branchError } : null
+          const compare = loaded ?? held
+          const base = onShown && prev.kind === 'ready' ? prev : state
+          return compare ? withMobileDiffReviewBranch(base, compare, worktreeId) : base
+        })
+        if (loaded) {
+          setActionError(loaded.error ?? null)
+        }
         settleWaiters()
       }
       // A compare a git change marked as it landed is newer than the shown one, so it shows while read again.
@@ -209,29 +222,13 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
         if (!isCurrent()) {
           return
         }
-        if (loaded) {
-          showBuilt(state, loaded)
-          return
-        }
-        if (!sameStatus) {
-          setStatusRevision(queryClient.getQueryState(statusKey)?.dataUpdatedAt ?? 0)
-        }
-        // Hold the shown compare until the new one lands.
-        setScreenState((prev) =>
-          prev.kind === 'ready'
-            ? withMobileDiffReviewBranch(
-                state,
-                { result: prev.branchCompare, error: prev.branchError },
-                worktreeId
-              )
-            : state
-        )
         // A write waits for the files it changed, not for the branch compare.
-        settleWaiters()
-        const settled = await branch
-        if (isCurrent()) {
-          setScreenState((prev) => withMobileDiffReviewBranch(prev, settled, worktreeId))
-          setActionError(settled.error ?? null)
+        showBuilt(state, loaded)
+        if (!loaded) {
+          const settled = await branch
+          if (isCurrent()) {
+            showBuilt(state, settled)
+          }
         }
       } catch (err) {
         fail(err)
