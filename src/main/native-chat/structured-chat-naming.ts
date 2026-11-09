@@ -1,3 +1,12 @@
+import type {
+  StructuredChatNameGeneration,
+  StructuredChatNamingDeps
+} from './structured-chat-naming-types'
+export type {
+  StructuredChatNameGeneration,
+  StructuredChatNamingDeps
+} from './structured-chat-naming-types'
+import { runStructuredChatNameGeneration } from './structured-chat-name-publication'
 import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
 import { createStructuredChatNamingWork, type NamingRequest } from './structured-chat-naming-work'
 import type { StructuredAgentSessionStatusObserverOptions } from './agent-session-wire/observations/structured-agent-session-status-observation'
@@ -9,8 +18,6 @@ import {
 } from '../../shared/source-control/ai/generation/conversation-name-generation'
 import { hasStructuredChatPromptText } from '../../shared/agent-session/requests/structured-agent-session-first-prompt'
 import { sliceAtCodeUnitLimit } from '../../shared/surrogate-safe-text-slice'
-import type { GlobalSettings } from '../../shared/global-settings-types'
-import type { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import {
   formatAgentGenerationFailureOutputForDisplay,
   type AgentGenerationFailureOutput
@@ -19,37 +26,7 @@ import type {
   StructuredAgentSessionConversationNaming,
   StructuredChatNamingFailure
 } from './agent-session-wire/host/structured-agent-session-host-types'
-import {
-  neverThrowingStructuredAgentSessionLogger,
-  type StructuredAgentSessionLogger
-} from './agent-session-wire/host/structured-agent-session-logger'
-
-/** null means unavailable/canceled: no failure to display or retry. */
-export type StructuredChatNameGeneration =
-  | { name: string }
-  | { error: string; errorCode?: string; failureOutput?: AgentGenerationFailureOutput }
-  | null
-
-export type StructuredChatNamingDeps = {
-  getStore: () => Pick<
-    AgentSessionRecordStore,
-    'getRecord' | 'compareAndSetConversationName' | 'setUserConversationName'
-  > | null
-  getSettings: () => Pick<GlobalSettings, 'nativeChatAutoName'>
-  readFirstPrompt: (sessionId: string, hostStartedAt: number) => Promise<string>
-  /** The current context's first prompt, for a name the user asked for again. */
-  readJournalFirstPrompt: (sessionId: string) => Promise<string>
-  now?: () => number
-  workerTaskTitle: (record: AgentSessionRecord) => { title: string } | null
-  generate: (
-    record: AgentSessionRecord,
-    firstPrompt: string,
-    shouldExecute?: () => boolean
-  ) => Promise<StructuredChatNameGeneration>
-  onNamed: (workspaceId: string, sessionId: string) => void
-  logger: StructuredAgentSessionLogger
-  wait?: (ms: number) => Promise<void>
-}
+import { neverThrowingStructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
 
 const GENERATION_RETRY_DELAYS_MS = [2000, 4000]
 const NAMING_ERROR_LIMIT = 1024
@@ -100,22 +77,25 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
   const work = createStructuredChatNamingWork({
     applicable,
     prepare,
-    execute: async (request, firstPrompt) => {
-      if (!applicable(request)) {
-        return
-      }
-      const name = await generateName(
-        request.record,
-        firstPrompt,
-        request.record.conversationName ?? '',
-        request.automatic ? GENERATION_RETRY_DELAYS_MS : [],
-        () => applicable(request)
-      )
-      const store = deps.getStore()
-      if (name && store && applicable(request)) {
-        await setName(store, request.record, name)
-      }
-    },
+    execute: (request, firstPrompt) =>
+      runStructuredChatNameGeneration({
+        automatic: request.automatic,
+        getRecord: () => deps.getStore()?.getRecord(request.record.sessionId),
+        applicable: () => applicable(request),
+        generate: (stillCurrent, automaticTitle) =>
+          generateName(
+            request.record,
+            firstPrompt,
+            request.record.conversationName ?? '',
+            request.automatic ? GENERATION_RETRY_DELAYS_MS : [],
+            stillCurrent,
+            automaticTitle
+          ),
+        setName: async (name, applicable) => {
+          const store = deps.getStore()
+          return store ? setName(store, request.record, name, applicable) : null
+        }
+      }),
     changed: (record) => refresh(record.location.workspaceId, record.sessionId),
     warn
   })
@@ -153,18 +133,24 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     firstPrompt: string,
     forName: string,
     retryDelays: readonly number[],
-    stillCurrent: () => boolean
-  ): Promise<string | null> {
+    stillCurrent: () => boolean,
+    automaticTitle?: Parameters<StructuredChatNamingDeps['generate']>[3]
+  ): Promise<{ name: string; shouldApply?: () => boolean } | null> {
     attempted.set(record.sessionId, contextId(record))
     for (let attempt = 0; stillCurrent(); attempt += 1) {
       let failure: NamingRunFailure
       try {
-        const result = await deps.generate(record, firstPrompt, stillCurrent)
+        const result = await deps.generate(
+          record,
+          firstPrompt,
+          stillCurrent,
+          attempt === 0 ? automaticTitle : undefined
+        )
         if (!result) {
           return null
         }
         if ('name' in result && result.name) {
-          return result.name
+          return result
         }
         failure = 'error' in result ? result : chatNamingFailure('noName')
       } catch (error) {
@@ -189,17 +175,24 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     return null
   }
 
-  async function setName(store: NamingStore, record: AgentSessionRecord, name: string) {
+  async function setName(
+    store: NamingStore,
+    record: AgentSessionRecord,
+    name: string,
+    applicable?: (record: AgentSessionRecord) => boolean
+  ) {
     const named = await store.compareAndSetConversationName(
       record.sessionId,
       name,
       record.conversationName ?? null,
-      contextId(record)
+      contextId(record),
+      applicable
     )
     if (named) {
       forget(record.sessionId)
       refresh(named.location.workspaceId, named.sessionId)
     }
+    return named
   }
 
   const generationStillCurrent = (store: NamingStore, record: AgentSessionRecord) => {

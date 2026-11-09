@@ -1,5 +1,9 @@
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
-import { resolveSourceControlActionRecipe } from '../../../../shared/source-control/ai/source-control-ai-operation-policy'
+import {
+  resolveSourceControlActionRecipe,
+  resolveInstructionsFromNormalized
+} from '../../../../shared/source-control/ai/source-control-ai-operation-policy'
+import { readSourceControlAiModelChoiceForHost } from '../../../../shared/source-control/ai/settings/source-control-ai-model-selection'
 import { normalizeSourceControlActionRecipe } from '../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import {
   renderConversationNamePrompt,
@@ -33,6 +37,33 @@ type StructuredChatNamingRuntime = {
   retitleOpenTab: StructuredChatNamingDeps['onNamed']
 }
 
+function canReuseClaudeTitle(
+  current: Parameters<typeof resolveTextGenerationParams>[0],
+  model: string
+): boolean {
+  const source = normalizeSourceControlAiSettings(current.sourceControlAi, current.commitMessageAi)
+  const recipe = resolveSourceControlActionRecipe({
+    settings: current,
+    actionId: 'conversationName'
+  })
+  const override = source.modelOverridesByOperation?.conversationName
+  const choices = [override, source, current.commitMessageAi]
+  return (
+    !recipe.agentId &&
+    !recipe.agentArgs?.trim() &&
+    recipe.commandInputTemplate === '{basePrompt}' &&
+    !resolveInstructionsFromNormalized(source, null, 'conversationName', undefined) &&
+    !choices.some(
+      (choice) =>
+        readSourceControlAiModelChoiceForHost(choice, LOCAL_COMMIT_MESSAGE_HOST_KEY, 'claude') !==
+        undefined
+    ) &&
+    (override?.selectedThinkingByModel?.[model] ??
+      source.selectedThinkingByModel[model] ??
+      current.commitMessageAi?.selectedThinkingByModel?.[model]) === undefined
+  )
+}
+
 export function structuredChatNamingDeps(
   getStore: () => {
     getSettings: () => Parameters<typeof resolveTextGenerationParams>[0] &
@@ -60,7 +91,7 @@ export function structuredChatNamingDeps(
         : ''
     },
     workerTaskTitle: runtime.workerTaskTitle,
-    generate: async (record, firstPrompt, shouldExecute) => {
+    generate: async function generate(record, firstPrompt, shouldExecute, automaticTitle) {
       // Unsupported execution contexts keep the seed regardless of native naming settings.
       if (record.location.wslDistro !== null) {
         return null
@@ -131,6 +162,39 @@ export function structuredChatNamingDeps(
       if (!settings.ok) {
         logger.warn(settings.error, log)
         return { error: settings.error }
+      }
+      if (
+        automaticTitle &&
+        record.provider === 'claude' &&
+        current.nativeChatAutoName !== false &&
+        canReuseClaudeTitle(current, settings.params.model)
+      ) {
+        const owner =
+          getStructuredAgentSessionHost()?.deps.adapter.captureConversationTitleOwner?.(record)
+        if (owner) {
+          automaticTitle.retainOwnership(owner.isCurrent)
+          const isCurrent = () => shouldExecute?.() ?? true
+          const eligible = () =>
+            getStore().getSettings().nativeChatAutoName !== false &&
+            canReuseClaudeTitle(getStore().getSettings(), settings.params.model)
+          if (!isCurrent()) {
+            return null
+          }
+          let output: unknown
+          try {
+            output = await owner.generate(firstPrompt, () => isCurrent() && eligible())
+          } catch {
+            // Optional CLI control failure keeps the existing generator's recovery path.
+          }
+          if (!isCurrent()) {
+            return null
+          }
+          const name = typeof output === 'string' ? sanitizeGeneratedConversationName(output) : ''
+          if (name && eligible()) {
+            return { name, shouldApply: eligible }
+          }
+          return generate(record, firstPrompt, shouldExecute, undefined)
+        }
       }
       const target = useChatAgent
         ? await chatNamingAgentTarget(

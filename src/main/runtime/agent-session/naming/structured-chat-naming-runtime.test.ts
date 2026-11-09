@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
     XDG_STATE_HOME: `/profiles/${id}/state`
   })),
   native: vi.fn(async () => 'Native title'),
+  titleOwner: vi.fn(),
   generate: vi.fn(async () => ({ success: true as const, name: 'Login repair' })),
   target: vi.fn(async (cwd: string) => ({ kind: 'local' as const, cwd })),
   publishConversationName: vi.fn<(sessionId: string) => void>(),
@@ -29,7 +30,9 @@ vi.mock('../../../agent-hooks/first-work/first-work-generation-target', () => ({
 }))
 vi.mock('../../../native-chat/agent-session-wire/host/structured-agent-session-registry', () => ({
   getStructuredAgentSessionHost: () => ({
-    deps: { adapter: { generateText: mocks.native } },
+    deps: {
+      adapter: { generateText: mocks.native, captureConversationTitleOwner: mocks.titleOwner }
+    },
     publishConversationName: mocks.publishConversationName,
     journalCurrentRead: mocks.journalCurrentRead
   })
@@ -46,7 +49,10 @@ afterEach(async () => {
   installClaudeProfileRouter(undefined)
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
-beforeEach(() => vi.clearAllMocks())
+beforeEach(() => {
+  vi.clearAllMocks()
+  mocks.titleOwner.mockReset()
+})
 
 function rig() {
   const settings = getDefaultSettings('/isolated')
@@ -74,6 +80,62 @@ function rig() {
 }
 
 describe('structured chat naming runtime', () => {
+  it('uses the CLI title only for automatic default naming and honors changed settings', async () => {
+    const state = rig()
+    const record = agentSessionRecordFixture()
+    const pending = Promise.withResolvers<string>()
+    const generate = vi.fn(() => pending.promise)
+    const retainOwnership = vi.fn()
+    mocks.titleOwner.mockReturnValue({ isCurrent: () => true, generate })
+    const result = state.deps.generate(record, 'Repair login', () => true, { retainOwnership })
+    await vi.waitFor(() => expect(generate).toHaveBeenCalled())
+    pending.resolve('Broken chat title')
+    expect(await result).toMatchObject({ name: 'Broken chat title' })
+    expect(mocks.generate).not.toHaveBeenCalled()
+    await state.deps.generate(record, 'Repair login')
+    expect(mocks.generate).toHaveBeenCalledOnce()
+
+    generate.mockImplementationOnce(async () => {
+      state.settings.sourceControlAi!.actions!.conversationName = {
+        commandInputTemplate: 'Custom {basePrompt}'
+      }
+      return 'Wrong settings title'
+    })
+    expect(
+      await state.deps.generate(record, 'Repair login', () => true, { retainOwnership })
+    ).toEqual({ name: 'Login repair' })
+  })
+
+  it.each(['action', 'shared', 'legacy', 'effort', 'template'] as const)(
+    'preserves authored %s naming choices without consulting the CLI',
+    async (choice) => {
+      const state = rig()
+      const source = state.settings.sourceControlAi!
+      if (choice === 'action') {
+        source.modelOverridesByOperation = {
+          conversationName: { selectedModelByAgent: { claude: 'opus' } }
+        }
+      }
+      if (choice === 'shared') {
+        source.selectedModelByAgent = { claude: 'opus' }
+      }
+      if (choice === 'legacy') {
+        state.settings.commitMessageAi!.selectedModelByAgent = { claude: 'opus' }
+      }
+      if (choice === 'effort') {
+        source.selectedThinkingByModel = { sonnet: 'high' }
+      }
+      if (choice === 'template') {
+        source.actions!.conversationName = { commandInputTemplate: 'Custom {basePrompt}' }
+      }
+      expect(
+        await state.deps.generate(agentSessionRecordFixture(), 'Repair login', () => true, {
+          retainOwnership: () => {}
+        })
+      ).toEqual({ name: 'Login repair' })
+      expect(mocks.titleOwner).not.toHaveBeenCalled()
+    }
+  )
   it.each(['grok', 'antigravity'] as const)(
     'codes %s native naming failures without exposing provider text',
     async (provider) => {
