@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 import { addSyntheticSession, openSessionSearchHarness } from './session-search-engine-test-fixture'
 import { readIndexContentRevision, readIndexGeneration } from './session-search-index-generation'
 import { encodeSessionSearchCursor, sessionSearchPageKey } from './session-search-page-cursor'
-import { SessionSearchToolPurge, readSessionSearchToolPurgePage } from './session-search-tool-purge'
+import { SessionSearchToolPurge } from './session-search-tool-purge'
 
 it('purges legacy tool rows across batches while preserving conversations and raw generation fences', async () => {
   const index = await openSessionSearchHarness('ss-tool-purge')
@@ -32,25 +32,6 @@ it('purges legacy tool rows across batches while preserving conversations and ra
     addSyntheticSession(index.db, { id: 4, role: 'tool', text: 'newlegacytool' })
     await purge.request()
     expect(index.engine.search({ query: 'newlegacytool' }).hits).toEqual([])
-  } finally {
-    await index.close()
-  }
-})
-
-it('bounds empty conversation pages and seeks across sparse rowid gaps', async () => {
-  const index = await openSessionSearchHarness('ss-tool-purge-sparse')
-  try {
-    addSyntheticSession(index.db, { id: 1, text: 'kept', rows: 300 })
-    addSyntheticSession(index.db, { id: 2, text: 'legacytool', role: 'tool' })
-    index.db.exec('UPDATE messages SET id = 1000000 WHERE id = 301')
-    const first = readSessionSearchToolPurgePage(index.db, 0)
-    expect(first).toEqual({ cursor: 256, ids: [] })
-    expect(readSessionSearchToolPurgePage(index.db, 256)).toEqual({ cursor: 512, ids: [] })
-    expect(readSessionSearchToolPurgePage(index.db, 512)).toEqual({
-      cursor: 1000255,
-      ids: [{ id: 1000000 }]
-    })
-    expect(readSessionSearchToolPurgePage(index.db, 1000255)).toBeNull()
   } finally {
     await index.close()
   }
@@ -122,3 +103,95 @@ it.each(['relevance', 'newest'] as const)(
     }
   }
 )
+
+type HarnessDb = Awaited<ReturnType<typeof openSessionSearchHarness>>['db']
+
+function readMeta(db: HarnessDb, key: string): string | undefined {
+  const row = db.prepare('SELECT value FROM meta WHERE key = ?').get(key)
+  return row ? String(row.value) : undefined
+}
+
+function countTool(db: HarnessDb): number {
+  return Number(db.prepare("SELECT COUNT(*) AS n FROM messages WHERE role = 'tool'").get()!.n)
+}
+
+function newPurge(db: HarnessDb, closed = () => false, onChange = (): void => {}) {
+  return new SessionSearchToolPurge(db, closed, onChange, (error) => {
+    throw error
+  })
+}
+
+it('persists a high-water mark so later passes skip already-scanned rowids', async () => {
+  const index = await openSessionSearchHarness('ss-tool-purge-mark')
+  try {
+    addSyntheticSession(index.db, { id: 1, text: 'userkept', rows: 300 })
+    addSyntheticSession(index.db, { id: 2, role: 'tool', text: 'toolremoved', rows: 300 })
+    const purge = newPurge(index.db)
+    await purge.request()
+    expect(countTool(index.db)).toBe(0)
+    const mark = Number(readMeta(index.db, 'tool_purge_scanned_rowid'))
+    expect(mark).toBeGreaterThanOrEqual(600)
+    expect(readMeta(index.db, 'tool_purge_floor_rowid')).toBeUndefined()
+
+    // Without the floor trigger, a row below the mark is invisible to later passes: no rescan.
+    index.db.exec('DROP TRIGGER search_tool_purge_floor')
+    index.db.exec('DELETE FROM messages WHERE id = 1')
+    index.db.exec("INSERT INTO messages(id, session_row_id, role) VALUES (1, 1, 'tool')")
+    await purge.request()
+    expect(countTool(index.db)).toBe(1)
+    expect(Number(readMeta(index.db, 'tool_purge_scanned_rowid'))).toBe(mark)
+  } finally {
+    await index.close()
+  }
+})
+
+it('purges legacy tool rows written after the mark, including reused tail rowids', async () => {
+  const index = await openSessionSearchHarness('ss-tool-purge-downgrade')
+  try {
+    addSyntheticSession(index.db, { id: 1, text: 'userkept', rows: 20 })
+    const purge = newPurge(index.db)
+    await purge.request()
+    const mark = Number(readMeta(index.db, 'tool_purge_scanned_rowid'))
+    expect(mark).toBeGreaterThanOrEqual(20)
+    // A downgraded build deletes the tail, then reuses those rowids for tool rows.
+    index.db.exec('DELETE FROM messages WHERE id > 10')
+    index.db.exec('DELETE FROM messages_fts WHERE rowid > 10')
+    addSyntheticSession(index.db, { id: 3, role: 'tool', text: 'reusedtool', rows: 5 })
+    const reused = index.db.prepare("SELECT MIN(id) AS id FROM messages WHERE role = 'tool'").get()
+    expect(Number(reused!.id)).toBeLessThanOrEqual(mark)
+    expect(Number(readMeta(index.db, 'tool_purge_floor_rowid'))).toBe(10)
+    addSyntheticSession(index.db, { id: 4, role: 'tool', text: 'latertool', rows: 400 })
+    await purge.request()
+    expect(countTool(index.db)).toBe(0)
+    expect(index.engine.search({ query: 'reusedtool' }).hits).toEqual([])
+    expect(index.engine.search({ query: 'userkept' }).hits[0]?.sessionId).toBe('1')
+    expect(readMeta(index.db, 'tool_purge_floor_rowid')).toBeUndefined()
+    expect(Number(readMeta(index.db, 'tool_purge_scanned_rowid'))).toBeGreaterThanOrEqual(415)
+  } finally {
+    await index.close()
+  }
+})
+
+it('keeps the claimed start when a pass is cancelled', async () => {
+  const index = await openSessionSearchHarness('ss-tool-purge-cancel')
+  try {
+    addSyntheticSession(index.db, { id: 1, role: 'tool', text: 'toolremoved', rows: 600 })
+    let closed = false
+    let cancels = 1
+    const purge = newPurge(
+      index.db,
+      () => closed,
+      () => {
+        closed = cancels-- > 0
+      }
+    )
+    await purge.request()
+    expect(countTool(index.db)).toBe(344)
+    expect(readMeta(index.db, 'tool_purge_scanned_rowid')).toBe('0')
+    closed = false
+    await purge.request()
+    expect(countTool(index.db)).toBe(0)
+  } finally {
+    await index.close()
+  }
+})

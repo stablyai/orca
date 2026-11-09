@@ -1185,8 +1185,7 @@
         "parakeetJa": "Japanese only. Trained on 35k+ hours of natural speech. Punctuation included.",
         "whisperTiny": "90+ languages. Lower accuracy than Parakeet but broadest language coverage.",
         "senseVoice": "Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.",
-        "gpt4oMiniTranscribe": "Cloud transcription with strong accuracy and low cost. Requires an OpenAI API key.",
-        "gpt4oTranscribe": "Cloud transcription with higher accuracy. Requires an OpenAI API key."
+        "gptTranscribe": "Cloud transcription with high accuracy. Requires an OpenAI API key."
       }
     },
     "diagnostics": {
@@ -4590,7 +4589,6 @@
             "4f327c8b3d": "Open Markdown...",
             "3d5d6c960d": "New Markdown",
             "fd2b42aaa3": "New Mobile Emulator",
-            "aea43b5748": "Open the existing emulator tab.",
             "b426bb2615": "Go to Mobile Emulator",
             "4833fb2cbe": "New Browser Tab",
             "d364f3c8d4": "New Terminal",
@@ -6274,7 +6272,10 @@
           "69f5b5380d": "Cloning...",
           "cloneOnHostDescription": "Enter the Git URL and choose where to clone it on {{value0}}.",
           "cloneParentFolder": "Parent folder",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Folder name",
+          "cloneFolderTakenByRepo": "\"{{value0}}\" in this folder is already a different repository, so this clone needs its own folder.",
+          "cloneFolderNotEmpty": "\"{{value0}}\" already exists in this folder, so this clone needs its own folder."
         },
         "AutoRenameFailedDialog": {
           "dismissError": "Dismiss error",
@@ -8903,7 +8904,6 @@
           "f828e1de19": "- shared with your team",
           "673a7fd10e": "Checking...",
           "5426ecbdcb": "Local scripts will not run",
-          "b2b06c7ce8": "Available environment variables (hover for details):",
           "95a0411b3e": "template",
           "175daba180": "Example",
           "b20c5df6ca": "Add an `orca.yaml` file to enable shared setup, archive, or issue-automation defaults for this repo. Example template:",
@@ -9798,7 +9798,8 @@
           "cd9fe37556": "Microphone permission granted",
           "openAiKeyName": "Your OpenAI transcription key",
           "dictationShortcutDescription": "Press {{shortcut}} to dictate text into any focused pane.",
-          "dictationModesDescription": "Toggle: press {{shortcut}} once to start, again to stop. Hold: dictate while {{shortcut}} is held."
+          "dictationModeAuto": "Auto",
+          "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -11641,7 +11642,10 @@
               "modelUnloadTitle": "Unload Speech Model",
               "modelUnloadDescription": "Choose when the on-device speech model is unloaded from memory.",
               "modelUnloadKeyword": "unload",
-              "modelMemoryKeyword": "memory"
+              "modelMemoryKeyword": "memory",
+              "fillerWordsTitle": "Remove Filler Words",
+              "fillerWordsDescription": "Drop “um”, “uh” and similar sounds from dictated text.",
+              "fillerWordsKeyword": "filler words"
             }
           }
         },
@@ -20072,6 +20076,7 @@
         "noCommands": "No matching commands",
         "commands": "Commands",
         "skills": "Skills",
+        "checkingSkills": "Checking for new skills...",
         "loadingSkills": "Loading skills...",
         "skillsLoaded": "Skills loaded",
         "clearDescription": "Clear conversation context",
@@ -20357,7 +20362,6 @@
         "notSavedYet": "{{agent}} hasn't saved this conversation yet. Try again after it replies.",
         "terminalChanged": "The terminal running {{agent}} changed before it closed, so Orca left it open. Try again.",
         "terminalExitUnproven": "Orca closed {{agent}}'s terminal but couldn't confirm it stopped, so the chat didn't open. Check the host connection, then open the conversation from Session History.",
-        "terminalExitUnprovenInChat": "Orca closed {{agent}}'s terminal but couldn't confirm {{agent}} stopped. Make sure it has stopped, then try again.",
         "resumeFailed": "{{agent}} couldn't continue in chat. Check this terminal and the host connection, then try again."
       },
       "state": {
@@ -20799,6 +20803,7 @@
       "composerWorkspace": {
         "copyFailed": "Failed to copy",
         "copyIdentity": "Copy {{value0}}",
+        "detachedCommit": "Commit {{head}} (not a branch)",
         "folder": "Folder",
         "mainCheckout": "Main checkout",
         "turnWorking": "This chat's agent is working. Switch branches after its turn finishes.",
@@ -21345,7 +21350,14 @@
           "cloud": "Cloud models run on the provider’s servers, so nothing stays loaded here.",
           "never": "Never",
           "immediately": "Immediately"
+        },
+        "fillerWords": {
+          "title": "Remove Filler Words",
+          "description": "Drops sounds like “um” and “uh” from dictated text, in the dictation language."
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "Available environment variables"
       }
     },
     "agentChildRow": {
@@ -21563,7 +21575,16 @@
     },
     "tabGroup": {
       "splitPaneLanding": {
-        "newAgent": "New Agent"
+        "browser": "Browser",
+        "chooseAgent": "Choose agent",
+        "closePane": "Close pane",
+        "goToFile": "Go to file",
+        "heading": "Open in this pane",
+        "markdown": "Markdown",
+        "mobileEmulator": "Mobile emulator",
+        "newAgent": "New Agent",
+        "reopenClosedTab": "Reopen closed tab",
+        "terminal": "Terminal"
       }
     }
   },
@@ -22637,11 +22658,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Could not save deletion preference",
     "alwaysForceDelete": "Always force delete",
+    "alwaysForceDeleteDescription": "Applies to all future workspace deletions.",
     "moreActions": "More force delete options",
-    "alwaysForceDeleteTooltip": "Applies to all future workspace deletions.",
     "moreBranchActions": "More branch delete options",
     "alwaysForceDeleteBranches": "Always delete preserved branches",
-    "alwaysForceDeleteBranchesTooltip": "Applies to branches kept after future workspace deletions.",
+    "alwaysForceDeleteBranchesDescription": "Applies to branches kept after future workspace deletions.",
     "moreDeleteOptions": "More delete options",
     "alwaysDelete": "Always delete",
     "alwaysDeleteTooltip": "Skip this confirmation for future deletions."
@@ -23362,7 +23383,8 @@
     "refresh": "Refresh",
     "restartLocal": "Restart local daemon",
     "killAllLocal": "Kill all local sessions",
-    "killFailed": "The terminal could not be ended. Last-observed sessions are retained."
+    "killFailed": "The terminal could not be ended. Last-observed sessions are retained.",
+    "metricDetails": "Metric details"
   },
   "browserExtensions": {
     "permission": {

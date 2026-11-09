@@ -493,6 +493,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   telemetry?: TelemetrySettings
   /** Voice/dictation settings; persistence merge hydrates getDefaultSettings() values for older profiles. */
   voice?: VoiceSettings
+  /** One-shot migration flag for the Auto dictation-mode default; after migration an explicit Toggle sticks. */
+  voiceDictationModeDefaultedToAuto?: boolean
   /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */
   aiVaultSearch?: AiVaultSearchSettings
 }

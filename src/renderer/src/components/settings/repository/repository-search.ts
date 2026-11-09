@@ -11,9 +11,10 @@ import {
   searchKeywordTranslator,
   projectGroupingSearchKeywords
 } from '../search/settings-search-keywords'
-import { getRepositoryGitAuthorSearchEntries } from './repository-git-author-search-entries'
-import { getRepositoryGitHooksSearchEntries } from './execution/repository-git-hooks-search-entries'
-import { getRepositoryGitWorktreeSearchEntries } from './execution/repository-git-worktree-search-entries'
+import { getRepositoryGitAuthorSearchEntries } from './source-control/repository-git-author-search-entries'
+import { getRepositoryMcpConfigSearchEntries } from './mcp/mcp-config-search'
+import { getRepositoryGitHooksSearchEntries } from './hooks/repository-git-hooks-search-entries'
+import { getRepositoryGitWorktreeSearchEntries } from './worktrees/repository-git-worktree-search-entries'
 import { getRepositoryFormatterSearchEntry } from './RepositoryFormatterSection'
 import { getRepositoryAgentTrustSearchEntry } from './RepositoryAgentTrustSection'
 
@@ -267,6 +268,7 @@ export function getRepositoryPaneSearchEntries(
       ? []
       : [
           ...getRepositoryGitAuthorSearchEntries(repo, t),
+          ...getRepositoryMcpConfigSearchEntries(repo, t),
           ...getRepositoryGitHooksSearchEntries(repo, t)
         ])
   ]

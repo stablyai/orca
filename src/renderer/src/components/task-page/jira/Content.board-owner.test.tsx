@@ -7,7 +7,7 @@ import type { TaskPageComposerActionsModel } from '../use-task-page-composer-act
 import type { TaskPageJiraBoardView } from './task-page-jira-board-view'
 import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { defaultJiraListColumnIds, visibleJiraListColumns } from '../../jira-list-columns'
-import { bumpProviderRuntimeSessionGeneration } from '@/lib/provider-runtime-context'
+import { bumpProviderRuntimeSessionGeneration } from '@/runtime/hosts/observations/provider-runtime-context'
 import { TaskPageJiraContent } from './Content'
 import type * as I18n from '@/i18n/i18n'
 

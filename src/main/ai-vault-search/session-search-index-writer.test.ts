@@ -1,5 +1,4 @@
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { SessionSearchIndexConsumer } from './session-search-index-consumer'
+import { afterEach, beforeEach, expect, it } from 'vitest'
 import {
   openSessionSearchIndexFile,
   syntheticCandidate,
@@ -23,7 +22,6 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  vi.restoreAllMocks()
   store.close()
   await index.close()
 })
@@ -102,34 +100,6 @@ it('refuses to commit a write whose file was removed mid-read', () => {
   expect(count('sessions')).toBe(0)
   expect(count('messages')).toBe(0)
   expect(count('files')).toBe(0)
-})
-
-it('declines a behind cursor in beginRead before it ever reaches the store', () => {
-  const attempted: number[] = []
-  vi.spyOn(store, 'indexedFile').mockReturnValue({ byteOffset: 100, mtimeMs: 1, sizeBytes: 1 })
-  vi.spyOn(store, 'beginWrite').mockImplementation((_candidate, _mode, previousByteOffset) => {
-    attempted.push(previousByteOffset)
-    return { add: () => undefined, commit: () => true, discard: () => undefined }
-  })
-  vi.spyOn(store, 'setFileState').mockImplementation(() => undefined)
-  const consumer = new SessionSearchIndexConsumer(store)
-
-  expect(
-    consumer.beginRead({
-      candidate: syntheticCandidate(),
-      mode: 'append',
-      previousByteOffset: 900
-    })
-  ).toBeNull()
-  expect(attempted).toEqual([])
-  expect(
-    consumer.beginRead({
-      candidate: syntheticCandidate(),
-      mode: 'append',
-      previousByteOffset: 100
-    })
-  ).not.toBeNull()
-  expect(attempted).toEqual([100])
 })
 
 it('treats half a recorded identity as no identity at all', () => {

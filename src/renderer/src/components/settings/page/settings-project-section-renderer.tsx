@@ -1,5 +1,5 @@
 import { ProjectGroupingSetting } from '../ProjectGroupingSetting'
-import { RepositoryHostSetupsSection } from '../repository/execution/RepositoryHostSetupsSection'
+import { RepositoryHostSetupsSection } from '../repository/hosts/RepositoryHostSetupsSection'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID

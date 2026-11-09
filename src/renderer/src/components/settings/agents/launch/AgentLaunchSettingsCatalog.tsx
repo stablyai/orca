@@ -23,11 +23,9 @@ import {
 } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-choice'
 import { agentArgsSetPermission } from '../../../../../../shared/agent-launch/permissions/agent-permission-args'
 import { liftAgentPermissionArgs } from '../../../../../../shared/agent-launch/permissions/tui-agent-permission-lift'
-import {
-  agentPermissionChoiceLabel,
-  AllAgentsPermissionSetting,
-  type AgentPermissionChoiceRow
-} from '@/components/agent/launch-settings/AgentPermissionChoiceControls'
+import { agentPermissionChoiceLabel } from '../../../agent/launch-settings/agent-permission-choice-label'
+import { AllAgentsPermissionSetting } from '../permissions/AllAgentsPermissionSetting'
+import type { AgentPermissionChoiceRow } from '../../../agent/launch-settings/agent-permission-choice-row'
 import type { AgentPermissionsSettingProps } from '@/components/settings/agents/permissions/AgentPermissionsSetting'
 import {
   buildAgentRowPermissions,

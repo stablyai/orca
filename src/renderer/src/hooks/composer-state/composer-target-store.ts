@@ -166,8 +166,16 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
   )
 
   const seedActiveRepoId = useMemo(
-    () => resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId, settings, grouping),
-    [repos, eligibleRepos, activeRepoId, settings, grouping]
+    () =>
+      resolveComposerActiveRepoId(
+        repos,
+        eligibleRepos,
+        activeRepoId,
+        runtimeEnvironments,
+        settings,
+        grouping
+      ),
+    [repos, eligibleRepos, activeRepoId, runtimeEnvironments, settings, grouping]
   )
 
   return {

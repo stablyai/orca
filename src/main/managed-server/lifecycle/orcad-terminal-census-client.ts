@@ -12,7 +12,7 @@ import {
   type OrcadTerminalCensus,
   UNVERIFIABLE_ORCAD_TERMINAL_CENSUS
 } from '../../../shared/orcad-terminal-census'
-import { sendRemoteRuntimeRequestWithStatusPreflight } from '../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import type { OrcadActivationRecord } from '../activation/orcad-activation-record'
 import { ensureOrcadManagedTunnel } from './orcad-managed-tunnel'
 import { verifyOrcadManagedServing } from './orcad-managed-serving-verify'
@@ -63,7 +63,7 @@ export async function requestOrcadTerminalCensus(
   options: OrcadTerminalCensusRequestOptions = {}
 ): Promise<OrcadTerminalCensus> {
   try {
-    const response = await sendRemoteRuntimeRequestWithStatusPreflight<unknown>(
+    const response = await sendRemoteRuntimeRequestOnSocket<unknown>(
       connection,
       ORCAD_TERMINAL_CENSUS_METHOD,
       {
@@ -77,6 +77,7 @@ export async function requestOrcadTerminalCensus(
           : { closeAdmissionForMs: options.closeAdmissionForMs })
       },
       timeoutMs,
+      undefined,
       (status) => {
         if (
           !status.ok ||
@@ -86,7 +87,9 @@ export async function requestOrcadTerminalCensus(
         }
       },
       undefined,
-      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+      undefined,
+      undefined
     )
     return response.ok
       ? OrcadTerminalCensusSchema.parse(response.result)

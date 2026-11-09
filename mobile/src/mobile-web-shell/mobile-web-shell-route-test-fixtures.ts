@@ -119,6 +119,7 @@ export async function mountRoute(fileSystem: FakeGenerationFileSystem): Promise<
       runtime: {
         createStore: () => createGenerationStore({ fileSystem }),
         mintSessionId: () => 'session-id',
+        claimSpareSessionId: async () => null,
         now: () => 0,
         setForegroundTimer: () => () => {}
       }

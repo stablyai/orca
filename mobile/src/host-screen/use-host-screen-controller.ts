@@ -63,6 +63,7 @@ export function useHostScreenController({
   const forceReconnectHost = useForceReconnect()
   const {
     hostCapabilities,
+    statusReadable,
     floatingWorkspaceEnabled,
     exactProjectRepoFilters,
     hostInstallationId
@@ -89,6 +90,7 @@ export function useHostScreenController({
     connState,
     embedded,
     hostCapabilities,
+    hostStatusReadable: statusReadable,
     hostId,
     sidebarFeed: sidebarFeed?.triggers ?? null,
     state,

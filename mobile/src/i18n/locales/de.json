@@ -2193,8 +2193,7 @@
       "copyPathLabel": "Pfad der Markdown-Datei kopieren",
       "copySource": "Markdown-Quelltext kopieren",
       "discard": "Verwerfen",
-      "dismissKeyboard": "Tastatur ausblenden",
-      "dismissKeyboardHint": "Blendet die Bildschirmtastatur aus und lässt den Markdown-Editor geöffnet.",
+      "previewTruncated": "Vorschau gekürzt.",
       "readOnly": "Schreibgeschützt"
     },
     "nativeChatAttachActions": {

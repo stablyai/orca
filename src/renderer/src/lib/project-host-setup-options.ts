@@ -230,7 +230,7 @@ function buildNeedsSetupOptions({
     })
 }
 
-function isEphemeralVmProjectHost(host: ExecutionHostRegistryEntry | undefined): boolean {
+export function isEphemeralVmProjectHost(host: ExecutionHostRegistryEntry | undefined): boolean {
   return host?.kind === 'runtime' && isEphemeralVmRuntimeEnvironment(host)
 }
 

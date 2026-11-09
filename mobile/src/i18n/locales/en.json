@@ -1966,8 +1966,7 @@
     "markdownReader": {
       "readOnly": "Read only",
       "changedOnDesktop": "Changed on desktop",
-      "dismissKeyboard": "Dismiss keyboard",
-      "dismissKeyboardHint": "Hides the software keyboard and keeps the markdown editor open.",
+      "previewTruncated": "Preview truncated.",
       "discard": "Discard",
       "copyLoadedSource": "Copy loaded Markdown source",
       "copySource": "Copy Markdown source",
@@ -3589,6 +3588,12 @@
     "panel": {
       "unavailableTitle": "Source Control Unavailable",
       "loading": "Loading changes…"
+    },
+    "folder": {
+      "emptyTitle": "No attached worktrees yet",
+      "emptyCopy": "Worktrees created from this workspace will show up here.",
+      "statusUnavailable": "Unavailable",
+      "backToFolder": "Back to folder"
     },
     "hostedReviewCopy": {
       "updatingBranch": "Updating branch...",

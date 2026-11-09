@@ -1,8 +1,8 @@
+import { isFolderRepo } from '../../../../../shared/repo-kind'
+import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 import type { RepositoryPaneProps } from './repository-pane-types'
 import { RepositorySettingsSession } from './RepositorySettingsSession'
 import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
-import { isFolderRepo } from '../../../../../shared/repo-kind'
-import { getRepoExecutionHostId } from '../../../../../shared/execution-host'
 
 import { RepositoryPaneView } from './RepositoryPaneView'
 export type { RepositoryPaneRepoUpdate } from './repository-pane-types'
