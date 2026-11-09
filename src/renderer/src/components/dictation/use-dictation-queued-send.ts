@@ -42,6 +42,16 @@ export function useSendAfterDictation<Intent>(
   }
 }
 
+async function sendIfStillQueued(
+  send: QueuedSend,
+  landed: boolean,
+  stillQueued: () => boolean
+): Promise<void> {
+  if (landed && stillQueued()) {
+    await send(stillQueued)
+  }
+}
+
 /** Enter or Send during a dictation stops it, then sends once its words have landed. */
 export function useDictationQueuedSend(
   sessionRef: RefObject<DictationSession>,
@@ -107,16 +117,12 @@ export function useDictationQueuedSend(
       const landed = await delivery.settled()
       // A cancel or failure while the words were landing drops the send.
       const stillQueued = (): boolean => sessionRef.current.run === run
-      try {
-        if (landed && stillQueued()) {
-          await queued.send(stillQueued)
-        }
-      } finally {
+      await sendIfStillQueued(queued.send, landed, stillQueued).finally(() => {
         // A later session may have queued its own send meanwhile; leave that one alone.
         if (queuedRef.current === queued) {
           clear()
         }
-      }
+      })
     },
     [keptRef, sessionRef, clear]
   )
