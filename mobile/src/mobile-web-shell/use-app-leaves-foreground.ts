@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { AppState } from 'react-native'
 
 /**
@@ -12,7 +12,9 @@ import { AppState } from 'react-native'
  */
 export function useAppLeavesForeground(onLeave: () => void): void {
   const onLeaveRef = useRef(onLeave)
-  onLeaveRef.current = onLeave
+  useLayoutEffect(() => {
+    onLeaveRef.current = onLeave
+  }, [onLeave])
   useEffect(() => {
     let away = AppState.currentState !== 'active'
     const leave = (): void => {
