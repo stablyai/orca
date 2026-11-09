@@ -250,24 +250,33 @@ function removeDefaultsFor(
 ): string[] {
   const catalog = getAgentSessionOptionLaunchCatalog(agent)
   let result = [...tokens]
-  if (!catalog) {
-    // Without launch catalog removers, the allowlisted aliases are the overridden defaults.
+  // Without a launch catalog remover, the allowlisted aliases are the overridden defaults.
+  const removeAllowlisted = (kind: ExtraAgentArgKind) => {
     for (const option of EXTRA_AGENT_ARG_OPTIONS[agent] ?? []) {
-      if (option.kind !== 'repeatable' && kinds.has(option.kind)) {
+      if (option.kind === kind) {
         result = removeAgentArgOption(agent, result, option.aliases, undefined, 'required')
       }
     }
-    return result
   }
   if (kinds.has('model')) {
-    result = catalog.modelApply.removeAgentArgs?.(result) ?? result
+    const remove = catalog?.modelApply.removeAgentArgs
+    if (remove) {
+      result = remove(result)
+    } else {
+      removeAllowlisted('model')
+    }
   }
   if (kinds.has('effort')) {
-    const effort = [
-      ...(catalog.unknownModelOptions ?? []),
-      ...catalog.models.flatMap((model) => model.options)
-    ].find((option) => option.id === 'effort' && option.apply.removeAgentArgs)
-    result = effort?.apply.removeAgentArgs?.(result) ?? result
+    const remove = [
+      ...(catalog?.unknownModelOptions ?? []),
+      ...(catalog?.models.flatMap((model) => model.options) ?? [])
+    ].find((option) => option.id === 'effort' && option.apply.removeAgentArgs)?.apply
+      .removeAgentArgs
+    if (remove) {
+      result = remove(result)
+    } else {
+      removeAllowlisted('effort')
+    }
   }
   return result
 }

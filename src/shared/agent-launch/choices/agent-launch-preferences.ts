@@ -6,6 +6,7 @@ import {
   agentPermissionHasTerminalChoice
 } from '../permissions/tui-agent-permission-choice'
 import { isTuiAgent } from '../catalog/tui-agent-config'
+import { launchCatalogTakesEffort } from './agent-launch-model-preferences'
 import {
   composeAgentLaunchModel,
   hasIndependentAgentLaunchOptions
@@ -23,7 +24,9 @@ export function toAgentLaunchPreferences(
   const effort =
     typeof sessionOptions.effort === 'string' &&
     sessionOptions.effort.trim() &&
-    !(agent === 'claude' && sessionOptions.effort.trim() === 'ultracode')
+    !(agent === 'claude' && sessionOptions.effort.trim() === 'ultracode') &&
+    // Why: an older host would still compile an effort this agent's terminals no longer take.
+    launchCatalogTakesEffort(agent)
       ? sessionOptions.effort.trim()
       : undefined
   const mode = readLaunchPermissionChoice(sessionOptions)
