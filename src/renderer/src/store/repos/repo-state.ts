@@ -7,6 +7,7 @@ import type {
   NestedRepoScanResult,
   ProjectGroup,
   ProjectGroupUpdate,
+  ProjectGroupMutation,
   ProjectGroupImportResult
 } from '../../../../shared/project-group-types'
 import type {
@@ -272,6 +273,9 @@ export type RepoSlice = {
     groupId: string,
     updates: ProjectGroupUpdate,
     options?: { hostId?: ExecutionHostId }
+  ) => Promise<boolean>
+  updateProjectGroups: (
+    mutations: readonly (ProjectGroupMutation & { hostId?: ExecutionHostId })[]
   ) => Promise<boolean>
   deleteProjectGroup: (groupId: string, options?: { hostId?: ExecutionHostId }) => Promise<boolean>
   deleteProjectGroupWithContainedProjects: (
