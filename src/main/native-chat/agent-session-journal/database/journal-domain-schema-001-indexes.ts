@@ -72,6 +72,8 @@ CREATE INDEX journal_items_provider_turn ON journal_items(session_id,epoch,provi
   WHERE provider_turn_id IS NOT NULL;
 CREATE INDEX journal_items_codex_turn ON journal_items(session_id,epoch,codex_thread_id,codex_turn_id,sequence,sequence_index,ordinal)
   WHERE hidden=0 AND codex_turn_id IS NOT NULL;
+CREATE INDEX journal_items_visible_provider_key ON journal_items(session_id,epoch,legacy_provider_item_key)
+  WHERE hidden=0 AND legacy_provider_item_key IS NOT NULL;
 CREATE INDEX journal_submission_codex_turn ON journal_submission_attempts(session_id,epoch,codex_thread_id,codex_turn_id,item_id)
   WHERE current=1 AND dispatch_state='accepted';
 CREATE INDEX journal_items_opener ON journal_items(session_id, epoch, opener_item_id, ordinal)

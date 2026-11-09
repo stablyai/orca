@@ -72,6 +72,13 @@ export function journalDomainTimelineReads(
   return {
     item,
     itemBody: (key) => item(key)?.body ?? null,
+    hasVisibleProviderItemKey: (key) =>
+      Boolean(
+        db
+          .prepare(`SELECT 1 FROM journal_items WHERE session_id=? AND epoch=? AND hidden=0
+            AND legacy_provider_item_key IS NOT NULL AND legacy_provider_item_key=? LIMIT 1`)
+          .get(...prefix, key)
+      ),
     newestTurn: () =>
       decode(
         db

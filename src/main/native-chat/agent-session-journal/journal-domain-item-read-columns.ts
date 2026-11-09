@@ -15,6 +15,7 @@ import {
 import { lostLiveWorkJournalBody } from './item-lifecycle/journal-subagent-liveness'
 import { isUnverifiedEndAgentJournalToolCall } from '../../../shared/agent-journal-tool-call-lifecycle'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { spelledProviderTimelineItemKey } from '../../../shared/provider-timeline-item-key'
 
 export function journalDomainItemLifecycleColumns(
   item: AgentJournalRenderItem
@@ -112,7 +113,8 @@ export const JOURNAL_DOMAIN_ITEM_COLUMNS = [
   'turn_scope_kind',
   'provider_turn_id',
   'codex_thread_id',
-  'codex_turn_id'
+  'codex_turn_id',
+  'legacy_provider_item_key'
 ] as const
 
 /** One payload projection supplies import, current writes and derived Stop revisions. */
@@ -140,7 +142,8 @@ export function journalDomainItemColumns(item: AgentJournalRenderItem, payload: 
       turnScopeKind,
       turn?.providerTurnId ?? turn?.turnId ?? null,
       identity?.provider === 'codex' ? identity.threadId : null,
-      identity?.provider === 'codex' ? identity.turnId : null
+      identity?.provider === 'codex' ? identity.turnId : null,
+      identity?.provider === 'legacy' ? spelledProviderTimelineItemKey(identity.recordId) : null
     ]
   }
 }

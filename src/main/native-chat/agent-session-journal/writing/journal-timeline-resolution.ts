@@ -1,5 +1,9 @@
 import { isDeepStrictEqual } from 'node:util'
-import { agentJournalItemKey } from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  parseAgentJournalItemKey
+} from '../../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { spelledProviderTimelineItemKey } from '../../../../shared/provider-timeline-item-key'
 import type { AgentJournalItemIdentity } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
@@ -51,6 +55,7 @@ type TimelineItemResolution =
       change: 'open' | 'update' | 'close'
     }
   | { kind: 'literal'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
+  | { kind: 'acp-loss-warning'; identity: AgentJournalItemIdentity; body: AgentJournalItemBody }
   | {
       kind: 'request-open'
       request: ProviderTimelineRequest
@@ -140,6 +145,21 @@ function resolveTimelineItem(
   switch (resolution.kind) {
     case 'literal':
       return resolved({ identity: resolution.identity, body: resolution.body })
+    case 'acp-loss-warning': {
+      const identity = parseAgentJournalItemKey(agentJournalItemKey(resolution.identity))
+      const key =
+        identity?.provider === 'legacy' ? spelledProviderTimelineItemKey(identity.recordId) : null
+      if (key === null) {
+        throw new Error('journal_acp_loss_warning_requires_provider_item_key')
+      }
+      return view.hasVisibleProviderItemKey(key)
+        ? nothing
+        : resolveJournalGuardedItem(
+            view,
+            { ...resolution, kind: 'guarded-item', change: 'update' },
+            placement
+          )
+    }
     case 'request-open':
       return resolveProviderTimelineRequestOpen(view, {
         ...resolution,

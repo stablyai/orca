@@ -66,7 +66,14 @@ export type ProviderTimelineEvent =
   /** Background-task messages outlive their initiating call/turn and become unverifiable on session end. */
   | ({ type: 'item.open'; item: string; body: ProviderTimelineItemBody } & Produced & Joined)
   /** Full snapshot; settled tools retain terminal bodies. */
-  | ({ type: 'item.update'; item: string; body: ProviderTimelineItemBody } & Produced & Joined)
+  | ({
+      type: 'item.update'
+      item: string
+      body: ProviderTimelineItemBody
+      /** ACP startup retries a lost-session warning by visible semantic identity. */
+      lossWarning?: true
+    } & Produced &
+      Joined)
   /** Terminal snapshot replaces text streamed under the same item ID. */
   | ({ type: 'item.close'; item: string; body: ProviderTimelineItemBody } & Produced & Joined)
   | ({

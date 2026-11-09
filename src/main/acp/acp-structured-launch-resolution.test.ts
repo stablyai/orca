@@ -59,8 +59,7 @@ function ompRecord(options: Record<string, string>, resumes: boolean): AgentSess
 }
 
 const NOTHING_SAVED: AcpSavedSessionReads = {
-  hasProviderTurn: async () => false,
-  savedItemIds: async () => new Set()
+  hasProviderTurn: async () => false
 }
 
 function resolver(record: AgentSessionRecord, savedSession = NOTHING_SAVED, spec = GROK) {
@@ -82,7 +81,7 @@ function resolver(record: AgentSessionRecord, savedSession = NOTHING_SAVED, spec
 }
 
 describe('ACP launch resolution', () => {
-  it('resumes a chat with a saved exchange and warns of an unannounced loss, unless unreadable', async () => {
+  it('resumes a saved exchange and carries loss candidates independently of journal readability', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-acp-saved-read-'))
     const journals = createTrackedJournalOpener()
     try {
@@ -108,15 +107,13 @@ describe('ACP launch resolution', () => {
       const { readers } = await openTestAgentSessionDatabase(root)
       const savedSession: AcpSavedSessionReads = {
         hasProviderTurn: (sessionId, nativeId) =>
-          journalSqlReads(readers, sessionId).hasProviderTurn(nativeId),
-        savedItemIds: async (sessionId, itemIds) =>
-          new Set(await journalSqlReads(readers, sessionId).savedItemIds(itemIds))
+          journalSqlReads(readers, sessionId).hasProviderTurn(nativeId)
       }
       const readDecisions = async (saved: AcpSavedSessionReads) => {
         const launch = await resolver(record, saved).resolve({ identity })
         return {
           unsaved: await launch.resume?.mayBeUnsaved(),
-          losses: await launch.resume?.unannouncedLosses()
+          losses: launch.resume?.lossKeys
         }
       }
       // Nothing saved on acp-1 yet, so the created session may hold an unsaved exchange.
@@ -137,12 +134,11 @@ describe('ACP launch resolution', () => {
       )
       // The turn on acp-1 is found, so the exchange is saved; the loss has no warning yet.
       expect(await readDecisions(savedSession)).toEqual({ unsaved: false, losses: [lostKey] })
-      // An unreadable chat proves no exchange and suppresses new warnings.
+      // An unreadable chat cannot prove no exchange; its writer still owns warning admission.
       const unreadable: AcpSavedSessionReads = {
-        hasProviderTurn: () => Promise.reject(new Error('journal unreadable')),
-        savedItemIds: () => Promise.reject(new Error('journal unreadable'))
+        hasProviderTurn: () => Promise.reject(new Error('journal unreadable'))
       }
-      expect(await readDecisions(unreadable)).toEqual({ unsaved: false, losses: [] })
+      expect(await readDecisions(unreadable)).toEqual({ unsaved: false, losses: [lostKey] })
     } finally {
       await journals.closeAll()
       rmSync(root, { recursive: true, force: true })

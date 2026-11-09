@@ -45,7 +45,7 @@ it('prefers the pin even when older, else a complete installed or external copy'
         }),
         pinLaunchDirectory: vi.fn()
       },
-      savedSession: { hasProviderTurn: async () => false, savedItemIds: async () => new Set() },
+      savedSession: { hasProviderTurn: async () => false },
       resolveEnvironment: async () => ({ PATH: '', HOME: homePath }),
       dataDirectory
     })

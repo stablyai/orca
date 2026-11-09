@@ -1,16 +1,10 @@
 import { agentSessionFailureFact } from '../../shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../shared/agent-session/failures/agent-session-failure-words'
-import type {
-  AgentSessionProviderHandleChain,
-  AgentSessionProviderHandleLink
-} from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
-import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
-import { createLegacyProviderTimelineIdentityScheme } from '../native-chat/agent-session-timeline/provider-timeline-identity'
+import type { AgentSessionProviderHandleLink } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import { AcpAuthRequiredError, AcpRpcError } from './acp-errors'
 import type { AcpStructuredLaunch } from './acp-structured-launch-resolution'
 import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
-import type { AcpSavedSessionReads } from './acp-structured-resume-history'
 
 import { temporaryAcpStartupAnswer } from './acp-startup-outcome'
 
@@ -56,6 +50,7 @@ export function acpSessionNotRestoredRow(
     {
       type: 'item.update',
       item: acpSessionNotRestoredItem(lostKey),
+      lossWarning: true,
       body: {
         kind: 'status',
         tone: 'warning',
@@ -67,56 +62,4 @@ export function acpSessionNotRestoredRow(
       join: { thread: providerSessionId }
     }
   ]
-}
-
-/** Retry missing loss-warning rows on successful starts; unreadable journals suppress new warnings. */
-export async function acpUnannouncedLosses(
-  reads: AcpSavedSessionReads,
-  sessionId: string,
-  chain: AgentSessionProviderHandleChain
-): Promise<string[]> {
-  // Any later session in the chain may have written a lost link's warning, keyed by its own id.
-  const warnings = chain.flatMap((link, index) =>
-    link.replaces?.reason === 'restore-failed'
-      ? [
-          {
-            key: link.replaces.key,
-            itemIds: warningItemIds(sessionId, link.replaces.key, chain.slice(index))
-          }
-        ]
-      : []
-  )
-  if (warnings.length === 0) {
-    return []
-  }
-  let saved: ReadonlySet<string>
-  try {
-    saved = await reads.savedItemIds(
-      sessionId,
-      warnings.flatMap((warning) => warning.itemIds)
-    )
-  } catch {
-    return []
-  }
-  // Warnings survive even if the replacement session that wrote them is superseded.
-  return warnings
-    .filter((warning) => !warning.itemIds.some((itemId) => saved.has(itemId)))
-    .map((warning) => warning.key)
-}
-
-function warningItemIds(
-  sessionId: string,
-  lostKey: string,
-  writers: AgentSessionProviderHandleChain
-): string[] {
-  return writers.map(({ handle }) =>
-    agentJournalItemKey(
-      createLegacyProviderTimelineIdentityScheme({ agent: handle.agent, sessionId }).item({
-        namespace: handle.nativeId,
-        family: 'item',
-        key: { source: 'provider', value: acpSessionNotRestoredItem(lostKey) },
-        thread: handle.nativeId
-      })
-    )
-  )
 }

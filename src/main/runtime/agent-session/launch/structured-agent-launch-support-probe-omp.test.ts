@@ -42,7 +42,7 @@ const workspace = async () => root
 
 function launchWith(settings: Settings) {
   return createAcpStructuredLaunchResolver(acpLaunchSpecFor('omp')!, {
-    savedSession: { hasProviderTurn: async () => false, savedItemIds: async () => new Set() },
+    savedSession: { hasProviderTurn: async () => false },
     store: {
       getRecord: () => ({
         ...agentSessionRecordFixture(),

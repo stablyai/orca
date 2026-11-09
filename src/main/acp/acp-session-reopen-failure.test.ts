@@ -22,7 +22,7 @@ it('propagates a temporary load envelope before takeover or a dead-child asserti
         key: 'saved-key',
         sessionId: 'saved-id',
         mayBeUnsaved: async () => false,
-        unannouncedLosses: async () => []
+        lossKeys: []
       }
     },
     script: (agent) =>
@@ -53,7 +53,7 @@ it.each([
         key: 'saved-key',
         sessionId: 'saved-id',
         mayBeUnsaved: async () => false,
-        unannouncedLosses: async () => []
+        lossKeys: []
       }
     },
     deps: {

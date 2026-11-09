@@ -76,7 +76,7 @@ export function launch(resume: () => boolean, spec = GROK): () => Promise<AcpStr
             nativeId: PROVIDER_SESSION
           }),
           mayBeUnsaved: async () => false,
-          unannouncedLosses: async () => []
+          lossKeys: []
         }
       : null
   })
