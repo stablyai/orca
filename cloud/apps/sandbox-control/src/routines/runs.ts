@@ -13,7 +13,7 @@ import { audit } from '../api/audit'
 import { createWorkspace, getProject, type ProjectRow } from '../api/workspaces'
 import { parseGitHubRepo } from '../github-app'
 import { GuardrailError } from '../guardrails'
-import { destroySandbox, renewLease, type LifecycleDeps } from '../lifecycle'
+import { LifecycleError, destroySandbox, renewLease, type LifecycleDeps } from '../lifecycle'
 import { getSandbox, liveSandboxForWorkspace, type SandboxRow } from '../store'
 import { latestRunAtOrBefore, nextRunAfter, parseRoutineSchedule } from './schedule'
 import {
@@ -278,7 +278,7 @@ export async function startRun(deps: RoutineDeps, queued: RunRow): Promise<RunRo
       title: `${routine.name} (Orca routine)`.slice(0, 200),
       prompt: composePrompt(routine, detail)
     })
-    const running = await claimRun(life.db, run, ['starting'], { status: 'running' }, life.now())
+    const running = await claimRun(life.db, run, ['starting'], { status: 'running', error: null }, life.now())
     await markRoutineRan(life.db, routine.id, life.now())
     console.log(JSON.stringify({ event: 'routine_run_running', runId: run.id, bootMs, totalStartMs: life.now() - startedMs }))
     return running
@@ -289,6 +289,16 @@ export async function startRun(deps: RoutineDeps, queued: RunRow): Promise<RunRo
       if (requeued) {
         console.log(JSON.stringify({ event: 'routine_run_requeued', runId: run.id, reason: error.code }))
         return requeued
+      }
+    }
+    if (error instanceof LifecycleError && error.code === 'conflict' && !run.error?.startsWith('retry:')) {
+      // A boot that failed under this run's key (e.g. a pooled VM that would not adopt, whose
+      // fallback then collides with the half-released row): clear the leftover, retry once.
+      await destroyRunSandbox(life, run)
+      const retry = await claimRun(life.db, run, ['starting'], { status: 'queued', started_at: null, error: `retry:${errorCode(error)}` }, life.now())
+      if (retry) {
+        console.log(JSON.stringify({ event: 'routine_run_retry', runId: run.id, reason: errorCode(error) }))
+        return retry
       }
     }
     const current = (await getRun(life.db, run.id)) ?? run

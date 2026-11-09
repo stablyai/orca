@@ -293,6 +293,19 @@ describe('routine runs (state machine on the fake provider)', () => {
     expect(h.liveBoxes()).toBe(0)
   })
 
+  it('retries a start once when a half-released VM holds the run key (pool fallback), then succeeds', async () => {
+    const h = await harness()
+    const routine = (await h.create({})).body.routine
+    const run = (await h.call('POST', `/v1/routines/${routine.id}/run`)).body.run
+    const vm = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: `routine-${run.id}`, machineSize: 'standard' } })
+    h.raw.prepare(`UPDATE sandboxes SET status = 'destroying' WHERE id = ?`).run(vm.body.sandbox.id)
+    await h.tick()
+    expect(h.raw.prepare('SELECT status, error FROM routine_runs WHERE id = ?').get(run.id)).toEqual({ status: 'queued', error: 'retry:conflict:sandbox_destroying' })
+    expect(h.liveBoxes()).toBe(0)
+    await h.tick()
+    expect(h.raw.prepare('SELECT status, error FROM routine_runs WHERE id = ?').get(run.id)).toEqual({ status: 'running', error: null })
+  })
+
   it('caps concurrency: one active run per routine and three per account', async () => {
     const h = await harness()
     const routines = []
