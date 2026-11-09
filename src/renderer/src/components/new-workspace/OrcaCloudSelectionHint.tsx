@@ -36,35 +36,22 @@ function useBlockCopy(access: OrcaCloudRunTargetAccess): BlockCopy | null {
       }
     case 'out-of-hours': {
       const cap = access.cause === 'cap'
-      const member = !access.canManageBilling
+      // Create time: no workspace exists yet, so "Your files are safe." does not apply here.
       return {
-        title: member
-          ? cap
-            ? t(
-                'auto.components.new.workspace.RunTargetCombobox.orcaCloudCapReachedSafe',
-                'Spend cap reached. Your files are safe.'
-              )
-            : t(
-                'auto.components.new.workspace.RunTargetCombobox.orcaCloudOutOfHoursSafe',
-                'Out of sandbox hours. Your files are safe.'
-              )
-          : cap
-            ? t(
-                'auto.components.new.workspace.RunTargetCombobox.orcaCloudCapReached',
-                'Spend cap reached'
-              )
-            : t(
-                'auto.components.new.workspace.RunTargetCombobox.orcaCloudOutOfHours',
-                'Out of sandbox hours'
-              ),
-        detail: member
+        title: cap
           ? t(
-              'auto.components.new.workspace.RunTargetCombobox.orcaCloudAskAddHoursOnly',
-              'Ask an owner or admin to add hours.'
+              'auto.components.new.workspace.RunTargetCombobox.orcaCloudCapReached',
+              'Spend cap reached'
             )
           : t(
-              'auto.components.new.workspace.RunTargetCombobox.orcaCloudFilesSafe',
-              'Your files are safe.'
+              'auto.components.new.workspace.RunTargetCombobox.orcaCloudOutOfHours',
+              'Out of sandbox hours'
+            ),
+        detail: access.canManageBilling
+          ? ''
+          : t(
+              'auto.components.new.workspace.RunTargetCombobox.orcaCloudAskAddHoursOnly',
+              'Ask an owner or admin to add hours.'
             ),
         tone: 'neutral',
         ...(access.canManageBilling

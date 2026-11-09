@@ -16436,7 +16436,6 @@
             "orcaCloudSignInDetail": "Sign in to start a sandbox",
             "orcaCloudChecking": "Checking your plan…",
             "orcaCloudNeedsTeamPlan": "Orca Cloud needs a Team plan.",
-            "orcaCloudFilesSafe": "Your files are safe.",
             "orcaCloudOutOfHours": "Out of sandbox hours",
             "orcaCloudRaiseSpendCap": "Raise spend cap",
             "orcaCloudPaymentEffect": "New sandboxes can't start.",
@@ -16447,8 +16446,6 @@
             "orcaCloudAskPayment": "Ask an owner or admin to update the payment method.",
             "orcaCloudIdleSleep_one": "Sleeps after {{count}} minute idle",
             "orcaCloudIdleSleep_other": "Sleeps after {{count}} minutes idle",
-            "orcaCloudCapReachedSafe": "Spend cap reached. Your files are safe.",
-            "orcaCloudOutOfHoursSafe": "Out of sandbox hours. Your files are safe.",
             "orcaCloudAskAddHoursOnly": "Ask an owner or admin to add hours."
           },
           "projectCombobox": {
@@ -20414,7 +20411,8 @@
           "sendInvites_one": "Send {{count}} invite",
           "sendInvites_other": "Send {{count}} invites",
           "skipInvalid_one": "Skipping {{count}} invalid entry.",
-          "skipInvalid_other": "Skipping {{count}} invalid entries."
+          "skipInvalid_other": "Skipping {{count}} invalid entries.",
+          "invitedCount": "{{count}} invited"
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",

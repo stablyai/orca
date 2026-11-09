@@ -808,6 +808,16 @@
             "subagent": "subagent"
           }
         },
+        "cloudApi": {
+          "keys": {
+            "customScopeCount_one": "Custom · {{count}} scope",
+            "customScopeCount_other": "Custom · {{count}} scopes"
+          },
+          "revoke": {
+            "appsCount_one": "An app approved with this key is disconnected too.",
+            "appsCount_other": "{{count}} apps approved with this key are disconnected too."
+          }
+        },
         "computerUseSummary": {
           "permissionsRequired_one": "{{value0}} permission required before agents can operate app windows.",
           "permissionsRequired_other": "{{value0}} permissions required before agents can operate app windows."
