@@ -29,7 +29,7 @@ describe('Orca Cloud cancel cleanup', () => {
     const run = deferred<void>()
     const cleanup = deferred<boolean>()
     void trackOrcaCloudCreateStep('c-1', run.promise)
-    beginOrcaCloudCancelCleanup('c-1', [cleanup.promise], { createStartedAt: 0 }, () => {})
+    beginOrcaCloudCancelCleanup('c-1', [cleanup.promise], { createStartedAt: 0 })
     expect(toasts.showOrcaCloudCleanupStartedToast).toHaveBeenCalledWith('c-1')
 
     cleanup.resolve(true)
@@ -43,7 +43,7 @@ describe('Orca Cloud cancel cleanup', () => {
   })
 
   it('reports a failure when a cleanup left the sandbox running', async () => {
-    beginOrcaCloudCancelCleanup('c-2', [Promise.resolve(false)], { createStartedAt: 0 }, () => {})
+    beginOrcaCloudCancelCleanup('c-2', [Promise.resolve(false)], { createStartedAt: 0 })
     await flush()
     expect(toasts.showOrcaCloudCleanupFailedToast).toHaveBeenCalledWith('c-2', expect.any(Function))
     expect(toasts.showOrcaCloudCleanupDoneToast).not.toHaveBeenCalled()
@@ -70,7 +70,7 @@ describe('Orca Cloud cancel cleanup', () => {
         }
       }
     })
-    beginOrcaCloudCancelCleanup('c-3', [], { createStartedAt: 100 }, () => {})
+    beginOrcaCloudCancelCleanup('c-3', [], { createStartedAt: 100 })
     await flush()
     expect(toasts.showOrcaCloudCleanupFailedToast).toHaveBeenCalledWith('c-3', expect.any(Function))
   })
@@ -90,7 +90,7 @@ describe('Orca Cloud cancel cleanup', () => {
         }
       }
     })
-    beginOrcaCloudCancelCleanup('c-4', [], { createStartedAt: 100 }, () => {})
+    beginOrcaCloudCancelCleanup('c-4', [], { createStartedAt: 100 })
     await flush()
     expect(toasts.showOrcaCloudCleanupDoneToast).toHaveBeenCalledWith('c-4')
   })

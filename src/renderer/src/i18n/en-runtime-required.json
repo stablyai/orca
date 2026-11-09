@@ -1260,6 +1260,10 @@
         "permissionDenied": "Permission denied.",
         "symlink": "Symbolic links cannot be attached.",
         "unsupported": "Unsupported file type."
+      },
+      "orcaCloudSession": {
+        "sandboxRestartsInMinutes_one": "Sandbox for {{name}} restarts in {{count}} minute",
+        "sandboxRestartsInMinutes_other": "Sandbox for {{name}} restarts in {{count}} minutes"
       }
     },
     "runtime": {

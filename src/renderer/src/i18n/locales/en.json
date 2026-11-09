@@ -2154,7 +2154,6 @@
         "seePlans": "See plans",
         "workspaceGone": "That workspace is no longer in Orca.",
         "thisWorkspaceLower": "this workspace",
-        "sandboxRestartSoon": "Sandbox for {{name}} restarts in {{minutes}} min",
         "sandboxRestartSoonDetail": "Cloud sandboxes restart after 24 hours. Files are kept and Orca resumes your agents after the restart.",
         "restartNow": "Restart now",
         "open": "Open",
@@ -2165,13 +2164,15 @@
         "restartedResumingDetail": "Files are kept and Orca is resuming your agents. The next restart is in 24 hours.",
         "sandboxRestarting": "Restarting the sandbox for {{name}}…",
         "restartingDetail": "Usually under a minute. Orca resumes your agents once it is back.",
-        "cleaningUp": "Cleaning up the Orca Cloud sandbox…",
-        "cleaningUpDetail": "Creation was cancelled. Deleting the sandbox so it stops using sandbox hours.",
-        "cleanedUp": "Orca Cloud sandbox cleaned up",
-        "cleanedUpDetail": "Nothing from the cancelled workspace is left running.",
-        "cleanupFailed": "Couldn't finish cleaning up the Orca Cloud sandbox",
-        "cleanupFailedDetail": "It may still be running and using sandbox hours. Retry the cleanup from Settings.",
-        "openSettings": "Open Settings"
+        "sandboxRestartsInMinutes_one": "Sandbox for {{name}} restarts in {{count}} minute",
+        "sandboxRestartsInMinutes_other": "Sandbox for {{name}} restarts in {{count}} minutes",
+        "deletingSandbox": "Deleting the sandbox…",
+        "deletingSandboxDetail": "Creating the workspace was canceled, so its sandbox is deleted and stops using sandbox hours.",
+        "sandboxDeleted": "Sandbox deleted",
+        "sandboxDeletedDetail": "Nothing from the canceled workspace is left running.",
+        "sandboxDeleteFailed": "Couldn't delete the sandbox",
+        "sandboxDeleteFailedDetail": "It may still be running and using sandbox hours.",
+        "tryAgain": "Try again"
       },
       "runtimePortForwards": {
         "desktopOnly": "Port forwarding needs the desktop app.",
@@ -7389,9 +7390,9 @@
         },
         "WorktreeCardStatusSlot": {
           "branchIdentity": "Branch",
-          "sleeping": "Sleeping",
           "markAsRead": "Mark as read",
-          "markAsUnread": "Mark as unread"
+          "markAsUnread": "Mark as unread",
+          "sleeping": "Asleep"
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "Hide external worktrees permanently for {{value0}}",
@@ -25483,9 +25484,9 @@
       "restartKeeps": "Restart keeps your files; agents resume.",
       "restarting": "Orca resumes your agents after the restart.",
       "asleep": "Files and chats are saved. Opening it wakes it.",
-      "starting": "Starting…",
       "archived": "Kept as a snapshot. Unarchive to work in it again.",
-      "failed": "The last start failed. Your files are saved."
+      "failed": "The last start failed. Your files are saved.",
+      "waking": "Waking…"
     },
     "restarting": "Restarting…",
     "restart": "Restart",
