@@ -9,6 +9,7 @@ export {
   useAgentPickerInventoryEntries,
   type AgentPickerInventorySource
 } from './agent-picker-inventory-source'
+import { modelCatalogSource } from '../../../../shared/agent-session/options/model-catalog-source'
 import { shallow } from 'zustand/shallow'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
 import type {
@@ -105,10 +106,12 @@ class AgentPickerAcquisition {
       }
       this.entries = this.project()
     }
+    const stopDemand = observer.subscribeDemand?.(() => this.admit('catalog'))
     observer.publish(this.entries)
     this.admit('catalog')
     this.admit('support')
     return () => {
+      stopDemand?.()
       this.observers.delete(observer)
       if (!this.observers.size) {
         this.catalogSubscriptions.forEach((stop) => stop())
@@ -191,14 +194,28 @@ class AgentPickerAcquisition {
 
   private admit(kind: 'catalog' | 'support') {
     while (this.observers.size && this.outstanding[kind] < 2 && this.queued[kind].size) {
+      const usable = [...this.queued[kind]].filter((index) => {
+        if (kind !== 'catalog') {
+          return true
+        }
+        const job = this.jobs[index],
+          entry = this.entries[job.index]
+        return [...this.observers].some(
+          (observer) =>
+            observer.usesSource?.(entry, job.source) ??
+            (job.source !== 'cli' ||
+              modelCatalogSource(entry.agent, entry.defaultSurface) === job.source)
+        )
+      })
+      if (!usable.length) {
+        break
+      }
       const priorities = [...this.observers].map((o) => o.selected())
       const preferred =
         kind === 'catalog'
           ? this.jobs.findIndex((job) => priorities.includes(this.entries[job.index].agent))
           : this.entries.findIndex((e) => priorities.includes(e.agent))
-      const index = this.queued[kind].has(preferred)
-        ? preferred
-        : this.queued[kind].values().next().value
+      const index = usable.includes(preferred) ? preferred : usable[0]
       if (index === undefined) {
         break
       }

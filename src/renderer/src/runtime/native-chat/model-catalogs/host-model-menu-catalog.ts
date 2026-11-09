@@ -105,9 +105,18 @@ class HostModelMenuCatalog {
       this.retire()
     }
   }
-  read(): Promise<AgentSessionModelCatalogResult | undefined> {
+  read(reuseHeld = false): Promise<AgentSessionModelCatalogResult | undefined> {
     if (this.pending) {
       return this.pending
+    }
+    if (
+      reuseHeld &&
+      this.snapshot.answer?.origin !== 'unknown' &&
+      this.snapshot.answer &&
+      !this.snapshot.answer.listingInProgress
+    ) {
+      this.retire()
+      return Promise.resolve(this.snapshot.answer)
     }
     const { target, agent, worktree } = this.scope
     const generation = hostModelCatalogGeneration(target, agent, this.scope.sourceKey)

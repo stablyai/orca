@@ -27,7 +27,10 @@ import { rowLabel } from '../tab-bar/tab-agent-row-presentation'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAgentPickerDraftScope } from './AgentLaunchSetupButton'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
-import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
+import {
+  useAgentLaunchPickerInventorySource,
+  useAgentPickerInventoryEntries
+} from './use-agent-launch-picker-inventory'
 import {
   agentPickerDraft,
   type AgentPickerDraft,
@@ -56,6 +59,7 @@ export const AgentLaunchPicker = memo(
     onTriggerEnter,
     onOpenChange,
     onCatalogOpen,
+    catalogDemand,
     onOpenAgentSettings,
     defaultAgent,
     onSetDefault,
@@ -80,6 +84,7 @@ export const AgentLaunchPicker = memo(
     onTriggerEnter?: () => void
     onOpenChange?: (open: boolean) => void
     /** Supplied entries own their catalogs; this says which agent's menu the user is viewing. */
+    catalogDemand?: ComponentProps<typeof AgentLaunchPickerMenu>['catalogDemand']
     onCatalogOpen?: (agent: AgentPickerEntry['agent']) => void
     onOpenAgentSettings?: (invoker: HTMLButtonElement) => void
     /** The saved default; with onSetDefault, right-clicking an agent row offers "Set as default". */
@@ -128,12 +133,13 @@ export const AgentLaunchPicker = memo(
       }
     }, [onOpenAgentSettings, setOpen])
     const [selected, setSelected] = useState<AgentPickerEntry['agent']>()
-    const observedEntries = useAgentLaunchPickerInventory(
+    const inventory = useAgentLaunchPickerInventorySource(
       worktreeId,
       model,
       open && !setupDisabled && !suppliedEntries,
       selected ?? agent ?? undefined
     )
+    const observedEntries = useAgentPickerInventoryEntries(inventory)
     const entries = suppliedEntries ?? observedEntries
     const ownsCatalog = suppliedEntries !== undefined
     const selectAgent = useCallback(
@@ -247,6 +253,7 @@ export const AgentLaunchPicker = memo(
                 draftScope={draftScope ?? ownDraftScope}
                 model={model}
                 entries={entries}
+                catalogDemand={suppliedEntries ? catalogDemand : inventory.observeSurface}
                 initialQuery={initialQuery}
                 searchInputRef={setSearchInput}
                 value={value}

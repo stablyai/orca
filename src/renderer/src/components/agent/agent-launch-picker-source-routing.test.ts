@@ -16,6 +16,7 @@ import { agentPickerModelCatalogReads } from './agent-launch-picker-host-reads'
 import { cliModelCatalogAnswer } from '@/runtime/native-chat/model-catalogs/model-menu-cli-catalog'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
 import {
+  forgetHostModelCatalogSnapshots,
   recordHostModelCatalogSnapshot,
   subscribeHostModelCatalogSnapshot
 } from '@/runtime/native-chat/model-catalogs/host-model-catalog-snapshots'
@@ -204,4 +205,26 @@ it('publishes only changed CLI rows, independent of the clock', () => {
     now.mockRestore()
     stop()
   }
+})
+
+it('reuses a held CLI answer on reopen until account invalidation', async () => {
+  const target = { kind: 'local' } as const
+  const reads = agentPickerModelCatalogReads({
+    target,
+    cliContext: { target, worktreeId: 'folder:reuse', worktreePath: '/work' },
+    cliRuntime: true,
+    nativeRuntime: true,
+    settings: {}
+  })
+  const entry = sourceEntry()
+  const stop = reads.observeCatalog(entry, () => {}, 'cli')
+  const answer = await reads.catalog(entry, false, 'cli')
+  stop()
+  const stopReopened = reads.observeCatalog(entry, () => {}, 'cli')
+  expect(await reads.catalog(entry, false, 'cli')).toEqual(answer)
+  expect(mocks.discover).toHaveBeenCalledTimes(1)
+  forgetHostModelCatalogSnapshots(target, ['antigravity'])
+  await reads.catalog(entry, false, 'cli')
+  expect(mocks.discover).toHaveBeenCalledTimes(2)
+  stopReopened()
 })

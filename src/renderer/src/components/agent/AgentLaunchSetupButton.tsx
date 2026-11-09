@@ -1,3 +1,4 @@
+import { useAgentPickerCatalogDemand } from './agent-picker-catalog-demand'
 import { useState, type ReactElement } from 'react'
 import { AgentLaunchSetupSubmenu } from './AgentLaunchSetupSubmenu'
 import { useTranslate } from '@/i18n/use-translate'
@@ -76,6 +77,7 @@ export function AgentLaunchSetupButton({
     mode,
     open
   })
+  useAgentPickerCatalogDemand(entry.agent, setup.draft.surface, open)
   const changeOpen = (next: boolean) => {
     if (next) {
       setup.activate()

@@ -121,16 +121,26 @@ it('admits independent protocol jobs into the existing bounded queue and preserv
     },
     support: async () => undefined
   }
+  let terminal = false
+  let demandChanged = () => {}
   const observer = {
+    usesSource: (_entry: AgentPickerEntry, source: string) => source !== 'cli' || terminal,
+    subscribeDemand: (listener: () => void) => {
+      demandChanged = listener
+      return () => {}
+    },
     selected: () => entry.agent,
     publish: (next: AgentPickerEntry[]) => {
       entries = next
     }
   }
   const stop = observeAgentPickerAcquisition('two-protocols', [entry], reads, observer)
-  expect(sources).toEqual(['structured', 'cli'])
+  expect(sources).toEqual(['structured'])
   stop()
   const reopen = observeAgentPickerAcquisition('two-protocols', [entry], reads, observer)
+  expect(sources).toEqual(['structured'])
+  terminal = true
+  demandChanged()
   expect(sources).toEqual(['structured', 'cli'])
   cli.resolve({ origin: 'probe', fetchedAt: 1, models: [model('variant-low')] })
   await expect.poll(() => entries[0].sourceCatalogs?.cli?.catalogRead).toBe('settled')

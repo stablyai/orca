@@ -1,3 +1,4 @@
+import { AgentPickerCatalogDemand } from './agent-picker-catalog-demand'
 import {
   selectWorktreesByRepo,
   selectFolderWorkspaces
@@ -30,6 +31,7 @@ export function AgentLaunchPickerMenu({
   mode,
   value,
   draftForEntry,
+  catalogDemand,
   runLaunch,
   entries,
   hideSearch,
@@ -47,6 +49,7 @@ export function AgentLaunchPickerMenu({
   mode?: 'launch' | 'select'
   value?: AgentPickerDraft
   draftForEntry?: (entry: AgentPickerEntry) => AgentPickerDraft
+  catalogDemand?: AgentPickerInventorySource['observeSurface']
   runLaunch: AgentPickerMenuLaunch
   entries: AgentPickerEntry[]
   hideSearch?: boolean
@@ -87,6 +90,19 @@ export function AgentLaunchPickerMenu({
       mode
     )
   }, [entries, draftScope, mode, setupDisabled])
+  useEffect(() => {
+    if (setupDisabled) {
+      return
+    }
+    const stops = entries.map((entry) =>
+      catalogDemand?.(
+        entry.agent,
+        (value?.agent === entry.agent ? value.surface : draftForEntry?.(entry)?.surface) ??
+          entry.defaultSurface
+      )
+    )
+    return () => stops.forEach((stop) => stop?.())
+  }, [entries, value, draftForEntry, catalogDemand, setupDisabled])
   const terminalBlocked = mode !== 'select' && model?.state === 'settled' && model.terminalPending
   const [query, setQuery] = useState(initialQuery)
   const [searchFocused, setSearchFocused] = useState(false)
@@ -152,101 +168,103 @@ export function AgentLaunchPickerMenu({
   const firstEntry = firstSetup ? undefined : visible.find(enabled)
   const showSearchDefault = searchFocused && query.trim().length > 0
   return (
-    <div ref={root} data-agent-launch-picker="true">
-      {!hideSearch ? (
-        <div className="px-1 py-0.5">
-          <Input
-            ref={searchInputRef}
-            value={query}
-            density="compact"
-            autoFocus={!searchInputRef}
-            onBlur={() => setSearchFocused(false)}
-            onFocus={(event) => {
-              setSearchFocused(true)
-              // Why: a seeded query must keep the caret after the typed key.
-              const end = event.currentTarget.value.length
-              event.currentTarget.setSelectionRange(end, end)
-            }}
-            placeholder={t('agentPicker.search', 'Search agents and setups…')}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                return
-              }
-              event.stopPropagation()
-              if (event.key === 'Enter' || event.key === 'ArrowDown') {
-                event.preventDefault()
-                const first = root.current?.querySelector<HTMLElement>(
-                  '[role="menuitem"]:not([data-disabled])'
-                )
-                if (event.key === 'Enter') {
-                  first?.click()
-                } else {
-                  first?.focus()
+    <AgentPickerCatalogDemand.Provider value={catalogDemand}>
+      <div ref={root} data-agent-launch-picker="true">
+        {!hideSearch ? (
+          <div className="px-1 py-0.5">
+            <Input
+              ref={searchInputRef}
+              value={query}
+              density="compact"
+              autoFocus={!searchInputRef}
+              onBlur={() => setSearchFocused(false)}
+              onFocus={(event) => {
+                setSearchFocused(true)
+                // Why: a seeded query must keep the caret after the typed key.
+                const end = event.currentTarget.value.length
+                event.currentTarget.setSelectionRange(end, end)
+              }}
+              placeholder={t('agentPicker.search', 'Search agents and setups…')}
+              onChange={(event) => setQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Escape') {
+                  return
                 }
-              }
-            }}
-          />
-        </div>
-      ) : null}
-      <div className="max-h-64 overflow-y-auto scrollbar-sleek">
-        {setups.map((setup) => {
-          const source = draftForEntry?.(setup.entry)
-          return (
-            <AgentPickerMenuRow
-              key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
-              draftScope={draftScope}
-              draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
-              initialSurface={setup.surface}
-              initialModel={setup.model.id}
-              initialEffort={setup.choices.options?.effort}
-              entry={setup.entry}
-              mode={mode}
-              setupDisabled={setupDisabled}
-              openSetup={openSetup}
-              onSetupOpenChange={setActiveSetup}
-              label={setup.label}
-              searchDefault={showSearchDefault && setup === firstSetup}
-              source={source}
-              selected={value?.agent === setup.entry.agent ? value : undefined}
-              onSelectAgent={onSelectAgent}
-              disabled={disabled}
-              terminalBlocked={terminalBlocked}
-              runLaunch={runLaunch}
+                event.stopPropagation()
+                if (event.key === 'Enter' || event.key === 'ArrowDown') {
+                  event.preventDefault()
+                  const first = root.current?.querySelector<HTMLElement>(
+                    '[role="menuitem"]:not([data-disabled])'
+                  )
+                  if (event.key === 'Enter') {
+                    first?.click()
+                  } else {
+                    first?.focus()
+                  }
+                }
+              }}
             />
-          )
-        })}
-        {visible.map((entry) => {
-          const source = draftForEntry?.(entry)
-          return (
-            <AgentPickerMenuRow
-              key={entry.agent}
-              draftScope={draftScope}
-              entry={entry}
-              mode={mode}
-              searchDefault={showSearchDefault && entry === firstEntry}
-              source={source}
-              selected={value?.agent === entry.agent ? value : undefined}
-              setupDisabled={setupDisabled}
-              openSetup={openSetup}
-              onSetupOpenChange={setActiveSetup}
-              disabled={disabled}
-              terminalBlocked={terminalBlocked}
-              runLaunch={runLaunch}
-              onSelectAgent={onSelectAgent}
-              isDefault={defaultAgent === entry.agent}
-              onSetDefault={onSetDefault}
-              shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
-            />
-          )
-        })}
-        {!visible.length && !setups.length ? (
-          <DropdownMenuItem disabled>
-            {t('auto.components.agent.AgentCombobox.579c768bde', 'No agents match your search.')}
-          </DropdownMenuItem>
+          </div>
         ) : null}
+        <div className="max-h-64 overflow-y-auto scrollbar-sleek">
+          {setups.map((setup) => {
+            const source = draftForEntry?.(setup.entry)
+            return (
+              <AgentPickerMenuRow
+                key={`${setup.entry.agent}:${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+                draftScope={draftScope}
+                draftId={`${setup.model.id}:${setup.choices.options?.effort ?? ''}`}
+                initialSurface={setup.surface}
+                initialModel={setup.model.id}
+                initialEffort={setup.choices.options?.effort}
+                entry={setup.entry}
+                mode={mode}
+                setupDisabled={setupDisabled}
+                openSetup={openSetup}
+                onSetupOpenChange={setActiveSetup}
+                label={setup.label}
+                searchDefault={showSearchDefault && setup === firstSetup}
+                source={source}
+                selected={value?.agent === setup.entry.agent ? value : undefined}
+                onSelectAgent={onSelectAgent}
+                disabled={disabled}
+                terminalBlocked={terminalBlocked}
+                runLaunch={runLaunch}
+              />
+            )
+          })}
+          {visible.map((entry) => {
+            const source = draftForEntry?.(entry)
+            return (
+              <AgentPickerMenuRow
+                key={entry.agent}
+                draftScope={draftScope}
+                entry={entry}
+                mode={mode}
+                searchDefault={showSearchDefault && entry === firstEntry}
+                source={source}
+                selected={value?.agent === entry.agent ? value : undefined}
+                setupDisabled={setupDisabled}
+                openSetup={openSetup}
+                onSetupOpenChange={setActiveSetup}
+                disabled={disabled}
+                terminalBlocked={terminalBlocked}
+                runLaunch={runLaunch}
+                onSelectAgent={onSelectAgent}
+                isDefault={defaultAgent === entry.agent}
+                onSetDefault={onSetDefault}
+                shortcut={mode !== 'select' ? shortcutLabels?.get(entry.agent) : undefined}
+              />
+            )
+          })}
+          {!visible.length && !setups.length ? (
+            <DropdownMenuItem disabled>
+              {t('auto.components.agent.AgentCombobox.579c768bde', 'No agents match your search.')}
+            </DropdownMenuItem>
+          ) : null}
+        </div>
       </div>
-    </div>
+    </AgentPickerCatalogDemand.Provider>
   )
 }
 
@@ -258,5 +276,7 @@ export function SubscribedAgentLaunchPickerMenu({
   inventory: AgentPickerInventorySource
 }) {
   const entries = useAgentPickerInventoryEntries(inventory)
-  return <AgentLaunchPickerMenu {...props} entries={entries} />
+  return (
+    <AgentLaunchPickerMenu {...props} entries={entries} catalogDemand={inventory.observeSurface} />
+  )
 }

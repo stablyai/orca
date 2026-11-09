@@ -288,6 +288,8 @@ export function useAgentLaunchPickerInventorySource(
       },
       {
         selected: () => selectedRef.current,
+        usesSource: source.usesSource,
+        subscribeDemand: source.subscribeDemand,
         publish: source.publish
       }
     )

@@ -1,4 +1,8 @@
-import type { ModelCatalogSource } from '../../../../shared/agent-session/options/model-catalog-source'
+import {
+  modelCatalogSource,
+  type ModelCatalogSurface,
+  type ModelCatalogSource
+} from '../../../../shared/agent-session/options/model-catalog-source'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import { useAppViewExternalStore } from '@/store/retained-views/app-state-view'
 import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/agent-launch-picker'
@@ -11,19 +15,48 @@ import type { AgentPickerEntry } from '../../../../shared/agent-launch/picker/ag
 export type AgentPickerInventorySource = {
   getSnapshot: () => AgentPickerEntry[]
   subscribe: (listener: () => void) => () => void
+  observeSurface?: (agent: string, surface: ModelCatalogSurface) => () => void
 }
 
-type WritableAgentPickerInventorySource = AgentPickerInventorySource & {
-  publish: (entries: readonly AgentPickerEntry[]) => void
-}
+type WritableAgentPickerInventorySource = AgentPickerInventorySource &
+  Pick<AgentPickerAcquisitionObserver, 'usesSource' | 'subscribeDemand'> & {
+    publish: (entries: readonly AgentPickerEntry[]) => void
+  }
 
 export function createAgentPickerInventorySource(
   initial: AgentPickerEntry[]
 ): WritableAgentPickerInventorySource {
   let entries = initial
   const listeners = new Set<() => void>()
+  const demand = new Map<string, number>()
+  const demandListeners = new Set<() => void>()
   return {
     getSnapshot: () => entries,
+    usesSource: (entry: AgentPickerEntry, source: ModelCatalogSource) =>
+      source !== 'cli' ||
+      modelCatalogSource(entry.agent, entry.defaultSurface) === source ||
+      (demand.get(entry.agent) ?? 0) > 0,
+    subscribeDemand: (listener: () => void) => {
+      demandListeners.add(listener)
+      return () => {
+        demandListeners.delete(listener)
+      }
+    },
+    observeSurface: (agent: string, surface: ModelCatalogSurface) => {
+      if (modelCatalogSource(agent, surface) !== 'cli') {
+        return () => {}
+      }
+      demand.set(agent, (demand.get(agent) ?? 0) + 1)
+      demandListeners.forEach((listener) => listener())
+      return () => {
+        const next = (demand.get(agent) ?? 1) - 1
+        if (next) {
+          demand.set(agent, next)
+        } else {
+          demand.delete(agent)
+        }
+      }
+    },
     subscribe: (listener) => {
       listeners.add(listener)
       return () => listeners.delete(listener)
@@ -50,6 +83,8 @@ export function useAgentPickerInventoryEntries(
 export type AgentPickerAcquisitionObserver = {
   publish: (entries: AgentPickerEntry[]) => void
   selected: () => TuiAgent | undefined
+  usesSource?: (entry: AgentPickerEntry, source: ModelCatalogSource) => boolean
+  subscribeDemand?: (listener: () => void) => () => void
 }
 export type AgentPickerAcquisitionReads = {
   settings?: () => Promise<AgentPickerEntry[] | undefined>
