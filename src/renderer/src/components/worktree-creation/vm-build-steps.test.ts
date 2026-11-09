@@ -189,7 +189,7 @@ describe('humanizeOrcaCloudLogLine', () => {
 
   it('turns provider codes into sentences and hides internals', () => {
     expect(humanizeOrcaCloudLogLine('Orca Cloud: included_hours_exhausted', t)).toBe(
-      'This month’s included sandbox hours are used up.'
+      'Your team is out of sandbox hours this month.'
     )
     expect(humanizeOrcaCloudLogLine('[orca-cloud] resuming', t)).toBe('Waking the sandbox…')
     expect(humanizeOrcaCloudLogLine('sandbox sbx_41d9 scheduled on pool p-use1-3', t)).toBeNull()
