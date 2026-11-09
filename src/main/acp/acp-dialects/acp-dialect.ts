@@ -116,6 +116,9 @@ export type AcpModelCommandReply =
 export type AcpDialect = {
   /** Effort replaces part of the native composite model selection. */
   effortChangesModel?: true
+  /** mcode only: its on/off effort values address the model's thinking variant, so writing them
+   *  rewrites the model id instead of a thought_level option. */
+  effortSelectsThinkingVariant?: true
   subagentStop?: {
     /** Probe without a target to establish support without cancelling a child. */
     probe: { method: string; params: unknown }

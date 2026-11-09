@@ -35,6 +35,7 @@ export class AcpStructuredOptions {
       | 'modelEfforts'
       | 'withheldCommands'
       | 'effortChangesModel'
+      | 'effortSelectsThinkingVariant'
       | 'clampsUnlistedEffort'
       | 'builtinCommands'
       | 'normalizeConfigOptions'
@@ -211,7 +212,7 @@ export class AcpStructuredOptions {
           : null
     }
     if (key === 'effort') {
-      if (this.dialect.effortChangesModel && (value === 'off' || value === 'on')) {
+      if (this.dialect.effortSelectsThinkingVariant && (value === 'off' || value === 'on')) {
         const modelOption = this.select('model')
         if (modelOption) {
           const base = modelOption.currentValue.replace(/:v:.*$/, '')

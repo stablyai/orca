@@ -5,6 +5,8 @@ import type {
 import type { AcpDialect } from '../acp-dialects/acp-dialect'
 import type { ModelInfo } from '../generated/acp-protocol.generated'
 
+/** Builds the picker's per-model rows from the session menu, advertising dialect-known efforts
+ *  where the agent reports them and sharing the session menu only where the dialect allows. */
 export function buildSessionModelOptions(args: {
   listed: { id: string; label: string; description?: string }[]
   currentModel: string | undefined

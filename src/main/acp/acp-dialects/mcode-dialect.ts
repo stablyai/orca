@@ -11,6 +11,7 @@ import {
   mcodeModelDescription
 } from '../../../shared/agent-session/options/agent-session-option-catalog-mcode'
 
+/** Names a session-menu model choice canonically, keeping mcode's raw description when set. */
 function resolveMcodeModelNameAndDescription(choice: SessionConfigSelectOption): {
   name: string
   description?: string
@@ -111,6 +112,7 @@ export function normalizeMcodeConfigOptions(options: SessionConfigOption[]): Ses
 
 export const MCODE_DIALECT: AcpDialect = {
   effortChangesModel: true,
+  effortSelectsThinkingVariant: true,
   modelEfforts: mcodeModelEfforts,
   normalizeConfigOptions: normalizeMcodeConfigOptions
 }
