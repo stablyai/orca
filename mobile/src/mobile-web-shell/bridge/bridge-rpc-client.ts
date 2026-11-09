@@ -198,6 +198,8 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     acceptState: (connection) => acceptState(cache.apply(connection)),
     acceptConnectionPath: (connection) => acceptState(cache.applyPath(connection)),
     acceptBack: back.press,
+    // Only a page booted before its screen, with no init yet, is parked; the shell answers its ready on adoption.
+    acceptParked: handshake.stop,
     acceptTerminalKey: (key, inputOwner) => terminalKeys.accept(key, inputOwner)
   })
 

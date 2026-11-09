@@ -1,5 +1,5 @@
 /** Human-readable import sources aligned with CHROMIUM_BROWSERS in
- *  browser-cookie-import.ts plus Firefox/Safari detection. */
+ *  browser-cookie-source-profiles.ts plus Firefox/Safari detection. */
 const CHROMIUM_COOKIE_IMPORT_SOURCES = [
   { label: 'Google Chrome', mac: true, win: true, linux: true },
   { label: 'Microsoft Edge', mac: true, win: true, linux: true },

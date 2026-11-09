@@ -1,5 +1,5 @@
 import { ChevronDown } from 'lucide-react-native'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import Animated from 'react-native-reanimated'
 import { PickerModal } from '../../components/PickerModal'
@@ -35,14 +35,14 @@ export function MobileHomeHostPill(props: {
   const t = useMobileTranslation()
   useMobileColorScheme()
   const [open, setOpen] = useState(false)
-  const [pressed, setPressed] = useState(false)
   const title = useHostDisplay(props.host).title
   const choosable = props.hosts.length > 1
   const dot = statusDotColor(props.state ?? 'disconnected')
   return (
     <>
-      <Pressable
-        accessibilityRole={choosable ? 'button' : 'text'}
+      <MobileHomePill
+        label={title}
+        leading={<View style={[styles.dot, { backgroundColor: dot }]} />}
         accessibilityLabel={
           choosable
             ? t('home.tabs.chooseDesktop', '{{desktop}}, choose another desktop', {
@@ -50,30 +50,8 @@ export function MobileHomeHostPill(props: {
               })
             : title
         }
-        disabled={!choosable}
-        onPressIn={() => setPressed(true)}
-        onPressOut={() => setPressed(false)}
-        onPress={() => setOpen(true)}
-        style={styles.pillHit}
-      >
-        <Animated.View
-          style={[
-            styles.pill,
-            pressed && styles.pillPressed,
-            {
-              transform: [{ scale: pressed ? 0.97 : 1 }],
-              transitionProperty: ['transform', 'backgroundColor'],
-              transitionDuration: 120
-            }
-          ]}
-        >
-          <View style={[styles.dot, { backgroundColor: dot }]} />
-          <Text style={styles.label} numberOfLines={1}>
-            {title}
-          </Text>
-          {choosable ? <ChevronDown size={14} color={colors.textSecondary} /> : null}
-        </Animated.View>
-      </Pressable>
+        onPress={choosable ? () => setOpen(true) : undefined}
+      />
       {choosable ? (
         <PickerModal
           visible={open}
@@ -85,6 +63,47 @@ export function MobileHomeHostPill(props: {
         />
       ) : null}
     </>
+  )
+}
+
+/** A Home tab's filter pill; without `onPress` it is a plain label. */
+export function MobileHomePill(props: {
+  label: string
+  leading: ReactNode
+  accessibilityLabel: string
+  onPress?: () => void
+}) {
+  useMobileColorScheme()
+  const [pressed, setPressed] = useState(false)
+  const choosable = props.onPress !== undefined
+  return (
+    <Pressable
+      accessibilityRole={choosable ? 'button' : 'text'}
+      accessibilityLabel={props.accessibilityLabel}
+      disabled={!choosable}
+      onPressIn={() => setPressed(true)}
+      onPressOut={() => setPressed(false)}
+      onPress={props.onPress}
+      style={styles.pillHit}
+    >
+      <Animated.View
+        style={[
+          styles.pill,
+          pressed && styles.pillPressed,
+          {
+            transform: [{ scale: pressed ? 0.97 : 1 }],
+            transitionProperty: ['transform', 'backgroundColor'],
+            transitionDuration: 120
+          }
+        ]}
+      >
+        {props.leading}
+        <Text style={styles.label} numberOfLines={1}>
+          {props.label}
+        </Text>
+        {choosable ? <ChevronDown size={14} color={colors.textSecondary} /> : null}
+      </Animated.View>
+    </Pressable>
   )
 }
 

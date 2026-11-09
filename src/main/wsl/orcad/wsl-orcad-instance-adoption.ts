@@ -1,9 +1,9 @@
 /** Adopt serving unrecorded orcad under the activation fence only when lock, readiness and installed build identify the same process. Never kill it without census; launching another loses the instance lock. Normal update admission handles version changes. */
+import { ORCAD_LOCK_FILE_NAME } from '../../orcad/orcad-instance-lock'
 import {
-  ORCAD_LOCK_FILE_NAME,
   parseOrcadInstanceLockRecord,
   type OrcadLockRecord
-} from '../../orcad/orcad-instance-lock'
+} from '../../orcad/orcad-instance-lock-record'
 import { compareOrcadProcessIdentity } from '../../orcad/orcad-process-start-time'
 import type { OrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
 import {
@@ -19,7 +19,7 @@ import {
   orcadSlotDir,
   resolveOrcadSlotIdentity,
   type OrcadSlotOptions
-} from '../../ssh/orcad-recovery-slot'
+} from '../../managed-server/activation/orcad-recovery-slot'
 import { ORCAD_PID_FILENAME } from '../../managed-server/install/orcad-remote-host-support'
 import {
   parseOrcadReadinessWaitOutput,
@@ -33,7 +33,7 @@ import {
   remoteInstallVersionDirRegex
 } from '../../managed-server/install/remote-install-model'
 import { quotePosixShell } from '../../../shared/shell/launch/shell-argument-quoting'
-import { joinRemotePath } from '../../ssh/ssh-remote-platform'
+import { joinRemotePath } from '../../ssh/remote-host/ssh-remote-platform'
 import {
   readWslGuestIdentity,
   wslGuestOrcadIncarnation,

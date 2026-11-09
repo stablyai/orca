@@ -23,7 +23,7 @@ vi.mock('../../../../ssh/targets/ssh-target-registry', () => ({
   listRegisteredSshTargets: mocks.listRegisteredSshTargets
 }))
 
-vi.mock('../../../../ssh/ssh-remote-directory-browse', () => ({
+vi.mock('../../../../ssh/filesystem/ssh-remote-directory-browse', () => ({
   browseSshDirectory: mocks.browseSshDirectory
 }))
 

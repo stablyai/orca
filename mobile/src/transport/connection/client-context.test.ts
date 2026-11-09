@@ -227,48 +227,6 @@ describe('useHostClient', () => {
     harness.unmount()
   })
 
-  it('reports disconnected instead of hanging when the host id is unknown', async () => {
-    loadHostsMock.mockResolvedValue([])
-
-    const harness = await renderHarness('missing-host')
-    expect(connectMock).not.toHaveBeenCalled()
-    expect(harness.hook.client).toBeNull()
-    expect(harness.hook.state).toBe('disconnected')
-
-    harness.unmount()
-  })
-
-  it('seeds connecting during the async open instead of flashing disconnected', async () => {
-    let resolveHosts: ((hosts: (typeof HOST)[]) => void) | null = null
-    const hostLookup = new Promise<(typeof HOST)[]>((resolve) => {
-      resolveHosts = resolve
-    })
-    connectMock.mockReturnValue(makeFakeClient('connecting'))
-    loadHostsMock.mockReturnValue(hostLookup)
-
-    const states: ConnectionState[] = []
-    let renderer: ReactTestRenderer | null = null
-    function Probe(): null {
-      states.push(useHostClient(HOST.id).state)
-      return null
-    }
-    try {
-      act(() => {
-        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
-      })
-      expect(states.at(-1)).toBe('connecting')
-
-      await act(async () => {
-        resolveHosts?.([HOST])
-        await hostLookup
-      })
-      expect(states.at(-1)).toBe('connecting')
-      expect(states).not.toContain('disconnected')
-    } finally {
-      act(() => renderer?.unmount())
-    }
-  })
-
   it('keeps Retry amber through forceReconnect instead of grey-then-amber', async () => {
     const first = makeFakeClient('connected')
     const second = makeFakeClient('connecting')

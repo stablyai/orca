@@ -163,7 +163,7 @@ async function setAgentHooksEnabled(
   enabled: boolean
 ): Promise<AgentHookCommandResult> {
   const { applyAgentStatusHooksEnabled, getManagedAgentHookStatuses } =
-    await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+    await import('../../main/agent-hooks/installation/managed-agent-hook-controls.js')
   const updatedRuntime = await updateRunningRuntime(client, enabled)
   const offlineUpdate = updatedRuntime ? null : await updateEnabledOnDisk(enabled)
   const settingsPath = offlineUpdate?.settingsPath ?? (await getDataPath())
@@ -202,7 +202,7 @@ export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
   'agent hooks status': async ({ json, flags }) => {
     rejectRemoteHookSelection(flags)
     const { getManagedAgentHookStatuses } =
-      await import('../../main/agent-hooks/managed-agent-hook-controls.js')
+      await import('../../main/agent-hooks/installation/managed-agent-hook-controls.js')
     const result: AgentHookCommandResult = {
       enabled: (await readHookSettingsFromDisk()).agentStatusHooksEnabled,
       settingsPath: await getDataPath(),

@@ -4122,6 +4122,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "開啟"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "已依其他視窗調整大小",
+            "fitHere": "在此調整"
           }
         }
       },
@@ -16080,6 +16084,7 @@
           "kernelStartFailed": "核心啟動失敗。",
           "noPython": "在此電腦上未找到 Python。請從 [python.org](https://www.python.org/downloads/) 安裝，然後重新執行儲存格。",
           "kernelDied": "核心已停止。",
+          "outputTruncated": "輸出已截斷：Orca 保留了此儲存格輸出的開頭部分，並捨棄其餘內容。如需保留全部輸出，請改為寫入檔案。",
           "localOnly": "筆記本儲存格只能針對此電腦上的檔案執行。",
           "pythonOnly": "Orca 中只能執行 Python 筆記本。",
           "ownerUnresolved": "Orca 尚無法判斷此筆記本位於哪台電腦，因此無法執行其中的儲存格。",
@@ -19218,6 +19223,7 @@
         "noCommands": "沒有符合的命令",
         "commands": "命令",
         "skills": "技能",
+        "checkingSkills": "正在檢查新技能…",
         "loadingSkills": "正在載入技能…",
         "skillsLoaded": "技能已載入",
         "clearDescription": "清除對話上下文",
@@ -19882,6 +19888,7 @@
         "copyIdentity": "複製 {{value0}}",
         "folder": "資料夾",
         "mainCheckout": "主要工作副本",
+        "turnWorking": "此聊天的代理正在工作。請在其回合結束後再切換分支。",
         "worktree": "工作樹"
       },
       "explicitChatWindows": "此 Agent 的聊天尚不支援 Windows。請改為在終端機中開啟。",
@@ -20981,6 +20988,7 @@
       "switch": "切換分支：{{branch}}",
       "search": "搜尋分支",
       "recover": "切換到 {{branch}}",
+      "copy": "複製分支名稱",
       "create": "從 {{branch}} 建立分支 {{name}}",
       "open": "開啟工作區",
       "occupied": "已在 {{path}} 中簽出",
@@ -21071,7 +21079,6 @@
       "sortRelevance": "最相關",
       "sortNewest": "最新",
       "sortResultsAriaLabel": "排序結果：{{value0}}",
-      "consent": "要啟用全文搜尋嗎？Orca 會在此電腦上，根據本機代理程式對話紀錄建立索引，包括完整對話及每筆工具輸出最多 3,072 個字元。內容不會經過遮蔽。已驗證的配對用戶端可以搜尋此索引。",
       "remoteDisabled": "此電腦已停用搜尋。請在該電腦啟用對話紀錄索引，以搜尋其工作階段。",
       "titleOnly": "此電腦上的全文搜尋已關閉，因此僅比對工作階段標題。",
       "notReady": "搜尋索引尚未就緒。請稍後重試。",
@@ -21128,7 +21135,6 @@
       "description": "搜尋此電腦及任何已配對 Orca 伺服器上代理程式說過或做過的事。",
       "searchDescription": "啟用此電腦與已配對伺服器的工作階段搜尋，或清除搜尋資料。",
       "indexComputers": "搜尋工作階段內容",
-      "computersConsent": "每台電腦會在本機儲存自己的代理程式對話與工具輸出的可搜尋副本。資料不會離開該電腦。",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "搜尋 {{host}} 上的工作階段",
       "serverOffline": "離線",

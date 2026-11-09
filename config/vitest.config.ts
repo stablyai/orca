@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { globSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { normalizePath, transformWithOxc, type Plugin } from 'vite'
@@ -9,6 +9,7 @@ import {
   UNIT_SETUP_FILES
 } from './scripts/ci/unit-selection/dependency-graph/ci-unit-files.mjs'
 import TimingSequencer from './scripts/ci/sharding/ci-unit-sequencer.mjs'
+import { filesSafeToShareWorker } from './scripts/test-runtime/execution-policy/vitest-shared-worker-files.mjs'
 import RuntimeSequencer from './scripts/test-runtime/execution-policy/vitest-runtime-sequencer.mjs'
 import { getNodeRuntimeInclude } from './scripts/test-runtime/sqlite-admission/vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
@@ -121,7 +122,46 @@ const bunProject = {
     sequence: { groupOrder: 1 }
   }
 }
-const projects = [...(process.versions.bun ? [bunProject] : []), nodeProject]
+// Files whose state the per-file reset can undo share one worker's module cache instead of
+// re-importing thousands of modules each. ORCA_VITEST_ISOLATE_EVERY_FILE=1 turns it off.
+const runtimeProject = process.versions.bun ? bunProject : nodeProject
+const nodeRuntimeFiles = new Set(nodeRuntimeInclude.map((file) => file.replaceAll('\\', '/')))
+const sharedWorkerFiles =
+  process.env.ORCA_VITEST_ISOLATE_EVERY_FILE === '1'
+    ? []
+    : filesSafeToShareWorker(
+        process.cwd(),
+        globSync(UNIT_INCLUDE)
+          .map((file) => file.replaceAll('\\', '/'))
+          .filter((file) => !nodeRuntimeFiles.has(file)),
+        [
+          { find: '@renderer', replacement: resolve('src/renderer/src') },
+          { find: '@', replacement: resolve('src/renderer/src') }
+        ]
+      )
+const sharedProjects =
+  sharedWorkerFiles.length > 0
+    ? [
+        {
+          ...runtimeProject,
+          test: {
+            ...runtimeProject.test,
+            name: `${runtimeProject.test.name}-shared`,
+            include: sharedWorkerFiles,
+            isolate: false,
+            setupFiles: [
+              ...runtimeProject.test.setupFiles,
+              resolve('config/scripts/test-runtime/environment/vitest-shared-worker-file-reset.mjs')
+            ]
+          }
+        }
+      ]
+    : []
+runtimeProject.test.exclude = [
+  ...(runtimeProject.test.exclude ?? testOptions.exclude),
+  ...sharedWorkerFiles
+]
+const projects = [...(process.versions.bun ? [bunProject] : []), nodeProject, ...sharedProjects]
 
 export default defineConfig({
   ...transforms,

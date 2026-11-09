@@ -315,6 +315,11 @@
       "signInHint": "Открывает терминал на компьютере с этим чатом",
       "forkedFrom": "Ответвление от"
     },
+    "ciResultLine": {
+      "failingLead": "CI с ошибками в",
+      "greenLead": "CI зелёный в",
+      "at": "на"
+    },
     "orcaStop": {
       "canContinue": "Вы можете продолжить этот разговор.",
       "crash": "Во время ответа Orca на {{machine}} неожиданно завершилась.",
@@ -1484,12 +1489,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "Активных: {{count}}",
-      "heading": "Агенты",
-      "showAll": "Показать все ({{count}})",
-      "showFewer": "Свернуть"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Скрыть уведомление об обновлении Orca {{version}}",
       "title": "Доступна Orca {{version}}",
@@ -2328,8 +2327,7 @@
       "copyPathLabel": "Скопировать путь к файлу Markdown",
       "copySource": "Скопировать исходный текст Markdown",
       "discard": "Отменить изменения",
-      "dismissKeyboard": "Скрыть клавиатуру",
-      "dismissKeyboardHint": "Скрывает экранную клавиатуру и оставляет редактор Markdown открытым.",
+      "previewTruncated": "Показана часть файла.",
       "readOnly": "Только чтение"
     },
     "nativeChatAttachActions": {

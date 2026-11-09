@@ -5,7 +5,7 @@ const mocks = vi.hoisted(() => ({
   resolvePagePromptTarget: vi.fn()
 }))
 
-vi.mock('../../browser-manager', () => ({
+vi.mock('../manager/browser-manager', () => ({
   browserManager: {
     resolvePagePromptTarget: mocks.resolvePagePromptTarget
   }

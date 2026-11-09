@@ -1,10 +1,10 @@
-import { buildHookProcessCapture } from '../agent-hooks/hook-process-capture'
+import { buildHookProcessCapture } from '../agent-hooks/installation/scripts/hook-process-capture'
 import type { AgentHookSource } from '../../shared/agent-hook-listener/transport/agent-hook-relay'
-import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installer-utils'
+import { buildWindowsAgentHookCurlPostCommand } from '../agent-hooks/installation/commands/windows-agent-hook-post-command'
 import {
   buildPosixAgentHookPostCommand,
   buildPosixHookMetadataCacheLines
-} from '../agent-hooks/hook-post-command'
+} from '../agent-hooks/installation/scripts/hook-post-command'
 import {
   buildPosixScrubSafeEnvRestoreLines,
   buildWindowsScrubSafeEnvRestoreLines
@@ -12,17 +12,17 @@ import {
 import {
   buildPosixCursorReplayGuardLines,
   buildWindowsCursorReplayGuardLines
-} from '../agent-hooks/cursor-replay-guard'
+} from '../agent-hooks/installation/scripts/cursor-replay-guard'
 import {
   buildPosixGrokReplayGuardLines,
   buildWindowsGrokReplayGuardLines
-} from '../agent-hooks/grok-replay-guard'
+} from '../agent-hooks/installation/scripts/grok-replay-guard'
 import {
   buildPosixHookPayloadCapture,
   buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines,
   POSIX_HOOK_STDIN_EXEC
-} from '../agent-hooks/hook-stdin-contract'
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
 import {
   buildPosixClaudeDecisionModeLines,
   buildPosixClaudeDecisionPreludeLines,
@@ -31,7 +31,7 @@ import {
 import {
   WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD,
   buildPosixClaudeBackgroundJobGuardLines
-} from '../agent-hooks/claude-background-job-guard'
+} from '../agent-hooks/installation/scripts/claude-background-job-guard'
 
 export function getManagedScript(
   target: 'local' | 'posix' = 'local',

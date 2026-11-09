@@ -307,6 +307,11 @@
       "signInHint": "このチャットを実行しているコンピューターでターミナルを開きます",
       "forkedFrom": "分岐元"
     },
+    "ciResultLine": {
+      "failingLead": "CI 失敗:",
+      "greenLead": "CI 成功:",
+      "at": "コミット"
+    },
     "orcaStop": {
       "canContinue": "この会話で続行できます。",
       "crash": "この応答の途中で、{{machine}} の Orca が予期せず停止しました。",
@@ -1402,12 +1407,6 @@
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} 件がアクティブ",
-      "heading": "Agent",
-      "showAll": "{{count}} 件をすべて表示",
-      "showFewer": "折りたたむ"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} の更新通知を閉じる",
       "title": "Orca {{version}} が利用可能です",
@@ -2190,8 +2189,7 @@
       "copyPathLabel": "Markdown ファイルのパスをコピー",
       "copySource": "Markdown ソースをコピー",
       "discard": "破棄",
-      "dismissKeyboard": "キーボードを閉じる",
-      "dismissKeyboardHint": "Markdown エディターを開いたまま、ソフトウェアキーボードを非表示にします。",
+      "previewTruncated": "プレビューは一部省略されています。",
       "readOnly": "読み取り専用"
     },
     "nativeChatAttachActions": {

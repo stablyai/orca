@@ -272,7 +272,6 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
         data-native-chat-scheme={appearanceStyle.colorScheme}
       >
         {nativeChatPaneHeader(props, ownerWorktreeId, appearanceStyle.colorScheme, handOff)}
-        {find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null}
         <NativeChatPaneFileDropScope
           enabled={childNavigator.child === null}
           hidden={childNavigator.child !== null}
@@ -285,7 +284,12 @@ export function NativeChatStructuredSession(props: Omit<NativeChatStructuredView
             canMention={canMention && childNavigator.child === null}
             isVisible={props.isVisible && childNavigator.child === null}
           >
-            <NativeChatContextClearFade clearing={controller.contextClear.clearing}>
+            <NativeChatContextClearFade
+              clearing={controller.contextClear.clearing && viewState.kind !== 'error'}
+              overlay={
+                find.isOpen ? <NativeChatFindBar find={find} isVisible={props.isVisible} /> : null
+              }
+            >
               {viewState.kind === 'loading' || (viewState.kind === 'error' && !readFailure) ? (
                 historyPhase !== 'unread' && <NativeChatLoadingCue />
               ) : viewState.kind === 'error' ? (

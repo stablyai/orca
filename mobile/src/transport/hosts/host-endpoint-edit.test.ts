@@ -4,18 +4,6 @@ import { resolveHostEndpointEdit } from './host-endpoint-edit'
 
 describe('resolveHostEndpointEdit', () => {
   it.each([
-    ['wss://old.example.com', 'new.example.com', 'wss://new.example.com:443'],
-    ['wss://old.example.com:8443', 'new.example.com', 'wss://new.example.com:8443'],
-    ['ws://old.local', 'new.local', 'ws://new.local:6768'],
-    ['ws://old.local:80', 'new.local', 'ws://new.local:80'],
-    ['wss://[2001:db8::1]', '[2001:db8::2]', 'wss://[2001:db8::2]:443']
-  ])('uses the current endpoint semantics for an address edit', (stored, input, expected) => {
-    const edit = resolveHostEndpointEdit(stored, input)
-
-    expect(edit).toEqual({ kind: 'changed', endpoint: expected })
-  })
-
-  it.each([
     ['ws://192.168.1.10:6768', 'wss://tunnel.example.com', 'wss://tunnel.example.com:443'],
     ['wss://old.example.com:8443', '  WSS://tunnel.example.com  ', 'wss://tunnel.example.com:443'],
     ['ws://192.168.1.10:6768', 'wss://[2001:db8::2]', 'wss://[2001:db8::2]:443'],

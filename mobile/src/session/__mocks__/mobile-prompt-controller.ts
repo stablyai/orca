@@ -54,6 +54,10 @@ vi.mock('../use-mobile-session-view-mode', () => ({
     toggleTabChatView: () => Object.assign(visible, { value: !visible.value })
   })
 }))
+// The chat's per-connection CI setting read isn't a prompt write; these tests count only those.
+vi.mock('../use-mobile-native-chat-ci-result-lines', () => ({
+  useMobileNativeChatCiResultLines: () => false
+}))
 vi.mock('../native-chat/use-mobile-native-chat-session-lane', () => ({
   useMobileNativeChatSessionLane: () => ({ session, structuredSession, sessionCommands })
 }))

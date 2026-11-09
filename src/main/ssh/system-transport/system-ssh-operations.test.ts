@@ -22,9 +22,12 @@ vi.mock('child_process', () => ({
 
 import { buildSshArgs } from './system-ssh-args'
 import { spawnSystemSshCommand } from './system-ssh-command'
-import { uploadDirectoryViaSystemSsh, writeFileViaSystemSsh } from './system-ssh-file-transfer'
+import {
+  uploadDirectoryViaSystemSsh,
+  writeFileViaSystemSsh
+} from './file-transfer/system-ssh-file-transfer'
 import type { SshTarget } from '../../../shared/ssh-types'
-import type { SystemSshResolvedConfig } from '../ssh-control-socket'
+import type { SystemSshResolvedConfig } from './ssh-control-socket'
 
 const SYSTEM_SSH_PATH =
   process.platform === 'win32' ? 'C:\\Windows\\System32\\OpenSSH\\ssh.exe' : '/usr/bin/ssh'
