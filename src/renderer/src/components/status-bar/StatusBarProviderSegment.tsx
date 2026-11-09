@@ -1,3 +1,6 @@
+import { useAppStore } from '@/store'
+import { resolveStatusBarUsageTemplate } from '../../../../shared/status-bar-usage-format'
+import { buildUsageFormatValues, renderUsageFormatTemplate } from './usage-format-template'
 import { AlertTriangle } from 'lucide-react'
 import React from 'react'
 import type {
@@ -26,7 +29,7 @@ import { isClaudeUsageWaitingForClaude } from './usage-error-copy'
 import { getTightestUsageSection, getUsageHeadlineSection } from './UsageRosterPanel'
 import { formatBareUsagePercentage, formatUsagePercentageLabel } from './usage-percentage-label'
 import { translate } from '@/i18n/i18n'
-import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { useTranslate, useIntlLocale, type Translate } from '@/i18n/use-translate'
 import { getStatusBarUsageSections } from './status-bar-usage-sections'
 import { GroupedPoolUsage } from './usage-grouped-pools'
 import { formatStatusBarSectionLabel, isGroupedUsagePool } from './usage-pool-label'
@@ -236,6 +239,28 @@ function formatCompactExtraUsage(
       })
 }
 
+function CustomUsageText({
+  template,
+  limits,
+  display,
+  now
+}: {
+  template: string
+  limits: ProviderRateLimits
+  display: UsagePercentageDisplay
+  now: number
+}): React.JSX.Element {
+  const locale = useIntlLocale()
+  return (
+    <span className="whitespace-pre tabular-nums">
+      {renderUsageFormatTemplate(
+        template,
+        buildUsageFormatValues(limits, { display, now, locale })
+      )}
+    </span>
+  )
+}
+
 export function ProviderSegment({
   p,
   compact,
@@ -249,6 +274,8 @@ export function ProviderSegment({
 }): React.JSX.Element {
   const t = useTranslate()
   const provider = p?.provider ?? 'claude'
+  const usageFormat = useAppStore((state) => state.statusBarUsageFormat)
+  const template = resolveStatusBarUsageTemplate(usageFormat, provider)
   const statusLabel = p ? getProviderUsageStatusLabel(p, t) : ''
   // Why: not a problem; Claude updates its own login the next time it runs.
   const calm = p ? isClaudeUsageWaitingForClaude(p) : false
@@ -262,11 +289,13 @@ export function ProviderSegment({
   const groupedBuckets = sections.map((section) => section.window).filter(isGroupedUsagePool)
   const showLabels = mode === 'verbose' || !compact
   const now = useResetCountdownClock(
-    showLabels
-      ? groupedBuckets
-          .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_URGENT_PERCENT)
-          .map((bucket) => bucket.resetsAt)
-      : []
+    template && p
+      ? [p.session?.resetsAt, p.weekly?.resetsAt, p.fableWeekly?.resetsAt, p.monthly?.resetsAt]
+      : showLabels
+        ? groupedBuckets
+            .filter((bucket) => clampUsedPercent(bucket.usedPercent) >= USAGE_URGENT_PERCENT)
+            .map((bucket) => bucket.resetsAt)
+        : []
   )
 
   // Why static: unfocused windows never poll, so a pending chip's pulse would redraw the compositor indefinitely.
@@ -320,10 +349,12 @@ export function ProviderSegment({
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
-      {mode === 'verbose' && tightest && !compact ? (
+      {!template && mode === 'verbose' && tightest && !compact ? (
         <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
       ) : null}
-      {showGroupedPools ? (
+      {template ? (
+        <CustomUsageText template={template} limits={p} display={display} now={now} />
+      ) : showGroupedPools ? (
         <GroupedPoolUsage
           visibleBuckets={groupedBuckets}
           allBuckets={p.buckets ?? []}
@@ -344,7 +375,7 @@ export function ProviderSegment({
           </React.Fragment>
         ))
       )}
-      {showBalance && p.extraUsage ? (
+      {!template && showBalance && p.extraUsage ? (
         <>
           <span className="text-muted-foreground">·</span>
           <span className="tabular-nums">{formatCompactExtraUsage(p.extraUsage, t)}</span>

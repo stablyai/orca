@@ -10472,7 +10472,14 @@
             "museUsageTitle": "Muse Usage",
             "museUsageDescription": "Show Muse subscription quota in the status bar.",
             "muse": "muse",
-            "meta": "meta"
+            "meta": "meta",
+            "statusBarUsageFormat": {
+              "title": "Usage format",
+              "description": "Customize how each provider’s usage is written in the status bar with placeholders.",
+              "format": "format",
+              "template": "template",
+              "placeholder": "placeholder"
+            }
           }
         },
         "auto": {
@@ -14145,6 +14152,20 @@
           "codexSignInTimedOut": "Codex sign-in took too long to finish. Please try again.",
           "codexSignInUnavailable": "Codex sign-in is temporarily unavailable. Please try again in a minute.",
           "claudeSignInFailed": "Claude sign-in failed. Please try again."
+        },
+        "StatusBarUsageFormatSetting": {
+          "reset": "Reset",
+          "previewLabel": "Preview",
+          "previewBuiltin": "Leave empty to use Orca’s built-in format.",
+          "placeholder": {
+            "provider": "provider name",
+            "plan": "plan (Codex)",
+            "windows": "window percentage",
+            "reset": "time until reset, e.g. 3h 15m",
+            "resetAt": "reset clock time, e.g. 20:50",
+            "buckets": "Gemini model buckets",
+            "optional": "dropped when a placeholder inside is empty"
+          }
         }
       },
       "right": {

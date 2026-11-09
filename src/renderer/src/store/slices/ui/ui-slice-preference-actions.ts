@@ -1,3 +1,7 @@
+import {
+  DEFAULT_STATUS_BAR_USAGE_FORMAT,
+  normalizeStatusBarUsageFormat
+} from '../../../../../shared/status-bar-usage-format'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { workspaceHostScopeForVisibleHosts } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
@@ -272,6 +276,12 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
         usagePercentageDisplay: normalized,
         usagePercentageDisplayChangeNoticeDismissed: true
       })
+    },
+    statusBarUsageFormat: { ...DEFAULT_STATUS_BAR_USAGE_FORMAT },
+    setStatusBarUsageFormat: (format) => {
+      const normalized = normalizeStatusBarUsageFormat(format)
+      window.api.ui.set({ statusBarUsageFormat: normalized }).catch(console.error)
+      set({ statusBarUsageFormat: normalized })
     },
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,
     setStatusBarUsageMode: (mode) => {

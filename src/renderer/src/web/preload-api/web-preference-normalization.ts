@@ -30,6 +30,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { PairedUiState, PairingLocalUiField } from '../../../../shared/pairing-local-ui-fields'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
+import { normalizeStatusBarUsageFormat } from '../../../../shared/status-bar-usage-format'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-themes/terminal-custom-themes'
 import { splitLegacyTerminalColorOverrides } from '../../../../shared/terminal-themes/terminal-color-overrides'
 import {
@@ -77,6 +78,9 @@ export function mergeWebUIState(
     ),
     statusBarUsageMode: normalizeStatusBarUsageMode(
       safeUpdates.statusBarUsageMode ?? base.statusBarUsageMode
+    ),
+    statusBarUsageFormat: normalizeStatusBarUsageFormat(
+      safeUpdates.statusBarUsageFormat ?? base.statusBarUsageFormat
     )
   }
 }
