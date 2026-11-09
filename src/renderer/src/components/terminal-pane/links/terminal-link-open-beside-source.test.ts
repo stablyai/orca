@@ -20,6 +20,7 @@ const {
   storeState,
   deps,
   openFileForLinkMock,
+  openFilePathMock,
   createBrowserTabMock,
   setPendingEditorRevealMock,
   statMock
