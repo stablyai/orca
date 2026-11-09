@@ -10,33 +10,12 @@ import {
   BrowserClientFileChannelWriteResult
 } from '../../../../shared/browser/client-hosting/browser-client-file-channel-protocol'
 import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import type { BrowserDownloadFinishedEvent } from '../../../../shared/browser-guest-events'
 import type { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
+import type { BrowserClientDownloadRouteOutcome } from './browser-client-download-routing'
 
 export const BROWSER_CLIENT_FILE_CHANNEL_WRITE_METHOD = 'browser.clientHost.fileChannel.write'
 export const BROWSER_CLIENT_FILE_CHANNEL_ABORT_METHOD = 'browser.clientHost.fileChannel.abort'
-
-export type BrowserClientDownloadDestination = {
-  workspaceRelativePath: string
-  hostLabel: string
-}
-
-export type BrowserClientDownloadRoute = {
-  transferId: string
-  browserPageId: string
-  /** Temp file main hands to Chromium; never the user's Downloads folder. */
-  stagingPath: string
-  complete(filename: string): Promise<BrowserClientDownloadDestination>
-  abort(): Promise<void>
-}
-
-export type BrowserClientDownloadRouteOutcome =
-  /** Another composition may own this WebContents. */
-  | { kind: 'unowned' }
-  | { kind: 'remote'; route: BrowserClientDownloadRoute }
-  /** A legacy host without the file channel permits a local save. */
-  | { kind: 'local-fallback' }
-  /** The owning page has no usable channel; refuse the download. */
-  | { kind: 'unavailable' }
 
 type RelayFilesystem = {
   // will-download must setSavePath synchronously, so create the directory before returning.
@@ -136,7 +115,7 @@ export class BrowserClientDownloadRelay {
     page: BrowserClientHostedPageInventory,
     transfer: StagedTransfer,
     filename: string
-  ): Promise<BrowserClientDownloadDestination> {
+  ): Promise<NonNullable<BrowserDownloadFinishedEvent['remoteDestination']>> {
     const { transferId, stagingPath } = transfer
     try {
       assertNotCanceled(transfer)

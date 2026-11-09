@@ -1,4 +1,4 @@
-import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
+import { measureUtf8ByteLength } from '../../../shared/utf8-byte-limits'
 
 export const LINEAR_BOARD_DRAG_ISSUE_MIME = 'application/x-orca-linear-issue-id'
 export const LINEAR_BOARD_DRAG_ISSUE_ID_MAX_BYTES = 1024
@@ -39,7 +39,7 @@ export function readLinearBoardIssueDragData(
 function isLinearBoardIssueIdTooLarge(issueId: string): boolean {
   return (
     issueId.length > LINEAR_BOARD_DRAG_ISSUE_ID_MAX_BYTES ||
-    measureClipboardTextByteLength(issueId, {
+    measureUtf8ByteLength(issueId, {
       stopAfterBytes: LINEAR_BOARD_DRAG_ISSUE_ID_MAX_BYTES
     }).exceededLimit
   )
