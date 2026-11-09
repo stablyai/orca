@@ -368,11 +368,13 @@ export async function createSandbox(
   const machineSize = source?.machineSize ?? request.machineSize
   await timer.time('entitlement', () => requireStart(deps, caller.accountId, caller.userId, machineSize))
   const region = request.region ?? deps.config.defaultRegion
-  // Pooled VMs run the plain golden image: a create that boots an environment build skips the pool.
+  // The pool keeps warm VMs per image: the golden one, and the active build of recently used environments.
   const pooled =
-    options.pool === false || source
+    options.pool === false
       ? null
-      : await timer.time('pool', () => claimPooledVm(deps, machineSize, region).catch(() => null))
+      : await timer.time('pool', () =>
+          claimPooledVm(deps, machineSize, region, source?.snapshotId ?? deps.config.goldenSnapshotId).catch(() => null)
+        )
   if (deps.config.pool) {
     // Refill behind the response, on a miss too (empty, or stale after a golden rotation), so the next
     // create finds one without waiting for the cron.
@@ -407,7 +409,7 @@ export async function createSandbox(
       deps.now()
     ).catch(async (error: unknown) => {
       if (pooled) {
-        await deletePooledVm(deps, pooled.provider_name).catch(() => undefined)
+        await deletePooledVm(deps, pooled.provider_name, pooled.snapshot_id).catch(() => undefined)
       }
       throw error
     })
