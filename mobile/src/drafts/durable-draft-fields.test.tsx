@@ -1,7 +1,10 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
-import { publishPageDeviceStore } from '../mobile-web-shell/bridge/page-device-store'
+import {
+  publishPageDeviceStore,
+  readPageDeviceStore
+} from '../mobile-web-shell/bridge/page-device-store'
 import { encodeDeviceStoreValue } from '../device-store/device-store-value-codec'
 import { resetDurableDraftFieldsForTests, useDurableDraftField } from './durable-draft-fields'
 import { publishInMemoryDeviceStore } from './in-memory-device-store.test-support'
@@ -85,5 +88,36 @@ it('drops an older draft once the text grows past what the store can hold', asyn
 
   await open()
   expect(field![0]).toBe('')
+  vi.useRealTimers()
+})
+
+it('saves text typed while the store could not be read once the store answers again', async () => {
+  vi.useFakeTimers()
+  const table = new Map<string, string>()
+  publishInMemoryDeviceStore(table)
+  const store = readPageDeviceStore()!
+  let readFails = true
+  publishPageDeviceStore({
+    ...store,
+    read: async (name, keys) => (readFails ? { status: 'unavailable' } : store.read(name, keys))
+  })
+  await act(async () => {
+    renderer = create(createElement(Field))
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  act(() => field![1]('typed while the store was down'))
+  readFails = false
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(15_000)
+  })
+  act(() => renderer?.unmount())
+  renderer = null
+  resetDurableDraftFieldsForTests()
+
+  await act(async () => {
+    renderer = create(createElement(Field))
+    await vi.advanceTimersByTimeAsync(0)
+  })
+  expect(field![0]).toBe('typed while the store was down')
   vi.useRealTimers()
 })

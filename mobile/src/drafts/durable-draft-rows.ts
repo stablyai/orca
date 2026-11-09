@@ -131,8 +131,8 @@ function enqueue(row: Row, step: () => Promise<void>): Promise<void> {
   return row.chain
 }
 
-async function load(row: Row): Promise<void> {
-  if (row.state !== 'pending' || Date.now() < row.retryReadAt) {
+async function load(row: Row, ignoreRetryWait = false): Promise<void> {
+  if (row.state !== 'pending' || (!ignoreRetryWait && Date.now() < row.retryReadAt)) {
     return
   }
   row.backend ??= row.owner.backend()
@@ -150,9 +150,11 @@ async function load(row: Row): Promise<void> {
   }
 }
 
-async function write(row: Row): Promise<void> {
-  await load(row)
+async function write(row: Row, hiding: boolean): Promise<void> {
+  await load(row, hiding)
   if (row.state !== 'loaded' || !row.backend) {
+    // Still unread: save again once a read may be retried, so the text doesn't stay only in memory.
+    row.timer ??= setTimeout(() => flush(row), Math.max(0, row.retryReadAt - Date.now()))
     return
   }
   const value = row.owner.snapshot() ?? null
@@ -166,12 +168,12 @@ async function write(row: Row): Promise<void> {
   }
 }
 
-function flush(row: Row): void {
+function flush(row: Row, hiding = false): void {
   if (row.timer !== null) {
     clearTimeout(row.timer)
     row.timer = null
   }
-  void enqueue(row, () => write(row))
+  void enqueue(row, () => write(row, hiding))
 }
 
 // The app going to the background may be the last chance before it is killed, so pending typing saves then.
@@ -181,7 +183,8 @@ function flushPendingOnHide(): void {
   }
   for (const row of rows.values()) {
     if (row.timer !== null) {
-      flush(row)
+      // Possibly the last chance before a kill, so a read waiting to be retried is tried now.
+      flush(row, true)
     }
   }
 }
