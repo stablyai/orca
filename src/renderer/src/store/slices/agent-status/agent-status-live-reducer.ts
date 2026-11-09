@@ -77,9 +77,9 @@ export function reduceAgentStatusLiveUpdate(
   }
   const recordChange = liveResumeRecordChange(existingSleepingRecord, liveRecoveryRecord)
   if (recordChange === 'clear') {
-    nextSleepingAgentSessions = replaceRecordEntries(state.sleepingAgentSessionsByPaneKey, [
-      [paneKey, null]
-    ])
+    nextSleepingAgentSessions = replaceRecordEntries<
+      AppState['sleepingAgentSessionsByPaneKey'][string]
+    >(state.sleepingAgentSessionsByPaneKey, [[paneKey, null]])
   } else if (recordChange) {
     nextSleepingAgentSessions = replaceRecordEntries(state.sleepingAgentSessionsByPaneKey, [
       [paneKey, recordChange.set]

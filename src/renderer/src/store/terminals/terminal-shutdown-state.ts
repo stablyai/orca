@@ -130,11 +130,14 @@ export function commitTerminalShutdownState({
             : state.ptyIdsByTabId,
         lastKnownRelayPtyIdByTabId:
           relayDeletions.length > 0
-            ? replaceRecordEntries(state.lastKnownRelayPtyIdByTabId, relayDeletions)
+            ? replaceRecordEntries<string>(state.lastKnownRelayPtyIdByTabId, relayDeletions)
             : state.lastKnownRelayPtyIdByTabId,
         runtimePaneTitlesByTabId:
           titleDeletions.length > 0
-            ? replaceRecordEntries(state.runtimePaneTitlesByTabId, titleDeletions)
+            ? replaceRecordEntries<Record<number, string>>(
+                state.runtimePaneTitlesByTabId,
+                titleDeletions
+              )
             : state.runtimePaneTitlesByTabId,
         suppressedPtyExitIds: suppressedPtyExitIds.read(),
         pendingPtyShutdownIds: pendingPtyShutdownIds.read(),

@@ -121,7 +121,7 @@ export function createAgentStatusRecoveryActions(
           delete nextLaunch[paneKey]
         }
         return {
-          sleepingAgentSessionsByPaneKey: replaceRecordEntries(
+          sleepingAgentSessionsByPaneKey: replaceRecordEntries<SleepingAgentSessionRecord>(
             s.sleepingAgentSessionsByPaneKey,
             removed.map((key) => [key, null] as const)
           ),
@@ -151,7 +151,7 @@ export function createAgentStatusRecoveryActions(
           delete nextLaunch[paneKey]
         }
         return {
-          sleepingAgentSessionsByPaneKey: replaceRecordEntries(
+          sleepingAgentSessionsByPaneKey: replaceRecordEntries<SleepingAgentSessionRecord>(
             s.sleepingAgentSessionsByPaneKey,
             removed.map((key) => [key, null] as const)
           ),

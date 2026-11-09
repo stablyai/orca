@@ -95,7 +95,9 @@ export function startWindowTabInMain(
   if (startup) {
     // Main runs it; a later mount of the pane must not run it again.
     store.setState({
-      pendingStartupByTabId: replaceRecordEntries(state.pendingStartupByTabId, [[tab.id, null]])
+      pendingStartupByTabId: replaceRecordEntries<TabStartup>(state.pendingStartupByTabId, [
+        [tab.id, null]
+      ])
     })
   }
   void callRuntimeRpc<{ terminal: { ptyId: string } }>({ kind: 'local' }, 'terminal.create', {

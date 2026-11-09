@@ -50,7 +50,9 @@ export function createTerminalLayoutActions(
           return s
         }
         return {
-          terminalLayoutsByTabId: replaceRecordEntries(s.terminalLayoutsByTabId, [
+          terminalLayoutsByTabId: replaceRecordEntries<
+            TerminalSlice['terminalLayoutsByTabId'][string]
+          >(s.terminalLayoutsByTabId, [
             [
               tabId,
               {
@@ -86,7 +88,9 @@ export function createTerminalLayoutActions(
             return s
           }
           return {
-            terminalLayoutsByTabId: replaceRecordEntries(s.terminalLayoutsByTabId, [[tabId, null]])
+            terminalLayoutsByTabId: replaceRecordEntries<
+              TerminalSlice['terminalLayoutsByTabId'][string]
+            >(s.terminalLayoutsByTabId, [[tabId, null]])
           }
         }
         const normalized = normalizeTerminalLayoutPtyOwnership(layout)
@@ -103,9 +107,9 @@ export function createTerminalLayoutActions(
           return s
         }
         return {
-          terminalLayoutsByTabId: replaceRecordEntries(s.terminalLayoutsByTabId, [
-            [tabId, normalized.snapshot]
-          ])
+          terminalLayoutsByTabId: replaceRecordEntries<
+            TerminalSlice['terminalLayoutsByTabId'][string]
+          >(s.terminalLayoutsByTabId, [[tabId, normalized.snapshot]])
         }
       })
       transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, ownershipTransfers)

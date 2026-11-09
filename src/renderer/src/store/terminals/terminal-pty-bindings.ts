@@ -64,7 +64,9 @@ export function createTerminalPtyBindingActions(
               })
             )
             if (changed) {
-              nextTerminalLayoutsByTabId = replaceRecordEntries(s.terminalLayoutsByTabId, [
+              nextTerminalLayoutsByTabId = replaceRecordEntries<
+                TerminalSlice['terminalLayoutsByTabId'][string]
+              >(s.terminalLayoutsByTabId, [
                 [tabId, { ...existingLayout, ptyIdsByLeafId: nextBindings }]
               ])
             }

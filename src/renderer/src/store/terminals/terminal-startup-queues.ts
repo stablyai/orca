@@ -68,7 +68,9 @@ export function createTerminalStartupQueueActions(
           return s
         }
         return {
-          pendingStartupByTabId: replaceRecordEntries(s.pendingStartupByTabId, [[tabId, null]])
+          pendingStartupByTabId: replaceRecordEntries<TabStartupCommand>(s.pendingStartupByTabId, [
+            [tabId, null]
+          ])
         }
       })
       return pending

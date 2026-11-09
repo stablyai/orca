@@ -90,7 +90,10 @@ export function removeSleepingRecordsReplacedByManualWorktreeSleep(
     deletions.push([paneKey, null])
   }
   return {
-    records: deletions.length > 0 ? replaceRecordEntries(records, deletions) : records,
+    records:
+      deletions.length > 0
+        ? replaceRecordEntries<SleepingAgentSessionRecord>(records, deletions)
+        : records,
     changed: deletions.length > 0
   }
 }

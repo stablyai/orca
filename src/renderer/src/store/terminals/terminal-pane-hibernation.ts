@@ -215,7 +215,7 @@ export function createTerminalPaneHibernationActions(
           }
           const nextLastKnownRelay =
             remainingPtyIds.length === 0
-              ? replaceRecordEntries(s.lastKnownRelayPtyIdByTabId, [[opts.tabId, null]])
+              ? replaceRecordEntries<string>(s.lastKnownRelayPtyIdByTabId, [[opts.tabId, null]])
               : s.lastKnownRelayPtyIdByTabId
           let nextRuntimePaneTitlesByTabId = s.runtimePaneTitlesByTabId
           const numericPaneId = Number(opts.leafId)
