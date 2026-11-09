@@ -2,6 +2,7 @@ import WebSocket from 'ws'
 import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
 import { remoteRuntimeUnavailableError } from '../requests/remote-runtime-request-frames'
 import { SharedControlAppHeartbeat } from './remote-runtime-shared-control-app-heartbeat'
+import { isRetryHeld } from './remote-runtime-shared-control-hold'
 import type {
   RemoteRuntimeSharedControlConnectionOptions,
   SharedControlConnectionState,
@@ -63,8 +64,8 @@ export class SharedControlReadinessTimer {
             probe,
             // clear() stops the heartbeat whenever the socket changes, so only readiness needs checking.
             isCurrent: () => args.getState() === 'ready',
-            shouldProbe: () =>
-              !(options.isManuallyDisconnected?.() ?? false) && !(options.isAsleep?.() ?? false),
+            // The same hold that stops reconnects: a disconnected or sleeping host is never probed.
+            shouldProbe: () => !isRetryHeld(options),
             onUnresponsive: (generation) =>
               args.retire(
                 remoteRuntimeUnavailableError(

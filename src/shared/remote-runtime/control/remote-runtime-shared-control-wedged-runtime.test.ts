@@ -1,3 +1,5 @@
+// @orca-isolated-worker: mixes real socket deadlines with faked intervals, so timer state left by an
+// earlier file in a shared worker can stop the probe deadline from ever firing.
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import type {
@@ -76,15 +78,19 @@ it('keeps a socket whose runtime answers the heartbeat', async () => {
 
 it('never probes an asleep host or a connection that did not opt in', async () => {
   const server = await createServer({ silentMethods: ['status.get'] })
+  // A sleeping VM is never dialed, so the host falls asleep after its socket is up.
+  let sleeping = false
   const asleep = new RemoteRuntimeSharedControlConnection(server.pairing, {
     appHeartbeat: heartbeat,
-    isAsleep: () => true
+    isAsleep: () => sleeping
   })
   const legacy = new RemoteRuntimeSharedControlConnection(server.pairing)
   await asleep.request('worktree.ps', undefined, 1000)
   await legacy.request('worktree.ps', undefined, 1000)
 
+  sleeping = true
   vi.advanceTimersByTime(heartbeat.intervalMs * 5)
+  sleeping = false
   // The socket delivers in order, so a probe sent while idle would reach the host before these.
   await asleep.request('worktree.ps', undefined, 1000)
   await legacy.request('worktree.ps', undefined, 1000)
