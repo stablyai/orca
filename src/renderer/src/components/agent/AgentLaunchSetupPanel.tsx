@@ -88,6 +88,7 @@ export function AgentLaunchSetupPanel({
     agentPickerNamesConfiguredModel(entry, draft.surface)
       ? models.find((model) => model.isDefault)?.id
       : undefined)
+  // Settled with nothing chosen still lets the user pick; nothing is checked and the agent keeps its own default.
   const { canSearch, catalogPending, catalogMessage } = catalogOf(
     { ...entry, ...view },
     models,
@@ -161,6 +162,7 @@ export function AgentLaunchSetupPanel({
     argumentsView.context
   )
   const rowGroups = agentLaunchSetupRowGroups(optionRows, mode === 'launch')
+  // Launch leaves Permissions and Arguments to Agent settings; select mode edits a saved setup.
   const editsDefaults = mode === 'select' && !entry.textGeneration
   const note = agentLaunchSetupArgumentsNote(entry.label, options, !seed?.modelApply.cli?.length)
   const legacyCount = models.filter((model) => model.isLegacy && !model.hidden).length
