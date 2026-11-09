@@ -1,25 +1,39 @@
 import { open, readdir } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { encodeClaudeProjectPaths } from '../ai-vault/scanners/claude/claude-project-dir-encoding'
 
 const FIRST_WINDOW_BYTES = 64 * 1024
 
+function isMissingPathError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    'code' in error &&
+    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+  )
+}
+
 /**
  * Claude can name a transcript file differently from the provider session id its rows carry, so a
  * filename lookup miss cannot prove the history is absent. Read the leading window of the files in
- * the project buckets this workspace would have used; every row names its session.
+ * the buckets a CLI started in could have used; every row names its session.
+ * A read that fails for any reason other than absence leaves absence unproven (#37707 review).
  */
 export async function findClaudeTranscriptBySessionIdContent(input: {
   projectsDir: string
   workspaceCwd: string
   providerSessionId: string
+  strictErrors?: boolean
 }): Promise<string | null> {
-  for (const bucket of encodeClaudeProjectPaths(input.workspaceCwd)) {
+  let sawUnreadable = false
+  for (const bucket of startingBuckets(input.workspaceCwd)) {
     const directory = join(input.projectsDir, bucket)
     let names: string[]
     try {
       names = await readdir(directory)
-    } catch {
+    } catch (error) {
+      if (!isMissingPathError(error)) {
+        sawUnreadable = true
+      }
       continue
     }
     for (const name of names) {
@@ -27,26 +41,55 @@ export async function findClaudeTranscriptBySessionIdContent(input: {
         continue
       }
       const file = join(directory, name)
-      if ((await readLeadingSessionId(file)) === input.providerSessionId) {
+      const leading = await readLeadingSessionId(file)
+      if (leading.kind === 'session' && leading.id === input.providerSessionId) {
         return file
       }
+      if (leading.kind === 'unreadable') {
+        sawUnreadable = true
+      }
     }
+  }
+  if (sawUnreadable && input.strictErrors === true) {
+    // Strict adoption must not turn an unreadable candidate into a blank chat.
+    throw new Error(
+      'A Claude transcript could not be read, so the conversation history cannot be proven absent.'
+    )
   }
   return null
 }
 
-async function readLeadingSessionId(file: string): Promise<string | null> {
+/** A CLI that started in a parent of the workspace filed under that parent's bucket. */
+function startingBuckets(workspaceCwd: string): string[] {
+  const buckets = new Set<string>()
+  let current = workspaceCwd
+  for (;;) {
+    for (const bucket of encodeClaudeProjectPaths(current)) {
+      buckets.add(bucket)
+    }
+    const parent = dirname(current)
+    if (parent === current) {
+      break
+    }
+    current = parent
+  }
+  return [...buckets]
+}
+
+type LeadingRead = { kind: 'session'; id: string } | { kind: 'none' } | { kind: 'unreadable' }
+
+async function readLeadingSessionId(file: string): Promise<LeadingRead> {
   try {
     const handle = await open(file, 'r')
     try {
       const buffer = Buffer.alloc(FIRST_WINDOW_BYTES)
       const { bytesRead } = await handle.read(buffer, 0, FIRST_WINDOW_BYTES, 0)
       const match = /"sessionId"\s*:\s*"([^"]+)"/.exec(buffer.toString('utf8', 0, bytesRead))
-      return match?.[1] ?? null
+      return match ? { kind: 'session', id: match[1]! } : { kind: 'none' }
     } finally {
       await handle.close()
     }
-  } catch {
-    return null
+  } catch (error) {
+    return isMissingPathError(error) ? { kind: 'none' } : { kind: 'unreadable' }
   }
 }

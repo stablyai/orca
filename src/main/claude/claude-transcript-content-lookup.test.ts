@@ -66,3 +66,56 @@ it('does not claim a transcript that belongs to another session', async () => {
     await rig.cleanup()
   }
 })
+
+it('also searches the bucket of a parent directory the CLI may have started in', async () => {
+  const rig = await makeProjects()
+  try {
+    const childCwd = join(rig.workspaceCwd, 'packages', 'app')
+    const parentBucket = join(
+      rig.root,
+      'projects',
+      encodeClaudeProjectPaths(rig.workspaceCwd)[0]!
+    )
+    await mkdir(parentBucket, { recursive: true })
+    const file = join(parentBucket, 'started-in-parent.jsonl')
+    await writeFile(file, JSON.stringify({ type: 'user', sessionId: 'session-parent' }))
+
+    await expect(
+      findClaudeTranscriptBySessionIdContent({
+        projectsDir: join(rig.root, 'projects'),
+        workspaceCwd: childCwd,
+        providerSessionId: 'session-parent'
+      })
+    ).resolves.toBe(file)
+  } finally {
+    await rig.cleanup()
+  }
+})
+
+it('refuses to call an unreadable candidate absent in strict adoption', async () => {
+  const rig = await makeProjects()
+  try {
+    // A directory named like a transcript cannot be read as one on any platform.
+    await mkdir(join(rig.bucketDir, 'unreadable.jsonl'))
+
+    await expect(
+      findClaudeTranscriptBySessionIdContent({
+        projectsDir: join(rig.root, 'projects'),
+        workspaceCwd: rig.workspaceCwd,
+        providerSessionId: 'session-1',
+        strictErrors: true
+      })
+    ).rejects.toThrow('cannot be proven absent')
+    // A non-strict lookup keeps its old null for the same bucket.
+    await expect(
+      findClaudeTranscriptBySessionIdContent({
+        projectsDir: join(rig.root, 'projects'),
+        workspaceCwd: rig.workspaceCwd,
+        providerSessionId: 'session-1',
+        strictErrors: false
+      })
+    ).resolves.toBeNull()
+  } finally {
+    await rig.cleanup()
+  }
+})

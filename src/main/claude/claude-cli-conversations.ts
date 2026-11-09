@@ -31,7 +31,8 @@ const CLAUDE_TRANSCRIPT_IMPORT = directoryTranscriptImport({
     return findClaudeTranscriptBySessionIdContent({
       projectsDir: store,
       workspaceCwd,
-      providerSessionId
+      providerSessionId,
+      ...(strictErrors === undefined ? {} : { strictErrors })
     })
   }
 })
