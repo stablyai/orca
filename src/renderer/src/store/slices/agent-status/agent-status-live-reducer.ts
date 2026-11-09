@@ -1,4 +1,4 @@
-import { annotateRecordReplacement } from '@/store/keyed-record-transitions'
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { projectAgentPaneConversation } from './agent-pane-conversation'
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -77,13 +77,13 @@ export function reduceAgentStatusLiveUpdate(
   }
   const recordChange = liveResumeRecordChange(existingSleepingRecord, liveRecoveryRecord)
   if (recordChange === 'clear') {
-    nextSleepingAgentSessions = { ...state.sleepingAgentSessionsByPaneKey }
-    delete nextSleepingAgentSessions[paneKey]
+    nextSleepingAgentSessions = replaceRecordEntries(state.sleepingAgentSessionsByPaneKey, [
+      [paneKey, null]
+    ])
   } else if (recordChange) {
-    nextSleepingAgentSessions = {
-      ...state.sleepingAgentSessionsByPaneKey,
-      [paneKey]: recordChange.set
-    }
+    nextSleepingAgentSessions = replaceRecordEntries(state.sleepingAgentSessionsByPaneKey, [
+      [paneKey, recordChange.set]
+    ])
   }
   const previousLive = state.agentStatusByPaneKey
   const nextLive = { ...previousLive, [paneKey]: entry }
@@ -117,11 +117,7 @@ export function reduceAgentStatusLiveUpdate(
       ? { agentConversationsByPaneKey: nextConversations }
       : {}),
     retainedAgentsByPaneKey: nextRetainedAgents,
-    sleepingAgentSessionsByPaneKey: annotateRecordReplacement(
-      state.sleepingAgentSessionsByPaneKey,
-      nextSleepingAgentSessions,
-      [paneKey, ...evictedPaneKeys]
-    ),
+    sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions,
     agentLaunchConfigByPaneKey: nextLaunchConfigs,
     migrationUnsupportedByPtyId: migrationUnsupported.next,
     retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,

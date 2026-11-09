@@ -1,4 +1,4 @@
-import { annotateRecordReplacement } from '@/store/keyed-record-transitions'
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type {
@@ -156,14 +156,9 @@ export function createAgentStatusProviderSessionActions(
               ? { agentConversationsByPaneKey: nextConversations }
               : {}),
             retainedAgentsByPaneKey: nextRetained,
-            sleepingAgentSessionsByPaneKey: annotateRecordReplacement(
-              s.sleepingAgentSessionsByPaneKey,
-              {
-                ...s.sleepingAgentSessionsByPaneKey,
-                [paneKey]: record
-              },
-              [paneKey]
-            ),
+            sleepingAgentSessionsByPaneKey: replaceRecordEntries(s.sleepingAgentSessionsByPaneKey, [
+              [paneKey, record]
+            ]),
             agentLaunchConfigByPaneKey: nextLaunchConfigs,
             acknowledgedAgentsByPaneKey: removePaneKeys(
               s.acknowledgedAgentsByPaneKey,

@@ -1,7 +1,4 @@
-import {
-  annotateTabBucketReplacement,
-  annotateRecordReplacement
-} from '@/store/keyed-record-transitions'
+import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
@@ -65,7 +62,9 @@ export function createTerminalTabPresentationActions(
           return s
         }
         const ownerTabs = tabs.map((tab) => (tab.id === tabId ? { ...tab, aiVaultTitle } : tab))
-        const nextTabsByWorktree = { ...s.tabsByWorktree, [ownerWorktreeId]: ownerTabs }
+        const nextTabsByWorktree = replaceTabBuckets(s.tabsByWorktree, [
+          [ownerWorktreeId, ownerTabs]
+        ])
         const unifiedTabs = s.unifiedTabsByWorktree[ownerWorktreeId] ?? []
         const nextUnifiedTabs = unifiedTabs.map((tab) =>
           tab.contentType === 'terminal' && tab.entityId === tabId ? { ...tab, aiVaultTitle } : tab
@@ -76,11 +75,9 @@ export function createTerminalTabPresentationActions(
         scheduleRuntimeGraphSync()
         return {
           tabsByWorktree: nextTabsByWorktree,
-          unifiedTabsByWorktree: annotateTabBucketReplacement(
-            s.unifiedTabsByWorktree,
-            { ...s.unifiedTabsByWorktree, [ownerWorktreeId]: nextUnifiedTabs },
-            [ownerWorktreeId]
-          )
+          unifiedTabsByWorktree: replaceTabBuckets(s.unifiedTabsByWorktree, [
+            [ownerWorktreeId, nextUnifiedTabs]
+          ])
         }
       })
     },
@@ -142,11 +139,7 @@ export function createTerminalTabPresentationActions(
         nextTabs[tabIndex] = tabWithoutLaunchAgent
         scheduleRuntimeGraphSync()
         return {
-          tabsByWorktree: annotateTabBucketReplacement(
-            s.tabsByWorktree,
-            { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs },
-            [ownerWorktreeId]
-          )
+          tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, [[ownerWorktreeId, nextTabs]])
         }
       })
     },
@@ -170,11 +163,9 @@ export function createTerminalTabPresentationActions(
         const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
         const shouldBump = classificationChanged && ownerWorktreeId !== null && !isActive
         return {
-          runtimePaneTitlesByTabId: annotateRecordReplacement(
-            s.runtimePaneTitlesByTabId,
-            { ...s.runtimePaneTitlesByTabId, [tabId]: { ...currentByPane, [paneId]: title } },
-            [tabId]
-          ),
+          runtimePaneTitlesByTabId: replaceRecordEntries(s.runtimePaneTitlesByTabId, [
+            [tabId, { ...currentByPane, [paneId]: title }]
+          ]),
           ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
         }
       })
@@ -188,12 +179,6 @@ export function createTerminalTabPresentationActions(
         const prevTitle = currentByPane[paneId]
         const nextByPane = { ...currentByPane }
         delete nextByPane[paneId]
-        const next = { ...s.runtimePaneTitlesByTabId }
-        if (Object.keys(nextByPane).length > 0) {
-          next[tabId] = nextByPane
-        } else {
-          delete next[tabId]
-        }
         // Clearing a classified title changes smart-sort’s verdict, like setRuntimePaneTitle.
         const hadClassification = classifyTitleActivity(prevTitle ?? '') !== null
         // Click-driven teardown must not re-rank active worktrees; skip orphaned owners too.
@@ -203,8 +188,8 @@ export function createTerminalTabPresentationActions(
         const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
         const shouldBump = hadClassification && ownerWorktreeId !== null && !isActive
         return {
-          runtimePaneTitlesByTabId: annotateRecordReplacement(s.runtimePaneTitlesByTabId, next, [
-            tabId
+          runtimePaneTitlesByTabId: replaceRecordEntries(s.runtimePaneTitlesByTabId, [
+            [tabId, Object.keys(nextByPane).length > 0 ? nextByPane : null]
           ]),
           ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
         }
