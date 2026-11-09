@@ -966,8 +966,7 @@
         "parakeetJa": "Nur Japanisch. Mit über 35.000 Stunden natürlicher Sprache trainiert. Mit Zeichensetzung.",
         "whisperTiny": "Über 90 Sprachen. Geringere Genauigkeit als Parakeet, aber die größte Sprachabdeckung.",
         "senseVoice": "Chinesisch, Englisch, Japanisch, Koreanisch und Kantonesisch mit automatischer Erkennung der gesprochenen Sprache.",
-        "gpt4oMiniTranscribe": "Cloud-Transkription mit hoher Genauigkeit und geringen Kosten. Benötigt einen OpenAI-API-Schlüssel.",
-        "gpt4oTranscribe": "Cloud-Transkription mit höherer Genauigkeit. Benötigt einen OpenAI-API-Schlüssel."
+        "gptTranscribe": "Cloud-Transkription mit hoher Genauigkeit. Benötigt einen OpenAI-API-Schlüssel."
       }
     },
     "diagnostics": {
@@ -9474,7 +9473,8 @@
           "cd9fe37556": "Mikrofonberechtigung erteilt",
           "openAiKeyName": "OpenAI-Transkriptionsschlüssel",
           "dictationShortcutDescription": "Mit {{shortcut}} Text in den jeweils fokussierten Bereich diktieren.",
-          "dictationModesDescription": "Umschalten: {{shortcut}} einmal zum Starten und erneut zum Stoppen drücken. Gedrückt halten: Diktieren, solange {{shortcut}} gedrückt bleibt."
+          "dictationModeAuto": "Automatisch",
+          "dictationModesWithAutoDescription": "Automatisch: Halten Sie {{shortcut}} gedrückt, um bis zum Loslassen zu diktieren, oder tippen Sie kurz zum Starten und Stoppen. Gedrückt halten: Diktieren, solange {{shortcut}} gedrückt bleibt. Umschalten: {{shortcut}} einmal zum Starten und erneut zum Stoppen drücken."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} entfernen",
@@ -16987,13 +16987,7 @@
           "lost": "Das Diktat konnte weder eingefügt noch kopiert werden."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Diktat stoppen",
-          "7f3660a7ba": "Mikrofon wird gestartet…",
-          "f082d0cb9d": "Wird verarbeitet…",
-          "3de5a129e7": "Hört zu",
-          "4977162383": "Zu laut",
-          "25f2b7a6a5": "Sprache erkannt",
-          "loadingModel": "Sprachmodell wird geladen…"
+          "4977162383": "Zu laut"
         }
       },
       "dashboard": {

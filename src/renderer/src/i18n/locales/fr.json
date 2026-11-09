@@ -736,8 +736,7 @@
         "parakeetJa": "Japonais uniquement. Entraîné sur plus de 35 000 heures de parole naturelle. Ponctuation incluse.",
         "whisperTiny": "Plus de 90 langues. Moins précis que Parakeet, mais offre la plus large couverture linguistique.",
         "senseVoice": "Chinois, anglais, japonais, coréen et cantonais avec détection automatique de la langue.",
-        "gpt4oMiniTranscribe": "Transcription dans le cloud avec une grande précision et un faible coût. Nécessite une clé API OpenAI.",
-        "gpt4oTranscribe": "Transcription dans le cloud avec une précision supérieure. Nécessite une clé API OpenAI."
+        "gptTranscribe": "Transcription dans le cloud avec une grande précision. Nécessite une clé API OpenAI."
       }
     },
     "diagnostics": {
@@ -9343,7 +9342,8 @@
           "cd9fe37556": "Autorisation d'accès au micro accordée",
           "openAiKeyName": "Votre clé de transcription OpenAI",
           "dictationShortcutDescription": "Appuyez sur {{shortcut}} pour dicter du texte dans n'importe quel volet actif.",
-          "dictationModesDescription": "Bascule : appuyez une fois sur {{shortcut}} pour démarrer, puis à nouveau pour arrêter. Maintien : dictez tant que {{shortcut}} est maintenu."
+          "dictationModeAuto": "Auto",
+          "dictationModesWithAutoDescription": "Auto : maintenez {{shortcut}} pour dicter jusqu’à ce que vous relâchiez, ou appuyez brièvement pour démarrer et arrêter. Maintien : dictez tant que {{shortcut}} est maintenu. Bascule : appuyez une fois sur {{shortcut}} pour démarrer, puis à nouveau pour arrêter."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Supprimer {{value0}}",
@@ -16939,13 +16939,7 @@
           "lost": "La dictée n'a pu être ni insérée ni copiée."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Arrêter la dictée",
-          "7f3660a7ba": "Démarrage du micro…",
-          "f082d0cb9d": "Traitement…",
-          "3de5a129e7": "Écoute en cours",
-          "4977162383": "Trop fort",
-          "25f2b7a6a5": "Vous parlez",
-          "loadingModel": "Chargement du modèle vocal…"
+          "4977162383": "Trop fort"
         }
       },
       "dashboard": {

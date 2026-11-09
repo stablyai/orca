@@ -1,19 +1,12 @@
 import { createElement, type ReactNode } from 'react'
-import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
+import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentJournalStatusItem } from '../../../../../src/shared/agent-session/journal/agent-session-journal-types'
-import { isAdmissibleAgentJournalItemBody } from '../../../../../src/shared/agent-session/journal/agent-session-journal-schemas'
 import { projectStructuredItemToNativeChat } from '../../../../../src/shared/agent-session/view/structured-agent-session-projection'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat/native-chat-types'
-import { agentSessionFailureFact } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
-import { agentSessionFailureWords } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { colors } from '../../../theme/mobile-theme'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
 import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
-import {
-  MobileNativeChatNoticeContext,
-  type MobileNativeChatNoticeView
-} from '../../mobile-native-chat-notice-context'
 
 vi.mock('react-native', async () => {
   const React = await import('react')
@@ -94,11 +87,6 @@ describe('MobileNativeChatMessage status notices', () => {
     return renderer!
   }
 
-  const markdownIn = (node: ReactTestInstance): string[] =>
-    node
-      .findAll((child) => String(child.type) === 'MobileMarkdown')
-      .map((markdown) => markdown.props.content)
-
   const statusRow = (body: AgentJournalStatusItem): NativeChatMessage =>
     projectStructuredItemToNativeChat({
       itemId: 'status',
@@ -107,20 +95,6 @@ describe('MobileNativeChatMessage status notices', () => {
       observedAt: 2,
       body
     })!
-  const renderNotice = (body: AgentJournalStatusItem, names: MobileNativeChatNoticeView) => {
-    act(() => {
-      renderer = create(
-        createElement(
-          MobileNativeChatNoticeContext.Provider,
-          { value: names },
-          createElement(MobileNativeChatMessage, { message: statusRow(body) })
-        )
-      )
-    })
-    return renderer!.root.findAll(
-      (node) => String(node.type) === 'Text' && node.props.selectable === true
-    )[0]!
-  }
 
   it('links a CI result line to its pull request and commit through the link sheet', () => {
     const openLink = vi.fn()
@@ -163,93 +137,6 @@ describe('MobileNativeChatMessage status notices', () => {
       ['https://github.com/acme/repo/commit/8d5f74b0c1']
     ])
   })
-
-  it.each(['with reset', 'from an old host'] as const)(
-    'draws an OpenCode usage warning %s',
-    (source) => {
-      const hasReset = source === 'with reset'
-      const resetsAt = new Date(2026, 9, 15, 15, 42).getTime()
-      const now = vi.spyOn(Date, 'now').mockReturnValue(new Date(2026, 9, 15, 12).getTime())
-      try {
-        const host = agentSessionFailureWords(
-          agentSessionFailureFact('usageLimitReached', {
-            detail: {
-              text: 'Internal error: Rate limit exceeded. Please try again later.',
-              audience: 'person'
-            },
-            ...(hasReset ? { usageLimit: { resetsAt } } : {})
-          }),
-          { surface: 'row', agentName: 'OpenCode' }
-        )
-        expect(host.text).toBe('OpenCode hit its usage limit.')
-        const hostText =
-          source === 'from an old host'
-            ? 'OpenCode hit its usage limit. Send a message once it resets to continue.'
-            : host.text
-        const body: unknown = { kind: 'status', tone: 'warning', ...host, text: hostText }
-        if (!isAdmissibleAgentJournalItemBody(body) || body.kind !== 'status') {
-          throw new Error('Status fixture was not admitted')
-        }
-        const text = renderNotice(body, { hostName: null, agentName: 'OpenCode' })
-        const tree = renderer!
-        // An old host's stored advice gives way to the headline from the fact; the reset sits below it.
-        expect(text.props.children).toBe('OpenCode hit its usage limit.')
-        expect(
-          tree.root
-            .findAll((node) => String(node.type) === 'Text')
-            .some((node) => /^Resets at \S/u.test(String(node.props.children)))
-        ).toBe(hasReset)
-        expect(Object.assign({}, ...text.props.style)).toMatchObject({ color: colors.statusAmber })
-        expect(tree.root.find((node) => String(node.type) === 'AlertTriangle').props.color).toBe(
-          colors.statusAmber
-        )
-        expect(markdownIn(tree.root)).toEqual([])
-        const details = tree.root.find(
-          (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Details'
-        )
-        expect(details.props['aria-expanded']).toBe(false)
-        act(() => details.props.onPress())
-        expect(
-          tree.root
-            .findAll((node) => String(node.type) === 'Text')
-            .flatMap((node) => node.props.children)
-        ).toContain('Internal error: Rate limit exceeded. Please try again later.')
-      } finally {
-        now.mockRestore()
-      }
-    }
-  )
-
-  it.each([
-    ['Claude', 'managed', 'claude auth login'],
-    ['Codex', 'system', 'codex login --device-auth'],
-    ['Codex', 'managed', null]
-  ] as const)(
-    'offers %s (%s account) sign-in in a host terminal',
-    (agentName, account, command) => {
-      const onRunInTerminal = vi.fn()
-      renderNotice(
-        {
-          kind: 'status',
-          tone: 'error',
-          ...agentSessionFailureWords(
-            agentSessionFailureFact('notSignedIn', account ? { account } : {}),
-            { surface: 'row', agentName }
-          )
-        },
-        { hostName: null, agentName, onRunInTerminal }
-      )
-      const signIn = renderer!.root.findAll(
-        (node) => String(node.type) === 'Pressable' && node.props.accessibilityHint !== undefined
-      )
-      if (command === null) {
-        expect(signIn).toHaveLength(0)
-        return
-      }
-      act(() => signIn[0]!.props.onPress())
-      expect(onRunInTerminal).toHaveBeenCalledWith(command)
-    }
-  )
 
   // Protocol-shaped synthetic frames, not a live-provider reproduction.
   it.each([

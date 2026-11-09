@@ -84,6 +84,11 @@ export const speechApi = {
     }
     return ipcRenderer.invoke('speech:stopDictation', sessionId)
   },
+  cancelDictation: (sessionId: string): Promise<void> => {
+    audioPorts.get(sessionId)?.close()
+    audioPorts.delete(sessionId)
+    return ipcRenderer.invoke('speech:cancelDictation', sessionId)
+  },
 
   onPartialTranscript: (callback: (data: SpeechTranscriptEvent) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, data: SpeechTranscriptEvent): void =>

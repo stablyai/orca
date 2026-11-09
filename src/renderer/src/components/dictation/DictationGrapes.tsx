@@ -3,11 +3,12 @@ import { DICTATION_GRAPES } from '../../../../shared/dictation-audio-meter'
 
 type DictationGrapesProps = {
   level: number
+  /** Moves with the voice; otherwise the grapes rest and pulse. */
   active: boolean
-  transitioning: boolean
+  className?: string
 }
 
-export function DictationGrapes({ level, active, transitioning }: DictationGrapesProps) {
+export function DictationGrapes({ level, active, className }: DictationGrapesProps) {
   const normalizedLevel = Math.min(1, Math.max(0, level))
 
   return (
@@ -16,7 +17,8 @@ export function DictationGrapes({ level, active, transitioning }: DictationGrape
       aria-hidden="true"
       className={cn(
         'flex h-6 w-11 shrink-0 items-center justify-center gap-px overflow-hidden',
-        transitioning && 'animate-pulse motion-reduce:animate-none'
+        !active && 'animate-pulse motion-reduce:animate-none',
+        className
       )}
     >
       {DICTATION_GRAPES.map((grape, index) => {

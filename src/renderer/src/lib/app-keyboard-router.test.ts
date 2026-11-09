@@ -77,6 +77,22 @@ describe('app keyboard router', () => {
     ])
   })
 
+  it('runs a first owner ahead of owners registered before it', () => {
+    const seen: string[] = []
+    onApp((event) => {
+      seen.push('overlay')
+      event.stopImmediatePropagation()
+    })
+    const dictation = (event: KeyboardEvent): void => {
+      seen.push('dictation')
+      event.stopImmediatePropagation()
+    }
+    addAppKeyListener('keydown', dictation, { first: true })
+    cleanups.push(() => removeAppKeyListener('keydown', dictation))
+    const tail = press()
+    expect([...seen, ...tail]).toEqual(['dictation'])
+  })
+
   it('keeps native stop semantics between app owners', () => {
     const seen: string[] = []
     onApp((event) => {
