@@ -31,6 +31,8 @@ export type CloudWakeProgressEvent = {
   startedAt: number
   at: number
   message?: string
+  /** The runtime environment the wake re-pairs; panes on it hold typing for the woken terminal. */
+  runtimeEnvironmentId?: string
 }
 
 export type CloudOomEvent = {

@@ -62,6 +62,8 @@ export function CloudWakingOverlay({
   workspaceName,
   leaving = false,
   autoFocus = true,
+  typeThrough = false,
+  pendingInput = '',
   onRetry,
   onRestart,
   onDismiss
@@ -69,6 +71,10 @@ export function CloudWakingOverlay({
   wake: CloudWakeProgressEvent
   workspaceName: string | null
   leaving?: boolean
+  /** Leave the terminal visible and typeable under a small pill; typing is delivered on wake. */
+  typeThrough?: boolean
+  /** Typing held for the woken terminal, shown so the keys read as accepted. */
+  pendingInput?: string
   /** Move focus into the overlay (only when it covers the pane that had focus). */
   autoFocus?: boolean
   onRetry: () => void
@@ -109,12 +115,23 @@ export function CloudWakingOverlay({
         : null
   // Announced once each (the text changes only when crossing 20 s and 60 s).
   const slowAnnouncement = stuck ? hint : slow ? hint : ''
+  const passThrough = typeThrough && !failed
+  // Last characters typed, with Enter shown as a return glyph so a typed command reads as queued.
+  const pendingPreview = pendingInput
+    ? pendingInput
+        .slice(-48)
+        .replace(/\r\n?|\n/g, '⏎')
+        .replace(/\t/g, '⇥')
+        .replace(/[\x7f\b]/g, '⌫')
+    : ''
   return (
     <div
       ref={rootRef}
       tabIndex={-1}
       className={cn(
-        'absolute inset-0 bg-background outline-none',
+        passThrough
+          ? 'pointer-events-none absolute inset-x-0 top-3 flex justify-center outline-none'
+          : 'absolute inset-0 bg-background outline-none',
         'motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-150',
         'motion-safe:transition-opacity motion-safe:duration-200',
         leaving ? 'pointer-events-none opacity-0' : 'opacity-100'
@@ -133,11 +150,17 @@ export function CloudWakingOverlay({
               : t('orcaCloudWorkspace.announce.waking', 'Waking {{name}}.', { name })
       }
     >
-      <TerminalSkeleton still={failed} />
+      {passThrough ? null : <TerminalSkeleton still={failed} />}
       <div role="status" className="sr-only">
         {failed ? '' : slowAnnouncement}
       </div>
-      <div className="absolute inset-0 flex items-center justify-center p-4">
+      <div
+        className={
+          passThrough
+            ? 'pointer-events-auto flex flex-col items-center gap-1.5 px-4'
+            : 'absolute inset-0 flex items-center justify-center p-4'
+        }
+      >
         {failed ? (
           <div
             role="alert"
@@ -202,6 +225,17 @@ export function CloudWakingOverlay({
               </span>
             </div>
             {hint ? <p className="text-center text-xs text-muted-foreground">{hint}</p> : null}
+            {passThrough && pendingPreview ? (
+              <div
+                className="flex max-w-xs items-center gap-1.5 rounded-md border border-dashed border-border bg-card/95 px-2 py-1 text-xs shadow-xs"
+                data-cloud-pending-input=""
+              >
+                <span className="shrink-0 text-muted-foreground">
+                  {t('orcaCloudWorkspace.overlay.pendingInput', 'Sending when awake')}
+                </span>
+                <code className="truncate font-mono text-foreground/70">{pendingPreview}</code>
+              </div>
+            ) : null}
             {stuck ? (
               <div className="flex gap-2">
                 <Button size="xs" variant="ghost" onClick={onRestart}>

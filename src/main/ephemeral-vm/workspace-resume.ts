@@ -71,14 +71,13 @@ export async function resumeEphemeralVmWorkspace(
     }
   }
   // An archived Orca Cloud workspace is browsed from its archive; only Unarchive wakes it, so a
-  // stale window (or a cold start before its status loaded) can never wake it by opening it.
-  if (
-    runtime.recipe?.provider === 'orca-cloud' &&
-    (await isCloudWorkspaceArchivedOnControlPlane(workspaceId))
-  ) {
-    restoreAfterFailedRecovery()
-    throw new Error(CLOUD_WORKSPACE_ARCHIVED_ERROR)
-  }
+  // stale window (or a cold start before its status loaded) can never wake it by opening it. The
+  // control plane refuses to resume an archive, so the check runs alongside the resume instead of
+  // adding a round trip in front of every wake; it only names the refusal.
+  const archivedCheck =
+    runtime.recipe?.provider === 'orca-cloud'
+      ? isCloudWorkspaceArchivedOnControlPlane(workspaceId).catch(() => false)
+      : null
   // After the recipe marked the VM running, an SSH host Orca cannot reach again is still a failed
   // resume, saved with its reason so the row can explain it after a restart.
   const failAfterResume = (error: unknown): void => {
@@ -108,6 +107,9 @@ export async function resumeEphemeralVmWorkspace(
   })
   if (!result.ok) {
     restoreAfterFailedRecovery()
+    if (archivedCheck && (await archivedCheck)) {
+      throw new Error(CLOUD_WORKSPACE_ARCHIVED_ERROR)
+    }
     throw new EphemeralVmFailureError({
       error: result.error,
       ...pickEphemeralVmFailureCode(result)

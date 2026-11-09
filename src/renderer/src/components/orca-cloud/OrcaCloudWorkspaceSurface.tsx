@@ -24,6 +24,7 @@ import { CloudWorkspaceNotice } from './CloudWorkspaceNotice'
 import { CloudWorkspaceOfflineView } from './offline/CloudWorkspaceOfflineView'
 import { useCloudOfflineData } from './offline/use-cloud-offline-data'
 import { useCloudWorkspaceView } from './use-cloud-workspace-view'
+import { useWakeInput } from './use-wake-input'
 import {
   runRestartCloudWorkspace,
   runUnarchiveCloudWorkspace,
@@ -97,7 +98,9 @@ function useArchiveLoad(workspaceId: string, enabled: boolean): [ArchiveLoad, ()
 function useWakeOverlay(
   wake: CloudWakeProgressEvent | undefined,
   now: number,
-  stalledMessage: string
+  stalledMessage: string,
+  /** Typing is already held for this wake: show its pill now, not after the show delay. */
+  immediate = false
 ): { wake: CloudWakeProgressEvent | null; leaving: boolean } {
   const reducedMotion = usePrefersReducedMotion()
   const effective: CloudWakeProgressEvent | null = !wake
@@ -123,8 +126,9 @@ function useWakeOverlay(
         setShown({ wake: effective, at: shown.at })
         return undefined
       }
-      // Failures show at once; wakes only if they outlast the show delay.
-      if (failed) {
+      // Failures show at once (and wakes the person is already typing into); others only if they
+      // outlast the show delay.
+      if (failed || immediate) {
         setShown({ wake: effective, at: Date.now() })
         return undefined
       }
@@ -151,7 +155,7 @@ function useWakeOverlay(
     }
     // `shown` is read, not tracked: a re-run per show would restart the hold.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveKey, reducedMotion])
+  }, [effectiveKey, reducedMotion, immediate])
 
   return { wake: shown?.wake ?? null, leaving }
 }
@@ -219,10 +223,13 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
   const view = useCloudWorkspaceView(workspaceId)
   const name = useAppStore((state) => findWorktreeById(state, workspaceId)?.displayName ?? null)
   const now = useNow(1_000, view.wake !== undefined)
+  // Typing is accepted while a wake is in flight, so the terminal stays visible and typeable.
+  const wakeInput = useWakeInput(workspaceId)
   const overlay = useWakeOverlay(
     view.wake,
     Math.max(now, view.wake?.at ?? 0),
-    t('orcaCloudWorkspace.overlay.stalled', 'Orca Cloud stopped responding while waking.')
+    t('orcaCloudWorkspace.overlay.stalled', 'Orca Cloud stopped responding while waking.'),
+    wakeInput.pending !== ''
   )
   const archived = view.state === 'archived'
   const maybeAsleep =
@@ -230,25 +237,35 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
   const [archiveLoad, retryArchive] = useArchiveLoad(workspaceId, archived)
   const offline = useCloudOfflineData(workspaceId, maybeAsleep && !archived)
   const asleep = Boolean(offline.snapshot?.asleep) && maybeAsleep
+  const wakeInFlight =
+    wakeInput.waking ||
+    Boolean(
+      view.wake &&
+      view.wake.phase !== 'failed' &&
+      view.wake.phase !== 'ready' &&
+      isWakeActive(view.wake, Math.max(now, view.wake.at))
+    )
 
   const layer: 'archived' | 'waking' | 'asleep' | null = archived
     ? 'archived'
     : overlay.wake
       ? 'waking'
-      : asleep
+      : asleep && !wakeInFlight
         ? 'asleep'
         : null
+  const typeThrough = layer === 'waking' && overlay.wake?.phase !== 'failed'
 
   // "Copy from 14 min ago" only needs a coarse clock, and only while the asleep view shows.
   const slowNow = useNow(30_000, layer === 'asleep')
   const coverRef = useRef<HTMLDivElement | null>(null)
   const headingRef = useRef<HTMLHeadingElement | null>(null)
   const [takeFocus, setTakeFocus] = useState(false)
-  useInertSiblings(coverRef, layer !== null && !overlay.leaving)
+  useInertSiblings(coverRef, layer !== null && !typeThrough && !overlay.leaving)
   useLayoutEffect(() => {
-    // Decide once per layer change, before the cover moves focus anywhere.
-    setTakeFocus(layer !== null && coveredPaneHadFocus(coverRef.current))
-  }, [layer])
+    // Decide once per layer change, before the cover moves focus anywhere. A type-through wake
+    // leaves focus in the terminal the person is typing into.
+    setTakeFocus(layer !== null && !typeThrough && coveredPaneHadFocus(coverRef.current))
+  }, [layer, typeThrough])
   useEffect(() => {
     if (takeFocus && (layer === 'archived' || layer === 'asleep')) {
       headingRef.current?.focus()
@@ -328,7 +345,13 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
       {layer ? (
         <div
           ref={coverRef}
-          className={layer === 'asleep' ? 'absolute inset-0 z-20' : 'absolute inset-0 z-30'}
+          className={
+            typeThrough
+              ? 'pointer-events-none absolute inset-0 z-30'
+              : layer === 'asleep'
+                ? 'absolute inset-0 z-20'
+                : 'absolute inset-0 z-30'
+          }
           data-cloud-cover={layer}
         >
           {layer === 'archived' ? (
@@ -349,6 +372,8 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
               workspaceName={name}
               leaving={overlay.leaving}
               autoFocus={takeFocus}
+              typeThrough={typeThrough}
+              pendingInput={wakeInput.pending}
               onRetry={wake}
               onRestart={restart}
               onDismiss={() => dismissCloudWake(workspaceId)}

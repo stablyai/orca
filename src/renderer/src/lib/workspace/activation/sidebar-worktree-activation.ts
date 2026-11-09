@@ -11,10 +11,15 @@ import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
 import { ephemeralVmFailureFromError } from '../../../../../shared/ephemeral-vm-failure-copy'
 import {
   getCloudWorkspaceSnapshot,
-  isCloudWorkspaceArchivedFresh,
+  isCloudWorkspaceArchived,
   noteCloudWakeProgress,
+  refreshCloudWorkspaceStatusIfStale,
   refreshCloudWorkspaceStatus
 } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import {
+  beginWorkspaceWake,
+  endWorkspaceWake
+} from '@/components/terminal-pane/input/wake-input-buffer'
 import { CLOUD_WORKSPACE_ARCHIVED_ERROR } from '../../../../../shared/hosted-sandbox/cloud-workspace-api'
 import { isWakeActive } from '@/lib/orca-cloud/orca-cloud-workspace-state'
 
@@ -62,8 +67,19 @@ export async function resumeEphemeralVmWorkspace(worktreeId: string): Promise<vo
   // A cold start or a stale read must not wake it, so a cloud workspace re-reads its status first.
   const cloud = getCloudWorkspaceSnapshot()
   const maybeCloud = !cloud.idsLoaded || cloud.ids.has(worktreeId)
-  if (maybeCloud && (await isCloudWorkspaceArchivedFresh(worktreeId))) {
+  // Known archived: never wake. Otherwise don't wait on a status round trip before waking: main
+  // and the control plane both refuse to resume an archive, and that refusal shows the archive.
+  if (maybeCloud && isCloudWorkspaceArchived(worktreeId)) {
     return
+  }
+  if (maybeCloud) {
+    void refreshCloudWorkspaceStatusIfStale(worktreeId, 30_000)
+  }
+  // Typing from the click on is accepted and delivered to the woken terminal.
+  const startedAt = Date.now()
+  const cloudAsleep = cloud.status[worktreeId]?.status?.state === 'sleeping'
+  if (cloudAsleep) {
+    beginWorkspaceWake(worktreeId, startedAt)
   }
   // Start the wake before loading the store so activation never waits on a module import.
   const resume = window.api.ephemeralVm.resumeWorkspace({ workspaceId: worktreeId })
@@ -74,7 +90,29 @@ export async function resumeEphemeralVmWorkspace(worktreeId: string): Promise<vo
   const isVmWorkspace = vmStatus === 'suspended' || vmStatus === 'resume_failed'
   if (isVmWorkspace) {
     store.getState().setEphemeralVmWorkspaceWaking(worktreeId, true)
+    beginWorkspaceWake(worktreeId, startedAt)
   }
+  const wakeHeld = cloudAsleep || isVmWorkspace
+  void resume
+    .then(
+      (result) => result,
+      () => null
+    )
+    .then((result) => {
+      if (!wakeHeld) {
+        return
+      }
+      // A wake main reports (waking → ready/failed) settles the hold itself; the answer to this
+      // call can come before the woken terminal is attached. Settle here only when no wake ran.
+      const reported = getCloudWorkspaceSnapshot().wake[worktreeId]
+      if (reported && reported.startedAt >= startedAt - 5_000) {
+        return
+      }
+      endWorkspaceWake(
+        worktreeId,
+        result && (result as { ok?: boolean }).ok !== false ? 'ready' : 'failed'
+      )
+    })
   try {
     const result = await settleLifecycleCall(resume)
     if (!result.ok) {

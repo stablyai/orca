@@ -18,6 +18,7 @@ import { isCodexPaneStale } from './codex-pane-stale'
 import { installTerminalSelectionFitGuard } from '../../viewport/terminal-selection-fit-guard'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { recordAdmittedTerminalUserInput } from '@/lib/telemetry'
+import { captureWakeInput, rebindWakeInputTarget } from '../../input/wake-input-buffer'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
   session.forwardPtyInput = (data: string, wasUserInput = false): void => {
@@ -154,10 +155,35 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
   }
   // Bind once so provenance survives deferred input without allocating per-keystroke closures.
   const forwardUserInput = (data: string): void => session.forwardPtyInput(data, true)
+  // The layout leaf outlives a remount, so held typing finds this pane's newest session.
+  const wakeInputKey = session.pane.leafId ?? String(session.pane.id)
+  const wakeInputReady = (): boolean => {
+    if (session.disposed) {
+      return false
+    }
+    const transport = session.deps.paneTransportsRef.current.get(session.pane.id)
+    const phase = transport?.getRecoveryState?.()?.phase
+    return Boolean(transport?.isConnected() && (phase ?? 'connected') === 'connected')
+  }
+  rebindWakeInputTarget(session.deps.worktreeId, wakeInputKey, forwardUserInput, wakeInputReady)
   const forwardUnclassifiedInput = (data: string): void => session.forwardPtyInput(data, false)
   session.onDataDisposable = subscribeToTerminalInputData(
     session.pane.terminal,
     (data, wasUserInput) => {
+      // Typing into a workspace whose server is waking is accepted now and delivered, in order,
+      // once this pane is attached to the woken terminal.
+      if (
+        wasUserInput &&
+        captureWakeInput(
+          session.deps.worktreeId,
+          wakeInputKey,
+          data,
+          forwardUserInput,
+          wakeInputReady
+        )
+      ) {
+        return
+      }
       const forward = wasUserInput ? forwardUserInput : forwardUnclassifiedInput
       if (session.deps.deferPtyInput) {
         session.deps.deferPtyInput(session.pane.id, data, forward)
