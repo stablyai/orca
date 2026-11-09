@@ -1,4 +1,4 @@
-name: Windows ConPTY native-neighbor diagnostic
+name: Windows ConPTY full-suite diagnostic
 
 on:
   workflow_dispatch:
@@ -13,6 +13,8 @@ jobs:
     env:
       ORCA_BACKGROUND_LAUNCH: '1'
       JOBS: max
+      ORCA_VITEST_ISOLATE_EVERY_FILE: '0'
+      ORCA_DIAGNOSTIC_TRACE_DIR: ${{ runner.temp }}/conpty-diagnostic
     steps:
       - name: Parallelize Windows checkout
         shell: bash
@@ -47,15 +49,37 @@ jobs:
           git rev-parse HEAD | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/source.txt"
           if ((git rev-parse HEAD) -ne '2a9d86a4f3d7ccd29c335df6922c06455b6e99f8') { throw 'Unexpected source SHA' }
           Get-ChildItem out/orcad -Recurse -File | Where-Object { $_.Extension -in '.node', '.dll', '.exe' } | Get-FileHash -Algorithm SHA256 | Format-Table -AutoSize | Out-String -Width 4096 | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/native-sha256.txt"
-      - name: Native process-table consumer and lifecycle neighbors at default concurrency
+      - name: Generate diagnostic-only worker trace and config
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+          import { createHash } from 'node:crypto'
+          const dir = '.build/conpty-diagnostic'
+          mkdirSync(dir, { recursive: true })
+          const setup = "import { appendFileSync } from 'node:fs'\nimport { join } from 'node:path'\nimport { afterAll, beforeAll, beforeEach, expect } from 'vitest'\n\nconst tracePath = join(process.env.ORCA_DIAGNOSTIC_TRACE_DIR, `worker-${process.pid}.jsonl`)\nfunction record(event) {\n  appendFileSync(tracePath, JSON.stringify({\n    event,\n    file: expect.getState().testPath,\n    test: expect.getState().currentTestName,\n    pid: process.pid,\n    ppid: process.ppid,\n    worker: process.env.VITEST_WORKER_ID,\n    pool: process.env.VITEST_POOL_ID,\n    monotonicNs: process.hrtime.bigint().toString()\n  }) + '\\n')\n}\nrecord('setup')\nbeforeAll(() => record('file-start'))\nbeforeEach(() => record('test-start'))\nafterAll(() => record('file-end'))\n";
+          const config = "import { resolve } from 'node:path'\nimport base from '../../config/vitest.config'\n\nconst traceSetup = resolve('.build/conpty-diagnostic/worker-trace.mjs')\nexport default {\n  ...base,\n  test: {\n    ...base.test,\n    projects: base.test.projects.map((project) => ({\n      ...project,\n      test: {\n        ...project.test,\n        setupFiles: [...project.test.setupFiles, traceSetup]\n      }\n    }))\n  }\n}\n";
+          writeFileSync(dir + '/worker-trace.mjs', setup)
+          writeFileSync(dir + '/vitest.config.mts', config)
+          const wrapperPath = 'config/scripts/ci/unit-selection/run-node-server-tests.mjs'
+          const original = readFileSync(wrapperPath, 'utf8')
+          const oldPath = "'config/vitest.config.ts'"
+          if (original.split(oldPath).length !== 2) throw new Error('Unexpected wrapper config selection')
+          const diagnostic = original.replace(oldPath, "'.build/conpty-diagnostic/vitest.config.mts'")
+          writeFileSync(wrapperPath.replace('.mjs', '.diagnostic.mjs'), diagnostic)
+          for (const [name, body] of Object.entries({ 'worker-trace.mjs': setup, 'vitest.config.mts': config, 'original-wrapper.mjs': original, 'diagnostic-wrapper.mjs': diagnostic })) {
+            writeFileSync(process.env.ORCA_DIAGNOSTIC_TRACE_DIR + '/' + name, body)
+            console.log(name, createHash('sha256').update(body).digest('hex'))
+          }
+          JS
+          git diff --exit-code
+      - name: Full original artifact suite with worker identity tracing
         shell: pwsh
-        env:
-          ORCA_VITEST_ISOLATE_EVERY_FILE: '0'
         run: |
           node -e "console.log(JSON.stringify({source: '2a9d86a4f3d7ccd29c335df6922c06455b6e99f8', availableParallelism: require('node:os').availableParallelism(), isolation: process.env.ORCA_VITEST_ISOLATE_EVERY_FILE}))" | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/policy.json"
-          pnpm test:node-server --artifact src/main/persistence/profile-state/profile-state-access-windows-native.win32.test.ts src/main/orcad/orcad-packaged-node-pty.integration.test.ts src/main/orcad/orcad-cli-launcher.integration.test.ts src/main/orcad/orcad-launcher-isolation.integration.test.ts src/main/orcad/orcad-stop-request-shutdown.integration.test.ts src/main/orcad/orcad-windows-conpty-breakaway.integration.test.ts src/main/orcad/orcad-serve-parity.integration.test.ts 2>&1 | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/native-neighbors-default.log"
+          node config/scripts/ci/unit-selection/run-node-server-tests.diagnostic.mjs --artifact 2>&1 | Tee-Object "$env:RUNNER_TEMP/conpty-diagnostic/full-suite.log"
           $testExit = $LASTEXITCODE
-          "exit=$testExit" | Add-Content "$env:RUNNER_TEMP/conpty-diagnostic/native-neighbors-default.log"
+          "exit=$testExit" | Add-Content "$env:RUNNER_TEMP/conpty-diagnostic/full-suite.log"
           exit $testExit
       - name: Upload diagnostic evidence
         if: ${{ !cancelled() }}
