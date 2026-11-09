@@ -48,6 +48,11 @@ async function countItems(page: Page, sessionId: string): Promise<number> {
   }
 }
 
+/** A manifest this harness wrote from `recipe`; only the recipe digest decides reuse. */
+function isManifestFrom(value: unknown, recipe: string): value is Manifest {
+  return typeof value === 'object' && value !== null && 'recipe' in value && value.recipe === recipe
+}
+
 const recipeOf = (workload: Workload, toolOutputBytes: number): string =>
   createHash('sha256')
     .update(JSON.stringify({ history: workload.history, toolOutputBytes }))
@@ -105,13 +110,15 @@ export async function seedProfile(input: {
   const manifestPath = `${seedDir}.json`
   const recipe = recipeOf(input.workload, input.toolOutputBytes)
   if (existsSync(manifestPath) && existsSync(seedDir)) {
-    const cached = JSON.parse(readFileSync(manifestPath, 'utf8')) as Partial<Manifest>
-    if (cached.recipe !== recipe) {
+    const cached: unknown = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    if (!isManifestFrom(cached, recipe)) {
+      const recorded =
+        typeof cached === 'object' && cached !== null && 'recipe' in cached ? cached.recipe : null
       throw new Error(
-        `${manifestPath} was seeded from another recipe (${cached.recipe ?? 'none recorded'}, now ${recipe}); move it and ${seedDir} aside or use a new --out`
+        `${manifestPath} was seeded from another recipe (${String(recorded ?? 'none recorded')}, now ${recipe}); move it and ${seedDir} aside or use a new --out`
       )
     }
-    return cached as Manifest
+    return cached
   }
   const started = Date.now()
   const launch = await launchArm(input.arm, input.profileDir, input.stubCommand)

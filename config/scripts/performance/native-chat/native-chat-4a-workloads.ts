@@ -122,7 +122,7 @@ export const WORKLOADS: Record<Workload['profile'], Workload> = {
 }
 
 export function workloadFor(profile: string, conversionSourceBytes?: number): Workload {
-  const workload = WORKLOADS[profile as Workload['profile']]
+  const workload = profile === 'smoke' || profile === 'full' ? WORKLOADS[profile] : undefined
   if (!workload) {
     throw new Error(`Unknown profile ${profile}; expected ${Object.keys(WORKLOADS).join(', ')}`)
   }
