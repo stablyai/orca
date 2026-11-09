@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { Identifier } from '../rpc-contract/structured-agent-session-identifiers'
 
 export const AgentSessionForegroundTaskSchema = z
