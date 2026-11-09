@@ -6,12 +6,10 @@ import {
   type DiscoverCommitMessageModelsResult
 } from '../../text-generation/commit-message-text-generation'
 import { prepareLocalCommitMessageAgentEnv } from '../../text-generation/commit-message-agent-environment'
-import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
-import {
-  resolveModelDiscoveryLocalPath,
-  getLocalAgentRuntimeTarget
-} from './filesystem-source-control-ai-targets'
-import { getLocalGitOptionsForRegisteredWorktree } from '../local-worktree-runtime-options'
+import { agentLaunchWslDistro } from '../../runtime/terminal/launch/agent-launch-scope-runtime'
+import { runtimePathsEqual } from '../../runtime/workspaces/catalog/runtime-worktree-path-identity'
+import { resolveModelDiscoveryLocalPath } from './filesystem-source-control-ai-targets'
+import { getLocalRepoForRegisteredWorktree } from '../local-worktree-runtime-options'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
 
 export function registerFilesystemGitModelDiscoveryHandlers(
@@ -39,15 +37,22 @@ export function registerFilesystemGitModelDiscoveryHandlers(
       let localDiscoveryOptions: Parameters<typeof discoverCommitMessageModelsLocal>[3]
       if (args.worktreePath) {
         const worktreePath = await resolveModelDiscoveryLocalPath(store, args.worktreePath)
-        const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-          store,
-          args.worktreePath,
-          worktreePath
-        )
-        const wslDistro = gitOptions.wslDistro ?? parseWslPath(args.worktreePath)?.distro
-        localRuntimeTarget = wslDistro
-          ? { runtime: 'wsl', wslDistro }
-          : getLocalAgentRuntimeTarget(gitOptions)
+        const folder = store
+          .getFolderWorkspaces?.()
+          .find((row) => runtimePathsEqual(row.folderPath, args.worktreePath!))
+        const repo = folder
+          ? null
+          : (getLocalRepoForRegisteredWorktree(store, args.worktreePath, worktreePath) ?? null)
+        const scope = {
+          id: folder ? `folder:${folder.id}` : (repo?.id ?? ''),
+          path: worktreePath,
+          connectionId: null,
+          repo,
+          folderWorkspace: folder ?? null
+        }
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the existing discovery boundary admits agent IDs before launch planning.
+        const wslDistro = agentLaunchWslDistro(store, scope, agentId as TuiAgent)
+        localRuntimeTarget = wslDistro ? { runtime: 'wsl', wslDistro } : { runtime: 'host' }
         localDiscoveryOptions = wslDistro ? { cwd: worktreePath, wslDistro } : { cwd: worktreePath }
       }
       const localEnv = await prepareLocalCommitMessageAgentEnv(

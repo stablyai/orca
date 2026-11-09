@@ -10,7 +10,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { getRepoSshConnectionId } from '../../../../shared/execution-host'
 import { isFolderRepo } from '../../../../shared/repo-kind'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
+import { isWslUncPath, parseWslUncPath } from '../../../../shared/wsl-paths'
 import { getWorktreePathSettings } from '../../../ipc/worktree-logic'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import {
@@ -132,4 +132,14 @@ export function resolveStartupAgentLaunchRuntime(
       launchRuntime: error instanceof Error ? error : new Error(String(error))
     }
   }
+}
+
+/** Discovery runs where the terminal's agent runs, independently of its Git executable. */
+export function agentLaunchWslDistro(
+  store: AgentLaunchRuntimeStore,
+  scope: TerminalWorkspaceLaunchScope,
+  agent: TuiAgent
+): string | undefined {
+  const runtime = resolveAgentLaunchRuntime(store, scope, undefined, agent)
+  return runtime.pty.terminalWindowsWslDistro ?? parseWslUncPath(scope.path)?.distro
 }

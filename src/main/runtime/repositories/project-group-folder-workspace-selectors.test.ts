@@ -102,5 +102,5 @@ it('discovers CLI models in a registered folder when no repository exists', asyn
   )
   expect(result).toMatchObject({ success: true, models: [{ id: 'gemini-3.8-flash-low' }] })
   expect(discovery.env).toHaveBeenCalledWith('antigravity', undefined, { runtime: 'host' })
-  expect(discovery.models).toHaveBeenCalledWith('antigravity', {}, undefined, undefined)
+  expect(discovery.models).toHaveBeenCalledWith('antigravity', {}, undefined, { cwd: FOLDER_PATH })
 })
