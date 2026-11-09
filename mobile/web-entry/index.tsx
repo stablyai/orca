@@ -19,7 +19,8 @@ import {
 import { storageReadResultSchema } from '../src/mobile-web-shell/bridge/bridge-native-verbs'
 import {
   publishPageStorage,
-  refreshPageTerminalSettings
+  refreshPageTerminalSettings,
+  replacePageStorage
 } from '../src/mobile-web-shell/bridge/page-async-storage'
 import {
   createPageDeviceStore,
@@ -202,6 +203,7 @@ bootstrapShellPage({
     client.onStorageUpdate(() => {
       const current = client.getShellSession()
       if (current !== null) {
+        replacePageStorage(current.storage, current.storageOversize)
         refreshPageTerminalSettings(current.storage, current.storageOversize)
       }
     })

@@ -4,8 +4,12 @@ import { settleSessionPreferenceRead } from './session-preference-read'
 import { useEffect, useRef, useCallback, useState } from 'react'
 import { AppState, type AppStateStatus, Platform } from 'react-native'
 import { useFocusEffect } from 'expo-router'
+import { subscribeMirroredKey } from '../storage/mirrored-storage-keys'
 import { loadHosts } from '../transport/hosts/host-store'
-import { loadTerminalAccessoryLayout } from '../terminal/terminal-accessory-layout'
+import {
+  TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY,
+  loadTerminalAccessoryLayout
+} from '../terminal/terminal-accessory-layout'
 import {
   recoverActiveTerminalAfterForeground,
   shouldRecoverTerminalOnAppStateChange
@@ -23,6 +27,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     connState,
     customKeys,
     setCustomKeys,
+    setShortcutLayout,
     setVisibleBuiltInIds,
     setDirectionPadEnabled,
     setHostEndpoint,
@@ -99,10 +104,16 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     void settleSessionPreferenceRead(loadTerminalAccessoryLayout(padAvailable)).then((layout) => {
       if (layoutReadRevisionRef.current === revision) {
         if (layout) {
+          setShortcutLayout?.(layout)
           setVisibleBuiltInIds(layout.visibleBuiltInIds)
           setDirectionPadEnabled(layout.directionPadEnabled !== false)
         }
         setAccessoryLayoutLoaded(true)
+      }
+    })
+    void settleSessionPreferenceRead(loadCustomKeys()).then((keys) => {
+      if (layoutReadRevisionRef.current === revision && keys) {
+        setCustomKeys(keys)
       }
     })
     return () => {
@@ -124,6 +135,12 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
   )
 
   useEffect(() => {
+    const unsubscribeLayout = subscribeMirroredKey(TERMINAL_ACCESSORY_LAYOUT_STORAGE_KEY, () => {
+      refreshAccessoryLayout()
+    })
+    const unsubscribeKeys = subscribeMirroredKey('orca:custom-accessory-keys', () => {
+      refreshAccessoryLayout()
+    })
     const sub = AppState.addEventListener('change', (s: AppStateStatus) => {
       if (s === 'active') {
         refreshCustomKeys()
@@ -133,6 +150,8 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
     return () => {
       customKeysReadRevisionRef.current += 1
       layoutReadRevisionRef.current += 1
+      unsubscribeLayout()
+      unsubscribeKeys()
       sub.remove()
     }
   }, [refreshAccessoryLayout, refreshCustomKeys])
