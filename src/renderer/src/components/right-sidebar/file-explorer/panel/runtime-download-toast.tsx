@@ -58,6 +58,19 @@ const formatCount = (value: number): string => countFormat.format(value)
 // A time-left estimate from the first second of a transfer swings wildly; wait for the rate to settle.
 const ETA_MIN_RATE_WINDOW_MS = 2_000
 
+// Titles truncate at the end in CSS, which hides the extension; shorten long names in the middle.
+const MAX_TITLE_NAME_CHARS = 40
+
+export function middleTruncateName(name: string, max = MAX_TITLE_NAME_CHARS): string {
+  const chars = Array.from(name)
+  if (chars.length <= max) {
+    return name
+  }
+  const tail = Math.floor((max - 1) / 2)
+  const head = max - 1 - tail
+  return `${chars.slice(0, head).join('')}…${chars.slice(chars.length - tail).join('')}`
+}
+
 const CARD =
   'relative w-[356px] rounded-lg border border-border bg-popover px-3 py-2.5 text-sm text-popover-foreground shadow-lg'
 
@@ -145,8 +158,12 @@ function ProgressCard({
   const detail = progressDetail(t, state.itemKind, state.snapshot)
   const title =
     state.intent === 'open'
-      ? t('components.runtimeDownload.opening', 'Opening {{name}}', { name: state.name })
-      : t('components.runtimeDownload.downloading', 'Downloading {{name}}', { name: state.name })
+      ? t('components.runtimeDownload.opening', 'Opening {{name}}', {
+          name: middleTruncateName(state.name)
+        })
+      : t('components.runtimeDownload.downloading', 'Downloading {{name}}', {
+          name: middleTruncateName(state.name)
+        })
   const progressLabel = t('components.runtimeDownload.progressLabel', 'Download progress')
   const Icon = state.intent === 'open' ? MonitorDown : Download
   return (
@@ -243,7 +260,7 @@ function DoneCard({
         <div className="min-w-0 flex-1 space-y-0.5">
           <p className="truncate font-medium" title={state.name}>
             {t('components.runtimeDownload.downloaded', 'Downloaded {{name}}', {
-              name: state.name
+              name: middleTruncateName(state.name)
             })}
           </p>
           <p className="text-xs tabular-nums text-muted-foreground">{parts.join(' · ')}</p>
