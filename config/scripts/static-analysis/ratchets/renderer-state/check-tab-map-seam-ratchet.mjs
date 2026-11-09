@@ -10,22 +10,56 @@ import ts from 'typescript-api'
 const R = 'src/renderer/src/'
 const STATUS = `${R}components/native-chat/session/status/`
 
-/** Repaired consumers: the only functions allowed to walk a whole map, and which callers may reach a whole-list helper. */
+/**
+ * Repaired consumers: the only functions allowed to walk a whole map (`coldPaths`), which callers
+ * may reach a cold helper (`helpers`), and the only values they may import, so a new walking helper
+ * can't arrive through an import unreviewed.
+ */
 export const CONSUMERS = new Map([
   [
     `${STATUS}structured-agent-session-tabs.ts`,
-    { coldPaths: new Set(['rebuildFromSnapshot']), helpers: { rebuildFromSnapshot: ['project'] } }
+    {
+      coldPaths: new Set(['rebuildFromSnapshot']),
+      helpers: { rebuildFromSnapshot: ['project'] },
+      imports: new Set(['structuredAgentSessionPaneKey', 'isStructuredTab', 'readTabMapChanges'])
+    }
   ],
   [
     `${STATUS}StructuredAgentSessionStatusBridge.tsx`,
     {
       coldPaths: new Set(['reconcileFromSnapshot']),
-      helpers: { getStructuredAgentSessionTabs: ['reconcileFromSnapshot'] }
+      helpers: {
+        getStructuredAgentSessionTabs: ['reconcileFromSnapshot'],
+        reconcileFromSnapshot: ['reconcile']
+      },
+      imports: new Set([
+        'useEffect',
+        'projectStatus',
+        'getStructuredAgentSessionLaunchLifecycle',
+        'subscribeStructuredAgentLaunchStatus',
+        'getStructuredAgentSessionLaunchFailedAt',
+        'useAppStore',
+        'structuredAgentSessionTargetForHost',
+        'getStructuredAgentSessionStatusFeed',
+        'structuredAgentSessionStatusFeedKey',
+        'getStructuredAgentSessionTabs',
+        'getStructuredAgentSessionTabsInWorkspace',
+        'readTabMapChanges',
+        'createTabOwnerCache',
+        'ownerInputChanged',
+        'ownerInputs',
+        'createStructuredSessionMembership',
+        'sameSemanticTab'
+      ])
     }
   ],
   [
     `${STATUS}structured-agent-session-status-membership.ts`,
-    { coldPaths: new Set(), helpers: { getStructuredAgentSessionTabs: [] } }
+    {
+      coldPaths: new Set(),
+      helpers: { getStructuredAgentSessionTabs: [] },
+      imports: new Set(['structuredAgentSessionPaneKey'])
+    }
   ]
 ])
 const ENUMERATING_CALLS = new Set(['keys', 'values', 'entries'])
@@ -124,9 +158,38 @@ function calleeName(call) {
   return { object: null, name: null }
 }
 
-export function consumerViolations(file, text, { coldPaths, helpers }) {
+function valueImports(source) {
+  const imported = []
+  for (const statement of source.statements) {
+    const clause = ts.isImportDeclaration(statement) ? statement.importClause : null
+    if (!clause || clause.isTypeOnly) {
+      continue
+    }
+    if (clause.name) {
+      imported.push(clause.name)
+    }
+    const bindings = clause.namedBindings
+    if (bindings && ts.isNamespaceImport(bindings)) {
+      imported.push(bindings.name)
+    } else if (bindings) {
+      imported.push(
+        ...bindings.elements.filter((element) => !element.isTypeOnly).map((e) => e.name)
+      )
+    }
+  }
+  return imported
+}
+
+export function consumerViolations(file, text, { coldPaths, helpers, imports }) {
   const source = parse(file, text)
   const violations = []
+  for (const name of valueImports(source)) {
+    if (!imports.has(name.text)) {
+      violations.push(
+        `${file}:${line(source, name)} imports ${name.text}; repaired consumers import only reviewed helpers`
+      )
+    }
+  }
   const visit = (node) => {
     let what = null
     let allowed = coldPaths
@@ -170,15 +233,82 @@ function isRawRecord(expression) {
   )
 }
 
+// Which argument a seam helper annotates in place (a replace* helper's first argument is only read).
+const ANNOTATED_ARGUMENT = {
+  annotateTabBucketReplacement: 1,
+  annotateRecordReplacement: 1,
+  markFullResync: 0
+}
+
+function enclosingScope(node) {
+  let current = node.parent
+  while (current && !ts.isFunctionLike(current) && !ts.isSourceFile(current)) {
+    current = current.parent
+  }
+  return current
+}
+
+/** Raw values a local binding receives in `scope`, and whether a seam helper annotates it there. */
+function localBinding(name, scope) {
+  const raw = []
+  let annotated = false
+  const visit = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.name.text === name) {
+      if (node.initializer && isRawRecord(node.initializer)) {
+        raw.push(node)
+      }
+    } else if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+      ts.isIdentifier(node.left) &&
+      node.left.text === name &&
+      isRawRecord(node.right)
+    ) {
+      raw.push(node)
+    } else if (
+      ts.isCallExpression(node) &&
+      ts.isIdentifier(node.expression) &&
+      Object.hasOwn(ANNOTATED_ARGUMENT, node.expression.text)
+    ) {
+      const argument = node.arguments[ANNOTATED_ARGUMENT[node.expression.text]]
+      annotated ||= argument !== undefined && ts.isIdentifier(argument) && argument.text === name
+    }
+    ts.forEachChild(node, visit)
+  }
+  visit(scope)
+  return { raw, annotated }
+}
+
+function rawValue(node) {
+  const initializer = ts.isShorthandPropertyAssignment(node) ? node.name : node.initializer
+  if (isRawRecord(initializer)) {
+    return true
+  }
+  if (!ts.isIdentifier(initializer)) {
+    return false
+  }
+  // Follow the local binding through enclosing scopes; an annotated binding is fine.
+  for (let scope = enclosingScope(node); scope; scope = scope.parent && enclosingScope(scope)) {
+    const binding = localBinding(initializer.text, scope)
+    if (binding.raw.length || binding.annotated) {
+      return binding.raw.length > 0 && !binding.annotated
+    }
+    if (ts.isSourceFile(scope)) {
+      break
+    }
+  }
+  return false
+}
+
 export function writerViolations(file, text) {
   const source = parse(file, text)
   const violations = []
   const visit = (node) => {
     if (
-      ts.isPropertyAssignment(node) &&
+      (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) &&
       (ts.isIdentifier(node.name) || ts.isStringLiteral(node.name)) &&
       SEAM_FIELDS.has(node.name.text) &&
-      isRawRecord(node.initializer)
+      rawValue(node)
     ) {
       violations.push(
         `${file}:${line(source, node)} raw ${node.name.text} record; build it with replaceTabBuckets/replaceRecordEntries or annotate it`
