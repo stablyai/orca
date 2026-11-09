@@ -46,6 +46,7 @@ type PaneActivityCacheEntry = {
 
 export type ActivityEventBuildCache = {
   panes: Map<string, PaneActivityCacheEntry>
+  // Temporary: removed when producer-owned Activity and Agents-list facts land (lane producer-owned-facts).
   tabs?: ActivityTabIndexes
 }
 
