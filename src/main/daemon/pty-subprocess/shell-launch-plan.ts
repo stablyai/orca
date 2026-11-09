@@ -60,10 +60,10 @@ export type PtyShellLaunchPlan = {
   startupAgentRecognition: RecognizedAgentProcess | null
 }
 
-export function createPtyShellLaunchPlan(
+export async function createPtyShellLaunchPlan(
   opts: PtySubprocessOptions,
   env: Record<string, string>
-): PtyShellLaunchPlan {
+): Promise<PtyShellLaunchPlan> {
   const resolvedWslContext = resolveWslSessionContext(opts)
   let shellPath = resolvedWslContext ? 'wsl.exe' : opts.shellOverride || resolvePtyShellPath(env)
   let shellArgs: string[]
@@ -195,7 +195,7 @@ export function createPtyShellLaunchPlan(
   } else {
     rescrubDaemonPtyEnvironment(env, opts)
     // Resolving a bare pwsh is not a fallback: no warning, and SHELL stays the user's login shell.
-    const preferredShellPath = resolvePosixPaneShellPath(shellPath, env.PATH)
+    const preferredShellPath = await resolvePosixPaneShellPath(shellPath, env.PATH)
     shellPath = preferredShellPath
     shellPath = resolveUnixShellPath(shellPath)
     if (shellPath !== preferredShellPath) {

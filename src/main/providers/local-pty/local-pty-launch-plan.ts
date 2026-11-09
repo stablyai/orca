@@ -3,7 +3,10 @@ import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-stat
 import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../../pty/shell-startup/git-bash'
 import { resolveUnixPaneShellPath } from '../../daemon/shell-readiness/shell-ready'
-import { resolvePosixPaneShellPath } from '../../pty/shell-startup/posix-pwsh'
+import {
+  needsPosixPaneShellResolution,
+  resolvePosixPaneShellPath
+} from '../../pty/shell-startup/posix-pwsh'
 import { getDefaultWslDistro } from '../../wsl/discovery/distro-catalog'
 import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
 import {
@@ -60,11 +63,17 @@ export type LocalPtyLaunchPlan = {
   launchWslDistro: string | null
 }
 
-export class DeferredLocalPtyLaunchPlan {
+export class DeferredLocalPtyLaunchPlan<T = boolean> {
   constructor(
-    readonly availability: boolean | Promise<boolean>,
-    readonly finish: (available: boolean) => LocalPtyLaunchPlan
+    private readonly input: T | Promise<T>,
+    private readonly finish: (input: T) => LocalPtyLaunchPlan
   ) {}
+
+  /** Awaits the async input; the caller rechecks cancellation before building the plan. */
+  async settle(): Promise<() => LocalPtyLaunchPlan> {
+    const input = await this.input
+    return () => this.finish(input)
+  }
 }
 
 function finalizeLocalPtyLaunchPlan(
@@ -192,7 +201,7 @@ function createWindowsLocalPtyLaunchPlan(
 export function createLocalPtyLaunchPlan(
   args: PtySpawnOptions,
   getOptions: () => LocalPtyProviderOptions
-): LocalPtyLaunchPlan | DeferredLocalPtyLaunchPlan {
+): LocalPtyLaunchPlan | DeferredLocalPtyLaunchPlan | DeferredLocalPtyLaunchPlan<string> {
   const startupAgentRecognition = args.command
     ? recognizeAgentProcessFromCommandLine(args.command)
     : null
@@ -236,18 +245,26 @@ export function createLocalPtyLaunchPlan(
   if (process.platform === 'win32') {
     return createWindowsLocalPtyLaunchPlan(seed, getOptions)
   }
-  const shellPath = resolvePosixPaneShellPath(
-    resolveUnixPaneShellPath(args.env ?? {}, args.shellOverride, getOptions().getDefaultShell?.()),
-    args.env?.PATH
+  const requestedShellPath = resolveUnixPaneShellPath(
+    args.env ?? {},
+    args.shellOverride,
+    getOptions().getDefaultShell?.()
   )
-  return finalizeLocalPtyLaunchPlan(seed, {
-    shellPath,
-    // shellOverride already includes settings resolution; only spawn-supplied args identify the profile launch.
-    shellArgs:
-      !args.command && !args.launchAgent && args.terminalShellArgs !== undefined
-        ? args.terminalShellArgs
-        : ['-l'],
-    effectiveCwd: cwd,
-    validationCwd: cwd
-  })
+  const finish = (shellPath: string): LocalPtyLaunchPlan =>
+    finalizeLocalPtyLaunchPlan(seed, {
+      shellPath,
+      // shellOverride already includes settings resolution; only spawn-supplied args identify the profile launch.
+      shellArgs:
+        !args.command && !args.launchAgent && args.terminalShellArgs !== undefined
+          ? args.terminalShellArgs
+          : ['-l'],
+      effectiveCwd: cwd,
+      validationCwd: cwd
+    })
+  return needsPosixPaneShellResolution(requestedShellPath)
+    ? new DeferredLocalPtyLaunchPlan(
+        resolvePosixPaneShellPath(requestedShellPath, args.env?.PATH),
+        finish
+      )
+    : finish(requestedShellPath)
 }

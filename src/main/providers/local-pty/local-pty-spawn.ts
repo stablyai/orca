@@ -62,9 +62,9 @@ export async function spawnLocalPty(
     const incarnationId = randomUUID()
     let plan = createLocalPtyLaunchPlan(args, getOptions)
     if (plan instanceof DeferredLocalPtyLaunchPlan) {
-      const available = await plan.availability
+      const finish = await plan.settle()
       throwIfCanceled()
-      plan = plan.finish(available)
+      plan = finish()
     }
     throwIfCanceled()
     // Daemon-off (the daemon failed to start) a restore spawns here: same E9 hold as the daemon's.

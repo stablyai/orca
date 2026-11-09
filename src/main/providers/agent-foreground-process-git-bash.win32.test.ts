@@ -116,7 +116,7 @@ describeOnWindows("Git Bash launcher shell proof with Orca's real launch", () =>
         env: extraEnv
       }
       const env = createDaemonPtyEnvironment(opts)
-      const plan = createPtyShellLaunchPlan(opts, env)
+      const plan = await createPtyShellLaunchPlan(opts, env)
       expect(isGitForWindowsBashLauncherPath(plan.shellPath)).toBe(true)
       expect(plan.shellArgs.join(' ')).toContain('exec "$BASH"')
       // Launcher, exec stub, interactive bash: the shape that a size-1 or size-2 rule never matches.
@@ -144,7 +144,7 @@ describeOnWindows("Git Bash launcher shell proof with Orca's real launch", () =>
     }
     try {
       const env = createDaemonPtyEnvironment(opts)
-      const plan = createPtyShellLaunchPlan(opts, env)
+      const plan = await createPtyShellLaunchPlan(opts, env)
       expect(plan.shellPath).toBe(opts.shellOverride)
       expect(isGitForWindowsBashLauncherPath(plan.shellPath)).toBe(true)
       // No Git Bash startup args for an unrecognized folder, so no exec stub: launcher -> bash.
@@ -165,7 +165,7 @@ describeOnWindows("Git Bash launcher shell proof with Orca's real launch", () =>
       shellOverride: WINDOWS_GIT_BASH_SHELL
     }
     const env = createDaemonPtyEnvironment(opts)
-    const spawned = await spawnPlannedPane(createPtyShellLaunchPlan(opts, env), env, opts)
+    const spawned = await spawnPlannedPane(await createPtyShellLaunchPlan(opts, env), env, opts)
     const proc = spawned.process
     let output = spawned.claimStartupEvents?.().data.join('') ?? ''
     proc.onData((chunk) => {
