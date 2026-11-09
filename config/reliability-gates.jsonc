@@ -2486,7 +2486,7 @@
           "result": "failed",
           "durationSeconds": 0.8,
           "summary": "The final-review oracle failed 4/16 before the follow-up: same-id folder simulator reuse selected no owning tab, inactive local simulator creation was unstamped, the paired SSH/runtime alias resolved local metadata, and an explicit unknown owner fell back locally. Historical command preserved after the test-value audit removed the palette repo resolver suite. currentCommand is an administrative link to a remaining gate command; this historical run has not validated that command or equivalent coverage.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts"
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/simulator/tabs/ensure-simulator-tab-behavior.test.ts"
         },
         {
           "date": "2026-08-20",
@@ -2496,7 +2496,7 @@
           "result": "failed",
           "durationSeconds": 0.1,
           "summary": "The final reviewer repo-label oracle failed 1/6 before the follow-up: a paired SSH worktree resolved the local bare-id repository instead of its runtime-owned repository. Historical command preserved after the test-value audit removed the palette repo resolver suite. currentCommand is an administrative link to a remaining gate command; this historical run has not validated that command or equivalent coverage.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts"
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/simulator/tabs/ensure-simulator-tab-behavior.test.ts"
         },
         {
           "date": "2026-08-20",
@@ -2506,7 +2506,7 @@
           "result": "failed",
           "durationSeconds": 0.1,
           "summary": "The final clean-round fail-closed oracle failed 1/7 before the follow-up: an unavailable explicit runtime owner borrowed physical SSH repository metadata. Historical command preserved after the test-value audit removed the palette repo resolver suite. currentCommand is an administrative link to a remaining gate command; this historical run has not validated that command or equivalent coverage.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/ensure-simulator-tab-behavior.test.ts"
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/simulator/tabs/ensure-simulator-tab-behavior.test.ts"
         },
 
         {
