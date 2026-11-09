@@ -66,7 +66,7 @@ function revisionKey(headSha: unknown, diffRefs: unknown): (string | null)[] | n
   if (diffRefs === undefined || diffRefs === null) {
     return [head, null, null, null]
   }
-  if (typeof diffRefs !== 'object') {
+  if (typeof diffRefs !== 'object' || Array.isArray(diffRefs)) {
     return null
   }
   const refs = [

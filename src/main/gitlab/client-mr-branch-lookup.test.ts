@@ -383,17 +383,19 @@ describe('gitlab client — MR operations', () => {
 
     it('bypasses malformed revisions and evicts by accounted ID storage below the receipt limit', async () => {
       const f = membershipFixture(33000)
-      Object.assign(f.mr, { diff_refs: { head_sha: 'bad' } })
-      await f.read(f.member)
-      await f.read(f.member)
-      expect(glabApiWithHeadersMock).toHaveBeenCalledTimes(660)
+      for (const diff_refs of [{ head_sha: 'bad' }, []]) {
+        Object.assign(f.mr, { diff_refs })
+        await f.read(f.member)
+        await f.read(f.member)
+      }
+      expect(glabApiWithHeadersMock).toHaveBeenCalledTimes(1320)
       Object.assign(f.mr, { diff_refs: undefined })
       await f.read(f.member)
       f.mr.sha = 'b'.repeat(40)
       await f.read(f.member)
       f.mr.sha = 'a'.repeat(40)
       await f.read(f.member)
-      expect(glabApiWithHeadersMock).toHaveBeenCalledTimes(1650)
+      expect(glabApiWithHeadersMock).toHaveBeenCalledTimes(2310)
     })
 
     it('completes oversized histories correctly without retaining them', async () => {

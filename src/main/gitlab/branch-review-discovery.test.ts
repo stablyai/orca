@@ -97,21 +97,26 @@ it.each([100, 1000])(
   async (count) => {
     read.mockResolvedValue({ stdout: JSON.stringify([row(1, 'opened', 8)]) })
     pages.mockImplementation(async ([endpoint]: string[]) => {
-      const page = Number(new URL(endpoint, 'https://gitlab.com').searchParams.get('page'))
+      const query = new URL(endpoint, 'https://gitlab.com').searchParams
+      const page = Number(query.get('page'))
+      const branch = query.get('source_branch')
       return {
         body: JSON.stringify(
           Array.from({ length: 100 }, (_, i) => {
             const iid = (page - 1) * 100 + i + 1
-            return row(iid, 'opened', iid === count ? 1 : 8)
+            return { ...row(iid, 'opened', iid === count ? 1 : 8), source_branch: branch }
           })
         ),
         headers: { 'x-next-page': page * 100 < count ? String(page + 1) : '' }
       }
     })
-    await expect(createGitLabBranchDiscovery(args)('feature')).resolves.toMatchObject({
-      iid: count
+    const discover = createGitLabBranchDiscovery(args)
+    await expect(discover('feature')).resolves.toMatchObject({ iid: count })
+    await expect(discover('renamed')).resolves.toMatchObject({
+      iid: count,
+      source_branch: 'renamed'
     })
     expect(read).toHaveBeenCalledTimes(1)
-    expect(pages).toHaveBeenCalledTimes(count / 100)
+    expect(pages).toHaveBeenCalledTimes((2 * count) / 100)
   }
 )
