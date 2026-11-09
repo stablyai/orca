@@ -117,8 +117,8 @@ it.each(['before', 'after', 'paired', 'orchestration', 'codex-startup'] as const
                   ...hook.payload,
                   paneKey: hook.paneKey,
                   terminalHandle: promptHandle,
-                  receivedAt: Date.now(),
-                  stateStartedAt: hook.payload.mainAgent?.stateStartedAt ?? Date.now(),
+                  receivedAt: hook.payload.mainAgent?.stateStartedAt ?? 1_000,
+                  stateStartedAt: hook.payload.mainAgent?.stateStartedAt ?? 1_000,
                   connectionId: null
                 }
               ]
