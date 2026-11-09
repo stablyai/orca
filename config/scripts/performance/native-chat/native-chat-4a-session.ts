@@ -199,7 +199,8 @@ export async function waitForControls(page: Page, timeoutMs = 60_000): Promise<v
         (candidate) => candidate.checkVisibility()
       )
       const composer = root?.querySelector('[role="textbox"]')
-      return Boolean(composer && root?.querySelector('[data-native-chat-working]'))
+      // The working flag is an attribute of the root itself.
+      return Boolean(composer && root?.hasAttribute('data-native-chat-working'))
     },
     null,
     { timeout: timeoutMs, polling: 16 }
@@ -216,8 +217,7 @@ export async function waitForWorking(
       const root = [...document.querySelectorAll('[data-native-chat-root="true"]')].find(
         (candidate) => candidate.checkVisibility()
       )
-      const flag = root?.querySelector('[data-native-chat-working]')
-      return flag?.getAttribute('data-native-chat-working') === String(working)
+      return root?.getAttribute('data-native-chat-working') === String(working)
         ? performance.now()
         : false
     },
