@@ -18528,7 +18528,9 @@
     },
     "native-chat": {
       "install": {
-        "checking": "このホストで {{agent}} の準備ができているか確認しています…"
+        "checking": "このホストで {{agent}} の準備ができているか確認しています…",
+        "cliInstall": "インストール",
+        "cliRecheck": "再確認"
       },
       "reasoning": "推論",
       "contextMenu": {

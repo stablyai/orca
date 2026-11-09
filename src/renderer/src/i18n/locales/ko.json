@@ -18528,7 +18528,9 @@
     },
     "native-chat": {
       "install": {
-        "checking": "이 호스트에서 {{agent}}이(가) 준비되었는지 확인하는 중…"
+        "checking": "이 호스트에서 {{agent}}이(가) 준비되었는지 확인하는 중…",
+        "cliInstall": "설치",
+        "cliRecheck": "다시 확인"
       },
       "reasoning": "추론",
       "contextMenu": {

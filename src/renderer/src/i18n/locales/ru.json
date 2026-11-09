@@ -19788,7 +19788,9 @@
     },
     "native-chat": {
       "install": {
-        "checking": "Проверяем готовность {{agent}} на этом сервере…"
+        "checking": "Проверяем готовность {{agent}} на этом сервере…",
+        "cliInstall": "Установить",
+        "cliRecheck": "Проверить снова"
       },
       "reasoning": "Рассуждения",
       "failureWords": {

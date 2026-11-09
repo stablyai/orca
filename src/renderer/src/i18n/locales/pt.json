@@ -20627,7 +20627,9 @@
       },
       "copyCode": "Copiar código",
       "install": {
-        "checking": "Verificando se {{agent}} está pronto neste host…"
+        "checking": "Verificando se {{agent}} está pronto neste host…",
+        "cliInstall": "Instalar",
+        "cliRecheck": "Verificar novamente"
       },
       "reasoning": "Raciocínio",
       "failureWords": {

@@ -19184,7 +19184,9 @@
         "linkActions": "Actions sur le lien"
       },
       "install": {
-        "checking": "Vérification que {{agent}} est prêt sur cet hôte…"
+        "checking": "Vérification que {{agent}} est prêt sur cet hôte…",
+        "cliInstall": "Installer",
+        "cliRecheck": "Revérifier"
       },
       "reasoning": "Raisonnement",
       "contextMenu": {

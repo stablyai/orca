@@ -18468,7 +18468,9 @@
   "components": {
     "native-chat": {
       "install": {
-        "checking": "正在检查 {{agent}} 是否已在此主机上就绪…"
+        "checking": "正在检查 {{agent}} 是否已在此主机上就绪…",
+        "cliInstall": "安装",
+        "cliRecheck": "再次检查"
       },
       "reasoning": "推理",
       "contextMenu": {
