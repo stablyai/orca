@@ -157,10 +157,7 @@ export class KeyedJsonRowCache {
         rollback(db)
       }
     } catch (error) {
-      // A crash mid-save can leave a journal or WAL only a writable connection can recover.
-      // Replaying it here would run unbounded I/O on the caller's thread, so rebuild instead,
-      // as for corruption; otherwise every later read-only load would fail the same way.
-      if (classifyRowCacheFailure(error) !== 'corrupt' && !needsWritableRecovery(error)) {
+      if (classifyRowCacheFailure(error) !== 'corrupt') {
         return { kind: 'unavailable', error }
       }
       db?.close()
@@ -352,11 +349,4 @@ function receiptNames(stored: unknown, receipt: string): boolean {
     return false
   }
   return stored === receipt || /^\d+:\d+:([0-9a-f]{64})$/.exec(stored)?.[1] === receipt
-}
-
-/** SQLITE_READONLY_RECOVERY and SQLITE_READONLY_ROLLBACK: recovery needs a writable connection. */
-function needsWritableRecovery(error: unknown): boolean {
-  const errcode =
-    error && typeof error === 'object' && 'errcode' in error ? error.errcode : undefined
-  return errcode === 264 || errcode === 776
 }
