@@ -94,13 +94,35 @@ export async function markerSeenAt(
   marker: string,
   timeoutMs = 120_000
 ): Promise<number> {
-  const handle = await page.waitForFunction(
-    (marker) =>
-      (window as unknown as { __4a: { seen: Map<string, number> } }).__4a.seen.get(marker) ?? false,
-    marker,
-    { timeout: timeoutMs, polling: 16 }
-  )
+  const handle = await page
+    .waitForFunction(
+      (marker) =>
+        (window as unknown as { __4a: { seen: Map<string, number> } }).__4a.seen.get(marker) ??
+        false,
+      marker,
+      { timeout: timeoutMs, polling: 16 }
+    )
+    .catch(async (error: unknown) => {
+      throw new Error(
+        `${marker} not visible in ${timeoutMs} ms (${await visibleChatState(page)})`,
+        {
+          cause: error
+        }
+      )
+    })
   return (await handle.jsonValue()) as number
+}
+
+/** One line on the chat the user sees, for timeout messages. */
+export function visibleChatState(page: Page): Promise<string> {
+  return page
+    .evaluate(() => {
+      const roots = [...document.querySelectorAll('[data-native-chat-root="true"]')]
+      const root = roots.find((candidate) => candidate.checkVisibility())
+      const text = root?.textContent ?? ''
+      return `${roots.length} roots, visible=${Boolean(root)}, working=${root?.getAttribute('data-native-chat-working')}, tail=${JSON.stringify(text.slice(-160))}`
+    })
+    .catch((error: unknown) => `state unreadable: ${String(error)}`)
 }
 
 /** Gaps between visible transcript updates inside [from, to], the live-update cadence a reader sees. */

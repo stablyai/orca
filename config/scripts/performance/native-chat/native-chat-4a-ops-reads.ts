@@ -94,7 +94,7 @@ export async function historyRows(ctx: RunContext): Promise<void> {
       continue
     }
     await sampled(ctx, row, n, () =>
-      read(ctx, 'agentSession.item', { sessionId, itemId: entry.item.id })
+      read(ctx, 'agentSession.item', { sessionId, itemId: entry.item.itemId })
     )
   }
 }
