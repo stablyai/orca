@@ -7,7 +7,6 @@ import {
 } from 'electron'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
 import { mergeDictationTerms } from '../../shared/dictation-dictionary'
-import type { DictationContext } from '../../shared/speech-types'
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
@@ -24,7 +23,7 @@ import {
   clearOpenAiCompatibleSpeechProvider,
   summarizeOpenAiCompatibleSpeechProvider
 } from '../speech/openai-compatible-speech-provider-store'
-import type { OpenAiCompatibleSpeechProvider } from '../../shared/speech-types'
+import type { DictationContext, OpenAiCompatibleSpeechProvider } from '../../shared/speech-types'
 import type { Store } from '../persistence/loading-store/store'
 
 export function registerSpeechHandlers(store: Store): void {
