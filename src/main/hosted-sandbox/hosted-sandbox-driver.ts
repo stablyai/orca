@@ -155,7 +155,13 @@ export function toReady(ready: HostedSandboxReadyResponse): HostedEnvironmentRea
   const handle: EnvironmentHandle = {
     driverId: HOSTED_SANDBOX_DRIVER_ID,
     environmentId: ready.sandbox.id,
-    driverState: { sandboxId: ready.sandbox.id }
+    driverState: {
+      sandboxId: ready.sandbox.id,
+      // Booted from an org environment build: dependencies are installed, so no setup-script nudge.
+      ...(ready.sandbox.environmentBuildId
+        ? { environmentBuildId: ready.sandbox.environmentBuildId }
+        : {})
+    }
   }
   return {
     handle,

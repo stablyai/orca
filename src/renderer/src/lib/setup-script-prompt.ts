@@ -58,7 +58,9 @@ export async function inspectSetupScriptPromptState({
         ? { status: 'distro-stopped', repoId: repo.id }
         : { status: 'error', repoId: repo.id }
     }
-    const hasEffectiveSetup = hasEffectiveSetupCommand(repo, hooksResult)
+    // A cloud workspace booted from an environment build has its dependencies installed already.
+    const hasEffectiveSetup =
+      hooksResult.environmentProvisioned === true || hasEffectiveSetupCommand(repo, hooksResult)
     if (hasEffectiveSetup) {
       return {
         status: 'ok',

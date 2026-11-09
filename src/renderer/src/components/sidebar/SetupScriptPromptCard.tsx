@@ -49,6 +49,12 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
   const dismissedRepoIds = useAppStore((s) => s.setupScriptPromptDismissedRepoIds)
   const dismissSetupScriptPrompt = useAppStore((s) => s.dismissSetupScriptPrompt)
+  // A cloud workspace booted from an org environment build already has its dependencies installed.
+  const provisionedByEnvironmentBuild = useAppStore((s) =>
+    activeWorktreeId
+      ? Boolean(s.ephemeralVmRuntimesByWorkspaceId[activeWorktreeId]?.environmentBuildId)
+      : false
+  )
   const [promptState, setPromptState] = useState<SetupScriptPromptState | null>(null)
   const [detectedSetupDraft, setDetectedSetupDraft] = useState('')
   const [importingRepoHostIdentity, setImportingRepoHostIdentity] = useState<string | null>(null)
@@ -61,9 +67,11 @@ function SetupScriptPromptCard(): React.JSX.Element | null {
     [activeRepoId, activeWorktree, repos, settings]
   )
   const activeRepoHostIdentity = activeRepo ? getRepoHostIdentity(activeRepo) : null
-  const isDismissed = activeRepoHostIdentity
-    ? isSetupScriptPromptDismissed(activeRepoHostIdentity, dismissedRepoIds)
-    : false
+  const isDismissed =
+    provisionedByEnvironmentBuild ||
+    (activeRepoHostIdentity
+      ? isSetupScriptPromptDismissed(activeRepoHostIdentity, dismissedRepoIds)
+      : false)
 
   useSetupScriptPromptInspection({
     activeRepo,

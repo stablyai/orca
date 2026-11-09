@@ -20,6 +20,8 @@ export type HookCheckResult = {
   hasHooks: boolean
   hooks: OrcaHooks | null
   mayNeedUpdate: boolean
+  /** The checkout comes from an Orca Cloud environment build that already installed dependencies. */
+  environmentProvisioned?: true
   /** A background check refused because the repo's WSL distro is stopped or didn't answer. */
   unavailable?: 'wsl-distro-stopped' | 'wsl-distro-unverifiable'
 }
