@@ -19,6 +19,21 @@ export type RuntimeLongPollClass = 'ask' | 'browser-host' | 'wait'
 
 // One long-poll classifier owns admission, abort and keepalive (design §3.1).
 export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollClass | null {
+  // A recipe workspace's removal waits on its environment's Git removal and the recipe's destroy
+  // step. Those requests name a runtime host and a full workspace id; other removals stay short.
+  if (
+    request.method === 'worktree.rm' &&
+    typeof request.params === 'object' &&
+    request.params !== null &&
+    'hostId' in request.params &&
+    typeof request.params.hostId === 'string' &&
+    request.params.hostId.startsWith('runtime:') &&
+    'worktree' in request.params &&
+    typeof request.params.worktree === 'string' &&
+    request.params.worktree.startsWith('id:')
+  ) {
+    return 'wait'
+  }
   // Worker readiness plus prompt verification can take 90–110s; keep Unix and Windows pipe connections alive.
   if (request.method === 'orchestration.workerStart') {
     return 'wait'

@@ -392,6 +392,8 @@ const ORCA_CLI_MARKDOWN = [
   "`recipe_workspace_create_failed`; `data.phase` names the failed step and `data.environment` says",
   "whether Orca destroyed the new environment. Never retry with `--retry-launch`; after a failed agent",
   "launch, use the returned `agent launch` recovery command against the existing workspace.",
+  "`ORCA worktree rm --worktree id:<id> --yes --json` on a recipe workspace also destroys its environment;",
+  "without `--yes` it asks in a terminal and fails with `confirmation_required` otherwise.",
   "",
   "Agent/setup flags:",
   "",
