@@ -50,6 +50,7 @@ import type { TerminalQuickCommandHostsSlice } from './terminals/terminal-quick-
 import type { StructuredSessionLaunchDirectorySlice } from './slices/agent-status/structured-session-launch-directories'
 import type { StructuredChatSleptAtSlice } from './slices/agent-status/structured-chat-slept-at'
 import type { StructuredChatCompanionWritesSlice } from './slices/agent-status/structured-chat-companion-writes'
+import type { EphemeralVmLifecycleSlice } from './slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import type { WorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-contract'
 
 export type AppState = RepoSlice &
@@ -102,4 +103,5 @@ export type AppState = RepoSlice &
   StructuredSessionLaunchDirectorySlice &
   StructuredChatSleptAtSlice &
   StructuredChatCompanionWritesSlice &
-  WorkspaceAttentionSlice
+  WorkspaceAttentionSlice &
+  EphemeralVmLifecycleSlice

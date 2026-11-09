@@ -5,7 +5,7 @@ const { owner } = vi.hoisted(() => {
   }
   return { owner }
 })
-vi.mock('@/lib/worktree-operation-route', () => ({
+vi.mock('@/lib/workspace/ownership/worktree-operation-route', () => ({
   resolveWorktreeOperationRoute: () =>
     owner.current.kind === 'local'
       ? { executionHostId: 'local', runtimeEnvironmentId: null }

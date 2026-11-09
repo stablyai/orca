@@ -9,7 +9,7 @@ import { isGitRepoKind } from '../../../../../../shared/repo-kind'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { refreshGitStatusForWorktree } from './git-status-refresh'
 import { isWindowVisible, windowPollSlowdown } from '@/lib/window-visibility-interval'
-import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace/activation/workspace-switch-user-act'
 import { useRefreshOnHostContact } from './use-refresh-on-host-contact'
 import { useGitStatusWindowPresence } from './use-git-status-window-presence'
 import {

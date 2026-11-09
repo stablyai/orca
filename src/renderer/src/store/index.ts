@@ -54,6 +54,7 @@ import { createTerminalQuickCommandHostsSlice } from './terminals/terminal-quick
 import { createStructuredSessionLaunchDirectorySlice } from './slices/agent-status/structured-session-launch-directories'
 import { createStructuredChatSleptAtSlice } from './slices/agent-status/structured-chat-slept-at'
 import { createStructuredChatCompanionWritesSlice } from './slices/agent-status/structured-chat-companion-writes'
+import { createEphemeralVmLifecycleSlice } from './slices/ephemeral-vm/ephemeral-vm-lifecycle'
 import { createWorkspaceAttentionSlice } from './slices/workspace-attention/workspace-attention-slice'
 import { e2eConfig } from '@/lib/e2e-config'
 import type { createWebRuntimeSessionTerminal } from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
@@ -152,7 +153,8 @@ export const useAppStore = create<AppState>()(
           ...createStructuredSessionLaunchDirectorySlice(...a),
           ...createStructuredChatSleptAtSlice(...a),
           ...createStructuredChatCompanionWritesSlice(...a),
-          ...createWorkspaceAttentionSlice(...a)
+          ...createWorkspaceAttentionSlice(...a),
+          ...createEphemeralVmLifecycleSlice(...a)
         }
       })
     ),

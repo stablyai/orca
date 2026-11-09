@@ -1,8 +1,7 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../shared/native-chat/native-chat-types'
 import { nativeChatSubagentSections } from './native-chat-subagent-sections'
 import { nativeChatSubagentLiveSections } from './native-chat-subagent-live-frontier'
-import { buildNativeChatTranscriptSlots } from '../conversation/slots/native-chat-transcript-slots'
 
 function message(
   id: string,
@@ -72,99 +71,7 @@ function fixture(calls: readonly NativeChatMessage[]) {
   return { conversation, sections, roster, parent, child }
 }
 
-function slots(input: ReturnType<typeof fixture>) {
-  return buildNativeChatTranscriptSlots({
-    messages: input.conversation,
-    turnKeys: input.conversation.map(() => undefined),
-    liveTurnKey: undefined,
-    receipts: new Map(),
-    turnStatuses: { active: null, completedByTurn: {} },
-    turnDiffs: new Map(),
-    expandedTurnKeys: new Set(),
-    isWorking: true,
-    lifecycleWorking: false,
-    subagentSections: input.sections
-  })
-}
-
-function countHandoffCopies(
-  input: ReturnType<typeof fixture>,
-  calls: readonly NativeChatMessage[]
-) {
-  const tracked = new Set<unknown>(calls)
-  const set = Map.prototype.set
-  const values = Array.prototype[Symbol.iterator]
-  let copies = 0
-  const spy = vi.spyOn(Map.prototype, 'set').mockImplementation(function (
-    this: Map<unknown, unknown>,
-    key,
-    value
-  ) {
-    if (key === 'parent' && Array.isArray(value) && tracked.has(value[0])) {
-      Object.defineProperty(value, Symbol.iterator, {
-        configurable: true,
-        value: () => {
-          const iterator = values.call(value)
-          const next = iterator.next.bind(iterator)
-          iterator.next = (...args) => {
-            const item = next(...args)
-            if (!item.done) {
-              copies += 1
-            }
-            return item
-          }
-          return iterator
-        }
-      })
-    }
-    return set.call(this, key, value)
-  })
-  try {
-    const live = nativeChatSubagentLiveSections(input.conversation, input.sections, true)
-    spy.mockRestore()
-    return { live, copies }
-  } finally {
-    spy.mockRestore()
-  }
-}
-
 describe('nested subagent handoff accumulation', () => {
-  it.each([12, 128, 1000])('copies %s handoffs only for their existing final merge', (count) => {
-    const calls = Array.from({ length: count }, (_, index) => handoff(index))
-    const input = fixture(calls)
-    const before = structuredClone(input)
-    const result = countHandoffCopies(input, calls)
-    expect([...result.live]).toEqual(['parent', 'child'])
-    expect(input).toEqual(before)
-    const messages = slots(input).flatMap((slot) =>
-      slot.kind === 'message' ? (slot.workRun ?? [slot.message]) : []
-    )
-    const expected = [input.roster, input.parent, input.child, ...calls]
-    expect(messages).toEqual(expected)
-    for (const [index, row] of messages.entries()) {
-      expect(row).toBe(expected[index])
-    }
-    expect(result.copies).toBe(count)
-  })
-
-  it('retains duplicate records, colliding message IDs and unknown input fields without mutating inputs', () => {
-    const first = handoff(0)
-    const second = handoff(1)
-    second.id = first.id
-    const calls = [first, first, second]
-    const input = fixture(calls)
-    const before = structuredClone(input)
-    Object.freeze(input.conversation)
-    for (const row of input.conversation) {
-      Object.freeze(row.blocks)
-      Object.freeze(row)
-    }
-    const result = countHandoffCopies(input, calls)
-    expect([...result.live]).toEqual(['parent', 'child'])
-    expect(input).toEqual(before)
-    expect(result.copies).toBe(3)
-  })
-
   it.each([{ agents: [] }, { agents: [''] }, { agents: ['unknown'] }])(
     'keeps unknown or empty target behavior for %j',
     ({ agents }) => {

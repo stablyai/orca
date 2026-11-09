@@ -1,3 +1,4 @@
+import type { RecipeEnvironmentDescription } from '../../../shared/recipe-host-removal'
 import {
   parseExecutionHostId,
   toRuntimeExecutionHostId,
@@ -19,6 +20,14 @@ import { SERVER_FETCH_TIMEOUT_MS } from './server-worktree-fetch'
 import { normalizePairedServerRow } from '../../../shared/sidebar-list/paired-server-rows'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 import { describeRelayHosts, relayHostFence } from './mobile-relay-host-descriptions'
+import {
+  RelayHostListAnnouncer,
+  type RelayHostListAnnouncerSources
+} from './mobile-relay-host-list-announcer'
+
+export type MobileRelayRecipeEnvironmentLookup = (
+  hostId: string
+) => ReadonlyMap<string, RecipeEnvironmentDescription>
 
 /** Sidebar live rows or per-phone-request fetches, always read as the desktop. */
 export type ServerWorktreeRows = {
@@ -50,6 +59,7 @@ export class MobileRelayHostCatalog {
       serverRows: ServerWorktreeRows
       hostLabelOverrides: () => ReadonlyMap<ExecutionHostId, string>
       getWorkspaceSession: (hostId: ExecutionHostId) => WorkspaceSessionState | null
+      recipeEnvironmentsFor?: MobileRelayRecipeEnvironmentLookup
       now?: () => number
     }
   ) {}
@@ -136,7 +146,27 @@ export class MobileRelayHostCatalog {
     return null
   }
 
+  private announcer: RelayHostListAnnouncer | null = null
+
   list(): MobileRelayHostsListResult {
+    const result = this.describe()
+    this.announcer?.listed(result)
+    return result
+  }
+
+  /** Calls `changed` whenever list() would answer differently, so phones need not poll it. */
+  publishListChanges(sources: RelayHostListAnnouncerSources): () => void {
+    const announcer = new RelayHostListAnnouncer(this.options.hosts, () => this.describe(), sources)
+    this.announcer = announcer
+    return () => {
+      announcer.dispose()
+      if (this.announcer === announcer) {
+        this.announcer = null
+      }
+    }
+  }
+
+  private describe(): MobileRelayHostsListResult {
     return {
       hosts: describeRelayHosts(this.options.hosts, this.options.hostLabelOverrides()).map(
         ({
@@ -196,15 +226,45 @@ export class MobileRelayHostCatalog {
         )
       ].map(worktreeIdentityKey)
     )
+    let recipeEnvironments: ReadonlyMap<string, RecipeEnvironmentDescription> | undefined
+    try {
+      recipeEnvironments = this.options.recipeEnvironmentsFor?.(
+        toRuntimeExecutionHostId(host.environmentId)
+      )
+    } catch {
+      // The tag only decorates rows; an unreadable VM store must not blank the phone's list.
+      recipeEnvironments = undefined
+    }
     // Only desktop reads request background-removal support.
     return {
       worktrees: rows
         .filter((row) => row.removing !== true)
         .map((row) =>
-          stampDesktopSidebarView(row, host.environmentId, desktopDeviceIds, sessionActivity)
+          stampRecipeEnvironment(
+            stampDesktopSidebarView(row, host.environmentId, desktopDeviceIds, sessionActivity),
+            recipeEnvironments
+          )
         )
     }
   }
+}
+
+/** Only this desktop knows which workspaces live on VMs it created; the server's rows can't say. */
+function stampRecipeEnvironment(
+  row: MobileRelayServerWorktreeRow,
+  recipeEnvironments: ReadonlyMap<string, RecipeEnvironmentDescription> | undefined
+): MobileRelayServerWorktreeRow {
+  const environment =
+    typeof row.worktreeId === 'string' ? recipeEnvironments?.get(row.worktreeId) : undefined
+  if (environment) {
+    return { ...row, recipeEnvironment: environment }
+  }
+  // Only this desktop may say a row's VM is its own; drop the field if the server sent one.
+  if ('recipeEnvironment' in row) {
+    const { recipeEnvironment: _serverClaim, ...rest } = row
+    return { ...rest, hostId: row.hostId }
+  }
+  return row
 }
 
 /** Bound waiting even while the call sits in the desktop queue, before its own timeout starts. */

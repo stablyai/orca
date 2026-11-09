@@ -19,9 +19,9 @@ import { activateBrowserWorkspaceTab } from './browser-workspace-tab-activation'
 import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRoute
-} from '../../worktree-operation-route'
+} from '../../workspace/ownership/worktree-operation-route'
 import { getWorkspaceClientCreationActionPolicy } from '../../client-creation-action-policy'
-import { selectWorkspaceSurface } from '../../workspace-surface-reveal'
+import { selectWorkspaceSurface } from '../../workspace/activation/workspace-surface-reveal'
 import { showWorkspaceTabs } from '../navigation/http-link-browser-placement'
 
 function ownsBrowserRoute(

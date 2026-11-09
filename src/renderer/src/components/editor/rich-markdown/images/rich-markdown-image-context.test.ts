@@ -9,7 +9,7 @@ import { prewarmMarkdownPreviewLocalImages } from '../../markdown-preview/links/
 import { loadLocalImageSrc } from '../../document-images/useLocalImageSrc'
 import { resetLocalImageCacheState as resetLocalImageSrcStateForTests } from '../../document-images/local-image-src-cache'
 
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({ getConnectionId: () => null }))
 
 describe('image reads for a document whose owner is unresolved', () => {
   afterEach(() => {

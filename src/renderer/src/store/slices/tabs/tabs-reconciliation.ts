@@ -31,11 +31,11 @@ export function projectWorktreeTabModelReconciliation(
 ): WorktreeTabModelReconciliation {
   // A batch's drafts hold earlier workspaces' writes; a single reconciliation drafts from `state`.
   const drafts = batch?.drafts ?? createReconciliationDrafts(state)
-  const unifiedTabs = drafts.unifiedTabsByWorktree.get(worktreeId) ?? []
-  const storedGroups = drafts.groupsByWorktree.get(worktreeId)
+  const unifiedTabs = drafts.unifiedTabs.get(worktreeId) ?? []
+  const storedGroups = drafts.groups.get(worktreeId)
   const groups = storedGroups ?? []
-  const storedActiveGroupId = drafts.activeGroupIdByWorktree.get(worktreeId)
-  const storedLayout = drafts.layoutByWorktree.get(worktreeId)
+  const storedActiveGroupId = drafts.activeGroups.get(worktreeId)
+  const storedLayout = drafts.layout.get(worktreeId)
   const runtimeTerminalTabs = state.tabsByWorktree[worktreeId] ?? []
   const unifiedTerminalEntityIds = new Set(
     unifiedTabs.filter((tab) => tab.contentType === 'terminal').map((tab) => tab.entityId)
@@ -219,18 +219,14 @@ export function projectWorktreeTabModelReconciliation(
         batch?.ownedStateKeys.add('unreadTerminalTabs')
       }
     }
-    const written = new Set<ReconciliationDraftField>([
-      'unifiedTabsByWorktree',
-      'groupsByWorktree',
-      'activeGroupIdByWorktree'
-    ])
-    drafts.unifiedTabsByWorktree.set(worktreeId, validTabs)
-    drafts.groupsByWorktree.set(worktreeId, nextGroups)
-    drafts.activeGroupIdByWorktree.set(worktreeId, nextActiveGroupId)
+    const written = new Set<ReconciliationDraftField>(['unifiedTabs', 'groups', 'activeGroups'])
+    drafts.unifiedTabs.set(worktreeId, validTabs)
+    drafts.groups.set(worktreeId, nextGroups)
+    drafts.activeGroups.set(worktreeId, nextActiveGroupId)
     if (nextLayout && layoutChanged) {
       // Why: restored runtime terminals need a concrete leaf before activation.
-      drafts.layoutByWorktree.set(worktreeId, nextLayout)
-      written.add('layoutByWorktree')
+      drafts.layout.set(worktreeId, nextLayout)
+      written.add('layout')
     }
     if (batch) {
       written.forEach((field) => batch.writtenDraftFields.add(field))

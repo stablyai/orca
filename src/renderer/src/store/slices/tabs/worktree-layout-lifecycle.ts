@@ -168,7 +168,12 @@ export function removeWorktreeLayout(
         : groups
     )
   }
-  collapseEmptiedKeptGroups(s.groupsByWorktree, drafts, affectedWorkspaces)
+  // Removed worktrees' entries stay deleted; collapsing them would write an empty group list back.
+  collapseEmptiedKeptGroups(
+    s.groupsByWorktree,
+    drafts,
+    new Set([...affectedWorkspaces].filter((id) => !worktreeIds.has(id)))
+  )
   const recentEditors = Object.fromEntries(
     Object.entries(omitByWorktree(s.recentlyClosedEditorTabsByWorktree)).map(([id, rows]) => [
       id,

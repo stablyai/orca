@@ -8,7 +8,7 @@ import type {
   BrowserClearResult,
   BrowserSelectAllResult,
   BrowserPdfResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../browser-error'
 import {
   FILE_INPUT_FRAME_URL_FUNCTION,

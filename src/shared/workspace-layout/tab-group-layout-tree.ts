@@ -96,12 +96,19 @@ export function removeGroupLayoutLeaf(
   return { ...root, first, second }
 }
 
+/** Builds a record from `previous` with one entry set, or deleted for null; the renderer passes its seam helper. */
+export type ReplaceRecordEntries = <V>(
+  previous: Readonly<Record<string, V>>,
+  replacements: Iterable<readonly [key: string, value: V | null]>
+) => Record<string, V>
+
 export function collapseGroupLayout(
   layoutByWorktree: Record<string, TabGroupLayoutNode>,
   activeGroupIdByWorktree: Record<string, string>,
   worktreeId: string,
   groupId: string,
-  fallbackGroupId?: string | null
+  fallbackGroupId: string | null | undefined,
+  replaceEntries: ReplaceRecordEntries
 ): {
   layoutByWorktree: Record<string, TabGroupLayoutNode>
   activeGroupIdByWorktree: Record<string, string>
@@ -116,18 +123,11 @@ export function collapseGroupLayout(
     groupId,
     fallbackGroupId
   )
-  const nextLayoutByWorktree = { ...layoutByWorktree }
-  if (collapsed.layout) {
-    nextLayoutByWorktree[worktreeId] = collapsed.layout
-  } else {
-    delete nextLayoutByWorktree[worktreeId]
-  }
   return {
-    layoutByWorktree: nextLayoutByWorktree,
-    activeGroupIdByWorktree: {
-      ...activeGroupIdByWorktree,
-      [worktreeId]: collapsed.activeGroupId
-    }
+    layoutByWorktree: replaceEntries(layoutByWorktree, [[worktreeId, collapsed.layout]]),
+    activeGroupIdByWorktree: replaceEntries(activeGroupIdByWorktree, [
+      [worktreeId, collapsed.activeGroupId]
+    ])
   }
 }
 

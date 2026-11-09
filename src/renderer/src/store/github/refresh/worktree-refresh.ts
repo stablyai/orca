@@ -15,12 +15,12 @@ import { resolveReviewRepository, reviewRepositoryMatchesWorkspace } from '@/lib
 import {
   findIndexedReviewRepository,
   hasUniqueIndexedRepositoryHost
-} from '@/lib/repository-owner-index'
+} from '@/lib/workspace/ownership/repository-owner-index'
 import { worktreeOwnerHostIds } from '@/lib/workspace/ownership/workspace-catalog-owner-index'
 import { prCacheKey } from '../cache/cache-identity'
 import { settingsForGitHubRepoOwner } from '../work-items/work-item-routing'
 import { githubHostedReviewFallbackPRNumber } from '../pull-requests/pr-result-routing'
-import type { GitHubPRFallbackSource } from '../cache/cache-model'
+import { resolvePRBranchFallback } from '../../../../../shared/github/pr-branch-fallback-rule'
 import { selectWorktreesByRepo } from '../../workspaces/catalog/workspace-record-fields'
 
 export function findWorktreeById(
@@ -251,23 +251,12 @@ export function buildPRRefreshCandidate(
     repo.executionHostId,
     true
   )
-  const cachedFallbackPRNumber = cachedPR?.number ?? null
-  // Why: a merged PR is a valid fallback only while the worktree sits on its head or a confirmed-contained commit — else the branch moved on.
-  const cachedMergedPRMovedPastHead =
-    worktree.linkedPR == null &&
-    cachedPR?.state === 'merged' &&
-    cachedPR.headSha !== worktree.head &&
-    cachedPR.confirmedContainedHeadOid !== worktree.head
-  const fallbackPRNumber =
-    worktree.linkedPR == null && !cachedMergedPRMovedPastHead
-      ? (cachedFallbackPRNumber ?? hostedReviewFallbackPRNumber)
-      : null
-  const fallbackPRSource: GitHubPRFallbackSource | null =
-    worktree.linkedPR != null || fallbackPRNumber == null
-      ? null
-      : cachedFallbackPRNumber != null
-        ? 'pr-cache'
-        : 'hosted-review'
+  const { fallbackPRNumber, fallbackPRSource } = resolvePRBranchFallback({
+    linkedPRNumber: worktree.linkedPR ?? null,
+    cachedPR,
+    hintPRNumber: hostedReviewFallbackPRNumber,
+    currentHeadOid: worktree.head
+  })
   const sshStatus = repo.connectionId
     ? state.sshConnectionStates.get(repo.connectionId)?.status
     : null

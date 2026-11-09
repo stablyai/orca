@@ -15,6 +15,7 @@ export type AcpStructuredChild = Pick<
   | 'permissionModes'
   | 'connection'
   | 'closeRequested'
+  | 'failureClose'
   | 'journalClosed'
   | 'ended'
   | 'exitObservedAt'

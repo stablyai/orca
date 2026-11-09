@@ -2,13 +2,13 @@ import type { AppState } from '@/store/types'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 import '../../../../../shared/protocol-version'
-import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../../shared/browser-runtime-capabilities'
+import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import {
   getWorkspaceClientCreationActionPolicy,
   runtimeHostsPagesOnThisDesktop,
   type ClientCreationActionAvailability
 } from '../../client-creation-action-policy'
-import { resolveWorktreeOperationRoute } from '../../worktree-operation-route'
+import { resolveWorktreeOperationRoute } from '../../workspace/ownership/worktree-operation-route'
 import { getExecutionHostIdForWorktree } from '../../workspace/ownership/worktree-runtime-owner'
 import { resolveSshWorkspaceBrowserRouteEligibility } from './ssh-workspace-browser-route-eligibility'
 

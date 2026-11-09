@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
-import type { RuntimeChildProcess } from './desktop-script-serve-channel'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { DesktopScriptRuntimeHost, isRuntimeHostUnavailable } from './desktop-script-runtime-host'
 
 class FakeRuntimeChild extends EventEmitter {
@@ -96,7 +96,8 @@ function createHost(
       const child = new FakeRuntimeChild()
       child.deferWrites = options.deferWrites === true
       children.push(child)
-      return child as unknown as RuntimeChildProcess
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the piped streams and events used by the runtime host.
+      return child as unknown as ChildProcessWithoutNullStreams
     }
   })
   return { host, children, specs, warnings }

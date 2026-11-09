@@ -2,7 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
-import type * as ConnectionOwnerResolution from '@/lib/connection-owner-resolution'
+import type * as ConnectionOwnerResolution from '@/lib/workspace/ownership/connection-owner-resolution'
 import type * as LaunchAgentKindModule from '../../../shared/agent-kind'
 
 const mockCreateTab = vi.fn()
@@ -60,7 +60,7 @@ vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 const connectionOwner = vi.hoisted((): { nestedConnectionId: string | undefined } => ({
   nestedConnectionId: undefined
 }))
-vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => {
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', async (importOriginal) => {
   const actual = await importOriginal<typeof ConnectionOwnerResolution>()
   return {
     ...actual,

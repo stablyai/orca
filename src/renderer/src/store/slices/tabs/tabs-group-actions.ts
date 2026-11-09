@@ -4,7 +4,7 @@ import { activeSurfacePatchMatchesState, buildActiveSurfacePatch } from './tabs-
 import type { TabGroup, TabGroupLayoutNode } from '../../../../../shared/tab-types'
 import {
   buildSplitNode,
-  collapseWorktreeGroupLayout,
+  collapseGroupLayout,
   replaceLeaf
 } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
@@ -189,28 +189,14 @@ export function createTabsGroupActions(
         const remainingGroups = (current.groupsByWorktree[worktreeId] ?? []).filter(
           (candidate) => candidate.id !== groupId
         )
-        const currentLayout = current.layoutByWorktree[worktreeId]
-        const collapsed =
-          currentLayout &&
-          collapseWorktreeGroupLayout(
-            currentLayout,
-            current.activeGroupIdByWorktree[worktreeId],
-            groupId,
-            remainingGroups[0]?.id ?? null
-          )
-        const collapsedState = collapsed
-          ? {
-              layoutByWorktree: replaceRecordEntries(current.layoutByWorktree, [
-                [worktreeId, collapsed.layout]
-              ]),
-              activeGroupIdByWorktree: replaceRecordEntries(current.activeGroupIdByWorktree, [
-                [worktreeId, collapsed.activeGroupId]
-              ])
-            }
-          : {
-              layoutByWorktree: current.layoutByWorktree,
-              activeGroupIdByWorktree: current.activeGroupIdByWorktree
-            }
+        const collapsedState = collapseGroupLayout(
+          current.layoutByWorktree,
+          current.activeGroupIdByWorktree,
+          worktreeId,
+          groupId,
+          remainingGroups[0]?.id ?? null,
+          replaceRecordEntries
+        )
         const nextGroupsByWorktree = replaceRecordEntries(current.groupsByWorktree, [
           [worktreeId, remainingGroups]
         ])

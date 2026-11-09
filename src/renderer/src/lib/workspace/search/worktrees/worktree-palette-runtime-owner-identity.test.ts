@@ -8,7 +8,7 @@ import {
 } from '../palette-repo-resolution'
 import { buildWorktreePaletteDocuments } from './worktree-palette-document'
 import { searchWorktreeDocuments } from './worktree-palette-search'
-import '../../../unified-tab-host-ownership'
+import '../../ownership/unified-tab-host-ownership'
 
 function makeWorktree(runtimeOwnerEnvironmentId: string, displayName: string): Worktree {
   return {

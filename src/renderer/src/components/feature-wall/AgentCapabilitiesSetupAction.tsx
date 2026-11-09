@@ -5,7 +5,7 @@ import {
 import { bundledSkillSetupActionLabel } from '../skills/setup/bundled-skill-setup-copy'
 import { useOnboardingSkillRuntime } from '@/hooks/use-onboarding-skill-runtime'
 import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
-import { buildAgentFeatureSkillInstallCommand } from '@/lib/agent-feature-install-commands'
+import { buildAgentFeatureSkillInstallCommand } from '@/lib/skills/installation/agent-feature-install-commands'
 import { buildSkillCommandForRuntime } from '../../lib/skill-runtime-command'
 import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
 import { useCallback, useEffect, useRef, useState } from 'react'

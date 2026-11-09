@@ -3,7 +3,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useCallback, useEffect, type Dispatch, type RefObject, type SetStateAction } from 'react'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { getConnectionId } from '@/lib/connection-context'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import { useAppStore } from '@/store/index'
 import {
   cancelRuntimeGeneratePullRequestFields,
