@@ -11,6 +11,7 @@ import { useTerminalWatcherEffects } from '../../use-terminal-watcher-effects'
 import { takePendingBackgroundTerminalWorktreeMount } from '../../terminal/background-terminal-worktree-mount'
 import { synchronizeTerminalProviderSnapshotCapabilities } from '../../terminal/terminal-provider-snapshot-capability'
 import { dispatchTerminalSideEffectBatch } from '../pty-transport/output/terminal-side-effect-facts-handler'
+import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
 
 const WORKSPACE = 'repo1::/repo1/background'
 const TAB = 'background-tab'
@@ -38,7 +39,9 @@ it('receives a new background split pane title and bell without mounting the wor
   let createTerminal!: Parameters<Window['api']['ui']['onCreateTerminal']>[0]
   const subscribe = () => () => {}
   window.api = {
+    ...originalApi,
     ui: {
+      ...originalApi?.ui,
       onLaunchRecipe: subscribe,
       onCreateTerminal: (listener) => {
         createTerminal = listener
@@ -47,6 +50,7 @@ it('receives a new background split pane title and bell without mounting the wor
       onRequestTerminalTabMount: subscribe
     },
     pty: {
+      ...originalApi?.pty,
       onData: subscribe,
       onReplay: subscribe,
       onExit: subscribe,
@@ -54,10 +58,10 @@ it('receives a new background split pane title and bell without mounting the wor
       getSideEffectSnapshot: async () => null,
       write: async () => {}
     },
-    gh: {},
-    settings: { set: async () => {} },
-    worktrees: { updateMeta: async () => ({}) }
-  } as unknown as Window['api']
+    gh: { ...originalApi?.gh },
+    settings: { ...originalApi?.settings, set: async () => createGlobalSettingsFixture() },
+    worktrees: { ...originalApi?.worktrees, updateMeta: async () => null }
+  }
   const tab = makeTab({ id: TAB, worktreeId: WORKSPACE, ptyId: FIRST_PTY })
   const seed = () =>
     useAppStore.setState({

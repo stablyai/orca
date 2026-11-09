@@ -86,18 +86,15 @@ const ORDINARY_WRITERS = [
   'store/slices/agent-status/agent-status-authority-actions.ts'
 ].map((rel) => RENDERER + rel)
 const RECORD_TRANSITIONS = new Set([
-  'annotateRecordReplacement',
   'replaceRecordEntries',
-  'markFullResync',
   'removePaneKeys',
-  'movePaneKeyedRecord',
   'removePaneKeysByTabPrefix'
 ])
 
 function collectUnaddressedWrites(root) {
   const violations = []
   for (const rel of ORDINARY_WRITERS) {
-    const { source, aliases, reassigned } = readModule(root, rel)
+    const { source, aliases, assignments } = readModule(root, rel)
     function addressed(value, field, seen = new Set()) {
       if (ts.isCallExpression(value) && ts.isIdentifier(value.expression)) {
         return RECORD_TRANSITIONS.has(value.expression.text)
@@ -109,12 +106,17 @@ function collectUnaddressedWrites(root) {
         return addressed(value.whenTrue, field, seen) && addressed(value.whenFalse, field, seen)
       }
       if (ts.isIdentifier(value)) {
-        if (seen.has(value.text) || reassigned.has(value.text)) {
+        if (seen.has(value.text)) {
           return false
         }
         seen.add(value.text)
         const alias = aliases.get(value.text)
-        return alias ? addressed(alias, field, seen) : false
+        return (
+          alias !== undefined &&
+          [alias, ...(assignments.get(value.text) ?? [])].every((replacement) =>
+            addressed(replacement, field, new Set(seen))
+          )
+        )
       }
       return false
     }
@@ -163,7 +165,7 @@ function readModule(root, rel) {
   const imports = new Map()
   const functions = new Map()
   const aliases = new Map()
-  const reassigned = new Set()
+  const assignments = new Map()
   function visit(node) {
     if (
       ts.isBinaryExpression(node) &&
@@ -171,7 +173,9 @@ function readModule(root, rel) {
       node.operatorToken.kind >= ts.SyntaxKind.FirstAssignment &&
       node.operatorToken.kind <= ts.SyntaxKind.LastAssignment
     ) {
-      reassigned.add(node.left.text)
+      const values = assignments.get(node.left.text) ?? []
+      values.push(node.right)
+      assignments.set(node.left.text, values)
     }
     if (ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier)) {
       const target = resolveImport(root, rel, node.moduleSpecifier.text)
@@ -197,7 +201,7 @@ function readModule(root, rel) {
     ts.forEachChild(node, visit)
   }
   visit(source)
-  return { source, imports, functions, aliases, reassigned }
+  return { source, imports, functions, aliases, assignments }
 }
 
 export function collectParkingOwnershipViolations(root = process.cwd()) {

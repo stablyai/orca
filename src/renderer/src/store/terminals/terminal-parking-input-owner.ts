@@ -16,12 +16,17 @@ import {
 } from '@/components/terminal-pane/parking/terminal-parking-input-events'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
-const TAB_RECORDS = [
+const SEAM_PARKING_TAB_FIELDS = [
   'terminalLayoutsByTabId',
   'ptyIdsByTabId',
   'lastKnownRelayPtyIdByTabId',
   'runtimePaneTitlesByTabId',
   'pendingStartupByTabId'
+] as const
+const SEAM_PARKING_WORKSPACE_FIELDS = [
+  'layoutByWorktree',
+  'groupsByWorktree',
+  'activeGroupIdByWorktree'
 ] as const
 const tabIdsByPtyId = new Map<string, Set<string>>()
 const ptyIdsByTabId = new Map<string, Set<string>>()
@@ -41,7 +46,10 @@ function sameParkingTab(previous: TerminalTab | undefined, next: TerminalTab): b
   )
 }
 
-function sameTitleSlots(previous: object | undefined, next: object | undefined): boolean {
+function sameTitleSlots(
+  previous: AppState['runtimePaneTitlesByTabId'][string] | undefined,
+  next: AppState['runtimePaneTitlesByTabId'][string] | undefined
+): boolean {
   const before = Object.keys(previous ?? {})
   const after = Object.keys(next ?? {})
   return before.length === after.length && before.every((key) => key in (next ?? {}))
@@ -147,11 +155,7 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
     }
   }
   const owners = getTerminalTabOwners(state.tabsByWorktree)
-  for (const field of [
-    'layoutByWorktree',
-    'groupsByWorktree',
-    'activeGroupIdByWorktree'
-  ] as const) {
+  for (const field of SEAM_PARKING_WORKSPACE_FIELDS) {
     const before = previous?.[field]
     const after = state[field]
     if (before === after) {
@@ -163,7 +167,7 @@ export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string
       }
     }
   }
-  for (const field of TAB_RECORDS) {
+  for (const field of SEAM_PARKING_TAB_FIELDS) {
     const before = previous?.[field]
     const after = state[field]
     if (before === after) {

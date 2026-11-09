@@ -33,7 +33,7 @@ import { captureNewlyParkedTerminalTabs } from '../capture/parked-terminal-tab-c
 import { createTerminalTabActivationOrder } from '../retention/terminal-tab-activation-order'
 import { buildTerminalTabColdParkCandidates } from '../retention/terminal-tab-park-candidates'
 import {
-  useTerminalParkingWorkspaceRevision,
+  useTerminalParkingWorkspaceInputs,
   useParkedTerminalWatcherSynchronization
 } from './use-parked-terminal-watcher-synchronization'
 import {
@@ -76,7 +76,8 @@ export function useTerminalTabColdParking(args: {
     activityTerminalPortals,
     activationDeferredMountTabIds
   } = args
-  const parkingInputRevision = useTerminalParkingWorkspaceRevision(worktreeId)
+  const parkingInputs = useTerminalParkingWorkspaceInputs(worktreeId)
+  const parkingInputRevision = parkingInputs.revision
   const assignmentProjection = useRef(assignments)
   if (assignmentProjection.current !== assignments) {
     const previous = assignmentProjection.current
@@ -259,14 +260,13 @@ export function useTerminalTabColdParking(args: {
     worktreeId
   ])
 
-  // Force-park exemptions depend on layout leaf PTYs even when terminalTabs is unchanged.
-  const evictionExemptLayoutKey = parkingInputRevision
   // Cache exemption layout walks until force-park, tabs, or layout PTYs change.
   const evictionExemptTerminalTabIds = useMemo(
     () =>
-      isForceParked ? selectEvictionExemptTerminalTabIds(worktreeId, terminalTabs) : EMPTY_TAB_IDS,
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- the layout key encodes the store fields the selector re-reads internally.
-    [evictionExemptLayoutKey, isForceParked, terminalTabs, worktreeId]
+      isForceParked
+        ? selectEvictionExemptTerminalTabIds(parkingInputs.worktreeId, terminalTabs)
+        : EMPTY_TAB_IDS,
+    [parkingInputs, isForceParked, terminalTabs]
   )
 
   // Render and watcher sync must share the pinned verdict, excluding portal-hosted tabs.
@@ -300,13 +300,12 @@ export function useTerminalTabColdParking(args: {
       if (
         activationDeferredMountTabIds?.has(terminalTab.id) &&
         !hasActivityTerminalPortal &&
-        canWatcherCoverParkedTerminalTab(worktreeId, terminalTab)
+        canWatcherCoverParkedTerminalTab(parkingInputs.worktreeId, terminalTab)
       ) {
         parked.add(terminalTab.id)
       }
     }
     return parked
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- coverage rereads external workspace facts owned by this revision.
   }, [
     activityTerminalPortals,
     assignments,
@@ -319,7 +318,7 @@ export function useTerminalTabColdParking(args: {
     sleepingRecordOwnedTabIds,
     terminalTabs,
     terminalPaneSplitMountLeaseTabIds,
-    parkingInputRevision,
+    parkingInputs,
     worktreeId
   ])
 
@@ -332,12 +331,7 @@ export function useTerminalTabColdParking(args: {
   })
 
   // Sync in the park/reveal effect flush: dispose watchers before remounted-pane IPC and start them after unmount capture.
-  useParkedTerminalWatcherSynchronization({
-    worktreeId,
-    terminalTabs,
-    parkedTabIds: parkedTerminalTabIds,
-    activationDeferredMountTabIds
-  })
+  useParkedTerminalWatcherSynchronization({ ...args, parkedTabIds: parkedTerminalTabIds })
 
   return parkedTerminalTabIds
 }

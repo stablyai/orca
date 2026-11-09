@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useEffectEvent, useMemo, useSyncExternalStore } from 'react'
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { syncParkedTerminalTabWatchers } from '../output-watchers/terminal-parked-tab-watchers'
 import { disposeParkedTerminalWatchersForWorktree } from '../output-watchers/terminal-parked-watcher-registry'
@@ -7,13 +7,14 @@ import {
   terminalParkingInputRevision
 } from '../terminal-parking-input-events'
 
-export function useTerminalParkingWorkspaceRevision(worktreeId: string): number {
+export function useTerminalParkingWorkspaceInputs(worktreeId: string) {
   const subscribe = useCallback(
     (listener: () => void) => subscribeTerminalParkingInputs(worktreeId, listener),
     [worktreeId]
   )
   const snapshot = useCallback(() => terminalParkingInputRevision(worktreeId), [worktreeId])
-  return useSyncExternalStore(subscribe, snapshot)
+  const revision = useSyncExternalStore(subscribe, snapshot)
+  return useMemo(() => ({ worktreeId, revision }), [worktreeId, revision])
 }
 
 export function useParkedTerminalWatcherSynchronization(args: {
@@ -23,15 +24,17 @@ export function useParkedTerminalWatcherSynchronization(args: {
   activationDeferredMountTabIds?: ReadonlySet<string> | null
 }): void {
   const { worktreeId, terminalTabs, parkedTabIds, activationDeferredMountTabIds } = args
-  const revision = useTerminalParkingWorkspaceRevision(worktreeId)
+  const inputs = useTerminalParkingWorkspaceInputs(worktreeId)
   useEffect(() => () => disposeParkedTerminalWatchersForWorktree(worktreeId), [worktreeId])
-  useEffect(() => {
+  const synchronize = useEffectEvent(() => {
     syncParkedTerminalTabWatchers({
       worktreeId,
       tabs: terminalTabs,
       parkedTabIds,
       restoreTitleOnStartTabIds: activationDeferredMountTabIds ?? undefined
     })
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- the workspace revision owns semantic tab inputs; title-only replacements carry no watcher change.
-  }, [activationDeferredMountTabIds, parkedTabIds, revision, worktreeId])
+  })
+  useEffect(() => {
+    synchronize()
+  }, [activationDeferredMountTabIds, parkedTabIds, inputs])
 }
