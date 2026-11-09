@@ -1,6 +1,6 @@
 import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { OrcaRuntimeWithCreateTerminal } from '../launch/terminal-create'
-import { OrcaRuntimeWithGetOrchestrationWorkerLaunchDefaults } from '../../orca-runtime-get-orchestration-worker-launch-defaults'
+import { OrcaRuntimeWithGetOrchestrationWorkerLaunchDefaults } from '../../orchestration/workers/launch/orca-runtime-get-orchestration-worker-launch-defaults'
 import type {
   RuntimeTerminalRead,
   RuntimeTerminalResolvePane,
