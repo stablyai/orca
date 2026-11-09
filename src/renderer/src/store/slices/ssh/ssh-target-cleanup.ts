@@ -1,7 +1,8 @@
 import type { AppState } from '../../types'
 import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
 import { resolveDirectSshTargetWorktreeIds } from '../../../lib/direct-ssh-target-scope'
-import { unbindTerminalTabPtys } from '../tabs/worktree-layout-lifecycle'
+import { unbindTerminalTabPtys } from '../tabs/worktree-terminal-tab-respawn'
+import { annotateRecordReplacement } from '../../keyed-record-transitions'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
@@ -48,9 +49,18 @@ function filterRecordIfChanged<T>(
   record: Record<string, T>,
   keep: (key: string, value: T) => boolean
 ): Record<string, T> | undefined {
-  const entries = Object.entries(record)
-  const kept = entries.filter(([key, value]) => keep(key, value))
-  return kept.length === entries.length ? undefined : Object.fromEntries(kept)
+  const kept: [string, T][] = []
+  const dropped: string[] = []
+  for (const [key, value] of Object.entries(record)) {
+    if (keep(key, value)) {
+      kept.push([key, value])
+    } else {
+      dropped.push(key)
+    }
+  }
+  return dropped.length === 0
+    ? undefined
+    : annotateRecordReplacement(record, Object.fromEntries(kept), dropped)
 }
 
 function omitKey<T>(record: Record<string, T>, key: string): Record<string, T> | undefined {
@@ -133,7 +143,11 @@ function clearSshTargetTabPtyState(
   return {
     changed: unboundTabIds.size > 0,
     ...unbindTerminalTabPtys(state, unboundTabIds),
-    lastKnownRelayPtyIdByTabId: nextLastKnownRelayPtyIdByTabId,
+    lastKnownRelayPtyIdByTabId: annotateRecordReplacement(
+      state.lastKnownRelayPtyIdByTabId,
+      nextLastKnownRelayPtyIdByTabId,
+      unboundTabIds
+    ),
     pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
     codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
   }

@@ -1,5 +1,6 @@
 import type { AppState } from '../../types'
 import type { TabsSlice, TabsSliceSet } from './tabs-slice-contract'
+import { annotateRecordReplacement } from '../../keyed-record-transitions'
 
 function previewActiveSurfacePatch(
   state: AppState,
@@ -113,18 +114,26 @@ export function createTabsDragPreviewActions(
 
         const next: Partial<AppState> = { ...surfacePatch }
         if (!groupUnchanged) {
-          next.groupsByWorktree = {
-            ...state.groupsByWorktree,
-            [worktreeId]: groups.map((group) =>
-              group.id === groupId ? { ...group, activeTabId: tabId } : group
-            )
-          }
+          next.groupsByWorktree = annotateRecordReplacement(
+            state.groupsByWorktree,
+            {
+              ...state.groupsByWorktree,
+              [worktreeId]: groups.map((group) =>
+                group.id === groupId ? { ...group, activeTabId: tabId } : group
+              )
+            },
+            [worktreeId]
+          )
         }
         if (!focusUnchanged) {
-          next.activeGroupIdByWorktree = {
-            ...state.activeGroupIdByWorktree,
-            [worktreeId]: activeGroupId
-          }
+          next.activeGroupIdByWorktree = annotateRecordReplacement(
+            state.activeGroupIdByWorktree,
+            {
+              ...state.activeGroupIdByWorktree,
+              [worktreeId]: activeGroupId
+            },
+            [worktreeId]
+          )
         }
         return next
       })
@@ -141,24 +150,36 @@ export function createTabsDragPreviewActions(
 
         const next: Partial<AppState> = {}
         if (!groupsUnchanged) {
-          next.groupsByWorktree = {
-            ...state.groupsByWorktree,
-            [worktreeId]: groups.map((group) => ({
-              ...group,
-              activeTabId: snapshot.activeTabIdByGroup[group.id] ?? null
-            }))
-          }
+          next.groupsByWorktree = annotateRecordReplacement(
+            state.groupsByWorktree,
+            {
+              ...state.groupsByWorktree,
+              [worktreeId]: groups.map((group) => ({
+                ...group,
+                activeTabId: snapshot.activeTabIdByGroup[group.id] ?? null
+              }))
+            },
+            [worktreeId]
+          )
         }
         if (!focusUnchanged) {
           if (snapshot.activeGroupId === null) {
             const nextActiveGroupIdByWorktree = { ...state.activeGroupIdByWorktree }
             delete nextActiveGroupIdByWorktree[worktreeId]
-            next.activeGroupIdByWorktree = nextActiveGroupIdByWorktree
+            next.activeGroupIdByWorktree = annotateRecordReplacement(
+              state.activeGroupIdByWorktree,
+              nextActiveGroupIdByWorktree,
+              [worktreeId]
+            )
           } else {
-            next.activeGroupIdByWorktree = {
-              ...state.activeGroupIdByWorktree,
-              [worktreeId]: snapshot.activeGroupId
-            }
+            next.activeGroupIdByWorktree = annotateRecordReplacement(
+              state.activeGroupIdByWorktree,
+              {
+                ...state.activeGroupIdByWorktree,
+                [worktreeId]: snapshot.activeGroupId
+              },
+              [worktreeId]
+            )
           }
         }
 
@@ -194,12 +215,16 @@ export function createTabsDragPreviewActions(
           return state
         }
         return {
-          groupsByWorktree: {
-            ...state.groupsByWorktree,
-            [worktreeId]: groups.map((group) =>
-              group.id === sourceGroupId ? { ...group, activeTabId: preDragActiveTabId } : group
-            )
-          }
+          groupsByWorktree: annotateRecordReplacement(
+            state.groupsByWorktree,
+            {
+              ...state.groupsByWorktree,
+              [worktreeId]: groups.map((group) =>
+                group.id === sourceGroupId ? { ...group, activeTabId: preDragActiveTabId } : group
+              )
+            },
+            [worktreeId]
+          )
         }
       })
     }

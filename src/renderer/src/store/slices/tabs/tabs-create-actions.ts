@@ -19,6 +19,11 @@ import { emptySplitGroup, insertSplitGroup } from './tabs-group-actions'
 import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { createdTabPreviewFlag } from './tab-preview-flag'
 import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
+import {
+  annotateRecordReplacement,
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '../../keyed-record-transitions'
 
 export function createTabsCreateActions(
   set: TabsSliceSet,
@@ -136,25 +141,41 @@ export function createTabsCreateActions(
         const nextRecent = shouldActivate
           ? pushRecentTabId(sanitizedRecent, created.id)
           : sanitizedRecent
+        // The split insert and ensureGroup touch only this workspace.
         return {
-          unifiedTabsByWorktree: {
-            ...state.unifiedTabsByWorktree,
-            [worktreeId]: [...nextTabs, created]
-          },
-          groupsByWorktree: {
-            ...groupsByWorktree,
-            [worktreeId]: updateGroup(groupsByWorktree[worktreeId] ?? [], {
-              ...group,
-              activeTabId: nextActiveTabId,
-              tabOrder: nextOrder,
-              recentTabIds: nextRecent
-            })
-          },
-          activeGroupIdByWorktree,
-          layoutByWorktree: {
-            ...state.layoutByWorktree,
-            [worktreeId]: state.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
-          }
+          unifiedTabsByWorktree: replaceTabBuckets(current.unifiedTabsByWorktree, [
+            [worktreeId, [...nextTabs, created]]
+          ]),
+          groupsByWorktree: annotateRecordReplacement(
+            current.groupsByWorktree,
+            replaceRecordEntries(groupsByWorktree, [
+              [
+                worktreeId,
+                updateGroup(groupsByWorktree[worktreeId] ?? [], {
+                  ...group,
+                  activeTabId: nextActiveTabId,
+                  tabOrder: nextOrder,
+                  recentTabIds: nextRecent
+                })
+              ]
+            ]),
+            [worktreeId]
+          ),
+          activeGroupIdByWorktree: annotateRecordReplacement(
+            current.activeGroupIdByWorktree,
+            activeGroupIdByWorktree,
+            [worktreeId]
+          ),
+          layoutByWorktree: annotateRecordReplacement(
+            current.layoutByWorktree,
+            replaceRecordEntries(state.layoutByWorktree, [
+              [
+                worktreeId,
+                state.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
+              ]
+            ]),
+            [worktreeId]
+          )
         }
       })
       if (replacedEditorId) {
@@ -220,10 +241,9 @@ export function createTabsCreateActions(
           recentTabIds: shouldActivate ? [id] : []
         }
         created = createdTab
-        const nextUnifiedTabsByWorktree = {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: [...existingTabs, createdTab]
-        }
+        const nextUnifiedTabsByWorktree = replaceTabBuckets(state.unifiedTabsByWorktree, [
+          [worktreeId, [...existingTabs, createdTab]]
+        ])
         const {
           groupsByWorktree: nextGroupsByWorktree,
           layoutByWorktree: nextLayoutByWorktree,

@@ -10,6 +10,7 @@ import {
   normalizeUrl
 } from './browser-page-records'
 import { normalizeBrowserHistoryUrl } from '../../../../../../shared/workspace-session/workspace-session-browser-history'
+import { replaceTabBuckets } from '../../../keyed-record-transitions'
 
 export function createBrowserPageStateActions(
   set: BrowserSliceSet,
@@ -84,12 +85,14 @@ export function createBrowserPageStateActions(
             }
           }
           if (unifiedLabelNeedsRepair) {
-            nextState.unifiedTabsByWorktree = {
-              ...s.unifiedTabsByWorktree,
-              [workspace.worktreeId]: unifiedTabs.map((entry, index) =>
-                index === unifiedIndex ? { ...entry, label: nextPage.title } : entry
-              )
-            }
+            nextState.unifiedTabsByWorktree = replaceTabBuckets(s.unifiedTabsByWorktree, [
+              [
+                workspace.worktreeId,
+                unifiedTabs.map((entry, index) =>
+                  index === unifiedIndex ? { ...entry, label: nextPage.title } : entry
+                )
+              ]
+            ])
           }
           return nextState
         }
@@ -126,12 +129,14 @@ export function createBrowserPageStateActions(
           unifiedIndex !== -1
         ) {
           if (unifiedLabelNeedsRepair || unifiedTabs[unifiedIndex]?.label !== nextWorkspace.title) {
-            nextState.unifiedTabsByWorktree = {
-              ...s.unifiedTabsByWorktree,
-              [workspace.worktreeId]: unifiedTabs.map((entry, index) =>
-                index === unifiedIndex ? { ...entry, label: nextWorkspace.title } : entry
-              )
-            }
+            nextState.unifiedTabsByWorktree = replaceTabBuckets(s.unifiedTabsByWorktree, [
+              [
+                workspace.worktreeId,
+                unifiedTabs.map((entry, index) =>
+                  index === unifiedIndex ? { ...entry, label: nextWorkspace.title } : entry
+                )
+              ]
+            ])
           }
         }
         return nextState

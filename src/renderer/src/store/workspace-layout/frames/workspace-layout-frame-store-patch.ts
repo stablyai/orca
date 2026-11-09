@@ -13,6 +13,10 @@ import {
   type HeldDrawnTabs
 } from './workspace-layout-frame-held-tabs'
 import { noteFramesTakingOverStagedBrowserTabs } from './workspace-layout-frame-browser-handover'
+import {
+  annotateRecordReplacement,
+  annotateTabBucketReplacement
+} from '../../keyed-record-transitions'
 
 /** Keep window spawn/recovery and live bindings; main publishes saved bindings until it owns live ones. */
 const WINDOW_TERMINAL_TAB_FIELDS = [
@@ -142,11 +146,26 @@ export function buildLayoutFrameStorePatch(
   const patch: Partial<LayoutFrameStoreState> = {}
   const keyed = (slice: KeyedSlice, value: (key: string) => unknown): void => {
     let next: Record<string, unknown> = state[slice]
+    const changedKeys: string[] = []
     for (const key of keys) {
-      next = setKey(next, key, value(key)) ?? next
+      const replaced = setKey(next, key, value(key))
+      if (replaced) {
+        next = replaced
+        changedKeys.push(key)
+      }
     }
     if (next !== state[slice]) {
-      Object.assign(patch, { [slice]: next })
+      const previous = state[slice]
+      Object.assign(patch, {
+        [slice]:
+          slice === 'tabsByWorktree' || slice === 'unifiedTabsByWorktree'
+            ? annotateTabBucketReplacement(
+                state[slice],
+                next as Record<string, { id: string }[]>,
+                changedKeys
+              )
+            : annotateRecordReplacement(previous, next, changedKeys)
+      })
     }
   }
 
@@ -195,6 +214,7 @@ export function buildLayoutFrameStorePatch(
   const tabIdsOf = (tabs: Record<string, readonly TerminalTab[]>): Set<string> =>
     new Set(keys.flatMap((key) => (tabs[key] ?? []).map((tab) => tab.id)))
   let terminalLayouts = state.terminalLayoutsByTabId
+  const changedLayoutTabIds: string[] = []
   for (const tabId of new Set([
     ...tabIdsOf(state.tabsByWorktree),
     ...tabIdsOf(built.tabsByWorktree)
@@ -206,10 +226,13 @@ export function buildLayoutFrameStorePatch(
     ) {
       continue
     }
-    terminalLayouts =
-      setKey(terminalLayouts, tabId, built.terminalLayoutsByTabId[tabId]) ?? terminalLayouts
+    const replaced = setKey(terminalLayouts, tabId, built.terminalLayoutsByTabId[tabId])
+    if (replaced) {
+      terminalLayouts = replaced
+      changedLayoutTabIds.push(tabId)
+    }
   }
-  Object.assign(patch, terminalLayoutsPatch(state, terminalLayouts))
+  Object.assign(patch, terminalLayoutsPatch(state, terminalLayouts, changedLayoutTabIds))
 
   const keySet = new Set(keys)
   // Keep window editor state. Frames carry edit-mode files; diff/preview/conflict records leave with their last tab, while unshown conflict-review selections stay.
@@ -292,10 +315,19 @@ export function buildLayoutFrameStorePatch(
   return patch
 }
 
-/** The patch that shows `layouts` as the store's pane trees; empty when they are the store's. */
+/** The patch that shows `layouts` as the store's pane trees; empty when they are the store's.
+ *  `changedTabIds` names every tab whose tree `layouts` replaced. */
 export function terminalLayoutsPatch(
   state: Pick<LayoutFrameStoreState, 'terminalLayoutsByTabId'>,
-  layouts: LayoutFrameStoreState['terminalLayoutsByTabId']
+  layouts: LayoutFrameStoreState['terminalLayoutsByTabId'],
+  changedTabIds?: Iterable<string>
 ): Partial<LayoutFrameStoreState> {
-  return layouts === state.terminalLayoutsByTabId ? {} : { terminalLayoutsByTabId: layouts }
+  if (layouts === state.terminalLayoutsByTabId) {
+    return {}
+  }
+  return {
+    terminalLayoutsByTabId: changedTabIds
+      ? annotateRecordReplacement(state.terminalLayoutsByTabId, layouts, changedTabIds)
+      : layouts
+  }
 }

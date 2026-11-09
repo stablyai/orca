@@ -14,6 +14,10 @@ import {
   writeBatchedWorkspaceRecordEntry,
   type WorktreeTabModelReconciliationBatch
 } from './tabs-reconciliation-batch'
+import {
+  annotateRecordReplacement,
+  annotateTabBucketReplacement
+} from '../../keyed-record-transitions'
 
 export type WorktreeTabModelReconciliation = {
   patch: Partial<AppState>
@@ -209,26 +213,39 @@ export function projectWorktreeTabModelReconciliation(
       }
     }
     patch = {
-      unifiedTabsByWorktree: writeBatchedWorkspaceRecordEntry(
+      // A batch re-annotates its in-place drafts once the fold ends.
+      unifiedTabsByWorktree: annotateTabBucketReplacement(
         state.unifiedTabsByWorktree,
-        'unifiedTabsByWorktree',
-        worktreeId,
-        validTabs,
-        batch
+        writeBatchedWorkspaceRecordEntry(
+          state.unifiedTabsByWorktree,
+          'unifiedTabsByWorktree',
+          worktreeId,
+          validTabs,
+          batch
+        ),
+        [worktreeId]
       ),
-      groupsByWorktree: writeBatchedWorkspaceRecordEntry(
+      groupsByWorktree: annotateRecordReplacement(
         state.groupsByWorktree,
-        'groupsByWorktree',
-        worktreeId,
-        nextGroups,
-        batch
+        writeBatchedWorkspaceRecordEntry(
+          state.groupsByWorktree,
+          'groupsByWorktree',
+          worktreeId,
+          nextGroups,
+          batch
+        ),
+        [worktreeId]
       ),
-      activeGroupIdByWorktree: writeBatchedWorkspaceRecordEntry(
+      activeGroupIdByWorktree: annotateRecordReplacement(
         state.activeGroupIdByWorktree,
-        'activeGroupIdByWorktree',
-        worktreeId,
-        nextActiveGroupId,
-        batch
+        writeBatchedWorkspaceRecordEntry(
+          state.activeGroupIdByWorktree,
+          'activeGroupIdByWorktree',
+          worktreeId,
+          nextActiveGroupId,
+          batch
+        ),
+        [worktreeId]
       ),
       ...(nextUnreadTerminalTabs !== state.unreadTerminalTabs
         ? { unreadTerminalTabs: nextUnreadTerminalTabs }
@@ -236,12 +253,16 @@ export function projectWorktreeTabModelReconciliation(
       ...(nextLayout && layoutChanged
         ? {
             // Why: restored runtime terminals need a concrete leaf before activation.
-            layoutByWorktree: writeBatchedWorkspaceRecordEntry(
+            layoutByWorktree: annotateRecordReplacement(
               state.layoutByWorktree,
-              'layoutByWorktree',
-              worktreeId,
-              nextLayout,
-              batch
+              writeBatchedWorkspaceRecordEntry(
+                state.layoutByWorktree,
+                'layoutByWorktree',
+                worktreeId,
+                nextLayout,
+                batch
+              ),
+              [worktreeId]
             )
           }
         : {}),

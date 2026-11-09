@@ -7,9 +7,11 @@ import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 import { buildActiveSurfacePatch } from './tabs-surface'
 import type { AppState } from '../../types'
 export { renameWorktreeLayoutKeys } from './rename-worktree-layout'
-import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
-import { getTerminalActivationSpawnSuppression } from '../../terminals/terminal-activation-spawn-suppression'
+import {
+  annotateRecordReplacement,
+  annotateTabBucketReplacement
+} from '../../keyed-record-transitions'
 import { collapseEmptiedKeptGroups } from './collapse-emptied-kept-groups'
 import {
   createKeptWorktreeSurfacePruners,
@@ -103,12 +105,12 @@ export function removeWorktreeLayout(
   const transferredPlacements = keep(omitByWorktree(transferred.sourceTabs), kept?.unifiedTabs)
   const survivingIds = new Set(remainingFiles.map((file) => file.id))
   const unifiedTabs = Object.fromEntries(
-    Object.entries(transferredPlacements).map(([id, tabs]) => [
-      id,
-      tabs.filter(
+    Object.entries(transferredPlacements).map(([id, tabs]) => {
+      const live = tabs.filter(
         (tab) => !isEditorTabContentType(tab.contentType) || survivingIds.has(tab.entityId)
       )
-    ])
+      return [id, live.length === tabs.length ? tabs : live]
+    })
   )
   const liveTabIds = new Set(
     Object.values(unifiedTabs).flatMap((tabs) => tabs.map((tab) => tab.id))
@@ -187,15 +189,50 @@ export function removeWorktreeLayout(
     activeFiles[tab.worktreeId] ??= tab.entityId
     ownerActiveTypes[tab.worktreeId] ??= 'editor'
   }
+  // Removed, pruned, filtered and content-owner workspaces are the only layout keys rewritten.
+  const layoutKeys = new Set([
+    ...worktreeIds,
+    ...(removed.kept?.worktreeIds ?? []),
+    ...affectedWorkspaces
+  ])
+  const terminalKeys = new Set([...worktreeIds, ...(removed.kept?.worktreeIds ?? [])])
   const patch: WorktreeLayoutPatch = {
-    tabsByWorktree: keep(omitByWorktree(s.tabsByWorktree), kept?.tabs),
-    terminalLayoutsByTabId: omitByTabId(s.terminalLayoutsByTabId),
-    ptyIdsByTabId: omitByTabId(s.ptyIdsByTabId),
+    tabsByWorktree: annotateTabBucketReplacement(
+      s.tabsByWorktree ?? {},
+      keep(omitByWorktree(s.tabsByWorktree), kept?.tabs),
+      terminalKeys
+    ),
+    terminalLayoutsByTabId: annotateRecordReplacement(
+      s.terminalLayoutsByTabId ?? {},
+      omitByTabId(s.terminalLayoutsByTabId),
+      tabIds
+    ),
+    ptyIdsByTabId: annotateRecordReplacement(
+      s.ptyIdsByTabId ?? {},
+      omitByTabId(s.ptyIdsByTabId),
+      tabIds
+    ),
     // Why: split-tab layout/group state is worktree-owned; leaving it makes a deleted worktree look restorable.
-    unifiedTabsByWorktree: unifiedTabs,
-    groupsByWorktree: collapsed.groups,
-    layoutByWorktree: omitByWorktree(ownerLayouts),
-    activeGroupIdByWorktree: omitByWorktree(ownerActiveGroups),
+    unifiedTabsByWorktree: annotateTabBucketReplacement(
+      s.unifiedTabsByWorktree,
+      unifiedTabs,
+      layoutKeys
+    ),
+    groupsByWorktree: annotateRecordReplacement(
+      s.groupsByWorktree ?? {},
+      collapsed.groups,
+      layoutKeys
+    ),
+    layoutByWorktree: annotateRecordReplacement(
+      s.layoutByWorktree ?? {},
+      omitByWorktree(ownerLayouts),
+      layoutKeys
+    ),
+    activeGroupIdByWorktree: annotateRecordReplacement(
+      s.activeGroupIdByWorktree ?? {},
+      omitByWorktree(ownerActiveGroups),
+      layoutKeys
+    ),
     tabBarOrderByWorktree: Object.fromEntries(
       Object.entries(ownerOrders).map(([id, order]) => [
         id,
@@ -239,64 +276,4 @@ export function removeWorktreeLayout(
     )
   }
   return patch
-}
-
-/**
- * Tags a worktree's wakeable terminal tabs for an activation spawn, optionally bumping their
- * generation so dead panes remount.
- */
-export function markWorktreeTabsForActivationSpawn(
-  s: AppState,
-  worktreeId: string,
-  options: { isWakeable: (tab: TerminalTab) => boolean; bumpGeneration: boolean }
-): Pick<AppState, 'tabsByWorktree'> {
-  const { isWakeable, bumpGeneration } = options
-  return {
-    tabsByWorktree: {
-      ...s.tabsByWorktree,
-      [worktreeId]: (s.tabsByWorktree[worktreeId] ?? []).map((tab) =>
-        !isWakeable(tab)
-          ? tab
-          : {
-              ...tab,
-              ...(bumpGeneration ? { generation: (tab.generation ?? 0) + 1 } : {}),
-              // Why: slept terminal remount/spawn is click-driven wake work; tag its PTY updates so they don't reshuffle Recent.
-              pendingActivationSpawn: getTerminalActivationSpawnSuppression(
-                s.terminalLayoutsByTabId[tab.id]
-              )
-            }
-      )
-    }
-  }
-}
-
-/** Detaches terminal tabs from their PTYs, leaving the tabs in place to respawn. */
-export function unbindTerminalTabPtys(
-  s: AppState,
-  tabIds: ReadonlySet<string>
-): Pick<AppState, 'tabsByWorktree' | 'ptyIdsByTabId'> {
-  let nextTabsByWorktree = s.tabsByWorktree
-  const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
-  for (const [worktreeId, tabs] of Object.entries(s.tabsByWorktree)) {
-    let nextTabs = tabs
-    for (const [index, tab] of tabs.entries()) {
-      if (!tabIds.has(tab.id)) {
-        continue
-      }
-      if (nextTabs === tabs) {
-        nextTabs = [...tabs]
-      }
-      const { pendingActivationSpawn: _pendingActivationSpawn, ...tabWithoutActivationSpawn } = tab
-      void _pendingActivationSpawn
-      nextTabs[index] = { ...tabWithoutActivationSpawn, ptyId: null }
-      nextPtyIdsByTabId[tab.id] = []
-    }
-    if (nextTabs !== tabs) {
-      if (nextTabsByWorktree === s.tabsByWorktree) {
-        nextTabsByWorktree = { ...nextTabsByWorktree }
-      }
-      nextTabsByWorktree[worktreeId] = nextTabs
-    }
-  }
-  return { tabsByWorktree: nextTabsByWorktree, ptyIdsByTabId: nextPtyIdsByTabId }
 }

@@ -26,7 +26,7 @@ type Buckets<T> = Readonly<Record<string, readonly T[]>>
 
 const links = new WeakMap<object, Link>()
 // Readers that skipped intermediate states still get an exact union; deeper gaps resync.
-const MAX_CHAIN = 16
+const MAX_CHAIN = 64
 
 function link(next: object, previous: object, keys: ReadonlySet<string>): void {
   links.set(next, { previous: new WeakRef(previous), keys })

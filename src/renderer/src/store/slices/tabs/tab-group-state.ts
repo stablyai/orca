@@ -2,6 +2,7 @@ import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/workspace-layout-minted-ids'
+import { replaceRecordEntries, replaceTabBuckets } from '../../keyed-record-transitions'
 
 export function findTabAndWorktree(
   tabsByWorktree: Record<string, Tab[]>,
@@ -77,8 +78,8 @@ export function ensureGroup(
   const group: TabGroup = { id: groupId, worktreeId, activeTabId: null, tabOrder: [] }
   return {
     group,
-    groupsByWorktree: { ...groupsByWorktree, [worktreeId]: [group] },
-    activeGroupIdByWorktree: { ...activeGroupIdByWorktree, [worktreeId]: groupId }
+    groupsByWorktree: replaceRecordEntries(groupsByWorktree, [[worktreeId, [group]]]),
+    activeGroupIdByWorktree: replaceRecordEntries(activeGroupIdByWorktree, [[worktreeId, groupId]])
   }
 }
 
@@ -105,9 +106,8 @@ export function patchTab(
   const { worktreeId } = found
   const tabs = tabsByWorktree[worktreeId] ?? []
   return {
-    unifiedTabsByWorktree: {
-      ...tabsByWorktree,
-      [worktreeId]: tabs.map((t) => (t.id === tabId ? { ...t, ...patch } : t))
-    }
+    unifiedTabsByWorktree: replaceTabBuckets(tabsByWorktree, [
+      [worktreeId, tabs.map((t) => (t.id === tabId ? { ...t, ...patch } : t))]
+    ])
   }
 }

@@ -5,6 +5,10 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constant
 import type { OpenFile } from '../types/open-file'
 import { isEditorTabContentType } from '../tabs/editor-tab-content-type'
 import { buildOwnedEditorFileId, runtimeOwnerKey } from './editor-file-ids'
+import {
+  annotateRecordReplacement,
+  annotateTabBucketReplacement
+} from '../../../keyed-record-transitions'
 
 export function shouldHydrateWithOwnedEditorFileId(
   worktreeId: string,
@@ -129,8 +133,8 @@ export function migrateHydratedEditorTabsAndGroups(
   state: Pick<AppState, 'unifiedTabsByWorktree' | 'groupsByWorktree'>,
   migrationsByWorktree: Record<string, Map<string, string>>
 ): Partial<Pick<AppState, 'unifiedTabsByWorktree' | 'groupsByWorktree'>> {
-  let tabsChanged = false
-  let groupsChanged = false
+  const changedTabWorkspaces = new Set<string>()
+  const changedGroupWorkspaces = new Set<string>()
   const nextUnifiedTabsByWorktree: Record<string, Tab[]> = { ...state.unifiedTabsByWorktree }
   const tabIdMigrationsByWorktree: Record<string, Map<string, string>> = {}
 
@@ -140,6 +144,7 @@ export function migrateHydratedEditorTabsAndGroups(
       continue
     }
     const tabIdMigrations = new Map<string, string>()
+    let bucketChanged = false
     const nextTabs = tabs.map((tab) => {
       // Live-move rekey covers all editor-family tabs, including diff/conflict/check-details.
       if (!isEditorTabContentType(tab.contentType)) {
@@ -150,7 +155,7 @@ export function migrateHydratedEditorTabsAndGroups(
       if (nextId === tab.id && nextEntityId === tab.entityId) {
         return tab
       }
-      tabsChanged = true
+      bucketChanged = true
       if (nextId !== tab.id) {
         tabIdMigrations.set(tab.id, nextId)
       }
@@ -159,7 +164,10 @@ export function migrateHydratedEditorTabsAndGroups(
     if (tabIdMigrations.size > 0) {
       tabIdMigrationsByWorktree[worktreeId] = tabIdMigrations
     }
-    nextUnifiedTabsByWorktree[worktreeId] = nextTabs
+    if (bucketChanged) {
+      changedTabWorkspaces.add(worktreeId)
+      nextUnifiedTabsByWorktree[worktreeId] = nextTabs
+    }
   }
 
   const nextGroupsByWorktree: Record<string, TabGroup[]> = { ...state.groupsByWorktree }
@@ -169,7 +177,8 @@ export function migrateHydratedEditorTabsAndGroups(
       continue
     }
     const validTabIds = new Set((nextUnifiedTabsByWorktree[worktreeId] ?? []).map((tab) => tab.id))
-    nextGroupsByWorktree[worktreeId] = groups.map((group) => {
+    let bucketChanged = false
+    const nextGroups = groups.map((group) => {
       const tabOrder = dedupeEditorTabOrder(
         group.tabOrder.map((tabId) => tabIdMigrations.get(tabId) ?? tabId),
         validTabIds
@@ -191,7 +200,7 @@ export function migrateHydratedEditorTabsAndGroups(
       ) {
         return group
       }
-      groupsChanged = true
+      bucketChanged = true
       return {
         ...group,
         activeTabId: validActiveTabId,
@@ -199,10 +208,30 @@ export function migrateHydratedEditorTabsAndGroups(
         recentTabIds
       }
     })
+    if (bucketChanged) {
+      changedGroupWorkspaces.add(worktreeId)
+      nextGroupsByWorktree[worktreeId] = nextGroups
+    }
   }
 
   return {
-    ...(tabsChanged ? { unifiedTabsByWorktree: nextUnifiedTabsByWorktree } : {}),
-    ...(groupsChanged ? { groupsByWorktree: nextGroupsByWorktree } : {})
+    ...(changedTabWorkspaces.size > 0
+      ? {
+          unifiedTabsByWorktree: annotateTabBucketReplacement(
+            state.unifiedTabsByWorktree,
+            nextUnifiedTabsByWorktree,
+            changedTabWorkspaces
+          )
+        }
+      : {}),
+    ...(changedGroupWorkspaces.size > 0
+      ? {
+          groupsByWorktree: annotateRecordReplacement(
+            state.groupsByWorktree,
+            nextGroupsByWorktree,
+            changedGroupWorkspaces
+          )
+        }
+      : {})
   }
 }

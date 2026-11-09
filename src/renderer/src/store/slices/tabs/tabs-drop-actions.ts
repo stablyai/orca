@@ -11,6 +11,11 @@ import { buildActiveSurfacePatch } from './tabs-surface'
 import { findGroupAndWorktree, findGroupForTab, findTabAndWorktree } from './tab-group-state'
 import { pickNextActiveTab, pushRecentTabId, sanitizeRecentTabIds } from './tab-selection-history'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
+import {
+  annotateRecordReplacement,
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '../../keyed-record-transitions'
 
 export function createTabsDropActions(
   set: TabsSliceSet,
@@ -156,16 +161,27 @@ export function createTabsDropActions(
           }
         }
 
-        const nextUnifiedTabsByWorktree = {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-            candidate.id === tabId ? { ...candidate, groupId: resolvedTargetGroupId } : candidate
-          )
-        }
-        const nextGroupsByWorktree = {
-          ...state.groupsByWorktree,
-          [worktreeId]: nextGroups
-        }
+        nextLayoutByWorktree = annotateRecordReplacement(
+          state.layoutByWorktree,
+          nextLayoutByWorktree,
+          [worktreeId]
+        )
+        nextActiveGroupIdByWorktree = annotateRecordReplacement(
+          state.activeGroupIdByWorktree,
+          nextActiveGroupIdByWorktree,
+          [worktreeId]
+        )
+        const nextUnifiedTabsByWorktree = replaceTabBuckets(state.unifiedTabsByWorktree, [
+          [
+            worktreeId,
+            (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+              candidate.id === tabId ? { ...candidate, groupId: resolvedTargetGroupId } : candidate
+            )
+          ]
+        ])
+        const nextGroupsByWorktree = replaceRecordEntries(state.groupsByWorktree, [
+          [worktreeId, nextGroups]
+        ])
 
         return {
           unifiedTabsByWorktree: nextUnifiedTabsByWorktree,

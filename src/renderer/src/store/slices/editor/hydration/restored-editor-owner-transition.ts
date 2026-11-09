@@ -17,6 +17,10 @@ import type {
 } from '../types/restored-editor-owner'
 import { resolveRestoredEditorOwnerDestination } from './restored-editor-owner-destination'
 import { rekeyRestoredEditorTabsInPlace } from './restored-editor-owner-in-place'
+import {
+  annotateRecordReplacement,
+  annotateTabBucketReplacement
+} from '../../../keyed-record-transitions'
 
 /** The group a moved restored tab joins: the workspace's active one, else its first, else a new one. */
 export function restoredEditorTargetGroupId(
@@ -188,6 +192,9 @@ export function buildRestoredEditorOwnerTransition(
       delete nextActiveGroupIdByWorktree[sourceWorktreeId]
     }
     nextActiveGroupIdByWorktree[targetWorktreeId] = targetGroupId
+    const movedWorkspaces = [sourceWorktreeId, targetWorktreeId]
+    const moved = <R extends object>(previous: object, next: R): R =>
+      annotateRecordReplacement(previous, next, movedWorkspaces)
     const tabState =
       sourceWorktreeId === targetWorktreeId
         ? rekeyRestoredEditorTabsInPlace(
@@ -199,15 +206,19 @@ export function buildRestoredEditorOwnerTransition(
           )
         : {
             activeFileIdByWorktree: nextActiveFileIdByWorktree,
-            activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
+            activeGroupIdByWorktree: moved(s.activeGroupIdByWorktree, nextActiveGroupIdByWorktree),
             activeTabTypeByWorktree: {
               ...s.activeTabTypeByWorktree,
               [targetWorktreeId]: 'editor' as const
             },
-            groupsByWorktree: nextGroupsByWorktree,
-            layoutByWorktree: nextLayoutByWorktree,
+            groupsByWorktree: moved(s.groupsByWorktree, nextGroupsByWorktree),
+            layoutByWorktree: moved(s.layoutByWorktree, nextLayoutByWorktree),
             tabBarOrderByWorktree: nextTabBarOrderByWorktree,
-            unifiedTabsByWorktree: nextUnifiedTabsByWorktree
+            unifiedTabsByWorktree: annotateTabBucketReplacement(
+              s.unifiedTabsByWorktree,
+              nextUnifiedTabsByWorktree,
+              movedWorkspaces
+            )
           }
 
     assignResult({ ok: true, fileId: newFileId })

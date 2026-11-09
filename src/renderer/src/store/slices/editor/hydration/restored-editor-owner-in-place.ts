@@ -1,5 +1,9 @@
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { AppState } from '../../../types'
+import {
+  annotateRecordReplacement,
+  annotateTabBucketReplacement
+} from '../../../keyed-record-transitions'
 
 type InPlaceTabState = Pick<
   AppState,
@@ -31,28 +35,36 @@ export function rekeyRestoredEditorTabsInPlace(
     activeGroupIdByWorktree: s.activeGroupIdByWorktree,
     activeTabTypeByWorktree: s.activeTabTypeByWorktree,
     layoutByWorktree: s.layoutByWorktree,
-    groupsByWorktree: {
-      ...s.groupsByWorktree,
-      [worktreeId]: (s.groupsByWorktree[worktreeId] ?? []).map((group) => ({
-        ...group,
-        activeTabId: group.activeTabId ? tabId(group.activeTabId) : group.activeTabId,
-        tabOrder: group.tabOrder.map(tabId),
-        ...(group.recentTabIds ? { recentTabIds: group.recentTabIds.map(tabId) } : {})
-      }))
-    },
-    unifiedTabsByWorktree: {
-      ...s.unifiedTabsByWorktree,
-      [worktreeId]: (s.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) =>
-        tabIdMigrations.has(tab.id) || fileIdMigrations.has(tab.entityId)
-          ? {
-              ...tab,
-              id: tabId(tab.id),
-              entityId: fileId(tab.entityId),
-              ...(tab.executionHostId ? { executionHostId } : {})
-            }
-          : tab
-      )
-    },
+    groupsByWorktree: annotateRecordReplacement(
+      s.groupsByWorktree,
+      {
+        ...s.groupsByWorktree,
+        [worktreeId]: (s.groupsByWorktree[worktreeId] ?? []).map((group) => ({
+          ...group,
+          activeTabId: group.activeTabId ? tabId(group.activeTabId) : group.activeTabId,
+          tabOrder: group.tabOrder.map(tabId),
+          ...(group.recentTabIds ? { recentTabIds: group.recentTabIds.map(tabId) } : {})
+        }))
+      },
+      [worktreeId]
+    ),
+    unifiedTabsByWorktree: annotateTabBucketReplacement(
+      s.unifiedTabsByWorktree,
+      {
+        ...s.unifiedTabsByWorktree,
+        [worktreeId]: (s.unifiedTabsByWorktree[worktreeId] ?? []).map((tab) =>
+          tabIdMigrations.has(tab.id) || fileIdMigrations.has(tab.entityId)
+            ? {
+                ...tab,
+                id: tabId(tab.id),
+                entityId: fileId(tab.entityId),
+                ...(tab.executionHostId ? { executionHostId } : {})
+              }
+            : tab
+        )
+      },
+      [worktreeId]
+    ),
     tabBarOrderByWorktree: {
       ...s.tabBarOrderByWorktree,
       [worktreeId]: (s.tabBarOrderByWorktree[worktreeId] ?? []).map(fileId)

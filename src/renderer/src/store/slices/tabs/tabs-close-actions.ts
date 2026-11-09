@@ -34,6 +34,11 @@ import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-ag
 import { isTuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import { forgetDesktopCreatedServerTab } from '@/lib/desktop-created-server-tabs'
+import {
+  annotateRecordReplacement,
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '../../keyed-record-transitions'
 
 export function createTabsCloseActions(
   set: TabsSliceSet,
@@ -164,19 +169,30 @@ export function createTabsCloseActions(
                 group.id,
                 nextGroups[0]?.id ?? null
               )
-              nextLayoutByWorktree = collapsedState.layoutByWorktree
-              nextActiveGroupIdByWorktree = collapsedState.activeGroupIdByWorktree
+              nextLayoutByWorktree = annotateRecordReplacement(
+                current.layoutByWorktree,
+                collapsedState.layoutByWorktree,
+                [worktreeId]
+              )
+              nextActiveGroupIdByWorktree = annotateRecordReplacement(
+                current.activeGroupIdByWorktree,
+                collapsedState.activeGroupIdByWorktree,
+                [worktreeId]
+              )
             }
+            const nextUnifiedTabsByWorktree = replaceTabBuckets(current.unifiedTabsByWorktree, [
+              [worktreeId, nextTabs]
+            ])
+            const nextGroupsByWorktree = replaceRecordEntries(current.groupsByWorktree, [
+              [worktreeId, nextGroups]
+            ])
             // Unwinding a failed create added no tab; preserve the original selection instead of landing on welcome.
             const shouldDeactivateWorktree =
               !opts?.preserveWorktreeSelection &&
               landsOnEmptiedWorktree(current, worktreeId, nextTabs.length)
             return {
-              unifiedTabsByWorktree: { ...current.unifiedTabsByWorktree, [worktreeId]: nextTabs },
-              groupsByWorktree: {
-                ...current.groupsByWorktree,
-                [worktreeId]: nextGroups
-              },
+              unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+              groupsByWorktree: nextGroupsByWorktree,
               layoutByWorktree: nextLayoutByWorktree,
               activeGroupIdByWorktree: nextActiveGroupIdByWorktree,
               // Avoid no-op unread allocations that wake full-state selectors.
@@ -190,14 +206,8 @@ export function createTabsCloseActions(
                 ? buildActiveSurfacePatch(
                     {
                       ...current,
-                      unifiedTabsByWorktree: {
-                        ...current.unifiedTabsByWorktree,
-                        [worktreeId]: nextTabs
-                      },
-                      groupsByWorktree: {
-                        ...current.groupsByWorktree,
-                        [worktreeId]: nextGroups
-                      },
+                      unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
+                      groupsByWorktree: nextGroupsByWorktree,
                       layoutByWorktree: nextLayoutByWorktree,
                       activeGroupIdByWorktree: nextActiveGroupIdByWorktree
                     },

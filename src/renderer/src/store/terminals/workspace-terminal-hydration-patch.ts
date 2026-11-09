@@ -8,6 +8,11 @@ import {
 import { resolveAgentPaneAuthorityKey } from '../slices/agent-status/agent-pane-authority'
 import type { HydrateWorkspaceSessionOptions } from './terminal-contracts'
 import { omitUnverifiedPtyLossTabIds } from './terminal-unverified-pty-loss'
+import {
+  annotateRecordReplacement,
+  annotateTabBucketReplacement,
+  markFullResync
+} from '../keyed-record-transitions'
 
 export type WorkspaceHydrationPatch = Pick<
   AppState,
@@ -103,6 +108,18 @@ export function transferNormalizedTerminalLayoutPtyOwnership(
   }
 }
 
+// Cold path: a full hydration rebuilds every tracked record from the session.
+export function markFullWorkspaceHydration(
+  hydrated: WorkspaceHydrationPatch
+): WorkspaceHydrationPatch {
+  markFullResync(hydrated.tabsByWorktree, 'hydration')
+  markFullResync(hydrated.sleepingAgentSessionsByPaneKey, 'hydration')
+  markFullResync(hydrated.pendingReconnectPtyIdByTabId, 'hydration')
+  markFullResync(hydrated.ptyIdsByTabId, 'hydration')
+  markFullResync(hydrated.terminalLayoutsByTabId, 'hydration')
+  return hydrated
+}
+
 export function targetScopedWorkspaceHydrationPatch(
   state: AppState,
   hydrated: WorkspaceHydrationPatch,
@@ -131,20 +148,29 @@ export function targetScopedWorkspaceHydrationPatch(
     state.unverifiedPtyLossTabIds,
     deletedTargetTabIds
   )
-  const pendingReconnectPtyIdByTabId = replaceHydratedRecordKeys(
+  const pendingReconnectPtyIdByTabId = annotateRecordReplacement(
     state.pendingReconnectPtyIdByTabId,
-    {},
+    replaceHydratedRecordKeys(state.pendingReconnectPtyIdByTabId, {}, targetTabIds),
     targetTabIds
   )
   const activeOutsideScope =
     state.activeWorktreeId != null && !workspaceKeys.has(state.activeWorktreeId)
+  const replacedSleepingPaneKeys = new Set<string>()
   const sleepingAgentSessionsByPaneKey = Object.fromEntries([
-    ...Object.entries(state.sleepingAgentSessionsByPaneKey).filter(
-      ([, record]) => !workspaceKeys.has(record.worktreeId)
-    ),
-    ...Object.entries(hydrated.sleepingAgentSessionsByPaneKey).filter(([, record]) =>
-      workspaceKeys.has(record.worktreeId)
-    )
+    ...Object.entries(state.sleepingAgentSessionsByPaneKey).filter(([paneKey, record]) => {
+      if (!workspaceKeys.has(record.worktreeId)) {
+        return true
+      }
+      replacedSleepingPaneKeys.add(paneKey)
+      return false
+    }),
+    ...Object.entries(hydrated.sleepingAgentSessionsByPaneKey).filter(([paneKey, record]) => {
+      if (!workspaceKeys.has(record.worktreeId)) {
+        return false
+      }
+      replacedSleepingPaneKeys.add(paneKey)
+      return true
+    })
   ])
   const everActivatedWorktreeIds = new Set(state.everActivatedWorktreeIds)
   for (const workspaceKey of hydrated.everActivatedWorktreeIds) {
@@ -165,9 +191,9 @@ export function targetScopedWorkspaceHydrationPatch(
       hydrated.activeTabIdByWorktree,
       workspaceKeys
     ),
-    tabsByWorktree: replaceHydratedRecordKeys(
+    tabsByWorktree: annotateTabBucketReplacement(
       state.tabsByWorktree,
-      hydrated.tabsByWorktree,
+      replaceHydratedRecordKeys(state.tabsByWorktree, hydrated.tabsByWorktree, workspaceKeys),
       workspaceKeys
     ),
     lastVisitedAtByWorktreeId: replaceHydratedRecordKeys(
@@ -192,7 +218,11 @@ export function targetScopedWorkspaceHydrationPatch(
       hydrated.automaticAgentResumeClaimsByTabId,
       targetTabIds
     ),
-    sleepingAgentSessionsByPaneKey,
+    sleepingAgentSessionsByPaneKey: annotateRecordReplacement(
+      state.sleepingAgentSessionsByPaneKey,
+      sleepingAgentSessionsByPaneKey,
+      replacedSleepingPaneKeys
+    ),
     pendingReconnectWorktreeIds: [
       ...state.pendingReconnectWorktreeIds.filter((key) => !workspaceKeys.has(key)),
       ...hydrated.pendingReconnectWorktreeIds.filter((key) => workspaceKeys.has(key))
@@ -207,14 +237,18 @@ export function targetScopedWorkspaceHydrationPatch(
     ...(nextUnverifiedPtyLossTabIds !== state.unverifiedPtyLossTabIds
       ? { unverifiedPtyLossTabIds: nextUnverifiedPtyLossTabIds }
       : {}),
-    ptyIdsByTabId: replaceHydratedRecordKeys(
+    ptyIdsByTabId: annotateRecordReplacement(
       state.ptyIdsByTabId,
-      hydrated.ptyIdsByTabId,
+      replaceHydratedRecordKeys(state.ptyIdsByTabId, hydrated.ptyIdsByTabId, targetTabIds),
       targetTabIds
     ),
-    terminalLayoutsByTabId: replaceHydratedRecordKeys(
+    terminalLayoutsByTabId: annotateRecordReplacement(
       state.terminalLayoutsByTabId,
-      hydrated.terminalLayoutsByTabId,
+      replaceHydratedRecordKeys(
+        state.terminalLayoutsByTabId,
+        hydrated.terminalLayoutsByTabId,
+        targetTabIds
+      ),
       targetTabIds
     ),
     localOnlyScrollbackByTabId: replaceHydratedRecordKeys(

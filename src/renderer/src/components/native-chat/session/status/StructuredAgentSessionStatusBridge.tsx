@@ -291,6 +291,19 @@ function installStatusProjection(): () => void {
       changed.add(member)
     }
   }
+  // Cold path (bootstrap, hydration, unannotated replacement): the whole projected chat list.
+  const reconcileFromSnapshot = (
+    source: AppState['unifiedTabsByWorktree'],
+    placeTab: (tab: StructuredTab, paneKey: string) => void
+  ): Member[] => {
+    const nextTabs = getStructuredAgentSessionTabs(source)
+    if (nextTabs === tabs) {
+      return []
+    }
+    const retiring = membership.reconcileTabs(nextTabs, null, placeTab)
+    tabs = nextTabs
+    return retiring
+  }
   const reconcile = (ownersChanged: boolean): void => {
     const state = useAppStore.getState()
     const source = state.unifiedTabsByWorktree
@@ -306,12 +319,7 @@ function installStatusProjection(): () => void {
         retiring.push(...membership.reconcileTabs(listed, changes.tabIds, placeTab))
         tabs = null
       } else {
-        // Cold path (bootstrap, hydration, unannotated replacement): the whole projected chat list.
-        const nextTabs = getStructuredAgentSessionTabs(source)
-        if (nextTabs !== tabs) {
-          retiring.push(...membership.reconcileTabs(nextTabs, null, placeTab))
-          tabs = nextTabs
-        }
+        retiring.push(...reconcileFromSnapshot(source, placeTab))
       }
     }
     for (const member of retiring) {

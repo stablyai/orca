@@ -25,6 +25,10 @@ import { noteAgentLaunchPaneClosedByUser } from '@/lib/agent-session/launch/pane
 import { settleAgentLaunchPaneStart } from '@/lib/agent-session/launch/pane/agent-launch-pane-start'
 import { settleAttentionRemovedBy } from '../slices/workspace-attention/attention-removal-follow-up'
 import { runAsAutomaticDeselection } from '../workspaces/selection/active-worktree-deselection-intent'
+import {
+  annotateRecordReplacement,
+  annotateTabBucketReplacement
+} from '../keyed-record-transitions'
 
 export function createTerminalTabCloseActions(
   set: TerminalStoreSet,
@@ -62,6 +66,10 @@ export function createTerminalTabCloseActions(
           const closingTabIds = [tabId]
           const omitByTabId = <T>(record: Record<string, T>): Record<string, T> =>
             omitRecordKeys(record, closingTabIds)
+          // Partial test slices may lack a record; omitRecordKeys normalizes those to {}.
+          const omitAddressedByTabId = <T>(record: Record<string, T>): Record<string, T> =>
+            record ? annotateRecordReplacement(record, omitByTabId(record), closingTabIds) : {}
+          const changedWorktreeIds: string[] = []
           const next = { ...s.tabsByWorktree }
           let closedTab: TerminalTab | null = null
           let closedWorktreeId: string | null = null
@@ -87,6 +95,7 @@ export function createTerminalTabCloseActions(
             const after = before.filter((t) => t.id !== tabId)
             if (after.length !== before.length) {
               next[wId] = after
+              changedWorktreeIds.push(wId)
             }
           }
           // Session-only tombstone fences synchronous SSH pulls before main acknowledges close; retire once merge moves to main.
@@ -121,13 +130,15 @@ export function createTerminalTabCloseActions(
               : null
           const nextExpanded = omitByTabId(s.expandedPaneByTabId)
           const nextCanExpand = omitByTabId(s.canExpandPaneByTabId)
-          const nextLayouts = omitByTabId(s.terminalLayoutsByTabId)
+          const nextLayouts = omitAddressedByTabId(s.terminalLayoutsByTabId)
           const nextLocalOnlyScrollback = omitByTabId(s.localOnlyScrollbackByTabId)
-          const nextPtyIdsByTabId = omitByTabId(s.ptyIdsByTabId)
-          const nextLastKnownRelay = omitByTabId(s.lastKnownRelayPtyIdByTabId)
+          const nextPtyIdsByTabId = omitAddressedByTabId(s.ptyIdsByTabId)
+          const nextLastKnownRelay = omitAddressedByTabId(s.lastKnownRelayPtyIdByTabId)
           const nextDeferredSshSessionIdsByTabId = omitByTabId(s.deferredSshSessionIdsByTabId)
-          const nextPendingReconnectPtyIdByTabId = omitByTabId(s.pendingReconnectPtyIdByTabId)
-          const nextRuntimePaneTitlesByTabId = omitByTabId(s.runtimePaneTitlesByTabId)
+          const nextPendingReconnectPtyIdByTabId = omitAddressedByTabId(
+            s.pendingReconnectPtyIdByTabId
+          )
+          const nextRuntimePaneTitlesByTabId = omitAddressedByTabId(s.runtimePaneTitlesByTabId)
           const nextUnverifiedPtyLossTabIds = omitUnverifiedPtyLossTabIds(
             s.unverifiedPtyLossTabIds,
             [tabId]
@@ -138,10 +149,20 @@ export function createTerminalTabCloseActions(
             s.lastTerminalInputAtByPaneKey,
             tabId
           )
-          const nextSleepingAgentSessionsByPaneKey = retiresSession
+          const removedSleepingSessions = retiresSession
             ? removeSleepingAgentSessionsForTab(s.sleepingAgentSessionsByPaneKey, tabId)
             : s.sleepingAgentSessionsByPaneKey
-          const nextPendingStartupByTabId = omitByTabId(s.pendingStartupByTabId)
+          const nextSleepingAgentSessionsByPaneKey =
+            removedSleepingSessions === s.sleepingAgentSessionsByPaneKey
+              ? removedSleepingSessions
+              : annotateRecordReplacement(
+                  s.sleepingAgentSessionsByPaneKey,
+                  removedSleepingSessions,
+                  Object.keys(s.sleepingAgentSessionsByPaneKey).filter(
+                    (paneKey) => !Object.hasOwn(removedSleepingSessions, paneKey)
+                  )
+                )
+          const nextPendingStartupByTabId = omitAddressedByTabId(s.pendingStartupByTabId)
           const nextAutomaticAgentResumeClaimsByTabId = omitByTabId(
             s.automaticAgentResumeClaimsByTabId
           )
@@ -194,7 +215,11 @@ export function createTerminalTabCloseActions(
             }
           }
           return {
-            tabsByWorktree: next,
+            tabsByWorktree: annotateTabBucketReplacement(
+              s.tabsByWorktree,
+              next,
+              changedWorktreeIds
+            ),
             activeTabId: s.activeTabId === tabId ? null : s.activeTabId,
             activeTabIdByWorktree: nextActiveTabIdByWorktree,
             ptyIdsByTabId: nextPtyIdsByTabId,

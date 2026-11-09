@@ -4,6 +4,11 @@ import { buildActiveSurfacePatch } from './tabs-surface'
 import { findGroupAndWorktree, findGroupForTab, findTabAndWorktree } from './tab-group-state'
 import { pickNextActiveTab, pushRecentTabId, sanitizeRecentTabIds } from './tab-selection-history'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
+import {
+  annotateRecordReplacement,
+  replaceRecordEntries,
+  replaceTabBuckets
+} from '../../keyed-record-transitions'
 
 export function createTabsMoveActions(
   set: TabsSliceSet,
@@ -89,19 +94,29 @@ export function createTabsMoveActions(
             sourceGroup.id,
             targetGroupId
           )
-          nextLayoutByWorktree = collapsedState.layoutByWorktree
+          nextLayoutByWorktree = annotateRecordReplacement(
+            state.layoutByWorktree,
+            collapsedState.layoutByWorktree,
+            [worktreeId]
+          )
           nextActiveGroupIdByWorktreeResolved = collapsedState.activeGroupIdByWorktree
         }
-        const nextGroupsByWorktree = {
-          ...state.groupsByWorktree,
-          [worktreeId]: filteredGroups
-        }
-        const nextUnifiedTabsByWorktree = {
-          ...state.unifiedTabsByWorktree,
-          [worktreeId]: (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
-            candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
-          )
-        }
+        nextActiveGroupIdByWorktreeResolved = annotateRecordReplacement(
+          state.activeGroupIdByWorktree,
+          nextActiveGroupIdByWorktreeResolved,
+          [worktreeId]
+        )
+        const nextGroupsByWorktree = replaceRecordEntries(state.groupsByWorktree, [
+          [worktreeId, filteredGroups]
+        ])
+        const nextUnifiedTabsByWorktree = replaceTabBuckets(state.unifiedTabsByWorktree, [
+          [
+            worktreeId,
+            (state.unifiedTabsByWorktree[worktreeId] ?? []).map((candidate) =>
+              candidate.id === tabId ? { ...candidate, groupId: targetGroupId } : candidate
+            )
+          ]
+        ])
         return {
           unifiedTabsByWorktree: nextUnifiedTabsByWorktree,
           groupsByWorktree: nextGroupsByWorktree,

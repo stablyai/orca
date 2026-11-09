@@ -12,16 +12,35 @@ import { createWorktreeTabModelReconciliationBatch } from './tabs-reconciliation
 import type { AppState } from '../../types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
+import {
+  annotateRecordReplacement,
+  annotateTabBucketReplacement,
+  markFullResync
+} from '../../keyed-record-transitions'
 
-function replaceWorkspaceRecordKeys<T>(
-  current: Record<string, T>,
-  hydrated: Record<string, T>,
-  workspaceKeys: ReadonlySet<string>
-): Record<string, T> {
-  return {
+/** The candidate keys whose entry `next` added, deleted or replaced. */
+function changedWorkspaceKeys(
+  previous: Readonly<Record<string, unknown>>,
+  next: Readonly<Record<string, unknown>>,
+  candidates: Iterable<string>
+): string[] {
+  return [...candidates].filter(
+    (key) =>
+      Object.hasOwn(previous, key) !== Object.hasOwn(next, key) || previous[key] !== next[key]
+  )
+}
+
+function replaceWorkspaceRecordKeys<R extends Record<string, unknown>>(
+  current: R,
+  hydrated: R,
+  workspaceKeys: ReadonlySet<string>,
+  annotate: (previous: R, next: R, keys: string[]) => R = annotateRecordReplacement
+): R {
+  const next = {
     ...Object.fromEntries(Object.entries(current).filter(([key]) => !workspaceKeys.has(key))),
     ...Object.fromEntries(Object.entries(hydrated).filter(([key]) => workspaceKeys.has(key)))
-  }
+  } as R
+  return annotate(current, next, changedWorkspaceKeys(current, next, workspaceKeys))
 }
 
 /** Fold in workspace order so shared unread/orphan maps see prior patches; defer only the store write and subscriber notifications. */
@@ -40,6 +59,24 @@ function projectWorktreeTabModelReconciliations(
     }
     Object.assign(merged, patch)
     Object.assign(working, patch)
+  }
+  // The fold writes batch-owned drafts in place, so name their keys against the fold's input.
+  if (merged.unifiedTabsByWorktree) {
+    annotateTabBucketReplacement(
+      state.unifiedTabsByWorktree,
+      merged.unifiedTabsByWorktree,
+      changedWorkspaceKeys(state.unifiedTabsByWorktree, merged.unifiedTabsByWorktree, worktreeIds)
+    )
+  }
+  for (const key of ['groupsByWorktree', 'activeGroupIdByWorktree', 'layoutByWorktree'] as const) {
+    const next = merged[key]
+    if (next) {
+      annotateRecordReplacement(
+        state[key],
+        next,
+        changedWorkspaceKeys(state[key], next, worktreeIds)
+      )
+    }
   }
   return merged
 }
@@ -94,7 +131,13 @@ export function createTabsSessionActions(
         new Set(options?.wslMovedChatWorkspaceKeys)
       )
       if (!options?.replaceWorkspaceKeys) {
-        set(hydrated)
+        // Cold path: a full session hydration rebuilds every workspace's tab state.
+        set({
+          unifiedTabsByWorktree: markFullResync(hydrated.unifiedTabsByWorktree, 'hydration'),
+          groupsByWorktree: markFullResync(hydrated.groupsByWorktree, 'hydration'),
+          activeGroupIdByWorktree: markFullResync(hydrated.activeGroupIdByWorktree, 'hydration'),
+          layoutByWorktree: markFullResync(hydrated.layoutByWorktree, 'hydration')
+        })
         return
       }
       const replaceWorkspaceKeys = new Set(options.replaceWorkspaceKeys)
@@ -102,7 +145,8 @@ export function createTabsSessionActions(
         unifiedTabsByWorktree: replaceWorkspaceRecordKeys(
           current.unifiedTabsByWorktree,
           hydrated.unifiedTabsByWorktree,
-          replaceWorkspaceKeys
+          replaceWorkspaceKeys,
+          annotateTabBucketReplacement
         ),
         groupsByWorktree: replaceWorkspaceRecordKeys(
           current.groupsByWorktree,
