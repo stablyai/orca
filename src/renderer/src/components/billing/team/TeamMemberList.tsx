@@ -21,7 +21,7 @@ import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { OrcaOrgMember, OrcaOrgRole } from '../../../../../shared/orca-profiles'
 import { PersonAvatar } from './TeamAvatar'
-import { memberStatusLabel, roleDescription } from './team-copy'
+import { invitedAsCopy, memberStatusLabel, roleDescription } from './team-copy'
 import { assignableRoles, roleLabel } from './team-roles'
 import type { TeamRow } from './team-roster-rows'
 
@@ -216,10 +216,11 @@ export function TeamMemberList(props: TeamMemberListProps): React.JSX.Element {
             ? row.member.displayName
               ? row.member.email
               : null
-            : t('auto.components.billing.team.invitedAgo', 'Invited {{value0}} as {{value1}}', {
-                value0: relativeSince(row.invite.createdAt, props.now, locale),
-                value1: roleLabel(row.invite.role, t).toLowerCase()
-              })
+            : invitedAsCopy(
+                row.invite.role,
+                relativeSince(row.invite.createdAt, props.now, locale),
+                t
+              )
         return (
           <li
             key={row.key}

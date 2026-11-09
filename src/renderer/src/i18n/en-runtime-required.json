@@ -205,6 +205,16 @@
         }
       },
       "billing": {
+        "plans": {
+          "seatsPerMember_one": "{{count}} seat, one per team member",
+          "seatsPerMember_other": "{{count}} seats, one per team member"
+        },
+        "sandboxHoursOver_one": "{{count}} sandbox hour over",
+        "sandboxHoursOver_other": "{{count}} sandbox hours over",
+        "seatsAnnual_one": "{{count}} seat · Annual",
+        "seatsAnnual_other": "{{count}} seats · Annual",
+        "seatsMonthly_one": "{{count}} seat · Monthly",
+        "seatsMonthly_other": "{{count}} seats · Monthly",
         "team": {
           "invitedCount_one": "{{count}} invited",
           "invitedCount_other": "{{count}} invited",

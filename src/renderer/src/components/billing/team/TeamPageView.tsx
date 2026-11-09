@@ -293,8 +293,8 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
         ) : null}
       </section>
 
-      {(roster?.canManageMembers && enterprise) || selfRow ? (
-        <div className="divide-y divide-border/60 rounded-xl border border-border">
+      {roster?.canManageMembers && enterprise ? (
+        <div className="rounded-xl border border-border">
           {roster?.canManageMembers && enterprise ? (
             <section aria-labelledby={ssoTitleId} className="flex flex-wrap items-center gap-3 p-4">
               <div className="min-w-[14rem] flex-1 space-y-0.5">
@@ -334,8 +334,8 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
                 <p className="text-xs text-muted-foreground text-pretty">
                   {canLeave
                     ? t(
-                        'auto.components.billing.team.leaveBody',
-                        'You lose access to the team’s cloud workspaces and secrets. An admin can invite you back.'
+                        'auto.components.billing.team.leaveBody2',
+                        'You lose access to the team’s cloud workspaces and secrets. An owner or admin can invite you back.'
                       )
                     : t(
                         'auto.components.billing.team.leaveLastOwner',
@@ -355,7 +355,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
               >
                 <Button
                   type="button"
-                  variant="outline"
+                  variant="destructive-chip"
                   size="sm"
                   disabled={!canLeave}
                   onClick={props.onLeave}

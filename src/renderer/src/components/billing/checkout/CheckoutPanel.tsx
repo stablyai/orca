@@ -170,8 +170,8 @@ export function CheckoutPanel(props: CheckoutPanelProps): React.JSX.Element {
     case 'canceled':
       title = t('auto.components.billing.checkout.canceled', 'Checkout canceled')
       body = t(
-        'auto.components.billing.checkout.canceledBody',
-        'Nothing was charged. You can pick up where you left off any time.'
+        'auto.components.billing.checkout.canceledBody2',
+        'Nothing was charged. You can choose a plan again any time.'
       )
       break
     case 'needs-attention':

@@ -1,6 +1,8 @@
 import { ExternalLink, Lock, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
+import type { PlanBillingNotice } from '../PlanBillingSection'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { OrcaBillingInterval, OrcaBillingOffers } from '../../../../../shared/orca-billing'
@@ -26,7 +28,7 @@ export function TeamPlanCard({
   /** choose: can buy; current: already on Team; locked: only owners/admins can buy. */
   mode: TeamPlanCardMode
   busy: boolean
-  notice: string | null
+  notice: PlanBillingNotice | null
   /** A payment banner already offers the same Portal action. */
   hideManage: boolean
   onCheckout: () => void
@@ -95,7 +97,7 @@ export function TeamPlanCard({
       </span>
       {monthly === null ? null : (
         <span className="text-sm text-muted-foreground">
-          {t('auto.components.billing.plans.perSeatMonth', 'per seat / month')}
+          {t('auto.components.billing.plans.perSeatPerMonth', 'per seat per month')}
         </span>
       )}
     </p>
@@ -106,8 +108,8 @@ export function TeamPlanCard({
       ? team.annualPriceCentsPerSeat === null
         ? t('auto.components.billing.plans.billedYearly', 'Billed yearly')
         : t(
-            'auto.components.billing.plans.billedYearlyAmount',
-            'Billed {{value0}} per seat yearly',
+            'auto.components.billing.plans.billedYearlyAmount2',
+            '{{value0}} per seat, billed yearly',
             {
               value0: formatCents(team.annualPriceCentsPerSeat, locale)
             }
@@ -118,9 +120,14 @@ export function TeamPlanCard({
     mode === 'choose' ? (
       <div className="flex items-baseline justify-between gap-3 rounded-md bg-muted/60 px-3 py-2">
         <p className="text-xs text-muted-foreground">
-          {t('auto.components.billing.plans.seatsOne', 'Seats: {{value0}} (one per team member)', {
-            value0: String(seats)
-          })}
+          {t(
+            'auto.components.billing.plans.seatsPerMember',
+            '{{count}} seats, one per team member',
+            {
+              count: seats,
+              defaultValue_one: '{{count}} seat, one per team member'
+            }
+          )}
         </p>
         {total === null ? null : (
           <p className="text-sm font-medium tabular-nums" aria-live="polite">
@@ -143,7 +150,7 @@ export function TeamPlanCard({
         <Button
           type="button"
           className="w-full"
-          disabled={busy}
+          aria-disabled={busy || undefined}
           onClick={onCheckout}
           data-plans-primary=""
         >
@@ -153,13 +160,17 @@ export function TeamPlanCard({
             : t('auto.components.billing.plans.checkout', 'Continue to checkout')}
           {busy ? null : <ExternalLink />}
         </Button>
-        <p role="status" className="text-center text-xs text-muted-foreground text-pretty">
-          {notice ??
-            t(
-              'auto.components.billing.plans.seatsFollow2',
-              'Seats follow your team: new members add a seat now; removed seats drop off at renewal.'
-            )}
-        </p>
+        {notice?.kind === 'error' ? (
+          <InlineError title={notice.text} />
+        ) : (
+          <p role="status" className="text-center text-xs text-muted-foreground text-pretty">
+            {notice?.text ??
+              t(
+                'auto.components.billing.plans.seatsFollow2',
+                'Seats follow your team: new members add a seat now; removed seats drop off at renewal.'
+              )}
+          </p>
+        )}
       </>
     )
   } else if (mode === 'current') {
@@ -176,20 +187,24 @@ export function TeamPlanCard({
           type="button"
           variant="outline"
           className="w-full"
-          disabled={busy}
+          aria-disabled={busy || undefined}
           onClick={onManage}
           data-plans-primary=""
         >
           {t('auto.components.billing.manageBilling', 'Manage billing')}
           <ExternalLink />
         </Button>
-        <p role="status" className="text-center text-xs text-muted-foreground">
-          {notice ??
-            t(
-              'auto.components.billing.plans.manageHint',
-              'Switch monthly or annual, update payment, or cancel.'
-            )}
-        </p>
+        {notice?.kind === 'error' ? (
+          <InlineError title={notice.text} />
+        ) : (
+          <p role="status" className="text-center text-xs text-muted-foreground">
+            {notice?.text ??
+              t(
+                'auto.components.billing.plans.manageHint',
+                'Switch monthly or annual, update payment, or cancel.'
+              )}
+          </p>
+        )}
       </>
     )
   } else {

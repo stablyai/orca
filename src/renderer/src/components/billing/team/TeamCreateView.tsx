@@ -7,6 +7,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import type { OrcaCloudOrgSummary } from '../../../../../shared/orca-profiles'
 import { TeamMark } from './TeamAvatar'
+import { normalizeOrgRole, roleLabel } from './team-roles'
 
 export type TeamCreateViewProps = {
   /** Teams the user already belongs to (switch instead of creating). */
@@ -76,7 +77,10 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
               aria-disabled={props.creating || undefined}
               disabled={props.unavailable}
             />
-            <Button type="submit" disabled={!trimmed || props.creating || props.unavailable}>
+            <Button
+              type="submit"
+              aria-disabled={!trimmed || props.creating || props.unavailable || undefined}
+            >
               {props.creating ? <LoadingSpinner className="size-3.5" /> : null}
               {t('auto.components.billing.team.createCta', 'Create team')}
             </Button>
@@ -112,8 +116,8 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">{org.name}</p>
                   {org.role ? (
-                    <p className="text-xs text-muted-foreground capitalize">
-                      {org.role.toLowerCase()}
+                    <p className="text-xs text-muted-foreground">
+                      {roleLabel(normalizeOrgRole(org.role), t)}
                     </p>
                   ) : null}
                 </div>
@@ -121,8 +125,12 @@ export function TeamCreateView(props: TeamCreateViewProps): React.JSX.Element {
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={props.switchingOrgId !== null}
-                  onClick={() => props.onSwitch(org.orgId)}
+                  aria-disabled={props.switchingOrgId !== null || undefined}
+                  onClick={() => {
+                    if (props.switchingOrgId === null) {
+                      props.onSwitch(org.orgId)
+                    }
+                  }}
                 >
                   {props.switchingOrgId === org.orgId ? (
                     <LoadingSpinner className="size-3.5" />

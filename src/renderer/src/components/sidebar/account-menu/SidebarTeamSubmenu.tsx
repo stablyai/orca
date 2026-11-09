@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Plus, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -13,11 +13,11 @@ import {
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import type { OrcaProfileAuthStatus } from '../../../../../shared/orca-profiles'
-import { TeamMark } from '../../billing/team/TeamAvatar'
 import { openTeamPage } from '../../billing/team/team-page-store'
 
 /**
- * Team switcher in the account menu, shown when the account belongs to more than one team.
+ * Team switcher in the account menu for signed-in accounts: the teams (radio items) and
+ * "Create a team…".
  * Radio items (menuitemradio + aria-checked) carry the current team for screen readers; the
  * "Team" item below it still opens the Team page. Switching selects the org at Orca Cloud auth,
  * which re-scopes billing, seats and the Team page.
@@ -29,15 +29,15 @@ export function SidebarTeamSubmenu({
 }): React.JSX.Element | null {
   const t = useTranslate()
   const selectOrg = useAppStore((state) => state.selectOrcaProfileOrg)
-  // One switch at a time, so toasts can't arrive out of order.
+  // One switch at a time, so toasts can't arrive out of order; the picked team shows as
+  // selected (and the group busy) until auth answers.
   const switching = useRef(false)
+  const [pendingOrgId, setPendingOrgId] = useState<string | null>(null)
   if (authStatus?.state !== 'connected') {
     return null
   }
+  // Always present for signed-in accounts so "Create a team…" is one click away.
   const organizations = authStatus.organizations ?? []
-  if (organizations.length < 2) {
-    return null
-  }
   const activeOrgId = authStatus.cloud?.activeOrgId ?? ''
   const activeName = authStatus.cloud?.activeOrgName ?? null
 
@@ -47,6 +47,7 @@ export function SidebarTeamSubmenu({
       return
     }
     switching.current = true
+    setPendingOrgId(orgId)
     void selectOrg(orgId)
       .then((result) => {
         if (result?.status === 'selected') {
@@ -63,6 +64,7 @@ export function SidebarTeamSubmenu({
       })
       .finally(() => {
         switching.current = false
+        setPendingOrgId(null)
       })
   }
 
@@ -85,32 +87,30 @@ export function SidebarTeamSubmenu({
               )
         }
       >
-        {activeName ? (
-          <TeamMark
-            name={activeName}
-            className="size-3.5 rounded-[3px] border-0 text-[7px] shadow-none"
-          />
-        ) : (
-          <Users className="size-3.5" />
-        )}
+        <Users className="size-3.5" />
         <span className="min-w-0 flex-1 truncate">
           {activeName ?? t('auto.components.sidebar.teamSwitcher.personal', 'Personal account')}
         </span>
       </DropdownMenuSubTrigger>
       <DropdownMenuSubContent className="w-60">
-        <DropdownMenuRadioGroup value={activeOrgId} onValueChange={switchTo}>
-          {organizations.map((org) => (
-            <DropdownMenuRadioItem key={org.orgId} value={org.orgId}>
-              <TeamMark name={org.name} className="size-5 rounded-[5px] text-[9px] shadow-none" />
-              <span className="min-w-0 flex-1 truncate">{org.name}</span>
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
+        {organizations.length > 0 ? (
+          <>
+            <DropdownMenuRadioGroup
+              value={pendingOrgId ?? activeOrgId}
+              onValueChange={switchTo}
+              aria-busy={pendingOrgId !== null || undefined}
+            >
+              {organizations.map((org) => (
+                <DropdownMenuRadioItem key={org.orgId} value={org.orgId} title={org.name}>
+                  <span className="min-w-0 flex-1 truncate">{org.name}</span>
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+            <DropdownMenuSeparator />
+          </>
+        ) : null}
         <DropdownMenuItem onSelect={() => openTeamPage({ kind: 'create' })}>
-          <span className="ml-[18px] flex size-5 items-center justify-center">
-            <Plus className="size-3.5" />
-          </span>
+          <Plus className="ml-[18px] size-3.5" />
           {t('auto.components.sidebar.teamSwitcher.create', 'Create a team…')}
         </DropdownMenuItem>
       </DropdownMenuSubContent>
