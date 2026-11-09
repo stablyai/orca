@@ -303,6 +303,45 @@ export async function setup() {
 }
 ```
 
+### Workspace badges
+
+A `contributes.worktreeBadges` entry puts a small icon beside the name of each workspace whose
+folder holds a marker path, such as a game engine's project file. The icon opens a menu of the
+plugin's workspace commands, and the workspace's context menu lists the same commands. Orca checks
+the paths itself, so the plugin learns nothing about a workspace until the person runs one of its
+commands on it.
+
+```json
+"commands": [{ "id": "unity.open", "title": "Open in Unity", "when": "workspace" }],
+"worktreeBadges": [
+  {
+    "id": "unity-project",
+    "title": "Unity project",
+    "icon": "icons/unity.svg",
+    "when": { "pathExists": ["ProjectSettings/ProjectVersion.txt"], "host": "local" },
+    "commands": ["unity.open"]
+  }
+],
+"capabilities": [{ "kind": "workspace:read" }]
+```
+
+`icon` is a panel icon name or a monochrome `.svg` in the plugin, which Orca draws in the text
+color. `"host": "local"` leaves out workspaces on SSH hosts, such as for a command that starts a
+desktop app; the default, `any`, checks those over SSH. Badges need `workspace:read` and
+`engines.orca` `>=1.4.256`, and each command must be a worker command with `"when": "workspace"`.
+
+Run from a badge, the context menu, the palette or a shortcut, the command's handler gets the
+workspace it ran on. A handler that returns `{ message }` shows it as a toast:
+
+```js
+orca.commands.register('unity.open', async ({ worktree }) => {
+  // worktree: { path, displayName, branch, host: 'local' | 'ssh' }; branch is '' for folders.
+  return { message: `Opening ${worktree.displayName}` }
+})
+```
+
+Workspaces of a paired Orca server get no badges, since the command would run on this computer.
+
 ### Custom editors
 
 A custom editor opens files that end in one of its `extensions` (with the dot, such as

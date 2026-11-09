@@ -54,6 +54,11 @@ import {
   PLUGIN_SETTING_LIMIT,
   pluginSettingContributionSchema
 } from './plugin-settings-contribution'
+import {
+  PLUGIN_WORKTREE_BADGE_LIMIT,
+  PLUGIN_WORKTREE_BADGES_SINCE,
+  pluginWorktreeBadgeContributionSchema
+} from './plugin-worktree-badge-contribution'
 
 /** Every `contributes` key, in manifest order. Adding a point starts here. */
 export const PLUGIN_CONTRIBUTION_POINTS = [
@@ -72,7 +77,8 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'customEditors',
   'newFiles',
   'settings',
-  'statusBarItems'
+  'statusBarItems',
+  'worktreeBadges'
 ] as const
 
 export type PluginContributionPoint = (typeof PLUGIN_CONTRIBUTION_POINTS)[number]
@@ -234,6 +240,12 @@ export const pluginContributesFields = {
     PLUGIN_STATUS_BAR_ITEM_LIMIT,
     'Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled.',
     PLUGIN_STATUS_BAR_SINCE
+  ),
+  worktreeBadges: contributionList(
+    pluginWorktreeBadgeContributionSchema,
+    PLUGIN_WORKTREE_BADGE_LIMIT,
+    "Icons beside each workspace whose folder holds a marker path; each opens the plugin's workspace commands for that workspace.",
+    PLUGIN_WORKTREE_BADGES_SINCE
   )
 } satisfies Record<PluginContributionPoint, z.ZodType>
 
@@ -283,5 +295,7 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   // Why sandboxed-ui: only code reads a setting, and panels are the least code there is.
   settings: { execution: 'sandboxed-ui', catalogType: null, bindsContent: false },
   // Why declarative: a static item only names its own command; updating it needs a worker.
-  statusBarItems: { execution: 'declarative', catalogType: null, bindsContent: false }
+  statusBarItems: { execution: 'declarative', catalogType: null, bindsContent: false },
+  // Why declarative: a badge only names the plugin's own workspace commands, which need a worker.
+  worktreeBadges: { execution: 'declarative', catalogType: null, bindsContent: false }
 }

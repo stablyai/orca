@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
-import type { PluginContribution } from './plugin-contributions'
+import type { PluginContribution, PluginContributionSource } from './plugin-contributions'
 
 export function withMode(
   kindLabel: string,
@@ -52,4 +52,32 @@ export function fontContributionRows(
     detail,
     tone: 'default'
   }))
+}
+
+export function worktreeBadgeContributionRows(
+  titles: readonly string[],
+  t: Translate = translate
+): PluginContribution[] {
+  const detail = t(
+    'auto.components.settings.pluginContributions.worktreeBadge',
+    'Badge beside matching workspaces'
+  )
+  return titles.map((title, index) => ({
+    key: `worktreeBadges:${index}`,
+    kind: 'worktreeBadges',
+    title,
+    detail,
+    tone: 'default'
+  }))
+}
+
+/** Rows for what a plugin adds to Orca's chrome: status bar items, then workspace badges. */
+export function chromeContributionRows(
+  source: Pick<PluginContributionSource, 'statusBarItems' | 'worktreeBadges'>,
+  t: Translate = translate
+): PluginContribution[] {
+  return [
+    ...statusBarContributionRows(source.statusBarItems, t),
+    ...worktreeBadgeContributionRows(source.worktreeBadges, t)
+  ]
 }

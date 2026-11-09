@@ -13,6 +13,10 @@ import { validatePluginFontArtifacts } from './plugin-font-files'
 import { PLUGIN_FONT_FILE_MAX_BYTES } from '../../shared/plugins/contributions/plugin-font-contribution'
 import { PLUGIN_PANEL_ENTRY_MAX_BYTES } from '../../shared/plugins/frames/plugin-frame-entry-limits'
 import {
+  isPluginWorktreeBadgeSvgIcon,
+  PLUGIN_WORKTREE_BADGE_SVG_MAX_BYTES
+} from '../../shared/plugins/contributions/plugin-worktree-badge-contribution'
+import {
   PLUGIN_WORKER_ENTRY_MAX_BYTES,
   readContainedPluginArtifactBytes,
   readContainedPluginArtifactText,
@@ -115,7 +119,16 @@ function declaredArtifactPaths(manifest: PluginManifest): DeclaredArtifact[] {
         syntax.configuration,
         PLUGIN_SYNTAX_CONFIGURATION_MAX_BYTES
       )
-    ])
+    ]),
+    ...c.worktreeBadges
+      .filter((badge) => isPluginWorktreeBadgeSvgIcon(badge.icon))
+      .flatMap((badge) =>
+        declaredFile(
+          `worktree badge "${badge.id}" icon`,
+          badge.icon,
+          PLUGIN_WORKTREE_BADGE_SVG_MAX_BYTES
+        )
+      )
   ]
 }
 

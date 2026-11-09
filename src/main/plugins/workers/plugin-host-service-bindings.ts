@@ -15,6 +15,7 @@ import { PluginKvStore } from '../plugin-storage-store'
 import type { TerminalInputKind } from '../../../shared/terminal/input/terminal-input-kind'
 import { pluginTerminalTitle, type PluginAgentStatusRow } from './plugin-workspace-projection'
 import type { PluginAppearanceService } from '../appearance/plugin-appearance-service'
+import type { PluginCommandWorkspaceResolver } from '../plugin-command-invocation'
 
 export type PluginRuntimeDelegate = {
   resolveActiveWorktreeContext(): Promise<{
@@ -50,6 +51,8 @@ export type PluginRuntimeDelegate = {
   listAgentStatuses?(): readonly PluginAgentStatusRow[]
   /** The runtime RPC the `orca` CLI calls, in process; absent where none is bound. */
   callRuntime?: PluginRuntimeRpc
+  /** The workspace a user ran a workspace command on; absent where no runtime is bound. */
+  resolveCommandWorkspace?: PluginCommandWorkspaceResolver
 }
 
 export function bindPluginHostServices(input: {

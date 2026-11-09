@@ -570,7 +570,8 @@
             "customEditors",
             "newFiles",
             "settings",
-            "statusBarItems"
+            "statusBarItems",
+            "worktreeBadges"
           ],
           "description": "Contribution point.",
           "x-orca-since": "1.4.245",

@@ -23,6 +23,7 @@ import { shouldBeginWorktreeRename } from '../controller/worktree-card-model'
 import { WorktreeCardSshHostControl } from '../host/WorktreeCardSshHostControl'
 import { WorktreeHostContextBadge } from '../host/WorktreeHostContextBadge'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
+import { WorktreeCardPluginBadges } from '../plugin-badges/WorktreeCardPluginBadges'
 import { cardElement } from './card-template-compiler'
 
 type Card = WorktreeCardController
@@ -105,6 +106,14 @@ export const CARD_IDENTITY_PARTS = {
     <WorktreeCardRenameErrorButton
       onPointerDown={card.stopQuickActionPointerPropagation}
       onOpen={card.handleOpenRenameErrorDialog}
+    />
+  )),
+  PluginBadges: part([], (_props, _children, card) => (
+    <WorktreeCardPluginBadges
+      worktree={card.worktree}
+      repo={card.repo}
+      isActive={card.isActive}
+      onPointerDown={card.stopQuickActionPointerPropagation}
     />
   )),
   PrimaryBadge: part(['hasHoverDetails'], (props, _children, card) => (

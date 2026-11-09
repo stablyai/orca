@@ -345,6 +345,16 @@
             "$ref": "#/$defs/StatusBarItemContribution"
           }
         },
+        "worktreeBadges": {
+          "default": [],
+          "description": "Icons beside each workspace whose folder holds a marker path; each opens the plugin's workspace commands for that workspace. At most 16.",
+          "x-orca-since": "1.4.256",
+          "maxItems": 16,
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/WorktreeBadgeContribution"
+          }
+        },
         "agentHarnesses": {
           "description": "Reserved for coding-agent harness definitions; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
@@ -1562,6 +1572,180 @@
       ],
       "additionalProperties": false,
       "description": "An item in the status bar. Requires the `declarative` profile; a `trusted-worker` can change it with `statusBar.update`."
+    },
+    "WorktreeBadgeContribution": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "Badge id, unique among this plugin's worktree badges.",
+          "x-orca-since": "1.4.256",
+          "examples": [
+            "unity-project"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "description": "Tooltip, accessible name and menu heading of the badge.",
+          "x-orca-since": "1.4.256",
+          "examples": [
+            "Unity project"
+          ]
+        },
+        "icon": {
+          "anyOf": [
+            {
+              "type": "string",
+              "enum": [
+                "activity",
+                "bar-chart-3",
+                "bell",
+                "blocks",
+                "book",
+                "bot",
+                "bug",
+                "calendar",
+                "cloud",
+                "code",
+                "database",
+                "file-text",
+                "flag",
+                "folder",
+                "gauge",
+                "globe",
+                "hammer",
+                "layers",
+                "lightbulb",
+                "package",
+                "plug",
+                "puzzle",
+                "rocket",
+                "star",
+                "terminal",
+                "wrench",
+                "zap",
+                "add",
+                "remove",
+                "delete",
+                "edit",
+                "refresh",
+                "search",
+                "settings",
+                "check",
+                "close",
+                "info",
+                "warning",
+                "error",
+                "open-external",
+                "copy",
+                "download",
+                "upload",
+                "play",
+                "pause",
+                "stop",
+                "more",
+                "expand",
+                "collapse",
+                "next",
+                "filter",
+                "branch",
+                "file",
+                "agent",
+                "link"
+              ]
+            },
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024,
+              "allOf": [
+                {
+                  "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$"
+                },
+                {
+                  "pattern": "\\.svg$"
+                }
+              ]
+            }
+          ],
+          "description": "A name from the panel icon set, or the path of a monochrome `.svg` (at most 32 KB) that Orca draws in the text color. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused.",
+          "x-orca-since": "1.4.256",
+          "examples": [
+            "package",
+            "icons/unity.svg"
+          ]
+        },
+        "when": {
+          "type": "object",
+          "properties": {
+            "pathExists": {
+              "minItems": 1,
+              "maxItems": 8,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 1024,
+                "pattern": "^[^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ](?:[\\\\/][^<>:\"|?*\\x00-\\x1f\\\\/]*[^<>:\"|?*\\x00-\\x1f\\\\/. ])*$"
+              },
+              "description": "The badge shows when the workspace folder holds any of these paths, relative to the folder. At most 8.",
+              "x-orca-since": "1.4.256",
+              "examples": [
+                [
+                  "ProjectSettings/ProjectVersion.txt"
+                ]
+              ]
+            },
+            "host": {
+              "default": "any",
+              "description": "`local` leaves out workspaces on SSH hosts, such as for commands that start a desktop app. Defaults to `any`.",
+              "x-orca-since": "1.4.256",
+              "type": "string",
+              "enum": [
+                "local",
+                "any"
+              ]
+            }
+          },
+          "required": [
+            "pathExists"
+          ],
+          "additionalProperties": false,
+          "description": "When Orca shows the badge. Orca checks it; the plugin is not asked.",
+          "x-orca-since": "1.4.256"
+        },
+        "commands": {
+          "minItems": 1,
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 256,
+            "pattern": "^[A-Za-z0-9]+(?:[._-][A-Za-z0-9]+)*$"
+          },
+          "description": "Ids of this plugin's worker commands with `when: \"workspace\"`, offered from the badge and the workspace's context menu. At most 8.",
+          "x-orca-since": "1.4.256",
+          "examples": [
+            [
+              "unity.open"
+            ]
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "icon",
+        "when",
+        "commands"
+      ],
+      "additionalProperties": false,
+      "description": "An icon beside the name of each workspace whose folder holds a marker path; it opens a menu of workspace commands. Needs `workspace:read`, since a command run from it receives the folder."
     },
     "Capability": {
       "type": "object",

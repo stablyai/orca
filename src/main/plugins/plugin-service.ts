@@ -277,8 +277,8 @@ export class PluginService {
   }
 
   invokeCommand(pluginKey: string, commandId: string, args?: unknown, startBy?: number) {
-    const [plugin, workers] = [this.findApprovedPlugin(pluginKey), this.workerController]
-    return invokePluginWorkerCommand(pluginKey, plugin, workers, commandId, args, startBy)
+    const run = { plugin: this.findApprovedPlugin(pluginKey), workers: this.workerController }
+    return invokePluginWorkerCommand(pluginKey, run, commandId, args, startBy, this.runtimeDelegate)
   }
 
   wantsEvent(event: PluginEventName): boolean {

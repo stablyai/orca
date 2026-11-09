@@ -10,6 +10,7 @@ import { Bell, BellOff, Pencil, Pin, PinOff, Unlink } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { WorktreeRowOpenInSubMenu } from '../open/WorktreeRowOpenInSubMenu'
 import { WorktreeDeveloperMenu } from '../open/WorktreeDeveloperMenu'
+import { WorktreePluginBadgeMenuItems } from '../../workspace-card/plugin-badges/WorktreePluginBadgeMenuItems'
 import { WorkspaceSleepMenuItems } from '../sleep/WorkspaceSleepMenuItems'
 import { WorkspaceVmLifecycleMenuItems } from '../sleep/WorkspaceVmLifecycleMenuItems'
 import { isEventTargetInsideCurrentTarget } from '../../workspace-card/controller/worktree-card-dom-events'
@@ -202,6 +203,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 connectionId={repo?.connectionId ?? null}
                 disabled={isDeleting}
               />
+              <WorktreePluginBadgeMenuItems worktree={worktree} repo={repo} disabled={isDeleting} />
               <WorktreeCopySubMenu model={model} />
               <WorktreeLineageSubMenu model={model} />
               <WorktreeProjectGroupSubMenu model={model} />

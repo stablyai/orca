@@ -46,6 +46,7 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.newFiles` | [NewFileContribution](#newfilecontribution)[] | no | 1.4.245 | Untitled files the user can create from the + menu and the command palette. At most 16. |
 | `contributes.settings` | [SettingContribution](#settingcontribution)[] | no | 1.4.246 | Settings Orca shows under the plugin in Settings; code reads them with `settings.get` (`settings:own`). At most 64. |
 | `contributes.statusBarItems` | [StatusBarItemContribution](#statusbaritemcontribution)[] | no | 1.4.248 | Items in the status bar; pressing one runs its `command`, and a worker changes them with `statusBar.update`. With `main`, the worker runs for as long as the plugin is enabled. At most 8. |
+| `contributes.worktreeBadges` | [WorktreeBadgeContribution](#worktreebadgecontribution)[] | no | 1.4.256 | Icons beside each workspace whose folder holds a marker path; each opens the plugin's workspace commands for that workspace. At most 16. |
 | `contributes.agentHarnesses` | any[] | no | 1.4.245 | Reserved for coding-agent harness definitions; must be empty until their format is defined. |
 | `contributes.skills` | any[] | no | 1.4.245 | Reserved for agent skills; must be empty until their format is defined. |
 | `contributes.mcpServers` | any[] | no | 1.4.245 | Reserved for MCP server definitions; must be empty until their format is defined. |
@@ -230,6 +231,20 @@ An item in the status bar. Requires the `declarative` profile; a `trusted-worker
 | `tone` | `"neutral"` \| `"accent"` \| `"success"` \| `"warning"` \| `"danger"` | no | 1.4.248 | Colour of the item. Defaults to `neutral`. Example: `"warning"` |
 | `tooltip` | string | no | 1.4.248 | Shown on hover. Defaults to the plugin name. |
 | `command` | string | no | 1.4.248 | Id of a command this plugin contributes in `contributes.commands`, run when the item is pressed. Example: `"guard.showLog"` |
+
+## WorktreeBadgeContribution
+
+An icon beside the name of each workspace whose folder holds a marker path; it opens a menu of workspace commands. Needs `workspace:read`, since a command run from it receives the folder.
+
+| Field | Type | Required | Since | Description |
+| --- | --- | --- | --- | --- |
+| `id` | string | yes | 1.4.256 | Badge id, unique among this plugin's worktree badges. Example: `"unity-project"` |
+| `title` | string | yes | 1.4.256 | Tooltip, accessible name and menu heading of the badge. Example: `"Unity project"` |
+| `icon` | `"activity"` \| `"bar-chart-3"` \| `"bell"` \| `"blocks"` \| `"book"` \| `"bot"` \| `"bug"` \| `"calendar"` \| `"cloud"` \| `"code"` \| `"database"` \| `"file-text"` \| `"flag"` \| `"folder"` \| `"gauge"` \| `"globe"` \| `"hammer"` \| `"layers"` \| `"lightbulb"` \| `"package"` \| `"plug"` \| `"puzzle"` \| `"rocket"` \| `"star"` \| `"terminal"` \| `"wrench"` \| `"zap"` \| `"add"` \| `"remove"` \| `"delete"` \| `"edit"` \| `"refresh"` \| `"search"` \| `"settings"` \| `"check"` \| `"close"` \| `"info"` \| `"warning"` \| `"error"` \| `"open-external"` \| `"copy"` \| `"download"` \| `"upload"` \| `"play"` \| `"pause"` \| `"stop"` \| `"more"` \| `"expand"` \| `"collapse"` \| `"next"` \| `"filter"` \| `"branch"` \| `"file"` \| `"agent"` \| `"link"` \| string | yes | 1.4.256 | A name from the panel icon set, or the path of a monochrome `.svg` (at most 32 KB) that Orca draws in the text color. Relative to the plugin root; `..` segments and Windows device names such as `CON` are refused. Example: `"package"` |
+| `when` | object | yes | 1.4.256 | When Orca shows the badge. Orca checks it; the plugin is not asked. |
+| `when.pathExists` | string[] | yes | 1.4.256 | The badge shows when the workspace folder holds any of these paths, relative to the folder. At most 8. Example: `["ProjectSettings/ProjectVersion.txt"]` |
+| `when.host` | `"local"` \| `"any"` | no | 1.4.256 | `local` leaves out workspaces on SSH hosts, such as for commands that start a desktop app. Defaults to `any`. |
+| `commands` | string[] | yes | 1.4.256 | Ids of this plugin's worker commands with `when: "workspace"`, offered from the badge and the workspace's context menu. At most 8. Example: `["unity.open"]` |
 
 ## Capability
 

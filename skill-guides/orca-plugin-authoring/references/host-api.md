@@ -151,7 +151,7 @@ List each in `contributes.hooks` (`{ "event", "onError"? }`; `main` and `trusted
 
 ## Capabilities
 
-- `workspace:read` (since 1.4.160): Read the name, branch, and terminal list of your focused workspace, and get notified when workspaces are created or removed
+- `workspace:read` (since 1.4.160): Read the name, branch, and terminal list of your focused workspace, and the folder of a workspace you run one of its commands on, and get notified when workspaces are created or removed
 - `workspace:write` (since 1.4.248): Open and rename your workspaces, open their files in Orca, and run its built-in commands
 - `agent:read` (since 1.4.245): Get notified when agent status changes
 - `agent:launch` (since 1.4.248): Start agents in your workspaces, local and SSH

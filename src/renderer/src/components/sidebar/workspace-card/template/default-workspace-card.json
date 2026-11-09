@@ -64,6 +64,10 @@
                 },
                 { "el": "RenameError", "when": "ws.hasRenameError && !ws.isRenaming" },
                 {
+                  "el": "PluginBadges",
+                  "when": "!ws.isRenaming && !ws.isDeleting && !place.affiliateList"
+                },
+                {
                   "el": "PrimaryBadge",
                   "when": "!vars.compact && ws.isMain && !vars.folder",
                   "props": { "hasHoverDetails": "=vars.hoverDetails && !ws.isRenaming" }

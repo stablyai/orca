@@ -7,6 +7,10 @@ import { installPluginHookRunner } from './hooks/plugin-hook-participants'
 import { installPluginResidentWorkerWarmer } from './workers/plugin-resident-worker'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { pluginRuntimeRpc } from './plugin-runtime-rpc'
+import {
+  pluginCommandWorkspaceResolver,
+  type PluginCommandWorkspaceSource
+} from './plugin-command-workspace'
 import type { DispatcherOptions } from '../runtime/rpc/dispatcher'
 import type { PluginRuntimeRpc } from './workers/plugin-host-workspace-method-bindings'
 import {
@@ -24,7 +28,11 @@ type PluginEvents = {
   wantsEvent(event: PluginEventName): boolean
 }
 
-type RuntimeDelegateSource = Omit<PluginRuntimeDelegate, 'listAgentStatuses' | 'callRuntime'>
+type RuntimeDelegateSource = Omit<
+  PluginRuntimeDelegate,
+  'listAgentStatuses' | 'callRuntime' | 'resolveCommandWorkspace'
+> &
+  Partial<PluginCommandWorkspaceSource>
 
 const WORKSPACE_CHANGE_DEBOUNCE_MS = 150
 
@@ -36,6 +44,13 @@ export function pluginRuntimeDelegate(
 ): PluginRuntimeDelegate {
   return {
     ...(callRuntime ? { callRuntime } : {}),
+    ...(runtime.resolveRuntimeFileTarget
+      ? {
+          resolveCommandWorkspace: pluginCommandWorkspaceResolver({
+            resolveRuntimeFileTarget: runtime.resolveRuntimeFileTarget.bind(runtime)
+          })
+        }
+      : {}),
     resolveActiveWorktreeContext: () => runtime.resolveActiveWorktreeContext(),
     listTerminals: (...args) => runtime.listTerminals(...args),
     sendTerminal: (...args) => runtime.sendTerminal(...args),

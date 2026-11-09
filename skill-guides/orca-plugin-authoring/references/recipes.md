@@ -71,6 +71,17 @@ keep their value and `visible: false` hides it. Bind a key to the same command w
 `contributes.keybindings` (`{ "command", "key": "Mod+Shift+K" }`).
 `ORCA plugin shot <plugin-key> --status-bar` saves a PNG of the status bar with the item drawn.
 
+## A badge on workspaces of one kind
+
+Declare it in `contributes.worktreeBadges` (`{ "id", "title", "icon", "when": { "pathExists",
+"host"? }, "commands" }`, `engines.orca` `>=1.4.256`, `workspace:read`). Orca checks `pathExists`
+itself and shows the icon beside each workspace whose folder holds one of the paths;
+`"host": "local"` leaves out SSH workspaces. `icon` is a panel icon name or a monochrome `.svg` in
+the plugin. Each of `commands` is a worker command with `"when": "workspace"`; run from the badge,
+the workspace's context menu, the palette or a shortcut, its handler gets
+`{ worktree: { path, displayName, branch, host } }`. A handler that returns `{ message }` shows it
+as a toast.
+
 ## Changing or refusing what Orca does (hooks)
 
 `trusted-worker` with `main`; list each hook in `contributes.hooks` (`{ "event": "terminal.send" }`)

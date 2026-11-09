@@ -5,6 +5,7 @@ import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { getSelectedTextForFileSearch } from '../lib/file-search-selection'
 import { registerAppCommandDispatcher } from '@/lib/app-command-dispatch'
 import { executePluginCommand } from '@/lib/plugin-command-execution'
+import { showPluginCommandMessage } from '@/lib/plugin-command-message'
 import { runBuiltInOrReplacement } from '@/lib/plugin-command-replacements'
 import {
   findPluginCommandForKeybinding,
@@ -211,11 +212,15 @@ export function useGlobalKeybindings(args: {
         )
         if (pluginCommand) {
           input.preventDefault()
-          void executePluginCommand(pluginCommand, 'plugin-keybinding').catch(() => {
-            toast.error(
-              translate('auto.App.pluginCommandFailed', 'Could not run the plugin command.')
-            )
+          void executePluginCommand(pluginCommand, 'plugin-keybinding', {
+            worktreeId: activeWorktreeId
           })
+            .then(showPluginCommandMessage)
+            .catch(() => {
+              toast.error(
+                translate('auto.App.pluginCommandFailed', 'Could not run the plugin command.')
+              )
+            })
           return
         }
       }

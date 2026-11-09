@@ -2,6 +2,7 @@ import { Blocks, FilePlus } from 'lucide-react'
 import { isWorkspaceScopedPluginContext } from '../../../../shared/plugins/contributions/plugin-command-contribution'
 import type { ActivePluginCommand } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { executePluginCommand } from '@/lib/plugin-command-execution'
+import { showPluginCommandMessage } from '@/lib/plugin-command-message'
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import type { ActivePluginNewFile } from '@/store/plugins/file-creation/plugin-new-files'
@@ -61,8 +62,10 @@ export function buildPluginQuickActions(
       isWorkspaceScopedPluginContext(command.context) && !context.activeWorktreeId
         ? { available: false, reason: 'no-active-workspace' }
         : { available: true },
-    run: async () => {
-      await executePluginCommand(command, 'plugin-palette')
+    run: async (ctx) => {
+      showPluginCommandMessage(
+        await executePluginCommand(command, 'plugin-palette', { worktreeId: ctx.activeWorktreeId })
+      )
       return { status: 'ok' }
     }
   }))
