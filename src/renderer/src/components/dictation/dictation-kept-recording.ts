@@ -105,6 +105,8 @@ export async function transcribeKeptRecording(args: {
       return
     }
     await window.api.speech.cancelDictation(sessionId).catch(() => undefined)
-    args.fail(String(error))
+    if (isCurrent()) {
+      args.fail(String(error))
+    }
   }
 }

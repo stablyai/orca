@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useRef, useCallback, useState } from 'react'
 import { useAppStore } from '@/store'
 import { useAudioCapture } from '@/hooks/use-audio-capture'
 import { DictationIndicator } from './DictationIndicator'
@@ -69,6 +69,8 @@ export function DictationController() {
   // The session's audio, kept until it lands, is retried, dismissed or replaced.
   const keptRef = useRef<DictationKeptRecording | null>(null)
   const [failure, setFailure] = useState<DictationFailureKind | null>(null)
+  // A new recording gets a fresh pill (timer and all); a retry keeps the one it failed in.
+  const [recordingKey, setRecordingKey] = useState(0)
 
   const dispatch = useCallback(
     (event: DictationSessionEvent): DictationSession => {
@@ -80,8 +82,10 @@ export function DictationController() {
       }
       if (next.phase !== previous.phase) {
         setDictationState(next.phase)
-        if (next.phase === 'idle') {
+        if (next.phase !== 'listening' && next.phase !== 'stopping') {
           setPartialTranscript('')
+        }
+        if (next.phase === 'idle') {
           setPillAnchor(null)
           keptRef.current = null
         }
@@ -195,6 +199,7 @@ export function DictationController() {
     deliverRef.current = (text) => deliver(text, insertionTarget)
     const kept = createDictationKeptRecording(insertionTarget, deliver)
     keptRef.current = kept
+    setRecordingKey((key) => key + 1)
     setCaptureLive(false)
     setPillAnchor(dictationPillAnchorFor(insertionTarget))
 
@@ -318,7 +323,9 @@ export function DictationController() {
       isCurrent: () => sessionRef.current.run === run,
       finish: () => finishDictationSession(sessionRef.current),
       fail: (message) =>
-        showFailure(dictationStartFailureKind(message), () => showDictationStartErrorToast(message))
+        showFailure(dictationStartFailureKind(message) ?? 'transcribe', () =>
+          showDictationStartErrorToast(message)
+        )
     })
   }, [settings, dispatch, finishDictationSession, showFailure])
 
@@ -330,16 +337,7 @@ export function DictationController() {
     }
   }, [startDictation, stopDictation])
 
-  // Main intercepts Toggle presses and Auto double taps so the chord never reaches xterm.
-  useEffect(() => {
-    const mode = settings?.voice?.dictationMode ?? 'auto'
-    if (mode === 'hold' || !settings?.voice?.enabled) {
-      return
-    }
-    return window.api.ui.onDictationKeyDown(toggleDictation)
-  }, [settings?.voice?.dictationMode, settings?.voice?.enabled, toggleDictation])
-
-  useDictationControls(settings?.voice?.enabled === true, {
+  useDictationControls(settings?.voice, dictationState, {
     start: () => void startDictation(),
     stop: () => void stopDictation(),
     cancel: cancelDictation,
@@ -389,5 +387,12 @@ export function DictationController() {
     }
   })
 
-  return <DictationIndicator captureLive={captureLive} anchor={pillAnchor} failure={failure} />
+  return (
+    <DictationIndicator
+      key={recordingKey}
+      captureLive={captureLive}
+      anchor={pillAnchor}
+      failure={failure}
+    />
+  )
 }
