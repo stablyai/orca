@@ -46,6 +46,23 @@ function post(bridge, message) {
   bridge.onClientMessage(JSON.stringify({ v: 1, type: 'request', ...message }))
 }
 
+test('only a live page that negotiated app inactivity receives the save signal', () => {
+  const peer = createRpcPeer()
+  const { bridge, frames } = createBridge(peer, null)
+  post(bridge, { type: 'ready' })
+  bridge.sendAppInactive()
+  assert.equal(frames.at(-1).type, 'init')
+
+  post(bridge, { type: 'ready', appInactiveFrames: true })
+  bridge.sendAppInactive()
+  assert.deepEqual(frames.at(-1), { v: 1, type: 'appInactive' })
+
+  post(bridge, { type: 'close' })
+  post(bridge, { type: 'ready' })
+  bridge.sendAppInactive()
+  assert.equal(frames.at(-1).type, 'init')
+})
+
 test('an oversized document is refused with the native media size reason and a smaller retry works', async () => {
   let size = 18 * 1024 * 1024 + 1
   const { NativeDevice, NativeMediaTooLargeError } = loadArkts(

@@ -11,12 +11,25 @@ import { ShellWindowRegions } from '../webshell/WindowRegions';
 export default class EntryAbility extends UIAbility {
   private windowReady: boolean = false;
   private launchNavigationPending: boolean = false;
+  private observedStage: window.WindowStage | null = null;
+  private inactiveNotified: boolean = false;
   private mainWindow: window.Window | null = null;
   private windowRegions: ShellWindowRegions | null = null;
   private appliedColorMode: number = -99;
   private readonly keyboardAreaChanged = (change: window.AvoidAreaOptions): void => {
     if (change.type === window.AvoidAreaType.TYPE_KEYBOARD) { this.publishKeyboardArea(change.area); }
   };
+  private readonly windowStageChanged = (state: window.WindowStageEventType): void => {
+    if (state === window.WindowStageEventType.ACTIVE || state === window.WindowStageEventType.RESUMED) {
+      this.inactiveNotified = false;
+    } else if (state === window.WindowStageEventType.PAUSED || state === window.WindowStageEventType.INACTIVE) {
+      this.notifyAppInactive();
+    }
+  };
+  private notifyAppInactive(): void {
+    if (this.inactiveNotified) { return; }
+    this.inactiveNotified = true; this.context.eventHub.emit('orcaAppInactive');
+  }
   private publishKeyboardArea(area?: window.AvoidArea): void {
     let current = this.mainWindow;
     if (!current) { return; }
@@ -82,6 +95,8 @@ export default class EntryAbility extends UIAbility {
     await this.openLaunchRoute();
   }
   onWindowStageCreate(windowStage: window.WindowStage): void {
+    this.inactiveNotified = false;
+    try { windowStage.on('windowStageEvent', this.windowStageChanged); this.observedStage = windowStage; } catch (e) {}
     windowStage.loadContent('pages/Home', (err) => {
       if (err.code) { hilog.error(0x0000, 'OrcaEntry', 'loadContent failed'); return; }
       let mainWindow = windowStage.getMainWindowSync();
@@ -107,6 +122,8 @@ export default class EntryAbility extends UIAbility {
   onConfigurationUpdate(config: Configuration): void { applyUiLanguage(); if (config.colorMode !== undefined) { setSystemAppearance(config.colorMode); } }
   onWindowStageDestroy(): void {
     closeIdleDesktopConnections(); dropHomePrewarm(); this.windowReady = false;
+    try { this.observedStage?.off('windowStageEvent', this.windowStageChanged); } catch (e) {}
+    this.observedStage = null;
     try { this.mainWindow?.off('avoidAreaChange', this.keyboardAreaChanged); } catch (e) {}
     this.mainWindow = null;
     this.windowRegions?.dispose(); this.windowRegions = null;
@@ -114,10 +131,12 @@ export default class EntryAbility extends UIAbility {
     setAppearanceListener(null); setUiLocaleListener(null);
   }
   onForeground(): void {
+    if (!this.observedStage) { this.inactiveNotified = false; }
     reviveDesktopConnections(); this.refreshKeyboardArea(); this.windowRegions?.refresh();
     this.context.eventHub.emit('orcaForeground'); this.styleSystemBars();
   }
   onBackground(): void {
+    this.notifyAppInactive();
     closeIdleDesktopConnections(); dropHomePrewarm(); this.context.eventHub.emit('orcaBackground'); this.publishKeyboardArea();
   }
   onMemoryLevel(_level: AbilityConstant.MemoryLevel): void { dropPrewarmForMemoryPressure(); }

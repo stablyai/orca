@@ -218,6 +218,7 @@ export class BridgeHost {
   private railClaimSink: ((claim: TerminalRailClaim | null) => void) | null = null;
   private railFocused: boolean = false;
   private pageReady: boolean = false;
+  private pageReadsAppInactive: boolean = false;
   private readySink: (() => void) | null = null;
   private faultSink: ((message: string) => void) | null = null;
   private livenessSink: (() => void) | null = null;
@@ -581,6 +582,12 @@ export class BridgeHost {
     }
   }
 
+  sendAppInactive(): void {
+    if (this.pageReady && this.pageReadsAppInactive && this.pushReady) {
+      this.pushFrame(JSON.stringify({ v: BRIDGE_PROTOCOL_VERSION, type: 'appInactive' }));
+    }
+  }
+
   /** Page→native frames (window.orcaBridge.postMessage). */
   onClientMessage(json: string): void {
     if (this.disposed || json.length > BRIDGE_MAX_FRAME_BYTES || utf8Encode(json).length > BRIDGE_MAX_FRAME_BYTES) { return; }
@@ -596,6 +603,7 @@ export class BridgeHost {
     if (type === 'ready') {
       this.readDeclaredStorageKeys(msg);
       this.resetBack();
+      this.pageReadsAppInactive = msg['appInactiveFrames'] === true;
       this.pageReady = true; this.railClaim = null; this.reportRailClaim();
       this.sendInit(); if (this.readySink) { this.readySink(); }
       return;

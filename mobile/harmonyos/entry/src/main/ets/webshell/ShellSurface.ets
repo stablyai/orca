@@ -120,6 +120,7 @@ export struct ShellSurface {
     this.openPendingNativeSession();
   };
   private generation: number = 0;
+  private inactiveListener: () => void = (): void => { this.bridge?.sendAppInactive(); };
   private backgroundListener: () => void = (): void => {
     this.navigation.invalidateCallbacks();
     this.foreground = false; this.publishPageRegions(); this.clearViewing();
@@ -134,6 +135,7 @@ export struct ShellSurface {
     this.pageVisible = this.visible;
     this.captureNativePage();
     this.unbindBack = this.back.bind((): boolean => this.handleBack());
+    (getContext(this) as common.UIAbilityContext).eventHub.on('orcaAppInactive', this.inactiveListener);
     (getContext(this) as common.UIAbilityContext).eventHub.on('orcaBackground', this.backgroundListener);
     (getContext(this) as common.UIAbilityContext).eventHub.on('orcaForeground', this.foregroundListener);
     this.boot();
@@ -151,6 +153,7 @@ export struct ShellSurface {
     this.disposed = true; this.generation++; this.startup.cancel();
     this.navigation.visit();
     this.unbindBack?.(); this.unbindBack = null;
+    (getContext(this) as common.UIAbilityContext).eventHub.off('orcaAppInactive', this.inactiveListener);
     (getContext(this) as common.UIAbilityContext).eventHub.off('orcaBackground', this.backgroundListener);
     (getContext(this) as common.UIAbilityContext).eventHub.off('orcaForeground', this.foregroundListener);
     this.clearViewing();

@@ -68,6 +68,8 @@ test('synchronous system theme callbacks do not reenter appearance configuration
   }
   ability.onCreate({}, {})
   ability.onWindowStageCreate({
+    on() {},
+    off() {},
     getMainWindow: async () => mainWindow,
     getMainWindowSync: () => mainWindow,
     loadContent(_page, callback) {
@@ -79,4 +81,33 @@ test('synchronous system theme callbacks do not reenter appearance configuration
   appearance.applyThemeMode('light')
   assert.equal(dispatchError, null)
   ability.onWindowStageDestroy()
+})
+
+test('the app switcher saves before background and re-arms when the stage resumes', () => {
+  const emitted = []
+  const { EntryAbility } = loadArkts('entryability/EntryAbility.ets', ['EntryAbility'], {
+    UIAbility: class {
+      context = { eventHub: { emit: (event) => emitted.push(event) } }
+    },
+    window: { WindowStageEventType: { INACTIVE: 3, RESUMED: 5, PAUSED: 6 } },
+    closeIdleDesktopConnections() {},
+    dropHomePrewarm() {}
+  })
+  const ability = new EntryAbility()
+  let stageChanged
+  ability.onWindowStageCreate({
+    on(_event, callback) {
+      stageChanged = callback
+    },
+    loadContent() {}
+  })
+
+  stageChanged(6)
+  assert.deepEqual(emitted, ['orcaAppInactive'])
+  stageChanged(3)
+  ability.onBackground()
+  assert.deepEqual(emitted, ['orcaAppInactive', 'orcaBackground'])
+  stageChanged(5)
+  stageChanged(6)
+  assert.deepEqual(emitted, ['orcaAppInactive', 'orcaBackground', 'orcaAppInactive'])
 })
