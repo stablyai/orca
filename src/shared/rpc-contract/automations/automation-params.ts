@@ -31,6 +31,8 @@ export const AutomationWorkspaceMode = z.enum(['existing', 'new_per_run']).optio
 
 export const SetupDecision = z.enum(['inherit', 'run', 'skip']).optional()
 
+export const OnNoReusableSession = z.enum(['skip']).optional()
+
 export const ExecutionHostId = requiredString('Missing host id').transform((value, ctx) => {
   const hostId = normalizeExecutionHostId(value)
   if (!hostId) {
@@ -279,6 +281,7 @@ export const AutomationCreate = z
     setupDecision: SetupDecision,
     setupTrustHash: z.string().max(128).optional(),
     reuseSession: OptionalBoolean,
+    onNoReusableSession: OnNoReusableSession,
     timezone: OptionalString,
     timezoneExplicit: OptionalBoolean,
     rrule: AutomationSchedule,
@@ -316,6 +319,7 @@ export const AutomationUpdateFields = z
     setupDecision: SetupDecision,
     setupTrustHash: z.string().max(128).optional(),
     reuseSession: OptionalBoolean,
+    onNoReusableSession: OnNoReusableSession,
     timezone: OptionalString,
     timezoneExplicit: OptionalBoolean,
     rrule: AutomationSchedule.optional(),

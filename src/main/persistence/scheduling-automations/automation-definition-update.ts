@@ -27,6 +27,8 @@ import {
 } from '../../../shared/automations/ownership/automation-owner-precondition'
 import {
   getAutomationContextsForRepo,
+  normalizeAutomationSessionReuse,
+  automationSessionReuseFields,
   automationContextAfterUpdate,
   getAutomationSchedulerOwner,
   applyAutomationSetupTrust,
@@ -107,6 +109,7 @@ export function mergeAutomationUpdate(
   updates: AutomationUpdateInput,
   options?: AutomationUpdatePreconditions & { resolvedRepo?: Repo }
 ): Automation {
+  current = normalizeAutomationSessionReuse(current)
   const projectionContext = automationProjectionContext(
     operations.state,
     operations.storageAuthority,
@@ -197,10 +200,7 @@ export function mergeAutomationUpdate(
         ? definedUpdates.setupDecision
         : current.setupDecision
     ),
-    reuseSession:
-      workspaceMode === 'existing'
-        ? (updates.reuseSession ?? current.reuseSession ?? false)
-        : false,
+    ...automationSessionReuseFields({ ...current, workspaceMode, ...definedUpdates }),
     ...updatedAutomationSchedule(current, definedUpdates, operations.storageAuthority),
     updatedAt: Date.now()
   }

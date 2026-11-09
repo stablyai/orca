@@ -4,7 +4,7 @@ import type {
 } from '../../../shared/automations/history/automation-run'
 import { automationRunRecency } from '../../../shared/automations/history/automation-session-reuse'
 import type { Store } from '../../persistence/loading-store/store'
-import { runOwnHandle, type RunOwnHandleRuntime } from '../launch/automation-terminal-launch'
+import { runOwnHandle, type RunOwnHandleRuntime } from '../launch/automation-terminal-session-reuse'
 import {
   AGENT_HOOKS_REVIEW_BLOCKED_ERROR,
   type AutomationRunTerminalHost

@@ -1,3 +1,4 @@
+import { runOwnHandle } from './launch/automation-terminal-session-reuse'
 import type { AutomationUsageClient } from '../../shared/backend/backend-service-contract'
 import { observeAutomationChatRun } from './observation/runtime-chat-run-observer'
 import { readAutomationRunReceipt } from './launch/automation-run-receipt'
@@ -16,7 +17,7 @@ import {
   isTuiAgent,
   TUI_AGENT_CONFIG
 } from '../../shared/agent-launch/catalog/tui-agent-config'
-import { launchAutomationTerminalAgent, runOwnHandle } from './launch/automation-terminal-launch'
+import { launchAutomationTerminalAgent } from './launch/automation-terminal-launch'
 import {
   AGENT_HOOKS_REVIEW_BLOCKED_ERROR,
   createRuntimeAutomationRunTerminalObserver

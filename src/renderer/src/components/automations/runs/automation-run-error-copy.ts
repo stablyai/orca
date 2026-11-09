@@ -84,6 +84,9 @@ const COPY: Record<
     translate('automations.runFailures.hooksReviewBlocked', EN.hooksReviewBlocked),
   agentNeverStarted: () =>
     translate('automations.runFailures.agentNeverStarted', EN.agentNeverStarted),
+  sessionBusy: () => translate('automations.runFailures.sessionBusy', EN.sessionBusy),
+  sessionNotReusable: () =>
+    translate('automations.runFailures.sessionNotReusable', EN.sessionNotReusable),
   agentNoCompletion: () =>
     translate('automations.runFailures.agentNoCompletion', EN.agentNoCompletion),
   agentInterrupted: () =>

@@ -30,6 +30,7 @@ import {
   getAutomationSchedulerOwner,
   applyAutomationSetupTrust,
   normalizeAutomationSessionReuse,
+  automationSessionReuseFields,
   normalizeAutomationSetupDecisionForWorkspaceMode
 } from './automation-context-migration'
 import { firstAutomationRunAt } from './automation-schedule-operations'
@@ -131,7 +132,7 @@ export function createAutomation(
       input.workspaceMode,
       input.setupDecision
     ),
-    reuseSession: input.workspaceMode === 'existing' ? (input.reuseSession ?? false) : false,
+    ...automationSessionReuseFields(input),
     timezone: input.timezone,
     rrule: input.rrule,
     dtstart: input.dtstart,
