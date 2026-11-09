@@ -8,11 +8,7 @@ import type {
   CrossStoreParentRef
 } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import type {
-  AutomationWorkspaceProvenance,
-  CliWorkspaceProvenance,
-  GitWorktreeInfo
-} from '../../../shared/worktree/types'
+import type { AutomationWorkspaceProvenance, GitWorktreeInfo } from '../../../shared/worktree/types'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { getProjectHostSetupWorktreeMeta } from '../../../shared/project-host-setup-lookup'
 import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-config'
@@ -59,7 +55,6 @@ export type ProvisionedRootRequest = Pick<
   crossStoreParentInferredFrom?: CrossStoreInferredSource
   expectedRefHead?: string
   automationProvenance?: AutomationWorkspaceProvenance
-  cliProvenance?: CliWorkspaceProvenance
 }
 
 export function provisionedRootPathsEqual(left: string, right: string): boolean {
@@ -149,7 +144,6 @@ export function buildProvisionedRootMeta(
     orcaCreatedAt: now,
     orcaCreationSource: options.source,
     creatorProvenance: { kind: 'host' },
-    ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
     orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, store.getSettings()),
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
     ...(args.compareBaseRef || args.baseBranch
