@@ -8,6 +8,7 @@ import { searchKeywords, translateSearchKeyword } from '../search/settings-searc
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getGeneralProjectRuntimeSearchEntries } from './project-runtime/general-project-runtime-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
+import { getTabSizingSearchEntries } from './tab-sizing-search'
 import { getUpdateDelayDescription, getUpdateDelayTitle } from '../updates/update-delay-copy'
 
 export const getGeneralWorkspaceSearchDescriptors = createLocalizedCatalog(() => [
@@ -115,6 +116,7 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.fb84767421', 'switch')
     ]
   },
+  ...getTabSizingSearchEntries(),
   {
     title: translate('settings.general.previewTabs.title', 'Preview tabs'),
     description: translate(
