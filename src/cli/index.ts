@@ -105,20 +105,20 @@ export async function main(
     refuseConflictingSessionCallerFlags(commandSpec, parsed.flags)
     await refuseLocalManagementSelector(parsed.commandPath, parsed.flags)
     const RuntimeClientClass = await loadRuntimeClientClass()
-    // `--on` mail is carried by the caller's own Orca; an inherited server selection never reroutes it.
-    const peerMail = isPeerMailCommand(parsed.commandPath, parsed.flags)
+    // `--on` runs on the caller's own Orca, which reaches that server; an inherited selection never reroutes it.
+    const onCallersOrca = runsOnCallersOrca(parsed.commandPath, parsed.flags)
     if (
-      peerMail &&
+      onCallersOrca &&
       (parsed.flags.has('pairing-code') ||
         (parsed.flags.has('environment') &&
           !isLocalEnvironmentSelector(parsed.flags.get('environment'))))
     ) {
       throw new RuntimeClientError(
         'invalid_argument',
-        '--on already names the server the mail goes to; drop --environment. Your own Orca carries it.'
+        '--on already names the server; drop --environment. Your own Orca reaches it.'
       )
     }
-    const ignoreRemoteSelection = peerMail || ignoresRemoteSelection(parsed.commandPath)
+    const ignoreRemoteSelection = onCallersOrca || ignoresRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
     const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
     // An explicit local route suppresses ambient ORCA_ENVIRONMENT and pairing codes.
@@ -205,13 +205,15 @@ export async function main(
   }
 }
 
-function isPeerMailCommand(
+const ON_CALLERS_ORCA_COMMANDS: ReadonlySet<string> = new Set(['send', 'reply', 'worker-start'])
+
+function runsOnCallersOrca(
   commandPath: readonly string[],
   flags: ReadonlyMap<string, string | boolean>
 ): boolean {
   return (
     commandPath[0] === 'orchestration' &&
-    (commandPath[1] === 'send' || commandPath[1] === 'reply') &&
+    ON_CALLERS_ORCA_COMMANDS.has(commandPath[1] ?? '') &&
     flags.has('on')
   )
 }
