@@ -18,6 +18,8 @@ import { WslHostStoppedCard } from '../../recovery/wsl/WslHostStoppedCard'
 import { useRetryPanesWhenWslHostReturns } from '../../recovery/wsl/use-wsl-host-return-retry'
 import { useCalmStatusReveal } from '@/hooks/use-calm-status-reveal'
 import { useAppStore } from '@/store/index'
+import { useRuntimeHostRetired } from '@/store/slices/runtime-status/views/use-runtime-status-view'
+import { runtimeStatusSubscriptions } from '@/store/slices/runtime-status/views/runtime-status-subscription-store'
 import { paneShowsWslHostStoppedCard } from '@/lib/wsl-host-stopped-status'
 import { withoutWslHostStoppedLines } from '../../../../../../../shared/wsl-host-stopped-message'
 import { mapPaneTerminalErrors } from '../../../errors/terminal-error-accumulation'
@@ -30,6 +32,26 @@ export function createPaneRecoveryReconnect(
   awaitingSignIn = false
 ): () => void {
   return () => {
+    const transport = getTransport()
+    const environmentId = transport?.getRuntimeEnvironmentId?.()
+    if (environmentId && runtimeStatusSubscriptions.getHostSnapshot(environmentId)?.retired) {
+      const epoch = transport?.getRecoveryState?.().epoch
+      void window.api.runtimeEnvironments
+        .connect({ selector: environmentId })
+        .then((response) => {
+          if (
+            response.ok &&
+            getTransport() === transport &&
+            transport?.getRuntimeEnvironmentId?.() === environmentId &&
+            !runtimeStatusSubscriptions.getHostSnapshot(environmentId)?.retired &&
+            transport.getRecoveryState?.().epoch === epoch
+          ) {
+            transport.retryRecovery?.()
+          }
+        })
+        .catch(() => undefined)
+      return
+    }
     const retry = (): void => {
       getTransport()?.retryRecovery?.()
     }
@@ -82,6 +104,7 @@ export function TerminalPaneRecoveryPortals({
     state.openSettingsPage()
   }, [pairingRefusedEnvironmentId])
   const ownerEnvironmentId = useWorkspaceRuntimeEnvironmentId(controller.worktreeId)
+  const ownerRetired = useRuntimeHostRetired(ownerEnvironmentId)
   // One subscription for both the card and the retry: one listener per mounted surface.
   const ownerWslHost = useAppStore((state) =>
     ownerEnvironmentId ? state.wslHostStatuses[ownerEnvironmentId] : undefined
@@ -114,6 +137,7 @@ export function TerminalPaneRecoveryPortals({
   // Why not isolated panes: an Activity thread shows one pane away from this tab's surface.
   const canSpeak =
     controller.isVisible &&
+    !ownerRetired &&
     !isolated &&
     !showSshReconnectOverlay &&
     !awaitingSignInHere &&
@@ -122,8 +146,13 @@ export function TerminalPaneRecoveryPortals({
     stoppedWslDistro === null &&
     pairingRefusedEnvironmentId === null
   const serverDown = retryingOutageEnvironmentId !== null
-  const notice = useRemoteServerNoticeClaim(ownerEnvironmentId, serverDown, canSpeak)
+  const notice = useRemoteServerNoticeClaim(
+    ownerRetired ? null : ownerEnvironmentId,
+    serverDown,
+    canSpeak
+  )
   const [noticeEnvironmentId, setNoticeEnvironmentId] = useState<string | null>(null)
+  const noticeRetired = useRuntimeHostRetired(noticeEnvironmentId)
   if (notice.speaks && ownerEnvironmentId !== noticeEnvironmentId) {
     setNoticeEnvironmentId(ownerEnvironmentId)
   }
@@ -136,7 +165,7 @@ export function TerminalPaneRecoveryPortals({
     setHandedOff(true)
   }
   const noticeReveal =
-    canSpeak && !handedOff && (notice.speaks || !serverDown)
+    !noticeRetired && canSpeak && !handedOff && (notice.speaks || !serverDown)
       ? revealed
       : { visible: false, downSince: null }
   usePublishRemoteServerNoticeShowing(noticeEnvironmentId, noticeReveal.visible)
@@ -196,6 +225,7 @@ export function TerminalPaneRecoveryPortals({
             // Why stopped panes too: a card flashing over the notice's hold is the overlap this avoids.
             heldByServer={
               !isolated &&
+              !ownerRetired &&
               !awaitingSignIn &&
               !wslHostUnavailable &&
               pairingRefusedEnvironmentId === null &&

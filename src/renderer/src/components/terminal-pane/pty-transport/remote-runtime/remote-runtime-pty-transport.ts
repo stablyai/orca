@@ -132,6 +132,7 @@ import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session
 import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/web-session-tabs-sync/hydration/host-session-snapshot-authority'
 import { runRemoteAgentSessionLaunch } from '@/runtime/hosted-terminals/creation/agent-launch/remote-agent-session-launch'
 import { useAppStore } from '@/store/index'
+import { runtimeStatusSubscriptions } from '@/store/slices/runtime-status/views/runtime-status-subscription-store'
 import { recordWebAgentSessionHandoff } from '@/runtime/hosted-terminals/creation/agent-launch/web-agent-session-handoff'
 import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot'
 import {
@@ -387,6 +388,58 @@ export function createRemoteRuntimePtyTransport(
   const disconnectedInputGrace = createRemoteRuntimeDisconnectedInputGrace()
   let previousRecoveryPhase: RemoteRuntimePtyRecoveryPhase = 'idle'
   let unregisterControlReadyReviver: (() => void) | null = null
+  let unregisterHostLifetime: (() => void) | null = null
+  const hostRetired = (): boolean =>
+    runtimeStatusSubscriptions.getHostSnapshot(currentRuntimeEnvironmentId)?.retired === true
+  function suspendHostLifetime(): void {
+    lifecycleEpoch += 1
+    attachGeneration += 1
+    subscriptionGeneration += 1
+    connecting = false
+    awaitingSshSignIn = false
+    settleSignInConnectWait()
+    cancelTerminalCreateRetryWait()
+    clearPublishedHandleWait()
+    viewportBatcher.clear()
+    clearPendingViewportClaim()
+    setAttachmentUnavailable()
+    recovery.suspend()
+    holdUnsentPendingInput()
+  }
+  function observeHostLifetime(): boolean {
+    if (!unregisterHostLifetime) {
+      let previous = runtimeStatusSubscriptions.getHostSnapshot(currentRuntimeEnvironmentId)
+      unregisterHostLifetime = runtimeStatusSubscriptions.subscribeHostLifetime(
+        currentRuntimeEnvironmentId,
+        () => {
+          const snapshot = runtimeStatusSubscriptions.getHostSnapshot(currentRuntimeEnvironmentId)
+          const canRevive =
+            snapshot &&
+            !snapshot.retired &&
+            (previous?.retired ||
+              snapshot.pairingRevision !== previous?.pairingRevision ||
+              snapshot.verification === 'verified')
+          const newlyRetired =
+            snapshot?.retired &&
+            (!previous?.retired || snapshot.pairingRevision !== previous.pairingRevision)
+          previous = snapshot
+          if (destroyed || terminalEnded) {
+            return
+          }
+          if (newlyRetired) {
+            suspendHostLifetime()
+          } else if (canRevive && recovery.currentPhase === 'disconnected') {
+            transport.retryRecovery?.()
+          }
+        }
+      )
+    }
+    if (!hostRetired()) {
+      return true
+    }
+    suspendHostLifetime()
+    return false
+  }
   // Why: the pane's retry is waiting on the user's SSH sign-in, not on a lost link.
   let awaitingSshSignIn = false
   // Keep connect pending through sign-in recovery so launch finalization receives the recovered terminal binding.
@@ -410,7 +463,7 @@ export function createRemoteRuntimePtyTransport(
       unregisterControlReadyReviver = registerRemoteRuntimePtyControlReadyReviver(
         runtimeEnvironmentId,
         () => {
-          if (destroyed) {
+          if (destroyed || hostRetired()) {
             return false
           }
           // Why: a ready control socket proves sign-in finished, whatever the replay meets next.
@@ -1166,6 +1219,9 @@ export function createRemoteRuntimePtyTransport(
           nextRequest = 'list'
         }
       } catch (error) {
+        if (toRemoteRuntimeClientErrorLike(error).code === 'runtime_manually_disconnected') {
+          throw error
+        }
         // Why: the inventory can race the reconnect that invalidated the handle; unknown liveness must not retire the pane.
         lastRequestError = error
         if (request === 'activate') {
@@ -1214,7 +1270,7 @@ export function createRemoteRuntimePtyTransport(
 
   // Schedule bounded auto-retries and retain a parked retry after deadline so external triggers always have work to revive.
   function scheduleConnectRetryAfterRecoverableFailure(): void {
-    if (destroyed) {
+    if (destroyed || hostRetired()) {
       return
     }
     // Ambiguous creates require explicit reconciliation-gated retry; automatic replay could repeatedly probe an incapable runtime.
@@ -1376,16 +1432,34 @@ export function createRemoteRuntimePtyTransport(
     params?: unknown,
     timeoutMs = 15_000
   ): Promise<TResult> {
-    const response = await window.api.runtimeEnvironments.call({
-      selector: environmentId,
-      method,
-      params,
-      timeoutMs,
-      expectedEnvironmentPairingRevision: currentPaneRevision()
-    })
+    const epoch = lifecycleEpoch
+    if (hostRetired()) {
+      throw Object.assign(new Error('Runtime environment was disconnected.'), {
+        code: 'runtime_manually_disconnected'
+      })
+    }
     try {
+      const response = await window.api.runtimeEnvironments.call({
+        selector: environmentId,
+        method,
+        params,
+        timeoutMs,
+        expectedEnvironmentPairingRevision: currentPaneRevision()
+      })
+      if (epoch !== lifecycleEpoch) {
+        throw new Error(ownerChanged)
+      }
       return unwrapRuntimeRpcResult(response as RuntimeRpcResponse<TResult>)
     } catch (error) {
+      if (epoch !== lifecycleEpoch) {
+        throw new Error(ownerChanged)
+      }
+      if (
+        epoch === lifecycleEpoch &&
+        toRemoteRuntimeClientErrorLike(error).code === 'runtime_manually_disconnected'
+      ) {
+        suspendHostLifetime()
+      }
       // Why await: the caller's retry must read the new revision, not race the catalog re-read.
       await refreshRuntimeEnvironmentsAfterPairingChange(error)
       throw error
@@ -1521,9 +1595,35 @@ export function createRemoteRuntimePtyTransport(
       if (createRemainingMs !== null && createRemainingMs <= 0) {
         break
       }
+      // A retired in-flight create is still an unknown outcome until its stable operation is reconciled.
+      const alreadyNeedsReconciliation =
+        kind === 'agent-session'
+          ? agentSessionRequiresHostAuthorityReplay
+          : terminalCreateNeedsReconciliation
+      const needsReconciliation = (value: boolean): void => {
+        if (kind === 'agent-session') {
+          agentSessionRequiresHostAuthorityReplay = value
+        } else {
+          terminalCreateNeedsReconciliation = value
+        }
+      }
+      needsReconciliation(true)
       try {
-        return await invoke(Math.min(15_000, createRemainingMs ?? 15_000), reconcileExisting)
+        const result = await invoke(
+          Math.min(15_000, createRemainingMs ?? 15_000),
+          reconcileExisting
+        )
+        if (lifecycleEpoch === expectedLifecycleEpoch) {
+          needsReconciliation(alreadyNeedsReconciliation)
+        }
+        return result
       } catch (error) {
+        if (
+          lifecycleEpoch === expectedLifecycleEpoch &&
+          !isRecoverableRemoteRuntimeConnectionError(toRemoteRuntimeClientErrorLike(error))
+        ) {
+          needsReconciliation(alreadyNeedsReconciliation)
+        }
         lastError = error
         const clientError = toRemoteRuntimeClientErrorLike(error)
         if (!isRecoverableRemoteRuntimeConnectionError(clientError)) {
@@ -2903,7 +3003,7 @@ export function createRemoteRuntimePtyTransport(
     replacementPolicy: HostHandleReplacementPolicy = 'reuse',
     requestedRecoveryEpoch?: number
   ): void {
-    if (destroyed || !connected || !handle) {
+    if (destroyed || hostRetired() || !connected || !handle) {
       return
     }
     const recoveryWasActive = recovery.isActive
@@ -3414,6 +3514,9 @@ export function createRemoteRuntimePtyTransport(
       return
     }
     const persistedHandle = nextHandle
+    if (!observeHostLifetime()) {
+      return
+    }
     void (async () => {
       const adoptPersistedHandle = () =>
         adoptResolvedHostPane(
@@ -3597,6 +3700,9 @@ export function createRemoteRuntimePtyTransport(
     connecting = true
     emitRecoveryState(true)
     if (destroyed || !worktreeId) {
+      return
+    }
+    if (!observeHostLifetime()) {
       return
     }
 
@@ -4047,6 +4153,8 @@ export function createRemoteRuntimePtyTransport(
     },
 
     disconnect() {
+      unregisterHostLifetime?.()
+      unregisterHostLifetime = null
       settleSignInConnectWait()
       lifecycleEpoch += 1
       attachGeneration += 1
@@ -4082,6 +4190,8 @@ export function createRemoteRuntimePtyTransport(
     },
 
     detach() {
+      unregisterHostLifetime?.()
+      unregisterHostLifetime = null
       // Drop the processor gauge before detach callbacks/batcher flush can throw; the successor already owns the PTY.
       outputProcessor.disposePendingSideEffectGauge()
       settleSignInConnectWait()
@@ -4233,36 +4343,21 @@ export function createRemoteRuntimePtyTransport(
     },
 
     retryRecovery() {
+      if (hostRetired()) {
+        return false
+      }
       if (recovery.hasOwnerRefresh || surfacedErrorMessages.has(ownerChanged)) {
         return recovery.retryNow()
       }
-      if (
-        !destroyed &&
-        !terminalEnded &&
-        !connected &&
-        isWebTerminalSurfaceTabId(tabId ?? '') &&
-        recovery.currentPhase === 'disconnected'
-      ) {
-        // Give replayed attach a fresh deadline; idle cancellation would reset grace and let old held input release arbitrarily late.
-        autoRecoveryWindowSpent = false
+      if (!destroyed && !terminalEnded && !connected && recovery.currentPhase === 'disconnected') {
+        if (isWebTerminalSurfaceTabId(tabId ?? '')) {
+          autoRecoveryWindowSpent = false
+        }
         recovery.begin()
         if (replayLastTransportEntryPoint()) {
           return true
         }
         recovery.markDisconnected()
-      }
-      if (
-        !destroyed &&
-        !terminalEnded &&
-        !connected &&
-        !handle &&
-        (terminalCreateNeedsReconciliation || agentSessionRequiresHostAuthorityReplay) &&
-        lastConnectOptions &&
-        recovery.currentPhase === 'disconnected'
-      ) {
-        recovery.begin()
-        void connectHoldingRestoredInput(lastConnectOptions, true)
-        return true
       }
       // Why: online/resume fires a parked retry; the button must not be weaker than an event (#12684).
       if (!destroyed && !terminalEnded && recovery.currentPhase === 'disconnected') {

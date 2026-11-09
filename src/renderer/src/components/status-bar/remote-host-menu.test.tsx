@@ -247,3 +247,46 @@ it('clears the old unavailable card while Retry is connecting, then shows only e
   expect(screen.getByRole('menuitem', { name: 'Retry now' })).toBeTruthy()
   expect(screen.queryByRole('menuitem', { name: 'Copy error' })).toBeNull()
 })
+
+it('keeps its reconnect submenu actionable when the pointer transfers from the row', async () => {
+  const retry = vi.fn(async () => undefined)
+  render(
+    <TooltipProvider>
+      <DropdownMenu defaultOpen modal={false}>
+        <DropdownMenuTrigger>Hosts</DropdownMenuTrigger>
+        <DropdownMenuContent>
+          <RemoteHostStatusRow
+            label="Host"
+            tone="busy"
+            status="Reconnecting"
+            actionLabel="Stop"
+            actionKind="disconnect"
+            onAction={vi.fn()}
+            recovery={{ since: 0, attempt: 3 }}
+            now={60_000}
+            onRetry={retry}
+          />
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </TooltipProvider>
+  )
+  const row = screen.getByRole('menuitem', { name: 'Host, Reconnecting' })
+  fireEvent.pointerMove(row, { pointerType: 'mouse', clientX: 20, clientY: 20 })
+  const action = await screen.findByRole('menuitem', { name: 'Retry now' })
+  act(() => row.focus())
+  fireEvent.pointerOut(row, {
+    pointerType: 'mouse',
+    relatedTarget: action,
+    clientX: 30,
+    clientY: 20
+  })
+  fireEvent.pointerOver(action, {
+    pointerType: 'mouse',
+    relatedTarget: row,
+    clientX: 31,
+    clientY: 20
+  })
+  await act(async () => fireEvent.click(action))
+  expect(retry).toHaveBeenCalledTimes(1)
+  expect(screen.getByRole('menuitem', { name: 'Stop Host' })).toBeTruthy()
+})

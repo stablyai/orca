@@ -51,6 +51,7 @@ export function RemoteHostStatusRow({
   const pending = useRef<{ token: symbol; kind: typeof actionKind } | null>(null)
   const [busy, setBusy] = useState<typeof actionKind | null>(null)
   const [open, setOpen] = useState(false)
+  const card = useRef<HTMLDivElement>(null)
   const reconnectCard =
     tone === 'busy' && recovery && (recovery.attempt >= 3 || now - recovery.since >= 30_000)
   const hasCard = Boolean(errorSentence || reconnectCard)
@@ -141,10 +142,22 @@ export function RemoteHostStatusRow({
     <div className="group flex items-center rounded-md hover:bg-accent focus-within:bg-accent">
       {hasCard ? (
         <DropdownMenuSub open={open} onOpenChange={setOpen}>
-          <DropdownMenuSubTrigger className={triggerClass} hideChevron aria-label={rowName}>
+          <DropdownMenuSubTrigger
+            className={triggerClass}
+            hideChevron
+            aria-label={rowName}
+            onPointerLeave={(event) => {
+              if (
+                event.relatedTarget instanceof Node &&
+                card.current?.contains(event.relatedTarget)
+              ) {
+                event.preventDefault()
+              }
+            }}
+          >
             {details}
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-[min(18rem,calc(100vw-1rem))] p-1.5">
+          <DropdownMenuSubContent ref={card} className="w-[min(18rem,calc(100vw-1rem))] p-1.5">
             <p className="px-1.5 py-1 text-xs text-muted-foreground">
               {errorSentence ??
                 t(

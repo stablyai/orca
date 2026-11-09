@@ -1,9 +1,19 @@
 import { useCallback, useSyncExternalStore } from 'react'
-import { useAppStore } from '../../../index'
-import { createRuntimeStatusSubscriptions } from './runtime-status-subscriptions'
+import { runtimeStatusSubscriptions } from './runtime-status-subscription-store'
 import { isDisconnectedRuntimeHostState } from '@/runtime/hosts/connections/runtime-host-connection-state'
 
-const runtimeStatusSubscriptions = createRuntimeStatusSubscriptions(useAppStore)
+export function useRuntimeHostRetired(environmentId: string | null): boolean {
+  const subscribe = useCallback(
+    (listener: () => void) =>
+      runtimeStatusSubscriptions.subscribeHostLifetime(environmentId, listener),
+    [environmentId]
+  )
+  const getSnapshot = useCallback(
+    () => runtimeStatusSubscriptions.getHostSnapshot(environmentId)?.retired === true,
+    [environmentId]
+  )
+  return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
+}
 
 export function useRuntimeHostDisconnected(environmentId: string | null) {
   const subscribe = useCallback(

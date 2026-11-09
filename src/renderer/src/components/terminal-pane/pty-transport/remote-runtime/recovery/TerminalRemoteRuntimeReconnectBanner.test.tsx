@@ -19,6 +19,13 @@ vi.mock('@/i18n/i18n', () => ({
   getIntlLocale: () => 'en-US'
 }))
 
+const hostLifetime = vi.hoisted(() => ({ retired: false }))
+vi.mock('@/store/slices/runtime-status/views/use-runtime-status-view', () => ({
+  useRuntimeHostRetired: (id: string | null) => Boolean(id && hostLifetime.retired)
+}))
+vi.mock('@/store/slices/runtime-status/views/runtime-status-subscription-store', () => ({
+  runtimeStatusSubscriptions: { getHostSnapshot: () => ({ retired: hostLifetime.retired }) }
+}))
 vi.mock('@/store/index', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
     selector({
@@ -35,6 +42,7 @@ vi.mock('@/store/index', () => ({
 }))
 
 afterEach(() => {
+  hostLifetime.retired = false
   cleanup()
   vi.useRealTimers()
 })
@@ -281,4 +289,43 @@ describe('CalmRemoteRuntimeReconnectBanner', () => {
     )
     expect(screen.getByText('Terminal stopped responding')).toBeInTheDocument()
   })
+})
+
+it('overrides held pane recovery with its actual stopped outcome at once', () => {
+  vi.useFakeTimers()
+  const view = render(
+    <CalmRemoteRuntimeReconnectBanner
+      recovery={{ phase: 'backoff', cause: 'connection' }}
+      heldByServer={false}
+      environmentId="env-1"
+      onReconnect={vi.fn()}
+    />
+  )
+  act(() => vi.advanceTimersByTime(CALM_STATUS_REVEAL_DELAY_MS * 2))
+  expect(
+    view.container.querySelector('[data-terminal-remote-runtime-reconnect-banner]')
+  ).not.toBeNull()
+  hostLifetime.retired = true
+  view.rerender(
+    <CalmRemoteRuntimeReconnectBanner
+      recovery={null}
+      heldByServer={false}
+      environmentId="env-1"
+      onReconnect={vi.fn()}
+    />
+  )
+  expect(view.container.querySelector('[data-terminal-remote-runtime-reconnect-banner]')).toBeNull()
+  view.rerender(
+    <CalmRemoteRuntimeReconnectBanner
+      recovery={{ phase: 'disconnected' }}
+      heldByServer={false}
+      environmentId="env-1"
+      onReconnect={vi.fn()}
+    />
+  )
+  expect(
+    view.container.querySelector(
+      '[data-terminal-remote-runtime-reconnect-banner="disconnected"] button'
+    )
+  ).not.toBeNull()
 })
