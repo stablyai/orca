@@ -21,6 +21,7 @@ import type { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import type { AgentLaunchResult } from '../../src/shared/agent-launch/contracts/agent-launch-intent'
 import { buildProfileStateCutoverFixture } from '../../src/main/persistence/profile-state-cutover-fixture'
 import { launchAutomationChatAgent } from '../../src/main/automations/automation-chat-agent-launch'
+import { agentSessionRefusalError } from '../../src/shared/agent-session/failures/agent-session-wire-refusals'
 
 const mocks = vi.hoisted(() => {
   const hostState: {
@@ -496,19 +497,45 @@ it.each(['before-admission', 'accepted-reply', 'accepted-lost-reply'] as const)(
     const current = { ...run, createdAt: HOST_TEST_NOW }
     const rig = await createQueuedMessageTestRig({ restartable: true })
     mocks.actualHost = rig.host
-    let removedRecord = rig.store.getRecord(HOST_TEST_SESSION)!
-    const removeRecord = () =>
-      rig.store['transact']((draft) => {
-        removedRecord = draft.records.get(HOST_TEST_SESSION)!
-        draft.records.delete(HOST_TEST_SESSION)
-      })
+    // The SQL record store has no record-deletion command, so deletion is injected at its record
+    // reads: every read the refusal and the fresh decision consult answers as for a missing record.
+    const { store } = rig
+    const reads = {
+      select: store.selectWritableRecord,
+      record: store.getRecord,
+      conversation: store.getConversation,
+      require: store.requireWritableRecord
+    }
+    const removed: { mockRestore: () => void }[] = []
+    const removeRecord = () => {
+      const deleted = (id: string) => id === HOST_TEST_SESSION
+      removed.push(
+        vi
+          .spyOn(store, 'selectWritableRecord')
+          .mockImplementation((id) => (deleted(id) ? { kind: 'missing' } : reads.select(id))),
+        vi
+          .spyOn(store, 'getRecord')
+          .mockImplementation((id) => (deleted(id) ? null : reads.record(id))),
+        vi
+          .spyOn(store, 'getConversation')
+          .mockImplementation((id) => (deleted(id) ? null : reads.conversation(id))),
+        vi.spyOn(store, 'requireWritableRecord').mockImplementation((id) => {
+          if (deleted(id)) {
+            throw agentSessionRefusalError('agent_session_identity_required', {
+              reason: 'recordMissing'
+            })
+          }
+          return reads.require(id)
+        })
+      )
+    }
     try {
       const { runtime } = fixture()
       vi.spyOn(runtime, 'openAgentSessionRecordStore').mockResolvedValue(rig.store)
       const sent = rig.host.send.bind(rig.host)
       const send = vi.spyOn(rig.host, 'send').mockImplementationOnce(async (...args) => {
         if (when === 'before-admission') {
-          await removeRecord()
+          removeRecord()
         }
         const reply = await sent(...args)
         if (when === 'before-admission') {
@@ -521,7 +548,7 @@ it.each(['before-admission', 'accepted-reply', 'accepted-lost-reply'] as const)(
           })
         } else {
           expect(reply.ok).toBe(true)
-          await removeRecord()
+          removeRecord()
           if (when === 'accepted-lost-reply') {
             throw new Error('accepted reply lost after deletion')
           }
@@ -566,9 +593,9 @@ it.each(['before-admission', 'accepted-reply', 'accepted-lost-reply'] as const)(
     } finally {
       mocks.actualHost = null
       // Restore the injected deletion only after assertions so ordinary host teardown can run.
-      await rig.store['transact']((draft) => {
-        draft.records.set(HOST_TEST_SESSION, removedRecord)
-      })
+      for (const read of removed) {
+        read.mockRestore()
+      }
       await rig.dispose()
     }
   }
