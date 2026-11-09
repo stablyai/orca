@@ -9,10 +9,10 @@ import { useMobileSourceControlSettings } from '../mobile-source-control-setting
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../../transport/connection/connection-state'
 import { loadMobileDiffReviewCommitSnapshot } from './mobile-diff-review-commit-loader'
-import type { MobileBranchCompareCache } from './mobile-diff-review-loaders'
+import type { BranchCompareLoadResult } from './mobile-diff-review-loaders'
 import {
-  readCachedReviewBranchCompare,
   reviewBranchCompareNeedsRead,
+  reviewBuildBranchCompareCache,
   type ReviewBranchCompareKey
 } from './mobile-diff-review-branch-compare-cache'
 import type { MobileDiffReviewQueueFilter } from './mobile-diff-review-queue'
@@ -170,27 +170,32 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
               throw err
             }
           )
-      const cacheBranchCompare: MobileBranchCompareCache = async (key, read) => {
-        // A superseded build's compare is never shown.
-        if (!isCurrent()) {
-          return { result: null }
+      const showBuilt = (state: ReviewScreenState, loaded: BranchCompareLoadResult) => {
+        if (!sameStatus) {
+          setStatusRevision(queryClient.getQueryState(statusKey)?.dataUpdatedAt ?? 0)
         }
-        try {
-          return await readCachedReviewBranchCompare(
-            queryClient,
-            { hostId, client },
-            target,
-            key,
-            read,
-            isCurrent
-          )
-        } finally {
-          // Only now: until it settles, this build reads the compare again itself after a git change.
-          if (isCurrent()) {
+        setScreenState(withMobileDiffReviewBranch(state, loaded, worktreeId))
+        setActionError(loaded.error ?? null)
+        settleWaiters()
+      }
+      // A compare a git change marked as it landed is newer than the shown one, so it shows while read again.
+      const showStaleCompare = (loaded: BranchCompareLoadResult) =>
+        void snapshot.then(
+          (state) => isCurrent() && showBuilt(state, loaded),
+          () => {}
+        )
+      const cacheBranchCompare = reviewBuildBranchCompareCache(
+        queryClient,
+        { hostId, client },
+        target,
+        {
+          isCurrent,
+          onStale: showStaleCompare,
+          onSettled: (key) => {
             builtCompareRef.current = key
           }
         }
-      }
+      )
       const { snapshot, branch } = startMobileDiffReviewSnapshot(client, worktreeId, {
         status: statusInput,
         compareAgainstUpstream,
@@ -204,13 +209,12 @@ export function useMobileDiffReviewSnapshot(input: SnapshotInput) {
         if (!isCurrent()) {
           return
         }
+        if (loaded) {
+          showBuilt(state, loaded)
+          return
+        }
         if (!sameStatus) {
           setStatusRevision(queryClient.getQueryState(statusKey)?.dataUpdatedAt ?? 0)
-        }
-        if (loaded) {
-          setScreenState(withMobileDiffReviewBranch(state, loaded, worktreeId))
-          setActionError(loaded.error ?? null)
-          return
         }
         // Hold the shown compare until the new one lands.
         setScreenState((prev) =>
