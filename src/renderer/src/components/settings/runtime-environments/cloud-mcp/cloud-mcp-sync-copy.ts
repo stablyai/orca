@@ -28,7 +28,7 @@ export function mcpSyncSummary(status: McpSyncStatus, t: Translate = translate):
   if (status.rows.length === 0) {
     return t(
       'cloudMcpSync.summary.none',
-      'None found in Claude Code or Codex on this computer. Add one there, then sync.'
+      'None found in Claude Code or Codex on this computer. Servers you add there show up here.'
     )
   }
   if (status.error === 'host-outdated' && status.lastSyncedAt === null) {
@@ -70,7 +70,7 @@ export function mcpSyncErrorText(
   const copy: Record<NonNullable<McpSyncStatus['error']>, string> = {
     'host-outdated': t(
       'cloudMcpSync.error.hostOutdated',
-      'This sandbox runs an older Orca that can’t receive MCP servers. Create a new workspace to use them.'
+      'This sandbox’s Orca is too old for MCP servers. Create a new workspace to use them.'
     ),
     'host-unreachable': t(
       'cloudMcpSync.error.hostUnreachable',
@@ -92,7 +92,7 @@ export function mcpSyncRowNote(row: McpSyncServerRow, t: Translate = translate):
     return row.unreachable
       ? t(
           'cloudMcpSync.row.unreachable',
-          'Synced, but the sandbox can’t reach this server. Sync again to reopen its host.'
+          'Synced, but the sandbox can’t reach this server. Sync now to reopen its host.'
         )
       : null
   }

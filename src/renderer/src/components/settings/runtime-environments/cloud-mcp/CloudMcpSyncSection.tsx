@@ -39,7 +39,11 @@ export function CloudMcpSyncSection({
       onSyncNow={syncNow}
       onToggleServer={(key, included) => {
         // Main flips the switch everywhere at once; turning one off also removes it from the workspace.
-        void Promise.resolve(api.setMcpServerIncluded?.(key, included)).then(syncNow).catch(failed)
+        // Main re-syncs every workspace that last synced cleanly; only this one otherwise.
+        const mainSyncs = status.error === null && status.lastSyncedAt !== null
+        void Promise.resolve(api.setMcpServerIncluded?.(key, included))
+          .then(() => (mainSyncs ? undefined : syncNow()))
+          .catch(failed)
       }}
       onToggleAutoSync={(autoSync) => {
         void Promise.resolve(api.setMcpSyncPreferences?.({ autoSync })).catch(failed)

@@ -26209,7 +26209,7 @@
     "egressNote": "Orca opens the sandbox’s network to each remote server’s host. Other hosts stay blocked.",
     "error": {
       "failed": "The last sync didn’t finish. Servers already in the sandbox still work.",
-      "hostOutdated": "This sandbox runs an older Orca that can’t receive MCP servers. Create a new workspace to use them.",
+      "hostOutdated": "This sandbox’s Orca is too old for MCP servers. Create a new workspace to use them.",
       "hostUnreachable": "Couldn’t reach the sandbox. Servers already in the sandbox still work."
     },
     "lastSynced": "Last synced {{time}}",
@@ -26223,7 +26223,7 @@
       "localCommand": "Command exists only on this computer",
       "localPath": "Uses files on this computer",
       "localUrl": "Runs on this computer’s localhost",
-      "unreachable": "Synced, but the sandbox can’t reach this server. Sync again to reopen its host."
+      "unreachable": "Synced, but the sandbox can’t reach this server. Sync now to reopen its host."
     },
     "saveFailed": "Couldn’t save the change.",
     "startFailed": "Couldn’t start the sync.",
@@ -26235,19 +26235,19 @@
     },
     "summary": {
       "found": "{{count}} found",
-      "none": "None found in Claude Code or Codex on this computer. Add one there, then sync.",
+      "none": "None found in Claude Code or Codex on this computer. Servers you add there show up here.",
       "notSynced": "{{count}} found, not synced yet",
       "pair": "{{synced}}, {{skipped}}",
       "skipped": "{{count}} skipped",
       "synced": "{{count}} synced",
+      "found_one": "{{count}} found",
+      "found_other": "{{count}} found",
       "notSynced_one": "{{count}} found, not synced yet",
       "notSynced_other": "{{count}} found, not synced yet",
       "synced_one": "{{count}} synced",
       "synced_other": "{{count}} synced",
       "skipped_one": "{{count}} skipped",
-      "skipped_other": "{{count}} skipped",
-      "found_one": "{{count}} found",
-      "found_other": "{{count}} found"
+      "skipped_other": "{{count}} skipped"
     },
     "syncAgain": "Sync again",
     "syncNow": "Sync now",
