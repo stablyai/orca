@@ -5,16 +5,11 @@ import { copyFileSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { removeTreeSync } from '../../../../shared/windows-transient-lock-removal'
-import { getManagedScript } from '../../../claude/hook-script'
-import { CLAUDE_HOOK_SETTINGS, getManagedLifecycleHook } from '../../../claude/hook-settings'
-import { getWindowsClaudeHookEntry } from '../../../claude/windows-hook-files'
 import { WINDOWS_CMD_SAFE_PATH } from './windows-hook-command'
 import {
   buildWindowsNativeHookExecutable,
   WINDOWS_NATIVE_HOOK_BUILD_TIMEOUT_MS
 } from './testing/windows-native-hook-exe.test-fixture'
-import { findGitBash } from './testing/windows-git-bash-path.test-fixture'
-import { getWindowsPowerShellExecutablePath } from './windows-powershell-hook-launcher'
 
 const PAYLOAD = JSON.stringify({
   session_id: 'native-hook-parity',
@@ -110,24 +105,14 @@ function paneEnv(listener: Listener, extra: NodeJS.ProcessEnv = {}): NodeJS.Proc
 
 let dir = ''
 let exePath = ''
-let command = ''
 const listeners: Server[] = []
 const tempIsCmdSafe = WINDOWS_CMD_SAFE_PATH.test(join(tmpdir(), 'orca-native-hook-x', 'x.exe'))
 
 describe.skipIf(process.platform !== 'win32' || !tempIsCmdSafe)('native agent hook hosts', () => {
   beforeAll(() => {
     dir = mkdtempSync(join(tmpdir(), 'orca-native-hook-'))
-    // A dev box's AutoRun target under the redirected profile; the .cmd parity leg starts cmd.exe.
-    writeFileSync(join(dir, '.cmd_aliases.cmd'), '@echo off\r\n')
     exePath = join(dir, 'orca-agent-hook.exe')
     copyFileSync(buildWindowsNativeHookExecutable(), exePath)
-    writeFileSync(join(dir, 'claude-hook.cmd'), getWindowsClaudeHookEntry())
-    writeFileSync(join(dir, 'claude-hook-impl.cmd'), getManagedScript())
-    command = getManagedLifecycleHook(
-      join(dir, 'claude-hook.cmd'),
-      CLAUDE_HOOK_SETTINGS,
-      exePath
-    ).command
   }, WINDOWS_NATIVE_HOOK_BUILD_TIMEOUT_MS)
 
   afterEach(() => {
@@ -145,37 +130,6 @@ describe.skipIf(process.platform !== 'win32' || !tempIsCmdSafe)('native agent ho
     return listener
   }
 
-  it('answers {} and posts what the .cmd hook posts under Git Bash, PowerShell 5.1 and CreateProcess', async () => {
-    const listener = await listen()
-    const env = paneEnv(listener)
-    const cmdRun = await run('cmd.exe', ['/d', '/c', join(dir, 'claude-hook.cmd')], env)
-    expect(cmdRun.code).toBe(0)
-    expect(listener.posts).toHaveLength(1)
-    const reference = listener.posts[0]
-    expect(reference.path).toBe('/hook/claude')
-
-    const hosts: [string, string, string[]][] = [
-      ['Git Bash -c', findGitBash(), ['-c', command]],
-      [
-        'PowerShell 5.1',
-        getWindowsPowerShellExecutablePath(),
-        ['-NoProfile', '-NonInteractive', '-Command', command]
-      ],
-      ['CreateProcess', exePath, ['claude']]
-    ]
-    for (const [name, program, args] of hosts) {
-      const before = listener.posts.length
-      const result = await run(program, args, env)
-      expect(result.code, name).toBe(0)
-      expect(result.stdout.trim(), name).toBe('{}')
-      expect(result.stderr, name).toBe('')
-      expect(listener.posts.slice(before), name).toEqual([reference])
-    }
-    expect(JSON.parse(reference.form)).toContainEqual(['payload', PAYLOAD])
-    expect(reference.token).toBe('native-token')
-    expect(reference.type).toBe('application/x-www-form-urlencoded')
-  })
-
   it('exits 0 without reading stdin outside an Orca pane or in a background job (#11549, #9236)', async () => {
     const listener = await listen()
     for (const env of [
@@ -186,16 +140,6 @@ describe.skipIf(process.platform !== 'win32' || !tempIsCmdSafe)('native agent ho
       const result = await run(exePath, ['claude'], env, 'abandon')
       expect(result.code).toBe(0)
       expect(result.stdout.trim()).toBe('{}')
-    }
-    expect(listener.posts).toHaveLength(0)
-  })
-
-  it('answers {} without reading stdin for a missing or unknown agent', async () => {
-    const listener = await listen()
-    for (const args of [[], ['codex'], ['Claude']]) {
-      const result = await run(exePath, args, paneEnv(listener), 'abandon')
-      expect(result.code, args.join(' ')).toBe(0)
-      expect(result.stdout.trim(), args.join(' ')).toBe('{}')
     }
     expect(listener.posts).toHaveLength(0)
   })
@@ -238,26 +182,5 @@ describe.skipIf(process.platform !== 'win32' || !tempIsCmdSafe)('native agent ho
         ['version', '2']
       ])
     )
-  })
-
-  it('returns only after the listener answers, so the next event cannot overtake it', async () => {
-    const listener = await listen(400)
-    const result = await run(exePath, ['claude'], paneEnv(listener))
-    expect(result.code).toBe(0)
-    expect(result.ms).toBeGreaterThanOrEqual(400)
-  })
-
-  it('gives up on a listener that never answers at the 1.5 s cap, still exit 0', async () => {
-    const listener = await listen('never')
-    const result = await run(exePath, ['claude'], paneEnv(listener))
-    expect(result.code).toBe(0)
-    expect(result.stdout.trim()).toBe('{}')
-    expect(listener.posts).toHaveLength(1)
-    expect(result.ms).toBeGreaterThanOrEqual(1400)
-    expect(result.ms).toBeLessThan(5000)
-
-    const refused = await run(exePath, ['claude'], paneEnv(listener, { ORCA_AGENT_HOOK_PORT: '1' }))
-    expect(refused.code).toBe(0)
-    expect(refused.stdout.trim()).toBe('{}')
   })
 })

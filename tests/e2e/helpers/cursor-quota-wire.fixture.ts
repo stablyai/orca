@@ -6,12 +6,12 @@ import {
   LOCAL_HTTPS_TEST_CERTIFICATE,
   LOCAL_HTTPS_TEST_PRIVATE_KEY
 } from '../../../src/main/browser/electron-fixtures/browser-local-https-test-certificate'
-import { fetchCursorRateLimits } from '../../../src/main/rate-limits/cursor-fetcher'
+import { fetchCursorRateLimits } from '../../../src/main/rate-limits/providers/cursor/cursor-fetcher'
 import {
   cursorSessionCookie,
   parseCursorSessionToken
-} from '../../../src/main/rate-limits/cursor-session-token'
-import type { CursorAuthReadResult } from '../../../src/main/rate-limits/cursor-auth'
+} from '../../../src/main/rate-limits/providers/cursor/cursor-session-token'
+import type { CursorAuthReadResult } from '../../../src/main/rate-limits/providers/cursor/cursor-auth'
 import { setMainHttpClient } from '../../../src/main/network/http-client'
 import { electronHttpClient } from '../../../src/main/host/electron-http-client'
 

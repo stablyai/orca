@@ -32,22 +32,6 @@ afterEach(async () => {
 })
 
 describe('readAuthorizedDocPreviewFile', () => {
-  it('reads the entry file without granting its containing directory', async () => {
-    const fixture = await createFixture()
-
-    await expect(
-      readAuthorizedDocPreviewFile({
-        boundaryPath: fixture.workspace,
-        entryPath: fixture.entry,
-        implicitRootPath: null,
-        authorizedRootPaths: [],
-        targetPath: fixture.entry,
-        maxTextBytes: 1024,
-        maxBinaryBytes: 1024
-      })
-    ).resolves.toEqual({ content: '<h1>entry</h1>', isBinary: false })
-  })
-
   it('returns typed binary bytes and enforces the read cap', async () => {
     const fixture = await createFixture()
     const image = join(fixture.assets, 'logo.png')

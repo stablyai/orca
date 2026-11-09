@@ -5,7 +5,7 @@ import {
   getFileExplorerOperationOwnerFromState,
   type FileExplorerOwnerState
 } from '@/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
-import { resolveOwner } from './resolve-owner'
+import { resolveOwner } from './workspace/ownership/resolve-owner'
 
 /** Track server owner (null for this app) and nested SSH owner (null for server-local, undefined for unknown). */
 type FileOwner = { runtimeEnvironmentId: string | null; sshHostId: string | null | undefined }

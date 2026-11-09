@@ -11,6 +11,7 @@
     ".github/actions/cloud-sql-rollout-lease/**",
     ".anti-slop-plugin/**",
     "src/main/runtime/__fixtures__/*.timing.json",
+    "src/shared/workspace-setup/__fixtures__/setup-script-imports/**",
     "resources/skills/released-digests.json",
     "resources/plugins/declarative/*.mjs",
     "resources/plugins/declarative/orca.d.ts",

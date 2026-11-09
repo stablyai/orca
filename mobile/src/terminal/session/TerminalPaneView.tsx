@@ -10,12 +10,12 @@ import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import type { TerminalFrame } from '../terminal-webview-messages'
 import { TerminalWebView } from '../TerminalWebView'
 import type {
-  MobileTerminalTheme,
   TerminalKeyboardAvoidanceMetrics,
   TerminalModes,
   TerminalPointerInput,
   TerminalWebViewHandle
 } from '../terminal-webview-contract'
+import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/runtime-mobile-session-tab-contracts'
 
 type TerminalPaneViewProps = {
   handle: string
@@ -28,7 +28,7 @@ type TerminalPaneViewProps = {
   title?: string
   onFrame?: (handle: string, frame: TerminalFrame) => void
   keyboardLift: number
-  terminalTheme?: MobileTerminalTheme
+  terminalTheme?: RuntimeMobileTerminalTheme
   textScale: number
   onRef: (handle: string, ref: TerminalWebViewHandle | null) => void
   onWebReady: (handle: string) => void

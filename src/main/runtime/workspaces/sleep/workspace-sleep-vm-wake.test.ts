@@ -81,6 +81,29 @@ describe('WorkspaceSleepCoordinator VM wake', () => {
     expect(order).toEqual(['suspend:start', 'suspend:end', 'resume'])
   })
 
+  it('destroys the VM only after a wake still running for it settles', async () => {
+    const order: string[] = []
+    const resuming = gate()
+    const workspaceSleep = coordinator({
+      suspendVm: async () => {},
+      resumeVm: async () => {
+        order.push('resume:start')
+        await resuming.opened
+        order.push('resume:end')
+        return null
+      }
+    })
+
+    const woke = workspaceSleep.wakeVm(WORKTREE_ID)
+    const destroyed = workspaceSleep.destroyVm(WORKTREE_ID, async () => {
+      order.push('destroy')
+    })
+    resuming.open()
+    await Promise.all([woke, destroyed])
+
+    expect(order).toEqual(['resume:start', 'resume:end', 'destroy'])
+  })
+
   it('keeps the VM up when the workspace is opened while its suspend waits behind a wake', async () => {
     const order: string[] = []
     const resuming = gate()

@@ -2,7 +2,7 @@
 import {
   runtimeEnvironmentIdForWorkspaceOwner,
   runtimeEnvironmentIdUnlessTwin
-} from '@/lib/resolve-owner'
+} from '@/lib/workspace/ownership/resolve-owner'
 import { callLayoutApply } from '@/runtime/workspace-layout/commands/layout-apply-call'
 import { holdTabPaneTree } from '@/runtime/workspace-layout/intents/layout-owner-pane-tree-holds'
 import {

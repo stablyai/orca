@@ -1298,6 +1298,28 @@
       "sessionLimit": "这台电脑上正在听写的设备过多。请等其中一台结束后再试。",
       "sessionLost": "听写与电脑的连接已断开。请重试。",
       "updateFailed": "更新听写设置失败"
+    },
+    "controls": {
+      "start": "听写",
+      "starting": "正在开始听写",
+      "stop": "停止并插入",
+      "finishing": "正在完成听写",
+      "cancel": "取消听写",
+      "meterOnPhone": "正在录音，{{duration}}，在此手机上",
+      "meterOn": "正在录音，{{duration}}，在 {{computer}} 上",
+      "meterOnComputer": "正在录音，{{duration}}，在电脑上",
+      "meter": "正在录音，{{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} 秒",
+      "durationSeconds_other": "{{count}} 秒",
+      "durationMinutes_one": "{{count}} 分钟",
+      "durationMinutes_other": "{{count}} 分钟"
+    },
+    "status": {
+      "finishingOn": "正在 {{computer}} 上完成",
+      "finishingOnComputer": "正在电脑上完成",
+      "movedTo": "已转到 {{computer}}",
+      "movedToComputer": "已转到电脑"
     }
   },
   "files": {
@@ -1530,6 +1552,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "要删除“{{name}}”（{{branch}}）吗？",
+      "deleteDestroysEnvironment": "这也会销毁 Orca 为其创建的环境“{{environment}}”，包括其中未提交的更改和正在运行的终端。",
+      "deleteKeepsEnvironment": "Orca 为其创建的环境“{{environment}}”会继续运行：其配方没有销毁步骤。",
       "deleteWorktree": "删除工作树",
       "pin": "固定",
       "primaryWorktreeDeleteHint": "主工作树不能删除。请改为移除项目。",
@@ -2398,11 +2422,7 @@
     "terminalInputActions": {
       "attachFileHint": "长按可改为附加文件",
       "attachPhoto": "附加照片",
-      "sendingImage": "正在发送图片",
-      "startDictation": "开始语音听写",
-      "startingDictation": "正在启动语音听写",
-      "stopDictation": "停止语音听写",
-      "transcribingDictation": "正在转写语音听写内容"
+      "sendingImage": "正在发送图片"
     },
     "terminalLiveInputStatus": {
       "listening": "正在聆听",
@@ -2411,8 +2431,6 @@
       "processing": "处理中",
       "releaseMicHint": "松开麦克风按钮即可停止",
       "startingMic": "正在启动麦克风",
-      "stopHint": "点按麦克风停止",
-      "transcribing": "正在桌面上转写",
       "uploadingImage": "正在将图片上传到主机",
       "uploadingImageTitle": "正在上传图片"
     },
@@ -2506,7 +2524,8 @@
       "insertFailed": "无法插入听写文本",
       "insertFailedCopied": "无法插入听写文本，已复制到剪贴板",
       "inserted": "已插入听写文本",
-      "stoppedAfterSilence": "静音一分钟后已停止"
+      "stoppedAfterSilence": "静音一分钟后已停止",
+      "stoppedAtCloudLimit": "已达 10 分钟云端上限。听写已停止。"
     },
     "useNativeChatStop": {
       "stopNotSent": "停止指令未发送",
@@ -2827,6 +2846,8 @@
       "dictationHeading": "听写",
       "dictationMode": "听写模式",
       "dictationModeDescription": "切换：按一次开始，再按一次停止。按住：按住期间进行听写。",
+      "dictationModeWithAutoDescription": "自动：轻按开始和停止；在电脑上按住快捷键会一直录音，直到松开。按住：按住期间进行听写。切换：按一次开始，再按一次停止。",
+      "autoMode": "自动",
       "downloadFailed": "下载失败",
       "enableDictation": "启用语音听写",
       "holdMode": "按住",

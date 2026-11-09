@@ -2,7 +2,8 @@ import { resolveBrowserLinkSession } from './browser/navigation/browser-link-ses
 import { activateAndRevealWorkspace } from './workspace/activation/worktree-activation'
 import type { AppState } from '@/store/types'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
+import '../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../shared/browser/browser-blank-page'
 import type { WorkspaceFilePreviewPlan } from './file-preview'
 import type {
   BrowserLinkOpenContext,
@@ -11,7 +12,7 @@ import type {
 import { openLocalBrowserLink } from './browser/navigation/browser-link-open'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
 import { createBrowserLinkHostMatcher } from './browser/navigation/browser-link-owner'
-import { resolveWorktreeOperationRoute } from './worktree-operation-route'
+import { resolveWorktreeOperationRoute } from './workspace/ownership/worktree-operation-route'
 import { selectDetectedWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import { hasIndexedDetectedWorktree } from './workspace/ownership/worktree-runtime-owner-index'
 

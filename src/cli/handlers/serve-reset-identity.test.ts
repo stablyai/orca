@@ -1,11 +1,14 @@
-import { chmodSync, mkdtempSync, statSync } from 'node:fs'
+import { chmodSync, existsSync, mkdtempSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { resetServeHostIdentity } from './serve-reset-identity'
 import { loadOrCreateE2EEKeypair } from '../../main/runtime/rpc/server/pairing/e2ee-keypair'
 import { DeviceRegistry } from '../../main/runtime/rpc/server/pairing/device-registry'
-import { acquireOrcadInstanceLock } from '../../main/orcad/orcad-instance-lock'
+import {
+  acquireOrcadInstanceLock,
+  ORCAD_LOCK_FILE_NAME
+} from '../../main/orcad/orcad-instance-lock'
 import {
   ensureHostInstanceIdentity,
   hostInstanceIdFromEnv
@@ -33,6 +36,26 @@ describe('resetServeHostIdentity', () => {
       ensureHostInstanceIdentity(before.dir, hostInstanceIdFromEnv({ ORCA_INSTANCE_ID: 'vm-a' }))
     ).toEqual({ kind: 'recorded' })
     expect(loadOrCreateE2EEKeypair(before.dir).publicKeyB64).toBe(publicKeyB64)
+  })
+
+  it('keeps the notice that the last run crashed, and leaves no lock after a clean one', async () => {
+    const before = pairedProfile()
+    const lockPath = join(before.dir, ORCAD_LOCK_FILE_NAME)
+    await resetServeHostIdentity(before.dir)
+    expect(existsSync(lockPath)).toBe(false)
+
+    // What an orcad killed before releasing its lock leaves behind; the pid is past any pid_max.
+    const crashed = acquireOrcadInstanceLock(before.dir)
+    crashed.release()
+    writeFileSync(lockPath, JSON.stringify({ ...crashed.record, pid: 99_999_999 }))
+    await resetServeHostIdentity(before.dir)
+
+    const next = acquireOrcadInstanceLock(before.dir)
+    try {
+      expect(next.previousUnexpectedExit).toMatchObject({ pid: 99_999_999 })
+    } finally {
+      next.release()
+    }
   })
 
   it('refuses while an Orca holds the profile lock and changes nothing', async () => {

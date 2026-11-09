@@ -221,6 +221,7 @@ import {
   TapParams,
   TypeParams
 } from './emulator-params'
+import { EnvironmentDoctorParams } from './environment-doctor-params'
 import {
   FileCommitUpload,
   FileCopy,
@@ -736,6 +737,7 @@ import {
   WorktreeDetectedListParams,
   WorktreeForceDeleteBranch,
   WorktreeListParams,
+  WorktreePreviewNestedRemoval,
   WorktreePsParams,
   WorktreeRemove,
   WorktreeResolveCallerParent,
@@ -1037,6 +1039,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'emulator.tap': TapParams,
   'emulator.type': TypeParams,
   'emulator.unregisterActive': EmulatorUnregisterActiveParams,
+  'environment.doctor': EnvironmentDoctorParams,
   'files.browseServerDir': ServerDirectoryBrowse,
   'files.commitUpload': FileCommitUpload,
   'files.copy': FileCopy,
@@ -1441,6 +1444,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'repo.add': RepoPath,
   'repo.addRemote': RepoAddRemote,
   'repo.baseRefDefault': RepoSelector,
+  'repo.checkCloneTarget': RepoClone,
   'repo.clone': RepoClone,
   'repo.create': RepoCreate,
   'repo.gitAvailable': null,
@@ -1615,6 +1619,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'worktree.listRetiredNames': WorktreeDetectedListParams,
   'worktree.persistSortOrder': WorktreeSortOrder,
   'worktree.prefetchCreateBase': WorktreePrefetchCreateBase,
+  'worktree.previewNestedRemoval': WorktreePreviewNestedRemoval,
   'worktree.ps': WorktreePsParams,
   'worktree.resolveCallerParent': WorktreeResolveCallerParent,
   'worktree.resolveMrBase': WorktreeResolveMrBase,

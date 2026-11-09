@@ -32,7 +32,7 @@ export function renderResourceUsageStatusTrigger(
   t: Translate = translate
 ): React.JSX.Element {
   return (
-    <Tooltip delayDuration={150}>
+    <Tooltip>
       <TooltipTrigger asChild>
         <PopoverTrigger asChild>
           <button

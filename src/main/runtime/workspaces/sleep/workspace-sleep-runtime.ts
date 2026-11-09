@@ -169,6 +169,12 @@ export class WorkspaceSleepCoordinator {
     return this.trackVmOperation(worktreeId, { kind: 'wake', settled: run }, run)
   }
 
+  /** Runs a VM-destroying operation behind this workspace's running wake or suspend, and ahead of
+   *  any asked for later, which then find no VM. Untracked: a destroyed VM is neither up nor asleep. */
+  destroyVm<T>(worktreeId: string, destroy: () => Promise<T>): Promise<T> {
+    return this.afterVmOperations(worktreeId, destroy)
+  }
+
   /** Where the VM stands, from its pending operations, which outrank its stored record: a wake
    *  still reconnecting has already marked it running, and a running suspend has not yet marked
    *  it suspended. A suspend still waiting its turn leaves the server as it is for now. */

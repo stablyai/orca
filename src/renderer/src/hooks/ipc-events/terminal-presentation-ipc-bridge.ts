@@ -11,7 +11,7 @@ import { insertUnifiedTabAfterAnchor } from '@/lib/unified-tab-anchor-insertion'
 import { tryMakePaneKey } from './agent-status-routing'
 import { registerLaunchRecipe } from './launch-recipe-registration'
 import { wasAgentLaunchPaneClosedByUser } from '@/lib/agent-session/launch/pane/agent-launch-pane-closes'
-import { revealWorkspaceSurface } from '@/lib/workspace-surface-reveal'
+import { revealWorkspaceSurface } from '@/lib/workspace/activation/workspace-surface-reveal'
 import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {

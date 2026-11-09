@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
-import { DesktopScriptServeChannel, type RuntimeChildProcess } from './desktop-script-serve-channel'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import { DesktopScriptServeChannel } from './desktop-script-serve-channel'
 
 class FakeChild extends EventEmitter {
   readonly stdout = new EventEmitter()
@@ -36,7 +37,11 @@ class FakeChild extends EventEmitter {
 function createChannel() {
   const child = new FakeChild()
   const handlers = { onLine: vi.fn(), onGone: vi.fn(), onOverflow: vi.fn() }
-  const channel = new DesktopScriptServeChannel(child as unknown as RuntimeChildProcess, handlers)
+  const channel = new DesktopScriptServeChannel(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the piped streams and events consumed by the channel.
+    child as unknown as ChildProcessWithoutNullStreams,
+    handlers
+  )
   return { channel, child, handlers }
 }
 
@@ -86,11 +91,15 @@ describe('DesktopScriptServeChannel', () => {
     const tails: string[] = []
     const feed = (index: number): void => {
       const child = new FakeChild()
-      const channel = new DesktopScriptServeChannel(child as unknown as RuntimeChildProcess, {
-        onLine: () => {},
-        onGone: () => {},
-        onOverflow: () => {}
-      })
+      const channel = new DesktopScriptServeChannel(
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this fixture implements the piped streams and events consumed by the channel.
+        child as unknown as ChildProcessWithoutNullStreams,
+        {
+          onLine: () => {},
+          onGone: () => {},
+          onOverflow: () => {}
+        }
+      )
       const line = String.fromCharCode(65 + (index % 26)).repeat(1024 * 1024)
       child.stdout.emit('data', `${line}\n{"partial":${index}`)
       tails.push((channel as unknown as { buffer: string }).buffer)

@@ -6,7 +6,7 @@ import { getWorkspaceFilePreviewPlan } from '@/lib/file-preview'
 import type { AppState } from '@/store/types'
 import { htmlFilePathFromUrl } from '../../../shared/file-links/html-file-url'
 import { authorityKey } from '../../../shared/host-authority'
-import { resolveOwner } from './resolve-owner'
+import { resolveOwner } from './workspace/ownership/resolve-owner'
 import { translate } from '@/i18n/i18n'
 import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 

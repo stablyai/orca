@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
-import type { ExecutionHostPlatformFact } from './execution-host-facts'
+import type { ExecutionHostPlatformFact } from '../runtime/hosts/platform/execution-host-platform-fact'
 
 type Recovery = Extract<ExecutionHostPlatformFact, { kind: 'withheld' }>['recovery']
 

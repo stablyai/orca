@@ -1,9 +1,9 @@
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
-import '@/lib/connection-context'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import '@/lib/workspace/ownership/connection-context'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import '@/store/slices/ssh/runtime-environment-ssh'
 import {
   selectRuntimeAwareSshConnectionGeneration,

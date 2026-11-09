@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { statSync } from 'node:fs'
-import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import { readClaudeProfileObject } from './claude-profile-paths'
 import { lstatIfPresent } from './claude-profile-prompt-history'
 import {

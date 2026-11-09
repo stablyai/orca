@@ -27,7 +27,7 @@ function stepLabel(id: WorktreeSetupStepId, agentLabel: string, t: Translate = t
   }
 }
 
-function StepIcon({ state }: { state: WorktreeSetupStep['state'] }): React.JSX.Element {
+export function StepIcon({ state }: { state: WorktreeSetupStep['state'] }): React.JSX.Element {
   switch (state) {
     case 'running':
       return (

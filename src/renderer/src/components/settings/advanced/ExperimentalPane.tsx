@@ -7,7 +7,7 @@ import { SettingsGroup } from '../section-layout/SettingsGroup'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { getExperimentalSearchEntry } from './experimental-search'
 import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
-import { NumberField, SettingsSwitch } from '../form-controls/SettingsFormControls'
+import { NumberField } from '../form-controls/SettingsFormControls'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentDashboardExperimentalSetting } from '../../dashboard/AgentDashboardExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from '../virtual-machines/recipes/EphemeralVmsExperimentalSetting'
@@ -162,13 +162,13 @@ export function ExperimentalPane({
                   )}
                 </p>
               </div>
-              <SettingsSwitch
+              <Switch
                 checked={agentHibernationEnabled}
-                ariaLabel={t(
+                aria-label={t(
                   'auto.components.settings.ExperimentalPane.agentHibernation.toggleLabel',
                   'Toggle agent sleep'
                 )}
-                onChange={() =>
+                onCheckedChange={() =>
                   updateSettings({
                     experimentalAgentHibernation: !agentHibernationEnabled
                   })
@@ -235,13 +235,13 @@ export function ExperimentalPane({
                   )}
                 </p>
               </div>
-              <SettingsSwitch
+              <Switch
                 checked={newWorktreeCardStyleEnabled}
-                ariaLabel={t(
+                aria-label={t(
                   'auto.components.settings.ExperimentalPane.newWorktreeCardStyle.toggleLabel',
                   'Toggle new card style'
                 )}
-                onChange={() =>
+                onCheckedChange={() =>
                   updateSettings({
                     experimentalNewWorktreeCardStyle: !newWorktreeCardStyleEnabled
                   })
