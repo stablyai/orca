@@ -8,6 +8,10 @@ import {
   type PairingCreateOfferResult
 } from '../../shared/remote-runtime/pairing/pairing-create-offer-contract'
 import {
+  TURN_SENDER_METHOD,
+  type TurnSenderResult
+} from '../../shared/remote-runtime/pairing/turn-sender-contract'
+import {
   PAIRING_REVOKE_DEVICE_METHOD,
   type PairingRevokeDeviceResult
 } from '../../shared/remote-runtime/pairing/pairing-revoke-device-contract'
@@ -76,5 +80,13 @@ export const PAIR_HANDLERS: Record<string, CommandHandler> = {
     if (!response.result.available) {
       process.exitCode = 1
     }
+  },
+  sender: async ({ client, json }) => {
+    const response = await client.call<TurnSenderResult>(TURN_SENDER_METHOD, undefined)
+    printResult(response, json, (result) =>
+      result.sender
+        ? `Last message from device ${result.sender.deviceId}.`
+        : 'No paired device has messaged this agent.'
+    )
   }
 }

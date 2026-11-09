@@ -16,6 +16,7 @@ export function createWebCloudWorkspacesApi(): PreloadApi['cloudWorkspaces'] {
     listGrants: () => Promise.resolve(NOT_CONFIGURED),
     revokeGrant: () => Promise.resolve(NOT_CONFIGURED),
     localWorkspaces: () => Promise.resolve([]),
+    noteSent: () => Promise.resolve(),
     bindEnvironment: () => Promise.resolve(),
     environmentBindings: () => Promise.resolve({}),
     setActive: () => Promise.resolve(),

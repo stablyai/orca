@@ -12,6 +12,7 @@ export const cloudWorkspacesApi = {
   listGrants: (id) => ipcRenderer.invoke('cloudWorkspaces:listGrants', { id }),
   revokeGrant: (id, grantId) => ipcRenderer.invoke('cloudWorkspaces:revokeGrant', { id, grantId }),
   localWorkspaces: () => ipcRenderer.invoke('cloudWorkspaces:localWorkspaces'),
+  noteSent: (id) => ipcRenderer.invoke('cloudWorkspaces:noteSent', { id }),
   bindEnvironment: (sandboxId, runtimeEnvironmentId, grantId) =>
     ipcRenderer.invoke('cloudWorkspaces:bindEnvironment', {
       sandboxId,

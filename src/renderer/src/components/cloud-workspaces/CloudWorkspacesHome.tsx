@@ -8,17 +8,21 @@ import { cn } from '@/lib/utils'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import type {
   CloudWorkspace,
-  CloudWorkspacePatch
+  CloudWorkspacePatch,
+  CloudWorkspacePresence
 } from '../../../../shared/cloud-workspaces/cloud-workspaces-wire'
 import { useOrgRoster } from '../billing/team/use-org-roster'
 import { CloudWorkspaceRow } from './CloudWorkspaceRow'
 import { NEW_SECTION } from './CloudWorkspaceRowMenu'
 import { ANY, CloudWorkspacesToolbar, type CloudWorkspacesFilters } from './CloudWorkspacesToolbar'
 import { EmptyState, ErrorState, NewSectionDialog, SkeletonRows } from './CloudWorkspacesStates'
+import { CloudWorkspaceConfirmDialog, type PendingConfirm } from './CloudWorkspaceConfirmDialog'
 import { formatUsdMicros, type MemberDirectory } from './cloud-workspace-format'
 import { refreshCloudMessageSenders } from '@/lib/cloud-message-sender'
 import { describeError } from './cloud-workspace-errors'
-import { copyCloudWorkspaceLink, openCloudWorkspace } from './open-cloud-workspace'
+import { focusCloudChat } from './cloud-chat-focus'
+import { frontCloudChat } from './cloud-workspace-links'
+import { cloudWorkspaceTitle, copyCloudWorkspaceLink, openCloudWorkspace } from './open-cloud-workspace'
 import { useCloudWorkspaces, useCloudWorkspacesAvailable } from './use-cloud-workspaces'
 
 const INITIAL_FILTERS: CloudWorkspacesFilters = {
@@ -67,6 +71,8 @@ export function CloudWorkspacesHome({
   const [opening, setOpening] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const [sectionFor, setSectionFor] = useState<CloudWorkspace | null>(null)
+  const [confirm, setConfirm] = useState<PendingConfirm | null>(null)
+  const signIn = useAppStore((s) => s.connectCurrentOrcaProfile)
   const { directory, canAdmin } = useMemberDirectory(orgId)
   const scope = orgId ? filters.scope : 'mine'
   const { state, stale, reading, refresh, replace } = useCloudWorkspaces(
@@ -90,7 +96,14 @@ export function CloudWorkspacesHome({
     })
   }, [])
 
-  const all = useMemo(() => (state.status === 'ready' ? state.workspaces : []), [state])
+  // A workspace being deleted (or gone) is not something to open or manage; Home leaves it out.
+  const all = useMemo(
+    () =>
+      state.status === 'ready'
+        ? state.workspaces.filter((w) => w.status !== 'destroying' && w.status !== 'destroyed')
+        : [],
+    [state]
+  )
   const repos = useMemo(
     () => [...new Set(all.flatMap((w) => (w.repo ? [w.repo.url] : [])))].sort(),
     [all]
@@ -103,15 +116,18 @@ export function CloudWorkspacesHome({
   // Owner filtering only exists in the team view; a repo that left the list stops filtering.
   const by = scope === 'team' ? filters.by : ANY
   const repo = repos.includes(filters.repo) ? filters.repo : ANY
+  // A row a link opened always shows, even when the owner/repo filters would hide it.
   const visible = useMemo(
     () =>
       all.filter(
         (w) =>
-          (by === ANY || w.ownerUserId === by || w.createdBy === by) &&
-          (repo === ANY || w.repo?.url === repo)
+          w.id === highlightId ||
+          ((by === ANY || w.ownerUserId === by || w.createdBy === by) &&
+            (repo === ANY || w.repo?.url === repo))
       ),
-    [all, by, repo]
+    [all, by, repo, highlightId]
   )
+  const highlighted = highlightId ? visible.find((w) => w.id === highlightId) : undefined
   const groups = useMemo(() => {
     const out = new Map<string, CloudWorkspace[]>()
     for (const w of visible) {
@@ -135,12 +151,15 @@ export function CloudWorkspacesHome({
   )
   const totalCost = visible.reduce((sum, w) => sum + w.cost.totalUsdMicros, 0)
 
-  const open = useCallback(async (w: CloudWorkspace) => {
+  /** Opens the workspace, then (going to a teammate's chat) the chat they have in front. */
+  const open = useCallback(async (w: CloudWorkspace, chatId?: string | null) => {
     setOpening(w.id)
     try {
       const outcome = await openCloudWorkspace(w)
       if (!outcome.ok) {
         toast.error(outcome.message)
+      } else if (chatId) {
+        await focusCloudChat(outcome.worktreeId, chatId)
       }
     } finally {
       setOpening((current) => (current === w.id ? null : current))
@@ -148,9 +167,18 @@ export function CloudWorkspacesHome({
   }, [])
 
   const patch = useCallback(
-    async (w: CloudWorkspace, change: CloudWorkspacePatch) => {
+    async (w: CloudWorkspace, change: CloudWorkspacePatch, confirmed = false) => {
       if (change.section === NEW_SECTION) {
         setSectionFor(w)
+        return
+      }
+      // Making private and handing over ownership take access away; both ask first.
+      if (!confirmed && change.visibility === 'private') {
+        setConfirm({ kind: 'private', workspace: w })
+        return
+      }
+      if (!confirmed && change.ownerUserId) {
+        setConfirm({ kind: 'owner', workspace: w, ownerUserId: change.ownerUserId })
         return
       }
       const result = await window.api.cloudWorkspaces.patch(w.id, change)
@@ -191,7 +219,12 @@ export function CloudWorkspacesHome({
   const actions = useMemo(
     () => ({
       open: (w: CloudWorkspace) => void open(w),
-      copyLink: (w: CloudWorkspace) => void copyCloudWorkspaceLink(w.id),
+      copyLink: (w: CloudWorkspace) => {
+        const front = frontCloudChat()
+        void copyCloudWorkspaceLink(w.id, front?.sandboxId === w.id ? front.chatId : null)
+      },
+      copyWorkspaceLink: (w: CloudWorkspace) => void copyCloudWorkspaceLink(w.id),
+      goToChat: (w: CloudWorkspace, member: CloudWorkspacePresence) => void open(w, member.chatId),
       patch: (w: CloudWorkspace, change: CloudWorkspacePatch) => void patch(w, change)
     }),
     [open, patch]
@@ -215,9 +248,10 @@ export function CloudWorkspacesHome({
         metaStale={stale}
         meta={
           state.status === 'ready'
-            ? t('auto.components.cloudWorkspaces.listMeta', '{{value0}} workspaces · {{value1}}', {
-                value0: visible.length,
-                value1: formatUsdMicros(totalCost, intlLocale)
+            ? t('auto.components.cloudWorkspaces.listMeta', '{{count}} workspaces · {{cost}}', {
+                count: visible.length,
+                cost: formatUsdMicros(totalCost, intlLocale),
+                defaultValue_one: '{{count}} workspace · {{cost}}'
               })
             : null
         }
@@ -235,9 +269,13 @@ export function CloudWorkspacesHome({
         {state.status === 'loading' && <SkeletonRows />}
         {state.status === 'error' && (
           <ErrorState
-            message={describeError(state.error, state.reason, t)}
+            error={state.error}
+            reason={state.reason}
             retrying={reading}
             onRetry={refresh}
+            onSignIn={() => {
+              void signIn().then(refresh)
+            }}
           />
         )}
         {state.status === 'ready' && visible.length === 0 && (
@@ -257,11 +295,18 @@ export function CloudWorkspacesHome({
                 {showHeading && (
                   <h3
                     id={headingId}
-                    className="px-3 py-2 text-xs font-medium text-muted-foreground"
+                    className="px-3 py-2 text-2xs font-medium text-muted-foreground"
                   >
                     {section || t('auto.components.cloudWorkspaces.noSection', 'No section')}
-                    <span className="ml-1.5 tabular-nums text-muted-foreground/70">
+                    {/* The bare number is visual; screen readers get the counted phrase. */}
+                    <span aria-hidden className="ml-1.5 tabular-nums text-muted-foreground">
                       {rows.length}
+                    </span>{' '}
+                    <span className="sr-only">
+                      {t('auto.components.cloudWorkspaces.sectionCount', '{{count}} workspaces', {
+                        count: rows.length,
+                        defaultValue_one: '{{count}} workspace'
+                      })}
                     </span>
                   </h3>
                 )}
@@ -289,6 +334,33 @@ export function CloudWorkspacesHome({
             )
           })}
       </div>
+
+      {/* Polite, so opening from a link is announced without stealing focus. */}
+      <div aria-live="polite" className="sr-only">
+        {highlighted
+          ? t('auto.components.cloudWorkspaces.openedFromLink', 'Opened from link: {{title}}', {
+              title: cloudWorkspaceTitle(highlighted, t)
+            })
+          : null}
+      </div>
+
+      {confirm && (
+        <CloudWorkspaceConfirmDialog
+          pending={confirm}
+          directory={directory}
+          selfId={selfId}
+          canAdmin={canAdmin}
+          onCancel={() => setConfirm(null)}
+          onConfirm={() => {
+            const change: CloudWorkspacePatch =
+              confirm.kind === 'private'
+                ? { visibility: 'private' }
+                : { ownerUserId: confirm.ownerUserId }
+            setConfirm(null)
+            void patch(confirm.workspace, change, true)
+          }}
+        />
+      )}
 
       {sectionFor && (
         <NewSectionDialog

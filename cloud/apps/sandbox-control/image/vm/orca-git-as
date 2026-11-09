@@ -1,14 +1,31 @@
 #!/usr/bin/env bash
-# Runs git as a workspace member: their GitHub identity for pushes/PRs and their commit author.
-#   orca-git-as <member user id> <git args...>      e.g. orca-git-as "$ORCA_SENDER_ID" push origin HEAD
-# Falls back to plain git (the workspace's app identity) when the member never connected GitHub.
+# Runs git as the teammate whose message started this agent's turn: their GitHub identity for
+# pushes/PRs (this repository only) and their commit author.
+#   orca-git-as <git args...>               e.g. orca-git-as push origin HEAD
+#   orca-git-as --as <member id> <git args>  refuses unless that member really sent the message
+# Orca attests the sender from the paired device that sent the message, never from arguments or
+# message text. Without an attested sender (not run from an agent, or the owner's local session) it
+# runs plain git with the workspace identity.
 set -euo pipefail
-user="${1:-}"
-shift || true
-case "$user" in '' | *[!A-Za-z0-9_.:-]*) echo 'usage: orca-git-as <member id> <git args...>' >&2; exit 2 ;; esac
-file="$HOME/.orca-sandbox/members/$(printf '%s' "$user" | tr ':' '_').gitconfig"
-if [ ! -f "$file" ]; then
-  echo "orca-git-as: $user has not connected GitHub; using the workspace identity" >&2
-  exec git "$@"
+expect=''
+if [ "${1:-}" = '--as' ]; then
+  expect="${2:-}"
+  shift 2 || { echo 'usage: orca-git-as [--as <member id>] <git args...>' >&2; exit 2; }
+  case "$expect" in '' | *[!A-Za-z0-9_.:-]*) echo 'orca-git-as: bad member id' >&2; exit 2 ;; esac
 fi
-exec git -c "include.path=$file" "$@"
+set +e
+file="$(ORCA_GIT_AS="$expect" sudo -n --preserve-env=ORCA_GIT_AS,ORCA_TERMINAL_HANDLE,ORCA_PANE_KEY,ORCA_AGENT_LAUNCH_TOKEN,ORCA_AGENT_SESSION_ID \
+  /opt/orca/bin/orca-git-identity)"
+status=$?
+set -e
+case "$status" in
+  0)
+    trap 'rm -f "$file"' EXIT
+    git -c "include.path=$file" "$@"
+    ;;
+  3)
+    echo 'orca-git-as: no teammate identity for this turn; using the workspace identity' >&2
+    exec git "$@"
+    ;;
+  *) exit 4 ;;
+esac

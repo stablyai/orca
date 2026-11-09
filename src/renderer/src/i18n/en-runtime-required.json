@@ -225,6 +225,14 @@
           "errorUnavailable": "Screenshot markup is not available on this page."
         }
       },
+      "cloudWorkspaces": {
+        "listMeta_one": "{{count}} workspace · {{cost}}",
+        "listMeta_other": "{{count}} workspaces · {{cost}}",
+        "sandboxHoursCost_one": "{{hours}} sandbox hour × {{rate}}/hour = {{cost}}",
+        "sandboxHoursCost_other": "{{hours}} sandbox hours × {{rate}}/hour = {{cost}}",
+        "sectionCount_one": "{{count}} workspace",
+        "sectionCount_other": "{{count}} workspaces"
+      },
       "dashboard": {
         "DashboardAgentChildDisclosure": {
           "hideChildAgents_one": "Hide {{count}} child agent",

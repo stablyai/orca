@@ -130,7 +130,7 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   },
   {
     id: 'cloudWorkspace.copyLink',
-    title: 'Copy Cloud Workspace Link',
+    title: 'Copy cloud workspace link',
     group: 'Global',
     scope: 'global',
     searchKeywords: ['shortcut', 'cloud', 'workspace', 'link', 'share', 'copy', 'team'],
