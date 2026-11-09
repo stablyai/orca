@@ -38,7 +38,7 @@ import {
 import {
   acquireEditorFileOperation,
   isSameEditorFileOperationIdentity
-} from '@/lib/editor-file-operation-owner'
+} from '@/lib/editor/file-operations/editor-file-operation-owner'
 
 export function useEditorPanelFileContentLoader({
   fileLoadRetryAttemptsRef,

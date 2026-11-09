@@ -25,7 +25,7 @@ vi.mock('./workspace/ownership/resolve-owner', () => ({
       : { kind: 'ambiguous' }
   }
 }))
-vi.mock('@/lib/file-preview', () => ({
+vi.mock('@/lib/browser/documents/file-preview', () => ({
   getWorkspaceFilePreviewPlan: (_state: unknown, worktreeId: string, filePath: string) => {
     plan.calls.push({ worktreeId, filePath })
     return plan.result

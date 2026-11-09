@@ -19209,6 +19209,7 @@
         "orcaStopCanContinue": "你可以在此對話中繼續。",
         "orcaStopUnnamedServer": "遠端伺服器",
         "permissionDenied": "{{agent}} 拒絕了權限。查看詳細資訊。",
+        "safetyReviewApproved": "{{agent}} 已核准此操作。查看詳細資訊。",
         "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
         "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
         "forkedFrom": "分支來源"
@@ -19644,7 +19645,8 @@
       "contextUsage": {
         "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
         "title": "上下文",
-        "estimated": "根據上一次回應的估算值。"
+        "estimated": "根據上一次回應的估算值。",
+        "deferredNote": "按需載入，不計入已用總量。"
       },
       "contextMenu": {
         "copyOrcaSessionId": "複製 Orca 工作階段 ID",

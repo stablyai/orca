@@ -1,4 +1,4 @@
-import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+import { getEditorFileOperationContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import { getFolderWorkspaceConnectionId } from '@/lib/workspace/ownership/folder-workspace-connection'
 import { getLocalPathOpenOwnerForRoute, isLocalPathOpenBlocked } from '@/lib/local-path-open-guard'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'

@@ -11,8 +11,8 @@ import {
   EXTERNAL_MUTATION_DEBOUNCE_MS
 } from '@/hooks/editor-external-watch-event-reconciliation'
 import '@/hooks/editor-external-watch-targets'
-import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
-import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
+import { getEditorFileOperationContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import type { AppState } from '@/store/types'
 import type { WorkspaceSessionState } from '../../../../../../shared/workspace-session/workspace-session-state-types'
 import {

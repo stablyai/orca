@@ -9,7 +9,7 @@ import { AgentSkillSetupPanel } from '../../../skills/setup/AgentSkillSetupPanel
 import { EphemeralVmRecipeRow } from './EphemeralVmRecipeRow'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { EPHEMERAL_VMS_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { EPHEMERAL_VMS_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill

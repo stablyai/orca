@@ -24,7 +24,7 @@ import {
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { selectFolderWorkspaceCopies } from '@/store/folder-workspaces/folder-workspace-record-index'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { focusFreeRouteStateOf } from '../../editor-file-operation-provenance'
+import { focusFreeRouteStateOf } from '../../editor/file-operations/editor-file-operation-provenance'
 import { namedHostForOwnerRef, resolveOwner, resolveOwnerOfRoute } from './resolve-owner'
 import { resolveUnstampedRecordHost } from './worktree-operation-catalog-route'
 import { resolveExactWorktreeRoute, routeForOwner } from './worktree-owner-route'
