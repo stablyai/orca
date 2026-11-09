@@ -35,6 +35,7 @@ import { useEmulatorScreenKeyboard } from './use-emulator-screen-keyboard'
 import { useEmulatorStreamWindowVisible } from './use-emulator-stream-window-visibility'
 
 type EmulatorDeviceFrameProps = {
+  deviceId?: string
   previewUrl?: string
   wsUrl?: string
   streamKey?: string
@@ -64,6 +65,7 @@ type ScreenCoordinateEvent = Pick<
 >
 
 export function EmulatorDeviceFrame({
+  deviceId,
   previewUrl,
   wsUrl,
   streamKey,
@@ -391,6 +393,7 @@ export function EmulatorDeviceFrame({
           }}
         >
           <EmulatorScreenSurface
+            deviceId={deviceId}
             frameLayout={frameLayout}
             isLive={isLive}
             keyboardCaptureActive={keyboardCaptureActive}

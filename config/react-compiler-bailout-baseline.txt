@@ -145,7 +145,7 @@
 3 src/renderer/src/components/editor/useEditorPanelFileContentLoader.ts
 4 src/renderer/src/components/editor/useLocalLogTail.ts
 1 src/renderer/src/components/editor/usePreserveSectionDuringExternalEdit.ts
-7 src/renderer/src/components/emulator-pane/emulator-screen-stream-content.tsx
+1 src/renderer/src/components/emulator-pane/emulator-screen-stream-content.tsx
 3 src/renderer/src/components/emulator-pane/use-emulator-pane-session.ts
 1 src/renderer/src/components/emulator-pane/use-emulator-pane-shutdown.ts
 1 src/renderer/src/components/emulator-pane/use-emulator-video-stream.ts

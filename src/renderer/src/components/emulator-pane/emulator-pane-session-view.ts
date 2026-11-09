@@ -24,12 +24,12 @@ export function buildEmulatorPaneSessionView({
     sessionDisplayName !== SIMULATOR_DEFAULT_TAB_LABEL
   const previewUrl = simulatorPreviewStreamUrl(session?.info)
   return {
+    deviceId: session?.info?.deviceUdid,
     displayName: hasSpecificSessionDisplayName
       ? sessionDisplayName
       : selectedDevice?.name || sessionDisplayName || SIMULATOR_DEFAULT_TAB_LABEL,
     previewUrl,
     wsUrl: session?.info?.wsUrl,
-    isLive: Boolean(previewUrl && session?.attached),
-    selectedDevice
+    isLive: Boolean(previewUrl && session?.attached)
   }
 }
