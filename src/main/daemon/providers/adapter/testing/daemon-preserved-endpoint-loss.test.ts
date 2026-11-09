@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { confirmPreservedEndpointLoss } from '../daemon-preserved-endpoint-loss'
 import { DaemonProtocolError } from '../../../protocol/daemon-errors'
 
@@ -8,79 +8,70 @@ function connectError(code: string): Error {
 
 const sleep = async (): Promise<void> => {}
 
+/** Replays connect outcomes in order; once spent, the caller no longer needs a verdict. */
+function script(outcomes: (Error | 'ok')[]) {
+  let index = 0
+  return {
+    connect: async () => {
+      const outcome = outcomes[index++]
+      if (outcome instanceof Error) {
+        throw outcome
+      }
+    },
+    shouldContinue: () => index < outcomes.length
+  }
+}
+
 describe('confirmPreservedEndpointLoss', () => {
-  it('is gone only when every attempt finds the endpoint refused or missing', async () => {
-    const connect = vi
-      .fn()
-      .mockRejectedValueOnce(connectError('ECONNREFUSED'))
-      .mockRejectedValueOnce(connectError('ENOENT'))
-      .mockRejectedValueOnce(connectError('ECONNREFUSED'))
+  it('is gone after three refused or missing attempts in a row with the process gone', async () => {
+    const run = script([
+      connectError('ECONNREFUSED'),
+      connectError('ENOENT'),
+      connectError('ECONNREFUSED')
+    ])
     await expect(
-      confirmPreservedEndpointLoss({
-        connect,
-        shouldContinue: () => true,
-        delaysMs: [1, 1, 1],
-        sleep
-      })
+      confirmPreservedEndpointLoss({ ...run, processExited: () => true, delaysMs: [1], sleep })
     ).resolves.toBe('gone')
-    expect(connect).toHaveBeenCalledTimes(3)
   })
 
-  it('never reads a timeout or other failure as death', async () => {
-    const connect = vi
-      .fn()
-      .mockRejectedValueOnce(connectError('ENOENT'))
-      .mockRejectedValueOnce(new DaemonProtocolError('Connection timed out'))
+  it('restarts the count on a timeout or other failure instead of reading it as death', async () => {
+    const run = script([
+      connectError('ENOENT'),
+      connectError('ENOENT'),
+      new DaemonProtocolError('Connection timed out'),
+      connectError('EPERM'),
+      connectError('ENOENT'),
+      connectError('ENOENT')
+    ])
     await expect(
-      confirmPreservedEndpointLoss({
-        connect,
-        shouldContinue: () => true,
-        delaysMs: [1, 1, 1],
-        sleep
-      })
-    ).resolves.toBe('unproven')
-    const eperm = vi.fn().mockRejectedValue(connectError('EPERM'))
+      confirmPreservedEndpointLoss({ ...run, processExited: () => true, delaysMs: [1], sleep })
+    ).resolves.toBe('abandoned')
+  })
+
+  it('keeps checking after an unproven attempt, so a host that dies later is still caught', async () => {
+    const run = script([
+      new DaemonProtocolError('Connection timed out'),
+      connectError('ENOENT'),
+      connectError('ENOENT'),
+      connectError('ENOENT'),
+      connectError('ENOENT')
+    ])
     await expect(
-      confirmPreservedEndpointLoss({
-        connect: eperm,
-        shouldContinue: () => true,
-        delaysMs: [1],
-        sleep
-      })
-    ).resolves.toBe('unproven')
+      confirmPreservedEndpointLoss({ ...run, processExited: () => true, delaysMs: [1], sleep })
+    ).resolves.toBe('gone')
+  })
+
+  it('never declares loss while the daemon process may still be alive', async () => {
+    const run = script(Array.from({ length: 10 }, () => connectError('ECONNREFUSED')))
+    await expect(
+      confirmPreservedEndpointLoss({ ...run, processExited: () => false, delaysMs: [1], sleep })
+    ).resolves.toBe('abandoned')
   })
 
   it('stops when the host answers again', async () => {
-    const connect = vi
-      .fn()
-      .mockRejectedValueOnce(connectError('ECONNREFUSED'))
-      .mockResolvedValueOnce(undefined)
+    const run = script([connectError('ECONNREFUSED'), 'ok', connectError('ECONNREFUSED')])
     await expect(
-      confirmPreservedEndpointLoss({
-        connect,
-        shouldContinue: () => true,
-        delaysMs: [1, 1, 1],
-        sleep
-      })
+      confirmPreservedEndpointLoss({ ...run, processExited: () => true, delaysMs: [1], sleep })
     ).resolves.toBe('reachable')
-    expect(connect).toHaveBeenCalledTimes(2)
-  })
-
-  it('stops without a verdict once the adapter no longer needs one', async () => {
-    const connect = vi.fn().mockRejectedValue(connectError('ECONNREFUSED'))
-    let live = true
-    connect.mockImplementationOnce(async () => {
-      live = false
-      throw connectError('ECONNREFUSED')
-    })
-    await expect(
-      confirmPreservedEndpointLoss({
-        connect,
-        shouldContinue: () => live,
-        delaysMs: [1, 1, 1],
-        sleep
-      })
-    ).resolves.toBe('abandoned')
-    expect(connect).toHaveBeenCalledTimes(1)
   })
 })

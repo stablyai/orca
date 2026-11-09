@@ -3,7 +3,8 @@ import { DaemonPtyDaemonRecovery } from './daemon-pty-daemon-recovery'
 import type { DaemonPtyAdapterOptions } from './daemon-pty-adapter-options'
 import {
   confirmPreservedEndpointLoss,
-  PRESERVED_ENDPOINT_LOSS_PROBE_DELAYS_MS
+  PRESERVED_ENDPOINT_LOSS_PROBE_DELAYS_MS,
+  preservedDaemonProcessExited
 } from './daemon-preserved-endpoint-loss'
 
 /**
@@ -12,6 +13,7 @@ import {
  */
 export abstract class DaemonPtyPreservedHostLoss extends DaemonPtyDaemonRecovery {
   private readonly preservedEndpointLossProbeDelaysMs: readonly number[]
+  private readonly preservedDaemonExited: (pid: number | undefined) => boolean
   private preservedEndpointLossProbe: Promise<void> | null = null
   /** Set once this adapter ended its sessions because its endpoint stayed gone. */
   private preservedEndpointLossDeclared = false
@@ -20,6 +22,7 @@ export abstract class DaemonPtyPreservedHostLoss extends DaemonPtyDaemonRecovery
     super(opts)
     this.preservedEndpointLossProbeDelaysMs =
       opts.preservedEndpointLossProbeDelaysMs ?? PRESERVED_ENDPOINT_LOSS_PROBE_DELAYS_MS
+    this.preservedDaemonExited = opts.preservedDaemonExited ?? preservedDaemonProcessExited
   }
 
   protected recoverAfterEndpointLoss(): void {
@@ -30,22 +33,18 @@ export abstract class DaemonPtyPreservedHostLoss extends DaemonPtyDaemonRecovery
     this.confirmPreservedDaemonLoss()
   }
 
+  // A host proven gone runs no session, so restores (attached or not) route to the current daemon.
   async probePtyLiveness(id: string): Promise<boolean | null> {
-    // Proven endpoint loss lets the pane's restore route to the current daemon.
-    return this.isDeclaredLostSession(id) ? false : await super.probePtyLiveness(id)
+    return this.isProvenGone() ? false : await super.probePtyLiveness(id)
   }
 
   listsSession(id: string): Promise<boolean | null> {
-    return this.isDeclaredLostSession(id) ? Promise.resolve(false) : super.listsSession(id)
+    return this.isProvenGone() ? Promise.resolve(false) : super.listsSession(id)
   }
 
-  /** A session this adapter ended as host loss while its endpoint is still unreachable. */
-  private isDeclaredLostSession(id: string): boolean {
-    return (
-      this.preservedEndpointLossDeclared &&
-      this.hostLossSessionIds.has(id) &&
-      !this.client.isConnected()
-    )
+  /** Proven gone and not reconnected since; a later reconnect restores the daemon's own answers. */
+  private isProvenGone(): boolean {
+    return this.preservedEndpointLossDeclared && !this.client.isConnected()
   }
 
   private confirmPreservedDaemonLoss(): void {
@@ -57,6 +56,7 @@ export abstract class DaemonPtyPreservedHostLoss extends DaemonPtyDaemonRecovery
     const probe = confirmPreservedEndpointLoss({
       connect: () => this.ensureConnected(),
       shouldContinue: stillLost,
+      processExited: () => this.preservedDaemonExited(this.lastAuthenticatedIdentity?.pid),
       delaysMs: this.preservedEndpointLossProbeDelaysMs
     })
       .then((verdict) => {
@@ -80,14 +80,19 @@ export abstract class DaemonPtyPreservedHostLoss extends DaemonPtyDaemonRecovery
       `[daemon] Terminal host v${this.protocolVersion} is gone - ending ${ids.length} session${ids.length === 1 ? '' : 's'} as host loss`
     )
     this.preservedEndpointLossDeclared = true
-    for (const id of ids) {
+    const exits = ids.map((id) => {
       const incarnationId = this.sessionIncarnations.get(id)
-      const hostLoss = { code: -1, incarnationId, hostLost: true as const }
       this.hostLossSessionIds.add(id)
-      this.clearExitedSessionState(id, hostLoss.code, incarnationId, { closeHistory: false })
-      emitPtyListeners(this.exitListeners, (listener) =>
-        listener(createPtyExitPayload(id, hostLoss))
-      )
+      this.clearExitedSessionState(id, -1, incarnationId, { closeHistory: false })
+      return createPtyExitPayload(id, { code: -1, incarnationId, hostLost: true })
+    })
+    // State is settled for every session first, so one throwing listener cannot strand the rest.
+    for (const exit of exits) {
+      try {
+        emitPtyListeners(this.exitListeners, (listener) => listener(exit))
+      } catch (error) {
+        console.warn('[daemon] Host-loss exit listener failed:', exit.id, error)
+      }
     }
   }
 }

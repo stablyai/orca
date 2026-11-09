@@ -17,6 +17,8 @@ export type DaemonPtyAdapterOptions = {
   wslBridgeBootIdentity?: WslBridgeBootIdentity
   /** Test seam; delays before each reconnect attempt to a dead daemon that cannot respawn. */
   preservedEndpointLossProbeDelaysMs?: readonly number[]
+  /** Test seam; whether a preserved daemon's process is proven gone, given its last pid. */
+  preservedDaemonExited?: (pid: number | undefined) => boolean
 }
 
 export type DaemonRespawnReason =

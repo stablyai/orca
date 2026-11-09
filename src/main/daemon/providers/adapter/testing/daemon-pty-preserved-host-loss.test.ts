@@ -98,7 +98,9 @@ describe('a preserved older-version terminal host that dies', () => {
       tokenPath: legacyTokenPath,
       protocolVersion: LEGACY_PROTOCOL,
       runtimeDir: directory,
-      preservedEndpointLossProbeDelaysMs: [5, 5, 5]
+      preservedEndpointLossProbeDelaysMs: [5],
+      // The fixture host shares this test's pid, so its exit is stubbed as proven.
+      preservedDaemonExited: () => true
     })
     const current = new DaemonPtyAdapter({
       socketPath: currentSocketPath,
