@@ -1,6 +1,6 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { createUntitledMarkdownFileWithTemplateSelection } from './create-untitled-markdown'
-import { getConnectionId } from './connection-context'
+import { getConnectionId } from './workspace/ownership/connection-context'
 import { detectLanguage } from './language-detect'
 import type { AppState } from '@/store/types'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'

@@ -19,7 +19,7 @@ import { agentTurnEndedOnPurpose } from '../../../../shared/agent-status/lifecyc
 import {
   createWorktreeTabBucketProjection,
   type WorktreeTabBucketProjection
-} from '@/lib/worktree-tab-bucket-projection'
+} from '@/lib/workspace/tabs/worktree-tab-bucket-projection'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

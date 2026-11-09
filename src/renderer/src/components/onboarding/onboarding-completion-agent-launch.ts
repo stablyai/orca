@@ -7,7 +7,7 @@ import { launchAgentInNewTabWithOutcome } from '@/lib/agent-session/launch/new-t
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { captureAgentTabLaunchContext } from '@/components/agent-tab-launch-context'
 import { activateAndRevealWorkspaceWithOutcome } from '@/lib/workspace/activation/worktree-activation'
-import { reportAgentWorkspaceActivation } from '@/lib/worktree-activation-outcome'
+import { reportAgentWorkspaceActivation } from '@/lib/workspace/activation/worktree-activation-outcome'
 
 export async function launchOnboardingCompletionAgent(
   worktreeId: string,

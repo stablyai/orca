@@ -17,7 +17,7 @@ import {
   releaseDocPreviewGrant,
   type DocPreviewGrantHandle
 } from '@/lib/doc-preview-grants'
-import { selectWorktreeHostDisplayLabel } from '@/lib/execution-host-display-label'
+import { selectWorktreeHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'

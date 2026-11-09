@@ -1,7 +1,7 @@
 import {
   getConnectionIdForWorktreeCopy,
   getConnectionIdFromState
-} from '@/lib/connection-owner-resolution'
+} from '@/lib/workspace/ownership/connection-owner-resolution'
 import { normalizeExecutionHostId } from '../../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { useAppStore } from '@/store/index'

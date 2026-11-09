@@ -31,7 +31,7 @@ import { getPtyExecutionHost } from '../../../../../shared/terminal/pty/lifecycl
 import {
   getOpenFileExecutionHostId,
   hasOpenFileExecutionHostEvidence
-} from '@/lib/unified-tab-host-ownership'
+} from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import { lastViewUnsavedFiles } from '@/components/editor/save/flush/removal-unsaved-editor-files'
 import {
   getExecutionHostLabel,

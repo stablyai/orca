@@ -21,7 +21,7 @@ import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agen
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { getNewWorkspaceProjectGroupHostId } from '@/lib/new-workspace-project-options'
 import { useAppStore } from '@/store/index'
-import { resolveExecutionHostAgentStartupShell } from '@/lib/execution-host-facts'
+import { resolveExecutionHostAgentStartupShell } from '@/runtime/hosts/platform/execution-host-facts'
 import {
   buildFolderWorkspaceLinkedStartupPlan,
   getFolderWorkspaceAgentLaunchFact,

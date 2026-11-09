@@ -3,7 +3,7 @@ import { beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import type * as importCreation from '@/runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import type * as WorktreeRuntimeOwner from '@/lib/workspace/ownership/worktree-runtime-owner'
-import type * as WorktreeOperationRoute from '@/lib/worktree-operation-route'
+import type * as WorktreeOperationRoute from '@/lib/workspace/ownership/worktree-operation-route'
 import { createTestStore } from '@/store/testing/app-store-test-fixture'
 import { createTabsSliceMockApi } from '@/store/slices/tabs/tabs-slice-test-harness'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
@@ -32,7 +32,7 @@ vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', async (original) => 
   runtimeEnvironmentIdOrLocalUnlessTwin: (_state: unknown, worktreeId: string) =>
     runtimeOwners.get(worktreeId) ?? null
 }))
-vi.mock('@/lib/worktree-operation-route', async (original) => ({
+vi.mock('@/lib/workspace/ownership/worktree-operation-route', async (original) => ({
   ...(await original<typeof WorktreeOperationRoute>()),
   resolveWorktreeOperationRouteResult: (_state: unknown, worktreeId: string) => ({
     kind: 'resolved',

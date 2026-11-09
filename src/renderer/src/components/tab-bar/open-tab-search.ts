@@ -21,7 +21,7 @@ import {
   type SearchableSimulatorTab,
   type SimulatorPaletteSearchResult
 } from '@/lib/simulator-palette-search'
-import { getUnifiedTabPaletteExecutionHostId } from '@/lib/unified-tab-host-ownership'
+import { getUnifiedTabPaletteExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
 import type { TerminalAgent } from '../../../../shared/agent-status/identity/terminal-agent'
 import '@/lib/workspace/search/tabs/workspace-tab-search-types'
 import { searchWorkspaceTabs } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
