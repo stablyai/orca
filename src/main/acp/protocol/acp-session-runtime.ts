@@ -43,7 +43,7 @@ const withMeta = (meta: Meta): { _meta?: Meta } => (meta ? { _meta: meta } : {})
 
 /** Stream-level protocol seam; production agents use createAcpAgentConnection. */
 export class AcpSessionRuntime {
-  private readonly peer: AcpJsonRpcPeer
+  protected readonly peer: AcpJsonRpcPeer
   private readonly listeners = new Set<(event: AcpSessionEvent) => void>()
   private initialized?: Promise<InitializeResponse>
   private starting?: Promise<AcpSessionStarted>
@@ -144,10 +144,6 @@ export class AcpSessionRuntime {
 
   /** Requires advertised session deletion support. */
   deleteSession = (sessionId: string) => this.call('session/delete', { sessionId }, z.unknown())
-
-  /** Any session the agent reports on this connection, including a subagent's child session. */
-  closeSession = (sessionId: string, timeoutMs = 10_000): Promise<unknown> =>
-    this.peer.request('session/close', { sessionId }, { timeoutMs })
 
   start(
     options: AcpSessionStartOptions,
