@@ -219,6 +219,10 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       input,
       this.deps.requestTimeoutMs
     )
+  // Why: the same setModel control the next dispatch uses, so an idle model pick reaches the live child now instead of snapping back on the next report.
+  canSetOptionWhileIdle: NonNullable<StructuredAgentSessionAdapter['canSetOptionWhileIdle']> = (
+    input
+  ) => claudeOptions.claudeCanSetOptionWhileIdle(this.sessions.get(input.sessionId), input)
   open: NonNullable<StructuredAgentSessionAdapter['open']> = (request) =>
     openClaudeStart({
       request,

@@ -111,6 +111,19 @@ export function setClaudeStructuredSessionOption(
   return setClaudeStructuredOption(session, input, timeoutMs)
 }
 
+/** Only the model control is metadata a ready child takes without a turn; effort and Fast need flag settings. */
+export function claudeCanSetOptionWhileIdle(
+  session: Pick<ClaudeSession, 'fence' | 'connection'> | undefined,
+  input: { key: string; fence: number }
+): boolean {
+  return (
+    input.key === 'model' &&
+    session !== undefined &&
+    session.fence === input.fence &&
+    !session.connection.closed
+  )
+}
+
 export async function setClaudeStructuredOption(
   session: ClaudeSession,
   input: { key: string; value: string },

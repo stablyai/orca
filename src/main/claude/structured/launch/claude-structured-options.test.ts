@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { setClaudeStructuredOption } from './claude-structured-options'
+import { claudeCanSetOptionWhileIdle, setClaudeStructuredOption } from './claude-structured-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import { ClaudeBackgroundTaskTracker } from '../../claude-background-task-tracker'
 import { ClaudeChildWorkDecoder } from '../../claude-child-work-decoder'
@@ -79,5 +79,21 @@ describe('Claude structured option mutation fencing', () => {
     releaseFirst()
     await expect(first).resolves.toEqual({ model: 'new' })
     expect(session.options).toEqual(new Map([['model', 'new']]))
+  })
+})
+
+describe('Claude idle option application', () => {
+  it('accepts the model control only on the live child fence', () => {
+    const session = sessionFor(vi.fn())
+    expect(claudeCanSetOptionWhileIdle(session, { key: 'model', fence: 1 })).toBe(true)
+    expect(claudeCanSetOptionWhileIdle(session, { key: 'model', fence: 2 })).toBe(false)
+    expect(claudeCanSetOptionWhileIdle(session, { key: 'effort', fence: 1 })).toBe(false)
+    expect(claudeCanSetOptionWhileIdle(undefined, { key: 'model', fence: 1 })).toBe(false)
+  })
+
+  it('refuses once the child connection closed', () => {
+    const session = sessionFor(vi.fn())
+    const closed = { ...session, connection: { ...session.connection, closed: true } }
+    expect(claudeCanSetOptionWhileIdle(closed, { key: 'model', fence: 1 })).toBe(false)
   })
 })
