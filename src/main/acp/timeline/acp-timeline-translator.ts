@@ -223,6 +223,9 @@ export class AcpTimelineTranslator {
     if (extension?.subagents) {
       events.push(...this.subagents.translate(extension.subagents, join, at))
     }
+    if (extension?.subagentRoster) {
+      events.push(...this.subagents.translateRoster(extension.subagentRoster, join, at))
+    }
     if (extension?.usage) {
       events.push(...this.context.update(extension.usage, join))
     }

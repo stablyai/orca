@@ -68,7 +68,9 @@ export function acpSessionUpdate(
       const events = tools.translate(update, dialect, join.join)
       const tool = events[0]
       const body = tool && 'body' in tool && tool.body?.kind === 'tool-call' ? tool.body : null
-      const subagentUpdates = body ? (dialect.toolSubagents?.(update, body) ?? []) : []
+      // Task progress is a fallback; an accepted roster snapshot supersedes it.
+      const subagentUpdates =
+        body && !subagents.hasRoster() ? (dialect.toolSubagents?.(update, body) ?? []) : []
       // Register subagents before excluding them from background tasks.
       const subagentEvents = subagents.translate(subagentUpdates, join.join, at)
       const tasks = (body ? (dialect.toolBackgroundTasks?.(update, body) ?? []) : []).filter(

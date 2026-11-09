@@ -148,7 +148,7 @@ function liveStatusOverride(
   if (terminatesCurrentTurn && transcriptLifecycle?.state === 'interrupted') {
     return undefined
   }
-  // Claude lead completion leaves current-epoch children working; callers must exclude older rosters.
+  // Idle lead + live child = running (source-only; not deployed). Claude lead completion leaves current-epoch children working; callers must exclude older rosters.
   if (hookHasWorkingSubagents) {
     return 'working'
   }

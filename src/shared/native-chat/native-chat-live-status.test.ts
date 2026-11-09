@@ -1,6 +1,11 @@
+import { readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from './native-chat-types'
-import { mergeNativeChatLiveSession, nativeChatHookAwaitsInput } from './native-chat-live-status'
+import {
+  mergeNativeChatLiveSession,
+  nativeChatHookAwaitsInput,
+  nativeChatHookHasWorkingSubagents
+} from './native-chat-live-status'
 import { shouldShowNativeChatWorking } from './native-chat-working-suppression'
 
 function assistant(id: string, text: string): NativeChatMessage {
@@ -136,6 +141,44 @@ describe('mergeNativeChatLiveSession', () => {
       hookHasWorkingSubagents: true
     })
     expect(session.status).toBe('working')
+  })
+
+  it('keeps a completed lead working while the producer roster has a live child, then settles', async () => {
+    const text = await readFile(
+      new URL('../../main/acp/fixtures/omp-subagents-roster.jsonl', import.meta.url),
+      'utf8'
+    )
+    const frames: { children: { id: string; status: string; updatedAt: number }[] }[] = text
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    const subagentsOf = (children: (typeof frames)[number]['children']) =>
+      children
+        .filter((child) => child.status === 'running')
+        .map((child) => ({ id: child.id, state: 'working' as const, startedAt: child.updatedAt }))
+    const base = {
+      messages: [assistant('a-1', 'lead done')],
+      sessionId: 'session-a',
+      agent: 'omp' as const,
+      hookState: 'working' as const,
+      stateStartedAt: 0,
+      transcriptLifecycle: { state: 'completed' as const, turnId: 'turn-1', timestamp: 2 }
+    }
+    const liveRoster = { stateStartedAt: 0, subagents: subagentsOf(frames[0].children) }
+    expect(
+      mergeNativeChatLiveSession({
+        ...base,
+        hookHasWorkingSubagents: nativeChatHookHasWorkingSubagents(liveRoster)
+      }).status
+    ).toBe('working')
+    const settledRoster = { stateStartedAt: 0, subagents: subagentsOf(frames[3].children) }
+    expect(
+      mergeNativeChatLiveSession({
+        ...base,
+        hookState: 'done',
+        hookHasWorkingSubagents: nativeChatHookHasWorkingSubagents(settledRoster)
+      }).status
+    ).toBe('ready')
   })
 
   it('settles on an interruption even while the hook reports a live background child', () => {

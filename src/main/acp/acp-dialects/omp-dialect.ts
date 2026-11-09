@@ -1,7 +1,15 @@
 import { z } from 'zod'
+import type { AgentJournalToolCallItem } from '../../../shared/agent-session/journal/agent-session-journal-types'
+import type { NativeChatSubagentState } from '../../../shared/native-chat/native-chat-types'
 import type { ToolCallContent, ToolCallUpdate } from '../generated/acp-protocol.generated'
 import type { AcpAgentError } from '../transport/acp-errors'
-import type { AcpCompactionReply, AcpDialect, AcpModelCommandReply } from './acp-dialect'
+import type {
+  AcpCompactionReply,
+  AcpDialect,
+  AcpModelCommandReply,
+  AcpDialectNotification,
+  AcpSubagentUpdate
+} from './acp-dialect'
 
 // Read raw result text instead of the repeated command echo in content.
 // Only timed foreground completion implies exit zero; service/background launches prove no exit.
@@ -24,6 +32,84 @@ const toolResultSchema = z.looseObject({
     .optional()
 })
 const asyncInputSchema = z.looseObject({ async: z.literal(true) })
+// Fallback only: an accepted `_omp/subagents` snapshot supersedes this. Terminal states only; `running` never clears without a later update.
+const taskRosterSchema = z.looseObject({
+  details: z.looseObject({
+    progress: z
+      .array(
+        z.looseObject({
+          id: z.string().trim().min(1),
+          status: z.string(),
+          description: z.string().nullish()
+        })
+      )
+      .optional()
+  })
+})
+// Own-key lookups: status is wire input, so inherited object keys must not match.
+const TASK_TERMINAL_STATES: Record<string, NativeChatSubagentState> = {
+  completed: 'completed',
+  failed: 'failed',
+  aborted: 'stopped'
+}
+
+function taskToolSubagents(
+  update: ToolCallUpdate,
+  tool: AgentJournalToolCallItem
+): AcpSubagentUpdate[] {
+  if (tool.name !== 'task') {
+    return []
+  }
+  const roster = taskRosterSchema.safeParse(update.rawOutput)
+  return (roster.success ? (roster.data.details.progress ?? []) : []).flatMap((child) => {
+    const state = Object.hasOwn(TASK_TERMINAL_STATES, child.status)
+      ? TASK_TERMINAL_STATES[child.status]
+      : undefined
+    const label = child.description?.trim()
+    return state ? [{ id: child.id, state, ...(label ? { label } : {}) }] : []
+  })
+}
+
+// Negotiated: Orca advertises `clientCapabilities._meta["omp/subagents"]=true`; omp emits `_omp/subagents` only when both sides agree. Each notification is a full child snapshot (not a delta) with a per-session monotonic `seq`; a stale or duplicate seq is ignored, and a child omitted from a newer snapshot settles once as stopped. A snapshot supersedes task-tool progress for the session. Source-only: not deployed.
+const ROSTER_METHOD = '_omp/subagents'
+const rosterSchema = z.looseObject({
+  sessionId: z.string(),
+  seq: z.number().int().nonnegative(),
+  children: z.array(z.unknown())
+})
+const rosterChildSchema = z.looseObject({
+  id: z.string().trim().min(1),
+  status: z.string(),
+  description: z.string().nullish()
+})
+// Snapshots replace the roster; pending and running are live.
+const ROSTER_STATES: Record<string, NativeChatSubagentState> = {
+  pending: 'working',
+  running: 'working',
+  completed: 'completed',
+  failed: 'failed',
+  aborted: 'stopped'
+}
+// A malformed envelope ignores the snapshot; a malformed child drops only itself.
+function rosterNotification(method: string, params: unknown): AcpDialectNotification | undefined {
+  if (method !== ROSTER_METHOD) {
+    return undefined
+  }
+  const roster = rosterSchema.safeParse(params)
+  if (!roster.success) {
+    return { disposition: 'ignore' }
+  }
+  const children = roster.data.children.flatMap((entry): AcpSubagentUpdate[] => {
+    const child = rosterChildSchema.safeParse(entry)
+    const state =
+      child.success && Object.hasOwn(ROSTER_STATES, child.data.status)
+        ? ROSTER_STATES[child.data.status]
+        : undefined
+    const label = child.success ? child.data.description?.trim() : undefined
+    return child.success && state ? [{ id: child.data.id, state, ...(label ? { label } : {}) }] : []
+  })
+  return { disposition: 'map', subagentRoster: { seq: roster.data.seq, children } }
+}
 
 function contentText(block: ToolCallContent | undefined): string | undefined {
   return block?.type === 'content' && block.content.type === 'text' ? block.content.text : undefined
@@ -133,7 +219,8 @@ export const OMP_ACP_DIALECT: AcpDialect = {
   // OMP resolves any thinking level against the selected model (model-controls.ts setThinkingLevel).
   clampsUnlistedEffort: true,
   // OMP offers its `ask` tool and extension dialogs only to clients that answer forms.
-  clientCapabilities: { elicitation: { form: {} } },
+  // Advertises the `_omp/subagents` roster; OMP emits it only when this is present.
+  clientCapabilities: { elicitation: { form: {} }, _meta: { 'omp/subagents': true } },
   normalizeToolUpdate,
   compactionReply,
   modelCommand: {
@@ -159,5 +246,7 @@ export const OMP_ACP_DIALECT: AcpDialect = {
     return (
       details === CANCEL_CLEANUP_TIMED_OUT || details === `Unsupported ACP session: ${sessionId}`
     )
-  }
+  },
+  toolSubagents: taskToolSubagents,
+  notification: rosterNotification
 }

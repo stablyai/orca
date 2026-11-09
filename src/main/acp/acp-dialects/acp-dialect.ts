@@ -84,6 +84,8 @@ export type AcpDialectNotification =
       backgroundTasks?: AcpBackgroundTaskUpdate[]
       subagents?: AcpSubagentUpdate[]
       child?: AcpChildSessionReport
+      /** Full roster snapshot (`_omp/subagents`); supersedes task-tool progress once accepted. */
+      subagentRoster?: { seq: number; children: AcpSubagentUpdate[] }
     }
 
 /** Hook denial completes the turn rather than recording a user Stop. */
