@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MessageRow, MessageType } from '../runtime/orchestration/db/orchestration-records'
-import { MessageWake, type MessageWaitResult } from '../runtime/runtime-message-waiters'
+import {
+  MessageWake,
+  type MessageWaitResult
+} from '../runtime/orchestration/mailbox/runtime-message-waiters'
 import {
   VoiceControlSessionBackendImpl,
   type VoiceControlSessionBackendDeps
