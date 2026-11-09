@@ -43,9 +43,7 @@ function findTarget(
     return null
   }
   const state = useAppStore.getState()
-  const others = Object.keys(state.unifiedTabsByWorktree).filter(
-    (id) => id !== preferredWorktreeId
-  )
+  const others = Object.keys(state.unifiedTabsByWorktree).filter((id) => id !== preferredWorktreeId)
   for (const worktreeId of preferredWorktreeId ? [preferredWorktreeId, ...others] : others) {
     const target = findCloudChatTarget(
       ref,

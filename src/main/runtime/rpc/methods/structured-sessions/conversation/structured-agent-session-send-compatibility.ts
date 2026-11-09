@@ -12,7 +12,10 @@ import {
 } from '../creation/structured-agent-session-gate'
 import { readsQueuedImageCards } from '../attachments/structured-agent-session-queued-image-capability'
 import { recordMobileChatSend } from '../../../../../telemetry/mobile-client-telemetry'
-import { agentSessionSenderKey, recordDrivingDevice } from '../../../../sender/driving-device-registry'
+import {
+  agentSessionSenderKey,
+  recordDrivingDevice
+} from '../../../../sender/driving-device-registry'
 
 /** Older clients wait past acceptance until handoff/rejection because they cannot show later failure.
  * Command-queued replies avoid request timeout; clients predating pending replies still wait for provider response. */

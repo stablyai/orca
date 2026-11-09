@@ -35,9 +35,14 @@ function turnSender(ctx: RpcContext): TurnSenderResult {
   }
   if (ctx.orchestrationCaller?.sessionId) {
     const sessionId = ctx.orchestrationCaller.sessionId
-    return { caller: { kind: 'session', sessionId }, sender: drivingDeviceFor(agentSessionSenderKey(sessionId)) }
+    return {
+      caller: { kind: 'session', sessionId },
+      sender: drivingDeviceFor(agentSessionSenderKey(sessionId))
+    }
   }
-  const authority = ctx.runtime.verifyOrchestrationCompatibilityCaller(ctx.orchestrationCompatibilityEvidence)
+  const authority = ctx.runtime.verifyOrchestrationCompatibilityCaller(
+    ctx.orchestrationCompatibilityEvidence
+  )
   const handle = authority?.terminalHandle ?? plainTerminalHandle(ctx)
   if (!handle) {
     return { caller: null, sender: null }

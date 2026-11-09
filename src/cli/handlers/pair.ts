@@ -84,7 +84,9 @@ export const PAIR_HANDLERS: Record<string, CommandHandler> = {
   sender: async ({ client, json }) => {
     const response = await client.call<TurnSenderResult>(TURN_SENDER_METHOD, undefined)
     printResult(response, json, (result) =>
-      result.sender ? `Last message from device ${result.sender.deviceId}.` : 'No paired device has messaged this agent.'
+      result.sender
+        ? `Last message from device ${result.sender.deviceId}.`
+        : 'No paired device has messaged this agent.'
     )
   }
 }

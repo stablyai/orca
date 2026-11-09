@@ -111,11 +111,15 @@ export function CloudWorkspaceRow({
         'Cost {{cost}}. Last active {{lastActive}}. {{visibility}}. {{presence}}.',
         { cost, lastActive, visibility, presence }
       )
-    : t('auto.components.cloudWorkspaces.rowDescription', 'Cost {{cost}}. Last active {{lastActive}}. {{visibility}}.', {
-        cost,
-        lastActive,
-        visibility
-      })
+    : t(
+        'auto.components.cloudWorkspaces.rowDescription',
+        'Cost {{cost}}. Last active {{lastActive}}. {{visibility}}.',
+        {
+          cost,
+          lastActive,
+          visibility
+        }
+      )
 
   return (
     <li
@@ -212,13 +216,17 @@ export function CloudWorkspaceRow({
         <TooltipContent side="top">
           <div className="font-medium">{t('auto.components.cloudWorkspaces.cost', 'Cost')}</div>
           <div>
-            {t('auto.components.cloudWorkspaces.sandboxHoursCost', '{{hours}} sandbox hours × {{rate}}/hour = {{cost}}', {
-              count: sandboxHours(w.cost.computeMs),
-              hours: formatSandboxHours(w.cost.computeMs, intlLocale),
-              rate: formatUsdMicros(w.cost.rateUsdMicrosPerHour, intlLocale),
-              cost: formatUsdMicros(w.cost.computeUsdMicros, intlLocale),
-              defaultValue_one: '{{hours}} sandbox hour × {{rate}}/hour = {{cost}}'
-            })}
+            {t(
+              'auto.components.cloudWorkspaces.sandboxHoursCost',
+              '{{hours}} sandbox hours × {{rate}}/hour = {{cost}}',
+              {
+                count: sandboxHours(w.cost.computeMs),
+                hours: formatSandboxHours(w.cost.computeMs, intlLocale),
+                rate: formatUsdMicros(w.cost.rateUsdMicrosPerHour, intlLocale),
+                cost: formatUsdMicros(w.cost.computeUsdMicros, intlLocale),
+                defaultValue_one: '{{hours}} sandbox hour × {{rate}}/hour = {{cost}}'
+              }
+            )}
           </div>
           {w.cost.tokenUsdMicros !== null && (
             <div>

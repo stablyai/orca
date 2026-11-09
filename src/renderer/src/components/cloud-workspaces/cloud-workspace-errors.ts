@@ -49,5 +49,8 @@ export function describeError(error: string, reason?: string, t: Translate = tra
       'Your Orca Cloud session expired. Sign in again.'
     )
   }
-  return t('auto.components.cloudWorkspaces.errorUnknown', 'Something went wrong. Nothing was changed. Try again.')
+  return t(
+    'auto.components.cloudWorkspaces.errorUnknown',
+    'Something went wrong. Nothing was changed. Try again.'
+  )
 }

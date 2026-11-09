@@ -21,7 +21,11 @@ export function terminalSenderKey(handle: string): string {
  * Records a person's input. Only paired devices are people with a device identity; the local CLI
  * (agents, scripts) and local windows never overwrite who drove the agent.
  */
-export function recordDrivingDevice(key: string, caller: RpcCallerIdentity | undefined, now: number = Date.now()): void {
+export function recordDrivingDevice(
+  key: string,
+  caller: RpcCallerIdentity | undefined,
+  now: number = Date.now()
+): void {
   if (caller?.kind !== 'paired-device' || !caller.deviceId) {
     return
   }

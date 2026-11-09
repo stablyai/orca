@@ -2,7 +2,13 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import { MemberAvatar, PresenceStack } from './CloudMemberAvatars'
 import { DIRECTORY, presence, SELF_ID } from './cloud-workspaces.test-fixture'
 
-function Line({ label, children }: { label: string; children: React.ReactNode }): React.JSX.Element {
+function Line({
+  label,
+  children
+}: {
+  label: string
+  children: React.ReactNode
+}): React.JSX.Element {
   return (
     <div className="flex items-center gap-4">
       <span className="w-40 text-xs text-muted-foreground">{label}</span>
@@ -67,7 +73,8 @@ export const followFocus = defineFixture({
       />
     </div>
   ),
-  interact: (frame) => frame.querySelector<HTMLButtonElement>('button')?.focus({ focusVisible: true })
+  interact: (frame) =>
+    frame.querySelector<HTMLButtonElement>('button')?.focus({ focusVisible: true })
 })
 
 /** Per-member hues stay stable; sizes used in rows and menus. */

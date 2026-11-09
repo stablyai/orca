@@ -57,7 +57,11 @@ describe('cloud chat ids', () => {
     }
     expect(cloudChatIdForTab(tab({}), layout, handleOf)).toBe('t:term-b')
     expect(
-      cloudChatIdForTab(tab({ contentType: 'agent-session', entityId: 'ses_1' }), undefined, handleOf)
+      cloudChatIdForTab(
+        tab({ contentType: 'agent-session', entityId: 'ses_1' }),
+        undefined,
+        handleOf
+      )
     ).toBe('s:ses_1')
     expect(
       cloudChatIdForTab(tab({}), { activeLeafId: 'l', ptyIdsByLeafId: { l: 'local-1' } }, handleOf)
@@ -70,7 +74,10 @@ describe('cloud chat ids', () => {
     const terminal = tab({ id: 'tab-t', entityId: 'tab-t' })
     const session = tab({ id: 'tab-s', entityId: 'ses_7', contentType: 'agent-session' })
     const layouts: Record<string, CloudChatTerminalLayout> = {
-      'tab-t': { activeLeafId: 'leaf-a', ptyIdsByLeafId: { 'leaf-a': 'remote:x', 'leaf-b': 'remote:y' } }
+      'tab-t': {
+        activeLeafId: 'leaf-a',
+        ptyIdsByLeafId: { 'leaf-a': 'remote:x', 'leaf-b': 'remote:y' }
+      }
     }
     const layoutOf = (t: Tab) => layouts[t.entityId]
     expect(

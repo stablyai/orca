@@ -209,7 +209,10 @@ async function openOnce(workspace: CloudWorkspace): Promise<OpenOutcome> {
     console.warn('[cloud-workspaces] open failed', error)
     return {
       ok: false,
-      message: translate('auto.components.cloudWorkspaces.openFailed', "Couldn't open the workspace. Your files are safe. Try again.")
+      message: translate(
+        'auto.components.cloudWorkspaces.openFailed',
+        "Couldn't open the workspace. Your files are safe. Try again."
+      )
     }
   }
 }

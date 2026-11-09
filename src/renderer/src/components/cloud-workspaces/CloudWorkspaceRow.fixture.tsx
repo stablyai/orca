@@ -66,17 +66,20 @@ async function waitFor<T>(find: () => T | null): Promise<T | null> {
 
 function openMenu(frame: HTMLElement): HTMLElement | null {
   const trigger = frame.querySelector<HTMLElement>('[data-slot="dropdown-menu-trigger"]')
-  trigger?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' }))
+  trigger?.dispatchEvent(
+    new PointerEvent('pointerdown', { bubbles: true, button: 0, pointerType: 'mouse' })
+  )
   return trigger
 }
 
 /** Opens a submenu by keyboard, the way Radix opens it for a focused sub-trigger. */
 async function openSubmenu(frame: HTMLElement, label: string): Promise<void> {
   openMenu(frame)
-  const subTrigger = await waitFor(() =>
-    [...document.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-sub-trigger"]')].find(
-      (el) => el.textContent?.includes(label)
-    ) ?? null
+  const subTrigger = await waitFor(
+    () =>
+      [...document.querySelectorAll<HTMLElement>('[data-slot="dropdown-menu-sub-trigger"]')].find(
+        (el) => el.textContent?.includes(label)
+      ) ?? null
   )
   subTrigger?.focus()
   subTrigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))

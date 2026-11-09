@@ -53,8 +53,7 @@ export const loading = defineFixture({
 export const error = defineFixture({
   width: WIDTH,
   store: { orcaProfileAuthStatus: AUTH_STATUS },
-  setup: () =>
-    stubCloudWorkspacesApi(() => Promise.resolve({ ok: false, error: 'unavailable' })),
+  setup: () => stubCloudWorkspacesApi(() => Promise.resolve({ ok: false, error: 'unavailable' })),
   render: () => <CloudWorkspacesHome />,
   interact: () => waitFor(() => document.querySelector('[data-slot="inline-error"]') !== null)
 })

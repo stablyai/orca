@@ -34,7 +34,10 @@ function LinkMessages(): React.JSX.Element {
       />
       <InlineError title={describeError('forbidden', undefined, t)} />
       <InlineError
-        title={t('auto.components.cloudWorkspaces.copyFailed', "Couldn't copy the link. Try again.")}
+        title={t(
+          'auto.components.cloudWorkspaces.copyFailed',
+          "Couldn't copy the link. Try again."
+        )}
       />
     </div>
   )

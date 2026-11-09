@@ -14,9 +14,14 @@ const handler = ORCHESTRATION_TURN_SENDER_METHODS[0]!.handler
 function ctx(partial: Record<string, unknown>): Ctx {
   const runtime = {
     getOrchestrationDispatchAuthority: (handle: string) =>
-      handle === 't-plain' ? { paneKey: 'tab:leaf', launchTokenHash: null } : handle === 't-agent' ? { paneKey: 'tab:a', launchTokenHash: 'h' } : null,
-    verifyOrchestrationCompatibilityCaller: (evidence: { terminalHandle?: string; launchToken?: string } | undefined) =>
-      evidence?.launchToken === 'right' ? { terminalHandle: evidence.terminalHandle } : null
+      handle === 't-plain'
+        ? { paneKey: 'tab:leaf', launchTokenHash: null }
+        : handle === 't-agent'
+          ? { paneKey: 'tab:a', launchTokenHash: 'h' }
+          : null,
+    verifyOrchestrationCompatibilityCaller: (
+      evidence: { terminalHandle?: string; launchToken?: string } | undefined
+    ) => (evidence?.launchToken === 'right' ? { terminalHandle: evidence.terminalHandle } : null)
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the handler reads only these fields.
   return { runtime, ...partial } as unknown as Ctx
@@ -35,31 +40,73 @@ describe('driving device registry', () => {
   })
 
   it('answers an agent only about itself, identified by orcad evidence, never a parameter', async () => {
-    recordDrivingDevice(terminalSenderKey('t-alice'), { kind: 'paired-device', deviceId: 'dev-alice' }, 1)
-    recordDrivingDevice(terminalSenderKey('t-bob'), { kind: 'paired-device', deviceId: 'dev-bob' }, 2)
-    recordDrivingDevice(agentSessionSenderKey('s1'), { kind: 'paired-device', deviceId: 'dev-carol' }, 3)
+    recordDrivingDevice(
+      terminalSenderKey('t-alice'),
+      { kind: 'paired-device', deviceId: 'dev-alice' },
+      1
+    )
+    recordDrivingDevice(
+      terminalSenderKey('t-bob'),
+      { kind: 'paired-device', deviceId: 'dev-bob' },
+      2
+    )
+    recordDrivingDevice(
+      agentSessionSenderKey('s1'),
+      { kind: 'paired-device', deviceId: 'dev-carol' },
+      3
+    )
     const asPlain = (terminalHandle: string, paneKey: string) =>
-      handler(undefined, ctx({ caller: { kind: 'local-cli' }, orchestrationCompatibilityEvidence: { terminalHandle, paneKey } }))
+      handler(
+        undefined,
+        ctx({
+          caller: { kind: 'local-cli' },
+          orchestrationCompatibilityEvidence: { terminalHandle, paneKey }
+        })
+      )
     const asTerminal = (terminalHandle: string, launchToken: string) =>
-      handler(undefined, ctx({ caller: { kind: 'local-cli' }, orchestrationCompatibilityEvidence: { terminalHandle, launchToken } }))
+      handler(
+        undefined,
+        ctx({
+          caller: { kind: 'local-cli' },
+          orchestrationCompatibilityEvidence: { terminalHandle, launchToken }
+        })
+      )
     expect(await asTerminal('t-bob', 'right')).toEqual({
       caller: { kind: 'terminal', handle: 't-bob' },
       sender: { deviceId: 'dev-bob', at: 2 }
     })
     // A forged launch token proves nothing.
     expect(await asTerminal('t-alice', 'forged')).toEqual({ caller: null, sender: null })
-    expect(await handler(undefined, ctx({ caller: { kind: 'local-cli' }, orchestrationCaller: { sessionId: 's1' } }))).toEqual({
+    expect(
+      await handler(
+        undefined,
+        ctx({ caller: { kind: 'local-cli' }, orchestrationCaller: { sessionId: 's1' } })
+      )
+    ).toEqual({
       caller: { kind: 'session', sessionId: 's1' },
       sender: { deviceId: 'dev-carol', at: 3 }
     })
     // A plain terminal (no launch token) is matched by handle + pane key; an agent terminal must prove its token.
-    recordDrivingDevice(terminalSenderKey('t-plain'), { kind: 'paired-device', deviceId: 'dev-dan' }, 4)
-    expect(await asPlain('t-plain', 'tab:leaf')).toEqual({ caller: { kind: 'terminal', handle: 't-plain' }, sender: { deviceId: 'dev-dan', at: 4 } })
+    recordDrivingDevice(
+      terminalSenderKey('t-plain'),
+      { kind: 'paired-device', deviceId: 'dev-dan' },
+      4
+    )
+    expect(await asPlain('t-plain', 'tab:leaf')).toEqual({
+      caller: { kind: 'terminal', handle: 't-plain' },
+      sender: { deviceId: 'dev-dan', at: 4 }
+    })
     expect(await asPlain('t-plain', 'tab:other')).toEqual({ caller: null, sender: null })
     expect(await asPlain('t-agent', 'tab:a')).toEqual({ caller: null, sender: null })
     // Paired clients are people, not agents: they get no answer.
     expect(
-      await handler(undefined, ctx({ caller: { kind: 'paired-device', deviceId: 'dev-bob' }, orchestrationCompatibilityEvidence: { terminalHandle: 't-bob', launchToken: 'right' } }))
+      await handler(
+        undefined,
+        ctx({
+          caller: { kind: 'paired-device', deviceId: 'dev-bob' },
+          orchestrationCompatibilityEvidence: { terminalHandle: 't-bob', launchToken: 'right' }
+        })
+      )
     ).toEqual({ caller: null, sender: null })
   })
 })
