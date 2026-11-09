@@ -67,6 +67,7 @@ export function sheet(
         onEditRecipe={() => {}}
         agentSignInRow={agentSignInRow}
         stepTimings={FIXTURE_STEP_TIMINGS}
+        cloudAgentStep={null}
       />
     </div>
   )

@@ -101,7 +101,7 @@ export function VmBuildSheet({
   onEditRecipe: () => void
   /** Fixtures only: a fixed sign-in row in place of the live one. */
   agentSignInRow?: React.ReactNode
-  /** Fixtures only: a fixed "Add an agent" step in place of the live one. */
+  /** Fixtures only: a fixed "Add an agent" step (null for none) in place of the live one. */
   cloudAgentStep?: React.ReactNode
   /** Fixtures only: measured step timings in place of the control plane's. */
   stepTimings?: VmBuildStepTimings
@@ -230,7 +230,11 @@ export function VmBuildSheet({
                   t={t}
                 />
               ))}
-              {cloudAgentStep ?? <VmBuildCloudAgentStep creationId={creationId} entry={entry} />}
+              {cloudAgentStep !== undefined ? (
+                cloudAgentStep
+              ) : (
+                <VmBuildCloudAgentStep creationId={creationId} entry={entry} />
+              )}
               {agentSignInRow ??
                 (entry.vmEnvironmentId ? (
                   <VmBuildAgentSignInRow
