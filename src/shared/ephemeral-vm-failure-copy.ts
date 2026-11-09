@@ -45,7 +45,7 @@ export const EPHEMERAL_VM_FAILURE_COPY = {
   cloudGithubNotConnected:
     'Connect GitHub to your Orca account so Orca Cloud can clone this repository.',
   cloudNoGithubRemote:
-    'Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub first, or start with an empty workspace.'
+    'Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again.'
 } as const
 
 export type EphemeralVmFailureCode = keyof typeof EPHEMERAL_VM_FAILURE_COPY

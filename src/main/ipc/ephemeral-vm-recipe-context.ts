@@ -36,8 +36,6 @@ export type EphemeralVmProvisionArgs = {
   branch?: string
   ref?: string
   provisionId?: string
-  /** Orca Cloud only: the user chose a workspace without their code (no GitHub remote). */
-  startEmpty?: boolean
 }
 
 export type EphemeralVmRecipeCatalogEntry = {

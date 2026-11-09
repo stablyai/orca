@@ -82,11 +82,7 @@ it('refuses a remote GitHub does not host, too', async () => {
   expect(step).not.toHaveBeenCalled()
 })
 
-it('starts the sandbox when the user chose to start empty, or the repo is on GitHub', async () => {
-  const empty = setup(null)
-  await empty.provision({ startEmpty: true })
-  expect(empty.step).toHaveBeenCalledOnce()
-
+it('starts the sandbox for a repo on GitHub', async () => {
   const github = setup('git@github.com:acme/web.git')
   await github.provision()
   expect(github.step).toHaveBeenCalledOnce()

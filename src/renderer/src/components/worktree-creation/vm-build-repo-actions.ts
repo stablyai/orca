@@ -1,5 +1,4 @@
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import { normalizeGitRemoteUrl } from '../../../../shared/git/remotes/git-remote-identity'
 import type { Repo } from '../../../../shared/repo-types'
@@ -18,20 +17,6 @@ export function orcaCloudRepoName(
     return normalized.slice('github.com/'.length)
   }
   return repo?.displayName ?? ''
-}
-
-/** Retries the create without the repository: the user chose an empty cloud workspace. */
-export function startOrcaCloudCreateEmpty(creationId: string, retry: () => void): void {
-  const store = useAppStore.getState()
-  const entry = store.pendingWorktreeCreations[creationId]
-  const recipe = entry?.request.ephemeralVmRecipe
-  if (!entry || !recipe) {
-    return
-  }
-  store.updatePendingWorktreeCreation(creationId, {
-    request: { ...entry.request, ephemeralVmRecipe: { ...recipe, startEmpty: true } }
-  })
-  retry()
 }
 
 /** Opens GitHub so the account can give Orca Cloud access; the user comes back and tries again. */

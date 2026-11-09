@@ -134,7 +134,7 @@ export function registerEphemeralVmHandlers(store: Store, pluginService?: Plugin
       if (!recipe) {
         return provisionFailure(ephemeralVmFailure('recipeNotFound', { recipeId: args.recipeId }))
       }
-      const refused = await refuseOrcaCloudWithoutGithub(recipe, repo.repo.path, args.startEmpty)
+      const refused = await refuseOrcaCloudWithoutGithub(recipe, repo.repo.path)
       if (refused) {
         return provisionFailure(refused)
       }

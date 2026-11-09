@@ -54,8 +54,6 @@ export type EphemeralVmApi = {
     branch?: string
     ref?: string
     provisionId?: string
-    /** Orca Cloud only: start without the repository when it has no GitHub remote. */
-    startEmpty?: boolean
   }) => Promise<
     | {
         ok: true

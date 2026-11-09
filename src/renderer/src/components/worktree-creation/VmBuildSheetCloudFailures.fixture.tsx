@@ -132,15 +132,6 @@ export const cloudNoGithubRemote = defineFixture({
   setup: () => seedFixtureRepo(null)
 })
 
-export const cloudNoGithubRemoteMore = defineFixture({
-  ...cloudNoGithubRemote,
-  interact: (frameElement) => {
-    Array.from(frameElement.querySelectorAll('button'))
-      .find((button) => button.textContent?.includes('More'))
-      ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
-  }
-})
-
 export const cloudFailedLogsOpen = defineFixture({
   ...cloudFailure('cloudUnavailable', 'Orca Cloud is unavailable right now.', CLOUD_FAILED_LOG),
   interact: (frameElement) => {

@@ -63,15 +63,14 @@ export async function hostedSandboxRepoUrl(repoPath: string): Promise<string | n
 
 /**
  * The sandbox can only clone from GitHub, so a repo without a GitHub remote is refused before the
- * control plane starts (and bills) a sandbox that would open without the code. `startEmpty` is the
- * user choosing that empty workspace anyway.
+ * control plane starts (and bills) a sandbox that could never open the workspace: the project has
+ * no identity a sandbox checkout can match.
  */
 export async function refuseOrcaCloudWithoutGithub(
   recipe: Pick<OrcaVmRecipe, 'provider'>,
-  repoPath: string,
-  startEmpty: boolean | undefined
+  repoPath: string
 ): Promise<EphemeralVmFailure | null> {
-  if (recipe.provider !== 'orca-cloud' || startEmpty || (await hostedSandboxRepoUrl(repoPath))) {
+  if (recipe.provider !== 'orca-cloud' || (await hostedSandboxRepoUrl(repoPath))) {
     return null
   }
   return ephemeralVmFailure('cloudNoGithubRemote')

@@ -70,7 +70,6 @@ async function prepareEphemeralVmRecipeRequest(
           }
         : {}),
       provisionId: creationId,
-      ...(recipe.startEmpty ? { startEmpty: true } : {}),
       setupExistingFolder: async (args) => {
         const setup = await store.setupProjectExistingFolder(args)
         if (setup) {
@@ -100,7 +99,7 @@ async function prepareEphemeralVmRecipeRequest(
     ) {
       const failed = state.pendingWorktreeCreations[creationId]
       if (failed) {
-        showVmBuildFailureToast(failed, preparedTarget.error)
+        showVmBuildFailureToast(failed, preparedTarget.error, state.repos)
       } else {
         toast.error(ephemeralVmErrorText(preparedTarget))
       }

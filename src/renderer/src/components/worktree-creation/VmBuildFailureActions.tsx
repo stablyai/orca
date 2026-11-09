@@ -3,7 +3,6 @@ import {
   Bot,
   ChevronDown,
   CreditCard,
-  FolderPlus,
   Github,
   Loader2,
   LifeBuoy,
@@ -36,7 +35,6 @@ export type VmBuildFailureActions = {
   onShowWorkspaces: () => void
   onContactSupport: () => void
   onConnectGitHub: () => void
-  onStartEmpty: () => void
   onPushToGitHub: () => void
 }
 
@@ -228,15 +226,6 @@ function failureActions(
       return {
         primary: [
           {
-            key: 'startEmpty',
-            label: t(
-              'auto.components.worktree.creation.VmBuildFailureCard.startEmpty',
-              'Start empty'
-            ),
-            icon: <FolderPlus />,
-            onClick: actions.onStartEmpty
-          },
-          {
             key: 'pushToGitHub',
             label: t(
               'auto.components.worktree.creation.VmBuildFailureCard.pushToGitHubFirst',
@@ -244,10 +233,11 @@ function failureActions(
             ),
             icon: <SquareArrowOutUpRight />,
             onClick: actions.onPushToGitHub
-          }
+          },
+          // After pushing, the same create works without leaving the sheet.
+          tryAgain
         ],
-        // After pushing, the same create works without leaving the sheet.
-        more: [tryAgain]
+        more: []
       }
     case 'unavailable':
     case 'network':

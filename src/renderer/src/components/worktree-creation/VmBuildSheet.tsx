@@ -30,8 +30,7 @@ import { useMinimumRunningSteps } from './use-minimum-running-steps'
 import {
   connectOrcaCloudGitHub,
   orcaCloudRepoName,
-  PUSH_TO_GITHUB_URL,
-  startOrcaCloudCreateEmpty
+  PUSH_TO_GITHUB_URL
 } from './vm-build-repo-actions'
 import { useVmBuildStepTimings, type VmBuildStepTimings } from './vm-build-timing'
 import { headerTitle, stepLabel, type SheetState } from './vm-build-sheet-copy'
@@ -282,7 +281,6 @@ export function VmBuildSheet({
               onShowWorkspaces: () => useAppStore.getState().setSidebarOpen(true),
               onContactSupport: () => openAppHttpLink(SUPPORT_URL),
               onConnectGitHub: connectGitHub,
-              onStartEmpty: () => startOrcaCloudCreateEmpty(creationId, onRetry),
               onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL)
             }}
           />

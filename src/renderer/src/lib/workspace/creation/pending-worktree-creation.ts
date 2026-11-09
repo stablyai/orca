@@ -64,8 +64,6 @@ export type WorktreeCreationRequest = {
     checkoutMode?: 'orca-worktree' | 'provisioned-root'
     /** Set for the built-in hosted provider, whose build sheet speaks in plain language. */
     provider?: 'orca-cloud'
-    /** Orca Cloud: the user chose to start without the repository (it has no GitHub remote). */
-    startEmpty?: boolean
   }
   // Capture local/runtime progress routing at submit so focus changes cannot alter Retry behavior.
   worktreeCreateProgressMode?: WorktreeCreationProgressMode
@@ -309,6 +307,12 @@ export function getCreationProgressLabel(
   if (entry.phase === 'provisioning-vm') {
     if (entry.environmentCheck?.status === 'failed') {
       return t('auto.lib.pendingWorktreeCreation.vmChecksFailed', 'Environment checks failed')
+    }
+    // Glossary: an Orca Cloud machine is a sandbox; "VM" stays only for bring-your-own recipes.
+    if (entry.request.ephemeralVmRecipe?.provider === 'orca-cloud') {
+      return entry.environmentCheck
+        ? t('auto.lib.pendingWorktreeCreation.preparingCloudEnvironment', 'Preparing environment…')
+        : t('auto.lib.pendingWorktreeCreation.startingSandbox', 'Starting sandbox…')
     }
     return entry.environmentCheck
       ? t('auto.lib.pendingWorktreeCreation.checkingVmEnvironment', 'Checking VM environment…')

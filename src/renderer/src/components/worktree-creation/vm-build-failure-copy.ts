@@ -140,8 +140,8 @@ export function vmBuildFailureCopy(
           { repo: repoName }
         ),
         body: t(
-          'auto.components.worktree.creation.VmBuildFailureCard.noGithubRemoteBody',
-          'Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, or start with an empty workspace. Nothing was created, and you weren’t charged.'
+          'auto.components.worktree.creation.VmBuildFailureCard.noGithubRemoteBody2',
+          'Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again. Nothing was created, and you weren’t charged.'
         )
       }
     case 'signIn':

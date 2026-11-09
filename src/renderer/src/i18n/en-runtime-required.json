@@ -2122,7 +2122,7 @@
       "cleanupStopped": "Cleanup stopped by user.",
       "cloudConcurrencyLimit": "You already have as many Orca Cloud workspaces running as your plan allows. Sleep or delete one, then try again.",
       "cloudGithubNotConnected": "Connect GitHub to your Orca account so Orca Cloud can clone this repository.",
-      "cloudNoGithubRemote": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub first, or start with an empty workspace.",
+      "cloudNoGithubRemote": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again.",
       "cloudPlanRequired": "Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.",
       "cloudSignInRequired": "Sign in to Orca to use Orca Cloud workspaces.",
       "cloudUnavailable": "Orca Cloud is unavailable right now. Try again in a moment.",

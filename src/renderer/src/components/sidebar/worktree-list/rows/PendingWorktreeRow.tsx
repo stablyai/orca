@@ -8,10 +8,17 @@ import {
 } from '@/lib/workspace/creation/pending-worktree-creation'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
+import { vmBuildFailureSummary } from '@/components/worktree-creation/vm-build-failure-toast'
 
 function statusLabel(entry: PendingWorktreeCreation, t: Translate = translate): string {
   if (entry.status === 'error') {
+    // An Orca Cloud refusal reads like its build-sheet card, never the raw provider text.
+    const cloud =
+      entry.request.ephemeralVmRecipe?.provider === 'orca-cloud' && entry.error
+        ? vmBuildFailureSummary(entry, entry.error, useAppStore.getState().repos, t)
+        : null
     return (
+      cloud?.title ??
       entry.error ??
       t('auto.components.sidebar.PendingWorktreeRow.creationFailed', 'Creation failed')
     )

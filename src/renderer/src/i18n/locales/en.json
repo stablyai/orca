@@ -2107,7 +2107,9 @@
         "creatingWorktree": "Creating worktree…",
         "fetchingBaseBranch": "Fetching base branch…",
         "checkingVmEnvironment": "Checking VM environment…",
-        "vmChecksFailed": "Environment checks failed"
+        "vmChecksFailed": "Environment checks failed",
+        "preparingCloudEnvironment": "Preparing environment…",
+        "startingSandbox": "Starting sandbox…"
       },
       "duplicatePairedServers": {
         "ambiguousSameServer": "{{value0}} and {{value1}} are the same server paired twice. Remove one in Settings > Remote Orca Servers."
@@ -4088,7 +4090,6 @@
             "turnOnOverage": "Turn on overage",
             "openingGitHub": "Opening GitHub…",
             "connectGitHub": "Connect GitHub",
-            "startEmpty": "Start empty",
             "pushToGitHubFirst": "Push to GitHub first",
             "planBody2": "Cloud workspaces are part of the Team plan. Nothing was created, and you weren’t charged.",
             "planBodyMember2": "Ask an owner or admin to choose a Team plan. Nothing was created, and you weren’t charged.",
@@ -4107,12 +4108,12 @@
             "githubNotConnectedTitle": "GitHub isn’t connected for {{repo}}",
             "githubNotConnectedBody": "Orca Cloud clones your code from GitHub and needs access to this repository first. Connect GitHub, then try again. Nothing was created, and you weren’t charged.",
             "noGithubRemoteTitle": "{{repo}} isn’t on GitHub",
-            "noGithubRemoteBody": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, or start with an empty workspace. Nothing was created, and you weren’t charged.",
             "signInBody3": "Cloud workspaces run on your Orca account. Sign in and Orca starts this one for you. Nothing was created, and you weren’t charged.",
             "unavailableBody2": "The problem is on our side, not in your project. Nothing was created, and you weren’t charged. Try again in a moment.",
             "networkBody3": "Check your internet connection, then try again. Nothing was created, and you weren’t charged.",
             "snapshotBody3": "The sandbox starts from a saved copy of your environment, and that copy couldn’t be found. Nothing was created, and you weren’t charged. Try again, or contact support if it keeps happening.",
-            "connectGitHubFailed": "Couldn’t open GitHub. Try again in a moment."
+            "connectGitHubFailed": "Couldn’t open GitHub. Try again in a moment.",
+            "noGithubRemoteBody2": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again. Nothing was created, and you weren’t charged."
           },
           "VmBuildLog": {
             "jumpToError": "Jump to first error",
@@ -25669,7 +25670,7 @@
       "cloudSignInRequired": "Sign in to Orca to use Orca Cloud workspaces.",
       "cloudUnavailable": "Orca Cloud is unavailable right now. Try again in a moment.",
       "cloudGithubNotConnected": "Connect GitHub to your Orca account so Orca Cloud can clone this repository.",
-      "cloudNoGithubRemote": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub first, or start with an empty workspace.",
+      "cloudNoGithubRemote": "Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub, then try again.",
       "recipeExitedWithoutCode": "Recipe exited without an exit code.",
       "destroyExitedWithoutCode": "Destroy exited without an exit code.",
       "suspendExited": "Suspend exited with code {{exitCode}}.",
