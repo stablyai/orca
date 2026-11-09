@@ -5,8 +5,8 @@ import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/t
 import {
   resolveWebSessionSiblingVisibleTabId,
   resolveWebSessionVisibleTabId
-} from '../web-session-focus-intent'
-import { isWebSessionBrowserPlacementGroupReserved } from '../web-session-browser-placement'
+} from './navigation/web-session-focus-intent'
+import { isWebSessionBrowserPlacementGroupReserved } from '../browser/placement/web-session-browser-placement'
 import { buildHostToLocalTabIdMap, updateHostSessionTabIdMappings } from './layout-groups'
 
 export function prepareWebSessionTabsSnapshotUnified(

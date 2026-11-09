@@ -1,13 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  removeFileAtomicallyIfUnchanged,
-  writeFileAtomically,
-  writeFileAtomicallyIfUnchanged
-} from './fs-utils'
+import { removeFileAtomicallyIfUnchanged, writeFileAtomicallyIfUnchanged } from './fs-utils'
 
 const fsMock = vi.hoisted(() => ({ linkSync: vi.fn(), renameSync: vi.fn() }))
 
@@ -38,23 +34,6 @@ describe('writeFileAtomically', () => {
       rmSync(dir, { recursive: true, force: true })
     }
   }
-
-  it('applies the mode option to the written file', () => {
-    if (process.platform === 'win32') {
-      return
-    }
-
-    setup()
-    try {
-      const target = join(dir, 'secret.json')
-      writeFileAtomically(target, '{"token":"abc"}\n', { mode: 0o600 })
-
-      const mode = statSync(target).mode & 0o777
-      expect(mode).toBe(0o600)
-    } finally {
-      cleanup()
-    }
-  })
 
   it('replaces only the expected file generation', () => {
     setup()

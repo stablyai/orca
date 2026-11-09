@@ -6,7 +6,7 @@ import {
   createWorktreeVisibilitySourceMatcher,
   resolveCustomWorktreeVisibilitySources
 } from '../../../../shared/worktree/visibility-sources'
-import { createRepoRowExecutionHostLookup } from '../../../../shared/worktree-execution-host-resolution'
+import { createRepoRowExecutionHostLookup } from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
 import { resolveConfiguredWorktreeBasePaths } from '../../../../shared/worktree/configured-worktree-base-path'
 

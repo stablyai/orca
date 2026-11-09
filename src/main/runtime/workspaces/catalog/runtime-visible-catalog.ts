@@ -11,15 +11,15 @@ import type { Repo } from '../../../../shared/repo-types'
 import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost
-} from '../../../../shared/worktree-execution-host-resolution'
+} from '../../../../shared/execution-host/worktree-execution-host-resolution'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import {
   visibleFolderWorkspaces,
   visibleProjectGroups,
   visibleProjectHostSetups,
   visibleRepos
-} from '../../../ssh/orcad-retained-source'
-import type { RuntimeStore } from '../../runtime-store-contract'
+} from '../../../persistence/migrating-orcad-catalog/orcad-source-visibility'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 
 type CatalogSource = Pick<
   RuntimeStore,

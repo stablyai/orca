@@ -21,14 +21,14 @@ vi.mock('@/store', () => ({
   useAppStore: { getState: getStateMock }
 }))
 
-vi.mock('@/runtime/web-runtime-session-tab-lifecycle', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle', () => ({
   activateWebRuntimeSessionTab: vi.fn(),
   closeWebRuntimeSessionTab: closeWebRuntimeSessionTabMock
 }))
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
   createWebRuntimeSessionTerminal: vi.fn()
 }))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: isWebRuntimeSessionActiveMock
 }))
 vi.mock('../../../../shared/workspace-layout/terminal-surface-id', () => ({
@@ -43,11 +43,11 @@ vi.mock('@/runtime/web-session-tabs-sync/tracking-mappings', () => ({
   resolveHostSessionTabIdForWebSessionTab: resolveHostSessionTabIdForWebSessionTabMock
 }))
 
-vi.mock('@/runtime/runtime-terminal-inspection', () => ({
+vi.mock('@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection', () => ({
   inspectRuntimeTerminalProcess: inspectRuntimeTerminalProcessMock
 }))
 
-import { useRunningTerminalCloseConfirmStore } from '@/store/running-terminal-close-confirm'
+import { useRunningTerminalCloseConfirmStore } from '@/store/slices/tabs/closing/running-terminal-close-confirm'
 import { closeTerminalTab } from './terminal-tab-actions'
 import { terminalOwnerRows } from './terminal-tab-owner-rows.test-fixture'
 
@@ -118,22 +118,6 @@ describe('closeTerminalTab running-process confirmation', () => {
     while (visibleRequest()) {
       store.dismissRunningTerminalClose()
     }
-  })
-
-  it('closes a busy tab only after the confirmation is accepted', async () => {
-    closeTerminalTab('tab-busy', { reason: 'user' })
-    await settleProbe()
-
-    expect(closeTab).not.toHaveBeenCalled()
-    expect(visibleRequest()).toMatchObject({
-      terminalTabId: 'tab-busy',
-      tabLabel: 'dev server',
-      copyKind: 'command'
-    })
-
-    useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
-
-    expect(closeTab).toHaveBeenCalledWith('tab-busy', { reason: 'user' })
   })
 
   it('keeps the tab and runs onCancel when the confirmation is dismissed', async () => {

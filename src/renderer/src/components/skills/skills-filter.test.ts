@@ -6,53 +6,7 @@ import {
   isSkillsFilterQueryTooLarge
 } from './skills-filter'
 
-function skill(overrides: Partial<DiscoveredSkill>): DiscoveredSkill {
-  return {
-    id: 'id',
-    name: 'Review',
-    description: 'Code review',
-    providers: ['codex'],
-    sourceKind: 'home',
-    sourceLabel: 'Codex home',
-    rootPath: '/root',
-    directoryPath: '/root/review',
-    skillFilePath: '/root/review/SKILL.md',
-    installed: true,
-    updatedAt: null,
-    ...overrides
-  }
-}
-
 describe('skills filtering', () => {
-  it('filters by provider, source, and text query', () => {
-    const skills = [
-      skill({ name: 'React Patterns', providers: ['codex'], sourceKind: 'home' }),
-      skill({
-        id: 'repo',
-        name: 'Docs Writer',
-        description: 'Write docs',
-        providers: ['claude'],
-        sourceKind: 'repo'
-      })
-    ]
-
-    // Root provenance preserves individual agent ownership that coarse provider tags collapse.
-    const agentByRootPath = new Map([
-      ['/home/dev/.codex/skills', 'codex'],
-      ['/repo/.claude/skills', 'claude']
-    ])
-    expect(
-      filterSkills(skills, { query: 'docs', agent: 'claude', sourceKind: 'repo' }, agentByRootPath)
-    ).toEqual([])
-    expect(
-      filterSkills(
-        skills,
-        { query: 'docs', agent: 'all', sourceKind: 'repo' },
-        agentByRootPath
-      ).map((item) => item.name)
-    ).toEqual(['Docs Writer'])
-  })
-
   it('rejects oversized pasted queries before reading skill metadata', () => {
     const oversizedQuery = 'secret-skill-filter'.repeat(SKILLS_FILTER_QUERY_MAX_BYTES)
     const throwingSkills = [

@@ -1,5 +1,6 @@
-import type { LinearIssueData, LinearIssueRequest } from './linear-issue-publication'
-import { openLinearIssueRead } from './linear-issue-publication'
+import type { LinearIssueData } from './linear-issue-read'
+import type { LinearIssueRequest } from './linear-issue-publication'
+import { openLinearIssueRead } from './linear-issue-read'
 import {
   canPublishLinearScopeCache,
   isCurrentLinearRuntimeContext,
@@ -11,7 +12,7 @@ import {
 } from './linear-slice-status-actions'
 import type { LinearSliceGet, LinearSliceSet } from './linear-slice-contract'
 import { isFresh, linearReadAccountRejections } from './linear-cache'
-import type { CacheEntry } from '../../github/cache-model'
+import type { CacheEntry } from '../../github/cache/cache-model'
 
 export function openStoreLinearIssueRead<T extends LinearIssueData>(args: {
   scope: LinearReadScope

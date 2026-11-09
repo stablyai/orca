@@ -1,4 +1,4 @@
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
 
 export type HostPushState = {
   connection: {

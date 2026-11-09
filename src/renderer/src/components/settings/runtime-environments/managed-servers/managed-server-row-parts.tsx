@@ -1,6 +1,7 @@
 import { ArrowUpCircle, RefreshCw, RotateCcw, ServerOff, Trash2, Wrench } from 'lucide-react'
 import type { OrcadManagedRuntimeStatus } from '../../../../../../shared/orcad-managed-runtime'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { LoadingSpinner } from '../../../LoadingSpinner'
 import { Button } from '../../../ui/button'
 import { DropdownMenuItem, DropdownMenuSeparator } from '../../../ui/dropdown-menu'
@@ -16,36 +17,36 @@ import type { ManagedServerLifecycle } from './use-managed-server-lifecycle'
 // Unloaded status means unknown; only loaded evidence can claim Not running.
 export function managedServerVersionLabel(
   status: OrcadManagedRuntimeStatus | null,
-  statusError: string | null
+  statusError: string | null,
+  t: Translate = translate
 ): string {
   if (status) {
     return (
       status.activeAppVersion ??
       status.activeVersion ??
-      translate('auto.components.settings.managedServers.row.notRunning', 'Not running')
+      t('auto.components.settings.managedServers.row.notRunning', 'Not running')
     )
   }
   return statusError
-    ? translate('auto.components.settings.managedServers.row.statusUnknown', 'Status unknown')
-    : translate('auto.components.settings.managedServers.row.checking', 'Checking…')
+    ? t('auto.components.settings.managedServers.row.statusUnknown', 'Status unknown')
+    : t('auto.components.settings.managedServers.row.checking', 'Checking…')
 }
 
-export function getManagedServerSummary(lifecycle: ManagedServerLifecycle): string | null {
+export function getManagedServerSummary(
+  lifecycle: ManagedServerLifecycle,
+  t: Translate = translate
+): string | null {
   const { status, recovery } = lifecycle
   if (recovery) {
-    return recoveryLabel(recovery)
+    return recoveryLabel(recovery, t)
   }
   if (status?.migration) {
-    return translate(
-      'auto.components.settings.managedServers.row.migration',
-      'Migration: {{phase}}',
-      {
-        phase: migrationPhaseLabel(status.migration.phase)
-      }
-    )
+    return t('auto.components.settings.managedServers.row.migration', 'Migration: {{phase}}', {
+      phase: migrationPhaseLabel(status.migration.phase, t)
+    })
   }
   if (status?.deferredUpdate) {
-    return translate(
+    return t(
       'auto.components.settings.managedServers.row.deferredVersion',
       'Update to {{version}} deferred.',
       { version: status.deferredUpdate.candidateVersion }
@@ -59,40 +60,39 @@ export function ManagedServerDetailLines({
 }: {
   lifecycle: ManagedServerLifecycle
 }): React.JSX.Element {
+  const t = useTranslate()
   const { status, statusError, recovery } = lifecycle
   return (
     <div className="space-y-0.5 text-xs text-muted-foreground">
       <p>
-        {translate(
+        {t(
           'auto.components.settings.managedServers.row.orcaVersion',
           'Orca on this host: {{version}}',
           {
-            version: managedServerVersionLabel(status, statusError)
+            version: managedServerVersionLabel(status, statusError, t)
           }
         )}
       </p>
       {statusError ? <p className="text-destructive">{statusError}</p> : null}
       {status ? (
         <>
-          <p>{terminalCensusLabel(status.terminals)}</p>
-          {recovery ? <p>{recoveryLabel(recovery)}</p> : null}
+          <p>{terminalCensusLabel(status.terminals, t)}</p>
+          {recovery ? <p>{recoveryLabel(recovery, t)}</p> : null}
           {status.migration ? (
             <p>
-              {translate(
-                'auto.components.settings.managedServers.row.migration',
-                'Migration: {{phase}}',
-                { phase: migrationPhaseLabel(status.migration.phase) }
-              )}
+              {t('auto.components.settings.managedServers.row.migration', 'Migration: {{phase}}', {
+                phase: migrationPhaseLabel(status.migration.phase, t)
+              })}
             </p>
           ) : null}
           {status.deferredUpdate ? (
             <p>
-              {translate(
+              {t(
                 'auto.components.settings.managedServers.row.deferredVersion',
                 'Update to {{version}} deferred.',
                 { version: status.deferredUpdate.candidateVersion }
               )}{' '}
-              {managedServerOutcomeLabel(status.deferredUpdate)}
+              {managedServerOutcomeLabel(status.deferredUpdate, t)}
             </p>
           ) : null}
         </>
@@ -126,6 +126,7 @@ export function ManagedServerPrimaryAction({
 }: {
   lifecycle: ManagedServerLifecycle
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const { recovery, busy, run } = lifecycle
   if (!recovery && managedServerUpdateOffered(lifecycle)) {
     return (
@@ -137,7 +138,7 @@ export function ManagedServerPrimaryAction({
         onClick={() => void run('update')}
       >
         {busy === 'update' || busy === 'forceUpdate' ? <LoadingSpinner className="size-3" /> : null}
-        {translate('auto.components.settings.managedServers.row.update', 'Update')}
+        {t('auto.components.settings.managedServers.row.update', 'Update')}
       </Button>
     )
   }
@@ -155,8 +156,8 @@ export function ManagedServerPrimaryAction({
     >
       {busy === 'recover' || busy === 'cancelStop' ? <LoadingSpinner className="size-3" /> : null}
       {cancelStop
-        ? translate('auto.components.settings.managedServers.row.cancelStop', 'Cancel stop')
-        : translate('auto.components.settings.managedServers.row.recover', 'Recover')}
+        ? t('auto.components.settings.managedServers.row.cancelStop', 'Cancel stop')
+        : t('auto.components.settings.managedServers.row.recover', 'Recover')}
     </Button>
   )
 }
@@ -223,18 +224,19 @@ export function ManagedServerConfirmations({
   lifecycle: ManagedServerLifecycle
   forgettable: boolean
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const { recovery, busy, run } = lifecycle
   const disabled = busy !== null
   const forceUpdate = lifecycle.confirmingForceUpdate
   if (forceUpdate) {
     return (
       <ConfirmStrip
-        message={forceUpdateMessage()}
-        confirmLabel={translate(
+        message={forceUpdateMessage(t)}
+        confirmLabel={t(
           'auto.components.settings.managedServers.row.updateAnyway',
           'Update anyway'
         )}
-        keepLabel={translate('auto.components.settings.managedServers.row.notNow', 'Not now')}
+        keepLabel={t('auto.components.settings.managedServers.row.notNow', 'Not now')}
         disabled={disabled}
         tone="default"
         onConfirm={() => void run('forceUpdate')}
@@ -245,15 +247,15 @@ export function ManagedServerConfirmations({
   if (lifecycle.confirmingStop) {
     return (
       <ConfirmStrip
-        message={translate(
+        message={t(
           'auto.components.settings.managedServers.row.stopOrcaDescription',
           'Stops Orca on the SSH host and removes it from this list.'
         )}
-        confirmLabel={translate(
+        confirmLabel={t(
           'auto.components.settings.managedServers.row.confirmStop',
           'Stop and remove server'
         )}
-        keepLabel={translate('auto.components.settings.managedServers.row.keep', 'Keep running')}
+        keepLabel={t('auto.components.settings.managedServers.row.keep', 'Keep running')}
         disabled={disabled}
         onConfirm={() => {
           lifecycle.setConfirmingStop(false)
@@ -267,18 +269,15 @@ export function ManagedServerConfirmations({
   if (forgettable && lifecycle.confirmingForget) {
     return (
       <ConfirmStrip
-        message={translate(
+        message={t(
           'auto.components.settings.managedServers.row.forgetDescription',
           'Unlinks this server here without contacting its host. If the host comes back, the server may still be running there.'
         )}
-        confirmLabel={translate(
+        confirmLabel={t(
           'auto.components.settings.managedServers.row.confirmForget',
           'Forget on this desktop'
         )}
-        keepLabel={translate(
-          'auto.components.settings.managedServers.row.keepLinked',
-          'Keep linked'
-        )}
+        keepLabel={t('auto.components.settings.managedServers.row.keepLinked', 'Keep linked')}
         disabled={disabled}
         onConfirm={() => {
           lifecycle.setConfirmingForget(false)
@@ -291,12 +290,12 @@ export function ManagedServerConfirmations({
   if (recovery && lifecycle.confirmingRestore) {
     return (
       <ConfirmStrip
-        message={recoveryLabel(recovery)}
-        confirmLabel={translate(
+        message={recoveryLabel(recovery, t)}
+        confirmLabel={t(
           'auto.components.settings.managedServers.row.confirmRestore',
           'Restore snapshot and restart'
         )}
-        keepLabel={translate('auto.components.settings.managedServers.row.keepState', 'Keep state')}
+        keepLabel={t('auto.components.settings.managedServers.row.keepState', 'Keep state')}
         disabled={disabled}
         onConfirm={() => {
           lifecycle.setConfirmingRestore(false)
@@ -316,17 +315,18 @@ export function ManagedServerMenuItems({
   lifecycle: ManagedServerLifecycle
   forgettable: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const { status, recovery, busy, run } = lifecycle
   const disabled = busy !== null
   return (
     <>
       <DropdownMenuItem disabled={disabled} onSelect={() => void lifecycle.loadStatus()}>
         <RefreshCw />
-        {translate('auto.components.settings.managedServers.row.refresh', 'Refresh status')}
+        {t('auto.components.settings.managedServers.row.refresh', 'Refresh status')}
       </DropdownMenuItem>
       <DropdownMenuItem disabled={disabled} onSelect={() => void run('update')}>
         <ArrowUpCircle />
-        {translate(
+        {t(
           'auto.components.settings.managedServers.row.updateOrcaOnHost',
           'Update Orca on this host'
         )}
@@ -334,14 +334,14 @@ export function ManagedServerMenuItems({
       {status?.rollbackAvailable ? (
         <DropdownMenuItem disabled={disabled} onSelect={() => void run('rollback')}>
           <RotateCcw />
-          {translate('auto.components.settings.managedServers.row.rollback', 'Roll back')}
+          {t('auto.components.settings.managedServers.row.rollback', 'Roll back')}
         </DropdownMenuItem>
       ) : null}
       {/* Cancel stop owns the primary slot during decommission; keep Recover in the menu. */}
       {recovery?.operation === 'decommission' ? (
         <DropdownMenuItem disabled={disabled} onSelect={() => void run('recover')}>
           <Wrench />
-          {translate('auto.components.settings.managedServers.row.recover', 'Recover')}
+          {t('auto.components.settings.managedServers.row.recover', 'Recover')}
         </DropdownMenuItem>
       ) : null}
       <DropdownMenuSeparator />
@@ -354,7 +354,7 @@ export function ManagedServerMenuItems({
         }}
       >
         <ServerOff />
-        {translate('auto.components.settings.managedServers.row.stop', 'Stop…')}
+        {t('auto.components.settings.managedServers.row.stop', 'Stop…')}
       </DropdownMenuItem>
       {forgettable ? (
         <DropdownMenuItem
@@ -366,7 +366,7 @@ export function ManagedServerMenuItems({
           }}
         >
           <Trash2 />
-          {translate('auto.components.settings.managedServers.row.forget', 'Forget…')}
+          {t('auto.components.settings.managedServers.row.forget', 'Forget…')}
         </DropdownMenuItem>
       ) : null}
     </>

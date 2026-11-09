@@ -1,9 +1,12 @@
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import { getRepoHostIdentity } from '../slices/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { worktreeMatchesHost } from '../slices/worktrees/listing/worktree-host-ownership'
-import { selectDetectedWorktreesByRepo, selectWorktreesByRepo } from '../workspace-record-selectors'
+import {
+  selectDetectedWorktreesByRepo,
+  selectWorktreesByRepo
+} from '../workspaces/catalog/workspace-record-fields'
 
 type HostedRow = { hostId?: ExecutionHostId; runtimeOwnerEnvironmentId?: string }
 type RowState = Pick<AppState, 'worktreesByRepo' | 'detectedWorktreesByRepo' | 'sortEpoch'>

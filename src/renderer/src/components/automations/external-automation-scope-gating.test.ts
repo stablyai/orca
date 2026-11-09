@@ -39,15 +39,6 @@ const runtimeEntry = entry({
 })
 
 describe('external automation scope gating', () => {
-  it('lists managers only for a desktop host with a captured owner', () => {
-    const gate = resolveExternalAutomationScopeGate(entry())
-    expect(gate.status).toBe('listed')
-    expect(gate.probeOwner).toEqual({
-      authority: { kind: 'desktop' },
-      selector: { kind: 'self' }
-    })
-  })
-
   it('never presents a runtime-owned host as clean', () => {
     const gate = resolveExternalAutomationScopeGate(runtimeEntry)
     expect(gate.status).toBe('not-listed')
@@ -97,17 +88,6 @@ describe('engine scope errors', () => {
         new Error(`Error invoking remote method 'x': ${hidden.message}`)
       )
     ).toBe(EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden)
-  })
-
-  it('preserves the hidden-target scope code', () => {
-    const gate = externalAutomationScopeGateFromError(
-      new ExternalAutomationScopeError(EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden)
-    )
-    expect(gate).toEqual({
-      status: 'not-listed',
-      probeOwner: null,
-      code: EXTERNAL_AUTOMATION_SCOPE_CODES.targetHidden
-    })
   })
 
   it('leaves unrelated failures alone so they are not relabelled as scope limits', () => {

@@ -1,13 +1,16 @@
 import { useLayoutEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store/index'
-import { getIndexedWorktreeById } from '@/store/worktree-repo-index'
+import { getIndexedWorktreeById } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { createConnectionIdForFileSelector } from '@/lib/connection-owner-resolution'
-import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
+import type { HttpLinkSourceOwner } from '@/lib/browser/navigation/http-link-routing'
 import { createRichMarkdownEditorCodec } from '../document/rich-markdown-source-transport'
 import { createRichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import type { AppState } from '@/store/types'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function resolveRichMarkdownWorktreeRoot(
   state: Pick<AppState, 'folderWorkspaces' | 'worktreesByRepo'>,

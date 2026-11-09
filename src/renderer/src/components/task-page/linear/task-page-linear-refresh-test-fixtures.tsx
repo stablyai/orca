@@ -9,12 +9,12 @@ import { LinearIssueTextEditor } from '../../LinearIssueTextEditor'
 import { useLinearIssueEditController } from '../../linear-item-drawer-edit-controller'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import { useStore } from 'zustand'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { useTaskPageLinearCollectionEffectsPrelude } from './use-task-page-linear-collection-effects'
 import { useTaskPageLinearCustomViewEffects } from './use-task-page-linear-custom-view-effects'
 import { afterEach, beforeEach, vi, type Mock } from 'vitest'
 import { cleanup, renderHook } from '@testing-library/react'
-import { createTestStore, issue } from '../../../store/slices/linear-slice-test-harness'
+import { createTestStore, issue } from '../../../store/slices/linear/linear-slice-test-harness'
 import { clearLinearRequestMaps } from '../../../store/slices/linear/linear-slice-request-state'
 import { useTaskPageLinearListSelectionPrelude } from './use-task-page-linear-list-selection'
 import { useTaskPageLinearListEffects } from './use-task-page-linear-list-effects'
@@ -98,7 +98,7 @@ const accountViewer = vi.hoisted(() => ({
   organizationName: 'Acme'
 }))
 
-vi.mock('@/runtime/runtime-linear-client', async (original) => ({
+vi.mock('@/runtime/linear/runtime-linear-client', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   linearTestConnection: (...args: unknown[]) => reads.test(...args),
   linearSelectWorkspace: (...args: unknown[]) => reads.select(...args),
@@ -109,7 +109,7 @@ vi.mock('@/runtime/runtime-linear-client', async (original) => ({
   linearSearchIssues: (...args: unknown[]) => reads.search(...args)
 }))
 
-vi.mock('@/runtime/runtime-linear-project-client', async (original) => ({
+vi.mock('@/runtime/linear/runtime-linear-project-client', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   linearListProjects: reads.projects,
   linearTeamStates: async () => [{ id: 'done', name: 'Done', type: 'completed', color: '#888888' }],
@@ -117,7 +117,7 @@ vi.mock('@/runtime/runtime-linear-project-client', async (original) => ({
   linearListCustomViewIssues: (...args: unknown[]) => reads.view(...args)
 }))
 
-vi.mock('@/runtime/runtime-linear-issue-mutations', async (original) => ({
+vi.mock('@/runtime/linear/runtime-linear-issue-client', async (original) => ({
   ...(await original<Record<string, unknown>>()),
   linearGetIssue: reads.detail,
   linearIssueComments: async () => [],
@@ -136,12 +136,12 @@ vi.mock('@/hooks/useIssueMetadata', async (original) => ({
   })
 }))
 
-vi.mock('@/store/selectors', async (original) => {
+vi.mock('@/store/slices/worktrees/listing/use-worktree-catalog', async (original) => {
   const empty: [] = []
   return { ...(await original<Record<string, unknown>>()), useAllWorktrees: () => empty }
 })
 
-vi.mock('@/store/workspace-record-selectors', async (original) => {
+vi.mock('@/store/workspaces/catalog/workspace-record-fields', async (original) => {
   const empty: [] = []
   return { ...(await original<Record<string, unknown>>()), selectFolderWorkspaces: () => empty }
 })

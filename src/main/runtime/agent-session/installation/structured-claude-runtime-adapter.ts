@@ -2,12 +2,10 @@ import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecy
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 import type { ClaudeEnvDeps } from '../../../claude/structured/launch/claude-structured-child-env'
 import { ClaudeStructuredSessionAdapter } from '../../../claude/structured/claude-structured-session-adapter'
-import type {
-  ClaudeStructuredSessionAdapterDeps,
-  ClaudeStructuredSessionEvent
-} from '../../../claude/structured/claude-structured-session-state'
+import type { ClaudeStructuredSessionAdapterDeps } from '../../../claude/structured/claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from '../../../claude/structured/claude-structured-session-event'
 import { claudeProviderHandleLink } from '../../../claude/structured/claude-structured-owner-identity'
-import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionLifecycleEvent } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 
 import {
   recordAgentSessionProviderHandle,

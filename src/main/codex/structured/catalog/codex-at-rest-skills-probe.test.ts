@@ -1,6 +1,6 @@
 import type * as Files from 'node:fs/promises'
 import { scanClaudeCommandFolders } from '../../../claude/claude-command-folder-scan'
-import type * as Catalog from '../../../native-chat/agent-session-wire/at-rest-command-catalog'
+import type * as Catalog from '../../../native-chat/agent-session-wire/options/at-rest-command-catalog'
 import { afterEach, expect, it, vi } from 'vitest'
 
 const folders = vi.hoisted(() => ({ open: vi.fn(), read: vi.fn() }))
@@ -13,19 +13,22 @@ vi.mock('node:fs/promises', async (original) => ({
 afterEach(() => vi.useRealTimers())
 
 const visits = vi.hoisted(() => vi.fn((current: boolean) => current))
-vi.mock('../../../native-chat/agent-session-wire/at-rest-command-catalog', async (original) => {
-  const actual = await original<typeof Catalog>()
-  return {
-    ...actual,
-    AtRestCommandCatalog: vi.fn(function (source: Catalog.AtRestCommandSource) {
-      return new actual.AtRestCommandCatalog({
-        ...source,
-        scan: (record, cwd, current, ...rest) =>
-          source.scan(record, cwd, () => visits(current()), ...rest)
+vi.mock(
+  '../../../native-chat/agent-session-wire/options/at-rest-command-catalog',
+  async (original) => {
+    const actual = await original<typeof Catalog>()
+    return {
+      ...actual,
+      AtRestCommandCatalog: vi.fn(function (source: Catalog.AtRestCommandSource) {
+        return new actual.AtRestCommandCatalog({
+          ...source,
+          scan: (record, cwd, current, ...rest) =>
+            source.scan(record, cwd, () => visits(current()), ...rest)
+        })
       })
-    })
+    }
   }
-})
+)
 
 it('closes a directory opened after cancellation before any read or recursion', async () => {
   const opened = Promise.withResolvers<unknown>()

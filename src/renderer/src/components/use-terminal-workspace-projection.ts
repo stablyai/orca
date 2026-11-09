@@ -6,8 +6,14 @@ import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-bro
 import { useTerminalProviderSnapshotCapability } from './terminal/use-terminal-provider-snapshot-capability'
 import { getEffectiveLayoutForWorktree as getEffectiveLayout } from './terminal/split-group-mount'
 import { useContextualTour } from './contextual-tours/use-contextual-tour'
+import { findFocusedSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import type { TerminalWorkspaceStoreController } from './use-terminal-workspace-store-bindings'
 import { useWorktreeFiles } from './terminal/use-worktree-files'
+
+// Read every render: the titlebar strip can mount after this host. A hook result is never memoized.
+function useTitlebarTabsTarget(): HTMLElement | null {
+  return document.getElementById('titlebar-tabs')
+}
 
 export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStoreController) {
   const {
@@ -53,7 +59,7 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
   const terminalProviderSnapshotCapabilityRevision = useTerminalProviderSnapshotCapability(
     workspaceSessionReady && hydrationSucceeded
   )
-  const titlebarTabsTarget = document.getElementById('titlebar-tabs')
+  const titlebarTabsTarget = useTitlebarTabsTarget()
 
   useEffect(() => {
     if (!activeWorktreeId) {
@@ -90,6 +96,13 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
       (!hasFeatureInteraction(state.featureInteractions, 'terminal-pane-split') &&
         !hasFeatureInteraction(state.featureInteractions, 'tab-splits'))
   )
+  const splitLandingGroupIds = useAppStore((state) => state.splitLandingGroupIds)
+  const focusesSplitLanding = Boolean(
+    findFocusedSplitLandingGroup(
+      { groupsByWorktree, activeGroupIdByWorktree, splitLandingGroupIds },
+      activeWorktreeId
+    )
+  )
   const hasSplitTab = useAppStore((state) =>
     hasFeatureInteraction(state.featureInteractions, 'tab-splits')
   )
@@ -101,7 +114,9 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
       activeView === 'terminal' &&
       workspaceSessionReady &&
       (activeTabType === 'agent-session' ||
-        (activeTabType === 'terminal' && Boolean(activeTabId))) &&
+        (activeTabType === 'terminal' && Boolean(activeTabId)) ||
+        // Splitting a chat focuses the new pane's landing; the tour continues there.
+        focusesSplitLanding) &&
       nextTourTipReachable
     ),
     'workspace_agent_sessions_visible',

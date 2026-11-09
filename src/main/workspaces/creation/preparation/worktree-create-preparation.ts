@@ -1,3 +1,8 @@
+import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
+import {
+  discardPreparationEntry,
+  trackPreparationDiscard
+} from './worktree-preparation-discard-retry'
 import { worktreePreparationGit } from '../../../git/worktrees/creation/worktree-create-git-executor'
 import { mkdir } from 'node:fs/promises'
 import { posix, win32 } from 'node:path'
@@ -162,9 +167,18 @@ async function claimPreparedWorktree(
   args.timing?.recordAdoptedPreparation(entry.activity.work)
   const claimedAt = performance.now()
   try {
-    await timePhase(args, 'prepared_checkout_wait', () => entry.ready)
+    await timePhase(args, 'prepared_checkout_wait', () =>
+      waitForPromiseWithSignal(entry.ready, options.signal)
+    )
+    entry.operation.complete()
     return { ...reserved, status: 'claimed', claimedAt }
   } catch {
+    entry.operation.controller.abort()
+    trackPreparationDiscard(worktreePreparationGit.run(() => discardPreparationEntry(entry)))
+    if (options.signal?.aborted) {
+      releaseClaimAfterCreate(reservation)()
+      options.signal.throwIfAborted()
+    }
     return { status: 'miss', reason: 'prepare_failed', rearm: releaseClaimAfterCreate(reservation) }
   }
 }
@@ -289,6 +303,10 @@ async function attemptPreparedWorktreeCreate(
       await timePhase(args, 'prepared_checkout_discard', () =>
         discardPreparedWorktree(args.repoPath, entry.preparedPath, options, entry.lockReason)
       ).catch(() => {})
+    }
+    if (options.signal?.aborted) {
+      releaseClaimAfterCreate(reservation)()
+      options.signal.throwIfAborted()
     }
     console.warn(
       '[worktree-create] prepared checkout could not be finalized; using normal add',

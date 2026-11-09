@@ -4,8 +4,8 @@ import { parseRoutableExecutionHostId } from '../execution-host'
 import { OptionalExecutionHostId } from './worktree-params'
 import { RepoSelector } from './github-repo-target-params'
 import type { TuiAgent } from '../agent-launch/catalog/tui-agent'
-import type { WorkspaceLaunchKind } from '../workspace-launch-kind'
-import type { ProjectExecutionRuntimeResolution } from '../project-execution-runtime'
+import type { WorkspaceLaunchKind } from '../agent-launch/contracts/workspace-launch-kind'
+import type { ProjectExecutionRuntimeResolution } from '../execution-host/project-execution-runtime'
 
 export const PreflightCheck = z.object({
   force: z.boolean().optional()

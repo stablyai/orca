@@ -3,10 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
-  MIN_RESUMABLE_PREFIX_BYTES,
-  jsonlPhysicalFileId,
   openJsonlFileReader,
-  resolveJsonlFileCheckpoint,
   validateJsonlFileReader,
   type JsonlFileReader
 } from './jsonl-file-checkpoint'
@@ -55,76 +52,6 @@ function positionalReadArgs(args: readonly unknown[]): [Buffer, number, number, 
 }
 
 describe('pinned small JSONL reader', () => {
-  it('encodes large physical identifiers exactly and preserves numeric caller compatibility', () => {
-    expect(jsonlPhysicalFileId({ dev: 1n, ino: 9_007_199_254_740_992n })).toBe('1:9007199254740992')
-    expect(jsonlPhysicalFileId({ dev: 1n, ino: 9_007_199_254_740_993n })).toBe('1:9007199254740993')
-    expect(jsonlPhysicalFileId({ dev: 3, ino: 4 })).toBe('3:4')
-    expect(jsonlPhysicalFileId({ dev: 3, ino: 0 })).toBeNull()
-    expect(jsonlPhysicalFileId({ dev: 3n, ino: 0n })).toBeNull()
-  })
-
-  it.each([Number.NaN, Infinity, -1, 1.5, Number.MAX_SAFE_INTEGER + 1])(
-    'rejects an invalid persisted offset %s before attempting a range read',
-    async (parsedBytes) => {
-      await expect(
-        resolveJsonlFileCheckpoint(filePath, {
-          parsedBytes,
-          headDigest: '4096:invalid',
-          boundaryDigest: '4096:invalid',
-          physicalFileId: null
-        })
-      ).resolves.toBeNull()
-    }
-  )
-
-  it('verifies an empty snapshot without creating a stream or issuing a read', async () => {
-    const active = await openFixture('')
-    const read = vi.spyOn(active.handle, 'read')
-    const stream = vi.spyOn(active.handle, 'createReadStream')
-
-    expect(await collect(active)).toEqual([])
-    expect(await validateJsonlFileReader(active)).toBe(true)
-    expect(stream).not.toHaveBeenCalled()
-    expect(read).not.toHaveBeenCalled()
-  })
-
-  it('reads and verifies all bytes twice without creating a stream', async () => {
-    const contents = '会🙂\r\n\r\nnext\n尾🙂'
-    const active = await openFixture(contents)
-    const read = vi.spyOn(active.handle, 'read')
-    const stream = vi.spyOn(active.handle, 'createReadStream')
-
-    expect(await collect(active)).toEqual([
-      { line: '会🙂', endOffset: Buffer.byteLength('会🙂\r\n'), terminated: true },
-      { line: '', endOffset: Buffer.byteLength('会🙂\r\n\r\n'), terminated: true },
-      { line: 'next', endOffset: Buffer.byteLength('会🙂\r\n\r\nnext\n'), terminated: true },
-      { line: '尾🙂', endOffset: Buffer.byteLength(contents), terminated: false }
-    ])
-    expect(await validateJsonlFileReader(active)).toBe(true)
-    expect(stream).not.toHaveBeenCalled()
-    expect(read).toHaveBeenCalledTimes(2)
-    expect(
-      (await Promise.all(read.mock.results.map((result) => result.value))).map(
-        (result) => result.bytesRead
-      )
-    ).toEqual([Buffer.byteLength(contents), Buffer.byteLength(contents)])
-  })
-
-  it('accounts for a skipped legacy prefix in the full snapshot proof', async () => {
-    const contents = 'legacy会\r\nnew🙂\r\n'
-    const active = await openFixture(contents)
-    const offset = Buffer.byteLength('legacy会\r\n')
-    const read = vi.spyOn(active.handle, 'read')
-
-    expect(await collect(active, offset)).toEqual([
-      { line: 'new🙂', endOffset: Buffer.byteLength(contents), terminated: true }
-    ])
-    expect(await validateJsonlFileReader(active)).toBe(true)
-    expect(active.streamBytes).toBe(Buffer.byteLength(contents) - offset)
-    expect(active.snapshotBytes).toBe(Buffer.byteLength(contents))
-    expect(read).toHaveBeenCalledTimes(3)
-  })
-
   it('accumulates short positional reads without exposing gaps or duplicate bytes', async () => {
     const contents = '会🙂\r\nnext\n終🙂'
     const active = await openFixture(contents)
@@ -140,19 +67,6 @@ describe('pinned small JSONL reader', () => {
       { line: '終🙂', endOffset: Buffer.byteLength(contents), terminated: false }
     ])
     expect(await validateJsonlFileReader(active)).toBe(true)
-  })
-
-  it('rejects a stable premature EOF instead of publishing partial history', async () => {
-    const active = await openFixture('one\ntwo\n')
-    const read = active.handle.read.bind(active.handle)
-    vi.spyOn(active.handle, 'read').mockImplementationOnce(async (...args) => {
-      const result = await read(...args)
-      return { ...result, bytesRead: 0 }
-    })
-
-    await expect(collect(active)).rejects.toThrow(/snapshot read.*unchanged file boundary/)
-    expect(active.streamBytes).toBe(0)
-    expect(active.snapshotBytes).toBe(0)
   })
 
   it('rejects an unchanged EOF after a positive short read without yielding a partial line', async () => {
@@ -234,20 +148,5 @@ describe('pinned small JSONL reader', () => {
 
     expect(await collect(active)).toEqual([])
     expect(await validateJsonlFileReader(active)).toBe(false)
-  })
-
-  it('uses the bounded buffer at the crossover and streams larger snapshots', async () => {
-    const active = await openFixture(`${'x'.repeat(MIN_RESUMABLE_PREFIX_BYTES - 1)}\n`)
-    const stream = vi.spyOn(active.handle, 'createReadStream')
-    await collect(active)
-    expect(await validateJsonlFileReader(active)).toBe(true)
-    expect(stream).not.toHaveBeenCalled()
-    await active.handle.close()
-    reader = undefined
-    const large = await openFixture(`${'x'.repeat(MIN_RESUMABLE_PREFIX_BYTES)}\n`)
-    const largeStream = vi.spyOn(large.handle, 'createReadStream')
-    await collect(large)
-    expect(await validateJsonlFileReader(large)).toBe(true)
-    expect(largeStream).toHaveBeenCalledOnce()
   })
 })

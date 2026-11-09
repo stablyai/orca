@@ -110,7 +110,8 @@
       "pastePairingCode": "またはペアリングコードを貼り付け",
       "scanCodeStep": "QR コードをスキャン",
       "title": "デスクトップのペアリング",
-      "tryAgain": "再試行"
+      "tryAgain": "再試行",
+      "codeNoLongerValid": "このペアリングコードは期限切れ、使用済み、または置き換え済みです。デスクトップで新しいコードを表示して、もう一度スキャンしてください。"
     },
     "terminalSettings": {
       "defaultText": "標準（100%）",
@@ -186,6 +187,7 @@
       "sendMessage": "メッセージを送信",
       "sendQueue": "キューに入れる",
       "sendSteer": "今すぐ送信",
+      "sendSteerQueued": "次を今すぐ送信",
       "sendQueueHint": "現在のターンの後に実行します",
       "sendSteerHint": "Agent が今行っている作業に加えます"
     },
@@ -204,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
-      "reconnecting": "再接続中…",
       "waitingForTerminal": "ターミナルを待っています…"
     },
     "diffCard": {
@@ -219,7 +220,9 @@
       "historyRepaired": "このチャットの履歴の一部を読み込めませんでした。"
     },
     "message": {
-      "copyMessage": "メッセージをコピーする"
+      "copyMessage": "メッセージをコピーする",
+      "forkFromResponse": "この応答から分岐",
+      "forkFromResponseHint": "このターンの終わりまでの応答全体を含む新しいチャット"
     },
     "messageActionsSheet": {
       "clipboardRejected": "クリップボードがテキストを受け付けませんでした。",
@@ -301,7 +304,13 @@
       "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。",
       "modelFallback": "Claudeがモデルを切り替えました: {{from}} → {{to}}。",
       "signIn": "サインイン",
-      "signInHint": "このチャットを実行しているコンピューターでターミナルを開きます"
+      "signInHint": "このチャットを実行しているコンピューターでターミナルを開きます",
+      "forkedFrom": "分岐元"
+    },
+    "ciResultLine": {
+      "failingLead": "CI 失敗:",
+      "greenLead": "CI 成功:",
+      "at": "コミット"
     },
     "orcaStop": {
       "canContinue": "この会話で続行できます。",
@@ -348,6 +357,13 @@
       "resume": "再開",
       "resumeSending": "キュー内のメッセージの送信を再開",
       "title": "キュー内のメッセージ"
+    },
+    "offlineQueue": {
+      "failed": "送信できませんでした — 「送信」をタップして再試行",
+      "waitingFor": "{{host}} に再接続すると送信されます",
+      "waiting": "デスクトップに再接続すると送信されます",
+      "behind": "待機中 — 前のメッセージに対応が必要です",
+      "closed": "Orca が閉じる前に送信されませんでした"
     },
     "receipt": {
       "cancelled": "キャンセル",
@@ -621,6 +637,12 @@
       "outcomeUnknownReturned": "Orca は会話がこのメッセージに戻ったかどうかを確認できませんでした。メッセージは入力欄に戻っており、次のメッセージが送信される前に Orca が会話を確認します。",
       "timeout": "このメッセージに戻った後、チャットが更新されませんでした。最新の内容を確認するには、開き直してください。",
       "pending": "会話が以前のメッセージに戻るまでお待ちください。"
+    },
+    "fork": {
+      "busy": "別のチャットまたはターミナルを開いています。しばらく待ってから {{agent}} のチャットを再度分岐してください。",
+      "unconfirmed": "{{agent}} は分岐を確認できませんでした。チャットが開いている可能性があります。再度分岐する前にセッション履歴を確認してください。",
+      "failed": "{{agent}} はこのチャットを分岐できませんでした。{{detail}}",
+      "unsupported": "このホストでは古いバージョンの Orca が実行されています。ホストの Orca を更新して再試行してください。"
     }
   },
   "common": {
@@ -1068,6 +1090,12 @@
     "mermaidDiagram": {
       "expand": "図を拡大",
       "label": "Mermaid 図"
+    },
+    "native-chat": {
+      "composer": {
+        "planMode": "プラン",
+        "exitPlanMode": "プランモードを終了"
+      }
     }
   },
   "connection": {
@@ -1258,14 +1286,16 @@
   },
   "dictation": {
     "setup": {
-      "alreadyActive": "コンピュータまたは別のスマートフォンで、すでにディクテーションを使用中です。",
+      "alreadyActive": "コンピュータまたは別のスマートフォンで、すでにディクテーションを使用中です。複数のデバイスから同時にディクテーションするには、コンピュータの Orca をアップデートしてください。",
       "cloudModelNeedsKey": "OpenAI キーが必要",
       "deleteFailed": "モデルの削除に失敗しました。",
       "desktopUpdateRequired": "モバイルの音声設定を使用するには、ペアリング済みのデスクトップの Orca アプリを更新してください。",
       "downloadFailed": "ダウンロードの開始に失敗しました。",
       "loadFailed": "ディクテーションモデルの読み込みに失敗しました。",
+      "modelBusy": "別のデバイスが異なる音声モデルでディクテーション中です。終わってから、もう一度お試しください。",
       "repairRequired": "ディクテーションを使用するには、このスマートフォンをコンピュータと再度ペアリングしてください。",
       "serverUpdateRequired": "音声ディクテーションを使用するには、このサーバーの Orca を更新してください。",
+      "sessionLimit": "このコンピュータでディクテーション中のデバイスが多すぎます。いずれかが終わってから、もう一度お試しください。",
       "sessionLost": "ディクテーション中にコンピュータとの接続が切れました。再試行してください。",
       "updateFailed": "ディクテーション設定の更新に失敗しました。"
     }
@@ -1277,7 +1307,6 @@
       "connecting": "デスクトップに接続中…",
       "emptyState": "ファイルが見つかりません。",
       "loadFailed": "ファイルを読み込めませんでした。",
-      "loadInterrupted": "フォルダーの読み込みが中断されました。",
       "title": "ファイル",
       "truncatedList": "{{worktreeLabel}} - 先頭の 5000 件を表示",
       "waiting": "デスクトップへの接続を待っています…"
@@ -1285,10 +1314,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "「{{name}}」はモバイルでは利用できません",
       "loadFolderFailed": "フォルダーを読み込めませんでした",
+      "loadedOfTotal": "{{total}} 件中 {{loaded}} 件",
       "loading": "読み込み中…",
       "openFolder": "フォルダー「{{name}}」を開く",
       "previewFile": "ファイル「{{name}}」をプレビュー",
       "retryLoading": "{{path}} の読み込みを再試行",
+      "searchAll": "すべて検索",
+      "searchAllIn": "{{folder}} をすべて検索",
+      "searched": "{{folder}} の {{total}} 件中 {{loaded}} 件を検索しました。",
+      "searching": "{{folder}} を検索中… {{total}} 件中 {{loaded}} 件",
+      "showMore": "さらに {{rows}} 件を表示",
       "unavailable": "モバイルでは利用不可"
     },
     "fileExplorerRowActions": {
@@ -1362,15 +1397,16 @@
       "openFailed": "この PDF を開けませんでした",
       "opening": "PDF を開いています…",
       "updateRequired": "PDF を開くには Orca Mobile を更新してください。"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "{{time}} の編集以降、デスクトップで変更されました",
+      "copyMyEdits": "自分の編集をコピー",
+      "discard": "破棄",
+      "restore": "復元",
+      "unsavedFrom": "{{time}} の未保存の編集"
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} 件がアクティブ",
-      "heading": "Agent",
-      "showAll": "{{count}} 件をすべて表示",
-      "showFewer": "折りたたむ"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} の更新通知を閉じる",
       "title": "Orca {{version}} が利用可能です",
@@ -1449,7 +1485,10 @@
       "microphoneInitFailed": "マイクの初期化に失敗しました",
       "microphoneInterrupted": "マイクの使用が中断されたため、音声ディクテーションを停止しました。再試行してください。",
       "microphonePermissionDenied": "マイクの使用が許可されていません",
-      "noSpeech": "音声が検出されませんでした。"
+      "noSpeech": "音声が検出されませんでした。",
+      "phoneUnavailable": "この端末での音声入力は準備ができていません。音声設定でダウンロードするか、「自動」を選んでください。",
+      "phoneFailed": "この端末での音声入力が停止しました。もう一度お試しください。",
+      "phoneBusy": "この端末の音声入力はまだ起動中です。少し待ってからもう一度お試しください。"
     }
   },
   "host": {
@@ -1497,7 +1536,8 @@
       "removeHost": "ホストを削除",
       "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
       "sleep": "スリープ",
-      "unpin": "固定を解除する"
+      "unpin": "固定を解除する",
+      "rename": "名前を変更"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "チェック：失敗",
@@ -1579,6 +1619,12 @@
       "thisComputer": "このコンピュータ",
       "waitingForDesktop": "まだデスクトップの応答を待っています",
       "workspaceOptions": "ワークスペースのオプション"
+    },
+    "workspaceRenameSheet": {
+      "title": "ワークスペースの名前を変更",
+      "emptyUsesBranch": "空欄の場合はブランチ名を使用します。",
+      "emptyUsesFolder": "空欄の場合はフォルダー名を使用します。",
+      "failed": "ワークスペースの名前を変更できませんでした。{{reason}}"
     }
   },
   "navigation": {
@@ -1953,13 +1999,11 @@
       "saveNote": "メモを保存"
     },
     "diffReviewLoaders": {
-      "changesLoadFailed": "変更を読み込めません。",
       "committedChangesFailed": "コミット済みの変更の読み込みに失敗しました。",
       "committedChangesUnavailable": "コミット済みの変更は利用できません。",
       "committedDiffUnavailable": "コミット済みの差分は利用できません。",
       "desktopUpdateRequired": "モバイルで変更をレビューするには、デスクトップの Orca を更新してください。",
       "diffLoadFailed": "差分を読み込めません。",
-      "invalidSourceControlResponse": "ソース管理からの応答が無効でした。",
       "reviewNotesLoadFailed": "レビューノートを読み込めません。"
     },
     "diffReviewQueue": {
@@ -2045,6 +2089,8 @@
       "managedAccountEnvOverride": "この Claude の起動では独自の Anthropic サインイン変数が設定されています。管理対象の Claude アカウントを使用するには、それらを削除してください。",
       "managedAccountUnsupported": "WSL に Claude アカウントが追加されていますが、Claude チャットには Windows の Claude アカウントが必要です。",
       "modelUnavailable": "{{agent}} は {{detail}} を使用できませんでした。別のモデルを選択して、もう一度送信してください。",
+      "modelUnavailableUpdate": "{{agent}} は {{detail}} を使用できませんでした。再起動後も維持するには {{agent}} を {{minimumVersion}} 以降に更新するか、別のモデルを選択して、もう一度送信してください。",
+      "modelNotSelected": "{{agent}} でモデルが選択されていません。モデルの選択と {{agent}} のサインインを確認して、もう一度送信してください。",
       "noTurnToStop": "{{agent}} には停止できる実行中のターンがありませんでした。",
       "notDelivered": "このメッセージは配信されませんでした。",
       "notDeliveredSendAgain": "このメッセージは配信されませんでした。続けるには、もう一度送信してください。",
@@ -2092,7 +2138,8 @@
       "usageLimitWindowWeeklyModel": "モデル別の週間",
       "waitForBackgroundTasks": "バックグラウンドタスクが終わるまでお待ちください。",
       "waitForStart": "Agent の起動が終わるまでお待ちください。",
-      "writeFailed": "Orca はこのメッセージを Agent に渡せなかったため、送信されませんでした。"
+      "writeFailed": "Orca はこのメッセージを Agent に渡せなかったため、送信されませんでした。",
+      "pluginInputRequired": "{{agent}} は「{{plugin}}」プラグインがターミナルペインで入力を待っているため停止しました。チャットセッションでプラグインを無効にするか、{{agent}} のターミナルでタスクを実行してください。"
     },
     "fileReader": {
       "copyReviewNotes": "レビューメモをコピー",
@@ -2323,7 +2370,8 @@
       "terminalName": "ターミナル名",
       "unsavedMarkdown": "Markdown の未保存の変更",
       "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。",
-      "allowAutoClose": "自動終了を許可"
+      "allowAutoClose": "自動終了を許可",
+      "renameTerminalFailed": "ターミナルの名前を変更できませんでした。{{reason}}"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "このワークスペースホストでは有効な AI Agent が検出されませんでした。",
@@ -2795,6 +2843,20 @@
     },
     "agents": {
       "permissionOwnAll": "Agent 独自の設定"
+    },
+    "voiceTranscribeOn": {
+      "heading": "文字起こしの場所",
+      "description": "この端末で聞き取った音声は端末の外に出ません。「自動」では、この端末で文字起こしできないときにコンピュータを使います。",
+      "automatic": "自動",
+      "phone": "この端末",
+      "computer": "コンピュータ",
+      "phoneReady": "この端末で使用可能",
+      "phoneNeedsDownload": "言語のダウンロードが必要",
+      "phoneDownloading": "ダウンロード中… {{progress}}%",
+      "phoneUnsupported": "この端末では使用できません",
+      "download": "この端末にダウンロード",
+      "downloadSize": "約 {{size}} MB",
+      "phoneChecking": "確認中…"
     }
   },
   "sourceControl": {
@@ -3980,6 +4042,8 @@
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "元のAgentペインは利用できません。保存済みの出力はここに残ります。",
       "openAgent": "Agentを開く",
       "retryHistory": "履歴を再読み込み",
+      "fullOutputUnavailable": "完全な出力を読み込めませんでした。",
+      "retryFullOutput": "再試行",
       "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "読み込んだ履歴に一致する実行はありません。さらに読み込んでください。",
       "noMatchingRunsYet": "一致する実行はまだありません。",
       "runSummary": "{{title}}、{{status}}、{{date}}",
@@ -4020,7 +4084,11 @@
       "notReported": "未報告",
       "searchOptions": "オプションを検索",
       "task": "タスク",
-      "review": "確認"
+      "review": "確認",
+      "discardChangesTitle": "変更を破棄しますか？",
+      "discardChangesMessage": "この自動化への未保存の変更は失われます。",
+      "discard": "破棄",
+      "keepEditing": "編集を続ける"
     },
     "orphanIssues": {
       "hostReselection": "実行する前に、このオートメーションを編集してホストを選択し直してください。",
@@ -4038,6 +4106,7 @@
       "noRunnableHost": "このオートメーションには実行するホストがありません。",
       "wslMoveInProgress": "このオートメーションのプロジェクトを WSL ホストへ移動中のため、Orca は今回の実行をスキップしました。移動が完了すると実行が再開されます。",
       "wslMoveOwnedByHost": "このオートメーションのプロジェクトは現在 WSL ホスト上で動作しており、オートメーションもそこで実行されます。Orca はこのローカルコピーを実行しなくなりました。",
+      "managedHostServer": "{{host}} への移行が必要",
       "missedGraceWindow": "Orca が次に確認した時点で、この実行は実行漏れの猶予時間を過ぎていました。",
       "targetMissing": "オートメーションのホストは登録されていないため、このオートメーションを実行する場所がありません。",
       "targetReplaced": "オートメーションのホストが削除され、再登録されたため、実行するにはこのオートメーションを再度関連付ける必要があります。",

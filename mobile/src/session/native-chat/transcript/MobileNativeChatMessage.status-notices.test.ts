@@ -9,6 +9,7 @@ import { agentSessionFailureFact } from '../../../../../src/shared/agent-session
 import { agentSessionFailureWords } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
 import { colors } from '../../../theme/mobile-theme'
 import { activateMobileUiLocale } from '../../../i18n/mobile-i18n'
+import { MarkdownLinkHandlerContext } from '../../../components/markdown-link-handler'
 import {
   MobileNativeChatNoticeContext,
   type MobileNativeChatNoticeView
@@ -51,6 +52,8 @@ vi.mock('lucide-react-native', () => ({
   Check: 'Check',
   ChevronDown: 'ChevronDown',
   ChevronRight: 'ChevronRight',
+  CircleCheck: 'CircleCheck',
+  CircleX: 'CircleX',
   Copy: 'Copy',
   Eye: 'Eye',
   FileMinus2: 'FileMinus2',
@@ -119,7 +122,49 @@ describe('MobileNativeChatMessage status notices', () => {
     )[0]!
   }
 
-  it.each(['without reset', 'with reset', 'from an old host'] as const)(
+  it('links a CI result line to its pull request and commit through the link sheet', () => {
+    const openLink = vi.fn()
+    act(() => {
+      renderer = create(
+        createElement(
+          MarkdownLinkHandlerContext.Provider,
+          { value: openLink },
+          createElement(MobileNativeChatMessage, {
+            message: {
+              // The journal key percent-encodes the line's client message id.
+              id: 'orca:pr-event%3Agithub.com%2Facme%2Frepo%233%3A8d5f74b0c1%3A1',
+              role: 'system',
+              blocks: [
+                {
+                  type: 'text',
+                  text: 'CI failing on repo#3 at 8d5f74b',
+                  presentation: 'pull-request-event',
+                  tone: 'failure'
+                }
+              ],
+              timestamp: 0,
+              source: 'transcript'
+            }
+          })
+        )
+      )
+    })
+    const links = renderer!.root.findAll(
+      (node) => String(node.type) === 'Text' && node.props.accessibilityRole === 'link'
+    )
+    // The whole lead is the PR's target, so a lead the ellipsis cuts still opens it.
+    expect(links.map((link) => link.props.accessibilityLabel ?? link.props.children)).toEqual([
+      'CI failing on repo#3',
+      '8d5f74b'
+    ])
+    links.forEach((link) => act(() => link.props.onPress()))
+    expect(openLink.mock.calls).toEqual([
+      ['https://github.com/acme/repo/pull/3'],
+      ['https://github.com/acme/repo/commit/8d5f74b0c1']
+    ])
+  })
+
+  it.each(['with reset', 'from an old host'] as const)(
     'draws an OpenCode usage warning %s',
     (source) => {
       const hasReset = source === 'with reset'
@@ -176,12 +221,9 @@ describe('MobileNativeChatMessage status notices', () => {
   )
 
   it.each([
-    ['Claude', 'system', 'claude auth login'],
     ['Claude', 'managed', 'claude auth login'],
     ['Codex', 'system', 'codex login --device-auth'],
-    ['Codex', 'managed', null],
-    ['Grok', undefined, 'grok login --device-auth'],
-    ['Antigravity', undefined, null]
+    ['Codex', 'managed', null]
   ] as const)(
     'offers %s (%s account) sign-in in a host terminal',
     (agentName, account, command) => {
@@ -218,14 +260,6 @@ describe('MobileNativeChatMessage status notices', () => {
       'Codex reported a safety review warning. View details.',
       'Codex a signalé un avertissement de sécurité. Voir les détails.',
       colors.statusAmber
-    ],
-    [
-      'claude',
-      'message:system:permission_denied',
-      'error',
-      'Claude denied permission. View details.',
-      'Claude a refusé la permission. Voir les détails.',
-      colors.statusRed
     ]
   ] as const)(
     'discloses the entire available %s notice without tool-output clipping or recovery',

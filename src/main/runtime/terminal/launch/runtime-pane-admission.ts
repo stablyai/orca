@@ -11,14 +11,14 @@ import type {
   TerminalPaneAdmissionOutcome
 } from '../../../persistence/terminal-topology/terminal-pane-admission'
 import type { LayoutRefusalCode } from '../../../../shared/workspace-layout/workspace-layout-command-types'
-import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import type { PaneResumeOutcome } from '../../../../shared/workspace-layout/workspace-layout-published'
 import {
   paneStartFailure,
   type PaneResumeOutcomes,
   type PaneStartStatuses
-} from '../../pane-start-statuses'
+} from '../surface/pane-start-statuses'
 
 type Spawn = NonNullable<RuntimePtyController['spawn']>
 type PaneStartStatusSink = Pick<PaneStartStatuses, 'set' | 'clear'>

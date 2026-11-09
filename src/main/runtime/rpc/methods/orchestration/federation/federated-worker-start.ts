@@ -1,6 +1,6 @@
 import type { FederatedWorkerStartRequest } from './federated-worker-start-request'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
-import type { RuntimeStatus } from '../../../../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../../../../shared/runtime-session-contracts'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
@@ -9,8 +9,8 @@ import {
   ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY
-} from '../../../../../../shared/protocol-version'
-import { orchestrationMigrationData } from '../../../../../../shared/orchestration-rpc-contract'
+} from '../../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { orchestrationMigrationData } from '../../../../../../shared/orchestration/orchestration-rpc-contract'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import {
   assertWorkerLaunchPreferencesRuntimeSupported,
@@ -25,7 +25,7 @@ import {
   isReadyRemoteFederatedWorkerStartReceipt,
   parseRemoteFederatedWorkerStartReceipt
 } from './federated-attach-receipt'
-import { isWorkerStartTimeoutWithinTimerLimit } from '../../../../../../shared/orchestration-timing-budgets'
+import { isWorkerStartTimeoutWithinTimerLimit } from '../../../../../../shared/orchestration/orchestration-timing-budgets'
 import {
   federatedFailedReceipt,
   federatedUnknownReceipt,
@@ -35,11 +35,11 @@ import { releaseRetriedWorkerTerminal } from '../worker/retried-worker-terminal-
 import { withWorkerStartNext } from '../receipt-next'
 import { recordReadyFederatedDispatch } from './federated-worker-ready-record'
 import { resolveFederatedChildParent } from './federated-worker-child-parent'
-import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
+import { prepareWorkerStartCard } from '../../../../orchestration/workers/launch/worker-start-card'
 import {
   recordWorkerLaunchObservation,
   workerLaunchAgent
-} from '../../../../orchestration/worker-launch-observation'
+} from '../../../../orchestration/workers/launch/worker-launch-observation'
 
 export async function startFederatedWorker(args: FederatedWorkerStartRequest): Promise<unknown> {
   const { params, runtime, db, task, orchestrationMutation } = args

@@ -12,6 +12,7 @@ import {
   isNoteInFlight,
   useNotesInFlightVersion
 } from '@/lib/notes-send-in-flight'
+import { recomputeOn } from '@/lib/recompute-on'
 
 export function useBrowserPageAnnotationSend({
   browserTabId,
@@ -59,10 +60,13 @@ export function useBrowserPageAnnotationSend({
   )
   // Annotations another send holds are left out of the next one.
   const inFlightVersion = useNotesInFlightVersion()
-  const sendableAnnotations = useMemo(() => {
-    void inFlightVersion
-    return browserAnnotations.filter((annotation) => !isNoteInFlight(annotation))
-  }, [browserAnnotations, inFlightVersion])
+  const sendableAnnotations = useMemo(
+    () =>
+      recomputeOn([inFlightVersion], () =>
+        browserAnnotations.filter((annotation) => !isNoteInFlight(annotation))
+      ),
+    [browserAnnotations, inFlightVersion]
+  )
   const browserAnnotationsPrompt = useMemo(
     () =>
       formatBrowserAnnotationsAsMarkdown(sendableAnnotations, {

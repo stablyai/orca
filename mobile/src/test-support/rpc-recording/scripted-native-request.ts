@@ -1,5 +1,5 @@
-import type { RpcResponse } from '../../transport/types'
-import type { RpcClient } from '../../transport/rpc-client'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import { captureArguments, captureError, observeSettlement } from './recording-values'
 
 import type { ScriptedRpcTransport } from './scripted-rpc-transport'

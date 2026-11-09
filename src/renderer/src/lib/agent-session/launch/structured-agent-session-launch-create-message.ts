@@ -22,7 +22,7 @@ import {
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection
 } from '../../../../../shared/agent-session/options/structured-agent-session-option-view'
-import { firstFrameOptionState } from '@/components/native-chat/structured-agent-session-option-first-frame'
+import { firstFrameOptionState } from '@/components/native-chat/session/options/structured/structured-agent-session-option-first-frame'
 import {
   applyStructuredLaunchHeldOptions,
   applyStructuredLaunchExplicitOptions,
@@ -48,7 +48,9 @@ export function prepareStructuredLaunchCreateMessage(
   }
   // Options without a model overlay the host's remembered model selection.
   const optionsMode: StructuredAgentSessionCreateParams['optionsMode'] =
-    hostTakesExplicitOptions && state.selection.explicit?.model !== undefined
+    !intent.params.forkFrom &&
+    hostTakesExplicitOptions &&
+    state.selection.explicit?.model !== undefined
       ? 'replace-model-selection'
       : undefined
   if (intent.createMessageSupport !== true) {
@@ -114,6 +116,10 @@ function structuredLaunchCreateOptions(state: StructuredLaunchState): {
   selection?: Readonly<Record<string, string>>
 } {
   const { intent } = state
+  // A fork's options are its source's, which the host copies.
+  if (intent.params.forkFrom) {
+    return {}
+  }
   const overlay = structuredLaunchOptionOverlay(state)
   const requested = structuredLaunchRequestedOptions({ ...state.selection, held: overlay })
   const firstFrame = firstFrameOptionState(intent.agent, intent.target, {

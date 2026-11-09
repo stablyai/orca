@@ -1,6 +1,6 @@
 import { applyEdits, modify, parse, type ParseError } from 'jsonc-parser'
-import type { HooksConfig } from '../../agent-hooks/installer-utils'
-import { isPlainObject } from '../../agent-hooks/hooks-json-read'
+import type { HooksConfig } from '../../agent-hooks/installation/configuration/hook-config-schema'
+import { isPlainObject } from '../../agent-hooks/installation/configuration/hooks-json-read'
 import {
   CLAUDE_AGENT_VIEW_COMMAND,
   CLAUDE_AGENT_VIEW_SHORTCUTS,

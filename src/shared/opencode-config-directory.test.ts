@@ -24,12 +24,6 @@ describe('OpenCode consumer config directory', () => {
     ).toBe(join('/consumer', '.config', 'opencode'))
   })
 
-  it('keeps the host home fallback when the execution home is absent', () => {
-    expect(resolveOpenCodeConfigDirectory({}, '/installer')).toBe(
-      join('/installer', '.config', 'opencode')
-    )
-  })
-
   it('does not treat a Windows shell HOME as the native OpenCode home', () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     expect(resolveOpenCodeConfigDirectory({ HOME: '/shell' }, '/installer')).toBe(

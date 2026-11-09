@@ -140,6 +140,16 @@ orca serve --pairing-address <server-tailscale-ip-or-hostname>
 orca-ide serve --pairing-address <server-tailscale-ip-or-hostname>
 ```
 
+Use `--bind <literal-ip>` to choose the interface that accepts runtime connections. For a
+server reached through an SSH tunnel or reverse proxy, bind locally; use a Tailscale or LAN IP
+when the client should connect directly. `--pairing-address` still controls only the address
+embedded in pairing links. `--mobile-pairing` needs all interfaces, so use it without `--bind` or with
+`--bind 0.0.0.0`.
+
+```bash
+orca-ide serve --bind 127.0.0.1 --pairing-address 127.0.0.1
+```
+
 For example:
 
 ```bash
@@ -158,6 +168,15 @@ The command:
 
 Paste the printed pairing URL into **Settings → Remote Orca Servers → Add Server** on the client.
 
+`orca serve` accepts clients from localhost, LAN and Tailscale addresses, including addresses on one of the server's own network prefixes (for example a same-network global IPv6 address). It refuses other public internet addresses unless:
+
+- you pass `--allow-public`;
+- `--pairing-address` is a hostname or a public IP;
+- a paired client has already connected from a public address; or
+- clients paired before this check was added are still paired.
+
+The startup log says which rule applies, and the first refused public address each hour is logged. Pass `--refuse-public` to refuse public addresses in every case, for example on a server whose older pairings would otherwise keep them accepted.
+
 Add `--port 6768` when a firewall, tunnel, or service definition requires a fixed port:
 
 ```bash
@@ -168,7 +187,7 @@ orca-ide serve --port 6768 --pairing-address 100.64.1.20
 
 Use only one host mode at a time. If the Orca desktop app is already sharing that computer, do not start a second `orca serve` process for the same setup.
 
-`orca serve` runs on Orca's own Node server (orcad) by default. If orcad can't serve on this computer, it uses the desktop app's server instead and prints one line saying why. On a packaged macOS app it currently always uses the desktop app's server, so paired clients can still update it. To always use the desktop app's server, set `ORCA_SERVE_RUNTIME=electron`.
+`orca serve` runs on Orca's own Node server (orcad) by default. If orcad can't serve on this computer, it uses the desktop app's server instead and prints one line saying why. On a packaged macOS app it uses the desktop app's server, so paired clients can still update it, unless you set `ORCA_SERVE_RUNTIME=orcad` (see [A Mac reached only over SSH](#a-mac-reached-only-over-ssh)). To always use the desktop app's server, set `ORCA_SERVE_RUNTIME=electron`.
 
 ### Limit terminal memory on a Linux server
 
@@ -198,6 +217,17 @@ orca-ide serve --pairing-address 100.64.1.20
 
 This only stops Orca from turning the GPU off. Chromium may still render in software on Orca's own Xvfb, which has no GPU of its own; open `chrome://gpu` in a browser pane to check, and point `DISPLAY` at a GPU-backed X server if it reports software rendering. If you installed the server with `orca serve service install`, add the variable to the service unit yourself. If the server stops starting or browser panes crash with it set, unset it to go back to software rendering.
 
+### Copies of a machine image
+
+Copies of a machine image share the server identity: the pairing key, the paired devices, and the installation id. Revoking a device on one copy leaves it working on the others, and the desktop app treats all copies as one server. Set `ORCA_INSTANCE_ID` per instance (for example the cloud-init instance id) in the environment that starts `orca serve`, or run `orca serve reset-identity` on each copy.
+
+- With `ORCA_INSTANCE_ID` set, Orca records the value with the server identity. If a later start sees a different value, Orca creates a new identity and removes all paired devices on that copy, so clients pair with it again.
+- The first value Orca sees on an existing server is only recorded, so setting the variable later keeps existing pairings. Use a value that stays the same across restarts of one instance; a value that changes on every boot forces a new pairing each time.
+- When `ORCA_INSTANCE_ID` is not set, Orca never changes the identity on its own.
+- If Orca cannot write the new identity (for example on a full or read-only disk), it keeps serving the current one unchanged, logs an error, and tries again on the next start.
+- `orca serve reset-identity` does the same reset on demand. Stop Orca on that machine first; the command asks for confirmation, or pass `--yes`.
+- Each reset moves the replaced files into a new folder under `orca-identity-backups` in the Orca data directory (the five most recent are kept). To undo an unwanted reset, stop Orca and copy the files from that folder back into the data directory.
+
 ### Mobile from a headless server
 
 For the Orca mobile app, request a mobile-scoped QR code and link:
@@ -209,6 +239,27 @@ orca-ide serve --pairing-address 100.64.1.20 --mobile-pairing
 ```
 
 Keep the phone on the same tailnet, open Orca Mobile, choose **Pair**, and scan the terminal QR code or paste the printed link.
+
+### Pair without restarting the server
+
+`orca pair` asks the Orca already running on this machine for a new pairing, so you do not have to stop a service or restart `orca serve`. Run it on the server, as the user Orca runs as:
+
+```bash
+orca pair --mobile --address 100.64.1.20   # QR code and link for Orca Mobile
+orca pair --address 100.64.1.20            # access link for another Orca
+# Linux
+orca-ide pair --mobile --address 100.64.1.20
+```
+
+It works the same against the desktop app, a foreground `orca serve`, or `orca serve service install`. Only the machine's own user can run it; paired clients and phones cannot create pairings.
+
+### A Mac reached only over SSH
+
+On a packaged macOS app, `orca serve` uses the desktop app's server, which needs a desktop login: started from an SSH session with nobody logged in, it aborts at startup. To serve such a Mac, ask for Orca's Node server instead. It has no in-app updater, so update the app yourself (for example with `brew upgrade --cask stablyai/orca/orca`) and restart the server:
+
+```bash
+ORCA_SERVE_RUNTIME=orcad orca serve --pairing-address 100.64.1.20
+```
 
 ## Desktop app or `orca serve`?
 

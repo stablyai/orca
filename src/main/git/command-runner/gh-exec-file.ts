@@ -38,7 +38,8 @@ import {
 
 // cwd is optional; wslDistro routes global calls when Windows has no host gh binary.
 // Retry only idempotent calls: a failed response can follow a completed write.
-export type GhExecOptions = Omit<GitExecOptions, 'cwd'> & {
+export type GhExecOptions = Omit<GitExecOptions, 'cwd' | 'stdin'> & {
+  stdin?: string | Uint8Array
   cwd?: string
   wslDistro?: string
   idempotent?: boolean

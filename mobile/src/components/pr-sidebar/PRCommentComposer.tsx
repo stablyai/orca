@@ -4,7 +4,7 @@ import { X } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import { isSubmittableCommentBody } from '../../session/pr-comment-actions'
+import { isSubmittableCommentBody } from '../../source-control/review/pr-comment-actions'
 import { MessageBox } from '../composer-input/MessageBox'
 import { composerInputStyles } from '../composer-input/composer-input-styles'
 

@@ -2,9 +2,9 @@ import { useEffect, useLayoutEffect, useRef } from 'react'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
 import { isSameGitRepository } from '../../../../../shared/plugins/catalog/plugin-marketplace'
 import type { PluginInstallLinkCatalog } from '../../../../../shared/plugins/catalog/plugin-install-link'
-import { usePluginPreviewRequestStore } from '@/store/plugin-preview-request'
+import { usePluginPreviewRequestStore } from '@/store/plugins/navigation/plugin-preview-request'
 
-export type { PluginCatalogToAdd } from '@/store/plugin-preview-request'
+export type { PluginCatalogToAdd } from '@/store/plugins/navigation/plugin-preview-request'
 
 /** Whether the link's catalog is one the user already has; official always counts as known. */
 export function isKnownInstallLinkCatalog(

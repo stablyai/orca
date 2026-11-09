@@ -33,7 +33,10 @@ async function preparePairedClient(
   testInfo: TestInfo,
   testRepoPath: string
 ): Promise<PreparedPairedClient> {
-  const client = await launchPairedElectronClient(offer, testInfo, 'Address-bar convergence')
+  // The client-hosted intro tour opens beside the address bar and covers its suggestions.
+  const client = await launchPairedElectronClient(offer, testInfo, 'Address-bar convergence', {
+    seenContextualTourIds: ['client-hosted-browser']
+  })
   try {
     // Use workstation width so split-preview document chips retain clickable pixels under CI.
     await client.page.setViewportSize({ width: 1600, height: 900 })
@@ -95,9 +98,9 @@ async function openPreviewFromExplorer(page: Page, fixtureName: string): Promise
   const fixtureRow = page.locator('[data-file-explorer-row]').filter({ hasText: fixtureName })
   await expect(fixtureRow).toBeVisible({ timeout: 30_000 })
   await fixtureRow.click()
-  const openPreviewToSide = page.getByRole('button', { name: 'Open Preview to the Side' })
-  await expect(openPreviewToSide).toBeVisible({ timeout: 30_000 })
-  await openPreviewToSide.click()
+  const openPreview = page.getByRole('button', { name: 'Preview', exact: true })
+  await expect(openPreview).toBeVisible({ timeout: 30_000 })
+  await openPreview.click()
 }
 
 // STA-5681: drive preview chip → URL conversion → Back/Forward → document conversion and document-name suggestions.

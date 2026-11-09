@@ -30,6 +30,8 @@ export type MobileApi = {
         endpoint: string | null
         deviceId: string
         connectionMode: MobilePairingConnectionMode
+        /** Null when the code stays valid until scanned. */
+        expiresAt: number | null
       }
   >
   getWindowsFirewallStatus: (args?: { address?: string }) => Promise<
@@ -64,6 +66,7 @@ export type MobileApi = {
         webClientUrl: string | null
         endpoint: string
         deviceId: string
+        expiresAt: number | null
       }
   >
   listDevices: () => Promise<{
@@ -72,6 +75,8 @@ export type MobileApi = {
       name: string
       pairedAt: number
       lastSeenAt: number
+      usesLegacyEncryption?: boolean
+      olderPairingMethod?: true
     }[]
   }>
   revokeDevice: (args: { deviceId: string }) => Promise<{ revoked: boolean }>

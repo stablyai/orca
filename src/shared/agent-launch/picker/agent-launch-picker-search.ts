@@ -34,7 +34,7 @@ export function searchAgentPickerSetups(
   }
   const matches: { setup: AgentPickerSetup; score: number }[] = []
   for (const entry of entries) {
-    if (!entry.surfaces.length || entry.catalog.origin === 'unknown') {
+    if (!entry.surfaces.length) {
       continue
     }
     const agentWords = tokens([entry.agent, entry.label, ...(entry.aliases ?? [])].join(' '))

@@ -15,6 +15,7 @@ import {
   type VerifyAndAddRuntimeEnvironmentResult
 } from '../../../shared/remote-runtime/pairing/remote-pairing-verification'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
+import { exchangeRemotePairingTicket } from '../../../shared/remote-runtime/pairing/remote-pairing-ticket-exchange'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
@@ -22,7 +23,7 @@ import {
   isEphemeralVmRuntimeEnvironment,
   redactRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
 import {
   remoteServerPairingFailureText,
   type RemoteServerPairingFailureCode
@@ -97,10 +98,17 @@ export async function verifyAndAddRuntimeEnvironmentFromPairingCode(
   }
   const { link, runtimeStatus } = verified
   const usesSshTunnel = link.endpointKind === 'loopback' && args.allowLoopback === true
+  // Save a token only this computer holds; the link stops working once it is used.
+  const pairingCode = await exchangeRemotePairingTicket({
+    pairingCode: args.pairingCode,
+    offer: link.pairing,
+    hostCapabilities: runtimeStatus.capabilities
+  })
   let outcome: ReturnType<typeof addOrUpdateEnvironmentFromPairingCode>
   try {
     outcome = addOrUpdateEnvironmentFromPairingCode(userDataPath, {
       ...args,
+      pairingCode,
       // Only a verified key match permits updating an existing server identity.
       runtimeId: runtimeStatus.runtimeId,
       ...(usesSshTunnel ? { connectionDependency: 'ssh-tunnel' as const } : {})
@@ -141,10 +149,15 @@ export async function verifyAndRepairRuntimeEnvironmentFromPairingCode(
       message: 'This pairing link is for a different server.'
     }
   }
+  const pairingCode = await exchangeRemotePairingTicket({
+    pairingCode: args.pairingCode,
+    offer: verified.link.pairing,
+    hostCapabilities: verified.runtimeStatus.capabilities
+  })
   let environment: ReturnType<typeof updateEnvironmentFromPairingCode>
   try {
     environment = updateEnvironmentFromPairingCode(userDataPath, existing.id, {
-      pairingCode: args.pairingCode,
+      pairingCode,
       // The verified same host may have restarted with a new runtimeId.
       runtimeId: verified.runtimeStatus.runtimeId
     })

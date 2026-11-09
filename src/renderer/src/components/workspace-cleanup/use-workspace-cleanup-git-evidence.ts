@@ -7,7 +7,7 @@ import {
   type WorkspaceCleanupCandidate,
   WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT as WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS
 } from '../../../../shared/workspace-cleanup/workspace-cleanup'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 
 export type WorkspaceCleanupGitEvidenceState = {
   /** Focused re-scan results, keyed by host-qualified identity. */

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
+import { clearRuntimeEnvironmentConnectionGenerations as clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status/runtime-status-connection-generation'
 import {
   HOST_MIRROR_HANDLE_GAP_DEADLINE_MS,
   countParkedHostMirrorHandleGapPanesForTests,
@@ -8,7 +8,7 @@ import {
   parkUntilHostMirrorHandleLands,
   resetHostMirrorHandleGapWaitsForTests
 } from './host-mirror-handle-gap-wait'
-import { makeTerminalTab } from '../store/slices/worktrees-slice-test-fixtures'
+import { makeTerminalTab } from '../store/terminals/terminal-row.test-fixture'
 
 // Cover store-drain and deadline replays directly: one pane’s throw must not escape to mirror apply, sibling waiters or later subscribers; re-entry must not replay or release stale snapshots.
 
