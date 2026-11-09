@@ -19759,6 +19759,8 @@
         "showAgent": "{{value0}} öğesini konuşmada göster"
       },
       "jumpToLatest": "En son öğeye git",
+      "newRowsAnnouncement": "Siz yokken yeni mesajlar geldi",
+      "newRowsMarker": "Yeni",
       "find": {
         "label": "Sohbette bul",
         "noResults": "Sonuç yok",
@@ -20625,6 +20627,9 @@
         "scrollToLatestOnSendTitle": "Gönderirken en son mesaja kaydır",
         "scrollToLatestOnSendCopy": "Yukarı kaydırılmışken göndermek en son mesaja atlar ve yanıtı takip eder. Konumunuzu korumak için kapatın.",
         "scrollToLatestOnSendSearchPosition": "konum",
+        "markNewMessagesTitle": "Bir sohbete dönünce yeni mesajları işaretle",
+        "markNewMessagesCopy": "Bir sohbete döndüğünüzde, siz yokken gelenlerin üstünde bir Yeni çizgisi gösterilir. En son mesajları okuyorduysanız sohbet oraya kaydırılır.",
+        "markNewMessagesSearchUnread": "okunmamış",
         "inlineVisualsTitle": "Yanıtlarda görseller",
         "inlineVisualsCopy": "Ajanın yanıtlarında grafikler, diyagramlar ve taslaklar göstermesine izin verin. Yeni başlatılan sohbetlere uygulanır.",
         "inlineVisualsToggleLabel": "Yanıtlardaki görselleri aç/kapat",
