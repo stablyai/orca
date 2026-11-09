@@ -6,8 +6,7 @@ import { GuardrailError, killSwitchOn } from './guardrails'
 import {
   DEFAULT_SNAPSHOT_EXPIRATION_MS,
   LifecycleError,
-  SESSION_DEADLINE_MS,
-  adoptRunning,
+  bootLiveSession,
   claim,
   guardrails,
   markProviderStopped,
@@ -38,8 +37,11 @@ const POLL_MS = 400
 const RESTART_DRAIN_SECONDS = 15
 /** A resuming/suspending row older than this is treated as stuck by Restart (the cron's bar is 15 min). */
 const RESTART_STUCK_MS = 5 * 60_000
-/** A wake whose Worker died (waitUntil cut it off) is picked up by the next wake call after this. */
-const WAKE_STALE_MS = 60_000
+/**
+ * A wake whose Worker died (waitUntil cut it off) is picked up by the next wake call after this.
+ * Longer than any live inline wake (the desktop's boot timeout is 180 s), so a healthy boot is never taken over.
+ */
+const WAKE_STALE_MS = 4 * 60_000
 /** A wake that just failed answers `failed` for this long instead of booting again on every poll. */
 const WAKE_FAILURE_HOLD_MS = 60_000
 /** Archive gives orcad this long to write durable offers (the desktop already ran its Sleep). */
@@ -120,7 +122,8 @@ export async function wakeSandbox(
   if (current.status === 'running' && !current.orcad_endpoint) {
     // Repaired by the cron after a wake died: the VM runs, orcad may not.
     const state = await deps.provider.getSandbox(current.provider_name, { resume: false })
-    current = state?.session.status === 'running' ? (await adoptRunning(deps, current, state)).row : await markProviderStopped(deps, current)
+    current =
+      state?.session.status === 'running' ? (await bootLiveSession(deps, current, state)).row : await markProviderStopped(deps, current)
   }
   if (current.status === 'resuming' && deps.now() - current.updated_at >= WAKE_STALE_MS) {
     current = await adoptStaleWake(deps, current)
@@ -165,25 +168,15 @@ async function adoptStaleWake(deps: LifecycleDeps, row: SandboxRow): Promise<San
   if (state?.session.status !== 'running') {
     return markProviderStopped(deps, row)
   }
-  const now = deps.now()
-  const running = await transition(
-    deps.db,
-    row,
-    {
-      status: 'running',
-      session_id: state.session.id,
-      session_started_at: state.session.startedAt ?? now,
-      session_deadline_at: (state.session.startedAt ?? now) + (deps.config.sessionDeadlineMs ?? SESSION_DEADLINE_MS),
-      lease_expires_at: (state.session.startedAt ?? now) + state.session.timeoutMs,
-      usage_settled_at: state.session.startedAt ?? now,
-      orcad_endpoint: null
-    },
-    now
-  )
-  if (!running) {
-    return (await getSandbox(deps.db, row.id)) ?? row
+  try {
+    return (await bootLiveSession(deps, row, state)).row
+  } catch (error) {
+    if (error instanceof LifecycleError && error.code === 'conflict') {
+      // Someone else moved the row meanwhile; report what they left.
+      return (await getSandbox(deps.db, row.id)) ?? row
+    }
+    throw error
   }
-  return (await adoptRunning(deps, running, state)).row
 }
 
 /**

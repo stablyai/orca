@@ -60,3 +60,25 @@ describe('OOM tracker', () => {
     expect(events).toEqual([])
   })
 })
+
+describe('archive checkouts trim', () => {
+  it('keeps cached repo state under the archive body limit', async () => {
+    const { trimCheckouts } = await import('./hosted-workspace-runtime')
+    const big = Array.from({ length: 20 }, (_, i) => ({
+      path: `/w/${i}`,
+      branch: 'b',
+      head: 'h',
+      upstream: null,
+      ahead: null,
+      behind: null,
+      commits: [],
+      changes: [],
+      diffStat: null,
+      fileCount: 2000,
+      files: Array.from({ length: 2000 }, (_, f) => `src/some/long/path/file-${f}.ts`)
+    }))
+    const trimmed = trimCheckouts(big)
+    expect(JSON.stringify(trimmed).length).toBeLessThanOrEqual(200 * 1024)
+    expect(trimmed[0]!.files.length).toBeGreaterThan(0)
+  })
+})

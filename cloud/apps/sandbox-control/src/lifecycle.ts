@@ -576,6 +576,22 @@ export async function adoptRunning(deps: LifecycleDeps, row: SandboxRow, state: 
   return { row: updated ?? row, connection }
 }
 
+/**
+ * The VM is running but the boot that should have followed never finished (its Worker was cut
+ * off, or the cron adopted the session): run the full boot — secrets, repo token, egress policy,
+ * orcad — against the live session, exactly as a wake would.
+ */
+export async function bootLiveSession(deps: LifecycleDeps, row: SandboxRow, state: ProviderSandboxState): Promise<Ready> {
+  const timer = phaseTimer(deps.now)
+  const prep = await timer.time('prepare', () => prepareBoot(deps, row))
+  return boot(deps, row, state, prep, {
+    policyApplied: false,
+    timer,
+    // Re-booting orcad in an already-metered session keeps its usage cursor (no re-billing).
+    billFrom: row.status === 'running' && row.usage_settled_at !== null ? row.usage_settled_at : undefined
+  })
+}
+
 export async function wake(deps: LifecycleDeps, row: SandboxRow): Promise<Ready> {
   const timer = phaseTimer(deps.now)
   // The provider boot is the long pole; secrets and the repo token resolve alongside it.

@@ -256,6 +256,9 @@ describe('wake recovery', () => {
     await h.vercel.getSandbox(`orca-test-${id}`, { resume: true })
     h.raw.prepare(`UPDATE sandboxes SET status = 'resuming', updated_at = ? WHERE id = ?`).run(h.now(), id)
     expect((await h.call('POST', '/v1/workspaces/ws-1/wake')).body.state).toBe('waking')
+    // A live inline boot can take minutes: not adopted yet.
+    h.advance(3 * 60_000)
+    expect((await h.call('POST', '/v1/workspaces/ws-1/wake')).body.state).toBe('waking')
     h.advance(61_000)
     const answer = HostedWakeResponseSchema.parse((await h.call('POST', '/v1/workspaces/ws-1/wake')).body)
     expect(answer.state).toBe('ready')
@@ -266,7 +269,7 @@ describe('wake recovery', () => {
     const { h, id } = await running()
     await h.call('POST', `/v1/sandboxes/${id}/suspend`)
     h.raw.prepare(`UPDATE sandboxes SET status = 'resuming', updated_at = ? WHERE id = ?`).run(h.now(), id)
-    h.advance(61_000)
+    h.advance(4 * 60_000 + 1000)
     expect((await h.call('POST', '/v1/workspaces/ws-1/wake?wait=30s')).body.state).toBe('ready')
   })
 
@@ -288,5 +291,37 @@ describe('wake recovery', () => {
     h.vercel.expire(`orca-test-${id}`)
     h.advance(31 * 60_000)
     expect((await h.call('GET', `/v1/sandboxes/${id}/status`)).body.status.state).toBe('sleeping')
+  })
+})
+
+describe('adopted wakes boot like real wakes', () => {
+  it('starts orcad with the session secrets and the egress policy, and keeps metering intact', async () => {
+    const h = await createHarness({ SECRETS_KEK: Buffer.alloc(32, 7).toString('base64') })
+    expect((await h.call('PUT', '/v1/secrets/personal/OPENAI_API_KEY', { body: { value: 'sk-adopted-test' } })).status).toBe(200)
+    const created = HostedSandboxReadyResponseSchema.parse((await h.call('POST', '/v1/sandboxes', { body: create })).body)
+    const id = created.sandbox.id
+    await h.call('POST', `/v1/sandboxes/${id}/suspend`)
+    await h.vercel.getSandbox(`orca-test-${id}`, { resume: true })
+    h.raw.prepare(`UPDATE sandboxes SET status = 'resuming', updated_at = ? WHERE id = ?`).run(h.now(), id)
+    const before = h.vercel.commands.length
+    h.advance(4 * 60_000 + 1000)
+    expect((await h.call('POST', '/v1/workspaces/ws-1/wake')).body.state).toBe('ready')
+    const start = h.vercel.commands.slice(before).find((c) => c.command === START_COMMAND)!
+    expect(start.env.ORCA_SECRET_ENV).toContain('OPENAI_API_KEY=')
+    expect(start.env.ORCA_PUBLIC_WSS).toMatch(/^wss:/)
+    const row = h.raw.prepare('SELECT status, session_id, orcad_endpoint FROM sandboxes WHERE id = ?').get(id) as any
+    expect(row.status).toBe('running')
+    expect(row.orcad_endpoint).toMatch(/^wss:/)
+  })
+
+  it('a cron-repaired running row without orcad gets a full boot and keeps its usage cursor', async () => {
+    const { h, id } = await running()
+    h.advance(10 * 60_000)
+    const cursor = (h.raw.prepare('SELECT usage_settled_at FROM sandboxes WHERE id = ?').get(id) as any).usage_settled_at
+    h.raw.prepare('UPDATE sandboxes SET orcad_endpoint = NULL WHERE id = ?').run(id)
+    const before = h.vercel.commands.filter((c) => c.command === START_COMMAND).length
+    expect((await h.call('POST', '/v1/workspaces/ws-1/wake')).body.state).toBe('ready')
+    expect(h.vercel.commands.filter((c) => c.command === START_COMMAND)).toHaveLength(before + 1)
+    expect((h.raw.prepare('SELECT usage_settled_at FROM sandboxes WHERE id = ?').get(id) as any).usage_settled_at).toBe(cursor)
   })
 })

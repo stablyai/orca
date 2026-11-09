@@ -76,8 +76,29 @@ export const NOT_CLOUD = {
   message: 'Not an Orca Cloud workspace.'
 } as const
 
-export function readCachedCheckouts(workspaceId: string): Promise<HostedArchiveCheckout[] | null> {
-  return cachedCheckouts ? cachedCheckouts(workspaceId).catch(() => null) : Promise.resolve(null)
+/** Cached repo state for an archive body, trimmed under the control plane's 256 KiB archive limit. */
+export async function readCachedCheckouts(
+  workspaceId: string
+): Promise<HostedArchiveCheckout[] | null> {
+  const checkouts = cachedCheckouts ? await cachedCheckouts(workspaceId).catch(() => null) : null
+  return checkouts ? trimCheckouts(checkouts) : null
+}
+
+const MAX_ARCHIVE_BODY_BYTES = 200 * 1024
+
+export function trimCheckouts(input: HostedArchiveCheckout[]): HostedArchiveCheckout[] {
+  const kept = input.slice(0, 20).map((c) => ({ ...c, files: c.files.slice(0, 2000) }))
+  const fits = (): boolean => JSON.stringify(kept).length <= MAX_ARCHIVE_BODY_BYTES
+  for (let i = kept.length - 1; i >= 0 && !fits(); i--) {
+    kept[i] = { ...kept[i]!, files: i === 0 ? kept[i]!.files.slice(0, 500) : [] }
+  }
+  for (let i = kept.length - 1; i >= 0 && !fits(); i--) {
+    kept[i] = { ...kept[i]!, files: [], changes: kept[i]!.changes.slice(0, 50) }
+  }
+  while (kept.length > 1 && !fits()) {
+    kept.pop()
+  }
+  return kept
 }
 
 /**
