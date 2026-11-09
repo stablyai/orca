@@ -21293,7 +21293,6 @@
         "modelNotSelected": "{{agent}} não tem nenhum modelo selecionado. Verifique a seleção de modelo e o login do {{agent}} e envie novamente.",
         "pluginInputRequired": "{{agent}} parou porque o plugin \"{{plugin}}\" está aguardando uma entrada em um painel de terminal. Desative o plugin para sessões de chat ou execute a tarefa em um terminal {{agent}}.",
         "claudeEffortInvalid": "O nível de esforço do Claude é inválido; selecione low, medium, high, xhigh ou max e envie novamente.",
-        "modelUnavailable": "{{agent}} não conseguiu usar {{detail}}. Selecione outro modelo e envie novamente.",
         "unconfirmed": "Não foi possível confirmar se esta mensagem foi enviada. Ela não foi reenviada."
       },
       "writeNotice": {

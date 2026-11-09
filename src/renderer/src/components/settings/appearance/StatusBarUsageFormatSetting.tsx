@@ -145,7 +145,8 @@ export function StatusBarUsageFormatSetting({
         value={template}
         placeholder={EXAMPLE_TEMPLATE}
         spellCheck={false}
-        className="h-8 font-mono text-[12px]"
+        variant="code"
+        className="h-8"
         onChange={(event) => onChange({ ...format, template: event.target.value })}
       />
       <div className="space-y-1 text-[11px] text-muted-foreground">

@@ -30,6 +30,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 
+function isStatusBarUsageProvider(value: string): value is StatusBarUsageProvider {
+  return STATUS_BAR_USAGE_PROVIDERS.has(value)
+}
+
 /** Coerces persisted/RPC input into a valid format, dropping unknown providers and non-string overrides. */
 export function normalizeStatusBarUsageFormat(value: unknown): StatusBarUsageFormat {
   if (!isRecord(value)) {
@@ -39,8 +43,8 @@ export function normalizeStatusBarUsageFormat(value: unknown): StatusBarUsageFor
   const byProvider: Partial<Record<StatusBarUsageProvider, string>> = {}
   if (isRecord(value.byProvider)) {
     for (const [provider, override] of Object.entries(value.byProvider)) {
-      if (STATUS_BAR_USAGE_PROVIDERS.has(provider) && typeof override === 'string') {
-        byProvider[provider as StatusBarUsageProvider] = override
+      if (isStatusBarUsageProvider(provider) && typeof override === 'string') {
+        byProvider[provider] = override
       }
     }
   }

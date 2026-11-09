@@ -40,7 +40,7 @@ function claudeLimits(): ProviderRateLimits {
     session: windowOf(14, 300),
     weekly: windowOf(20, 10080),
     fableWeekly: windowOf(37, 10080),
-    updatedAt: Date.now(),
+    updatedAt: 1_700_000_000_000,
     error: null,
     status: 'ok'
   }
