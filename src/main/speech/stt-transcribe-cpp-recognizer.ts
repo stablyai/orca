@@ -91,7 +91,12 @@ export async function createTranscribeCppRecognizer(
   if (!gguf) {
     throw new Error(`No .gguf model file in: ${init.files.join(', ')}`)
   }
+  // Device setup (Metal shader library, Vulkan drivers) and reading the weights each report done,
+  // so a cold disk or a busy machine isn't taken for a GPU that hung.
+  await transcribe.initialize()
+  post({ type: 'loading' })
   const model = await transcribe.TranscribeModel.load(join(init.modelDir, gguf))
+  post({ type: 'loading' })
   // The child runs one call at a time, so every stream can share one session.
   const session = model.createSession({ nThreads: performanceCoreThreads() })
   const { languages } = model.capabilities
