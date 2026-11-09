@@ -221,11 +221,18 @@ describe('useMobileSourceControlLoaders status summary', () => {
   }
 
   // Summary reads skip line stats; the screen's own read asks for them.
+  function isSummaryRead(params: unknown): boolean {
+    return (
+      typeof params === 'object' &&
+      params !== null &&
+      'includeLineStats' in params &&
+      params.includeLineStats === false
+    )
+  }
+
   function takeRead(calls: PendingCall[], summary: boolean): PendingCall {
     const index = calls.findIndex(
-      (call) =>
-        call.method === 'git.status' &&
-        ((call.params as { includeLineStats?: boolean }).includeLineStats === false) === summary
+      (call) => call.method === 'git.status' && isSummaryRead(call.params) === summary
     )
     if (index === -1) {
       throw new Error(`The schedule expected a pending ${summary ? 'summary' : 'status'} read`)

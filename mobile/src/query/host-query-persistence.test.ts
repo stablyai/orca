@@ -1,4 +1,4 @@
-import { QueryClient } from '@tanstack/react-query'
+import { hashKey, QueryClient } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaQueryStoreBackend } from '../device-store/query-storage'
 import { hostWorktreeCatalogKey, hostWorktreeCatalogQuery } from '../host-screen/host-list-queries'
@@ -7,7 +7,6 @@ import {
   holdsRestoredHostQueryData,
   persistedHostQueryKey
 } from './host-query-persistence'
-import { hashKey } from '@tanstack/react-query'
 
 vi.mock('react-native', () => ({ AppState: {} }))
 

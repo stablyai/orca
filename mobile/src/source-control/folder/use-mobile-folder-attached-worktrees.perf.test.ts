@@ -21,11 +21,17 @@ import {
 import { MobileFolderWorktreeRow } from './MobileFolderWorktreeRow'
 
 vi.mock('react-native', () => ({ AppState: {} }))
-const gates = vi.hoisted(() => ({ hostCapabilities: [] as string[] }))
+const gates = vi.hoisted(() => {
+  const hostCapabilities: string[] = []
+  return { hostCapabilities }
+})
 vi.mock('../../components/host-protocol-gates-context', () => ({
   useOptionalHostProtocolGates: () => gates
 }))
-const host = vi.hoisted(() => ({ client: null as unknown }))
+const host = vi.hoisted(() => {
+  const state: { client: unknown } = { client: null }
+  return state
+})
 vi.mock('../../transport/connection/host-client-hooks', () => ({
   useHostClient: () => ({ client: host.client, clientId: 'client-1', state: 'connected' })
 }))
@@ -68,6 +74,8 @@ vi.mock('../../i18n/use-mobile-translation', () => ({
 const NO_STATUS = vi.hoisted(() => ({ data: undefined, error: null }))
 const REFRESHERS = new Set<() => void>()
 const NOOP = (): void => {}
+
+const READY: RuntimeClientEventStreamMessage = { type: 'ready', subscriptionId: 'sub-1' }
 
 function row(worktreeId: string, overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -200,7 +208,7 @@ describe.each([
     host.client = fake.client
     const read: { current: MobileFolderAttachedWorktrees | null } = { current: null }
     await mount(read)
-    fake.emit({ type: 'ready' } as RuntimeClientEventStreamMessage)
+    fake.emit(READY)
     await settleQueryNotifications()
     expect(read.current?.worktrees).toHaveLength(n)
     const members = read.current!.worktrees

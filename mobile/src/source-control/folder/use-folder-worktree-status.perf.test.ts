@@ -22,6 +22,13 @@ const STATUS = { branch: 'feature', entries: [] }
 
 type StatusRead = { worktree: string; includeLineStats?: boolean }
 
+function isStatusRead(params: unknown): params is StatusRead {
+  return typeof params === 'object' && params !== null && 'worktree' in params
+}
+
+const runtimeHost = (environmentId: string): ExecutionHostId => `runtime:${environmentId}`
+const READY: RuntimeClientEventStreamMessage = { type: 'ready', subscriptionId: 'sub-1' }
+
 function countingClient() {
   const reads: StatusRead[] = []
   let eventStreams = 0
@@ -30,7 +37,9 @@ function countingClient() {
     getLastConnectedAt: () => 1,
     sendRequest: async (method, params) => {
       if (method === 'git.status') {
-        reads.push(params as StatusRead)
+        if (isStatusRead(params)) {
+          reads.push(params)
+        }
       }
       return { id: 'call', ok: true, result: STATUS, _meta: { runtimeId: 'runtime-1' } }
     },
@@ -93,7 +102,7 @@ function folderRows(n: number, servers: number): RowSpec[] {
   )
   const relayed = Array.from({ length: n }, (_, i) => ({
     worktreeId: `repo-s::/w${i}`,
-    routeHost: `runtime:env-${i % servers}` as ExecutionHostId
+    routeHost: runtimeHost(`env-${i % servers}`)
   }))
   return [...local, ...relayed]
 }
@@ -130,7 +139,7 @@ describe.each([
     vi.useFakeTimers({ toFake: ['Date'] })
     const host = countingClient()
     await mountFolder(folderRows(n, servers), host.client)
-    host.emit({ type: 'ready' } as RuntimeClientEventStreamMessage)
+    host.emit(READY)
     await settleQueryNotifications()
 
     expect(host.reads).toHaveLength(3 * n)
@@ -143,7 +152,7 @@ describe.each([
     vi.useFakeTimers({ toFake: ['Date'] })
     const host = countingClient()
     const setSubscribed = await mountFolder(folderRows(n, servers), host.client)
-    host.emit({ type: 'ready' } as RuntimeClientEventStreamMessage)
+    host.emit(READY)
     await settleQueryNotifications()
 
     host.reads.length = 0
@@ -175,7 +184,7 @@ describe.each([
     const opened: RowSpec = { worktreeId: 'repo-s::/w0', routeHost: 'runtime:env-0' }
     const rows = [
       ...folderRows(n, servers),
-      { worktreeId: 'repo-s::/w0', routeHost: 'runtime:env-x' as ExecutionHostId },
+      { worktreeId: 'repo-s::/w0', routeHost: runtimeHost('env-x') },
       { worktreeId: 'repo-s::/w0', routeHost: undefined }
     ]
     const setSubscribed = await mountFolder(rows, host.client)
