@@ -1,7 +1,9 @@
 import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { VM_SCRIPTS, buildGoldenImage, resolveReleaseBundle, type BuildInputs } from './golden-image'
+import { renderVmScriptsModule } from './generate-vm-scripts'
 
 const manifest: BuildInputs['manifest'] = {
   imageVersion: '2026-11-08.1',
@@ -99,5 +101,12 @@ describe('golden image build', () => {
       sha256: 'c'.repeat(64)
     })
     await expect(resolveReleaseBundle('v1.4.254', 'x64', async () => new Response('', { status: 404 }))).rejects.toThrow(/source build/)
+  })
+})
+
+describe('Worker-embedded image scripts', () => {
+  it('match image/ (run image/generate-vm-scripts.ts after editing a script)', () => {
+    const generated = readFileSync(fileURLToPath(new URL('./vm-scripts.generated.ts', import.meta.url).href), 'utf8')
+    expect(generated).toBe(renderVmScriptsModule())
   })
 })

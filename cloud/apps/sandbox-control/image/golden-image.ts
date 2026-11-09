@@ -82,9 +82,18 @@ export function provisionEnv(inputs: BuildInputs): Record<string, string> {
     env.GH_SHA256 = manifest.gh.sha256
   }
   for (const name of VM_SCRIPTS) {
-    env[`ORCA_VM_SCRIPT_${name.replaceAll('-', '_')}`] = Buffer.from(inputs.vmScripts[name]).toString('base64')
+    env[`ORCA_VM_SCRIPT_${name.replaceAll('-', '_')}`] = utf8Base64(inputs.vmScripts[name])
   }
   return env
+}
+
+/** Runs in Node (operator CLI) and in Workers (scheduled rotation), so no Buffer. */
+function utf8Base64(text: string): string {
+  let binary = ''
+  for (const byte of new TextEncoder().encode(text)) {
+    binary += String.fromCharCode(byte)
+  }
+  return btoa(binary)
 }
 
 export type BuildResult = {
@@ -93,7 +102,8 @@ export type BuildResult = {
   report: unknown
 }
 
-type Provider = Pick<SandboxProviderApi, 'runCommand'> & GoldenImageProviderApi
+type Provider = Pick<SandboxProviderApi, 'runCommand'> &
+  Pick<GoldenImageProviderApi, 'createBuildSandbox' | 'createSnapshot' | 'deleteBuildSandbox'>
 
 export async function buildGoldenImage(
   provider: Provider,

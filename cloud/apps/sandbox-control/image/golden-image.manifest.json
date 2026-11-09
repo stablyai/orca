@@ -8,8 +8,11 @@
     "sha256": null
   },
   "gh": {
-    "version": null,
-    "sha256": null
+    "version": "2.103.3",
+    "sha256": "4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d"
   },
-  "agentCliPackages": ["@anthropic-ai/claude-code@2.1.319", "@openai/codex@0.166.0"]
+  "agentCliPackages": [
+    "@anthropic-ai/claude-code@2.1.319",
+    "@openai/codex@0.166.0"
+  ]
 }

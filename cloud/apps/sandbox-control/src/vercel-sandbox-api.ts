@@ -235,6 +235,35 @@ export function createVercelSandboxApi(
         request('DELETE', `/v2/sandboxes/${encodeURIComponent(name)}`, { query: { projectId: config.projectId } })
       ),
 
+    async startCommand(sessionId, params) {
+      const response = await request('POST', `/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}/cmd`, {
+        body: { command: params.command, args: params.args ?? [], env: params.env ?? {}, timeout: params.timeoutMs }
+      })
+      return (await json(z.looseObject({ command: z.looseObject({ id: z.string() }) }), response)).command.id
+    },
+
+    async getCommand(sessionId, commandId) {
+      const response = await request(
+        'GET',
+        `/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}/cmd/${encodeURIComponent(commandId)}`
+      )
+      const body = await json(z.looseObject({ command: z.looseObject({ exitCode: z.number().nullable().optional() }) }), response)
+      return { exitCode: body.command.exitCode ?? null }
+    },
+
+    async getSnapshot(snapshotId) {
+      try {
+        const response = await request('GET', `/v2/sandboxes/snapshots/${encodeURIComponent(snapshotId)}`)
+        const body = await json(z.looseObject({ snapshot: Snapshot.extend({ expiresAt: z.number().optional() }) }), response)
+        return { id: body.snapshot.id, status: body.snapshot.status, expiresAt: body.snapshot.expiresAt ?? null }
+      } catch (error) {
+        if (error instanceof ProviderError && error.status === 404) {
+          return null
+        }
+        throw error
+      }
+    },
+
     async listSnapshots(name) {
       const snapshots: z.infer<typeof Snapshot>[] = []
       let cursor: string | undefined

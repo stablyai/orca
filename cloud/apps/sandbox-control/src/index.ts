@@ -13,6 +13,7 @@
 // Operator (OPERATOR_TOKEN): /v1/internal/* (see operator.ts)
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
 import { authenticateDesktop } from './auth'
+import { advanceGoldenImages, currentGoldenSnapshotId } from './golden-images'
 import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker, type ProxiedRoute } from './egress-proxy'
 import {
   BillingUnavailableError,
@@ -262,7 +263,12 @@ async function readJson(request: Request): Promise<unknown> {
 
 /** Lifecycle routes refuse to run half-configured rather than guess at Orca's provider account. */
 async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null> {
-  if (!env.GOLDEN_SNAPSHOT_ID || (!deps.provider && (!env.VERCEL_TOKEN || !env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID))) {
+  if (!deps.provider && (!env.VERCEL_TOKEN || !env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID)) {
+    return null
+  }
+  // The Worker rotates golden images itself (golden-images.ts); the var only seeds the first one.
+  const goldenSnapshotId = await currentGoldenSnapshotId(env.SANDBOX_DB, env.GOLDEN_SNAPSHOT_ID)
+  if (!goldenSnapshotId) {
     return null
   }
   return {
@@ -287,12 +293,41 @@ async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null
           ? Math.floor(Number(env.SNAPSHOT_EXPIRATION_DAYS)) * 86_400_000
           : undefined,
       environment: env.SANDBOX_ENV,
-      goldenSnapshotId: env.GOLDEN_SNAPSHOT_ID,
+      goldenSnapshotId,
       defaultRegion: env.VERCEL_REGION ?? 'iad1',
       egressProxyUrl: env.EGRESS_PROXY_URL,
       sessionDeadlineMs:
         env.SESSION_DEADLINE_MS && env.SANDBOX_ENV !== 'prod' ? Number(env.SESSION_DEADLINE_MS) : undefined
     }
+  }
+}
+
+/** Keeps a smoke-tested golden image current: refresh before expiry, rebuild on a new release. */
+async function advanceGoldenImagesFromEnv(env: Env): Promise<void> {
+  if (!env.VERCEL_TOKEN || !env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID) {
+    return
+  }
+  const days = Number(env.GOLDEN_SNAPSHOT_EXPIRATION_DAYS ?? '0')
+  const tick = await advanceGoldenImages({
+    db: env.SANDBOX_DB,
+    provider: createVercelSandboxApi({
+      token: env.VERCEL_TOKEN,
+      teamId: env.VERCEL_TEAM_ID,
+      projectId: env.VERCEL_PROJECT_ID,
+      baseUrl: env.VERCEL_API_BASE
+    }),
+    now: Date.now,
+    config: {
+      environment: env.SANDBOX_ENV,
+      region: env.VERCEL_REGION ?? 'iad1',
+      expirationMs: Number.isFinite(days) && days >= 1 ? Math.floor(days) * 86_400_000 : 0,
+      source: env.GOLDEN_IMAGE_SOURCE,
+      seedSnapshotId: env.GOLDEN_SNAPSHOT_ID,
+      refreshBeforeMs: env.GOLDEN_REFRESH_BEFORE_HOURS ? Number(env.GOLDEN_REFRESH_BEFORE_HOURS) * 3_600_000 : undefined
+    }
+  })
+  if (tick !== 'idle') {
+    console.log(JSON.stringify({ event: 'golden_image_tick', tick }))
   }
 }
 
@@ -524,6 +559,9 @@ export default {
           const summary = await reconcile(life)
           console.log(JSON.stringify({ event: 'reconcile', ...summary }))
         }
+        await advanceGoldenImagesFromEnv(env).catch((error: unknown) =>
+          console.log(JSON.stringify({ event: 'golden_image_tick_failed', error: String(error).slice(0, 200) }))
+        )
       })
     )
   }

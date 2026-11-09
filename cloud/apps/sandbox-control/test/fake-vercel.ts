@@ -133,6 +133,9 @@ export function createFakeVercel(now: () => number): FakeVercel {
         const ready = { schemaVersion: 1, pairingCode: `orca://pair?code=${box.params.name}`, projectRoot: '/vercel/sandbox/project' }
         return { exitCode: 0, stdout: `booting\n${JSON.stringify(ready)}\n`, stderr: '' }
       }
+      if (params.command === '/opt/orca/bin/orca-image-wipe') {
+        return { exitCode: 0, stdout: '{"wiped":true}\n', stderr: '' }
+      }
       if (params.command === DRAIN_COMMAND) {
         return { exitCode: 0, stdout: '', stderr: '' }
       }
