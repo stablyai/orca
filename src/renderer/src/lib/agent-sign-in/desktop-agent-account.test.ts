@@ -14,21 +14,21 @@ describe('desktop agent account', () => {
   it('uses the selected account, else the System default login', () => {
     const accounts = [account('a', 'work@example.com'), account('b', 'home@example.com')]
     expect(
-      selectedAccountEmail('claude', {
+      selectedAccountEmail({
         accounts,
         activeAccountId: 'a',
         activeAccountIdsByRuntime: { host: 'b', wsl: {} }
       })
     ).toBe('home@example.com')
     expect(
-      selectedAccountEmail('claude', {
+      selectedAccountEmail({
         accounts,
         activeAccountId: null,
         systemDefaultEmail: 'default@example.com'
       })
     ).toBe('default@example.com')
     expect(
-      selectedAccountEmail('codex', {
+      selectedAccountEmail({
         accounts: [],
         activeAccountId: null,
         systemDefault: {
