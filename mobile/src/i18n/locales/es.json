@@ -1358,13 +1358,23 @@
       "durationSeconds_many": "{{count}} segundos",
       "durationMinutes_one": "{{count}} minuto",
       "durationMinutes_other": "{{count}} minutos",
-      "durationMinutes_many": "{{count}} minutos"
+      "durationMinutes_many": "{{count}} minutos",
+      "discard": "Descartar grabación",
+      "retry": "Reintentar dictado",
+      "retryShort": "Reintentar"
     },
     "status": {
       "finishingOn": "Terminando en {{computer}}",
       "finishingOnComputer": "Terminando en el ordenador",
       "movedTo": "Pasado a {{computer}}",
       "movedToComputer": "Pasado al ordenador"
+    },
+    "failure": {
+      "connectionLost": "Conexión perdida",
+      "connectionSlow": "Conexión demasiado lenta",
+      "phoneStopped": "Detenido en este teléfono",
+      "stopped": "Dictado detenido",
+      "recordingKept": "Grabación guardada"
     }
   },
   "files": {

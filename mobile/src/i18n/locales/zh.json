@@ -1313,13 +1313,23 @@
       "durationSeconds_one": "{{count}} 秒",
       "durationSeconds_other": "{{count}} 秒",
       "durationMinutes_one": "{{count}} 分钟",
-      "durationMinutes_other": "{{count}} 分钟"
+      "durationMinutes_other": "{{count}} 分钟",
+      "discard": "丢弃录音",
+      "retry": "重试听写",
+      "retryShort": "重试"
     },
     "status": {
       "finishingOn": "正在 {{computer}} 上完成",
       "finishingOnComputer": "正在电脑上完成",
       "movedTo": "已转到 {{computer}}",
       "movedToComputer": "已转到电脑"
+    },
+    "failure": {
+      "connectionLost": "连接已断开",
+      "connectionSlow": "连接太慢",
+      "phoneStopped": "已在此手机上停止",
+      "stopped": "听写已停止",
+      "recordingKept": "录音已保留"
     }
   },
   "files": {

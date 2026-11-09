@@ -4,10 +4,11 @@ import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-hos
 import { useHostDisplay } from '../transport/hosts/use-host-display'
 import { useHostProfile } from '../transport/hosts/use-host-profile'
 import type { MobileDictationLive } from './mobile-dictation-live-context'
+import { dictationFailureReason } from './mobile-dictation-controls-copy'
 
-// What every dictation control reads while one runs: meter, engine, the computer's name and cancel.
+// What every dictation control reads while one runs or waits for Retry: meter, engine, the computer's name, cancel and Retry.
 export function useMobileDictationLive(
-  dictation: Pick<UseMobileDictationResult, 'meter' | 'engine'>,
+  dictation: Pick<UseMobileDictationResult, 'meter' | 'engine' | 'failure' | 'retry'>,
   cancel: () => void,
   hostId: string
 ): MobileDictationLive {
@@ -20,9 +21,17 @@ export function useMobileDictationLive(
   const hostTitle = useHostDisplay(hostProfile).title
   // A workspace routed to another server transcribes there, and the phone lacks that server's name.
   const computerName = useWorkspaceExecutionHost() === undefined && hostProfile ? hostTitle : null
-  const { meter, engine } = dictation
+  const { meter, engine, failure, retry } = dictation
+  const failureReason = failure === null ? null : dictationFailureReason(failure)
   return useMemo(
-    () => ({ meter, engine, computerName, cancel: stableCancel }),
-    [meter, engine, computerName, stableCancel]
+    () => ({
+      meter,
+      engine,
+      computerName,
+      cancel: stableCancel,
+      failureReason,
+      retry: () => void retry()
+    }),
+    [meter, engine, computerName, stableCancel, failureReason, retry]
   )
 }

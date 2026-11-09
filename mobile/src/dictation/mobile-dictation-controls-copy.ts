@@ -1,5 +1,11 @@
 import { translate } from '../i18n/mobile-i18n'
-import type { MobileDictationEngineShown } from '../hooks/mobile-dictation-session-state'
+import type {
+  MobileDictationEngineShown,
+  MobileDictationKeptFailure
+} from '../hooks/mobile-dictation-session-state'
+import { MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE } from '../hooks/mobile-dictation-pending-audio-budget'
+import { phoneDictationFailedMessage } from '../hooks/mobile-dictation-device-engine'
+import { dictationFailureMessage, dictationSessionLostMessage } from './mobile-dictation-setup'
 
 // Active: starting or recording, so the mic is a Stop.
 export type MobileDictationMicState = { starting: boolean; active: boolean; processing: boolean }
@@ -11,6 +17,10 @@ export const dictationControlsCopy = {
   stop: () => translate('dictation.controls.stop', 'Stop and insert'),
   finishing: () => translate('dictation.controls.finishing', 'Finishing dictation'),
   cancel: () => translate('dictation.controls.cancel', 'Cancel dictation'),
+  discard: () => translate('dictation.controls.discard', 'Discard recording'),
+  retry: () => translate('dictation.controls.retry', 'Retry dictation'),
+  retryShort: () => translate('dictation.controls.retryShort', 'Retry'),
+  recordingKept: () => translate('dictation.failure.recordingKept', 'Recording kept'),
   mic: ({ starting, active, processing }: MobileDictationMicState) =>
     starting
       ? dictationControlsCopy.starting()
@@ -78,4 +88,18 @@ export function dictationMeterLabel(
         )
   }
   return translate('dictation.controls.meter', 'Recording, {{duration}}', { duration })
+}
+
+// The few words a kept failure shows in the composer row; the full message is too long for it.
+export function dictationFailureReason({ message, offline }: MobileDictationKeptFailure): string {
+  if (offline || dictationFailureMessage(message) === dictationSessionLostMessage()) {
+    return translate('dictation.failure.connectionLost', 'Connection lost')
+  }
+  if (message === MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE) {
+    return translate('dictation.failure.connectionSlow', 'Connection too slow')
+  }
+  if (message === phoneDictationFailedMessage()) {
+    return translate('dictation.failure.phoneStopped', 'Stopped on this phone')
+  }
+  return translate('dictation.failure.stopped', 'Dictation stopped')
 }

@@ -1317,13 +1317,23 @@
       "durationSeconds_one": "{{count}} saniye",
       "durationSeconds_other": "{{count}} saniye",
       "durationMinutes_one": "{{count}} dakika",
-      "durationMinutes_other": "{{count}} dakika"
+      "durationMinutes_other": "{{count}} dakika",
+      "discard": "Kaydı sil",
+      "retry": "Dikteyi yeniden dene",
+      "retryShort": "Yeniden dene"
     },
     "status": {
       "finishingOn": "{{computer}} üzerinde tamamlanıyor",
       "finishingOnComputer": "Bilgisayarda tamamlanıyor",
       "movedTo": "{{computer}} cihazına geçildi",
       "movedToComputer": "Bilgisayara geçildi"
+    },
+    "failure": {
+      "connectionLost": "Bağlantı kesildi",
+      "connectionSlow": "Bağlantı çok yavaş",
+      "phoneStopped": "Bu telefonda durdu",
+      "stopped": "Dikte durdu",
+      "recordingKept": "Kayıt saklandı"
     }
   },
   "files": {

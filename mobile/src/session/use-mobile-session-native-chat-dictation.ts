@@ -166,7 +166,12 @@ export function useMobileSessionNativeChatDictation(
         }
       })().catch(() => keepUndeliveredDictation(text))
     },
-    onError: (err) => {
+    onError: (err, { kept }) => {
+      // A kept failure shows in place with Retry, which still needs the dictation's target.
+      if (kept) {
+        triggerError()
+        return
+      }
       dictationRouteContextRef.current = null
       reportDictationFailure(err)
     },

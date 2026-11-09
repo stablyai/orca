@@ -1313,13 +1313,23 @@
       "durationSeconds_one": "{{count}}초",
       "durationSeconds_other": "{{count}}초",
       "durationMinutes_one": "{{count}}분",
-      "durationMinutes_other": "{{count}}분"
+      "durationMinutes_other": "{{count}}분",
+      "discard": "녹음 삭제",
+      "retry": "받아쓰기 다시 시도",
+      "retryShort": "다시 시도"
     },
     "status": {
       "finishingOn": "{{computer}}에서 마무리 중",
       "finishingOnComputer": "컴퓨터에서 마무리 중",
       "movedTo": "{{computer}}(으)로 전환됨",
       "movedToComputer": "컴퓨터로 전환됨"
+    },
+    "failure": {
+      "connectionLost": "연결 끊김",
+      "connectionSlow": "연결이 너무 느림",
+      "phoneStopped": "이 휴대폰에서 중지됨",
+      "stopped": "받아쓰기 중지됨",
+      "recordingKept": "녹음 보관됨"
     }
   },
   "files": {

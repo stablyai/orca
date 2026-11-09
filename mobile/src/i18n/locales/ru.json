@@ -1399,13 +1399,23 @@
       "durationMinutes_one": "{{count}} минута",
       "durationMinutes_other": "{{count}} минуты",
       "durationMinutes_few": "{{count}} минуты",
-      "durationMinutes_many": "{{count}} минут"
+      "durationMinutes_many": "{{count}} минут",
+      "discard": "Удалить запись",
+      "retry": "Повторить диктовку",
+      "retryShort": "Повторить"
     },
     "status": {
       "finishingOn": "Завершается на {{computer}}",
       "finishingOnComputer": "Завершается на компьютере",
       "movedTo": "Перешло на {{computer}}",
       "movedToComputer": "Перешло на компьютер"
+    },
+    "failure": {
+      "connectionLost": "Соединение потеряно",
+      "connectionSlow": "Соединение слишком медленное",
+      "phoneStopped": "Остановлено на этом телефоне",
+      "stopped": "Диктовка остановлена",
+      "recordingKept": "Запись сохранена"
     }
   },
   "files": {

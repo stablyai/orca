@@ -1313,13 +1313,23 @@
       "durationSeconds_one": "{{count}} 秒",
       "durationSeconds_other": "{{count}} 秒",
       "durationMinutes_one": "{{count}} 分",
-      "durationMinutes_other": "{{count}} 分"
+      "durationMinutes_other": "{{count}} 分",
+      "discard": "録音を破棄",
+      "retry": "音声入力を再試行",
+      "retryShort": "再試行"
     },
     "status": {
       "finishingOn": "{{computer}} で仕上げています",
       "finishingOnComputer": "コンピュータで仕上げています",
       "movedTo": "{{computer}} に切り替えました",
       "movedToComputer": "コンピュータに切り替えました"
+    },
+    "failure": {
+      "connectionLost": "接続が切れました",
+      "connectionSlow": "接続が遅すぎます",
+      "phoneStopped": "このスマートフォンで停止しました",
+      "stopped": "音声入力が停止しました",
+      "recordingKept": "録音は保持されています"
     }
   },
   "files": {

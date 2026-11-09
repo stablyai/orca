@@ -534,13 +534,23 @@
       "meterOnPhone": "Recording, {{duration}}, on this phone",
       "meterOn": "Recording, {{duration}}, on {{computer}}",
       "meterOnComputer": "Recording, {{duration}}, on the computer",
-      "meter": "Recording, {{duration}}"
+      "meter": "Recording, {{duration}}",
+      "discard": "Discard recording",
+      "retry": "Retry dictation",
+      "retryShort": "Retry"
     },
     "status": {
       "finishingOn": "Finishing on {{computer}}",
       "finishingOnComputer": "Finishing on the computer",
       "movedTo": "Moved to {{computer}}",
       "movedToComputer": "Moved to the computer"
+    },
+    "failure": {
+      "recordingKept": "Recording kept",
+      "connectionLost": "Connection lost",
+      "connectionSlow": "Connection too slow",
+      "phoneStopped": "Stopped on this phone",
+      "stopped": "Dictation stopped"
     }
   },
   "home": {
