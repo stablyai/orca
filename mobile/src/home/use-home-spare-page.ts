@@ -30,7 +30,7 @@ export function useHomeSparePage(hostIds: readonly string[]): void {
         cancelTimer()
         cancelTimer = setForegroundTimer(
           () => void prepareHomeSparePage(processGenerationStore(), hosts.split(HOST_ID_SEPARATOR)),
-          Math.max(HOME_SPARE_IDLE_MS, homeSpareRefillWaitMs())
+          Math.max(HOME_SPARE_IDLE_MS, Math.ceil(homeSpareRefillWaitMs()))
         )
       }
       arm()
