@@ -31,7 +31,8 @@ import {
   resumeSandbox,
   rolloverSandbox,
   suspendSandbox,
-  type LifecycleDeps
+  type LifecycleDeps,
+  type Ready
 } from './lifecycle'
 import { createGitHubAppMinter, type GitHubAppMinter } from './github-app'
 import {
@@ -245,6 +246,18 @@ function devCredentials(env: Env): CredentialBroker {
   return { authorizationFor: async (_row, host) => (host === 'api.github.com' ? value : null) }
 }
 
+/** Ready answers carry phase timings as Server-Timing so clients and dashboards can see the slow step. */
+function readyResponse(ready: Ready): Response {
+  const response = json(readyView(ready.row, ready.connection))
+  const timing = Object.entries(ready.timings ?? {})
+    .map(([phase, ms]) => `${phase};dur=${ms}`)
+    .join(', ')
+  if (timing) {
+    response.headers.set('server-timing', timing)
+  }
+  return response
+}
+
 function json(body: unknown, status = 200): Response {
   return Response.json(body, { status, headers: { 'cache-control': 'no-store' } })
 }
@@ -386,6 +399,17 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         })) ?? fail('not_found', 404)
       )
     }
+    if (url.pathname === '/v1/github/dev-connect' && env.SANDBOX_ENV !== 'prod') {
+      // Dev-only, link-shareable start of the user flow: mints a fresh 10-min state per click for a dev:<sub>
+      // account (desktop builds call POST /v1/github/connect instead).
+      const connect = githubConnect(env, deps)
+      const sub = url.searchParams.get('sub') ?? ''
+      if (!connect || !/^[A-Za-z0-9_.-]{1,64}$/.test(sub)) {
+        return fail('not_found', 404)
+      }
+      const state = await createConnectState(env.SANDBOX_DB, connect.stateSecret, { accountId: `dev:${sub}`, userId: sub }, (deps.now ?? Date.now)())
+      return Response.redirect(authorizeUrl(connect, url.origin, state), 302)
+    }
     if (url.pathname === '/v1/github/connect' || url.pathname === '/v1/github/installations') {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
@@ -445,7 +469,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         return fail('invalid_request', 400)
       }
       const ready = await createSandbox(life, caller, body.data)
-      return json(readyView(ready.row, ready.connection))
+      return readyResponse(ready)
     }
     const row = await getSandbox(env.SANDBOX_DB, id)
     // Another account's sandbox is indistinguishable from a missing one.
@@ -462,11 +486,11 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         return json({ sandbox: sandboxView(await suspendSandbox(life, row)) })
       case 'POST resume': {
         const ready = await resumeSandbox(life, row)
-        return json(readyView(ready.row, ready.connection))
+        return readyResponse(ready)
       }
       case 'POST rollover': {
         const ready = await rolloverSandbox(life, row)
-        return json(readyView(ready.row, ready.connection))
+        return readyResponse(ready)
       }
       case 'POST lease': {
         const body = LeaseRequestSchema.safeParse(await readJson(request))

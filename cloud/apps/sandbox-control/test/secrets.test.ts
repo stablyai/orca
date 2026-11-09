@@ -34,7 +34,7 @@ afterEach(() => {
 async function setup(overrides: Record<string, string> = {}, deps: Parameters<typeof createHarness>[1] = {}) {
   const h = await createHarness({ SECRETS_KEK: KEK, ...overrides }, deps)
   const as = async (sub: string, org?: string, role?: string) =>
-    h.token(sub, org, 'sandbox', role ? { org_role: role } : {})
+    h.token(sub, org, 'sandbox', role ? { orgRole: role } : {})
   async function put(scope: string, name: string, value: string, bearer: string, repo?: string) {
     const query = repo ? `?repo=${encodeURIComponent(repo)}` : ''
     return h.call('PUT', `/v1/secrets/${scope}/${name}${query}`, { body: { value }, bearer })

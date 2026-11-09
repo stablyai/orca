@@ -76,7 +76,41 @@ export class LifecycleError extends Error {
   }
 }
 
-export type Ready = { row: SandboxRow; connection: OrcadReady }
+export type Ready = { row: SandboxRow; connection: OrcadReady; timings?: Record<string, number> }
+
+/** Phase durations for one lifecycle call (logged + Server-Timing); counts only, no ids or secrets. */
+export function phaseTimer(now: () => number = Date.now) {
+  const timings: Record<string, number> = {}
+  return {
+    timings,
+    async time<T>(phase: string, work: () => Promise<T>): Promise<T> {
+      const started = now()
+      try {
+        return await work()
+      } finally {
+        timings[phase] = now() - started
+      }
+    }
+  }
+}
+
+type BootPrep = {
+  secrets: { env: Record<string, string>; hosts: string[] }
+  minted: { token: string; expiresAt: number } | null
+}
+
+/** Everything a boot needs that does not depend on the VM: resolved concurrently with the VM work. */
+async function prepareBoot(deps: LifecycleDeps, row: SandboxRow): Promise<BootPrep> {
+  const [secrets, minted] = await Promise.all([
+    sessionSecrets(deps, row),
+    deps.github && row.repo_url ? deps.github.tokenForRepo(row.repo_url, row.account_id) : Promise.resolve(null)
+  ])
+  return { secrets, minted }
+}
+
+function routedRow(row: SandboxRow, prep: BootPrep): SandboxRow {
+  return { ...row, egress_secret_hosts: prep.secrets.hosts.join(',') || null }
+}
 
 function randomId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(12))
@@ -158,9 +192,11 @@ export function guardrails(deps: LifecycleDeps): GuardrailConfig {
 }
 
 async function requireStart(deps: LifecycleDeps, accountId: string, userId: string, machineSize: MachineSize) {
-  await assertStartsOpen(deps.db, guardrails(deps))
-  const runningSandboxes = await countActiveSandboxes(deps.db, accountId)
-  const runningSandboxesForUser = await countActiveSandboxesForUser(deps.db, accountId, userId)
+  const [, runningSandboxes, runningSandboxesForUser] = await Promise.all([
+    assertStartsOpen(deps.db, guardrails(deps)),
+    countActiveSandboxes(deps.db, accountId),
+    countActiveSandboxesForUser(deps.db, accountId, userId)
+  ])
   const decision = await deps.entitlements.checkStart({
     accountId,
     machineSize,
@@ -180,24 +216,37 @@ async function requireStart(deps: LifecycleDeps, accountId: string, userId: stri
   })
 }
 
-async function boot(deps: LifecycleDeps, row: SandboxRow, state: ProviderSandboxState, repo?: { url: string; ref?: string }): Promise<Ready> {
+async function boot(
+  deps: LifecycleDeps,
+  row: SandboxRow,
+  state: ProviderSandboxState,
+  prep: BootPrep,
+  options: { repo?: { url: string; ref?: string }; policyApplied: boolean; timer: ReturnType<typeof phaseTimer> }
+): Promise<Ready> {
   if (state.sandbox.tags.orcaSandbox !== row.id) {
     throw new LifecycleError('conflict', 'ownership_mismatch')
   }
-  const secrets = await sessionSecrets(deps, row)
-  const routed: SandboxRow = { ...row, egress_secret_hosts: secrets.hosts.join(',') || null }
-  const git = await refreshGitCredentials(deps, routed, state.session.id)
-  if (!git && (routed.egress_secret_hosts || row.egress_secret_hosts)) {
-    // Model-key routes must be live before any agent starts; the git refresh already wrote them.
-    await deps.provider.updateNetworkPolicy(state.session.id, egressPolicy(deps, routed))
-  }
-  const connection = await startOrcad(deps.provider, state, {
-    sandboxId: row.id,
-    repo,
-    githubPlaceholder: deps.config.egressProxyUrl ? githubPlaceholderToken(row) : undefined,
-    gitExtraHeader: git ? `Authorization: ${gitBasicAuthorization(githubPlaceholderToken(row))}` : undefined,
-    secretEnv: secrets.env
-  })
+  const routed = routedRow(row, prep)
+  const git = prep.minted ? { expiresAt: prep.minted.expiresAt } : null
+  // A resumed session keeps its last policy (an expired repo token); swap it in while orcad boots.
+  // Nothing in the VM uses git or model keys before orcad answers and the desktop attaches.
+  const needsPolicy = !options.policyApplied && (git || routed.egress_secret_hosts || row.egress_secret_hosts)
+  const [, connection] = await Promise.all([
+    needsPolicy
+      ? options.timer.time('policy', () =>
+          deps.provider.updateNetworkPolicy(state.session.id, egressPolicy(deps, routed, prep.minted?.token))
+        )
+      : Promise.resolve(),
+    options.timer.time('orcad', () =>
+      startOrcad(deps.provider, state, {
+        sandboxId: row.id,
+        repo: options.repo,
+        githubPlaceholder: deps.config.egressProxyUrl ? githubPlaceholderToken(row) : undefined,
+        gitExtraHeader: git ? `Authorization: ${gitBasicAuthorization(githubPlaceholderToken(row))}` : undefined,
+        secretEnv: prep.secrets.env
+      })
+    )
+  ])
   const running = await claim(deps, row, {
     status: 'running',
     last_error: null,
@@ -206,7 +255,7 @@ async function boot(deps: LifecycleDeps, row: SandboxRow, state: ProviderSandbox
     egress_secret_hosts: routed.egress_secret_hosts,
     ...sessionFields(deps, state)
   })
-  return { row: running, connection }
+  return { row: running, connection, timings: options.timer.timings }
 }
 
 /**
@@ -260,42 +309,52 @@ export async function createSandbox(
     }
     return { row: existing, connection: await startOrcad(deps.provider, state, { sandboxId: existing.id }) }
   }
-  await requireStart(deps, caller.accountId, caller.userId, request.machineSize)
+  const timer = phaseTimer(deps.now)
+  await timer.time('entitlement', () => requireStart(deps, caller.accountId, caller.userId, request.machineSize))
   const id = randomId()
-  const row = await insertSandbox(
-    deps.db,
-    {
-      id,
-      account_id: caller.accountId,
-      user_id: caller.userId,
-      workspace_id: request.workspaceId,
-      provider: 'vercel',
-      provider_name: `orca-${deps.config.environment}-${id}`,
-      machine_size: request.machineSize,
-      region: request.region ?? deps.config.defaultRegion,
-      repo_url: request.repo?.url ?? null
-    },
-    deps.now()
-  )
+  // Write-ahead row and the VM-independent prep (secrets, repo token) run together.
+  const [row, prep] = await timer.time('prepare', async () => {
+    const inserted = await insertSandbox(
+      deps.db,
+      {
+        id,
+        account_id: caller.accountId,
+        user_id: caller.userId,
+        workspace_id: request.workspaceId,
+        provider: 'vercel',
+        provider_name: `orca-${deps.config.environment}-${id}`,
+        machine_size: request.machineSize,
+        region: request.region ?? deps.config.defaultRegion,
+        repo_url: request.repo?.url ?? null
+      },
+      deps.now()
+    )
+    return [inserted, await prepareBoot(deps, inserted)] as const
+  })
   let state: ProviderSandboxState
   try {
-    state = await deps.provider.createSandbox({
-      name: row.provider_name,
-      snapshotId: deps.config.goldenSnapshotId,
-      vcpus: VCPUS[row.machine_size],
-      region: row.region,
-      timeoutMs: LEASE_MS,
-      ports: [ORCAD_PORT],
-      networkPolicy: egressPolicy(deps, row),
-      snapshotExpirationMs: deps.config.snapshotExpirationMs ?? DEFAULT_SNAPSHOT_EXPIRATION_MS,
-      tags: { orcaSandbox: row.id, orcaEnv: deps.config.environment }
-    })
+    // The full policy (repo token, model-key routes) goes in at create: no second policy round trip.
+    state = await timer.time('vm', () =>
+      deps.provider.createSandbox({
+        name: row.provider_name,
+        snapshotId: deps.config.goldenSnapshotId,
+        vcpus: VCPUS[row.machine_size],
+        region: row.region,
+        timeoutMs: LEASE_MS,
+        ports: [ORCAD_PORT],
+        networkPolicy: egressPolicy(deps, routedRow(row, prep), prep.minted?.token),
+        snapshotExpirationMs: deps.config.snapshotExpirationMs ?? DEFAULT_SNAPSHOT_EXPIRATION_MS,
+        tags: { orcaSandbox: row.id, orcaEnv: deps.config.environment }
+      })
+    )
   } catch (error) {
     await failAndRelease(deps, row)
     throw error
   }
   try {
-    return await boot(deps, row, state, request.repo)
+    const ready = await boot(deps, row, state, prep, { repo: request.repo, policyApplied: true, timer })
+    console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'create', ms: timer.timings }))
+    return ready
   } catch (error) {
     await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row)
     throw error
@@ -379,13 +438,20 @@ export async function resumeSandbox(deps: LifecycleDeps, row: SandboxRow): Promi
 }
 
 async function wake(deps: LifecycleDeps, row: SandboxRow): Promise<Ready> {
-  const state = await deps.provider.getSandbox(row.provider_name, { resume: true })
+  const timer = phaseTimer(deps.now)
+  // The provider boot is the long pole; secrets and the repo token resolve alongside it.
+  const [state, prep] = await Promise.all([
+    timer.time('vm', () => deps.provider.getSandbox(row.provider_name, { resume: true })),
+    timer.time('prepare', () => prepareBoot(deps, row))
+  ])
   if (!state) {
     await claim(deps, row, { status: 'failed', last_error: 'provider_sandbox_missing' })
     throw new LifecycleError('conflict', 'environment_missing')
   }
   try {
-    return await boot(deps, row, state)
+    const ready = await boot(deps, row, state, prep, { policyApplied: false, timer })
+    console.log(JSON.stringify({ event: 'lifecycle_timing', op: 'wake', ms: timer.timings }))
+    return ready
   } catch (error) {
     // Leave it resumable: the disk is intact, only this boot failed.
     const current = await getSandbox(deps.db, row.id)

@@ -20,7 +20,7 @@ const ClaimsSchema = z.object({
   sub: ID,
   org: ID.optional(),
   /** The caller's role in `org`, minted by Orca Cloud auth; absent means no admin rights. */
-  org_role: z.enum(['owner', 'admin', 'member']).optional(),
+  orgRole: z.enum(['owner', 'admin', 'member']).optional(),
   purpose: z.literal('sandbox')
 })
 
@@ -81,7 +81,7 @@ async function verify(
     return {
       userId: claims.sub,
       accountId: accountIdFor(claims),
-      ...(claims.org ? { orgId: claims.org, ...(claims.org_role ? { orgRole: claims.org_role } : {}) } : {})
+      ...(claims.org ? { orgId: claims.org, ...(claims.orgRole ? { orgRole: claims.orgRole } : {}) } : {})
     }
   } catch {
     return null
