@@ -4,7 +4,14 @@ import { z } from 'zod'
 import type { GoldenImageProviderApi } from '../src/golden-image-provider'
 import type { SandboxProviderApi } from '../src/sandbox-provider'
 
-export const VM_SCRIPTS = ['orca-sandbox-start', 'orca-sandbox-drain', 'orca-egress-probe', 'orca-image-wipe'] as const
+export const VM_SCRIPTS = [
+  'orca-sandbox-start',
+  'orca-sandbox-drain',
+  'orca-sandbox-env',
+  'orca-session-env.sh',
+  'orca-egress-probe',
+  'orca-image-wipe'
+] as const
 
 const Sha256 = z.string().regex(/^[a-f0-9]{64}$/)
 const Package = z.string().regex(/^(@[a-z0-9-]+\/)?[a-z0-9.-]+@\d+\.\d+\.\d+[A-Za-z0-9.-]*$/)
@@ -12,11 +19,14 @@ const Package = z.string().regex(/^(@[a-z0-9-]+\/)?[a-z0-9.-]+@\d+\.\d+\.\d+[A-Z
 export const ManifestSchema = z
   .object({
     imageVersion: z.string().regex(/^[0-9]{4}-[0-9]{2}-[0-9]{2}\.[0-9]+$/),
-    runtime: z.string().min(1),
+    /** Vercel Managed Image (Ubuntu) the build starts from, e.g. vercel/sandbox/node:24. */
+    image: z.string().regex(/^vercel\/sandbox\/[a-z0-9-]+(:[A-Za-z0-9._-]+|@sha256:[a-f0-9]{64})?$/),
     region: z.string().regex(/^[a-z]{3}[0-9]$/),
     vcpus: z.number().int().min(2).max(8),
     orcad: z.object({ bundleUrl: z.url({ protocol: /^https$/ }).nullable(), sha256: Sha256.nullable() }).strict(),
     gh: z.object({ version: z.string().regex(/^\d+\.\d+\.\d+$/).nullable(), sha256: Sha256.nullable() }).strict(),
+    /** Google Chrome .deb (headless browser for agents and Orca browser automation); null skips it. */
+    chrome: z.object({ version: z.string().regex(/^\d+\.\d+\.\d+\.\d+-\d+$/), sha256: Sha256 }).strict().nullable(),
     agentCliPackages: z.array(Package).min(1)
   })
   .strict()
@@ -81,8 +91,12 @@ export function provisionEnv(inputs: BuildInputs): Record<string, string> {
     env.GH_VERSION = manifest.gh.version
     env.GH_SHA256 = manifest.gh.sha256
   }
+  if (manifest.chrome) {
+    env.CHROME_VERSION = manifest.chrome.version
+    env.CHROME_SHA256 = manifest.chrome.sha256
+  }
   for (const name of VM_SCRIPTS) {
-    env[`ORCA_VM_SCRIPT_${name.replaceAll('-', '_')}`] = utf8Base64(inputs.vmScripts[name])
+    env[`ORCA_VM_SCRIPT_${name.replaceAll(/[-.]/g, '_')}`] = utf8Base64(inputs.vmScripts[name])
   }
   return env
 }
@@ -118,7 +132,7 @@ export async function buildGoldenImage(
   log(`creating build sandbox ${name}`)
   const state = await provider.createBuildSandbox({
     name,
-    runtime: inputs.manifest.runtime,
+    image: inputs.manifest.image,
     vcpus: inputs.manifest.vcpus,
     region: inputs.manifest.region,
     timeoutMs: BUILD_TIMEOUT_MS,

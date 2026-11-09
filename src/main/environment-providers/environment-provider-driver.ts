@@ -11,19 +11,14 @@ export type EnvironmentProviderCapabilities = Readonly<{
   fsPersistOnStop: boolean
   /** Orca-owned idle stop; null when the provider has none. */
   idleStopMs: number | null
-  /** Secrets can be injected at the egress proxy instead of living in the VM. */
-  egressInjection?: boolean
 }>
 
 export type EnvironmentProviderPhase =
-  | 'checking-entitlement'
   | 'provisioning'
   | 'booting'
   | 'connecting'
   | 'suspending'
   | 'resuming'
-  | 'renewing'
-  | 'rolling-over'
   | 'destroying'
 
 export type EnvironmentProviderCallContext = {
@@ -52,8 +47,6 @@ export type EnvironmentSessionInfo = {
   startedAt: number
   /** When the provider will end this session regardless of activity. */
   deadlineAt: number | null
-  /** Session-capped providers: when the current Orca lease lapses unless renewed. */
-  leaseExpiresAt?: number | null
 }
 
 export type EnvironmentStatus =
@@ -96,17 +89,6 @@ export type EnvironmentProviderDriver = {
     handle: EnvironmentHandle,
     ctx?: EnvironmentProviderCallContext
   ): Promise<EnvironmentStatusSnapshot>
-  /** Session-capped providers: keep the session alive while Orca reports work. */
-  renewLease?(
-    handle: EnvironmentHandle,
-    extendMs: number,
-    ctx?: EnvironmentProviderCallContext
-  ): Promise<EnvironmentStatusSnapshot>
-  /** Session-capped providers: end this session and start a fresh one from the same disk. */
-  rollover?(
-    handle: EnvironmentHandle,
-    ctx?: EnvironmentProviderCallContext
-  ): Promise<EnvironmentReady>
 }
 
 export const ENVIRONMENT_PROVIDER_ERROR_CODES = [
@@ -117,8 +99,7 @@ export const ENVIRONMENT_PROVIDER_ERROR_CODES = [
   'unavailable',
   'timeout',
   'aborted',
-  'invalid_response',
-  'entitlement_denied'
+  'invalid_response'
 ] as const
 
 export type EnvironmentProviderErrorCode = (typeof ENVIRONMENT_PROVIDER_ERROR_CODES)[number]

@@ -297,8 +297,8 @@ describe('model API key egress placeholders (phase 2)', () => {
 
   it('gives the VM placeholders, routes only the key hosts, and swaps the real key at egress', async () => {
     const { h, sandboxId, proxied, upstream } = await placeholderSetup()
-    const anthropicPh = `orca-ph-anthropic-${sandboxId}`
-    const openaiPh = `orca-ph-openai-${sandboxId}`
+    const anthropicPh = `orca-ph-anthropic-api-key-${sandboxId}`
+    const openaiPh = `orca-ph-openai-api-key-${sandboxId}`
     expect(startEnv(h)).toEqual({ ANTHROPIC_API_KEY: anthropicPh, OPENAI_API_KEY: openaiPh, GEMINI_API_KEY: 'gemini-plain-value' })
     const [box] = [...h.vercel.boxes.values()]
     const forward = (header: string, value: string) => ({
@@ -331,9 +331,9 @@ describe('model API key egress placeholders (phase 2)', () => {
       status: 403,
       body: 'placeholder_missing'
     })
-    expect((await proxied('api.anthropic.com', { 'x-api-key': 'orca-ph-anthropic-sbx_other' })).status).toBe(403)
+    expect((await proxied('api.anthropic.com', { 'x-api-key': 'orca-ph-anthropic-api-key-sbx_other' })).status).toBe(403)
     // The openai placeholder is not valid on the anthropic host.
-    expect((await proxied('api.anthropic.com', { authorization: `Bearer orca-ph-openai-${sandboxId}` })).status).toBe(403)
+    expect((await proxied('api.anthropic.com', { authorization: `Bearer orca-ph-openai-api-key-${sandboxId}` })).status).toBe(403)
     expect(upstream).toEqual([])
   })
 

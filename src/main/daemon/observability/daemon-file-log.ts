@@ -3,6 +3,7 @@
 import { mkdirSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { createBoundedLogFileWriter } from '../../observability/bounded-log-file-writer'
+import { redactValue } from '../../observability/redactor'
 
 const DEFAULT_MAX_BYTES = 5 * 1024 * 1024
 const DEFAULT_MAX_ROTATED_FILES = 2
@@ -36,7 +37,8 @@ function formatDaemonLogLine(event: string, details: Record<string, unknown>): s
     ts: new Date().toISOString(),
     pid: process.pid,
     event,
-    ...details
+    // Mostly error messages: redact at write so a spawn error quoting a token never lands on disk.
+    ...(redactValue(details) as Record<string, unknown>)
   })}\n`
 }
 

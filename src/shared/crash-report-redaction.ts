@@ -3,6 +3,7 @@ import type {
   CrashReportBreadcrumbInput,
   CrashReportDetailValue
 } from './crash-reporting'
+import { redactRegisteredSecretValues } from './redacted-secret-values'
 
 const MAX_STRING_DETAIL_LENGTH = 240
 const MAX_STACK_DETAIL_LENGTH = 4_000
@@ -10,7 +11,13 @@ const MAX_BREADCRUMB_NAME_LENGTH = 80
 const MAX_BREADCRUMBS = 30
 
 const SECRET_PATTERNS = [
-  /\bgh[pousr]_[A-Za-z0-9_]{20,}\b/g,
+  // Dotted tails cover JWT-format installation tokens (ghs_<header>.<payload>.<signature>).
+  /\bgh[pousr]_[A-Za-z0-9_]{20,}(?:\.[A-Za-z0-9_-]+)*/g,
+  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/g,
+  /\bvc[kpiar]_[A-Za-z0-9_-]{20,}/g,
+  /\bAIza[0-9A-Za-z_-]{35}/g,
+  // Pairing codes are bearer credentials for the paired host.
+  /orca:\/\/pair\?[^\s"'<>]+/g,
   /\bgithub_pat_[A-Za-z0-9_]{20,}\b/g,
   /\bglpat-[A-Za-z0-9_-]{20,}\b/g,
   /\bsk-[A-Za-z0-9_-]{20,}\b/g,
@@ -20,6 +27,9 @@ const SECRET_PATTERNS = [
   /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g
 ]
 const CREDENTIAL_URL_PATTERN = /\b[A-Za-z0-9._%+-]+:[A-Za-z0-9._%+-]+@(?=[^/\s]+)/g
+// Env-style assignments of credential-named variables (ANTHROPIC_API_KEY=…, GH_TOKEN=…).
+const SECRET_ENV_ASSIGNMENT_PATTERN =
+  /\b([A-Z][A-Z0-9_]*(?:KEY|TOKEN|SECRET|PASSWORD|CREDENTIALS?))\s*=\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^&\s,;]+)/g
 const SECRET_ASSIGNMENT_PATTERN =
   /\b(token|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|secret|password|account[_-]?key)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^&\s,;]+)/gi
 
@@ -38,11 +48,14 @@ export function sanitizeCrashReportString(
   value: string,
   maxLength = MAX_STRING_DETAIL_LENGTH
 ): string {
-  let sanitized = value
+  let sanitized = redactRegisteredSecretValues(value, '[redacted-secret]')
   for (const pattern of PATH_PATTERNS) {
     sanitized = sanitized.replace(pattern, '[redacted-path]')
   }
   sanitized = sanitized.replace(CREDENTIAL_URL_PATTERN, '[redacted-credential]@')
+  sanitized = sanitized.replace(SECRET_ENV_ASSIGNMENT_PATTERN, (_match, key: string) => {
+    return `${key}=[redacted]`
+  })
   sanitized = sanitized.replace(SECRET_ASSIGNMENT_PATTERN, (_match, key: string) => {
     return `${key}=[redacted]`
   })

@@ -1,8 +1,10 @@
 import { appendFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { redactValue } from '../observability/redactor'
 
-// Opt in because probe data can include typed text and local paths.
+// Opt in because probe data can include typed text and local paths. RPC params can carry launch env
+// (agent API keys) and pairing material, so payloads pass the observability redactor first.
 export const EMULATOR_PROBE_LOG = join(tmpdir(), 'orca-android-emu-probe.log')
 const EMULATOR_PROBE_ENABLED = process.env.ORCA_EMULATOR_PROBE === '1'
 
@@ -17,7 +19,7 @@ function format(level: string, event: string, data?: unknown): string {
   let payload = ''
   if (data !== undefined) {
     try {
-      payload = ` ${JSON.stringify(data)}`
+      payload = ` ${JSON.stringify(redactValue(data))}`
     } catch {
       payload = ' [unserializable]'
     }

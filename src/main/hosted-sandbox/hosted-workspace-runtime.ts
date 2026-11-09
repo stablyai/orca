@@ -16,6 +16,7 @@ import {
   type EnvironmentProviderErrorCode
 } from '../environment-providers/environment-provider-driver'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
+import { isHostedEntitlementDenied } from './hosted-environment-provider'
 import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
 import type { HostedWorkspaceService } from './hosted-workspace-service'
 
@@ -46,9 +47,16 @@ export function findCloudRuntime(userDataPath: string, workspaceId: string): Clo
 }
 
 export function failure<T>(error: unknown): CloudWorkspaceResult<T> {
+  if (isHostedEntitlementDenied(error)) {
+    return {
+      ok: false,
+      code: 'entitlement_denied',
+      message: error.message,
+      reason: error.reason ?? null
+    }
+  }
   const codes: (CloudWorkspaceErrorCode & EnvironmentProviderErrorCode)[] = [
     'unauthorized',
-    'entitlement_denied',
     'conflict',
     'not_found'
   ]

@@ -1,3 +1,8 @@
+import {
+  redactRegisteredSecretValues,
+  registerRedactedSecretValue
+} from '../../shared/redacted-secret-values'
+
 // Apply idempotent redaction at sink write, bundle collection and server ingest.
 // Server mode also strips product-telemetry identity keys.
 // Envelope bounds limit size; truncating attributes would lose diagnostic stack tails.
@@ -10,7 +15,13 @@ const LABELED_KV =
 const PROVIDER_PATTERNS: { tag: string; re: RegExp }[] = [
   { tag: 'anthropic-key', re: /sk-ant-[a-zA-Z0-9_-]{40,}/g },
   { tag: 'openai-key', re: /sk-(?:proj-)?[a-zA-Z0-9_-]{32,}/g },
-  { tag: 'github-token', re: /gh[pousr]_[A-Za-z0-9]{36,}/g },
+  // Dotted tails cover JWT-format installation tokens (ghs_<header>.<payload>.<signature>).
+  { tag: 'github-token', re: /gh[pousr]_[A-Za-z0-9_]{36,}(?:\.[A-Za-z0-9_-]+)*/g },
+  { tag: 'github-token', re: /github_pat_[A-Za-z0-9_]{22,}/g },
+  // Vercel API/AI Gateway keys and access tokens (vck_, vcp_, vci_, vca_, vcr_).
+  { tag: 'vercel-token', re: /\bvc[kpiar]_[A-Za-z0-9_-]{20,}/g },
+  // A pairing code is a bearer credential for the paired host.
+  { tag: 'pairing-code', re: /orca:\/\/pair\?[^\s"'<>]+/g },
   { tag: 'aws-access-key-id', re: /AKIA[0-9A-Z]{16}/g },
   { tag: 'google-api-key', re: /AIza[0-9A-Za-z_-]{35}/g },
   {
@@ -89,32 +100,14 @@ function shouldDropAttributeKey(key: string, mode: RedactorMode): boolean {
   return false
 }
 
+export { registerRedactedSecretValue }
+
 /** Idempotent so sink, bundle and server passes can safely repeat. */
-// Exact values Orca itself handed to a process (stored agent API keys) whose shape no pattern knows.
-const MIN_REGISTERED_SECRET_LENGTH = 8
-const MAX_REGISTERED_SECRETS = 256
-const registeredSecretValues = new Set<string>()
-
-export function registerRedactedSecretValue(value: string): void {
-  if (value.length < MIN_REGISTERED_SECRET_LENGTH || registeredSecretValues.has(value)) {
-    return
-  }
-  if (registeredSecretValues.size >= MAX_REGISTERED_SECRETS) {
-    registeredSecretValues.delete(registeredSecretValues.values().next().value!)
-  }
-  registeredSecretValues.add(value)
-}
-
 export function redactString(input: string): string {
   if (typeof input !== 'string' || input.length === 0) {
     return input
   }
-  let out = input
-  for (const value of registeredSecretValues) {
-    if (out.includes(value)) {
-      out = out.split(value).join('[redacted:stored-key]')
-    }
-  }
+  let out = redactRegisteredSecretValues(input, '[redacted:stored-key]')
 
   out = out.replace(LABELED_KV, '[redacted:labeled-kv]')
 

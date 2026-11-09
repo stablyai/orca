@@ -14,7 +14,6 @@ import type {
   HostedArchivePullRequest,
   HostedSandboxReadyResponse
 } from '../../shared/hosted-sandbox/hosted-sandbox-wire'
-import { environmentReadyToRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import { applyResumedRuntimePairing } from '../ephemeral-vm/runtime-resume-pairing'
 import { noteRecipeVmWakePairing } from '../ephemeral-vm/recipe-vm-wake-pairings'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
@@ -76,7 +75,7 @@ export function installHostedWorkspaceService(deps: {
     const runtimeEnvironmentId = found.runtime.runtimeEnvironmentId
     updateEphemeralVmRuntimeStatus(deps.userDataPath, found.runtime.id, {
       status: 'running',
-      recipeResult: environmentReadyToRecipeResult(toReady(ready), 'orca-worktree')
+      recipeResult: toReady(ready).result
     })
     if (!runtimeEnvironmentId) {
       return

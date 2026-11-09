@@ -1,6 +1,7 @@
 // HTTPS client for the Orca sandbox control plane. The desktop holds only a short-lived Orca token;
 // the provider credential never leaves the control plane.
 import type { z } from 'zod'
+import { HostedEntitlementDeniedError } from './hosted-environment-provider'
 import {
   HostedArchiveResponseSchema,
   HostedWakeResponseSchema,
@@ -238,7 +239,6 @@ const STATUS_CODES: Record<string, EnvironmentProviderErrorCode> = {
   forbidden: 'unauthorized',
   not_found: 'not_found',
   conflict: 'conflict',
-  entitlement_denied: 'entitlement_denied',
   invalid_request: 'invalid_request',
   invalid_json: 'invalid_request',
   billing_unavailable: 'unavailable',
@@ -249,6 +249,12 @@ const STATUS_CODES: Record<string, EnvironmentProviderErrorCode> = {
 
 function errorFromResponse(status: number, payload: unknown): EnvironmentProviderError {
   const parsed = HostedSandboxErrorResponseSchema.safeParse(payload)
+  if (parsed.success && parsed.data.error === 'entitlement_denied') {
+    return new HostedEntitlementDeniedError(
+      'Orca Cloud refused the request (entitlement_denied).',
+      parsed.data.reason ?? null
+    )
+  }
   if (parsed.success) {
     const code = STATUS_CODES[parsed.data.error] ?? 'unavailable'
     return new EnvironmentProviderError(

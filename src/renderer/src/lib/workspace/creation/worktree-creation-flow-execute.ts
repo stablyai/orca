@@ -56,7 +56,7 @@ export async function executeWorktreeCreation(
   const creationHostId =
     preparedRequest.workspaceRunContext?.hostId ?? preparedRequest.executionHostId
   const onCreationHost = creationHostId ? { executionHostId: creationHostId } : {}
-  const hostAgentLaunch = await signedInHostLaunch(preparedRequest, signedOut)
+  const hostAgentLaunch = await signedInHostLaunch(preparedRequest, signedOut, request)
   let result: CreatedWorktreeResult
   try {
     const provisionedRoot = getProvisionedRootCreateOptions(preparedRequest)

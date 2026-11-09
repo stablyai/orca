@@ -38,7 +38,9 @@ async function prepareEphemeralVmRecipeRequest(
   }
   store.updatePendingWorktreeCreation(creationId, {
     phase: 'provisioning-vm',
-    provisioningLog: ''
+    provisioningLog: '',
+    // A retry provisions a new VM; the sheet must not act on the last one.
+    vmEnvironmentId: undefined
   })
   const unsubscribeProvisionEvents = window.api.ephemeralVm.onProvisionEvent?.((event) => {
     if (event.provisionId !== creationId || event.stream !== 'stderr') {
@@ -83,6 +85,9 @@ async function prepareEphemeralVmRecipeRequest(
   }
   appendProvisioningWarnings(creationId, preparedTarget.warnings)
   if (preparedTarget.environmentId) {
+    useAppStore
+      .getState()
+      .updatePendingWorktreeCreation(creationId, { vmEnvironmentId: preparedTarget.environmentId })
     // Why: the VM's first connect may have just deployed this server; host badges and removal read it.
     try {
       useAppStore.getState().setRuntimeEnvironments(await window.api.runtimeEnvironments.list())

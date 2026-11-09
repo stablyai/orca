@@ -1,6 +1,6 @@
 {
-  "imageVersion": "2026-11-08.1",
-  "runtime": "node24",
+  "imageVersion": "2026-11-09.1",
+  "image": "vercel/sandbox/node:24",
   "region": "iad1",
   "vcpus": 4,
   "orcad": {
@@ -10,6 +10,10 @@
   "gh": {
     "version": "2.103.3",
     "sha256": "4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d"
+  },
+  "chrome": {
+    "version": "157.0.8103.38-1",
+    "sha256": "a62b277dc03da2cff50cc04589deb66f6875be339c066d46adb49b49eedb629d"
   },
   "agentCliPackages": [
     "@anthropic-ai/claude-code@2.1.319",

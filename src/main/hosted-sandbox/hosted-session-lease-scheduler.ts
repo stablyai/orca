@@ -1,11 +1,11 @@
 // Drives one Orca Cloud environment's session: renews Orca's lease while work runs, warns before the
 // cap, suspends when idle, and rolls the session over (drain → stop → boot → re-pair → continue agents).
+import type { EnvironmentHandle } from '../environment-providers/environment-provider-driver'
 import type {
-  EnvironmentHandle,
-  EnvironmentProviderDriver,
-  EnvironmentReady,
-  EnvironmentSessionInfo
-} from '../environment-providers/environment-provider-driver'
+  HostedEnvironmentProviderDriver,
+  HostedEnvironmentReady,
+  HostedSessionInfo
+} from './hosted-environment-provider'
 import type { HostedAgentAutoResumeOutcome } from './hosted-agent-auto-resume'
 import {
   HOSTED_LEASE_POLICY,
@@ -16,13 +16,13 @@ import {
 } from './hosted-session-lease-policy'
 
 export type HostedSessionLeasePorts = {
-  driver: EnvironmentProviderDriver
+  driver: HostedEnvironmentProviderDriver
   handle: EnvironmentHandle
-  session: EnvironmentSessionInfo
+  session: HostedSessionInfo
   readActivity: () => Promise<HostedActivitySample>
   warn: (minutesLeft: HostedLeaseWarning) => void
   /** Re-pairs with the rebooted orcad; resolves once the runtime answers again. */
-  reconnect: (ready: EnvironmentReady) => Promise<void>
+  reconnect: (ready: HostedEnvironmentReady) => Promise<void>
   resumeAgents: (drainStartedAt: number) => Promise<HostedAgentAutoResumeOutcome>
   onSuspended: () => void
   /** Replaces the driver suspend, e.g. to run the window's ordinary Sleep for the workspace. */
@@ -38,7 +38,7 @@ const UNVERIFIABLE: HostedActivitySample = {
 }
 
 export class HostedSessionLeaseScheduler {
-  private session: EnvironmentSessionInfo
+  private session: HostedSessionInfo
   private readonly warned = new Set<HostedLeaseWarning>()
   private timer: ReturnType<typeof setTimeout> | null = null
   private running: Promise<HostedLeaseAction> | null = null
@@ -84,7 +84,7 @@ export class HostedSessionLeaseScheduler {
     })
     switch (action.kind) {
       case 'renew': {
-        const renewed = await this.ports.driver.renewLease?.(this.ports.handle, action.extendMs)
+        const renewed = await this.ports.driver.renewLease(this.ports.handle, action.extendMs)
         if (renewed?.session) {
           this.session = renewed.session
         }
@@ -117,9 +117,6 @@ export class HostedSessionLeaseScheduler {
 
   private async rollover(reason: 'opportunistic' | 'forced'): Promise<void> {
     const { driver, handle } = this.ports
-    if (!driver.rollover) {
-      return
-    }
     const drainStartedAt = this.now()
     this.log(`[orca-cloud] ${reason} rollover`)
     const ready = await driver.rollover(handle)

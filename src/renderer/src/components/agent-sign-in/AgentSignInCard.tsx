@@ -1,10 +1,11 @@
-import { CircleAlert, Copy, ExternalLink } from 'lucide-react'
+import { CircleAlert, Copy, ExternalLink, TriangleAlert } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { Button } from '@/components/ui/button'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { PasteCodeForm } from './AgentSignInPasteCodeForm'
 import type { AgentSignInGate } from '@/lib/agent-sign-in/agent-sign-in-gate'
+import { HOST_AGENT_SIGN_IN_AGENT_NAME } from '../../../../shared/host-agent-sign-in-status'
 
 export type AgentSignInCardActions = {
   signIn: () => void
@@ -14,10 +15,11 @@ export type AgentSignInCardActions = {
   openLink: (url: string) => void
   copyText: (text: string) => void
   cancel: () => void
-  skip: () => void
+  /** Absent where nothing waits to start, e.g. the VM build sheet. */
+  skip?: () => void
 }
 
-const AGENT_NAME = { claude: 'Claude', codex: 'Codex' } as const
+const AGENT_NAME = HOST_AGENT_SIGN_IN_AGENT_NAME
 const SIGN_IN_SITE = { claude: 'claude.ai', codex: 'chatgpt.com' } as const
 
 function QueuedPrompt({
@@ -37,10 +39,28 @@ function QueuedPrompt({
   )
 }
 
-function ErrorLine({ title, detail }: { title: string; detail: string }): React.JSX.Element {
+export function ErrorLine({
+  title,
+  detail,
+  tone = 'error'
+}: {
+  title: string
+  detail: string
+  tone?: 'error' | 'warning'
+}): React.JSX.Element {
+  const Icon = tone === 'warning' ? TriangleAlert : CircleAlert
   return (
-    <div role="alert" className="flex items-start gap-2 text-xs leading-5">
-      <CircleAlert className="mt-0.5 size-3.5 shrink-0 text-destructive" />
+    <div
+      role={tone === 'warning' ? 'status' : 'alert'}
+      className="flex items-start gap-2 text-xs leading-5"
+    >
+      <Icon
+        className={
+          tone === 'warning'
+            ? 'mt-0.5 size-3.5 shrink-0 text-status-warning'
+            : 'mt-0.5 size-3.5 shrink-0 text-destructive'
+        }
+      />
       <p className="min-w-0">
         <span className="font-medium text-foreground">{title}</span>{' '}
         <span className="text-muted-foreground">{detail}</span>
@@ -136,6 +156,18 @@ export function AgentSignInCard({
       </div>
 
       {view.step === 'error' ? <AgentSignInError gate={gate} view={view} /> : null}
+
+      {view.step === 'signed' && view.expectedEmail ? (
+        <ErrorLine
+          tone="warning"
+          title={t('agentSignIn.otherAccount', 'Not your usual account.')}
+          detail={t(
+            'agentSignIn.otherAccountDetail',
+            'This computer uses {{email}} for {{agent}}.',
+            { email: view.expectedEmail, agent: name }
+          )}
+        />
+      ) : null}
 
       {view.step === 'paste' ? (
         <>
@@ -265,7 +297,8 @@ export function AgentSignInCard({
         </div>
       )}
 
-      {view.step === 'need' || view.step === 'starting' || view.step === 'error' ? (
+      {(view.step === 'need' || view.step === 'starting' || view.step === 'error') &&
+      (!gate.codeOnly || actions.skip) ? (
         <div className="-mx-4 -mb-1 flex items-center gap-1.5 border-t border-border px-2.5 pt-2 text-xs text-muted-foreground">
           {gate.codeOnly ? null : (
             <Button
@@ -279,15 +312,11 @@ export function AgentSignInCard({
             </Button>
           )}
           <span className="flex-1" />
-          <Button
-            type="button"
-            variant="ghost"
-            size="xs"
-
-            onClick={actions.skip}
-          >
-            {t('agentSignIn.startAnyway', 'Start without signing in')}
-          </Button>
+          {actions.skip ? (
+            <Button type="button" variant="ghost" size="xs" onClick={actions.skip}>
+              {t('agentSignIn.startAnyway', 'Start without signing in')}
+            </Button>
+          ) : null}
         </div>
       ) : null}
     </div>
