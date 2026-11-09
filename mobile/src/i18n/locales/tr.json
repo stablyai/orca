@@ -603,6 +603,7 @@
       "fullCopySaveUpdate": "Bu ek için Tümünü Kopyala ve Kaydet özellikleri bir telefon güncellemesiyle kullanılabilecek."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} çevrimdışı · {{time}} itibarıyla",
       "reconnecting": "{{hostName}} yeniden bağlanıyor…",
       "stopped": "{{hostName}} durduruldu. Bilgisayarınızda başlatın.",
       "server": "Sunucu",

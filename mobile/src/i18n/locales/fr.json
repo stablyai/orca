@@ -638,6 +638,7 @@
       "fullCopySaveUpdate": "La copie intégrale et l’enregistrement de cette pièce jointe seront disponibles dans une mise à jour du téléphone."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} est hors ligne · état à {{time}}",
       "reconnecting": "{{hostName}} se reconnecte…",
       "stopped": "{{hostName}} est arrêté. Démarrez-le sur votre ordinateur.",
       "server": "Le serveur",
