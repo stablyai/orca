@@ -1,194 +1,230 @@
-import { uiText } from '../settings/NativeUi';
+import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
-import { listHosts, HostMeta } from '../storage/HostStore';
+import { directPath, endpointLabel, platformVersion, TroubleshootIssue, troubleshootIssues } from '../diagnostics/ConnectionDiagnostics';
+import { ConnectionLogEntry, listLogs } from '../diagnostics/ConnectionLogStore';
+import { ProbeStatus, TroubleshootProbes } from '../diagnostics/TroubleshootProbes';
+import { lucideColorFilter } from '../settings/LucideColor';
+import { uiText } from '../settings/NativeUi';
+import { SettingsNavBar } from '../settings/SettingsNavBar';
+import { HostMeta, listHosts } from '../storage/HostStore';
 
-/**
- * 连接诊断（只读）：列出全部已配对主机的 endpoint 与上次连接时间，
- * 并给出常见连接问题的排查提示（桌面需监听 6768 及以上端口、
- * 模拟器访问宿主机用 10.0.2.2、真机用局域网 IP 等）。
- */
-
-interface TipEntry {
-  title: string;
-  detail: string;
-}
+interface CheckResult { id: string; label: string; status: ProbeStatus; detail: string; }
+interface UpdateFailure { id: string; name: string; ts: number; }
+const RUN = 'diagnostics.troubleshootView.';
+const CHECK = 'diagnostics.useTroubleshootDiagnostics.';
 
 @Entry
 @Component
 struct Troubleshoot {
   @StorageProp('uiLocale') uiLocale: string = 'en';
+  @StorageProp('themeScheme') themeScheme: string = 'dark';
   @StorageProp('themeBg') themeBg: string = '#0a0a0a';
+  @StorageProp('themeRaised') themeRaised: string = '#262626';
   @StorageProp('themeSurface') themeSurface: string = '#171717';
   @StorageProp('themeBorder') themeBorder: string = 'rgba(255, 255, 255, 0.07)';
   @StorageProp('themeText') themeText: string = '#fafafa';
   @StorageProp('themeMuted') themeMuted: string = '#898989';
   @StorageProp('themeSecondary') themeSecondary: string = '#acacac';
-  @StorageProp('themeAccent') themeAccent: string = '#3276f2';
-  @StorageProp('themeLink') themeLink: string = '#3276f2';
-  @StorageProp('themeWarning') themeWarning: string = '#eab308';
-  @State hosts: HostMeta[] = [];
-  @State loaded: boolean = false;
-
-  private tips: TipEntry[] = [
-    { title: '桌面端未监听', detail: '在桌面 Orca 设置 → Mobile 确认连接服务已开启；桌面需监听 6768 及以上端口（6768 为默认）。' },
-    { title: '模拟器连不上', detail: '模拟器访问宿主机不能用 localhost：endpoint 主机名填 10.0.2.2，端口与桌面保持一致。' },
-    { title: '真机连不上', detail: '真机与桌面需在同一局域网，endpoint 填桌面机器的局域网 IP，并确认防火墙放行对应端口。' },
-    { title: '配对失效', detail: '桌面重置配对后旧凭证即失效：删除该主机后重新扫码配对。' },
-    { title: '看失败原因', detail: '点击下方「连接事件日志」查看最近 100 条连接事件。' }
-  ];
+  @StorageProp('themeStatusRed') themeStatusRed: string = '#ff6568';
+  @State endpoints: string[] = [];
+  @State checks: CheckResult[] = [];
+  @State failures: UpdateFailure[] = [];
+  @State phase: string = 'idle';
+  @State expanded: string = '';
+  private pageRevision: number = 0;
+  private revision: number = 0;
+  private probes: TroubleshootProbes = new TroubleshootProbes();
 
   onPageShow(): void {
-    this.reload();
+    let pageRevision = ++this.pageRevision;
+    let revision = this.revision;
+    let context = getContext(this) as common.Context;
+    listHosts(context).then(async (hosts: HostMeta[]): Promise<void> => {
+      if (pageRevision !== this.pageRevision) { return; }
+      if (revision === this.revision) { this.endpoints = hosts.map((host: HostMeta): string => host.endpoint); }
+      let failures = await Promise.all(hosts.map(async (host: HostMeta): Promise<UpdateFailure | null> => {
+        let logs = await listLogs(context, host.id);
+        let failure = logs.slice().reverse().find((entry: ConnectionLogEntry): boolean => entry.code === 'web-shell-update-failed');
+        return failure ? { id: host.id, name: host.name, ts: failure.ts } : null;
+      }));
+      if (pageRevision === this.pageRevision) {
+        let latest: UpdateFailure[] = [];
+        failures.forEach((failure: UpdateFailure | null): void => { if (failure) { latest.push(failure); } });
+        this.failures = latest;
+      }
+    }).catch(() => {});
   }
 
-  reload(): void {
-    listHosts(getContext(this)).then((hosts: HostMeta[]) => {
-      this.hosts = hosts;
-      this.loaded = true;
-    }).catch((e: Error) => {
-      this.hosts = [];
-      this.loaded = true;
-    });
+  onPageHide(): void {
+    this.pageRevision++; this.revision++; this.probes.cancel();
+    if (this.phase === 'running') { this.phase = 'idle'; this.checks = []; }
   }
 
-  lastConnectedText(host: HostMeta): string {
-    if (host.lastConnected <= 0) {
-      return '尚未连接过';
+  aboutToDisappear(): void { this.onPageHide(); }
+
+  private t(key: string): string { return uiText(key, this.uiLocale); }
+
+  private add(id: string, label: string, status: ProbeStatus, detail: string): void {
+    this.checks = this.checks.concat([{ id: id, label: label, status: status, detail: detail }]);
+  }
+
+  private async run(): Promise<void> {
+    if (this.phase === 'running') { return; }
+    this.phase = 'running'; this.checks = [];
+    let revision = ++this.revision;
+    let hosts: HostMeta[] = [];
+    try {
+      hosts = await listHosts(getContext(this));
+      if (revision !== this.revision) { return; }
+      this.endpoints = hosts.map((host: HostMeta): string => host.endpoint);
+      this.add('hosts', this.t(CHECK + 'pairedHosts'), hosts.length > 0 ? 'pass' : 'fail',
+        hosts.length > 0 ? this.t(CHECK + 'pairedCount').replace('{{count}}', String(hosts.length)) : this.t(CHECK + 'noPairedHosts'));
+    } catch (e) {
+      if (revision !== this.revision) { return; }
+      this.add('hosts', this.t(CHECK + 'pairedHosts'), 'warn', this.t(CHECK + 'hostDataFailed'));
     }
-    return `上次连接 ${new Date(host.lastConnected).toLocaleString()}`;
+
+    let internet = await this.probes.internet().catch((): ProbeStatus => 'fail');
+    if (revision !== this.revision) { return; }
+    this.add('internet', this.t(CHECK + 'internet'), internet, this.t(CHECK +
+      (internet === 'pass' ? 'connected' : internet === 'warn' ? 'unexpectedResponse' : 'noConnection')));
+
+    for (let host of hosts) {
+      if (!host.endpoint && host.relay) {
+        this.add(host.id, host.name, 'warn', this.t('此桌面仅使用 Relay。请在网络诊断中查看其连接状态。'));
+        continue;
+      }
+      let reachable = await this.probes.desktop(host.endpoint).catch((): boolean => false);
+      if (revision !== this.revision) { return; }
+      let detail = reachable ? CHECK + 'reachable' : directPath(host.endpoint) === 'tailscale' ?
+        '无法连接 {{endpoint}}，请检查 Tailscale。' : '无法连接 {{endpoint}}。';
+      this.add(host.id, host.name, reachable ? 'pass' : 'fail', this.t(detail).replace('{{endpoint}}', endpointLabel(host.endpoint)));
+    }
+
+    this.add('platform', this.t(CHECK + 'platform'), 'pass', platformVersion());
+    this.phase = 'done';
+  }
+
+  private issueIcon(kind: string): Resource {
+    switch (kind) {
+      case 'notifications': return $r('app.media.lucide_bell');
+      case 'wifi': return $r('app.media.lucide_wifi_off');
+      case 'desktop': return $r('app.media.lucide_monitor');
+      case 'timeout': return $r('app.media.lucide_clock');
+      case 'tailscale': return $r('app.media.lucide_globe');
+      default: return $r('app.media.lucide_shield');
+    }
+  }
+
+  @Builder
+  private separator() {
+    Divider().strokeWidth(0.5).color(this.themeBorder).margin({ left: 40 })
+  }
+
+  @Builder
+  private button(label: string, id: string, icon: Resource, busy: boolean, action: () => void) {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 8 }) {
+        if (busy) {
+          LoadingProgress().width(16).height(16).color(this.themeText)
+        } else {
+          Image(icon).supportSvg2(true).width(16).height(16).colorFilter(lucideColorFilter(this.themeText))
+        }
+        Text(this.t(label)).fontFamily('Geist').fontSize(15).fontWeight(FontWeight.Medium).fontColor(this.themeText)
+      }.justifyContent(FlexAlign.Center).width('100%').padding({ top: 12, bottom: 12, left: 12, right: 12 })
+    }.width('100%').constraintSize({ minHeight: 46 }).borderRadius(10).backgroundColor(this.themeRaised)
+      .enabled(!busy).id(id).accessibilityText(this.t(label)).onClick(action)
+  }
+
+  @Builder
+  private heading(label: string) {
+    Text(this.t(label)).fontFamily('Geist').fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.themeSecondary)
+      .width('100%').padding({ left: 16, bottom: 8 })
+  }
+
+  @Builder
+  private checkRow(check: CheckResult) {
+    Row({ space: 10 }) {
+      Image(check.status === 'pass' ? $r('app.media.lucide_circle_check') : check.status === 'fail' ?
+        $r('app.media.lucide_circle_x') : $r('app.media.lucide_triangle_alert'))
+        .supportSvg2(true).width(14).height(14).colorFilter(lucideColorFilter(check.status === 'pass' ?
+          (this.themeScheme === 'light' ? '#147638' : '#86efac') : check.status === 'fail' ? this.themeStatusRed : this.themeMuted))
+      Column({ space: 3 }) {
+        Text(check.label).fontFamily('Geist').fontSize(15).fontColor(this.themeText)
+        Text(check.detail).fontFamily('Geist').fontSize(13).lineHeight(18)
+          .fontColor(check.status === 'fail' ? this.themeStatusRed : this.themeMuted)
+      }.alignItems(HorizontalAlign.Start).layoutWeight(1)
+    }.width('100%').padding({ left: 16, right: 16, top: 10, bottom: 10 })
+  }
+
+  @Builder
+  private issueRow(issue: TroubleshootIssue) {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 10 }) {
+        Image(this.issueIcon(issue.kind)).supportSvg2(true).width(16).height(16)
+          .colorFilter(lucideColorFilter(this.themeSecondary))
+        Text(issue.title).fontFamily('Geist').fontSize(15).fontColor(this.themeText).layoutWeight(1)
+        Image(this.expanded === issue.id ? $r('app.media.lucide_chevron_up') : $r('app.media.lucide_chevron_down'))
+          .supportSvg2(true).width(16).height(16).colorFilter(lucideColorFilter(this.themeMuted))
+      }.width('100%').padding({ left: 16, right: 16, top: 12, bottom: 12 })
+    }.width('100%').constraintSize({ minHeight: 48 }).backgroundColor(Color.Transparent).id(`diagnostic-issue-${issue.id}`)
+      .accessibilityText(issue.title).onClick((): void => { this.expanded = this.expanded === issue.id ? '' : issue.id; })
+    if (this.expanded === issue.id) {
+      Column({ space: 4 }) {
+        ForEach(issue.steps, (step: string): void => {
+          Row({ space: 8 }) {
+            Text('•').fontFamily('Geist').fontSize(13).fontColor(this.themeMuted)
+            Text(step).fontFamily('Geist').fontSize(13).lineHeight(18).fontColor(this.themeMuted).layoutWeight(1)
+          }.width('100%').alignItems(VerticalAlign.Top)
+        }, (step: string): string => step)
+      }.width('100%').padding({ left: 40, right: 16, bottom: 12 })
+    }
   }
 
   build() {
-    Column({ space: 10 }) {
-      Row({ space: 10 }) {
-        Text('‹')
-          .fontFamily('Geist').fontSize(22)
-          .fontColor(this.themeAccent)
-          .width(32)
-          .height(32)
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            router.back();
-          })
-        Text(uiText('连接诊断', this.uiLocale))
-          .fontFamily('Geist').fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.themeText)
-          .layoutWeight(1)
-      }
-      .width('100%')
-      .padding({ left: 10, right: 14, top: 10 })
-
+    Column() {
+      SettingsNavBar({ title: this.t(RUN + 'title') })
       Scroll() {
-        Column({ space: 14 }) {
-          // 已配对主机（只读）
-          Column({ space: 8 }) {
-            Text(`已配对主机（${this.hosts.length}）`)
-              .fontFamily('Geist').fontSize(12)
-              .fontColor(this.themeMuted)
-              .width('100%')
-              .padding({ left: 4 })
-
-            if (this.loaded && this.hosts.length === 0) {
-              Column({ space: 6 }) {
-                Text(uiText('还没有已配对的桌面', this.uiLocale))
-                  .fontFamily('Geist').fontSize(14)
-                  .fontColor(this.themeSecondary)
-                Text(uiText('先回到主页完成扫码配对，再回来查看诊断信息', this.uiLocale))
-                  .fontFamily('Geist').fontSize(11)
-                  .fontColor(this.themeMuted)
-              }
-              .width('100%')
-              .padding(16)
-              .borderRadius(10)
-              .backgroundColor(this.themeSurface)
-              .border({ width: 1, color: this.themeBorder })
-              .alignItems(HorizontalAlign.Center)
-            }
-
-            ForEach(this.hosts, (host: HostMeta, index: number) => {
-              Column({ space: 4 }) {
-                Row({ space: 8 }) {
-                  Text(host.name)
-                    .fontFamily('Geist').fontSize(15)
-                    .fontWeight(FontWeight.Medium)
-                    .fontColor(this.themeText)
-                    .maxLines(1)
-                    .layoutWeight(1)
-                  Text(uiText('已配对', this.uiLocale))
-                    .fontFamily('Geist').fontSize(10)
-                    .fontColor(this.themeAccent)
-                }
-                .width('100%')
-
-                Text(`endpoint：${host.endpoint}`)
-                  .fontFamily('Geist').fontSize(11)
-                  .fontColor(this.themeLink)
-                  .maxLines(1)
-                  .width('100%')
-
-                Text(this.lastConnectedText(host))
-                  .fontFamily('Geist').fontSize(10)
-                  .fontColor(this.themeMuted)
-                  .width('100%')
-              }
-              .width('100%')
-              .padding(12)
-              .borderRadius(10)
-              .backgroundColor(this.themeSurface)
-              .border({ width: 1, color: this.themeBorder })
-              .alignItems(HorizontalAlign.Start)
-            }, (host: HostMeta, index: number) => `${index}-${host.id}`)
+        Column({ space: 16 }) {
+          if (this.phase === 'running') {
+            this.button(RUN + 'running', 'diagnostics-run', $r('app.media.lucide_activity'), true, (): void => {})
+          } else if (this.phase === 'done') {
+            this.button(RUN + 'runAgain', 'diagnostics-run', $r('app.media.lucide_activity'), false, (): void => { this.run().catch(() => {}); })
+          } else {
+            this.button(RUN + 'runDiagnostics', 'diagnostics-run', $r('app.media.lucide_activity'), false, (): void => { this.run().catch(() => {}); })
           }
-          .width('100%')
-
-          // 排查提示
-          Column({ space: 12 }) {
-            Text(uiText('常见问题排查', this.uiLocale))
-              .fontFamily('Geist').fontSize(12)
-              .fontColor(this.themeMuted)
-              .width('100%')
-              .padding({ left: 4 })
-
-            ForEach(this.tips, (tip: TipEntry, index: number) => {
-              Column({ space: 3 }) {
-                Text(tip.title)
-                  .fontFamily('Geist').fontSize(14)
-                  .fontColor(this.themeWarning)
-                Text(tip.detail)
-                  .fontFamily('Geist').fontSize(12)
-                  .fontColor(this.themeSecondary)
-                  .lineHeight(17)
-              }
-              .width('100%')
-              .padding(12)
-              .borderRadius(10)
-              .backgroundColor(this.themeSurface)
-              .border({ width: 1, color: this.themeBorder })
-              .alignItems(HorizontalAlign.Start)
-            }, (tip: TipEntry, index: number) => `${index}-${tip.title}`)
+          this.button(RUN + 'viewNetworkDiagnostics', 'diagnostics-log', $r('app.media.lucide_scroll_text'), false,
+            (): void => { router.pushUrl({ url: 'pages/ConnectionLog' }).catch(() => {}); })
+          if (this.failures.length > 0) {
+            Column() {
+              this.heading('diagnostics.mobileWebShellUpdateFailureRow.title')
+              Column({ space: 8 }) {
+                ForEach(this.failures, (failure: UpdateFailure): void => {
+                  Text(this.t('{{hostName}} 的工作区更新失败，已保留上次可用版本。').replace('{{hostName}}', failure.name))
+                    .fontFamily('Geist').fontSize(13).lineHeight(18).fontColor(this.themeMuted).width('100%')
+                }, (failure: UpdateFailure): string => `${failure.id}:${failure.ts}`)
+              }.width('100%').padding(16).borderRadius(16).backgroundColor(this.themeSurface)
+            }.width('100%')
           }
-          .width('100%')
-
-          Button(uiText('连接事件日志', this.uiLocale)).fontColor(this.themeText).backgroundColor(this.themeSurface).height(44).width('100%')
-            .onClick((): void => { router.pushUrl({ url: 'pages/ConnectionLog' }); })
-          Text(uiText('本页为只读诊断；连接失败的具体错误会记录在连接事件日志中。', this.uiLocale))
-            .fontFamily('Geist').fontSize(11)
-            .fontColor(this.themeMuted)
-            .width('100%')
-            .textAlign(TextAlign.Center)
-            .padding(8)
-        }
-        .width('100%')
-      }
-      .layoutWeight(1)
-      .width('100%')
-      .padding({ left: 12, right: 12 })
-      .scrollBar(BarState.Off)
-      .align(Alignment.Top)
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(this.themeBg)
+          if (this.checks.length > 0) {
+            Column() {
+              ForEach(this.checks, (check: CheckResult, index: number): void => {
+                if (index > 0) { this.separator() }
+                this.checkRow(check)
+              }, (check: CheckResult): string => check.id)
+            }.width('100%').backgroundColor(this.themeSurface).borderRadius(16).clip(true)
+          }
+          Column() {
+            this.heading(RUN + 'commonIssues')
+            Column() {
+              ForEach(troubleshootIssues(this.endpoints, this.uiLocale), (issue: TroubleshootIssue, index: number): void => {
+                if (index > 0) { this.separator() }
+                this.issueRow(issue)
+              }, (issue: TroubleshootIssue): string => `${issue.id}:${issue.title}`)
+            }.width('100%').backgroundColor(this.themeSurface).borderRadius(16).clip(true)
+          }.width('100%')
+        }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 24 })
+      }.width('100%').layoutWeight(1).scrollBar(BarState.Off).align(Alignment.Top)
+    }.width('100%').height('100%').backgroundColor(this.themeBg)
   }
 }

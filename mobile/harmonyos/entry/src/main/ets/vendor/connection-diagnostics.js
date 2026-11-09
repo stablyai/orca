@@ -30,6 +30,7 @@ __export(orca_connection_diagnostics_entry_exports, {
   formatConnectionLogHistory: () => formatConnectionLogHistory,
   formatEndpoint: () => formatEndpoint,
   getReportableConnectionIncidentId: () => getReportableConnectionIncidentId,
+  getTroubleshootCommonIssues: () => getTroubleshootCommonIssues,
   installRuntime: () => installRuntime,
   isTailscaleEndpoint: () => isTailscaleEndpoint,
   redactConnectionLogText: () => redactConnectionLogText,
@@ -1083,8 +1084,177 @@ var RelayHostReachabilityLatch = class {
   }
 };
 
+// mobile/src/diagnostics/troubleshoot-common-issues.ts
+function troubleshootCommonIssues(t, endpoints = []) {
+  const ports = new Set(
+    endpoints.map((endpoint) => {
+      const port = endpointPort(endpoint);
+      if (port) {
+        return port;
+      }
+      try {
+        const url = new URL(endpoint);
+        if (url.protocol === "wss:") {
+          return "443";
+        }
+        if (url.protocol === "ws:") {
+          return "80";
+        }
+      } catch {
+      }
+      return "6768";
+    })
+  );
+  if (ports.size === 0) {
+    ports.add("6768");
+  }
+  return [
+    {
+      id: "notifications",
+      kind: "notifications",
+      title: t("diagnostics.troubleshootCommonIssues.notificationsTitle", "Push Notifications"),
+      steps: [
+        t(
+          "diagnostics.troubleshootCommonIssues.allowNotifications",
+          "Check that system settings allow Orca notifications and that Focus or Do Not Disturb is off."
+        ),
+        t(
+          "diagnostics.troubleshootCommonIssues.notificationNetwork",
+          "Try cellular or another Wi-Fi network. If alerts arrive after switching, your network may be delaying delivery."
+        )
+      ]
+    },
+    {
+      id: "wifi",
+      kind: "wifi",
+      title: t("diagnostics.troubleshootCommonIssues.wifiTitle", "Different WiFi Networks"),
+      steps: [
+        t(
+          "diagnostics.troubleshootCommonIssues.sameNetwork",
+          "Both devices must be on the same LAN (unless connected through Tailscale)."
+        ),
+        t(
+          "diagnostics.troubleshootCommonIssues.sameSubnet",
+          "Ethernet and WiFi must share the same subnet."
+        ),
+        t(
+          "diagnostics.troubleshootCommonIssues.reconnectWifi",
+          "Try reconnecting WiFi on both devices."
+        )
+      ]
+    },
+    ...Array.from(ports, (port) => ({
+      id: `firewall-${port}`,
+      kind: "firewall",
+      title: t(
+        "diagnostics.troubleshootCommonIssues.firewallTitle",
+        "Firewall Blocking Port {{port}}",
+        {
+          port
+        }
+      ),
+      steps: [
+        t(
+          "diagnostics.troubleshootCommonIssues.macosFirewall",
+          "macOS: System Settings \u2192 Network \u2192 Firewall \u2014 allow Orca."
+        ),
+        t(
+          "diagnostics.troubleshootCommonIssues.windowsFirewall",
+          "Windows: Defender Firewall \u2192 Allow app \u2014 enable Orca for Private networks."
+        ),
+        t("diagnostics.troubleshootCommonIssues.linuxFirewall", "Linux: sudo ufw allow {{port}}", {
+          port
+        }),
+        t(
+          "diagnostics.troubleshootCommonIssues.restrictedNetwork",
+          "Corporate/school networks may block P2P \u2014 try a personal hotspot."
+        )
+      ]
+    })),
+    {
+      id: "desktop",
+      kind: "desktop",
+      title: t("diagnostics.troubleshootCommonIssues.desktopTitle", "Desktop App Not Running"),
+      steps: [
+        t(
+          "diagnostics.troubleshootCommonIssues.openDesktop",
+          "Orca must be open on your desktop to accept connections."
+        ),
+        t(
+          "diagnostics.troubleshootCommonIssues.restartDesktop",
+          "Try restarting Orca \u2014 the companion server starts on launch."
+        ),
+        t(
+          "diagnostics.troubleshootCommonIssues.pairAfterUpdate",
+          "After an update, you may need to re-pair via QR code."
+        )
+      ]
+    },
+    {
+      id: "timeout",
+      kind: "timeout",
+      title: t("diagnostics.troubleshootCommonIssues.timeoutTitle", "Connection Timeout"),
+      steps: [
+        t(
+          "diagnostics.troubleshootCommonIssues.wifiSignal",
+          "Check WiFi signal strength on your phone."
+        ),
+        t(
+          "diagnostics.troubleshootCommonIssues.retryHost",
+          "Go back to the host list and tap your host to retry."
+        ),
+        t(
+          "diagnostics.troubleshootCommonIssues.restartBothApps",
+          "Restart both apps if timeouts persist."
+        )
+      ]
+    },
+    {
+      id: "tailscale",
+      kind: "tailscale",
+      title: t("diagnostics.troubleshootCommonIssues.tailscaleTitle", "Tailscale Host Unreachable"),
+      steps: [
+        t(
+          "diagnostics.troubleshootCommonIssues.keepTailscaleOn",
+          "Host addresses like 100.x.x.x or *.ts.net connect through Tailscale \u2014 keep it ON."
+        ),
+        t(
+          "diagnostics.troubleshootCommonIssues.restartTailscale",
+          "iOS/Android can silently wedge the tunnel: toggle Tailscale off and back on in the Tailscale app."
+        ),
+        t(
+          "diagnostics.troubleshootCommonIssues.checkTailnet",
+          "Check the desktop is awake and shows as connected in your tailnet."
+        ),
+        t(
+          "diagnostics.troubleshootCommonIssues.updateTailscale",
+          "Update the Tailscale app \u2014 recent releases fix reconnect bugs."
+        )
+      ]
+    },
+    {
+      id: "vpn",
+      kind: "vpn",
+      title: t("diagnostics.troubleshootCommonIssues.vpnTitle", "Other VPN Interference"),
+      steps: [
+        t(
+          "diagnostics.troubleshootCommonIssues.vpnRouting",
+          "Non-Tailscale VPNs can route local traffic through a remote server."
+        ),
+        t(
+          "diagnostics.troubleshootCommonIssues.disableVpn",
+          'Disable that VPN or enable split tunneling / "Allow LAN".'
+        )
+      ]
+    }
+  ];
+}
+
 // orca-connection-diagnostics-entry.ts
 var createRelayHostReachability = () => new RelayHostReachabilityLatch();
+function getTroubleshootCommonIssues(endpoints, translator2) {
+  return withTranslation(translator2, () => troubleshootCommonIssues(translate, endpoints));
+}
 function describeDesktopConnection(args, translator2) {
   return withTranslation(translator2, () => {
     const verdict = classifyConnection(args);

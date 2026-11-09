@@ -82,6 +82,23 @@ export function redactDiagnosticText(value: string): string {
 }
 
 export function endpointLabel(endpoint: string): string { return model.formatEndpoint(endpoint) as string; }
+export interface TroubleshootIssue {
+  id: string;
+  kind: string;
+  title: string;
+  steps: string[];
+}
+
+export function troubleshootIssues(endpoints: string[], locale: string): TroubleshootIssue[] {
+  return model.getTroubleshootCommonIssues(endpoints, (key: string, fallback: string): string => {
+    let nativeKey = key === 'diagnostics.troubleshootCommonIssues.notificationsTitle' ? '在线通知' :
+      key === 'diagnostics.troubleshootCommonIssues.notificationNetwork' ? '保持 Orca 运行并连接桌面。' :
+      key === 'diagnostics.troubleshootCommonIssues.restartTailscale' ? '在手机上关闭再开启 Tailscale，然后重试。' : key;
+    let label = uiText(nativeKey, locale);
+    return nativeKey === key && label === key ? fallback : label;
+  }) as TroubleshootIssue[];
+}
+
 export interface DesktopEndpointEdit { kind: string; endpoint?: string; error?: string; }
 
 export function displayHostEndpoint(endpoint: string): string { return model.displayHostEndpoint(endpoint) as string; }

@@ -112,3 +112,44 @@ test('editing a bare desktop address preserves the saved port and WebSocket rout
     'invalid'
   )
 })
+
+test('leaving diagnostics closes a late desktop socket and cannot settle a new run', async () => {
+  const sockets = []
+  const { TroubleshootProbes } = loadArkts(
+    'diagnostics/TroubleshootProbes.ets',
+    ['TroubleshootProbes'],
+    {
+      isDirectEndpoint: () => true,
+      webSocket: {
+        createWebSocket: () => {
+          const events = new Map()
+          const socket = {
+            opened: false,
+            on: (event, callback) => events.set(event, callback),
+            connect: async () => true,
+            close: async () => {
+              socket.opened = false
+            },
+            open() {
+              socket.opened = true
+              events.get('open')()
+            }
+          }
+          sockets.push(socket)
+          return socket
+        }
+      }
+    }
+  )
+  const probes = new TroubleshootProbes()
+  const cancelled = probes.desktop('ws://first.invalid:6768')
+  probes.cancel()
+  assert.equal(await cancelled, false)
+
+  const current = probes.desktop('ws://second.invalid:6768')
+  sockets[0].open()
+  assert.equal(sockets[0].opened, false)
+  sockets[1].open()
+  assert.equal(await current, true)
+  assert.equal(sockets[1].opened, false)
+})
