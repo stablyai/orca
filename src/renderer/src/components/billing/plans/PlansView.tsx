@@ -120,7 +120,7 @@ function CurrentPlanStrip({
             'auto.components.billing.hoursUsedMonth',
             '{{value0}} of {{value1}} hours used this month',
             {
-              value0: formatHours(entitlement.usedSeconds),
+              value0: formatHours(Math.min(entitlement.usedSeconds, entitlement.includedSeconds)),
               value1: formatHours(entitlement.includedSeconds)
             }
           )}

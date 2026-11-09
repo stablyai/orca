@@ -44,6 +44,15 @@ export function UsageSummary({
         value={includedUsagePercent(entitlement)}
         aria-label={t('auto.components.billing.usageLabel', 'Included hours used')}
       />
+      {entitlement.overageSeconds === 0 &&
+      entitlement.usedSeconds > entitlement.includedSeconds &&
+      entitlement.includedSeconds > 0 ? (
+        <p className="text-xs text-muted-foreground tabular-nums">
+          {t('auto.components.billing.overBy', 'Over by {{value0}} h this month', {
+            value0: formatHours(entitlement.usedSeconds - entitlement.includedSeconds)
+          })}
+        </p>
+      ) : null}
       {entitlement.overageSeconds > 0 ? (
         <p className="text-xs text-muted-foreground tabular-nums">
           {t(

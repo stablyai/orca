@@ -20124,7 +20124,8 @@
           "title": "Upgrade to use Orca Cloud"
         },
         "upsellLine": "Orca Cloud runs agents in hosted sandboxes. Team is {{value0}} per seat / month.",
-        "upsellLineNoPrice": "Orca Cloud runs agents in hosted sandboxes for your whole team."
+        "upsellLineNoPrice": "Orca Cloud runs agents in hosted sandboxes for your whole team.",
+        "overBy": "Over by {{value0}} h this month"
       },
       "ports": {
         "RuntimePortAutoForwarder": {
