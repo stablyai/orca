@@ -46,15 +46,16 @@ import { useMobileHomeHostConnections } from './use-mobile-home-host-connections
 
 export type MobileHomeData = ReturnType<typeof useMobileHomeData>
 
-type HostClientEntry = { hostId: string; client: RpcClient }
+// A paired desktop with its client, or none while Home holds no connection to it (disconnected, never opened).
+type HomeHost = { hostId: string; client: RpcClient | null }
 
 // Home reads one of each per paired desktop.
 const homeQueryOptions = <TData>(
   query: HostQuery<typeof NO_HOST_LIST_INPUT, TData>,
-  entry: HostClientEntry,
+  host: HomeHost,
   enabled: boolean
 ) => ({
-  ...hostObserverOptions(query, entry.client, entry.hostId, HOST_LIST_TARGET, NO_HOST_LIST_INPUT),
+  ...hostObserverOptions(query, host.client, host.hostId, HOST_LIST_TARGET, NO_HOST_LIST_INPUT),
   enabled
 })
 
@@ -86,31 +87,43 @@ export function useMobileHomeData() {
   const [homeFocused, setHomeFocused] = useState(false)
   const hosts = useMemo(() => selectConnectableHostProfiles(hostCatalog), [hostCatalog])
   const connections = useMobileHomeHostConnections(hosts, hostCatalog)
-  const { allClients, connectedSince, hostStates } = connections
+  const { allClients, hostLastConnected, hostStates } = connections
   const allClientsRef = useRef(allClients)
+  // Every paired desktop keeps its last counts and totals on Home, connected or not.
+  const homeHosts = useMemo((): HomeHost[] => {
+    const clients = new Map(allClients.map((entry) => [entry.hostId, entry.client]))
+    return hosts.map((host) => ({ hostId: host.id, client: clients.get(host.id) ?? null }))
+  }, [hosts, allClients])
+  // A read from before the desktop's latest connect, or from an earlier launch, can't vouch for agents or usage.
+  const isLive = useCallback(
+    (hostId: string, readAt: number): boolean => {
+      const connectedAt = hostLastConnected[hostId]
+      return connectedAt != null && readAt >= connectedAt
+    },
+    [hostLastConnected]
+  )
 
   // A desktop's reads wait for its connection; one still connecting would report the list unavailable.
   const countsQueries = useMemo(
     () =>
-      allClients.map((entry) =>
-        homeQueryOptions(homeWorktreeCountsQuery, entry, hostStates[entry.hostId] === 'connected')
+      homeHosts.map((host) =>
+        homeQueryOptions(homeWorktreeCountsQuery, host, hostStates[host.hostId] === 'connected')
       ),
-    [allClients, hostStates]
+    [homeHosts, hostStates]
   )
   const combineCounts = useCallback(
     (results: QueryObserverResult<HomeWorktreeCounts>[]): Record<string, HostWorktreeInfo> => {
       const byHost: Record<string, HostWorktreeInfo> = {}
-      allClients.forEach((entry, at) => {
+      homeHosts.forEach(({ hostId }, at) => {
         const result = results[at]
-        const info =
-          result && homeWorktreeInfo(entry.hostId, readOf(result), connectedSince[entry.hostId])
+        const info = result && homeWorktreeInfo(hostId, readOf(result), isLive)
         if (info) {
-          byHost[entry.hostId] = info
+          byHost[hostId] = info
         }
       })
       return byHost
     },
-    [allClients, connectedSince]
+    [homeHosts, isLive]
   )
   // A hidden Home reads nothing; coming back reads what went stale meanwhile.
   const worktreeInfo = useQueries({
@@ -120,15 +133,15 @@ export function useMobileHomeData() {
   })
   const statsQueries = useMemo(
     () =>
-      allClients.map((entry) =>
-        homeQueryOptions(homeStatsQuery, entry, hostStates[entry.hostId] === 'connected')
+      homeHosts.map((host) =>
+        homeQueryOptions(homeStatsQuery, host, hostStates[host.hostId] === 'connected')
       ),
-    [allClients, hostStates]
+    [homeHosts, hostStates]
   )
   const combineStats = useCallback(
     (results: QueryObserverResult<HomeStatsRow>[]): Record<string, HomeStatsRow> =>
-      Object.fromEntries(allClients.map((entry, at) => [entry.hostId, results[at]?.data])),
-    [allClients]
+      Object.fromEntries(homeHosts.map(({ hostId }, at) => [hostId, results[at]?.data])),
+    [homeHosts]
   )
   const statsByHost = useQueries({
     queries: statsQueries,
@@ -136,28 +149,26 @@ export function useMobileHomeData() {
     subscribed: homeFocused
   })
   const accountsQueries = useMemo(
-    () => allClients.map((entry) => homeAccountsOptions(entry.hostId)),
-    [allClients]
+    () => homeHosts.map(({ hostId }) => homeAccountsOptions(hostId)),
+    [homeHosts]
   )
   // Usage is live: only a snapshot from this connection shows, never a stored or disconnected one.
   const combineAccounts = useCallback(
     (results: QueryObserverResult<AccountsSnapshot | null>[]): Record<string, AccountsSnapshot> => {
       const byHost: Record<string, AccountsSnapshot> = {}
-      allClients.forEach((entry, at) => {
+      homeHosts.forEach(({ hostId }, at) => {
         const result = results[at]
-        const since = connectedSince[entry.hostId]
         if (
           result?.data &&
-          since !== undefined &&
-          result.dataUpdatedAt >= since &&
-          hostStates[entry.hostId] === 'connected'
+          hostStates[hostId] === 'connected' &&
+          isLive(hostId, result.dataUpdatedAt)
         ) {
-          byHost[entry.hostId] = result.data
+          byHost[hostId] = result.data
         }
       })
       return byHost
     },
-    [allClients, connectedSince, hostStates]
+    [homeHosts, hostStates, isLive]
   )
   const accountsByHost = useQueries({
     queries: accountsQueries,

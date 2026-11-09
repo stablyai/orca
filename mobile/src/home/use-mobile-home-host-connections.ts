@@ -9,7 +9,6 @@ import { retainHostConnectionInvalidation } from '../query/host-connection-inval
 import { retainHostEventRouter } from '../query/host-event-router'
 import { keepNativeHostQueries } from '../query/native-query-persistence'
 import { usePrimeHosts } from '../transport/connection/host-client-hooks'
-import { createHostConnectRefetchGate } from '../transport/hosts/host-connect-refetch-gate'
 import { selectHomeAutoConnectHostIds } from '../transport/hosts/home-host-auto-connect'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { ConnectionState } from '../transport/connection/connection-state'
@@ -23,9 +22,8 @@ import {
 
 // Home's per-desktop reads (counts, stats) are queries; this wires what a connection carries besides them.
 function wireMobileHomeHostSubscriptions(
-  entry: { hostId: string; client: RpcClient; state: ConnectionState },
-  queryClient: QueryClient,
-  onConnected: (hostId: string) => void
+  entry: { hostId: string; client: RpcClient },
+  queryClient: QueryClient
 ): () => void {
   const { hostId, client } = entry
   keepNativeHostQueries(queryClient, hostId)
@@ -34,12 +32,7 @@ function wireMobileHomeHostSubscriptions(
   const router = retainHostEventRouter(queryClient, hostId, client)
   let unsubscribeNotifications: (() => void) | null = null
   let unsubscribeAccounts: (() => void) | null = null
-  const connectGate = createHostConnectRefetchGate()
   const wireState = (state: ConnectionState): void => {
-    if (connectGate.observe(state)) {
-      // Only reads after this moment may show agent states or usage as current.
-      onConnected(hostId)
-    }
     if (state === 'connected') {
       unsubscribeNotifications ??= subscribeToDesktopNotifications(client, hostId)
       // One stream per connection: each subscribe makes the desktop check usage, so focus must not resubscribe.
@@ -55,7 +48,8 @@ function wireMobileHomeHostSubscriptions(
     unsubscribeAccounts?.()
     unsubscribeAccounts = null
   }
-  wireState(entry.state)
+  // The live state: the client may have connected since the render that listed it.
+  wireState(client.getState())
   const unsubscribeState = client.onStateChange(wireState)
   return () => {
     unsubscribeState()
@@ -71,8 +65,6 @@ export function useMobileHomeHostConnections(
   hostCatalog: HostCatalogEntry[]
 ) {
   const queryClient = useQueryClient()
-  // When Home last saw each desktop connect; a read older than that was a connection ago.
-  const [connectedSince, setConnectedSince] = useState<Record<string, number>>({})
   const [hostStates, setHostStates] = useState<Record<string, ConnectionState>>({})
   const [hostAttempts, setHostAttempts] = useState<Record<string, number>>({})
   const [hostLastConnected, setHostLastConnected] = useState<Record<string, number | null>>({})
@@ -115,9 +107,7 @@ export function useMobileHomeHostConnections(
       if (!subscriptionsRef.current.has(entry.hostId)) {
         subscriptionsRef.current.set(entry.hostId, {
           client: entry.client,
-          cleanup: wireMobileHomeHostSubscriptions(entry, queryClient, (hostId) =>
-            setConnectedSince((previous) => ({ ...previous, [hostId]: Date.now() }))
-          )
+          cleanup: wireMobileHomeHostSubscriptions(entry, queryClient)
         })
       }
     }
@@ -136,7 +126,6 @@ export function useMobileHomeHostConnections(
   return {
     allClients,
     autoConnectHostIds,
-    connectedSince,
     hostAttempts,
     hostLastConnected,
     hostStates

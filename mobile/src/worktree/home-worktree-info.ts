@@ -73,7 +73,7 @@ export type HomeWorktreeRead = {
 export function homeWorktreeInfo(
   hostId: string,
   read: HomeWorktreeRead,
-  liveSince: number | undefined
+  isLive: (hostId: string, readAt: number) => boolean
 ): HostWorktreeInfo | undefined {
   const { data, failed } = read
   if (!data) {
@@ -82,7 +82,7 @@ export function homeWorktreeInfo(
       ? { hostId, totalWorktrees: 0, activeCount: 0, catalogUnavailable: true }
       : undefined
   }
-  const live = liveSince !== undefined && read.dataUpdatedAt >= liveSince
+  const live = isLive(hostId, read.dataUpdatedAt)
   const agents = data.agents.length > 0 ? data.agents : undefined
   return {
     hostId,
