@@ -55,6 +55,8 @@ export const DEFAULT_EGRESS_ALLOWLIST: readonly string[] = [
   'generativelanguage.googleapis.com',
   'oauth2.googleapis.com',
   'accounts.google.com',
+  // Vercel AI Gateway: Anthropic/OpenAI-compatible endpoint teams point agents at (ANTHROPIC_BASE_URL).
+  'ai-gateway.vercel.sh',
   '*.onorca.dev'
 ]
 

@@ -26,7 +26,9 @@ type FakeBox = {
 export type FakeVercel = SandboxProviderApi & {
   boxes: Map<string, FakeBox>
   snapshots: Map<string, ProviderSnapshot & { sandboxName: string; creationMethod: string; createdAt: number }>
-  commands: { sessionId: string; command: string; env: Record<string, string> }[]
+  commands: { sessionId: string; command: string; args?: string[]; env: Record<string, string> }[]
+  /** Answers commands the fake does not know (in-VM orca CLI, routine runners); undefined falls through. */
+  commandHandler?: (params: RunCommandParams, sessionId: string) => { exitCode: number; stdout: string; stderr: string } | undefined
   failStart: boolean
   failCreate: boolean
   /** Simulates the provider ending a session at its timeout. */
@@ -128,7 +130,11 @@ export function createFakeVercel(now: () => number): FakeVercel {
       if (box.status !== 'running') {
         throw new ProviderError(410, 'sandbox_stopped')
       }
-      commands.push({ sessionId, command: params.command, env: params.env ?? {} })
+      commands.push({ sessionId, command: params.command, args: params.args, env: params.env ?? {} })
+      const handled = fake.commandHandler?.(params, sessionId)
+      if (handled) {
+        return handled
+      }
       if (params.command === START_COMMAND) {
         if (fake.failStart) {
           return { exitCode: 1, stdout: '', stderr: 'orcad crashed' }
@@ -144,6 +150,9 @@ export function createFakeVercel(now: () => number): FakeVercel {
         return { exitCode: 0, stdout: '{"wiped":true}\n', stderr: '' }
       }
       if (params.command === DRAIN_COMMAND) {
+        return { exitCode: 0, stdout: '', stderr: '' }
+      }
+      if (params.command === '/bin/sh' && params.args?.[1]?.includes('credentials.json')) {
         return { exitCode: 0, stdout: '', stderr: '' }
       }
       return { exitCode: 127, stdout: '', stderr: 'not found' }
