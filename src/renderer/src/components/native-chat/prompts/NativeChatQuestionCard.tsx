@@ -18,6 +18,7 @@ import type { AgentJournalFreeTextInput } from '../../../../../shared/agent-sess
 import {
   askAcceptsEmptyAnswer,
   askConfirmAction,
+  askQuestionShowsPreviews,
   askConfirmLabel,
   askTypedText,
   toggleAskOption
@@ -82,6 +83,7 @@ export function NativeChatQuestionCard({
   const questionAllowsOther = Array.isArray(allowOther) ? (allowOther[index] ?? false) : allowOther
   const freeTextInput = freeTextInputs?.[index]
   const fieldTakesFocus = q.options.length === 0 || undefined
+  const showsPreviews = askQuestionShowsPreviews(q)
   const answerPlaceholder =
     freeTextInput?.placeholder ??
     t('components.native-chat.question.otherPlaceholder', 'Type your answer')
@@ -156,15 +158,30 @@ export function NativeChatQuestionCard({
     }
   }
 
-  // Briefly show a single-select pick before advancing; picking again retracts it.
-  const pickOption = (optionIndex: number): void => {
+  // Briefly show a single-select pick before advancing; picking again retracts it. With previews,
+  // a pick stays put: a digit focuses its row, and Enter on the chosen row confirms.
+  const pickOption = (
+    optionIndex: number,
+    via: 'pointer' | 'digit' | 'enter' = 'pointer'
+  ): void => {
     const cur = selections[index] ?? []
+    if (showsPreviews && cur.includes(optionIndex)) {
+      if (via === 'enter') {
+        confirm(true)
+      }
+      return
+    }
+    if (showsPreviews && via === 'digit') {
+      cardRef.current
+        ?.querySelectorAll<HTMLButtonElement>('button[aria-pressed]')
+        [optionIndex]?.focus()
+    }
     const picked = !cur.includes(optionIndex)
     const chosen = toggleAskOption(cur, optionIndex, q.multiSelect)
     const next = selections.map((s, i) => (i === index ? chosen : s))
     setSelections(next)
     autoAdvance.cancel()
-    if (picked && !q.multiSelect) {
+    if (picked && !q.multiSelect && !showsPreviews) {
       autoAdvance.schedule(() => advanceOrSubmit(next, otherText))
     }
   }
@@ -298,6 +315,7 @@ export function NativeChatQuestionCard({
                 initialFocus={i === 0}
                 label={opt.label}
                 description={opt.description}
+                preview={opt.preview}
                 selected={(selections[index] ?? []).includes(i)}
                 disabled={isSubmitting}
                 onSelect={() => pickOption(i)}
