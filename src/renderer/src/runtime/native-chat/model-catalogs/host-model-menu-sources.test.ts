@@ -207,6 +207,8 @@ it.each([3, 30])(
     await reading
     const fresh = hostModelMenuCatalog(scope)
     expect(fresh.snapshot.answer).toBeUndefined()
+    const stopFresh = fresh.subscribe(() => {})
+    stopFresh()
     expect(hostModelCatalogSnapshotDiagnostics()).toEqual({
       epochs: 1,
       chatAnswers: 0,

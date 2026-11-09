@@ -1,5 +1,6 @@
 import { expect, it } from 'vitest'
 import {
+  createAgentPickerInventorySource,
   currentAgentPickerAcquisition,
   observeAgentPickerAcquisition
 } from './agent-launch-picker-acquisition'
@@ -121,14 +122,10 @@ it('admits independent protocol jobs into the existing bounded queue and preserv
     },
     support: async () => undefined
   }
-  let terminal = false
-  let demandChanged = () => {}
+  const inventory = createAgentPickerInventorySource([entry])
   const observer = {
-    usesSource: (_entry: AgentPickerEntry, source: string) => source !== 'cli' || terminal,
-    subscribeDemand: (listener: () => void) => {
-      demandChanged = listener
-      return () => {}
-    },
+    usesSource: inventory.usesSource,
+    subscribeDemand: inventory.subscribeDemand,
     selected: () => entry.agent,
     publish: (next: AgentPickerEntry[]) => {
       entries = next
@@ -139,8 +136,7 @@ it('admits independent protocol jobs into the existing bounded queue and preserv
   stop()
   const reopen = observeAgentPickerAcquisition('two-protocols', [entry], reads, observer)
   expect(sources).toEqual(['structured'])
-  terminal = true
-  demandChanged()
+  const stopTerminal = inventory.observeSurface?.(entry.agent, 'terminal')
   expect(sources).toEqual(['structured', 'cli'])
   cli.resolve({ origin: 'probe', fetchedAt: 1, models: [model('variant-low')] })
   await expect.poll(() => entries[0].sourceCatalogs?.cli?.catalogRead).toBe('settled')
@@ -148,5 +144,6 @@ it('admits independent protocol jobs into the existing bounded queue and preserv
   acp.resolve({ origin: 'probe', fetchedAt: 1, models: [model('base')] })
   await expect.poll(() => entries[0].catalogRead).toBe('settled')
   expect(entries[0].sourceCatalogs?.cli?.catalog).toMatchObject({ models: [{ id: 'variant-low' }] })
+  stopTerminal?.()
   reopen()
 })
