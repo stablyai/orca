@@ -1,4 +1,5 @@
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
+import { onPageAppInactive } from '../../mobile-web-shell/bridge/bridge-app-inactive'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession,
@@ -61,12 +62,13 @@ const SAME_COPY_REWRITE_MS = 60_000
 
 // Whether two copies hold the same rows: an open that changed nothing then skips re-encoding the whole window.
 function sameRows(a: StoredChatTranscript, b: StoredChatTranscript): boolean {
+  // The merger replaces a row object whenever the row changes, anywhere in the list; a copy read back from the
+  // store holds other objects, so the first save after a relaunch writes once.
   if (a.kind === 'terminal' && b.kind === 'terminal') {
     return (
       a.messages.length === b.messages.length &&
       a.hasMore === b.hasMore &&
-      a.messages[0]?.id === b.messages[0]?.id &&
-      JSON.stringify(a.messages.at(-1)) === JSON.stringify(b.messages.at(-1))
+      a.messages.every((row, at) => row === b.messages[at])
     )
   }
   // A journal's cursor moves with every change to its rows.
@@ -88,10 +90,16 @@ function yieldToPage(): Promise<void> {
 }
 
 /**
- * Writes a chat's noted copy unless the store already holds it. A turn settle or a close encodes in slices,
- * so even a big chat costs no long task; a hide (`now`) encodes in one go, since the app may stop right after.
+ * When a copy is written. `settle` (a turn settles, a chat closes) and `leave` (the app leaving the foreground, which
+ * also fires for Notification Centre, Face ID or an Android dialog) encode in slices, so even a big chat costs no long
+ * task; a swipe-kill from the app switcher comes a beat later. `leave` writes only rows the store doesn't hold yet and
+ * otherwise keeps the copy noted for the next hide. `hide` encodes in one go, since the app may stop right after.
  */
-export function flushChatTranscript(identity: string, now = false): void {
+type FlushWhen = 'settle' | 'hide' | 'leave'
+
+/** Writes a chat's noted copy unless the store already holds it. */
+export function flushChatTranscript(identity: string, when: FlushWhen = 'settle'): void {
+  const now = when === 'hide'
   const next = pending.get(identity) ?? (now ? encoding.get(identity) : undefined)
   pending.delete(identity)
   const store = readPageDeviceStore()
@@ -100,9 +108,15 @@ export function flushChatTranscript(identity: string, now = false): void {
   }
   const stored = next.build(next.isLive() ? Date.now() : next.notedAt)
   const kept = peekStoredChatTranscript(identity)
-  if (kept && sameRows(kept, stored) && stored.savedAt - kept.savedAt < SAME_COPY_REWRITE_MS) {
-    written.add(next.source)
-    return
+  if (kept && sameRows(kept, stored)) {
+    if (when === 'leave') {
+      pending.set(identity, next)
+      return
+    }
+    if (stored.savedAt - kept.savedAt < SAME_COPY_REWRITE_MS) {
+      written.add(next.source)
+      return
+    }
   }
   const write = ++writes
   latestWrite.set(identity, write)
@@ -142,25 +156,30 @@ export function flushChatTranscript(identity: string, now = false): void {
     .catch(retry)
 }
 
-function flushAll(): void {
+function flushAll(when: Exclude<FlushWhen, 'settle'>): void {
   for (const identity of new Set([...pending.keys(), ...encoding.keys()])) {
-    flushChatTranscript(identity, true)
+    flushChatTranscript(identity, when)
   }
 }
 
-let hiddenListener = false
+let listening = false
 function listenForHidden(): void {
-  if (hiddenListener || typeof document === 'undefined') {
+  if (listening) {
     return
   }
-  hiddenListener = true
+  listening = true
+  // iOS hides the page only once the app is in the background; a swipe-kill from the app switcher comes sooner.
+  onPageAppInactive(() => flushAll('leave'))
+  if (typeof document === 'undefined') {
+    return
+  }
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') {
-      flushAll()
+      flushAll('hide')
     }
   })
   // A document torn down while visible fires no hidden and runs no unmount cleanups.
-  window.addEventListener('pagehide', flushAll)
+  window.addEventListener('pagehide', () => flushAll('hide'))
 }
 
 // Reducer states that still show a stored copy no live read has confirmed, with when it was saved.
