@@ -1,0 +1,166 @@
+#!/usr/bin/env node
+// Share-link proxy for this VM. Listens on 0.0.0.0:6769 (its public *.vercel.run route) and only
+// serves requests the control plane's share gateway signed with this session's key:
+//   x-orca-share: v2.<port>.<expiresAt>.<until>.<linkId>.<base64url HMAC-SHA256(key, everything before)>
+// A request must start before `expiresAt` (60s windows); its response or WebSocket is closed at
+// `until` (the link's expiry, at most 30 minutes out), so a revoked or expired link also loses open
+// streams. Signed requests are reverse-proxied to 127.0.0.1:<port>: streaming both ways, no
+// buffering, WebSocket upgrades piped raw. Anything unsigned gets a bare 404.
+// The key arrives on stdin (orca-sandbox-start pipes it), so it is never in this process's
+// environment or argv; ORCA_SHARE_PROXY_KEY in the env is accepted for tests. Optional
+// ORCA_SHARE_PROXY_PORT (default 6769). Plain Node, no dependencies.
+// getBuiltinModule (Node >= 22.3) works whether node loads this extensionless file as CommonJS
+// (in the VM) or as an ES module (under this repo's type:module package, in tests).
+const crypto = process.getBuiltinModule('node:crypto')
+const fs = process.getBuiltinModule('node:fs')
+const http = process.getBuiltinModule('node:http')
+const net = process.getBuiltinModule('node:net')
+
+const LISTEN_PORT = Number(process.env.ORCA_SHARE_PROXY_PORT || 6769)
+const KEY = Buffer.from((process.env.ORCA_SHARE_PROXY_KEY || fs.readFileSync(0, 'utf8')).trim(), 'base64url')
+delete process.env.ORCA_SHARE_PROXY_KEY
+// Never proxy to the VM's sshd, orcad or this proxy itself.
+// 6080: the remote desktop (VNC behind a password) is for its owner's forward only.
+const BLOCKED_PORTS = new Set([2222, 6080, 6768, LISTEN_PORT])
+const MAX_SKEW_SECONDS = 300
+const MAX_CONNECTION_SECONDS = 3600
+const HOP_BY_HOP = ['connection', 'keep-alive', 'proxy-connection', 'transfer-encoding', 'te', 'trailer', 'upgrade']
+
+if (KEY.length < 32) {
+  console.error('orca-share-proxy: share proxy key missing or short')
+  process.exit(2)
+}
+
+/** The target port and close-by time (ms) for a validly signed request, else null. */
+function verify(header, nowMs) {
+  if (typeof header !== 'string') {
+    return null
+  }
+  const match = /^v2\.(\d{1,5})\.(\d{1,12})\.(\d{1,12})\.([0-9a-f]{32})\.([A-Za-z0-9_-]{43})$/.exec(header)
+  if (!match) {
+    return null
+  }
+  const now = Math.floor(nowMs / 1000)
+  const port = Number(match[1])
+  const expiresAt = Number(match[2])
+  const until = Number(match[3])
+  if (port < 1 || port > 65535 || BLOCKED_PORTS.has(port)) {
+    return null
+  }
+  if (expiresAt < now || expiresAt > now + MAX_SKEW_SECONDS || until <= now || until > now + MAX_CONNECTION_SECONDS) {
+    return null
+  }
+  const signed = header.slice(0, header.lastIndexOf('.'))
+  const expected = crypto.createHmac('sha256', KEY).update(signed).digest()
+  const given = Buffer.from(match[5], 'base64url')
+  return given.length === expected.length && crypto.timingSafeEqual(given, expected) ? { port, untilMs: until * 1000 } : null
+}
+
+function upstreamHeaders(raw, port) {
+  const headers = { ...raw }
+  const connectionTokens = String(raw.connection || '')
+    .split(',')
+    .map((token) => token.trim().toLowerCase())
+  for (const name of [...HOP_BY_HOP, ...connectionTokens, 'x-orca-share']) {
+    delete headers[name]
+  }
+  // Dev servers (Vite, Next) allow localhost hosts by default; the public host rides x-forwarded-host.
+  headers.host = `localhost:${port}`
+  return headers
+}
+
+function refuse(res) {
+  res.writeHead(404, { 'content-type': 'text/plain', 'cache-control': 'no-store' })
+  res.end('not found')
+}
+
+/** Ends `close` at the grant's deadline; the timer goes away with the connection. */
+function deadline(untilMs, close, ...emitters) {
+  const timer = setTimeout(close, Math.max(0, untilMs - Date.now()))
+  for (const emitter of emitters) {
+    emitter.once('close', () => clearTimeout(timer))
+  }
+}
+
+const server = http.createServer((req, res) => {
+  const grant = verify(req.headers['x-orca-share'], Date.now())
+  if (grant === null) {
+    return refuse(res)
+  }
+  const { port } = grant
+  const upstream = http.request(
+    { host: '127.0.0.1', port, method: req.method, path: req.url, headers: upstreamHeaders(req.headers, port) },
+    (answer) => {
+      const headers = { ...answer.headers }
+      for (const name of HOP_BY_HOP) {
+        delete headers[name]
+      }
+      // Marks the answer as the app's, so the gateway can tell it from a route with no proxy behind it.
+      headers['x-orca-share-proxy'] = '1'
+      res.writeHead(answer.statusCode || 502, answer.statusMessage, headers)
+      answer.pipe(res)
+    }
+  )
+  deadline(grant.untilMs, () => {
+    upstream.destroy()
+    res.destroy()
+  }, res)
+  upstream.on('error', (error) => {
+    if (res.headersSent) {
+      res.destroy()
+      return
+    }
+    // The gateway renders its own page for this; the code tells it why. Status 200 on purpose: a 5xx
+    // from the VM reaches a Worker as Vercel's own 502 with our headers gone (found live).
+    res.writeHead(200, { 'content-type': 'text/plain', 'x-orca-share-proxy': '1', 'x-orca-share-error': error.code === 'ECONNREFUSED' ? 'no_listener' : 'upstream_failed' })
+    res.end('upstream unavailable')
+  })
+  req.on('aborted', () => upstream.destroy())
+  req.pipe(upstream)
+})
+
+server.on('upgrade', (req, socket, head) => {
+  const grant = verify(req.headers['x-orca-share'], Date.now())
+  if (grant === null) {
+    socket.end('HTTP/1.1 404 Not Found\r\nconnection: close\r\ncontent-length: 0\r\n\r\n')
+    return
+  }
+  const { port } = grant
+  const headers = upstreamHeaders(req.headers, port)
+  const target = net.connect(port, '127.0.0.1', () => {
+    const lines = [`${req.method} ${req.url} HTTP/1.1`, `connection: upgrade`, `upgrade: ${req.headers.upgrade || 'websocket'}`]
+    for (const [name, value] of Object.entries(headers)) {
+      for (const item of Array.isArray(value) ? value : [value]) {
+        lines.push(`${name}: ${item}`)
+      }
+    }
+    target.write(`${lines.join('\r\n')}\r\n\r\n`)
+    if (head && head.length > 0) {
+      target.write(head)
+    }
+    socket.pipe(target)
+    target.pipe(socket)
+  })
+  const close = () => {
+    socket.destroy()
+    target.destroy()
+  }
+  deadline(grant.untilMs, close, socket)
+  target.on('error', () => {
+    if (socket.writable) {
+      socket.end('HTTP/1.1 200 OK\r\nx-orca-share-proxy: 1\r\nx-orca-share-error: no_listener\r\nconnection: close\r\ncontent-length: 0\r\n\r\n')
+    }
+    close()
+  })
+  socket.on('error', close)
+  target.on('close', () => socket.destroy())
+  socket.on('close', () => target.destroy())
+})
+
+server.keepAliveTimeout = 65_000
+server.headersTimeout = 70_000
+// No request timeout: previews can stream (SSE, long polls) until the grant's deadline.
+server.requestTimeout = 0
+server.listen(LISTEN_PORT, '0.0.0.0', () => {
+  console.log(`orca-share-proxy listening on ${LISTEN_PORT}`)
+})

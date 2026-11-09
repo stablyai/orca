@@ -11,12 +11,16 @@ import { mintShellSessionId } from './shell-session-id'
 // A Home entry claims the spare about 0.2 s after the tap on a simulator; a native screen keeps it no longer.
 const HOME_SPARE_CLAIM_GRACE_MS = 2000
 
+// Hopping between Home and native screens would otherwise boot and destroy a whole page on every return.
+const HOME_SPARE_REFILL_BACKOFF_MS = 30_000
+
 // What JS last asked native to park, until a claim or a drop. Native may since have dropped it on
 // its own (background, memory); this only saves the claim's native round trip when nothing can match.
 let parkedDirectory: string | null = null
 let dropTimer: ReturnType<typeof setTimeout> | null = null
 // A prepare still reading the store when Home goes must not park a spare after the drop ran.
 let homeShown = false
+let unclaimedDropAt: number | null = null
 
 function cancelDrop(): void {
   if (dropTimer !== null) {
@@ -37,13 +41,13 @@ export async function prepareHomeSparePage(
       if (active === null) {
         continue
       }
-      if (!homeShown) {
+      if (!homeShown || homeSpareRefillWaitMs() > 0) {
         return
       }
       const directory = generationDirectoryPath(active.directory)
       const prepared = await prepareSpareDocument(directory, mintShellSessionId())
       if (prepared && !homeShown) {
-        await dropHomeSparePage()
+        await dropUnclaimedHomeSparePage()
       } else if (prepared) {
         parkedDirectory = directory
       }
@@ -68,6 +72,14 @@ export async function claimHomeSparePage(directory: string): Promise<string | nu
   }
 }
 
+// How long Home must still wait before booting another spare after one went unclaimed.
+export function homeSpareRefillWaitMs(): number {
+  if (unclaimedDropAt === null) {
+    return 0
+  }
+  return Math.max(0, unclaimedDropAt + HOME_SPARE_REFILL_BACKOFF_MS - performance.now())
+}
+
 // Home is shown; a spare still inside the grace after leaving it stays.
 export function enterHomeSparePage(): void {
   homeShown = true
@@ -80,8 +92,13 @@ export function leaveHomeSparePage(): void {
   cancelDrop()
   dropTimer = setTimeout(() => {
     dropTimer = null
-    void dropHomeSparePage()
+    void (parkedDirectory === null ? dropHomeSparePage() : dropUnclaimedHomeSparePage())
   }, HOME_SPARE_CLAIM_GRACE_MS)
+}
+
+function dropUnclaimedHomeSparePage(): Promise<void> {
+  unclaimedDropAt = performance.now()
+  return dropHomeSparePage()
 }
 
 // Also runs before any host's built files go: that is rare, and a spare must not outlive its files.

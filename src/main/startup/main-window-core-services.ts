@@ -1,5 +1,6 @@
 import { app, type BrowserWindow } from 'electron'
 import { registerAgentApiKeyHandlers } from '../agent-api-keys/agent-api-key-ipc'
+import { registerCloudWorkspacesHandlers } from '../ipc/cloud-workspaces'
 import { registerCoreHandlers } from '../ipc/register-core-handlers/register-core-handlers'
 import { attachMainWindowServices } from '../window/attach-main-window-services'
 import { initTccPromptNotice } from '../macos-permissions/macos-tcc-prompt-notice'
@@ -67,6 +68,7 @@ export function attachMainWindowCoreServices(
   // Server status probes start inside registerCoreHandlers; held hosts must be marked first.
   holdLaunchReconnectOptOuts(store.getSshTargets())
   registerAgentApiKeyHandlers(app.getPath('userData'))
+  registerCloudWorkspacesHandlers()
   registerCoreHandlers(
     store,
     runtime,

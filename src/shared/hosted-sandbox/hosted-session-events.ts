@@ -19,4 +19,8 @@ export type HostedSessionWarningEvent = {
   minutesLeft: 60 | 15
 }
 
-export type HostedSessionIdleSleepEvent = { workspaceId: string | null }
+export type HostedSessionIdleSleepEvent = {
+  workspaceId: string | null
+  /** How long the workspace was idle before sleeping (for "slept after N min idle"); optional for older mains. */
+  idleMs?: number | null
+}

@@ -12,6 +12,7 @@ import {
   WorktreeCardSparseBadge
 } from '../identity/worktree-card-header-items'
 import { WorktreeCardSshHostControl } from '../host/WorktreeCardSshHostControl'
+import { CloudWorkspaceMarkSlot } from '@/components/orca-cloud/CloudWorkspaceMarkSlot'
 import { WorktreeTitleInlineRename } from '../identity/WorktreeTitleInlineRename'
 import type { WorktreeCardController } from '../controller/use-worktree-card-controller'
 
@@ -78,10 +79,19 @@ export function WorktreeCardHeader({
           />
         )}
 
-        {!repo?.connectionId && parsedRepoHost?.kind === 'runtime' && (
-          <WorktreeCardRuntimeHostMark
-            disconnected={isRuntimeDisconnected}
-            hostLabel={runtimeHostLabel}
+        {!repo?.connectionId && (
+          // An Orca Cloud workspace shows its cloud mark (live state) in place of the server mark.
+          <CloudWorkspaceMarkSlot
+            workspaceId={worktree.id}
+            onPointerDown={stopQuickActionPointerPropagation}
+            fallback={
+              parsedRepoHost?.kind === 'runtime' ? (
+                <WorktreeCardRuntimeHostMark
+                  disconnected={isRuntimeDisconnected}
+                  hostLabel={runtimeHostLabel}
+                />
+              ) : null
+            }
           />
         )}
 

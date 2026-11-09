@@ -2,6 +2,8 @@
 // wrangler.jsonc or git. Deployed environments live in the private deploy config.
 export type Env = {
   SANDBOX_DB: D1Database
+  /** Comma-separated browser origins allowed to call /mcp besides this Worker's own (MCP web clients). */
+  MCP_ALLOWED_ORIGINS?: string
   /** `prod` | `dev` | `local`; tagged on every provider resource so environments never mix. */
   SANDBOX_ENV: string
 
@@ -14,6 +16,10 @@ export type Env = {
   VERCEL_API_BASE?: string
   /** Golden image (orcad + agent CLIs) every new sandbox boots from; see image/. */
   GOLDEN_SNAPSHOT_ID?: string
+  /** Non-prod only: pin this image over the rotated active one (preview versions testing new VM entry points). */
+  GOLDEN_SNAPSHOT_OVERRIDE?: string
+  /** Git as the sender: `on`, `accounts:<id>,<id>` or off (default). See memberGitEnabled in index.ts. */
+  MEMBER_GIT_IDENTITY?: string
   /** `release:latest` | `release:v1.2.3`: build golden images from Orca's released orca-server tarball. */
   GOLDEN_IMAGE_SOURCE?: string
   /** TTL for Worker-built golden images; unset/0 keeps them until rotated out. */
@@ -72,6 +78,21 @@ export type Env = {
   GITHUB_APP_CLIENT_SECRET?: string
   /** HMAC key for the signed connect state (secret, >= 32 chars). */
   GITHUB_STATE_SECRET?: string
+
+  /**
+   * Share links (src/share-links.ts): HMAC secret (>= 32 chars) for link tokens, per-session VM
+   * proxy keys and viewer cookies. Unset = share routes answer 503. Rotating it voids every link.
+   */
+  SHARE_LINK_SECRET?: string
+  /**
+   * Per-link subdomain mode: `.share.example.dev` serves `<token>.share.example.dev/` at the root
+   * (needs a wildcard custom domain on this Worker). Unset = path mode `/s/<token>/` only.
+   */
+  SHARE_HOST_SUFFIX?: string
+  /** Retired SHARE_LINK_SECRET, still accepted for links, codes and cookies while a rotation drains. */
+  SHARE_LINK_SECRET_PREVIOUS?: string
+  /** `on` | `off`: path-mode links (`/s/<token>/` on this origin). Default on outside prod, off in prod. */
+  SHARE_PATH_MODE?: string
 
   /** Operator routes (/v1/internal/*): kill switch, drain, bindings. Secret, >= 32 chars; unset = no routes. */
   OPERATOR_TOKEN?: string

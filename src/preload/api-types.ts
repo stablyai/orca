@@ -29,6 +29,8 @@ import type { DocPreviewApi } from './api/doc-preview-api'
 import type { EmulatorApi } from './api/emulator-api'
 import type { EphemeralVmApi } from './api/ephemeral-vm-api'
 import type { OrcaCloudWorkspaceApi } from '../shared/hosted-sandbox/cloud-workspace-api'
+import type { CloudWorkspaceOfflineApi } from '../shared/hosted-sandbox/cloud-workspace-offline-api'
+import type { CloudSharesApi } from './api/cloud-shares-api'
 import type { ExportApi, FilesystemApi } from './api/filesystem-api'
 import type { GitInspectionApi } from './api/git-inspection-api'
 import type { GitOperationApi } from './api/git-operation-api'
@@ -73,6 +75,7 @@ import type { UpdaterApi } from './api/updater-api'
 import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspace-cleanup-api'
 import type { LocalhostWorktreeLabelsApi, WorkspacePortsApi } from './api/workspace-port-api'
 import type { LinkPreviewApi } from './api/link-preview-api'
+import type { CloudWorkspacesApi } from './api/cloud-workspaces-api'
 import type { WorkspaceSessionApi } from './api/workspace-session-api'
 import type { FolderWorkspacesApi, SparsePresetsApi, WorktreeApi } from './api/worktree-api'
 
@@ -94,6 +97,7 @@ export type PreloadApi = {
   workspaceSpace: WorkspaceSpaceApi
   workspacePorts: WorkspacePortsApi
   linkPreview: LinkPreviewApi
+  cloudWorkspaces: CloudWorkspacesApi
   pty: PtyApi
   feedback: FeedbackApi
   crashReports: CrashReportsApi
@@ -137,6 +141,9 @@ export type PreloadApi = {
   ephemeralVm: EphemeralVmApi
   /** Orca Cloud workspace lifecycle (status panel, Restart, archive); absent in builds without Orca Cloud. */
   orcaCloudWorkspace: OrcaCloudWorkspaceApi
+  /** Orca Cloud: browse a sleeping workspace from the client cache; prompts queued to wake it. */
+  orcaCloudOffline: CloudWorkspaceOfflineApi
+  cloudShares: CloudSharesApi
   cache: WorkspaceSessionApi['cache']
   session: WorkspaceSessionApi['session']
   updater: UpdaterApi

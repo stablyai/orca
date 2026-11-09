@@ -1,3 +1,5 @@
+import { ORCA_ORG_NAME_MAX_LENGTH } from '../../../shared/orca-org-management'
+import type { OrcaProfileOrgCreateResult } from '../../../shared/orca-org-management'
 import { ipcMain } from 'electron'
 import type {
   OrcaOrgRole,
@@ -12,7 +14,10 @@ import type {
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import {
   changeOrcaProfileOrgMemberRole,
+  createOrcaProfileOrg,
   inviteOrcaProfileOrgMember,
+  leaveOrcaProfileOrg,
+  resendOrcaProfileOrgInvite,
   listOrcaProfileOrgMembers,
   removeOrcaProfileOrgMember,
   revokeOrcaProfileOrgInvite
@@ -77,7 +82,34 @@ function orgMemberRemoveArgsFromUnknown(args: unknown): OrcaProfileOrgMemberRemo
   return { orgId, userId: orgUserIdFromUnknown(record.userId) }
 }
 
+function orgCreateNameFromUnknown(args: unknown): string {
+  const record = args && typeof args === 'object' ? (args as Record<string, unknown>) : {}
+  const name = typeof record.name === 'string' ? record.name.trim() : ''
+  if (!name || name.length > ORCA_ORG_NAME_MAX_LENGTH) {
+    throw new Error('invalid_orca_org_name')
+  }
+  return name
+}
+
 export function registerOrcaProfileOrgMemberHandlers(): void {
+  ipcMain.handle(
+    'orcaProfiles:orgInviteResend',
+    async (_event, rawArgs: unknown): Promise<OrcaProfileOrgMemberMutationResult> =>
+      resendOrcaProfileOrgInvite(getProfileUserDataPath(), orgMemberInviteArgsFromUnknown(rawArgs))
+  )
+
+  ipcMain.handle(
+    'orcaProfiles:orgLeave',
+    async (_event, rawArgs: unknown): Promise<OrcaProfileOrgMemberMutationResult> =>
+      leaveOrcaProfileOrg(getProfileUserDataPath(), { orgId: orgMembersScopedArgs(rawArgs).orgId })
+  )
+
+  ipcMain.handle(
+    'orcaProfiles:orgCreate',
+    async (_event, rawArgs: unknown): Promise<OrcaProfileOrgCreateResult> =>
+      createOrcaProfileOrg(getProfileUserDataPath(), { name: orgCreateNameFromUnknown(rawArgs) })
+  )
+
   ipcMain.handle(
     'orcaProfiles:orgMembersList',
     async (

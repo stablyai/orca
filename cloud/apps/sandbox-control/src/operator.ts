@@ -5,7 +5,7 @@
 //   POST   /v1/internal/housekeeping                    orphan sweep + retention now
 //   POST   /v1/internal/github/bindings {installationId, accountId}   support binding (audited as `operator`)
 //   DELETE /v1/internal/github/bindings {installationId, accountId?}
-//   POST   /v1/internal/members/removed {accountId, userId}   revoke a departed member's API keys (auth calls this)
+//   POST   /v1/internal/members/removed {accountId, userId}   revoke a departed member's API keys, disable their routines (auth calls this)
 import { z } from 'zod'
 import { audit } from './api/audit'
 import { readBearer } from './auth'
@@ -14,6 +14,7 @@ import { bindInstallation, revokeInstallation, timingSafeEqual } from './github-
 import { countAllActive, getControlState, killSwitchOn, setKillSwitch } from './guardrails'
 import { guardrails, type LifecycleDeps } from './lifecycle'
 import { drainAll, housekeeping } from './retention'
+import { disableMemberRoutines } from './routines/runs'
 import { listByStatus } from './store'
 
 const KillSwitchBody = z.object({ enabled: z.boolean(), drain: z.boolean().optional() }).strict()
@@ -124,8 +125,15 @@ export async function handleOperator(
         .prepare(`UPDATE api_keys SET revoked_at = ?, revoked_by = 'system:member_removed' WHERE account_id = ? AND created_by = ? AND revoked_at IS NULL`)
         .bind(now, body.data.accountId, body.data.userId)
         .run()
-      await audit(life.db, { accountId: body.data.accountId, type: 'system', id: 'auth', userId: body.data.userId }, { action: 'member.removed', detail: { keysRevoked: result.meta.changes } }, now)
-      return Response.json({ revoked: result.meta.changes })
+      // MCP OAuth tokens are api_keys rows (revoked above); pending codes and approvals die too.
+      await life.db.batch([
+        life.db.prepare('UPDATE oauth_codes SET consumed_at = ? WHERE account_id = ? AND user_id = ? AND consumed_at IS NULL').bind(now, body.data.accountId, body.data.userId),
+        life.db.prepare('UPDATE oauth_approvals SET consumed_at = ? WHERE account_id = ? AND user_id = ? AND consumed_at IS NULL').bind(now, body.data.accountId, body.data.userId)
+      ])
+      // Routines run with their creator's secrets: a departed member's stop, and nothing of theirs keeps running.
+      const routines = await disableMemberRoutines({ life }, body.data.accountId, body.data.userId)
+      await audit(life.db, { accountId: body.data.accountId, type: 'system', id: 'auth', userId: body.data.userId }, { action: 'member.removed', detail: { keysRevoked: result.meta.changes, routinesDisabled: routines.disabled, runsCancelled: routines.cancelled } }, now)
+      return Response.json({ revoked: result.meta.changes, routinesDisabled: routines.disabled })
     }
     default:
       return null

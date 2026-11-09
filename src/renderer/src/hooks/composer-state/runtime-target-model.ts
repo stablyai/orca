@@ -4,7 +4,7 @@ import type { ExecutionHostId, ParsedExecutionHost } from '../../../../shared/ex
 import type { Repo } from '../../../../shared/repo-types'
 import type { SshConnectionState, SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import type { OrcaVmRecipe } from '../../../../shared/orca-yaml-hook-types'
+import type { OrcaCloudAvailability, OrcaVmRecipe } from '../../../../shared/orca-yaml-hook-types'
 import type { AgentStartupShell } from '../../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
@@ -52,6 +52,8 @@ export type ComposerRuntimeTargetModel = {
   selectedRecipeRepoId: string | null
   selectedRecipeRepoConnectionId: string | null
   ephemeralVmsEnabled: boolean
+  /** Orca Cloud for this project, from main; drives the picker's sign-in/upsell row. */
+  orcaCloudAvailability: OrcaCloudAvailability
   ephemeralVmRecipes: OrcaVmRecipe[]
   selectedEphemeralVmRecipeId: string | null
   setSelectedEphemeralVmRecipeId: (recipeId: string | null) => void

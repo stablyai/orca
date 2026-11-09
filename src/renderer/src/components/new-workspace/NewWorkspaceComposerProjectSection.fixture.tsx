@@ -6,6 +6,8 @@ import {
   type ProjectHostSetupOption
 } from '@/lib/project-host-setup-options'
 import { NewWorkspaceComposerProjectSection } from './NewWorkspaceComposerProjectSection'
+import type { EphemeralVmRecipeOption } from './run-target-options'
+import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
 
 const projects: NewWorkspaceProjectOption[] = [
   {
@@ -77,16 +79,30 @@ const hosts: ProjectHostSetupOption[] = [
   }
 ]
 
+const orcaCloudRecipe: EphemeralVmRecipeOption = {
+  id: 'cloud',
+  name: 'Orca Cloud',
+  description: 'Hosted by Orca. Sleeps when idle and keeps your files.',
+  provider: 'orca-cloud',
+  create: 'orca-cloud create'
+}
+
 function ProjectAndHostPreview({
-  folderOnly = false
+  folderOnly = false,
+  orcaCloud,
+  cloudSelected = false
 }: {
   folderOnly?: boolean
+  /** Offers Orca Cloud with this entitlement. */
+  orcaCloud?: OrcaCloudRunTargetAccess
+  cloudSelected?: boolean
 }): React.JSX.Element {
   const [project, setProject] = useState(folderOnly ? 'folder' : 'orca')
   const [host, setHost] = useState('local')
+  const [recipe, setRecipe] = useState<string | null>(cloudSelected ? 'cloud' : null)
   return (
     <div className="space-y-4 rounded-xl border border-border bg-background p-4">
-      <h1 className="text-base font-semibold">New worktree</h1>
+      <h1 className="text-base font-semibold">Create workspace</h1>
       <NewWorkspaceComposerProjectSection
         projectError={null}
         selectedRepoConnectionId={null}
@@ -109,7 +125,10 @@ function ProjectAndHostPreview({
             setHost(option.id)
           }
         }}
-        ephemeralVmRecipes={[]}
+        ephemeralVmRecipes={orcaCloud ? [orcaCloudRecipe] : []}
+        selectedEphemeralVmRecipeId={recipe}
+        onEphemeralVmRecipeChange={setRecipe}
+        {...(orcaCloud ? { orcaCloudAccess: orcaCloud } : {})}
         handleAddSshHost={() => {}}
         handleAddRemoteServer={() => {}}
         handleConnectRunTargetHost={async () => {}}
@@ -159,3 +178,17 @@ function tooltipFixture(attribute: string) {
 
 export const projectTooltip = tooltipFixture('data-project-combobox-root')
 export const hostTooltip = tooltipFixture('data-run-target-combobox-root')
+
+const entitled: OrcaCloudRunTargetAccess = { state: 'entitled', remainingSeconds: 41 * 3600 }
+export const hostMenuOrcaCloud = defineFixture({
+  ...hostMenu,
+  render: () => <ProjectAndHostPreview orcaCloud={entitled} />
+})
+export const hostMenuOrcaCloudLocked = defineFixture({
+  ...hostMenu,
+  render: () => <ProjectAndHostPreview orcaCloud={{ state: 'no-plan', lapsed: false }} />
+})
+export const orcaCloudSelected = defineFixture({
+  ...closed,
+  render: () => <ProjectAndHostPreview orcaCloud={entitled} cloudSelected />
+})

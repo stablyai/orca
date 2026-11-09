@@ -136,8 +136,8 @@ export function createVercelSandboxApi(
           region: params.region,
           timeout: params.timeoutMs,
           ports: params.ports,
-          persistent: true,
-          keepLastSnapshots: { count: 2, expiration: params.snapshotExpirationMs },
+          persistent: params.persistent ?? true,
+          ...(params.persistent === false ? {} : { keepLastSnapshots: { count: 2, expiration: params.snapshotExpirationMs } }),
           snapshotExpiration: params.snapshotExpirationMs,
           networkPolicy: params.networkPolicy,
           tags: params.tags
@@ -179,6 +179,17 @@ export function createVercelSandboxApi(
       await request('POST', `/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}/network-policy`, {
         body: policy
       })
+    },
+
+    async updatePorts(name, ports) {
+      // PATCH treats `ports` as the full list; a running session gets the new routes immediately
+      // (measured live: ~260 ms, route answers at once).
+      const response = await request('PATCH', `/v2/sandboxes/${encodeURIComponent(name)}`, {
+        query: { projectId: config.projectId },
+        body: { ports }
+      })
+      const body = await json(z.looseObject({ routes: z.array(Route).optional() }), response)
+      return (body.routes ?? []).map((route) => ({ port: route.port, url: route.url }))
     },
 
     async runCommand(sessionId, params) {
@@ -268,13 +279,31 @@ export function createVercelSandboxApi(
       return (await json(z.looseObject({ command: z.looseObject({ id: z.string() }) }), response)).command.id
     },
 
-    async getCommand(sessionId, commandId) {
+    async getCommand(sessionId, commandId, options) {
       const response = await request(
         'GET',
-        `/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}/cmd/${encodeURIComponent(commandId)}`
+        `/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}/cmd/${encodeURIComponent(commandId)}`,
+        { query: { wait: options?.wait ? 'true' : undefined } }
       )
       const body = await json(z.looseObject({ command: z.looseObject({ exitCode: z.number().nullable().optional() }) }), response)
       return { exitCode: body.command.exitCode ?? null }
+    },
+
+    async streamCommandLogs(sessionId, commandId, signal) {
+      const url = new URL(
+        `${base}/v2/sandboxes/sessions/${encodeURIComponent(sessionId)}/cmd/${encodeURIComponent(commandId)}/logs`
+      )
+      url.searchParams.set('teamId', config.teamId)
+      const response = await doFetch(url, {
+        headers: { authorization: `Bearer ${config.token}` },
+        redirect: 'manual',
+        signal
+      })
+      if (!response.ok || !response.body) {
+        const parsed = ErrorBody.safeParse(await response.json().catch(() => null))
+        throw new ProviderError(response.status, parsed.success ? (parsed.data.error?.code ?? null) : null)
+      }
+      return response.body
     },
 
     async getSnapshot(snapshotId) {

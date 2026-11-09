@@ -100,6 +100,7 @@ const schemas: Record<string, object> = {
       id: { type: 'string' },
       name: { type: 'string' },
       projectId: { type: 'string' },
+      repo: { type: ['object', 'null'], properties: { url: { type: 'string' }, ref: { type: ['string', 'null'] } } },
       enabled: { type: 'boolean' },
       trigger: {
         oneOf: [
@@ -114,14 +115,28 @@ const schemas: Record<string, object> = {
               baseBranches: { type: 'array', items: { type: 'string' } }
             }
           },
-          { type: 'object', properties: { kind: { const: 'webhook' }, url: { type: 'string', description: 'Secret URL; POST to it to start a run' } } }
+          {
+            type: 'object',
+            properties: {
+              kind: { const: 'webhook' },
+              urlHint: { type: ['string', 'null'], description: 'Last 4 characters of the secret URL (`…a1b2`). The URL itself is only returned when created or rotated.' }
+            }
+          }
         ]
       },
       agent: { type: 'string', enum: ['claude', 'codex'] },
       prompt: { type: 'string' },
       postResults: { type: 'string', enum: ['none', 'comment', 'pr'] },
+      machineSize: { type: 'string', enum: ['standard', 'large'] },
+      maxRuntimeMinutes: { type: 'integer', minimum: 5, maximum: 120 },
       nextRunAt: { type: ['integer', 'null'] },
-      lastRun: { oneOf: [{ type: 'null' }, ref('RoutineRun')] }
+      lastRun: {
+        type: ['object', 'null'],
+        properties: { id: { type: 'string' }, status: { type: 'string' }, finishedAt: { type: ['integer', 'null'] } }
+      },
+      createdBy: { type: 'string', description: 'Runs execute as this user (their personal and the org secrets).' },
+      createdAt: { type: 'integer' },
+      updatedAt: { type: 'integer' }
     }
   },
   RoutineRun: {
@@ -130,13 +145,16 @@ const schemas: Record<string, object> = {
       id: { type: 'string' },
       routineId: { type: 'string' },
       trigger: { type: 'string', enum: ['schedule', 'github', 'webhook', 'manual'] },
+      triggerDetail: { type: ['object', 'null'], description: 'What fired it: scheduled slot, GitHub event and target, webhook payload' },
       status: { type: 'string', enum: ['queued', 'starting', 'running', 'posting', 'succeeded', 'failed', 'cancelled', 'timed_out'] },
       workspaceId: { type: ['string', 'null'] },
       result: { type: ['object', 'null'], properties: { summary: { type: 'string' }, prUrl: { type: 'string' }, commentUrl: { type: 'string' } } },
       error: { type: ['string', 'null'] },
       createdAt: { type: 'integer' },
       startedAt: { type: ['integer', 'null'] },
-      finishedAt: { type: ['integer', 'null'] }
+      finishedAt: { type: ['integer', 'null'] },
+      durationMs: { type: ['integer', 'null'] },
+      logTail: { type: ['string', 'null'], description: 'Single-run view only: short, redacted tail of the runner log' }
     }
   },
   AuditEntry: {
@@ -158,14 +176,32 @@ const one = (key: string, item: string) => obj({ [key]: ref(item) })
 const ROUTINE_BODY = obj(
   {
     name: { type: 'string' },
-    projectId: { type: 'string' },
-    trigger: (schemas.Routine as { properties: { trigger: object } }).properties.trigger,
+    projectId: { type: 'string', description: 'One of projectId or repo' },
+    repo: { type: 'object', description: 'Reuses (or creates) the project for this repo', properties: { url: { type: 'string' }, ref: { type: 'string' } } },
+    trigger: {
+      oneOf: [
+        obj({ kind: { const: 'schedule' }, cron: { type: 'string', description: 'Five-field cron; at most every 15 minutes', examples: ['0 9 * * 1-5'] }, timezone: { type: 'string', examples: ['America/New_York'] } }, ['kind', 'cron', 'timezone']),
+        obj(
+          {
+            kind: { const: 'github' },
+            events: { type: 'array', items: { type: 'string', enum: ['pull_request.opened', 'pull_request.labeled', 'pull_request.synchronize', 'issues.opened', 'issues.labeled', 'issue_comment.created'] } },
+            labels: { type: 'array', items: { type: 'string' } },
+            authors: { type: 'array', items: { type: 'string' } },
+            baseBranches: { type: 'array', items: { type: 'string' } }
+          },
+          ['kind', 'events']
+        ),
+        obj({ kind: { const: 'webhook' } }, ['kind'])
+      ]
+    },
     agent: { type: 'string', enum: ['claude', 'codex'] },
-    prompt: { type: 'string' },
+    prompt: { type: 'string', maxLength: 20000 },
     postResults: { type: 'string', enum: ['none', 'comment', 'pr'] },
-    enabled: { type: 'boolean' }
+    enabled: { type: 'boolean', default: true },
+    machineSize: { type: 'string', enum: ['standard', 'large'] },
+    maxRuntimeMinutes: { type: 'integer', minimum: 5, maximum: 120, default: 30 }
   },
-  ['name', 'projectId', 'trigger', 'prompt']
+  ['name', 'trigger', 'agent', 'prompt', 'postResults']
 )
 
 export const OPERATIONS: Record<string, Record<string, Op>> = {
@@ -185,6 +221,48 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
   },
   '/v1/api-keys/{id}': {
     delete: { tags: ['API keys'], sessionOnly: true, summary: 'Revoke an API key', params: [idParam('id', 'Key id')], responses: { 200: 'Revoked' } }
+  },
+  '/v1/oauth-approvals': {
+    post: {
+      tags: ['API keys'],
+      sessionOnly: true,
+      summary: 'Mint a one-time MCP approval code',
+      description: 'A single-use code (10 minutes) the user pastes on the MCP OAuth approval page instead of an API key. Defaults to every scope the role allows.',
+      body: obj({ scopes: { type: 'array', items: { type: 'string', enum: [...API_SCOPES] } } }),
+      responses: { 201: { description: 'Created', schema: obj({ code: { type: 'string' }, expiresAt: { type: 'integer' }, scopes: { type: 'array', items: { type: 'string' } } }) } }
+    }
+  },
+  '/v1/oauth-grants': {
+    get: {
+      tags: ['API keys'],
+      sessionOnly: true,
+      summary: 'List connected MCP apps',
+      description: 'Live OAuth grants: members see their own, owners/admins the whole account. A grant ends 90 days after approval, when revoked here, or when the API key that approved it is revoked.',
+      responses: {
+        200: {
+          description: 'Grants',
+          schema: obj({
+            grants: {
+              type: 'array',
+              items: obj({
+                id: { type: 'string' },
+                clientId: { type: 'string' },
+                clientName: { type: ['string', 'null'] },
+                userId: { type: 'string' },
+                scopes: { type: 'array', items: { type: 'string' } },
+                approvedWith: { type: 'object' },
+                grantedAt: { type: 'integer' },
+                lastUsedAt: { type: ['integer', 'null'] },
+                expiresAt: { type: ['integer', 'null'] }
+              })
+            }
+          })
+        }
+      }
+    }
+  },
+  '/v1/oauth-grants/{id}': {
+    delete: { tags: ['API keys'], sessionOnly: true, summary: 'Disconnect an MCP app (revoke every token of the grant)', params: [idParam('id', 'Grant id (fam_…)')], responses: { 200: 'Revoked' } }
   },
   '/v1/settings': {
     get: { tags: ['Account'], summary: 'Programmatic-access settings', responses: { 200: { description: 'Settings', schema: obj({ settings: obj({ vmCliEnabled: { type: 'boolean' } }) }) } } },
@@ -287,11 +365,11 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
   },
   '/v1/routines': {
     get: { tags: ['Routines'], scope: 'routines:read', summary: 'List routines', responses: { 200: { description: 'Routines', schema: list('routines', 'Routine') } } },
-    post: { tags: ['Routines'], scope: 'routines:write', summary: 'Create a routine', description: 'Webhook routines return their secret URL once, in this response.', body: ROUTINE_BODY, responses: { 201: { description: 'Created', schema: one('routine', 'Routine') } } }
+    post: { tags: ['Routines'], scope: 'routines:write', summary: 'Create a routine', description: 'Webhook routines return their secret URL (`webhookUrl`) once, in this response.', body: ROUTINE_BODY, responses: { 201: { description: 'Created', schema: obj({ routine: ref('Routine'), webhookUrl: { type: 'string' } }) } } }
   },
   '/v1/routines/{id}': {
     get: { tags: ['Routines'], scope: 'routines:read', summary: 'Get a routine', params: [idParam('id', 'Routine id')], responses: { 200: { description: 'Routine', schema: one('routine', 'Routine') } } },
-    patch: { tags: ['Routines'], scope: 'routines:write', summary: 'Update a routine', params: [idParam('id', 'Routine id')], body: ROUTINE_BODY, responses: { 200: { description: 'Routine', schema: one('routine', 'Routine') } } },
+    patch: { tags: ['Routines'], scope: 'routines:write', summary: 'Update a routine', description: 'Any subset of the create body. Members edit their own routines; owners/admins edit all.', params: [idParam('id', 'Routine id')], body: ROUTINE_BODY, responses: { 200: { description: 'Routine', schema: one('routine', 'Routine') } } },
     delete: { tags: ['Routines'], scope: 'routines:write', summary: 'Delete a routine', params: [idParam('id', 'Routine id')], responses: { 200: 'Deleted' } }
   },
   '/v1/routines/{id}/run': {
@@ -301,7 +379,30 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
     post: { tags: ['Routines'], scope: 'routines:write', summary: 'Rotate the secret webhook URL', description: 'The old URL stops working immediately.', params: [idParam('id', 'Routine id')], responses: { 200: { description: 'New URL', schema: obj({ url: { type: 'string' } }) } } }
   },
   '/v1/routines/{id}/runs': {
-    get: { tags: ['Routines'], scope: 'routines:read', summary: 'Run history', params: [idParam('id', 'Routine id')], responses: { 200: { description: 'Runs, newest first', schema: list('runs', 'RoutineRun') } } }
+    get: {
+      tags: ['Routines'],
+      scope: 'routines:read',
+      summary: 'Run history',
+      params: [
+        idParam('id', 'Routine id'),
+        { name: 'limit', in: 'query', schema: { type: 'integer', maximum: 100 } },
+        { name: 'before', in: 'query', description: 'Cursor: `nextBefore` from the previous page', schema: { type: 'integer' } }
+      ],
+      responses: { 200: { description: 'Runs, newest first', schema: obj({ runs: { type: 'array', items: ref('RoutineRun') }, nextBefore: { type: ['integer', 'null'] } }) } }
+    }
+  },
+  '/v1/routines/{id}/runs/{runId}': {
+    get: { tags: ['Routines'], scope: 'routines:read', summary: 'One run, with a redacted log tail', params: [idParam('id', 'Routine id'), idParam('runId', 'Run id')], responses: { 200: { description: 'Run', schema: one('run', 'RoutineRun') } } }
+  },
+  '/v1/hooks/{token}': {
+    post: {
+      tags: ['Routines'],
+      summary: 'Trigger a webhook routine',
+      description:
+        'No Authorization header: the secret URL is the credential. Optional JSON body (up to 16 KB) reaches the agent as untrusted context. Optional `Idempotency-Key` header dedupes retries. 10 runs a minute per routine.\n\nFrom GitHub Actions:\n\n```yaml\n- run: curl -fsS -X POST -H \'content-type: application/json\' -d \'{"sha":"${{ github.sha }}"}\' "$ORCA_ROUTINE_URL"\n  env:\n    ORCA_ROUTINE_URL: ${{ secrets.ORCA_ROUTINE_URL }}\n```',
+      params: [idParam('token', 'The secret part of the webhook URL')],
+      responses: { 202: { description: 'Queued', schema: obj({ runId: { type: 'string' } }) }, 413: 'Body over 16 KB' }
+    }
   }
 }
 
@@ -393,8 +494,10 @@ curl -X POST ${o}/v1/workspaces/$ID/wake    -H "Authorization: Bearer $ORCA_API_
 curl -X POST ${o}/v1/workspaces/$ID/archive -H "Authorization: Bearer $ORCA_API_KEY"
 curl -X DELETE ${o}/v1/workspaces/$ID       -H "Authorization: Bearer $ORCA_API_KEY"</pre>
 <h2>MCP</h2>
-<p>Point any MCP client at <code>${o}/mcp</code>. Clients that support OAuth sign in through the browser; others can send an API key as a bearer token.</p>
-<pre>claude mcp add --transport http orca-cloud ${o}/mcp</pre>
+<p>Point any MCP client at <code>${o}/mcp</code> (Streamable HTTP). Clients that support OAuth register themselves and open an approval page in the browser: approve with a one-time code from Orca → Settings → API keys → <i>Approve an app</i>, or with one of your API keys. The app never gets more than that key may do. Clients without OAuth can send an API key as a bearer token.</p>
+<pre>claude mcp add --transport http orca-cloud ${o}/mcp
+claude mcp add --transport http orca-cloud ${o}/mcp --header "Authorization: Bearer $ORCA_API_KEY"</pre>
+<p>Tools: whoami, list_projects, list_workspaces, get_workspace, create_workspace, sleep_workspace, wake_workspace, archive_workspace, destroy_workspace, send_message, get_message, list_sessions, read_session, list_routines, run_routine. They use the same scopes, rate limits and audit log as the REST API.</p>
 <h2>Limits and errors</h2>
 <div class="grid">
 <div class="card"><b>Rate limits</b>120 requests/min per key, 30 messages/min per user, 10 workspace creates/min per org. 429 responses carry <code>Retry-After</code>.</div>

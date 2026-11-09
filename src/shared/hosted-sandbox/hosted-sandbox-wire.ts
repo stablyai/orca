@@ -58,7 +58,9 @@ export const HostedSandboxViewSchema = z
     machineSize: z.enum(HOSTED_SANDBOX_MACHINE_SIZES),
     region: z.string().min(1).max(32),
     session: HostedSandboxSessionSchema.nullable(),
-    createdAt: Millis
+    createdAt: Millis,
+    /** Org environment build this workspace booted from; null/absent for the plain image. */
+    environmentBuildId: Id.nullable().optional()
   })
   .strict()
 export type HostedSandboxView = z.infer<typeof HostedSandboxViewSchema>
@@ -85,7 +87,14 @@ export const HostedSandboxCreateRequestSchema = z
         ref: z.string().min(1).max(255).optional()
       })
       .strict()
-      .optional()
+      .optional(),
+    /** Boot from exactly this org environment build (rollback testing, pinned projects). */
+    environmentBuildId: z
+      .string()
+      .regex(/^bld_[0-9a-f]{8,40}$/)
+      .optional(),
+    /** Default true: boot from the active build of the org environment that lists the repo. */
+    useEnvironment: z.boolean().optional()
   })
   .strict()
 export type HostedSandboxCreateRequest = z.infer<typeof HostedSandboxCreateRequestSchema>
@@ -113,6 +122,17 @@ export const HostedSandboxStatusResponseSchema = z
 export const HostedSandboxListResponseSchema = z
   .object({ sandboxes: z.array(HostedSandboxViewSchema).max(1000) })
   .strict()
+
+/** `POST /v1/sandboxes/:id/desktop`: the remote desktop's port on the VM's loopback, never a public route. */
+export const HostedSandboxDesktopResponseSchema = z.object({
+  desktop: z.object({
+    port: z.number().int().min(1024).max(65_535),
+    path: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/),
+    password: z.string().regex(/^[A-Za-z0-9]{8}$/)
+  })
+})
+
+export type HostedSandboxDesktop = z.infer<typeof HostedSandboxDesktopResponseSchema>['desktop']
 
 export const HostedSandboxErrorResponseSchema = z
   .object({
@@ -248,3 +268,26 @@ export const HostedArchiveResponseSchema = z
   })
   .strict()
 export type HostedArchiveResponse = z.infer<typeof HostedArchiveResponseSchema>
+
+/** ed25519 only, one line, a plain comment: nothing sshd would read as key options. */
+export const HOSTED_SANDBOX_SSH_PUBLIC_KEY =
+  /^ssh-ed25519 [A-Za-z0-9+/]{68} [A-Za-z0-9@._:+-]{1,200}$/
+
+/** POST (install) and DELETE (revoke) /v1/sandboxes/:id/ssh-keys. */
+export const HostedSandboxSshKeyRequestSchema = z
+  .object({ publicKey: z.string().regex(HOSTED_SANDBOX_SSH_PUBLIC_KEY) })
+  .strict()
+
+/** The VM's loopback sshd: the desktop pins `hostKey` instead of trusting it on first use. */
+export const HostedSandboxSshAccessResponseSchema = z
+  .object({
+    ssh: z
+      .object({
+        port: z.number().int().min(1).max(65535),
+        user: z.string().regex(/^[a-z_][a-z0-9_-]{0,31}$/),
+        hostKey: z.string().regex(/^ssh-ed25519 [A-Za-z0-9+/]{68}$/)
+      })
+      .strict()
+  })
+  .strict()
+export type HostedSandboxSshAccess = z.infer<typeof HostedSandboxSshAccessResponseSchema>['ssh']

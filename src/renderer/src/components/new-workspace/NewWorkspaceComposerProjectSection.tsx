@@ -13,6 +13,9 @@ import type {
   NewWorkspaceComposerCardProps
 } from './new-workspace-composer-card-props'
 import { EMPTY_PROJECT_OPTIONS } from './new-workspace-composer-card-props'
+import { OrcaCloudSelectionHint } from './OrcaCloudSelectionHint'
+import { isOrcaCloudSelection } from './run-target-options'
+import type { OrcaCloudRunTargetAccess } from './orca-cloud-run-target-access'
 
 type NewWorkspaceComposerProjectSectionProps = Pick<
   NewWorkspaceComposerCardProps,
@@ -33,6 +36,7 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   | 'onEphemeralVmRecipeChange'
   | 'selectedEphemeralVmRecipeId'
   | 'ephemeralVmRecipeError'
+  | 'orcaCloudAvailability'
 > & {
   disabled?: boolean
   projectDescriptionId: string
@@ -49,6 +53,8 @@ type NewWorkspaceComposerProjectSectionProps = Pick<
   sshStatusLabel: string
   connectButtonLabel: string
   selectedProjectName: string
+  /** Fixtures pin Orca Cloud entitlement; the app reads it from billing. */
+  orcaCloudAccess?: OrcaCloudRunTargetAccess
 }
 
 export function NewWorkspaceComposerProjectSection({
@@ -77,13 +83,15 @@ export function NewWorkspaceComposerProjectSection({
   handleConnectRunTargetHost,
   handleSetLocation,
   ephemeralVmRecipeError,
+  orcaCloudAvailability = 'unavailable',
   selectedRepoRequiresConnection,
   selectedRepoConnectionId,
   selectedRepoConnectInProgress,
   onConnectSelectedRepo,
   sshStatusLabel,
   connectButtonLabel,
-  selectedProjectName
+  selectedProjectName,
+  orcaCloudAccess
 }: NewWorkspaceComposerProjectSectionProps): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -169,11 +177,15 @@ export function NewWorkspaceComposerProjectSection({
               onAddRemoteServer={handleAddRemoteServer}
               onConnectHost={handleConnectRunTargetHost}
               onSetLocation={handleSetLocation}
+              orcaCloudAvailability={orcaCloudAvailability}
+              {...(orcaCloudAccess ? { orcaCloudAccess } : {})}
             />
             {ephemeralVmRecipeError ? (
               <p className="whitespace-pre-line text-[11px] text-destructive">
                 {ephemeralVmRecipeError}
               </p>
+            ) : isOrcaCloudSelection({ ephemeralVmRecipes, selectedEphemeralVmRecipeId }) ? (
+              <OrcaCloudSelectionHint access={orcaCloudAccess} />
             ) : null}
           </div>
         ) : null}

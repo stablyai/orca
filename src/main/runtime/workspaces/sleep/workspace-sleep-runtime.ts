@@ -1,5 +1,4 @@
 import {
-  awaitInFlightWake,
   holdOpenUntilUp,
   pendingVmWake,
   trackPendingVmOperation,
@@ -96,8 +95,9 @@ export class WorkspaceSleepCoordinator {
   private readonly reopenings = new Map<string, number>()
   private readonly vmOperations = new Map<string, Promise<void>>()
   /** The VM operations asked for per workspace, in order, until each settles. */
-  private readonly pendingVmOperations = new Map<string, VmOperation[]>()
-  private readonly sleepRequests = new WorkspaceSleepRequests()
+  /** Read by the in-flight wake hold (awaitInFlightWake); written only here. */
+  readonly pendingVmOperations = new Map<string, VmOperation[]>()
+  readonly sleepRequests = new WorkspaceSleepRequests()
 
   constructor(private readonly runtime: WorkspaceSleepRuntime) {}
 
@@ -210,17 +210,44 @@ export class WorkspaceSleepCoordinator {
     }
   }
 
-  /** Holds a request that does not open the workspace while a wake already in flight finishes;
-   *  never starts a wake or counts as a reopening, so background traffic leaves a VM asleep. */
-  awaitWake(worktreeId: string, recordSuspended: boolean, timeoutMs: number, signal?: AbortSignal) {
-    const pending = this.pendingVmOperations.get(worktreeId) ?? []
-    return awaitInFlightWake(
-      pending,
-      recordSuspended,
-      this.sleepRequests,
+  /** The user's Suspend VM on a workspace with nothing open to sleep: queued like a sleep's
+   *  suspend, so it never runs beside a wake of the same VM, and skipped if the workspace is
+   *  opened before its turn. */
+  suspendVm(worktreeId: string): Promise<void> {
+    const platform = this.runtime.workspaceSleepPlatform
+    if (!platform?.ownsVm(worktreeId)) {
+      return Promise.resolve()
+    }
+    // A second Suspend VM while one is queued or running would rerun the recipe's suspend on a
+    // VM already going to sleep.
+    const pending = (this.pendingVmOperations.get(worktreeId) ?? []).at(-1)
+    if (pending?.kind === 'suspend') {
+      return Promise.resolve()
+    }
+    // Opening the workspace while this waits its turn keeps the VM up, as it does for a Sleep.
+    const at = this.reopenings.get(worktreeId) ?? 0
+    return this.queueVmSuspend(
+      platform,
       worktreeId,
-      timeoutMs,
-      signal
+      () => (this.reopenings.get(worktreeId) ?? 0) === at
+    )
+  }
+
+  private queueVmSuspend(
+    platform: WorkspaceSleepPlatform,
+    worktreeId: string,
+    wanted: () => boolean
+  ): Promise<void> {
+    const operation: VmOperation = { kind: 'suspend', suspending: false }
+    return this.trackVmOperation(
+      worktreeId,
+      operation,
+      this.afterVmOperations(worktreeId, async () => {
+        if (wanted()) {
+          operation.suspending = true
+          await platform.suspendVm(worktreeId)
+        }
+      })
     )
   }
 
@@ -271,19 +298,7 @@ export class WorkspaceSleepCoordinator {
         return host.sleepWorkspace(worktreeId, markAsleep)
       },
       suspendVm: platform
-        ? (worktreeId, wanted) => {
-            const operation: VmOperation = { kind: 'suspend', suspending: false }
-            return this.trackVmOperation(
-              worktreeId,
-              operation,
-              this.afterVmOperations(worktreeId, async () => {
-                if (wanted()) {
-                  operation.suspending = true
-                  await platform.suspendVm(worktreeId)
-                }
-              })
-            )
-          }
+        ? (worktreeId, wanted) => this.queueVmSuspend(platform, worktreeId, wanted)
         : null,
       vmWakeSettled: (worktreeId) =>
         pendingVmWake(this.pendingVmOperations.get(worktreeId) ?? []).catch(() => {}),

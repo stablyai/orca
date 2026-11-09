@@ -5,6 +5,8 @@ import { READY_VIA_FILE_ENV, resolveOrcadReadyLine } from './orcad-ready'
 import { ProviderError, type ProviderSandboxState, type SandboxProviderApi } from './sandbox-provider'
 
 export const ORCAD_PORT = 6768
+/** In-VM share-link proxy (image/vm/orca-share-proxy); only answers gateway-signed requests. */
+export const SHARE_PROXY_PORT = 6769
 export const START_COMMAND = '/opt/orca/bin/orca-sandbox-start'
 export const DRAIN_COMMAND = '/opt/orca/bin/orca-sandbox-drain'
 export const ENV_COMMAND = '/opt/orca/bin/orca-sandbox-env'
@@ -25,7 +27,7 @@ const ReadySchema = z
 export type OrcadReady = z.infer<typeof ReadySchema>
 
 export class VmCommandError extends Error {
-  constructor(readonly code: 'orcad_start_failed' | 'orcad_ready_invalid' | 'route_missing') {
+  constructor(readonly code: 'orcad_start_failed' | 'orcad_ready_invalid' | 'route_missing' | 'ssh_keys_failed') {
     super(code)
     this.name = 'VmCommandError'
   }
@@ -40,6 +42,13 @@ export type StartInputs = {
   gitExtraHeader?: string
   /** Secrets for orcad's (and so every agent's) process env. Never written to disk in the VM. */
   secretEnv?: Record<string, string>
+  /**
+   * First boot only: bash run before the start script (stdout redirected to stderr), e.g. linking an
+   * environment build's prebuilt repo as the project. Its failure never blocks the start.
+   */
+  prelude?: { script: string; env?: Record<string, string> }
+  /** This session's share-proxy key (src/share-crypto.ts); the proxy keeps it in memory only. */
+  shareProxyKey?: string
 }
 
 /** `NAME=<base64 utf-8 value>` lines, so values with newlines or quotes survive bash intact. */
@@ -86,11 +95,23 @@ export async function startOrcad(
   if (inputs.secretEnv && Object.keys(inputs.secretEnv).length > 0) {
     env.ORCA_SECRET_ENV = encodeSecretEnv(inputs.secretEnv)
   }
-  const result = await provider.runCommand(state.session.id, {
-    command: START_COMMAND,
-    env,
-    timeoutMs: START_TIMEOUT_MS
-  })
+  if (inputs.shareProxyKey) {
+    env.ORCA_SHARE_PROXY_KEY = inputs.shareProxyKey
+  }
+  // The prelude rides in an env var (the start script's `env -i` keeps it out of orcad) so one
+  // round trip both prepares the checkout and starts orcad.
+  const result = await provider.runCommand(
+    state.session.id,
+    inputs.prelude
+      ? {
+          command: 'bash',
+          // The prelude never sees the share-proxy key; only the start script gets it.
+          args: ['-c', `env -u ORCA_SHARE_PROXY_KEY bash -c "$ORCA_PRELUDE" 1>&2 || true; unset ORCA_PRELUDE; exec ${START_COMMAND}`],
+          env: { ...env, ...inputs.prelude.env, ORCA_PRELUDE: inputs.prelude.script },
+          timeoutMs: START_TIMEOUT_MS
+        }
+      : { command: START_COMMAND, env, timeoutMs: START_TIMEOUT_MS }
+  )
   if (result.exitCode !== 0) {
     throw new VmCommandError('orcad_start_failed')
   }
@@ -163,5 +184,57 @@ export async function drainOrcad(provider: SandboxProviderApi, sessionId: string
       return false
     }
     throw error
+  }
+}
+
+export const DESKTOP_COMMAND = '/opt/orca/bin/orca-desktop-start'
+/** noVNC on the VM's loopback; reached only through the paired forward, never shared. */
+export const DESKTOP_PORT = 6080
+const DESKTOP_TIMEOUT_MS = 45_000
+/** orca-desktop-start's exit code for an image built without the remote desktop. */
+const DESKTOP_NOT_INSTALLED_EXIT = 3
+
+const DesktopReadySchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    port: z.number().int().min(1024).max(65_535),
+    display: z.string().regex(/^:\d{1,3}$/),
+    path: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/),
+    /** Per-boot VNC password: the desktop's localhost forward is reachable by any local process. */
+    password: z.string().regex(/^[A-Za-z0-9]{8}$/)
+  })
+  .strict()
+
+export type DesktopReady = z.infer<typeof DesktopReadySchema>
+
+export class DesktopCommandError extends Error {
+  constructor(readonly code: 'desktop_not_installed' | 'desktop_start_failed' | 'desktop_ready_invalid') {
+    super(code)
+    this.name = 'DesktopCommandError'
+  }
+}
+
+/** Starts the VM's remote desktop (idempotent per boot): Xvnc + noVNC on the VM's loopback only. */
+export async function startDesktop(provider: SandboxProviderApi, sessionId: string): Promise<DesktopReady> {
+  let result: Awaited<ReturnType<SandboxProviderApi['runCommand']>>
+  try {
+    result = await provider.runCommand(sessionId, { command: DESKTOP_COMMAND, timeoutMs: DESKTOP_TIMEOUT_MS })
+  } catch (error) {
+    // Vercel refuses to spawn a missing executable: an image from before the desktop.
+    if (error instanceof ProviderError && error.status === 400 && error.code === 'command_failed') {
+      throw new DesktopCommandError('desktop_not_installed')
+    }
+    throw error
+  }
+  if (result.exitCode === DESKTOP_NOT_INSTALLED_EXIT || result.exitCode === 127) {
+    throw new DesktopCommandError('desktop_not_installed')
+  }
+  if (result.exitCode !== 0) {
+    throw new DesktopCommandError('desktop_start_failed')
+  }
+  try {
+    return DesktopReadySchema.parse(JSON.parse(result.stdout.trim().split('\n').at(-1) ?? ''))
+  } catch {
+    throw new DesktopCommandError('desktop_ready_invalid')
   }
 }

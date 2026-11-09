@@ -1,5 +1,6 @@
 import { app, clipboard, dialog, type BrowserWindow } from 'electron'
 import { isRoutedOrcaDeepLink } from './startup/orca-deep-link-url'
+import { findOrcaBillingReturnLink, ORCA_BILLING_RETURN_CHANNEL } from '../shared/orca-billing'
 import { createMacAppActivationHandler } from './window/macos-app-activation'
 import { isBackgroundLaunch, isOrcadSidecarLaunch } from './window/foreground-activation-policy'
 import { createDesktopHandoff, desktopHandoffArguments } from './window/macos-desktop-handoff'
@@ -45,6 +46,7 @@ import { registerOrcaProtocolClient } from './startup/orca-protocol-registration
 import { clearWindowsStdHandleInheritance } from './startup/windows-std-handle-inheritance'
 import { installWindowsIsolatedSpawner } from './startup/windows-isolated-spawner'
 import { dropE2eSpawnLogOutsideE2e } from './startup/e2e-spawn-log-env'
+import { captureCloudShareDeepLinks } from './hosted-sandbox/cloud-share-deep-link'
 
 // Before anything spawns, so no daemon, PTY or agent inherits it outside e2e.
 dropE2eSpawnLogOutsideE2e()
@@ -64,13 +66,25 @@ const requestDesktopHandoff = createDesktopHandoff({
 })
 
 function requestDesktopActivation(argv: readonly string[] = []): void {
+  // A team share link opens in the browser; bouncing through the Orca window first is noise.
+  if (captureCloudShareDeepLinks(argv)) {
+    return
+  }
   state.skillShareDeepLinks.capture(argv, (shareId) => {
     state.mainWindow?.webContents.send('ui:openSkillShare', shareId)
   })
   state.pluginInstallLinks.capture(argv, (link) => {
     state.mainWindow?.webContents.send('ui:openPluginInstallLink', link)
   })
+  state.cloudWorkspaceLinks.capture(argv, (link) => {
+    state.mainWindow?.webContents.send('ui:openCloudWorkspaceLink', link)
+  })
   state.osOpenedDocuments.capture(argv, publishOsOpenedDocuments)
+  // Back from Stripe Checkout or the Portal: focus Orca and let the open billing view re-read.
+  const billingReturn = findOrcaBillingReturnLink(argv)
+  if (billingReturn) {
+    state.mainWindow?.webContents.send(ORCA_BILLING_RETURN_CHANNEL, billingReturn)
+  }
   // Duplicate serve launches must not activate a desktop on a headless server (#11935).
   if (!shouldActivateDesktopForSecondInstance(argv)) {
     return
@@ -164,7 +178,9 @@ if (preflightReady) {
     desktopLaunch: !state.isServeMode && !isBackgroundLaunch() && !isOrcadSidecarLaunch()
   })
   state.skillShareDeepLinks.capture(process.argv)
+  captureCloudShareDeepLinks(process.argv)
   state.pluginInstallLinks.capture(process.argv)
+  state.cloudWorkspaceLinks.capture(process.argv)
   // The first renderer pulls on mount; nothing listens this early.
   state.osOpenedDocuments.capture(process.argv)
   registerMainProcessIpcHandlers()

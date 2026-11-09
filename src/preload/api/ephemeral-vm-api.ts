@@ -1,4 +1,4 @@
-import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
+import type { OrcaCloudAvailability, OrcaHooks } from '../../shared/orca-yaml-hook-types'
 import type {
   HostedSessionIdleSleepEvent,
   HostedSessionWarningEvent
@@ -8,9 +8,18 @@ import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-re
 import type { EphemeralVmRecipeResultWarning } from '../../shared/ephemeral-vm-recipe-diagnostics'
 import type {
   EphemeralVmProvisionedRuntimeRecord,
-  EphemeralVmRuntimeRecord
+  EphemeralVmRuntimeRecord,
+  EphemeralVmWorkspaceLifecycleResult
 } from '../../shared/ephemeral-vm-runtimes'
 import type { EphemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
+import type {
+  CloudSshCopyResult,
+  CloudSshOpenEditorRequest,
+  CloudSshOpenEditorResult,
+  CloudSshRevokeResult,
+  CloudSshStatus
+} from '../../shared/cloud-ssh'
+import type { CloudRemoteDesktopResult } from '../../shared/hosted-sandbox/cloud-remote-desktop'
 
 export type EphemeralVmApi = {
   listRecipes: (args: { repoId: string }) => Promise<{
@@ -21,6 +30,8 @@ export type EphemeralVmApi = {
     message?: string
     messageCode?: string
     messageParams?: Record<string, string | number>
+    /** Absent from older mains and web clients; treat as unavailable. */
+    orcaCloud?: OrcaCloudAvailability
   }>
   listRecipeCatalog: () => Promise<
     {
@@ -72,11 +83,19 @@ export type EphemeralVmApi = {
   /** Orca Cloud: the workspace has been idle long enough to sleep through the ordinary Sleep flow. */
   onCloudIdleSleepRequested: (callback: (event: HostedSessionIdleSleepEvent) => void) => () => void
   listRuntimes: () => Promise<EphemeralVmRuntimeRecord[]>
+  /** Orca Cloud: runtime environment ids that are Orca Cloud VMs. Absent in the web client. */
+  cloudEnvironmentIds?: () => Promise<string[]>
+  /** Orca Cloud: starts the VM's desktop and forwards it to this computer's localhost. */
+  openCloudRemoteDesktop?: (args: { environmentId: string }) => Promise<CloudRemoteDesktopResult>
   attachWorkspace: (args: {
     runtimeId: string
     workspaceId: string
   }) => Promise<EphemeralVmRuntimeRecord>
-  resumeWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmRuntimeRecord | null>
+  resumeWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmWorkspaceLifecycleResult>
+  /** Suspends the workspace's VM without closing panels; sleep closes them first. */
+  suspendWorkspace: (args: { workspaceId: string }) => Promise<EphemeralVmWorkspaceLifecycleResult>
+  /** Fires after any runtime record write; re-list to read the new lifecycle status. */
+  onRuntimesChanged: (callback: () => void) => () => void
   cleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
   stopCleanup: (args: { runtimeId: string }) => Promise<EphemeralVmRuntimeRecord>
   /** Drops an interrupted write-ahead record that never received a recipe result. */
@@ -88,4 +107,12 @@ export type EphemeralVmApi = {
     cleanupDisabled: boolean
     message?: string
   }>
+  /** Orca Cloud SSH: whether it applies to a workspace, and which editors can open it. */
+  cloudSshStatus: (args: { workspaceId: string }) => Promise<CloudSshStatus>
+  /** Ensures access (waking only for the first key install) and copies the ssh command. */
+  cloudSshCopyCommand: (args: { workspaceId: string }) => Promise<CloudSshCopyResult>
+  cloudSshOpenInEditor: (args: CloudSshOpenEditorRequest) => Promise<CloudSshOpenEditorResult>
+  cloudSshRevoke: (args: { workspaceId: string }) => Promise<CloudSshRevokeResult>
+  /** Takes Orca's Include line back out of ~/.ssh/config. */
+  cloudSshRemoveSshConfigInclude: () => Promise<boolean>
 }

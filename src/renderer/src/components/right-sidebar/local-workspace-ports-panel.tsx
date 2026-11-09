@@ -27,17 +27,26 @@ import {
 import { LocalPortSection } from './local-port-section'
 import { LocalPortDetailsDialog } from './local-port-details-dialog'
 import { SshForwardedPortsSection } from './ssh-forwarded-ports-section'
+import { useRuntimePortRowForwarding } from './use-runtime-port-row-forwarding'
+import { RuntimeForwardedPortsSection } from './runtime-forwarded-ports-section'
+import { RuntimePortsEmptyText } from './runtime-ports-empty-text'
 
 export function LocalWorkspacePortsPanel({
   isVisible,
   runtimeTarget,
-  sshForwardTargetId = null
+  sshForwardTargetId = null,
+  portMenuItems,
+  footer
 }: {
   isVisible: boolean
   /** The endpoint that owns the active workspace, even if the sidebar is focused elsewhere. */
   runtimeTarget: RuntimeClientTarget | null
   /** A managed server's SSH host, whose connection carries this client's forwards. */
   sshForwardTargetId?: string | null
+  /** Extra row actions for this host's ports (Orca Cloud: Share…); rides the forwarding menu. */
+  portMenuItems?: (port: WorkspacePort) => React.ReactNode
+  /** Host-specific sections below the ports (Orca Cloud: shared links), given the listening ports. */
+  footer?: (activePorts: readonly WorkspacePort[]) => React.ReactNode
 }): React.JSX.Element {
   const t = useTranslate()
   const activeWorktree = useActiveWorktree()
@@ -57,6 +66,7 @@ export function LocalWorkspacePortsPanel({
   })
 
   const scanKey = runtimeTarget ? `${workspacePortRuntimeTargetKey(runtimeTarget)}:all` : null
+  const runtimeForwarding = useRuntimePortRowForwarding(runtimeTarget, portMenuItems)
 
   const refresh = useCallback(() => {
     if (!activeRepoId || !runtimeTarget || !scanKey) {
@@ -152,17 +162,23 @@ export function LocalWorkspacePortsPanel({
 
   const handleOpenPortInBrowser = useCallback(
     async (port: WorkspacePort, event?: React.MouseEvent<HTMLButtonElement>) => {
+      const openInOrcaBrowser = resolvePortOpenInOrcaBrowser({
+        settings,
+        event,
+        isMac: navigator.userAgent.includes('Mac')
+      })
+      if (runtimeForwarding && !openInOrcaBrowser) {
+        // A remote port reaches the system browser through a forward on this computer's localhost.
+        await runtimeForwarding.openLocally(port)
+        return
+      }
       const result = await openWorkspacePortInBrowser({
         port,
         activeWorktreeId: activeWorktree?.id,
         runtimeTarget,
         createBrowserTab,
         setRemoteBrowserPageHandle,
-        openInOrcaBrowser: resolvePortOpenInOrcaBrowser({
-          settings,
-          event,
-          isMac: navigator.userAgent.includes('Mac')
-        }),
+        openInOrcaBrowser,
         localhostLabelRoute: resolveLocalhostLabelRouteForPort(useAppStore.getState(), port)
       })
       if (!result.ok) {
@@ -175,7 +191,14 @@ export function LocalWorkspacePortsPanel({
         )
       }
     },
-    [activeWorktree?.id, createBrowserTab, runtimeTarget, setRemoteBrowserPageHandle, settings]
+    [
+      activeWorktree?.id,
+      createBrowserTab,
+      runtimeForwarding,
+      runtimeTarget,
+      setRemoteBrowserPageHandle,
+      settings
+    ]
   )
 
   const { activePorts, otherWorkspacePorts, externalPorts } = useMemo(
@@ -203,7 +226,7 @@ export function LocalWorkspacePortsPanel({
   return (
     <div className="flex flex-col h-full overflow-y-auto scrollbar-sleek">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t('auto.components.right.sidebar.PortsPanel.6bc058dbe1', 'Ports')}
         </span>
         <Tooltip>
@@ -227,6 +250,11 @@ export function LocalWorkspacePortsPanel({
       </div>
 
       {sshForwardTargetId && <SshForwardedPortsSection connectionId={sshForwardTargetId} />}
+      {runtimeForwarding && (
+        <div aria-live="polite" className="sr-only">
+          {runtimeForwarding.announcement}
+        </div>
+      )}
 
       {displayScan?.unavailableReason && (
         <div className="px-3 py-2 text-xs text-muted-foreground border-b border-border">
@@ -248,15 +276,20 @@ export function LocalWorkspacePortsPanel({
             title={t('auto.components.right.sidebar.PortsPanel.935dda7718', 'Active Workspace')}
             ports={activePorts}
             emptyText={
-              refreshing && !displayScan
-                ? t('auto.components.right.sidebar.PortsPanel.0d63d94db3', 'Scanning...')
-                : t('auto.components.right.sidebar.PortsPanel.38b16cfbef', 'No ports detected')
+              refreshing && !displayScan ? (
+                t('auto.components.right.sidebar.PortsPanel.0d63d94db3', 'Scanning...')
+              ) : runtimeForwarding ? (
+                <RuntimePortsEmptyText />
+              ) : (
+                t('auto.components.right.sidebar.PortsPanel.38b16cfbef', 'No ports detected')
+              )
             }
             collapsed={collapsedSections.active ?? false}
             onToggle={() => toggleSection('active')}
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
+            forwarding={runtimeForwarding?.forwarding}
           />
           <LocalPortSection
             id="other"
@@ -267,6 +300,7 @@ export function LocalWorkspacePortsPanel({
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
+            forwarding={runtimeForwarding?.forwarding}
           />
           <LocalPortSection
             id="external"
@@ -277,8 +311,16 @@ export function LocalWorkspacePortsPanel({
             onStopPort={(port) => void handleStopPort(port)}
             onShowDetails={setDetailsPort}
             onOpenInBrowser={handleOpenPortInBrowser}
+            forwarding={runtimeForwarding?.forwarding}
           />
         </>
+      )}
+      {runtimeForwarding && (
+        <RuntimeForwardedPortsSection
+          forwards={runtimeForwarding.forwards.filter(
+            (forward) => !displayScan?.ports.some((port) => port.port === forward.remotePort)
+          )}
+        />
       )}
 
       {!displayScan?.unavailableReason &&
@@ -289,10 +331,16 @@ export function LocalWorkspacePortsPanel({
           <div className="flex flex-col items-center justify-center flex-1 px-4 text-center text-muted-foreground">
             <Server size={32} className="mb-3 opacity-50" />
             <p className="text-sm">
-              {t('auto.components.right.sidebar.PortsPanel.a2a9fc6899', 'No local ports detected')}
+              {runtimeForwarding ? (
+                <RuntimePortsEmptyText />
+              ) : (
+                t('auto.components.right.sidebar.PortsPanel.a2a9fc6899', 'No local ports detected')
+              )}
             </p>
           </div>
         )}
+
+      {footer?.(activePorts)}
 
       <LocalPortDetailsDialog port={detailsPort} onClose={() => setDetailsPort(null)} />
     </div>

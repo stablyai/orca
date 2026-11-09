@@ -3,7 +3,8 @@
 # {"schemaVersion":1,"pairingCode":"orca://pair?...","projectRoot":"/vercel/sandbox/project"}
 # Env from the control plane: ORCA_SANDBOX_ID, ORCA_PUBLIC_WSS, optional ORCA_REPO_URL/ORCA_REPO_REF,
 # ORCA_GITHUB_PLACEHOLDER, ORCA_SECRET_ENV (`NAME=<base64>` lines: org/personal/repo secrets for
-# orcad and its agents). Never prints anything else on stdout's last line.
+# orcad and its agents), ORCA_SHARE_PROXY_KEY (this session's share-link proxy key, port 6769).
+# Never prints anything else on stdout's last line.
 # With ORCA_READY_VIA=file it prints {"schemaVersion":1,"readyFile":"<path>"} instead and the control
 # plane reads the offer with the files API: the provider keeps command stdout as logs, not files.
 # Managed env for every process orcad starts: ORCA_IS_CLOUD=1, ORCA_SANDBOX_ID, ORCA_ROOT_PATH,
@@ -44,7 +45,26 @@ redact_log() {
     -e 's#(Authorization|authorization):[[:space:]]*[A-Za-z]+[[:space:]]+[^[:space:]]+#\1: [REDACTED]#g'
 }
 
+node="$(find "$ORCA_HOME/runtime/runtimes" -type f -name node | head -n 1)"
+
+# Share-link proxy (port 6769): answers only requests the control plane signed with this session's
+# key, so its public route is useless on its own. The key goes in on stdin (printf is a builtin), so
+# it never appears in any argv or in the proxy's /proc/<pid>/environ.
+start_share_proxy() {
+  [ -n "${ORCA_SHARE_PROXY_KEY:-}" ] && [ -x "$ORCA_HOME/bin/orca-share-proxy" ] || return 0
+  if [ "$(cat "$STATE/share-proxy.boot" 2>/dev/null || true)" = "$boot_id" ] \
+    && kill -0 "$(cat "$STATE/share-proxy.pid" 2>/dev/null || echo 0)" 2>/dev/null; then
+    return 0
+  fi
+  printf '%s' "$ORCA_SHARE_PROXY_KEY" | env -i HOME="$HOME" LANG=C.UTF-8 PATH=/usr/bin:/bin \
+    setsid "$node" "$ORCA_HOME/bin/orca-share-proxy" >"$STATE/share-proxy.log" 2>&1 9>&- &
+  echo $! >"$STATE/share-proxy.pid"
+  printf '%s' "$boot_id" >"$STATE/share-proxy.boot"
+}
+
 boot_id="$(cat /proc/sys/kernel/random/boot_id)"
+start_share_proxy
+unset ORCA_SHARE_PROXY_KEY
 if [ "$(cat "$STATE/boot-id" 2>/dev/null || true)" = "$boot_id" ] && [ -s "$STATE/ready.json" ] \
   && kill -0 "$(cat "$STATE/orcad.pid" 2>/dev/null || echo 0)" 2>/dev/null; then
   print_ready
@@ -68,20 +88,21 @@ if [ ! -d "$PROJECT" ]; then
   fi
 fi
 
-workspace_name="$(basename "$(git -C "$PROJECT" remote get-url origin 2>/dev/null || echo "$PROJECT")" .git)"
-default_branch="$(git -C "$PROJECT" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)"
-default_branch="${default_branch#origin/}"
-if [ -z "$default_branch" ]; then
-  default_branch="$(git -C "$PROJECT" branch --show-current 2>/dev/null || true)"
+# The clone may still be running here, so the name comes from the URL; the default branch is
+# filled in lazily by the session-env shell hook once the clone exists.
+if [ -n "${ORCA_REPO_URL:-}" ]; then
+  workspace_name="$(basename "${ORCA_REPO_URL%/}" .git)"
+else
+  workspace_name="$(basename "$(git -C "$PROJECT" remote get-url origin 2>/dev/null || echo "$PROJECT")" .git)"
 fi
 # One workspace per VM: its preview ports start at 3000 (Conductor allots CONDUCTOR_PORT..+9).
 managed_env=(
   ORCA_IS_CLOUD=1
   ORCA_ROOT_PATH="$PROJECT" ORCA_WORKTREE_PATH="$PROJECT" ORCA_WORKSPACE_PATH="$PROJECT"
-  ORCA_WORKSPACE_NAME="$workspace_name" ORCA_DEFAULT_BRANCH="${default_branch:-main}" ORCA_PORT=3000
+  ORCA_WORKSPACE_NAME="$workspace_name" ORCA_PORT=3000
   CONDUCTOR_IS_CLOUD=1
   CONDUCTOR_ROOT_PATH="$PROJECT" CONDUCTOR_WORKSPACE_PATH="$PROJECT"
-  CONDUCTOR_WORKSPACE_NAME="$workspace_name" CONDUCTOR_DEFAULT_BRANCH="${default_branch:-main}" CONDUCTOR_PORT=3000
+  CONDUCTOR_WORKSPACE_NAME="$workspace_name" CONDUCTOR_PORT=3000
 )
 
 agent_env=()
@@ -110,9 +131,11 @@ fi
 "$ORCA_HOME/bin/orca-sandbox-env" >/dev/null || echo 'session env file unavailable; secrets apply at boot only' >&2
 unset ORCA_SECRET_ENV
 
-node="$(find "$ORCA_HOME/runtime/runtimes" -type f -name node | head -n 1)"
+# Agent CLIs installed with the image's npm (codex, gemini, ...) are `#!/usr/bin/env node` scripts:
+# terminals need that node on PATH, not only orcad's bundled runtime.
+system_node="$(command -v node 2>/dev/null || echo "$node")"
 env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 TERM=xterm-256color \
-  PATH="$ORCA_HOME/tools/bin:$ORCA_HOME/bin:/usr/local/bin:/usr/bin:/bin" \
+  PATH="$ORCA_HOME/tools/bin:$ORCA_HOME/bin:$(dirname "$system_node"):/usr/local/bin:/usr/bin:/bin" \
   ORCA_USER_DATA="$HOME/.orcad-data" ORCA_SANDBOX_ID="$ORCA_SANDBOX_ID" "${managed_env[@]}" \
   NODE_COMPILE_CACHE="$ORCA_HOME/compile-cache" \
   ORCA_SESSION_ENV_NAMES="${secret_names[*]}" "${agent_env[@]}" \
@@ -121,6 +144,9 @@ env -i HOME="$HOME" USER="$(id -un)" LANG=C.UTF-8 TERM=xterm-256color \
   --recipe-json --project-root "$PROJECT" \
   >"$STATE/ready.json" 2>"$STATE/orcad.log" </dev/null 9>&- &
 echo $! >"$STATE/orcad.pid"
+
+# sshd for `orca ssh` (loopback only). Best effort: a workspace without it still serves orcad.
+"$ORCA_HOME/bin/orca-sshd" >/dev/null 2>"$STATE/sshd-start.err" || true
 
 for _ in $(seq 1 1200); do
   if grep -q '"pairingCode"' "$STATE/ready.json" 2>/dev/null; then

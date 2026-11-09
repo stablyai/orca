@@ -35,6 +35,11 @@ export const HOST_HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/vm.js')).VM_HANDLERS
   },
   {
+    name: 'cloud-ssh',
+    keys: ['ssh', 'ssh-proxy'],
+    load: async () => (await import('./handlers/cloud-ssh.js')).CLOUD_SSH_HANDLERS
+  },
+  {
     name: 'vm-env',
     keys: ['vm env doctor'],
     load: async () => (await import('./handlers/vm-env.js')).VM_ENV_HANDLERS

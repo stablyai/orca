@@ -8,6 +8,7 @@ import {
   type JWTVerifyGetKey
 } from 'jose'
 import { z } from 'zod'
+import { authenticateDeviceToken, isDeviceToken } from './device-sessions'
 import type { Env } from './env'
 
 const ID = z
@@ -21,6 +22,8 @@ const ClaimsSchema = z.object({
   org: ID.optional(),
   /** The caller's role in `org`, minted by Orca Cloud auth; absent means no admin rights. */
   orgRole: z.enum(['owner', 'admin', 'member']).optional(),
+  /** Same role as Orca Cloud auth spells it in its tokens (`org_role`); either is accepted. */
+  org_role: z.enum(['owner', 'admin', 'member']).optional(),
   purpose: z.literal('sandbox')
 })
 
@@ -32,6 +35,8 @@ export type SandboxCaller = {
   orgRole?: OrgRole
   /** Dev operator token: every id lives under the `dev:` namespace. */
   dev?: boolean
+  /** Set when a companion device (phone) signed this request with its own enrolled key. */
+  deviceSessionId?: string
 }
 
 const keySets = new Map<string, JWTVerifyGetKey>()
@@ -81,7 +86,7 @@ async function verify(
     return {
       userId: claims.sub,
       accountId: accountIdFor(claims),
-      ...(claims.org ? { orgId: claims.org, ...(claims.orgRole ? { orgRole: claims.orgRole } : {}) } : {})
+      ...(claims.org ? { orgId: claims.org, ...((claims.orgRole ?? claims.org_role) ? { orgRole: claims.orgRole ?? claims.org_role } : {}) } : {})
     }
   } catch {
     return null
@@ -96,6 +101,9 @@ export async function authenticateDesktop(
   const token = readBearer(request.headers.get('authorization'))
   if (!token) {
     return null
+  }
+  if (isDeviceToken(token)) {
+    return authenticateDeviceToken(env.SANDBOX_DB, token, env.SANDBOX_JWT_AUDIENCE, now)
   }
   const caller = await verify(token, keysFor(env), env, env.SANDBOX_AUTH_ISSUER, now)
   if (caller || !env.SANDBOX_DEV_JWKS || env.SANDBOX_ENV === 'prod') {

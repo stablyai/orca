@@ -300,6 +300,7 @@
       "plan": "プラン",
       "stoppedManually": "手動で停止しました",
       "permissionDenied": "{{agent}} が権限を拒否しました。詳細を表示。",
+      "safetyReviewApproved": "{{agent}} がこの操作を承認しました。詳細を表示。",
       "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
       "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。",
       "modelFallback": "Claudeがモデルを切り替えました: {{from}} → {{to}}。",
@@ -598,6 +599,7 @@
       "fullCopySaveUpdate": "この添付ファイルの全内容のコピーと保存は、スマートフォンのアップデートで利用可能になります。"
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} はオフラインです · {{time}} 時点",
       "reconnecting": "{{hostName}} に再接続しています…",
       "stopped": "{{hostName}} は停止しています。コンピューターで起動してください。",
       "server": "サーバー",

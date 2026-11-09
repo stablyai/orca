@@ -1,4 +1,10 @@
 import { ipcRenderer } from 'electron'
+import type {
+  RuntimePortForward,
+  RuntimePortForwardOpenRequest,
+  RuntimePortForwardOpenResult
+} from '../../shared/runtime-port-forwards'
+import { RUNTIME_PORT_FORWARDS_CHANGED_CHANNEL } from '../../shared/runtime-port-forward-channels'
 import {
   RUNTIME_HOST_STATUS_CHANNEL,
   type RuntimeHostStatusSnapshot
@@ -41,6 +47,22 @@ export const runtimeEnvironmentsApi = {
   closeAuthCallbackForward: (
     request: Pick<AuthCallbackForwardRequest, 'environmentId' | 'flowId'>
   ): Promise<void> => ipcRenderer.invoke('runtimeEnvironments:closeAuthCallbackForward', request),
+  listPortForwards: (): Promise<RuntimePortForward[]> =>
+    ipcRenderer.invoke('runtimePortForwards:list'),
+  openPortForward: (
+    request: RuntimePortForwardOpenRequest
+  ): Promise<RuntimePortForwardOpenResult> =>
+    ipcRenderer.invoke('runtimePortForwards:open', request),
+  closePortForward: (request: { id: string }): Promise<RuntimePortForward | null> =>
+    ipcRenderer.invoke('runtimePortForwards:close', request),
+  wakePortForwardHost: (request: { environmentId: string }): Promise<boolean> =>
+    ipcRenderer.invoke('runtimePortForwards:wake', request),
+  onPortForwardsChanged: (callback: (forwards: RuntimePortForward[]) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, forwards: RuntimePortForward[]): void =>
+      callback(forwards)
+    ipcRenderer.on(RUNTIME_PORT_FORWARDS_CHANGED_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(RUNTIME_PORT_FORWARDS_CHANGED_CHANNEL, listener)
+  },
   getStatusSnapshots: (): Promise<RuntimeHostStatusSnapshot[]> =>
     ipcRenderer.invoke('runtimeEnvironments:getStatusSnapshots'),
   onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void): (() => void) => {

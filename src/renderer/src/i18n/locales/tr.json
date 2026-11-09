@@ -2525,10 +2525,8 @@
         "destroyDisabled": "yok etme devre dışı",
         "destroyConfigured": "yok etme yapılandırıldı",
         "noDestroyConfigured": "yok etme yok",
-        "ephemeralVm": "Çalışma Alanı Başına Ortam",
         "chooseRunTarget": "Hedef seçin",
         "noRunTargets": "Bu proje için hazır çalıştırma hedefi yok.",
-        "perWorkspaceEnvHint": "Bir tarifle isteğe bağlı bir ortam sağlayın",
         "branchName": "Branch adı",
         "branchNamePlaceholder": "feature/my-branch",
         "connectTimedOut": "Bağlantı zaman aşımına uğradı. Arka planda hâlâ bağlanıyor olabilir.",
@@ -2540,7 +2538,6 @@
         "addHost": "Sunucu ekle",
         "addSshHost": "SSH sunucusu ekle",
         "addSshHostHint": "SSH üzerinden mevcut bir makineyi kullanın",
-        "addRemoteOrcaServer": "Uzak Orca Sunucusu Ekle",
         "addRemoteOrcaServerHint": "Başka bir Orca çalışma zamanını eşleştirin",
         "hostConnectionFailed": "Bağlantı başarısız oldu",
         "connect": "Bağlan",
@@ -3692,12 +3689,9 @@
           "WorktreeCreationPanel": {
             "dabd226118": "Kapat",
             "34dd5ee38b": "Yeniden dene",
-            "ed2a664f8b": "Worktree oluşturulamadı",
             "a3346fc6ed": "Worktree oluşturmayı iptal et",
             "532aea14ce": "İptal",
-            "767951265d": "Worktree oluşturulurken bir şeyler ters gitti.",
-            "cancelProvisioning": "İptal",
-            "vmProvisioningLogEmpty": "Kurulum çıktısı bekleniyor…"
+            "cancelProvisioning": "İptal"
           }
         }
       },
@@ -6899,7 +6893,6 @@
           "modalInstallDescription": "Ajanlarınız için Linear becerisini yükleyin."
         },
         "FolderWorkspaceComposerDialog": {
-          "title": "Klasör Çalışma Alanı Oluştur",
           "create": "Çalışma alanı oluştur"
         },
         "WorkspaceKanbanDrawer": {
@@ -19459,6 +19452,7 @@
         "orcaStopCanContinue": "Bu konuşmada devam edebilirsiniz.",
         "orcaStopUnnamedServer": "uzak sunucu",
         "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
+        "safetyReviewApproved": "{{agent}} bu işleme onay verdi. Ayrıntıları görüntüleyin.",
         "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
         "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
         "forkedFrom": "Çatallandığı kaynak"

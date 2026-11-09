@@ -6,7 +6,7 @@ import type {
   WorkspaceSleepRequest
 } from '../../../../shared/workspace-sleep'
 import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
-import type { RecipeVmOpening, RecipeVmState } from './recipe-vm-operations'
+import { awaitInFlightWake, type RecipeVmOpening, type RecipeVmState } from './recipe-vm-operations'
 import { dropStrandedSleepRecord } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../../terminal/recovery/restored-pane-start'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -146,6 +146,11 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
     )
   }
 
+  /** The user's Suspend VM, serialised with any wake of the same VM. */
+  suspendWorkspaceVm(worktreeId: string): Promise<void> {
+    return this.workspaceSleep.suspendVm(worktreeId)
+  }
+
   /** Where this workspace's recipe VM stands for a client about to reach its server. */
   workspaceVmState(worktreeId: string, recordSuspended: boolean): RecipeVmState {
     return this.workspaceSleep.vmState(worktreeId, recordSuspended)
@@ -168,7 +173,9 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
     timeoutMs: number,
     signal?: AbortSignal
   ): Promise<RecipeVmOpening | 'asleep'> {
-    return this.workspaceSleep.awaitWake(worktreeId, recordSuspended, timeoutMs, signal)
+    const pending = this.workspaceSleep.pendingVmOperations.get(worktreeId) ?? []
+    const sleeps = this.workspaceSleep.sleepRequests
+    return awaitInFlightWake(pending, recordSuspended, sleeps, worktreeId, timeoutMs, signal)
   }
 
   /** The window opened a slept pane; main resumes it and the window attaches. */

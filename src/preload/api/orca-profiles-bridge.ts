@@ -8,6 +8,7 @@ import {
   type SwitchOrcaProfileResult,
   type TransferOrcaProfileProjectResult
 } from '../../shared/orca-profiles'
+import { ORCA_BILLING_RETURN_CHANNEL, type OrcaBillingReturn } from '../../shared/orca-billing'
 import { prepareAndInvokeAppRestart } from '../renderer-restart-wiring'
 import { awaitBeforeUnloadCheckpoint } from '../preload-runtime-support'
 
@@ -65,6 +66,14 @@ export const orcaProfilesApi = {
   orgInviteRevoke: (args) => ipcRenderer.invoke('orcaProfiles:orgInviteRevoke', args),
   orgMemberChangeRole: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberChangeRole', args),
   orgMemberRemove: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberRemove', args),
+  orgInviteResend: (args) => ipcRenderer.invoke('orcaProfiles:orgInviteResend', args),
+  orgLeave: (args) => ipcRenderer.invoke('orcaProfiles:orgLeave', args),
+  orgCreate: (args) => ipcRenderer.invoke('orcaProfiles:orgCreate', args),
+  onBillingReturn: (callback: (event: OrcaBillingReturn) => void): (() => void) => {
+    const listener = (_event: unknown, payload: OrcaBillingReturn): void => callback(payload)
+    ipcRenderer.on(ORCA_BILLING_RETURN_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(ORCA_BILLING_RETURN_CHANNEL, listener)
+  },
   billingStatus: () => ipcRenderer.invoke('orcaProfiles:billingStatus'),
   billingOpenCheckout: (args) => ipcRenderer.invoke('orcaProfiles:billingOpenCheckout', args),
   billingOpenPortal: () => ipcRenderer.invoke('orcaProfiles:billingOpenPortal'),

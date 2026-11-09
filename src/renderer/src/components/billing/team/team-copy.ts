@@ -1,0 +1,131 @@
+// Team page copy that more than one component needs.
+import type { OrcaProfileOrgCreateResult } from '../../../../../shared/orca-org-management'
+import type { Translate } from '@/i18n/use-translate'
+import type {
+  OrcaOrgRole,
+  OrcaProfileOrgMemberMutationResult
+} from '../../../../../shared/orca-profiles'
+
+export function seatCountLabel(count: number, t: Translate): string {
+  return count === 1
+    ? t('auto.components.billing.team.oneSeat', '1 seat')
+    : t('auto.components.billing.team.seatsN', '{{value0}} seats', { value0: String(count) })
+}
+
+export function memberCountLabel(count: number, t: Translate): string {
+  return count === 1
+    ? t('auto.components.billing.team.oneMember', '1 member')
+    : t('auto.components.billing.team.membersN', '{{value0}} members', { value0: String(count) })
+}
+
+export function roleDescription(role: OrcaOrgRole, t: Translate): string {
+  switch (role) {
+    case 'owner':
+      return t(
+        'auto.components.billing.team.roleOwnerHint',
+        'Everything, including billing and other owners'
+      )
+    case 'admin':
+      return t('auto.components.billing.team.roleAdminHint', 'Manages members and billing')
+    case 'member':
+      return t('auto.components.billing.team.roleMemberHint', 'Uses Orca Cloud with the team')
+  }
+}
+
+/** Status of a roster entry: signed in, invited (email sent), or added but never signed in. */
+export type TeamMemberStatus = 'active' | 'invited' | 'pending'
+
+export function memberStatusLabel(status: TeamMemberStatus, t: Translate): string {
+  switch (status) {
+    case 'active':
+      return t('auto.components.billing.team.statusActive', 'Active')
+    case 'invited':
+      return t('auto.components.billing.team.statusInvited', 'Invited')
+    case 'pending':
+      return t('auto.components.billing.team.statusPending', 'Pending sign-in')
+  }
+}
+
+export function mutationFailureCopy(
+  result: OrcaProfileOrgMemberMutationResult,
+  t: Translate
+): string | null {
+  switch (result.status) {
+    case 'ok':
+      return null
+    case 'conflict':
+      return result.reason === 'already_member'
+        ? t('auto.components.billing.team.alreadyMember', 'That person is already a member.')
+        : t('auto.components.billing.team.alreadyInvited', 'That person already has an invite.')
+    case 'invalid':
+      switch (result.reason) {
+        case 'cannot_remove_self':
+          return t(
+            'auto.components.billing.team.cannotRemoveSelf',
+            'Use Leave team to remove yourself.'
+          )
+        case 'last_owner':
+          return t(
+            'auto.components.billing.team.lastOwner',
+            'Make someone else an owner before you leave.'
+          )
+        case 'cannot_change_own_role':
+          return t(
+            'auto.components.billing.team.cannotChangeOwnRole',
+            'Another owner has to change your role.'
+          )
+      }
+      return null
+    case 'forbidden':
+      return t(
+        'auto.components.billing.team.forbidden',
+        'Only owners and admins can manage members, and only owners can manage owners.'
+      )
+    case 'not-found':
+      return t('auto.components.billing.team.notFound', 'That member or invite no longer exists.')
+    case 'unsupported':
+      return t(
+        'auto.components.billing.team.unsupported2',
+        'This isn’t available yet. Ask an owner or admin to do it for you.'
+      )
+    case 'rate-limited':
+      return t(
+        'auto.components.billing.team.rateLimited',
+        'Too many team changes at once. Wait a minute and try again.'
+      )
+    case 'reconnect-required':
+      return t('auto.components.billing.openSignedOut', 'Sign in to Orca again to manage billing.')
+    case 'unconfigured':
+      return t('auto.components.billing.openUnconfigured', 'Billing is unavailable in this build.')
+    case 'failed':
+      return t('auto.components.billing.team.failed', 'Could not update the team. Try again.')
+  }
+}
+
+export function createTeamFailureCopy(
+  result: OrcaProfileOrgCreateResult,
+  t: Translate
+): string | null {
+  switch (result.status) {
+    case 'created':
+      return null
+    case 'invalid':
+      return t('auto.components.billing.team.createInvalid', 'Choose a different team name.')
+    case 'unsupported':
+      return t(
+        'auto.components.billing.team.createUnavailable',
+        'Team creation isn’t available yet. Ask a teammate to invite you.'
+      )
+    case 'rate-limited':
+      return t(
+        'auto.components.billing.team.rateLimited',
+        'Too many team changes at once. Wait a minute and try again.'
+      )
+    case 'reconnect-required':
+      return t('auto.components.billing.openSignedOut', 'Sign in to Orca again to manage billing.')
+    case 'unconfigured':
+      return t('auto.components.billing.openUnconfigured', 'Billing is unavailable in this build.')
+    case 'failed':
+      return t('auto.components.billing.team.createFailed', 'Could not create the team. Try again.')
+  }
+}

@@ -76,9 +76,10 @@ export function TeamPlanCard({
       className="flex items-baseline gap-1.5 animate-in fade-in-0 slide-in-from-bottom-1 duration-200 motion-reduce:animate-none"
     >
       {discounted && fullMonthly !== null ? (
-        <span className="text-lg text-muted-foreground line-through tabular-nums">
+        <del className="text-lg text-muted-foreground tabular-nums">
+          <span className="sr-only">{t('auto.components.billing.plans.was', 'Was')} </span>
           {formatCents(fullMonthly, locale)}
-        </span>
+        </del>
       ) : null}
       <span className="text-3xl font-semibold tracking-tight tabular-nums">
         {monthly === null
@@ -134,7 +135,13 @@ export function TeamPlanCard({
   if (mode === 'choose') {
     footer = (
       <>
-        <Button type="button" className="w-full" disabled={busy} onClick={onCheckout}>
+        <Button
+          type="button"
+          className="w-full"
+          disabled={busy}
+          onClick={onCheckout}
+          data-plans-primary=""
+        >
           {busy ? <LoadingSpinner /> : null}
           {busy
             ? t('auto.components.billing.plans.waiting', 'Waiting for checkout…')
@@ -166,6 +173,7 @@ export function TeamPlanCard({
           className="w-full"
           disabled={busy}
           onClick={onManage}
+          data-plans-primary=""
         >
           {t('auto.components.billing.manageBilling', 'Manage billing')}
           <ExternalLink />

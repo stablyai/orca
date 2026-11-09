@@ -251,16 +251,18 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
 
   const selectedRecipeRepoConnectionId = selectedRepo?.connectionId ?? null
 
-  // Only probe enabled experiments or hidden features can raise setup errors.
-  const ephemeralVmsEnabled = settings?.experimentalEphemeralVms === true
-
   const {
     recipes: ephemeralVmRecipes,
     selectedRecipeId: selectedEphemeralVmRecipeId,
     setSelectedRecipeId: setSelectedEphemeralVmRecipeId,
-    error: ephemeralVmRecipeError
+    error: ephemeralVmRecipeError,
+    offered: ephemeralVmsEnabled,
+    orcaCloud: orcaCloudAvailability
   } = useEphemeralVmRecipeOptions({
-    enabled: ephemeralVmsEnabled,
+    // Always load: Orca Cloud is gated by the account's sandbox capability in main, not this flag.
+    enabled: true,
+    // Only probe enabled experiments or hidden features can raise setup errors.
+    customRecipesEnabled: settings?.experimentalEphemeralVms === true,
     repoId: selectedRecipeRepoId,
     repoIsGit: selectedRepoIsGit,
     repoConnectionId: selectedRecipeRepoConnectionId,
@@ -328,6 +330,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     selectedRecipeRepoId,
     selectedRecipeRepoConnectionId,
     ephemeralVmsEnabled,
+    orcaCloudAvailability,
     ephemeralVmRecipes,
     selectedEphemeralVmRecipeId,
     setSelectedEphemeralVmRecipeId,

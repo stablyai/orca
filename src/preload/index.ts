@@ -23,6 +23,7 @@ import { workspaceCleanupApi } from './api/workspace-cleanup-bridge'
 import { workspaceSpaceApi } from './api/workspace-space-bridge'
 import { workspacePortsApi } from './api/workspace-ports-bridge'
 import { linkPreviewApi } from './api/link-preview-bridge'
+import { cloudWorkspacesApi } from './api/cloud-workspaces-bridge'
 import { ptyApi } from './api/pty-bridge'
 import { feedbackApi } from './api/feedback-bridge'
 import { crashReportsApi } from './api/crash-reports-bridge'
@@ -61,6 +62,8 @@ import { emulatorApi } from './api/emulator-bridge'
 import { hooksApi } from './api/hooks-bridge'
 import { ephemeralVmApi } from './api/ephemeral-vm-bridge'
 import { orcaCloudWorkspaceApi } from './api/orca-cloud-workspace-bridge'
+import { orcaCloudOfflineApi } from './api/orca-cloud-offline-bridge'
+import { cloudSharesApi } from './api/cloud-shares-bridge'
 import { cacheApi } from './api/cache-bridge'
 import { sessionApi } from './api/session-bridge'
 import { updaterApi } from './api/updater-bridge'
@@ -127,6 +130,7 @@ const api = {
   workspaceSpace: workspaceSpaceApi,
   workspacePorts: workspacePortsApi,
   linkPreview: linkPreviewApi,
+  cloudWorkspaces: cloudWorkspacesApi,
   pty: ptyApi,
   feedback: feedbackApi,
   crashReports: crashReportsApi,
@@ -169,6 +173,8 @@ const api = {
   hooks: hooksApi,
   ephemeralVm: ephemeralVmApi,
   orcaCloudWorkspace: orcaCloudWorkspaceApi,
+  orcaCloudOffline: orcaCloudOfflineApi,
+  cloudShares: cloudSharesApi,
   cache: cacheApi,
   session: sessionApi,
   updater: updaterApi,

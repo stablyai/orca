@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useEphemeralVmRecipeOptions } from './useEphemeralVmRecipeOptions'
+import { useAppStore } from '@/store'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -60,15 +61,18 @@ function Harness({
   repoId,
   initialRecipeId,
   enabled = true,
+  customRecipesEnabled = true,
   repoExecutionHostId = 'local'
 }: {
   repoId: string
   initialRecipeId?: string
   enabled?: boolean
+  customRecipesEnabled?: boolean
   repoExecutionHostId?: 'local' | `runtime:${string}`
 }): React.JSX.Element {
   const state = useEphemeralVmRecipeOptions({
     enabled,
+    customRecipesEnabled,
     repoId,
     repoIsGit: true,
     repoConnectionId: null,
@@ -139,6 +143,59 @@ describe('useEphemeralVmRecipeOptions', () => {
       expect(container.querySelector('[data-testid="recipes"]')?.textContent).toBe('new-project')
     )
     expect(container.textContent).not.toContain('stale-project')
+  })
+
+  it('offers only Orca Cloud, without recipe diagnostics, while custom recipes are off', async () => {
+    installApi(
+      vi.fn().mockResolvedValue({
+        status: 'error',
+        repoPath: '/repo',
+        diagnostics: [{ index: 0, field: 'create', message: 'missing' }],
+        message: 'orca.yaml is invalid',
+        recipes: [
+          { id: 'cloud', name: 'Orca Cloud', provider: 'orca-cloud', create: 'orca-cloud create' },
+          { id: 'devbox', name: 'devbox', create: './create.sh' }
+        ]
+      })
+    )
+    const { container } = await render(<Harness repoId="repo-1" customRecipesEnabled={false} />)
+
+    await vi.waitFor(() =>
+      expect(container.querySelector('[data-testid="recipes"]')?.textContent).toBe('cloud')
+    )
+    expect(container.querySelector('[data-testid="error"]')?.textContent).toBe('none')
+  })
+
+  it('reloads when the account signs in, so Orca Cloud appears without switching projects', async () => {
+    const listRecipes = vi
+      .fn()
+      .mockResolvedValueOnce({ ...result([]), orcaCloud: 'needs-sign-in' })
+      .mockResolvedValueOnce({
+        ...result([]),
+        recipes: [
+          { id: 'cloud', name: 'Orca Cloud', provider: 'orca-cloud', create: 'orca-cloud create' }
+        ],
+        orcaCloud: 'offered'
+      })
+    installApi(listRecipes)
+    const { container } = await render(<Harness repoId="repo-1" customRecipesEnabled={false} />)
+    await vi.waitFor(() => expect(listRecipes).toHaveBeenCalledTimes(1))
+
+    await act(async () =>
+      useAppStore.setState({
+        orcaProfileAuthStatus: {
+          activeProfileId: 'p',
+          configured: true,
+          state: 'connected',
+          persistence: 'encrypted',
+          capabilities: { flags: { sandbox: true }, refreshedAt: 1 }
+        }
+      })
+    )
+
+    await vi.waitFor(() =>
+      expect(container.querySelector('[data-testid="recipes"]')?.textContent).toBe('cloud')
+    )
   })
 
   it('does not send a paired-runtime repo id to local recipe discovery', async () => {

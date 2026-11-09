@@ -64,6 +64,7 @@ export function renderAccountsLocationSection(
         control={
           <div className="flex w-44 flex-col items-stretch gap-2">
             <SettingsSegmentedControl
+              activation="manual"
               ariaLabel={t('auto.components.settings.AccountsPane.46cf7e7495', 'Account location')}
               value={accountRuntime.runtime}
               onChange={(value) => void updateAccountLocation({ localAccountRuntime: value })}

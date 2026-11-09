@@ -41,6 +41,16 @@ describe('dev operator keys', () => {
       passThroughOnException() {}
     } as unknown as ExecutionContext)
     expect(response.status).toBe(200)
-    expect(await response.text()).toContain('return to Orca')
+    const html = await response.text()
+    expect(html).toContain('Payment complete')
+    expect(html).toContain('orca://billing/return?checkout=success')
+    expect(response.headers.get('content-security-policy')).toContain("default-src 'none'")
+    const cancel = await handleRequest(new Request('https://billing.test/return?checkout=cancel&x=<script>'), h.env, {
+      waitUntil() {},
+      passThroughOnException() {}
+    } as unknown as ExecutionContext)
+    const cancelHtml = await cancel.text()
+    expect(cancelHtml).toContain('Nothing was charged')
+    expect(cancelHtml).not.toContain('<script>')
   })
 })

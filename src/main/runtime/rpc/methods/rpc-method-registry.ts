@@ -43,6 +43,8 @@ import { JIRA_METHODS } from './integrations/jira/jira'
 import { SSH_METHODS } from './ssh/ssh'
 import { MANAGED_SERVER_METHODS } from './host-management/managed-server'
 import { RECIPE_VM_WAKE_METHODS } from './host-management/recipe-vm-wake'
+import { ORCA_CLOUD_DEVICE_ENROLLMENT_METHODS } from './orca-cloud/orca-cloud-device-enrollment'
+import { CLOUD_SSH_METHODS } from './cloud-ssh/cloud-ssh-methods'
 import { ENVIRONMENT_DOCTOR_METHODS } from './host-management/environment-doctor'
 import { SPEECH_METHODS } from './speech/speech'
 import { CLIENT_UI_METHODS } from './client-state/client-ui'
@@ -142,6 +144,8 @@ export const ALL_RPC_METHODS = [
   ...SSH_METHODS,
   ...MANAGED_SERVER_METHODS,
   ...RECIPE_VM_WAKE_METHODS,
+  ...ORCA_CLOUD_DEVICE_ENROLLMENT_METHODS,
+  ...CLOUD_SSH_METHODS,
   ...ENVIRONMENT_DOCTOR_METHODS,
   ...SPEECH_METHODS,
   ...WORKSPACE_PORT_METHODS,

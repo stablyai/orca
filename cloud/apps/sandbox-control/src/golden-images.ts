@@ -1,10 +1,15 @@
 // Golden images the Worker keeps fresh by itself, one step per cron tick:
 // - refresh: before the active image expires, clone it into a new snapshot (no source build needed);
-// - release: when GOLDEN_IMAGE_SOURCE names an Orca release with an orca-server tarball, build from it.
+// - release: when GOLDEN_IMAGE_SOURCE names an Orca release with an orca-server tarball, build from it;
+// - source: when GOLDEN_IMAGE_SOURCE is `git:<repo>#<branch>`, rebuild orcad from that branch's HEAD
+//   whenever HEAD changes code that ships in the VM (golden-source.ts). The commit is the image's
+//   `bundle_sha256` (`git:<sha>`) and /opt/orca/runtime/orcad/SOURCE_COMMIT.
+// Clone refreshes keep `bundle_sha256`, so a refreshed image still knows which commit it carries.
 // A new image becomes active only after a smoke boot reaches orcad ready; the previous one is kept
 // (`retired`, still bootable) until the next rotation succeeds, so a bad build never strands creates.
-import { MANIFEST, PROVISION_SCRIPT, VM_SCRIPT_SOURCES } from '../image/vm-scripts.generated'
-import { provisionEnv, resolveReleaseBundle, type GoldenImageManifest } from '../image/golden-image'
+import { MANIFEST, PROVISION_SCRIPT, SOURCE_BUILD_SCRIPT, VM_SCRIPT_SOURCES } from '../image/vm-scripts.generated'
+import { VM_SCRIPTS, provisionEnv, resolveReleaseBundle, utf8Base64, type GoldenImageManifest } from '../image/golden-image'
+import { parseGitSource, resolveSourceHead, type AppRequest, type GitSource, type SourceHead } from './golden-source'
 import type { GoldenImageProviderApi } from './golden-image-provider'
 import { compileNetworkPolicy } from './network-policy'
 import type { SandboxProviderApi } from './sandbox-provider'
@@ -19,8 +24,10 @@ export type GoldenImageDeps = {
     region: string
     /** Snapshot TTL for new images; 0 keeps them until rotated out. */
     expirationMs: number
-    /** `release:latest` or `release:v1.2.3`; unset means refresh-only. */
+    /** `release:latest`, `release:v1.2.3` or `git:https://github.com/<owner>/<repo>#<branch>`; unset = refresh-only. */
     source?: string
+    /** GitHub App requests (git sources read the repo through its installation). */
+    github?: AppRequest
     /** Fallback when no row is active yet (wrangler var); adopted as the first active row. */
     seedSnapshotId?: string
     /** Refresh this long before the active image expires (default 24 h). */
@@ -101,6 +108,8 @@ export type GoldenTick =
   | 'activated'
   | 'failed'
   | 'release-unavailable'
+  | 'source-started'
+  | 'source-unavailable'
 
 /** One step of the rotation state machine; safe to call every cron tick. */
 export async function advanceGoldenImages(deps: GoldenImageDeps): Promise<GoldenTick> {
@@ -140,11 +149,62 @@ export async function advanceGoldenImages(deps: GoldenImageDeps): Promise<Golden
   } else if (release && release.sha256 !== active.bundle_sha256 && recentFailure?.bundle_sha256 !== release.sha256) {
     return startRelease(deps, release)
   }
+  const git = parseGitSource(deps.config.source)
+  let sourceUnavailable = false
+  if (git) {
+    const activeSha = active.bundle_sha256?.startsWith('git:') ? active.bundle_sha256.slice('git:'.length) : null
+    const head = deps.config.github
+      ? await resolveSourceHead(deps.config.github, git, activeSha, deps.config.fetch).catch(() => null)
+      : null
+    sourceUnavailable = head === null
+    if (head && head.touchesVm && head.sha !== activeSha && recentFailure?.bundle_sha256 !== `git:${head.sha}`) {
+      return startSourceBuild(deps, git, head)
+    }
+  }
   const refreshBefore = deps.config.refreshBeforeMs ?? REFRESH_BEFORE_MS
   if (active.expires_at !== null && active.expires_at - now < refreshBefore && !recentFailure) {
     return startRefresh(deps, active)
   }
-  return release === 'unavailable' ? 'release-unavailable' : 'idle'
+  return release === 'unavailable' ? 'release-unavailable' : sourceUnavailable ? 'source-unavailable' : 'idle'
+}
+
+/** Build sandbox: fetch the commit, build orcad + CLI, provision; stepBuild then wipes, snapshots, smokes. */
+async function startSourceBuild(deps: GoldenImageDeps, git: GitSource, head: SourceHead): Promise<GoldenTick> {
+  const { db, provider } = deps
+  const now = deps.now()
+  const id = randomId()
+  const name = `orca-${deps.config.environment}-golden-${id}`
+  await insert(db, { id, source: `git:${git.repoUrl}#${git.ref}`, bundle_sha256: `git:${head.sha}`, status: 'building', build_name: name }, now)
+  try {
+    const box = await provider.createBuildSandbox({
+      name,
+      image: MANIFEST.image,
+      // A source build (pnpm install + orcad + CLI) is CPU-bound: the widest box Pro allows.
+      vcpus: 8,
+      region: deps.config.region,
+      timeoutMs: BUILD_DEADLINE_MS,
+      tags: { orcaGoldenImage: id, orcaEnv: deps.config.environment }
+    })
+    const env = {
+      ...provisionEnv({ manifest: MANIFEST, provisionScript: PROVISION_SCRIPT, vmScripts: VM_SCRIPT_SOURCES, buildId: id }),
+      ORCA_SRC_REPO: git.repoUrl,
+      ORCA_SRC_SHA: head.sha,
+      // 1 h, read-only, this repo only; the script uses it for one fetch and unsets it.
+      ORCA_SRC_AUTH: `Authorization: ${head.gitAuthorization}`,
+      ORCA_PROVISION_SCRIPT: utf8Base64(PROVISION_SCRIPT)
+    }
+    const commandId = await provider.startCommand(box.session.id, {
+      command: 'bash',
+      args: ['-c', SOURCE_BUILD_SCRIPT],
+      env,
+      timeoutMs: 40 * 60_000
+    })
+    await update(db, id, { session_id: box.session.id, command_id: commandId }, now)
+    return 'source-started'
+  } catch (error) {
+    await fail(deps, id, name, String(error))
+    return 'failed'
+  }
 }
 
 async function desiredRelease(deps: GoldenImageDeps): Promise<{ tag: string; bundleUrl: string; sha256: string } | 'unavailable'> {
@@ -185,6 +245,9 @@ async function startRefresh(deps: GoldenImageDeps, active: GoldenRow): Promise<G
       tags: { orcaGoldenImage: id, orcaEnv: deps.config.environment },
       snapshotExpirationMs: 86_400_000
     })
+    // A refresh also rolls out the control plane's current VM entry points (grant/revoke, start
+    // script fixes) without waiting for the next release build.
+    await installEntryPoints(deps, box.session.id)
     await finishBuild(deps, id, name, box.session.id)
     return 'refresh-started'
   } catch (error) {
@@ -250,6 +313,26 @@ async function stepBuild(deps: GoldenImageDeps, row: GoldenRow): Promise<GoldenT
 }
 
 /** Wipe identity, snapshot (stops the box), drop the build box; the snapshot then waits for its smoke test. */
+/** Rewrites /opt/orca/bin/<entry point> from VM_SCRIPT_SOURCES (same bytes a release build installs). */
+export async function installEntryPoints(deps: { provider: Pick<SandboxProviderApi, 'runCommand'> }, sessionId: string): Promise<void> {
+  const env = provisionEnv({ manifest: MANIFEST, provisionScript: PROVISION_SCRIPT, vmScripts: VM_SCRIPT_SOURCES, buildId: 'sync' })
+  const scriptEnv = Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith('ORCA_VM_SCRIPT_')))
+  const install = [
+    'set -euo pipefail',
+    `for name in ${VM_SCRIPTS.join(' ')}; do`,
+    '  var="ORCA_VM_SCRIPT_${name//[-.]/_}"',
+    '  printf %s "${!var}" | base64 -d >"/tmp/$name.new"',
+    '  sudo install -o root -g root -m 0755 "/tmp/$name.new" "/opt/orca/bin/$name"',
+    '  rm -f "/tmp/$name.new"',
+    'done',
+    'echo synced'
+  ].join('\n')
+  const result = await deps.provider.runCommand(sessionId, { command: 'bash', args: ['-c', install], env: scriptEnv, timeoutMs: 60_000 })
+  if (result.exitCode !== 0 || !result.stdout.includes('synced')) {
+    throw new Error('entry_point_sync_failed')
+  }
+}
+
 async function finishBuild(deps: GoldenImageDeps, id: string, name: string, sessionId: string): Promise<void> {
   const { provider } = deps
   const wipe = await provider.runCommand(sessionId, { command: WIPE, timeoutMs: 60_000 })

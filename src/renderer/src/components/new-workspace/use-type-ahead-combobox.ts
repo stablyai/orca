@@ -2,7 +2,11 @@ import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { useWheelScrollable } from './use-wheel-scrollable'
 
 /** Track selection by row key and query so late host lists cannot retarget a keypress; clear queries on close to restore the committed display. */
-export function useTypeAheadCombobox(deriveRowKeys: (query: string) => readonly string[]): {
+export function useTypeAheadCombobox(
+  deriveRowKeys: (query: string) => readonly string[],
+  /** Row armed before any key or hover, while the query is empty (e.g. the committed choice). */
+  initialKey: string | null = null
+): {
   query: string
   setQuery: (value: string) => void
   open: boolean
@@ -32,7 +36,8 @@ export function useTypeAheadCombobox(deriveRowKeys: (query: string) => readonly 
 
   // A stale arm (aimed at an earlier query) falls back to the first row.
   const armedKey = armed !== null && armed.query === query ? armed.key : null
-  const armedIndex = Math.max(armedKey === null ? -1 : rowKeys.indexOf(armedKey), 0)
+  const fallbackKey = query === '' ? initialKey : null
+  const armedIndex = Math.max(rowKeys.indexOf(armedKey ?? fallbackKey ?? ''), 0)
   const resolvedKey = rowKeys[armedIndex] ?? null
 
   React.useEffect(() => {

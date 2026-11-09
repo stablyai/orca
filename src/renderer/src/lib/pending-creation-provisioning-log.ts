@@ -27,6 +27,37 @@ export function appendProvisioningLog(creationId: string, chunk: string): void {
   }
   // Why: recipe stdout contains the structured result with pairing credentials;
   // only stderr is displayed, and the in-memory tail is bounded.
-  const nextLog = `${entry.provisioningLog ?? ''}${chunk}`.slice(-MAX_PROVISIONING_LOG_CHARS)
-  store.updatePendingWorktreeCreation(creationId, { provisioningLog: nextLog })
+  store.updatePendingWorktreeCreation(
+    creationId,
+    appendStampedLog(
+      entry.provisioningLog ?? '',
+      entry.provisioningLogStamps ?? [],
+      chunk,
+      Date.now()
+    )
+  )
+}
+
+function countLines(text: string): number {
+  // A trailing newline opens a line that has no output yet, so it gets no stamp.
+  return text === '' ? 0 : text.split('\n').length - (text.endsWith('\n') ? 1 : 0)
+}
+
+/** Appends a chunk and stamps each newly started line with `now`, trimming both to the bounded tail. */
+export function appendStampedLog(
+  log: string,
+  stamps: readonly number[],
+  chunk: string,
+  now: number
+): { provisioningLog: string; provisioningLogStamps: number[] } {
+  const full = `${log}${chunk}`
+  const lineCount = countLines(full)
+  const nextStamps = stamps.slice(0, lineCount)
+  while (nextStamps.length < lineCount) {
+    nextStamps.push(now)
+  }
+  const tail = full.slice(-MAX_PROVISIONING_LOG_CHARS)
+  const dropped = full.slice(0, full.length - tail.length)
+  const droppedLines = dropped === '' ? 0 : dropped.split('\n').length - 1
+  return { provisioningLog: tail, provisioningLogStamps: nextStamps.slice(droppedLines) }
 }

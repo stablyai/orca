@@ -40,7 +40,10 @@ export function PaymentIssueNotice({
       <div className="min-w-0 flex-1 space-y-2">
         <p className="text-sm font-medium">
           {payment.suspendRunning
-            ? t('auto.components.billing.paymentSuspended', 'Sandboxes suspended: payment overdue')
+            ? t(
+                'auto.components.billing.paymentFailedSuspended',
+                'Payment failed · sandboxes suspended'
+              )
             : t('auto.components.billing.paymentFailed', 'Payment failed')}
         </p>
         <p className="text-xs text-muted-foreground">
@@ -59,14 +62,21 @@ export function PaymentIssueNotice({
           <Button
             type="button"
             size="sm"
-            variant="outline"
             disabled={busy}
             onClick={onUpdatePayment}
+            data-plans-primary=""
           >
             {t('auto.components.billing.updatePayment', 'Update payment method')}
             <ExternalLink />
           </Button>
-        ) : null}
+        ) : (
+          <p className="text-xs font-medium">
+            {t(
+              'auto.components.billing.paymentAskAdmin',
+              'Ask an owner or admin to update the payment method.'
+            )}
+          </p>
+        )}
       </div>
     </div>
   )

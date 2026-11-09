@@ -2082,10 +2082,8 @@
         "destroyDisabled": "破壊は無効です",
         "destroyConfigured": "設定されたものを破棄する",
         "noDestroyConfigured": "破壊しない",
-        "ephemeralVm": "ワークスペースごとの環境",
         "chooseRunTarget": "ターゲットを選択",
         "noRunTargets": "このプロジェクトには実行ターゲットが準備されていません。",
-        "perWorkspaceEnvHint": "レシピからオンデマンド環境をプロビジョニングする",
         "branchName": "ブランチ名",
         "branchNamePlaceholder": "feature/my-branch",
         "connectTimedOut": "接続がタイムアウトしました。バックグラウンドで接続が続いている可能性があります。",
@@ -2094,7 +2092,6 @@
         "addHost": "ホストを追加",
         "addSshHost": "SSH ホストを追加",
         "addSshHostHint": "既存のマシンを SSH 経由で使用します",
-        "addRemoteOrcaServer": "リモート Orca サーバーを追加",
         "addRemoteOrcaServerHint": "別の Orca ランタイムとペアリングします",
         "hostConnectionFailed": "接続に失敗しました",
         "defaultBranchUpdateFailed": "プロジェクトのデフォルトブランチを更新できませんでした。再試行。",
@@ -3186,12 +3183,9 @@
           "WorktreeCreationPanel": {
             "dabd226118": "閉じる",
             "34dd5ee38b": "再試行",
-            "ed2a664f8b": "ワークツリーを作成できませんでした",
             "a3346fc6ed": "ワークツリーの作成をキャンセルする",
             "532aea14ce": "キャンセル",
-            "767951265d": "ワークツリーの作成中に問題が発生しました。",
-            "cancelProvisioning": "キャンセル",
-            "vmProvisioningLogEmpty": "レシピの出力を待っています…"
+            "cancelProvisioning": "キャンセル"
           }
         }
       },
@@ -6255,7 +6249,6 @@
           "modalInstallDescription": "Agent 用に Linear スキルをインストールします。"
         },
         "FolderWorkspaceComposerDialog": {
-          "title": "フォルダーワークスペースを作成",
           "create": "ワークスペースを作成"
         },
         "AddRepoHostSelector": {
@@ -19091,6 +19084,7 @@
         "orcaStopCanContinue": "この会話で続行できます。",
         "orcaStopUnnamedServer": "リモートサーバー",
         "permissionDenied": "{{agent}} が権限を拒否しました。詳細を表示。",
+        "safetyReviewApproved": "{{agent}} がこの操作を承認しました。詳細を表示。",
         "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
         "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。",
         "forkedFrom": "分岐元"

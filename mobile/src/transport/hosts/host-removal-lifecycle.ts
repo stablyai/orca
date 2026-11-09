@@ -1,15 +1,18 @@
+import type { QueryClient } from '@tanstack/react-query'
 import { wipeHostStore } from '../../device-store/device-store'
 import {
   deleteHostPageCache,
   forgetHostUpdateFailures
 } from '../../mobile-web-shell/removed-host-shell-cache'
 import { unregisterPushForRemovedHost } from '../../notifications/push-registration'
+import { forgetNativeHostQueries } from '../../query/native-query-persistence'
 import { forgetHostDescriptor } from './host-descriptor-store'
 import { removeHost } from './host-store'
 
 export async function removeHostAndCloseClient(
   hostId: string,
-  forgetHostClient: (hostId: string) => void
+  forgetHostClient: (hostId: string) => void,
+  queryClient: QueryClient
 ): Promise<void> {
   // Unregister before removal while the client is authenticated; desktop revocation covers undelivered requests.
   const restorePushRegistration = await unregisterPushForRemovedHost(hostId)
@@ -22,6 +25,8 @@ export async function removeHostAndCloseClient(
   }
   forgetHostClient(hostId)
   forgetHostDescriptor(hostId)
+  // Before the wipe, so nothing this world still holds is written back after it.
+  forgetNativeHostQueries(queryClient, hostId)
   // After commit, cache cleanup must not delay/fail removal; later eviction can reclaim failures.
   void forgetHostUpdateFailures(hostId).catch(() => undefined)
   void deleteHostPageCache(hostId).catch(() => undefined)

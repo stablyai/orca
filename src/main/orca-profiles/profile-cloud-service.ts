@@ -1,3 +1,4 @@
+import { resetCloudOfflineData } from '../hosted-sandbox/cloud-offline-reset'
 import type {
   ConnectCurrentOrcaProfileResult,
   CreateCloudLinkedOrcaProfileArgs,
@@ -172,6 +173,8 @@ export async function signOutCurrentOrcaProfile(
   }
   signOutCloudSession(active.profile.id, userDataPath)
   const list = unlinkOrcaProfileFromCloud(active.profile.id, userDataPath)
+  // Cached Orca Cloud transcripts and queued prompts belong to the signed-out account.
+  resetCloudOfflineData()
   try {
     clearRelayRegionPreferenceCache(userDataPath)
   } catch {

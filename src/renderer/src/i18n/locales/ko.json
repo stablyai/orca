@@ -2082,10 +2082,8 @@
         "destroyDisabled": "삭제 비활성화됨",
         "destroyConfigured": "삭제 명령 설정됨",
         "noDestroyConfigured": "삭제 명령 없음",
-        "ephemeralVm": "워크스페이스별 환경",
         "chooseRunTarget": "대상 선택",
         "noRunTargets": "이 프로젝트에는 실행 대상이 준비되어 있지 않습니다.",
-        "perWorkspaceEnvHint": "레시피에서 온디맨드 환경 프로비저닝",
         "branchName": "브랜치 이름",
         "branchNamePlaceholder": "feature/my-branch",
         "connectTimedOut": "연결 시간이 초과되었습니다. 백그라운드에서 여전히 연결 중일 수 있습니다.",
@@ -2094,7 +2092,6 @@
         "addHost": "Add host",
         "addSshHost": "Add SSH host",
         "addSshHostHint": "SSH로 기존 컴퓨터 사용",
-        "addRemoteOrcaServer": "원격 Orca 서버 추가",
         "addRemoteOrcaServerHint": "다른 Orca 런타임 페어링",
         "hostConnectionFailed": "Connection failed",
         "defaultBranchUpdateFailed": "프로젝트 기본 브랜치를 업데이트할 수 없습니다. 다시 시도해 보세요.",
@@ -3186,12 +3183,9 @@
           "WorktreeCreationPanel": {
             "dabd226118": "닫기",
             "34dd5ee38b": "다시 시도",
-            "ed2a664f8b": "작업 트리를 만들 수 없습니다.",
             "a3346fc6ed": "작업 트리 생성 취소",
             "532aea14ce": "취소",
-            "767951265d": "작업 트리를 만드는 중에 문제가 발생했습니다.",
-            "cancelProvisioning": "취소",
-            "vmProvisioningLogEmpty": "레시피 출력을 기다리는 중…"
+            "cancelProvisioning": "취소"
           }
         }
       },
@@ -6255,7 +6249,6 @@
           "modalInstallDescription": "에이전트용 Linear 스킬을 설치합니다."
         },
         "FolderWorkspaceComposerDialog": {
-          "title": "폴더 워크스페이스 만들기",
           "create": "워크스페이스 만들기"
         },
         "AddRepoHostSelector": {
@@ -19091,6 +19084,7 @@
         "orcaStopCanContinue": "이 대화에서 계속할 수 있습니다.",
         "orcaStopUnnamedServer": "원격 서버",
         "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
+        "safetyReviewApproved": "{{agent}}이(가) 이 작업을 승인했습니다. 세부 정보 보기.",
         "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
         "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트).",
         "forkedFrom": "분기 원본"

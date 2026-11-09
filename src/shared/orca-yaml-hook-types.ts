@@ -46,6 +46,12 @@ export type OrcaVmRecipe = {
 
 export type OrcaVmRecipeProviderId = 'orca-cloud'
 
+/**
+ * Whether this build and account can use Orca Cloud: `offered` adds its recipe; `needs-sign-in` and
+ * `needs-capability` let the picker show a sign-in or upsell row; `unavailable` hides it entirely.
+ */
+export type OrcaCloudAvailability = 'offered' | 'needs-sign-in' | 'needs-capability' | 'unavailable'
+
 export type OrcaVmRecipeLifecycleMode = 'create' | 'suspend' | 'resume' | 'destroy'
 
 export type OrcaVmRecipeTimeoutSeconds = Partial<Record<OrcaVmRecipeLifecycleMode, number>>

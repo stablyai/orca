@@ -31,10 +31,13 @@ export function StepIcon({ state }: { state: WorktreeSetupStep['state'] }): Reac
   switch (state) {
     case 'running':
       return (
-        <Loader2 aria-hidden className="size-3.5 shrink-0 animate-spin text-muted-foreground" />
+        <Loader2
+          aria-hidden
+          className="size-3.5 shrink-0 text-muted-foreground motion-safe:animate-spin"
+        />
       )
     case 'done':
-      return <CircleCheck aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+      return <CircleCheck aria-hidden className="size-3.5 shrink-0 text-foreground" />
     case 'failed':
       return <CircleX aria-hidden className="size-3.5 shrink-0 text-destructive" />
     case 'pending':

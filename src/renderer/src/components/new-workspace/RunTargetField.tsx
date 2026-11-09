@@ -1,6 +1,6 @@
 import { ImeInput } from '@/lib/ime-text-field'
 import React, { useState } from 'react'
-import { ChevronDown, Cloud } from 'lucide-react'
+import { Box, ChevronDown, Cloud } from 'lucide-react'
 import { PopoverAnchor } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -17,12 +17,12 @@ export default function RunTargetField({
   onOpenRequest,
   onToggle,
   committed,
-  isRecipe,
+  recipeKind,
   hostId,
   label,
   detail,
-  listId,
-  hasArmedRow,
+  controlsId,
+  activeDescendantId,
   inputRef,
   onKeyDown
 }: {
@@ -32,12 +32,14 @@ export default function RunTargetField({
   onOpenRequest: () => void
   onToggle: () => void
   committed: boolean
-  isRecipe: boolean
+  /** A committed recipe selection; Orca Cloud keeps its own glyph. */
+  recipeKind: 'orca-cloud' | 'recipe' | null
   hostId: ExecutionHostId | null
   label: string
   detail: string
-  listId: string
-  hasArmedRow: boolean
+  /** The main listbox id, plus an open submenu's listbox id. */
+  controlsId: string
+  activeDescendantId: string | undefined
   inputRef: React.RefObject<HTMLInputElement | null>
   onKeyDown: (event: React.KeyboardEvent<HTMLInputElement>) => void
 }): React.JSX.Element {
@@ -57,8 +59,10 @@ export default function RunTargetField({
           >
             <span className="flex w-4 shrink-0 items-center justify-center">
               {committed ? (
-                isRecipe ? (
+                recipeKind === 'orca-cloud' ? (
                   <Cloud className="size-3.5 shrink-0 text-muted-foreground" />
+                ) : recipeKind === 'recipe' ? (
+                  <Box className="size-3.5 shrink-0 text-muted-foreground" />
                 ) : hostId ? (
                   <HostRowIcon hostId={hostId} />
                 ) : null
@@ -72,9 +76,9 @@ export default function RunTargetField({
                 data-run-target-combobox-root="true"
                 aria-label={t('auto.components.new.workspace.RunTargetCombobox.label', 'Run on')}
                 aria-expanded={open}
-                aria-controls={listId}
+                aria-controls={controlsId}
                 aria-autocomplete="list"
-                aria-activedescendant={open && hasArmedRow ? `${listId}-armed` : undefined}
+                aria-activedescendant={open ? activeDescendantId : undefined}
                 value={query}
                 placeholder={
                   committed
