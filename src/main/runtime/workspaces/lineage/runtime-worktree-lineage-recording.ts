@@ -1,3 +1,14 @@
+import {
+  appendLineageDiagnosticComment,
+  confirmedWorktreeLineageProject,
+  getWorkspaceLineagePolicy,
+  PROJECT_LINEAGE_CONFLICT_MESSAGE
+} from '../../../../shared/workspace-lineage-policy'
+import {
+  readAllWorktreeMetaForHost,
+  worktreeRowTarget
+} from '../../../persistence/host-qualified-worktree-meta'
+import { splitWorktreeId } from '../../../../shared/worktree/id'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -11,7 +22,6 @@ import type {
 } from '../../../../shared/worktree/lineage-types'
 import { type WorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { RuntimeStore } from '../../construction/runtime-store-contract'
-import { worktreeRowTarget } from '../../../persistence/host-qualified-worktree-meta'
 
 type LineageParent =
   | {
@@ -91,17 +101,77 @@ export function recordCreatedWorktreeLineage(
   const warnings = resolution.kind === 'none' ? [...resolution.warnings] : []
   let lineage: WorktreeLineage | null = null
   let workspaceLineage: WorkspaceLineage | null = null
+  const target = store ? worktreeRowTarget(store, worktree) : undefined
+  const restricted = getWorkspaceLineagePolicy(store?.getSettings?.()) === 'same-project'
+  const rootWithDiagnostic = () => {
+    if (restricted && store && target && warnings.length) {
+      const meta = readAllWorktreeMetaForHost(store, target.hostId)[worktree.id]
+      const comment = appendLineageDiagnosticComment(meta?.comment, { kind: 'none', warnings })
+      if (comment !== meta?.comment) {
+        store.setWorktreeMeta(target, { comment })
+      }
+    }
+    return { lineage: null, workspaceLineage: null, warnings }
+  }
+  if (restricted && resolution.kind !== 'none') {
+    const rows = store && target ? readAllWorktreeMetaForHost(store, target.hostId) : {}
+    const catalog = {
+      projects: store?.getProjects?.() ?? [],
+      projectHostSetups: store?.getProjectHostSetups?.() ?? []
+    }
+    const childMeta = rows[worktree.id]
+    const parent =
+      resolution.kind === 'lineage' && resolution.parent.type === 'worktree'
+        ? resolution.parent
+        : undefined
+    const parentMeta = parent ? rows[parent.worktree.id] : undefined
+    const childProject = childMeta
+      ? confirmedWorktreeLineageProject(catalog, {
+          ...childMeta,
+          repoId: splitWorktreeId(worktree.id)?.repoId ?? ''
+        })
+      : undefined
+    const parentProject =
+      parent && parentMeta
+        ? confirmedWorktreeLineageProject(catalog, {
+            ...parentMeta,
+            repoId: splitWorktreeId(parent.worktree.id)?.repoId ?? ''
+          })
+        : undefined
+    if (
+      !childProject ||
+      childProject !== parentProject ||
+      childMeta?.instanceId !== worktree.instanceId ||
+      parentMeta?.instanceId !== parent?.instanceId
+    ) {
+      warnings.push({
+        code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        message: `Workspace kept as a root. ${PROJECT_LINEAGE_CONFLICT_MESSAGE}`,
+        details: {
+          parentWorkspaceKey: resolution.parent.workspaceKey,
+          ...(resolution.kind === 'lineage'
+            ? {
+                taskId: resolution.taskId,
+                orchestrationRunId: resolution.orchestrationRunId,
+                coordinatorHandle: resolution.coordinatorHandle,
+                createdByTerminalHandle: resolution.createdByTerminalHandle
+              }
+            : { parentInstallationId: resolution.parent.installationId })
+        }
+      })
+      return rootWithDiagnostic()
+    }
+  }
   if (resolution.kind === 'crossStore') {
     return { lineage, workspaceLineage, ...recordCrossStoreLineage(store, worktree, resolution) }
   }
   if (resolution.kind !== 'lineage') {
-    return { lineage, workspaceLineage, warnings }
+    return rootWithDiagnostic()
   }
 
   const childInstanceId = worktree.instanceId
   const parentInstanceId = resolution.parent.instanceId
   const createdAt = Date.now()
-  const target = store ? worktreeRowTarget(store, worktree) : undefined
   if (
     resolution.parent.type === 'worktree' &&
     childInstanceId &&
@@ -183,7 +253,7 @@ export function recordCreatedWorktreeLineage(
     // setWorktreeLineage already wrote this row as the link's workspace projection.
     workspaceLineage = row
   } else if (store?.setWorkspaceLineage) {
-    workspaceLineage = store.setWorkspaceLineage(row)
+    workspaceLineage = store.setWorkspaceLineage(row) ?? null
   }
   return { lineage, workspaceLineage, warnings }
 }

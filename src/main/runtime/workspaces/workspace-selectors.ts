@@ -47,14 +47,19 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
     ...args: Parameters<RuntimeWorkspaceCatalog['listResolvedWorktrees']>
   ): ReturnType<RuntimeWorkspaceCatalog['listResolvedWorktrees']>
 
+  protected abstract computeResolvedWorktrees(
+    readOnlyAdmission?: boolean
+  ): ReturnType<RuntimeWorkspaceCatalog['computeResolvedWorktrees']>
+
   /** The repo-backed catalog only: project-group folder workspaces never match. Resolve a workspace with resolveWorkspaceSelector. */
   protected async resolveGitWorktreeSelector(
     selector: string,
     requiredHostId?: ExecutionHostId
   ): Promise<ResolvedWorktree> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(selector)
+    const readOnlyAdmission = this.store?.getSettings?.().workspaceLineagePolicy === 'same-project'
     // Only id selectors name a repo; scoping other selectors would hide fleet-wide ambiguity.
-    if (explicitWorktreeId && !this.hasFreshResolvedWorktreeCache()) {
+    if (!readOnlyAdmission && explicitWorktreeId && !this.hasFreshResolvedWorktreeCache()) {
       const scoped = await (requiredHostId === undefined
         ? this.resolveExplicitWorktreeIdScoped(explicitWorktreeId)
         : this.resolveExplicitWorktreeIdScoped(explicitWorktreeId, requiredHostId))
@@ -62,9 +67,11 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
         return scoped
       }
     }
-    const worktrees = (await this.listResolvedWorktrees()).filter(
-      (row) => requiredHostId === undefined || row.hostId === requiredHostId
-    )
+    const worktrees = (
+      readOnlyAdmission
+        ? (await this.computeResolvedWorktrees(true)).worktrees
+        : await this.listResolvedWorktrees()
+    ).filter((row) => requiredHostId === undefined || row.hostId === requiredHostId)
     return this.matchWorktreeSelector(selector, worktrees, explicitWorktreeId, requiredHostId)
   }
 
@@ -208,7 +215,10 @@ export abstract class RuntimeWorkspaceSelectors extends RuntimeProjectLaunchCont
     }
     const worktrees = this.matchWorktreeCandidates(
       selector,
-      (await this.listResolvedWorktrees()).filter((row) => onHost(row.hostId)),
+      (this.store?.getSettings?.().workspaceLineagePolicy === 'same-project'
+        ? (await this.computeResolvedWorktrees(true)).worktrees
+        : await this.listResolvedWorktrees()
+      ).filter((row) => onHost(row.hostId)),
       undefined,
       requiredHostId
     )

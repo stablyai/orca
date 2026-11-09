@@ -1,3 +1,7 @@
+import {
+  getWorkspaceLineagePolicy,
+  PROJECT_LINEAGE_CONFLICT_MESSAGE
+} from '../../../../shared/workspace-lineage-policy'
 import { getRepoRegistrationHostIds } from '../../../../shared/repo-host-identity'
 import type { GitPushTarget, Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
@@ -62,6 +66,24 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
 }): Promise<Worktree> {
   const worktree = await args.ports.resolveWorktree(args.selector)
   const { lineage, ...metaUpdates } = args.updates
+  const restricted = getWorkspaceLineagePolicy(args.store.getSettings()) === 'same-project'
+  if (
+    restricted &&
+    ['projectId', 'hostId', 'projectHostSetupId', 'instanceId', 'identity'].some((key) =>
+      Object.hasOwn(metaUpdates, key)
+    )
+  ) {
+    throw new RuntimeLineageError(
+      'LINEAGE_PARENT_CONTEXT_CONFLICT',
+      'Workspace ownership is assigned by the host project setup, not metadata updates.'
+    )
+  }
+  if (restricted && lineage?.crossStoreParent) {
+    throw new RuntimeLineageError(
+      'LINEAGE_PARENT_CONTEXT_CONFLICT',
+      PROJECT_LINEAGE_CONFLICT_MESSAGE
+    )
+  }
   const folderParent = lineage?.parentWorktree ? folderParentKey(lineage.parentWorktree) : undefined
   const previousParentRepoId = lineage
     ? splitWorktreeId(args.store.getWorktreeLineage?.(worktree.id)?.parentWorktreeId ?? '')?.repoId
@@ -142,6 +164,12 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
       .catch((error: unknown) => {
         throw explicitParentError(error)
       })
+    if (restricted && parent.type === 'folder') {
+      throw new RuntimeLineageError(
+        'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        PROJECT_LINEAGE_CONFLICT_MESSAGE
+      )
+    }
     const recorded =
       parent.type === 'folder'
         ? recordFolderParent(args.store, target, worktree, parent)

@@ -1,3 +1,5 @@
+import { appendLineageDiagnosticComment } from '../../../../shared/workspace-lineage-policy'
+import { rootOnlyFolderLineage } from '../../../runtime/workspaces/lineage/runtime-worktree-lineage-resolution'
 import { ipcMain, app } from 'electron'
 import { getLocalWorktreeCatalogVersion } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import type {
@@ -68,7 +70,32 @@ export function registerWorktreeCreateHandlers(context: WorktreeIpcContext): voi
             // Track operational failures; malformed IPC rejected above is outside the creation funnel.
             if (isFolderRepo(repo)) {
               // Folder creation only registers metadata, so it needs no filesystem host route.
-              result = createFolderWorkspace(createArgs, repo, store)
+              if (store.getSettings().workspaceLineagePolicy === 'same-project') {
+                const resolution = rootOnlyFolderLineage(
+                  await runtime.resolveLineageForWorktreeCreate(
+                    {
+                      parentWorkspace: createArgs.parentWorkspace,
+                      parentWorkspaceOrigin: 'manual',
+                      crossStoreParent: createArgs.crossStoreParent,
+                      comment: createArgs.comment
+                    },
+                    repo
+                  )
+                )
+                result = createFolderWorkspace(
+                  {
+                    ...createArgs,
+                    comment: appendLineageDiagnosticComment(createArgs.comment, resolution)
+                  },
+                  repo,
+                  store
+                )
+                if (resolution.kind === 'none' && resolution.warnings.length) {
+                  result.warnings = resolution.warnings
+                }
+              } else {
+                result = createFolderWorkspace(createArgs, repo, store)
+              }
             } else {
               // Resolve executionHostId-only SSH ownership before any local Git operation.
               const createRoute = requireWorktreeCreateRoute(repo)

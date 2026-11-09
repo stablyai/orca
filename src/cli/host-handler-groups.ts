@@ -7,6 +7,7 @@ export const HOST_HANDLER_GROUPS: readonly HandlerGroup[] = [
     name: 'environment',
     keys: [
       'host name',
+      'host lineage-policy',
       'host list',
       'host rm',
       'environment add',

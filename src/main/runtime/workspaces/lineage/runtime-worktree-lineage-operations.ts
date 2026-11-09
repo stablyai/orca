@@ -1,3 +1,4 @@
+import { confirmedRepoLineageProject } from '../../../../shared/workspace-lineage-policy'
 import { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../../terminal/launch/terminal-workspace-scope'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type {
@@ -22,7 +23,17 @@ export abstract class RuntimeWorktreeLineageOperations extends OrcaRuntimeWithRe
   ): Promise<WorktreeLineageResolution> {
     return this.worktreeLineage.resolveCreate(
       input,
-      childRepo ? getRepoExecutionHostId(childRepo) : undefined
+      childRepo ? getRepoExecutionHostId(childRepo) : undefined,
+      childRepo
+        ? confirmedRepoLineageProject(
+            {
+              projects: this.store?.getProjects?.() ?? [],
+              projectHostSetups: this.store?.getProjectHostSetups?.() ?? []
+            },
+            childRepo.id,
+            getRepoExecutionHostId(childRepo)
+          )
+        : undefined
     )
   }
 

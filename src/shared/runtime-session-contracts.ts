@@ -77,6 +77,7 @@ export type RuntimeStatus = {
   liveLeafCount: number
   runtimeProtocolVersion?: number
   minCompatibleRuntimeClientVersion?: number
+  workspaceLineagePolicy?: 'any-project' | 'same-project'
   capabilities?: RuntimeCapability[]
   /** Optional policy for clients that negotiated worktree.create-idempotency.v1. */
   worktreeCreateIdempotency?: {
@@ -124,6 +125,7 @@ export type CliStatusResult = {
     runtimeId: string | null
     appVersion?: string
     remoteUpdateSupport?: RemoteServerUpdateSupport
+    workspaceLineagePolicy?: RuntimeStatus['workspaceLineagePolicy']
     capabilities?: RuntimeCapability[]
     degradations?: RuntimeDegradation[]
   }

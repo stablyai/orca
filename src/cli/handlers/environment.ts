@@ -1,3 +1,4 @@
+import { WORKSPACE_LINEAGE_POLICY_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import type { CommandHandler } from '../dispatch'
 import {
   formatEnvironment,
@@ -37,6 +38,44 @@ import { refuseReservedEnvironmentName } from '../local-environment-selector'
 import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 
 export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
+  'host lineage-policy': async ({ client, flags, json }) => {
+    const policy = flags.get('policy')
+    if (policy !== undefined && policy !== 'any-project' && policy !== 'same-project') {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        'Expected --policy any-project or --policy same-project.'
+      )
+    }
+    let status = await client.call<RuntimeStatus>('status.get')
+    if (
+      !status.result.capabilities?.includes(WORKSPACE_LINEAGE_POLICY_RUNTIME_CAPABILITY) ||
+      (status.result.workspaceLineagePolicy !== 'any-project' &&
+        status.result.workspaceLineagePolicy !== 'same-project')
+    ) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'This host cannot enforce workspace lineage policy. Update Orca on the serving host; nothing was changed.'
+      )
+    }
+    if (policy !== undefined) {
+      await client.call('settings.update', { workspaceLineagePolicy: policy })
+      status = await client.call<RuntimeStatus>('status.get')
+      if (
+        status.result.workspaceLineagePolicy !== policy ||
+        !status.result.capabilities?.includes(WORKSPACE_LINEAGE_POLICY_RUNTIME_CAPABILITY)
+      ) {
+        throw new RuntimeClientError(
+          'runtime_error',
+          'The host did not confirm the requested workspace lineage policy. Read its status before retrying.'
+        )
+      }
+    }
+    printResult(
+      status,
+      json,
+      (result: RuntimeStatus) => `Workspace lineage policy: ${result.workspaceLineagePolicy}`
+    )
+  },
   'host name': async ({ client, flags, json }) => {
     const requestedName = flags.get('name')
     if (requestedName !== undefined && typeof requestedName !== 'string') {

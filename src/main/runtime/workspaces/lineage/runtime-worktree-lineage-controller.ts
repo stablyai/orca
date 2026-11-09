@@ -1,4 +1,9 @@
 import {
+  confirmedWorktreeLineageProject,
+  getWorkspaceLineagePolicy,
+  PROJECT_LINEAGE_CONFLICT_MESSAGE
+} from '../../../../shared/workspace-lineage-policy'
+import {
   isCrossStoreInferredSource,
   type CrossStoreInferredSource,
   type CrossStoreParentRef,
@@ -24,7 +29,7 @@ import type {
 } from '../catalog/workspace-selector-candidates'
 import { readStoreInstallationId } from '../../hosts/platform-probe/host-descriptor'
 import { assertParentInAnotherStore } from './cross-store-parent-store-check'
-import { savedInstanceIdReader } from './saved-lineage-reads'
+import { validateSavedLineageParentCycle } from './saved-lineage-reads'
 import { getCanonicalUserDataPath } from '../../../persistence/loading-store/user-data-path'
 import { RuntimeLineageError, LINEAGE_PARENT_AMBIGUOUS } from './runtime-lineage-error'
 import {
@@ -61,7 +66,8 @@ export class RuntimeWorktreeLineageController {
 
   async resolveCreate(
     input?: WorktreeLineageInput,
-    childHostId?: ExecutionHostId
+    childHostId?: ExecutionHostId,
+    childProjectId?: string
   ): Promise<WorktreeLineageResolution> {
     const resolution = await resolveRuntimeWorktreeCreateLineage(input, {
       resolveParent: (selector) => this.resolveParent(selector),
@@ -84,9 +90,6 @@ export class RuntimeWorktreeLineageController {
         }
       }
     })
-    if (resolution.kind === 'crossStore') {
-      await assertParentInAnotherStore(resolution.parent, () => this.readStoreInstallationId())
-    }
     const retained = enforceCreateLineageHostBoundary(resolution, childHostId)
     if (
       retained.kind === 'lineage' &&
@@ -94,6 +97,51 @@ export class RuntimeWorktreeLineageController {
       input?.cwdParentAmbiguous === true
     ) {
       throw new RuntimeLineageError(LINEAGE_PARENT_AMBIGUOUS, formatAmbiguousCwdParentMessage())
+    }
+    const store = this.deps.getStore()
+    const restricted =
+      childHostId && getWorkspaceLineagePolicy(store?.getSettings?.()) === 'same-project'
+    if (restricted && retained.kind !== 'none') {
+      const parentProjectId =
+        retained.kind === 'lineage' && retained.parent.type === 'worktree'
+          ? confirmedWorktreeLineageProject(
+              {
+                projects: store?.getProjects?.() ?? [],
+                projectHostSetups: store?.getProjectHostSetups?.() ?? []
+              },
+              retained.parent.worktree
+            )
+          : undefined
+      if (!childProjectId || !parentProjectId || childProjectId !== parentProjectId) {
+        const { parent, ...provenance } = retained
+        if (retained.capture.confidence === 'explicit') {
+          throw new RuntimeLineageError(
+            'LINEAGE_PARENT_CONTEXT_CONFLICT',
+            PROJECT_LINEAGE_CONFLICT_MESSAGE
+          )
+        }
+        return {
+          kind: 'none',
+          warnings: [
+            {
+              code: 'LINEAGE_PARENT_CONTEXT_CONFLICT',
+              message: `Workspace created as a root. ${PROJECT_LINEAGE_CONFLICT_MESSAGE}`,
+              details: {
+                ...input?.orchestrationContext,
+                createdByTerminalHandle: input?.callerTerminalHandle,
+                ...provenance,
+                parentWorkspaceKey: parent.workspaceKey,
+                ...(retained.kind === 'crossStore'
+                  ? { parentInstallationId: retained.parent.installationId }
+                  : {})
+              }
+            }
+          ]
+        }
+      }
+    }
+    if (retained.kind === 'crossStore') {
+      await assertParentInAnotherStore(retained.parent, () => this.readStoreInstallationId())
     }
     return retained
   }
@@ -190,43 +238,35 @@ export class RuntimeWorktreeLineageController {
       )
     }
     const store = this.deps.getStore()
-    let readSavedInstanceId: ((id: string) => string | undefined) | undefined
-    // Reparent invalidates the resolved cache; saved metadata must cover intermediate nodes or longer loops escape detection.
-    const instanceIdOf = (id: string): string | undefined => {
-      if (id === child.id || id === parent.id) {
-        return id === child.id ? child.instanceId : parent.instanceId
+    if (getWorkspaceLineagePolicy(store?.getSettings?.()) === 'same-project') {
+      const catalog = {
+        projects: store?.getProjects?.() ?? [],
+        projectHostSetups: store?.getProjectHostSetups?.() ?? []
       }
-      readSavedInstanceId ??= store
-        ? savedInstanceIdReader(store, child.hostId ?? parent.hostId)
-        : () => undefined
-      return readSavedInstanceId(id)
-    }
-    let cursor: string | undefined = parent.id
-    const visited = new Set<string>()
-    while (cursor) {
-      if (cursor === child.id) {
+      const childProject = confirmedWorktreeLineageProject(catalog, child)
+      if (!childProject || childProject !== confirmedWorktreeLineageProject(catalog, parent)) {
         throw new RuntimeLineageError(
-          'LINEAGE_PARENT_CYCLE',
-          'Parent selector would create a lineage cycle.'
+          'LINEAGE_PARENT_CONTEXT_CONFLICT',
+          PROJECT_LINEAGE_CONFLICT_MESSAGE
         )
       }
-      // An unrelated saved loop must not block this parent.
-      if (visited.has(cursor)) {
-        break
+      if (store?.validatePersistedLineageParent && child.hostId) {
+        store.validatePersistedLineageParent(
+          {
+            childWorkspaceKey: worktreeWorkspaceKey(child.id),
+            childInstanceId: child.instanceId,
+            parentWorkspaceKey: worktreeWorkspaceKey(parent.id),
+            parentInstanceId: parent.instanceId,
+            origin: 'manual',
+            capture: { source: 'manual-action', confidence: 'explicit' },
+            createdAt: Date.now()
+          },
+          child.hostId
+        )
+        return
       }
-      visited.add(cursor)
-      const lineage = store?.getWorktreeLineage?.(cursor)
-      if (!lineage) {
-        break
-      }
-      if (
-        instanceIdOf(cursor) !== lineage.worktreeInstanceId ||
-        instanceIdOf(lineage.parentWorktreeId) !== lineage.parentWorktreeInstanceId
-      ) {
-        break
-      }
-      cursor = lineage.parentWorktreeId
     }
+    validateSavedLineageParentCycle(store, child, parent)
   }
 
   async resolveTaskCandidate(taskId: string): Promise<WorktreeLineageCandidate | null> {

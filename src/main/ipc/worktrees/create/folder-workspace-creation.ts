@@ -25,6 +25,7 @@ export function createFolderWorkspace(
   )
   const meta = store.setWorktreeMeta(hostWorktreeTargetForRepo(worktreeId, repo), {
     instanceId,
+    ...(args.comment !== undefined ? { comment: args.comment } : {}),
     ...(store.getProjectHostSetups
       ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
       : {}),

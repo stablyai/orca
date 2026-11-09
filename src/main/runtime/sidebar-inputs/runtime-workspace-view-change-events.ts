@@ -7,6 +7,7 @@ import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 /** The settings a phone's workspace list mirrors: Card layout, card style and pinned placement. */
 const WORKSPACE_VIEW_SETTINGS: readonly (keyof GlobalSettings)[] = [
+  'workspaceLineagePolicy',
   'compactWorktreeCards',
   'experimentalNewWorktreeCardStyle',
   'showPinnedWorktreesInGroups'

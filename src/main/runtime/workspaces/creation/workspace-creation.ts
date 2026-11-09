@@ -1,5 +1,7 @@
+import { appendLineageDiagnosticComment } from '../../../../shared/workspace-lineage-policy'
 import { assertOpenCodeModelLaunchPreferencesAbsent } from '../../../opencode/opencode-model-startup-plan'
 import {
+  rootOnlyFolderLineage,
   formatAmbiguousCwdParentMessage,
   type WorktreeLineageInput,
   type WorktreeLineageResolution
@@ -114,9 +116,30 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
     )
     // Match IPC routing: executionHostId-only SSH repos must not create locally.
     const createRoute = resolveWorktreeCreateRoute(repo)
+    const lineageInput =
+      args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
+    const lineageResolution =
+      isFolderRepo(repo) && store.getSettings().workspaceLineagePolicy !== 'same-project'
+        ? { kind: 'none' as const, warnings: [] }
+        : await this.resolveLineageForWorktreeCreate(lineageInput, repo).catch((error: unknown) => {
+            if (error instanceof RuntimeLineageError && error.code === LINEAGE_PARENT_AMBIGUOUS) {
+              throw new RuntimeLineageError(
+                error.code,
+                formatAmbiguousCwdParentMessage(args.startupAgent ?? args.createdWithAgent)
+              )
+            }
+            throw error
+          })
+    const retainedLineage =
+      isFolderRepo(repo) && store.getSettings().workspaceLineagePolicy === 'same-project'
+        ? rootOnlyFolderLineage(lineageResolution)
+        : lineageResolution
+    if (store.getSettings().workspaceLineagePolicy === 'same-project') {
+      args = { ...args, comment: appendLineageDiagnosticComment(args.comment, retainedLineage) }
+    }
     if (isFolderRepo(repo)) {
       // A folder workspace is a registration, not a filesystem create, so it is host-agnostic.
-      return createRuntimeFolderWorktree({
+      const folderResult = await createRuntimeFolderWorktree({
         request: args,
         repo,
         startup: effectiveStartup,
@@ -141,20 +164,11 @@ export abstract class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWi
           activate: activationCallbacks.folder
         }
       })
-    }
-    const lineageInput =
-      args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
-    const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput, repo).catch(
-      (error: unknown) => {
-        if (error instanceof RuntimeLineageError && error.code === LINEAGE_PARENT_AMBIGUOUS) {
-          throw new RuntimeLineageError(
-            error.code,
-            formatAmbiguousCwdParentMessage(args.startupAgent ?? args.createdWithAgent)
-          )
-        }
-        throw error
+      if (retainedLineage.kind === 'none' && retainedLineage.warnings.length) {
+        folderResult.warnings = retainedLineage.warnings
       }
-    )
+      return folderResult
+    }
     if (createRoute.kind === 'runtime') {
       throw new ExecutionHostNotDispatchableError(createRoute.hostId)
     }

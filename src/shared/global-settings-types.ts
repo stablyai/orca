@@ -55,6 +55,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults
   /** Per-host value is host override ?? client default, keyed by ExecutionHostId. */
   hostSettingOverrides?: Partial<Record<ExecutionHostId, HostSettingOverrides>>
+  workspaceLineagePolicy?: 'any-project' | 'same-project'
   nestWorkspaces: boolean
   workspaceDirHistory?: OrcaWorkspaceLayout[]
   refreshLocalBaseRefOnWorktreeCreate: boolean

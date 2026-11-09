@@ -1,3 +1,8 @@
+import {
+  getWorkspaceLineagePolicy,
+  PROJECT_LINEAGE_CONFLICT_MESSAGE,
+  WorkspaceLineagePolicyError
+} from '../../../shared/workspace-lineage-policy'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceKey } from '../../../shared/workspace-scope'
 import type { CrossStoreWorkspaceLineage } from '../../../shared/worktree/lineage-types'
@@ -30,6 +35,13 @@ export class CrossStoreLineagePersistence {
   getCrossStoreWorkspaceLineage(
     childWorkspaceKey: WorkspaceKey
   ): CrossStoreWorkspaceLineage | undefined {
+    if (
+      getWorkspaceLineagePolicy(
+        this[crossStoreLineagePersistenceContext].runtime.state.settings
+      ) === 'same-project'
+    ) {
+      return undefined
+    }
     const saved =
       this[crossStoreLineagePersistenceContext].runtime.state.crossStoreLineageByChildKey
     const entry =
@@ -40,6 +52,13 @@ export class CrossStoreLineagePersistence {
   }
 
   getAllCrossStoreWorkspaceLineage(): Record<WorkspaceKey, CrossStoreWorkspaceLineage> {
+    if (
+      getWorkspaceLineagePolicy(
+        this[crossStoreLineagePersistenceContext].runtime.state.settings
+      ) === 'same-project'
+    ) {
+      return {}
+    }
     return validCrossStoreLineage(
       this[crossStoreLineagePersistenceContext].runtime.state.crossStoreLineageByChildKey
     )
@@ -51,6 +70,15 @@ export class CrossStoreLineagePersistence {
     childHostId: ExecutionHostId
   ): CrossStoreWorkspaceLineage | undefined {
     const { state } = this[crossStoreLineagePersistenceContext].runtime
+    if (getWorkspaceLineagePolicy(state.settings) === 'same-project') {
+      if (lineage.capture.confidence === 'inferred') {
+        return undefined
+      }
+      throw new WorkspaceLineagePolicyError(
+        'LINEAGE_PARENT_CONTEXT_CONFLICT',
+        PROJECT_LINEAGE_CONFLICT_MESSAGE
+      )
+    }
     if (!ownsChildBucket(state, lineage.childWorkspaceKey, childHostId)) {
       return undefined
     }
