@@ -15,7 +15,6 @@ function model(
   return {
     id: label,
     label,
-    description: '',
     type,
     provider: 'local',
     language: 'multilingual',

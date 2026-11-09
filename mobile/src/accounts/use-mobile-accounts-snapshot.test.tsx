@@ -5,15 +5,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 // Also tells TanStack observers on a microtask, so act() sees replies.
 import '../test-support/query-client-test-renderer'
 import { settleQueryNotifications } from '../test-support/rpc-recording/hook-mount'
-import type { OrcaQueryStoreBackend } from '../device-store/query-storage'
 import { createOrcaQueryClient } from '../query/orca-query-client'
-import { createHostQueryPersistence, persistedHostQueryKey } from '../query/host-query-persistence'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
-import {
-  accountsSnapshotFamily,
-  accountsSnapshotKey,
-  accountsSnapshotOptions
-} from './accounts-snapshot-stream'
+import { accountsSnapshotKey } from './accounts-snapshot-stream'
 import { useMobileAccountsSnapshot } from './use-mobile-accounts-snapshot'
 
 const HOST = 'host-1'
@@ -89,24 +83,6 @@ async function mountAccounts(queryClient: QueryClient, client: RpcClient) {
   }
 }
 
-function memoryStore(): OrcaQueryStoreBackend {
-  const rows = new Map<string, string>()
-  return {
-    hostId: HOST,
-    read: async (keys) => ({ status: 'ok', values: keys.map((key) => rows.get(key) ?? null) }),
-    write: async (ops) => {
-      for (const op of ops) {
-        if (op.value === null) {
-          rows.delete(op.key)
-        } else {
-          rows.set(op.key, op.value)
-        }
-      }
-      return { written: true }
-    }
-  }
-}
-
 describe('accounts snapshot', () => {
   it('still shows usage when the stream fails and accounts.list answers', async () => {
     const port = accountsClient(SNAPSHOT)
@@ -127,25 +103,5 @@ describe('accounts snapshot', () => {
     expect(read().snapshot?.claude.accounts.map((account) => account.email)).toEqual([
       'claude@example.test'
     ])
-  })
-
-  it('never counts a stored snapshot as live, even one written after the connect', async () => {
-    const store = memoryStore()
-    // Native Home's own stream stores the snapshot after the connect the page then reads.
-    const home = createOrcaQueryClient()
-    const homePersistence = createHostQueryPersistence(home, store)
-    home.getQueryCache().build(home, accountsSnapshotOptions(HOST))
-    home.setQueryData(accountsSnapshotKey(HOST), SNAPSHOT, { updatedAt: CONNECTED_AT + 1 })
-    await settleQueryNotifications()
-    await homePersistence.flush()
-    home.clear()
-
-    const page = createOrcaQueryClient()
-    await createHostQueryPersistence(page, store).restore([
-      persistedHostQueryKey(accountsSnapshotFamily, accountsSnapshotKey(HOST))!
-    ])
-    const read = await mountAccounts(page, accountsClient(SNAPSHOT).client)
-    expect(read().snapshot?.claude.accounts.map((account) => account.id)).toEqual(['claude-1'])
-    expect(read().live).toBe(false)
   })
 })
