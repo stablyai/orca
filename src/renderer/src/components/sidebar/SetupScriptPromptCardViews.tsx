@@ -171,7 +171,7 @@ export function SetupScriptPromptBody({
       />
     )
   }
-  const sourceElement = <code className="break-all font-mono text-foreground" />
+  const sourceElement = <span className="break-words text-foreground" />
   if (isPackageManagerSuggestion) {
     return candidateSource ? (
       <Trans
