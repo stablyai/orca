@@ -19,11 +19,14 @@ const PRIMARY_ARG_KEYS = [
   'directory',
   'command',
   'cmd',
+  'CommandLine',
   'url',
+  'Role',
+  'toolSummary',
   'description'
 ] as const
-const BRIEF_ARG_KEYS = ['query', 'pattern', 'directory', 'command', 'cmd'] as const
-const COMMAND_ARG_KEYS = ['command', 'cmd'] as const
+const BRIEF_ARG_KEYS = ['query', 'pattern', 'directory', 'command', 'cmd', 'CommandLine'] as const
+const COMMAND_ARG_KEYS = ['command', 'cmd', 'CommandLine'] as const
 export const MAX_TOOL_DETAIL_LENGTH = 4000
 
 export type ToolInputDisplay = {
@@ -125,7 +128,7 @@ function normalizedToolFilePath(input: unknown): string | null {
   }
   const value = input as Record<string, unknown>
   // Search path is usually a scan root. Suppress file links, accepting lost file-scoped links over dead folder links on most searches.
-  const directory = isSearchToolInput(value) ? undefined : value.path
+  const directory = isSearchToolInput(value) ? undefined : (value.path ?? value.Path)
   const path =
     value.file_path ??
     value.filePath ??
@@ -272,13 +275,7 @@ export function summarizeToolRun(blocks: readonly NativeChatBlock[]): string {
 }
 
 export function countToolCalls(blocks: readonly NativeChatBlock[]): number {
-  let count = 0
-  blocks.forEach((block) => {
-    if (isToolCallBlock(block)) {
-      count += 1
-    }
-  })
-  return count
+  return blocks.filter(isToolCallBlock).length
 }
 
 export function formatToolInputPreview(input: unknown): string {

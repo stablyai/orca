@@ -1,3 +1,4 @@
+import { decodeAntigravityTranscriptLine } from '../../transcript-decoding/transcript-line-decoders-antigravity'
 import { decodeClaudeTranscriptLine } from '../../transcript-decoding/transcript-line-decoders-claude'
 import { decodeCodexTranscriptLine } from '../../transcript-decoding/transcript-line-decoders-codex'
 import { decodeGrokTranscriptLine } from '../../transcript-decoding/transcript-line-decoders-grok'
@@ -34,6 +35,7 @@ export async function readLegacyImportTranscript(
 }
 
 export const TRANSCRIPT_DECODERS = {
+  antigravity: decodeAntigravityTranscriptLine,
   claude: decodeClaudeTranscriptLine,
   codex: (line: string, fallbackId: string) =>
     decodeCodexTranscriptLine(line, fallbackId, { historyImport: true }),

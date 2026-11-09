@@ -1,5 +1,10 @@
 import { agentChoiceCliApply } from '../../../agent-launch/choices/agent-choice-cli-apply'
-import type { AgentSessionOptionCatalog, CatalogOption } from './agent-session-option-catalog-types'
+import { parseAntigravityModels } from '../../../source-control/ai/generation/commit-message-model-parsers'
+import type {
+  AgentSessionOptionCatalog,
+  CatalogModel,
+  CatalogOption
+} from './agent-session-option-catalog-types'
 
 /** agy lists each level of a model family as "<family>-<level>", e.g. gemini-3.8-flash-low. */
 export const ANTIGRAVITY_EFFORT_LEVELS = [
@@ -31,7 +36,9 @@ const ANTIGRAVITY_EFFORT: CatalogOption = {
     choices: [
       { value: 'low', label: 'Low' },
       { value: 'medium', label: 'Medium' },
-      { value: 'high', label: 'High' }
+      { value: 'high', label: 'High' },
+      { value: 'xhigh', label: 'Extra high' },
+      { value: 'max', label: 'Max' }
     ],
     defaultValue: 'high'
   },
@@ -51,6 +58,13 @@ const ANTIGRAVITY_EFFORT: CatalogOption = {
   }
 }
 
+function parseAntigravityCatalogModels(stdout: string): CatalogModel[] {
+  return parseAntigravityModels(stdout).map((model) => ({
+    ...model,
+    options: [ANTIGRAVITY_EFFORT]
+  }))
+}
+
 export const ANTIGRAVITY_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences: true,
   // Model availability is account-scoped; worker-start accepts the slug reported by `agy models`.
@@ -67,8 +81,14 @@ export const ANTIGRAVITY_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       ],
       '--model'
     ),
-    midSession: { kind: 'agent-picker', command: '/model' }
+    midSession: {
+      kind: 'command',
+      build: (value) => `/model ${String(value)}`,
+      pickerCommand: '/model'
+    }
   },
+  discoveredModelsAreAuthoritative: true,
   unknownModelOptions: [ANTIGRAVITY_EFFORT],
-  composeModelValue: (modelId, values) => composeAntigravityLaunchModel(modelId, values.effort)
+  composeModelValue: (modelId, values) => composeAntigravityLaunchModel(modelId, values.effort),
+  listModels: { command: 'agy models', parse: parseAntigravityCatalogModels }
 }

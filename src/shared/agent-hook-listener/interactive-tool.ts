@@ -22,7 +22,17 @@ export function stripHookEnvelopeKeys(record: Record<string, unknown>): Record<s
 export function summarizeApprovalInput(toolInput: unknown): string {
   if (toolInput && typeof toolInput === 'object') {
     const obj = toolInput as Record<string, unknown>
-    const direct = obj.command ?? obj.file_path ?? obj.path ?? obj.url ?? obj.pattern
+    const direct =
+      obj.command ??
+      obj.CommandLine ??
+      obj.file_path ??
+      obj.Path ??
+      obj.path ??
+      obj.Target ??
+      obj.Action ??
+      obj.Reason ??
+      obj.url ??
+      obj.pattern
     if (typeof direct === 'string' && direct.length > 0) {
       return direct.length > 200 ? `${direct.slice(0, 200)}…` : direct
     }
@@ -58,7 +68,12 @@ export function deriveInteractivePrompt(
       return undefined
     }
   }
-  if (eventName === 'PermissionRequest' && typeof toolName === 'string' && toolName.length > 0) {
+  if (
+    (eventName === 'PermissionRequest' ||
+      (normalizedEventName === 'pre_tool_use' && toolName === 'ask_permission')) &&
+    typeof toolName === 'string' &&
+    toolName.length > 0
+  ) {
     try {
       return JSON.stringify({
         approval: { tool: toolName, summary: summarizeApprovalInput(toolInput) }

@@ -42,14 +42,24 @@ export function catalogModelsFromModelDiscovery(
     ...(model.isDefault ? { isDefault: true as const } : {}),
     ...(model.contextWindowTokens ? { contextWindowTokens: model.contextWindowTokens } : {}),
     ...(model.resolvedModel ? { resolvedModel: model.resolvedModel } : {}),
-    options:
-      agent === 'claude'
-        ? createClaudeCatalogOptions({
-            effortLevelIds: model.thinkingLevels?.map(({ id }) => id) ?? [],
-            supportsFastMode: model.supportsFastMode
-          })
-        : []
+    options: discoveredModelOptions(agent, model)
   }))
+}
+
+function discoveredModelOptions(
+  agent: AgentType,
+  model: CommitMessageModelCapability
+): CatalogModel['options'] {
+  if (agent === 'claude') {
+    return createClaudeCatalogOptions({
+      effortLevelIds: model.thinkingLevels?.map(({ id }) => id) ?? [],
+      supportsFastMode: model.supportsFastMode
+    })
+  }
+  if (agent === 'antigravity') {
+    return [...(getAgentSessionOptionCatalog('antigravity')?.unknownModelOptions ?? [])]
+  }
+  return []
 }
 
 /** Discovered models as the picker lists them: Claude's own, or merged with the seed so its option menus stay. */

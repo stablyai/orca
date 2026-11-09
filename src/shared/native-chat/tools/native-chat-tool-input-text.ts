@@ -1,7 +1,7 @@
 import { unwrapLoginShellCommand } from './native-chat-tool-preview-prefix'
 import { normalizeToolInput } from './native-chat-tool-summary'
 
-type NativeChatTextInputKey = 'command' | 'cmd' | 'description' | 'url'
+type NativeChatTextInputKey = 'command' | 'cmd' | 'CommandLine' | 'description' | 'Role' | 'url'
 type NativeChatTextInput = Partial<Record<NativeChatTextInputKey, unknown>>
 
 function isNativeChatTextInput(value: unknown): value is NativeChatTextInput {
@@ -36,7 +36,10 @@ export function nativeChatToolInputText(
 }
 
 export function nativeChatFullCommand(input: unknown): string | null {
-  const command = nativeChatToolInputText(input, 'command') || nativeChatToolInputText(input, 'cmd')
+  const command =
+    nativeChatToolInputText(input, 'command') ||
+    nativeChatToolInputText(input, 'cmd') ||
+    nativeChatToolInputText(input, 'CommandLine')
   return command?.trim() ? unwrapLoginShellCommand(command).trim() : null
 }
 
@@ -50,9 +53,10 @@ export function nativeChatPlainCommandInput(input: unknown): string | null {
     return null
   }
   const keys = Object.keys(normalized)
-  if (keys.length !== 1 || (keys[0] !== 'command' && keys[0] !== 'cmd')) {
+  const key = keys[0]
+  if (keys.length !== 1 || (key !== 'command' && key !== 'cmd' && key !== 'CommandLine')) {
     return null
   }
-  const command = keys[0] === 'command' ? normalized.command : normalized.cmd
+  const command = normalized[key]
   return typeof command === 'string' ? command : null
 }

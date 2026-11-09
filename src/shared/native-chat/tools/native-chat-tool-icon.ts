@@ -59,6 +59,7 @@ export const NATIVE_CHAT_TOOL_ICON_NAMES: Record<NativeChatToolCategory, NativeC
 const CATEGORY_BY_ROW_WORD = new Map<string, NativeChatToolCategory>([
   // Codex's classified shell rows.
   ['read', 'read'],
+  ['read_file', 'read'],
   ['search', 'search'],
   ['list', 'listFiles'],
   // Rollout shell names classify glyphs here; the activity set separately controls live-row wording.
@@ -75,12 +76,14 @@ const CATEGORY_BY_ROW_WORD = new Map<string, NativeChatToolCategory>([
   ['agent', 'subAgentActivity'],
   // OpenCode 2.x's name for its task tool.
   ['subagent', 'subAgentActivity'],
+  ['invoke_subagent', 'subAgentActivity'],
   ['webfetch', 'webSearch'],
   ['todowrite', 'todoList'],
   ['update_plan', 'todoList'],
   ['web search', 'webSearch'],
   ['websearch', 'webSearch'],
-  ['web_search', 'webSearch']
+  ['web_search', 'webSearch'],
+  ['search_web', 'webSearch']
 ])
 
 /** Use edit-only names: isEditToolName also admits command inputs that quote patches, which remain shell activity. */

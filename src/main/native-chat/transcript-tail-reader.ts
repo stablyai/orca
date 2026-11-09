@@ -7,10 +7,15 @@ import type {
 } from '../../shared/native-chat/native-chat-types'
 import { resolveNativeChatTranscriptAgent } from '../../shared/native-chat/native-chat-agent-support'
 import { resolveSessionFilePath, type ResolveSessionFileOptions } from './session-file-resolver'
+import { decodeAntigravityTranscriptLine } from './transcript-decoding/transcript-line-decoders-antigravity'
 import { decodeClaudeChatTranscriptLine } from './transcript-decoding/transcript-line-decoders-claude'
 import { decodeCodexTranscriptLine } from './transcript-decoding/transcript-line-decoders-codex'
 import { decodeGrokTranscriptLine } from './transcript-decoding/transcript-line-decoders-grok'
 import { decodeOmpTranscriptLine } from './transcript-decoding/transcript-line-decoders-omp'
+import {
+  decodedTranscriptMessages,
+  type TranscriptDecoderResult
+} from './transcript-streaming/transcript-stream-lines'
 import { transcriptFallbackId } from './transcript-streaming/transcript-fallback-id'
 import { inTranscriptFileOrder } from './transcript-streaming/transcript-file-order'
 import { extendTranscriptBoundary } from './transcript-watching/transcript-file-version'
@@ -30,23 +35,21 @@ import { wslTranscriptFsRefusal } from './transcript-filesystem/wsl-transcript-f
 
 export const MAX_NATIVE_CHAT_TRANSCRIPT_RECORD_BYTES = 2 * 1024 * 1024
 
-export type NativeChatLineDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
+export type NativeChatLineDecoder = (line: string, fallbackId: string) => TranscriptDecoderResult
+
+const LINE_DECODERS: Partial<
+  Record<ReturnType<typeof resolveNativeChatTranscriptAgent> & string, NativeChatLineDecoder>
+> = {
+  antigravity: decodeAntigravityTranscriptLine,
+  claude: decodeClaudeChatTranscriptLine,
+  codex: decodeCodexTranscriptLine,
+  grok: decodeGrokTranscriptLine,
+  omp: decodeOmpTranscriptLine
+}
 
 export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineDecoder | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  if (transcriptAgent === 'claude') {
-    return decodeClaudeChatTranscriptLine
-  }
-  if (transcriptAgent === 'codex') {
-    return decodeCodexTranscriptLine
-  }
-  if (transcriptAgent === 'grok') {
-    return decodeGrokTranscriptLine
-  }
-  if (transcriptAgent === 'omp') {
-    return decodeOmpTranscriptLine
-  }
-  return null
+  return transcriptAgent ? (LINE_DECODERS[transcriptAgent] ?? null) : null
 }
 
 export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecycle>(
@@ -167,7 +170,14 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
       return { message: ordered.message, offset: entry.offset }
     })
     // slice(-0) returns everything; non-positive limits must explicitly select nothing.
-    const selected = limit > 0 ? chronological.slice(Math.max(0, chronological.length - limit)) : []
+    let selectStart = limit > 0 ? Math.max(0, chronological.length - limit) : chronological.length
+    while (
+      selectStart > 0 &&
+      chronological[selectStart - 1]?.offset === chronological[selectStart]?.offset
+    ) {
+      selectStart -= 1
+    }
+    const selected = limit > 0 ? chronological.slice(selectStart) : []
     return {
       messages: selected.map((entry) => entry.message),
       ...(onDecodedLine ? { messageOffsets: selected.map((entry) => entry.offset) } : {}),
@@ -230,10 +240,15 @@ export async function readNativeChatTranscriptTailFile<L = NativeChatTurnLifecyc
     const fallbackId = transcriptFallbackId(filePath, lineOffset)
     // Use provider lifecycle records from the same window; visible assistant text cannot prove completion.
     lifecycle ??= decodeLifecycle?.(line, fallbackId) ?? undefined
-    const message = decode(line, fallbackId)
-    onDecodedLine?.(line, fallbackId, lineOffset, message)
-    if (message) {
-      messages.push({ message, offset: lineOffset })
+    const batch = decodedTranscriptMessages(decode(line, fallbackId))
+    if (batch.length === 0) {
+      onDecodedLine?.(line, fallbackId, lineOffset, null)
+    } else {
+      for (let index = batch.length - 1; index >= 0; index -= 1) {
+        const message = batch[index]!
+        onDecodedLine?.(line, fallbackId, lineOffset, message)
+        messages.push({ message, offset: lineOffset })
+      }
     }
   }
 }
@@ -266,7 +281,6 @@ export async function readNativeChatTranscriptTail(
     )
   }
   const decode = nativeChatLineDecoderForAgent(args.agent)
-  const decodeLifecycle = nativeChatTurnLifecycleDecoderForAgent(args.agent)
   if (!decode) {
     return { error: 'Transcript unavailable' }
   }
@@ -291,7 +305,7 @@ export async function readNativeChatTranscriptTail(
       decode,
       true,
       args.beforeOffset,
-      decodeLifecycle,
+      nativeChatTurnLifecycleDecoderForAgent(args.agent),
       signal,
       undefined,
       args.sourceOrder

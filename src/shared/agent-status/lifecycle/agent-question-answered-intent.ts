@@ -19,7 +19,11 @@ export type AgentQuestionAnsweredInferenceRequest = {
  *  clients render as a live card. */
 export function isAskUserQuestionTool(toolName: string | undefined): boolean {
   const normalized = toolName?.replaceAll(/[^a-z0-9]/gi, '').toLowerCase()
-  return normalized === 'askuserquestion' || normalized === 'requestuserinput'
+  return (
+    normalized === 'askuserquestion' ||
+    normalized === 'requestuserinput' ||
+    normalized === 'askquestion'
+  )
 }
 
 const QUESTION_ANSWER_ENTER_INPUTS: ReadonlySet<string> = new Set([
@@ -44,8 +48,15 @@ function readSingleSelectOptionCount(interactivePrompt: string | undefined): num
     if (!Array.isArray(parsed.questions) || parsed.questions.length !== 1) {
       return -1
     }
-    const [question] = parsed.questions as { multiSelect?: unknown; options?: unknown }[]
-    if (!question || question.multiSelect === true || !Array.isArray(question.options)) {
+    const [question]: unknown[] = parsed.questions
+    if (
+      !question ||
+      typeof question !== 'object' ||
+      ('multiSelect' in question && question.multiSelect === true) ||
+      ('is_multi_select' in question && question.is_multi_select === true) ||
+      !('options' in question) ||
+      !Array.isArray(question.options)
+    ) {
       return -1
     }
     // Why: Claude's preview selector only moves focus on a digit; Enter commits.
