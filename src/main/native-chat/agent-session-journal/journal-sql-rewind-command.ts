@@ -15,12 +15,9 @@ import {
   readJournalDomainContextHead,
   journalDomainPublicCursor
 } from './journal-domain-context-replacement'
-import {
-  removeJournalDomainItem,
-  queuedJournalDomainSubmission,
-  journalDomainEventItem
-} from './journal-domain-item-removal'
-import { retainedFailures, restoreRetainedFailures } from './journal-domain-retained-failures'
+import { journalDomainEventItem } from './journal-domain-item-removal'
+import { restoreRetainedFailures } from './journal-domain-retained-failures'
+import { removeJournalDomainRewindSuffix } from './journal-domain-rewind-removal'
 import { invalidateJournalDomainQueue } from './journal-domain-queue-revision'
 import { queueClearRestatement, writeJournalDomainQueueClear } from './journal-domain-queue-clear'
 import { appendJournalSqlEvent } from './journal-sql-event-tail'
@@ -111,37 +108,21 @@ export function applyJournalSqlRewindCommand(
       throw new Error('agent_session_rewind:stale-context')
     }
     const floor = local ? plan.cut.floor : 0
-    if (childBoundary?.kind === 'item') {
-      const anchorId = childBoundary.itemId
-      const anchor = plan.rows.findIndex((row) => row.itemId === anchorId)
-      const survivor =
-        anchor === -1
-          ? undefined
-          : plan.rows
-              .slice(0, anchor + 1)
-              .findLast((row) => (local && row.sequence <= floor) || plan.kept.has(row.itemId))
-      childBoundary = survivor ? { kind: 'item', itemId: survivor.itemId } : { kind: 'start' }
-    }
     const restatement = head.cleared ? queueClearRestatement(db, target) : null
-    const failures = retainedFailures(db, target, [...plan.kept], head.failureBoundary)
     let sequence = head.lastSequence + 1
     invalidateJournalDomainQueue(db, target, sequence)
-    const removed = db
-      .prepare(`SELECT item_id FROM journal_items WHERE session_id=? AND epoch=? AND sequence>?
-      ORDER BY sequence,sequence_index,ordinal`)
-      .all(...prefix, floor)
-    for (const row of removed) {
-      const itemId = String(row.item_id)
-      if (plan.kept.has(itemId) || queuedJournalDomainSubmission(db, target, itemId)) {
-        continue
-      }
-      const removal = removeJournalDomainItem(db, target, itemId, sequence, undefined, false)
-      commit.removedItemIds.push(removal.itemId)
-      commit.items.push(...removal.items)
-      if (removal.removed?.body.kind === 'turn') {
-        commit.removedTurnIds.push(removal.removed.body.turnId)
-      }
-    }
+    const removed = removeJournalDomainRewindSuffix(
+      new JournalSqlScope(db, target.sessionId, target.epoch),
+      plan.membership,
+      floor,
+      sequence,
+      head.failureBoundary,
+      childBoundary
+    )
+    childBoundary = removed.childBoundary
+    commit.removedItemIds = removed.removedItemIds
+    commit.removedTurnIds = removed.removedTurnIds
+    commit.items = removed.items
     if (!local) {
       const providerHandle = agentSessionJournalProviderHandle({
         agent: record.provider,
@@ -189,7 +170,7 @@ export function applyJournalSqlRewindCommand(
       fence,
       observedAt: savedAt
     })
-    restoreRetainedFailures(db, target, failures)
+    restoreRetainedFailures(db, target, removed.failures)
     if (restatement) {
       sequence++
       commit.clear = writeJournalDomainQueueClear(db, target, sequence, restatement)

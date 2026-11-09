@@ -1,3 +1,4 @@
+import { JOURNAL_DOMAIN_SCHEMA_001_OUTLINE } from './journal-domain-schema-001-outline'
 import { JOURNAL_DOMAIN_SCHEMA_001_INDEXES } from './journal-domain-schema-001-indexes'
 
 export const JOURNAL_DOMAIN_SCHEMA_001 = `
@@ -120,6 +121,9 @@ CREATE TABLE journal_items (
   kind TEXT,
   message_role TEXT,
   turn_id TEXT,
+  provider_turn_id TEXT,
+  codex_thread_id TEXT,
+  codex_turn_id TEXT,
   opener_item_id TEXT,
   context_clear INTEGER NOT NULL DEFAULT 0,
   goal_transition INTEGER NOT NULL DEFAULT 0,
@@ -202,6 +206,12 @@ CREATE TABLE journal_submission_attempts (
   covers_stopped_history INTEGER NOT NULL DEFAULT 0,
   fingerprint TEXT NOT NULL,
   dispatch_state TEXT NOT NULL,
+  provider_item_id TEXT GENERATED ALWAYS AS (
+    CASE WHEN json_valid(payload_json) THEN json_extract(payload_json,'$.providerItemId') END
+  ) VIRTUAL,
+  codex_thread_id TEXT,
+  codex_turn_id TEXT,
+  queued INTEGER NOT NULL DEFAULT 0,
   dispatch_fence INTEGER NOT NULL DEFAULT 0,
   signed_out INTEGER NOT NULL DEFAULT 0 CHECK(signed_out IN (0,1)),
   recovered INTEGER NOT NULL DEFAULT 0 CHECK(recovered IN (0,1)),
@@ -270,36 +280,6 @@ CREATE TABLE journal_maintenance (
   id INTEGER PRIMARY KEY CHECK(id=1),
   compacted_at INTEGER NOT NULL
 );
-CREATE TABLE journal_outline_members (
-  session_id TEXT NOT NULL,
-  epoch TEXT NOT NULL,
-  item_id TEXT NOT NULL,
-  source_revision INTEGER NOT NULL,
-  sequence INTEGER NOT NULL,
-  sequence_index INTEGER NOT NULL,
-  ordinal INTEGER NOT NULL,
-  structure_json TEXT NOT NULL,
-  turn_key TEXT,
-  reply TEXT,
-  entry_json TEXT,
-  short_json TEXT,
-  empty_json TEXT,
-  entry_bytes INTEGER NOT NULL,
-  short_bytes INTEGER NOT NULL,
-  empty_bytes INTEGER NOT NULL,
-  PRIMARY KEY(session_id,epoch,item_id)
-) WITHOUT ROWID;
-CREATE INDEX journal_outline_entries ON journal_outline_members(session_id,epoch,sequence,sequence_index,ordinal)
-  WHERE entry_json IS NOT NULL;
-CREATE INDEX journal_outline_reply_candidates ON journal_outline_members(session_id,epoch,turn_key,sequence DESC,sequence_index DESC,ordinal DESC)
-  WHERE reply IS NOT NULL;
-CREATE TABLE journal_outline_replies (
-  session_id TEXT NOT NULL,
-  epoch TEXT NOT NULL,
-  turn_key TEXT NOT NULL,
-  reply TEXT NOT NULL,
-  reply_bytes INTEGER NOT NULL,
-  PRIMARY KEY(session_id,epoch,turn_key)
-) WITHOUT ROWID;
+${JOURNAL_DOMAIN_SCHEMA_001_OUTLINE}
 ${JOURNAL_DOMAIN_SCHEMA_001_INDEXES}
 `

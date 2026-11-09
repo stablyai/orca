@@ -1,5 +1,7 @@
 import type { AgentJournalSubmission } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import { journalDomainOutlineSubmission } from './journal-domain-outline-source'
+import { parseAgentJournalItemKey } from '../../../shared/agent-session/journal/agent-session-journal-item-key'
+import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session/requests/agent-session-queued-submission'
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session/failures/agent-session-failure'
 import { classifyDispatchRejection } from '../../../shared/agent-session/requests/structured-agent-session-dispatch-rejection'
 import {
@@ -20,7 +22,10 @@ export const JOURNAL_DOMAIN_SUBMISSION_COLUMNS = [
   'steer_turn_item_id',
   'stopped_history',
   'covers_stopped_history',
-  'outline_json'
+  'outline_json',
+  'codex_thread_id',
+  'codex_turn_id',
+  'queued'
 ] as const
 
 /** All current-attempt selectors describe the same saved dispatch and its source coverage. */
@@ -28,6 +33,9 @@ export function journalDomainSubmissionColumns(
   submission: AgentJournalSubmission,
   carries: readonly string[]
 ) {
+  const identity = submission.providerItemId
+    ? parseAgentJournalItemKey(submission.providerItemId)
+    : null
   return [
     submission.submittedAt,
     submission.acceptedSequence ?? null,
@@ -47,6 +55,9 @@ export function journalDomainSubmissionColumns(
     submission.answeredInTurn?.via === 'steer' ? submission.answeredInTurn.turnItemId : null,
     Number(stoppedHistoryCandidate(submission)),
     Number(carries.length > 0 && !refusedBeforeWrite(submission)),
-    journalDomainOutlineSubmission(submission)
+    journalDomainOutlineSubmission(submission),
+    identity?.provider === 'codex' ? identity.threadId : null,
+    identity?.provider === 'codex' ? identity.turnId : null,
+    Number(isQueuedAgentJournalSubmission(submission))
   ]
 }

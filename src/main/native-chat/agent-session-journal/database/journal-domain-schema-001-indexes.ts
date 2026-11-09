@@ -65,6 +65,12 @@ CREATE INDEX journal_items_user_message ON journal_items(session_id, epoch, ordi
   WHERE hidden=0 AND kind='message' AND message_role='user';
 CREATE INDEX journal_items_named_turn ON journal_items(session_id, epoch, turn_id, sequence, sequence_index, ordinal)
   WHERE hidden=0 AND turn_id IS NOT NULL;
+CREATE INDEX journal_items_provider_turn ON journal_items(session_id,epoch,provider_turn_id,sequence,sequence_index,ordinal)
+  WHERE provider_turn_id IS NOT NULL;
+CREATE INDEX journal_items_codex_turn ON journal_items(session_id,epoch,codex_thread_id,codex_turn_id,sequence,sequence_index,ordinal)
+  WHERE hidden=0 AND codex_turn_id IS NOT NULL;
+CREATE INDEX journal_submission_codex_turn ON journal_submission_attempts(session_id,epoch,codex_thread_id,codex_turn_id,item_id)
+  WHERE current=1 AND dispatch_state='accepted';
 CREATE INDEX journal_items_opener ON journal_items(session_id, epoch, opener_item_id, ordinal)
   WHERE hidden=0 AND opener_item_id IS NOT NULL;
 CREATE INDEX journal_items_context_clear ON journal_items(session_id, epoch, sequence)

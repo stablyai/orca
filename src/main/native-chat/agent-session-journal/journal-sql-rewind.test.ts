@@ -72,7 +72,14 @@ it('keeps late child output and queued input in place, while removing the target
   const late = f.item('codex:child:child-turn:1')
   const queued = f.item('orca:queued')
   const { complete } = f.prepare('codex:thread:next:0')
+  f.db
+    .prepare('UPDATE journal_items SET payload_json=? WHERE item_id=?')
+    .run('unreadable original', 'codex:thread:old:0')
   const result = await complete()
+  expect(
+    f.db.prepare('SELECT payload_json FROM journal_items WHERE item_id=?').get('codex:thread:old:0')
+      ?.payload_json
+  ).toBe('unreadable original')
   expect(f.item('codex:child:child-turn:1')).toEqual(late)
   expect(f.item('orca:queued')).toEqual(queued)
   expect(f.item('codex:thread:next:0')).toBeUndefined()
@@ -85,6 +92,60 @@ it('keeps late child output and queued input in place, while removing the target
   expect(f.readRecord().rewind).toMatchObject({ phase: 'completed', epoch: result.cursor.epoch })
   expect(result.cursor.epoch).not.toBe('epoch')
   expect(result.requestEvents).toEqual([])
+  await f.write(native('next', 0), rewindMessage('replacement', 'user'))
+  expect(f.item('codex:thread:next:0')?.revision).toBe(3)
+})
+
+it('cuts accepted provider aliases at their scoped opener while keeping late output from the preceding turn', async () => {
+  const f = sqlRewindFixture(cleanup)
+  await f.write(host('kept-turn'), {
+    kind: 'turn',
+    turnId: 'host-old',
+    providerTurnId: 'old:/ turn',
+    state: 'running'
+  })
+  await f.write(native('old:/ turn', 0), rewindMessage('kept', 'user'))
+  await f.write(host('hidden-owner'), {
+    kind: 'turn',
+    turnId: 'host-next',
+    providerTurnId: 'next:/ turn',
+    state: 'running'
+  })
+  f.db.prepare('UPDATE journal_items SET hidden=1 WHERE item_id=?').run('orca:hidden-owner')
+  await f.write(host('scoped-opener'), rewindMessage('target opener', 'user'), {
+    turnScope: { kind: 'turn', turnItemId: 'orca:hidden-owner' }
+  })
+  await f.write(host('between'), rewindMessage('after the actual boundary'))
+  await f.run({
+    kind: 'submission',
+    input: {
+      clientMessageId: 'target',
+      body: rewindMessage('target', 'user'),
+      payloadFingerprint: 'target',
+      fence: 1,
+      origin: 'client',
+      source: { kind: 'user' }
+    }
+  })
+  await f.run({
+    kind: 'dispatch',
+    input: {
+      clientMessageId: 'target',
+      state: 'accepted',
+      fence: 1,
+      providerIdentity: native('next:/ turn', 0)
+    }
+  })
+  await f.write(native('late', 1, 'child'), rewindMessage('kept late output'), {
+    turnScope: { kind: 'turn', turnItemId: 'orca:kept-turn' }
+  })
+  const { complete } = f.prepare('orca:target')
+  await complete()
+  expect(f.item('orca:scoped-opener')).toBeUndefined()
+  expect(f.item('orca:between')).toBeUndefined()
+  expect(f.item('orca:target')).toBeUndefined()
+  expect(f.item('codex:thread:old%3A%2F%20turn:0')?.body).toEqual(rewindMessage('kept', 'user'))
+  expect(f.item('codex:child:late:1')?.body).toEqual(rewindMessage('kept late output'))
 })
 
 it('rolls the cut and usage-limit cancellation back with its receipt and completes both on retry', async () => {
