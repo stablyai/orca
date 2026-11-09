@@ -1322,6 +1322,10 @@
           "removeProjectHostDisconnected": "此專案的伺服器已中斷連線。可立即從這台電腦移除，重新連線後 Orca 會將專案從伺服器移除。",
           "moveProjectGroupFailed": "無法移動專案群組",
           "moveProjectGroupFailedDesc": "該群組所在主機未套用新的上層群組。請更新該電腦上的 Orca 後再試一次。",
+          "pinProjectGroupFailed": "無法更新群組固定狀態",
+          "pinProjectGroupFailedDesc": "該群組所在主機未套用固定設定。請更新該電腦上的 Orca 後再試一次。",
+          "pinProjectFailed": "無法更新專案固定狀態",
+          "pinProjectFailedDesc": "該專案所在主機未套用固定設定。請更新該電腦上的 Orca 後再試一次。",
           "createSubgroupCleanupFailed": "無法建立子群組",
           "createSubgroupCleanupFailedDesc": "該群組所在主機改為建立了最上層群組且清理失敗，因此該群組仍保留在該電腦上。"
         },
@@ -6492,7 +6496,12 @@
           "groupCreateFailed": "建立群組失敗",
           "groupCreateFailedDesc": "Orca 無法向所在主機確認新群組。請檢查主機連線後再試一次。",
           "moveProjectToParentGroup": "移至上層群組 ({{group}})",
-          "moveGroupToTopLevel": "移至最上層"
+          "moveGroupToTopLevel": "移至最上層",
+          "unpinGroup": "取消固定群組",
+          "pinGroup": "固定群組",
+          "unpinProject": "取消固定專案",
+          "pinProject": "固定專案",
+          "unpinItemAriaLabel": "取消固定 {{value0}}"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "取消",

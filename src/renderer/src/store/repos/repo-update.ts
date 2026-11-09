@@ -18,6 +18,10 @@ import type { RepoSlice, RepoUpdate } from './repo-state'
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import { getProjectSetupRuntimeTarget } from '../projects/project-host-routing'
 import { mergeProjectCompatibilityForHostRepoChange } from './repo-catalog-identity'
+import {
+  notifyProjectPinFailed,
+  notifyProjectPinRejected
+} from '../project-groups/project-group-mutation-toasts'
 
 export function sanitizeRepoUpdate(updates: RepoUpdate): RepoUpdate {
   const sanitized = { ...updates }
@@ -118,6 +122,9 @@ export function createRepoUpdateActions(
         hostId: options?.hostId
       })
       if (!ownerRepo) {
+        if (updates.isPinned !== undefined) {
+          notifyProjectPinFailed()
+        }
         return false
       }
       // Why: an explicit hostId is authoritative; route to that host's target rather than the currently-focused runtime.
@@ -164,6 +171,17 @@ export function createRepoUpdateActions(
             JSON.stringify(updatedRepo?.dictationTerms ?? []) !==
               JSON.stringify(sanitizedUpdates.dictationTerms)
           ) {
+            return false
+          }
+          if (
+            sanitizedUpdates.isPinned !== undefined &&
+            (!updatedRepo || updatedRepo.isPinned !== sanitizedUpdates.isPinned)
+          ) {
+            if (updatedRepo) {
+              notifyProjectPinRejected()
+            } else {
+              notifyProjectPinFailed()
+            }
             return false
           }
           set((s) => {
@@ -246,6 +264,9 @@ export function createRepoUpdateActions(
           return true
         } catch (err) {
           console.error('Failed to update repo:', err)
+          if (updates.isPinned !== undefined) {
+            notifyProjectPinFailed()
+          }
           return false
         }
       }

@@ -892,6 +892,10 @@
           "removeProjectHostDisconnected": "Su servidor está desconectado. Elimínalo ahora de este escritorio y Orca lo eliminará del servidor cuando te vuelvas a conectar.",
           "moveProjectGroupFailed": "No se pudo mover el grupo de proyectos",
           "moveProjectGroupFailedDesc": "El equipo del grupo no aplicó el nuevo grupo superior. Actualiza Orca en ese equipo e inténtalo de nuevo.",
+          "pinProjectGroupFailed": "No se pudo actualizar la fijación del grupo",
+          "pinProjectGroupFailedDesc": "El equipo del grupo no aplicó el ajuste de fijación. Actualiza Orca en ese equipo e inténtalo de nuevo.",
+          "pinProjectFailed": "No se pudo actualizar la fijación del proyecto",
+          "pinProjectFailedDesc": "El equipo del proyecto no aplicó el ajuste de fijación. Actualiza Orca en ese equipo e inténtalo de nuevo.",
           "createSubgroupCleanupFailed": "No se pudo crear el subgrupo",
           "createSubgroupCleanupFailedDesc": "El equipo del grupo creó un grupo de nivel superior en su lugar y la limpieza falló, por lo que el grupo permanece en ese equipo."
         },
@@ -6227,7 +6231,12 @@
           "groupCreateFailed": "No se pudo crear el grupo",
           "groupCreateFailedDesc": "Orca no pudo confirmar el nuevo grupo con su equipo. Revisa la conexión e inténtalo de nuevo.",
           "moveProjectToParentGroup": "Mover al grupo superior ({{group}})",
-          "moveGroupToTopLevel": "Mover al nivel superior"
+          "moveGroupToTopLevel": "Mover al nivel superior",
+          "unpinGroup": "Desanclar grupo",
+          "pinGroup": "Fijar grupo",
+          "unpinProject": "Desanclar proyecto",
+          "pinProject": "Fijar proyecto",
+          "unpinItemAriaLabel": "Desanclar {{value0}}"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancelar",

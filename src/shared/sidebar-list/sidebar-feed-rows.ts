@@ -224,6 +224,7 @@ export function planSidebarFeedRows(
     sortBy: view.sortBy,
     worktrees: visibleWorktrees,
     repoMap,
+    repos: visibleRepos,
     repoOfWorktree: index.repoOf,
     prGroupOf: (worktree) =>
       prGroupOfReviewFact(domains.review.get(getWorktreeHostIdentity(worktree))),

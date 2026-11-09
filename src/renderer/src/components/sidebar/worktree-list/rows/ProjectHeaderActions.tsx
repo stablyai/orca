@@ -4,6 +4,7 @@ import { cn } from '@/lib/class-names'
 import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import {
+  isProjectHeaderRowPinned,
   isSingleHostProjectHeader,
   type GroupHeaderRow
 } from '../../../../../../shared/sidebar-list/row-types'
@@ -18,6 +19,7 @@ import {
   RepoHeaderProjectActionsMenu,
   type RepoHeaderProjectActions
 } from './repo-header-project-actions'
+import { getProjectHeaderPinTargetRepos } from './SectionHeaderPinButton'
 import { handleRepoHeaderCollapseAffordancePointerDown } from './header-event-guards'
 
 // Hover actions overlay titles; touch keeps them in flow. Pointer/self-stretch prevent action gutters becoming drag handles.
@@ -57,6 +59,7 @@ export function SectionHeaderTrailingActions({
   projectGroupPathStatus,
   projectGroups,
   projectActions,
+  onTogglePinProjectGroup,
   onRefreshProjectGroup,
   onCreateProjectSubgroup,
   onMoveProjectGroup,
@@ -76,6 +79,7 @@ export function SectionHeaderTrailingActions({
   projectGroupPathStatus: FolderWorkspacePathStatus | null
   projectGroups: readonly ProjectGroup[]
   projectActions: RepoHeaderProjectActions
+  onTogglePinProjectGroup?: (groupId: string, nextPinned: boolean, hostId?: ExecutionHostId) => void
   onRefreshProjectGroup?: (projectGroup: ProjectGroup) => void
   onCreateProjectSubgroup?: (groupId: string, groupName: string, hostId?: ExecutionHostId) => void
   onMoveProjectGroup?: (
@@ -113,7 +117,13 @@ export function SectionHeaderTrailingActions({
           hostId={projectGroupHostIdForHeader}
           label={label}
           projectGroup={folderBackedProjectGroup}
+          isPinned={
+            row.projectGroup && 'createdFrom' in row.projectGroup
+              ? row.projectGroup.isPinned === true
+              : false
+          }
           projectGroups={projectGroups}
+          onTogglePinGroup={onTogglePinProjectGroup}
           onRefreshProjectGroup={onRefreshProjectGroup}
           onCreateSubgroup={onCreateProjectSubgroup}
           onMoveGroup={onMoveProjectGroup}
@@ -135,6 +145,8 @@ export function SectionHeaderTrailingActions({
       {row.repo && isRepoView ? (
         <RepoHeaderProjectActionsMenu
           repo={row.repo}
+          targetRepos={getProjectHeaderPinTargetRepos(row)}
+          isPinned={isProjectHeaderRowPinned(row)}
           label={label}
           projectGroups={row.hostRepos ? [] : projectGroups}
           actions={projectActions}

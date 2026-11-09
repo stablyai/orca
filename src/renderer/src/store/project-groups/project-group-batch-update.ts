@@ -13,7 +13,9 @@ import { getRuntimeTargetHostId } from '../../runtime/rpc/targets/runtime-client
 import { adoptFromEndpoint } from '../host-catalog/endpoint-catalog-adoption'
 import {
   notifyProjectGroupMoveFailed,
-  notifyProjectGroupParentMoveRejected
+  notifyProjectGroupParentMoveRejected,
+  notifyProjectGroupPinFailed,
+  notifyProjectGroupPinRejected
 } from './project-group-mutation-toasts'
 import { persistProjectGroupUpdates } from './project-group-update-persistence'
 
@@ -24,6 +26,7 @@ function mergeReconciledParentStage(current: ProjectGroup, staged: ProjectGroup)
   const next: ProjectGroup = {
     ...current,
     parentGroupId: staged.parentGroupId,
+    ...(staged.isPinned !== undefined ? { isPinned: staged.isPinned } : {}),
     updatedAt: Math.max(current.updatedAt, staged.updatedAt)
   }
   if (staged.rootProjectOrder === undefined) {
@@ -56,6 +59,9 @@ export function createProjectGroupBatchUpdateAction(
         if (mutations.some((entry) => entry.updates.parentGroupId !== undefined)) {
           notifyProjectGroupMoveFailed()
         }
+        if (mutations.some((entry) => entry.updates.isPinned !== undefined)) {
+          notifyProjectGroupPinFailed()
+        }
         return false
       }
       const ownerHostId = resolveProjectGroupOwnerHostId(state, groupId, hostId)
@@ -72,6 +78,7 @@ export function createProjectGroupBatchUpdateAction(
       batch.mutations.push({ groupId, updates: normalizedUpdates, ownerHostId })
     }
     let notifiedSpecificRejection = false
+    let notifiedPinFailure = false
     const results = await Promise.all(
       [...batches.values()].map(async ({ hostKey, target, mutations }) => {
         const stagedByGroupId = new Map<string, { row: ProjectGroup; revision: number }>()
@@ -80,6 +87,16 @@ export function createProjectGroupBatchUpdateAction(
             onParentGroupMoveRejected: () => {
               notifiedSpecificRejection = true
               notifyProjectGroupParentMoveRejected()
+            },
+            onPinRejected: () => {
+              notifiedSpecificRejection = true
+              notifyProjectGroupPinRejected()
+            },
+            onPinFailed: () => {
+              if (!notifiedPinFailure && !notifiedSpecificRejection) {
+                notifiedPinFailure = true
+                notifyProjectGroupPinFailed()
+              }
             },
             onStageCommitted: (group) => {
               const revision = ++nextCommitRevision
@@ -170,6 +187,9 @@ export function createProjectGroupBatchUpdateAction(
     if (!saved && !notifiedSpecificRejection) {
       if (mutations.some(({ updates }) => updates.parentGroupId !== undefined)) {
         notifyProjectGroupMoveFailed()
+      }
+      if (!notifiedPinFailure && mutations.some(({ updates }) => updates.isPinned !== undefined)) {
+        notifyProjectGroupPinFailed()
       }
     }
     return saved

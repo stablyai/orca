@@ -72,6 +72,7 @@ export const ProjectGroupUpdate = z.object({
   updates: z.object({
     name: OptionalString,
     isCollapsed: z.boolean().optional(),
+    isPinned: OptionalBoolean,
     tabOrder: OptionalFiniteNumber,
     rootProjectOrder: z.number().finite().nullable().optional(),
     color: OptionalString.nullable().optional(),

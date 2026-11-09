@@ -5,6 +5,8 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { HostHeaderRect } from './host-header-drag-dom'
+import type { ProjectGroupChildItemId } from './project-group-child-slot-order'
+import type { ProjectGroupHeaderUpdatePatch } from './project-group-header-drag-contract'
 import type { ProjectGroupHeaderDragRect } from './project-group-header-drop'
 import type { ProjectHeaderDragBucketKey, ProjectHeaderDragRect } from './project-header-drop'
 
@@ -29,13 +31,24 @@ export const INITIAL_REPO_DRAG_STATE: RepoDragState = {
 export type UseRepoHeaderDragArgs = RootProjectHeaderDrag & {
   orderedRepoIds: string[]
   sidebarRepoHeaderIdsByBucket: ReadonlyMap<ProjectHeaderDragBucketKey, readonly string[]>
+  sidebarGroupChildItemIdsByGroupId?: ReadonlyMap<string, readonly ProjectGroupChildItemId[]>
+  pinnedRepoHeaderIds?: ReadonlySet<string>
   repoById: ReadonlyMap<string, Repo>
+  projectGroupById?: ReadonlyMap<string, ProjectGroup>
   projectGroups: readonly ProjectGroup[]
   getLiveRepos: () => readonly Repo[]
   allowSlotReorder: boolean
   usesProjectGroupOrdering: boolean
   onCommitRepoOrder: (orderedIds: string[]) => void
-  onCommitProjectGroupOrder: (project: Repo, projectGroupId: string | null, order: number) => void
+  onCommitProjectGroupOrder: (
+    project: Repo,
+    projectGroupId: string | null,
+    order: number
+  ) => Promise<boolean> | boolean | void
+  onCommitProjectGroupUpdate?: (
+    groupId: string,
+    updates: ProjectGroupHeaderUpdatePatch
+  ) => Promise<boolean> | boolean | void
   onMoveToGroupHeader: (project: Repo, groupId: string) => void
   getScrollContainer: () => HTMLElement | null
 }

@@ -200,4 +200,26 @@ describe('profile project transfer', () => {
     expect(readProfileStateDatabase('personal').repos).toHaveLength(1)
     expect(existsSync(intentPath)).toBe(true)
   })
+
+  it('resets isPinned when transferring a grouped project to ungrouped root in the target profile', async () => {
+    const { createTargetRepo } = await import('./profile-project-transfer-payload')
+    const targetState = {
+      ...makeState(),
+      targetProjectId: null
+    }
+    const fromGroup = createTargetRepo(
+      { ...makeRepo(), projectGroupId: 'grp-1', projectGroupOrder: 2, isPinned: true },
+      targetState,
+      false
+    )
+    expect(fromGroup.projectGroupId).toBeNull()
+    expect(fromGroup.isPinned).toBe(false)
+
+    const fromRoot = createTargetRepo(
+      { ...makeRepo(), projectGroupId: null, isPinned: true },
+      targetState,
+      false
+    )
+    expect(fromRoot.isPinned).toBe(true)
+  })
 })

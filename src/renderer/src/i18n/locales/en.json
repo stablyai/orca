@@ -1732,6 +1732,10 @@
           "removeProjectHostDisconnected": "Its server is disconnected. Remove it from this desktop now, and Orca removes it from the server when you reconnect.",
           "moveProjectGroupFailed": "Could not move project group",
           "moveProjectGroupFailedDesc": "The group's host did not apply the new parent group. Update Orca on that computer and try again.",
+          "pinProjectGroupFailed": "Could not update group pin",
+          "pinProjectGroupFailedDesc": "The group's host did not apply the pin setting. Update Orca on that computer and try again.",
+          "pinProjectFailed": "Could not update project pin",
+          "pinProjectFailedDesc": "The project's host did not apply the pin setting. Update Orca on that computer and try again.",
           "createSubgroupCleanupFailed": "Could not create subgroup",
           "createSubgroupCleanupFailedDesc": "The group's host created a top-level group instead and cleanup failed, so the group remains on that computer."
         },
@@ -7263,7 +7267,12 @@
           "groupCreateFailed": "Failed to create group",
           "groupCreateFailedDesc": "Orca could not confirm the new group with its host. Recheck the host connection and try again.",
           "moveProjectToParentGroup": "Move to parent group ({{group}})",
-          "moveGroupToTopLevel": "Move to top level"
+          "moveGroupToTopLevel": "Move to top level",
+          "unpinGroup": "Unpin group",
+          "pinGroup": "Pin group",
+          "unpinProject": "Unpin project",
+          "pinProject": "Pin project",
+          "unpinItemAriaLabel": "Unpin {{value0}}"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",

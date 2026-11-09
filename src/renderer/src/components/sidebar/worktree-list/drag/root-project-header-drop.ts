@@ -11,19 +11,25 @@ import {
   compareRootProjectEntries,
   getRootProjectEntryKey,
   getRootProjectEntryRank,
+  isRootProjectEntryPinned,
   type RootProjectEntry
 } from '../../../../../../shared/root-project-order'
 import { getDistinctProjectGroups } from '../../../../../../shared/project-groups'
 import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { GroupHeaderRow } from '../../../../../../shared/sidebar-list/row-types'
+import {
+  filterRootEntriesToDraggedHostSection,
+  getMovedRankUpdates
+} from './root-project-rank-updates'
 
 export type RootProjectHeaderDrag = {
   rootProjectHeaderKeys?: readonly string[]
   onCommitRootProjectOrder?: (
     visibleKeys: readonly string[],
     draggedKey: string,
-    dropIndex: number
+    dropIndex: number,
+    hostId?: string
   ) => void
 }
 
@@ -199,8 +205,12 @@ export function getRootProjectOrderForSidebarDrop(args: {
   }
   const groups = getDistinctProjectGroups(args.projectGroups)
   const groupIds = new Set(groups.map((group) => group.id))
+  const pinnedRepoIds = new Set<string>()
   const repos = new Map<string, Repo>()
   for (const repo of args.repos) {
+    if (repo.isPinned === true) {
+      pinnedRepoIds.add(repo.id)
+    }
     if (!repos.has(repo.id) && (!repo.projectGroupId || !groupIds.has(repo.projectGroupId))) {
       repos.set(repo.id, repo)
     }
@@ -208,8 +218,12 @@ export function getRootProjectOrderForSidebarDrop(args: {
   const entries: RootProjectEntry[] = [
     ...groups
       .filter((group) => !group.parentGroupId || !groupIds.has(group.parentGroupId))
-      .map((group) => ({ kind: 'group' as const, group })),
-    ...[...repos.values()].map((repo) => ({ kind: 'repo' as const, repo }))
+      .map((group) => ({ kind: 'group' as const, group, isPinned: group.isPinned === true })),
+    ...[...repos.values()].map((repo) => ({
+      kind: 'repo' as const,
+      repo,
+      isPinned: pinnedRepoIds.has(repo.id)
+    }))
   ]
   const repoOrder = getLogicalRepoOrderRankById(args.repos.map((repo) => repo.id))
   entries.sort((left, right) => compareRootProjectEntries(left, right, repoOrder))
@@ -230,44 +244,8 @@ export function getRootProjectOrderForSidebarDrop(args: {
   return remaining
 }
 
-function getMovedRankUpdates<T>(
-  entries: readonly T[],
-  dragged: T,
-  rank: (entry: T) => number
-): Map<T, number> {
-  const index = entries.indexOf(dragged)
-  const lower = index > 0 ? rank(entries[index - 1]) : Number.NEGATIVE_INFINITY
-  let end = index + 1
-  while (end < entries.length && rank(entries[end]) <= lower) {
-    end += 1
-  }
-  const upper = end < entries.length ? rank(entries[end]) : Number.POSITIVE_INFINITY
-  if (end === index + 1 && rank(dragged) > lower && rank(dragged) < upper) {
-    return new Map()
-  }
-  const count = end - index
-  const step =
-    Number.isFinite(lower) && Number.isFinite(upper) ? (upper - lower) / (count + 1) : 1000
-  const first = Number.isFinite(lower)
-    ? lower + step
-    : Number.isFinite(upper)
-      ? upper - step * count
-      : 0
-  const updates = new Map<T, number>()
-  let previous = lower
-  for (let offset = 0; offset < count; offset += 1) {
-    const value = first + step * offset
-    if (!Number.isFinite(value) || value <= previous || value >= upper) {
-      return new Map(entries.map((entry, index) => [entry, index * 1000]))
-    }
-    previous = value
-    updates.set(entries[index + offset], value)
-  }
-  return updates
-}
-
 export function getRootProjectOrderUpdatesForSidebarDrop(
-  args: Parameters<typeof getRootProjectOrderForSidebarDrop>[0]
+  args: Parameters<typeof getRootProjectOrderForSidebarDrop>[0] & { hostId?: string }
 ): {
   entry: RootProjectEntry
   rootProjectOrder?: number
@@ -278,17 +256,32 @@ export function getRootProjectOrderUpdatesForSidebarDrop(
   if (!dragged) {
     return []
   }
+  const sectionEntries = filterRootEntriesToDraggedHostSection({
+    entries,
+    repos: args.repos,
+    projectGroups: args.projectGroups,
+    visibleKeys: args.visibleKeys,
+    draggedKey: args.draggedKey,
+    hostId: args.hostId
+  })
   const repoOrder = getLogicalRepoOrderRankById(args.repos.map((repo) => repo.id))
-  const draggedIndex = entries.indexOf(dragged)
+  const draggedPinned = isRootProjectEntryPinned(dragged)
+  const tierEntries = sectionEntries.filter(
+    (entry) => isRootProjectEntryPinned(entry) === draggedPinned
+  )
+  const draggedIndex = tierEntries.indexOf(dragged)
   const staysLegacyGroup =
     dragged.kind === 'group' &&
     dragged.group.rootProjectOrder === undefined &&
     (draggedIndex === 0 ||
-      getRootProjectEntryRank(entries[draggedIndex - 1], repoOrder) === Number.NEGATIVE_INFINITY)
+      getRootProjectEntryRank(tierEntries[draggedIndex - 1], repoOrder) ===
+        Number.NEGATIVE_INFINITY)
   const ranks = staysLegacyGroup
     ? new Map<RootProjectEntry, number>()
-    : getMovedRankUpdates(entries, dragged, (entry) => getRootProjectEntryRank(entry, repoOrder))
-  const groups = entries.filter((entry) => entry.kind === 'group')
+    : getMovedRankUpdates(tierEntries, dragged, (entry) =>
+        getRootProjectEntryRank(entry, repoOrder)
+      )
+  const groups = tierEntries.filter((entry) => entry.kind === 'group')
   const tabRanks =
     dragged.kind === 'group'
       ? getMovedRankUpdates(groups, dragged, (entry) => entry.group.tabOrder)

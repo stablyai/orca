@@ -884,6 +884,10 @@
           "removeProjectHostDisconnected": "서버 연결이 끊어졌습니다. 지금 이 데스크톱에서 제거하면 다시 연결할 때 Orca가 서버에서도 제거합니다.",
           "moveProjectGroupFailed": "프로젝트 그룹을 이동할 수 없습니다",
           "moveProjectGroupFailedDesc": "그룹의 호스트가 새 상위 그룹을 적용하지 않았습니다. 해당 컴퓨터의 Orca를 업데이트한 후 다시 시도하세요.",
+          "pinProjectGroupFailed": "그룹 고정 설정을 업데이트할 수 없습니다",
+          "pinProjectGroupFailedDesc": "그룹의 호스트가 고정 설정을 적용하지 않았습니다. 해당 컴퓨터의 Orca를 업데이트한 후 다시 시도하세요.",
+          "pinProjectFailed": "프로젝트 고정 설정을 업데이트할 수 없습니다",
+          "pinProjectFailedDesc": "프로젝트의 호스트가 고정 설정을 적용하지 않았습니다. 해당 컴퓨터의 Orca를 업데이트한 후 다시 시도하세요.",
           "createSubgroupCleanupFailed": "하위 그룹을 만들 수 없습니다",
           "createSubgroupCleanupFailedDesc": "그룹의 호스트가 대신 최상위 그룹을 만들었으며 정리에 실패하여 해당 컴퓨터에 그룹이 남아 있습니다."
         },
@@ -5965,7 +5969,12 @@
           "groupCreateFailed": "그룹을 만들지 못했습니다",
           "groupCreateFailedDesc": "호스트에서 새 그룹을 확인하지 못했습니다. 호스트 연결을 확인한 뒤 다시 시도하세요.",
           "moveProjectToParentGroup": "상위 그룹으로 이동 ({{group}})",
-          "moveGroupToTopLevel": "최상위로 이동"
+          "moveGroupToTopLevel": "최상위로 이동",
+          "unpinGroup": "그룹 고정 해제",
+          "pinGroup": "그룹 고정",
+          "unpinProject": "프로젝트 고정 해제",
+          "pinProject": "프로젝트 고정",
+          "unpinItemAriaLabel": "{{value0}} 고정 해제"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "취소",

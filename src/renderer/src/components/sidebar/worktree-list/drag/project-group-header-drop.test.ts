@@ -741,4 +741,69 @@ describe('project-group-header-reparent-drop', () => {
     })
     expect(onCommitRootProjectOrder).toHaveBeenCalledTimes(1)
   })
+
+  it('matches exact host-twin repo rows and skips removed repos when validating live sibling repo mutations', async () => {
+    const sshParent = group('g-ssh', {
+      connectionId: 'box',
+      executionHostId: 'ssh:box',
+      tabOrder: 0
+    })
+    const dragged = group('g-drag-ssh', {
+      connectionId: 'box',
+      executionHostId: 'ssh:box',
+      tabOrder: 1
+    })
+    const localTwin: Repo = {
+      id: 'r1',
+      path: '/r1',
+      displayName: 'r1',
+      badgeColor: '#000',
+      addedAt: 1,
+      executionHostId: 'local',
+      projectGroupId: null
+    }
+    const sshTwin: Repo = {
+      ...localTwin,
+      connectionId: 'box',
+      executionHostId: 'ssh:box',
+      projectGroupId: 'g-ssh'
+    }
+    const removedRepo: Repo = { ...sshTwin, id: 'r2', path: '/r2', displayName: 'r2' }
+    let liveRepos = [localTwin, sshTwin, removedRepo]
+    const committedRepoIds: string[] = []
+
+    await commitProjectGroupHeaderDragDrop({
+      session: { groupId: 'g-drag-ssh', bucketKey: 'root' },
+      dropTarget: {
+        kind: 'slot',
+        targetBucketKey: 'parent:g-ssh',
+        dropIndex: 0,
+        dropIndicatorY: 0
+      },
+      projectGroupById: new Map([
+        ['g-ssh', sshParent],
+        ['g-drag-ssh', dragged]
+      ]),
+      getLiveProjectGroups: () => [sshParent, { ...dragged, parentGroupId: 'g-ssh' }],
+      getLiveRepos: () => liveRepos,
+      repos: [localTwin, sshTwin, removedRepo],
+      repoById: new Map([
+        ['r1', sshTwin],
+        ['r2', removedRepo]
+      ]),
+      allowMixedProjectReorder: true,
+      sidebarGroupChildItemIdsByGroupId: new Map([['g-ssh', ['repo:r1', 'repo:r2'] as const]]),
+      sidebarProjectGroupHeaderIdsByBucket: new Map([['root', ['g-ssh', 'g-drag-ssh']]]),
+      onCommitProjectGroupUpdate: async () => {
+        liveRepos = [localTwin, sshTwin]
+        return true
+      },
+      onCommitProjectGroupOrder: async (repo) => {
+        committedRepoIds.push(`${repo.id}@${repo.executionHostId}`)
+        return true
+      }
+    })
+
+    expect(committedRepoIds).toEqual(['r1@ssh:box'])
+  })
 })

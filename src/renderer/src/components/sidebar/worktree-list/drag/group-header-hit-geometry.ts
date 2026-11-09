@@ -3,10 +3,12 @@ import {
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { Repo } from '../../../../../../shared/repo-types'
 import {
   getRuntimeTargetHostId,
   ipcOrRuntimeTargetForHostId
 } from '@/runtime/rpc/targets/runtime-client-target'
+import { isSameRepoRow } from '@/store/repos/repo-host-identity'
 import type { HostHeaderRect } from './host-header-drag-dom'
 import type { ProjectGroupHeaderDragRect } from './project-group-header-drop'
 
@@ -118,4 +120,21 @@ export function isProjectGroupStillInExpectedParent(args: {
       ? target.parentGroupId
       : null
   return effectiveParentId === args.expectedParentGroupId
+}
+
+export function isRepoStillInExpectedProjectGroup(args: {
+  repo: Repo
+  expectedProjectGroupId: string | null
+  liveRepos: readonly Repo[] | undefined
+  fallbackRepoById: ReadonlyMap<string, Repo> | undefined
+}): boolean {
+  if (args.liveRepos) {
+    const liveMatch = args.liveRepos.find((candidate) => isSameRepoRow(candidate, args.repo))
+    return (
+      liveMatch !== undefined && (liveMatch.projectGroupId ?? null) === args.expectedProjectGroupId
+    )
+  }
+  const fallback = args.fallbackRepoById?.get(args.repo.id)
+  const target = fallback && isSameRepoRow(fallback, args.repo) ? fallback : args.repo
+  return (target.projectGroupId ?? null) === args.expectedProjectGroupId
 }

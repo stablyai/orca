@@ -884,6 +884,10 @@
           "removeProjectHostDisconnected": "サーバーとの接続が切断されています。今すぐこのデスクトップから削除すると、再接続時に Orca がサーバーからも削除します。",
           "moveProjectGroupFailed": "プロジェクトグループを移動できませんでした",
           "moveProjectGroupFailedDesc": "グループのホストが新しい親グループを適用しませんでした。そのコンピュータの Orca を更新してからもう一度お試しください。",
+          "pinProjectGroupFailed": "グループの固定設定を更新できませんでした",
+          "pinProjectGroupFailedDesc": "グループのホストが固定設定を適用しませんでした。そのコンピュータの Orca を更新してからもう一度お試しください。",
+          "pinProjectFailed": "プロジェクトの固定設定を更新できませんでした",
+          "pinProjectFailedDesc": "プロジェクトのホストが固定設定を適用しませんでした。そのコンピュータの Orca を更新してからもう一度お試しください。",
           "createSubgroupCleanupFailed": "サブグループを作成できませんでした",
           "createSubgroupCleanupFailedDesc": "グループのホストが代わりにトップレベルのグループを作成し、クリーンアップに失敗したため、グループはそのコンピュータに残っています。"
         },
@@ -5968,7 +5972,12 @@
           "groupCreateFailed": "グループを作成できませんでした",
           "groupCreateFailedDesc": "ホスト側で新しいグループを確認できませんでした。接続を確認してもう一度お試しください。",
           "moveProjectToParentGroup": "親グループへ移動 ({{group}})",
-          "moveGroupToTopLevel": "最上位へ移動"
+          "moveGroupToTopLevel": "最上位へ移動",
+          "unpinGroup": "グループの固定を解除",
+          "pinGroup": "グループを固定",
+          "unpinProject": "プロジェクトの固定を解除",
+          "pinProject": "プロジェクトを固定",
+          "unpinItemAriaLabel": "{{value0}} の固定を解除"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "キャンセル",

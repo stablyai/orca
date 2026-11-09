@@ -38,6 +38,7 @@ const repoSchema = z.object({
   // Older desktops omit both; the project then lists ungrouped, as it did.
   projectGroupId: salvagedOptional('projectGroupId', z.string().nullable()),
   projectGroupOrder: salvagedOptional('projectGroupOrder', z.number()),
+  isPinned: salvagedOptional('isPinned', z.boolean()),
   // Decoded where drawn (readMobileRepoIcon), so an arm this build lacks still keeps the row.
   repoIcon: z.unknown().optional()
 })
@@ -73,6 +74,7 @@ export const ProjectGroupSchema = z.object({
   tabOrder: z.number(),
   rootProjectOrder: salvagedOptional('rootProjectOrder', z.number().finite()),
   isCollapsed: z.boolean(),
+  isPinned: salvagedOptional('isPinned', z.boolean()),
   color: z.string().nullable(),
   createdAt: z.number(),
   updatedAt: z.number()

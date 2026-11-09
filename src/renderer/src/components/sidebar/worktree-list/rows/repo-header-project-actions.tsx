@@ -8,6 +8,8 @@ import {
   Eye,
   FolderInput,
   FolderTree,
+  Pin,
+  PinOff,
   Plus,
   // `Shapes` is lucide-react's own export name; exempted in config/oxlint-anti-slop.json.
   Shapes,
@@ -73,6 +75,7 @@ function getWorktreeVisibilityMenuLabel(
 
 export type RepoHeaderProjectActions = {
   getWorktreeVisibilityDefaults: (repo: Repo) => WorktreeVisibilityDefaults | undefined
+  onTogglePinProject?: (repos: readonly Repo[], nextPinned: boolean) => void
   onOpenRepoSettings: (projectId: string, sectionId?: string) => void
   onOpenWorktreeVisibility: (repo: Repo) => void
   onCreateGroupFromRepo: (repo: Repo) => void
@@ -86,11 +89,15 @@ export type RepoHeaderProjectActions = {
 // Memoized: the sidebar re-renders every header row when the active workspace changes.
 export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjectActionsMenu({
   repo,
+  targetRepos,
+  isPinned,
   label,
   projectGroups,
   actions
 }: {
   repo: Repo
+  targetRepos?: readonly Repo[]
+  isPinned?: boolean
   label: string
   projectGroups: readonly ProjectGroup[]
   actions: RepoHeaderProjectActions
@@ -98,6 +105,8 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
   const t = useTranslate()
   // Memoized: subscribe so a language change still repaints its labels.
   useTranslation()
+  const effectiveIsPinned = isPinned ?? repo.isPinned === true
+  const effectiveTargetRepos = targetRepos ?? [repo]
   const joinableGroupEntries = React.useMemo(
     () => buildJoinableProjectGroupMenuEntries(repo, projectGroups),
     [projectGroups, repo]
@@ -146,6 +155,16 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
         onClick={stopRepoHeaderMenuEvent}
         onKeyDown={stopRepoHeaderMenuEvent}
       >
+        {actions.onTogglePinProject ? (
+          <DropdownMenuItem
+            onSelect={() => actions.onTogglePinProject?.(effectiveTargetRepos, !effectiveIsPinned)}
+          >
+            {effectiveIsPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
+            {effectiveIsPinned
+              ? t('auto.components.sidebar.WorktreeList.unpinProject', 'Unpin project')
+              : t('auto.components.sidebar.WorktreeList.pinProject', 'Pin project')}
+          </DropdownMenuItem>
+        ) : null}
         <DropdownMenuItem onSelect={() => actions.onOpenRepoSettings(repo.id)}>
           <SlidersHorizontal className="size-3.5" />
           {t('auto.components.sidebar.WorktreeList.2cdffbc728', 'Project Settings')}

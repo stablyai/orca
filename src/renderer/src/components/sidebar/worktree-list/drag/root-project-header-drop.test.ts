@@ -3,9 +3,10 @@ import type {
   HostSectionRow,
   HostHeaderRow
 } from '../../../../../../shared/sidebar-list/host-section-rows'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
+import { commitProjectHeaderDragDrop } from './project-header-drag-commit'
 import {
   getRootProjectHeaderCountByOccurrenceKey,
   getRootProjectHeaderDragKeys,
@@ -165,6 +166,25 @@ describe('root project header drops', () => {
       { entry: { kind: 'group', group: { id: 'b' } }, rootProjectOrder: -1000, tabOrder: -1000 }
     ])
   })
+
+  it('does not sweep legacy groups from another host section when reordering root entries on one host', () => {
+    const updates = getRootProjectOrderUpdatesForSidebarDrop({
+      projectGroups: [
+        group('local-a', { executionHostId: 'local' }),
+        group('remote-b', { executionHostId: 'runtime:remote', tabOrder: 1 })
+      ],
+      repos: [repo('local-x', { executionHostId: 'local', projectGroupOrder: 0 })],
+      visibleKeys: ['group:local-a', 'repo:local-x'],
+      draggedKey: 'repo:local-x',
+      dropIndex: 0
+    })
+
+    expect(updates).toHaveLength(2)
+    expect(updates).toMatchObject([
+      { entry: { kind: 'repo', repo: { id: 'local-x' } }, rootProjectOrder: 0 },
+      { entry: { kind: 'group', group: { id: 'local-a' } }, rootProjectOrder: 1000 }
+    ])
+  })
   it('uses the actual host occurrence when repeated logical headers span sections', () => {
     const host = (hostId: HostHeaderRow['hostId']): HostHeaderRow => ({
       type: 'host-header',
@@ -265,5 +285,102 @@ describe('root project header drops', () => {
         (rect) => rect.key
       )
     ).toEqual(['group:a', 'repo:y'])
+  })
+
+  it('respaces root ranks when ungrouping a project exhausts midpoint, tail, or head float precision', async () => {
+    const parent = group('g-src', { tabOrder: 0, rootProjectOrder: 0 })
+    const runUngroupCase = async (args: {
+      rootRepos: Repo[]
+      dragged: Repo
+      dropIndex: number
+    }): Promise<{ key: string; order: number | undefined }[]> => {
+      const repos = [...args.rootRepos.map((entry) => ({ ...entry })), { ...args.dragged }]
+      let updates: ReturnType<typeof getRootProjectOrderUpdatesForSidebarDrop> = []
+      await commitProjectHeaderDragDrop({
+        session: {
+          repo: args.dragged,
+          groupRepo: args.dragged,
+          bucketKey: 'group:g-src',
+          sidebarRepoHeaderIds: [args.dragged.id],
+          rootProjectHeaderKeys: args.rootRepos.map((entry) => `repo:${entry.id}`)
+        },
+        dropTarget: {
+          kind: 'slot',
+          targetBucketKey: 'root-interleaved',
+          dropIndex: args.dropIndex,
+          dropIndicatorY: 40
+        },
+        sidebarRepoHeaderIdsByBucket: new Map([['group:g-src', [args.dragged.id]]]),
+        projectGroups: [parent],
+        projectGroupById: new Map([['g-src', parent]]),
+        orderedRepoIds: repos.map((entry) => entry.id),
+        repoById: new Map(repos.map((entry) => [entry.id, entry])),
+        liveRepos: repos,
+        usesProjectGroupOrdering: true,
+        onCommitRepoOrder: vi.fn(),
+        onCommitProjectGroupOrder: async (target, groupId, order) => {
+          const match = repos.find((entry) => entry.id === target.id)
+          if (match) {
+            match.projectGroupId = groupId
+            match.projectGroupOrder = order
+          }
+          return true
+        },
+        onCommitRootProjectOrder: (visibleKeys, draggedKey, dropIndex) => {
+          updates = getRootProjectOrderUpdatesForSidebarDrop({
+            repos,
+            projectGroups: [],
+            visibleKeys,
+            draggedKey,
+            dropIndex
+          })
+        },
+        onMoveToGroupHeader: vi.fn()
+      })
+      return updates.map((entry) => ({
+        key:
+          entry.entry.kind === 'group'
+            ? `group:${entry.entry.group.id}`
+            : `repo:${entry.entry.repo.id}`,
+        order: entry.rootProjectOrder
+      }))
+    }
+
+    await expect(
+      runUngroupCase({
+        rootRepos: [
+          repo('r-eps-a', { projectGroupOrder: 1 }),
+          repo('r-eps-b', { projectGroupOrder: 1 + Number.EPSILON })
+        ],
+        dragged: repo('r-mid', { projectGroupId: 'g-src', projectGroupOrder: 0 }),
+        dropIndex: 1
+      })
+    ).resolves.toEqual([
+      { key: 'repo:r-eps-a', order: 0 },
+      { key: 'repo:r-mid', order: 1000 },
+      { key: 'repo:r-eps-b', order: 2000 }
+    ])
+
+    await expect(
+      runUngroupCase({
+        rootRepos: [repo('r-huge-tail', { projectGroupOrder: 2 ** 64 })],
+        dragged: repo('r-tail', { projectGroupId: 'g-src', projectGroupOrder: 0 }),
+        dropIndex: 1
+      })
+    ).resolves.toEqual([
+      { key: 'repo:r-huge-tail', order: 0 },
+      { key: 'repo:r-tail', order: 1000 }
+    ])
+
+    await expect(
+      runUngroupCase({
+        rootRepos: [repo('r-huge-head', { projectGroupOrder: -(2 ** 64) })],
+        dragged: repo('r-head', { projectGroupId: 'g-src', projectGroupOrder: 0 }),
+        dropIndex: 0
+      })
+    ).resolves.toEqual([
+      { key: 'repo:r-head', order: 0 },
+      { key: 'repo:r-huge-head', order: 1000 }
+    ])
   })
 })

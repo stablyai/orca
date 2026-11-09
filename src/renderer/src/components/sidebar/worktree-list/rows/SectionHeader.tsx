@@ -23,6 +23,7 @@ import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual } from './header-visuals'
 import { resolveProjectGroupHeaderColor } from './project-header-color'
 import { SectionHeaderTrailingActions } from './ProjectHeaderActions'
+import { hasSectionHeaderTitlePinBadge, SectionHeaderTitlePinBadge } from './SectionHeaderPinButton'
 import {
   getProjectGroupHeaderPaddingLeft,
   WORKTREE_SECTION_HEADER_PADDING_LEFT
@@ -84,28 +85,16 @@ export function renderWorktreeSectionHeaderRow(
       ? headerDrag.projectGroupHeaderBucketByGroupId.get(projectGroupDragIdForHeader)
       : undefined
   const rootProjectHeaderKey = usesRootProjectDrag ? getRootProjectHeaderKey(row) : undefined
-  const rootProjectHeaderCount = rootProjectHeaderKey
-    ? (headerDrag.rootProjectHeaderCountByOccurrenceKey.get(
-        getRootProjectHeaderOccurrenceKey(rootProjectHeaderKey, row.hostId)
-      ) ??
-      headerDrag.rootProjectHeaderCountByOccurrenceKey.get(
-        getRootProjectHeaderOccurrenceKey(rootProjectHeaderKey)
-      ))
-    : undefined
   const isDraggableRepoHeader = Boolean(
     isRepoHeader &&
     headerRepo &&
     projectIdForHeader &&
-    ((headerDrag.canReorderRepoHeaders &&
-      rootProjectHeaderCount !== undefined &&
-      rootProjectHeaderCount > 1) ||
-      headerDrag.canDragProjectHeader(headerRepo, groupDragRepo))
+    headerDrag.canDragProjectHeader(headerRepo, groupDragRepo, row.hostId)
   )
   const isDraggableProjectGroupHeader = Boolean(
     headerDrag.canReorderProjectGroupHeaders &&
     projectGroupDragIdForHeader &&
-    ((rootProjectHeaderCount !== undefined && rootProjectHeaderCount > 1) ||
-      headerDrag.canDragProjectGroupHeader(projectGroupDragIdForHeader))
+    headerDrag.canDragProjectGroupHeader(projectGroupDragIdForHeader, row.hostId)
   )
   const isDraggingThis =
     headerDrag.canDragRepoHeaders &&
@@ -325,7 +314,16 @@ export function renderWorktreeSectionHeaderRow(
             data-project-group-header-drag-handle={isDraggableProjectGroupHeader ? '' : undefined}
             className={cn(
               'flex min-w-0 flex-1 items-center gap-1.5 self-stretch',
-              hostContext && 'can-hover:pr-18',
+              (hostContext ||
+                hasSectionHeaderTitlePinBadge(
+                  row,
+                  isRepoHeader,
+                  isProjectGroupHeader,
+                  projectGroupIdForHeader,
+                  Boolean(ctx.projectActions.onTogglePinProject),
+                  Boolean(ctx.onTogglePinProjectGroup)
+                )) &&
+                'can-hover:pr-18',
               (isDraggableRepoHeader || isDraggableProjectGroupHeader) &&
                 'cursor-grab active:cursor-grabbing'
             )}
@@ -351,6 +349,16 @@ export function renderWorktreeSectionHeaderRow(
             <div className="min-w-0 flex-1">
               <div className="flex min-w-0 items-center gap-1.5">
                 <div className="min-w-0 truncate text-[13px] font-semibold leading-4">{label}</div>
+                <SectionHeaderTitlePinBadge
+                  row={row}
+                  label={label}
+                  isRepoHeader={isRepoHeader}
+                  isProjectGroupHeader={isProjectGroupHeader}
+                  projectGroupId={projectGroupIdForHeader}
+                  projectGroupHostId={projectGroupHostIdForHeader}
+                  onTogglePinProject={ctx.projectActions.onTogglePinProject}
+                  onTogglePinProjectGroup={ctx.onTogglePinProjectGroup}
+                />
                 {hostContext ? <ProjectHeaderHostLabel context={hostContext} /> : null}
                 <RepoForkIndicator upstream={row.repo?.upstream} />
                 <FolderPathStatusIndicator status={projectGroupPathStatus} />
@@ -372,6 +380,7 @@ export function renderWorktreeSectionHeaderRow(
             projectGroupPathStatus={projectGroupPathStatus}
             projectGroups={ctx.projectGroups}
             projectActions={ctx.projectActions}
+            onTogglePinProjectGroup={ctx.onTogglePinProjectGroup}
             onRefreshProjectGroup={ctx.onRefreshProjectGroup}
             onCreateProjectSubgroup={ctx.onCreateProjectSubgroup}
             onMoveProjectGroup={!row.repeated ? headerDrag.moveProjectGroupToParent : undefined}

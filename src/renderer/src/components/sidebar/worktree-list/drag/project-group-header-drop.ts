@@ -95,13 +95,19 @@ export function getProjectGroupTabOrderUpdatesForSidebarDrop(args: {
   sidebarDropIndex: number
   projectGroupById: ReadonlyMap<string, ProjectGroup>
 }): ProjectGroupTabOrderUpdate[] {
-  const sourceIndex = args.sidebarProjectGroupHeaderIds.indexOf(args.draggedGroupId)
+  const draggedPinned = args.projectGroupById.get(args.draggedGroupId)?.isPinned === true
+  const pinnedIds = args.sidebarProjectGroupHeaderIds.filter(
+    (groupId) => args.projectGroupById.get(groupId)?.isPinned === true
+  )
+  const unpinnedIds = args.sidebarProjectGroupHeaderIds.filter(
+    (groupId) => args.projectGroupById.get(groupId)?.isPinned !== true
+  )
+  const tierIds = draggedPinned ? pinnedIds : unpinnedIds
+  const sourceIndex = tierIds.indexOf(args.draggedGroupId)
   if (sourceIndex === -1) {
     return []
   }
-  const siblingIds = args.sidebarProjectGroupHeaderIds.filter(
-    (groupId) => groupId !== args.draggedGroupId
-  )
+  const siblingIds = tierIds.filter((groupId) => groupId !== args.draggedGroupId)
   const siblingDropIndex = mapSidebarProjectGroupDropIndexToSiblingInsertIndex({
     sidebarDropIndex: args.sidebarDropIndex,
     sourceIndex,
@@ -112,8 +118,11 @@ export function getProjectGroupTabOrderUpdatesForSidebarDrop(args: {
     return []
   }
 
-  const orderedIds = siblingIds.slice()
-  orderedIds.splice(siblingDropIndex, 0, args.draggedGroupId)
+  const reorderedTierIds = siblingIds.slice()
+  reorderedTierIds.splice(siblingDropIndex, 0, args.draggedGroupId)
+  const orderedIds = draggedPinned
+    ? [...reorderedTierIds, ...unpinnedIds]
+    : [...pinnedIds, ...reorderedTierIds]
 
   const updates: ProjectGroupTabOrderUpdate[] = []
   for (const [index, groupId] of orderedIds.entries()) {

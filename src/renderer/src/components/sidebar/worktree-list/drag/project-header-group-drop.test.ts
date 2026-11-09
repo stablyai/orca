@@ -7,6 +7,11 @@ import {
   getJoinableGroupIdsForRepo
 } from './project-header-group-drop'
 import { commitProjectHeaderDragDrop } from './project-header-drag-commit'
+import { getProjectGroupMutationsForDrop } from './project-group-header-drag-commit'
+import {
+  computeCombinedProjectGroupHeaderDropTarget,
+  getReparentableTargetGroupIdsForGroup
+} from './project-group-header-reparent-drop'
 
 function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
   return {
@@ -344,11 +349,11 @@ describe('computeCombinedProjectHeaderDropTarget', () => {
 })
 
 describe('commitProjectHeaderDragDrop cross-group moves', () => {
-  it('moves a project into a group header when dropped on a group-header target', () => {
+  it('moves a project into a group header when dropped on a group-header target', async () => {
     const r1 = makeRepo('r1')
     const onMoveToGroupHeader = vi.fn()
 
-    commitProjectHeaderDragDrop({
+    await commitProjectHeaderDragDrop({
       session: {
         repo: r1,
         bucketKey: 'ungrouped',
@@ -368,13 +373,13 @@ describe('commitProjectHeaderDragDrop cross-group moves', () => {
     expect(onMoveToGroupHeader).toHaveBeenCalledWith(r1, 'g1')
   })
 
-  it('computes midpoint order when inserting a project into another open group slot', () => {
+  it('computes midpoint order when inserting a project into another open group slot', async () => {
     const dragged = makeRepo('r-drag')
     const s1 = makeRepo('s1', { projectGroupId: 'g2', projectGroupOrder: 0 })
     const s2 = makeRepo('s2', { projectGroupId: 'g2', projectGroupOrder: 10 })
     const onCommitProjectGroupOrder = vi.fn()
 
-    commitProjectHeaderDragDrop({
+    await commitProjectHeaderDragDrop({
       session: {
         repo: dragged,
         bucketKey: 'ungrouped',
@@ -406,11 +411,11 @@ describe('commitProjectHeaderDragDrop cross-group moves', () => {
     expect(onCommitProjectGroupOrder).toHaveBeenCalledWith(dragged, 'g2', 5)
   })
 
-  it('moves a lone grouped project back to ungrouped root when dropped on the empty ungrouped slot', () => {
+  it('moves a lone grouped project back to ungrouped root when dropped on the empty ungrouped slot', async () => {
     const r1 = makeRepo('r1', { projectGroupId: 'g1', projectGroupOrder: 0 })
     const onCommitProjectGroupOrder = vi.fn()
 
-    commitProjectHeaderDragDrop({
+    await commitProjectHeaderDragDrop({
       session: {
         repo: r1,
         bucketKey: 'group:g1',
@@ -435,12 +440,12 @@ describe('commitProjectHeaderDragDrop cross-group moves', () => {
     expect(onCommitProjectGroupOrder).toHaveBeenCalledWith(r1, null, 0)
   })
 
-  it('mutates the localized host registration (groupRepo) rather than the ordering anchor twin on group moves', () => {
+  it('mutates the localized host registration (groupRepo) rather than the ordering anchor twin on group moves', async () => {
     const localAnchor = makeRepo('twin', { executionHostId: 'local' })
     const remoteTwin = makeRepo('twin', { executionHostId: 'runtime:env-1' })
     const onMoveToGroupHeader = vi.fn()
 
-    commitProjectHeaderDragDrop({
+    await commitProjectHeaderDragDrop({
       session: {
         repo: localAnchor,
         groupRepo: remoteTwin,
@@ -611,5 +616,155 @@ describe('commitProjectHeaderDragDrop cross-group moves', () => {
         contentBottom: 164
       })
     ).toBeNull()
+  })
+
+  it('targets the destination parent unpinned tier on cross-parent group drops, including pinned-only destinations', () => {
+    const p1 = makeGroup('p1', { tabOrder: 0, isPinned: true })
+    const subPinned = makeGroup('sub-pinned', {
+      parentGroupId: 'p1',
+      tabOrder: 0,
+      isPinned: true
+    })
+    const u1 = makeGroup('u1', { tabOrder: 1, isPinned: false })
+    const groups = [p1, subPinned, u1]
+    const byId = new Map(groups.map((entry) => [entry.id, entry]))
+    const rects = [
+      { groupId: 'p1', bucketKey: 'root', headerIndex: 0, top: 0, bottom: 28, sectionBottom: 100 },
+      {
+        groupId: 'sub-pinned',
+        bucketKey: 'parent:p1',
+        headerIndex: 0,
+        top: 60,
+        bottom: 88,
+        sectionBottom: 100
+      },
+      {
+        groupId: 'u1',
+        bucketKey: 'root',
+        headerIndex: 1,
+        top: 108,
+        bottom: 136,
+        sectionBottom: 136
+      }
+    ]
+    const buckets = new Map<string, readonly string[]>([
+      ['root', ['p1', 'u1']],
+      ['parent:p1', ['sub-pinned']]
+    ])
+
+    const promoteTarget = computeCombinedProjectGroupHeaderDropTarget({
+      pointerY: 104,
+      containerTop: 0,
+      scrollTop: 0,
+      draggedGroup: subPinned,
+      projectGroupById: byId,
+      reparentableGroupIds: getReparentableTargetGroupIdsForGroup(subPinned, groups),
+      groupHeaderRects: rects,
+      sidebarProjectGroupHeaderIdsByBucket: buckets,
+      contentBottom: 136
+    })
+    expect(promoteTarget).toEqual({
+      kind: 'slot',
+      targetBucketKey: 'root',
+      dropIndex: 0,
+      dropIndicatorY: 104
+    })
+    expect(
+      getProjectGroupMutationsForDrop({
+        draggedGroup: subPinned,
+        sourceBucketKey: 'parent:p1',
+        dropTarget: promoteTarget!,
+        projectGroupById: byId,
+        sidebarProjectGroupHeaderIdsByBucket: buckets
+      })
+    ).toEqual([
+      { groupId: 'sub-pinned', updates: { parentGroupId: null, tabOrder: 1 } },
+      { groupId: 'u1', updates: { tabOrder: 2 } }
+    ])
+
+    const intoPinnedOnlyParent = computeCombinedProjectGroupHeaderDropTarget({
+      pointerY: 42,
+      containerTop: 0,
+      scrollTop: 0,
+      draggedGroup: u1,
+      projectGroupById: byId,
+      reparentableGroupIds: getReparentableTargetGroupIdsForGroup(u1, groups),
+      groupHeaderRects: rects,
+      sidebarProjectGroupHeaderIdsByBucket: buckets,
+      contentBottom: 136
+    })
+    expect(intoPinnedOnlyParent).toEqual({
+      kind: 'slot',
+      targetBucketKey: 'parent:p1',
+      dropIndex: 0,
+      dropIndicatorY: 104
+    })
+    expect(
+      getProjectGroupMutationsForDrop({
+        draggedGroup: u1,
+        sourceBucketKey: 'root',
+        dropTarget: intoPinnedOnlyParent!,
+        projectGroupById: byId,
+        sidebarProjectGroupHeaderIdsByBucket: buckets
+      })
+    ).toEqual([{ groupId: 'u1', updates: { parentGroupId: 'p1', tabOrder: 1 } }])
+
+    const p2 = makeGroup('p2', { tabOrder: 1, isPinned: true })
+    const uRoot = makeGroup('u-root', { tabOrder: 2, isPinned: false })
+    const tallGroups = [p1, p2, subPinned, uRoot]
+    const tallById = new Map(tallGroups.map((entry) => [entry.id, entry]))
+    const overTallPinnedRootPrefix = computeCombinedProjectGroupHeaderDropTarget({
+      pointerY: 210,
+      containerTop: 0,
+      scrollTop: 0,
+      draggedGroup: subPinned,
+      projectGroupById: tallById,
+      reparentableGroupIds: getReparentableTargetGroupIdsForGroup(subPinned, tallGroups),
+      groupHeaderRects: [
+        {
+          groupId: 'p1',
+          bucketKey: 'root',
+          headerIndex: 0,
+          top: 0,
+          bottom: 28,
+          sectionBottom: 100
+        },
+        {
+          groupId: 'sub-pinned',
+          bucketKey: 'parent:p1',
+          headerIndex: 0,
+          top: 60,
+          bottom: 88,
+          sectionBottom: 100
+        },
+        {
+          groupId: 'p2',
+          bucketKey: 'root',
+          headerIndex: 1,
+          top: 220,
+          bottom: 248,
+          sectionBottom: 300
+        },
+        {
+          groupId: 'u-root',
+          bucketKey: 'root',
+          headerIndex: 2,
+          top: 340,
+          bottom: 368,
+          sectionBottom: 368
+        }
+      ],
+      sidebarProjectGroupHeaderIdsByBucket: new Map([
+        ['root', ['p1', 'p2', 'u-root']],
+        ['parent:p1', ['sub-pinned']]
+      ]),
+      contentBottom: 380
+    })
+    expect(overTallPinnedRootPrefix).toEqual({
+      kind: 'slot',
+      targetBucketKey: 'root',
+      dropIndex: 0,
+      dropIndicatorY: 336
+    })
   })
 })

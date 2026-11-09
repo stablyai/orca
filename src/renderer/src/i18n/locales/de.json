@@ -1374,6 +1374,10 @@
           "removeProjectHostDisconnected": "Der Server ist getrennt. Das Projekt jetzt von diesem Desktop entfernen; Orca entfernt es vom Server, sobald die Verbindung wiederhergestellt wird.",
           "moveProjectGroupFailed": "Projektgruppe konnte nicht verschoben werden",
           "moveProjectGroupFailedDesc": "Der Computer der Gruppe hat die neue übergeordnete Gruppe nicht übernommen. Aktualisieren Sie Orca auf diesem Computer und versuchen Sie es erneut.",
+          "pinProjectGroupFailed": "Anheftung der Gruppe konnte nicht aktualisiert werden",
+          "pinProjectGroupFailedDesc": "Der Computer der Gruppe hat die Anheftungseinstellung nicht übernommen. Aktualisieren Sie Orca auf diesem Computer und versuchen Sie es erneut.",
+          "pinProjectFailed": "Anheftung des Projekts konnte nicht aktualisiert werden",
+          "pinProjectFailedDesc": "Der Computer des Projekts hat die Anheftungseinstellung nicht übernommen. Aktualisieren Sie Orca auf diesem Computer und versuchen Sie es erneut.",
           "createSubgroupCleanupFailed": "Untergruppe konnte nicht erstellt werden",
           "createSubgroupCleanupFailedDesc": "Der Computer der Gruppe hat stattdessen eine Gruppe auf oberster Ebene erstellt und die Bereinigung ist fehlgeschlagen, sodass die Gruppe auf diesem Computer verbleibt."
         },
@@ -6661,7 +6665,12 @@
           "groupCreateFailed": "Gruppe konnte nicht erstellt werden",
           "groupCreateFailedDesc": "Orca konnte die neue Gruppe beim zugehörigen Host nicht bestätigen. Prüfen Sie die Verbindung und versuchen Sie es erneut.",
           "moveProjectToParentGroup": "In übergeordnete Gruppe verschieben ({{group}})",
-          "moveGroupToTopLevel": "Auf oberste Ebene verschieben"
+          "moveGroupToTopLevel": "Auf oberste Ebene verschieben",
+          "unpinGroup": "Gruppe lösen",
+          "pinGroup": "Gruppe anheften",
+          "unpinProject": "Projekt lösen",
+          "pinProject": "Projekt anheften",
+          "unpinItemAriaLabel": "{{value0}} lösen"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Abbrechen",

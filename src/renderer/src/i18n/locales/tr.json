@@ -1350,6 +1350,10 @@
           "removeProjectHostDisconnected": "Projenin sunucusunun bağlantısı kesildi. Şimdi bu masaüstünden kaldırın; yeniden bağlandığınızda Orca sunucudan da kaldırır.",
           "moveProjectGroupFailed": "Proje grubu taşınamadı",
           "moveProjectGroupFailedDesc": "Grubun ana bilgisayarı yeni üst grubu uygulamadı. O bilgisayarda Orca’yı güncelleyip tekrar deneyin.",
+          "pinProjectGroupFailed": "Grup sabitlemesi güncellenemedi",
+          "pinProjectGroupFailedDesc": "Grubun ana bilgisayarı sabitleme ayarını uygulamadı. O bilgisayarda Orca’yı güncelleyip tekrar deneyin.",
+          "pinProjectFailed": "Proje sabitlemesi güncellenemedi",
+          "pinProjectFailedDesc": "Projenin ana bilgisayarı sabitleme ayarını uygulamadı. O bilgisayarda Orca’yı güncelleyip tekrar deneyin.",
           "createSubgroupCleanupFailed": "Alt grup oluşturulamadı",
           "createSubgroupCleanupFailedDesc": "Grubun ana bilgisayarı bunun yerine üst düzey bir grup oluşturdu ve temizleme başarısız oldu, bu nedenle grup o bilgisayarda kaldı."
         },
@@ -6638,7 +6642,12 @@
           "groupCreateFailed": "Grup oluşturulamadı",
           "groupCreateFailedDesc": "Orca yeni grubu ana bilgisayarıyla doğrulayamadı. Bağlantıyı kontrol edip tekrar deneyin.",
           "moveProjectToParentGroup": "Üst gruba taşı ({{group}})",
-          "moveGroupToTopLevel": "En üst düzeye taşı"
+          "moveGroupToTopLevel": "En üst düzeye taşı",
+          "unpinGroup": "Grubun sabitlemesini kaldır",
+          "pinGroup": "Grubu sabitle",
+          "unpinProject": "Projenin sabitlemesini kaldır",
+          "pinProject": "Projeyi sabitle",
+          "unpinItemAriaLabel": "{{value0}} sabitlemesini kaldır"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "İptal",

@@ -34,6 +34,7 @@ import { selectWorktreeListReviewCacheInputs } from './review-cache-inputs'
 import {
   filterFolderWorkspacesForVisibleHosts,
   filterProjectGroupsForVisibleHosts,
+  filterReposForVisibleHosts,
   getVisibleSidebarHostIdSet
 } from '../../../../../../shared/sidebar-list/host-filtering'
 import { selectWorkspaceBoardStatuses } from '@/store/workspaces/status/host-workspace-status-columns'
@@ -78,6 +79,7 @@ export function computeRenderedSidebarRows(
     sortBy: state.sortBy,
     worktrees: [...visibleWorktrees],
     repoMap,
+    repos: filterReposForVisibleHosts(state.repos, visibleHostIdSet, defaultHostId),
     prGroupOf: createSidebarPRGroupReader(repoMap, prCache),
     repoOrder: getLogicalRepoOrderRankById(state.repos.map((repo) => repo.id)),
     workspaceStatuses: selectWorkspaceBoardStatuses(state),

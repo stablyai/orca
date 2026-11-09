@@ -1145,6 +1145,10 @@
           "removeProjectHostDisconnected": "Son serveur est déconnecté. Supprimez-le maintenant de ce bureau, et Orca le supprimera du serveur lorsque vous vous reconnecterez.",
           "moveProjectGroupFailed": "Impossible de déplacer le groupe de projets",
           "moveProjectGroupFailedDesc": "L’ordinateur du groupe n’a pas appliqué le nouveau groupe parent. Mettez à jour Orca sur cet ordinateur et réessayez.",
+          "pinProjectGroupFailed": "Impossible de mettre à jour l’épinglage du groupe",
+          "pinProjectGroupFailedDesc": "L’ordinateur du groupe n’a pas appliqué le paramètre d’épinglage. Mettez à jour Orca sur cet ordinateur et réessayez.",
+          "pinProjectFailed": "Impossible de mettre à jour l’épinglage du projet",
+          "pinProjectFailedDesc": "L’ordinateur du projet n’a pas appliqué le paramètre d’épinglage. Mettez à jour Orca sur cet ordinateur et réessayez.",
           "createSubgroupCleanupFailed": "Impossible de créer le sous-groupe",
           "createSubgroupCleanupFailedDesc": "L’ordinateur du groupe a créé un groupe de premier niveau à la place et le nettoyage a échoué, de sorte que le groupe reste sur cet ordinateur."
         },
@@ -6519,7 +6523,12 @@
           "groupCreateFailed": "Impossible de créer le groupe",
           "groupCreateFailedDesc": "Orca n’a pas pu confirmer le nouveau groupe auprès de son hôte. Vérifiez la connexion et réessayez.",
           "moveProjectToParentGroup": "Déplacer vers le groupe parent ({{group}})",
-          "moveGroupToTopLevel": "Déplacer au premier niveau"
+          "moveGroupToTopLevel": "Déplacer au premier niveau",
+          "unpinGroup": "Désépingler le groupe",
+          "pinGroup": "Épingler le groupe",
+          "unpinProject": "Désépingler le projet",
+          "pinProject": "Épingler le projet",
+          "unpinItemAriaLabel": "Désépingler {{value0}}"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Annuler",

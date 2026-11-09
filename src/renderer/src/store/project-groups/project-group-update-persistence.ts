@@ -22,19 +22,31 @@ function groupOrderMatchesUpdate(
 
 type PersistProjectGroupUpdateOptions = {
   onParentGroupMoveRejected?: () => void
+  onPinRejected?: () => void
+  onPinFailed?: () => void
   onStageCommitted?: (group: ProjectGroup) => void
 }
 
 function verifyProjectGroupMatchesUpdate(
-  group: ProjectGroup,
+  group: ProjectGroup | null | undefined,
   updates: ProjectGroupMutation['updates'],
   options?: PersistProjectGroupUpdateOptions
-): boolean {
+): group is ProjectGroup {
+  if (!group) {
+    if (updates.isPinned !== undefined) {
+      options?.onPinFailed?.()
+    }
+    return false
+  }
   if (
     updates.parentGroupId !== undefined &&
     (group.parentGroupId ?? null) !== updates.parentGroupId
   ) {
     options?.onParentGroupMoveRejected?.()
+    return false
+  }
+  if (updates.isPinned !== undefined && group.isPinned !== updates.isPinned) {
+    options?.onPinRejected?.()
     return false
   }
   return groupOrderMatchesUpdate(group, updates)
@@ -71,10 +83,7 @@ async function persistSingleProjectGroupUpdate(
             { timeoutMs: 15_000 }
           )
         ).group
-  if (!updated || !verifyProjectGroupMatchesUpdate(updated, updates, options)) {
-    return null
-  }
-  return updated
+  return verifyProjectGroupMatchesUpdate(updated, updates, options) ? updated : null
 }
 
 export async function persistProjectGroupUpdate(
@@ -93,6 +102,9 @@ export async function persistProjectGroupUpdate(
   ) {
     if (updates.parentGroupId !== undefined) {
       options?.onParentGroupMoveRejected?.()
+    }
+    if (updates.isPinned !== undefined) {
+      options?.onPinRejected?.()
     }
     return null
   }
@@ -132,6 +144,9 @@ async function persistProjectGroupUpdatesBatch(
       mutations.map(({ groupId, updates }) =>
         persistProjectGroupUpdate(target, groupId, updates, options).catch((err) => {
           console.error('Failed to update project group:', err)
+          if (updates.isPinned !== undefined) {
+            options?.onPinFailed?.()
+          }
           return null
         })
       )
@@ -151,7 +166,7 @@ async function persistProjectGroupUpdatesBatch(
   const byId = new Map(updated?.map((group) => [group.id, group]))
   return mutations.map(({ groupId, updates }) => {
     const group = byId.get(groupId)
-    return group && verifyProjectGroupMatchesUpdate(group, updates, options) ? group : null
+    return verifyProjectGroupMatchesUpdate(group, updates, options) ? group : null
   })
 }
 
@@ -163,17 +178,29 @@ export async function persistProjectGroupUpdates(
   if (mutations.length === 0) {
     return []
   }
-  let notifiedParentMoveRejected = false
+  let notifiedPinRejected = false
+  const once = (fn?: () => void, skip?: () => boolean): (() => void) | undefined => {
+    let called = false
+    return fn
+      ? () => {
+          if (!called && !skip?.()) {
+            called = true
+            fn()
+          }
+        }
+      : undefined
+  }
   const dedupedOptions: PersistProjectGroupUpdateOptions | undefined = options
     ? {
-        onParentGroupMoveRejected: options.onParentGroupMoveRejected
-          ? () => {
-              if (!notifiedParentMoveRejected) {
-                notifiedParentMoveRejected = true
-                options.onParentGroupMoveRejected?.()
-              }
-            }
-          : undefined,
+        onParentGroupMoveRejected: once(options.onParentGroupMoveRejected),
+        onPinRejected: once(
+          () => {
+            notifiedPinRejected = true
+            options.onPinRejected?.()
+          },
+          () => !options.onPinRejected
+        ),
+        onPinFailed: once(options.onPinFailed, () => notifiedPinRejected),
         onStageCommitted: options.onStageCommitted
       }
     : undefined
@@ -187,6 +214,9 @@ export async function persistProjectGroupUpdates(
   ) {
     if (mutations.some(({ updates }) => updates.parentGroupId !== undefined)) {
       dedupedOptions?.onParentGroupMoveRejected?.()
+    }
+    if (mutations.some(({ updates }) => updates.isPinned !== undefined)) {
+      dedupedOptions?.onPinRejected?.()
     }
     return mutations.map(() => null)
   }
