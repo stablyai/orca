@@ -7,7 +7,13 @@ import type { Env } from './env'
 export type MachineSize = 'standard' | 'large'
 
 /** `suspendRunning`: payment grace ran out, so the account's running sandboxes must stop too. */
-export type StartDecision = { allow: boolean; reason: string | null; suspendRunning: boolean }
+export type StartDecision = {
+  allow: boolean
+  reason: string | null
+  suspendRunning: boolean
+  /** Paid seats, when billing reports them; scales the control plane's per-account backstop. */
+  seats?: number
+}
 
 export type UsageSegment = {
   usageId: string
@@ -41,7 +47,8 @@ export class BillingUnavailableError extends Error {
 const StartAnswer = z.looseObject({
   allow: z.boolean(),
   reason: z.string().nullable(),
-  suspendRunning: z.boolean().default(false)
+  suspendRunning: z.boolean().default(false),
+  seats: z.number().int().positive().max(100_000).optional()
 })
 const UsageResponse = z.looseObject({
   canStartSandbox: z.boolean(),
@@ -51,6 +58,13 @@ const UsageResponse = z.looseObject({
 const SuspensionsResponse = z.looseObject({
   accounts: z.array(z.looseObject({ accountId: z.string() })).max(10_000)
 })
+
+/** Reasons that start the data-retention clock (canceled / unpaid). */
+export const RETENTION_HOLD_REASONS: ReadonlySet<string> = new Set([
+  'subscription_inactive',
+  'no_subscription',
+  'payment_grace_expired'
+])
 
 /** Reasons that mean running sandboxes must stop, not just that new starts wait. */
 export const STOP_RUNNING_REASONS: ReadonlySet<string> = new Set([

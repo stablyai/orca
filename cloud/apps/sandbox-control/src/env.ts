@@ -39,7 +39,7 @@ export type Env = {
   /** Dev-only: Authorization the egress proxy injects for api.github.com until the GitHub App minter exists. */
   EGRESS_DEV_STATIC_AUTHORIZATION?: string
 
-  // GitHub App (contents/pull_requests write, metadata read). The PKCS#8 key is a secret.
+  // GitHub App (contents/pull_requests write, metadata read, org members read). The PKCS#8 key is a secret.
   GITHUB_APP_ID?: string
   GITHUB_APP_PRIVATE_KEY?: string
 
@@ -55,4 +55,31 @@ export type Env = {
    * key in (forwardURL path). Anything else: plain env injection. Needs EGRESS_PROXY_URL.
    */
   SECRETS_EGRESS_PLACEHOLDERS?: string
+
+  /** App slug for the install URL (github.com/apps/<slug>). */
+  GITHUB_APP_SLUG?: string
+  /** OAuth credentials of the same app: prove who installed it before binding (secret: CLIENT_SECRET). */
+  GITHUB_APP_CLIENT_ID?: string
+  GITHUB_APP_CLIENT_SECRET?: string
+  /** HMAC key for the signed connect state (secret, >= 32 chars). */
+  GITHUB_STATE_SECRET?: string
+
+  /** Operator routes (/v1/internal/*): kill switch, drain, bindings. Secret, >= 32 chars; unset = no routes. */
+  OPERATOR_TOKEN?: string
+  /** `true` refuses every create/resume/rollover (static kill switch; the D1 flag is the runtime one). */
+  SANDBOX_CREATES_DISABLED?: string
+  /** Global cap on active sandboxes across all accounts (default 50). */
+  SANDBOX_MAX_RUNNING?: string
+  /** Per-account active cap per paid seat (default 3); billing enforces the plan limit as well. */
+  ACCOUNT_MAX_ACTIVE_PER_SEAT?: string
+  /** POST /v1/sandboxes per account per minute (default 10). */
+  CREATE_RATE_PER_MINUTE?: string
+  /** Days data is kept after cancel/unpaid before deletion (default 30). */
+  DATA_RETENTION_DAYS?: string
+  /** Days a suspended sandbox may sit untouched before deletion (default 90). */
+  IDLE_RETENTION_DAYS?: string
+  /** Hours an orphan provider resource is kept (suspended) before deletion (default 24). */
+  ORPHAN_GRACE_HOURS?: string
+  /** Provider snapshot expiry after last use, days (default 104, backstop behind idle retention). */
+  SNAPSHOT_EXPIRATION_DAYS?: string
 }

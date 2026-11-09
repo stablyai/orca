@@ -230,6 +230,29 @@ Product decision: "API-key injection" in the Conductor parity matrix (form 2 = t
   in the same VM. Enable on dev after a live streaming test with the rebuilt image.
 - Needs: golden image rebuild (new `orca-sandbox-start`), and Orca Cloud auth minting `org_role` on sandbox tokens.
 
+## GitHub installation binding, guardrails, retention (2026-11-09)
+
+- Repo tokens need a binding: `github_installations(installation_id, account_id)`. `tokenForRepo(url, accountId)`
+  looks up the repo's installation, refuses unless the caller's account holds a live binding (re-checked on cached
+  tokens too), mints for that one repo (contents/pull_requests write, metadata read) and rejects a wider response.
+  Binding: desktop `POST /v1/github/connect` → signed (HMAC), single-use, 10-min state carrying the Orca account →
+  GitHub install / OAuth → `/v1/github/setup` + `/v1/github/callback` exchange the code for a user-to-server token and
+  bind only installations on the GitHub user's own account or on an org where they are an active admin
+  (`/user/memberships/orgs`, needs the app's Members:read). Installation ids in URLs are never trusted.
+  Operator binding for support/dev: `POST /v1/internal/github/bindings {installationId|repoUrl, accountId}`.
+- Guardrails before billing: kill switch (D1 flag via `POST /v1/internal/kill-switch`, or `SANDBOX_CREATES_DISABLED`)
+  refuses create/resume/rollover with 503 `maintenance` and drains running sandboxes (suspend, snapshot kept; cron
+  keeps draining while on); global `SANDBOX_MAX_RUNNING` (50, 503 `capacity`); per-account 3 × seats backstop
+  (403 `concurrency_limit`); `CREATE_RATE_PER_MINUTE` (10, 429).
+- Hourly housekeeping: provider sandboxes tagged with this env and no live row are stopped on first sight and
+  deleted after `ORPHAN_GRACE_HOURS` (24); automatic snapshots whose sandbox no longer exists anywhere in the project
+  are deleted after the same grace (manual/golden never; partial listings delete nothing). Canceled/unpaid accounts
+  (suspensions list + daily standing probe; outages never start a clock) get a warning hook at T−7 days and are
+  destroyed `DATA_RETENTION_DAYS` (30) after; suspended sandboxes idle `IDLE_RETENTION_DAYS` (90) likewise. New
+  sandboxes set `snapshotExpiration` to 104 days (backstop). Destroyed rows drop `repo_url`.
+- Live on dev: unbound account → private clone refused (no token minted); after operator binding → clone + push +
+  gh/Node via proxy OK; kill switch drill drained 1, refused create/resume, resume OK after lifting.
+
 ## What needs live access (not done)
 
 Vercel Pro team id + project id + a Sandbox-scoped token (as Worker secrets), wrangler auth for a dev D1, a

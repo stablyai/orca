@@ -41,7 +41,8 @@ describe('Vercel Sandbox REST client', () => {
       timeoutMs: 1_800_000,
       ports: [6768],
       networkPolicy: { allow: { 'registry.npmjs.org': [] } },
-      tags: { orcaSandbox: 'sbx_1' }
+      tags: { orcaSandbox: 'sbx_1' },
+      snapshotExpirationMs: 104 * 86_400_000
     })
     expect(seen[0]!.method).toBe('POST')
     expect(`${seen[0]!.url.origin}${seen[0]!.url.pathname}${seen[0]!.url.search}`).toBe(
@@ -53,8 +54,8 @@ describe('Vercel Sandbox REST client', () => {
       source: { type: 'snapshot', snapshotId: 'snap_golden' },
       resources: { vcpus: 4 },
       persistent: true,
-      keepLastSnapshots: { count: 2 },
-      snapshotExpiration: 0
+      keepLastSnapshots: { count: 2, expiration: 104 * 86_400_000 },
+      snapshotExpiration: 104 * 86_400_000
     })
     expect(state.routes).toEqual([{ port: 6768, url: 'https://sb-1.vercel.run' }])
     expect(state.session.timeoutMs).toBe(1_800_000)

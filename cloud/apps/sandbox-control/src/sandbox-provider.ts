@@ -41,6 +41,22 @@ export type ProviderSnapshot = {
   sourceSessionId: string
 }
 
+/** Project-wide listing entries for the orphan sweep. */
+export type ProviderSandboxSummary = {
+  name: string
+  status: ProviderSessionStatus
+  currentSessionId: string
+  tags: Record<string, string>
+}
+
+export type ProviderProjectSnapshot = {
+  id: string
+  status: 'created' | 'deleted' | 'failed'
+  /** `automatic` (session stop) | `manual` (golden images); absent on old snapshots. */
+  creationMethod: string | null
+  createdAt: number
+}
+
 export type CreateSandboxParams = {
   name: string
   snapshotId: string
@@ -50,6 +66,8 @@ export type CreateSandboxParams = {
   ports: number[]
   networkPolicy: NetworkPolicy
   tags: Record<string, string>
+  /** Provider-side snapshot expiry after last use (backstop behind Orca's own retention); 0 = never. */
+  snapshotExpirationMs: number
 }
 
 export type RunCommandParams = {
@@ -76,6 +94,10 @@ export type SandboxProviderApi = {
   listSnapshots(name: string): Promise<ProviderSnapshot[]>
   /** Resolves when already gone. */
   deleteSnapshot(snapshotId: string): Promise<void>
+  /** Every sandbox in Orca's project (all environments). `complete` is false when the listing was cut short. */
+  listSandboxes(): Promise<{ sandboxes: ProviderSandboxSummary[]; complete: boolean }>
+  /** Every snapshot in Orca's project. */
+  listProjectSnapshots(): Promise<{ snapshots: ProviderProjectSnapshot[]; complete: boolean }>
 }
 
 /** Provider failed or answered unexpectedly; the body is never surfaced to callers. */
