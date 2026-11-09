@@ -21,11 +21,11 @@
       "website": "Trang web Orca",
       "sourceCode": "Mã nguồn Orca",
       "socialProfile": "Orca trên X",
-      "openLinkFailed": "Không thể mở liên kết. Thử lại."
+      "openLinkFailed": "Không thể mở liên kết. Vui lòng thử lại."
     },
     "appUpdateSettingsRows": {
       "checking": "Đang kiểm tra…",
-      "upToDate": "Đã mới nhất",
+      "upToDate": "Đã là mới nhất",
       "checkFailed": "Không thể kiểm tra",
       "neverChecked": "Chưa từng",
       "lastCheckedJustNow": "Lần kiểm tra gần nhất vừa xong",
@@ -49,8 +49,8 @@
       "title": "Trình duyệt",
       "linksHeading": "LIÊN KẾT",
       "linksDescription": "Chọn nơi mở liên kết HTTP(S) được nhấn trong đầu ra terminal.",
-      "loadFailed": "Không thể tải tùy chọn trình duyệt. Thử lại.",
-      "saveFailed": "Không thể lưu tùy chọn trình duyệt. Thử lại.",
+      "loadFailed": "Không thể tải cài đặt trình duyệt. Vui lòng thử lại.",
+      "saveFailed": "Không thể lưu cài đặt trình duyệt. Vui lòng thử lại.",
       "openTerminalLinks": "Mở liên kết terminal"
     },
     "menuItems": {
@@ -77,34 +77,34 @@
       "updateDesktopHint": "Ghép nối một máy tính đã cập nhật để nhận thông báo trên điện thoại này."
     },
     "notificationDisplayTest": {
-      "loadFailed": "Không thể tải máy tính đã ghép nối.",
+      "loadFailed": "Không thể tải danh sách máy tính đã ghép nối.",
       "pairDesktop": "Ghép nối máy tính rồi thử lại.",
       "connectDesktop": "Kết nối máy tính rồi thử lại.",
       "desktopUnreachable": "Không thể kết nối đến máy tính. Thử lại.",
-      "accepted": "Dịch vụ push của Orca đã tiếp nhận. Kiểm tra thông báo.",
+      "accepted": "Dịch vụ push của Orca đã tiếp nhận. Hãy kiểm tra thông báo.",
       "rateLimited": "Quá nhiều thông báo. Thử lại sau.",
       "pushServiceFailed": "Không thể gửi qua dịch vụ push của Orca. Thử lại.",
       "sendFailed": "Không thể gửi thử thông báo push.",
       "troubleReceivingAlerts": "Gặp sự cố khi nhận cảnh báo?",
-      "description": "Kiểm tra gửi push, hoặc thông báo cục bộ khi không có push.",
+      "description": "Kiểm tra gửi push, hoặc gửi thông báo cục bộ khi không có push.",
       "sending": "Đang gửi…",
       "sendButton": "Gửi thông báo thử nghiệm",
       "troubleshooting": "Khắc phục sự cố",
       "localTitle": "Thông báo thử nghiệm",
-      "localBody": "Kiểm tra thông báo cục bộ từ điện thoại này.",
+      "localBody": "Thông báo thử nghiệm cục bộ từ điện thoại này.",
       "localScheduled": "{{reason}} Đã lên lịch thông báo thử cục bộ. Hãy xem thông báo có hiện không. Việc này chỉ kiểm tra hiển thị; không xác minh việc gửi cảnh báo của agent.",
       "disabled": "Thông báo đã bị tắt trong Orca. Bật thông báo rồi thử lại.",
       "osDisabled": "Thông báo đã bị tắt trong cài đặt hệ thống. Cho phép thông báo rồi thử lại.",
       "noToken": "Không có push token khả dụng trên điện thoại này.",
       "unsupportedHost": "Máy tính này không hỗ trợ thông báo push. Cập nhật máy tính để nhận push.",
       "registrationPending": "Đăng ký push chưa sẵn sàng trên máy tính này. Thử lại sau chốc lát.",
-      "liveFallbackScheduled": "{{reason}} Đã lên lịch kiểm tra cục bộ. Kiểm tra thông báo. Cảnh báo trực tiếp khả dụng khi Orca đang chạy và được kết nối."
+      "liveFallbackScheduled": "{{reason}} Đã lên lịch gửi thử cục bộ. Hãy kiểm tra thông báo. Cảnh báo trực tiếp chỉ có khi Orca đang chạy và đã kết nối."
     },
     "notificationSettingsScreen": {
       "loadFailed": "Không thể tải cài đặt thông báo. Thử lại.",
       "saveFailed": "Không thể lưu cài đặt thông báo. Thử lại.",
       "notificationsBlocked": "Thông báo đã bị tắt trong cài đặt hệ thống.",
-      "description": "Nhận thông báo trên thiết bị này khi agent cần bạn nhập thông tin hoặc hoàn thành tác vụ.",
+      "description": "Nhận thông báo trên thiết bị này khi agent cần đầu vào từ bạn hoặc hoàn thành một tác vụ.",
       "title": "Thông báo",
       "enableNotifications": "Bật thông báo",
       "openSettingsFailed": "Không thể mở cài đặt hệ thống. Thử lại.",
@@ -116,7 +116,7 @@
       "cleanupUnconfirmed_one": "Không thể xác nhận đã xóa {{count}} thông tin xác thực trên thiết bị này.",
       "cleanupUnconfirmed_other": "Không thể xác nhận đã xóa {{count}} thông tin xác thực trên thiết bị này.",
       "statusCheckFailed": "Không thể kiểm tra trạng thái xóa thông tin xác thực trên thiết bị này. Thử lại để đảm bảo an toàn.",
-      "retryCleanup": "Thử lại việc xóa thông tin xác thực ghép nối"
+      "retryCleanup": "Thử xóa lại thông tin xác thực ghép nối"
     },
     "menuScreen": {
       "privacyPolicy": "Chính sách quyền riêng tư",
@@ -131,8 +131,8 @@
       "loadFailed": "Không thể tải cài đặt giọng nói",
       "updateFailed": "Không thể cập nhật",
       "selectModelFailed": "Không thể chọn mô hình",
-      "downloadFailed": "Không thể tải xuống",
-      "deleteFailed": "Không thể xóa",
+      "downloadFailed": "Tải xuống thất bại",
+      "deleteFailed": "Xóa thất bại",
       "noneSelected": "Chưa chọn",
       "title": "Giọng nói",
       "connectDesktop": "Kết nối với máy tính để quản lý cài đặt giọng nói.",
@@ -226,7 +226,7 @@
       "saveChoiceFailed": "Không thể lưu lựa chọn của bạn. Thử lại.",
       "notificationSettingsFailed": "Không thể cập nhật cài đặt thông báo. Thử lại.",
       "progress": "Tiến trình thiết lập ban đầu",
-      "stepProgress": "Bước {{step}} / {{total}}"
+      "stepProgress": "Bước {{step}}/{{total}}"
     },
     "notifications": {
       "description": "Nhận cảnh báo từ agent ngay cả khi ứng dụng đã đóng. Được chuyển phát qua dịch vụ push của Orca và Apple hoặc Google."
@@ -358,11 +358,11 @@
     },
     "useAgentHistoryState": {
       "waitingForHost": "Đang chờ host…",
-      "hostUnreachable": "Không thể tiếp cận host",
+      "hostUnreachable": "Không thể kết nối với host",
       "loadFailed": "Không thể tải phiên agent"
     },
     "worktreeNavigationActions": {
-      "sourceControl": "Quản lý mã nguồn",
+      "sourceControl": "Source Control",
       "agentSessionHistory": "Lịch sử phiên agent"
     },
     "resume": {
@@ -479,7 +479,7 @@
         "unrecognisedError": "lỗi không xác định"
       },
       "hostCodeCopy": {
-        "unavailable": "host không có gói workspace nào",
+        "unavailable": "host không có gói workspace",
         "buildChanged": "bản dựng của host đã thay đổi trong khi tải xuống",
         "assetUnknown": "host không nhận diện được tài nguyên",
         "assetChanged": "một tài nguyên đã thay đổi trên host",
@@ -487,7 +487,7 @@
         "readLimited": "host đã giới hạn lượt đọc đồng thời"
       },
       "wallCopy": {
-        "bundleUnavailable": "host không có gói workspace nào",
+        "bundleUnavailable": "host không có gói workspace",
         "bundleShellTooOld": "ứng dụng này quá cũ so với gói đã lưu",
         "hostTooOldForBundle": "host quá cũ so với gói đã lưu",
         "bundleTooOldForHost": "gói đã lưu quá cũ so với host",
@@ -589,7 +589,7 @@
       "heading": "Số liệu thống kê",
       "agentsSpawned": "Agent đã khởi tạo",
       "agentTime": "Thời gian agent chạy",
-      "prsCreated": "PR đã tạo",
+      "prsCreated": "Pull request đã tạo",
       "days": "{{days}} ngày",
       "hours": "{{hours}} giờ",
       "minutes": "{{minutes}} phút"
@@ -622,7 +622,7 @@
       "connectDesktop": "Kết nối {{desktop}} để xem mức sử dụng tài khoản agent.",
       "addAccounts": "Thêm tài khoản từ Cài đặt → Tài khoản trên máy tính.",
       "updatedJustNow": "Vừa cập nhật",
-      "updatedAgo": "Đã cập nhật {{time}} trước",
+      "updatedAgo": "Cập nhật {{time}} trước",
       "active": "Đang hoạt động",
       "openAccountsHint": "Mở các tài khoản của máy tính này",
       "emptyTitle": "Chưa có dữ liệu sử dụng"
@@ -642,7 +642,7 @@
       "noSpeech": "Không phát hiện thấy giọng nói.",
       "microphoneInterrupted": "Đọc chính tả bằng giọng nói đã dừng do micrô bị gián đoạn. Thử lại.",
       "inputClosed": "Đọc chính tả bằng giọng nói đã dừng do phiên này không còn nhận đầu vào. Thử lại.",
-      "phoneUnavailable": "Tính năng đọc chính tả trên điện thoại này chưa sẵn sàng. Hãy tải xuống trong Cài đặt giọng nói, hoặc chọn Tự động.",
+      "phoneUnavailable": "Tính năng đọc chính tả trên điện thoại này chưa sẵn sàng. Tải xuống trong Cài đặt > Giọng nói, hoặc chọn Tự động.",
       "phoneFailed": "Tính năng đọc chính tả trên điện thoại này đã ngừng hoạt động. Thử lại.",
       "phoneBusy": "Tính năng đọc chính tả trên điện thoại này vẫn đang khởi động. Thử lại sau giây lát."
     }
@@ -677,7 +677,7 @@
       "unpin": "Bỏ ghim",
       "pin": "Ghim",
       "rename": "Đổi tên",
-      "primaryWorktreeDeleteHint": "Worktree chính — không thể xóa. Hãy xóa dự án thay vì xóa mục này.",
+      "primaryWorktreeDeleteHint": "Worktree chính — không thể xóa. Hãy xóa dự án.",
       "removeHost": "Xóa host",
       "removeHostMessage": "Xóa \"{{name}}\"? Bạn có thể ghép nối lại sau.",
       "deleteFailed": "Không thể xóa \"{{name}}\"",
@@ -696,7 +696,7 @@
       "checksPassing": "Lượt kiểm tra: Đạt",
       "checksFailing": "Lượt kiểm tra: Không đạt",
       "checksPending": "Lượt kiểm tra: Đang chờ",
-      "createdFromCli": "Được tạo từ Orca CLI",
+      "createdFromCli": "Tạo từ Orca CLI",
       "createdByNamedAutomation": "Do tự động hóa “{{name}}” tạo",
       "createdByAutomation": "Do tự động hóa tạo",
       "openLinkWithTitle": "Mở {{label}}, {{title}}",
@@ -704,7 +704,7 @@
       "prOpen": "Đang mở"
     },
     "workspaceOptionControls": {
-      "none": "Không",
+      "none": "Không có",
       "status": "Trạng thái",
       "pr": "PR",
       "project": "Dự án",
@@ -719,9 +719,9 @@
       "detailed": "Chi tiết",
       "compact": "Thu gọn",
       "fullList": "Danh sách đầy đủ",
-      "githubTicket": "Ticket GitHub",
-      "linearIssue": "Linear issue",
-      "jiraIssue": "Jira issue",
+      "githubTicket": "GitHub ticket",
+      "linearIssue": "Issue Linear",
+      "jiraIssue": "Issue Jira",
       "prMrLink": "Liên kết PR/MR",
       "automation": "Tự động hóa",
       "notes": "Ghi chú",
@@ -732,7 +732,7 @@
       "linearIssues": "Linear issue",
       "jiraIssues": "Jira issue",
       "agentStatuses": "Trạng thái agent",
-      "branchFolderPath": "Đường dẫn branch / thư mục",
+      "branchFolderPath": "Branch / đường dẫn thư mục",
       "branchName": "Tên branch",
       "selectedCount": "{{count}} trên {{total}}",
       "allHosts": "Tất cả host",
@@ -800,11 +800,11 @@
   "navigation": {
     "hostStackScreens": {
       "host": "Host",
-      "editHost": "Sửa host",
+      "editHost": "Chỉnh sửa host",
       "accounts": "Tài khoản",
       "tasks": "Tác vụ",
       "terminal": "Terminal",
-      "sourceControl": "Quản lý mã nguồn",
+      "sourceControl": "Source Control",
       "agentSessionHistory": "Lịch sử phiên agent",
       "changes": "Thay đổi",
       "pullRequest": "Pull Request",
@@ -835,8 +835,8 @@
       "sessionViewDescription": "Chọn mở các phiên agent được hỗ trợ trong terminal hay Chat UI trên thiết bị này. Nhấn và giữ một tab phiên để chuyển đổi chế độ xem, hoặc đổi mặc định bất kỳ lúc nào trong Cài đặt → Chat UI.",
       "notificationsDescription": "Nhận thông báo trên điện thoại này khi agent hoàn tất hoặc đang chờ — ngay cả khi bạn không dùng ứng dụng.",
       "notificationsDisclosure": "Được gửi qua dịch vụ đẩy của Orca sau khi máy tính không hoạt động trong 3 phút. Bạn có thể đổi bất kỳ lúc nào trong Cài đặt.",
-      "useChatUi": "Dùng Chat UI",
-      "openInChatUi": "Mở các phiên trong Chat UI",
+      "useChatUi": "Dùng giao diện Chat",
+      "openInChatUi": "Mở phiên trong giao diện chat",
       "keepTerminal": "Giữ terminal",
       "openInTerminal": "Mở các phiên trong terminal",
       "enableNotifications": "Bật thông báo",
@@ -857,14 +857,14 @@
       "signInRequired": "Cần đăng nhập trên {{host}}",
       "signInDetail": "Đăng nhập vào Orca trên máy tính để kết nối lại",
       "hostOffline": "{{host}} đang ngoại tuyến",
-      "hostOfflineDetail": "Kiểm tra máy đang thức, Orca đang chạy và bạn đã đăng nhập",
-      "relayAccessExpired": "Quyền truy cập Relay đã hết hạn cho {{host}}",
+      "hostOfflineDetail": "Kiểm tra máy đang bật, Orca đang chạy và bạn đã đăng nhập",
+      "relayAccessExpired": "Quyền truy cập Relay của {{host}} đã hết hạn",
       "rePairDetail": "Ghép nối lại với máy tính",
       "relayUnreachable": "Không thể kết nối với Relay",
       "checkConnection": "Kiểm tra kết nối của bạn",
       "tailscaleHint": "kiểm tra Tailscale",
       "hostFallback": "Host",
-      "pairingInvalid": "Ghép nối không hợp lệ — hãy ghép nối lại với máy tính của bạn",
+      "pairingInvalid": "Ghép nối không hợp lệ — ghép nối lại với máy tính",
       "connected": "Đã kết nối",
       "relayConnectFailed": "Không thể kết nối qua Relay",
       "connectingViaRelay": "Đang kết nối qua Relay…",
@@ -895,7 +895,7 @@
       "invalidCode": "Mã ghép nối không hợp lệ"
     },
     "rpcClientStreamRegistry": {
-      "interrupted": "Kết nối bị gián đoạn",
+      "interrupted": "Kết nối đã bị gián đoạn",
       "endedBeforeReady": "Yêu cầu streaming đã kết thúc trước khi sẵn sàng."
     },
     "rpcClientTerminalBinaryFrame": {
@@ -905,13 +905,13 @@
   "worktree": {
     "agentRowDisplay": {
       "working": "Đang chạy",
-      "monitoring": "Đang theo dõi tác vụ nền",
+      "monitoring": "Đang theo dõi các tác vụ chạy ngầm",
       "blocked": "Bị chặn",
       "waiting": "Đang chờ đầu vào",
       "interrupted": "Bị gián đoạn",
       "failed": "Thất bại",
       "unconfirmed": "Không thể xác nhận",
-      "idle": "Rảnh",
+      "idle": "Đang rảnh",
       "unverifiable": "Không có cập nhật gần đây",
       "stopping": "Đang dừng…",
       "justNow": "vừa xong",
@@ -925,7 +925,7 @@
       "permission": "Cần chú ý"
     },
     "hostWorkspaceListStates": {
-      "checkHost": "Kiểm tra xem máy tính của bạn có đang bật (không ngủ) và Orca đang chạy không",
+      "checkHost": "Kiểm tra xem máy tính của bạn đã bật và Orca đang chạy chưa",
       "loadFailed": "Không thể tải workspace từ host này",
       "noMatches": "Không có workspace phù hợp",
       "noFilterMatches": "Không có workspace nào khớp với bộ lọc",
@@ -946,17 +946,17 @@
   },
   "components": {
     "agentLaunchNotice": {
-      "updateRequired": "Cập nhật Orca trên máy tính của bạn để bắt đầu agent từ điện thoại.",
+      "updateRequired": "Cập nhật Orca trên máy tính để khởi chạy agent từ điện thoại.",
       "statusUnreadable": "Không thể đọc trạng thái của host này. Đang thử lại…",
       "copyFailed": "Không thể sao chép",
       "copyPrompt": "Sao chép prompt"
     },
     "agentSpinner": {
-      "monitoring": "Đang theo dõi tác vụ nền",
+      "monitoring": "Đang theo dõi các tác vụ chạy ngầm",
       "unconfirmed": "Không thể xác nhận"
     },
     "agentStateDot": {
-      "monitoring": "Đang theo dõi tác vụ nền",
+      "monitoring": "Đang theo dõi các tác vụ chạy ngầm",
       "unverifiable": "Không có cập nhật gần đây"
     },
     "authFailedBanner": {
@@ -1016,12 +1016,12 @@
       "updateDesktop": "Cập nhật Orca trên máy tính",
       "connectOnDesktop": "Kết nối Jira trên máy tính của bạn",
       "credentialUnreadable": "Jira đã được lưu nhưng không đọc được: {{credentialError}}",
-      "connectHint": "Thêm trang Jira của bạn trong Orca trên máy tính tại Cài đặt → Tích hợp, sau đó kiểm tra lại.",
+      "connectHint": "Thêm trang Jira của bạn trong Orca trên máy tính tại Cài đặt > Tích hợp, sau đó kiểm tra lại.",
       "checkAgain": "Kiểm tra lại"
     },
     "dictationSetupSheet": {
-      "loadFailed": "Không thể tải",
-      "downloadFailed": "Tải xuống thất bại",
+      "loadFailed": "Tải không thành công",
+      "downloadFailed": "Tải xuống không thành công",
       "selectFailed": "Không thể chọn mô hình",
       "updateFailed": "Không thể cập nhật",
       "modelSize": "{{size}} MB",
@@ -1030,7 +1030,7 @@
       "title": "Thiết lập đọc chính tả bằng giọng nói",
       "description": "Tải xuống hoặc chọn một mô hình và bật đọc chính tả trên máy tính đã ghép nối — tất cả ngay tại đây.",
       "enabled": "Đã bật đọc chính tả",
-      "recommended": "Khuyên dùng",
+      "recommended": "Đề xuất",
       "inUse": "Đang dùng",
       "useModel": "Dùng {{model}}",
       "use": "Dùng",
@@ -1123,10 +1123,10 @@
       "jumpToFile": "{{fileName}}, chuyển đến tệp khác"
     },
     "diffReviewLine": {
-      "addedLineNumber": "Dòng được thêm {{number}}",
-      "addedLine": "Dòng được thêm",
-      "deletedLineNumber": "Dòng bị xóa {{number}}",
-      "deletedLine": "Dòng bị xóa",
+      "addedLineNumber": "Dòng đã thêm {{number}}",
+      "addedLine": "Dòng đã thêm",
+      "deletedLineNumber": "Dòng đã xóa {{number}}",
+      "deletedLine": "Dòng đã xóa",
       "contextLineNumber": "Dòng ngữ cảnh {{number}}",
       "contextLine": "Dòng ngữ cảnh",
       "addNoteOnLine": "Thêm ghi chú ở dòng {{number}}",
@@ -1135,17 +1135,17 @@
     "hostCard": {
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} đang hoạt động",
       "pairingInvalid": "Ghép nối không hợp lệ",
-      "pairingTemporarilyUnavailable": "Tạm thời không thể ghép nối",
+      "pairingTemporarilyUnavailable": "Ghép nối tạm thời không khả dụng",
       "sameNetworkOnlyHint": "Chỉ kết nối trên cùng mạng Wi-Fi hoặc Tailscale. Để kết nối từ bất kỳ đâu, hãy đăng nhập trên máy tính và ghép nối lại",
       "repairHint": "Nhấn để ghép nối lại với máy tính của bạn",
       "unlockHint": "Mở khóa điện thoại, rồi nhấn để thử lại",
       "openHost": "Mở {{title}}",
       "hostActions": "Thao tác cho {{title}}",
-      "needsYou_one": "{{count}} cần bạn",
-      "needsYou_other": "{{count}} cần bạn"
+      "needsYou_one": "{{count}} cần bạn xử lý",
+      "needsYou_other": "{{count}} cần bạn xử lý"
     },
     "htmlPreview": {
-      "previewRenderedHtml": "Xem trước HTML đã kết xuất",
+      "previewRenderedHtml": "Xem trước bản hiển thị của HTML",
       "preview": "Xem trước",
       "viewHtmlSource": "Xem mã nguồn HTML",
       "source": "Nguồn",
@@ -1276,7 +1276,7 @@
       "crossRepoMessage": "Mục này nằm trong {{owner}}/{{repo}}.",
       "switchRepo": "Chuyển sang {{repoName}}",
       "connectRepository": "Kết nối repo để tìm kiếm nguồn.",
-      "gitHubRemoteRequired": "Repo SSH này cần một remote GitHub để liệt kê issue và PR.",
+      "gitHubRemoteRequired": "Repo SSH này cần một remote GitHub để liệt kê issue và pull request.",
       "noResults": "Không tìm thấy kết quả nào.",
       "typeWorkspaceName": "Nhập tên workspace vào trường bên dưới.",
       "searchPlaceholder": "Nhập tên hoặc tìm kiếm nguồn",
@@ -1317,7 +1317,7 @@
       "modelSize": "{{size}} MB",
       "modelProgress": "{{size}} · {{progress}}%",
       "modelExtracting": "{{size}} · đang giải nén…",
-      "recommended": "Khuyên dùng",
+      "recommended": "Đề xuất",
       "inUse": "Đang dùng",
       "useModel": "Dùng {{label}}",
       "use": "Dùng",
@@ -1486,13 +1486,13 @@
     "prCheckDetail": {
       "noDetails": "Không có thông tin chi tiết.",
       "annotations": "Chú thích",
-      "annotationsTruncated": "Đang hiển thị 20 chú thích đầu tiên",
-      "jobsTruncated": "Đang hiển thị 100 việc đầu tiên"
+      "annotationsTruncated": "Hiển thị 20 chú thích đầu tiên",
+      "jobsTruncated": "Hiển thị 100 công việc đầu tiên"
     },
     "checksSection": {
-      "noChecks": "Không có lượt kiểm tra",
-      "failing": "{{count}} lượt kiểm tra thất bại",
-      "passed": "{{count}} lượt kiểm tra đạt",
+      "noChecks": "Không có lượt kiểm tra nào",
+      "failing": "{{count}} thất bại",
+      "passed": "{{count}} đạt",
       "title": "Lượt kiểm tra",
       "openOnWeb": "Mở {{name}} trên web"
     },
@@ -1517,7 +1517,7 @@
       "deleteComment": "Xóa bình luận",
       "unresolveThread": "Mở lại luồng",
       "resolveThread": "Giải quyết luồng",
-      "unresolve": "Mở lại",
+      "unresolve": "Bỏ đánh dấu đã giải quyết",
       "resolve": "Giải quyết",
       "replyPlaceholder": "Viết phản hồi…",
       "deleteConfirmTitle": "Xóa bình luận?",
@@ -1528,7 +1528,7 @@
       "humans": "Người dùng",
       "bots": "Bot",
       "noBotComments": "Không có bình luận nào từ bot.",
-      "noHumanComments": "Không có bình luận nào của người dùng.",
+      "noHumanComments": "Không có bình luận nào từ người dùng.",
       "noComments": "Chưa có bình luận nào.",
       "description": "Mô tả",
       "descriptionLoadFailed": "Không thể tải mô tả. Nhấn làm mới để thử lại.",
@@ -1541,7 +1541,7 @@
       "comment": "Bình luận",
       "resolvedThreadSingle": "Luồng do {{author}} giải quyết",
       "resolvedThreadCount": "Luồng do {{author}} giải quyết ({{count}})",
-      "resolvedCommentSingle": "Bình luận do {{author}} giải quyết",
+      "resolvedCommentSingle": "Bình luận đã giải quyết của {{author}}",
       "resolvedCommentCount": "Bình luận do {{author}} giải quyết ({{count}})",
       "commentsLoadFailedRetry": "Không thể tải bình luận."
     },
@@ -1564,7 +1564,7 @@
       "refreshOrCreate": "Làm mới để kiểm tra lại, hoặc tạo PR mới cho branch này.",
       "branchNotLinked": "{{branch}} chưa được liên kết với PR đang mở nào.",
       "currentBranchNotLinked": "Branch hiện tại chưa được liên kết với PR đang mở nào.",
-      "linkExistingPullRequest": "Liên kết pull request hiện có"
+      "linkExistingPullRequest": "Liên kết một pull request hiện có"
     },
     "reviewerPickerDrawer": {
       "loadFailed": "Không thể tải danh sách người dùng",
@@ -1583,20 +1583,20 @@
       "reviewRequiredLabel": "Cần phê duyệt",
       "reviewRequiredHint": "GitHub yêu cầu phê duyệt review trước khi pull request này có thể merge",
       "changesRequestedLabel": "Đã yêu cầu thay đổi",
-      "changesRequestedHint": "GitHub báo cáo có yêu cầu thay đổi trên pull request này",
+      "changesRequestedHint": "GitHub báo có yêu cầu thay đổi cho pull request này",
       "conflictsLabel": "Xung đột",
-      "conflictsHint": "GitHub báo cáo có xung đột merge",
+      "conflictsHint": "GitHub báo có xung đột merge",
       "mergeQueueLabel": "Merge khi sẵn sàng",
-      "mergeQueueHint": "Branch gốc này dùng hàng đợi merge của GitHub",
-      "mergeQueueAutoMergeOnLabel": "Đã bật tự động merge",
-      "mergeQueueAutoMergeOnHint": "Branch gốc này dùng hàng đợi merge của GitHub",
+      "mergeQueueHint": "Base branch này dùng hàng đợi merge của GitHub",
+      "mergeQueueAutoMergeOnLabel": "Đang bật tự động merge",
+      "mergeQueueAutoMergeOnHint": "Base branch này dùng hàng đợi merge của GitHub",
       "mergeStatusUnavailableLabel": "Merge",
       "mergeStatusUnavailableHint": "Không có trạng thái merge cho PR này",
       "behindLabel": "Chưa cập nhật",
       "behindHint": "Cập nhật branch trước khi merge",
       "blockedLabel": "Bị chặn",
-      "blockedHint": "GitHub báo cáo pull request này đã bị chặn",
-      "mergeableChecksFailedLabel": "Lượt kiểm tra thất bại",
+      "blockedHint": "GitHub báo pull request này bị chặn",
+      "mergeableChecksFailedLabel": "Các lượt kiểm tra thất bại",
       "mergeableChecksFailedHint": "GitHub báo PR này có thể merge, nhưng một số lượt kiểm tra đã thất bại",
       "mergeableChecksPendingLabel": "Lượt kiểm tra đang chờ",
       "mergeableChecksPendingHint": "GitHub báo PR này có thể merge, nhưng các lượt kiểm tra vẫn đang chạy",
@@ -1658,7 +1658,7 @@
     },
     "tab": {
       "updated": "đã cập nhật {{time}}",
-      "moreActions": "Thao tác pull request khác",
+      "moreActions": "Các thao tác pull request khác",
       "unlinkConfirmTitle": "Hủy liên kết pull request?",
       "unlinkConfirmMessage": "#{{number}} vẫn mở trên GitHub; workspace này sẽ dừng theo dõi.",
       "createPullRequest": "Tạo pull request",
@@ -1715,21 +1715,21 @@
       "viewLog": "Xem nhật ký",
       "copyError": "Sao chép lỗi",
       "openOnGitHub": "Mở trên GitHub",
-      "failedAfter": "Thất bại sau {{duration}}",
-      "failed": "Thất bại",
-      "checkActions": "Thao tác khác cho {{name}}",
+      "failedAfter": "Không đạt sau {{duration}}",
+      "failed": "Không đạt",
+      "checkActions": "Tác vụ khác cho {{name}}",
       "rerun": "Chạy lại",
       "copyErrorFailed": "Không thể sao chép lỗi.",
-      "durationSeconds": "{{seconds}} giây",
-      "durationMinutes": "{{minutes}} phút {{seconds}} giây",
-      "durationHours": "{{hours}} giờ {{minutes}} phút",
-      "failing": "Thất bại",
+      "durationSeconds": "{{seconds}}s",
+      "durationMinutes": "{{minutes}}m {{seconds}}s",
+      "durationHours": "{{hours}}h {{minutes}}m",
+      "failing": "Không đạt",
       "fixWithAi": "Sửa bằng AI",
       "runningSection": "Đang chạy",
-      "queued": "Đã vào hàng đợi",
+      "queued": "Đang trong hàng đợi",
       "inProgress": "Đang xử lý",
       "passedSection": "Đã đạt",
-      "neutralSection": "Trung lập",
+      "neutralSection": "Trung tính",
       "namesAndMore": "{{names}} và còn {{count}} người khác",
       "running": "{{count}} lượt đang chạy",
       "filterComments": "Lọc bình luận",
@@ -1743,7 +1743,7 @@
       "commentActions": "Thao tác khác cho bình luận này",
       "replyAndMore": "{{body}} (còn {{count}} phản hồi khác)",
       "severityCritical": "Nghiêm trọng",
-      "severityMajor": "Nghiêm trọng",
+      "severityMajor": "Quan trọng",
       "severityMinor": "Nhỏ",
       "severityTrivial": "Không đáng kể",
       "thread": "Luồng",
@@ -1770,20 +1770,20 @@
       "title": "Chưa có pull request"
     },
     "gates": {
-      "checksUnavailable": "Lượt kiểm tra không khả dụng",
-      "checksFailing_one": "{{count}} lượt kiểm tra thất bại",
-      "checksFailing_other": "{{count}} lượt kiểm tra thất bại",
+      "checksUnavailable": "Không có dữ liệu lượt kiểm tra",
+      "checksFailing_one": "{{count}} lượt kiểm tra không đạt",
+      "checksFailing_other": "{{count}} lượt kiểm tra không đạt",
       "checksRunning_one": "{{count}} lượt kiểm tra đang chạy",
       "checksRunning_other": "{{count}} lượt kiểm tra đang chạy",
       "checksPassedSoFar": "Đến giờ đã đạt {{count}} lượt",
       "noChecks": "Không có lượt kiểm tra nào",
-      "checksFinished": "Đã kiểm tra xong",
+      "checksFinished": "Các lượt kiểm tra đã hoàn tất",
       "checksPassed_one": "{{count}} lượt kiểm tra đã đạt",
       "checksPassed_other": "{{count}} lượt kiểm tra đã đạt",
-      "checksNeutral": "{{count}} trung lập",
+      "checksNeutral": "{{count}} trung tính",
       "threads": "Luồng review",
-      "commentsUnavailable": "Bình luận không khả dụng",
-      "allThreadsResolved": "Đã giải quyết tất cả các luồng",
+      "commentsUnavailable": "Không thể tải bình luận",
+      "allThreadsResolved": "Tất cả các luồng đã được giải quyết",
       "noThreads": "Không có luồng review nào",
       "threadAuthorOnFile": "{{author}} trong {{file}}",
       "fromBots_one": "{{count}} từ bot",
@@ -1863,11 +1863,11 @@
       "closeFiles": "Đóng danh sách tệp",
       "backToSession": "Quay lại phiên",
       "title": "Tệp",
-      "truncatedList": "{{worktreeLabel}} - Hiển thị 5000 tệp đầu tiên",
+      "truncatedList": "{{worktreeLabel}} - Hiển thị 5000 mục đầu tiên",
       "emptyState": "Không tìm thấy tệp",
       "filterPlaceholder": "Lọc tệp",
       "noMatchesHint": "Chỉ tìm trong các thư mục bạn đã mở.",
-      "clearFilter": "Xóa bộ lọc",
+      "clearFilter": "Bỏ bộ lọc",
       "loading": "Đang tải tệp…"
     },
     "fileMarkdownPreview": {
@@ -1976,10 +1976,10 @@
     "terminalLiveInputStatus": {
       "listening": "Đang nghe",
       "processing": "Đang xử lý",
-      "startingMic": "Đang khởi động mic",
+      "startingMic": "Đang khởi động micrô",
       "liveInput": "Đầu vào trực tiếp",
       "uploadingImageTitle": "Đang tải ảnh lên",
-      "releaseMicHint": "Nhả mic để dừng",
+      "releaseMicHint": "Thả micrô để dừng",
       "preparingMic": "Đang chuẩn bị micrô",
       "uploadingImage": "Đang tải ảnh lên host"
     },
@@ -1990,7 +1990,7 @@
       "discard": "Loại bỏ",
       "copyLoadedSource": "Sao chép mã nguồn Markdown đã tải",
       "copySource": "Sao chép mã nguồn Markdown",
-      "copyLoaded": "Sao chép phần đã tải",
+      "copyLoaded": "Sao chép nội dung đã tải",
       "copyPathLabel": "Sao chép đường dẫn Markdown",
       "copyPath": "Sao chép đường dẫn",
       "loading": "Đang tải tài liệu…"
@@ -2098,7 +2098,7 @@
       "newTab": "Tab mới",
       "quickCommands": "Lệnh nhanh",
       "fileExplorer": "Trình khám phá tệp",
-      "sourceControl": "Quản lý mã nguồn"
+      "sourceControl": "Source Control"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Lịch sử agent",
@@ -2129,7 +2129,7 @@
       "copyAllAndLeave": "Sao chép tất cả và rời đi",
       "copyDraftsFailed": "Không thể sao chép bản nháp",
       "discardAndLeave": "Loại bỏ và rời đi",
-      "discardChanges": "Loại bỏ thay đổi",
+      "discardChanges": "Loại bỏ các thay đổi",
       "discardMessage": "Thay bản nháp trên điện thoại bằng tệp mới nhất trên máy tính?",
       "discard": "Loại bỏ",
       "newBrowser": "Trình duyệt mới",
@@ -2224,12 +2224,12 @@
     "agentChildRow": {
       "noRecentUpdate": "Không có cập nhật gần đây",
       "ended": "Đã kết thúc",
-      "minutes_one": "{{count}}p",
-      "minutes_other": "{{count}}p",
-      "hours_one": "{{count}}h",
-      "hours_other": "{{count}}h",
-      "days_one": "{{count}}d",
-      "days_other": "{{count}}d",
+      "minutes_one": "{{count}} phút",
+      "minutes_other": "{{count}} phút",
+      "hours_one": "{{count}} giờ",
+      "hours_other": "{{count}} giờ",
+      "days_one": "{{count}} ngày",
+      "days_other": "{{count}} ngày",
       "noUpdate": "Không có cập nhật trong {{value0}}",
       "agent": "Agent"
     },
@@ -2238,7 +2238,7 @@
       "fromSender": "Từ"
     },
     "backgroundTask": {
-      "monitoring": "Đang theo dõi tác vụ nền",
+      "monitoring": "Đang theo dõi các tác vụ nền",
       "stop": "Dừng",
       "stopTask": "Dừng {{value0}}",
       "stopAll": "Dừng tác vụ nền",
@@ -2284,12 +2284,12 @@
       "stateWaitingCount_other": "{{value0}} đang chờ",
       "stateBlockedCount_one": "{{value0}} bị chặn",
       "stateBlockedCount_other": "{{value0}} bị chặn",
-      "stateDoneCount_one": "{{value0}} hoàn tất",
-      "stateDoneCount_other": "{{value0}} hoàn tất",
+      "stateDoneCount_one": "{{value0}} đã hoàn thành",
+      "stateDoneCount_other": "{{value0}} đã hoàn thành",
       "stateIdleCount_one": "{{value0}} đã dừng",
       "stateIdleCount_other": "{{value0}} đã dừng",
-      "stateUnverifiableCount_one": "{{value0}} có trạng thái không khả dụng",
-      "stateUnverifiableCount_other": "{{value0}} có trạng thái không khả dụng"
+      "stateUnverifiableCount_one": "{{value0}} không rõ trạng thái",
+      "stateUnverifiableCount_other": "{{value0}} không rõ trạng thái"
     },
     "bulkCloseSheetActions": {
       "closeOtherTabs": "Đóng các tab khác"
@@ -2299,7 +2299,7 @@
       "titleRight": "Đóng các tab bên phải?",
       "titleLeft": "Đóng các tab bên trái?",
       "titleEditors": "Đóng tất cả tab trình chỉnh sửa?",
-      "description": "Các tab đã chọn sẽ bị đóng. Các tab được ghim sẽ vẫn mở.",
+      "description": "Các tab đã chọn sẽ bị đóng. Các tab đã ghim vẫn sẽ mở.",
       "confirm": "Đóng tab"
     },
     "diffReviewLoaders": {
@@ -2336,7 +2336,7 @@
       "files": "Tệp",
       "fileTypes": "PDF, văn bản, mã…",
       "workspaceFile": "Tệp workspace",
-      "skills": "Skills",
+      "skills": "Skill",
       "availableSkills": "Hiện có {{count}}",
       "commands": "Lệnh"
     },
@@ -2349,7 +2349,7 @@
       "emptyTitle": "Bắt đầu trò chuyện với {{agent}}",
       "emptySubtitle": "Yêu cầu {{agent}} kiểm tra mã, giải thích kết quả hoặc thực hiện thay đổi.",
       "errorTitle": "Không thể tải cuộc trò chuyện",
-      "errorSubtitle": "Không thể đọc bản ghi chép. Chuyển lại về terminal để tiếp tục làm việc.",
+      "errorSubtitle": "Không thể đọc bản ghi hội thoại. Chuyển lại về terminal để tiếp tục làm việc.",
       "defaultAgentLabel": "agent"
     },
     "nativeChatToggleAction": {
@@ -2385,7 +2385,7 @@
       "createFailed": "Không thể tạo terminal",
       "terminalTitle": "Terminal",
       "sendNotesFailed": "Không thể gửi ghi chú",
-      "inputLocked": "Đầu vào terminal đã bị client khác khóa.",
+      "inputLocked": "Đầu vào terminal đang bị một thiết bị khác khóa.",
       "notesSent": "Đã gửi ghi chú",
       "sendNotesError": "Không thể gửi ghi chú"
     },
@@ -2401,10 +2401,10 @@
       "messageNotSent": "Tin nhắn chưa được gửi"
     },
     "terminalActionSheetActions": {
-      "switchToDesktop": "Chuyển sang máy tính",
-      "switchToPhone": "Chuyển sang điện thoại",
+      "switchToDesktop": "Chuyển sang Máy tính",
+      "switchToPhone": "Chuyển sang Điện thoại",
       "rename": "Đổi tên",
-      "clearTerminal": "Xóa sạch terminal"
+      "clearTerminal": "Xóa terminal"
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
@@ -2432,7 +2432,7 @@
     },
     "prAiTriageLaunch": {
       "promptNotSent": "Agent đã bắt đầu nhưng prompt chưa được gửi.",
-      "updateRequired": "Cập nhật Orca trên máy tính để khởi chạy agent từ điện thoại.",
+      "updateRequired": "Cập nhật Orca trên máy tính để bắt đầu agent từ điện thoại.",
       "loadFailed": "Không thể tải các agent hiện có.",
       "emptyPrompt": "Prompt đã lưu của thao tác này đang trống. Hãy cập nhật cài đặt Source Control AI trên máy tính.",
       "agentStartedIn": "Agent đã bắt đầu trong {{label}}",
@@ -2503,7 +2503,7 @@
     "useContentCreateActions": {
       "noteCreateFailed": "Không thể tạo ghi chú markdown",
       "untitledNoteCreateFailed": "Không thể tạo ghi chú markdown không tên",
-      "browserUpdateRequired": "Cần cập nhật Orca trên máy tính để truyền phát trình duyệt sang điện thoại",
+      "browserUpdateRequired": "Cần cập nhật ứng dụng trên máy tính để truyền phát trình duyệt sang di động",
       "invalidUrl": "Nhập một URL hợp lệ",
       "browserCreateFailed": "Không thể tạo trình duyệt",
       "browserUnavailable": "Trang trình duyệt chưa sẵn sàng.",
@@ -2576,9 +2576,9 @@
       "agentStillWorking": "Agent vẫn đang xử lý.",
       "runCommandWhenDone": "Chạy /{{command}} khi hoàn tất.",
       "commandAfterAnswer": "Trả lời câu hỏi hoặc phê duyệt của agent, sau đó chạy /{{command}}.",
-      "compactionFailed": "Nén ngữ cảnh thất bại.",
-      "compactionFailedQuoted": "Nén ngữ cảnh thất bại: {{detail}}.",
-      "compactionUnconfirmed": "Chưa thể xác nhận việc nén ngữ cảnh đã hoàn tất.",
+      "compactionFailed": "Nén cuộc trò chuyện thất bại.",
+      "compactionFailedQuoted": "Nén cuộc trò chuyện thất bại: {{detail}}.",
+      "compactionUnconfirmed": "Chưa thể xác nhận việc nén cuộc trò chuyện đã hoàn tất.",
       "cancelUnconfirmed": "Chưa thể xác nhận việc hủy.",
       "stopRefused": "{{agent}} không dừng.",
       "stopRefusedQuoted": "{{agent}} không dừng: {{detail}}.",
@@ -2592,7 +2592,7 @@
       "hostFault": "Orca gặp sự cố, do đó thao tác này không thực hiện được.",
       "hostFaultTryAgain": "Orca gặp sự cố, do đó thao tác này không thực hiện được. Thử lại.",
       "hostStopped": "{{agent}} chưa khởi động xong, do đó Orca đã dừng agent.",
-      "providerRateLimited": "{{agent}} bị giới hạn tốc độ và đang thử lại.",
+      "providerRateLimited": "{{agent}} bị giới hạn tần suất và đang thử lại.",
       "providerRetrying": "{{agent}} gặp sự cố tạm thời và đang thử lại.",
       "providerRetryingQuoted": "{{agent}} đang thử lại: {{detail}}.",
       "providerRetryNumber": "Thử lại lần {{attempt}}.",
@@ -2605,7 +2605,7 @@
       "usageLimitWindowWeeklyModel": "hàng tuần theo mô hình",
       "usageLimitWindowCredits": "sử dụng thêm",
       "usageLimitResetsAt": "Sẽ đặt lại lúc {{when}}.",
-      "usageLimitSendAfterReset": "Gửi một tin nhắn sau khi giới hạn được đặt lại để tiếp tục.",
+      "usageLimitSendAfterReset": "Gửi tin nhắn sau khi được đặt lại để tiếp tục.",
       "previousExitUnverifiable": "Không thể dừng {{agent}} từ phiên trước.",
       "sessionNotRestored": "{{agent}} không thể mở lại phiên trước đó, do đó đoạn chat này tiếp tục trong phiên mới. {{agent}} không nhớ các tin nhắn trước.",
       "providerExitedRow": "{{agent}} đã dừng trong khi câu trả lời này đang được xử lý. Bạn có thể tiếp tục trong cuộc trò chuyện này.",
@@ -2614,7 +2614,7 @@
       "claudeEffortInvalid": "Mức độ xử lý của Claude không hợp lệ; chọn low, medium, high, xhigh hoặc max rồi gửi lại.",
       "modelUnavailable": "{{agent}} không thể sử dụng {{detail}}. Chọn mô hình khác rồi gửi lại.",
       "modelUnavailableUpdate": "{{agent}} không thể sử dụng {{detail}}. Cập nhật {{agent}} lên {{minimumVersion}} hoặc mới hơn để giữ lại sau khi khởi động lại, hoặc chọn mô hình khác rồi gửi lại.",
-      "modelNotSelected": "{{agent}} chưa được chọn mô hình. Kiểm tra lựa chọn mô hình và đăng nhập {{agent}}, sau đó gửi lại.",
+      "modelNotSelected": "{{agent}} chưa được chọn model. Kiểm tra việc chọn model và đăng nhập {{agent}}, sau đó gửi lại.",
       "providerRejected": "{{agent}} không chấp nhận tin nhắn này.",
       "providerRejectedQuoted": "{{agent}} không chấp nhận tin nhắn này: {{detail}}.",
       "attachmentEmpty": "Một hình ảnh trong tin nhắn này bị trống, do đó tin nhắn không được gửi.",
@@ -2650,28 +2650,28 @@
       "couldNotStart": "{{agent}} không thể khởi động.",
       "couldNotRestart": "{{agent}} không thể khởi động lại.",
       "cliTooOld": "{{agent}} {{installedVersion}} đã quá cũ cho các đoạn chat. Hãy cập nhật lên {{minimumVersion}} hoặc mới hơn.",
-      "startTimedOut": "{{agent}} mất quá nhiều thời gian để khởi động (không có phản hồi cho {{method}} sau {{seconds}} giây).",
+      "startTimedOut": "{{agent}} mất quá nhiều thời gian để khởi động (không có phản hồi cho {{method}} sau {{seconds}}s).",
       "startTimedOutKeepsHappening": "Nếu tình trạng này tiếp tục xảy ra, máy tính đang chạy đoạn chat này có thể bị quá tải.",
       "argumentsUnsupportedOption": "Đối số đã lưu chứa tùy chọn không được hỗ trợ ({{option}}).",
       "argumentsMissingValue": "Đối số đã lưu cần một giá trị cho {{option}}.",
       "argumentsMultipleValues": "Đối số đã lưu cấp cho {{option}} nhiều hơn một giá trị.",
       "argumentsPositionalPrompt": "Đối số đã lưu bao gồm một prompt.",
-      "editSavedArguments": "Chỉnh sửa đối số trong Cài đặt > Agent > Đối số.",
+      "editSavedArguments": "Chỉnh sửa trong Cài đặt > Agent > Đối số.",
       "terminalAgentHoldsChat": "Đoạn chat này vẫn đang mở trong một terminal agent.",
       "quitTerminalAgent": "Thoát agent đó để tiếp tục đoạn chat tại đây.",
       "startNewChat": "Bắt đầu đoạn chat mới để tiếp tục.",
       "notSignedIn": "{{agent}} chưa đăng nhập.",
-      "claudeSystemNotSignedIn": "Claude chưa đăng nhập. Chạy `{{loginCommand}}`, hoặc chọn một tài khoản trong cài đặt Tài khoản Claude.",
-      "claudeManagedNotSignedIn": "Tài khoản Claude này chưa đăng nhập. Đăng nhập lại trong cài đặt Tài khoản Claude.",
+      "claudeSystemNotSignedIn": "Claude chưa đăng nhập. Chạy `{{loginCommand}}`, hoặc chọn một tài khoản trong cài đặt Claude Accounts.",
+      "claudeManagedNotSignedIn": "Tài khoản Claude này chưa đăng nhập. Đăng nhập lại trong cài đặt Claude Accounts.",
       "codexSystemNotSignedIn": "Codex chưa đăng nhập. Chạy `{{loginCommand}}`.",
-      "codexManagedNotSignedIn": "Tài khoản Codex này chưa đăng nhập. Đăng nhập lại trong cài đặt Tài khoản Codex.",
-      "antigravityNotSignedIn": "Antigravity chưa đăng nhập. Đăng nhập trong Cài đặt → Tài khoản → Antigravity. Sau đó gửi lại tin nhắn của bạn.",
+      "codexManagedNotSignedIn": "Tài khoản Codex này chưa đăng nhập. Đăng nhập lại trong cài đặt Codex Accounts.",
+      "antigravityNotSignedIn": "Antigravity chưa đăng nhập. Đăng nhập tại Cài đặt → Tài khoản → Antigravity. Sau đó gửi lại tin nhắn của bạn.",
       "antigravitySystemNotSignedIn": "Antigravity chưa đăng nhập. Đăng nhập bằng cách chạy `agy` trên máy tính đang chạy đoạn chat này, sau đó gửi lại tin nhắn của bạn.",
       "agentCommandNotSignedIn": "Đăng nhập vào {{agent}} bằng `{{loginCommand}}` trên máy tính đang chạy đoạn chat này.",
       "interactiveAgentNotSignedIn": "Đăng nhập vào {{agent}} bằng cách chạy `{{loginCommand}}` và dùng `{{slashCommand}}` trên máy tính đang chạy đoạn chat này.",
       "agentNotSignedIn": "Đăng nhập vào {{agent}}.",
-      "cliMissing": "Không tìm thấy {{agent}} trên máy tính đang chạy đoạn chat này. Hãy cài đặt, hoặc kiểm tra Lệnh của agent trong Cài đặt → Agent.",
-      "cliMissingInWslDistro": "{{agent}} chưa được cài đặt trong bản phân phối WSL {{distro}}. Hãy cài đặt bên trong {{distro}}, hoặc kiểm tra Lệnh của agent trong Cài đặt → Agent.",
+      "cliMissing": "Không tìm thấy {{agent}} trên máy tính đang chạy đoạn chat này. Hãy cài đặt, hoặc kiểm tra Command của agent trong Cài đặt → Agent.",
+      "cliMissingInWslDistro": "{{agent}} chưa được cài đặt trong bản phân phối WSL {{distro}}. Hãy cài đặt bên trong {{distro}}, hoặc kiểm tra Command của agent trong Cài đặt → Agent.",
       "signInFirst": "Đăng nhập trước.",
       "signInThenRunCommand": "Đăng nhập, sau đó chạy lại /{{command}}.",
       "signInThenSend": "Đăng nhập, sau đó gửi lại tin nhắn của bạn.",
@@ -2684,15 +2684,15 @@
       "historyInOtherAccount": "Lịch sử của đoạn chat này nằm ở tài khoản Claude khác. Chuyển lại về tài khoản đó để tiếp tục.",
       "claudeAccountFolderMissing": "Thư mục của tài khoản Claude đã chọn bị thiếu. Đăng nhập lại vào tài khoản đó hoặc chọn tài khoản khác.",
       "claudeAccountSetupFailed": "Không thể thiết lập tài khoản Claude đã chọn. Thử lại hoặc chọn tài khoản khác.",
-      "agentCommandNotRunnable": "Lệnh của {{agent}} trong Cài đặt → Agent phải là đường dẫn hoặc tên chương trình mà Orca tìm thấy, không có đối số hoặc biến. Hãy thay đổi hoặc đặt lại lệnh này.",
-      "runtimeNotInstalled": "{{agent}} chưa được cài đặt trên máy tính đang chạy đoạn chat này. Hãy cài đặt từ đoạn chat trong phiên bản Orca mới nhất.",
-      "fullAccessAsRoot": "{{agent}} sẽ không dùng Toàn quyền truy cập khi chạy dưới quyền root. Chọn quyền khác cho {{agent}} trong Cài đặt → Agent cho máy tính đang chạy đoạn chat này, sau đó bắt đầu một đoạn chat mới.",
+      "agentCommandNotRunnable": "Lệnh của {{agent}} trong Cài đặt → Agent phải là đường dẫn hoặc tên chương trình mà Orca có thể tìm thấy, không có đối số hoặc biến. Hãy thay đổi hoặc đặt lại.",
+      "runtimeNotInstalled": "{{agent}} chưa được cài đặt trên máy tính đang chạy đoạn chat này. Hãy cài đặt từ đoạn chat bằng phiên bản Orca mới.",
+      "fullAccessAsRoot": "{{agent}} sẽ không dùng quyền Full access khi chạy dưới quyền root. Chọn quyền khác cho {{agent}} trong Cài đặt → Agent cho máy tính đang chạy đoạn chat này, sau đó bắt đầu một đoạn chat mới.",
       "launchPreparationFailed": "Orca không thể chuẩn bị để {{agent}} khởi động trên máy tính đang chạy đoạn chat này.",
       "conversationOpenElsewhere": "Codex vẫn đang mở cuộc trò chuyện này. Hãy thử lại sau giây lát, hoặc đóng các terminal Codex khác.",
       "conversationOpenInTerminal": "{{agent}} đang chạy cuộc trò chuyện này trong một terminal khác. Thoát {{agent}} ở đó hoặc đóng terminal đó để tiếp tục tại đây.",
-      "chooseClaudeAccount": "Chọn hoặc thêm tài khoản trong cài đặt Tài khoản Claude.",
-      "chooseClaudeAccountThenRunCommand": "Chọn hoặc thêm tài khoản trong cài đặt Tài khoản Claude, sau đó chạy lại /{{command}}.",
-      "chooseClaudeAccountThenSend": "Chọn hoặc thêm tài khoản trong cài đặt Tài khoản Claude, sau đó gửi lại tin nhắn của bạn.",
+      "chooseClaudeAccount": "Chọn hoặc thêm tài khoản trong phần cài đặt Claude Accounts.",
+      "chooseClaudeAccountThenRunCommand": "Chọn hoặc thêm tài khoản trong phần cài đặt Claude Accounts, sau đó chạy lại /{{command}}.",
+      "chooseClaudeAccountThenSend": "Chọn hoặc thêm tài khoản trong phần cài đặt Claude Accounts, sau đó gửi lại tin nhắn của bạn.",
       "unconfirmed": "Không thể xác nhận tin nhắn này đã được gửi hay chưa. Tin nhắn chưa được gửi lại."
     },
     "writeNotice": {
@@ -2700,11 +2700,11 @@
       "notDoneSend": "Tin nhắn của bạn chưa được gửi.",
       "tryAgainComposerSend": "Gửi lại.",
       "messageNotSaved": "Không thể lưu tin nhắn của bạn.",
-      "notDoneStop": "Agent chưa dừng.",
+      "notDoneStop": "Agent chưa được dừng.",
       "notDoneStopTask": "Tác vụ nền chưa dừng.",
       "notDoneStopTasks": "Các tác vụ nền chưa dừng.",
       "notDoneAnswer": "Câu trả lời của bạn chưa được gửi.",
-      "notDoneOption": "Cài đặt chưa thay đổi.",
+      "notDoneOption": "Cài đặt chưa được thay đổi.",
       "notDoneCommand": "Lệnh chưa được chạy.",
       "notDoneGoalChangeIncomplete": "Không thể hoàn tất việc thay đổi mục tiêu. Kiểm tra đoạn chat.",
       "notDoneQueuedEdit": "Chỉnh sửa của bạn chưa được lưu.",
@@ -2747,9 +2747,9 @@
       "settleEarlierMessage": "Chờ tin nhắn trước đó được gửi đi, hoặc thử lại.",
       "agentStillWorking": "Agent vẫn đang xử lý.",
       "runClearWhenDone": "Chạy /clear khi hoàn tất.",
-      "clearAfterAnswer": "Trả lời câu hỏi hoặc phê duyệt của agent, rồi chạy /clear.",
+      "clearAfterAnswer": "Trả lời câu hỏi hoặc phê duyệt yêu cầu của agent, rồi chạy /clear.",
       "runCompactWhenDone": "Chạy /compact khi hoàn tất.",
-      "compactAfterAnswer": "Trả lời câu hỏi hoặc phê duyệt của agent, rồi chạy /compact.",
+      "compactAfterAnswer": "Trả lời câu hỏi hoặc phê duyệt yêu cầu của agent, rồi chạy /compact.",
       "clearAfterRetry": "Thử lại tin nhắn trước đó của bạn, rồi chạy /clear.",
       "compactAfterRetry": "Thử lại tin nhắn trước đó của bạn, rồi chạy /compact.",
       "clearAfterSending": "Tin nhắn trước đó của bạn vẫn đang được gửi. Hãy chạy /clear sau khi gửi xong.",
@@ -2846,8 +2846,8 @@
     },
     "documentReaders": {
       "markdownFailed": "Không thể tải markdown",
-      "diffFailed": "Không thể tải xem trước diff",
-      "fileFailed": "Không thể tải xem trước tệp",
+      "diffFailed": "Không thể tải bản xem trước diff",
+      "fileFailed": "Không thể tải bản xem trước tệp",
       "outsideWorkspace": "Tệp này nằm ngoài workspace. Hãy mở trên máy tính để xem."
     },
     "linkActionSheet": {
@@ -2871,8 +2871,8 @@
       "saveEditedMessage": "Lưu tin nhắn đã sửa",
       "sendMessage": "Gửi tin nhắn",
       "sendQueue": "Đưa vào hàng đợi",
-      "sendSteer": "Điều hướng",
-      "sendSteerQueued": "Đã đưa điều hướng vào hàng đợi",
+      "sendSteer": "Định hướng",
+      "sendSteerQueued": "Đã đưa định hướng vào hàng đợi",
       "sendQueueHint": "Chạy sau lượt hiện tại",
       "sendSteerHint": "Áp dụng vào việc agent đang làm"
     },
@@ -2931,7 +2931,7 @@
       "resume": "Tiếp tục",
       "title": "Tin nhắn trong hàng đợi",
       "pausedState": "Đã tạm dừng",
-      "queuedState": "Đã vào hàng đợi",
+      "queuedState": "Đang trong hàng đợi",
       "editMessage": "Chỉnh sửa tin nhắn"
     },
     "offlineQueue": {
@@ -2939,14 +2939,14 @@
       "waitingFor": "Sẽ gửi khi {{host}} hoạt động lại",
       "waiting": "Sẽ gửi khi máy tính hoạt động lại",
       "behind": "Đang chờ — một tin nhắn phía trước cần chú ý",
-      "closed": "Chưa gửi trước khi Orca đóng"
+      "closed": "Chưa được gửi trước khi Orca đóng"
     },
     "sessionOptionPickers": {
       "workingAnnouncement": "Agent đang làm việc. Cài đặt mô hình sẽ mở khóa khi lượt này hoàn tất.",
       "modelFullAccessLabel": "Mô hình, {{value}}, toàn quyền truy cập",
       "modelLabel": "Mô hình, {{value}}",
       "permissionsLabel": "Quyền, {{value}}",
-      "backToModels": "Quay lại mô hình",
+      "backToModels": "Quay lại danh sách model",
       "agentWorking": "Agent đang làm việc",
       "settingsLocked": "Cài đặt mô hình sẽ mở khóa khi lượt này hoàn tất.",
       "dispatchUnconfirmed": "Đã gửi tới agent — chưa xác nhận",
@@ -2958,7 +2958,7 @@
     },
     "sessionOptionRows": {
       "defaultMarker": "Mặc định",
-      "notReportedMarker": "Chưa báo cáo",
+      "notReportedMarker": "Chưa có báo cáo",
       "moreModels": "Hiện thêm mô hình",
       "fewerModels": "Ẩn bớt mô hình"
     },
@@ -2993,7 +2993,7 @@
       "permissions": "Quyền",
       "notSet": "Chưa đặt",
       "model": "Mô hình",
-      "effort": "Mức độ xử lý",
+      "effort": "Mức độ suy nghĩ",
       "fastMode": "Chế độ nhanh",
       "speed": "Tốc độ",
       "thinking": "Suy nghĩ",
@@ -3011,7 +3011,7 @@
       "fast": "Nhanh",
       "toggleOption": "Bật/tắt {{value0}}",
       "chooseInAgentPicker": "Chọn trong bộ chọn agent…",
-      "setWhenSessionStarts": "Được thiết lập khi phiên bắt đầu.",
+      "setWhenSessionStarts": "Thiết lập khi phiên bắt đầu.",
       "availableAfterSessionStarts": "Khả dụng sau khi phiên bắt đầu.",
       "sessionOptions": "Tùy chọn phiên"
     },
@@ -3074,9 +3074,9 @@
     },
     "nativeChatToolLine": {
       "durationMilliseconds": "{{milliseconds}}ms",
-      "durationSeconds": "{{seconds}}s",
-      "durationMinutes": "{{minutes}}m {{seconds}}s",
-      "durationHours": "{{hours}}h {{minutes}}m {{seconds}}s",
+      "durationSeconds": "{{seconds}} giây",
+      "durationMinutes": "{{minutes}} phút {{seconds}} giây",
+      "durationHours": "{{hours}} giờ {{minutes}} phút {{seconds}} giây",
       "result": "Kết quả",
       "exitCode": "mã thoát {{exitCode}}",
       "copyCommand": "Sao chép lệnh",
@@ -3098,9 +3098,9 @@
       "listing": "Đang liệt kê",
       "listed": "Đã liệt kê",
       "triedList": "Đã thử liệt kê",
-      "fetching": "Đang lấy",
-      "fetched": "Đã lấy",
-      "triedFetch": "Đã thử lấy",
+      "fetching": "Đang tải",
+      "fetched": "Đã tải",
+      "triedFetch": "Đã thử tải",
       "searchingWeb": "Đang tìm kiếm trên web",
       "searchedWeb": "Đã tìm kiếm trên web",
       "triedSearchWeb": "Đã thử tìm kiếm trên web"
@@ -3124,7 +3124,7 @@
     },
     "orcaStop": {
       "update": "Orca trên {{machine}} đã khởi động lại để cập nhật trong khi phản hồi này đang diễn ra.",
-      "quit": "Orca trên {{machine}} đã được đóng trong khi phản hồi này đang diễn ra.",
+      "quit": "Orca trên {{machine}} đã bị đóng trong khi phản hồi này đang diễn ra.",
       "crash": "Orca trên {{machine}} đã dừng đột ngột trong khi phản hồi này đang diễn ra.",
       "remote": "Orca trên {{machine}} đã dừng trong khi phản hồi này đang diễn ra.",
       "canContinue": "Bạn có thể tiếp tục trong cuộc trò chuyện này.",
@@ -3132,7 +3132,7 @@
     },
     "interruptedContinue": {
       "failed": "Không thể tiếp tục đoạn chat này. Thử lại, hoặc gửi một tin nhắn.",
-      "explanation": "Tiếp tục, và agent sẽ kiểm tra xem bước cuối cùng đã hoàn tất chưa."
+      "explanation": "Khi tiếp tục, agent sẽ kiểm tra trước xem bước cuối cùng đã hoàn tất chưa."
     },
     "sendError": {
       "dismiss": "Bỏ qua"
@@ -3145,7 +3145,7 @@
       "runningNamedPreview": "Đang chạy {{toolName}} {{preview}}",
       "runningNamed": "Đang chạy {{toolName}}",
       "result": "Kết quả",
-      "moreCalls": "+{{value0}} nữa",
+      "moreCalls": "+{{value0}} mục khác",
       "failedCount": "{{value0}} thất bại",
       "failedCallsLabel": "Lượt gọi công cụ thất bại: {{value0}}",
       "interruptedCount": "{{value0}} bị gián đoạn",
@@ -3204,7 +3204,7 @@
       "theAgent": "Agent",
       "windowSession": "phiên",
       "windowWeekly": "hàng tuần",
-      "windowWeeklyModel": "hàng tuần theo mô hình",
+      "windowWeeklyModel": "hàng tuần của mô hình",
       "windowCredits": "sử dụng thêm",
       "reachedNamed": "{{agent}} đã đạt giới hạn {{window}}.",
       "reached": "{{agent}} đã đạt giới hạn sử dụng.",
@@ -3212,7 +3212,7 @@
       "autoContinueCancelFailed": "Không thể hủy tự động tiếp tục. Thử lại.",
       "autoContinueCancel": "Không tiếp tục",
       "statusResetAt": "Đã đặt lại lúc {{time}}",
-      "statusResetsAt": "Sẽ đặt lại lúc {{time}}",
+      "statusResetsAt": "Đặt lại lúc {{time}}",
       "statusContinuesShortly": "Orca sẽ tiếp tục trong giây lát",
       "statusContinuesThen": "Orca sẽ tiếp tục sau đó",
       "statusWontContinue": "Orca sẽ không tự động tiếp tục"
@@ -3237,12 +3237,12 @@
     },
     "nativeChatVisual": {
       "defaultTitle": "Trực quan hóa",
-      "unavailable": "Hình ảnh trực quan không khả dụng",
+      "unavailable": "Trực quan hóa không khả dụng",
       "retryHint": "Thử tải lại",
       "openFullscreen": "Mở {{title}} toàn màn hình"
     },
     "diffCard": {
-      "diffTruncated": "Đã cắt bớt diff",
+      "diffTruncated": "Diff bị cắt bớt",
       "diffGap": "Các dòng không hiển thị",
       "copyDiff": "Sao chép diff"
     },
@@ -3261,19 +3261,19 @@
       "stateCompleted": "đã hoàn thành",
       "stateWorking": "đang xử lý",
       "stateIdle": "đang rảnh",
-      "stateFailed": "thất bại",
+      "stateFailed": "đã thất bại",
       "stateStopped": "đã dừng",
       "stateUnverifiable": "trạng thái không khả dụng",
       "stateWorkingCount_one": "{{count}} đang xử lý",
       "stateWorkingCount_other": "{{count}} đang xử lý",
       "stateIdleCount_one": "{{count}} đang rảnh",
       "stateIdleCount_other": "{{count}} đang rảnh",
-      "stateFailedCount_one": "{{count}} thất bại",
-      "stateFailedCount_other": "{{count}} thất bại",
+      "stateFailedCount_one": "{{count}} đã thất bại",
+      "stateFailedCount_other": "{{count}} đã thất bại",
       "stateStoppedCount_one": "{{count}} đã dừng",
       "stateStoppedCount_other": "{{count}} đã dừng",
-      "stateUnverifiableCount_one": "{{count}} có trạng thái không khả dụng",
-      "stateUnverifiableCount_other": "{{count}} có trạng thái không khả dụng",
+      "stateUnverifiableCount_one": "{{count}} không rõ trạng thái",
+      "stateUnverifiableCount_other": "{{count}} không rõ trạng thái",
       "started_one": "Đã khởi chạy {{count}} subagent",
       "started_other": "Đã khởi chạy {{count}} subagent",
       "ran_one": "Đã chạy {{count}} subagent",
@@ -3324,7 +3324,7 @@
       "chip": "Mục tiêu",
       "exitMode": "Thoát chế độ mục tiêu",
       "placeholder": "Mô tả mục tiêu của bạn, xác định kết quả có thể đo lường để đạt hiệu quả tốt nhất",
-      "pursuing": "Đang theo đuổi mục tiêu",
+      "pursuing": "Đang thực hiện mục tiêu",
       "set": "Đã đặt mục tiêu",
       "paused": "Mục tiêu đã tạm dừng",
       "blocked": "Mục tiêu bị chặn",
@@ -3343,9 +3343,9 @@
       "unsupported": "Đoạn chat này không thể quay lại tin nhắn trước đó.",
       "historyNotPaginated": "Đoạn chat Codex cũ hơn này không thể quay lại tin nhắn trước đó. Bắt đầu một đoạn chat mới để dùng tính năng Quay lại đây.",
       "busy": "Khả dụng khi agent rảnh và không có gì trong đoạn chat này đang chờ bạn.",
-      "staleEpoch": "Cuộc trò chuyện đã thay đổi. Đọc lại các tin nhắn mới nhất rồi thử lại.",
+      "staleEpoch": "Cuộc trò chuyện đã thay đổi. Xem lại các tin nhắn mới nhất rồi thử lại.",
       "invalidTarget": "Cuộc trò chuyện không thể quay lại tin nhắn này. Chưa có gì thay đổi.",
-      "historyLimit": "Cuộc trò chuyện này quá dài để quay lại. Không có gì bị thay đổi.",
+      "historyLimit": "Cuộc trò chuyện này quá dài để quay lại. Chưa có gì thay đổi.",
       "providerRefused": "Agent không thể quay lại tin nhắn này.",
       "proofMismatch": "Lịch sử của agent không khớp với đoạn chat này. Kiểm tra lại cuộc trò chuyện trước khi tiếp tục.",
       "outcomeUnknown": "Orca không thể xác nhận cuộc trò chuyện đã quay lại tin nhắn trước đó hay chưa. Ứng dụng sẽ kiểm tra trước khi tin nhắn tiếp theo của bạn được gửi.",
@@ -3374,7 +3374,7 @@
       "commitStagedChanges": "Commit các thay đổi đã stage",
       "commitPush": "Commit & Push",
       "commitForcePush": "Commit & Force Push",
-      "commitSync": "Commit & Đồng bộ",
+      "commitSync": "Commit và đồng bộ",
       "checkingBranchStatus": "Đang kiểm tra trạng thái branch…",
       "checkingPrStatus": "Đang kiểm tra trạng thái PR…",
       "prAlreadyMerged": "PR đã được merge",
@@ -3394,31 +3394,31 @@
     },
     "createPrAction": {
       "createReview": "Tạo {{titleLabel}}",
-      "createPullRequest": "Tạo Pull Request",
+      "createPullRequest": "Tạo pull request",
       "statusUnavailable": "Trạng thái review không khả dụng",
       "checkingStatus": "Đang kiểm tra trạng thái review…",
       "providerUnavailable": "Không thể tạo review cho nhà cung cấp này"
     },
     "prCreate": {
       "notReady": "Branch này chưa sẵn sàng cho {{reviewLabel}}.",
-      "existingNumber": "{{titleLabel}} #{{number}} hiện đã mở.",
-      "existing": "{{titleLabel}} hiện đã mở.",
+      "existingNumber": "{{titleLabel}} #{{number}} đang mở.",
+      "existing": "Đã có {{titleLabel}} đang mở.",
       "createdNotRefreshed": "Đã tạo {{titleLabel}}, nhưng Orca chưa thể làm mới.",
       "lookupUnconfirmed": "Orca không thể xác nhận branch này đã có {{reviewLabel}} hay chưa. Hãy thử lại sau giây lát.",
       "dirty": "Hãy commit các thay đổi trước khi tạo {{reviewLabel}}.",
       "detachedHead": "Chuyển sang một branch trước khi tạo {{reviewLabel}}.",
       "defaultBranch": "Chuyển sang một branch tính năng trước khi tạo {{reviewLabel}}.",
-      "noUpstream": "Hãy xuất bản các commit trước khi tạo {{reviewLabel}}.",
-      "needsSync": "Hãy đồng bộ branch này trước khi tạo {{reviewLabel}}.",
-      "authRequired": "Hãy xác thực trước khi tạo {{reviewLabel}}.",
+      "noUpstream": "Xuất bản các commit trước khi tạo {{reviewLabel}}.",
+      "needsSync": "Đồng bộ branch này trước khi tạo {{reviewLabel}}.",
+      "authRequired": "Xác thực trước khi tạo {{reviewLabel}}.",
       "unsupportedMergeRequests": "Không hỗ trợ tạo merge request cho repo này.",
       "unsupportedPullRequests": "Không hỗ trợ tạo pull request cho repo này.",
       "existingReview": "Đã tồn tại một {{reviewLabel}} cho branch này.",
       "forkHeadUnsupported": "Không hỗ trợ tạo {{reviewLabel}} từ bản fork này.",
-      "baseNotOnRemote": "Hãy push branch gốc trước khi tạo {{reviewLabel}}."
+      "baseNotOnRemote": "Push branch gốc trước khi tạo {{reviewLabel}}."
     },
     "hostedReviewCreate": {
-      "pushSucceeded": "Push thành công, nhưng tạo {{shortLabel}} không thành công: {{error}}"
+      "pushSucceeded": "Push thành công, nhưng tạo {{shortLabel}} thất bại: {{error}}"
     },
     "remoteDropdown": {
       "push": "Push",
@@ -3432,13 +3432,13 @@
       "publishNoBranch": "Không có branch",
       "checkingBranchStatus": "Đang kiểm tra trạng thái branch…",
       "checkingPrStatus": "Đang kiểm tra trạng thái PR…",
-      "prAlreadyMerged": "PR đã được merge",
+      "prAlreadyMerged": "PR đã merge",
       "linkedReviewTargetUnavailable": "Không xác định được branch đích của review liên kết",
       "checkOutBranchToPush": "Chuyển sang một branch trước khi push commit",
       "pushAndSetUpstream": "Push branch này và đặt upstream nếu cần",
       "pushToLinkedReview": "Push các cập nhật lên branch review được liên kết",
-      "tryRegularPush": "Thử push thông thường; git có thể yêu cầu force push",
-      "pushMayNeedSync": "Push các commit cục bộ; git có thể yêu cầu đồng bộ trước",
+      "tryRegularPush": "Thử push thông thường; Git có thể yêu cầu force push",
+      "pushMayNeedSync": "Push các commit cục bộ; Git có thể yêu cầu đồng bộ trước",
       "nothingToPush": "Không có gì để push",
       "checkOutBranchToForcePush": "Chuyển sang một branch trước khi force push commit",
       "nothingToForcePush": "Không có gì để force push",
@@ -3450,14 +3450,14 @@
       "publishBranchFirstToFastForward": "Xuất bản branch trước để fast-forward",
       "nothingNewToFastForward": "Không có gì mới để fast-forward — remote chỉ có các bản sao cũ hơn của commit cục bộ",
       "nothingToFastForward": "Không có gì để fast-forward",
-      "tryFastForwardPull": "Thử pull fast-forward; git có thể từ chối các commit cục bộ",
+      "tryFastForwardPull": "Thử pull fast-forward; Git có thể từ chối các commit cục bộ",
       "checkOutBranchToSync": "Chuyển sang một branch trước khi đồng bộ commit",
       "publishBranchFirstToSync": "Xuất bản branch trước để đồng bộ commit",
       "useForcePushToSync": "Sử dụng Force Push — remote chỉ có các bản sao cũ hơn của commit cục bộ",
-      "branchUpToDate": "Branch đã cập nhật mới nhất",
+      "branchUpToDate": "Branch đã là mới nhất",
       "rebaseFromBase": "Rebase từ branch gốc",
       "rebaseChooseRemoteBase": "Chọn branch gốc trên remote để rebase",
-      "rebaseDirtyHint": "Thử rebase; git có thể yêu cầu commit hoặc stash các thay đổi cục bộ trước",
+      "rebaseDirtyHint": "Thử rebase; Git có thể yêu cầu commit hoặc stash các thay đổi cục bộ trước",
       "fetch": "Fetch",
       "fetchTitle": "Fetch từ remote mà không merge",
       "linkedReviewBranchExists": "Branch review liên kết đã tồn tại",
@@ -3494,7 +3494,7 @@
       "pullCommits_other": "Pull {{count}} commit.",
       "pushCommits_one": "Push {{count}} commit.",
       "pushCommits_other": "Push {{count}} commit.",
-      "upToDate": "Không có gì để commit. Branch đã cập nhật mới nhất.",
+      "upToDate": "Không có gì để commit. Branch đã là mới nhất.",
       "openCommits": "Mở các commit"
     },
     "dropdownCounts": {
@@ -3505,7 +3505,7 @@
       "fastForwardCount_one": "Fast-forward {{count}} commit",
       "fastForwardCount_other": "Fast-forward {{count}} commit",
       "syncCounts": "Pull {{behind}}, push {{ahead}}",
-      "remoteBranchFallback": "branch trên remote",
+      "remoteBranchFallback": "branch remote",
       "titleForcePushOlderCopiesBranch": "Remote chỉ có các bản sao cũ hơn của commit cục bộ. Force push branch này kèm lease để cập nhật {{upstreamName}}.",
       "titleForcePushOlderCopiesCount_one": "Remote chỉ có các bản sao cũ hơn của commit cục bộ. Force push {{count}} commit của branch kèm lease để cập nhật {{upstreamName}}.",
       "titleForcePushOlderCopiesCount_other": "Remote chỉ có các bản sao cũ hơn của commit cục bộ. Force push {{count}} commit của branch kèm lease để cập nhật {{upstreamName}}.",
@@ -3519,7 +3519,7 @@
     },
     "primaryAction": {
       "forcePushFromDesktop": "Force push branch của pull request này từ máy tính",
-      "forcePush": "Force push",
+      "forcePush": "Force Push",
       "commit": "Commit",
       "push": "Push",
       "pull": "Pull",
@@ -3534,7 +3534,7 @@
       "stageAll": "Stage tất cả"
     },
     "commitFailurePanel": {
-      "title": "Commit không thành công",
+      "title": "Commit thất bại",
       "summary": "Commit không thành công.",
       "fixWithAi": "Sửa lỗi commit bằng AI",
       "fix": "Khắc phục",
@@ -3546,7 +3546,7 @@
     "gitHistoryList": {
       "loadFailed": "Không thể tải lịch sử",
       "loadFilesFailed": "Không thể tải các tệp của commit",
-      "retryFiles": "Thử lại các tệp của commit",
+      "retryFiles": "Tải lại các tệp của commit",
       "waitingForDesktop": "Đang chờ máy tính...",
       "noFileChanges": "Không có thay đổi tệp",
       "noCommits": "Không có commit nào.",
@@ -3586,12 +3586,12 @@
       "discard": "Loại bỏ"
     },
     "header": {
-      "close": "Đóng quản lý mã nguồn",
+      "close": "Đóng Source Control",
       "backToSession": "Quay lại phiên",
-      "title": "Quản lý mã nguồn",
+      "title": "Source Control",
       "openNumberedPrWeb": "Mở pull request #{{number}} trên web",
       "openPrWeb": "Mở pull request trên web",
-      "refresh": "Làm mới quản lý mã nguồn",
+      "refresh": "Làm mới Source Control",
       "moreActions": "Thao tác quản lý mã nguồn khác"
     },
     "modals": {
@@ -3605,7 +3605,7 @@
       "openPrMessage": "Mở trong trình duyệt của bạn?"
     },
     "panel": {
-      "unavailableTitle": "Quản lý mã nguồn không khả dụng",
+      "unavailableTitle": "Source Control không khả dụng",
       "loading": "Đang tải các thay đổi…"
     },
     "folder": {
@@ -3639,12 +3639,12 @@
     },
     "gitHistory": {
       "justNow": "vừa xong",
-      "minutes_one": "{{count}}p",
-      "minutes_other": "{{count}}p",
-      "hours_one": "{{count}}h",
-      "hours_other": "{{count}}h",
-      "days_one": "{{count}}d",
-      "days_other": "{{count}}d",
+      "minutes_one": "{{count}} phút",
+      "minutes_other": "{{count}} phút",
+      "hours_one": "{{count}} giờ",
+      "hours_other": "{{count}} giờ",
+      "days_one": "{{count}} ngày",
+      "days_other": "{{count}} ngày",
       "months_one": "{{count}} tháng",
       "months_other": "{{count}} tháng",
       "years_one": "{{count}} năm",
@@ -3665,7 +3665,7 @@
       "reviewCommitMessage": "Xem lại thông điệp commit, sau đó thử lại Tạo PR."
     },
     "hostedReviewGitPreparation": {
-      "refreshFailed": "Không thể làm mới phần quản lý mã nguồn",
+      "refreshFailed": "Không thể làm mới Source Control",
       "updateBranchFailed": "Không thể cập nhật branch trên remote. Thử lại Tạo PR.",
       "stageFailed": "Không thể stage thay đổi",
       "commitFailed": "Commit thất bại"
@@ -3690,7 +3690,7 @@
       "abortOperation": "Hủy {{operation}}"
     },
     "hubTab": {
-      "changes": "Các thay đổi",
+      "changes": "Thay đổi",
       "pullRequest": "Pull request"
     },
     "screenState": {
@@ -3704,7 +3704,7 @@
       "generateFailed": "Không thể tạo thông điệp commit"
     },
     "useMobileCreatePrRunner": {
-      "branchRequired": "Hãy chuyển sang một branch trước khi tạo pull request."
+      "branchRequired": "Chuyển sang một branch trước khi tạo pull request."
     },
     "useMobileGitRequests": {
       "waitingForDesktop": "Đang chờ máy tính...",
@@ -3721,10 +3721,10 @@
       "actionFailed": "Thao tác quản lý mã nguồn thất bại"
     },
     "loaders": {
-      "connectingToDesktop": "Đang kết nối với máy tính...",
+      "connectingToDesktop": "Đang kết nối tới máy tính...",
       "waitingForDesktop": "Đang chờ máy tính...",
       "updateDesktop": "Cập nhật Orca trên máy tính để dùng Quản lý mã nguồn trên điện thoại.",
-      "loadFailed": "Không thể tải Source Control"
+      "loadFailed": "Không thể tải phần quản lý mã nguồn"
     },
     "runners": {
       "actionFailed": "Thao tác quản lý mã nguồn thất bại"
@@ -3748,10 +3748,10 @@
       "kimiCredentialVariableMissing": "Kimi thiếu biến môi trường thông tin xác thực đã cấu hình. Hãy đặt biến đó trên host thực thi trước khi thử lại.",
       "kimiCredentialsRequired": "Kimi cần thông tin xác thực nhà cung cấp. Mở Kimi trên host thực thi để cấu hình nhà cung cấp hoặc đăng nhập, sau đó thử lại.",
       "kimiModelMissing": "Kimi chưa có mô hình khả dụng nào được cấu hình. Mở Kimi trên host thực thi để cấu hình hoặc chọn một mô hình, sau đó thử lại.",
-      "kimiPromptHookBlocked": "Một hook prompt của Kimi đã chặn yêu cầu hoặc lượt tương tác không thể bắt đầu. Xem lại các hook và cấu hình của Kimi trước khi thử lại.",
+      "kimiPromptHookBlocked": "Một hook prompt của Kimi đã chặn yêu cầu hoặc không thể bắt đầu lượt tương tác. Xem lại các hook và cấu hình của Kimi trước khi thử lại.",
       "kimiCancelled": "Kimi đã hủy yêu cầu trước khi tạo xong văn bản. Hãy thử lại.",
       "kimiEmptyPrompt": "Kimi nhận được prompt trống. Hãy sửa đầu vào đó trong recipe tạo văn bản hoặc đối số CLI, sau đó thử lại.",
-      "kimiEmptyModel": "Kimi đã nhận được mô hình trống. Sửa đầu vào đó trong recipe tạo văn bản hoặc đối số CLI, sau đó thử lại.",
+      "kimiEmptyModel": "Kimi đã nhận được mô hình trống. Hãy sửa đầu vào đó trong recipe tạo hoặc đối số CLI, sau đó thử lại.",
       "kimiEmptyAgent": "Kimi nhận được agent trống. Hãy sửa đầu vào đó trong recipe tạo văn bản hoặc đối số CLI, sau đó thử lại.",
       "kimiEmptyAgentFilePath": "Kimi nhận được đường dẫn tệp agent trống. Hãy sửa đầu vào đó trong recipe tạo văn bản hoặc đối số CLI, sau đó thử lại.",
       "kimiOutputFormatInvalid": "Định dạng đầu ra của Kimi yêu cầu chế độ prompt và giá trị text hoặc stream-json được hỗ trợ. Hãy sửa recipe tạo văn bản hoặc đối số CLI trước khi thử lại.",
@@ -3767,12 +3767,12 @@
       "kimiConfigInvalid": "Kimi có cấu hình không hợp lệ. Kiểm tra cấu hình mô hình và nhà cung cấp trên host thực thi trước khi thử lại.",
       "promptTooLargeForWindows": "Prompt {{label}} quá lớn đối với dòng lệnh Windows. Hãy stage ít thay đổi hơn và thử lại.",
       "promptTooLargeForArgument": "Prompt {{label}} quá lớn để truyền làm một đối số dòng lệnh đơn. Hãy stage ít thay đổi hơn và thử lại.",
-      "agentCouldNotStart": "Không thể khởi động {{label}}. Kiểm tra lệnh agent trong Cài đặt và thử lại.",
-      "agentFailedToStart": "{{label}} khởi động thất bại. Kiểm tra lệnh agent trong Cài đặt và thử lại.",
+      "agentCouldNotStart": "Không thể khởi động {{label}}. Kiểm tra lệnh agent trong Cài đặt rồi thử lại.",
+      "agentFailedToStart": "{{label}} không thể khởi động. Kiểm tra lệnh agent trong Cài đặt rồi thử lại.",
       "agentBinaryNotFound": "Không tìm thấy {{binary}} trên PATH. Cài đặt {{label}} để sử dụng thông điệp commit bằng AI.",
       "timedOut": "Quá trình tạo đã hết thời gian chờ sau {{seconds}} giây.",
       "outputTooLarge": "Lệnh CLI {{label}} tạo ra quá nhiều đầu ra. Kiểm tra cấu hình CLI của agent và thử lại.",
-      "windowsBatchUnsafeArguments": "{{label}} chạy qua tập lệnh batch Windows không thể nhận prompt nhiều dòng làm đối số. Hãy trỏ Cài đặt vào tệp thực thi của agent, hoặc sử dụng lệnh tùy chỉnh không có {prompt} để Orca gửi prompt qua stdin.",
+      "windowsBatchUnsafeArguments": "{{label}} chạy qua tập lệnh batch Windows không thể nhận prompt nhiều dòng làm đối số. Hãy đặt đường dẫn trong Cài đặt trỏ tới tệp thực thi của agent, hoặc sử dụng lệnh tùy chỉnh không có {prompt} để Orca gửi prompt qua stdin.",
       "cliTerminated": "Lệnh CLI {{label}} đã bị chấm dứt trước khi thoát.",
       "cliTerminatedWithDetail": "Lệnh CLI {{label}} đã bị chấm dứt trước khi thoát: {{detail}}",
       "cliFailed": "Lệnh CLI {{label}} thất bại với mã {{exitCode}}.",
@@ -3801,24 +3801,24 @@
       "chatNameAgentUnsupported": "Chọn một agent đặt tên đoạn chat được hỗ trợ cho thao tác này trong Cài đặt -> Chat -> Chat names. Các agent được hỗ trợ: {{agents}}, hoặc Lệnh tùy chỉnh.",
       "sourceControlCustomCommandEmpty": "Lệnh tùy chỉnh đang trống. Thêm một lệnh trong Cài đặt -> Git -> Source Control AI.",
       "chatNameCustomCommandEmpty": "Lệnh tùy chỉnh đang trống. Thêm một lệnh trong Cài đặt -> Chat -> Chat names.",
-      "agentCannotGenerateCommitMessage": "Agent \"{{agent}}\" không hỗ trợ thông điệp commit bằng AI Source Control. Các agent được hỗ trợ: {{agents}}, hoặc Lệnh tùy chỉnh.",
-      "agentCannotGeneratePullRequest": "Agent \"{{agent}}\" không hỗ trợ chi tiết pull request bằng AI Source Control. Các agent được hỗ trợ: {{agents}}, hoặc Lệnh tùy chỉnh.",
-      "agentCannotGenerateBranchName": "Agent \"{{agent}}\" không hỗ trợ tên branch bằng AI Source Control. Các agent được hỗ trợ: {{agents}}, hoặc Lệnh tùy chỉnh.",
+      "agentCannotGenerateCommitMessage": "Agent \"{{agent}}\" không hỗ trợ thông điệp commit Source Control AI. Các agent được hỗ trợ: {{agents}}, hoặc Lệnh tùy chỉnh.",
+      "agentCannotGeneratePullRequest": "Agent \"{{agent}}\" không hỗ trợ chi tiết pull request Source Control AI. Các agent được hỗ trợ: {{agents}}, hoặc Lệnh tùy chỉnh.",
+      "agentCannotGenerateBranchName": "Agent \"{{agent}}\" không hỗ trợ tên branch Source Control AI. Các agent được hỗ trợ: {{agents}}, hoặc Lệnh tùy chỉnh.",
       "agentCannotGenerateChatName": "Agent \"{{agent}}\" không hỗ trợ tên đoạn chat. Các agent được hỗ trợ: {{agents}}, hoặc Lệnh tùy chỉnh.",
-      "noModelForAgent": "Không có mô hình khả dụng cho {{label}}.",
+      "noModelForAgent": "Không có model khả dụng cho {{label}}.",
       "planCustomCommandEmpty": "Lệnh tùy chỉnh đang trống. Thêm một lệnh trong Cài đặt → Git → AI Commit Messages.",
       "planAgentUnsupported": "Agent \"{{agent}}\" không hỗ trợ thông điệp commit bằng AI.",
-      "planModelUnavailable": "Mô hình \"{{model}}\" không khả dụng cho {{label}}.",
-      "planModelWithoutThinking": "Mô hình \"{{model}}\" không hỗ trợ mức độ suy nghĩ.",
+      "planModelUnavailable": "Model \"{{model}}\" không khả dụng cho {{label}}.",
+      "planModelWithoutThinking": "Model \"{{model}}\" không hỗ trợ mức độ suy nghĩ.",
       "planThinkingLevelInvalid": "Mức độ suy nghĩ \"{{level}}\" không hợp lệ cho {{model}}."
     },
     "conflictActions": {
       "resolveFile": "{{action}}: {{path}}",
       "needsNewerHost": "Cập nhật Orca trên máy tính đang chạy workspace này để giải quyết xung đột merge từ điện thoại.",
-      "markResolved": "Đánh dấu đã giải quyết",
+      "markResolved": "Đánh dấu là đã giải quyết",
       "keepFile": "Giữ tệp",
-      "keepDeletion": "Giữ phần đã xóa",
-      "completeMergeFailed": "Hoàn tất merge thất bại"
+      "keepDeletion": "Giữ thao tác xóa",
+      "completeMergeFailed": "Không thể hoàn tất merge"
     },
     "commitDetail": {
       "copySha": "Sao chép SHA",
@@ -3877,14 +3877,14 @@
       "merging": "Đang merge",
       "rebasing": "Đang rebase",
       "cherryPicking": "Đang cherry-pick",
-      "notPublished": "Chưa xuất bản",
+      "notPublished": "Chưa đẩy lên remote",
       "notPushed": "Chưa push {{count}}",
-      "behind": "Chậm hơn {{count}}",
+      "behind": "Chậm {{count}} commit",
       "upToDate": "Đã là mới nhất",
       "switchBranch": "Chuyển branch từ {{branch}}",
-      "mergeInProgress": "Merge đang tiến hành",
-      "rebaseInProgress": "Rebase đang tiến hành",
-      "cherryPickInProgress": "Cherry-pick đang tiến hành",
+      "mergeInProgress": "Đang merge",
+      "rebaseInProgress": "Đang rebase",
+      "cherryPickInProgress": "Đang cherry-pick",
       "filesNeedDecision_one": "{{count}} tệp cần xử lý trước khi hoàn tất.",
       "filesNeedDecision_other": "Cần xử lý {{count}} tệp trước khi bạn có thể hoàn tất.",
       "conflictsResolved": "Đã giải quyết mọi xung đột. Hãy hoàn tất từ thanh bên dưới.",
@@ -3917,7 +3917,7 @@
       "loadIssuesFailed": "Không thể tải issue từ {{source}}.",
       "retryLoadingIssues": "Thử tải lại issue từ {{source}}",
       "retrying": "Đang thử lại...",
-      "subIssueDataUnavailable": "Dữ liệu sub-issue không khả dụng cho token của bạn.",
+      "subIssueDataUnavailable": "Dữ liệu issue phụ không khả dụng với token của bạn.",
       "mergeMethodTitle": "Phương thức merge",
       "pullRequestMergeMessage": "Chọn cách merge pull request này.",
       "mergeRequestMergeMessage": "Chọn cách merge merge request này.",
@@ -3928,9 +3928,9 @@
     },
     "prFileDiff": {
       "noTextChanges": "Không tìm thấy thay đổi văn bản.",
-      "showingDiffLines": "Đang hiển thị {{limit}} dòng diff đầu tiên của {{total}}.",
+      "showingDiffLines": "Đang hiển thị {{limit}} dòng diff đầu tiên trong tổng số {{total}} dòng.",
       "commentPlaceholder": "Thêm nhận xét review",
-      "commentOnLine": "Nhận xét về dòng {{line}}"
+      "commentOnLine": "Bình luận trên dòng {{line}}"
     },
     "smartSourceModes": {
       "smart": "Thông minh",
@@ -3996,7 +3996,7 @@
       "loadingStates": "Đang tải trạng thái...",
       "noStates": "Không có trạng thái nào khả dụng",
       "jiraFilter": "Bộ lọc Jira",
-      "jiraSite": "Trang web Jira",
+      "jiraSite": "Trang Jira",
       "statesFailed": "Không thể tải trạng thái. Hãy mở lại để thử lại."
     },
     "githubProjectList": {
@@ -4012,7 +4012,7 @@
       "moreFields_other": "+{{count}} trường",
       "loading": "Đang tải dự án…",
       "noMatches": "Không có mục dự án nào khớp.",
-      "linkedPullRequestsOverflow": "+{{count}} mục nữa"
+      "linkedPullRequestsOverflow": "+{{count}} nữa"
     },
     "githubProjectPickers": {
       "title": "GitHub Projects",
@@ -4037,7 +4037,7 @@
       "noMoreProjects": "Không còn dự án nào.",
       "chooseView": "Chọn chế độ xem dự án",
       "view": "Chế độ xem dự án",
-      "unsupportedLayout": "Orca chưa hỗ trợ bố cục GitHub project này."
+      "unsupportedLayout": "Orca chưa hỗ trợ bố cục GitHub Project này."
     },
     "githubViewControls": {
       "openView": "Mở chế độ xem trong GitHub"
@@ -4150,18 +4150,18 @@
       "createdState": "Đã tạo",
       "linearCreatedDescription": "Issue do bạn tạo",
       "completedState": "Đã hoàn thành",
-      "linearCompletedDescription": "Issue hoàn thành gần đây",
+      "linearCompletedDescription": "Issue đã hoàn thành gần đây",
       "list": "Danh sách",
       "listDescription": "Hàng issue thu gọn",
       "board": "Bảng",
       "boardDescription": "Cột theo nhóm",
-      "noGrouping": "Không nhóm",
+      "noGrouping": "Không gom nhóm",
       "status": "Trạng thái",
       "assignee": "Người được giao",
       "priority": "Mức ưu tiên",
       "team": "Nhóm",
-      "updated": "Thời gian cập nhật",
-      "identifier": "Định danh",
+      "updated": "Đã cập nhật",
+      "identifier": "Mã định danh",
       "labels": "Nhãn",
       "issues": "Issue",
       "githubIssuesDescription": "Issue trên GitHub",
@@ -4310,10 +4310,10 @@
       "issues": "Issue"
     },
     "screenChrome": {
-      "refreshGitHub": "Tải lại công việc GitHub",
-      "refreshGitLab": "Tải lại các mục công việc GitLab",
-      "refreshLinear": "Tải lại Linear",
-      "refreshJira": "Tải lại các issue Jira",
+      "refreshGitHub": "Làm mới công việc GitHub",
+      "refreshGitLab": "Làm mới các mục công việc GitLab",
+      "refreshLinear": "Làm mới Linear",
+      "refreshJira": "Làm mới các issue Jira",
       "title": "Tác vụ",
       "newGitHubIssue": "Issue GitHub mới",
       "newLinearIssue": "Issue Linear mới"
@@ -4352,7 +4352,7 @@
       "fullCheckout": "Checkout đầy đủ",
       "fullCheckoutSubtitle": "Dùng toàn bộ repo",
       "editPreset": "Sửa {{name}}",
-      "newPreset": "Preset mới"
+      "newPreset": "Mẫu thiết lập sẵn mới"
     },
     "workspaceTrustDrawers": {
       "newSparsePreset": "Preset sparse mới",
@@ -4370,20 +4370,20 @@
       "setupChangedTitle": "Tập lệnh thiết lập của {{name}} đã thay đổi",
       "runSetupTitle": "Chạy thiết lập từ {{name}}?",
       "trustSubtitle": "Tệp orca.yaml của repo này chạy trên máy tính của bạn trước khi workspace khởi động. Chỉ chạy nếu bạn tin cậy repo này.",
-      "newSetupScript": "Tập lệnh thiết lập mới",
-      "setupScript": "Tập lệnh thiết lập",
+      "newSetupScript": "Script thiết lập mới",
+      "setupScript": "Script thiết lập",
       "trustFailed": "Không thể đánh dấu tin cậy tập lệnh thiết lập.",
       "runHooks": "Chạy hook",
       "alwaysTrustAndRun": "Luôn tin cậy và chạy",
       "dontRun": "Không chạy"
     },
     "sparsePresetDraft": {
-      "repoRelativeDirectoriesRequired": "Dùng thư mục tương đối theo repo; không dùng thư mục gốc, đường dẫn tuyệt đối hoặc thư mục cha (..).",
+      "repoRelativeDirectoriesRequired": "Dùng các thư mục tương đối với repo, không dùng thư mục gốc, đường dẫn tuyệt đối hoặc đoạn trỏ lên thư mục cha.",
       "directoryRequired": "Thêm ít nhất một thư mục."
     },
     "composerSource": {
       "baseFailed": "Không thể xác định branch base.",
-      "forkPushWarning": "PR này tắt \"Cho phép người bảo trì chỉnh sửa\"; việc push lên bản fork có thể bị GitHub từ chối."
+      "forkPushWarning": "Pull request này tắt \"Allow edits from maintainers\"; việc push lên bản fork có thể bị GitHub từ chối."
     },
     "detailCommentRenderers": {
       "commentPlaceholder": "Thêm bình luận",
@@ -4461,8 +4461,8 @@
       "closed": "Đã đóng",
       "conflicts": "Xung đột",
       "behind": "Đi sau branch base",
-      "blocked": "Bị chặn",
-      "checksPending": "Đang chờ lượt kiểm tra",
+      "blocked": "Đã bị chặn",
+      "checksPending": "Các lượt kiểm tra đang chờ",
       "ableToMerge": "Có thể merge",
       "unknown": "Không xác định"
     },
@@ -4475,13 +4475,13 @@
       "sortBy": "Sắp xếp theo",
       "issueSource": "Nguồn issue",
       "issueSourceRow": "Upstream hoặc origin",
-      "view": "Chế độ xem",
+      "view": "Xem",
       "projectView": "Chế độ xem dự án",
       "projectItems_one": "{{count}} mục",
       "projectItems_other": "{{count}} mục",
       "chooseView": "Chọn",
       "showOnRows": "Hiển thị trên hàng",
-      "projectFields": "Trường dự án",
+      "projectFields": "Các trường dự án",
       "workspace": "Workspace",
       "linearWorkspace": "Workspace Linear",
       "layout": "Bố cục",
@@ -4652,7 +4652,7 @@
       "run": "Chạy",
       "output": "Đầu ra",
       "noOutput": "Không có nội dung đầu ra.",
-      "capturedTruncated": "Đã ghi nhận {{date}} · Đầu ra bị host cắt bớt",
+      "capturedTruncated": "Đã ghi lại {{date}} · Đầu ra do host cắt bớt",
       "capturedDate": "Đã ghi nhận {{date}}",
       "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "Khung agent ban đầu không còn khả dụng. Đầu ra đã lưu vẫn ở đây.",
       "openAgent": "Mở agent",
@@ -4668,7 +4668,7 @@
       "loadMoreRuns": "Tải thêm lượt chạy",
       "hourly": "Hàng giờ",
       "daily": "Hàng ngày",
-      "weekdays": "Ngày làm việc (T2–T6)",
+      "weekdays": "Các ngày làm việc (T2–T6)",
       "weekly": "Hàng tuần",
       "customCronOrRRULE": "Cron hoặc RRULE tùy chỉnh",
       "cadence": "Tần suất",
@@ -4738,10 +4738,10 @@
       "targetMissing": "Host chạy tự động hóa không còn được đăng ký, vì vậy tự động hóa này không có nơi nào để chạy.",
       "targetReplaced": "Host chạy tự động hóa đã bị xóa và đăng ký lại, vì vậy cần gán lại tự động hóa này trước khi có thể chạy.",
       "workspaceHostAmbiguous": "Workspace tự động hóa trải dài trên nhiều host, vì vậy Orca không thể biết nên chạy trên host nào.",
-      "legacyTwinHosts": "Tự động hóa này đã được lưu trước khi Orca theo dõi host chạy nó, và dự án của nó nằm trên nhiều host. Hãy mở tự động hóa và chọn host cần chạy.",
+      "legacyTwinHosts": "Tự động hóa này được lưu trước khi Orca theo dõi host chạy nó, và dự án của nó nằm trên nhiều host. Hãy mở tự động hóa và chọn host cần chạy.",
       "targetUnavailable": "Đích chạy tự động hóa không còn khả dụng.",
       "remoteSchedulingUnavailable": "Máy khách Orca này chưa hỗ trợ lên lịch tự động hóa trên máy chủ từ xa. Hãy chạy tự động hóa này trên máy chủ từ xa, hoặc cập nhật Orca khi có tính năng lên lịch lâu dài trên máy chủ từ xa.",
-      "projectSetupMissing": "Dự án không còn được thiết lập trên host chạy tự động hóa đã chọn nữa.",
+      "projectSetupMissing": "Dự án không còn được thiết lập trên host chạy tự động hóa đã chọn.",
       "targetSetupMismatch": "Đích chạy tự động hóa không còn khớp với thiết lập host của dự án đã chọn.",
       "repoUnavailable": "Repo trên host chạy tự động hóa đã chọn không còn khả dụng.",
       "repoDetached": "Repo không còn được gắn vào host chạy tự động hóa đã chọn.",
@@ -4770,9 +4770,9 @@
             "label": {
               "086a5a9fe2": "Lịch chạy không hợp lệ",
               "ba20c92073": "Lịch chạy tùy chỉnh",
-              "a95afb7483": "Mỗi giờ vào phút :{{minute}}",
+              "a95afb7483": "Mỗi giờ vào phút thứ {{minute}}",
               "280ccd2701": "Hàng ngày lúc {{time}}",
-              "3f1422adc1": "Ngày làm việc (T2–T6) lúc {{time}}",
+              "3f1422adc1": "Các ngày làm việc lúc {{time}}",
               "cc71e252ba": "Mỗi {{day}} lúc {{time}}"
             }
           }
@@ -4827,7 +4827,7 @@
       "showWorkers": "Hiện worker agent",
       "open": "Tùy chọn danh sách agent",
       "unreadOnly": "Chỉ chưa đọc",
-      "markAllRead": "Đánh dấu tất cả là đã đọc",
+      "markAllRead": "Đánh dấu tất cả đã đọc",
       "clearFinished": "Xóa mục đã hoàn thành"
     },
     "search": {
