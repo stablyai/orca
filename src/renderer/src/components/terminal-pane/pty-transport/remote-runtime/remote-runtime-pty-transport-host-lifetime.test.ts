@@ -35,7 +35,7 @@ function publish(retired = false, pairingRevision = 1) {
     environmentId: 'env-1',
     pairingRevision,
     sequence: pairingRevision,
-    checkedAt: Date.now(),
+    checkedAt: 1,
     status: null,
     transport: retired ? 'disconnected' : 'ready',
     verification: retired ? 'blocked' : 'verified',
@@ -115,12 +115,13 @@ it.each(['success', 'refusal'] as const)(
     expect(onExit).not.toHaveBeenCalled()
     expect(onDisconnect).not.toHaveBeenCalled()
     const callsAtStop = fixture.runtimeCall.mock.calls.length
+    vi.useFakeTimers()
     request.resolve(
       settlement === 'success'
         ? await dispatch({ method: 'session.tabs.activate', params: { tabId: 'tab-1' } })
         : { ok: false, error: { code: 'runtime_manually_disconnected', message: 'Stopped' } }
     )
-    await new Promise((resolve) => setTimeout(resolve, 20))
+    await vi.advanceTimersByTimeAsync(60_000)
     const { retryAllRemoteRuntimePtyRecoveriesNow } =
       await import('./recovery/remote-runtime-pty-recovery-state')
     retryAllRemoteRuntimePtyRecoveriesNow()
@@ -128,6 +129,7 @@ it.each(['success', 'refusal'] as const)(
     expect(transport.getRecoveryState?.().phase).toBe('disconnected')
     expect(fixture.runtimeCall.mock.calls.length).toBe(callsAtStop)
 
+    vi.useRealTimers()
     fixture.runtimeCall.mockImplementation(dispatch)
     publish(false, 2)
     await vi.waitFor(() => expect(transport.isConnected()).toBe(true))
@@ -149,10 +151,12 @@ it('terminates a current manual-disconnect refusal inside the production activat
   fixture.runtimeCall.mockClear()
   callbacks?.onClose?.()
   await vi.waitFor(() => expect(transport.getRecoveryState?.().phase).toBe('disconnected'))
-  await new Promise((resolve) => setTimeout(resolve, 60))
+  vi.useFakeTimers()
+  await vi.advanceTimersByTimeAsync(60_000)
   expect(fixture.runtimeCall.mock.calls.map(([args]) => args.method)).toEqual([
     'session.tabs.activate'
   ])
+  vi.useRealTimers()
   fixture.runtimeCall.mockImplementation(dispatch)
   publish()
   await vi.waitFor(() => expect(transport.isConnected()).toBe(true))

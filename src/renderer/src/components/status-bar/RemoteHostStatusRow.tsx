@@ -157,7 +157,7 @@ export function RemoteHostStatusRow({
           >
             {details}
           </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent ref={card} className="w-[min(18rem,calc(100vw-1rem))] p-1.5">
+          <DropdownMenuSubContent ref={card} className="w-[min(18rem,calc(100vw-1rem))]">
             <p className="px-1.5 py-1 text-xs text-muted-foreground">
               {errorSentence ??
                 t(
