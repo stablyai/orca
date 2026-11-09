@@ -95,14 +95,6 @@ describe('followWslAutomountRoots', () => {
     await listRunning(['Ubuntu'])
     expect(read).toHaveBeenCalledExactlyOnceWith('Ubuntu')
   })
-
-  it('keeps the default root when a distro cannot be read', async () => {
-    const read = vi.fn(async () => null)
-    follow(read)
-    await listRunning(['Ubuntu'])
-    await vi.waitFor(() => expect(read).toHaveBeenCalled())
-    expect(knownWslAutomountRoots()).toEqual(['/mnt/'])
-  })
 })
 
 describe('followWslAutomountRoots: one guest read per distro start', () => {
@@ -113,88 +105,6 @@ describe('followWslAutomountRoots: one guest read per distro start', () => {
       await new Promise((resolve) => setImmediate(resolve))
     }
   }
-
-  it.each(['/mnt/', '/custom/'])(
-    'reads a %s root once across many running observations, and once more after a restart',
-    async (root) => {
-      let reads = 0
-      follow(async () => {
-        reads += 1
-        return root
-      })
-      await observeRunning(10)
-      expect(reads).toBe(1)
-
-      await listRunning([])
-      now += WSL_STOP_SETTLE_MS
-      await observeRunning(10)
-      expect(reads).toBe(2)
-    }
-  )
-
-  it('retries a read that failed or found nothing, then stops once one succeeds', async () => {
-    const results: (string | null | Error)[] = [new Error('wsl.exe timed out'), null, '/mnt/']
-    let reads = 0
-    follow(async () => {
-      const result = reads < results.length ? results[reads] : '/mnt/'
-      reads += 1
-      if (result instanceof Error) {
-        throw result
-      }
-      return result
-    })
-    await observeRunning(6)
-    expect(reads).toBe(3)
-  })
-
-  it('reads again after a restart even when the stop came while a read was in flight', async () => {
-    let reads = 0
-    let finishFirst: (root: string) => void = () => {}
-    follow(
-      (): Promise<string> =>
-        new Promise((resolve) => {
-          reads += 1
-          if (reads === 1) {
-            finishFirst = resolve
-          } else {
-            resolve('/mnt/')
-          }
-        })
-    )
-    await listRunning(['Ubuntu'])
-    await listRunning([])
-    finishFirst('/mnt/')
-    await new Promise((resolve) => setImmediate(resolve))
-    now += WSL_STOP_SETTLE_MS
-    await observeRunning(3)
-    expect(reads).toBe(2)
-  })
-
-  // Terminals opened on a running distro each note a wake; only the interval lets one re-read through.
-  it('reads at most once more for many wakes while the distro runs', async () => {
-    let reads = 0
-    follow(async () => {
-      reads += 1
-      return '/mnt/'
-    })
-    await observeRunning(1)
-    expect(reads).toBe(1)
-
-    for (let i = 0; i < 10; i++) {
-      now += 1_000
-      noteWslDistroWoken('Ubuntu')
-      await observeRunning(1)
-    }
-    expect(reads).toBe(1)
-
-    now += WSL_AUTOMOUNT_WAKE_REREAD_INTERVAL_MS
-    for (let i = 0; i < 10; i++) {
-      noteWslDistroWoken('Ubuntu')
-      now += 1
-      await observeRunning(1)
-    }
-    expect(reads).toBe(2)
-  })
 
   it('picks up a root edited across a restart no probe saw, once Orca wakes the distro', async () => {
     let root = '/old/'

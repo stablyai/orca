@@ -15,7 +15,7 @@ import {
   type ClaudeTrustConfigTarget,
   grantClaudeWorkspaceTrust
 } from '../../claude/claude-folder-trust-file'
-import { isTooBroadToPreTrust } from '../../../shared/home-or-filesystem-root'
+import { isTooBroadToPreTrust } from '../../../shared/agent-launch/permissions/workspace-pretrust-scope'
 
 /** Resolve trust on the agent’s execution host, including WSL guests and SSH relays. */
 export type WorkspaceTrustHost = {
@@ -27,6 +27,8 @@ export type WorkspaceTrustHost = {
   claudeConfig: () => ClaudeTrustConfigTarget | null
   /** Every config.toml the launched Codex may read, in the hook installer's lock order. */
   codexConfigFiles: () => readonly string[]
+  /** The workspace as a WSL agent sees it, when it differs from the host path. */
+  guestWorkspacePath?: string
   /** KIMI_CODE_HOME for the launched Kimi; unset means `<agentHome>/.kimi-code`. */
   kimiHome?: string
   deadlineMs: number
@@ -105,7 +107,7 @@ async function writePreset(
     case 'qoder':
       return markQoderWorkspaceTrusted(storedPath, host.agentHome)
     case 'antigravity':
-      return markAntigravityWorkspaceTrusted(storedPath, host.agentHome)
+      return markAntigravityWorkspaceTrusted(storedPath, host.agentHome, host.guestWorkspacePath)
     case 'kimi':
       return markKimiWorkspaceTrusted(
         storedPath,

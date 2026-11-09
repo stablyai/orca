@@ -1,10 +1,10 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { translate } from '@/i18n/i18n'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { useTranslate } from '@/i18n/use-translate'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import {
   useCustomEditorViewStore,
   type ActivePluginCustomEditor
-} from '@/store/plugin-custom-editors'
+} from '@/store/plugins/file-editors/plugin-custom-editors'
 import { PLUGIN_PANEL_FRAME_NAME_PREFIX } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import { CUSTOM_EDITOR_LARGE_DOCUMENT_BYTES } from '../../../../shared/plugins/frames/plugin-custom-editor-bridge'
 import { fillPluginPanelShell } from '../plugins/frames/plugin-panel-design-token-css'
@@ -69,6 +69,7 @@ export default function PluginCustomEditorFrame({
   binaryDocument,
   onBytesChange
 }: PluginCustomEditorFrameProps): React.JSX.Element {
+  const t = useTranslate()
   const [refusal, setRefusal] = useState<CustomEditorEditRefusal | null>(null)
   const [saveBlocked, setSaveBlocked] = useState(false)
   const frameRef = useRef<PluginFrameElement | null>(null)
@@ -226,14 +227,14 @@ export default function PluginCustomEditorFrame({
   if (entry.status === 'loading') {
     return (
       <FrameMessage>
-        {translate('auto.components.editor.PluginCustomEditorFrame.loading', 'Loading editor…')}
+        {t('auto.components.editor.PluginCustomEditorFrame.loading', 'Loading editor…')}
       </FrameMessage>
     )
   }
   if (entry.status === 'unresponsive') {
     return (
       <FrameMessage>
-        {translate(
+        {t(
           'auto.components.editor.PluginCustomEditorFrame.unresponsive',
           '{{value0}} stopped responding. Switch to Source to keep editing.',
           { value0: editor.title }
@@ -257,7 +258,7 @@ export default function PluginCustomEditorFrame({
   if (entry.status === 'error') {
     return (
       <FrameMessage>
-        {translate(
+        {t(
           'auto.components.editor.PluginCustomEditorFrame.loadFailed',
           '{{value0}} could not be loaded. Switch to Source to edit this file.',
           { value0: editor.title }
@@ -273,7 +274,7 @@ export default function PluginCustomEditorFrame({
     >
       {saveBlocked ? (
         <div className="border-b border-border px-3 py-1.5 text-xs text-destructive">
-          {translate(
+          {t(
             'auto.components.editor.PluginCustomEditorFrame.saveBlocked',
             "Couldn't save the latest changes from {{value0}}.",
             { value0: editor.title }
@@ -282,12 +283,12 @@ export default function PluginCustomEditorFrame({
       ) : refusal ? (
         <div className="border-b border-border px-3 py-1.5 text-xs text-destructive">
           {refusal === 'oversized'
-            ? translate(
+            ? t(
                 'auto.components.editor.PluginCustomEditorFrame.editTooLarge',
                 'This file is too large for {{value0}} to save changes. Use Source instead.',
                 { value0: editor.title }
               )
-            : translate(
+            : t(
                 'auto.components.editor.PluginCustomEditorFrame.editsHeld',
                 '{{value0}} is sending changes too quickly; Orca applies the latest one shortly.',
                 { value0: editor.title }
@@ -295,7 +296,7 @@ export default function PluginCustomEditorFrame({
         </div>
       ) : isLarge ? (
         <div className="border-b border-border px-3 py-1.5 text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.editor.PluginCustomEditorFrame.largeFile',
             'Large file — may take a moment.'
           )}

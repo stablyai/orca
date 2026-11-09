@@ -1,5 +1,5 @@
 import React from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
 import {
   LIST_TABLE_HEADER_CLASS,
@@ -59,10 +59,11 @@ export function AutomationListTableHeader({
   sort?: AutomationListSort | null
   onSort?: (field: AutomationListSortField) => void
 } = {}): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className={`${AUTOMATIONS_TABLE_GRID_CLASS} ${LIST_TABLE_HEADER_CLASS}`}>
       {COLUMNS.map((column, index) => {
-        const label = translate(column.key, column.fallback)
+        const label = t(column.key, column.fallback)
         const className =
           index === 0
             ? LIST_TABLE_STICKY_HEADER_CELL_CLASS
@@ -85,7 +86,7 @@ export function AutomationListTableHeader({
         )
       })}
       <span className="sr-only">
-        {translate('auto.components.automations.AutomationsPage.tableActions', 'Actions')}
+        {t('auto.components.automations.AutomationsPage.tableActions', 'Actions')}
       </span>
     </div>
   )

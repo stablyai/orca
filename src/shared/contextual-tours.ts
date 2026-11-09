@@ -9,6 +9,7 @@ export type ContextualTourId =
   | 'automations'
   | 'floating-workspace'
   | 'workspace-creation'
+  | 'projects-collapse-all'
 
 export type ContextualTourStepControl = {
   kind: 'auto-rename-branch-from-work'
@@ -18,6 +19,7 @@ export type ContextualTourStepActionKind =
   | 'next'
   | 'complete'
   | 'split-terminal-pane'
+  | 'split-chat-pane'
   | 'create-worktree'
   | 'show-worktrees'
   | 'open-tasks'
@@ -46,10 +48,13 @@ export type ContextualTourStep = {
   primaryAction?: ContextualTourStepAction
   secondaryAction?: ContextualTourStepAction
   advanceOnFeatureInteraction?: FeatureInteractionId
+  /** Labels a step that announces a newly shipped feature. */
+  badge?: 'new'
 }
 
 export type ContextualTour = {
   id: ContextualTourId
+  preserveFocus?: boolean
   allowedActiveModals?: readonly string[]
   steps: readonly ContextualTourStep[]
 }
@@ -79,11 +84,32 @@ export const CONTEXTUAL_TOURS = [
     id: 'workspace-agent-sessions',
     steps: [
       {
+        id: 'agent-sessions-new-tab',
+        title: 'New agents start here',
+        body: 'Click + to start an agent, a terminal, or a browser tab.',
+        targetSelector: '[data-contextual-tour-target="tab-create-menu"]',
+        requiredForStart: true,
+        preferredPlacement: 'bottom',
+        targetPulse: true
+      },
+      // Exactly one split step shows: its target exists only for the active tab's kind.
+      {
+        id: 'agent-sessions-split-chat',
+        title: 'Open a pane beside the chat',
+        body: 'Press {terminal.splitRight}, or click the split button at the top of the chat. Each side gets its own tabs.',
+        targetSelector:
+          '[data-contextual-tour-target="chat-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"][data-active-content-type="agent-session"]',
+        requiredForStart: true,
+        preferredPlacement: 'bottom',
+        primaryAction: { kind: 'split-chat-pane', label: 'Split pane' },
+        advanceOnFeatureInteraction: 'tab-splits'
+      },
+      {
         id: 'agent-sessions-split',
         title: 'Split a terminal pane',
         body: 'Open a second terminal pane with {terminal.splitRight}, or right-click the pane for split options.',
         targetSelector:
-          '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"]',
+          '[data-contextual-tour-target="terminal-pane-split-target"], [data-contextual-tour-target="workspace-agent-terminal-tip"][data-active-content-type="terminal"]',
         requiredForStart: true,
         preferredPlacement: 'bottom',
         primaryAction: { kind: 'split-terminal-pane', label: 'Split terminal' },
@@ -211,6 +237,23 @@ export const CONTEXTUAL_TOURS = [
     ]
   },
   {
+    id: 'projects-collapse-all',
+    preserveFocus: true,
+    steps: [
+      {
+        id: 'projects-collapse-all-intro',
+        badge: 'new',
+        title: 'Collapse all projects at once',
+        body: 'Press {sidebar.projects.toggleCollapse}, click this button, or Alt-click any project header.',
+        targetSelector:
+          '[data-contextual-tour-target="projects-collapse-all"]:has([data-projects-collapse-toggle])',
+        requiredForStart: true,
+        preferredPlacement: 'bottom',
+        primaryAction: { kind: 'complete', label: 'Got it' }
+      }
+    ]
+  },
+  {
     id: 'workspace-creation',
     allowedActiveModals: ['new-workspace-composer'],
     steps: [
@@ -249,6 +292,9 @@ export function isContextualTourId(value: unknown): value is ContextualTourId {
 export function getContextualTour(id: ContextualTourId): ContextualTour {
   return CONTEXTUAL_TOURS.find((tour) => tour.id === id)!
 }
+
+export const getContextualTourStepIndex = (id: ContextualTourId, stepId: ContextualTourStepId) =>
+  getContextualTour(id).steps.findIndex((step) => step.id === stepId)
 
 export function normalizeContextualTourIds(value: unknown): ContextualTourId[] {
   if (!Array.isArray(value)) {

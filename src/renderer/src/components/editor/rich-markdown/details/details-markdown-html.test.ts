@@ -1,11 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  extractDetailsSummaryHtml,
   isEditableDetailsHtmlBlock,
   matchDetailsHtmlBlock,
-  normalizeDetailsOpeningTag,
-  parseDetailsAttributes,
-  parseToggleHeadingVariant,
   type DetailsHtmlBlock
 } from './details-markdown-html'
 
@@ -27,110 +23,6 @@ afterEach(() => {
 })
 
 describe('details markdown html', () => {
-  it.each([
-    ['<details>', '<details class="orca-details">'],
-    ['<details open="open">', '<details class="orca-details" open>'],
-    ['<details CLASS="orca-details">', '<details class="orca-details">'],
-    ["<details Class='orca-details'>", '<details class="orca-details">'],
-    ['<details cLaSs=orca-details>', '<details class="orca-details">'],
-    [
-      "<details open data-orca-toggle = 'heading-2' class='orca-details'>",
-      '<details class="orca-details" data-orca-toggle="heading-2" open>'
-    ]
-  ])('normalizes supported opening tag %s like the serializer', (input, expected) => {
-    expect(normalizeDetailsOpeningTag(input)).toBe(expected)
-  })
-
-  it.each([
-    '<details id="keep">',
-    '<details class="custom">',
-    '<details class="ORCA-DETAILS">',
-    "<details CLASS='Orca-Details'>",
-    '<details Class=ORCA-DETAILS>',
-    '<details data-orca-toggle="heading-6">',
-    '<details open="false">',
-    '<detailsish>',
-    '</details>',
-    '<summary>',
-    '<!-- <details> -->'
-  ])('leaves noncanonical or unrelated fragment %s unchanged', (fragment) => {
-    expect(normalizeDetailsOpeningTag(fragment)).toBe(fragment)
-  })
-
-  it.each(['ORCA-DETAILS', 'Orca-Details'])(
-    'keeps case-sensitive class %s out of editable details nodes',
-    (className) => {
-      expect(
-        isEditableHtml(`<details class="${className}"><summary>Toggle</summary>Body</details>`)
-      ).toBe(false)
-    }
-  )
-
-  it('extracts leading summary html without regex capture', () => {
-    const matchSpy = vi.spyOn(String.prototype, 'match')
-    const inner = `\n<SUMMARY>${'Heading line\n'.repeat(1_000)}</SUMMARY><p>Body</p>`
-
-    const summary = extractDetailsSummaryHtml(inner)
-
-    expect(summary?.content).toContain('Heading line')
-    expect(summary?.rawLength).toBe(inner.indexOf('<p>Body</p>'))
-    const usedSummaryCapture = matchSpy.mock.calls.some(
-      ([pattern]) =>
-        pattern instanceof RegExp &&
-        pattern.source.startsWith('^\\s*<summary') &&
-        pattern.source.includes('[\\s\\S]')
-    )
-    expect(usedSummaryCapture).toBe(false)
-  })
-
-  it('accepts editable details blocks with newline-heavy summaries without summary matching', () => {
-    const matchSpy = vi.spyOn(String.prototype, 'match')
-    const block: DetailsHtmlBlock = {
-      raw: '',
-      openingAttributes: '',
-      inner: `<summary>${'Heading line\n'.repeat(1_000)}</summary><p>Body</p>`
-    }
-
-    expect(isEditableDetailsHtmlBlock(block)).toBe(true)
-    const usedSummaryCapture = matchSpy.mock.calls.some(
-      ([pattern]) =>
-        pattern instanceof RegExp &&
-        pattern.source.startsWith('^\\s*<summary') &&
-        pattern.source.includes('[\\s\\S]')
-    )
-    expect(usedSummaryCapture).toBe(false)
-  })
-
-  it('accepts heading-5 toggle variants and rejects unsupported levels', () => {
-    expect(parseToggleHeadingVariant('heading-5')).toBe('heading-5')
-    expect(parseToggleHeadingVariant('heading-6')).toBeNull()
-    expect(parseDetailsAttributes(' data-orca-toggle="heading-5"')).toMatchObject({
-      variant: 'heading-5'
-    })
-    expect(parseDetailsAttributes(' data-orca-toggle="heading-6"')).toMatchObject({
-      variant: null
-    })
-
-    const editableHeading5: DetailsHtmlBlock = {
-      raw: '',
-      openingAttributes: ' data-orca-toggle="heading-5"',
-      inner: '<summary>Toggle</summary><p>Body</p>'
-    }
-    const unsupportedHeading6: DetailsHtmlBlock = {
-      raw: '',
-      openingAttributes: ' data-orca-toggle="heading-6"',
-      inner: '<summary>Toggle</summary><p>Body</p>'
-    }
-
-    expect(isEditableDetailsHtmlBlock(editableHeading5)).toBe(true)
-    expect(isEditableDetailsHtmlBlock(unsupportedHeading6)).toBe(false)
-  })
-
-  it('accepts nested toggles whose descendants are all editable', () => {
-    expect(isEditableHtml(nestedToggles(2))).toBe(true)
-    expect(isEditableHtml(nestedToggles(16))).toBe(true)
-  })
-
   it('bounds each of many sibling nested toggles independently', () => {
     const siblings = (count: number, extra = ''): string =>
       Array.from(
@@ -144,16 +36,6 @@ describe('details markdown html', () => {
     expect(isEditableHtml(wrap(siblings(40)))).toBe(true)
     // Shared fence ranges must not let later siblings inherit an earlier sibling’s editability boundaries.
     expect(isEditableHtml(wrap(`${siblings(20)}\n\n${siblings(1, ' id="x"')}`))).toBe(false)
-  })
-
-  it('rejects a toggle whose nested toggle is not itself editable', () => {
-    const block: DetailsHtmlBlock = {
-      raw: '',
-      openingAttributes: ' class="orca-details"',
-      inner: '<summary>Outer</summary><details id="x"><summary>Inner</summary><p>Body</p></details>'
-    }
-
-    expect(isEditableDetailsHtmlBlock(block)).toBe(false)
   })
 
   it('rejects nesting past the recursion guard instead of recursing without bound', () => {

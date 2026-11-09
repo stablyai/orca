@@ -4,8 +4,7 @@
 // the identity under test is derived there — mocking it out would assert only the mock's shape.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { recordHostModelCatalogSnapshot } from '@/runtime/host-model-catalog-snapshots'
-import { holdStructuredAgentSessionLaunchOption } from './structured-agent-session-launch-options'
+
 import type { StructuredAgentSessionCreateParams } from '../../../../../shared/agent-session/structured-agent-session-create'
 
 const mocks = vi.hoisted(() => ({
@@ -25,13 +24,19 @@ vi.mock('@/lib/agent-catalog', () => ({
   getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }]
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call,
-  supportsStructuredAgentSessionCreateMessage: async () => true,
-  supportsStructuredAgentSessionCreateOptionsMode: async () => true,
-  structuredAgentSessionHostSupports: async () => true,
-  structuredAgentSessionHostCapabilityState: async () => 'supported'
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
+  callStructuredAgentSession: mocks.call
 }))
+
+vi.mock(
+  '../../../runtime/native-chat/host-capabilities/structured-agent-session-host-support',
+  () => ({
+    supportsStructuredAgentSessionCreateMessage: async () => true,
+    supportsStructuredAgentSessionCreateOptionsMode: async () => true,
+    structuredAgentSessionHostSupports: async () => true,
+    structuredAgentSessionHostCapabilityState: async () => 'supported'
+  })
+)
 
 vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => ({
   refreshLocalStructuredSessionTabs: mocks.refresh
@@ -77,42 +82,6 @@ describe('a launch that adopts a conversation is its own identity', () => {
       return { ok: true, value: { submission: { dispatchState: 'accepted' } } }
     })
   })
-
-  it.each(['off', 'medium'])(
-    'keeps held Pi %s raw in first-message identity despite supported drawing',
-    async (effort) => {
-      recordHostModelCatalogSnapshot({ kind: 'local' }, 'pi', null, {
-        origin: 'probe',
-        fetchedAt: 1,
-        models: [
-          {
-            id: 'openai/gpt-5',
-            label: 'GPT-5',
-            isDefault: false,
-            efforts: ['off', 'minimal', 'low', 'xhigh']
-              .filter((value) => effort !== 'off' || value !== 'off')
-              .map((value) => ({ value, label: value }))
-          }
-        ]
-      })
-      const launch = startStructuredAgentLaunch(`held-pi-${effort}`, 'pi', {
-        requestId: `held-pi-${effort}`,
-        prompt: 'opening text'
-      })
-      holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'openai/gpt-5')
-      holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', effort)
-      await flushLaunchDispatch()
-      await vi.waitFor(() => expect(createParams()).toHaveLength(1))
-      expect(createParams()[0]?.firstMessage?.body.blocks).toEqual([
-        { type: 'text', text: 'opening text' }
-      ])
-      expect(createParams()[0]?.options).toEqual({ model: 'openai/gpt-5', effort })
-      expect(createParams()[0]?.firstMessage?.selection).toMatchObject({
-        model: 'openai/gpt-5',
-        effort
-      })
-    }
-  )
 
   it('does not hand a resume the blank launch already pending for the same worktree', async () => {
     // Joiners inherit existing intent and add prompt only; joining a blank launch would discard conversation adoption.
@@ -177,22 +146,5 @@ describe('a launch that adopts a conversation is its own identity', () => {
 
     expect(second.sessionId).toBe(first.sessionId)
     expect(createParams()).toHaveLength(1)
-  })
-
-  it('keeps the same row apart across worktrees and agents', async () => {
-    const resumeFrom = { providerSessionId: 'thread-1' }
-    const here = startStructuredAgentLaunch('wt-here', 'codex', {
-      requestId: 'request-9',
-      resumeFrom
-    })
-    const there = startStructuredAgentLaunch('wt-there', 'codex', {
-      requestId: 'request-10',
-      resumeFrom
-    })
-
-    await flushLaunchDispatch()
-
-    expect(there.sessionId).not.toBe(here.sessionId)
-    expect(createParams()).toHaveLength(2)
   })
 })

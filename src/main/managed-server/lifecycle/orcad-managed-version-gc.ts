@@ -5,10 +5,10 @@ import {
   orcadSlotDir,
   resolveOrcadSlotIdentity,
   type OrcadSlotOptions
-} from '../../ssh/orcad-recovery-slot'
-import { probeActiveOrcadReadiness } from '../../ssh/orcad-active-readiness'
+} from '../activation/orcad-recovery-slot'
+import { probeActiveOrcadReadiness } from '../activation/orcad-active-readiness'
 import { gcOldOrcadVersions } from '../install/orcad-remote-gc'
-import { nodeRuntimeStorePins } from '../../ssh/pinned-runtime-host-target'
+import { nodeRuntimeStorePins } from '../install/pinned-runtime-host-target'
 
 /** null proves no daemon; undefined means its version is unknown. */
 export function provenLiveDaemonVersion(readiness: ServeReadiness): string | null | undefined {

@@ -1,3 +1,4 @@
+import { getWorktreeReorderDropPoint } from './worktree-lineage-drag-drop'
 import { useEffect } from 'react'
 import type React from 'react'
 import { getFullDropIndexForWorktreeDragUnit } from './worktree-drag-units'
@@ -24,26 +25,27 @@ export function useWorktreeDocumentDrop(args: {
         clearWorktreeDrag()
         return
       }
+      const container = ctx.scrollRef.current
+      const target = ctx.getEligibleLineageDropTarget(
+        container
+          ? getPointerDropStatusTarget({
+              container,
+              x: event.clientX,
+              y: event.clientY
+            })
+          : NO_WORKTREE_SIDEBAR_DROP_TARGET,
+        session.pickedCopies
+      )
+      // As in dragover: an eligible parent under the pointer wins over a reorder slot.
+      if (target.lineageParentIdentity) {
+        event.preventDefault()
+        event.stopPropagation()
+        ctx.commitWorktreeLineageParentDrop(session.pickedCopies, target.lineageParentIdentity)
+        clearWorktreeDrag()
+        return
+      }
       const drop = ctx.computeWorktreeDrop(event.clientY)
       if (!drop) {
-        const container = ctx.scrollRef.current
-        const target = ctx.getEligibleLineageDropTarget(
-          container
-            ? getPointerDropStatusTarget({
-                container,
-                x: event.clientX,
-                y: event.clientY
-              })
-            : NO_WORKTREE_SIDEBAR_DROP_TARGET,
-          session.draggedIds
-        )
-        if (target.lineageParentId) {
-          event.preventDefault()
-          event.stopPropagation()
-          ctx.commitWorktreeLineageParentDrop(session.draggedIds, target.lineageParentId)
-          clearWorktreeDrag()
-          return
-        }
         const statusDrop = target.status
           ? ctx.computeWorktreeStatusDrop({
               pointerY: event.clientY,
@@ -81,7 +83,9 @@ export function useWorktreeDocumentDrop(args: {
       })
       ctx.clearReorderedWorktreeParents({
         draggedIds: session.draggedIds,
-        sourceGroupKey: session.sourceGroupKey
+        sourceGroupKey: session.sourceGroupKey,
+        pickedCopies: session.pickedCopies,
+        dropPoint: getWorktreeReorderDropPoint(event, drop, ctx.scrollRef.current)
       })
       clearWorktreeDrag()
     }

@@ -6,6 +6,7 @@ import type {
 } from './agent-status/contracts/agent-status-types'
 import type { AgentMainAgentStatus } from './agent-status/lifecycle/main-agent-status'
 import type { ProgramStatusFacet } from './program-status/facet'
+import type { AgentListVerdict } from './agent-status/presentation/agent-list-status'
 import type { CheckStatus, ProviderCheckSummary } from './github/pull-request-types'
 import type { AgentChildWorkView } from './agent-status/child-work/agent-status-child-work-view'
 import type { AgentSubagentSnapshot } from './agent-status/contracts/agent-status-subagent-snapshot'
@@ -13,6 +14,8 @@ import type { RuntimeTerminalInteractiveWait } from './runtime-terminal-contract
 import type { BaseRefSearchResult, Repo } from './repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
 import type {
+  CrossStoreWorkspaceLineage,
+  WorkspaceLineageEdge,
   WorkspaceLineage,
   WorktreeLineage,
   WorktreeLineageWarning
@@ -61,6 +64,8 @@ export type RuntimeWorktreeAgentRow = {
   hasLivePty?: true
   /** The program's own OSC 7501 report; never decides `state`. Optional: old hosts never send it. */
   programStatus?: ProgramStatusFacet
+  /** How the desktop Agents list shows this agent. Omitted with no desktop window, by old hosts, and for a turn newer than the window's last verdicts. */
+  activity?: AgentListVerdict
 }
 
 export type RuntimeWorktreePsSummary = {
@@ -68,6 +73,8 @@ export type RuntimeWorktreePsSummary = {
   worktreeId: string
   repoId: string
   hostId?: Worktree['hostId']
+  /** Host-qualified identity; tells same-id rows on different hosts apart. Absent from older hosts. */
+  identity?: Worktree['identity']
   terminalPlatform?: NodeJS.Platform
   repo: string
   path: string
@@ -81,6 +88,10 @@ export type RuntimeWorktreePsSummary = {
   parentWorktreeInstanceId?: string
   parentWorktreeId: string | null
   childWorktreeIds: string[]
+  /** This row's parent in another Orca store; lineage fields above stay null for it, so older readers show it standalone. */
+  crossStoreParent?: CrossStoreWorkspaceLineage
+  /** Its folder workspace parent; null for none, absent from older hosts. Lineage fields above stay null for it. */
+  workspaceLineage?: WorkspaceLineageEdge | null
   displayName: string
   workspaceStatus: string
   sortOrder: number
@@ -142,6 +153,8 @@ export type RuntimeWorktreePsSummary = {
 export type RuntimeGitLocalBranches = {
   current: string | null
   branches: string[]
+  committedAt?: Record<string, number>
+  worktreePaths?: Record<string, string>
 }
 
 export type RuntimeSpeechModelSummary = {
@@ -161,6 +174,8 @@ export type RuntimeSpeechSetupState = {
   models: RuntimeSpeechModelSummary[]
 }
 
+export type RuntimeGitSwitchResult = { ok: true; branch: string; head?: string; warning?: string }
+
 export type RuntimeGitCheckoutResult = {
   ok: true
   branch: string
@@ -176,6 +191,8 @@ export type RuntimeWorktreeRecord = Worktree & {
   childWorktreeIds: string[]
   lineage: WorktreeLineage | null
   workspaceLineage?: WorkspaceLineage | null
+  /** A parent in another Orca store (worktree.show); older hosts omit it. */
+  crossStoreLineage?: CrossStoreWorkspaceLineage | null
   git: GitWorktreeInfo
 }
 
@@ -183,6 +200,7 @@ export type RuntimeWorktreeCreateResult = {
   worktree: RuntimeWorktreeRecord
   lineage: WorktreeLineage | null
   workspaceLineage?: WorkspaceLineage | null
+  crossStoreLineage?: CrossStoreWorkspaceLineage | null
   warnings: WorktreeLineageWarning[]
   warning?: string
   startupTerminal?: CreateWorktreeResult['startupTerminal']
@@ -205,6 +223,7 @@ export type RuntimeWorktreePsResult = {
 export type RuntimeRepoList = { repos: Repo[] }
 
 export type RuntimeRepoSearchRefs = {
+  namespace?: 'remote'
   refs: string[]
   refDetails?: BaseRefSearchResult[]
   truncated: boolean

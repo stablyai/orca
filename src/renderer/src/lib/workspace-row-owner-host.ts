@@ -4,7 +4,7 @@ import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import '../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../shared/folder-workspaces/folder-workspace-host-id'
 import type { AppState } from '../store/types'
-import { selectFolderWorkspaces } from '@/store/workspace-record-selectors'
+import { selectFolderWorkspaces } from '@/store/workspaces/catalog/workspace-record-fields'
 
 /**
  * The host that owns a workspace's own row; null while that row is unknown. Unlike

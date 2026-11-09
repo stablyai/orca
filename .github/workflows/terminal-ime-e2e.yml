@@ -105,7 +105,7 @@ jobs:
         env:
           SKIP_BUILD: '1'
           ORCA_E2E_WAYLAND_INPUT_DIAGNOSTICS: ${{ inputs.diagnose_wayland_input && '1' || '' }}
-        run: node config/scripts/run-terminal-ibus-hangul-e2e.mjs --nested-wayland
+        run: node config/scripts/runtime-verification/terminal-e2e/run-terminal-ibus-hangul-e2e.mjs --nested-wayland
       - name: Upload Wayland terminal IME evidence
         if: always()
         uses: actions/upload-artifact@v7

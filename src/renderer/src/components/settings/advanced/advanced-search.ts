@@ -2,6 +2,7 @@ import type { SettingsSearchEntry } from '../search/settings-search'
 import { getAdvancedNetworkSearchEntries } from './network/advanced-network-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
 
 export const getAdvancedPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
@@ -52,10 +53,10 @@ function findEntry(title: string): SettingsSearchEntry {
   return entry
 }
 
-export function getAdvancedSearchEntry() {
+export function getAdvancedSearchEntry(t: Translate = translate) {
   return {
     http1Compatibility: findEntry(
-      translate('auto.components.settings.advanced.search.11eea3da72', 'HTTP/1.1 Compatibility')
+      t('auto.components.settings.advanced.search.11eea3da72', 'HTTP/1.1 Compatibility')
     )
   } as const
 }

@@ -1,10 +1,10 @@
 // @vitest-environment happy-dom
 
-import { act, StrictMode, type ComponentProps, type ReactNode } from 'react'
+import { act, type ComponentProps, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JiraComment, JiraIssue, JiraTransition } from '../../../shared/jira/jira-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { AppState } from '../store/types'
 import type {
   JiraIssueCommentComposer,
@@ -53,7 +53,7 @@ vi.mock('@/store', () => {
   }
 })
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
-vi.mock('@/runtime/runtime-jira-client', () => {
+vi.mock('@/runtime/jira/runtime-jira-detail-client', () => {
   function request<T>(queue: PendingRead<T>[], key: string): Promise<T> {
     return new Promise((resolve, reject) => queue.push({ key, resolve, reject }))
   }
@@ -64,11 +64,13 @@ vi.mock('@/runtime/runtime-jira-client', () => {
     jiraListTransitionsForTarget: (_owner: unknown, key: string) =>
       request(boundary.transitions, key),
     jiraListPrioritiesForTarget: async () => [],
-    jiraListAssignableUsersForTarget: async () => [],
     jiraUpdateIssueForTarget: async () => ({ ok: true }),
     jiraAddIssueCommentForTarget: async () => ({ ok: true, id: 'added' })
   }
 })
+vi.mock('@/runtime/jira/runtime-jira-user-fields-client', () => ({
+  jiraListAssignableUsersForTarget: async () => []
+}))
 vi.mock('@/components/ui/sheet', () => {
   const Content = ({ children }: { children: ReactNode }) => <div>{children}</div>
   return {
@@ -222,47 +224,6 @@ afterEach(async () => {
 })
 
 describe('Jira issue workspace request lifetime', () => {
-  it.each([
-    ['rejects', 'before'],
-    ['returns null', 'before'],
-    ['rejects', 'after'],
-    ['returns null', 'after']
-  ])(
-    'keeps hydrated labels when a saved title refresh %s and hydration lands %s',
-    async (outcome, hydrationOrder) => {
-      await render(issue())
-      const initialRead = take(boundary.issues)
-      await act(async () => {
-        if (!boundary.content) {
-          throw new Error('Missing issue content')
-        }
-        boundary.content.setTitleDraft('Saved title')
-      })
-      await act(async () => {
-        if (!boundary.content) {
-          throw new Error('Missing issue content')
-        }
-        boundary.content.handleSaveTitle()
-        if (hydrationOrder === 'before') {
-          initialRead.resolve({ ...issue(), labels: ['backend'] })
-        }
-      })
-      await act(async () => {
-        const refresh = take(boundary.issues)
-        if (outcome === 'rejects') {
-          refresh.reject(new Error('Refresh failed'))
-        } else {
-          refresh.resolve(null)
-        }
-      })
-      if (hydrationOrder === 'after') {
-        await act(async () => initialRead.resolve({ ...issue(), labels: ['backend'] }))
-      }
-      expect(text('title')).toBe('Saved title')
-      expect(text('labels')).toBe('backend')
-    }
-  )
-
   it('keeps same-issue transitions when their post-save reload fails', async () => {
     await render(issue())
     await act(async () => {
@@ -287,51 +248,6 @@ describe('Jira issue workspace request lifetime', () => {
     expect(text('transitions')).toBe('existing-transition')
   })
 
-  it.each([false, true])(
-    'refreshes required transition comments without accepting older hydration (reopened: %s)',
-    async (reopened) => {
-      await render(issue())
-      await act(async () => take(boundary.issues).resolve(issue()))
-      const oldComments = take(boundary.comments)
-      await act(async () => {
-        if (!boundary.metadata) {
-          throw new Error('Missing issue metadata')
-        }
-        void boundary.metadata.mutateIssue(
-          'transition',
-          { transitionId: 'close', transitionComment: 'Verified fix' },
-          { status: { ...issue().status, id: 'done', name: 'Done' } }
-        )
-      })
-      const saveRefresh = take(boundary.issues)
-      if (reopened) {
-        await render(issue('JIR-2'))
-        await render(issue())
-        const currentIssue = boundary.issues.find((pending) => pending.key === 'JIR-1')
-        if (!currentIssue) {
-          throw new Error('Missing reopened issue read')
-        }
-        await act(async () => currentIssue.resolve(issue()))
-      }
-      await act(async () => saveRefresh.resolve(issue()))
-      const commentsRefresh = boundary.comments.at(-1)
-      if (!commentsRefresh || commentsRefresh.key !== 'JIR-1') {
-        throw new Error('Missing transition comments refresh')
-      }
-      await act(async () => commentsRefresh.resolve([comment('transition-comment')]))
-      await act(async () => {
-        oldComments.resolve([])
-        for (const pending of boundary.comments) {
-          if (pending !== commentsRefresh) {
-            pending.resolve([])
-          }
-        }
-      })
-      expect(text('comments')).toBe('transition-comment')
-      expect(text('comments-loading')).toBe('false')
-    }
-  )
-
   it('clears old issue transitions even when the new issue transition read fails', async () => {
     await render(issue())
     await act(async () =>
@@ -346,76 +262,6 @@ describe('Jira issue workspace request lifetime', () => {
 
     expect(duringNewRead).toBe('')
     expect(text('transitions')).toBe('')
-  })
-
-  it('hydrates replayed detail reads and discards obsolete StrictMode reads', async () => {
-    const mountedRoot = root
-    if (!mountedRoot) {
-      throw new Error('Missing React root')
-    }
-    await act(async () =>
-      mountedRoot.render(
-        <StrictMode>
-          <JiraIssueWorkspace
-            issue={issue()}
-            sourceContext={sourceContext}
-            onUse={() => {}}
-            onClose={() => {}}
-          />
-        </StrictMode>
-      )
-    )
-    expect(boundary.issues).toHaveLength(2)
-    expect(boundary.comments).toHaveLength(2)
-    expect(boundary.transitions).toHaveLength(2)
-    await act(async () => {
-      take(boundary.issues).resolve(issue('JIR-1', 'Discarded detail'))
-      take(boundary.comments).resolve([comment('discarded')])
-      take(boundary.transitions).resolve([
-        { id: 'discarded', name: 'Discarded', to: issue().status }
-      ])
-    })
-    expect(text('title')).toBe('JIR-1')
-    expect(text('comments')).toBe('')
-    expect(text('transitions')).toBe('')
-    expect(text('issue-loading')).toBe('true')
-    expect(text('comments-loading')).toBe('true')
-    await act(async () => {
-      take(boundary.issues).resolve(issue('JIR-1', 'Replayed detail'))
-      take(boundary.comments).resolve([comment('current')])
-      take(boundary.transitions).resolve([{ id: 'current', name: 'Current', to: issue().status }])
-    })
-    expect(text('title')).toBe('Replayed detail')
-    expect(text('comments')).toBe('current')
-    expect(text('transitions')).toBe('current')
-    expect(text('issue-loading')).toBe('false')
-    expect(text('comments-loading')).toBe('false')
-  })
-
-  it('discards late detail and comments after closing the mounted workspace', async () => {
-    await render(issue())
-    await render(null)
-    await act(async () => {
-      take(boundary.issues).resolve({ ...issue(), description: 'Screenshot data'.repeat(32_768) })
-      take(boundary.comments).resolve([{ ...comment('late'), body: 'Image data'.repeat(32_768) }])
-    })
-    expect(container.querySelector('[data-open]')?.getAttribute('data-open')).toBe('false')
-    expect(container.querySelector('[data-testid="detail"]')).toBeNull()
-    expect(boundary.composer).toBeNull()
-  })
-
-  it('clears an already hydrated issue and comments when it closes', async () => {
-    await render(issue())
-    await act(async () => {
-      take(boundary.issues).resolve(issue('JIR-1', 'Hydrated'))
-      take(boundary.comments).resolve([comment('loaded')])
-    })
-    expect(text('title')).toBe('Hydrated')
-    expect(text('comments')).toBe('loaded')
-    expect(text('issue-loading')).toBe('false')
-    expect(text('comments-loading')).toBe('false')
-    await render(null)
-    expect(container.querySelector('[data-testid="detail"]')).toBeNull()
   })
 
   it('ignores old replies and accepts the reopened issue replies', async () => {

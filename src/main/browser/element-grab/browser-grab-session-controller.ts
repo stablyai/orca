@@ -1,6 +1,7 @@
 import type { BrowserGrabCancelReason, BrowserGrabResult } from '../../../shared/browser-grab-types'
 import { buildGuestOverlayScript } from './grab-guest-script'
 import { clampGrabPayload } from './browser-grab-payload'
+import { readDocPreviewGuestDocumentUrl } from '../document-preview/doc-preview-guest-policy'
 
 type ActiveGrabOp = {
   opId: string
@@ -113,7 +114,7 @@ export class BrowserGrabSessionController {
           const payloadSource = isContextMenu
             ? (rawPayload as Record<string, unknown>).payload
             : rawPayload
-          const payload = clampGrabPayload(payloadSource)
+          const payload = clampGrabPayload(payloadSource, readDocPreviewGuestDocumentUrl(guest))
           if (!payload) {
             settleOnce({ opId, kind: 'error', reason: 'Guest returned invalid payload structure' })
             return

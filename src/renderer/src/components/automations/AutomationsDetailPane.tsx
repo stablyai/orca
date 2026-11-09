@@ -2,13 +2,13 @@ import React from 'react'
 import { ArrowLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type {
-  Automation,
   ExternalAutomationAction,
   ExternalAutomationJob,
-  ExternalAutomationManager,
-  AutomationRun
-} from '../../../../shared/automations-types'
+  ExternalAutomationManager
+} from '../../../../shared/automations/external/external-automation'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { AutomationDetail } from './AutomationDetail'
 import { AutomationRunHistory } from './AutomationRunHistory'
@@ -25,7 +25,7 @@ import {
   shouldHandleAutomationDetailEscapeKey,
   shouldHandleAutomationDetailTabArrowKey
 } from './automation-detail-tab-navigation'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type AutomationsDetailPaneProps = {
   selected: Automation | null
@@ -53,6 +53,8 @@ type AutomationsDetailPaneProps = {
   ) => void
   runNow: (automation: Automation) => void
   openEditDialog: (automation: Automation) => void
+  migrateAutomation?: (automation: Automation) => void
+  isMigrating?: boolean
   toggleAutomation: (automation: Automation) => void
   requestDeleteAutomation: (automation: Automation) => void
   openAutomationRunPage: (run: AutomationRun) => void
@@ -79,12 +81,15 @@ export function AutomationsDetailPane({
   requestExternalAction,
   runNow,
   openEditDialog,
+  migrateAutomation,
+  isMigrating,
   toggleAutomation,
   requestDeleteAutomation,
   openAutomationRunPage,
   onBackToList,
   recoverSelectedRuns
 }: AutomationsDetailPaneProps): React.JSX.Element {
+  const t = useTranslate()
   React.useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
       if (shouldHandleAutomationDetailEscapeKey(event)) {
@@ -121,10 +126,7 @@ export function AutomationsDetailPane({
           <div className="mb-3">
             <Button type="button" variant="ghost" size="sm" onClick={onBackToList}>
               <ArrowLeft className="size-4" />
-              {translate(
-                'auto.components.automations.AutomationsPage.backToList',
-                'All automations'
-              )}
+              {t('auto.components.automations.AutomationsPage.backToList', 'All automations')}
             </Button>
           </div>
           <ExternalAutomationManagers
@@ -159,7 +161,7 @@ export function AutomationsDetailPane({
               variant="ghost"
               size="icon-sm"
               onClick={onBackToList}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.automations.AutomationsPage.backToList',
                 'All automations'
               )}
@@ -168,10 +170,10 @@ export function AutomationsDetailPane({
             </Button>
             <TabsList variant="line" className="h-8">
               <TabsTrigger value="overview">
-                {translate('auto.components.automations.AutomationsPage.bb1b2cd31e', 'Overview')}
+                {t('auto.components.automations.AutomationsPage.bb1b2cd31e', 'Overview')}
               </TabsTrigger>
               <TabsTrigger value="runs" disabled={!selected}>
-                {translate('auto.components.automations.AutomationsPage.0e110a3469', 'Runs')}{' '}
+                {t('auto.components.automations.AutomationsPage.0e110a3469', 'Runs')}{' '}
                 {selectedRunsNotice ? null : (
                   <span className="text-xs text-muted-foreground">{selectedRuns.length}</span>
                 )}
@@ -192,6 +194,8 @@ export function AutomationsDetailPane({
               now={relativeNow}
               onRunNow={(automation) => void runNow(automation)}
               onEdit={(automation) => void openEditDialog(automation)}
+              onMigrate={migrateAutomation}
+              isMigrating={isMigrating}
               onToggle={(automation) => void toggleAutomation(automation)}
               onDelete={requestDeleteAutomation}
             />
@@ -211,7 +215,7 @@ export function AutomationsDetailPane({
                 />
               ) : (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.automations.AutomationsPage.c3a28c9793',
                     'Select an automation to view runs.'
                   )}

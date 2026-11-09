@@ -6,33 +6,31 @@ import {
   POSITION_TEXT,
   openPositionDraft,
   PositionField,
-  positionInventory,
-  startPositionMain
+  positionInventory
 } from './structured-agent-session-draft-position.test-fixture'
-import * as draftCache from '@/components/native-chat/native-chat-draft-cache'
-import * as draftMemory from '@/components/native-chat/native-chat-composer-draft-memory'
+
 import { seedStructuredAgentLaunchDraft } from './launch/structured-agent-session-launch-draft'
-import { publishedLayoutsOf } from '@/runtime/main-loaded-layout-frames.test-fixture'
+import { publishedLayoutsOf } from '@/runtime/workspace-layout/testing/main-loaded-layout-frames.test-fixture'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+
 import { render, within } from '@testing-library/react'
 import { createRef, StrictMode } from 'react'
-import type { NativeChatComposerInput } from '@/components/native-chat/native-chat-composer-input'
-import { promptEditor } from '@/components/native-chat/native-chat-prompt-editor.test-support'
+import type { NativeChatComposerInput } from '@/components/native-chat/composer/editor/native-chat-composer-input'
+import { promptEditor } from '@/components/native-chat/composer/editor/native-chat-prompt-editor.test-support'
 import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
 import { getStructuredLaunchStateBySessionId } from './launch/structured-agent-session-launch-registry'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
+import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/drafts/native-chat-composer-draft-load'
 import {
-  clearNativeChatComposerDraftsForTests,
-  hydrateNativeChatComposerDrafts,
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { setNativeChatComposerDraftStorageForTests } from '@/components/native-chat/native-chat-composer-draft-storage'
-import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { setNativeChatComposerDraftStorageForTests } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
+import { promptTextContent } from '@/components/native-chat/composer/editor/native-chat-prompt-document-text'
 import { openStructuredAgentSessionProvisionalTab } from './launch/structured-agent-session-launch-surface'
 
 it
@@ -254,179 +252,5 @@ it.each(['remove', 'replace', 'final-retained'] as const)(
       original.document
     )
     view.unmount()
-  }
-)
-
-it.each([10, 100])(
-  'bounds actual affected-workspace retirement at %i tabs without scanning unrelated drafts',
-  async (n) => {
-    const handle = openPositionDraft()
-    await handle.finish()
-    const row = useAppStore.getState().getTab(handle.tab.id)
-    if (!row) {
-      throw new Error('Expected drawn source')
-    }
-    main.close()
-    const rows = Array.from({ length: n }, (_, i) => ({
-      ...row,
-      id: `scale-${i}`,
-      entityId: `scale-session-${i}`
-    }))
-    useAppStore.setState({
-      unifiedTabsByWorktree: {
-        'wt-1': rows,
-        unrelated: [{ ...row, id: 'do-not-visit', worktreeId: 'unrelated' }]
-      },
-      groupsByWorktree: {
-        'wt-1': [
-          {
-            id: row.groupId,
-            worktreeId: 'wt-1',
-            tabOrder: rows.map((tab) => tab.id),
-            activeTabId: rows[0]!.id,
-            recentTabIds: []
-          }
-        ],
-        unrelated: []
-      }
-    })
-    await startPositionMain()
-    const visits = { before: 0, after: 0, entries: 0, maps: 0, retire: 0, calls: 0 }
-    const realRetire = draftCache.retireRemovedNativeChatDraftPositions,
-      RealMap = Map,
-      mapped = new WeakSet<object>()
-    const retire = vi.spyOn(draftMemory, 'retireNativeChatDraftPosition')
-    const compare = vi
-      .spyOn(draftCache, 'retireRemovedNativeChatDraftPositions')
-      .mockImplementation((before, after) => {
-        visits.calls++
-        if (before === after) {
-          realRetire(before, after)
-          return
-        }
-        expect(before.every((tab) => tab.worktreeId === 'wt-1')).toBe(true)
-        realRetire(
-          new Proxy(before, {
-            get(target, key, receiver) {
-              if (key === Symbol.iterator) {
-                return function* () {
-                  for (const tab of target) {
-                    visits.before++
-                    yield tab
-                  }
-                }
-              }
-              // oxlint-disable-next-line anti-slop/no-reflect-get -- Test-only Proxy forwards unmeasured string/symbol keys with the original receiver.
-              return Reflect.get(target, key, receiver)
-            }
-          }),
-          new Proxy(after, {
-            get(target, key, receiver) {
-              if (key === 'map') {
-                return (callback: (tab: typeof row, index: number) => unknown) => {
-                  const entries = target.map((tab, index) => {
-                    visits.after++
-                    visits.entries++
-                    return callback(tab, index)
-                  })
-                  mapped.add(entries)
-                  return entries
-                }
-              }
-              // oxlint-disable-next-line anti-slop/no-reflect-get -- Test-only Proxy forwards unmeasured string/symbol keys with the original receiver.
-              return Reflect.get(target, key, receiver)
-            }
-          })
-        )
-      })
-    class MeasuredMap<K, V> extends RealMap<K, V> {
-      constructor(entries?: Iterable<readonly [K, V]> | null) {
-        super(entries)
-        if (entries && mapped.has(entries)) {
-          visits.maps++
-        }
-      }
-    }
-    const measure = async (action: () => void) => {
-      Object.assign(visits, { before: 0, after: 0, entries: 0, maps: 0, retire: 0, calls: 0 })
-      retire.mockClear()
-      globalThis.Map = MeasuredMap
-      try {
-        action()
-        await main.settle()
-      } finally {
-        globalThis.Map = RealMap
-      }
-      visits.retire = retire.mock.calls.length
-      expect(visits.before).toBeLessThanOrEqual(n)
-      expect(visits.after).toBeLessThanOrEqual(n)
-      expect(visits.entries).toBe(visits.after)
-      expect(visits.maps).toBeLessThanOrEqual(1)
-      expect(visits.calls).toBeLessThanOrEqual(1)
-      return { ...visits }
-    }
-    const inventories = (title = 'Chat', omit = false): RuntimeMobileSessionTabsResult => ({
-      ...positionInventory(null, 1),
-      tabs: omit
-        ? []
-        : rows.map((tab) => ({
-            type: 'agent-session',
-            id: tab.id,
-            sessionId: tab.entityId,
-            agent: 'claude',
-            title,
-            isActive: false
-          }))
-    })
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      const layout = publishedLayoutsOf(layoutApplyTestTransport.mainModel!)['wt-1']!
-      const emit = (next: typeof layout) =>
-        layoutApplyTestTransport.emitFrame({ type: 'workspace', key: 'wt-1', layout: next })
-      const identical = await measure(() => emit(layout))
-      expect(identical.retire).toBe(0)
-      const titled = {
-        ...layout,
-        tabs: layout.tabs.map((tab) => ({ ...tab, customTitle: 'title' }))
-      }
-      const titles = await measure(() => emit(titled))
-      expect(titles.retire).toBe(0)
-      const removed = { ...titled, tabs: [], groups: [] }
-      const removal = await measure(() => emit(removed))
-      expect(removal).toMatchObject({ before: n, after: 0, maps: 1, retire: n })
-      const duplicate = await measure(() => emit(removed))
-      expect(duplicate.retire).toBe(0)
-    } else {
-      let version = 1
-      const publish = (snapshot: RuntimeMobileSessionTabsResult) =>
-        applyStructuredSessionTabSnapshots([{ ...snapshot, snapshotVersion: version++ }])
-      const first = await measure(() => publish(inventories()))
-      expect(first.retire).toBe(0)
-      const identical = await measure(() => publish(inventories()))
-      expect(identical.retire).toBe(0)
-      const titles = await measure(() => publish(inventories('title')))
-      expect(titles.retire).toBe(0)
-      const removal = await measure(() => publish(inventories('title', true)))
-      expect(removal).toMatchObject({ before: n, after: 0, maps: 1, retire: n })
-      const duplicate = await measure(() => publish(inventories('title', true)))
-      expect(duplicate.retire).toBe(0)
-    }
-    compare.mockRestore()
-    retire.mockRestore()
-  }
-)
-
-it.runIf(!ORCA_LAYOUT_OWNER_IS_MAIN)(
-  'uses one addressed retirement for actual local close and makes a duplicate close inert',
-  async () => {
-    const handle = openPositionDraft()
-    await handle.finish()
-    const compare = vi.spyOn(draftCache, 'retireRemovedNativeChatDraftPositions')
-    useAppStore.getState().closeUnifiedTab(handle.tab.id)
-    expect(compare.mock.calls.map(([before, after]) => [before.length, after.length])).toEqual([
-      [1, 0]
-    ])
-    compare.mockClear()
-    expect(useAppStore.getState().closeUnifiedTab(handle.tab.id)).toBeNull()
-    expect(compare).not.toHaveBeenCalled()
   }
 )

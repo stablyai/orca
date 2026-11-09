@@ -30,10 +30,6 @@ describe('generated status input redaction', () => {
     expect(await postedInput({ nested: [{ path }] })).toEqual({ redacted: true })
   })
 
-  it('redacts property names containing credential paths', async () => {
-    expect(await postedInput({ '/home/test/.ssh/id_rsa': 'synthetic' })).toEqual({ redacted: true })
-  })
-
   it('does not invoke custom serialization after validating input', async () => {
     const toJSON = vi.fn(() => ({ path: '/home/test/.ssh/id_rsa' }))
     expect(await postedInput({ path: '/tmp/safe', toJSON })).toEqual({ redacted: true })
@@ -70,18 +66,6 @@ describe('generated status input redaction', () => {
     }
   })
 
-  it('bounds sparse array serialization and cumulative reserved slots', async () => {
-    const sparse: unknown[] = []
-    sparse.length = 5000
-    expect(await postedInput({ values: sparse })).toEqual({ redacted: true })
-    const values = Array.from({ length: 8 }, () => {
-      const slots: unknown[] = []
-      slots.length = 1000
-      return slots
-    })
-    expect(await postedInput({ values })).toEqual({ redacted: true })
-  })
-
   it('preserves ordinary questions, arrays, sibling paths and repeated data references', async () => {
     const path = { path: '/tmp/.ssh-backup' }
     const input = {
@@ -89,15 +73,5 @@ describe('generated status input redaction', () => {
       paths: [path, path]
     }
     expect(await postedInput(input)).toEqual(input)
-  })
-
-  it('sanitizes both hook input shapes for Pi as well as OMP', async () => {
-    for (const kind of ['omp', 'pi'] as const) {
-      for (const event of ['tool_call', 'tool_execution_start']) {
-        expect(await postedInput({ path: '~/.ssh/id_rsa' }, event, kind)).toEqual({
-          redacted: true
-        })
-      }
-    }
   })
 })

@@ -1,5 +1,5 @@
-import { z } from 'zod'
-import type { RpcClient } from '../transport/rpc-client'
+import * as z from 'zod'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { Worktree } from './workspace-list-sections'
 import { worktreeCatalogRead } from './worktree-catalog-operations'
 
@@ -207,29 +207,82 @@ export class WorktreeCatalogSnapshotClient {
     if (pending.admission.kind !== 'full' && pending.requestedSnapshotId !== this.snapshotId) {
       return null
     }
-    if (pending.admission.kind === 'invalid') {
+    const held = this.confirmedWorktrees && {
+      snapshotId: this.snapshotId,
+      worktrees: this.confirmedWorktrees
+    }
+    const next = applyWorktreeCatalogAdmission(held, pending.admission)
+    if (!next) {
       this.snapshotId = null
       return null
     }
-
-    const { admission } = pending
-    if (admission.kind === 'delta') {
-      const rebuilt = this.confirmedWorktrees
-        ? rebuildFromBase(admission.rowsFromBase, this.confirmedWorktrees)
-        : null
-      if (!rebuilt) {
-        this.snapshotId = null
-        return null
-      }
-      this.confirmedWorktrees = rebuilt
-    } else if (admission.kind === 'full') {
-      this.confirmedWorktrees = admission.worktrees
-    }
-    this.snapshotId = admission.snapshotId
+    this.snapshotId = next.snapshotId
+    this.confirmedWorktrees = next.worktrees
     // Reassert confirmed host rows on unchanged polls too, overriding optimistic local edits.
     // A copy: the next delta indexes into these rows, so a caller sorting in place must not reorder them.
-    return this.confirmedWorktrees ? [...this.confirmedWorktrees] : null
+    return [...next.worktrees]
   }
+}
+
+export type WorktreeCatalogSnapshot = { snapshotId: string | null; worktrees: Worktree[] }
+
+/** The catalog an admitted reply describes on top of `held`; null when it can't be rebuilt from it. */
+function applyWorktreeCatalogAdmission(
+  held: WorktreeCatalogSnapshot | null,
+  admission: WorktreeCatalogAdmission<Worktree>
+): WorktreeCatalogSnapshot | null {
+  if (admission.kind === 'full') {
+    return { snapshotId: admission.snapshotId, worktrees: admission.worktrees }
+  }
+  if (admission.kind === 'invalid' || !held || held.snapshotId === null) {
+    return null
+  }
+  if (admission.kind === 'unchanged') {
+    return admission.snapshotId === held.snapshotId ? held : null
+  }
+  if (admission.baseSnapshotId !== held.snapshotId) {
+    return null
+  }
+  const worktrees = rebuildFromBase(admission.rowsFromBase, held.worktrees)
+  return worktrees && { snapshotId: admission.snapshotId, worktrees }
+}
+
+/** A catalog read refused by the host, or a reply no catalog can be built from; `code` is shown verbatim (STA-3123). */
+export class WorktreeCatalogReadError extends Error {
+  constructor(readonly code: string) {
+    super(`worktree catalog read failed: ${code}`)
+  }
+}
+
+/**
+ * Reads the desktop catalog on top of the one the caller holds: an unchanged reply returns `held`
+ * itself, a delta rebuilds from its rows, and a delta that can't be rebuilt asks once in full.
+ */
+export async function readWorktreeCatalogSnapshot(
+  client: RpcClient,
+  held: WorktreeCatalogSnapshot | undefined
+): Promise<WorktreeCatalogSnapshot> {
+  let base = held?.snapshotId ? held : null
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const requestedSnapshotId = base?.snapshotId ?? null
+    const catalog = await desktopCatalogRequest(client, {
+      afterSnapshotId: requestedSnapshotId,
+      acceptRowDelta: true
+    })
+    if (!catalog.accepted) {
+      throw new WorktreeCatalogReadError(catalog.code)
+    }
+    const admission = admitWorktreeCatalogResponse(catalog.value, requestedSnapshotId)
+    const next = applyWorktreeCatalogAdmission(base, admission)
+    if (next) {
+      return next
+    }
+    if (admission.kind !== 'delta') {
+      break
+    }
+    base = null
+  }
+  throw new WorktreeCatalogReadError('invalid_response')
 }
 
 // Null when an index falls outside the base; the caller then asks for a full catalog.

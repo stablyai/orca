@@ -10,10 +10,7 @@ export function useWorktreeContextMenuSecondaryActions(args: {
   updateWorktreeLineage: ReturnType<typeof useAppStore.getState>['updateWorktreeLineage']
 }) {
   const handleRemoveParentLink = useCallback(() => {
-    void unnestWorktrees(
-      args.activeContextWorktrees.map((item) => item.id),
-      args.updateWorktreeLineage
-    )
+    void unnestWorktrees(args.activeContextWorktrees, args.updateWorktreeLineage)
   }, [args])
   const suppressOpeningPointerEvent = useCallback(
     (event: React.SyntheticEvent) => {

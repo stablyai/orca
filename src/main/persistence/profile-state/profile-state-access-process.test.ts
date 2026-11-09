@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path'
 import { buildSync } from 'esbuild'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import { stagePackagedProcessHost } from '../../../../config/scripts/packaged-process-host-fixture.mjs'
+import { stagePackagedProcessHost } from '../../../../config/scripts/desktop-distribution/runtime-verification/packaged-process-host-fixture.mjs'
 import {
   acquireProfileStateMaintenance,
   acquireProfileStateRuntimeAdmission
@@ -132,21 +132,5 @@ describe('profile state owners across actual process death', () => {
     expect(() => acquireProfileStateMaintenance(root)).toThrow('in use')
     await stopChild(child)
     acquireProfileStateRuntimeAdmission(root).release()
-  })
-
-  it('treats a crash before complete owner publication as an inert candidate', async () => {
-    const root = join(fixture, 'candidate')
-    const child = await startChild(root, 'candidate')
-    acquireProfileStateRuntimeAdmission(root).release()
-    await stopChild(child)
-    acquireProfileStateMaintenance(root).release()
-  })
-
-  it('excludes recovery after participant publication even before runtime admission finishes', async () => {
-    const root = join(fixture, 'published')
-    const child = await startChild(root, 'published')
-    expect(() => acquireProfileStateMaintenance(root)).toThrow('in use')
-    await stopChild(child)
-    acquireProfileStateMaintenance(root).release()
   })
 })

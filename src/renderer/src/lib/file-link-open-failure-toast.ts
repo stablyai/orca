@@ -1,8 +1,8 @@
-import type { FileOpenFailure } from '@/components/terminal-pane/terminal-file-open-failure'
+import type { FileOpenFailure } from '@/components/terminal-pane/links/files/terminal-file-open-failure'
 import {
   showFileLinkNotFoundToast,
   showFileLinkUnverifiableToast
-} from '@/components/native-chat/native-chat-file-link-toasts'
+} from '@/components/native-chat/links/actions/native-chat-file-link-toasts'
 
 export function showFileLinkOpenFailureToast(filePath: string, failure: FileOpenFailure): void {
   if (failure.verdict === 'unverifiable') {

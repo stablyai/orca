@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode, type Ref } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../../ui/button'
 import { ButtonGroup } from '../../../ui/button-group'
 import {
@@ -50,6 +50,7 @@ export function WorktreeForceDeleteButton({
   alwaysForceDeleteTooltip?: string
   children?: ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const [isSaving, setIsSaving] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const groupRef = useRef<HTMLDivElement>(null)
@@ -89,7 +90,7 @@ export function WorktreeForceDeleteButton({
       await onAlwaysForceDelete()
     } catch (error) {
       toast.error(
-        translate('workspaceDeletion.preferenceSaveFailed', 'Could not save deletion preference'),
+        t('workspaceDeletion.preferenceSaveFailed', 'Could not save deletion preference'),
         { description: error instanceof Error ? error.message : String(error) }
       )
       return
@@ -132,8 +133,7 @@ export function WorktreeForceDeleteButton({
           className={fullWidth ? 'min-w-0 flex-1' : undefined}
           onClick={forceDelete}
         >
-          {children ??
-            translate('auto.components.sidebar.delete.worktree.flow.2b20ce87b3', 'Force Delete')}
+          {children ?? t('auto.components.sidebar.delete.worktree.flow.2b20ce87b3', 'Force Delete')}
         </Button>
         {onAlwaysForceDelete ? (
           <DropdownMenuTrigger asChild>
@@ -143,8 +143,7 @@ export function WorktreeForceDeleteButton({
               size={size === 'sm' ? 'icon-sm' : 'icon'}
               disabled={disabled || isSaving}
               aria-label={
-                moreActionsLabel ??
-                translate('workspaceDeletion.moreActions', 'More force delete options')
+                moreActionsLabel ?? t('workspaceDeletion.moreActions', 'More force delete options')
               }
             >
               <ChevronDown className="size-3.5" />
@@ -175,12 +174,12 @@ export function WorktreeForceDeleteButton({
                 }}
               >
                 {alwaysForceDeleteLabel ??
-                  translate('workspaceDeletion.alwaysForceDelete', 'Always force delete')}
+                  t('workspaceDeletion.alwaysForceDelete', 'Always force delete')}
               </DropdownMenuItem>
             </TooltipTrigger>
             <TooltipContent side="left" sideOffset={8}>
               {alwaysForceDeleteTooltip ??
-                translate(
+                t(
                   'workspaceDeletion.alwaysForceDeleteTooltip',
                   'Applies to all future workspace deletions.'
                 )}

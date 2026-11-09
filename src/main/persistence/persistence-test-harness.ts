@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
+import { installFakeAppEnvironment } from '../../../config/scripts/test-runtime/environment/vitest-host-ports-setup'
 import type { Project, ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../shared/worktree/lineage-types'

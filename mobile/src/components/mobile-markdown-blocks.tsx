@@ -1,5 +1,6 @@
-import type { Code, List, PhrasingContent, RootContent, Table } from 'mdast'
+import type { Code, List, Nodes, PhrasingContent, RootContent, Table } from 'mdast'
 import { Fragment, type ReactNode } from 'react'
+import { Square, SquareCheck } from 'lucide-react-native'
 import {
   Pressable,
   ScrollView,
@@ -10,6 +11,7 @@ import {
 } from 'react-native'
 import type { NativeChatVisualDirective } from '../../../src/shared/native-chat/native-chat-visual-directive'
 import { isMobileMermaidLanguage } from './mobile-mermaid-language'
+import { mobileMathMeasureText } from './mobile-markdown-math-nodes'
 import { mobileMarkdownTableColumnWidths } from './mobile-markdown-table-columns'
 import { mobileMarkdownVisualPlaceholderIndex } from './mobile-markdown-visual-lines'
 import {
@@ -19,11 +21,16 @@ import {
 } from './mobile-markdown-inline'
 import { MARKDOWN_TONES, scaledMarkdownText, styles } from './mobile-markdown-styles'
 import { MarkdownText } from './mobile-markdown-text'
-import { codeFenceClosed, plainText } from './mobile-markdown-tree'
+import { codeFenceClosed } from './mobile-markdown-code-nodes'
+import { plainText } from './mobile-markdown-plain-text'
 import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
+import { MobileMarkdownCallout } from './MobileMarkdownCallout'
 import { MobileMarkdownCodeBlock } from './MobileMarkdownCodeBlock'
+import { MobileMarkdownDetails } from './MobileMarkdownDetails'
+import { MobileMarkdownMath } from './MobileMarkdownMath'
+import { drawnBlock } from './mobile-markdown-drawn-blocks'
 import { translate } from '../i18n/mobile-i18n'
-import { pressedStyle } from '../theme/mobile-theme'
+import { colors, pressedStyle } from '../theme/mobile-theme'
 
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
@@ -31,6 +38,7 @@ const MERMAID_BASE = 13
  *  exhaust native layout. */
 const MAX_NESTING = 8
 
+/** A field added here is compared in mobile-markdown-drawn-blocks' `sameContext` too. */
 export type MarkdownBlockContext = MarkdownInlineContext & {
   /** The text is still arriving: a diagram stays code until it stops. */
   growing: boolean
@@ -40,7 +48,7 @@ export type MarkdownBlockContext = MarkdownInlineContext & {
   rowLongPress?: () => void
   directives: readonly NativeChatVisualDirective[]
   /** Null or undefined leaves the image a link. */
-  renderImage?: (href: string, alt: string) => ReactNode
+  renderImage?: (href: string, alt: string, width?: number) => ReactNode
   renderVisual?: (directive: NativeChatVisualDirective, index: number) => ReactNode
   mermaidOccurrences: Map<string, number>
 }
@@ -63,6 +71,7 @@ function renderCode(node: Code, key: number, ctx: MarkdownBlockContext): ReactNo
       code={node.value}
       language={node.lang ?? undefined}
       textScale={ctx.textScale}
+      sourceLine={node.position?.start.line}
     />
   )
 }
@@ -73,15 +82,28 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
     <View key={key} style={styles.list}>
       {node.children.map((item, itemIndex) => (
         <View key={itemIndex} style={styles.listItem}>
-          <NativeText style={ctx.listMarker}>
-            {item.checked == null
-              ? node.ordered
-                ? `${(node.start ?? 1) + itemIndex}.`
-                : '•'
-              : item.checked
-                ? '[x]'
-                : '[ ]'}
-          </NativeText>
+          {item.checked == null ? (
+            <NativeText style={ctx.listMarker}>
+              {node.ordered ? `${(node.start ?? 1) + itemIndex}.` : '•'}
+            </NativeText>
+          ) : (
+            // A GitHub task's read-only box, centred on the item's first line.
+            <View
+              // ARIA props, which react-native-web reads too; a read-only box takes no keyboard stop.
+              accessible
+              focusable={false}
+              role="checkbox"
+              aria-checked={Boolean(item.checked)}
+              aria-disabled
+              style={[styles.taskMarker, { height: styles.listText.lineHeight * ctx.textScale }]}
+            >
+              {item.checked ? (
+                <SquareCheck size={14 * ctx.textScale} color={colors.accentBlue} strokeWidth={2} />
+              ) : (
+                <Square size={14 * ctx.textScale} color={colors.textSecondary} strokeWidth={2} />
+              )}
+            </View>
+          )}
           <View style={styles.listItemBody}>
             {renderBlocks(item.children, ctx, itemText, depth + 1)}
           </View>
@@ -91,11 +113,19 @@ function renderList(node: List, key: number, ctx: MarkdownBlockContext, depth: n
   )
 }
 
+/** What a cell draws, with each formula as wide as it typesets rather than as its TeX. */
+function cellText(node: Nodes): string {
+  if (node.type === 'inlineMath') {
+    return mobileMathMeasureText(node.value)
+  }
+  return 'children' in node ? node.children.map(cellText).join('') : plainText(node)
+}
+
 function renderTable(node: Table, key: number, ctx: MarkdownBlockContext): ReactNode {
   const rows = node.children.map((row) => row.children)
   // Rows lay out independently, so a shared width per column is what lines them up.
   const columnWidths = mobileMarkdownTableColumnWidths(
-    rows.map((cells) => cells.map((cell) => plainText(cell))),
+    rows.map((cells) => cells.map(cellText)),
     ctx.textScale
   )
   // A table keeps its own dark surface, so its spans keep the default palette.
@@ -160,7 +190,8 @@ function renderImageParagraph(
     run = []
   }
   for (const child of children) {
-    const image = child.type === 'image' ? renderImage(child.url, child.alt ?? '') : null
+    const image =
+      child.type === 'image' ? renderImage(child.url, child.alt ?? '', child.data?.width) : null
     if (image === null || image === undefined) {
       run.push(child)
       continue
@@ -241,7 +272,7 @@ function renderBlock(
           <Pressable
             key={key}
             style={({ pressed }) => [styles.imageFrame, pressed && pressedStyle]}
-            onPress={() => openMarkdownHref(only.url, ctx.onOpenFile)}
+            onPress={() => openMarkdownHref(only.url, ctx)}
             onLongPress={ctx.rowLongPress}
           >
             <NativeText style={styles.link}>
@@ -266,9 +297,13 @@ function renderBlock(
           selectable
           style={[
             styles.heading,
-            node.depth <= 2 ? styles.headingLarge : null,
+            node.depth === 1 ? styles.headingTitle : node.depth === 2 ? styles.headingLarge : null,
             scaledMarkdownText(
-              node.depth <= 2 ? styles.headingLarge : styles.heading,
+              node.depth === 1
+                ? styles.headingTitle
+                : node.depth === 2
+                  ? styles.headingLarge
+                  : styles.heading,
               ctx.textScale
             ),
             ctx.tone.text
@@ -278,7 +313,12 @@ function renderBlock(
         </MarkdownText>
       )
     case 'blockquote':
-      return (
+      // A GitHub alert's body is ordinary text, not a muted quote.
+      return node.data?.callout ? (
+        <MobileMarkdownCallout key={key} kind={node.data.callout} textScale={ctx.textScale}>
+          {renderBlocks(node.children, ctx, { style: text.style, selectable: true }, depth + 1)}
+        </MobileMarkdownCallout>
+      ) : (
         <View key={key} style={styles.quote}>
           {renderBlocks(
             node.children,
@@ -297,16 +337,42 @@ function renderBlock(
       )
     case 'code':
       return renderCode(node, key, ctx)
+    case 'math':
+      return (
+        <MobileMarkdownMath
+          key={key}
+          value={node.value}
+          source={node.source}
+          display
+          githubSizes={!ctx.chatMath}
+          style={text.style}
+        />
+      )
     case 'list':
       return renderList(node, key, ctx, depth)
     case 'table':
       return renderTable(node, key, ctx)
     case 'thematicBreak':
       return <View key={key} style={styles.rule} />
+    case 'details':
+      return (
+        <MobileMarkdownDetails
+          key={key}
+          open={node.open}
+          summaryStyle={text.style}
+          summary={
+            node.summary.length > 0
+              ? renderInline(node.summary, ctx)
+              : translate('pullRequest.markdownBlocks.details', 'Details')
+          }
+        >
+          {renderBlocks(node.children, ctx, text, depth + 1)}
+        </MobileMarkdownDetails>
+      )
     case 'footnoteDefinition':
       return (
         <View key={key} style={styles.listItem}>
-          <NativeText style={ctx.listMarker}>{`[${node.label ?? node.identifier}]`}</NativeText>
+          <NativeText style={ctx.listMarker}>{`${node.label ?? node.identifier}.`}</NativeText>
           <View style={styles.listItemBody}>
             {renderBlocks(node.children, ctx, { style: ctx.listText, selectable: true }, depth + 1)}
           </View>
@@ -326,6 +392,7 @@ function renderBlock(
     case 'image':
     case 'imageReference':
     case 'inlineCode':
+    case 'inlineMath':
     case 'link':
     case 'linkReference':
     case 'strong':
@@ -351,5 +418,9 @@ export function renderBlocks(
   text: ParagraphText,
   depth = 0
 ): ReactNode[] {
-  return nodes.map((node, index) => renderBlock(node, index, ctx, text, depth))
+  return nodes.map((node, index) =>
+    depth === 0
+      ? drawnBlock(node, ctx, text, () => renderBlock(node, index, ctx, text, 0))
+      : renderBlock(node, index, ctx, text, depth)
+  )
 }

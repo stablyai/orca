@@ -15,7 +15,7 @@ import {
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
-import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { canConnectAddRepoHost, canSelectAddRepoHost } from './add-repo-host-availability'
 
 type AddRepoHostSelectorProps = {
@@ -35,16 +35,16 @@ type AddRepoHostSelectorProps = {
   onOpenWslHostsSetting?: () => void
 }
 
-function getHostStatusDetail(host: SidebarHostOption): string {
+function getHostStatusDetail(host: SidebarHostOption, t?: Translate): string {
   // A disabled WSL feature is not a disconnected-host failure.
   if (host.wslUnavailable) {
     return host.detail
   }
   if (host.compatibility?.kind === 'blocked') {
-    return describeRuntimeCompatBlock(host.compatibility)
+    return describeRuntimeCompatBlock(host.compatibility, t)
   }
   const detail = host.failureReason ?? host.detail
-  return `${getSidebarHostHealthLabel(host.health, host.blockedReason)}${detail ? ` - ${detail}` : ''}`
+  return `${getSidebarHostHealthLabel(host.health, host.blockedReason, t)}${detail ? ` - ${detail}` : ''}`
 }
 
 export function AddRepoHostSelector({
@@ -60,6 +60,7 @@ export function AddRepoHostSelector({
   wslHostsPausedNote,
   onOpenWslHostsSetting
 }: AddRepoHostSelectorProps): React.JSX.Element | null {
+  const t = useTranslate()
   const [addHostOpen, setAddHostOpen] = useState(false)
   const rows = useBoundedHostRows(hosts, new Set(selectedHostId ? [selectedHostId] : []))
   const showHostSetupActions = Boolean(onAddSshHost || onAddRemoteServer || onAddWslHost)
@@ -74,7 +75,7 @@ export function AddRepoHostSelector({
   return (
     <div className="flex items-center gap-2 text-xs">
       <span className="font-medium text-muted-foreground">
-        {translate('auto.components.sidebar.AddRepoHostSelector.host', 'Host')}
+        {t('auto.components.sidebar.AddRepoHostSelector.host', 'Host')}
       </span>
       <Popover open={open} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
@@ -88,10 +89,10 @@ export function AddRepoHostSelector({
             <span className="min-w-0 truncate">{selectedHost.label}</span>
             {selectedHost.health !== 'local' ? (
               <span
-                title={getHostStatusDetail(selectedHost)}
+                title={getHostStatusDetail(selectedHost, t)}
                 className="shrink-0 text-[11px] font-normal text-muted-foreground"
               >
-                {getSidebarHostHealthLabel(selectedHost.health, selectedHost.blockedReason)}
+                {getSidebarHostHealthLabel(selectedHost.health, selectedHost.blockedReason, t)}
               </span>
             ) : null}
             <ChevronsUpDown className="size-3.5 shrink-0 opacity-50" />
@@ -101,13 +102,13 @@ export function AddRepoHostSelector({
           align="start"
           className="w-[min(340px,calc(100vw-1rem))] min-w-[var(--radix-popover-trigger-width)] p-0"
         >
-          <Command shouldFilter={false} label={searchHostsLabel()}>
+          <Command shouldFilter={false} label={searchHostsLabel(t)}>
             {rows.searchable ? (
               <CommandInput
                 value={rows.query}
                 onValueChange={rows.setQuery}
-                placeholder={searchHostsLabel()}
-                aria-label={searchHostsLabel()}
+                placeholder={searchHostsLabel(t)}
+                aria-label={searchHostsLabel(t)}
               />
             ) : null}
             <CommandList>
@@ -124,7 +125,7 @@ export function AddRepoHostSelector({
                       <span className="min-w-0 flex-1">
                         <span className="flex min-w-0 items-center gap-2">
                           <span className="truncate font-medium">
-                            {translate(
+                            {t(
                               'auto.components.sidebar.AddRepoHostSelector.addRemoteHost',
                               'Add remote host'
                             )}
@@ -132,11 +133,11 @@ export function AddRepoHostSelector({
                         </span>
                         <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
                           {onAddWslHost
-                            ? translate(
+                            ? t(
                                 'auto.components.sidebar.AddRepoHostSelector.addRemoteHostDetailWithWsl',
                                 'SSH host, Orca server, or WSL distro'
                               )
-                            : translate(
+                            : t(
                                 'auto.components.sidebar.AddRepoHostSelector.addRemoteHostDetail',
                                 'SSH host or Orca server'
                               )}
@@ -157,13 +158,13 @@ export function AddRepoHostSelector({
                         }}
                       >
                         <span className="text-xs font-medium">
-                          {translate(
+                          {t(
                             'auto.components.sidebar.AddRepoHostSelector.addSshHost',
                             'Add SSH host'
                           )}
                         </span>
                         <span className="mt-0.5 text-[11px] text-muted-foreground">
-                          {translate(
+                          {t(
                             'auto.components.sidebar.AddRepoHostSelector.addSshHostDetail',
                             'Use an existing machine over SSH.'
                           )}
@@ -181,13 +182,13 @@ export function AddRepoHostSelector({
                         }}
                       >
                         <span className="text-xs font-medium">
-                          {translate(
+                          {t(
                             'auto.components.sidebar.AddRepoHostSelector.addRemoteServer',
                             'Add remote server'
                           )}
                         </span>
                         <span className="mt-0.5 text-[11px] text-muted-foreground">
-                          {translate(
+                          {t(
                             'auto.components.sidebar.AddRepoHostSelector.addRemoteServerDetail',
                             'Pair with Orca running on another computer.'
                           )}
@@ -210,13 +211,13 @@ export function AddRepoHostSelector({
                         }}
                       >
                         <span className="text-xs font-medium">
-                          {translate(
+                          {t(
                             'auto.components.sidebar.AddRepoHostSelector.addWslHost',
                             'Add WSL distro'
                           )}
                         </span>
                         <span className="mt-0.5 text-[11px] text-muted-foreground">
-                          {translate(
+                          {t(
                             'auto.components.sidebar.AddRepoHostSelector.addWslHostDetail',
                             'Run an Orca server inside a WSL 2 distro. Experimental.'
                           )}
@@ -264,7 +265,7 @@ export function AddRepoHostSelector({
                       </span>
                       <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
                         <span className="min-w-0 flex-1 truncate" title={host.failureReason}>
-                          {getHostStatusDetail(host)}
+                          {getHostStatusDetail(host, t)}
                         </span>
                       </span>
                     </span>
@@ -283,14 +284,11 @@ export function AddRepoHostSelector({
                       >
                         {isConnecting ? <Loader2 className="size-3 animate-spin" /> : null}
                         {isConnecting
-                          ? translate(
+                          ? t(
                               'auto.components.sidebar.AddRepoHostSelector.connecting',
                               'Connecting'
                             )
-                          : translate(
-                              'auto.components.sidebar.AddRepoHostSelector.connect',
-                              'Connect'
-                            )}
+                          : t('auto.components.sidebar.AddRepoHostSelector.connect', 'Connect')}
                       </Button>
                     ) : canTurnOn ? (
                       <Button
@@ -305,10 +303,7 @@ export function AddRepoHostSelector({
                           onOpenWslHostsSetting()
                         }}
                       >
-                        {translate(
-                          'auto.components.sidebar.AddRepoHostSelector.turnOnWslHosts',
-                          'Turn on'
-                        )}
+                        {t('auto.components.sidebar.AddRepoHostSelector.turnOnWslHosts', 'Turn on')}
                       </Button>
                     ) : null}
                   </CommandItem>

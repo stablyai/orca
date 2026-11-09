@@ -192,7 +192,8 @@ internal class OrcaMobileWebShellView(
       // is still a failure, and one that says so beats one that goes quiet forever.
       applied = next
       loadState.reset()
-      emit(loadState.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE))
+      // A dead renderer requires a remount; changed props must still report the original loss.
+      emit(loadState.rendererStillGone())
       return
     }
     if (applied == null && webView == null) {
@@ -211,6 +212,8 @@ internal class OrcaMobileWebShellView(
       webView = created
       activeViews.add(this)
       addView(created, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+      // Chromium reports an unpaused, never-attached WebView as visible, and a screen pushed under another never attaches.
+      if (!isAttachedToWindow) created.onPause()
     }
     view.stopLoading()
     emit(loadState.started())
@@ -368,6 +371,17 @@ internal class OrcaMobileWebShellView(
     proxy.postMessage(json)
   }
 
+  override fun onAttachedToWindow() {
+    super.onAttachedToWindow()
+    webView?.onResume()
+  }
+
+  // Stay paused whenever off-window so the page reads hidden, as a buried WKWebView does on iOS.
+  override fun onDetachedFromWindow() {
+    webView?.onPause()
+    super.onDetachedFromWindow()
+  }
+
   /** Expo calls this once React Native is done with the view, and onRenderProcessGone calls it. */
   fun destroyWebView() {
     activeViews.remove(this)
@@ -436,7 +450,7 @@ internal class OrcaMobileWebShellView(
   // B4 requires device proofs: no network, persistent state, file/content access, cleartext or navigation escape.
   @Suppress("DEPRECATION")
   private fun createWebView(): WebView {
-    val view = WebView(MutableContextWrapper(context))
+    val view = MobileWebShellSelectionView(MutableContextWrapper(context))
     view.setBackgroundColor(Color.TRANSPARENT)
     view.settings.apply {
       javaScriptEnabled = true
@@ -587,9 +601,11 @@ internal class OrcaMobileWebShellView(
 
     /** Return true to avoid killing the app; destroy the dead WebView and leave retry policy to the caller. */
     override fun onRenderProcessGone(view: WebView, detail: RenderProcessGoneDetail): Boolean {
+      // Android ends every WebView's renderer together; off-screen or low-memory losses are the OS's doing, not the page's.
+      val background = !isShown || windowVisibility != View.VISIBLE
       renderProcessGone = true
       destroyWebViewImmediate()
-      emit(loadState.failed(MobileWebShellFailureReason.RENDER_PROCESS_GONE))
+      emit(loadState.rendererGone(background, detail.didCrash()))
       return true
     }
   }

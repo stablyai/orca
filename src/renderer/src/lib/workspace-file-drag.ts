@@ -3,7 +3,7 @@ import {
   NATIVE_FILE_DROP_MAX_PATH_BYTES,
   NATIVE_FILE_DROP_MAX_PATHS,
   validateNativeFileDropPaths
-} from '../../../shared/native-file-drop'
+} from '../../../shared/file-import/native-file-drop'
 import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
 import {
   isUnresolvedOwnerHostId,

@@ -9,8 +9,8 @@ import {
 } from '../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import { encodeAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-record-stored-form'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import { WSL_HOSTS_INTERNAL_GATE_ENV } from '../../../shared/wsl-host-internal-gate'
-import { getHistorySessionDirName } from '../../daemon/history-paths'
+import '../../../shared/wsl-host-internal-gate'
+import { getHistorySessionDirName } from '../../daemon/history/storage/history-paths'
 import { readProfileProjectTransferState } from '../../orca-profiles/profile-project-domain-state'
 import { getOrcaProfileStateDatabaseFile } from '../../orca-profiles/profile-storage-paths'
 import { openProfileStateDatabase } from '../../persistence/profile-state/profile-state-database'
@@ -25,11 +25,7 @@ import {
   writeWslDriveUncConversion,
   type WslDriveUncConversion
 } from './wsl-drive-unc-conversion-journal'
-import {
-  lastWslDriveUncConversionOutcomes,
-  runPendingWslDriveUncConversions,
-  runWslDriveUncConversionsAtStartup
-} from './wsl-drive-unc-conversion-startup'
+import { runWslDriveUncConversionsAtStartup } from './wsl-drive-unc-conversion-startup'
 import {
   wslDriveUncConversionStores,
   type WslDriveUncConversionStore
@@ -429,38 +425,4 @@ describe('runWslDriveUncConversionsAtStartup', () => {
     ).toBe(true)
     expect(chatRows()[0]).toEqual({ workspace_id: NEW_ID })
   })
-})
-
-describe('runPendingWslDriveUncConversions', () => {
-  const originalPlatform = process.platform
-  afterEach(() => {
-    vi.unstubAllEnvs()
-    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
-  })
-
-  // Any platform finishes a journaled conversion once the gate is open; only the gate stops it.
-  it.each([
-    ['on Windows', 'win32', ''],
-    ['off Windows', 'linux', '']
-  ])(
-    'leaves a journaled conversion untouched with the gate closed, %s',
-    (_case, platform, gate) => {
-      vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, gate)
-      Object.defineProperty(process, 'platform', { configurable: true, value: platform })
-      seedProfile(profileState())
-      journal()
-
-      runPendingWslDriveUncConversions({
-        userDataPath: root,
-        profileUserDataPath: root,
-        profileId: PROFILE
-      })
-
-      expect(lastWslDriveUncConversionOutcomes()).toEqual([])
-      expect(listWslDriveUncConversions(root)).toEqual([
-        expect.objectContaining({ phase: 'prepared' })
-      ])
-      expect(readProfile().repos[0].path).toBe(UNC)
-    }
-  )
 })

@@ -28,7 +28,7 @@ import {
   observeTerminals,
   runWorkspaceLifecycleCommand,
   workspaceLifecycleKey
-} from '../../../runtime/workspaces/workspace-lifecycle-commands'
+} from '../../../runtime/workspaces/lifecycle/workspace-lifecycle-commands'
 
 export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): void {
   const { store, options, worktreeRemovalsInFlight } = context

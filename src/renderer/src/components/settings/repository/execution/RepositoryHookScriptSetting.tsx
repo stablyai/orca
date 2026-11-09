@@ -3,31 +3,32 @@ import { AlertTriangle, Plus } from 'lucide-react'
 import { Button } from '../../../ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../../ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { getRepositoryHookScriptTextareaRows } from '@/lib/script-textarea-rows'
 import type {
   LocalCommandSourcePolicyNotice,
   LocalHookField
 } from './repository-hook-settings-draft'
 
-function getEnvVars(): { name: string; description: string }[] {
+function getEnvVars(t: Translate = translate): { name: string; description: string }[] {
   return [
     {
       name: '$ORCA_ROOT_PATH',
-      description: translate(
+      description: t(
         'auto.components.settings.RepositoryHooksSection.30952c4aa4',
         'Path to the main repo checkout. Useful for copying shared files, like .env, into a worktree.'
       )
     },
     {
       name: '$ORCA_WORKTREE_PATH',
-      description: translate(
+      description: t(
         'auto.components.settings.RepositoryHooksSection.54c73d88d0',
         'Path to the worktree being created. Setup commands run from this directory.'
       )
     },
     {
       name: '$ORCA_WORKSPACE_NAME',
-      description: translate(
+      description: t(
         'auto.components.settings.RepositoryHooksSection.0fa21e19ec',
         'Name of the workspace, usually based on the branch name.'
       )
@@ -36,11 +37,12 @@ function getEnvVars(): { name: string; description: string }[] {
 }
 
 function EnvVarChips(): React.JSX.Element {
-  const envVars = getEnvVars()
+  const t = useTranslate()
+  const envVars = getEnvVars(t)
   return (
     <div className="space-y-1.5">
       <p className="text-[11px] text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.RepositoryHooksSection.b2b06c7ce8',
           'Available environment variables (hover for details):'
         )}
@@ -69,6 +71,7 @@ function EnvVarChips(): React.JSX.Element {
 }
 
 function SaveIndicator({ status }: { status: 'idle' | 'saving' | 'saved' }) {
+  const t = useTranslate()
   if (status === 'idle') {
     return null
   }
@@ -82,8 +85,8 @@ function SaveIndicator({ status }: { status: 'idle' | 'saving' | 'saved' }) {
         className={`size-1.5 rounded-full ${isSaving ? 'animate-pulse bg-amber-500' : 'bg-emerald-500'}`}
       />
       {isSaving
-        ? translate('auto.components.settings.RepositoryHooksSection.81057d5f71', 'Saving...')
-        : translate('auto.components.settings.RepositoryHooksSection.2b6356e744', 'Saved')}
+        ? t('auto.components.settings.RepositoryHooksSection.81057d5f71', 'Saving...')
+        : t('auto.components.settings.RepositoryHooksSection.2b6356e744', 'Saved')}
     </span>
   )
 }
@@ -105,6 +108,7 @@ export function RepositoryHookScriptSetting({
   onCommit: () => void
   sectionId?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const [showLocal, setShowLocal] = useState(value.length > 0)
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const lastValueRef = useRef(value)
@@ -148,26 +152,20 @@ export function RepositoryHookScriptSetting({
         <div className="space-y-2">
           <div className="flex items-center justify-between gap-2">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-500/25 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:text-emerald-300">
-              {translate('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'orca.yaml')}
+              {t('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'orca.yaml')}
               <span className="font-normal text-emerald-700/80 dark:text-emerald-300/80">
-                {translate(
+                {t(
                   'auto.components.settings.RepositoryHooksSection.f828e1de19',
                   '- shared with your team'
                 )}
               </span>
             </span>
             <span className="text-[11px] text-muted-foreground">
-              {translate('auto.components.settings.RepositoryHooksSection.b113344b6a', 'Edit')}{' '}
+              {t('auto.components.settings.RepositoryHooksSection.b113344b6a', 'Edit')}{' '}
               <code className="rounded bg-muted px-1 py-0.5">
-                {translate(
-                  'auto.components.settings.RepositoryHooksSection.39da2ae12f',
-                  'orca.yaml'
-                )}
+                {t('auto.components.settings.RepositoryHooksSection.39da2ae12f', 'orca.yaml')}
               </code>{' '}
-              {translate(
-                'auto.components.settings.RepositoryHooksSection.7e4427b4a2',
-                'to change.'
-              )}
+              {t('auto.components.settings.RepositoryHooksSection.7e4427b4a2', 'to change.')}
             </span>
           </div>
           <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded-lg border border-border/50 bg-muted/30 p-3 font-mono text-[11.5px] leading-5 text-foreground">
@@ -180,9 +178,9 @@ export function RepositoryHookScriptSetting({
           <div className="flex items-center justify-between gap-2">
             {hasShared ? (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/30 px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                {translate('auto.components.settings.RepositoryHooksSection.2d03a514db', 'local')}
+                {t('auto.components.settings.RepositoryHooksSection.2d03a514db', 'local')}
                 <span className="font-normal">
-                  {translate(
+                  {t(
                     'auto.components.settings.RepositoryHooksSection.40a446ae16',
                     '- just for you, on this machine'
                   )}
@@ -204,7 +202,7 @@ export function RepositoryHookScriptSetting({
             className="w-full min-w-0 resize-y rounded-lg border border-input bg-muted/20 px-3 py-2 font-mono text-[12px] leading-[1.55] shadow-xs transition-[color,box-shadow] outline-none placeholder:italic placeholder:text-muted-foreground focus-visible:border-ring focus-visible:bg-background focus-visible:ring-[3px] focus-visible:ring-ring/40"
           />
           <p className="text-[11px] text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.RepositoryHooksSection.8c2893fae0',
               'Runs as a single shell script. Saved on this machine.'
             )}
@@ -219,10 +217,7 @@ export function RepositoryHookScriptSetting({
           className="gap-1.5"
         >
           <Plus className="size-3.5" />
-          {translate(
-            'auto.components.settings.RepositoryHooksSection.5d940bde5c',
-            'Add local script'
-          )}
+          {t('auto.components.settings.RepositoryHooksSection.5d940bde5c', 'Add local script')}
         </Button>
       )}
     </div>
@@ -236,24 +231,25 @@ export function LocalCommandSourceNotice({
   notice: LocalCommandSourcePolicyNotice
   onSelectPolicy: (policy: 'local-only' | 'run-both') => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-amber-500/20 bg-amber-500/5 p-3">
       <div className="flex min-w-0 flex-1 items-start gap-3">
         <AlertTriangle className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-300" />
         <div className="space-y-1">
           <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
-            {translate(
+            {t(
               'auto.components.settings.RepositoryHooksSection.5426ecbdcb',
               'Local scripts will not run'
             )}
           </p>
           <p className="text-xs leading-5 text-muted-foreground">
             {notice.kind === 'checking'
-              ? translate(
+              ? t(
                   'auto.components.settings.RepositoryHooksSection.7f78e5eea6',
                   'Local scripts are saved. Orca is still checking orca.yaml before it can recommend which script source to use.'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.RepositoryHooksSection.0ce113fd7b',
                   'Local scripts are saved, but Script Source is set to orca.yaml only.'
                 )}
@@ -272,7 +268,7 @@ export function LocalCommandSourceNotice({
         </Button>
       ) : (
         <span className="shrink-0 rounded-full border border-border/60 bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground">
-          {translate('auto.components.settings.RepositoryHooksSection.673a7fd10e', 'Checking...')}
+          {t('auto.components.settings.RepositoryHooksSection.673a7fd10e', 'Checking...')}
         </span>
       )}
     </div>

@@ -17,6 +17,14 @@ public class OrcaMobileWebShellModule: Module {
       }
     }
 
+    // Home calls this once it has a paired host, so a user with nothing to open pays nothing.
+    Function("warmUp") {
+      // A second's delay keeps the warm-up off the launch's first frames.
+      DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+        MobileWebShellWarmUp.start()
+      }
+    }
+
     AsyncFunction("presentPdf") { (url: URL) in
       guard let presenter = self.appContext?.utilities?.currentViewController() else {
         throw PdfPresenterUnavailableException()
@@ -27,6 +35,17 @@ public class OrcaMobileWebShellModule: Module {
       self.pdfPreview = preview
       presenter.present(controller, animated: true)
     }.runOnQueue(.main)
+
+    AsyncFunction("shareImage") { (url: URL, _: String) in
+      guard let presenter = self.appContext?.utilities?.currentViewController() else {
+        throw ImagePresenterUnavailableException()
+      }
+      presentImageShareSheet(url: url, from: presenter)
+    }.runOnQueue(.main)
+
+    AsyncFunction("saveImageToPhotos") { (url: URL, _: String, promise: Promise) in
+      saveImageToPhotoLibrary(url: url, promise: promise)
+    }
 
     View(OrcaMobileWebShellView.self) {
       Events("onLoadState", "onBridgeMessage", "onExternalNavigation", "onBackEdgeSwipe")

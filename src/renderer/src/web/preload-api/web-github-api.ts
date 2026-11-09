@@ -1,4 +1,4 @@
-import { callGitHubTargetOperation } from '@/lib/github-work-item-target-request'
+import { callGitHubTargetOperation } from '@/lib/work-items/github/github-work-item-target-request'
 import { requireActiveEnvironment } from './web-runtime-session'
 import { requireGitHubWorkItemTargetDetails } from '../../../../shared/github/work-item-target'
 import type { PreloadApi } from '../../../../preload/api-types'
@@ -9,7 +9,7 @@ import {
 import { translate } from '@/i18n/i18n'
 import { GITHUB_WEB_RPC_METHODS } from './web-github-routes'
 import type { WebGitHubRuntimeMethod } from './web-github-routes'
-import { mapRepoPathArg } from '@/runtime/runtime-repo-selector-params'
+import { mapRepoPathArg } from '@/runtime/source-control/forge/runtime-repo-selector-params'
 import { callRuntimeResult, getRemoteRuntimeStatus } from './web-runtime-calls'
 import { noopUnsubscribe } from './web-storage'
 

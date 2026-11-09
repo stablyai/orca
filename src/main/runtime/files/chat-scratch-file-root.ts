@@ -1,6 +1,6 @@
 import { lstat } from 'node:fs/promises'
 import { basename, dirname } from 'node:path'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import {
   resolveAuthorizedPath,
   type ResolveAuthorizedPathOptions

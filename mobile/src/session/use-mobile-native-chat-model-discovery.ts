@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import { z } from 'zod'
+import * as z from 'zod'
 import { getAgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog'
 import type { CatalogModel } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import {
   catalogModelsFromModelDiscovery,
   mergeDiscoveredCatalogModels
 } from '../../../src/shared/native-chat/input/native-chat-discovered-catalog-models'
-import { defineRpcOperation, runRpcOperation } from '../transport/rpc-operation'
+import { defineRpcOperation, runRpcOperation } from '../transport/rpc/rpc-operation'
 
 const discoveredModel = z.object({
   id: z.string().min(1),
@@ -15,7 +15,8 @@ const discoveredModel = z.object({
   thinkingLevels: z.array(z.object({ id: z.string(), label: z.string() })).optional(),
   supportsFastMode: z.boolean().optional(),
   isDefault: z.boolean().optional(),
-  contextWindowTokens: z.number().optional()
+  contextWindowTokens: z.number().optional(),
+  resolvedModel: z.string().optional()
 })
 
 const discoveryResult = z.union([
