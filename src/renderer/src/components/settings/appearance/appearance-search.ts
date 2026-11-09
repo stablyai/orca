@@ -146,6 +146,31 @@ export const getTypographyEntries = createLocalizedCatalog((): SettingsSearchEnt
   }
 ])
 
+export const getFileExplorerFontSizeEntry = (
+  t: Translate = translate
+): SettingsSearchEntry & { description: string } => ({
+  title: t('settings.fileExplorerFontSize', 'Font Size'),
+  description: t(
+    'settings.fileExplorerFontSizeDescription',
+    'Text size of File Explorer rows. Leave empty for the default.'
+  ),
+  keywords: [
+    ...translateSearchKeyword('settings.fileExplorerFontSizeKeywords.font', 'font', undefined, t),
+    ...translateSearchKeyword(
+      'settings.fileExplorerFontSizeKeywords.textSize',
+      'text size',
+      undefined,
+      t
+    ),
+    ...translateSearchKeyword(
+      'settings.fileExplorerFontSizeKeywords.fileExplorer',
+      'file explorer',
+      undefined,
+      t
+    )
+  ]
+})
+
 export const getFollowSymlinkedDirectoriesEntry = (
   t: Translate = translate
 ): SettingsSearchEntry => ({
@@ -207,7 +232,8 @@ export const getLayoutEntries = createLocalizedCatalog((): SettingsSearchEntry[]
       ...translateSearchKeyword('auto.components.settings.appearance.search.648eeada79', 'hide')
     ]
   },
-  getFollowSymlinkedDirectoriesEntry()
+  getFollowSymlinkedDirectoriesEntry(),
+  getFileExplorerFontSizeEntry()
 ])
 
 export const getTitlebarEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [

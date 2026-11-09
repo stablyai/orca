@@ -237,6 +237,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   rightSidebarOpenByDefault: boolean
   followSymlinkedDirectories?: boolean
   showGitIgnoredFiles?: boolean
+  /** Opt-in File Explorer text size in px; unset keeps the 12px rows. */
+  fileExplorerFontSize?: number
   /** Preferred Source Control changes layout. Per-user, not per-workspace. */
   sourceControlViewMode: SourceControlViewMode
   /** Preferred Source Control group order. Per-user, not per-workspace. */

@@ -14,6 +14,7 @@ import {
 } from '../form-controls/SettingsFormControls'
 import { useAvailableStatusBarToggles } from '../../status-bar/use-available-status-bar-toggles'
 import { getLayoutEntries, getFollowSymlinkedDirectoriesEntry } from './appearance-search'
+import { FileExplorerFontSizeSetting } from './FileExplorerFontSizeSetting'
 import {
   getSidebarEntries,
   getLeftSidebarAppearanceEntry,
@@ -386,6 +387,10 @@ export function AppearanceWindowSidebarSection({
                       }
                     />
                   </SearchableSetting>
+                  <FileExplorerFontSizeSetting
+                    settings={settings}
+                    updateSettings={updateSettings}
+                  />
                 </div>
               </div>
             ) : null}

@@ -2,6 +2,8 @@ import React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { dirname } from '@/lib/path'
 import { cn } from '@/lib/utils'
+import { resolveFileExplorerFontSize } from '@/lib/file-explorer-font-size'
+import { useAppStore } from '@/store/index'
 import type { GitFileStatus } from '../../../../../../shared/git/status/git-status-types'
 import { FileExplorerRow } from './FileExplorerRow'
 import { InlineInputRow, type InlineInput } from '../mutations/file-explorer-inline-input-row'
@@ -150,13 +152,17 @@ export function FileExplorerVirtualRows(props: FileExplorerVirtualRowsProps): Re
     nativeDropTargetDir
   } = props
 
+  const fontSize = useAppStore((s) => resolveFileExplorerFontSize(s.settings))
   const visibleSelectionCount = rowProjection.countVisiblePaths(selectedPaths)
   // Resolve only at dragstart; row virtualization renders on every scroll frame.
   const resolveSourceOwner = (paths: readonly string[]) =>
     resolveDragSourceOwner(rowProjection, dirCache, paths)
 
   return (
-    <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+    <div
+      className="relative w-full text-xs"
+      style={{ height: `${virtualizer.getTotalSize()}px`, fontSize: `${fontSize}px` }}
+    >
       {virtualizer.getVirtualItems().map((vItem) => {
         const isInlineRow = inlineInputIndex >= 0 && vItem.index === inlineInputIndex
         const rowIndex =

@@ -145,7 +145,7 @@ export function FileExplorerRow({
           data-file-explorer-row=""
           data-selected={isSelected ? 'true' : undefined}
           className={cn(
-            'flex w-full items-center gap-1 rounded-sm px-2 py-1 text-left text-xs transition-colors',
+            'flex w-full items-center gap-1 rounded-sm px-2 py-1 text-left transition-colors',
             !isSelected && 'hover:bg-accent hover:text-foreground',
             isSelected && 'text-accent-foreground',
             isFlashing && 'bg-amber-400/20 ring-1 ring-inset ring-amber-400/70'
@@ -179,7 +179,7 @@ export function FileExplorerRow({
             if (paths.length > 1) {
               const btn = event.currentTarget
               const rowW = btn.getBoundingClientRect().width
-              const ghost = createMultiSelectDragGhost(paths, rowW)
+              const ghost = createMultiSelectDragGhost(paths, rowW, getComputedStyle(btn).fontSize)
 
               document.body.appendChild(ghost)
               event.dataTransfer.setDragImage(ghost, 12, 12)
@@ -198,31 +198,31 @@ export function FileExplorerRow({
             <>
               <ChevronRight
                 className={cn(
-                  'size-3 shrink-0 text-muted-foreground transition-transform',
+                  'size-[1em] shrink-0 text-muted-foreground transition-transform',
                   isExpanded && 'rotate-90'
                 )}
               />
               {isLoading ? (
-                <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
+                <Loader2 className="size-[1em] shrink-0 animate-spin text-muted-foreground" />
               ) : showLoadError ? (
-                <CircleAlert className="size-3 shrink-0 text-destructive" />
+                <CircleAlert className="size-[1em] shrink-0 text-destructive" />
               ) : (
                 <FolderIcon
                   folderPath={node.name}
                   open={isExpanded}
-                  className="size-3 shrink-0 text-muted-foreground"
+                  className="size-[1em] shrink-0 text-muted-foreground"
                 />
               )}
             </>
           ) : (
             <>
-              <span className="size-3 shrink-0" />
+              <span className="size-[1em] shrink-0" />
               {node.isSymlink ? (
-                <Link className="size-3 shrink-0 text-muted-foreground" />
+                <Link className="size-[1em] shrink-0 text-muted-foreground" />
               ) : (
                 React.createElement(FileTypeIcon, {
                   filePath: node.relativePath || node.name,
-                  className: 'size-3 shrink-0 text-muted-foreground'
+                  className: 'size-[1em] shrink-0 text-muted-foreground'
                 })
               )}
             </>
@@ -251,7 +251,7 @@ export function FileExplorerRow({
           ) : null}
           {nodeStatus ? (
             <span
-              className="ml-auto shrink-0 text-[10px] font-semibold tracking-wide mr-2"
+              className="ml-auto shrink-0 text-[length:calc(10em/12)] font-semibold tracking-wide mr-2"
               style={{ color: statusColor ?? undefined }}
             >
               {STATUS_LABELS[nodeStatus]}
@@ -262,7 +262,7 @@ export function FileExplorerRow({
                 'auto.components.right.sidebar.FileExplorerRow.e26010014a',
                 'Ignored by .gitignore'
               )}
-              className="ml-auto size-3 shrink-0 mr-2"
+              className="ml-auto size-[1em] shrink-0 mr-2"
               style={{ color: 'var(--git-decoration-ignored)' }}
             />
           ) : null}

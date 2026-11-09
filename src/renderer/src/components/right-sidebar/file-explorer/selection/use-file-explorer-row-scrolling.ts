@@ -2,6 +2,10 @@ import type { RefObject } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store/index'
+import {
+  estimateFileExplorerRowHeight,
+  resolveFileExplorerFontSize
+} from '@/lib/file-explorer-font-size'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { DirCache } from '../tree/file-explorer-types'
 import type { FileExplorerRowProjection } from '../tree/file-explorer-row-projection'
@@ -58,6 +62,7 @@ export function useFileExplorerRowScrolling({
 }: UseFileExplorerRowScrollingParams): UseFileExplorerRowScrollingResult {
   const pendingExplorerReveal = useAppStore((s) => s.pendingExplorerReveal)
   const clearPendingExplorerReveal = useAppStore((s) => s.clearPendingExplorerReveal)
+  const fontSize = useAppStore((s) => resolveFileExplorerFontSize(s.settings))
   const [flashingPath, setFlashingPath] = useState<string | null>(null)
   /** Include the scrollbar, which is outside Radix’s viewport. */
   const explorerShellRef = useRef<HTMLDivElement | null>(null)
@@ -68,7 +73,7 @@ export function useFileExplorerRowScrolling({
   const virtualizer = useVirtualizer({
     count: totalCount,
     getScrollElement: () => scrollRef.current,
-    estimateSize: () => 26,
+    estimateSize: () => estimateFileExplorerRowHeight(fontSize),
     overscan: 20,
     getItemKey: (index) => {
       if (inlineInputIndex >= 0) {
