@@ -1,4 +1,4 @@
-import { redactEphemeralVmRecipeDiagnosticText } from './ephemeral-vm-recipe-diagnostics'
+import { redactEphemeralVmRecipeDiagnosticText } from './ephemeral-vm-recipe-diagnostic-redaction'
 
 export type EnvironmentSetupFailureContext = {
   /** The step that failed, in the words the user saw (for example "Provision VM"). */
