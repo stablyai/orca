@@ -14,6 +14,8 @@ import { clampMonacoAutoHeight } from './monaco-auto-height'
 import { installMonacoE2EProbe } from './monaco-e2e-probe'
 import { matchesPendingEditorFocusRequest } from './pending-editor-focus-request'
 import { installMonacoEditorInputBindings } from './monaco-editor-input-bindings'
+import { installMonacoNavigationHistory } from './monaco-navigation-history'
+import { EMPTY_OWNER_KEY } from './editor-navigation.consts'
 import type { MonacoEditorMountParams } from './monaco-editor-mount-params'
 import {
   installMonacoViewStateTracking,
@@ -183,6 +185,14 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         scrollThrottleTimerRef,
         setEditorCursorLine: passiveMirror ? ignoreCursorLine : setEditorCursorLine
       })
+      const disposeNavigationHistory = passiveMirror
+        ? () => {}
+        : installMonacoNavigationHistory({
+            editorInstance,
+            fileIdRef,
+            viewStateId,
+            ownerKey: modelOwnerKey ?? EMPTY_OWNER_KEY
+          })
 
       const gutterMouseDownSub = editorInstance.onMouseDown((e) => {
         if (
@@ -201,6 +211,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       })
 
       editorInstance.onDidDispose(() => {
+        disposeNavigationHistory()
         cursorPositionSub.dispose()
         scrollStateSub.dispose()
         gutterMouseDownSub.dispose()

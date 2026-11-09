@@ -1,0 +1,11 @@
+export const DIRECTION = { BACK: 'back', FORWARD: 'forward' } as const
+export const ACTION = { BACK: 'editor.navigateBack', FORWARD: 'editor.navigateForward' } as const
+export const CURSOR_REASON = { NOT_SET: 0, EXPLICIT: 3 } as const
+export const CURSOR_SOURCE = { API: 'api', GOTO_LOCATION: 'gotoLocation' } as const
+export const EVENT = { KEY_DOWN: 'keydown' } as const
+export const FILE_MODE = 'edit'
+export const TAB_TYPE = 'editor'
+export const DELETED_FILE_MUTATION = 'deleted'
+export const MAX_HISTORY_ENTRIES = 100
+export const LINE_JUMP_THRESHOLD = 10
+export const EMPTY_OWNER_KEY = ''
