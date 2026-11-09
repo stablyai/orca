@@ -10,7 +10,7 @@ import {
   killSwitchOn,
   type GuardrailConfig
 } from './guardrails'
-import { compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
+import { DEFAULT_EGRESS_ALLOWLIST, compileNetworkPolicy, gitBasicAuthorization, type CredentialRoute } from './network-policy'
 import type { RetentionConfig } from './retention'
 import type { ProviderSandboxState, SandboxProviderApi } from './sandbox-provider'
 import { applySecretPlaceholders, egressSecretHosts, secretPlaceholder } from './secret-egress'
@@ -64,6 +64,11 @@ export type LifecycleDeps = {
   publicRepoCheck?: (repoUrl: string) => Promise<boolean>
   /** Work that may finish after the response (Worker ctx.waitUntil); absent means fire-and-forget. */
   background?: (work: Promise<unknown>) => void
+  /** Best-effort side effects of a session starting or ending (workspace tokens, see api/settings.ts). */
+  hooks?: {
+    afterBoot?(row: SandboxRow, sessionId: string): Promise<unknown>
+    afterStop?(row: SandboxRow): Promise<unknown>
+  }
   config: {
     environment: string
     goldenSnapshotId: string
@@ -75,6 +80,8 @@ export type LifecycleDeps = {
     snapshotExpirationMs?: number
     /** Warm pool (pool.ts); absent or size 0 means every create boots its own VM. */
     pool?: PoolConfig
+    /** Hosts allowed on top of the default egress allowlist (e.g. this control plane for the in-VM CLI). */
+    extraEgressHosts?: readonly string[]
   }
 }
 
@@ -176,7 +183,11 @@ export function egressPolicy(deps: LifecycleDeps, row: SandboxRow, gitToken?: st
         )
       ]
     : []
-  return compileNetworkPolicy({ mode: 'allowlist', credentials: [...git, ...credentials] })
+  return compileNetworkPolicy({
+    mode: 'allowlist',
+    ...(deps.config.extraEgressHosts?.length ? { allowlist: [...DEFAULT_EGRESS_ALLOWLIST, ...deps.config.extraEgressHosts] } : {}),
+    credentials: [...git, ...credentials]
+  })
 }
 
 export function sessionFields(deps: LifecycleDeps, state: ProviderSandboxState): SessionFields {
@@ -274,6 +285,7 @@ async function boot(
     ...sessionFields(deps, state),
     ...(options.billFrom !== undefined ? { usage_settled_at: options.billFrom } : {})
   })
+  await deps.hooks?.afterBoot?.(running, state.session.id).catch(() => undefined)
   return { row: running, connection, timings: options.timer.timings }
 }
 
@@ -494,6 +506,7 @@ async function stopForSuspend(deps: LifecycleDeps, row: SandboxRow): Promise<San
     }
   }
   await queueUsage(deps.db, row, deps.now())
+  await deps.hooks?.afterStop?.(row).catch(() => undefined)
   return claim(deps, row, { status: 'suspended', ...NO_SESSION })
 }
 
@@ -622,5 +635,6 @@ export async function destroySandbox(deps: LifecycleDeps, row: SandboxRow): Prom
     repo_url: null
   })
   await flushUsage(deps.db, deps.entitlements, deps.now(), row.id)
+  await deps.hooks?.afterStop?.(destroyed).catch(() => undefined)
   return destroyed
 }
