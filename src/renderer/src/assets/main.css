@@ -2146,7 +2146,7 @@ html.native-shell .app-layout {
   }
 }
 
-.settings-view-shell > :not(aside) {
+.settings-view-shell {
   animation: settings-shell-enter 180ms ease-out;
 }
 
