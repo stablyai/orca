@@ -57,6 +57,7 @@
                   "props": { "iconOnly": "=!vars.classic" }
                 },
                 { "el": "RuntimeHostMark", "when": "host.kind == 'runtime'" },
+                { "el": "CloudMark", "when": "host.kind != 'runtime' && host.kind != 'ssh'" },
                 { "el": "RepoChip", "when": "vars.inlineRepo" },
                 {
                   "el": "Title",

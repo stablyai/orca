@@ -1,5 +1,6 @@
 // Orca Cloud workspace surfaces for the window: status panel, Restart, archive/unarchive, wake
 // progress and OOM notices. Maps the renderer's workspace id to its Orca Cloud runtime record.
+import { failQueuedCloudPrompts } from './cloud-offline-service'
 import { ipcMain, type BrowserWindow } from 'electron'
 import {
   listEphemeralVmRuntimes,
@@ -268,6 +269,10 @@ export function installHostedWorkspaceService(deps: {
           ...(checkouts?.length ? { checkouts: checkouts.slice(0, 20) } : {})
         })
         updateEphemeralVmRuntimeStatus(deps.userDataPath, found.runtime.id, { status: 'suspended' })
+        failQueuedCloudPrompts(
+          [args.workspaceId],
+          'The workspace was archived before this was sent.'
+        )
         deps.syncSessions()
         return { ok: true, value: null }
       } catch (error) {
