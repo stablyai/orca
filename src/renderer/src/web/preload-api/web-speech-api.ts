@@ -148,8 +148,8 @@ export function createWebSpeechApi(): Pick<
   }
 
   return {
-    // No model id, like the phone: the host dictates with the model it has selected now.
-    startDictation: async (_modelId, _hotwords, sessionId) => {
+    // No model id, like the phone: the host dictates with the model it has selected now, and its own terms for the worktree.
+    startDictation: async (_modelId, context, sessionId) => {
       const dictation: HostDictation = {
         sessionId,
         dictationId: `web-${createNonSecureContextUuid()}`,
@@ -164,7 +164,10 @@ export function createWebSpeechApi(): Pick<
       }
       active = dictation
       try {
-        await callRuntimeResult('speech.dictation.start', { dictationId: dictation.dictationId })
+        await callRuntimeResult('speech.dictation.start', {
+          dictationId: dictation.dictationId,
+          ...(context?.worktreeId ? { worktreeId: context.worktreeId } : {})
+        })
         // A cancel that landed while the host was starting couldn't reach this dictation yet.
         if (active !== dictation) {
           void cancelOnHost(dictation)

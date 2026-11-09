@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { useAudioCapture } from '@/hooks/use-audio-capture'
 import { DictationIndicator } from './DictationIndicator'
 import { captureInsertionTarget } from './dictation-insertion-target'
+import { captureDictationContext } from './dictation-context'
 import { dictationPillAnchorFor, type DictationPillAnchor } from './dictation-pill-anchor'
 import {
   canRetryDictation,
@@ -207,7 +208,8 @@ export function DictationController() {
     const insertionTarget = captureInsertionTarget()
     const deliver = createDictationTranscriptDelivery()
     deliverRef.current = (text) => deliver(text, insertionTarget)
-    const kept = createDictationKeptRecording(insertionTarget, deliver)
+    const context = captureDictationContext()
+    const kept = createDictationKeptRecording(insertionTarget, deliver, context)
     keptRef.current = kept
     setRecordingKey((key) => key + 1)
     setCaptureLive(false)
@@ -270,7 +272,7 @@ export function DictationController() {
       }
       setCaptureLive(true)
 
-      await window.api.speech.startDictation(modelId, undefined, sessionId)
+      await window.api.speech.startDictation(modelId, context, sessionId)
       if (!isCurrent()) {
         await releaseStart(true)
         return

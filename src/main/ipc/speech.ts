@@ -6,9 +6,7 @@ import {
   type MessagePortMain
 } from 'electron'
 import { abortWhenRendererGone } from './renderer-lifetime-abort'
-import { join } from 'node:path'
-import { writeFile, unlink } from 'node:fs/promises'
-import { createHash } from 'node:crypto'
+import { mergeDictationTerms } from '../../shared/dictation-dictionary'
 import { SPEECH_MODEL_CATALOG } from '../speech/model-catalog'
 import { deleteLocalSpeechModel } from '../speech/speech-model-deletion'
 import { getSpeechModelManager, getSpeechSttService } from '../speech/speech-runtime-service'
@@ -25,7 +23,7 @@ import {
   clearOpenAiCompatibleSpeechProvider,
   summarizeOpenAiCompatibleSpeechProvider
 } from '../speech/openai-compatible-speech-provider-store'
-import type { OpenAiCompatibleSpeechProvider } from '../../shared/speech-types'
+import type { DictationContext, OpenAiCompatibleSpeechProvider } from '../../shared/speech-types'
 import type { Store } from '../persistence/loading-store/store'
 
 export function registerSpeechHandlers(store: Store): void {
@@ -112,29 +110,6 @@ export function registerSpeechHandlers(store: Store): void {
     })
   })
 
-  const getHotwordsFilePath = (content: string): string => {
-    const digest = createHash('sha256').update(content).digest('hex').slice(0, 12)
-    // Native speech libraries may open paths with ANSI Windows APIs; keep hotwords in the ASCII-safe model cache.
-    return join(getSpeechModelManager(store).getModelsDir(), `speech-hotwords-${digest}.txt`)
-  }
-
-  const hotwordFileUsers = new Map<string, { users: number; written: boolean }>()
-  const retainHotwordsFile = (path: string): ((written: boolean) => void) => {
-    const entry = hotwordFileUsers.get(path) ?? { users: 0, written: false }
-    entry.users += 1
-    hotwordFileUsers.set(path, entry)
-    return (written) => {
-      entry.written ||= written
-      entry.users -= 1
-      if (entry.users === 0) {
-        hotwordFileUsers.delete(path)
-        if (entry.written) {
-          unlink(path).catch(() => {})
-        }
-      }
-    }
-  }
-
   // Renderer run ids restart per document; a retired document's owner must not be reused by its successor.
   const retiredDocumentCounts = new Map<number, number>()
   const getDesktopOwner = (senderId: number, sessionId: string): string =>
@@ -153,7 +128,7 @@ export function registerSpeechHandlers(store: Store): void {
 
   ipcMain.handle(
     'speech:startDictation',
-    async (event, modelId: string, hotwords?: string[], sessionId = 'desktop') => {
+    async (event, modelId: string, context?: DictationContext, sessionId = 'desktop') => {
       const senderId = event.sender.id
       const owner = getDesktopOwner(senderId, sessionId)
       const audioPort = pendingAudioPorts.get(owner)
@@ -164,8 +139,6 @@ export function registerSpeechHandlers(store: Store): void {
         audioPort?.close()
         return { directAudio }
       }
-      let resolvedHotwordsPath: string | undefined
-      let releaseHotwords: ((written: boolean) => void) | undefined
       let rendererRetired = false
       const rendererLifetime = abortWhenRendererGone(event.sender)
       let sessionListenerRemoved = false
@@ -207,14 +180,6 @@ export function registerSpeechHandlers(store: Store): void {
           }
         }
 
-        if (hotwords && hotwords.length > 0) {
-          const content = `${hotwords.join('\n')}\n`
-          const hotwordsFilePath = getHotwordsFilePath(content)
-          releaseHotwords = retainHotwordsFile(hotwordsFilePath)
-          await writeFile(hotwordsFilePath, content, 'utf-8')
-          resolvedHotwordsPath = hotwordsFilePath
-        }
-
         if (rendererRetired || window.isDestroyed()) {
           cleanupSessionListener()
           return { directAudio }
@@ -252,7 +217,7 @@ export function registerSpeechHandlers(store: Store): void {
                 break
             }
           },
-          resolvedHotwordsPath,
+          mergeDictationTerms(context?.repoTerms, store.getSettings().voice?.dictationTerms),
           owner,
           store.getSettings().voice
         )
@@ -272,7 +237,6 @@ export function registerSpeechHandlers(store: Store): void {
         cleanupSessionListener()
         throw err
       } finally {
-        releaseHotwords?.(resolvedHotwordsPath !== undefined)
         if (!directAudio) {
           audioPort?.close()
         }

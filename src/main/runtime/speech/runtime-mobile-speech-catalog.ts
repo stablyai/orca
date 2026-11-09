@@ -18,6 +18,7 @@ import {
   getSpeechModelDeletionErrorCode
 } from '../../speech/speech-model-deletion'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { hostDictationTerms } from './runtime-dictation-terms'
 import {
   clearOpenAiSpeechApiKey,
   getOpenAiSpeechApiKeyProtection,
@@ -34,7 +35,8 @@ export type OpenAiSpeechKeyStatus = {
 export class RuntimeMobileSpeechCatalog {
   constructor(private readonly getStore: () => RuntimeStore | null) {}
 
-  async list(): Promise<RuntimeSpeechSetupState> {
+  /** `worktreeId` picks the repo terms a phone recognizing on its own spells with. */
+  async list(worktreeId?: string): Promise<RuntimeSpeechSetupState> {
     const store = this.requireStore()
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
     const states = await getSpeechModelManager(store).getModelStates()
@@ -67,6 +69,7 @@ export class RuntimeMobileSpeechCatalog {
       dictationMode: voice.dictationMode === 'hold' ? 'hold' : 'toggle',
       dictationHoldToRecord: voice.dictationHoldToRecord !== false,
       removeFillerWords: voice.removeFillerWords !== false,
+      dictationTerms: hostDictationTerms(store, worktreeId),
       models
     }
   }

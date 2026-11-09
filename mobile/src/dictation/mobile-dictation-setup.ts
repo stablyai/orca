@@ -126,8 +126,12 @@ export function isDictationSetupRequiredError(message: string): boolean {
   return SETUP_REQUIRED_CODES.has(message) || message.startsWith('voice_model_not_ready:')
 }
 
-export async function fetchDictationSetup(client: RpcOperationSender): Promise<MobileSpeechSetup> {
-  const reply = await requestDictationSetupReply(client)
+/** `worktreeId` asks for that repo's dictionary terms too. */
+export async function fetchDictationSetup(
+  client: RpcOperationSender,
+  worktreeId?: string
+): Promise<MobileSpeechSetup> {
+  const reply = await requestDictationSetupReply(client, worktreeId ? { worktreeId } : null)
   if (isLegacyDesktopSpeechSetupReply(reply)) {
     throw new Error(
       translate(
@@ -145,15 +149,18 @@ export async function fetchDictationSetup(client: RpcOperationSender): Promise<M
   )
 }
 
-async function requestDictationSetupReply(client: RpcOperationSender): Promise<RpcResponse> {
+async function requestDictationSetupReply(
+  client: RpcOperationSender,
+  params: { worktreeId: string } | null
+): Promise<RpcResponse> {
   try {
-    return await dictationSetupRead.request(client, null)
+    return await dictationSetupRead.request(client, params)
   } catch (error) {
     if (!(error instanceof LogicalClientCutoverError)) {
       throw error
     }
     // Replay this read on authenticated replacement; mutations must surface cutover to avoid replaying unknown commits.
-    return dictationSetupRead.request(client, null)
+    return dictationSetupRead.request(client, params)
   }
 }
 

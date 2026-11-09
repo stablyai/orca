@@ -1,4 +1,5 @@
 import type { MessagePortMain } from 'electron'
+import { dictationVocabulary, type DictationTerm } from '../../shared/dictation-dictionary'
 import {
   createDictationTextPipeline,
   type DictationTextSettings
@@ -44,19 +45,20 @@ export class SttService {
     this.state = createSttSessionState(modelManager, spawnWorker)
   }
 
+  /** `terms`: the dictionary for where this dictation goes, repo terms first (mergeDictationTerms). */
   startDictation(
     modelId: string,
     sink: SttEventSink,
-    hotwordsFilePath?: string,
+    terms: readonly DictationTerm[] = [],
     owner = 'desktop',
     voice?: Partial<DictationTextSettings>
   ): Promise<void> {
-    const clean = createDictationTextPipeline(getCatalogModel(modelId), voice)
+    const clean = createDictationTextPipeline(getCatalogModel(modelId), voice, terms)
     return startSttDictation(
       this.state,
       modelId,
       clean ? cleanTranscriptEvents(sink, clean) : sink,
-      hotwordsFilePath,
+      dictationVocabulary(terms),
       owner,
       voice?.dictationLanguage
     )
