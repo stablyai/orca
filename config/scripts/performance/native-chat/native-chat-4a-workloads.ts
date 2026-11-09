@@ -19,6 +19,8 @@ export type Workload = {
   history: {
     /** The large retained chat: one recipe turn is 1 prompt + `tools` tool items + 1 reply (+ its turn row). */
     largeTurns: number
+    /** The medium chat's turns, same recipe; 0 seeds no medium chat. */
+    mediumTurns: number
     tools: number
     toolOutputBytes: number
     promptBytes: number
@@ -35,6 +37,17 @@ export type Workload = {
   rewind: { nearTipSamples: number; deepCutTurns: number; deepSamples: number }
   /** Generated only on the M4Air run; smoke keeps the 55k shape off this Mac. */
   conversionSourceBytes: number
+  /** Huge completed tool originals whose heads share one page, one original above the detail reply cap, one oversized message. */
+  shapes: { hugeTools: number; hugeToolBytes: number; capToolBytes: number; messageBytes: number }
+  /** Interleaved: parallel subagents whose child rows alternate, per turn. Sparse: one subagent's rows under a near-empty root. */
+  subagents: {
+    interleavedTurns: number
+    agents: number
+    childrenPerAgent: number
+    sparseChildren: number
+  }
+  /** Large completed rows written then rewound on a disposable chat, an outside reader held for `holdMs`, reclaim watched for `reclaimWaitMs`. */
+  maintenance: { debtTools: number; debtToolBytes: number; holdMs: number; reclaimWaitMs: number }
 }
 
 const MiB = 1024 * 1024
@@ -59,6 +72,7 @@ export const WORKLOADS: Record<Workload['profile'], Workload> = {
     coldSamples: 1,
     history: {
       largeTurns: 20,
+      mediumTurns: 5,
       tools: 8,
       toolOutputBytes: 2000,
       promptBytes: 300,
@@ -70,21 +84,25 @@ export const WORKLOADS: Record<Workload['profile'], Workload> = {
     stream: { cases: streamCases([MiB / 4]), chunkBytes: 16_384, intervalMs: 1, samples: 1 },
     retained: { checkpoints: [0, 20], liveQueue: 2 },
     rewind: { nearTipSamples: 2, deepCutTurns: 5, deepSamples: 1 },
-    conversionSourceBytes: 0
+    conversionSourceBytes: 0,
+    shapes: { hugeTools: 3, hugeToolBytes: MiB, capToolBytes: 5 * MiB, messageBytes: 3 * MiB },
+    subagents: { interleavedTurns: 2, agents: 2, childrenPerAgent: 30, sparseChildren: 250 },
+    maintenance: { debtTools: 4, debtToolBytes: 2 * MiB, holdMs: 10_000, reclaimWaitMs: 150_000 }
   },
   full: {
     profile: 'full',
     samples: 30,
     coldSamples: 5,
-    // The established 5000-turn/55000-item recipe plus 309 small chats: the 55k-history/310-chat profile.
+    // The established 5000-turn/55000-item recipe, a 500-turn medium chat and 308 small chats: the 55k-history/310-chat profile.
     history: {
       largeTurns: 5000,
+      mediumTurns: 500,
       tools: 8,
       toolOutputBytes: 2000,
       promptBytes: 300,
       replyBytes: 1500,
       queuedEvery: 10,
-      fillerChats: 309,
+      fillerChats: 308,
       fillerTurns: 2
     },
     stream: {
@@ -95,7 +113,11 @@ export const WORKLOADS: Record<Workload['profile'], Workload> = {
     },
     retained: { checkpoints: [0, 1_000, 10_000], liveQueue: 2 },
     rewind: { nearTipSamples: 10, deepCutTurns: 1000, deepSamples: 3 },
-    conversionSourceBytes: 20 * 1024 * MiB
+    conversionSourceBytes: 20 * 1024 * MiB,
+    shapes: { hugeTools: 4, hugeToolBytes: 3 * MiB, capToolBytes: 16 * MiB, messageBytes: 3 * MiB },
+    subagents: { interleavedTurns: 20, agents: 2, childrenPerAgent: 40, sparseChildren: 400 },
+    // 160 MiB of rows rewound under a held reader passes the candidate's 32,768-frame WAL admission threshold.
+    maintenance: { debtTools: 10, debtToolBytes: 16 * MiB, holdMs: 60_000, reclaimWaitMs: 600_000 }
   }
 }
 
@@ -109,13 +131,17 @@ export function workloadFor(profile: string, conversionSourceBytes?: number): Wo
 
 export type HistoryTurn = { prompt: string; queued: boolean }
 
-/** Large-chat recipe turns in send order; each reply ends with a 4A-TAIL marker naming its turn. */
-export function* largeHistoryTurns(workload: Workload): Generator<HistoryTurn> {
+/** A recipe chat's turns in send order; each reply ends with a 4A-TAIL marker naming its chat and turn. */
+export function* historyTurns(
+  workload: Workload,
+  chat: 'large' | 'medium' = 'large'
+): Generator<HistoryTurn> {
   const { history } = workload
-  for (let turn = 0; turn < history.largeTurns; turn += 1) {
+  const turns = chat === 'large' ? history.largeTurns : history.mediumTurns
+  for (let turn = 0; turn < turns; turn += 1) {
     const op = {
       op: 'history',
-      tag: `large-${turn}`,
+      tag: `${chat}-${turn}`,
       tools: history.tools,
       toolOutputBytes: history.toolOutputBytes,
       replyBytes: history.replyBytes
@@ -138,9 +164,9 @@ export function fillerTurn(chat: number, turn: number, workload: Workload): stri
   return providerText.formatDirective(op, workload.history.promptBytes)
 }
 
-/** Expected large-chat rows, so a run can refuse a fixture that did not seed what it claims. */
-export function expectedLargeItems(workload: Workload): number {
-  return workload.history.largeTurns * (workload.history.tools + 3)
+/** Expected recipe-chat rows, so a run can refuse a fixture that did not seed what it claims. */
+export function expectedItems(turns: number, workload: Workload): number {
+  return turns * (workload.history.tools + 3)
 }
 
 /** Per-turn tool output that makes the conversion source reach `conversionSourceBytes` with the same turn count. */
@@ -167,6 +193,29 @@ export function streamPrompt(workload: Workload, stream: StreamCase): string {
   })
 }
 
+export const shapesPrompt = (workload: Workload, tag: string): string =>
+  providerText.formatDirective({ op: 'shapes', tag, ...workload.shapes })
+export const subagentPrompt = (
+  workload: Workload,
+  tag: string,
+  mode: 'interleaved' | 'sparse'
+): string => {
+  const { agents, childrenPerAgent, sparseChildren } = workload.subagents
+  return providerText.formatDirective({
+    op: 'subagents',
+    tag,
+    agents: mode === 'sparse' ? 1 : agents,
+    children: mode === 'sparse' ? sparseChildren : childrenPerAgent
+  })
+}
+export const debtPrompt = (workload: Workload, tag: string): string =>
+  providerText.formatDirective({
+    op: 'history',
+    tag,
+    tools: workload.maintenance.debtTools,
+    toolOutputBytes: workload.maintenance.debtToolBytes,
+    replyBytes: 400
+  })
 export const holdPrompt = (tag: string, ms: number): string =>
   providerText.formatDirective({ op: 'hold', tag, ms })
 export const replyPrompt = (tag: string): string =>
@@ -178,7 +227,7 @@ export function dryRunWorkload(workload: Workload): Record<string, unknown> {
   let promptBytes = 0
   let queued = 0
   let turns = 0
-  for (const turn of largeHistoryTurns(workload)) {
+  for (const turn of historyTurns(workload)) {
     promptBytes += Buffer.byteLength(turn.prompt)
     queued += Number(turn.queued)
     turns += 1
@@ -198,13 +247,25 @@ export function dryRunWorkload(workload: Workload): Record<string, unknown> {
   return {
     profile: workload.profile,
     largeTurns: turns,
-    expectedLargeItems: expectedLargeItems(workload),
+    expectedLargeItems: expectedItems(workload.history.largeTurns, workload),
+    expectedMediumItems: expectedItems(workload.history.mediumTurns, workload),
     queuedHistoryTurns: queued,
     largePromptBytes: promptBytes,
     largeToolOutputBytes: turns * workload.history.tools * workload.history.toolOutputBytes,
-    chats: 1 + workload.history.fillerChats,
+    chats: 1 + Number(workload.history.mediumTurns > 0) + workload.history.fillerChats,
+    mediumPromptDigest: providerText.digest(
+      [...historyTurns(workload, 'medium')].map((turn) => turn.prompt).join('\n')
+    ),
     fillerPromptDigest: providerText.digest(fillerTurn(0, 0, workload)),
     streams,
+    shapesPromptDigest: providerText.digest(shapesPrompt(workload, 'shapes')),
+    subagentPromptDigests: (['interleaved', 'sparse'] as const).map((mode) =>
+      providerText.digest(subagentPrompt(workload, 'subagents', mode))
+    ),
+    debtPromptDigest: providerText.digest(debtPrompt(workload, 'debt')),
+    shapes: workload.shapes,
+    subagents: workload.subagents,
+    maintenance: workload.maintenance,
     retained: workload.retained,
     rewind: workload.rewind,
     conversion: {

@@ -8,6 +8,7 @@ import {
   storageBytes,
   watchMarkers
 } from './native-chat-4a-probes'
+import { maintenanceDebtRows } from './native-chat-4a-ops-maintenance'
 import { stat, type Sample } from './native-chat-4a-report'
 import {
   addRow,
@@ -125,7 +126,7 @@ async function streamSample(
   }
 }
 
-/** After a large stream, sends to another chat while retired payloads are pruned, pages reclaimed and the WAL checkpointed. */
+/** After a large stream, sends to another chat and large-chat reads while whatever maintenance follows runs; no debt is asserted. */
 async function maintenanceWindow(ctx: RunContext): Promise<Sample[]> {
   const other = ctx.manifest.fillerSessionIds[1] ?? ctx.manifest.fillerSessionIds[0]!
   const fromEpoch = Date.now()
@@ -191,7 +192,8 @@ export async function streamingRows(ctx: RunContext): Promise<void> {
       variant: size,
       context: {
         windowMs: MAINTENANCE_WINDOW_MS,
-        retiredPayloadBytes: stream.toolOutputBytes ?? stream.bytes
+        // The stream's final body stays current; retired-data debt is measured in the maintenance module.
+        precedingStreamBytes: stream.toolOutputBytes ?? stream.bytes
       }
     })
     try {
@@ -201,6 +203,7 @@ export async function streamingRows(ctx: RunContext): Promise<void> {
         `failed: ${error instanceof Error ? error.message : String(error)}`.slice(0, 300)
     }
   }
+  await maintenanceDebtRows(ctx)
   // A cheap read after all streams confirms the large chat still answers its tail.
   await rpc(page(ctx), 'agentSession.history', {
     sessionId: largeSessionId,

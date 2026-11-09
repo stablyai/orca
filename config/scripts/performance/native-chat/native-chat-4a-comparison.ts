@@ -16,13 +16,7 @@ import { parseArgs } from 'node:util'
 import type { Arm } from './native-chat-4a-arm'
 import type { Manifest } from './native-chat-4a-fixture'
 import type { RunContext } from './native-chat-4a-run-context'
-import {
-  armMarkdown,
-  comparisonMarkdown,
-  summarizeRow,
-  type ArmResult,
-  type Row
-} from './native-chat-4a-report'
+import { armMarkdown, writeComparison, type ArmResult, type Row } from './native-chat-4a-report'
 import {
   conversionToolOutputBytes,
   dryRunWorkload,
@@ -65,30 +59,8 @@ const workload = workloadFor(
 )
 const log = (line: string): void => console.error(`[4a ${new Date().toISOString()}] ${line}`)
 
-function writeComparison(out: string, results: ArmResult[]): void {
-  const [base, next] = results
-  if (!base || !next) {
-    return
-  }
-  const name = `4a-${base.sha.slice(0, 8)}-vs-${next.sha.slice(0, 8)}`
-  const summaries = results.map((result) => ({
-    ...result,
-    summaries: result.rows.map((row: Row) => ({ ...row, summary: summarizeRow(row) }))
-  }))
-  const machine = {
-    platform: process.platform,
-    release: os.release(),
-    cpu: os.cpus()[0]?.model,
-    cpus: os.cpus().length,
-    memoryBytes: os.totalmem()
-  }
-  writeFileSync(
-    path.join(out, `${name}.json`),
-    `${JSON.stringify({ workload, machine, arms: summaries }, null, 2)}\n`
-  )
-  writeFileSync(path.join(out, `${name}.md`), comparisonMarkdown(base, next))
-  log(`wrote ${path.join(out, `${name}.md`)}`)
-}
+const seededChatCount = (manifest: Manifest): number =>
+  1 + Number(manifest.mediumSessionId !== null) + manifest.fillerSessionIds.length
 
 async function runArm(input: {
   arm: Arm
@@ -102,28 +74,37 @@ async function runArm(input: {
   const { copyProfile, launchArm, stopArm } = await import('./native-chat-4a-arm')
   const { resetTags } = await import('./native-chat-4a-run-context')
   const lifecycle = await import('./native-chat-4a-ops-lifecycle')
+  const conversion = await import('./native-chat-4a-ops-conversion')
+  const { ConversionObserver } = await import('./native-chat-4a-sqlite-observer')
   const queue = await import('./native-chat-4a-ops-queue')
   const retained = await import('./native-chat-4a-ops-retained')
   const stream = await import('./native-chat-4a-ops-stream')
   const reads = await import('./native-chat-4a-ops-reads')
+  const shapes = await import('./native-chat-4a-ops-shapes')
   const profileDir = path.join(input.out, 'profile')
   const rows: Row[] = []
   const startedAt = new Date().toISOString()
 
+  // Each seed copy's first launch converts on the candidate; the observer starts before it, reading only.
   const onProfile = async (
     seedDir: string,
     manifest: typeof input.manifest,
-    body: (ctx: RunContext) => Promise<void>
+    phase: string,
+    body: (ctx: RunContext, observer: InstanceType<typeof ConversionObserver>) => Promise<void>
   ) => {
     if (existsSync(profileDir)) {
       renameSync(profileDir, path.join(input.out, `stale-profile-${Date.now()}`))
     }
     copyProfile(seedDir, profileDir)
     resetTags()
+    const observer = new ConversionObserver(profileDir)
     const open = () => launchArm(input.arm, profileDir, input.stubCommand)
     const ctx = {
       arm: input.arm,
-      launch: await open(),
+      launch: await open().catch(async (error: unknown) => {
+        await observer.stop()
+        throw error
+      }),
       workload,
       manifest,
       rows,
@@ -135,14 +116,15 @@ async function runArm(input: {
       ctx.launch = await open()
     }
     try {
-      await body(ctx)
+      await body(ctx, observer)
     } finally {
+      await observer.stop()
       await stopArm(ctx.launch)
       renameSync(
         profileDir,
         path.join(
           input.out,
-          `after-${input.arm.name}-${manifest.toolOutputBytes}-${input.arm.sha.slice(0, 8)}`
+          `after-${input.arm.name}-${phase}-${manifest.toolOutputBytes}-${input.arm.sha.slice(0, 8)}`
         )
       )
     }
@@ -170,19 +152,25 @@ async function runArm(input: {
     }
   }
 
-  await onProfile(input.seedDir, input.manifest, async (ctx) => {
-    const seedFiles = lifecycle.seededDbFiles(input.seedDir)
-    // First: the seeded tail markers and unconverted state exist only before any other family writes.
-    await run('conversion', () =>
-      lifecycle.firstLaunchRows(
-        ctx,
-        seedFiles,
-        `${workload.history.largeTurns}-turn/${workload.history.fillerChats + 1}-chat profile`
-      )
+  const label = `${workload.history.largeTurns}-turn/${seededChatCount(input.manifest)}-chat profile`
+  if (input.families.has('conversion')) {
+    // A copy of its own, left idle, so the sweep's whole duration and per-chat intervals carry no foreground work.
+    await onProfile(input.seedDir, input.manifest, 'sweep', (ctx, observer) =>
+      run('conversion', () => conversion.sweepRows(ctx, observer, label))
     )
+  }
+  await onProfile(input.seedDir, input.manifest, 'families', async (ctx, observer) => {
+    const seedFiles = conversion.seededDbFiles(input.seedDir)
+    // First: the seeded tail markers and unconverted state exist only before any other family writes.
+    await run('conversion', () => conversion.firstLaunchRows(ctx, seedFiles, label, observer))
+    await conversion.awaitSweep(ctx, observer, label)
     await run('send', () => queue.sendAndQueueRows(ctx))
     await run('stream', () => stream.streamingRows(ctx))
-    await run('history', () => reads.historyRows(ctx))
+    await run('history', async () => {
+      await reads.historyRows(ctx)
+      await shapes.subagentRows(ctx)
+      await shapes.itemShapeRows(ctx)
+    })
     await run('outline', () => reads.outlineAndForkRows(ctx))
     await run('records', () => reads.recordRows(ctx))
     await run('retained', () => retained.retainedAdmissionRows(ctx))
@@ -191,10 +179,15 @@ async function runArm(input: {
   })
   if (input.largeSource && input.families.has('conversion')) {
     const source = input.largeSource
-    const label = `${(workload.conversionSourceBytes / 1024 ** 3).toFixed(0)} GiB source`
-    await onProfile(source.seedDir, source.manifest, (ctx) =>
+    const sourceLabel = `${(workload.conversionSourceBytes / 1024 ** 3).toFixed(0)} GiB source`
+    await onProfile(source.seedDir, source.manifest, 'large-source', (ctx, observer) =>
       run('conversion', () =>
-        lifecycle.firstLaunchRows(ctx, lifecycle.seededDbFiles(source.seedDir), label)
+        conversion.firstLaunchRows(
+          ctx,
+          conversion.seededDbFiles(source.seedDir),
+          sourceLabel,
+          observer
+        )
       )
     )
   }
@@ -228,7 +221,7 @@ async function main(): Promise<void> {
       .filter((file) => /^arm-.*\.json$/.test(file))
       .map((file) => JSON.parse(readFileSync(path.join(out, file), 'utf8')) as ArmResult)
       .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
-    writeComparison(out, results)
+    writeComparison(out, workload, results, log)
     return
   }
   const families = new Set(values.families.split(',').map((family) => family.trim()) as Family[])
@@ -271,7 +264,7 @@ async function main(): Promise<void> {
     values['large-source'] && workload.conversionSourceBytes > 0
       ? await seed(conversionToolOutputBytes(workload), {
           ...workload,
-          history: { ...workload.history, fillerChats: 3 }
+          history: { ...workload.history, fillerChats: 5, mediumTurns: 0 }
         })
       : null
   const results: ArmResult[] = []
@@ -292,7 +285,7 @@ async function main(): Promise<void> {
     writeFileSync(path.join(out, `arm-${arm.name}-${arm.sha.slice(0, 12)}.md`), armMarkdown(result))
     results.push(result)
   }
-  writeComparison(out, results)
+  writeComparison(out, workload, results, log)
   const skipped = results.flatMap((result) =>
     result.rows
       .filter((row) => row.skipped)
