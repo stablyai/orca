@@ -28,9 +28,12 @@ vi.mock('@/lib/active-agent-note-send', () => ({
   sendNotesToActiveAgentSession: mocks.sendNotesToActiveAgentSession
 }))
 
-vi.mock('@/components/native-chat/structured-agent-session-message-sender', () => ({
-  sendStructuredAgentSessionMessage: mocks.sendStructuredAgentSessionMessage
-}))
+vi.mock(
+  '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender',
+  () => ({
+    sendStructuredAgentSessionMessage: mocks.sendStructuredAgentSessionMessage
+  })
+)
 // The chat's tab names its host; the send only needs to find one.
 vi.mock('@/store/index', () => ({
   useAppStore: {
@@ -41,7 +44,7 @@ vi.mock('@/store/index', () => ({
     })
   }
 }))
-vi.mock('@/runtime/structured-agent-session-owner', () => ({
+vi.mock('@/runtime/native-chat/session-ownership/structured-agent-session-owner', () => ({
   structuredAgentSessionTargetForTab: () => ({ kind: 'local' })
 }))
 

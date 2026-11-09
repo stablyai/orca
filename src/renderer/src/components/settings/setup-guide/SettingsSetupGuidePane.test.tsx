@@ -14,8 +14,8 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-vi.mock('./settings-setup-guide-progress', () => ({
-  useSettingsSetupGuideFullProgress: () => ({ stepDone: {} })
+vi.mock('../../setup-guide/use-setup-guide-progress', () => ({
+  useSetupGuideProgress: () => ({ stepDone: {} })
 }))
 
 vi.mock('../../feature-wall/FeatureWallSetupChecklist', () => ({

@@ -1,7 +1,7 @@
 import { acceptPRCheckObservation } from '../../../shared/github/complete-pr-check-owner'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { capturePRCheckContract } from './pr-check-observation-contract'
 import { getGitHubSourceRuntimeTarget } from './github-source-runtime-context'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from './work-items/github/github-work-item-source-lookup'

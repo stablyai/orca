@@ -6,7 +6,7 @@ import {
 } from '../../../../shared/browser-url'
 import type { BrowserContextMenuRequestedEvent } from '../../../../shared/browser-guest-events'
 import { readContextMenuSpelling } from '../../../window/editable-context-menu'
-import { readGuestNavigationState } from '../browser-guest-navigation-state'
+import { readGuestNavigationState } from '../navigation/browser-guest-navigation-state'
 import type { ResolveRenderer } from '../browser-guest-renderer-target'
 import { buildBrowserExtensionPageContextMenu } from '../../extensions/context-menus/browser-extension-context-menu-host'
 

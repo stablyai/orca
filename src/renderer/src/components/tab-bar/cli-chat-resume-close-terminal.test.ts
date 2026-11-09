@@ -25,7 +25,7 @@ vi.mock('@/store', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: mocks.call
 }))
-vi.mock('@/runtime/structured-agent-session-owner', () => ({
+vi.mock('@/runtime/native-chat/session-ownership/structured-agent-session-owner', () => ({
   structuredAgentSessionTargetForHost: (host: string) =>
     host === 'local' ? { kind: 'local' } : { kind: 'environment', environmentId: 'paired' }
 }))
@@ -126,19 +126,22 @@ it.each([
     exitCode: -1,
     exitCause: { kind: 'unknown', reason: 'stop_unverified' }
   },
-  { satisfied: true, status: 'unknown', exitCode: null }
-])('rejects unproven exit evidence: %j', async (wait) => {
+  { satisfied: true, status: 'unknown', exitCode: null },
+  new Error('timeout')
+])('goes on once an exit the host could not prove settles: %j', async (wait) => {
   mocks.call.mockImplementation(async (_target, method, params) => {
     const leaf = params.paneKey?.endsWith(':b') ? 'b' : 'a'
     return method === 'terminal.resolvePane'
       ? {
           terminal: { handle: `handle-${leaf}`, ptyId: `pty-${leaf}`, incarnationId: `inc-${leaf}` }
         }
-      : { wait }
+      : wait instanceof Error
+        ? Promise.reject(wait)
+        : { wait }
   })
   await expect(
     closeCliChatResumeTerminal(source, () => true, hooks(), new AbortController().signal)
-  ).rejects.toThrow('terminal exit unproven')
+  ).resolves.toBe(true)
 })
 it('rechecks the source incarnation after an existing close dialog and says the close was dropped', async () => {
   mocks.close.mockImplementation((_tab, options) => {

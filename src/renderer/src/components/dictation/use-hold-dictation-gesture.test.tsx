@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DictationState } from '../../../../shared/speech-types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { getDefaultSettings, getDefaultVoiceSettings } from '../../../../shared/constants'
 import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 
 const originalUserAgent = navigator.userAgent
@@ -12,6 +13,8 @@ const originalUserAgent = navigator.userAgent
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 let dictationState: DictationState
+let dictationMode: 'auto' | 'hold'
+let terminalShortcutPolicy: 'orca-first' | 'terminal-first'
 let startDictation: ReturnType<typeof vi.fn<() => void>>
 let stopDictation: ReturnType<typeof vi.fn<() => void>>
 
@@ -24,17 +27,16 @@ function setUserAgent(userAgent: string): void {
 
 function holdSettings(): GlobalSettings {
   return {
-    voice: {
-      enabled: true,
-      sttModel: 'test-model',
-      dictationMode: 'hold'
-    }
-  } as GlobalSettings
+    ...getDefaultSettings('/home/test'),
+    terminalShortcutPolicy,
+    voice: { ...getDefaultVoiceSettings(), enabled: true, sttModel: 'test-model', dictationMode }
+  }
 }
 
 function Probe(): null {
   useHoldDictationGesture({
     canStartDictation: () => dictationState === 'idle',
+    isDictationUnderway: () => dictationState === 'starting' || dictationState === 'listening',
     keybindings: {},
     settings: holdSettings(),
     startDictation,
@@ -74,6 +76,8 @@ function beginHold(init: KeyboardEventInit = {}): void {
 beforeEach(() => {
   setUserAgent('Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0)')
   dictationState = 'idle'
+  dictationMode = 'hold'
+  terminalShortcutPolicy = 'orca-first'
   startDictation = vi.fn<() => void>()
   stopDictation = vi.fn<() => void>()
 })
@@ -151,5 +155,97 @@ describe('useHoldDictationGesture', () => {
     })
 
     expect(startDictation).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('useHoldDictationGesture in Auto mode', () => {
+  let now = 0
+
+  beforeEach(() => {
+    dictationMode = 'auto'
+    now = 1000
+    vi.spyOn(performance, 'now').mockImplementation(() => now)
+  })
+
+  it('keeps recording after a tap and stops on the next press', async () => {
+    await renderProbe()
+
+    // macOS drops the E keyup under Cmd, so the tap ends only when Cmd lets go.
+    beginHold()
+    now += 600
+    act(() => {
+      dispatchKeyUp({ key: 'Meta', code: 'MetaLeft', metaKey: false })
+    })
+    expect(stopDictation).not.toHaveBeenCalled()
+
+    act(() => {
+      dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true })
+    })
+    expect(startDictation).toHaveBeenCalledTimes(1)
+    expect(stopDictation).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops on release after a press held for 300 ms', async () => {
+    await renderProbe()
+
+    beginHold()
+    now += 300
+    act(() => {
+      dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true, repeat: true })
+    })
+    act(() => {
+      dispatchKeyUp({ key: 'Meta', code: 'MetaLeft', metaKey: false })
+    })
+
+    expect(startDictation).toHaveBeenCalledTimes(1)
+    expect(stopDictation).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts a hold pressed while the last dictation was still finishing', async () => {
+    await renderProbe()
+    dictationState = 'stopping'
+
+    act(() => {
+      dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true })
+    })
+    dictationState = 'idle'
+    act(() => {
+      dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true, repeat: true })
+    })
+
+    expect(stopDictation).not.toHaveBeenCalled()
+    expect(startDictation).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the shortcut to the IME while composing', async () => {
+    await renderProbe()
+
+    const event = dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true, isComposing: true })
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(startDictation).not.toHaveBeenCalled()
+  })
+
+  it('leaves the shortcut to a terminal that owns its keys', async () => {
+    terminalShortcutPolicy = 'terminal-first'
+    await renderProbe()
+    const terminalInput = document.createElement('textarea')
+    terminalInput.className = 'xterm-helper-textarea'
+    document.body.appendChild(terminalInput)
+
+    const event = new KeyboardEvent('keydown', {
+      bubbles: true,
+      cancelable: true,
+      key: 'e',
+      code: 'KeyE',
+      metaKey: true
+    })
+    act(() => {
+      terminalInput.dispatchEvent(event)
+    })
+    terminalInput.remove()
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(startDictation).not.toHaveBeenCalled()
   })
 })

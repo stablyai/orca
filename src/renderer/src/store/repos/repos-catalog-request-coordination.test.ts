@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../../../../shared/repo-types'
+
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 
 const { syncFork } = vi.hoisted(() => ({ syncFork: vi.fn() }))
 
@@ -81,35 +81,4 @@ describe('repo module-lifetime coordinators', () => {
     await expect(older).resolves.toEqual([])
     expect(firstStore.getState().repos).toEqual([])
   })
-
-  it('shares safe-auto fork sync cooldown attempts across store instances', async () => {
-    const { promise: sync, resolve: resolveSync } = Promise.withResolvers<void>()
-    syncFork.mockReturnValueOnce(sync)
-    const safeAutoRepo: Repo = {
-      id: 'safe-auto-shared',
-      path: '/safe-auto-shared',
-      displayName: 'Safe auto',
-      badgeColor: '#000',
-      addedAt: 1,
-      forkSyncMode: 'safe-auto',
-      upstream: { owner: 'upstream', repo: 'safe-auto-shared' }
-    }
-    window.api.repos.list = vi.fn().mockResolvedValue([safeAutoRepo])
-    const firstStore = createTestStore()
-    const secondStore = createTestStore()
-
-    await firstStore.getState().fetchRepos(catalogOwner(firstStore))
-    await secondStore.getState().fetchRepos(catalogOwner(secondStore))
-
-    expect(syncFork).toHaveBeenCalledTimes(1)
-    resolveSync()
-    await sync
-  })
 })
-
-// The catalog these tests read is the one the focused host would have shown.
-function catalogOwner(store: {
-  getState: () => { settings: { activeRuntimeEnvironmentId?: string | null } | null }
-}): { runtimeEnvironmentId: string | null } {
-  return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
-}

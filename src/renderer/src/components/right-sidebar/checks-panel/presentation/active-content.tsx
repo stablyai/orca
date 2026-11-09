@@ -1,7 +1,7 @@
 import {
   forgeCredentialTarget,
   forgeOwnerHostIdForWorkspace
-} from '@/runtime/forge-credential-target'
+} from '@/runtime/source-control/forge/forge-credential-target'
 import { ImeInput } from '@/lib/ime-text-field'
 import React from 'react'
 import { Check, LoaderCircle, Pencil, X } from 'lucide-react'
@@ -22,7 +22,7 @@ import { ConflictingFilesSection, MergeConflictNotice } from './conflict-summary
 import { ChecksList } from './checks-list'
 import { PRCommentsList } from '../comments/comments-list'
 import { openAnnotationLocation } from '@/components/editor/check-details/actions/check-annotation-open'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { ChecksPanelActiveContentModel } from './active-content-props'
 import { ChecksPanelReviewHeader } from './review-header'
 
@@ -31,6 +31,7 @@ export function ChecksPanelActiveContent({
 }: {
   model: ChecksPanelActiveContentModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     activeConnectionId,
     activeConflictReview,
@@ -115,7 +116,7 @@ export function ChecksPanelActiveContent({
   // A classified GitHub failure says more than a manual one, so it wins; one banner either way.
   const refreshError =
     (activeReview.provider === 'github' && prRefreshState?.status === 'error'
-      ? getChecksPanelRefreshErrorBannerLine(prRefreshState.errorType)
+      ? getChecksPanelRefreshErrorBannerLine(prRefreshState.errorType, t)
       : null) ?? manualRefreshError
   return (
     <div ref={setChecksPanelContentRef} className="flex-1 overflow-auto scrollbar-sleek">
@@ -161,7 +162,7 @@ export function ChecksPanelActiveContent({
             />
             <button
               className="cursor-pointer rounded p-1 text-emerald-500 transition-colors hover:bg-accent hover:text-emerald-400 disabled:cursor-default disabled:opacity-50"
-              title={translate('auto.components.right.sidebar.ChecksPanel.2ab7fd4b6d', 'Save')}
+              title={t('auto.components.right.sidebar.ChecksPanel.2ab7fd4b6d', 'Save')}
               onClick={() => void handleSaveTitle()}
               disabled={titleSaving}
             >
@@ -173,7 +174,7 @@ export function ChecksPanelActiveContent({
             </button>
             <button
               className="cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:cursor-default disabled:opacity-50"
-              title={translate('auto.components.right.sidebar.ChecksPanel.058039787c', 'Cancel')}
+              title={t('auto.components.right.sidebar.ChecksPanel.058039787c', 'Cancel')}
               onClick={handleCancelEdit}
               disabled={titleSaving}
             >
@@ -327,7 +328,7 @@ export function ChecksPanelActiveContent({
         actionId={agentComposerState?.actionId ?? 'fixChecks'}
         title={
           agentComposerState?.title ??
-          translate('auto.components.right.sidebar.ChecksPanel.7fad8509fe', 'Fix With AI')
+          t('auto.components.right.sidebar.ChecksPanel.7fad8509fe', 'Fix With AI')
         }
         description={agentComposerState?.description ?? ''}
         baseCommandInput={agentComposerState?.prompt ?? ''}

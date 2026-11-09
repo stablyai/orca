@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { Editor } from '@tiptap/react'
 import { Copy, ExternalLink, Pencil, Unlink } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { addViewportSizeChangeListener } from '@/hooks/viewport-size-change-listener'
@@ -94,6 +94,7 @@ function LinkEditInput({
   onSave: (href: string) => void
   onCancel: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [value, setValue] = useState(initialHref)
   const isMac = navigator.userAgent.includes('Mac')
 
@@ -127,7 +128,7 @@ function LinkEditInput({
           onCancel()
         }
       }}
-      placeholder={translate(
+      placeholder={t(
         'auto.components.editor.RichMarkdownLinkBubble.7b0b945fdc',
         'Paste or type a link…'
       )}
@@ -165,6 +166,7 @@ export function RichMarkdownLinkBubble({
   ownerId,
   portalToDocument = false
 }: RichMarkdownLinkBubbleProps): React.JSX.Element {
+  const t = useTranslate()
   const bubbleRef = useRef<HTMLDivElement | null>(null)
   const onDismissRef = useRef(onDismiss)
   onDismissRef.current = onDismiss
@@ -291,17 +293,14 @@ export function RichMarkdownLinkBubble({
             {linkBubble.href.length > 40 ? `${linkBubble.href.slice(0, 40)}…` : linkBubble.href}
           </span>
           <LinkBubbleAction
-            label={translate(
-              'auto.components.editor.RichMarkdownLinkBubble.bfc813e909',
-              'Open link'
-            )}
+            label={t('auto.components.editor.RichMarkdownLinkBubble.bfc813e909', 'Open link')}
             disabled={!linkBubble.openEnabled}
             onClick={onOpen}
           >
             <ExternalLink size={14} />
           </LinkBubbleAction>
           <LinkBubbleAction
-            label={translate('auto.components.editor.RichMarkdownLinkBubble.copyLink', 'Copy link')}
+            label={t('auto.components.editor.RichMarkdownLinkBubble.copyLink', 'Copy link')}
             disabled={!linkBubble.copyEnabled}
             onClick={onCopy}
           >
@@ -310,19 +309,13 @@ export function RichMarkdownLinkBubble({
           {linkBubble.kind === 'markdown' ? (
             <>
               <LinkBubbleAction
-                label={translate(
-                  'auto.components.editor.RichMarkdownLinkBubble.cdfe166f6f',
-                  'Edit link'
-                )}
+                label={t('auto.components.editor.RichMarkdownLinkBubble.cdfe166f6f', 'Edit link')}
                 onClick={onEditStart}
               >
                 <Pencil size={14} />
               </LinkBubbleAction>
               <LinkBubbleAction
-                label={translate(
-                  'auto.components.editor.RichMarkdownLinkBubble.1c99b726e0',
-                  'Remove link'
-                )}
+                label={t('auto.components.editor.RichMarkdownLinkBubble.1c99b726e0', 'Remove link')}
                 onClick={onRemove}
               >
                 <Unlink size={14} />

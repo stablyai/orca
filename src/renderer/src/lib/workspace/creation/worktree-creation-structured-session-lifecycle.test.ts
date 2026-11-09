@@ -2,6 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
+import { toast } from 'sonner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { executeWorktreeCreation } from './worktree-creation-flow-execute'
 import { retryBackgroundWorktreeCreation } from './worktree-creation-flow'
@@ -9,7 +10,7 @@ import {
   makeCreatedAgentWorktree,
   seedEmptyActivatableWorktree
 } from '../activation/worktree-activation-created-agent.test-fixture'
-import type { WorktreeCreationRequest } from './pending-worktree-creation'
+
 import type { StructuredLaunchAdmission } from '../../agent-session/launch/structured-agent-session-host-admission'
 import type * as admissionModule from '../../agent-session/launch/structured-agent-session-host-admission'
 import type * as launchModule from '../../agent-session/launch/structured-agent-session-launch-create-call'
@@ -21,35 +22,38 @@ import { StructuredAgentSessionCreateRefusalError } from '../../agent-session/la
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
   isNativeChatComposerDraftUnsaved,
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/native-chat-composer-draft-load'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/drafts/native-chat-composer-draft-load'
 import {
   flushNativeChatComposerDrafts,
   nativeChatComposerDraftWritesSettled
-} from '@/components/native-chat/native-chat-composer-draft-persistence'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-persistence'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from '@/components/native-chat/native-chat-composer-draft-storage'
-import { pendingCreationChatDraftScopeKey } from './pending-worktree-creation'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
+import {
+  type WorktreeCreationRequest,
+  pendingCreationChatDraftScopeKey
+} from './pending-worktree-creation'
 import '../../agent-session/launch/structured-agent-session-launch-prompt'
 import { hasStagedStructuredLaunchPrompt } from '../../agent-session/launch/structured-agent-session-staged-prompt'
-import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/structured-agent-session-pending-sends'
-import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/structured-agent-session-message-sender'
+import { getStructuredAgentSessionPendingSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { resetStructuredAgentSessionSendsForTests } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import {
   addNativeChatPendingAttachment,
   clearNativeChatPendingAttachmentsForTests,
   nativeChatPendingAttachmentSnapshot,
   settleNativeChatPendingAttachment
-} from '@/components/native-chat/native-chat-pending-attachment-cache'
+} from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 import {
   holdBrowserAttachmentFiles,
   readBrowserAttachmentFile
@@ -58,7 +62,7 @@ import {
   holdNativeChatStagedInput,
   releaseNativeChatStagedFiles,
   stageNativeChatDraftFile
-} from '@/components/native-chat/native-chat-draft-attachment-staging'
+} from '@/components/native-chat/drafts/native-chat-draft-attachment-staging'
 
 const mocks = vi.hoisted(() => ({
   admission: vi.fn<typeof admissionModule.admitStructuredLaunchOnHost>(),
@@ -77,15 +81,15 @@ vi.mock(
 )
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await original())
 )
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await original())
 )
-vi.mock('@/components/native-chat/native-chat-composer-mount', () => ({
+vi.mock('@/components/native-chat/composer/focus/native-chat-composer-mount', () => ({
   nativeChatComposerSelection: () => undefined,
   waitForNativeChatComposerHandoff: async () => {}
 }))
@@ -544,4 +548,35 @@ describe('creation chat handoff', () => {
     expect(useAppStore.getState().unifiedTabsByWorktree[worktree.id] ?? []).toEqual([])
     expect(mocks.createSession).not.toHaveBeenCalled()
   })
+})
+
+it('returns a classified late legacy preparation error to the composer without a second error surface', async () => {
+  const failureNotice = vi.spyOn(toast, 'error')
+  const { worktreeCreationAgentLaunchOptions } =
+    await import('./worktree-creation-host-agent-launch')
+  const onLegacyPreparationFailure = vi.fn()
+  const late: WorktreeCreationRequest = {
+    ...request,
+    agentLaunchRoute: 'terminal-tui',
+    launchInputs: { sessionOptions: { model: 'opus' } },
+    creationStartup: {
+      legacy: () => {
+        throw new Error('Invalid Arguments')
+      },
+      onLegacyPreparationFailure
+    }
+  }
+  useAppStore.setState({
+    createWorktree: async () => {
+      worktreeCreationAgentLaunchOptions(late).legacyStartup?.()
+      throw new Error('preparation must not reach create')
+    }
+  })
+  await executeWorktreeCreation('creation-1', late)
+  expect(onLegacyPreparationFailure).toHaveBeenCalledWith(
+    expect.objectContaining({ message: 'Invalid Arguments' })
+  )
+  expect(onLegacyPreparationFailure).toHaveBeenCalledOnce()
+  expect(useAppStore.getState().pendingWorktreeCreations['creation-1']).toBeUndefined()
+  expect(failureNotice).not.toHaveBeenCalled()
 })

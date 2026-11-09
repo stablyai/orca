@@ -7,7 +7,7 @@ import type {
   ProviderRateLimits,
   RateLimitWindow
 } from '../../../../shared/rate-limit-types'
-import { makeTab } from '@/store/slices/store-test-helpers'
+import { makeTab } from '@/store/terminals/terminal-tab.test-fixture'
 import { CodexSwitcherMenu } from './CodexSwitcherMenu'
 import {
   DropdownMenu,

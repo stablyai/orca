@@ -7,6 +7,7 @@ import { captureInsertionTarget } from './dictation-insertion-target'
 import { createDictationTranscriptDelivery } from './dictation-transcript-delivery'
 import { recordStoppedSession, waitForStoppedSession } from './dictation-stopped-sessions'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   showDictationDisabledToast,
   showDictationNoModelToast,
@@ -30,6 +31,7 @@ import {
 } from '../../../../shared/dictation-session-machine'
 
 export function DictationController() {
+  const t = useTranslate()
   const dictationState = useAppStore((s) => s.dictationState)
   const setDictationState = useAppStore((s) => s.setDictationState)
   const setPartialTranscript = useAppStore((s) => s.setPartialTranscript)
@@ -260,10 +262,10 @@ export function DictationController() {
     }
   }, [startDictation, stopDictation])
 
-  // Toggle mode uses intercepted main IPC so the chord cannot reach xterm or system shortcuts.
+  // Main intercepts Toggle presses and Auto double taps so the chord never reaches xterm.
   useEffect(() => {
-    const mode = settings?.voice?.dictationMode ?? 'toggle'
-    if (mode !== 'toggle' || !settings?.voice?.enabled) {
+    const mode = settings?.voice?.dictationMode ?? 'auto'
+    if (mode === 'hold' || !settings?.voice?.enabled) {
       return
     }
     return window.api.ui.onDictationKeyDown(toggleDictation)
@@ -296,6 +298,7 @@ export function DictationController() {
 
   useHoldDictationGesture({
     canStartDictation: () => canStartDictation(sessionRef.current.phase),
+    isDictationUnderway: () => isDictationUnderway(sessionRef.current.phase),
     keybindings,
     settings,
     startDictation,
@@ -314,11 +317,9 @@ export function DictationController() {
       recordStoppedSession(sessionId, stoppedSessionIdsRef, stoppedResolversRef),
     onError: (sessionId, error) => {
       toast.error(
-        translate(
-          'auto.components.dictation.DictationController.de136f1199',
-          'Speech error: {{value0}}',
-          { value0: error }
-        )
+        t('auto.components.dictation.DictationController.de136f1199', 'Speech error: {{value0}}', {
+          value0: error
+        })
       )
       const { run } = dispatch({ type: 'abandon' })
       stopCapture()

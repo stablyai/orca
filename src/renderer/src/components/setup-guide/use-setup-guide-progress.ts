@@ -5,7 +5,7 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { checkRuntimeHooks } from '@/runtime/repo-hooks/runtime-hooks-client'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { hasEffectiveSetupCommand } from '@/lib/setup-script-status'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import {
   COMPUTER_USE_SKILL_NAME,
   ORCA_CLI_SKILL_NAME,
@@ -28,7 +28,7 @@ import {
   getSetupGuideProgressReady,
   getSetupScriptProbeSignature
 } from './setup-guide-progress-readiness'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import {
   readSetupScriptProbeCache,
   setSetupScriptProbeCache,

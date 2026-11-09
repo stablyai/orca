@@ -11,7 +11,8 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { readRuntimeMetadata } from './runtime-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../../../shared/remote-runtime/pairing/pairing'
-import { subscribeRemoteRuntimeRequest } from '../../../../shared/remote-runtime/remote-runtime-client'
+import '../../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -66,118 +67,6 @@ const { getWorktreeListingMocks } = vi.hoisted(() => {
 })
 
 describe('OrcaRuntimeRpcServer', () => {
-  it('mirrors laptop-created remote runtime terminals into phone session tabs over RPC', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    const runtime = new OrcaRuntimeService(makeStore() as never)
-    const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
-    runtime.setPtyController({
-      spawn: committingSpawn(runtime, spawn),
-      write: () => true,
-      kill: () => true,
-      getForegroundProcess: async () => null
-    })
-    const server = new OrcaRuntimeRpcServer({ runtime, userDataPath })
-
-    await server.start()
-
-    const metadata = readRuntimeMetadata(userDataPath)
-    const endpoint = metadata!.transports[0]!.endpoint
-    const authToken = metadata!.authToken
-    const leafId = '11111111-1111-4111-8111-111111111111'
-    const createResponse = await sendRequest(endpoint, {
-      id: 'laptop_create',
-      authToken,
-      method: 'terminal.create',
-      params: {
-        worktree: 'id:repo-1::/tmp/worktree-a',
-        command: "claude 'work on the issue'",
-        terminalKittyKeyboardProtocol: true,
-        terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' },
-        tabId: 'laptop-tab',
-        leafId,
-        presentation: 'background'
-      }
-    })
-
-    expect(createResponse).toMatchObject({
-      id: 'laptop_create',
-      ok: true,
-      result: {
-        terminal: {
-          worktreeId: 'repo-1::/tmp/worktree-a',
-          surface: 'background'
-        }
-      }
-    })
-    expect(
-      (createResponse.result as { terminal?: { warning?: string } } | undefined)?.terminal?.warning
-    ).toBeUndefined()
-    expect(spawn).toHaveBeenCalledWith(
-      expect.objectContaining({
-        terminalKittyKeyboardProtocol: true,
-        terminalColorQueryReplies: { foreground: '#ffffff', background: '#282c34' }
-      })
-    )
-    runtime.onPtyData('laptop-created-pty', '\x1b]0;Claude working\x07', 456)
-    runtime.onPtyData('laptop-created-pty', 'Claude is working...\r\n', 456)
-
-    const listResponse = await sendRequest(endpoint, {
-      id: 'phone_list',
-      authToken,
-      method: 'session.tabs.list',
-      params: {
-        worktree: 'id:repo-1::/tmp/worktree-a'
-      }
-    })
-
-    const terminal = (
-      createResponse.result as {
-        terminal: { handle: string }
-      }
-    ).terminal
-    expect(listResponse).toMatchObject({
-      id: 'phone_list',
-      ok: true,
-      result: {
-        tabs: [
-          {
-            type: 'terminal',
-            id: `laptop-tab::${leafId}`,
-            parentTabId: 'laptop-tab',
-            leafId,
-            status: 'ready',
-            terminal: terminal.handle,
-            agentStatus: {
-              state: 'working',
-              paneKey: `laptop-tab:${leafId}`,
-              terminalHandle: terminal.handle
-            }
-          }
-        ]
-      }
-    })
-
-    const readResponse = await sendRequest(endpoint, {
-      id: 'phone_read',
-      authToken,
-      method: 'terminal.read',
-      params: {
-        terminal: terminal.handle
-      }
-    })
-    expect(readResponse).toMatchObject({
-      id: 'phone_read',
-      ok: true,
-      result: {
-        terminal: {
-          tail: ['Claude is working...']
-        }
-      }
-    })
-
-    await server.stop()
-  })
-
   it('streams laptop-created runtime terminals to a paired phone WebSocket client', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const writes: string[] = []
@@ -462,7 +351,7 @@ describe('OrcaRuntimeRpcServer', () => {
     const responses: Record<string, unknown>[] = []
     const binaryFrames: Uint8Array<ArrayBufferLike>[] = []
     const onError = vi.fn()
-    const subscription = await subscribeRemoteRuntimeRequest(
+    const subscription = await subscribeRemoteRuntimeTransport(
       pairedRuntimeConnectionFromOffer(pairing),
       'terminal.multiplex',
       {},

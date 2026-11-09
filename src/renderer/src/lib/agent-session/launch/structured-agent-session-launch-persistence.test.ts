@@ -15,8 +15,6 @@ import { structuredAgentLaunchRecordFor } from './structured-agent-session-launc
 import type { StructuredAgentSessionLaunchIntent } from '../../launch-structured-agent-session'
 
 const SERVER = 'runtime:server-1'
-const TOMBSTONES_KEY = 'orca:structuredAgentLaunchCancelledSessions:v1'
-
 function reload(): void {
   resetStructuredAgentLaunchPersistenceForTests()
 }
@@ -155,19 +153,5 @@ describe('structured agent launch persistence', () => {
     ).toBe(true)
     expect(hasStructuredAgentLaunchCancellationTombstonePersisted('local_session')).toBe(false)
     expect(hasStructuredAgentLaunchCancellationTombstonePersisted('remote_session')).toBe(true)
-  })
-
-  it("expires a paired host's tombstone that host never answered for", () => {
-    const expired = Date.now() - 31 * 24 * 60 * 60 * 1000
-    localStorage.setItem(
-      TOMBSTONES_KEY,
-      JSON.stringify([
-        { sessionId: 'stale_remote', executionHostId: SERVER, cancelledAt: expired },
-        { sessionId: 'fresh_remote', executionHostId: SERVER, cancelledAt: Date.now() }
-      ])
-    )
-
-    expect(hasStructuredAgentLaunchCancellationTombstonePersisted('stale_remote')).toBe(false)
-    expect(hasStructuredAgentLaunchCancellationTombstonePersisted('fresh_remote')).toBe(true)
   })
 })

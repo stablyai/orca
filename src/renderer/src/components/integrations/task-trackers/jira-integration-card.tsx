@@ -9,7 +9,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import {
   getProviderRuntimeContextKey,
   hasRemoteProviderRuntime
-} from '@/lib/provider-runtime-context'
+} from '@/runtime/hosts/observations/provider-runtime-context'
 import { useAppStore } from '@/store/index'
 import {
   IntegrationCardDetails,
@@ -19,11 +19,12 @@ import { useIntegrationSubordinateRowClass } from '../presentation/integration-c
 import { getProviderAccountScope } from '../../provider-accounts/provider-account-scope'
 import { ProviderHostScopeControl } from '../../provider-accounts/ProviderHostScopeControl'
 import { JIRA_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type VerificationResult = { state: 'ok' | 'error'; error?: string }
 
 export function JiraIntegrationCard(): React.JSX.Element {
+  const t = useTranslate()
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
@@ -42,13 +43,13 @@ export function JiraIntegrationCard(): React.JSX.Element {
   const connected = contextMatches && jiraStatus.connected
   const sites = jiraStatus.sites ?? []
   const siteCount = sites.length || (connected ? 1 : 0)
-  const accountScope = getProviderAccountScope(settings)
+  const accountScope = getProviderAccountScope(settings, t)
   const credentialCopy = hasRemoteProviderRuntime(settings)
-    ? translate(
+    ? t(
         'auto.components.settings.task.tracker.integration.cards.2d60ec7921',
         'Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are sent to the selected remote runtime and stored there with runtime-supported encryption.'
       )
-    : translate(
+    : t(
         'auto.components.settings.task.tracker.integration.cards.977e360b71',
         'Connect a Jira Cloud site with an API token, or a self-hosted Jira with a personal access token or username and password. Credentials are stored locally and encrypted when local runtime storage supports it.'
       )
@@ -89,7 +90,7 @@ export function JiraIntegrationCard(): React.JSX.Element {
       name="Jira"
       description={
         connected
-          ? translate(
+          ? t(
               siteCount === 1
                 ? 'auto.components.settings.task.tracker.integration.cards.connectedSiteSingular'
                 : 'auto.components.settings.task.tracker.integration.cards.connectedSitePlural',
@@ -97,11 +98,11 @@ export function JiraIntegrationCard(): React.JSX.Element {
               { count: siteCount }
             )
           : checking
-            ? translate(
+            ? t(
                 'auto.components.settings.task.tracker.integration.cards.a1093a06c7',
                 'Checking Jira access before showing setup actions.'
               )
-            : translate(
+            : t(
                 'auto.components.settings.task.tracker.integration.cards.7ca5ffffdb',
                 'Browse, create, and start work from Jira Cloud issues.'
               )
@@ -110,11 +111,8 @@ export function JiraIntegrationCard(): React.JSX.Element {
       statusTone={connected ? 'connected' : 'attention'}
       statusLabel={
         connected
-          ? translate('auto.components.settings.jira.integration.card.statusConnected', 'Connected')
-          : translate(
-              'auto.components.settings.jira.integration.card.statusNotConnected',
-              'Not connected'
-            )
+          ? t('auto.components.settings.jira.integration.card.statusConnected', 'Connected')
+          : t('auto.components.settings.jira.integration.card.statusNotConnected', 'Not connected')
       }
       actions={
         !checking ? (
@@ -124,11 +122,11 @@ export function JiraIntegrationCard(): React.JSX.Element {
             onClick={() => setDialogOpen(true)}
           >
             {connected
-              ? translate(
+              ? t(
                   'auto.components.settings.task.tracker.integration.cards.60996beda6',
                   'Add Jira site'
                 )
-              : translate(
+              : t(
                   'auto.components.settings.task.tracker.integration.cards.e2ff968276',
                   'Connect Jira'
                 )}
@@ -139,13 +137,13 @@ export function JiraIntegrationCard(): React.JSX.Element {
       <IntegrationCardDetails>
         <UnsealedCredentialNotice
           protection={jiraStatus.credentialProtection ?? null}
-          credentialName={translate(
+          credentialName={t(
             'auto.components.settings.jira.integration.card.jiraTokenName',
             'Your Jira API token'
           )}
         />
         <ProviderHostScopeControl
-          labelPrefix={translate(
+          labelPrefix={t(
             'auto.components.settings.task.tracker.integration.cards.account_scope_prefix',
             'Account scope'
           )}
@@ -171,7 +169,7 @@ export function JiraIntegrationCard(): React.JSX.Element {
                   {testResult?.state === 'ok' ? (
                     <span className="flex shrink-0 items-center gap-1 text-xs text-status-success">
                       <CheckCircle2 className="size-3.5" />
-                      {translate(
+                      {t(
                         'auto.components.settings.task.tracker.integration.cards.a2c0015fb8',
                         'Verified'
                       )}
@@ -192,13 +190,13 @@ export function JiraIntegrationCard(): React.JSX.Element {
                     {testing ? (
                       <>
                         <LoaderCircle className="size-3.5 mr-1.5 animate-spin" />
-                        {translate(
+                        {t(
                           'auto.components.settings.task.tracker.integration.cards.3e7c10d286',
                           'Testing...'
                         )}
                       </>
                     ) : (
-                      translate(
+                      t(
                         'auto.components.settings.task.tracker.integration.cards.c24e56c532',
                         'Test'
                       )
@@ -206,7 +204,7 @@ export function JiraIntegrationCard(): React.JSX.Element {
                   </Button>
                   <button
                     onClick={() => void handleDisconnect(site.id)}
-                    aria-label={translate(
+                    aria-label={t(
                       'auto.components.settings.task.tracker.integration.cards.dd3529015d',
                       'Disconnect {{value0}}',
                       { value0: site.displayName }
@@ -219,7 +217,7 @@ export function JiraIntegrationCard(): React.JSX.Element {
               )
             })}
             <p className="text-[11px] text-muted-foreground/70">
-              {translate(
+              {t(
                 'auto.components.settings.task.tracker.integration.cards.8c20e76308',
                 'Each connected Jira site has one token stored by the active runtime.'
               )}
@@ -228,20 +226,20 @@ export function JiraIntegrationCard(): React.JSX.Element {
         ) : connected ? (
           <>
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.task.tracker.integration.cards.8b2408a8e5',
                 'Jira is connected for this runtime. Re-check if the connected site list looks stale.'
               )}
             </p>
             <div className="flex items-center gap-2">
               <Button variant="ghost" size="sm" onClick={() => void checkJiraConnection()}>
-                {translate(
+                {t(
                   'auto.components.settings.task.tracker.integration.cards.c90f2ef419',
                   'Re-check'
                 )}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => void handleDisconnect()}>
-                {translate(
+                {t(
                   'auto.components.settings.task.tracker.integration.cards.disconnect_all',
                   'Disconnect'
                 )}
@@ -252,10 +250,7 @@ export function JiraIntegrationCard(): React.JSX.Element {
           <>
             <p className="text-xs text-muted-foreground">{credentialCopy}</p>
             <Button variant="ghost" size="sm" onClick={() => void checkJiraConnection()}>
-              {translate(
-                'auto.components.settings.task.tracker.integration.cards.c90f2ef419',
-                'Re-check'
-              )}
+              {t('auto.components.settings.task.tracker.integration.cards.c90f2ef419', 'Re-check')}
             </Button>
           </>
         ) : null}

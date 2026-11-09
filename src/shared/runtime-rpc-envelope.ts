@@ -1,6 +1,6 @@
 // Share envelopes across CLI/desktop/non-Electron clients without client-to-client imports.
 import { z } from 'zod'
-import type { OrchestrationCompatibilityEvidence } from './orchestration-compatibility-evidence'
+import type { OrchestrationCompatibilityEvidence } from './orchestration/orchestration-compatibility-evidence'
 
 // Independently updated peers may add envelope fields; strip unknown fields while validating known ones.
 const MetaSuccess = z
@@ -40,11 +40,17 @@ const Failure = z
   })
   .strip()
 
+const Progress = z.object({ phase: z.string().min(1).max(200) }).strip()
+
 const Keepalive = z
   .object({
-    _keepalive: z.literal(true)
+    _keepalive: z.literal(true),
+    // Optional named step of a long poll; clients that predate it strip the field.
+    progress: Progress.optional()
   })
   .strip()
+
+export type RuntimeRpcProgress = z.infer<typeof Progress>
 
 export const RuntimeRpcEnvelopeSchema = z.union([Success, Failure, Keepalive])
 

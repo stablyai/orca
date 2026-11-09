@@ -1,28 +1,33 @@
 import { app } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
-import {
-  findWorkspaceEphemeralVmRuntime,
-  updateEphemeralVmRuntimeStatus
-} from '../../shared/ephemeral-vm-runtime-store'
+import { updateEphemeralVmRuntimeStatus } from '../../shared/ephemeral-vm-runtime-store'
+import { findWorkspaceEphemeralVmRuntime } from '../../shared/ephemeral-vm-workspace-runtime'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
 import {
   getEphemeralVmRecipeResultConnection,
   getEphemeralVmRecipeResultPairingCode
 } from '../../shared/ephemeral-vm-recipes'
-import {
-  resolveEnvironment,
-  updateEnvironmentFromPairingCode
-} from '../../shared/remote-runtime/host-store/runtime-environment-store'
+import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { resumeEphemeralVmRuntime } from './runtime-service'
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'
-import { getRuntimeOwnedSshTargetId } from '../ssh/connection/ssh-connection-store'
-import { isSshUserDisconnected, sshUserDisconnectCount } from '../ssh/ssh-user-disconnect'
+import { applyResumedRuntimePairing } from './runtime-resume-pairing'
+import { getRuntimeOwnedSshTargetId } from '../ssh/targets/ssh-target-runtime-ownership'
+import {
+  isSshUserDisconnected,
+  sshUserDisconnectCount
+} from '../ssh/connection/ssh-user-disconnect'
 import type { VmWakeRequest } from '../runtime/workspaces/sleep/workspace-sleep-platform'
 import { getRuntimeRecipeContext } from '../ipc/ephemeral-vm-recipe-context'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
+import {
+  getRuntimeEnvironmentStatusOwner,
+  reconnectRemoteRuntimeSharedControlConnection
+} from '../ipc/runtime-environments/runtime-environment-request-connections'
+import { getRegisteredSshState } from '../ssh/targets/ssh-target-registry'
+import { isRecipeVmLostContact } from './recipe-vm-lost-contact'
 
-/** Wakes a workspace's suspended recipe VM on this host; callers go through WorkspaceSleepCoordinator.wakeVm. */
+/** Wakes a workspace's suspended (or lost) recipe VM on this host; callers go through WorkspaceSleepCoordinator.wakeVm. */
 export async function resumeEphemeralVmWorkspace(
   store: Store,
   workspaceId: string,
@@ -33,18 +38,33 @@ export async function resumeEphemeralVmWorkspace(
   if (!runtime) {
     return null
   }
-  if (runtime.status !== 'suspended' && runtime.status !== 'resume_failed') {
+  // A VM recorded as up whose SSH host Orca gave up reaching may have been stopped or reclaimed by
+  // its provider (#34089): its recipe's resume brings it back. A failure there keeps the record as
+  // it was, so a VM that was only out of reach is still reconnected as before.
+  const lostContact =
+    !request.sshHeld &&
+    isRecipeVmLostContact(runtime, (targetId) => getRegisteredSshState(targetId)?.status)
+  if (runtime.status !== 'suspended' && runtime.status !== 'resume_failed' && !lostContact) {
     return runtime
+  }
+  const restoreAfterFailedRecovery = (): void => {
+    if (lostContact) {
+      updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, { status: runtime.status })
+    }
   }
   const recipeContext = getRuntimeRecipeContext(store, userDataPath, runtime.id)
   const result = await resumeEphemeralVmRuntime({
     userDataPath,
-    repoPath: recipeContext.repo.repo.path,
+    repoPath: recipeContext.repoPath,
     recipe: recipeContext.recipe,
     runtimeId: runtime.id
   })
   if (!result.ok) {
+    restoreAfterFailedRecovery()
     throw new Error(result.error)
+  }
+  if (!result.runtime.recipeResult) {
+    return result.runtime
   }
   const connection = getEphemeralVmRecipeResultConnection(result.runtime.recipeResult)
   // SSH servers use their target and have no pairing to refresh.
@@ -53,11 +73,20 @@ export async function resumeEphemeralVmWorkspace(
     if (!pairingCode) {
       throw new Error('Resume result did not include an Orca Server pairing code.')
     }
-    const repaired = updateEnvironmentFromPairingCode(userDataPath, runtime.runtimeEnvironmentId, {
-      pairingCode
+    const { environment } = await applyResumedRuntimePairing({
+      userDataPath,
+      environmentId: runtime.runtimeEnvironmentId,
+      pairingCode,
+      invalidateTransport: invalidateRuntimeEnvironmentTransport
     })
-    noteRecipeVmWakePairing(repaired.id, repaired.pairingRevision ?? repaired.createdAt)
-    invalidateRuntimeEnvironmentTransport(runtime.runtimeEnvironmentId)
+    noteRecipeVmWakePairing(
+      environment.id,
+      environment.pairingRevision ?? environment.createdAt,
+      true
+    )
+  }
+  if (connection.type !== 'ssh' && runtime.runtimeEnvironmentId) {
+    reestablishWokenServer(userDataPath, runtime.runtimeEnvironmentId)
   }
   // Suspend tore down the runtime-owned SSH transport, so an SSH VM reconnects even when its
   // recipe had no resume step to run.
@@ -81,19 +110,40 @@ export async function resumeEphemeralVmWorkspace(
       // The reconnect can move the server's tunnel and re-pair it; the waiting open expects that.
       const reached = resolveEnvironment(userDataPath, ssh.environmentId)
       noteRecipeVmWakePairing(reached.id, reached.pairingRevision ?? reached.createdAt)
-      return updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+      const woken = updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
         connectionMode: 'ssh',
         sshTargetId: ssh.targetId,
         runtimeEnvironmentId: ssh.environmentId
       })
+      reestablishWokenServer(userDataPath, ssh.environmentId)
+      return woken
     } catch (error) {
-      updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
-        status: 'resume_failed'
-      })
+      if (lostContact) {
+        restoreAfterFailedRecovery()
+      } else {
+        updateEphemeralVmRuntimeStatus(userDataPath, result.runtime.id, {
+          status: 'resume_failed'
+        })
+      }
       throw error
     }
   }
   return result.runtime
+}
+
+/** Nothing retried this server's control socket or health probe while its VM slept; reopen them.
+ *  On the next turn, once this wake is no longer pending, so the reopen is not refused as waking. */
+function reestablishWokenServer(userDataPath: string, environmentId: string): void {
+  setTimeout(() => {
+    try {
+      reconnectRemoteRuntimeSharedControlConnection(environmentId)
+      void getRuntimeEnvironmentStatusOwner(userDataPath, environmentId)
+        .refresh({ reconnect: true })
+        .catch(() => {})
+    } catch (error) {
+      console.warn('[ephemeral-vm] reconnect after wake failed', error)
+    }
+  }, 0)
 }
 
 /** The wake request for a workspace's VM, taken when the wake is accepted. */

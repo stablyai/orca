@@ -1,4 +1,4 @@
-import { getTaskSourceCacheScope } from '../../../../../shared/task-source-context'
+import { getTaskSourceCacheScope } from '../../../../../shared/work-items/task-source-context'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   CircleDot,
@@ -9,7 +9,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
-import { useAllWorktrees } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { findGithubPrWorkspaceAttachment } from '@/lib/work-items/github/github-work-item-workspace-attachment'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
@@ -20,6 +20,7 @@ import {
   resolveGitHubLinkCopyState
 } from '@/components/github-link-copy-state'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { PullRequestPageProps } from '../page-types'
 import { GitHubWorkItemTargetContext } from '@/components/github-item-dialog/load-item-details/github-work-item-target-context'
@@ -47,12 +48,15 @@ function PullRequestPageItem({
   repoId,
   sourceContext,
   initialTab,
-  backLabel = translate('auto.components.TaskPage.backToPullRequests', 'Pull requests'),
+  backLabel: backLabelOverride,
   projectOrigin,
   onUse,
   onReviewRequestsChange,
   onClose
 }: PullRequestPageProps): React.JSX.Element {
+  const t = useTranslate()
+  const backLabel =
+    backLabelOverride ?? t('auto.components.TaskPage.backToPullRequests', 'Pull requests')
   const workItemId = workItem?.id
   const [localState, setLocalState] = useState<GitHubWorkItem['state']>(workItem?.state ?? 'open')
   const [localLabels, setLocalLabels] = useState<string[]>(workItem?.labels ?? [])
@@ -318,6 +322,7 @@ function PullRequestPageItem({
             sourceContext={sourceContext}
             projectOrigin={projectOrigin}
             body={body}
+            bodyImageUrls={details?.bodyImageUrls}
             comments={comments}
             files={files}
             filesUnavailable={filesUnavailable}

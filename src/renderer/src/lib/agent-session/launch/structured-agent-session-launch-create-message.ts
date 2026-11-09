@@ -22,7 +22,7 @@ import {
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection
 } from '../../../../../shared/agent-session/options/structured-agent-session-option-view'
-import { firstFrameOptionState } from '@/components/native-chat/structured-agent-session-option-first-frame'
+import { firstFrameOptionState } from '@/components/native-chat/session/options/structured/structured-agent-session-option-first-frame'
 import {
   applyStructuredLaunchHeldOptions,
   applyStructuredLaunchExplicitOptions,

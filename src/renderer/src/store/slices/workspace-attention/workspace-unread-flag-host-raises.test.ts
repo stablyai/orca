@@ -4,8 +4,10 @@ import type * as WorktreeMetaPersistModule from '../worktrees/metadata/worktree-
 
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
 import { WORKSPACE_UNREAD_HOST_RAISES_CAPABILITY } from '../../../../../shared/workspace-unread-raise-capability'
-import { createTestStore, makeWorktree, TEST_REPO } from '../store-test-helpers'
-import { makeFolderWorkspace } from '../worktrees-slice-test-fixtures'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import { makeWorktree } from '../worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../../repos/repo.test-fixture'
+import { makeFolderWorkspace } from '../../folder-workspaces/folder-workspace.test-fixture'
 import { markWorkspaceUnreadFlag } from './workspace-unread-flag'
 
 import '@/runtime/rpc/calls/runtime-rpc-call'

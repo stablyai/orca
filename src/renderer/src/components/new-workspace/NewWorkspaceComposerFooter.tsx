@@ -3,7 +3,7 @@ import { LoaderCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { SwitchIndicator } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ButtonKeyHint } from '@/components/ButtonKeyHint'
 import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-card-props'
 
@@ -32,6 +32,7 @@ export function NewWorkspaceComposerFooter({
   primaryActionLabel,
   submitShortcutModifierLabel
 }: NewWorkspaceComposerFooterProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       {createError ? (
@@ -67,7 +68,7 @@ export function NewWorkspaceComposerFooter({
           >
             <SwitchIndicator checked={createMultiple} />
             <span className="text-muted-foreground transition-colors group-hover:text-foreground">
-              {translate('auto.components.NewWorkspaceComposerCard.createMultiple', 'Create more')}
+              {t('auto.components.NewWorkspaceComposerCard.createMultiple', 'Create more')}
             </span>
           </button>
         ) : null}

@@ -1,5 +1,5 @@
-import type { AppState } from '../../store'
-import type { RetiredTerminalTabSweepState } from '../../store/slices/retired-terminal-tab-state-sweep'
+import type { AppState } from '../../store/types'
+import type { RetiredTerminalTabSweepState } from '../../store/terminals/retired-terminal-tab-state-sweep'
 import type {
   RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
@@ -229,6 +229,7 @@ export type WebSessionTabsSyncState = Pick<
   | 'unreadTerminalTabs'
   | 'sortEpoch'
 > &
+  Partial<Pick<AppState, 'splitLandingGroupIds'>> &
   Partial<RetiredTerminalTabSweepState> &
   Partial<
     Pick<

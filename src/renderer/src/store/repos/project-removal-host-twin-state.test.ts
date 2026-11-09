@@ -2,31 +2,28 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { registerPendingEditorFlush } from '@/components/editor/save/flush/editor-pending-flush'
 import { confirmUnsavedDiscard } from '../slices/worktrees/teardown/removed-workspace-unsaved-files'
-import { createTestStore } from '../slices/store-test-helpers'
-import {
-  makeOpenFile,
-  makeTab,
-  makeTabGroup,
-  makeUnifiedTab
-} from '../slices/store-session-test-harness'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
+import { createTestStore } from '../testing/app-store-test-fixture'
+import { makeOpenFile } from '../slices/editor/types/open-file.test-fixture'
+import { makeTab } from '../terminals/terminal-tab.test-fixture'
+import { makeTabGroup, makeUnifiedTab } from '../slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
 } from '../../runtime/rpc/testing/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../runtime/rpc/compatibility/runtime-compatibility-cache'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
@@ -39,7 +36,7 @@ import '../../../../shared/workspace-scope'
 import {
   readNativeChatComposerDraft,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
 
 const recoveryNotice = vi.hoisted(() => vi.fn())
 vi.mock('@/components/editor/closed-unsaved-files-toast', () => ({

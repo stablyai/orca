@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { createTestStore } from '../slices/store-test-helpers'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
+import { createTestStore } from '../testing/app-store-test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import { workItemsCacheKey } from '../github/cache/cache-identity'
 
 import type { Repo } from '../../../../shared/repo-types'

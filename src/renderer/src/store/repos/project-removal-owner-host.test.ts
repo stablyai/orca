@@ -1,6 +1,6 @@
 // Require exact host row on removal: unique-candidate/focused fallbacks can destroy the other host’s same-ID project (#13071).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import { purgeOrphanedRuntimeSshProjects } from '../slices/worktrees/teardown/orphaned-runtime-ssh-project-purge'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -8,12 +8,12 @@ import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTest
 
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 

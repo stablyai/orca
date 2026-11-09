@@ -1,6 +1,6 @@
-import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration-rpc-contract'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrchestrationDb } from '../orchestration-db'
-import type { ResetRemovedWork } from '../../../../../shared/orchestration-removed-work'
+import type { ResetRemovedWork } from '../../../../../shared/orchestration/orchestration-removed-work'
 import {
   readRemovedWorkWatermark,
   summarizeRemovedWorkSince

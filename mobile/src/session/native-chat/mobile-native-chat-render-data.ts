@@ -62,9 +62,11 @@ function mobileNativeChatEmptyStateCopy(
 
 export function mobileNativeChatEmptyState(
   status: MobileNativeChatStatus,
-  agent: string | null,
+  agent: string | null | undefined,
   error?: string,
-  sessionLive = false
+  sessionLive = false,
+  /** A sent /clear hid the old rows: a blank list until its divider lands, not new-chat copy. */
+  clearing = false
 ): NativeChatEmptyStateCopy | null {
   const agentLabel = agent
     ? formatAgentTypeLabel(agent)
@@ -77,7 +79,7 @@ export function mobileNativeChatEmptyState(
     case 'awaiting-transcript':
       return mobileNativeChatEmptyStateCopy(sessionLive ? 'empty' : 'notFound', agentLabel)
     case 'ready':
-      return mobileNativeChatEmptyStateCopy('empty', agentLabel)
+      return clearing ? null : mobileNativeChatEmptyStateCopy('empty', agentLabel)
     case 'error': {
       const copy = mobileNativeChatEmptyStateCopy('error', agentLabel)
       return error ? { ...copy, subtitle: describeLoadError(error, translate).message } : copy

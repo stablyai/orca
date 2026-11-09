@@ -7,7 +7,7 @@ import type { SshTarget } from '../../../shared/ssh-types'
 import { spawnProcess } from '@orca/process-host'
 import { SshConnection } from '../../ssh/connection/ssh-connection'
 import { uploadRemoteInstallDirectory, writeRemoteInstallFile } from './remote-install-transfers'
-import { getRemoteHostPlatform } from '../../ssh/ssh-remote-platform'
+import { getRemoteHostPlatform } from '../../ssh/remote-host/ssh-remote-platform'
 
 type NoisyHost = { port: number; subsystems: number; execs: number; close: () => Promise<void> }
 

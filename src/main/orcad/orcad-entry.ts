@@ -90,15 +90,15 @@ async function startOrcadRuntime(
   const { resolveDaemonSessionScrollbackRows } =
     await import('../daemon/sessions/daemon-session-scrollback-window')
   const { collectOrcadHealth } = await import('./orcad-health')
-  const { agentHookServer } = await import('../agent-hooks/server')
-  await import('../agent-hooks/managed-agent-hook-controls')
-  const { agentHookRuntimeDeps } = await import('../agent-hooks/agent-hook-runtime-deps')
+  const { agentHookServer } = await import('../agent-hooks/server/agent-hook-server')
+  await import('../agent-hooks/installation/managed-agent-hook-controls')
+  const { agentHookRuntimeDeps } = await import('../agent-hooks/runtime/agent-hook-runtime-deps')
   const { installHookStatusSessionTabsRepublish } =
-    await import('../agent-hooks/hook-status-session-tabs-republish')
+    await import('../agent-hooks/runtime/hook-status-session-tabs-republish')
   const { startOrcadAgentHookServer, startOrcadManagedAgentHooks } =
     await import('./orcad-managed-agent-hooks')
   const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
-    await import('../runtime/agent-status-observed-pane-identity')
+    await import('../runtime/terminal/identity/agent-status-observed-pane-identity')
 
   const { disposeWatcherProcessAndWait } =
     await import('../ipc/filesystem/watcher-process/parcel-watcher-process')
@@ -244,7 +244,8 @@ async function startOrcadRuntime(
   const { startSpeechModelWarmup } = await import('../speech/speech-model-warmup')
   startSpeechModelWarmup(profileStore)
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    const { repairDuplicatePtyPanesOnStart } = await import('../runtime/moved-pane-owner-rekey')
+    const { repairDuplicatePtyPanesOnStart } =
+      await import('../runtime/terminal/identity/moved-pane-owner-rekey')
     // Wait behind earlier writes and persist repair before reconciliation/RPC admission.
     await repairDuplicatePtyPanesOnStart(profileStore, runtime)
   }
@@ -285,7 +286,8 @@ async function startOrcadRuntime(
   observedStatusCapture.attach(runtime)
   agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
   // First RPC clients must see a fully published graph.
-  const { publishHeadlessRuntimeGraph } = await import('../runtime/headless-runtime-graph')
+  const { publishHeadlessRuntimeGraph } =
+    await import('../runtime/session-graph/headless-runtime-graph')
   publishHeadlessRuntimeGraph(runtime)
   // Only the runtime can identify running shells and install deferred migrated history.
   void runtime.installPendingOrcadMigrationShellHistory().catch((error: unknown) => {
@@ -313,6 +315,8 @@ async function startOrcadRuntime(
   // Stop RPC before cleanup can tear down writers and runtime state.
   registerCleanup(() => rpc.stop())
   await timed('rpc', () => rpc.start())
+  // The daemon has no window to wait for; its CI-line watches start with the runtime.
+  runtime.startPullRequestWatches()
   startOrcadAutomations(runtime, profileStore, registerCleanup)
   const pushService = DesktopPushService.create({
     runtime,

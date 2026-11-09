@@ -8,11 +8,11 @@ import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairi
 import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import { upsertEphemeralVmRuntime } from '../../../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeStatus } from '../../../shared/ephemeral-vm-runtimes'
-import { registerRecipeVmWaker } from '../../runtime/recipe-vm-waker-registry'
+import { registerRecipeVmWaker } from '../../runtime/workspaces/sleep/recipe-vm-waker-registry'
 import type {
   RecipeVmOpening,
   RecipeVmState
-} from '../../runtime/workspaces/sleep/workspace-sleep-runtime'
+} from '../../runtime/workspaces/sleep/recipe-vm-operations'
 import { prepareRecipeVm } from './runtime-environment-recipe-vm-wake'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
@@ -157,6 +157,28 @@ describe('a request to a recipe VM environment', () => {
       wokenPairingRevision: 7
     })
     // A later open that woke nothing does not inherit that pairing.
+    await expect(prepareRecipeVm(userDataPath, VM_ENVIRONMENT, 'wake')).resolves.toEqual({
+      wokenPairingRevision: null
+    })
+  })
+
+  // A resume that kept its saved pairing leaves the revision as it was; it is still a new wake.
+  it('reports a wake that kept the pairing an earlier wake made', async () => {
+    recordVm('suspended')
+    forgetRecipeVmWakePairingsForTests()
+    noteRecipeVmWakePairing(VM_ENVIRONMENT.id, 7)
+    holdOpen.mockImplementationOnce(async () => {
+      noteRecipeVmWakePairing(VM_ENVIRONMENT.id, 7, true)
+      return 'up'
+    })
+    await expect(prepareRecipeVm(userDataPath, VM_ENVIRONMENT, 'wake')).resolves.toEqual({
+      wokenPairingRevision: 7
+    })
+    // Without a server restart, a wake that kept the pairing reads as no wake, as before.
+    holdOpen.mockImplementationOnce(async () => {
+      noteRecipeVmWakePairing(VM_ENVIRONMENT.id, 7)
+      return 'up'
+    })
     await expect(prepareRecipeVm(userDataPath, VM_ENVIRONMENT, 'wake')).resolves.toEqual({
       wokenPairingRevision: null
     })

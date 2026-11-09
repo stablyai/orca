@@ -27,18 +27,19 @@ import {
   WorktreeResolveMrBase,
   WorktreeResolvePrBase,
   WorktreeRunApprovedSetup,
-  WorktreeSelector,
+  WorktreeShow,
   WorktreeSortOrder,
   WorktreeTeardownMissingTerminalsParams,
   WorktreeResolveCallerParent
 } from '../../../../../shared/rpc-contract/worktree-params'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 import { WORKTREE_PROVISIONED_ROOT_METHOD } from './worktree-provisioned-root-method'
+import { VM_RECIPE_LIST_METHOD } from './vm-recipe-list-method'
 import { waitsForWorktreeRemoval } from '../../worktree-removal-marker-projection'
 import { queueWorkspaceDelete } from '../../../workspaces/lifecycle/workspace-lifecycle-commands'
 import { WORKTREE_SLEEP_METHOD } from './worktree-sleep-method'
 import { WORKTREE_SET_METHOD } from './worktree-set-method'
-import { runApprovedCreatedWorktreeSetup } from '../../../created-worktree-approved-setup'
+import { runApprovedCreatedWorktreeSetup } from '../../../workspaces/creation/created-worktree-approved-setup'
 
 export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
@@ -88,9 +89,11 @@ export const WORKTREE_METHODS = [
   defineMethod({
     name: 'worktree.show',
     permission: 'workspace',
-    params: WorktreeSelector,
+    params: WorktreeShow,
     handler: async (params, { runtime }) => ({
-      worktree: await runtime.showManagedWorktree(params.worktree)
+      worktree: await runtime.showManagedWorktree(params.worktree, undefined, {
+        matchFolders: params.matchFolderWorkspaces === true
+      })
     })
   }),
   WORKTREE_SLEEP_METHOD,
@@ -119,6 +122,24 @@ export const WORKTREE_METHODS = [
       // Mobile retries after migration share clientMutationId; return the same pending/created worktree. Desktop/CLI without keys run plainly.
       context.runtime.dedupeWorktreeCreate(params, params.clientMutationId, async () => {
         const { runtime } = context
+        if (params.recipeId !== undefined) {
+          // Why: a recipe starts a billed machine from this computer's orca.yaml; paired devices
+          // do not get to start one until they have their own UI and confirmation for it.
+          if (context.clientKind !== undefined) {
+            throw Object.assign(
+              new Error(
+                "Recipe workspaces are created from this computer's Orca app or CLI, not from a paired device."
+              ),
+              { code: 'forbidden' }
+            )
+          }
+          return runtime.createManagedRecipeWorkspace(params, {
+            ...(context.signal ? { signal: context.signal } : {}),
+            ...(context.reportProgress
+              ? { onPhase: (phase) => context.reportProgress?.({ phase }) }
+              : {})
+          })
+        }
         const repo = await runtime.showRepo(worktreeCreateRepoSelector(params))
         const automationProvenance =
           resolveAutomationWorkspaceProvenance({
@@ -163,6 +184,7 @@ export const WORKTREE_METHODS = [
       })
   }),
   WORKTREE_PROVISIONED_ROOT_METHOD,
+  VM_RECIPE_LIST_METHOD,
   defineMethod({
     name: 'worktree.prefetchCreateBase',
     permission: 'workspace',

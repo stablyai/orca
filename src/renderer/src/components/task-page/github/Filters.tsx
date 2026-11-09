@@ -8,7 +8,7 @@ import { cn } from '@/lib/utils'
 import PRFilterDropdowns from '@/components/github/PRFilterDropdowns'
 import { Search, X, Plus, LoaderCircle, RefreshCw } from 'lucide-react'
 import { Input } from '@/components/ui/input'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
 import { resolveNewIssueOpenSeed } from '@/components/task-page/task-page-new-issue-draft'
@@ -69,6 +69,7 @@ export function TaskPageGitHubFilters({
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     setTaskResumeState,
     setIssueSourcePreference,
@@ -206,15 +207,15 @@ export function TaskPageGitHubFilters({
             onKeyDown={handleTaskSearchKeyDown}
             placeholder={
               activeGithubTaskKind === 'prs'
-                ? translate('auto.components.TaskPage.eee4df4c66', 'Search GitHub PRs...')
-                : translate('auto.components.TaskPage.b15ceb409d', 'Search GitHub issues...')
+                ? t('auto.components.TaskPage.eee4df4c66', 'Search GitHub PRs...')
+                : t('auto.components.TaskPage.b15ceb409d', 'Search GitHub issues...')
             }
             className="h-8 rounded-md border-border/60 bg-background pl-8 pr-8 text-xs text-foreground shadow-xs"
           />
           {taskSearchInput || appliedTaskSearch ? (
             <button
               type="button"
-              aria-label={translate('auto.components.TaskPage.b797bdd7c3', 'Clear search')}
+              aria-label={t('auto.components.TaskPage.b797bdd7c3', 'Clear search')}
               onClick={handleResetGithubTaskSearch}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
             >
@@ -245,14 +246,14 @@ export function TaskPageGitHubFilters({
                   setNewIssueOpen(true)
                 }}
                 disabled={!newIssueTargetRepo}
-                aria-label={translate('auto.components.TaskPage.d3d0998b7d', 'New GitHub issue')}
+                aria-label={t('auto.components.TaskPage.d3d0998b7d', 'New GitHub issue')}
                 className="size-8 border-border/60 bg-background text-foreground shadow-xs hover:bg-muted/60"
               >
                 <Plus className="size-4" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
-              {translate('auto.components.TaskPage.d3d0998b7d', 'New GitHub issue')}
+              {t('auto.components.TaskPage.d3d0998b7d', 'New GitHub issue')}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -265,8 +266,8 @@ export function TaskPageGitHubFilters({
                 aria-busy={githubTasksBusy}
                 aria-label={
                   githubTasksBusy
-                    ? translate('auto.components.TaskPage.6ffa6be99f', 'Refreshing GitHub work')
-                    : translate('auto.components.TaskPage.ff53631e6f', 'Refresh GitHub work')
+                    ? t('auto.components.TaskPage.6ffa6be99f', 'Refreshing GitHub work')
+                    : t('auto.components.TaskPage.ff53631e6f', 'Refresh GitHub work')
                 }
                 className="size-8 cursor-pointer border-border/60 bg-background text-foreground shadow-xs hover:bg-muted/60 disabled:pointer-events-auto disabled:cursor-wait"
               >
@@ -279,8 +280,8 @@ export function TaskPageGitHubFilters({
             </TooltipTrigger>
             <TooltipContent side="bottom" sideOffset={6}>
               {githubTasksBusy
-                ? translate('auto.components.TaskPage.31f81cc334', 'Refreshing GitHub work…')
-                : translate('auto.components.TaskPage.ff53631e6f', 'Refresh GitHub work')}
+                ? t('auto.components.TaskPage.31f81cc334', 'Refreshing GitHub work…')
+                : t('auto.components.TaskPage.ff53631e6f', 'Refresh GitHub work')}
             </TooltipContent>
           </Tooltip>
         </div>

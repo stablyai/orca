@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import type { Repo } from '../../../../shared/repo-types'
 import { FOLDER_WORKSPACE_PATH_STATUS_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
 import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'

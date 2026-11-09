@@ -1,5 +1,5 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { BrowserTab } from '../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../shared/browser-workspace-types'
 import type { TabGroup } from '../../../shared/tab-types'
 import { getGroupVisibleTabOrder } from '@/components/tab-bar/group-tab-order'
 import {
@@ -15,7 +15,7 @@ import {
   selectEmptyFloatingWorkspacePanelVisible,
   selectFloatingVisibleTabCount,
   type EmptyFloatingWorkspacePanelState
-} from '@/store/floating-workspace-panel-selector'
+} from '@/store/workspaces/floating/floating-workspace-panel-selector'
 import { resolveBrowserWorkspaceOwner } from './browser/workspace/browser-workspace-source-resolution'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
@@ -134,7 +134,7 @@ function getActiveIdsForFloatingEntry(entry: TypeCyclableTab): {
 function getFloatingWorkspaceBrowserTab(
   store: FloatingWorkspaceTabSwitchStore,
   browserTabId: string
-): BrowserTab | null {
+): BrowserWorkspace | null {
   return (
     (store.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []).find(
       (tab) => tab.id === browserTabId

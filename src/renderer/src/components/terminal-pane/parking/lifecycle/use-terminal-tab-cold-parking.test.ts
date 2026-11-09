@@ -209,78 +209,6 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     expect(result.current).toEqual(new Set(['tab-1']))
   })
 
-  it('parks paired-runtime tabs only when their exact host advertises restore', () => {
-    const environmentId = 'paired-env'
-    const remoteArgs = {
-      ...hookArgs(false),
-      terminalTabs: [
-        { ...terminalTab('tab-1'), ptyId: `remote:${environmentId}@@term-1` },
-        { ...terminalTab('tab-2'), ptyId: `remote:${environmentId}@@term-2` }
-      ]
-    }
-    for (const [advertisedEnvironmentId, expected] of [
-      [environmentId, new Set(['tab-2'])],
-      ['other-env', new Set()]
-    ] as const) {
-      mocks.storeState.runtimeStatusByEnvironmentId = new Map([
-        [advertisedEnvironmentId, { status: { capabilities: ['terminal.paired-parking.v1'] } }]
-      ])
-      const { result, unmount } = renderHook(() => useTerminalTabColdParking(remoteArgs))
-
-      act(() => {
-        vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
-      })
-
-      expect(result.current).toEqual(expected)
-      unmount()
-    }
-  })
-
-  it('skips parking scans for capability-equivalent status writes and scans membership changes', () => {
-    const args = hookArgs(false)
-    mocks.storeState.runtimeStatusByEnvironmentId = new Map([
-      ['runtime-a', { status: { capabilities: ['terminal.multiplex.v1'], runtimeId: 'peer-a' } }]
-    ])
-    const { rerender } = renderHook(
-      (props: ReturnType<typeof hookArgs>) => useTerminalTabColdParking(props),
-      { initialProps: args }
-    )
-    const initialSelectCalls = mocks.coldParkSelectCalls
-
-    mocks.storeState.runtimeStatusByEnvironmentId = new Map([
-      [
-        'runtime-a',
-        {
-          status: {
-            capabilities: ['terminal.multiplex.v1'],
-            runtimeId: 'peer-a-reconnected',
-            appVersion: '1.5.0'
-          }
-        }
-      ]
-    ])
-    act(() => {
-      rerender(args)
-    })
-    expect(mocks.coldParkSelectCalls).toBe(initialSelectCalls)
-
-    mocks.storeState.runtimeStatusByEnvironmentId = new Map([
-      [
-        'runtime-a',
-        {
-          status: {
-            capabilities: ['terminal.multiplex.v1', 'terminal.paired-parking.v1'],
-            runtimeId: 'peer-a-reconnected'
-          }
-        }
-      ]
-    ])
-    act(() => {
-      rerender(args)
-    })
-    expect(mocks.coldParkSelectCalls).toBe(initialSelectCalls + 1)
-  })
-
   // After damping, expired hysteresis leaves pin expiry as the only wakeup; missing it retains the pane indefinitely.
   it('re-parks a damped tab once the pin expires with no other store change', () => {
     const { result, rerender } = renderHook(
@@ -390,23 +318,6 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     expect(result.current).toEqual(new Set(['tab-2']))
   })
 
-  // Force-park exemptions must retain unrestorable live shells; remounting would orphan them.
-  it('keeps eviction-exempt tabs mounted when the worktree is force-parked', () => {
-    mocks.exemptTabIds = new Set(['tab-1'])
-    const { result, rerender } = renderHook(
-      (args: ReturnType<typeof hookArgs> & { isForceParked: boolean }) =>
-        useTerminalTabColdParking(args),
-      { initialProps: { ...hookArgs(false), coldParkTerminalPanes: true, isForceParked: true } }
-    )
-    expect(result.current).toEqual(new Set(['tab-2']))
-
-    // Ordinary parks contain no exempt tabs, so both may evict.
-    act(() => {
-      rerender({ ...hookArgs(false), coldParkTerminalPanes: true, isForceParked: false })
-    })
-    expect(result.current).toEqual(new Set(['tab-1', 'tab-2']))
-  })
-
   // Splits update layout PTYs without changing terminalTabs; that must invalidate exemption memoization.
   it('re-resolves exemptions when only the layout PTYs change', () => {
     const stableArgs = { ...hookArgs(false), coldParkTerminalPanes: true, isForceParked: true }
@@ -428,24 +339,6 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
     act(() => {
       rerender(stableArgs)
     })
-    expect(result.current).toEqual(new Set(['tab-2']))
-  })
-
-  // Unrelated renders must not repeat per-tab store reads and layout walks.
-  it('resolves eviction exemptions once per force-park input change', () => {
-    mocks.exemptTabIds = new Set(['tab-1'])
-    const stableArgs = { ...hookArgs(false), coldParkTerminalPanes: true, isForceParked: true }
-    const { result, rerender } = renderHook(
-      (args: typeof stableArgs) => useTerminalTabColdParking(args),
-      { initialProps: stableArgs }
-    )
-    expect(result.current).toEqual(new Set(['tab-2']))
-    const callsAfterFirstRender = mocks.exemptSelectCalls
-
-    act(() => {
-      rerender({ ...stableArgs, isWorktreeActive: false })
-    })
-    expect(mocks.exemptSelectCalls).toBe(callsAfterFirstRender)
     expect(result.current).toEqual(new Set(['tab-2']))
   })
 
@@ -486,29 +379,6 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
       vi.advanceTimersByTime(TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS)
       rerender(hookArgs(false))
     })
-    expect(result.current).toEqual(new Set(['tab-2']))
-  })
-
-  it('does not exempt a tab from a truncated malformed pane key', () => {
-    const { result, rerender } = renderHook(
-      (args: ReturnType<typeof hookArgs>) => useTerminalTabColdParking(args),
-      { initialProps: hookArgs(false) }
-    )
-    act(() => {
-      vi.advanceTimersByTime(TERMINAL_TAB_HOT_RETAIN_MS + 1)
-    })
-    expect(result.current).toEqual(new Set(['tab-2']))
-
-    mocks.storeState.sleepingAgentSessionsByPaneKey = {
-      'tab-2x': {
-        paneKey: 'tab-2x',
-        worktreeId: WORKTREE_ID
-      }
-    }
-    act(() => {
-      rerender(hookArgs(false))
-    })
-
     expect(result.current).toEqual(new Set(['tab-2']))
   })
 

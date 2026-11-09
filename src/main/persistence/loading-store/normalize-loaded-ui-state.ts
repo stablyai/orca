@@ -1,6 +1,6 @@
 import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
 import { resolveStatusBarCompactChangeNoticeDismissed } from '../../../shared/status-bar-compact-change-notice'
-import { migrateExplorerDisplayRoots } from '../../../shared/file-explorer-display-root'
+import { migrateExplorerDisplayRoots } from '../../../shared/file-listing/file-explorer-display-root'
 import {
   getWorktreeCardModeProperties,
   isCurrentCompactWorktreeCardProperties,

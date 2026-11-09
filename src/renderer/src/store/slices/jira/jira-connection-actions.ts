@@ -7,7 +7,7 @@ import {
   jiraTestConnection
 } from '@/runtime/jira/runtime-jira-client'
 import { jiraReadStatus } from '@/runtime/jira/runtime-jira-summary-client'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { translate } from '@/i18n/i18n'
 import type { JiraSlice, JiraSliceGet, JiraSliceSet } from './jira-slice-contract'
 import {

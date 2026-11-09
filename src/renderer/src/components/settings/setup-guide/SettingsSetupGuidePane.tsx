@@ -7,7 +7,7 @@ import {
 } from '../../../../../shared/feature-wall-setup-steps'
 import type { FeatureWallSetupStepId } from '../../../../../shared/feature-wall-setup-steps'
 import { FeatureWallSetupChecklist } from '../../feature-wall/FeatureWallSetupChecklist'
-import { useSettingsSetupGuideFullProgress } from './settings-setup-guide-progress'
+import { useSetupGuideProgress } from '../../setup-guide/use-setup-guide-progress'
 import { Button } from '../../ui/button'
 import { translate } from '@/i18n/i18n'
 
@@ -38,7 +38,7 @@ export function SettingsSetupGuidePane(): React.JSX.Element {
   const [checklistVisibilityLoadAttempt, setChecklistVisibilityLoadAttempt] = useState(0)
   const [dismissalUpdating, setDismissalUpdating] = useState(false)
   const dismissalIntentRef = useRef<boolean | null>(null)
-  const progress = useSettingsSetupGuideFullProgress(
+  const progress = useSetupGuideProgress(
     true,
     orchestrationSkillInstalled,
     browserUseSkillInstalled

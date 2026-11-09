@@ -1,4 +1,4 @@
-import type { FeatureInteractionId } from '../../../shared/feature-interactions'
+import type { FeatureInteractionId } from '../../../shared/feature-interaction-catalog'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { RpcEnvelopeMeta, RpcRequest, RpcResponse } from './core'
 import { successResponse } from './errors'

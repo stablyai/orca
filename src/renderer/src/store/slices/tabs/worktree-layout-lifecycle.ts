@@ -1,7 +1,7 @@
 import {
   retirePendingWorkspaceTabs,
   hasPendingEntityTab
-} from '@/runtime/layout-owner-pending-tabs'
+} from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import { editorPlacementsInContentOwners } from '@/lib/workspace/persistence/workspace-session-unified-tabs'
 import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 import { buildActiveSurfacePatch } from './tabs-surface'
@@ -9,7 +9,7 @@ import type { AppState } from '../../types'
 export { renameWorktreeLayoutKeys } from './rename-worktree-layout'
 import type { TerminalTab } from '../../../../../shared/workspace-layout/terminal-tab-types'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
-import { getTerminalActivationSpawnSuppression } from '../terminal-activation-spawn-suppression'
+import { getTerminalActivationSpawnSuppression } from '../../terminals/terminal-activation-spawn-suppression'
 import { collapseEmptiedKeptGroups } from './collapse-emptied-kept-groups'
 import {
   createKeptWorktreeSurfacePruners,

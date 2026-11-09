@@ -1,7 +1,9 @@
-import type { WorktreeMetaBatchUpdate, WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeMetaBatchUpdate } from './worktree-meta-update-options'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
-import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
+import { applyWorktreeUpdates } from './worktree-meta-update-application'
+import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
 import {
   applyDetectedWorktreeUpdates,
   findKnownWorktreeById,
@@ -12,7 +14,7 @@ import { withPendingSidebarRowWrites } from '@/lib/sidebar-pending-layer'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
-import { getIndexedWorktreesById } from '../../../worktree-repo-index'
+import { getIndexedWorktreesById } from '../listing/worktree-catalog-index'
 
 function getKnownOwnerHostIds(
   state: ReturnType<WorktreeSliceGet>,

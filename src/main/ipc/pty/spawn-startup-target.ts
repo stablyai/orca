@@ -2,7 +2,7 @@ import {
   isWslShellName,
   type LocalWindowsTerminalRuntimeOptions
 } from '../../../shared/local-windows-terminal-runtime'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 import type { StartupCwdFallback } from '../../../shared/startup-cwd-fallback'
 import {
   resolveTerminalStartupCwd,

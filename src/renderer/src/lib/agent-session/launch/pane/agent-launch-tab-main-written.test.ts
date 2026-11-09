@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import type { AgentLaunchTabPublishRequest } from '../../../../../../shared/agent-launch/contracts/agent-launch-tab-publication'
-import { createTabsSliceMockApi } from '../../../../store/slices/tabs-slice-test-harness'
-import { createTestStore } from '../../../../store/slices/store-test-helpers'
+import { createTabsSliceMockApi } from '../../../../store/slices/tabs/tabs-slice-test-harness'
+import { createTestStore } from '../../../../store/testing/app-store-test-fixture'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/agent-status', async (importOriginal) => ({
@@ -35,11 +35,11 @@ vi.mock('@/hooks/ipc-events/terminal-command-state', async (importOriginal) => (
 }))
 
 const frames = vi.hoisted(() => ({ flowing: false, holdsTab: true }))
-vi.mock('@/runtime/layout-frame-position', async (importOriginal) => ({
+vi.mock('@/runtime/workspace-layout/frames/layout-frame-position', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   layoutFramesFlowing: () => frames.flowing
 }))
-vi.mock('@/runtime/layout-frame-terminal-panes', () => ({
+vi.mock('@/runtime/workspace-layout/frames/layout-frame-terminal-panes', () => ({
   layoutFrameTerminalTab: () => (frames.holdsTab ? { id: 'main-tab' } : undefined)
 }))
 const revealWorkspaceSurface = vi.hoisted(() => vi.fn())

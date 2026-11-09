@@ -4,13 +4,15 @@ import { findTransport, type RuntimeMetadata } from '../../shared/runtime-bootst
 import type {
   ExpectedRuntimeSource,
   RuntimeOrchestrationEnvelope,
-  RuntimeRequestSelection
+  RuntimeRequestSelection,
+  RuntimeRpcProgress
 } from '../../shared/runtime-rpc-envelope'
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
 import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcResponse } from './types'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
 import { runtimeAccessDeniedError } from './runtime-access-denied'
 import { MAX_LOCAL_RUNTIME_RPC_MESSAGE_BYTES } from '../../shared/local-runtime-rpc-limits'
+import { daemonSocketDirIsTrusted } from '../../main/daemon/endpoint/publication/daemon-socket-endpoint-path'
 
 export async function sendRequest<TResult>(
   metadata: RuntimeMetadata,
@@ -23,9 +25,10 @@ export async function sendRequest<TResult>(
   options: {
     classifySocketError?: (error: Error) => RuntimeClientError | null
     requestSelection?: RuntimeRequestSelection
+    onProgress?: (progress: RuntimeRpcProgress) => void
   } = {}
 ): Promise<RuntimeRpcResponse<TResult>> {
-  const { classifySocketError = runtimeAccessDeniedError, requestSelection } = options
+  const { classifySocketError = runtimeAccessDeniedError, requestSelection, onProgress } = options
   if (!isSafeTimerDelayMs(timeoutMs)) {
     throw new RuntimeClientError(
       'invalid_argument',
@@ -39,6 +42,16 @@ export async function sendRequest<TResult>(
         new RuntimeClientError(
           'runtime_unavailable',
           'No compatible transport found in Orca runtime metadata.'
+        )
+      )
+      return
+    }
+    // A relocated socket lives in shared /tmp; never send the auth token to a planted listener.
+    if (transport.kind === 'unix' && !daemonSocketDirIsTrusted(transport.endpoint)) {
+      reject(
+        new RuntimeClientError(
+          'runtime_unavailable',
+          'Orca runtime socket directory is not private to this user.'
         )
       )
       return
@@ -145,6 +158,11 @@ export async function sendRequest<TResult>(
         // Keepalives refresh the idle timeout without a full envelope validation.
         if (isKeepaliveFrame(raw)) {
           timeout.refresh()
+          // Parse only for a caller that listens; every other long poll skips the work.
+          const progress = onProgress ? RuntimeRpcEnvelopeSchema.safeParse(raw) : null
+          if (progress?.success && 'progress' in progress.data && progress.data.progress) {
+            onProgress?.(progress.data.progress)
+          }
           continue
         }
 

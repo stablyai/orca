@@ -23,6 +23,12 @@ export default defineConfig({
         )
       },
       {
+        find: /^.*\/orca-mobile-web-shell\/src\/spare-document$/,
+        replacement: fileURLToPath(
+          new URL('./src/test-support/spare-document-node.ts', import.meta.url)
+        )
+      },
+      {
         find: 'expo-haptics',
         replacement: fileURLToPath(
           new URL('./src/test-support/expo-haptics-node.ts', import.meta.url)

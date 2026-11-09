@@ -50,8 +50,8 @@ export function closesAppOsc133Zone(adjacentMarkers: string, payload: string): b
 }
 
 export type Osc133CommandFinishedScanner = {
-  /** Feed one raw PTY chunk; fires once per complete OSC 133;D sequence. */
-  scan: (data: string) => void
+  /** Feed one raw PTY chunk; fires once per complete OSC 133;D sequence and returns where the chunk's last one ends, or -1. */
+  scan: (data: string) => number
   /** Drop the cross-chunk carry (transport teardown / parser reset). */
   reset: () => void
 }
@@ -64,6 +64,7 @@ export function createOsc133CommandFinishedScanner(
   let carry = ''
   // OSC 133 markers seen back to back since the last other output, e.g. 'BC'.
   let adjacentMarkers = ''
+  let lastFinishEnd = -1
 
   const noteOutput = (): void => {
     adjacentMarkers = ''
@@ -82,11 +83,13 @@ export function createOsc133CommandFinishedScanner(
       return
     }
     if (sequence === 'D') {
+      lastFinishEnd = endInChunk
       onCommandFinished(parseBestEffortExitCode(exitCode))
     }
   }
 
-  const scan = (data: string): void => {
+  const scan = (data: string): number => {
+    lastFinishEnd = -1
     let combined = carry + data
     // `combined` starts at this index in `data`; negative while it still holds the carry.
     let combinedStartInChunk = -carry.length
@@ -124,6 +127,7 @@ export function createOsc133CommandFinishedScanner(
       combined = combined.slice(sequenceEnd)
       combinedStartInChunk += sequenceEnd
     }
+    return lastFinishEnd
   }
 
   return {

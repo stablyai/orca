@@ -153,6 +153,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         await (navigator.clipboard?.readText?.() ?? ''),
         options
       ),
+    // Browser paste events carry their own HTML; a programmatic read would prompt.
+    readClipboardLinkHtml: async () => '',
     readSelectionClipboardText: () =>
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     saveClipboardImageAsTempFile: saveWebClipboardImageAsTempFile,
@@ -256,6 +258,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     replyAgentLaunchTabPublish: () => {},
     onRevealTerminalPane: () => noopUnsubscribe,
     replyTerminalPaneReveal: () => {},
+    onApplyAgentPaneActivity: () => noopUnsubscribe,
+    replyAgentPaneActivity: () => {},
     onSplitTerminal: () => noopUnsubscribe,
     onRenameTerminal: () => noopUnsubscribe,
     onSetPaneTitle: () => noopUnsubscribe,
@@ -294,6 +298,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     popupMenu: () => {},
     onWindowCloseRequested: () => noopUnsubscribe,
     confirmWindowClose: () => {},
+    cancelWindowClose: () => {},
     notifyWindowRevealed: () => {}
   }
 }

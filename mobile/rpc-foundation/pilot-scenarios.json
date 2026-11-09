@@ -239,7 +239,7 @@
       "id": "settings-new-tab-ssh",
       "operation": "settings.new-tab-agents",
       "family": "settings-agent-read",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -336,7 +336,7 @@
       "id": "settings-bot-overrides-fulfilled",
       "operation": "settings.bot-overrides",
       "family": "settings.bot-overrides",
-      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "sites": ["mobile/src/source-control/review/use-pr-bot-author-overrides.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -373,7 +373,7 @@
       "id": "settings-bot-overrides-refused",
       "operation": "settings.bot-overrides",
       "family": "settings.bot-overrides",
-      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "sites": ["mobile/src/source-control/review/use-pr-bot-author-overrides.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -405,7 +405,7 @@
       "id": "settings-bot-overrides-transport-error",
       "operation": "settings.bot-overrides",
       "family": "settings.bot-overrides",
-      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "sites": ["mobile/src/source-control/review/use-pr-bot-author-overrides.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -1058,7 +1058,7 @@
                   "displayName": "Emoji",
                   "repoIcon": {
                     "type": "emoji",
-                    "emoji": "\ud83d\udc33"
+                    "emoji": "🐳"
                   },
                   "connectionId": "ssh-1"
                 },
@@ -1976,7 +1976,7 @@
       "id": "settings-new-tab-refused",
       "operation": "settings.new-tab-agents",
       "family": "settings-agent-read",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -2035,7 +2035,7 @@
       "id": "settings-new-tab-transport-error",
       "operation": "settings.new-tab-agents",
       "family": "settings-agent-read",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": ["settings-first"],
       "steps": [
         {
@@ -2457,7 +2457,7 @@
       "id": "settings-bot-overrides-refresh-refused",
       "operation": "settings.bot-overrides",
       "family": "settings.bot-overrides",
-      "sites": ["mobile/src/session/use-pr-bot-author-overrides.ts"],
+      "sites": ["mobile/src/source-control/review/use-pr-bot-author-overrides.ts"],
       "schedules": ["success-then-refused"],
       "steps": [
         {
@@ -3191,7 +3191,7 @@
       "id": "probe-new-tab-both-refused",
       "operation": "settings.new-tab-agents",
       "family": "settings-agent-read",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": ["both-refused"],
       "steps": [
         {
@@ -3253,7 +3253,7 @@
       "id": "probe-new-tab-refused-sibling-rejects",
       "operation": "settings.new-tab-agents",
       "family": "settings-agent-read",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": ["refused-sibling-rejects"],
       "steps": [
         {
@@ -3312,7 +3312,7 @@
       "id": "probe-new-tab-rejects-sibling-refused",
       "operation": "settings.new-tab-agents",
       "family": "settings-agent-read",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": ["rejects-sibling-refused"],
       "steps": [
         {
@@ -3371,7 +3371,7 @@
       "id": "probe-new-tab-null-sibling-refused",
       "operation": "settings.new-tab-agents",
       "family": "settings-agent-read",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": ["null-sibling-refused"],
       "steps": [
         {
@@ -7395,34 +7395,6 @@
       ]
     },
     {
-      "id": "components-codex-capability",
-      "operation": "components.codex-reset-capability",
-      "family": "components.codex-reset-capability",
-      "sites": ["mobile/src/components/codex-reset-credit-capability.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "probe",
-          "id": "probe"
-        },
-        {
-          "complete": "status.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "capabilities": ["accounts.codex-reset-credit.v1"]
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
       "id": "host-view-settings-sync",
       "operation": "host.view-settings",
       "family": "host.view-settings",
@@ -7885,7 +7857,7 @@
             "ok": false,
             "error": {
               "code": "worktree_archive_hook_failed",
-              "message": "Archive hook failed for worktree: /repos/marlin/wt-1 \u2014 exited 1.",
+              "message": "Archive hook failed for worktree: /repos/marlin/wt-1 — exited 1.",
               "data": {
                 "worktreePath": "/repos/marlin/wt-1",
                 "outcome": "exited",
@@ -7971,7 +7943,7 @@
       "id": "pr-read-surface",
       "operation": "session.pr-reads",
       "family": "github.pr-read",
-      "sites": ["mobile/src/session/github-pr-rpc.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-rpc.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8245,7 +8217,7 @@
       "id": "pr-read-fork-routing",
       "operation": "session.pr-reads",
       "family": "github.pr-read",
-      "sites": ["mobile/src/session/github-pr-rpc.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-rpc.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8350,7 +8322,7 @@
       "id": "pr-read-upstream-error",
       "operation": "session.pr-reads",
       "family": "github.pr-read",
-      "sites": ["mobile/src/session/github-pr-rpc.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-rpc.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8432,12 +8404,29 @@
       "id": "pr-sidebar-load",
       "operation": "session.pr-sidebar",
       "family": "session.pr-sidebar",
-      "sites": ["mobile/src/session/mobile-pr-sidebar-state.ts"],
+      "sites": [
+        "mobile/src/source-control/review/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/source-control/review/mobile-pr-queries.ts",
+        "mobile/src/source-control/review/mobile-pr-sidebar-state.ts"
+      ],
       "schedules": [],
       "steps": [
         {
-          "action": "load",
-          "id": "load"
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "github.repoSlug#1",
+          "params": {
+            "repo": "id:repo-9"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "owner": "owner",
+              "repo": "repo"
+            }
+          }
         },
         {
           "complete": "hostedReview.forBranch#1",
@@ -8454,8 +8443,8 @@
               "number": 12,
               "title": "Recorded",
               "state": "open",
-              "url": "https://x/12",
-              "updatedAt": "2026-01-01",
+              "url": "https://github.com/owner/repo/pull/12",
+              "updatedAt": "2026-01-01T00:00:00Z",
               "mergeable": "MERGEABLE"
             }
           }
@@ -8495,8 +8484,9 @@
                 "number": 12,
                 "state": "open",
                 "title": "Recorded",
-                "url": "https://x/12",
+                "url": "https://github.com/owner/repo/pull/12",
                 "headSha": "head-sha-1",
+                "updatedAt": "2026-01-01T00:00:00Z",
                 "mergeable": "MERGEABLE"
               },
               "fetchedAt": 0
@@ -8526,6 +8516,58 @@
           }
         },
         {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "recorded"
+            }
+          }
+        },
+        {
+          "complete": "github.workItemDetails#1",
+          "params": {
+            "repo": "id:repo-9",
+            "number": 12,
+            "type": "pr"
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "item": {
+                "id": "PR_1",
+                "number": 12,
+                "type": "pr",
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "labels": [],
+                "assignees": []
+              },
+              "body": "body",
+              "headSha": "head-sha-1",
+              "comments": [
+                {
+                  "id": 55,
+                  "author": "rev",
+                  "body": "please fix",
+                  "createdAt": "2026-01-01T00:00:00Z",
+                  "url": "https://github.com/owner/repo/pull/12#discussion_r55",
+                  "threadId": "thread-1",
+                  "path": "src/app.ts",
+                  "line": 3,
+                  "isResolved": false
+                }
+              ]
+            }
+          }
+        },
+        {
           "checkpoint": "loaded"
         }
       ]
@@ -8534,12 +8576,29 @@
       "id": "pr-sidebar-checks-refused",
       "operation": "session.pr-sidebar",
       "family": "session.pr-sidebar",
-      "sites": ["mobile/src/session/mobile-pr-sidebar-state.ts"],
+      "sites": [
+        "mobile/src/source-control/review/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/source-control/review/mobile-pr-queries.ts",
+        "mobile/src/source-control/review/mobile-pr-sidebar-state.ts"
+      ],
       "schedules": [],
       "steps": [
         {
-          "action": "load",
-          "id": "load"
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "github.repoSlug#1",
+          "params": {
+            "repo": "id:repo-9"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "owner": "owner",
+              "repo": "repo"
+            }
+          }
         },
         {
           "complete": "hostedReview.forBranch#1",
@@ -8556,8 +8615,8 @@
               "number": 12,
               "title": "Recorded",
               "state": "open",
-              "url": "https://x/12",
-              "updatedAt": "2026-01-01",
+              "url": "https://github.com/owner/repo/pull/12",
+              "updatedAt": "2026-01-01T00:00:00Z",
               "mergeable": "MERGEABLE"
             }
           }
@@ -8597,8 +8656,9 @@
                 "number": 12,
                 "state": "open",
                 "title": "Recorded",
-                "url": "https://x/12",
+                "url": "https://github.com/owner/repo/pull/12",
                 "headSha": "head-sha-1",
+                "updatedAt": "2026-01-01T00:00:00Z",
                 "mergeable": "MERGEABLE"
               },
               "fetchedAt": 0
@@ -8623,7 +8683,497 @@
           }
         },
         {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "recorded"
+            }
+          }
+        },
+        {
+          "complete": "github.workItemDetails#1",
+          "params": {
+            "repo": "id:repo-9",
+            "number": 12,
+            "type": "pr"
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "item": {
+                "id": "PR_1",
+                "number": 12,
+                "type": "pr",
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "labels": [],
+                "assignees": []
+              },
+              "body": "body",
+              "headSha": "head-sha-1",
+              "comments": [
+                {
+                  "id": 55,
+                  "author": "rev",
+                  "body": "please fix",
+                  "createdAt": "2026-01-01T00:00:00Z",
+                  "url": "https://github.com/owner/repo/pull/12#discussion_r55",
+                  "threadId": "thread-1",
+                  "path": "src/app.ts",
+                  "line": 3,
+                  "isResolved": false
+                }
+              ]
+            }
+          }
+        },
+        {
           "checkpoint": "checks-refused"
+        }
+      ]
+    },
+    {
+      "id": "pr-resolve-refused-rolls-back",
+      "operation": "session.pr-sidebar",
+      "family": "session.pr-sidebar",
+      "sites": [
+        "mobile/src/source-control/review/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/source-control/review/mobile-pr-queries.ts",
+        "mobile/src/source-control/review/mobile-pr-sidebar-state.ts",
+        "mobile/src/source-control/review/pr-comment-writes.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "github.repoSlug#1",
+          "params": {
+            "repo": "id:repo-9"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "owner": "owner",
+              "repo": "repo"
+            }
+          }
+        },
+        {
+          "complete": "hostedReview.forBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedGitHubPR": null,
+            "active": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "provider": "github",
+              "number": 12,
+              "title": "Recorded",
+              "state": "open",
+              "url": "https://github.com/owner/repo/pull/12",
+              "updatedAt": "2026-01-01T00:00:00Z",
+              "mergeable": "MERGEABLE"
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo-9::/w"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "linkedPR": null
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "branch-hint"
+        },
+        {
+          "complete": "github.prForBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedPRNumber": null,
+            "fallbackPRNumber": 12,
+            "currentHeadOid": null
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "found",
+              "pr": {
+                "number": 12,
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "headSha": "head-sha-1",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "mergeable": "MERGEABLE"
+              },
+              "fetchedAt": 0
+            }
+          }
+        },
+        {
+          "checkpoint": "pr"
+        },
+        {
+          "complete": "github.prChecks#1",
+          "params": {
+            "repo": "id:repo-9",
+            "prNumber": 12,
+            "headSha": "head-sha-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "name": "build",
+                "status": "completed",
+                "conclusion": "success",
+                "checkRunId": 7
+              }
+            ]
+          }
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "recorded"
+            }
+          }
+        },
+        {
+          "complete": "github.workItemDetails#1",
+          "params": {
+            "repo": "id:repo-9",
+            "number": 12,
+            "type": "pr"
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "item": {
+                "id": "PR_1",
+                "number": 12,
+                "type": "pr",
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "labels": [],
+                "assignees": []
+              },
+              "body": "body",
+              "headSha": "head-sha-1",
+              "comments": [
+                {
+                  "id": 55,
+                  "author": "rev",
+                  "body": "please fix",
+                  "createdAt": "2026-01-01T00:00:00Z",
+                  "url": "https://github.com/owner/repo/pull/12#discussion_r55",
+                  "threadId": "thread-1",
+                  "path": "src/app.ts",
+                  "line": 3,
+                  "isResolved": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "loaded"
+        },
+        {
+          "action": "resolve-thread",
+          "id": "resolve-thread"
+        },
+        {
+          "checkpoint": "resolved-locally"
+        },
+        {
+          "complete": "github.resolveReviewThread#1",
+          "params": {
+            "repo": "id:repo-9",
+            "threadId": "thread-1",
+            "resolve": true
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "upstream_error",
+              "message": "Resource not accessible by integration"
+            }
+          }
+        },
+        {
+          "checkpoint": "rolled-back"
+        }
+      ]
+    },
+    {
+      "id": "pr-comment-posted-in-place",
+      "operation": "session.pr-sidebar",
+      "family": "session.pr-sidebar",
+      "sites": [
+        "mobile/src/source-control/review/use-mobile-pr-sidebar-controller.ts",
+        "mobile/src/source-control/review/mobile-pr-queries.ts",
+        "mobile/src/source-control/review/mobile-pr-sidebar-state.ts",
+        "mobile/src/source-control/review/pr-comment-writes.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "github.repoSlug#1",
+          "params": {
+            "repo": "id:repo-9"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "owner": "owner",
+              "repo": "repo"
+            }
+          }
+        },
+        {
+          "complete": "hostedReview.forBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedGitHubPR": null,
+            "active": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "provider": "github",
+              "number": 12,
+              "title": "Recorded",
+              "state": "open",
+              "url": "https://github.com/owner/repo/pull/12",
+              "updatedAt": "2026-01-01T00:00:00Z",
+              "mergeable": "MERGEABLE"
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo-9::/w"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "linkedPR": null
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "branch-hint"
+        },
+        {
+          "complete": "github.prForBranch#1",
+          "params": {
+            "repo": "id:repo-9",
+            "branch": "feature",
+            "linkedPRNumber": null,
+            "fallbackPRNumber": 12,
+            "currentHeadOid": null
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "kind": "found",
+              "pr": {
+                "number": 12,
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "headSha": "head-sha-1",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "mergeable": "MERGEABLE"
+              },
+              "fetchedAt": 0
+            }
+          }
+        },
+        {
+          "checkpoint": "pr"
+        },
+        {
+          "complete": "github.prChecks#1",
+          "params": {
+            "repo": "id:repo-9",
+            "prNumber": 12,
+            "headSha": "head-sha-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "name": "build",
+                "status": "completed",
+                "conclusion": "success",
+                "checkRunId": 7
+              }
+            ]
+          }
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "recorded"
+            }
+          }
+        },
+        {
+          "complete": "github.workItemDetails#1",
+          "params": {
+            "repo": "id:repo-9",
+            "number": 12,
+            "type": "pr"
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "item": {
+                "id": "PR_1",
+                "number": 12,
+                "type": "pr",
+                "state": "open",
+                "title": "Recorded",
+                "url": "https://github.com/owner/repo/pull/12",
+                "updatedAt": "2026-01-01T00:00:00Z",
+                "labels": [],
+                "assignees": []
+              },
+              "body": "body",
+              "headSha": "head-sha-1",
+              "comments": [
+                {
+                  "id": 55,
+                  "author": "rev",
+                  "body": "please fix",
+                  "createdAt": "2026-01-01T00:00:00Z",
+                  "url": "https://github.com/owner/repo/pull/12#discussion_r55",
+                  "threadId": "thread-1",
+                  "path": "src/app.ts",
+                  "line": 3,
+                  "isResolved": false
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "loaded"
+        },
+        {
+          "action": "post-comment",
+          "id": "post-comment"
+        },
+        {
+          "complete": "github.addIssueComment#1",
+          "params": {
+            "repo": "id:repo-9",
+            "number": 12,
+            "body": "recorded comment",
+            "type": "pr"
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true,
+              "comment": {
+                "id": 57
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "comment-sent"
+        },
+        {
+          "complete": "github.prComments#1",
+          "params": {
+            "repo": "id:repo-9",
+            "prNumber": 12,
+            "noCache": true,
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
+          },
+          "paramsFollowDivergence": true,
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "id": 55,
+                "author": "rev",
+                "body": "please fix",
+                "createdAt": "2026-01-01T00:00:00Z",
+                "url": "https://github.com/owner/repo/pull/12#discussion_r55",
+                "threadId": "thread-1",
+                "path": "src/app.ts",
+                "line": 3,
+                "isResolved": false
+              },
+              {
+                "id": 57,
+                "author": "me",
+                "body": "recorded comment",
+                "createdAt": "2026-01-01T00:01:00Z",
+                "url": "https://github.com/owner/repo/pull/12#issuecomment-57"
+              }
+            ]
+          }
+        },
+        {
+          "checkpoint": "comment-shown"
         }
       ]
     },
@@ -8631,7 +9181,7 @@
       "id": "pr-mutation-status",
       "operation": "session.pr-mutations",
       "family": "github.pr-mutation",
-      "sites": ["mobile/src/session/github-pr-mutations.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8772,7 +9322,7 @@
       "id": "pr-mutation-in-band-failure",
       "operation": "session.pr-mutations",
       "family": "github.pr-mutation",
-      "sites": ["mobile/src/session/github-pr-mutations.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -8873,7 +9423,7 @@
       "id": "pr-comment-mutation",
       "operation": "session.pr-mutations",
       "family": "github.pr-comment-mutation",
-      "sites": ["mobile/src/session/github-pr-mutations.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9000,7 +9550,7 @@
       "id": "pr-line-comment-and-file-viewed",
       "operation": "session.pr-mutations",
       "family": "github.pr-comment-mutation",
-      "sites": ["mobile/src/session/github-pr-review-line-mutations.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-review-line-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9077,7 +9627,7 @@
       "id": "pr-comment-resolve-unconfirmed",
       "operation": "session.pr-mutations",
       "family": "github.pr-comment-mutation",
-      "sites": ["mobile/src/session/github-pr-mutations.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9123,7 +9673,7 @@
       "id": "pr-title-mutation",
       "operation": "session.pr-mutations",
       "family": "github.pr-title-mutation",
-      "sites": ["mobile/src/session/github-pr-mutations.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9151,7 +9701,7 @@
       "id": "pr-title-unconfirmed",
       "operation": "session.pr-mutations",
       "family": "github.pr-title-mutation",
-      "sites": ["mobile/src/session/github-pr-mutations.ts"],
+      "sites": ["mobile/src/source-control/review/github-pr-mutations.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9201,7 +9751,7 @@
       "id": "pr-triage-launch",
       "operation": "session.pr-triage-launch",
       "family": "session.pr-triage",
-      "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
+      "sites": ["mobile/src/source-control/review/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9297,7 +9847,7 @@
       "id": "pr-triage-prompt-not-delivered",
       "operation": "session.pr-triage-launch",
       "family": "session.pr-triage",
-      "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
+      "sites": ["mobile/src/source-control/review/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9390,7 +9940,7 @@
       "id": "pr-triage-launch-unconfirmed",
       "operation": "session.pr-triage-launch",
       "family": "session.pr-triage",
-      "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
+      "sites": ["mobile/src/source-control/review/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9470,7 +10020,7 @@
       "id": "pr-triage-update-required",
       "operation": "session.pr-triage-launch",
       "family": "session.pr-triage",
-      "sites": ["mobile/src/session/pr-ai-triage-launch.ts"],
+      "sites": ["mobile/src/source-control/review/pr-ai-triage-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9489,7 +10039,7 @@
       "id": "pr-branch-identity",
       "operation": "session.pr-branch-context",
       "family": "session.pr-branch-context",
-      "sites": ["mobile/src/session/use-mobile-pr-branch-context.ts"],
+      "sites": ["mobile/src/source-control/review/use-mobile-pr-branch-context.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9596,7 +10146,7 @@
       "id": "pr-branch-repo-context",
       "operation": "session.pr-branch-context",
       "family": "session.pr-branch-context",
-      "sites": ["mobile/src/session/use-mobile-pr-branch-context.ts"],
+      "sites": ["mobile/src/source-control/review/use-mobile-pr-branch-context.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9627,8 +10177,8 @@
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
       "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts",
-        "mobile/src/session/mobile-diff-review-snapshot-loader.ts"
+        "mobile/src/source-control/review/mobile-diff-review-loaders.ts",
+        "mobile/src/source-control/review/mobile-diff-review-snapshot-loader.ts"
       ],
       "schedules": [],
       "steps": [
@@ -9741,8 +10291,8 @@
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
       "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts",
-        "mobile/src/session/mobile-diff-review-snapshot-loader.ts"
+        "mobile/src/source-control/review/mobile-diff-review-loaders.ts",
+        "mobile/src/source-control/review/mobile-diff-review-snapshot-loader.ts"
       ],
       "schedules": [],
       "steps": [
@@ -9772,7 +10322,7 @@
       "id": "diff-review-worktree-file-diff",
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
-      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9854,7 +10404,7 @@
       "id": "diff-review-refused-file-diff",
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
-      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9939,7 +10489,7 @@
       "id": "diff-review-branch-file-diff",
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
-      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -9989,8 +10539,8 @@
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
       "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts",
-        "mobile/src/session/mobile-diff-review-commit-loader.ts"
+        "mobile/src/source-control/review/mobile-diff-review-loaders.ts",
+        "mobile/src/source-control/review/mobile-diff-review-commit-loader.ts"
       ],
       "schedules": [],
       "steps": [
@@ -10064,7 +10614,7 @@
       "id": "diff-review-branch-compare",
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
-      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10180,8 +10730,8 @@
       "operation": "session.diff-review-load",
       "family": "session.diff-review",
       "sites": [
-        "mobile/src/session/mobile-diff-review-loaders.ts",
-        "mobile/src/session/mobile-diff-review-snapshot-loader.ts"
+        "mobile/src/source-control/review/mobile-diff-review-loaders.ts",
+        "mobile/src/source-control/review/mobile-diff-review-snapshot-loader.ts"
       ],
       "schedules": [],
       "steps": [
@@ -10287,7 +10837,7 @@
       "id": "transport-host-status-gates-ready",
       "operation": "transport.host-status-gates",
       "family": "transport.host-status-gates",
-      "sites": ["mobile/src/transport/host-status-gates.ts"],
+      "sites": ["mobile/src/transport/connection/host-status-gates.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10319,7 +10869,7 @@
       "id": "transport-host-status-gates-refused-degrades",
       "operation": "transport.host-status-gates",
       "family": "transport.host-status-gates",
-      "sites": ["mobile/src/transport/host-status-gates.ts"],
+      "sites": ["mobile/src/transport/connection/host-status-gates.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10348,7 +10898,7 @@
       "id": "transport-host-status-gates-drop-keeps-capabilities",
       "operation": "transport.host-status-gates",
       "family": "transport.host-status-gates",
-      "sites": ["mobile/src/transport/host-status-gates.ts"],
+      "sites": ["mobile/src/transport/connection/host-status-gates.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10390,7 +10940,7 @@
       "id": "transport-capability-probe-publishes",
       "operation": "transport.capability-probe",
       "family": "transport.capability-probe",
-      "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
+      "sites": ["mobile/src/transport/connection/runtime-capability-probe.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10418,7 +10968,7 @@
       "id": "transport-capability-probe-refused-backs-off",
       "operation": "transport.capability-probe",
       "family": "transport.capability-probe",
-      "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
+      "sites": ["mobile/src/transport/connection/runtime-capability-probe.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10465,7 +11015,7 @@
       "id": "transport-capability-probe-non-string-capabilities-drop",
       "operation": "transport.capability-probe",
       "family": "transport.capability-probe",
-      "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
+      "sites": ["mobile/src/transport/connection/runtime-capability-probe.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10500,7 +11050,7 @@
       "id": "transport-pairing-race-relay-completes-first",
       "operation": "transport.pairing-race",
       "family": "transport.pairing-race",
-      "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
+      "sites": ["mobile/src/pairing/pairing-candidate-race.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10554,7 +11104,7 @@
       "id": "transport-pairing-race-direct-completes-first",
       "operation": "transport.pairing-race",
       "family": "transport.pairing-race",
-      "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
+      "sites": ["mobile/src/pairing/pairing-candidate-race.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10608,7 +11158,7 @@
       "id": "transport-pairing-race-relay-wins-when-direct-refused",
       "operation": "transport.pairing-race",
       "family": "transport.pairing-race",
-      "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
+      "sites": ["mobile/src/pairing/pairing-candidate-race.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10663,7 +11213,7 @@
       "id": "transport-pairing-race-both-refused",
       "operation": "transport.pairing-race",
       "family": "transport.pairing-race",
-      "sites": ["mobile/src/transport/pairing-candidate-race.ts"],
+      "sites": ["mobile/src/pairing/pairing-candidate-race.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10719,7 +11269,7 @@
       "id": "relay-rotation-installs-and-commits",
       "operation": "relay.credential-rotation",
       "family": "relay.credential-rotation",
-      "sites": ["mobile/src/transport/mobile-relay-credential-rotation.ts"],
+      "sites": ["mobile/src/transport/relay/mobile-relay-credential-rotation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10810,7 +11360,7 @@
       "id": "relay-rotation-resumes-committed-pending",
       "operation": "relay.credential-rotation",
       "family": "relay.credential-rotation",
-      "sites": ["mobile/src/transport/mobile-relay-credential-rotation.ts"],
+      "sites": ["mobile/src/transport/relay/mobile-relay-credential-rotation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10862,7 +11412,7 @@
       "id": "relay-direct-upgrade-commits",
       "operation": "relay.direct-upgrade",
       "family": "relay.direct-upgrade",
-      "sites": ["mobile/src/transport/mobile-relay-direct-upgrade.ts"],
+      "sites": ["mobile/src/transport/relay/mobile-relay-direct-upgrade.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10955,7 +11505,7 @@
       "id": "relay-direct-upgrade-unsupported-host-declines",
       "operation": "relay.direct-upgrade",
       "family": "relay.direct-upgrade",
-      "sites": ["mobile/src/transport/mobile-relay-direct-upgrade.ts"],
+      "sites": ["mobile/src/transport/relay/mobile-relay-direct-upgrade.ts"],
       "schedules": [],
       "steps": [
         {
@@ -10987,7 +11537,7 @@
       "id": "relay-pairing-recovery-resume-committed",
       "operation": "relay.pairing-recovery",
       "family": "relay.pairing-recovery",
-      "sites": ["mobile/src/transport/mobile-relay-pairing-recovery.ts"],
+      "sites": ["mobile/src/pairing/mobile-relay-pairing-recovery.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11036,7 +11586,7 @@
       "id": "relay-pairing-recovery-invite-authorizes",
       "operation": "relay.pairing-recovery",
       "family": "relay.pairing-recovery",
-      "sites": ["mobile/src/transport/mobile-relay-pairing-recovery.ts"],
+      "sites": ["mobile/src/pairing/mobile-relay-pairing-recovery.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11153,8 +11703,8 @@
       "operation": "pairing.pre-profile",
       "family": "pairing.pre-profile",
       "sites": [
-        "mobile/src/transport/pre-profile-pairing-coordinator.ts",
-        "mobile/src/transport/pairing-candidate-race.ts"
+        "mobile/src/pairing/pre-profile-pairing-coordinator.ts",
+        "mobile/src/pairing/pairing-candidate-race.ts"
       ],
       "schedules": [],
       "steps": [
@@ -11259,8 +11809,8 @@
       "operation": "pairing.pre-profile",
       "family": "pairing.pre-profile",
       "sites": [
-        "mobile/src/transport/pre-profile-pairing-coordinator.ts",
-        "mobile/src/transport/pairing-candidate-race.ts"
+        "mobile/src/pairing/pre-profile-pairing-coordinator.ts",
+        "mobile/src/pairing/pairing-candidate-race.ts"
       ],
       "schedules": [],
       "steps": [
@@ -11330,8 +11880,8 @@
       "operation": "pairing.pre-profile",
       "family": "pairing.pre-profile",
       "sites": [
-        "mobile/src/transport/pre-profile-pairing-coordinator.ts",
-        "mobile/src/transport/pairing-candidate-race.ts"
+        "mobile/src/pairing/pre-profile-pairing-coordinator.ts",
+        "mobile/src/pairing/pairing-candidate-race.ts"
       ],
       "schedules": [],
       "steps": [
@@ -11357,7 +11907,7 @@
       "id": "transport-capability-probe-cutover-reasks-fast",
       "operation": "transport.capability-probe",
       "family": "transport.capability-probe",
-      "sites": ["mobile/src/transport/runtime-capability-probe.ts"],
+      "sites": ["mobile/src/transport/connection/runtime-capability-probe.ts"],
       "schedules": [],
       "steps": [
         {
@@ -11671,6 +12221,7 @@
           "complete": "gitlab.workItemDetails#1",
           "params": {
             "iid": 4,
+            "markViewerComments": true,
             "projectRef": {
               "host": "gitlab.com",
               "path": "group/project"
@@ -11717,6 +12268,7 @@
           "complete": "gitlab.workItemDetails#1",
           "params": {
             "iid": 4,
+            "markViewerComments": true,
             "projectRef": {
               "host": "gitlab.com",
               "path": "group/project"
@@ -12237,6 +12789,166 @@
         },
         {
           "checkpoint": "load-settled"
+        }
+      ]
+    },
+    {
+      "id": "tk-list-linear-switch-back",
+      "operation": "tasks.task-list-linear",
+      "family": "tasks.task-list-linear",
+      "sites": ["mobile/src/tasks/use-mobile-tasks-task-list-loading.tsx"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "action": "load",
+          "id": "load-0"
+        },
+        {
+          "complete": "linear.listIssues#1",
+          "params": {
+            "filter": "all",
+            "limit": 50,
+            "workspaceId": "linear-workspace"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "items": [
+                {
+                  "id": "issue-1",
+                  "identifier": "ENG-1",
+                  "title": "A Linear issue",
+                  "url": "",
+                  "description": "",
+                  "state": {
+                    "name": "Todo",
+                    "type": "unstarted",
+                    "color": "#000"
+                  },
+                  "team": {
+                    "id": "team-1",
+                    "key": "ENG",
+                    "name": "Engineering"
+                  },
+                  "labels": [],
+                  "priority": 0,
+                  "updatedAt": "2020-01-01T00:00:00.000Z",
+                  "workspaceId": "linear-workspace"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "first-filter-settled"
+        },
+        {
+          "action": "set-query",
+          "id": "set-query-1",
+          "args": {
+            "query": "bug"
+          }
+        },
+        {
+          "action": "load",
+          "id": "load-2"
+        },
+        {
+          "checkpoint": "second-filter-pending"
+        },
+        {
+          "complete": "linear.searchIssues#1",
+          "params": {
+            "limit": 50,
+            "query": "bug",
+            "workspaceId": "linear-workspace"
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "id": "issue-2",
+                "identifier": "ENG-2",
+                "title": "A found issue",
+                "url": "",
+                "description": "",
+                "state": {
+                  "name": "Todo",
+                  "type": "unstarted",
+                  "color": "#000"
+                },
+                "team": {
+                  "id": "team-1",
+                  "key": "ENG",
+                  "name": "Engineering"
+                },
+                "labels": [],
+                "priority": 0,
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "workspaceId": "linear-workspace"
+              }
+            ]
+          }
+        },
+        {
+          "checkpoint": "second-filter-settled"
+        },
+        {
+          "action": "set-query",
+          "id": "set-query-2",
+          "args": {
+            "query": ""
+          }
+        },
+        {
+          "action": "load",
+          "id": "load-3"
+        },
+        {
+          "checkpoint": "first-filter-back-pending"
+        },
+        {
+          "complete": "linear.listIssues#2",
+          "params": {
+            "filter": "all",
+            "limit": 50,
+            "workspaceId": "linear-workspace"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "items": [
+                {
+                  "id": "issue-1",
+                  "identifier": "ENG-1",
+                  "title": "A Linear issue",
+                  "url": "",
+                  "description": "",
+                  "state": {
+                    "name": "Todo",
+                    "type": "unstarted",
+                    "color": "#000"
+                  },
+                  "team": {
+                    "id": "team-1",
+                    "key": "ENG",
+                    "name": "Engineering"
+                  },
+                  "labels": [],
+                  "priority": 0,
+                  "updatedAt": "2020-01-01T00:00:00.000Z",
+                  "workspaceId": "linear-workspace"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "first-filter-back-settled"
         }
       ]
     },
@@ -14885,6 +15597,7 @@
           "params": {
             "force": false,
             "limit": 500,
+            "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
           },
           "reply": {
@@ -14949,18 +15662,6 @@
           }
         },
         {
-          "complete": "status.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "capabilities": ["aiVault.v1"]
-            }
-          }
-        },
-        {
           "checkpoint": "held"
         },
         {
@@ -14968,7 +15669,7 @@
           "id": "worktrees-loaded"
         },
         {
-          "complete": "status.get#2",
+          "complete": "status.get#1",
           "params": {
             "$undefined": true
           },
@@ -14984,6 +15685,7 @@
           "params": {
             "force": false,
             "limit": 500,
+            "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
           },
           "reply": {
@@ -15002,6 +15704,284 @@
         },
         {
           "checkpoint": "ready"
+        }
+      ]
+    },
+    {
+      "id": "aivault-history-scan-revisit",
+      "operation": "aiVault.history-scan",
+      "family": "aiVault.history",
+      "sites": ["mobile/src/agent-history/use-mobile-agent-history-state.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["aiVault.v1"]
+            }
+          }
+        },
+        {
+          "complete": "aiVault.listSessions#1",
+          "params": {
+            "force": false,
+            "limit": 500,
+            "scopeOnly": true,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s1",
+                  "agent": "claude",
+                  "cwd": "/repo/feature"
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "ready"
+        },
+        {
+          "action": "leave",
+          "id": "leave"
+        },
+        {
+          "advance": 31000
+        },
+        {
+          "action": "return",
+          "id": "return"
+        },
+        {
+          "checkpoint": "cached"
+        },
+        {
+          "complete": "aiVault.listSessions#2",
+          "params": {
+            "force": false,
+            "limit": 500,
+            "scopeOnly": true,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s1",
+                  "agent": "claude",
+                  "cwd": "/repo/feature"
+                },
+                {
+                  "id": "s2",
+                  "agent": "claude",
+                  "cwd": "/repo/feature"
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "revalidated"
+        }
+      ]
+    },
+    {
+      "id": "aivault-history-scan-refresh",
+      "operation": "aiVault.history-scan",
+      "family": "aiVault.history",
+      "sites": ["mobile/src/agent-history/use-mobile-agent-history-state.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["aiVault.v1"]
+            }
+          }
+        },
+        {
+          "complete": "aiVault.listSessions#1",
+          "params": {
+            "force": false,
+            "limit": 500,
+            "scopeOnly": true,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s1",
+                  "agent": "claude",
+                  "cwd": "/repo/feature"
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "ready"
+        },
+        {
+          "action": "refresh",
+          "id": "refresh"
+        },
+        {
+          "complete": "aiVault.listSessions#2",
+          "params": {
+            "force": true,
+            "limit": 500,
+            "scopeOnly": true,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s2",
+                  "agent": "claude",
+                  "cwd": "/repo/feature"
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "refreshed"
+        }
+      ]
+    },
+    {
+      "id": "aivault-history-scan-association",
+      "operation": "aiVault.history-scan",
+      "family": "aiVault.history",
+      "sites": ["mobile/src/agent-history/use-mobile-agent-history-state.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["aiVault.v1"]
+            }
+          }
+        },
+        {
+          "complete": "aiVault.listSessions#1",
+          "params": {
+            "force": false,
+            "limit": 500,
+            "scopeOnly": true,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s1",
+                  "agent": "pi",
+                  "cwd": "/repo/feature"
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "ready"
+        },
+        {
+          "frame": "agentSession.subscribeStatus#1",
+          "params": {},
+          "reply": {
+            "ok": true,
+            "streaming": true,
+            "result": {
+              "type": "snapshot",
+              "sessions": [
+                {
+                  "sessionId": "native",
+                  "agent": "pi",
+                  "workspaceId": "worktree-1",
+                  "latestPrompt": "",
+                  "status": null,
+                  "updatedAt": 1,
+                  "providerSession": {
+                    "key": "session_id",
+                    "id": "/provider"
+                  },
+                  "conversationName": "Budget plan"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "complete": "aiVault.listSessions#2",
+          "params": {
+            "force": false,
+            "limit": 500,
+            "scopeOnly": true,
+            "scopePaths": ["/repo/feature"]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "sessions": [
+                {
+                  "id": "s1",
+                  "agent": "pi",
+                  "cwd": "/repo/feature",
+                  "structuredSession": {
+                    "sessionId": "native",
+                    "workspaceId": "worktree-1"
+                  }
+                }
+              ],
+              "issues": []
+            }
+          }
+        },
+        {
+          "checkpoint": "associated"
         }
       ]
     },
@@ -15618,7 +16598,7 @@
       "id": "aivault-resume-prepare-repin",
       "operation": "aiVault.resume-preparation",
       "family": "aiVault.resume-preparation",
-      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15650,7 +16630,7 @@
       "id": "aivault-resume-prepare-unavailable",
       "operation": "aiVault.resume-preparation",
       "family": "aiVault.resume-preparation",
-      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15682,7 +16662,7 @@
       "id": "aivault-resume-prepare-refused",
       "operation": "aiVault.resume-preparation",
       "family": "aiVault.resume-preparation",
-      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15714,7 +16694,7 @@
       "id": "aivault-resume-prepare-skipped",
       "operation": "aiVault.resume-preparation",
       "family": "aiVault.resume-preparation",
-      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-preparation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15730,7 +16710,7 @@
       "id": "aivault-resume-launch-sent",
       "operation": "aiVault.resume-launch",
       "family": "aiVault.resume-launch",
-      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15788,7 +16768,7 @@
       "id": "aivault-resume-launch-locked",
       "operation": "aiVault.resume-launch",
       "family": "aiVault.resume-launch",
-      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15846,7 +16826,7 @@
       "id": "aivault-resume-launch-create-refused",
       "operation": "aiVault.resume-launch",
       "family": "aiVault.resume-launch",
-      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15878,7 +16858,7 @@
       "id": "aivault-resume-launch-invalid-tab",
       "operation": "aiVault.resume-launch",
       "family": "aiVault.resume-launch",
-      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
+      "sites": ["mobile/src/agent-history/ai-vault-resume-launch.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15917,7 +16897,7 @@
       "id": "clipboard-image-upload-single-frame-fallback",
       "operation": "clipboard.image-upload",
       "family": "clipboard.image-upload",
-      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
+      "sites": ["mobile/src/files/attachments/mobile-clipboard-image.ts"],
       "schedules": [],
       "steps": [
         {
@@ -15958,7 +16938,7 @@
       "id": "clipboard-image-upload-chunked",
       "operation": "clipboard.image-upload",
       "family": "clipboard.image-upload",
-      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
+      "sites": ["mobile/src/files/attachments/mobile-clipboard-image.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16011,7 +16991,7 @@
       "id": "clipboard-image-upload-aborts-on-chunk-failure",
       "operation": "clipboard.image-upload",
       "family": "clipboard.image-upload",
-      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
+      "sites": ["mobile/src/files/attachments/mobile-clipboard-image.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16067,7 +17047,7 @@
       "id": "clipboard-image-upload-start-refused",
       "operation": "clipboard.image-upload",
       "family": "clipboard.image-upload",
-      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
+      "sites": ["mobile/src/files/attachments/mobile-clipboard-image.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16098,8 +17078,8 @@
       "operation": "clipboard.image-terminal-attachment",
       "family": "clipboard.image-attachment",
       "sites": [
-        "mobile/src/session/mobile-image-attachment.ts",
-        "mobile/src/session/mobile-clipboard-image.ts"
+        "mobile/src/files/attachments/mobile-image-attachment.ts",
+        "mobile/src/files/attachments/mobile-clipboard-image.ts"
       ],
       "schedules": [],
       "steps": [
@@ -16131,8 +17111,8 @@
       "operation": "clipboard.image-terminal-attachment",
       "family": "clipboard.image-attachment",
       "sites": [
-        "mobile/src/session/mobile-image-attachment.ts",
-        "mobile/src/session/mobile-clipboard-image.ts"
+        "mobile/src/files/attachments/mobile-image-attachment.ts",
+        "mobile/src/files/attachments/mobile-clipboard-image.ts"
       ],
       "schedules": [],
       "steps": [
@@ -16207,8 +17187,8 @@
       "operation": "clipboard.image-terminal-attachment",
       "family": "clipboard.image-attachment",
       "sites": [
-        "mobile/src/session/mobile-image-attachment.ts",
-        "mobile/src/session/mobile-clipboard-image.ts"
+        "mobile/src/files/attachments/mobile-image-attachment.ts",
+        "mobile/src/files/attachments/mobile-clipboard-image.ts"
       ],
       "schedules": [],
       "steps": [
@@ -16226,8 +17206,8 @@
       "operation": "clipboard.image-terminal-attachment",
       "family": "clipboard.image-attachment",
       "sites": [
-        "mobile/src/session/mobile-image-attachment.ts",
-        "mobile/src/session/mobile-clipboard-image.ts"
+        "mobile/src/files/attachments/mobile-image-attachment.ts",
+        "mobile/src/files/attachments/mobile-clipboard-image.ts"
       ],
       "schedules": [],
       "steps": [
@@ -16282,8 +17262,8 @@
       "operation": "clipboard.image-terminal-attachment",
       "family": "clipboard.image-attachment",
       "sites": [
-        "mobile/src/session/mobile-image-attachment.ts",
-        "mobile/src/session/mobile-clipboard-image.ts"
+        "mobile/src/files/attachments/mobile-image-attachment.ts",
+        "mobile/src/files/attachments/mobile-clipboard-image.ts"
       ],
       "schedules": [],
       "steps": [
@@ -16993,7 +17973,7 @@
       "id": "session-tab-activation-focus-and-activate",
       "operation": "session.tab-activation",
       "family": "session.tab-activation",
-      "sites": ["mobile/src/session/mobile-session-tab-activation.ts"],
+      "sites": ["mobile/src/session/tabs/mobile-session-tab-activation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17042,7 +18022,7 @@
       "id": "session-tab-activation-refused",
       "operation": "session.tab-activation",
       "family": "session.tab-activation",
-      "sites": ["mobile/src/session/mobile-session-tab-activation.ts"],
+      "sites": ["mobile/src/session/tabs/mobile-session-tab-activation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17075,7 +18055,7 @@
       "id": "session-tab-activation-transport-error",
       "operation": "session.tab-activation",
       "family": "session.tab-activation",
-      "sites": ["mobile/src/session/mobile-session-tab-activation.ts"],
+      "sites": ["mobile/src/session/tabs/mobile-session-tab-activation.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17101,7 +18081,7 @@
       "id": "session-tabs-health-reconciled",
       "operation": "session.tabs-stream-health",
       "family": "session.tabs-stream-health",
-      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
+      "sites": ["mobile/src/session/tabs/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17137,7 +18117,7 @@
       "id": "session-tabs-health-refused",
       "operation": "session.tabs-stream-health",
       "family": "session.tabs-stream-health",
-      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
+      "sites": ["mobile/src/session/tabs/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17170,7 +18150,7 @@
       "id": "session-tabs-health-stale-application-revision",
       "operation": "session.tabs-stream-health",
       "family": "session.tabs-stream-health",
-      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
+      "sites": ["mobile/src/session/tabs/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17210,7 +18190,7 @@
       "id": "session-tabs-health-errored",
       "operation": "session.tabs-stream-health",
       "family": "session.tabs-stream-health",
-      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
+      "sites": ["mobile/src/session/tabs/mobile-session-tabs-stream-health.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17240,7 +18220,7 @@
       "id": "file-tap-opens-worktree-file",
       "operation": "files.terminal-path-tap",
       "family": "files.terminal-path-tap",
-      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
+      "sites": ["mobile/src/files/session-documents/mobile-file-tap-open.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17306,7 +18286,7 @@
       "id": "file-tap-resolve-miss",
       "operation": "files.terminal-path-tap",
       "family": "files.terminal-path-tap",
-      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
+      "sites": ["mobile/src/files/session-documents/mobile-file-tap-open.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17339,7 +18319,7 @@
       "id": "file-tap-resolve-refused",
       "operation": "files.terminal-path-tap",
       "family": "files.terminal-path-tap",
-      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
+      "sites": ["mobile/src/files/session-documents/mobile-file-tap-open.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17372,7 +18352,7 @@
       "id": "file-tap-open-refused",
       "operation": "files.terminal-path-tap",
       "family": "files.terminal-path-tap",
-      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
+      "sites": ["mobile/src/files/session-documents/mobile-file-tap-open.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17426,7 +18406,7 @@
       "id": "file-tap-previews-absolute-artifact",
       "operation": "files.terminal-path-tap",
       "family": "files.terminal-path-tap",
-      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
+      "sites": ["mobile/src/files/session-documents/mobile-file-tap-open.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17695,7 +18675,7 @@
       "id": "session-markdown-tab-read",
       "operation": "session.tab-documents",
       "family": "session.tab-documents",
-      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17727,7 +18707,7 @@
       "id": "session-markdown-tab-disk-fallback",
       "operation": "session.tab-documents",
       "family": "session.tab-documents",
-      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17772,7 +18752,7 @@
       "id": "session-markdown-tab-refused",
       "operation": "session.tab-documents",
       "family": "session.tab-documents",
-      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17802,7 +18782,7 @@
       "id": "session-file-tab-read",
       "operation": "session.tab-documents",
       "family": "session.tab-documents",
-      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17833,7 +18813,7 @@
       "id": "session-terminal-list-merged",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17872,7 +18852,7 @@
       "id": "session-terminal-list-dedupes-handles",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17911,7 +18891,7 @@
       "id": "session-terminal-list-refused",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17942,7 +18922,7 @@
       "id": "session-terminal-list-empty-guarded",
       "operation": "session.terminal-inventory",
       "family": "session.terminal-inventory",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-list.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18459,7 +19439,7 @@
       "id": "session-tab-close-terminal",
       "operation": "session.tab-close",
       "family": "session.tab-close",
-      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "sites": ["mobile/src/session/tabs/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18487,7 +19467,7 @@
       "id": "session-tab-close-refused-keeps-tab",
       "operation": "session.tab-close",
       "family": "session.tab-close",
-      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "sites": ["mobile/src/session/tabs/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18516,7 +19496,7 @@
       "id": "session-tab-rename",
       "operation": "session.tab-close",
       "family": "session.tab-close",
-      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "sites": ["mobile/src/session/tabs/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18551,7 +19531,7 @@
       "id": "session-tab-close-session-tab",
       "operation": "session.tab-close",
       "family": "session.tab-close",
-      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "sites": ["mobile/src/session/tabs/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -18582,10 +19562,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -18659,10 +19639,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -18737,10 +19717,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -18772,10 +19752,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -18808,10 +19788,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -18844,10 +19824,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -18900,10 +19880,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.diff-review-actions",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -18985,7 +19965,7 @@
       "id": "session-diff-notes-loaded",
       "operation": "session.diff-notes",
       "family": "session.diff-notes",
-      "sites": ["mobile/src/session/use-mobile-session-diff-comments.ts"],
+      "sites": ["mobile/src/source-control/review/use-mobile-session-diff-comments.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19024,7 +20004,7 @@
       "id": "session-diff-notes-load-refused",
       "operation": "session.diff-notes",
       "family": "session.diff-notes",
-      "sites": ["mobile/src/session/use-mobile-session-diff-comments.ts"],
+      "sites": ["mobile/src/source-control/review/use-mobile-session-diff-comments.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19053,7 +20033,7 @@
       "id": "session-markdown-saved",
       "operation": "session.markdown-save",
       "family": "session.markdown-save",
-      "sites": ["mobile/src/session/use-mobile-session-markdown-actions.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-markdown-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19086,7 +20066,7 @@
       "id": "session-markdown-save-conflict",
       "operation": "session.markdown-save",
       "family": "session.markdown-save",
-      "sites": ["mobile/src/session/use-mobile-session-markdown-actions.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-markdown-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19118,7 +20098,7 @@
       "id": "quick-commands-loaded-and-saved",
       "operation": "settings.quick-commands",
       "family": "settings.quick-commands",
-      "sites": ["mobile/src/session/use-quick-commands.ts"],
+      "sites": ["mobile/src/terminal/quick-commands/use-quick-commands.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19177,7 +20157,7 @@
       "id": "quick-commands-save-refused-rolls-back",
       "operation": "settings.quick-commands",
       "family": "settings.quick-commands",
-      "sites": ["mobile/src/session/use-quick-commands.ts"],
+      "sites": ["mobile/src/terminal/quick-commands/use-quick-commands.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19230,7 +20210,7 @@
       "id": "quick-commands-load-refused",
       "operation": "settings.quick-commands",
       "family": "settings.quick-commands",
-      "sites": ["mobile/src/session/use-quick-commands.ts"],
+      "sites": ["mobile/src/terminal/quick-commands/use-quick-commands.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19529,7 +20509,8 @@
           "complete": "files.readDir#1",
           "params": {
             "worktree": "id:wt-files",
-            "relativePath": ""
+            "relativePath": "",
+            "limit": 500
           },
           "reply": {
             "ok": false,
@@ -19587,7 +20568,8 @@
           "complete": "files.readDir#1",
           "params": {
             "worktree": "id:wt-files",
-            "relativePath": ""
+            "relativePath": "",
+            "limit": 500
           },
           "reply": {
             "ok": true,
@@ -19809,8 +20791,8 @@
       "operation": "session.terminal-clipboard",
       "family": "session.terminal-paste",
       "sites": [
-        "mobile/src/session/use-mobile-terminal-paste.ts",
-        "mobile/src/session/use-mobile-session-accessory-selection.ts"
+        "mobile/src/terminal/session/use-mobile-terminal-paste.ts",
+        "mobile/src/terminal/session/use-mobile-session-accessory-selection.ts"
       ],
       "schedules": [],
       "steps": [
@@ -19875,7 +20857,7 @@
       "id": "terminal-paste-refused",
       "operation": "session.terminal-clipboard",
       "family": "session.terminal-paste",
-      "sites": ["mobile/src/session/use-mobile-terminal-paste.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-terminal-paste.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19936,7 +20918,7 @@
       "id": "terminal-worktree-connection-resolved",
       "operation": "session.terminal-clipboard",
       "family": "session.worktree-connection",
-      "sites": ["mobile/src/session/use-mobile-session-accessory-selection.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-accessory-selection.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19993,7 +20975,7 @@
       "id": "terminal-live-input-accepted",
       "operation": "session.terminal-input-send",
       "family": "session.terminal-input-send",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-send-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-send-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -20247,13 +21229,6 @@
           "id": "mount"
         },
         {
-          "bind": "platform-status",
-          "request": "status.get#1",
-          "params": {
-            "$undefined": true
-          }
-        },
-        {
           "checkpoint": "worktrees-pending"
         },
         {
@@ -20278,6 +21253,13 @@
                 }
               ]
             }
+          }
+        },
+        {
+          "bind": "platform-status",
+          "request": "status.get#1",
+          "params": {
+            "$undefined": true
           }
         },
         {
@@ -20309,13 +21291,6 @@
           "id": "mount"
         },
         {
-          "bind": "platform-status",
-          "request": "status.get#1",
-          "params": {
-            "$undefined": true
-          }
-        },
-        {
           "checkpoint": "worktrees-pending"
         },
         {
@@ -20343,6 +21318,13 @@
           }
         },
         {
+          "bind": "platform-status",
+          "request": "status.get#1",
+          "params": {
+            "$undefined": true
+          }
+        },
+        {
           "complete": "platform-status",
           "params": {
             "$undefined": true
@@ -20362,6 +21344,7 @@
           "params": {
             "force": false,
             "limit": 500,
+            "scopeOnly": true,
             "scopePaths": ["/repo/feature"]
           },
           "reply": {
@@ -20487,7 +21470,7 @@
       "id": "live-worktree-name-stream",
       "operation": "session.live-worktree-name",
       "family": "live-worktree-name",
-      "sites": ["mobile/src/session/use-live-worktree-name.ts"],
+      "sites": ["mobile/src/worktree/use-live-worktree-name.ts"],
       "schedules": [],
       "steps": [
         {
@@ -21710,7 +22693,7 @@
       "id": "terminal-gesture-flush-and-clear",
       "operation": "session.terminal-gesture-input",
       "family": "session.terminal-gesture-input",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-input.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-input.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22064,7 +23047,7 @@
       "id": "session-create-terminal-with-prompt",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22149,7 +23132,7 @@
       "id": "session-create-terminal-replaces-active",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22205,7 +23188,7 @@
       "id": "session-create-terminal-refused",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22253,7 +23236,7 @@
       "id": "session-create-terminal-without-handle",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22309,7 +23292,7 @@
       "id": "session-create-terminal-without-active-tab",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22366,7 +23349,7 @@
       "id": "session-create-terminal-runs-a-quick-command",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22429,7 +23412,7 @@
       "id": "session-create-terminal-launches-an-agent-quick-command",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22492,7 +23475,7 @@
       "id": "session-create-terminal-ignores-a-second-create-in-flight",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22564,7 +23547,7 @@
       "id": "session-create-terminal-agent-launched",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22631,7 +23614,7 @@
       "id": "session-create-terminal-agent-launched-as-chat",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22699,7 +23682,7 @@
       "id": "session-create-terminal-diff-notes-launched",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22777,7 +23760,7 @@
       "id": "session-create-terminal-diff-notes-not-delivered",
       "operation": "session.create-terminal",
       "family": "session.create-terminal",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-create-actions.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-create-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22855,7 +23838,7 @@
       "id": "session-terminal-display-mode-auto-take-floor",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22912,7 +23895,7 @@
       "id": "session-terminal-display-mode-to-desktop",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
       "steps": [
         {
@@ -22962,7 +23945,7 @@
       "id": "session-terminal-display-mode-drops-second-toggle",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23032,7 +24015,7 @@
       "id": "session-terminal-display-mode-auto-without-viewport",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23081,7 +24064,7 @@
       "id": "session-terminal-display-mode-auto-without-device-token",
       "operation": "session.terminal-display-mode",
       "family": "session.terminal-display-mode",
-      "sites": ["mobile/src/session/use-mobile-session-terminal-stream-display.ts"],
+      "sites": ["mobile/src/terminal/session/use-mobile-session-terminal-stream-display.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23236,7 +24219,7 @@
       "id": "review-file-diff-shapes",
       "operation": "session.diff-review-load",
       "family": "session.review-file-diff",
-      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23318,7 +24301,7 @@
       "id": "review-branch-diff-shapes",
       "operation": "session.diff-review-load",
       "family": "session.review-branch-diff",
-      "sites": ["mobile/src/session/mobile-diff-review-loaders.ts"],
+      "sites": ["mobile/src/source-control/review/mobile-diff-review-loaders.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23368,10 +24351,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.review-git-mutations",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -23423,10 +24406,10 @@
       "operation": "session.diff-review-actions",
       "family": "session.review-send-sheet",
       "sites": [
-        "mobile/src/session/use-mobile-diff-review-interactions.ts",
-        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
-        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-interactions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/source-control/review/use-mobile-diff-review-send-actions.ts",
         "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
@@ -23552,7 +24535,7 @@
       "id": "session-tab-renamed",
       "operation": "session.tab-close",
       "family": "session.tab-rename",
-      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "sites": ["mobile/src/session/tabs/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23587,7 +24570,7 @@
       "id": "session-tab-closed",
       "operation": "session.tab-close",
       "family": "session.tab-close-session",
-      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "sites": ["mobile/src/session/tabs/use-mobile-session-close-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23617,7 +24600,7 @@
       "id": "new-tab-local-agents",
       "operation": "settings.new-tab-agents",
       "family": "settings.new-tab-local-agents",
-      "sites": ["mobile/src/session/mobile-new-tab-agent-loader.ts"],
+      "sites": ["mobile/src/session/agent-launch/mobile-new-tab-agent-loader.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23780,7 +24763,7 @@
       "id": "session-markdown-disk-read",
       "operation": "session.tab-documents",
       "family": "session.markdown-disk-fallback",
-      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {
@@ -23825,7 +24808,7 @@
       "id": "session-markdown-disk-served",
       "operation": "session.tab-documents",
       "family": "session.markdown-disk-fallback",
-      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "sites": ["mobile/src/files/session-documents/use-mobile-session-document-readers.ts"],
       "schedules": [],
       "steps": [
         {

@@ -6,7 +6,7 @@ import {
   isOrchestrationMutation,
   isTerminalPromptMutation,
   orchestrationMigrationData
-} from '../../shared/orchestration-rpc-contract'
+} from '../../shared/orchestration/orchestration-rpc-contract'
 import type { PairedRuntimeConnection } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { openLocalOrca } from './open-local-orca'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
@@ -36,7 +36,7 @@ import { resolveRemoteConnection } from './runtime-remote-pairing'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
   ORCHESTRATION_CONTRACT_VERSION
-} from '../../shared/protocol-version'
+} from '../../shared/orchestration/orchestration-runtime-capabilities'
 import { RemoteRuntimeCompatGate } from './remote-runtime-compat-gate'
 import {
   createAgentLaunchCallerEvidence,
@@ -47,7 +47,7 @@ import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartClientTimeoutMs,
   resolveWorkerStartReadinessTimeoutMs
-} from '../../shared/orchestration-timing-budgets'
+} from '../../shared/orchestration/orchestration-timing-budgets'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import {
   buildOrchestrationRecoveryCommand,
@@ -194,7 +194,8 @@ export class RuntimeClient {
         effectiveTimeoutMs,
         envelope,
         expectedRuntimeSource,
-        options?.requestSelection ? { requestSelection: options.requestSelection } : undefined
+        // Only requestSelection and onProgress reach the socket; the rest shaped the envelope above.
+        options
       )
     } catch (error) {
       // A pre-send refusal has no outcome to recover; retry advice would resend the same bytes.

@@ -12,15 +12,15 @@ import {
   diffCommentOwnerKey,
   selectDiffCommentView,
   type DiffCommentOwner
-} from '../../diff-comment-owner'
+} from './diff-comment-owner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import type { DiffComment } from '../../../../../shared/diff-comment-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
 import { toSshExecutionHostId } from '../../../../../shared/execution-host'
-import { createTestStore } from '../store-test-helpers'
-import { selectWorktreeDiffCommentsOrEmpty } from '../../worktree-diff-comments-selector'
+import { createTestStore } from '../../testing/app-store-test-fixture'
+import { selectWorktreeDiffCommentsOrEmpty } from './worktree-diff-comments-selector'
 
 vi.mock('../../../runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeRpcCallModule>()),

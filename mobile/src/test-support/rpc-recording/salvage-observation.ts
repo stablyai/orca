@@ -1,4 +1,4 @@
-const SALVAGE_REPORTING_MODULE = 'mobile/src/transport/rpc-operation-reply.ts'
+const SALVAGE_REPORTING_MODULE = 'mobile/src/transport/rpc/rpc-operation-reply.ts'
 const CLASSIFY = 'classifyRpcReply'
 
 type SalvageReport = { droppedPaths: readonly string[]; droppedCount: number }

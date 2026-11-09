@@ -1,6 +1,6 @@
-import { maybeAutoRenameBranchOnFirstWork } from '../agent-hooks/first-work-branch-rename'
-import { firstWorkRenameDeps } from '../agent-hooks/first-work-rename-runtime'
-import { agentHookServer } from '../agent-hooks/server'
+import { maybeAutoRenameBranchOnFirstWork } from '../agent-hooks/first-work/first-work-branch-rename'
+import { firstWorkRenameDeps } from '../agent-hooks/first-work/first-work-rename-runtime'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
 import { mainProcessState as state } from './main-process-state'
 
 /** Arms first-work rename from the hook store itself, so headless serve (no window) renames too. */

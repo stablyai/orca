@@ -10,7 +10,7 @@ import {
   MobileDictationChunkOrder,
   type MobileDictationChunk
 } from './mobile-dictation-chunk-order'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import {
   DictationTranscript,
   type DictationTranscriptSnapshot
@@ -87,7 +87,7 @@ export class RuntimeMobileDictationController {
         (event) => acceptEvent(session, event),
         undefined,
         owner,
-        voice.dictationLanguage
+        voice
       )
       if (this.sessions.get(clientId) !== session) {
         throw new Error('dictation_canceled')

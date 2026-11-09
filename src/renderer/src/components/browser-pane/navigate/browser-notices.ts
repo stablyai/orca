@@ -6,6 +6,7 @@ import type {
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
 import { isChromiumCertificateErrorCode } from '../../../../../shared/browser-certificate-errors'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
 import {
   BROWSER_LOAD_FAILURE_COPY as COPY,
@@ -105,13 +106,14 @@ export function formatByteCount(bytes: number | null): string | null {
 
 export function formatLoadFailureTitle(
   loadError: BrowserLoadError,
-  failure: BrowserLoadFailureDescription
+  failure: BrowserLoadFailureDescription,
+  t: Translate = translate
 ): string {
   if (isChromiumCertificateErrorCode(loadError.code)) {
-    return translate('browser.loadFailure.connectionNotSecure', "Connection isn't secure")
+    return t('browser.loadFailure.connectionNotSecure', "Connection isn't secure")
   }
   if (loadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
-    return translate('browser.guestRecovery.title', 'Browser page stopped')
+    return t('browser.guestRecovery.title', 'Browser page stopped')
   }
   return formatLoadFailureNetworkText(loadError, failure).title
 }
@@ -119,7 +121,8 @@ export function formatLoadFailureTitle(
 export function formatLoadFailureDescription(
   loadError: BrowserLoadError,
   failure: BrowserLoadFailureDescription,
-  sshRouted = false
+  sshRouted = false,
+  t: Translate = translate
 ): string | null {
   if (loadError.code === BROWSER_GUEST_RECOVERY_ERROR_CODE) {
     return loadError.description
@@ -127,37 +130,37 @@ export function formatLoadFailureDescription(
   if (isChromiumCertificateErrorCode(loadError.code)) {
     const host = failure.host ?? 'this address'
     if (loadError.code === -200) {
-      return translate(
+      return t(
         'browser.loadFailure.certificateNameMismatch',
         "The certificate doesn't match {{value0}}.",
         { value0: host }
       )
     }
     if (loadError.code === -201) {
-      return translate(
+      return t(
         'browser.loadFailure.certificateDateInvalid',
         "The certificate for {{value0}} isn't valid at the current date and time.",
         { value0: host }
       )
     }
     if (loadError.code === -202) {
-      return translate(
+      return t(
         'browser.loadFailure.certificateAuthorityInvalid',
         "Orca doesn't trust the authority that issued the certificate for {{value0}}.",
         { value0: host }
       )
     }
-    return translate(
+    return t(
       'browser.loadFailure.certificateVerificationFailed',
       "Orca couldn't verify the certificate for {{value0}}.",
       { value0: host }
     )
   }
   if (sshRouted && failure.kind === 'not-running') {
-    return translate('browser.loadFailure.notRunningSshDescription', COPY.notRunningSshDescription)
+    return t('browser.loadFailure.notRunningSshDescription', COPY.notRunningSshDescription)
   }
   if (sshRouted && failure.kind === 'other') {
-    return translate(
+    return t(
       'browser.loadFailure.sshRoutedHint',
       "This page browses through the workspace's SSH host — the host may be disconnected or unable to reach this site."
     )

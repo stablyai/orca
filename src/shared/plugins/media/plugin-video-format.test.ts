@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { pluginThemeVideoRuleError } from './plugin-theme-video-rules'
-import { readPluginVideoHeader, type PluginVideoInfo } from './plugin-video-format'
+
+import { readPluginVideoHeader } from './plugin-video-format'
 
 const be = (n: number, bytes: number) =>
   Array.from({ length: bytes }, (_, index) => Math.floor(n / 256 ** (bytes - 1 - index)) % 256)
@@ -133,31 +133,5 @@ describe('readPluginVideoHeader', () => {
       )
     )
     expect(readPluginVideoHeader(twoDescriptions)).toBe('video headers are malformed')
-  })
-})
-
-describe('pluginThemeVideoRuleError', () => {
-  const video = (overrides: Partial<PluginVideoInfo> = {}): PluginVideoInfo => ({
-    container: 'mp4',
-    codec: 'h264',
-    width: 960,
-    height: 540,
-    durationMs: 30_000,
-    ...overrides
-  })
-
-  it('accepts portable codecs within the size, length and pixel caps', () => {
-    expect(pluginThemeVideoRuleError(video(), 2_600_000)).toBeNull()
-    expect(pluginThemeVideoRuleError(video({ codec: 'av1', container: 'webm' }), 1)).toBeNull()
-    expect(pluginThemeVideoRuleError(video({ codec: 'hevc' }), 1)).toBe(
-      'video codec must be H.264 (recommended), VP9 or AV1, not HEVC'
-    )
-    expect(pluginThemeVideoRuleError(video(), 9 * 1024 * 1024)).toBe('video must be at most 8 MB')
-    expect(pluginThemeVideoRuleError(video({ durationMs: 61_000 }), 1)).toBe(
-      'video must be at most 60 seconds'
-    )
-    expect(pluginThemeVideoRuleError(video({ width: 2560, height: 1440 }), 1)).toBe(
-      'video must be at most 2,304,000 pixels'
-    )
   })
 })

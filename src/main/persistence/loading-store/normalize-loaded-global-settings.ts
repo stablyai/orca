@@ -36,6 +36,7 @@ export function normalizeLoadedGlobalSettings(
     defaults,
     migratedExternalVisibility,
     migratedTerminalScrollback,
+    migratedTerminalFontWeight,
     migratedTerminalTuiScrollSensitivity,
     migratedSourceControlAi,
     migratedOptionAsAlt,
@@ -72,6 +73,15 @@ export function normalizeLoadedGlobalSettings(
   } = profile
   const pluginOwnedSettings = normalizePluginOwnedSettings(parsed.settings ?? {})
   const voice = { ...getDefaultVoiceSettings(), ...parsed.settings?.voice }
+  // Stored 'toggle' was everyone's old default, and Auto still toggles on a tap; Hold was always a choice.
+  const keepsDictationMode =
+    voice.dictationMode === 'hold' ||
+    voice.dictationMode === 'auto' ||
+    (parsed.settings?.voiceDictationModeDefaultedToAuto === true &&
+      voice.dictationMode === 'toggle')
+  if (!keepsDictationMode) {
+    voice.dictationMode = 'auto'
+  }
   const matchTerminalSidebarInputs = {
     pluginAppThemeLight: pluginOwnedSettings.pluginAppThemeLight,
     pluginAppThemeDark: pluginOwnedSettings.pluginAppThemeDark,
@@ -105,6 +115,7 @@ export function normalizeLoadedGlobalSettings(
     ...migratedNestedWorkerMaxDepth,
     ...migratedTerminalCursorStyle,
     terminalLineHeight: migratedTerminalLineHeight,
+    ...migratedTerminalFontWeight,
     // False was always explicit; the old true default may be reset once.
     terminalRightClickToPaste: terminalRightClickToPasteDefaultedForPlatform
       ? (parsed.settings?.terminalRightClickToPaste ?? defaults.settings.terminalRightClickToPaste)
@@ -182,6 +193,7 @@ export function normalizeLoadedGlobalSettings(
       migratedSourceControlAi,
       parsed.settings?.commitMessageAi ?? defaults.settings.commitMessageAi
     ),
-    voice: { ...voice, sttModel: replaceRetiredSpeechModelId(voice.sttModel) }
+    voice: { ...voice, sttModel: replaceRetiredSpeechModelId(voice.sttModel) },
+    voiceDictationModeDefaultedToAuto: true
   }
 }

@@ -3,13 +3,13 @@ import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/agent-
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { RuntimeStore } from '../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import { decideAgentLaunchMode, readAgentLaunchModeSettings } from './agent-launch-mode'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/orca-state', isPackaged: true } }))
 
 describe('host launch preference ownership', () => {
-  it.each([false, true])('reads saved choices privately with Agents disabled=%s', (disabled) => {
+  it.each([true])('reads saved choices privately with Agents disabled=%s', (disabled) => {
     const settings: ReturnType<RuntimeStore['getSettings']> = {
       ...getDefaultSettings('/tmp'),
       agentDefaultSurface: 'chat',

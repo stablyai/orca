@@ -4,7 +4,7 @@ import {
   collectActivePluginCommands,
   usePluginPanelsStore,
   type ActivePluginCommand
-} from '@/store/plugin-panels'
+} from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isWorkspaceScopedPluginContext } from '../../../shared/plugins/contributions/plugin-command-contribution'
 
 /** Past this a replacing command's worker is not waited for: Orca's own action runs. */
