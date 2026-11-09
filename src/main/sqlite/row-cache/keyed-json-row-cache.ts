@@ -122,15 +122,9 @@ export class KeyedJsonRowCache {
     this.closeDatabase()
   }
 
-  /**
-   * One read-only snapshot: another connection's write lock cannot block it. After a crash
-   * mid-save, SQLite needs a writable connection to roll back a hot journal or rebuild the WAL
-   * index. That retry runs synchronously and its cost scales with the leftover journal or WAL,
-   * not with a fixed bound; it only happens on the first load after such a crash.
-   */
+  /** One read-only snapshot: another connection's write lock cannot block it. */
   private readSnapshot(
-    busyTimeoutMs: number,
-    readonly = true
+    busyTimeoutMs: number
   ):
     | { kind: 'rows'; rows: KeyedJsonRow[]; receipt: unknown }
     | { kind: 'unavailable'; error: unknown } {
@@ -140,7 +134,7 @@ export class KeyedJsonRowCache {
     }
     let db: SyncDatabase | null = null
     try {
-      db = new SyncDatabase(this.path, { readonly, fileMustExist: true })
+      db = new SyncDatabase(this.path, { readonly: true, fileMustExist: true })
       db.pragma(`busy_timeout = ${busyTimeoutMs}`)
       db.exec('BEGIN')
       try {
@@ -163,14 +157,10 @@ export class KeyedJsonRowCache {
         rollback(db)
       }
     } catch (error) {
-      if (readonly && needsWritableRecovery(error)) {
-        db?.close()
-        db = null
-        // A crash left a hot journal or WAL that only a writer can replay; reading after
-        // that recovery takes no write lock in WAL mode.
-        return this.readSnapshot(busyTimeoutMs, false)
-      }
-      if (classifyRowCacheFailure(error) !== 'corrupt') {
+      // A crash mid-save can leave a journal or WAL only a writable connection can recover.
+      // Replaying it here would run unbounded I/O on the caller's thread, so rebuild instead,
+      // as for corruption; otherwise every later read-only load would fail the same way.
+      if (classifyRowCacheFailure(error) !== 'corrupt' && !needsWritableRecovery(error)) {
         return { kind: 'unavailable', error }
       }
       db?.close()

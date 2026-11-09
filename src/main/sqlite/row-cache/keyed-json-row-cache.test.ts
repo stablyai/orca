@@ -166,7 +166,7 @@ describe('keyed JSON row cache', () => {
     expect(restore(new KeyedJsonRowCache(path, { schemaVersion: 1 }))).toEqual(['2'])
   })
 
-  it('recovers rows a crashed rollback-journal writer left behind', () => {
+  it('rebuilds a cache a crashed rollback-journal writer left behind and saves again', () => {
     const { path } = paths()
     new KeyedJsonRowCache(path, {
       schemaVersion: 1,
@@ -195,6 +195,11 @@ describe('keyed JSON row cache', () => {
     }
     expect(existsSync(`${path}-journal`)).toBe(true)
 
-    expect(restore(new KeyedJsonRowCache(path, { schemaVersion: 1 }))).toEqual(['1'])
+    const cache = new KeyedJsonRowCache(path, { schemaVersion: 1 })
+    expect(restore(cache)).toEqual([])
+    expect(existsSync(`${path}-journal`)).toBe(false)
+    cache.write([row('b', '2')])
+    cache.close()
+    expect(restore(new KeyedJsonRowCache(path, { schemaVersion: 1 }))).toEqual(['2'])
   })
 })
