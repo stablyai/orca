@@ -43,7 +43,6 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -67,8 +66,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
 
     it('reattaches via daemon sessionId when an in-session PTY is live', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transportFactoryQueue.push(transport)
 
@@ -102,8 +102,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
 
     it('attaches remote runtime PTY handles instead of creating a replacement terminal', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       transport.attach.mockImplementation(({ callbacks }: { callbacks?: ConnectCallbacks }) => {
         transport.getPtyId.mockReturnValue('remote:env-1@@terminal-1')
@@ -152,8 +153,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
 
     it('reports remote renderer readiness only after delayed restore output is parsed', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport()
       let remoteCallbacks: ConnectCallbacks | undefined
       transport.attach.mockImplementation(({ callbacks }: { callbacks?: ConnectCallbacks }) => {
@@ -205,8 +207,9 @@ export function registerPtyConnectionRemoteRuntimeAttachTests(): void {
 
     it('cold-spawns slept remote runtime PTYs instead of reattaching the preserved handle', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       enableActiveRuntimeEnvironment('env-1')
       const restoredPtyId = 'remote:env-1@@terminal-1'
       const freshPtyId = 'remote:env-1@@terminal-2'

@@ -8,13 +8,10 @@ import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import { forgetMobileCreatedStructuredSession } from './mobile-created-structured-sessions'
 import { createStructuredAgentSessionOptionsReadOwner } from '../../../src/shared/agent-session/options/structured-agent-session-options-read-owner'
 import { BoundedMap } from '../../../src/shared/bounded-map'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { AgentSessionOptionCatalog } from '../../../src/shared/agent-session/options/agent-session-option-catalog-types'
 import { usesInstalledAgentModelCatalog } from '../../../src/shared/agent-session/options/agent-model-catalog-ownership'
-import {
-  applyStructuredAgentSessionModelCatalog,
-  createStructuredAgentSessionOptionState
-} from '../../../src/shared/agent-session/options/structured-agent-session-options'
+import { structuredAgentSessionFirstFrameOptionState } from '../../../src/shared/agent-session/options/structured-agent-session-first-frame'
 import type { HostModelCatalogCache } from './use-mobile-host-model-catalog-upgrade'
 import { structuredAgentSessionReportsAtFence } from '../../../src/shared/agent-session/options/structured-agent-session-runtime-reports'
 
@@ -70,18 +67,13 @@ export function useMobileStructuredOptionState(args: {
   const providerStarting = summary?.hostExecutionPhase === 'starting'
   const coherentCatalog = usesInstalledAgentModelCatalog(agent ?? '', hostCoherentCatalog)
   // The host's last list for this agent when this world holds one, else the quiet placeholder until the host answers.
-  const firstFrame = () => {
-    const seeded = createStructuredAgentSessionOptionState(agent ?? 'codex', optionCatalog)
-    const listed =
-      optionCatalog &&
-      modelCatalogCache?.seed({ newLaunch, seedsModel: false, ...(worktree ? { worktree } : {}) })
-    return listed && optionCatalog
-      ? applyStructuredAgentSessionModelCatalog(seeded, optionCatalog, listed, {
-          newLaunch,
-          coherentCatalog
-        })
-      : seeded
-  }
+  const firstFrame = () =>
+    structuredAgentSessionFirstFrameOptionState(
+      agent ?? 'codex',
+      optionCatalog,
+      modelCatalogCache?.seed({ newLaunch, seedsModel: false, ...(worktree ? { worktree } : {}) }),
+      { newLaunch, coherentCatalog }
+    )
   // One view serves every chat tab, so each chat keeps its own reader and its last answer on return.
   const [readers] = useState(
     () =>

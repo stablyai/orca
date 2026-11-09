@@ -3,7 +3,7 @@ import type {
   AiVaultSession
 } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { structuralValuesEqual } from '../../../../../../shared/structural-value-equality'
-import { reuseEqualCatalogRows } from '@/store/catalog-row-reconciliation'
+import { reuseEqualCatalogRows } from '@/lib/catalog-reconciliation/catalog-row-reconciliation'
 
 // Freeze the shared sentinel so one consumer cannot mutate every panel's initial rows.
 export const EMPTY_AI_VAULT_SESSIONS: readonly AiVaultSession[] = Object.freeze([])

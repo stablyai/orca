@@ -8,13 +8,13 @@ import type { LocatedCodexPane } from './located-codex-pane'
 
 import type { AppState } from '@/store/types'
 import { useAppStore } from '@/store/index'
-import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
+import { singlePaneLayoutSnapshot } from '@/store/terminals/terminal-single-pane-layout'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
 import {
   buildCodexAccountRestartStartup,
   buildPaneAccountRestartStartup
-} from '@/lib/agent-account-restart-startup'
-import { isClaudePaneMidTurn } from '@/lib/claude-session-account-move'
+} from '@/lib/agent-session/accounts/agent-account-restart-startup'
+import { isClaudePaneMidTurn } from '@/lib/agent-session/accounts/claude/claude-session-account-move'
 import type { AccountRestartAgent } from '@/store/terminals/terminal-contracts'
 import { isForeignMachineCodexPtyId } from '@/lib/codex-pane-selection-lane'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'

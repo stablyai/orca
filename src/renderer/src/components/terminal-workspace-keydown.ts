@@ -22,7 +22,7 @@ import { translate } from '@/i18n/i18n'
 import { getKeybindingContext } from './terminal-workspace-model'
 import { isAgentTerminalPreviewTarget } from './dashboard-popout/agent-terminal-preview-target'
 import { resolveTerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
-import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-detection-target-inventory'
+import { getDetectionTargetIdentityForWorktree } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import {
   launchAgentTabShortcut,
   launchFloatingWorkspaceAgentShortcut

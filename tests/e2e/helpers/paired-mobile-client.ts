@@ -1,20 +1,20 @@
-import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from '../../../mobile/src/transport/mobile-runtime-client-capabilities'
+import { MOBILE_RUNTIME_CLIENT_CAPABILITIES } from '../../../mobile/src/transport/connection/mobile-runtime-client-capabilities'
 import { pairedRuntimeConnectionFromOffer } from '../../../src/shared/remote-runtime/pairing/paired-runtime-connection'
 import { decodePairingOffer } from '../../../src/shared/remote-runtime/pairing/pairing'
 import type { PairingOffer } from '../../../src/shared/remote-runtime/pairing/mobile-relay-pairing-offer'
-import {
-  sendRemoteRuntimeRequest,
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription,
-  type RemoteRuntimeSubscriptionCallbacks
-} from '../../../src/shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../src/shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../../src/shared/remote-runtime/requests/remote-runtime-subscription-transport'
+import type {
+  RemoteRuntimeTransportSubscription,
+  RemoteRuntimeTransportSubscriptionCallbacks
+} from '../../../src/shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import type { RuntimeRpcResponse } from '../../../src/shared/runtime-rpc-envelope'
 import { openRemoteRuntimePassthroughSocket } from '../../../src/shared/remote-runtime/remote-runtime-passthrough-socket'
 import type { RuntimeCapability } from '../../../src/shared/protocol-version'
 import {
   decodeBrowserScreencastFrame,
   type BrowserScreencastFrame
-} from '../../../src/shared/browser-screencast-protocol'
+} from '../../../src/shared/browser/screencast/browser-screencast-protocol'
 import {
   decodeTerminalStreamFrame,
   decodeTerminalStreamText,
@@ -37,9 +37,9 @@ export type PairedMobileClient = {
   subscribe: <T>(
     method: string,
     params: unknown,
-    callbacks: RemoteRuntimeSubscriptionCallbacks<T>,
+    callbacks: RemoteRuntimeTransportSubscriptionCallbacks<T>,
     timeoutMs?: number
-  ) => Promise<RemoteRuntimeSubscription>
+  ) => Promise<RemoteRuntimeTransportSubscription>
   /** One persistent phone socket, as the app holds one; needed for streams and `executionHost`. */
   openSocket: () => Promise<PairedMobileSocket>
   /** Closes every subscription and socket this client opened. */
@@ -81,14 +81,17 @@ export function pairMobileClient(
     params: unknown = {},
     timeoutMs = DEFAULT_TIMEOUT_MS
   ): Promise<RuntimeRpcResponse<T>> =>
-    sendRemoteRuntimeRequest<T>(
+    sendRemoteRuntimeRequestOnSocket<T>(
       connection,
       method,
       params,
       timeoutMs,
       undefined,
       undefined,
-      capabilities
+      undefined,
+      capabilities,
+      undefined,
+      undefined
     )
   return {
     request,
@@ -100,7 +103,7 @@ export function pairMobileClient(
       return response.result
     },
     subscribe: async (method, params, callbacks, timeoutMs = DEFAULT_TIMEOUT_MS) => {
-      const subscription = await subscribeRemoteRuntimeRequest(
+      const subscription = await subscribeRemoteRuntimeTransport(
         connection,
         method,
         params,

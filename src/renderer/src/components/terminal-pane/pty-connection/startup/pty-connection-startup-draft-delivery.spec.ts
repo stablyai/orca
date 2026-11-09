@@ -1,7 +1,7 @@
 import { bindPtyConnectionTestMocks } from '../test-fixtures/pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-startup-delayed-delivery'
+import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'
 import { flushAsyncTicks } from '../test-fixtures/pty-connection-test-async'
 import { VISIBLE_PTY_SETTLE_MS } from '../test-fixtures/pty-connection-test-constants'
 import {
@@ -37,7 +37,6 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -62,10 +61,11 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
     it.each([10_000, 20_000])('keeps Codex draft delivery bounded after %d ms', async (waitMs) => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { beginAgentStartupDeliveryAttempt: claimStartupDelivery } =
-        await import('@/lib/agent-startup-delayed-delivery')
+        await import('@/lib/agent-session/launch/startup/agent-startup-delayed-delivery')
 
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-codex')
@@ -153,10 +153,11 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
 
     it('keeps startup draft ownership while deferred connect waits through setup', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const { beginAgentStartupDeliveryAttempt: claimStartupDelivery } =
-        await import('@/lib/agent-startup-delayed-delivery')
+        await import('@/lib/agent-session/launch/startup/agent-startup-delayed-delivery')
 
       const deferredFrames: FrameRequestCallback[] = []
       globalThis.requestAnimationFrame = vi.fn((callback: FrameRequestCallback) => {
@@ -227,8 +228,9 @@ export function registerPtyConnectionStartupDraftDeliveryTests(): void {
 
     it('releases startup draft delivery when disposed before deferred connect starts', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       globalThis.requestAnimationFrame = vi.fn(() => 1)
       const transport = createMockTransport('pty-codex')
       transportFactoryQueue.push(transport)

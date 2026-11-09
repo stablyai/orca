@@ -1,5 +1,5 @@
 import type { AppState } from '../../types'
-import { selectDiffCommentView, type DiffCommentOwner } from '../../diff-comment-owner'
+import { selectDiffCommentView, type DiffCommentOwner } from './diff-comment-owner'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { DiffComment } from '../../../../../shared/diff-comment-types'
 import type { Worktree } from '../../../../../shared/worktree/types'
@@ -11,7 +11,7 @@ import {
 import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../runtime/rpc/compatibility/runtime-compatibility-cache'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
@@ -105,7 +105,7 @@ const mockApi = {
 // @ts-expect-error -- mock
 globalThis.window = { api: mockApi }
 
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 
 const REPO = 'repo1'
 const WT = 'repo1::/path/wt'

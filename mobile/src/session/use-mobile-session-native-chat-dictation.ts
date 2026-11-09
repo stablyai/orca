@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from 'react'
+import { useEffect, useCallback, useRef, useState } from 'react'
 import { AppState } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
@@ -8,7 +8,7 @@ import { useClipboardWriter } from '../platform/clipboard'
 import {
   useMobileDictationDestination,
   useMobileDictationPreviews
-} from './use-mobile-dictation-destination'
+} from '../dictation/use-mobile-dictation-destination'
 import {
   dictationFailureMessage,
   dictationMicHidden,
@@ -17,16 +17,16 @@ import {
   isDictationSetupRequiredError
 } from '../dictation/mobile-dictation-setup'
 import { useMobileNativeChatController } from './native-chat/use-mobile-native-chat-controller'
-import { useMobileDictationLeaveHold } from './mobile-dictation-leave-hold'
-import { useMobileDictationHaptics } from './use-mobile-dictation-haptics'
-import { useMobileDictationSilenceStop } from './use-mobile-dictation-silence-stop'
+import { useMobileDictationLeaveHold } from '../dictation/mobile-dictation-leave-hold'
+import { useMobileDictationHaptics } from '../dictation/use-mobile-dictation-haptics'
+import { useMobileDictationSilenceStop } from '../dictation/use-mobile-dictation-silence-stop'
 import { useMobileNativeChatReadability } from './native-chat/transcript/use-mobile-native-chat-readability'
 import { useMobileNativeChatInputLease } from './native-chat/use-mobile-native-chat-input-lease'
 import { useMobileNativeChatSendError } from './native-chat/use-mobile-native-chat-send-error'
 import { mobileNativeChatScopeKey } from './native-chat/mobile-native-chat-scope-key'
 import { mobileNativeChatOverlayInputLockReason } from './native-chat/mobile-native-chat-overlay-lock-reason'
 import { useMobileSendCompletionGeneration } from './use-mobile-send-completion-generation'
-import { nativeChatDictationCopy } from './mobile-session-native-chat-dictation-copy'
+import { nativeChatDictationCopy } from '../dictation/mobile-session-native-chat-dictation-copy'
 import type { MobileSessionFeedbackCapabilitiesModel } from './use-mobile-session-feedback-capabilities'
 
 export function useMobileSessionNativeChatDictation(
@@ -136,9 +136,12 @@ export function useMobileSessionNativeChatDictation(
   const dictationCanStart = showNativeChat
     ? connState === 'connected' || phoneDictation.ready
     : canSend
+  // The host's filler switch, kept from its last setup read; on until one says otherwise.
+  const [removeFillerWords, setRemoveFillerWords] = useState(true)
   const dictation = useMobileDictation({
     client,
     enabled: (showNativeChat || canCompose) && dictationEnabled,
+    removeFillerWords,
     onTranscript: (text) => {
       // Chat dictation is inserted locally; a terminal's words are typed into it live.
       if (destination.landsInChat(showNativeChatRef.current)) {
@@ -166,7 +169,8 @@ export function useMobileSessionNativeChatDictation(
     onError: (err) => {
       dictationRouteContextRef.current = null
       reportDictationFailure(err)
-    }
+    },
+    onAudioLimitReached: () => showToast(nativeChatDictationCopy.stoppedAtCloudLimit())
   })
 
   const dictationLeaveHold = useMobileDictationLeaveHold(dictation)
@@ -246,6 +250,7 @@ export function useMobileSessionNativeChatDictation(
       const setup = await fetchDictationSetup(client)
       if (read === dictationSettingsReadRef.current) {
         setDictationMode(setup.dictationMode)
+        setRemoveFillerWords(setup.removeFillerWords !== false)
         setDictationEnabled(!dictationMicHidden(setup))
         dictationNeedsSetupRef.current = dictationNeedsSetup(setup)
       }

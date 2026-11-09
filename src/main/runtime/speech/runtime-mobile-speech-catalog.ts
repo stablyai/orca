@@ -4,6 +4,7 @@ import type {
   RuntimeSpeechSetupState
 } from '../../../shared/runtime-worktree-contracts'
 import { getDefaultVoiceSettings } from '../../../shared/constants'
+import { dictationShortcutModeSettings } from '../../../shared/dictation-shortcut-mode'
 import {
   getCatalogModel,
   isLocalSpeechModel,
@@ -16,7 +17,7 @@ import {
   deleteLocalSpeechModel,
   getSpeechModelDeletionErrorCode
 } from '../../speech/speech-model-deletion'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 import {
   clearOpenAiSpeechApiKey,
   getOpenAiSpeechApiKeyProtection,
@@ -60,6 +61,8 @@ export class RuntimeMobileSpeechCatalog {
       enabled: voice.enabled === true,
       selectedModelId: voice.sttModel ?? '',
       dictationMode: voice.dictationMode === 'hold' ? 'hold' : 'toggle',
+      dictationHoldToRecord: voice.dictationHoldToRecord !== false,
+      removeFillerWords: voice.removeFillerWords !== false,
       models
     }
   }
@@ -100,6 +103,7 @@ export class RuntimeMobileSpeechCatalog {
     enabled?: boolean
     modelId?: string
     dictationMode?: 'toggle' | 'hold'
+    dictationHoldToRecord?: boolean
   }): Promise<RuntimeSpeechSetupState> {
     const store = this.requireWritableStore()
     const current = store.getSettings().voice ?? getDefaultVoiceSettings()
@@ -113,7 +117,13 @@ export class RuntimeMobileSpeechCatalog {
       ...current,
       ...(params.enabled !== undefined ? { enabled: params.enabled } : {}),
       ...(params.modelId !== undefined ? { sttModel: params.modelId } : {}),
-      ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {})
+      ...(params.dictationMode !== undefined ? { dictationMode: params.dictationMode } : {}),
+      ...(params.dictationHoldToRecord !== undefined
+        ? { dictationHoldToRecord: params.dictationHoldToRecord }
+        : // A phone without Auto that picks Hold leaves no hold-to-record behind for a later Toggle.
+          params.dictationMode === 'hold'
+          ? dictationShortcutModeSettings('hold')
+          : {})
     }
     store.updateSettings?.({ voice: nextVoice }, { notifyListeners: true })
     return this.list()

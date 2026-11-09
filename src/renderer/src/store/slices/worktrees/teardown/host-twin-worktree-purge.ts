@@ -8,7 +8,7 @@ import {
 } from '../../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import type { WorktreePurgeTarget } from '../../worktree-purge-target'
+import type { WorktreePurgeTarget } from './worktree-purge-target'
 import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
 import { getProjectGroupHostId } from '../../../project-groups/project-group-owner-routing'
@@ -21,7 +21,7 @@ import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import { buildActiveSurfacePatch } from '../../tabs/tabs-surface'
 import { getRepoHostSummaries } from '../listing/worktree-host-ownership'
 import { collectSurfacePurgeDoomedIds } from './worktree-purge-doomed-ids'
-import { collectPtyIdsForTab } from '../../terminal-tab-retirement'
+import { collectPtyIdsForTab } from '../../../terminals/terminal-tab-retirement'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
 import {
@@ -30,7 +30,7 @@ import {
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
 import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
-import { selectFolderWorkspaces } from '../../../workspace-record-selectors'
+import { selectFolderWorkspaces } from '../../../workspaces/catalog/workspace-record-fields'
 
 import {
   worktreePurgePublishers,

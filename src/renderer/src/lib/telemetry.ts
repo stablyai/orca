@@ -3,12 +3,37 @@
 
 import type { EventName, EventProps } from '../../../shared/telemetry-events'
 import type { TelemetryConsentState } from '../../../shared/telemetry-consent-types'
+import { utcDayIndex } from '../../../shared/telemetry-day'
 
 // Re-exported so renderer call sites can import the mapper alongside `track` (impl is shared because main needs the same mapping).
 export { tuiAgentToAgentKind } from '../../../shared/agent-kind'
 
 // Single source-of-truth for the privacy doc URL so FirstLaunchBanner and PrivacyPane can't drift.
 export const PRIVACY_URL = 'https://www.onorca.dev/docs/telemetry'
+
+let lastTerminalUserInputAt: number | null = null
+
+/** Report admitted xterm input once a minute within each UTC day; main owns consent and daily deduplication. */
+export function recordAdmittedTerminalUserInput(): void {
+  const now = Date.now()
+  if (
+    lastTerminalUserInputAt !== null &&
+    utcDayIndex(lastTerminalUserInputAt) === utcDayIndex(now) &&
+    now >= lastTerminalUserInputAt &&
+    now - lastTerminalUserInputAt < 60_000
+  ) {
+    return
+  }
+  try {
+    const noteUserInput = window.api?.pty?.noteUserInput
+    if (noteUserInput) {
+      lastTerminalUserInputAt = now
+      noteUserInput()
+    }
+  } catch (err) {
+    console.warn('[telemetry] terminal user input IPC failed', err)
+  }
+}
 
 // Why: the IPC boundary is untyped at runtime, so validate before the Privacy pane trusts a payload from main.
 function isTelemetryConsentState(x: unknown): x is TelemetryConsentState {

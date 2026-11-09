@@ -8,7 +8,7 @@ import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   areTaskSourceContextsEqual,
   normalizeStoredTaskSourceContext
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 import {
   areWorkspaceLinkedItemsEqual,
   normalizeWorkspaceLinkedItem

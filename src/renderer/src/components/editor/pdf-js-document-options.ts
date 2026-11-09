@@ -1,5 +1,5 @@
 import type { PDFDataRangeTransport } from 'pdfjs-dist'
-import { MAX_FILE_RANGE_READ_BYTES } from '../../../../shared/file-range-read'
+import { MAX_FILE_RANGE_READ_BYTES } from '../../../../shared/file-content/file-range-read'
 
 export function buildPdfJsDocumentOptions(
   source: { data: Uint8Array } | { range: PDFDataRangeTransport },

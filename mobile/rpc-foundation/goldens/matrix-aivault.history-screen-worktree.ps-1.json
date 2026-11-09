@@ -4,9 +4,9 @@
   "family": "aiVault.history-screen",
   "namedDeltas": [],
   "values": {
-    "00b7efbaf87f": {
+    "0562fd9175d5": {
       "name": "worktree.ps#1",
-      "ordinal": 3,
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -16,45 +16,6 @@
           "name": "params",
           "value": {
             "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "error": "refused"
-          }
-        }
-      }
-    },
-    "0180d22edc2e": {
-      "name": "worktree.ps#1",
-      "ordinal": 5,
-      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
-    },
-    "03106dceb986": {
-      "name": "status.get#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
           }
         },
         {
@@ -69,159 +30,18 @@
         "startedAt": 0
       }
     },
-    "0569ef4f06ba": {
-      "name": "worktree.ps#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "error": {
-              "message": "inner refused"
-            },
-            "ok": false
-          }
-        }
-      }
-    },
-    "19cf1a6a7639": {
-      "name": "worktree.ps#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true
-        }
-      }
-    },
-    "222a3ba1d974": {
-      "name": "worktree.ps#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "worktrees": [
-              {
-                "path": "/repo/feature",
-                "repoId": "repo-1",
-                "worktreeId": "wt-history"
-              },
-              {
-                "path": "/repo/sibling",
-                "repoId": "repo-1",
-                "worktreeId": "wt-2"
-              }
-            ]
-          }
-        }
-      }
-    },
-    "30b5ef327e47": {
-      "name": "worktree.ps#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-3",
-          "ok": true,
-          "result": {
-            "$rpc": "null"
-          }
-        }
-      }
-    },
-    "4d68bff46cff": {
-      "name": "status.get#1",
+    "111e9a5009ba": {
+      "name": "streams-registered-at-teardown",
       "ordinal": 4,
-      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+      "value": [
+        {
+          "cancelled": false,
+          "method": "agentSession.subscribeStatus",
+          "payload": "agentSession.subscribeStatus#1"
+        }
+      ]
     },
-    "4f7d48d96db6": {
+    "1b7d1f3c4f0a": {
       "name": "aiVault.listSessions#1",
       "ordinal": 6,
       "args": [
@@ -234,13 +54,13 @@
           "value": {
             "force": false,
             "limit": 500,
-            "scopePaths": ["/repo/feature"]
+            "scopePaths": []
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -255,14 +75,38 @@
         }
       }
     },
-    "595e6c3bbfed": {
+    "27ef7c5c6263": {
       "name": "aiVault.listSessions#1",
-      "ordinal": 7,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"]}}"
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.listSessions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": false,
+            "limit": 500,
+            "scopeOnly": true,
+            "scopePaths": ["/repo/feature"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
-    "6405fa9d6a94": {
+    "519ce9879c6f": {
       "name": "worktree.ps#1",
-      "ordinal": 3,
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -290,42 +134,14 @@
             "code": "method_not_found",
             "message": "Unknown method"
           },
-          "id": "frame-3",
+          "id": "frame-2",
           "ok": false
         }
       }
     },
-    "6cd39311d5ec": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 6,
-      "args": [
-        {
-          "name": "method",
-          "value": "aiVault.listSessions"
-        },
-        {
-          "name": "params",
-          "value": {
-            "force": false,
-            "limit": 500,
-            "scopePaths": ["/repo/feature"]
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "7182750ca2d1": {
+    "5a2900554f7f": {
       "name": "worktree.ps#1",
-      "ordinal": 3,
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -349,23 +165,17 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-3",
+          "id": "frame-2",
           "ok": true,
           "result": {
-            "error": "inner refused",
-            "ok": false
+            "error": "refused"
           }
         }
       }
     },
-    "7312d72e532d": {
-      "name": "aiVault.listSessions#1",
-      "ordinal": 7,
-      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[]}}"
-    },
-    "7368414c8786": {
+    "63ddf576c4de": {
       "name": "worktree.ps#1",
-      "ordinal": 3,
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -385,48 +195,23 @@
         }
       ],
       "settlement": {
-        "status": "pending",
-        "startedAt": 0
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
       }
     },
-    "739d442628ed": {
+    "7312d72e532d": {
       "name": "aiVault.listSessions#1",
-      "ordinal": 6,
-      "args": [
-        {
-          "name": "method",
-          "value": "aiVault.listSessions"
-        },
-        {
-          "name": "params",
-          "value": {
-            "force": false,
-            "limit": 500,
-            "scopePaths": []
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "pending",
-        "startedAt": 0
-      }
-    },
-    "758b3fde1948": {
-      "name": "streams-registered-at-teardown",
-      "ordinal": 6,
-      "value": [
-        {
-          "cancelled": false,
-          "method": "agentSession.subscribeStatus",
-          "payload": "agentSession.subscribeStatus#1"
-        }
-      ]
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[]}}"
     },
     "7623e8b568b1": {
       "crash": {
@@ -444,6 +229,11 @@
       "labels": ["Back", "Refresh agent sessions"],
       "text": ["Agent Session History", "orca-history", "Loading agent sessions…"]
     },
+    "7c48e0564605": {
+      "name": "status.get#1",
+      "ordinal": 5,
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
     "7e8b2964ad63": {
       "name": "streams-registered-at-teardown",
       "ordinal": 8,
@@ -455,9 +245,181 @@
         }
       ]
     },
-    "858c23d8f3ef": {
+    "8cdf568d4967": {
       "name": "worktree.ps#1",
-      "ordinal": 3,
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "9799ad4cf6fd": {
+      "name": "worktree.ps#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "a07520ab0ac1": {
+      "name": "worktree.ps#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "a0b80301d553": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.listSessions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": false,
+            "limit": 500,
+            "scopeOnly": true,
+            "scopePaths": ["/repo/feature"]
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection closed",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "bdd2f2097a96": {
+      "name": "worktree.ps#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "c3e8997d664e": {
+      "name": "worktree.ps#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -487,142 +449,9 @@
         }
       }
     },
-    "8854a58ee704": {
+    "c3f81e95c2d2": {
       "name": "worktree.ps#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "Connection closed",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "9a209a9534f9": {
-      "name": "worktree.ps#1",
-      "ordinal": 3,
-      "args": [
-        {
-          "name": "method",
-          "value": "worktree.ps"
-        },
-        {
-          "name": "params",
-          "value": {
-            "limit": 10000
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "error": {
-            "code": "refused",
-            "message": "outer refused"
-          },
-          "id": "frame-3",
-          "ok": false
-        }
-      }
-    },
-    "9b8c00f534c6": {
-      "name": "status.get#1",
       "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "rejected",
-        "startedAt": 0,
-        "settledAt": 0,
-        "error": {
-          "category": "Error",
-          "message": "Connection closed",
-          "isRpcDeliveryUnknown": true
-        }
-      }
-    },
-    "acf501fa9958": {
-      "name": "status.get#1",
-      "ordinal": 2,
-      "args": [
-        {
-          "name": "method",
-          "value": "status.get"
-        },
-        {
-          "name": "params",
-          "value": {
-            "$rpc": "absent"
-          }
-        },
-        {
-          "name": "options",
-          "value": {
-            "$rpc": "absent"
-          }
-        }
-      ],
-      "settlement": {
-        "status": "fulfilled",
-        "startedAt": 0,
-        "settledAt": 0,
-        "value": {
-          "id": "frame-2",
-          "ok": true,
-          "result": {
-            "capabilities": ["aiVault.v1"]
-          }
-        }
-      }
-    },
-    "c4a0ee2acc32": {
-      "name": "worktree.ps#1",
-      "ordinal": 3,
       "args": [
         {
           "name": "method",
@@ -652,20 +481,33 @@
         }
       }
     },
-    "c8a1368e170b": {
+    "d126597611a2": {
+      "name": "worktree.ps#1",
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+    },
+    "dffc0668b556": {
       "name": "aiVault.listSessions#1",
-      "ordinal": 6,
+      "ordinal": 7,
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.listSessions\",\"params\":{\"limit\":500,\"force\":false,\"scopePaths\":[\"/repo/feature\"],\"scopeOnly\":true}}"
+    },
+    "e28c488ce6b2": {
+      "name": "agentSession.subscribeStatus#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.subscribeStatus\",\"params\":{}}"
+    },
+    "e4b1f6dfd294": {
+      "name": "worktree.ps#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
-          "value": "aiVault.listSessions"
+          "value": "worktree.ps"
         },
         {
           "name": "params",
           "value": {
-            "force": false,
-            "limit": 500,
-            "scopePaths": []
+            "limit": 10000
           }
         },
         {
@@ -686,9 +528,51 @@
         }
       }
     },
-    "de6f51a372a1": {
+    "e881d7dabb25": {
+      "name": "status.get#1",
+      "ordinal": 4,
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "capabilities": ["aiVault.v1"]
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "ebc8d9683b5e": {
       "name": "worktree.ps#1",
-      "ordinal": 3,
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -712,26 +596,86 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "error": {
-            "code": "refused",
-            "message": ""
-          },
-          "id": "frame-3",
-          "ok": false
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "worktrees": [
+              {
+                "path": "/repo/feature",
+                "repoId": "repo-1",
+                "worktreeId": "wt-history"
+              },
+              {
+                "path": "/repo/sibling",
+                "repoId": "repo-1",
+                "worktreeId": "wt-2"
+              }
+            ]
+          }
         }
       }
     },
-    "e28c488ce6b2": {
-      "name": "agentSession.subscribeStatus#1",
-      "ordinal": 1,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.subscribeStatus\",\"params\":{}}"
+    "fe3fd26f3355": {
+      "name": "aiVault.listSessions#1",
+      "ordinal": 6,
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.listSessions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "force": false,
+            "limit": 500,
+            "scopePaths": []
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "failWhenDisconnected": true
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
     },
-    "eb79a9b3682a": {
-      "status": "fulfilled",
-      "startedAt": 0,
-      "settledAt": 0,
-      "value": {
-        "$rpc": "undefined"
+    "ff1353abed80": {
+      "name": "worktree.ps#1",
+      "ordinal": 2,
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
       }
     }
   },
@@ -741,8 +685,8 @@
       {
         "id": "aivault-history-screen-worktrees.prelude:worktrees-pending",
         "observation": {
-          "sender": ["03106dceb986", "7368414c8786"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e"],
+          "sender": ["0562fd9175d5"],
+          "payloads": ["e28c488ce6b2", "d126597611a2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -753,20 +697,20 @@
       {
         "id": "aivault-history-screen-worktrees.prelude:cleanup",
         "observation": {
-          "sender": ["9b8c00f534c6", "8854a58ee704"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e"],
+          "sender": ["e4b1f6dfd294"],
+          "payloads": ["e28c488ce6b2", "d126597611a2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
           "state": "7623e8b568b1",
-          "effects": ["758b3fde1948"]
+          "effects": ["111e9a5009ba"]
         }
       },
       {
         "id": "aivault-history-screen-worktrees.normal:worktrees-listed",
         "observation": {
-          "sender": ["acf501fa9958", "222a3ba1d974", "6cd39311d5ec"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "595e6c3bbfed"],
+          "sender": ["ebc8d9683b5e", "e881d7dabb25", "27ef7c5c6263"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "dffc0668b556"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -777,8 +721,8 @@
       {
         "id": "aivault-history-screen-worktrees.normal:cleanup",
         "observation": {
-          "sender": ["acf501fa9958", "222a3ba1d974", "4f7d48d96db6"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "595e6c3bbfed"],
+          "sender": ["ebc8d9683b5e", "e881d7dabb25", "a0b80301d553"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "dffc0668b556"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -789,8 +733,8 @@
       {
         "id": "aivault-history-screen-worktrees.result-absent:worktrees-listed",
         "observation": {
-          "sender": ["acf501fa9958", "19cf1a6a7639", "739d442628ed"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["9799ad4cf6fd", "e881d7dabb25", "fe3fd26f3355"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -801,8 +745,8 @@
       {
         "id": "aivault-history-screen-worktrees.result-absent:cleanup",
         "observation": {
-          "sender": ["acf501fa9958", "19cf1a6a7639", "c8a1368e170b"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["9799ad4cf6fd", "e881d7dabb25", "1b7d1f3c4f0a"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -813,8 +757,8 @@
       {
         "id": "aivault-history-screen-worktrees.result-null:worktrees-listed",
         "observation": {
-          "sender": ["acf501fa9958", "30b5ef327e47", "739d442628ed"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["8cdf568d4967", "e881d7dabb25", "fe3fd26f3355"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -825,8 +769,8 @@
       {
         "id": "aivault-history-screen-worktrees.result-null:cleanup",
         "observation": {
-          "sender": ["acf501fa9958", "30b5ef327e47", "c8a1368e170b"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["8cdf568d4967", "e881d7dabb25", "1b7d1f3c4f0a"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -837,8 +781,8 @@
       {
         "id": "aivault-history-screen-worktrees.inner-ok-missing:worktrees-listed",
         "observation": {
-          "sender": ["acf501fa9958", "00b7efbaf87f", "739d442628ed"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["5a2900554f7f", "e881d7dabb25", "fe3fd26f3355"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -849,8 +793,8 @@
       {
         "id": "aivault-history-screen-worktrees.inner-ok-missing:cleanup",
         "observation": {
-          "sender": ["acf501fa9958", "00b7efbaf87f", "c8a1368e170b"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["5a2900554f7f", "e881d7dabb25", "1b7d1f3c4f0a"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -861,8 +805,8 @@
       {
         "id": "aivault-history-screen-worktrees.inner-false-string-error:worktrees-listed",
         "observation": {
-          "sender": ["acf501fa9958", "7182750ca2d1", "739d442628ed"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["ff1353abed80", "e881d7dabb25", "fe3fd26f3355"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -873,8 +817,8 @@
       {
         "id": "aivault-history-screen-worktrees.inner-false-string-error:cleanup",
         "observation": {
-          "sender": ["acf501fa9958", "7182750ca2d1", "c8a1368e170b"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["ff1353abed80", "e881d7dabb25", "1b7d1f3c4f0a"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -885,8 +829,8 @@
       {
         "id": "aivault-history-screen-worktrees.inner-false-object-error:worktrees-listed",
         "observation": {
-          "sender": ["acf501fa9958", "0569ef4f06ba", "739d442628ed"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["a07520ab0ac1", "e881d7dabb25", "fe3fd26f3355"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -897,8 +841,8 @@
       {
         "id": "aivault-history-screen-worktrees.inner-false-object-error:cleanup",
         "observation": {
-          "sender": ["acf501fa9958", "0569ef4f06ba", "c8a1368e170b"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["a07520ab0ac1", "e881d7dabb25", "1b7d1f3c4f0a"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -909,8 +853,8 @@
       {
         "id": "aivault-history-screen-worktrees.outer-refused:worktrees-listed",
         "observation": {
-          "sender": ["acf501fa9958", "9a209a9534f9", "739d442628ed"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["63ddf576c4de", "e881d7dabb25", "fe3fd26f3355"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -921,8 +865,8 @@
       {
         "id": "aivault-history-screen-worktrees.outer-refused:cleanup",
         "observation": {
-          "sender": ["acf501fa9958", "9a209a9534f9", "c8a1368e170b"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["63ddf576c4de", "e881d7dabb25", "1b7d1f3c4f0a"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -933,8 +877,8 @@
       {
         "id": "aivault-history-screen-worktrees.outer-refused-no-message:worktrees-listed",
         "observation": {
-          "sender": ["acf501fa9958", "de6f51a372a1", "739d442628ed"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["bdd2f2097a96", "e881d7dabb25", "fe3fd26f3355"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -945,8 +889,8 @@
       {
         "id": "aivault-history-screen-worktrees.outer-refused-no-message:cleanup",
         "observation": {
-          "sender": ["acf501fa9958", "de6f51a372a1", "c8a1368e170b"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["bdd2f2097a96", "e881d7dabb25", "1b7d1f3c4f0a"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -957,8 +901,8 @@
       {
         "id": "aivault-history-screen-worktrees.method-not-found:worktrees-listed",
         "observation": {
-          "sender": ["acf501fa9958", "6405fa9d6a94", "739d442628ed"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["519ce9879c6f", "e881d7dabb25", "fe3fd26f3355"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -969,8 +913,8 @@
       {
         "id": "aivault-history-screen-worktrees.method-not-found:cleanup",
         "observation": {
-          "sender": ["acf501fa9958", "6405fa9d6a94", "c8a1368e170b"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["519ce9879c6f", "e881d7dabb25", "1b7d1f3c4f0a"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -981,8 +925,8 @@
       {
         "id": "aivault-history-screen-worktrees.transport-rejection:worktrees-listed",
         "observation": {
-          "sender": ["acf501fa9958", "c4a0ee2acc32", "739d442628ed"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["c3f81e95c2d2", "e881d7dabb25", "fe3fd26f3355"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -993,8 +937,8 @@
       {
         "id": "aivault-history-screen-worktrees.transport-rejection:cleanup",
         "observation": {
-          "sender": ["acf501fa9958", "c4a0ee2acc32", "c8a1368e170b"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["c3f81e95c2d2", "e881d7dabb25", "1b7d1f3c4f0a"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1005,8 +949,8 @@
       {
         "id": "aivault-history-screen-worktrees.transport-rejection-no-message:worktrees-listed",
         "observation": {
-          "sender": ["acf501fa9958", "858c23d8f3ef", "739d442628ed"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["c3e8997d664e", "e881d7dabb25", "fe3fd26f3355"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
@@ -1017,8 +961,8 @@
       {
         "id": "aivault-history-screen-worktrees.transport-rejection-no-message:cleanup",
         "observation": {
-          "sender": ["acf501fa9958", "858c23d8f3ef", "c8a1368e170b"],
-          "payloads": ["e28c488ce6b2", "4d68bff46cff", "0180d22edc2e", "7312d72e532d"],
+          "sender": ["c3e8997d664e", "e881d7dabb25", "1b7d1f3c4f0a"],
+          "payloads": ["e28c488ce6b2", "d126597611a2", "7c48e0564605", "7312d72e532d"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },

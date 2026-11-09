@@ -7,7 +7,7 @@ import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 import { useAppStore } from '../store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { selectActiveTerminalChromeState } from '../store/active-terminal-chrome-selector'
+import { selectActiveTerminalChromeState } from './active-terminal-chrome-selector'
 import {
   hasRequestedBackgroundTerminalWorktreeMount,
   subscribeBackgroundTerminalWorktreeMountRequests

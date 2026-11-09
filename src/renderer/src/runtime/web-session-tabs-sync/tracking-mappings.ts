@@ -4,7 +4,7 @@ import {
   hostSessionTabIdByLocalKey,
   hostSessionTabMappingKeysByEnvironmentAndWorktree
 } from './state'
-import { resolveWebAgentSessionHandoff } from '../web-agent-session-handoff'
+import { resolveWebAgentSessionHandoff } from '../hosted-terminals/creation/agent-launch/web-agent-session-handoff'
 
 function hostSessionTabMappingKey(args: {
   environmentId: string

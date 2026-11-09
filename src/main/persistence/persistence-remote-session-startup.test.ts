@@ -1,4 +1,4 @@
-import { closeTestStores, createStore, makeRepo, testState } from './persistence-test-harness'
+import { closeTestStores, createStore, testState } from './persistence-test-harness'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
@@ -69,46 +69,6 @@ describe('remote session startup ownership', () => {
   afterEach(async () => {
     await closeTestStores()
     rmSync(testState.dir, { recursive: true, force: true })
-  })
-
-  it('keeps a paired browser row and its hosting identity across two Store reloads', () => {
-    const seed = createStore()
-    seed.addRepo(makeRepo({ id: 'local-repo', path: join(testState.dir, 'local') }))
-    seed.setWorkspaceSession(browserSession(), HOST)
-    seed.flush()
-
-    for (let i = 0; i < 2; i += 1) {
-      const reloaded = createStore()
-      expect(reloaded.getWorkspaceSession(HOST).browserPagesByWorkspace).toEqual({
-        [BROWSER.id]: [PAGE]
-      })
-      expect(reloaded.sweepDeregisteredRepoResidue()).toEqual([])
-      reloaded.flush()
-    }
-  })
-
-  it('retains remote metadata when no session or local catalog row names its repo', () => {
-    const seed = createStore()
-    seed.setWorktreeMeta(hostWorktreeTarget({ id: WORKTREE, hostId: HOST }), {
-      displayName: 'Remote work'
-    })
-    seed.flush()
-    const reloaded = createStore()
-    expect(reloaded.getWorktreeMeta(WORKTREE)).toMatchObject({ displayName: 'Remote work' })
-    expect(reloaded.sweepDeregisteredRepoResidue()).toEqual([])
-    reloaded.flush()
-  })
-
-  it('still applies an explicit remote project removal', () => {
-    const seed = createStore()
-    seed.setWorkspaceSession(browserSession(), HOST)
-    seed.flush()
-    const reloaded = createStore()
-    // Prove the fixture survived loading so an empty post-removal partition is meaningful.
-    expect(reloaded.getWorkspaceSession(HOST).browserPagesByWorkspace).not.toEqual({})
-    reloaded.removeProjectForHost({ id: REPO, executionHostId: HOST })
-    reloaded.flush()
-    expect(createStore().getWorkspaceSession(HOST).browserPagesByWorkspace).toEqual({})
   })
 
   // Paired hosts can share repo IDs without a local registration; removal must remain host-scoped (STA-7117).

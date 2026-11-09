@@ -2,10 +2,11 @@ import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store/index'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
+import { useWorkspaceFileBrowserActionPredicate } from '@/lib/browser/documents/file-preview'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { Repo } from '../../../../../../shared/repo-types'
+import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { TreeNode } from './file-explorer-types'
 import { buildFolderStatusMap, buildStatusMap } from '../../../../lib/git-path-decoration'
@@ -23,6 +24,9 @@ import type { useFileExplorerSelection } from '../selection/useFileExplorerSelec
 import type { useFileExplorerTree } from './useFileExplorerTree'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { LocalPathOpenOwner } from '@/lib/local-path-open-guard'
+
+// Why: a stable reference keeps the selector from re-rendering the pane when the active worktree has no status.
+const NO_GIT_STATUS_ENTRIES: GitStatusEntry[] = []
 
 type UseFileExplorerTreePaneStateParams = {
   onRevealOutsideRoot?: () => void
@@ -132,7 +136,11 @@ export function useFileExplorerTreePaneState({
   const toggleDir = useAppStore((s) => s.toggleDir)
   const openFile = useAppStore((s) => s.openFile)
   const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
-  const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const entries = useAppStore((s) =>
+    activeWorktreeId
+      ? (s.gitStatusByWorktree[activeWorktreeId] ?? NO_GIT_STATUS_ENTRIES)
+      : NO_GIT_STATUS_ENTRIES
+  )
   const closeFile = useAppStore((s) => s.closeFile)
 
   const runtimeDownloadContext = useMemo(
@@ -149,10 +157,6 @@ export function useFileExplorerTreePaneState({
   )
   const isWindows = useMemo(() => navigator.userAgent.includes('Windows'), [])
 
-  const entries = useMemo(
-    () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
-    [activeWorktreeId, gitStatusByWorktree]
-  )
   const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
   const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
 

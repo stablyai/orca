@@ -1,6 +1,9 @@
 import { expect, it } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../../../shared/agent-session/journal/agent-session-journal-item-key'
-import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  journalRowSchemaVersion
+} from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../../../../shared/agent-session/agent-session-wire'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
@@ -10,17 +13,267 @@ import { AgentSessionSubscribers } from '../../publication/subscribers/structure
 import { readAgentSessionHistory } from '../../publication/history/agent-session-history-page'
 import { subscriberHistoryReader } from '../../publication/history/agent-session-bounded-frames'
 import type { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
+import {
+  pinTestJournalInputMode,
+  assertTestJournalHistoricalInputs,
+  finishTestJournalHistoricalInputs
+} from '../../../agent-session-journal/replay/journal-historical-inputs.test-support'
+import { insertTestJournalRow } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { agentSessionSendBodyFingerprint } from '../../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
+import {
+  HOST_TEST_NOW,
+  HOST_TEST_SESSION as SESSION
+} from './structured-agent-session-host-test-data'
 
 import {
   db,
   handOff,
   journalFor,
+  legacyIds,
   message,
   retainedHistoryCases,
   seedLegacy,
   threadWrite
 } from './structured-agent-session-queue-import-contract-test-fixture'
+
+it.each(['person', 'mail'] as const)(
+  'accepted table-only %s handoff keeps its Stop provenance after cleanup and another open',
+  async (sender) => {
+    const sessionId = 'table-only-legacy'
+    let journal = journalFor(sessionId, true)
+    await journal.open()
+    pinTestJournalInputMode(journal)
+    await journal.appendStopEvent({ reason: 'user-stop' }, 0)
+    await handOff(journal, 'H', 'S', 'sent', 'accepted')
+    await journal.close()
+    seedLegacy(sessionId, [
+      ['W', 'waiting', 'waiting'],
+      ['S', 'dispatched', 'sent', 'H']
+    ])
+    if (sender === 'mail') {
+      const body = {
+        ...message('sent'),
+        from: {
+          kind: 'agent',
+          senders: [],
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: 'owner',
+            dispatchId: null,
+            messages: []
+          }
+        }
+      }
+      db()
+        .prepare('UPDATE queued_messages SET body_json=? WHERE message_id=?')
+        .run(JSON.stringify(body), 'S')
+    }
+    for (let opened = 0; opened < 2; opened++) {
+      journal = journalFor(sessionId)
+      await journal.open()
+      await journal.queuedMessages.importAtOpen()
+      expect(legacyIds(sessionId)).toEqual([])
+      expect(journal.queuedMessages.list().map((card) => card.messageId)).toEqual(['W'])
+      expect(journal.queuedMessages.userStopInForce() === null).toBe(sender === 'person')
+      await journal.appendSubmission({
+        clientMessageId: `unattended-${opened}`,
+        body: message('wake'),
+        payloadFingerprint: 'wake',
+        source: { kind: 'agent' },
+        origin: 'host',
+        handoverRecorded: true,
+        fence: 0
+      })
+      await journal.resolveDispatch({
+        clientMessageId: `unattended-${opened}`,
+        state: 'accepted',
+        providerIdentity: null,
+        fence: 0
+      })
+      expect(journal.queuedMessages.nextInputCard()?.messageId ?? null).toBe(
+        sender === 'person' ? 'W' : null
+      )
+      await journal.close()
+    }
+  }
+)
+
+it.each(['person', 'mail'] as const)(
+  'a previously cleaned legacy %s handoff keeps its original Stop provenance',
+  async (sender) => {
+    const sessionId = 'already-cleaned-legacy'
+    let journal = journalFor(sessionId, true)
+    await journal.open()
+    pinTestJournalInputMode(journal)
+    await journal.queuedMessages.insert({ messageId: 'W', body: message('waiting') })
+    await journal.appendStopEvent({ reason: 'user-stop' }, 0)
+    const body = {
+      ...message('sent'),
+      ...(sender === 'mail'
+        ? { from: { kind: 'agent' as const, senders: [], orchestration: null } }
+        : {})
+    }
+    await journal.appendSubmission({
+      clientMessageId: 'H',
+      queuedMessageId: 'S',
+      origin: 'client',
+      body,
+      payloadFingerprint: agentSessionSendBodyFingerprint(sessionId, body),
+      handoverRecorded: true,
+      fence: 0
+    })
+    await journal.resolveDispatch({
+      clientMessageId: 'H',
+      state: 'accepted',
+      providerIdentity: null,
+      fence: 0
+    })
+    assertTestJournalHistoricalInputs(db(), journal)
+    finishTestJournalHistoricalInputs(journal)
+    await journal.close()
+    for (let opened = 0; opened < 2; opened++) {
+      journal = journalFor(sessionId)
+      await journal.open()
+      expect(legacyIds(sessionId)).toEqual([])
+      expect(journal.queuedMessages.get('S')).toBeNull()
+      expect(journal.queuedMessages.userStopInForce() === null).toBe(sender === 'person')
+      await journal.appendSubmission({
+        clientMessageId: `wake-${opened}`,
+        body: message('wake'),
+        payloadFingerprint: 'wake',
+        source: { kind: 'agent' },
+        origin: 'host',
+        handoverRecorded: true,
+        fence: 0
+      })
+      await journal.resolveDispatch({
+        clientMessageId: `wake-${opened}`,
+        state: 'accepted',
+        providerIdentity: null,
+        fence: 0
+      })
+      expect(journal.queuedMessages.nextInputCard()?.messageId ?? null).toBe(
+        sender === 'person' ? 'W' : null
+      )
+      if (opened === 0) {
+        await journal.replaceEpochItems('handle_forked', 0, [])
+      }
+      await journal.close()
+    }
+  }
+)
+
+it('a retired personal handoff in a marker-5 prefix keeps Stop lifted without reviving its input', async () => {
+  const sessionId = 'retired-prefix-legacy'
+  let journal = journalFor(sessionId, true)
+  await journal.open()
+  pinTestJournalInputMode(journal)
+  await journal.queuedMessages.insert({ messageId: 'W', body: message('waiting') })
+  await journal.appendStopEvent({ reason: 'user-stop' }, 0)
+  const body = message('sent')
+  await journal.appendSubmission({
+    clientMessageId: 'H',
+    queuedMessageId: 'S',
+    origin: 'client',
+    body,
+    payloadFingerprint: agentSessionSendBodyFingerprint(sessionId, body),
+    handoverRecorded: true,
+    fence: 0
+  })
+  await journal.resolveDispatch({
+    clientMessageId: 'H',
+    state: 'accepted',
+    providerIdentity: null,
+    fence: 0
+  })
+  assertTestJournalHistoricalInputs(db(), journal)
+  const { epoch, sequence } = journal.cursor()
+  await journal.close()
+  const prefix = sequence + 1
+  insertTestJournalRow(db(), sessionId, {
+    kind: 'tombstone',
+    v: journalRowSchemaVersion([]),
+    epoch,
+    seq: prefix,
+    ts: HOST_TEST_NOW,
+    fence: 0,
+    itemId: agentJournalSubmissionKey('H'),
+    revision: 1,
+    retireSubmission: true
+  })
+  const generation = db()
+    .prepare('INSERT INTO journal_outcome_generations (session_id, epoch) VALUES (?, ?)')
+    .run(sessionId, epoch).lastInsertRowid
+  db()
+    .prepare('INSERT INTO journal_rows (session_id,epoch,seq,ts,row_json) VALUES (?,?,?,?,?)')
+    .run(
+      sessionId,
+      epoch,
+      prefix + 1,
+      HOST_TEST_NOW,
+      JSON.stringify({ v: 5, kind: 'outcomes', epoch, seq: prefix + 1, ts: HOST_TEST_NOW })
+    )
+  db()
+    .prepare('INSERT INTO journal_outcome_epochs VALUES (?,?,?,?,?,?)')
+    .run(sessionId, epoch, generation, 2, prefix, prefix)
+  for (let opened = 0; opened < 2; opened++) {
+    journal = journalFor(sessionId)
+    await journal.open()
+    expect(journal.queuedMessages.userStopInForce()).toBeNull()
+    expect(journal.submission('H')).toBeUndefined()
+    expect(journal.item(agentJournalSubmissionKey('H'))).toBeNull()
+    expect(journal.queuedMessages.get('S')).toBeNull()
+    await journal.appendQueueReopen(0)
+    expect(journal.queuedMessages.nextInputCard()).toBeNull()
+    await journal.appendSubmission({
+      clientMessageId: `wake-${opened}`,
+      body: message('wake'),
+      payloadFingerprint: 'wake',
+      source: { kind: 'agent' },
+      origin: 'host',
+      handoverRecorded: true,
+      fence: 0
+    })
+    await journal.resolveDispatch({
+      clientMessageId: `wake-${opened}`,
+      state: 'accepted',
+      providerIdentity: null,
+      fence: 0
+    })
+    expect(journal.queuedMessages.nextInputCard()?.messageId).toBe('W')
+    await journal.replaceEpochItems('handle_forked', 0, [])
+    await journal.close()
+  }
+})
+
+it('a new-format missing-card attempt cannot invent legacy personal provenance', async () => {
+  let journal = journalFor(SESSION)
+  await journal.open()
+  await journal.queuedMessages.insert({ messageId: 'W', body: message('waiting') })
+  await journal.appendStopEvent({ reason: 'user-stop' }, 0)
+  const body = message('sent')
+  await journal.appendSubmission({
+    clientMessageId: 'H',
+    queuedMessageId: 'S',
+    origin: 'client',
+    body,
+    payloadFingerprint: agentSessionSendBodyFingerprint(SESSION, body),
+    handoverRecorded: true,
+    fence: 0
+  })
+  await journal.resolveDispatch({
+    clientMessageId: 'H',
+    state: 'accepted',
+    providerIdentity: null,
+    fence: 0
+  })
+  await journal.close()
+  journal = journalFor(SESSION)
+  await journal.open()
+  expect(journal.queuedMessages.userStopInForce()).not.toBeNull()
+  expect(journal.queuedMessages.nextInputCard()).toBeNull()
+  await journal.close()
+})
 
 it.each(retainedHistoryCases)('retained history: $adopt / $proof', async ({ adopt, proof }) => {
   const earlier = journalFor(SESSION)

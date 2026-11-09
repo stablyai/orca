@@ -1,6 +1,6 @@
 import type { BrowserCookieImportFailure } from './browser-cookie-import-failure-copy'
-import type { GoogleCookieClearLocalReceipt } from './browser-google-cookie-clear'
-import type { ManagedBrowserProfileOwner } from './browser-profile-scope'
+import type { GoogleCookieClearLocalReceipt } from './browser/cookies/browser-google-cookie-clear'
+import type { ManagedBrowserProfileOwner } from './browser/profiles/browser-profile-scope'
 export type BrowserHistoryEntry = {
   url: string
   normalizedUrl: string
@@ -132,8 +132,6 @@ export type BrowserWorkspace = {
   /** Mirrored from the active page, like the fields above it. */
   docLocation?: BrowserPageDocLocation | null
 }
-
-export type BrowserTab = BrowserWorkspace
 
 export type BrowserSessionProfileScope = 'default' | 'isolated' | 'imported'
 

@@ -13,7 +13,7 @@ import {
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '../../workspace-record-selectors'
+} from '../../workspaces/catalog/workspace-record-fields'
 
 let latestWorkspaceCleanupScanToken = 0
 let finalizedWorkspaceCleanupScanToken = 0

@@ -326,8 +326,10 @@ describe('registerClipboardHandlers', () => {
       'data:image/png;base64,AAAA'
     )
     const file = handlers.get('clipboard:writeFile')?.(makeClipboardEvent(), '/tmp/denied.txt')
+    const imageResult = expect(image).rejects.toThrow('Clipboard image could not be decoded')
     await vi.runAllTimersAsync()
-    await Promise.all([text, image])
+    await text
+    await imageResult
     await expect(file).resolves.toEqual({ ok: false, reason: 'access-denied' })
     expect(clipboardWriteTextMock).toHaveBeenCalledWith(large)
     expect(clipboardWriteImageMock).not.toHaveBeenCalled()
@@ -768,7 +770,7 @@ describe('registerClipboardHandlers', () => {
     expect(fsWriteFileMock).not.toHaveBeenCalled()
   })
 
-  it('ignores oversized clipboard write-image data before decoding base64', () => {
+  it('rejects oversized clipboard write-image data before decoding base64', () => {
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
@@ -776,13 +778,15 @@ describe('registerClipboardHandlers', () => {
       'data:image/png;base64,',
       'A'.repeat(CLIPBOARD_IMAGE_MAX_BASE64_CHARS + 1)
     ].join('')
-    handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), dataUrl)
+    expect(() => handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), dataUrl)).toThrow(
+      'Clipboard image is too large'
+    )
 
     expect(nativeImageCreateFromBufferMock).not.toHaveBeenCalled()
     expect(clipboardWriteImageMock).not.toHaveBeenCalled()
   })
 
-  it('ignores clipboard write images with oversized decoded dimensions', async () => {
+  it('rejects clipboard write images with oversized decoded dimensions', async () => {
     nativeImageCreateFromBufferMock.mockReturnValue({
       getSize: () => ({ height: 1, width: CLIPBOARD_IMAGE_MAX_PIXELS + 1 }),
       isEmpty: () => false
@@ -791,7 +795,9 @@ describe('registerClipboardHandlers', () => {
     registerClipboardHandlers({} as never)
 
     const handlers = getRegisteredHandlers()
-    await handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), 'data:image/png;base64,AAAA')
+    await expect(
+      handlers.get('clipboard:writeImage')?.(makeClipboardEvent(), 'data:image/png;base64,AAAA')
+    ).rejects.toThrow('Clipboard image is too large')
 
     expect(nativeImageCreateFromBufferMock).toHaveBeenCalled()
     expect(clipboardWriteImageMock).not.toHaveBeenCalled()

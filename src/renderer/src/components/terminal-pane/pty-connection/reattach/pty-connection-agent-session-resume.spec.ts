@@ -44,7 +44,6 @@ export function registerPtyConnectionSleepingRecordResumeTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -70,8 +69,9 @@ export function registerPtyConnectionSleepingRecordResumeTests(): void {
     it('uses sleeping-record launch config for pane cold restore after settings change', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -194,7 +194,6 @@ export function registerPtyConnectionLiveResumeIdentityTests(): void {
   const bindLeaf2 = bindsPaneInStore(() => mockStoreState, 'tab-1', LEAF_2)
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -220,8 +219,9 @@ export function registerPtyConnectionLiveResumeIdentityTests(): void {
     it('prefers live-entry launch config for pane cold restore when status survived PTY loss', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -313,8 +313,9 @@ export function registerPtyConnectionLiveResumeIdentityTests(): void {
       async (kind) => {
         vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks6 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const retainedPtyId = 'wt-1@@lost-pty'
         const transport = createMockTransport()
         transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
@@ -403,8 +404,9 @@ export function registerPtyConnectionLiveResumeIdentityTests(): void {
     it('ignores stale live launch config when cold restore identity lookup rejects it', async () => {
       vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('fresh-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {
         if (sessionId) {
@@ -514,8 +516,9 @@ export function registerPtyConnectionLiveResumeIdentityTests(): void {
 
     it('shows the restored banner when a sleeping resume falls back to a fresh shell', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const staleSessionId = 'wt-1@@stale-session'
       const transport = createMockTransport()
       transport.connect.mockImplementation(async (opts: { sessionId?: string }) => {

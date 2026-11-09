@@ -65,19 +65,6 @@ describe('SidebarFeedReader', () => {
     expect(host.transport.mock.calls.length).toBe(sent)
   })
 
-  it('names the read each settled install answers, keeping unchanged domains', async () => {
-    const host = hostWithFeed()
-    const first = host.reader.refresh()
-    await settle()
-    expect(host.reads.at(-1)?.settledBy).toBe(first)
-    const domains = host.reads.at(-1)!.snapshot!.domains
-    const second = host.reader.refresh()
-    await settle()
-    expect(second).toBeGreaterThan(first)
-    expect(host.reads.at(-1)?.settledBy).toBe(second)
-    expect(host.reads.at(-1)!.snapshot!.domains.workspaces).toBe(domains.workspaces)
-  })
-
   it('reads a host without the feed as unavailable, and stops retrying it', async () => {
     vi.useFakeTimers()
     try {

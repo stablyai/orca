@@ -1,7 +1,4 @@
-import {
-  DICTATION_FINISH_TIMEOUT_MS,
-  isCurrentMobileDictationStart
-} from './mobile-dictation-session-state'
+import { isCurrentMobileDictationStart } from './mobile-dictation-session-state'
 import { sendAcrossConnectionMove } from './mobile-dictation-audio-chunk'
 import { dictationSessionLostMessage } from '../dictation/mobile-dictation-setup'
 import {
@@ -10,9 +7,10 @@ import {
   dictationSessionStart
 } from '../dictation/mobile-dictation-operations'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../src/shared/rpc-contract/speech-params'
-import { rpcPayloadMember } from '../transport/rpc-reader-payload'
-import { probeLivenessWhileWaiting } from '../transport/rpc-liveness-probe-while-waiting'
-import type { RpcClient } from '../transport/rpc-client'
+import { pairedDictationFinishTimeoutMs } from '../../../src/shared/dictation-finish-deadlines'
+import { rpcPayloadMember } from '../transport/rpc/rpc-reader-payload'
+import { probeLivenessWhileWaiting } from '../transport/rpc/rpc-liveness-probe-while-waiting'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 
 type StartMobileDictationDesktopSessionOptions = {
   client: RpcClient
@@ -57,15 +55,13 @@ export function cancelDesktopDictation(client: RpcClient, dictationId: string): 
 // Returns the interpreted reply: the caller reads its text only after its staleness guard.
 export async function finishDesktopDictation(
   client: RpcClient,
-  dictationId: string
+  dictationId: string,
+  sentAudioSeconds: number
 ): Promise<unknown> {
+  const timeoutMs = pairedDictationFinishTimeoutMs(sentAudioSeconds)
   return dictationSessionFinish.interpret(
     await sendAcrossConnectionMove(client, () =>
-      dictationSessionFinish.request(
-        client,
-        { dictationId },
-        { timeoutMs: DICTATION_FINISH_TIMEOUT_MS }
-      )
+      dictationSessionFinish.request(client, { dictationId }, { timeoutMs })
     )
   )
 }

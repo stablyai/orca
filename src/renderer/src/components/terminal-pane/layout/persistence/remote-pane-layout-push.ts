@@ -4,7 +4,7 @@ import { updateWebRuntimePaneLayout } from '@/runtime/hosted-terminals/actions/w
 import {
   requeuePendingPaneTitleRenames,
   takeUnsentPaneTitleRenames
-} from '@/runtime/pending-pane-title-renames'
+} from '@/runtime/web-session-tabs-sync/naming/pending-pane-title-renames'
 import { collectLeafIdsInOrder } from '../terminal-layout-leaf-traversal'
 
 export type RemotePaneLayoutPusher = {

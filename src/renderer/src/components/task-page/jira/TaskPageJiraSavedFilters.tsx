@@ -7,7 +7,7 @@ import {
   MAX_JIRA_SAVED_FILTERS,
   type JiraSavedFilter
 } from '../../../../../shared/jira/jira-saved-filters'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   Command,
   CommandInput,
@@ -67,6 +67,7 @@ export function TaskPageJiraSavedFilters({
   error,
   onRetry
 }: TaskPageJiraSavedFiltersProps): React.JSX.Element {
+  const t = useTranslate()
   const [popoverOpen, setPopoverOpen] = useState(false)
   const [draft, setDraft] = useState<SavedFilterDraft | null>(null)
   const filterLimitReached = filters.length >= MAX_JIRA_SAVED_FILTERS
@@ -114,13 +115,13 @@ export function TaskPageJiraSavedFilters({
         <PopoverTrigger asChild>
           <Button type="button" variant="outline" size="xs">
             <ListFilter />
-            {translate('auto.components.TaskPageJiraSavedFilters.6c381858a1', 'Saved filters')}
+            {t('auto.components.TaskPageJiraSavedFilters.6c381858a1', 'Saved filters')}
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" sideOffset={6} className="w-72">
           <div className="border-b border-border/50 px-3 py-2">
             <p className="text-xs font-medium">
-              {translate('auto.components.TaskPageJiraSavedFilters.6c381858a1', 'Saved filters')}
+              {t('auto.components.TaskPageJiraSavedFilters.6c381858a1', 'Saved filters')}
             </p>
           </div>
           {error ? (
@@ -129,23 +130,21 @@ export function TaskPageJiraSavedFilters({
                 {error}
               </p>
               <Button size="xs" variant="outline" onClick={onRetry}>
-                {translate('jira.savedFilters.retry', 'Retry')}
+                {t('jira.savedFilters.retry', 'Retry')}
               </Button>
             </div>
           ) : null}
           <Command>
-            <CommandInput
-              placeholder={translate('jira.savedFilters.find', 'Find a saved filter')}
-            />
+            <CommandInput placeholder={t('jira.savedFilters.find', 'Find a saved filter')} />
             <CommandList className="max-h-72">
               {filters.length > 0 ? (
                 <CommandEmpty>
-                  {translate('jira.savedFilters.noMatch', 'No matching filters.')}
+                  {t('jira.savedFilters.noMatch', 'No matching filters.')}
                 </CommandEmpty>
               ) : null}
               {filters.length === 0 ? (
                 <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.TaskPageJiraSavedFilters.d14121662d',
                     'No saved filters yet.'
                   )}
@@ -179,7 +178,7 @@ export function TaskPageJiraSavedFilters({
                         type="button"
                         variant="ghost"
                         size="icon-xs"
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.TaskPageJiraSavedFilters.af0dd8c528',
                           'Edit {{value0}}',
                           { value0: filter.name }
@@ -201,7 +200,7 @@ export function TaskPageJiraSavedFilters({
           <div className="border-t border-border/50 p-1">
             {filterLimitReached ? (
               <p className="px-2 py-1 text-[11px] text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.TaskPageJiraSavedFilters.bae9bd87bf',
                   'You can save up to {{value0}} filters.',
                   { value0: MAX_JIRA_SAVED_FILTERS }
@@ -217,10 +216,7 @@ export function TaskPageJiraSavedFilters({
               onClick={openCreateDialog}
             >
               <Plus />
-              {translate(
-                'auto.components.TaskPageJiraSavedFilters.85506127a5',
-                'Save current filter'
-              )}
+              {t('auto.components.TaskPageJiraSavedFilters.85506127a5', 'Save current filter')}
             </Button>
           </div>
         </PopoverContent>
@@ -231,17 +227,11 @@ export function TaskPageJiraSavedFilters({
           <DialogHeader>
             <DialogTitle>
               {draft?.mode === 'edit'
-                ? translate(
-                    'auto.components.TaskPageJiraSavedFilters.7aef259c28',
-                    'Edit Jira filter'
-                  )
-                : translate(
-                    'auto.components.TaskPageJiraSavedFilters.4f0e55d2e5',
-                    'Save Jira filter'
-                  )}
+                ? t('auto.components.TaskPageJiraSavedFilters.7aef259c28', 'Edit Jira filter')
+                : t('auto.components.TaskPageJiraSavedFilters.4f0e55d2e5', 'Save Jira filter')}
             </DialogTitle>
             <DialogDescription>
-              {translate(
+              {t(
                 'auto.components.TaskPageJiraSavedFilters.466c1b12ce',
                 'Give this JQL query a name for quick access.'
               )}
@@ -257,7 +247,7 @@ export function TaskPageJiraSavedFilters({
           >
             <div className="space-y-2">
               <Label htmlFor="jira-saved-filter-name">
-                {translate('auto.components.TaskPageJiraSavedFilters.e4c2f52972', 'Name')}
+                {t('auto.components.TaskPageJiraSavedFilters.e4c2f52972', 'Name')}
               </Label>
               <Input
                 id="jira-saved-filter-name"
@@ -274,7 +264,7 @@ export function TaskPageJiraSavedFilters({
               />
               {duplicateName ? (
                 <p role="alert" className="text-xs text-destructive">
-                  {translate(
+                  {t(
                     'auto.components.TaskPageJiraSavedFilters.0ab71bb840',
                     'A saved filter with this name already exists.'
                   )}
@@ -284,7 +274,7 @@ export function TaskPageJiraSavedFilters({
 
             <div className="space-y-2">
               <Label htmlFor="jira-saved-filter-jql">
-                {translate('auto.components.TaskPageJiraSavedFilters.42ce360813', 'JQL')}
+                {t('auto.components.TaskPageJiraSavedFilters.42ce360813', 'JQL')}
               </Label>
               <Textarea
                 id="jira-saved-filter-jql"
@@ -322,26 +312,17 @@ export function TaskPageJiraSavedFilters({
                   }}
                 >
                   <Trash2 />
-                  {translate(
-                    'auto.components.TaskPageJiraSavedFilters.7b21c59a26',
-                    'Delete filter'
-                  )}
+                  {t('auto.components.TaskPageJiraSavedFilters.7b21c59a26', 'Delete filter')}
                 </Button>
               ) : null}
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="ghost" size="sm" onClick={() => setDraft(null)}>
-                  {translate('auto.components.TaskPageJiraSavedFilters.a62f9db53d', 'Cancel')}
+                  {t('auto.components.TaskPageJiraSavedFilters.a62f9db53d', 'Cancel')}
                 </Button>
                 <Button type="submit" size="sm" disabled={disabled || !canSubmit}>
                   {draft?.mode === 'edit'
-                    ? translate(
-                        'auto.components.TaskPageJiraSavedFilters.c77189bc0c',
-                        'Update filter'
-                      )
-                    : translate(
-                        'auto.components.TaskPageJiraSavedFilters.19af906d12',
-                        'Save filter'
-                      )}
+                    ? t('auto.components.TaskPageJiraSavedFilters.c77189bc0c', 'Update filter')
+                    : t('auto.components.TaskPageJiraSavedFilters.19af906d12', 'Save filter')}
                 </Button>
               </div>
             </DialogFooter>

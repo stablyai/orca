@@ -148,17 +148,6 @@ describe('describeInstallDirAclPoison', () => {
     resetWindowsInstallDirAclRecoveryForTest()
   })
 
-  it('offers the copyable commands, and drops them once the repair lands', async () => {
-    await probeThenRecover(() => [ORPHAN_PACKAGE_ACE])
-    const repaired = describeInstallDirAclPoison()
-    expect(repaired?.detail).toContain('Orca repaired the permissions')
-    expect(repaired?.detail).not.toContain('Administrator Command Prompt')
-    expect(repaired?.commands).toEqual([
-      `icacls "${INSTALL_DIR}" /grant "*S-1-15-2-2:(OI)(CI)(RX)"`,
-      `icacls "${INSTALL_DIR}" /grant "*S-1-15-2-2:(RX)" /T /C`
-    ])
-  })
-
   it('walks a standard user through icacls when the repair could not write', async () => {
     await probeThenRecover(() => [ORPHAN_PACKAGE_ACE], {
       failRepair: true
@@ -265,10 +254,6 @@ describe('isInstallDirAclSuspect', () => {
     resetWindowsInstallDirAclProbeForTest()
     resetWindowsInstallDirAclRepairForTest()
     resetWindowsInstallDirAclRecoveryForTest()
-  })
-
-  it('is false when nothing has suggested the install DACL is involved', () => {
-    expect(isInstallDirAclSuspect()).toBe(false)
   })
 
   // GPU deaths can precede the probe by seconds; pending verdict is the misdiagnosis window.

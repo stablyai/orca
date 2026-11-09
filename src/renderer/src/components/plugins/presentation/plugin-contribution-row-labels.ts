@@ -1,15 +1,17 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { PluginContribution } from './plugin-contributions'
 
 export function withMode(
   kindLabel: string,
-  mode: 'light' | 'dark' | 'unknown' | undefined
+  mode: 'light' | 'dark' | 'unknown' | undefined,
+  t: Translate = translate
 ): string {
   if (mode === 'dark') {
-    return `${kindLabel} · ${translate('auto.components.settings.pluginContributions.dark', 'Dark')}`
+    return `${kindLabel} · ${t('auto.components.settings.pluginContributions.dark', 'Dark')}`
   }
   if (mode === 'light') {
-    return `${kindLabel} · ${translate('auto.components.settings.pluginContributions.light', 'Light')}`
+    return `${kindLabel} · ${t('auto.components.settings.pluginContributions.light', 'Light')}`
   }
   return kindLabel
 }
@@ -21,8 +23,11 @@ export function statusBarItemTitles(
   return (items ?? []).map((item) => item.text || item.id)
 }
 
-export function statusBarContributionRows(titles: readonly string[]): PluginContribution[] {
-  const detail = translate('auto.components.settings.pluginContributions.statusBar', 'Status bar')
+export function statusBarContributionRows(
+  titles: readonly string[],
+  t: Translate = translate
+): PluginContribution[] {
+  const detail = t('auto.components.settings.pluginContributions.statusBar', 'Status bar')
   return titles.map((title, index) => ({
     key: `statusBarItems:${index}`,
     kind: 'statusBarItems',
@@ -32,8 +37,11 @@ export function statusBarContributionRows(titles: readonly string[]): PluginCont
   }))
 }
 
-export function fontContributionRows(families: readonly string[]): PluginContribution[] {
-  const detail = translate(
+export function fontContributionRows(
+  families: readonly string[],
+  t: Translate = translate
+): PluginContribution[] {
+  const detail = t(
     'auto.components.settings.pluginContributions.font',
     'Font for the terminal, editor or interface'
   )

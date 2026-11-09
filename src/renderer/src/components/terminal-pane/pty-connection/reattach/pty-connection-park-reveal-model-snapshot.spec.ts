@@ -34,7 +34,6 @@ export function registerPtyConnectionParkRevealModelSnapshotTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -58,8 +57,9 @@ export function registerPtyConnectionParkRevealModelSnapshotTests(): void {
 
     it('keeps a parked main-model alt frame at its capture grid while hidden', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const localPtyId = 'global-floating-terminal@@terminal-1'
       const transport = createMockTransport(localPtyId)
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) => {

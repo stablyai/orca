@@ -250,13 +250,19 @@ type Collection = (typeof OUTCOME_FORMAT_1_COLLECTIONS)[number]
 type StoredIn<F> = F extends 'items'
   ? AgentJournalRenderItem
   : F extends 'queue.cards'
-    ? [string, Omit<Cards extends Map<string, infer V> ? V : never, 'recovers'>]
+    ? [
+        string,
+        Omit<
+          Cards extends Map<string, infer V> ? V : never,
+          'recovers' | 'deliveryMode' | 'unattended'
+        >
+      ]
     : F extends keyof State
       ? Stored<State[F]>
       : never
 type Marks = State['queuePauseMarks']
 // Live Stop settlement is never stored (durableQueuePauseMarks).
-type StoredMarks = Omit<Marks, 'latestStop'> & {
+type StoredMarks = Omit<Marks, 'latestStop' | 'manualStop'> & {
   latestStop: { sequence: number; event: JournalStopEvent } | null
 }
 type Scalars = z.output<typeof outcomeFormat1StoredScalars>

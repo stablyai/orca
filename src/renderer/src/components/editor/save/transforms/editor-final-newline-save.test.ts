@@ -4,9 +4,9 @@ import * as monaco from 'monaco-editor/esm/vs/editor/editor.api.js'
 import type { StoreApi } from 'zustand'
 import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
-import { editorModelRegistry } from '@/lib/editor-model-registry'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import { usePluginPanelsStore } from '@/store/plugin-panels'
+import { editorModelRegistry } from '@/lib/editor/monaco/editor-model-registry'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { requestEditorFileSave } from '../../autosave/editor-autosave'
 import { attachEditorAutosaveController } from '../../autosave/editor-autosave-controller'
 import { createEditorStore } from '../../autosave/editor-autosave-controller-test-fixture'
@@ -17,7 +17,9 @@ import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-
 
 const storeRef = vi.hoisted((): { current: StoreApi<AppState> | null } => ({ current: null }))
 
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => null }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => null
+}))
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeRef.current?.getState() } }))
 vi.mock('@/lib/file-owner-runtime-target', () => ({
   getRuntimeTargetForFileOwner: () => ({ kind: 'local' })

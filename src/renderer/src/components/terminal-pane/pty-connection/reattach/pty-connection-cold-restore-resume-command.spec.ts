@@ -26,6 +26,7 @@ import { createInitialStoreState } from '../test-fixtures/pty-connection-test-st
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
+  loadFreshTerminalModules,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
 import { mockPanePtyArgs } from '../test-fixtures/pty-connection-test-connect-mock-pane'
@@ -42,7 +43,6 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -76,8 +76,9 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
 
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const paneKey = makePaneKey('tab-1', LEAF_2)
         let activePtyId: string | null = 'restored-session'
         const transport = createMockTransport('restored-session')
@@ -193,6 +194,7 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
       const restoreNavigator = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       const pendingTimeouts: (() => void)[] = []
       const originalSetTimeout = globalThis.setTimeout
       globalThis.setTimeout = vi.fn((fn: () => void) => {
@@ -202,8 +204,9 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
 
       try {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks2 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const paneKey = makePaneKey('tab-1', LEAF_2)
         let activePtyId: string | null = 'restored-session'
         const transport = createMockTransport('restored-session')
@@ -316,8 +319,9 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
       state: 'working' | 'done'
     ): Promise<void> {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const paneKey = makePaneKey('tab-1', LEAF_2)
       const transport = createMockTransport('restored-session')
       transport.connect.mockResolvedValue({
@@ -374,8 +378,9 @@ export function registerPtyConnectionColdRestoreResumeCommandTests(): void {
 
     it('keeps a contentless reattach when a live status supersedes passive sleep evidence', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const paneKey = makePaneKey('tab-1', LEAF_2)
       const transport = createMockTransport('restored-session')
       transport.connect.mockResolvedValue({

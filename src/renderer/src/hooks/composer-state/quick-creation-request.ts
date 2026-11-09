@@ -2,10 +2,10 @@ import type { AgentStartedTelemetry } from '@/lib/workspace/creation/worktree-st
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { AgentStartupPlan } from '../../../../shared/agent-launch/startup/tui-agent-startup'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { LinkedPluginTask } from '../../../../shared/plugins/tasks/plugin-task-link'
-import type { AgentLaunchChoice } from '@/lib/agent-menu-selection'
+import type { AgentLaunchChoice } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
@@ -36,6 +36,7 @@ export type QuickCreationRequestInput = {
   agent: TuiAgent | null
   agentLaunchRoute?: WorktreeCreationRequest['agentLaunchRoute']
   launchInputs?: WorktreeCreationRequest['launchInputs']
+  legacyLaunchInputs?: WorktreeCreationRequest['legacyLaunchInputs']
   linkedLinearIssue: string | undefined
   linkedLinearIssueWorkspaceId: string | undefined
   linkedLinearIssueOrganizationUrlKey: string | undefined
@@ -51,6 +52,7 @@ export type QuickCreationRequestInput = {
   hookPreparation?: WorktreeCreationRequest['hookPreparation']
   pendingFirstAgentMessageRename: boolean
   note: string
+  creationStartup?: WorktreeCreationRequest['creationStartup']
   startupPlan: AgentStartupPlan | null
   quickPrompt: string
   launchDraftPrompt: string | null | undefined
@@ -61,9 +63,11 @@ export type QuickCreationRequestInput = {
 }
 
 export type QuickSubmitOptions = {
+  onLegacyPreparationFailure?: (error: unknown) => void
   setupOnly?: boolean
   launchChoice?: AgentLaunchChoice
   launchInputs?: WorktreeCreationRequest['launchInputs']
+  legacyLaunchInputs?: WorktreeCreationRequest['legacyLaunchInputs']
   /** Draft typed into the agent after launch (not sent for folder-group targets). */
   agentDraft?: string
   /** Session options (e.g. model, effort) layered over the agent's defaults for this launch. */
@@ -108,6 +112,8 @@ export function buildQuickCreationRequest(
     agent: input.agent,
     ...(input.agentLaunchRoute ? { agentLaunchRoute: input.agentLaunchRoute } : {}),
     ...(input.launchInputs ? { launchInputs: input.launchInputs } : {}),
+    ...(input.legacyLaunchInputs ? { legacyLaunchInputs: input.legacyLaunchInputs } : {}),
+    ...(input.creationStartup ? { creationStartup: input.creationStartup } : {}),
     ...(input.linkedLinearIssue ? { linkedLinearIssue: input.linkedLinearIssue } : {}),
     ...(input.linkedLinearIssueWorkspaceId !== undefined
       ? { linkedLinearIssueWorkspaceId: input.linkedLinearIssueWorkspaceId }

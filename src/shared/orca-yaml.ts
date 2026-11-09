@@ -12,6 +12,7 @@ import {
   MAX_ORCA_YAML_ALIAS_COUNT,
   MAX_ORCA_YAML_COLLECTION_ENTRIES
 } from './orca-yaml-file-limit'
+import { parseEphemeralVmRecipeTimeoutSeconds } from './ephemeral-vm-recipe-timeouts'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value !== null && typeof value === 'object' && !Array.isArray(value)
@@ -172,6 +173,15 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
       const resume = asTrimmedString(record.resume)
       const destroyValue = asTrimmedString(record.destroy) ?? asTrimmedString(record.cleanup)
       const destroyDisabled = destroyValue === 'none'
+      const timeouts = parseEphemeralVmRecipeTimeoutSeconds(record.timeoutSeconds)
+      if (!timeouts.ok) {
+        // A bad limit should not hide the recipe; its steps stay unlimited.
+        diagnostics.push({
+          index,
+          field: 'timeoutSeconds',
+          message: `Recipe "${id}" ${timeouts.message} Steps keep no time limit.`
+        })
+      }
       return {
         id,
         name,
@@ -181,7 +191,10 @@ function normalizeVmRecipes(value: unknown): VmRecipeParseResult {
         ...(suspend ? { suspend } : {}),
         ...(resume ? { resume } : {}),
         ...(destroyValue && !destroyDisabled ? { destroy: destroyValue } : {}),
-        ...(destroyDisabled ? { destroyDisabled: true } : {})
+        ...(destroyDisabled ? { destroyDisabled: true } : {}),
+        ...(timeouts.ok && timeouts.timeoutSeconds
+          ? { timeoutSeconds: timeouts.timeoutSeconds }
+          : {})
       }
     })
     .filter((entry): entry is OrcaVmRecipe => entry !== null)

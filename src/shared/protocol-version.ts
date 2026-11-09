@@ -1,3 +1,4 @@
+import { PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY } from './project-group-order-capability'
 import { EMULATOR_RUNTIME_CAPABILITIES } from './emulator-runtime-capabilities'
 import { ACCOUNT_RUNTIME_CAPABILITIES } from './account-runtime-capabilities'
 import * as agentLaunchCapabilities from './agent-launch/contracts/agent-launch-runtime-capability'
@@ -9,18 +10,18 @@ import { AI_VAULT_RUNTIME_CAPABILITIES } from './ai-vault/contracts/ai-vault-run
 import {
   AUTOMATION_RUNTIME_CAPABILITIES,
   AUTOMATION_RUNTIME_CLIENT_CAPABILITIES
-} from './automation-runtime-capabilities'
-import { BROWSER_RUNTIME_CAPABILITIES } from './browser-runtime-capabilities'
+} from './automations/automation-runtime-capabilities'
+import { BROWSER_RUNTIME_CAPABILITIES } from './browser/runtime/browser-runtime-capabilities'
 import {
   DEVICE_KEY_RUNTIME_CAPABILITIES,
   E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY
 } from './remote-runtime/pairing/device-key-capability'
 import { PAIRING_TICKET_EXCHANGE_RUNTIME_CAPABILITIES } from './remote-runtime/pairing/ticket-exchange-capability'
-import { FILES_RUNTIME_CAPABILITIES } from './files-runtime-capabilities'
+import { FILES_RUNTIME_CAPABILITIES } from './file-access/files-runtime-capabilities'
 import { HOST_RUNTIME_CAPABILITIES } from './host-runtime-capabilities'
 import { MOBILE_RUNTIME_CAPABILITIES } from './mobile-runtime-capabilities'
 import { ORCAD_RUNTIME_CAPABILITIES } from './orcad-runtime-capabilities'
-import { ORCHESTRATION_RUNTIME_CAPABILITIES } from './orchestration-runtime-capabilities'
+import { ORCHESTRATION_RUNTIME_CAPABILITIES } from './orchestration/orchestration-runtime-capabilities'
 import { PREFLIGHT_RUNTIME_CAPABILITIES } from './preflight-runtime-capabilities'
 import {
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
@@ -28,7 +29,7 @@ import {
 } from './session-tabs-runtime-capabilities'
 import { SKILL_RUNTIME_CAPABILITIES } from './skill-install-capability'
 import { SOURCE_CONTROL_RUNTIME_CAPABILITIES } from './source-control/runtime/source-control-runtime-capabilities'
-import { TASK_SOURCE_RUNTIME_CAPABILITIES } from './task-source-runtime-capabilities'
+import { TASK_SOURCE_RUNTIME_CAPABILITIES } from './work-items/task-source-runtime-capabilities'
 import { TERMINAL_RUNTIME_CAPABILITIES } from './terminal/runtime-policy/terminal-runtime-capabilities'
 import { WORKSPACE_PORTS_RUNTIME_CAPABILITIES } from './workspace-ports-runtime-capabilities'
 import {
@@ -49,49 +50,15 @@ export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 2
 
 // Why stars: importers keep reading every capability from here while each area owns its module.
 
-export * from './browser-runtime-capabilities'
-export * from './files-runtime-capabilities'
 export * from './host-runtime-capabilities'
 
 export * from './mobile-runtime-capabilities'
 export * from './preflight-runtime-capabilities'
 
-export * from './task-source-runtime-capabilities'
-
 export * from './workspace-ports-runtime-capabilities'
 export * from './worktree-runtime-capabilities'
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
 
-export {
-  AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
-  AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE,
-  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-  AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE,
-  AUTOMATION_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
-  AUTOMATION_EXTRA_AGENT_ARGS_RUNTIME_CAPABILITY,
-  AUTOMATION_SETUP_CHOICE_RUNTIME_CAPABILITY,
-  AUTOMATION_SURFACE_RUNTIME_CAPABILITY,
-  AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY
-} from './automation-runtime-capabilities'
-export {
-  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_CONTROL_MAIL_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_WORKER_STOP_VERDICT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_STRUCTURED_READ_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_FLEET_SNAPSHOT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RELEASE_ARCHIVE_RUNTIME_CAPABILITY,
-  ORCHESTRATION_WORKER_AUTO_RELEASE_RUNTIME_CAPABILITY,
-  ORCHESTRATION_WORKER_START_IMPLICIT_RUN_RUNTIME_CAPABILITY,
-  ORCHESTRATION_RETAINED_RUN_BINDINGS_RUNTIME_CAPABILITY,
-  ORCHESTRATION_WORKER_TURN_STOP_REPORTS_RUNTIME_CAPABILITY,
-  ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_CONTROL_MAIL_PROTOCOL_VERSION,
-  ORCHESTRATION_FEDERATION_LIFECYCLE_SETTLEMENT_PROTOCOL_VERSION,
-  ORCHESTRATION_CONTRACT_VERSION,
-  ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY
-} from './orchestration-runtime-capabilities'
 export {
   AGENT_STATUS_RESTORED_UNCONFIRMED_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
@@ -135,6 +102,7 @@ export const RUNTIME_CAPABILITIES = /* @__PURE__ */ (() =>
     ...SKILL_RUNTIME_CAPABILITIES,
     ...AUTOMATION_RUNTIME_CAPABILITIES,
     ...WORKTREE_RUNTIME_CAPABILITIES,
+    PROJECT_ROOT_ORDER_RUNTIME_CAPABILITY,
     ...PREFLIGHT_RUNTIME_CAPABILITIES,
     ...WORKSPACE_PORTS_RUNTIME_CAPABILITIES,
     ...SESSION_TABS_RUNTIME_CAPABILITIES,

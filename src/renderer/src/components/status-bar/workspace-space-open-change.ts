@@ -4,7 +4,7 @@ import type { GitStatusEntry } from '../../../../shared/git/status/git-status-ty
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import type { WorkspaceSpaceChange } from '../../../../shared/workspace-disk-space/workspace-space-change'
 import { useAppStore } from '@/store'
-import { getWorktreeOnHostFromState } from '@/store/selectors'
+import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
 import { repoMatchesHostIdentity } from '@/store/repos/repo-host-identity'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
 import { getRuntimeGitStatus } from '@/runtime/source-control/git/runtime-git-status-client'

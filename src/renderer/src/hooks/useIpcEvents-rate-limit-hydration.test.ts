@@ -106,7 +106,7 @@ describe('useIpcEvents rate-limit hydration', () => {
     vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
       getVisibleWorktreeIds: () => []
     }))
-    vi.doMock('@/lib/editor-font-zoom', () => ({
+    vi.doMock('@/lib/editor/appearance/editor-font-zoom', () => ({
       nextEditorFontZoomLevel: vi.fn(() => 0),
       computeEditorFontSize: vi.fn(() => 13)
     }))

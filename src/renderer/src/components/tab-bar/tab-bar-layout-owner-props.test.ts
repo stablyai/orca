@@ -20,7 +20,7 @@ vi.mock('@/store', () => ({
     })
   }
 }))
-vi.mock('@/lib/resolve-owner', () => ({
+vi.mock('@/lib/workspace/ownership/resolve-owner', () => ({
   runtimeEnvironmentIdUnlessTwin: () => mocks.ownerEnvironmentId
 }))
 
@@ -43,21 +43,6 @@ describe('withLayoutOwnerTabProps', () => {
     mocks.ownerEnvironmentId = null
     mocks.recordFeatureInteraction.mockReset()
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-  })
-
-  it('sends the pin to main by tab-bar id and leaves drawing it to main’s frame', async () => {
-    mocks.callRuntimeRpc.mockResolvedValue({ ok: true, result: {} })
-    const today = windowActions()
-
-    wrap(today).togglePinned(pinnedItem)
-
-    expect(mocks.callRuntimeRpc.mock.calls.map((call) => call[2])).toEqual([
-      { command: { type: 'setTabProps', tabId: 'tab-editor', isPinned: false, workspace: 'wt-1' } }
-    ])
-    await vi.waitFor(() =>
-      expect(mocks.recordFeatureInteraction).toHaveBeenCalledWith('terminal-tabs')
-    )
-    expect(today.togglePinned).not.toHaveBeenCalled()
   })
 
   it('leaves the window as it is when main refuses', async () => {

@@ -1,5 +1,5 @@
-import type { AppState } from '@/store'
-import { getWorktreeIdFromVisitKey } from '@/lib/worktree-visit-recency'
+import type { AppState } from '@/store/types'
+import { getWorktreeIdFromVisitKey } from '@/lib/workspace/activation/worktree-visit-recency'
 
 // Why: recently used workspaces keep their watch so switching back needs no re-read.
 export const WARM_RECURSIVE_WATCH_WORKSPACE_COUNT = 3

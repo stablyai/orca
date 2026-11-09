@@ -1,12 +1,11 @@
-import React, { useMemo } from 'react'
+import React, { useId, useMemo } from 'react'
 import { ArrowDownUp, ArrowUp, Check, CloudUpload, GitPullRequestArrow, Plus } from 'lucide-react'
 import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   hasExpandedCommitFailureDetails,
   summarizeCommitFailure
@@ -80,6 +79,8 @@ export function CommitArea({
   onPrimaryAction,
   onDropdownAction
 }: CommitAreaProps): React.JSX.Element {
+  const t = useTranslate()
+  const actionDescriptionId = useId()
   // Cap rows so long messages scroll internally instead of pushing Commit offscreen.
   const rows = getCommitMessageTextareaRows(commitMessage)
   // Spin the primary only for its matching operation; Fetch uses the chevron and commits use isCommitting.
@@ -140,73 +141,73 @@ export function CommitArea({
   const showGenerate = showComposer && sourceControlAiActionsVisible && !isCreatePrIntentInFlight
   let generateTooltip: string | undefined
   if (isGenerating) {
-    generateTooltip = translate(
+    generateTooltip = t(
       'auto.components.right.sidebar.source.control.commit.area.cc5739bd1d',
       'Generating commit message…'
     )
   } else if (isCommitting) {
-    generateTooltip = translate(
+    generateTooltip = t(
       'auto.components.right.sidebar.source.control.commit.area.4cbd0cd9d2',
       'Commit in progress…'
     )
   } else if (stagedCount === 0) {
-    generateTooltip = translate(
+    generateTooltip = t(
       'auto.components.right.sidebar.source.control.commit.area.e7876a2bde',
       'Stage at least one file to generate a message.'
     )
   } else if (hasMessage) {
-    generateTooltip = translate(
+    generateTooltip = t(
       'auto.components.right.sidebar.source.control.commit.area.0904be2505',
       'Clear the message to regenerate.'
     )
   } else if (!aiAgentConfigured) {
-    generateTooltip = translate(
+    generateTooltip = t(
       'auto.components.right.sidebar.source.control.commit.area.1ea9ba37aa',
       'Pick an agent in Settings -> Git -> Source Control AI.'
     )
   }
   const isGenerateDisabled =
     isGenerating || isCommitting || stagedCount === 0 || hasMessage || hasUnresolvedConflicts
-  const moreCommitAndRemoteActionsLabel = translate(
+  const moreCommitAndRemoteActionsLabel = t(
     'auto.components.right.sidebar.SourceControl.cc199ccc5f',
     'More commit and remote actions'
   )
   const dropdownMenuContent = (
-    <DropdownMenuContent align="end" className="min-w-[14rem]">
+    <DropdownMenuContent align="end" className="w-72 max-w-[calc(100vw-1rem)]">
       {dropdownItems.map((entry) =>
         entry.kind === 'separator' ? (
           <DropdownMenuSeparator key={entry.id} />
         ) : (
-          <Tooltip key={entry.kind}>
-            <TooltipTrigger asChild>
-              <div className="block">
-                <DropdownMenuItem
-                  disabled={entry.disabled}
-                  variant={entry.variant}
-                  className="w-full"
-                  onSelect={(event) => {
-                    if (entry.disabled) {
-                      event.preventDefault()
-                      return
-                    }
-                    onDropdownAction(entry.kind)
-                  }}
-                >
-                  <span className="flex min-w-0 flex-col">
-                    <span>{entry.label}</span>
-                    {entry.hint ? (
-                      <span className="truncate text-[10px] text-muted-foreground">
-                        {entry.hint}
-                      </span>
-                    ) : null}
-                  </span>
-                </DropdownMenuItem>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="left" sideOffset={8} className="max-w-72">
-              {entry.title}
-            </TooltipContent>
-          </Tooltip>
+          <div key={entry.kind}>
+            <DropdownMenuItem
+              aria-disabled={entry.disabled || undefined}
+              variant={entry.variant}
+              textValue={entry.label}
+              aria-describedby={entry.disabled ? `${actionDescriptionId}-${entry.kind}` : undefined}
+              onSelect={(event) => {
+                if (entry.disabled) {
+                  event.preventDefault()
+                  return
+                }
+                onDropdownAction(entry.kind)
+              }}
+            >
+              <span className="flex min-w-0 flex-col break-words">
+                <span>{entry.label}</span>
+                {!entry.disabled && (
+                  <span className="text-2xs text-muted-foreground">{entry.title}</span>
+                )}
+              </span>
+            </DropdownMenuItem>
+            {entry.disabled && (
+              <p
+                id={`${actionDescriptionId}-${entry.kind}`}
+                className="px-2.5 pb-1 text-2xs text-muted-foreground break-words"
+              >
+                {entry.title}
+              </p>
+            )}
+          </div>
         )
       )}
     </DropdownMenuContent>

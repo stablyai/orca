@@ -1,5 +1,5 @@
 import { AlertTriangle, Check, Loader2, ShieldCheck } from 'lucide-react'
-import { getIntlLocale, translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { PluginTrust } from '../presentation/plugin-access-profile'
 import { pluginTrustWarnings } from '../presentation/plugin-consent-copy'
 import { Button } from '../../ui/button'
@@ -79,19 +79,18 @@ export function PluginAccessSection({
   /** Null while unknown; never guessed from contributions alone. */
   trust: PluginTrust | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const capabilities = shownPluginCapabilities(requested, trust)
   // Why "own files" only then: a panel bounded by no capabilities is sandboxed; anything that
   // runs instructions or a worker reaches further, whatever it asks for.
   const ownFilesOnly =
     trust !== null && !trust.worker && !trust.declarative && capabilities.length === 0
   return (
-    <DetailSection
-      title={translate('auto.components.settings.PluginDetailSections.access', 'Can access')}
-    >
+    <DetailSection title={t('auto.components.settings.PluginDetailSections.access', 'Can access')}>
       {trust === null ? (
         <DetailRow
           icon={<Loader2 className="animate-spin" />}
-          title={translate(
+          title={t(
             'auto.components.settings.PluginDetailSections.accessLoading',
             'Reading the plugin…'
           )}
@@ -99,7 +98,7 @@ export function PluginAccessSection({
       ) : ownFilesOnly ? (
         <DetailRow
           icon={<ShieldCheck />}
-          title={translate(
+          title={t(
             'auto.components.settings.PluginDetailSections.noAccessReach',
             'Nothing outside its own files'
           )}
@@ -107,7 +106,7 @@ export function PluginAccessSection({
       ) : (
         <>
           {trust.worker || trust.declarative
-            ? pluginTrustWarnings(trust).map((warning) => (
+            ? pluginTrustWarnings(trust, t).map((warning) => (
                 <DetailRow key={warning} icon={<AlertTriangle />} wrap title={warning} />
               ))
             : null}
@@ -115,7 +114,7 @@ export function PluginAccessSection({
             <DetailRow
               key={capability.kind}
               icon={<Check />}
-              title={pluginCapabilityDescription(capability.kind, capability.description)}
+              title={pluginCapabilityDescription(capability.kind, capability.description, t)}
             />
           ))}
         </>
@@ -129,32 +128,30 @@ export function PluginLogsSection({
 }: {
   state: PluginLogsState | undefined
 }): React.JSX.Element {
+  const intlLocale = useIntlLocale()
+  const t = useTranslate()
   const lines = state?.lines ?? []
   const text = lines
     .map(
       (entry) =>
-        `${new Date(entry.ts).toLocaleTimeString(getIntlLocale())} ${entry.level.padEnd(5)} ${entry.line}`
+        `${new Date(entry.ts).toLocaleTimeString(intlLocale)} ${entry.level.padEnd(5)} ${entry.line}`
     )
     .join('\n')
   return (
     <DetailSection
-      title={translate('auto.components.settings.PluginDetailSections.logs', 'Logs')}
+      title={t('auto.components.settings.PluginDetailSections.logs', 'Logs')}
       count={
         state?.lines
-          ? translate(
-              'auto.components.settings.PluginSettingsRow.logCount',
-              'Last {{value0}} lines',
-              {
-                value0: lines.length
-              }
-            )
+          ? t('auto.components.settings.PluginSettingsRow.logCount', 'Last {{value0}} lines', {
+              value0: lines.length
+            })
           : undefined
       }
     >
       {state?.loading ? (
         <p className="flex items-center gap-2 px-3.5 py-3 text-xs text-muted-foreground">
           <Loader2 className="size-3.5 animate-spin" />
-          {translate('auto.components.settings.PluginSettingsRow.loadingLogs', 'Loading logs…')}
+          {t('auto.components.settings.PluginSettingsRow.loadingLogs', 'Loading logs…')}
         </p>
       ) : state?.error ? (
         <p className="px-3.5 py-3 text-xs text-destructive">{state.error}</p>
@@ -164,7 +161,7 @@ export function PluginLogsSection({
             tabIndex={0}
             className="scrollbar-sleek max-h-44 overflow-auto bg-muted/40 px-3.5 py-2.5 font-mono text-2xs leading-5"
           >
-            {text || translate('auto.components.settings.PluginSettingsRow.noLogs', 'No logs yet')}
+            {text || t('auto.components.settings.PluginSettingsRow.noLogs', 'No logs yet')}
           </pre>
           {text ? (
             <div className="flex justify-end border-t border-border px-2 py-1">
@@ -173,7 +170,7 @@ export function PluginLogsSection({
                 size="xs"
                 onClick={() => void window.api.ui.writeClipboardText(text)}
               >
-                {translate('auto.components.settings.PluginDetailSections.copyLogs', 'Copy')}
+                {t('auto.components.settings.PluginDetailSections.copyLogs', 'Copy')}
               </Button>
             </div>
           ) : null}

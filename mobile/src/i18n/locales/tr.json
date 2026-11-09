@@ -206,7 +206,6 @@
     },
     "composerPlaceholder": {
       "prompt": "Bir şey sorun; dosyalara başvurmak için @, komutlar için / kullanın",
-      "reconnecting": "Yeniden bağlanılıyor…",
       "waitingForTerminal": "Terminal bekleniyor…"
     },
     "diffCard": {
@@ -301,12 +300,18 @@
       "plan": "Plan",
       "stoppedManually": "Elle durduruldu",
       "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
+      "safetyReviewApproved": "{{agent}} bu işleme onay verdi. Ayrıntıları görüntüleyin.",
       "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
       "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
       "modelFallback": "Claude model değiştirdi: {{from}} → {{to}}.",
       "signIn": "Oturum aç",
       "signInHint": "Bu sohbeti çalıştıran bilgisayarda bir terminal açar",
       "forkedFrom": "Çatallandığı kaynak"
+    },
+    "ciResultLine": {
+      "failingLead": "CI başarısız:",
+      "greenLead": "CI başarılı:",
+      "at": "commit"
     },
     "orcaStop": {
       "canContinue": "Bu konuşmada devam edebilirsiniz.",
@@ -353,6 +358,13 @@
       "resume": "Devam ettir",
       "resumeSending": "Kuyruktaki mesajları göndermeye devam et",
       "title": "Kuyruktaki mesajlar"
+    },
+    "offlineQueue": {
+      "failed": "Gönderilemedi — yeniden denemek için Gönder'e dokunun",
+      "waitingFor": "{{host}} geri geldiğinde gönderilecek",
+      "waiting": "Masaüstü geri geldiğinde gönderilecek",
+      "behind": "Bekliyor — öndeki bir mesajın ilgilenilmesi gerekiyor",
+      "closed": "Orca kapanmadan önce gönderilmedi"
     },
     "receipt": {
       "cancelled": "İptal edildi",
@@ -591,6 +603,7 @@
       "fullCopySaveUpdate": "Bu ek için Tümünü Kopyala ve Kaydet özellikleri bir telefon güncellemesiyle kullanılabilecek."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} çevrimdışı · {{time}} itibarıyla",
       "reconnecting": "{{hostName}} yeniden bağlanıyor…",
       "stopped": "{{hostName}} durduruldu. Bilgisayarınızda başlatın.",
       "server": "Sunucu",
@@ -1291,6 +1304,28 @@
       "sessionLimit": "Bu bilgisayarda çok fazla cihaz dikte ediyor. Biri bitince tekrar deneyin.",
       "sessionLost": "Diktenin bilgisayarla bağlantısı kesildi. Yeniden deneyin.",
       "updateFailed": "Dikte ayarları güncellenemedi"
+    },
+    "controls": {
+      "start": "Dikte et",
+      "starting": "Dikte başlatılıyor",
+      "stop": "Durdur ve ekle",
+      "finishing": "Dikte tamamlanıyor",
+      "cancel": "Dikteyi iptal et",
+      "meterOnPhone": "Kaydediliyor, {{duration}}, bu telefonda",
+      "meterOn": "Kaydediliyor, {{duration}}, {{computer}} üzerinde",
+      "meterOnComputer": "Kaydediliyor, {{duration}}, bilgisayarda",
+      "meter": "Kaydediliyor, {{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} saniye",
+      "durationSeconds_other": "{{count}} saniye",
+      "durationMinutes_one": "{{count}} dakika",
+      "durationMinutes_other": "{{count}} dakika"
+    },
+    "status": {
+      "finishingOn": "{{computer}} üzerinde tamamlanıyor",
+      "finishingOnComputer": "Bilgisayarda tamamlanıyor",
+      "movedTo": "{{computer}} cihazına geçildi",
+      "movedToComputer": "Bilgisayara geçildi"
     }
   },
   "files": {
@@ -1307,10 +1342,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} mobilde kullanılamıyor",
       "loadFolderFailed": "Klasör yüklenemedi",
+      "loadedOfTotal": "{{loaded}} / {{total}}",
       "loading": "Yükleniyor…",
       "openFolder": "{{name}} klasörünü aç",
       "previewFile": "{{name}} dosyasını önizle",
       "retryLoading": "{{path}} klasörünü yüklemeyi yeniden dene",
+      "searchAll": "Tümünü ara",
+      "searchAllIn": "{{folder}} içinde tümünü ara",
+      "searched": "{{folder}} içinde {{total}} öğenin {{loaded}} tanesi arandı.",
+      "searching": "{{folder}} aranıyor… {{loaded}} / {{total}}",
+      "showMore": "{{rows}} tane daha göster",
       "unavailable": "Mobilde kullanılamıyor"
     },
     "fileExplorerRowActions": {
@@ -1384,15 +1425,16 @@
       "openFailed": "Bu PDF açılamadı",
       "opening": "PDF açılıyor…",
       "updateRequired": "PDF'leri açmak için Orca Mobile'ı güncelleyin"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "{{time}} tarihli düzenlemelerinizden sonra masaüstünde değişti",
+      "copyMyEdits": "Düzenlemelerimi kopyala",
+      "discard": "Vazgeç",
+      "restore": "Geri yükle",
+      "unsavedFrom": "{{time}} tarihli kaydedilmemiş düzenlemeler"
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "{{count}} etkin",
-      "heading": "Ajanlar",
-      "showAll": "Tümünü göster ({{count}})",
-      "showFewer": "Daha az göster"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} güncellemesini gizle",
       "title": "Orca {{version}} sürümü mevcut",
@@ -1516,6 +1558,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "“{{name}}” ({{branch}}) silinsin mi?",
+      "deleteDestroysEnvironment": "Orca'nın bunun için oluşturduğu \"{{environment}}\" ortamı da, içindeki commit edilmemiş değişiklikler ve çalışan terminallerle birlikte yok edilir.",
+      "deleteKeepsEnvironment": "Orca'nın bunun için oluşturduğu \"{{environment}}\" ortamı çalışmaya devam eder: tarifinde yok etme adımı yok.",
       "deleteWorktree": "Worktree'yi Sil",
       "pin": "Sabitle",
       "primaryWorktreeDeleteHint": "Birincil worktree, silinemez. Bunun yerine projeyi kaldırın.",
@@ -2175,8 +2219,7 @@
       "copyPathLabel": "Markdown yolunu kopyala",
       "copySource": "Markdown kaynağını kopyala",
       "discard": "Vazgeç",
-      "dismissKeyboard": "Klavyeyi gizle",
-      "dismissKeyboardHint": "Ekran klavyesini gizler ve Markdown düzenleyicisini açık tutar.",
+      "previewTruncated": "Önizleme kısaltıldı.",
       "readOnly": "Salt okunur"
     },
     "nativeChatAttachActions": {
@@ -2385,11 +2428,7 @@
     "terminalInputActions": {
       "attachFileHint": "Fotoğraf yerine dosya eklemek için basılı tutun",
       "attachPhoto": "Fotoğraf ekle",
-      "sendingImage": "Görsel gönderiliyor",
-      "startDictation": "Sesli dikteyi başlat",
-      "startingDictation": "Sesli dikte başlatılıyor",
-      "stopDictation": "Sesli dikteyi durdur",
-      "transcribingDictation": "Sesli dikte yazıya dökülüyor"
+      "sendingImage": "Görsel gönderiliyor"
     },
     "terminalLiveInputStatus": {
       "listening": "Dinliyor",
@@ -2398,8 +2437,6 @@
       "processing": "İşleniyor",
       "releaseMicHint": "Durdurmak için mikrofonu bırakın",
       "startingMic": "Mikrofon başlatılıyor",
-      "stopHint": "Durdurmak için mikrofona dokunun",
-      "transcribing": "Masaüstünde yazıya dökülüyor",
       "uploadingImage": "Görsel sunucuya yükleniyor",
       "uploadingImageTitle": "Görsel yükleniyor"
     },
@@ -2493,7 +2530,8 @@
       "insertFailed": "Dikte metni eklenemedi",
       "insertFailedCopied": "Dikte metni eklenemediği için panoya kopyalandı",
       "inserted": "Dikte metni eklendi",
-      "stoppedAfterSilence": "Bir dakika sessizlikten sonra durduruldu"
+      "stoppedAfterSilence": "Bir dakika sessizlikten sonra durduruldu",
+      "stoppedAtCloudLimit": "Dikte, 10 dakikalık bulut sınırında durduruldu."
     },
     "useNativeChatStop": {
       "stopNotSent": "Durdurma isteği gönderilemedi",
@@ -2814,6 +2852,8 @@
       "dictationHeading": "DİKTE",
       "dictationMode": "Dikte Modu",
       "dictationModeDescription": "Aç/kapat: başlatmak için bir kez, durdurmak için tekrar basın. Basılı tut: basılı tuttuğunuz sürece dikte edin.",
+      "dictationModeWithAutoDescription": "Otomatik: başlatmak ve durdurmak için dokunun; bilgisayarınızda kısayolu basılı tutmak bırakana kadar kaydeder. Basılı tut: basılı tuttuğunuz sürece dikte edin. Aç/kapat: başlatmak için bir kez, durdurmak için tekrar basın.",
+      "autoMode": "Otomatik",
       "downloadFailed": "İndirme tamamlanamadı",
       "enableDictation": "Sesli Dikteyi Etkinleştir",
       "holdMode": "Basılı Tut",

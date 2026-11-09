@@ -1,7 +1,7 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
-import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
+import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 
 export function createPrefetchWorktreeCreateBase(
   _set: WorktreeSliceSet,

@@ -13,7 +13,7 @@ import { showAgentPaneUnavailable } from '@/components/terminal-pane/agent-statu
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
 import { activateAndRevealWorktree } from './workspace/activation/worktree-activation'
-import { activateWslMovedWorkspace } from './wsl-moved-chat-activation'
+import { activateWslMovedWorkspace } from './workspace/activation/wsl-moved-chat-activation'
 import { useAppStore } from '@/store'
 export {
   revealStructuredSession,

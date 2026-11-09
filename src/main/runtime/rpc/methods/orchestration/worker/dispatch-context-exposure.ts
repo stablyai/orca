@@ -1,4 +1,4 @@
-import { parseWorkerTerminalHostScope } from '../../../../../../shared/worker-terminal-host-scope'
+import { parseWorkerTerminalHostScope } from '../../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import type { DispatchContextRow } from '../../../../orchestration/db/orchestration-records'
 
 // Hide authority hashes and decode host_scope; emit one camelCase shape matching exposeWorker.

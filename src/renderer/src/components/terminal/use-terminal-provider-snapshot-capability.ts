@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
 import { createTerminalProviderSnapshotBoundPtyIdsSelector } from './terminal-provider-snapshot-bound-pty-ids'
+import { startTerminalProviderSnapshotCapabilitySynchronization } from './terminal-provider-snapshot-capability'
 import {
   getTerminalProviderSnapshotCapabilityRevision,
-  subscribeTerminalProviderSnapshotCapability,
-  startTerminalProviderSnapshotCapabilitySynchronization
-} from './terminal-provider-snapshot-capability'
+  subscribeTerminalProviderSnapshotCapability
+} from './terminal-provider-capability-revision'
 
 export function useTerminalProviderSnapshotCapability(enabled: boolean): number {
   // Match startup’s full PTY set or synchronization prunes valid split/reconnect answers; the stable selector avoids scans/restarts on title or focus writes.

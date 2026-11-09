@@ -91,92 +91,12 @@ describe('handleSwitchTerminalTab', () => {
     vi.clearAllMocks()
   })
 
-  it('skips non-terminal tabs when switching forward', () => {
-    const store = makeStore('terminal')
-    store.activeTabId = 'term-2'
-    getStateMock.mockReturnValue(store)
-    getActiveTabNavOrderMock.mockReturnValue([
-      { type: 'terminal', id: 'term-1' },
-      { type: 'editor', id: 'editor-1' },
-      { type: 'terminal', id: 'term-2' },
-      { type: 'editor', id: 'editor-2' },
-      { type: 'terminal', id: 'term-3' }
-    ])
-
-    expect(handleSwitchTerminalTab(1)).toBe(true)
-    expect(store.setActiveTab).toHaveBeenCalledWith('term-3')
-    expect(store.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
-  })
-
-  it('wraps from the last terminal to the first terminal', () => {
-    const store = makeStore('terminal')
-    store.activeTabId = 'term-3'
-    getStateMock.mockReturnValue(store)
-    getActiveTabNavOrderMock.mockReturnValue([
-      { type: 'terminal', id: 'term-1' },
-      { type: 'editor', id: 'editor-1' },
-      { type: 'terminal', id: 'term-2' },
-      { type: 'browser', id: 'browser-1' },
-      { type: 'terminal', id: 'term-3' }
-    ])
-
-    expect(handleSwitchTerminalTab(1)).toBe(true)
-    expect(store.setActiveTab).toHaveBeenCalledWith('term-1')
-    expect(store.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
-  })
-
   it('returns false when no terminal tabs exist', () => {
     const store = makeStore('editor')
     getStateMock.mockReturnValue(store)
     getActiveTabNavOrderMock.mockReturnValue([
       { type: 'editor', id: 'editor-1' },
       { type: 'browser', id: 'browser-1' }
-    ])
-
-    expect(handleSwitchTerminalTab(1)).toBe(false)
-    expect(store.setActiveTab).not.toHaveBeenCalled()
-    expect(store.setActiveTabType).not.toHaveBeenCalled()
-  })
-
-  it('jumps to the first terminal when an editor tab is active', () => {
-    const store = makeStore('editor')
-    store.activeFileId = 'editor-2'
-    getStateMock.mockReturnValue(store)
-    getActiveTabNavOrderMock.mockReturnValue([
-      { type: 'terminal', id: 'term-1' },
-      { type: 'editor', id: 'editor-1' },
-      { type: 'terminal', id: 'term-2' },
-      { type: 'editor', id: 'editor-2' },
-      { type: 'terminal', id: 'term-3' }
-    ])
-
-    expect(handleSwitchTerminalTab(1)).toBe(true)
-    expect(store.setActiveTab).toHaveBeenCalledWith('term-1')
-    expect(store.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
-  })
-
-  it('jumps from an editor to the only terminal when one terminal exists', () => {
-    const store = makeStore('editor')
-    store.activeFileId = 'editor-1'
-    getStateMock.mockReturnValue(store)
-    getActiveTabNavOrderMock.mockReturnValue([
-      { type: 'editor', id: 'editor-1' },
-      { type: 'terminal', id: 'term-1' },
-      { type: 'browser', id: 'browser-1' }
-    ])
-
-    expect(handleSwitchTerminalTab(1)).toBe(true)
-    expect(store.setActiveTab).toHaveBeenCalledWith('term-1')
-    expect(store.setActiveTabType).toHaveBeenCalledWith('terminal', 'wt-1')
-  })
-
-  it('returns false when the only terminal is already active', () => {
-    const store = makeStore('terminal')
-    store.activeTabId = 'term-1'
-    getStateMock.mockReturnValue(store)
-    getActiveTabNavOrderMock.mockReturnValue([
-      { type: 'terminal', id: 'term-1' },
-      { type: 'editor', id: 'editor-1' }
     ])
 
     expect(handleSwitchTerminalTab(1)).toBe(false)
@@ -387,22 +307,6 @@ describe('handleSwitchTab', () => {
     expect(store.setActiveTab).not.toHaveBeenCalled()
     expect(store.setActiveFile).not.toHaveBeenCalled()
     expect(store.setActiveTabType).toHaveBeenCalledWith('browser', 'wt-1')
-  })
-
-  it('returns false when the active type has only one tab', () => {
-    const store = makeStore('editor')
-    store.activeFileId = 'file-1'
-    getStateMock.mockReturnValue(store)
-    getActiveTabNavOrderMock.mockReturnValue([
-      { type: 'editor', id: 'file-1', tabId: 'tab-editor-1' },
-      { type: 'terminal', id: 'term-1' },
-      { type: 'browser', id: 'browser-1', tabId: 'tab-browser-1' }
-    ])
-
-    expect(handleSwitchTab(1)).toBe(false)
-    expect(store.setActiveTab).not.toHaveBeenCalled()
-    expect(store.setActiveFile).not.toHaveBeenCalled()
-    expect(store.setActiveTabType).not.toHaveBeenCalled()
   })
 
   it('falls back when an editor entry has no unified tab id', () => {

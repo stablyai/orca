@@ -1,16 +1,17 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import { makeTab, makeUnifiedTab } from '../slices/store-session-test-harness'
-import { makeWorktree } from '../slices/worktrees-slice-test-fixtures'
+import { makeTab } from '../terminals/terminal-tab.test-fixture'
+import { makeUnifiedTab } from '../slices/tabs/tab-group.test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
 import {
   makeDetectedResult,
   qualifyDetectedResult
-} from '../slices/worktrees-detected-listing-fixtures'
+} from '../slices/worktrees/listing/worktrees-detected-listing-fixtures'
 import {
   createTestStore,
   mockApi,
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory
-} from '../slices/worktrees-slice-test-harness'
+} from '../slices/worktrees/worktrees-slice-test-harness'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }

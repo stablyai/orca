@@ -210,7 +210,6 @@
     },
     "composerPlaceholder": {
       "prompt": "Pregunta lo que quieras, @ para referenciar archivos, / para comandos",
-      "reconnecting": "Reconectando…",
       "waitingForTerminal": "Esperando a la terminal…"
     },
     "diffCard": {
@@ -305,12 +304,18 @@
       "plan": "Plan",
       "stoppedManually": "Detenido manualmente",
       "permissionDenied": "{{agent}} denegó el permiso. Ver detalles.",
+      "safetyReviewApproved": "{{agent}} aprobó esta acción. Ver detalles.",
       "safetyReview": "{{agent}} notificó una advertencia de revisión de seguridad. Ver detalles.",
       "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes).",
       "modelFallback": "Claude cambió de modelo: {{from}} → {{to}}.",
       "signIn": "Iniciar sesión",
       "signInHint": "Abre una terminal en el ordenador que ejecuta este chat",
       "forkedFrom": "Rama creada desde"
+    },
+    "ciResultLine": {
+      "failingLead": "CI fallando en",
+      "greenLead": "CI en verde en",
+      "at": "en"
     },
     "orcaStop": {
       "canContinue": "Puedes continuar en esta conversación.",
@@ -357,6 +362,13 @@
       "resume": "Reanudar",
       "resumeSending": "Reanudar el envío de los mensajes en cola",
       "title": "Mensajes en cola"
+    },
+    "offlineQueue": {
+      "failed": "No se pudo enviar: toca Enviar para reintentar",
+      "waitingFor": "Se enviará cuando {{host}} vuelva",
+      "waiting": "Se enviará cuando el escritorio vuelva",
+      "behind": "En espera: un mensaje anterior necesita atención",
+      "closed": "No se envió antes de cerrar Orca"
     },
     "receipt": {
       "cancelled": "Cancelado",
@@ -626,6 +638,7 @@
       "fullCopySaveUpdate": "Copiar todo y Guardar para este adjunto estarán disponibles en una actualización del teléfono."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} está sin conexión · a las {{time}}",
       "reconnecting": "{{hostName}} se está reconectando…",
       "stopped": "{{hostName}} está detenido. Inícialo en tu ordenador.",
       "server": "El servidor",
@@ -1330,6 +1343,30 @@
       "sessionLimit": "Hay demasiados dispositivos dictando en este ordenador. Inténtalo de nuevo cuando termine uno.",
       "sessionLost": "El dictado perdió la conexión con el ordenador. Inténtalo de nuevo.",
       "updateFailed": "No se pudieron actualizar los ajustes de dictado"
+    },
+    "controls": {
+      "start": "Dictar",
+      "starting": "Iniciando el dictado",
+      "stop": "Detener e insertar",
+      "finishing": "Terminando el dictado",
+      "cancel": "Cancelar dictado",
+      "meterOnPhone": "Grabando, {{duration}}, en este teléfono",
+      "meterOn": "Grabando, {{duration}}, en {{computer}}",
+      "meterOnComputer": "Grabando, {{duration}}, en el ordenador",
+      "meter": "Grabando, {{duration}}",
+      "durationMinutesSeconds": "{{minutes}} {{seconds}}",
+      "durationSeconds_one": "{{count}} segundo",
+      "durationSeconds_other": "{{count}} segundos",
+      "durationSeconds_many": "{{count}} segundos",
+      "durationMinutes_one": "{{count}} minuto",
+      "durationMinutes_other": "{{count}} minutos",
+      "durationMinutes_many": "{{count}} minutos"
+    },
+    "status": {
+      "finishingOn": "Terminando en {{computer}}",
+      "finishingOnComputer": "Terminando en el ordenador",
+      "movedTo": "Pasado a {{computer}}",
+      "movedToComputer": "Pasado al ordenador"
     }
   },
   "files": {
@@ -1346,10 +1383,16 @@
     "fileExplorerRow": {
       "fileUnavailable": "{{name}} no disponible en el móvil",
       "loadFolderFailed": "No se pudo cargar la carpeta",
+      "loadedOfTotal": "{{loaded}} de {{total}}",
       "loading": "Cargando…",
       "openFolder": "Abrir la carpeta {{name}}",
       "previewFile": "Previsualizar el archivo {{name}}",
       "retryLoading": "Reintentar cargar {{path}}",
+      "searchAll": "Buscar en todo",
+      "searchAllIn": "Buscar en todo {{folder}}",
+      "searched": "Se buscó en {{loaded}} de {{total}} en {{folder}}.",
+      "searching": "Buscando en {{folder}}… {{loaded}} de {{total}}",
+      "showMore": "Mostrar {{rows}} más",
       "unavailable": "No disponible en el móvil"
     },
     "fileExplorerRowActions": {
@@ -1423,15 +1466,16 @@
       "openFailed": "No se pudo abrir este PDF",
       "opening": "Abriendo PDF…",
       "updateRequired": "Actualiza Orca Mobile para abrir archivos PDF"
+    },
+    "unsavedEditsOffer": {
+      "changedSince": "Modificado en el escritorio desde tus cambios de las {{time}}",
+      "copyMyEdits": "Copiar mis cambios",
+      "discard": "Descartar",
+      "restore": "Restaurar",
+      "unsavedFrom": "Cambios sin guardar de las {{time}}"
     }
   },
   "home": {
-    "agents": {
-      "activeCount": "Activos: {{count}}",
-      "heading": "Agentes",
-      "showAll": "Mostrar todos ({{count}})",
-      "showFewer": "Mostrar menos"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Descartar la actualización de Orca {{version}}",
       "title": "Orca {{version}} está disponible",
@@ -1555,6 +1599,8 @@
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "¿Eliminar \"{{name}}\" ({{branch}})?",
+      "deleteDestroysEnvironment": "También se destruye el entorno «{{environment}}» que Orca creó para él, con los cambios sin confirmar y los terminales en ejecución que haya en él.",
+      "deleteKeepsEnvironment": "El entorno «{{environment}}» que Orca creó para él sigue en ejecución: su receta no tiene un paso de destrucción.",
       "deleteWorktree": "Eliminar worktree",
       "pin": "Fijar",
       "primaryWorktreeDeleteHint": "El worktree principal no se puede eliminar. Quita el proyecto en su lugar.",
@@ -2242,8 +2288,7 @@
       "copyPathLabel": "Copiar la ruta del archivo Markdown",
       "copySource": "Copiar el código fuente Markdown",
       "discard": "Descartar",
-      "dismissKeyboard": "Ocultar teclado",
-      "dismissKeyboardHint": "Oculta el teclado en pantalla y mantiene abierto el editor de Markdown.",
+      "previewTruncated": "Vista previa truncada.",
       "readOnly": "Solo lectura"
     },
     "nativeChatAttachActions": {
@@ -2453,11 +2498,7 @@
     "terminalInputActions": {
       "attachFileHint": "Mantén pulsado para adjuntar un archivo en su lugar.",
       "attachPhoto": "Adjuntar una foto",
-      "sendingImage": "Enviando imagen",
-      "startDictation": "Iniciar dictado de voz",
-      "startingDictation": "Iniciando dictado de voz",
-      "stopDictation": "Detener dictado de voz",
-      "transcribingDictation": "Transcribiendo dictado de voz"
+      "sendingImage": "Enviando imagen"
     },
     "terminalLiveInputStatus": {
       "listening": "Escuchando",
@@ -2466,8 +2507,6 @@
       "processing": "Procesando",
       "releaseMicHint": "Suelta el micrófono para detener la grabación",
       "startingMic": "Iniciando micrófono",
-      "stopHint": "Toca el micrófono para parar",
-      "transcribing": "Transcribiendo en el escritorio",
       "uploadingImage": "Subiendo imagen al host",
       "uploadingImageTitle": "Subiendo imagen"
     },
@@ -2561,7 +2600,8 @@
       "insertFailed": "No se pudo insertar el dictado",
       "insertFailedCopied": "No se pudo insertar el dictado, así que se copió al portapapeles.",
       "inserted": "Dictado insertado",
-      "stoppedAfterSilence": "Se detuvo tras un minuto de silencio"
+      "stoppedAfterSilence": "Se detuvo tras un minuto de silencio",
+      "stoppedAtCloudLimit": "Dictado detenido al llegar al límite de 10 minutos en la nube."
     },
     "useNativeChatStop": {
       "stopNotSent": "No se envió la orden de detener",
@@ -2886,6 +2926,8 @@
       "dictationHeading": "DICTADO",
       "dictationMode": "Modo de dictado",
       "dictationModeDescription": "Alternar: pulsa una vez para iniciar y otra para detener. Mantener pulsado: dicta sin soltar.",
+      "dictationModeWithAutoDescription": "Automático: toca para iniciar y detener; en tu ordenador, mantener el atajo graba hasta que lo sueltes. Mantener pulsado: dicta sin soltar. Alternar: pulsa una vez para iniciar y otra para detener.",
+      "autoMode": "Automático",
       "downloadFailed": "Falló la descarga",
       "enableDictation": "Habilitar dictado de voz",
       "holdMode": "Mantener",

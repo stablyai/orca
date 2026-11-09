@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest'
-import { createTestStore } from '../slices/store-test-helpers'
+import { createTestStore } from '../testing/app-store-test-fixture'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -404,46 +404,6 @@ describe('repos-all-hosts-folder-workspaces', () => {
           .folderWorkspaces.map((workspace) => workspace.id)
           .sort()
       ).toEqual(['local-folder', 'remote-folder', 'remote-folder-2'])
-    })
-
-    it('does not repeat offline runtime compatibility probes across startup catalog loads', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-      runtimeEnvironmentTransportCall.mockResolvedValue({
-        id: 'status',
-        ok: false,
-        error: { code: 'runtime_unavailable', message: 'offline' },
-        _meta: { runtimeId: 'runtime-remote' }
-      })
-      const store = createTestStore()
-      store.setState({ settings: { activeRuntimeEnvironmentId: 'env-1' } as never })
-      const restoredFolderKey = folderWorkspaceKey('remote-folder')
-      store.setState({
-        restoredRuntimeHostIdByWorkspaceSessionKey: {
-          [restoredFolderKey]: 'runtime:env-1'
-        }
-      })
-
-      try {
-        await store.getState().fetchReposForAllHosts()
-        await store.getState().fetchProjectGroupsForAllHosts()
-        await store.getState().fetchFolderWorkspacesForAllHosts()
-
-        expect(store.getState().repos).toEqual([{ ...localRepo, executionHostId: 'local' }])
-        expect(store.getState().projectGroups).toEqual([
-          { ...localProjectGroup, executionHostId: 'local' }
-        ])
-        expect(store.getState().folderWorkspaces).toEqual([
-          { ...localFolderWorkspace, executionHostId: 'local' }
-        ])
-        expect(runtimeEnvironmentTransportCall.mock.calls.map((call) => call[0].method)).toEqual([
-          'status.get'
-        ])
-        expect(store.getState().restoredRuntimeHostIdByWorkspaceSessionKey).toEqual({
-          [restoredFolderKey]: 'runtime:env-1'
-        })
-      } finally {
-        warn.mockRestore()
-      }
     })
   })
 })

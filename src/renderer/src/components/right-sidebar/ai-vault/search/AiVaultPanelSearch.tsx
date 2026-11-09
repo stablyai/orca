@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
 import { resolveAiVaultSearchSettings } from '../../../../../../shared/ai-vault/search/ai-vault-search-settings'
 import type { AiVaultSearchHostOutcome } from '../../../../../../shared/ai-vault/search/ai-vault-search-types'
@@ -11,27 +12,27 @@ import {
 import type { useAiVaultPanelSearch } from './use-ai-vault-search'
 
 // Keep reasons short to match adjacent host labels; null means the host answered.
-function hostSkipReason(outcome: AiVaultSearchHostOutcome['outcome']): string | null {
+function hostSkipReason(
+  outcome: AiVaultSearchHostOutcome['outcome'],
+  t: Translate = translate
+): string | null {
   switch (outcome) {
     case 'searched':
       return null
     case 'stale':
-      return translate('sessionSearch.panel.hostSkipReason.indexChanged', 'index changed')
+      return t('sessionSearch.panel.hostSkipReason.indexChanged', 'index changed')
     case 'disabled':
-      return translate('sessionSearch.panel.hostSkipReason.searchOff', 'search off')
+      return t('sessionSearch.panel.hostSkipReason.searchOff', 'search off')
     case 'not-ready':
-      return translate('sessionSearch.panel.hostSkipReason.notReady', 'not ready')
+      return t('sessionSearch.panel.hostSkipReason.notReady', 'not ready')
     case 'no-service':
-      return translate('sessionSearch.panel.hostSkipReason.unavailable', 'unavailable')
+      return t('sessionSearch.panel.hostSkipReason.unavailable', 'unavailable')
     case 'unreachable':
-      return translate('sessionSearch.panel.hostSkipReason.unreachable', 'unreachable')
+      return t('sessionSearch.panel.hostSkipReason.unreachable', 'unreachable')
     case 'scope-unknown':
-      return translate('sessionSearch.panel.hostSkipReason.scopeNotFound', 'scope not found there')
+      return t('sessionSearch.panel.hostSkipReason.scopeNotFound', 'scope not found there')
     case 'unsupported-agent':
-      return translate(
-        'sessionSearch.panel.hostSkipReason.agentNotSupported',
-        'agent not supported'
-      )
+      return t('sessionSearch.panel.hostSkipReason.agentNotSupported', 'agent not supported')
   }
 }
 
@@ -42,18 +43,21 @@ const UNSETTLED_SCOPE_OUTCOMES = new Set<AiVaultSearchHostOutcome['outcome']>([
 ])
 
 // Name hosts lacking the project only when that explains otherwise empty results.
-function describeSkippedHosts(hosts: readonly AiVaultSearchHostOutcome[]): string | null {
+function describeSkippedHosts(
+  hosts: readonly AiVaultSearchHostOutcome[],
+  t: Translate = translate
+): string | null {
   const anyResolved = hosts.some((entry) => !UNSETTLED_SCOPE_OUTCOMES.has(entry.outcome))
   const skipped = hosts.flatMap((entry) => {
     if (entry.outcome === 'scope-unknown' && anyResolved) {
       return []
     }
-    const reason = hostSkipReason(entry.outcome)
+    const reason = hostSkipReason(entry.outcome, t)
     const label = getExecutionHostLabel(parseExecutionHostId(entry.executionHostId)?.id ?? null)
     return reason ? [`${label} (${reason})`] : []
   })
   return skipped.length > 0
-    ? translate('sessionSearch.panel.hostsSkipped', 'Not searched: {{value0}}', {
+    ? t('sessionSearch.panel.hostsSkipped', 'Not searched: {{value0}}', {
         value0: skipped.join(' · ')
       })
     : null
@@ -68,6 +72,7 @@ export function AiVaultPanelSearch({
   noAgents: boolean
   children: ReactNode
 }) {
+  const t = useTranslate()
   const { needsLocalConsent, response, error, loading, retry: onRetry } = search
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(false)
@@ -94,52 +99,49 @@ export function AiVaultPanelSearch({
   const unavailable = response?.kind === 'unavailable' ? response.reason : null
   let message: string | null = null
   if (needsLocalConsent) {
-    message = translate(
+    message = t(
       'sessionSearch.panel.consent',
-      'Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations and up to 3,072 characters per tool output. Content is not redacted. Authenticated paired clients can search it.'
+      'Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations. Content is not redacted. Authenticated paired clients can search it.'
     )
   } else if (noAgents) {
-    message = translate(
-      'auto.components.right.sidebar.AiVaultPanel.noAgentsSelected',
-      'No agents selected'
-    )
+    message = t('auto.components.right.sidebar.AiVaultPanel.noAgentsSelected', 'No agents selected')
   } else if (search.titleOnly) {
-    message = translate(
+    message = t(
       'sessionSearch.panel.titleOnly',
       'Full-text search is off on this computer, so only session titles are matched.'
     )
   } else if (unavailable === 'disabled') {
-    message = translate(
+    message = t(
       'sessionSearch.panel.remoteDisabled',
       'Search is disabled on this computer. Enable transcript indexing on that computer to search its sessions.'
     )
   } else if (unavailable === 'not-ready') {
-    message = translate(
+    message = t(
       'sessionSearch.panel.notReady',
       'The search index is not ready yet. Try again shortly.'
     )
   } else if (unavailable === 'no-service') {
-    message = translate(
+    message = t(
       'sessionSearch.panel.noService',
       'Search is unavailable on this computer. It may need an Orca update or a runtime with search support.'
     )
   } else if (unavailable === 'unsupported-agent') {
-    message = translate(
+    message = t(
       'sessionSearch.panel.unsupportedAgent',
       'This computer does not support history search for the selected agent. Update Orca on that computer or select another agent.'
     )
   } else if (unavailable === 'scope-unknown') {
-    message = translate(
+    message = t(
       'sessionSearch.panel.scopeUnknown',
       'This computer does not have this workspace or project. Switch the scope to All to search everything on it.'
     )
   } else if (error) {
-    message = translate(
+    message = t(
       'sessionSearch.panel.failed',
       'Could not search this computer. Check its connection and try again.'
     )
   } else if (response?.kind === 'stale-cursor' || response?.kind === 'malformed-cursor') {
-    message = translate(
+    message = t(
       'sessionSearch.panel.changed',
       'The index changed while searching. Search again for current results.'
     )
@@ -149,20 +151,20 @@ export function AiVaultPanelSearch({
       response.truncated.query ||
       response.truncated.snippets > 0
     ) {
-      message = translate(
+      message = t(
         'sessionSearch.panel.truncated',
         'Some results or matching text were limited. Narrow your search for more precise results.'
       )
     }
   }
-  if (response?.kind === 'results' && search.hits.length === 0) {
-    message = translate(
+  if (response?.kind === 'results' && search.hits.length === 0 && !message) {
+    message = t(
       'sessionSearch.panel.noMatches',
       'No matching sessions in the indexed history. Try another query or scope.'
     )
   }
   const skippedHosts =
-    response?.kind === 'results' ? describeSkippedHosts(response.hosts ?? []) : null
+    response?.kind === 'results' ? describeSkippedHosts(response.hosts ?? [], t) : null
   return (
     <>
       {(message || skippedHosts) && (
@@ -176,14 +178,11 @@ export function AiVaultPanelSearch({
             <>
               {saveError && (
                 <p className="text-destructive">
-                  {translate(
-                    'sessionSearch.panel.enableFailed',
-                    'Could not enable search. Try again.'
-                  )}
+                  {t('sessionSearch.panel.enableFailed', 'Could not enable search. Try again.')}
                 </p>
               )}
               <Button size="xs" disabled={saving} onClick={() => void enable()}>
-                {translate('sessionSearch.panel.enable', 'Enable')}
+                {t('sessionSearch.panel.enable', 'Enable')}
               </Button>
             </>
           ) : !noAgents &&
@@ -192,7 +191,7 @@ export function AiVaultPanelSearch({
               response?.kind === 'stale-cursor' ||
               response?.kind === 'malformed-cursor') ? (
             <Button size="xs" variant="outline" disabled={loading} onClick={onRetry}>
-              {translate('sessionSearch.panel.retry', 'Try again')}
+              {t('sessionSearch.panel.retry', 'Try again')}
             </Button>
           ) : null}
         </div>
@@ -207,7 +206,7 @@ export function AiVaultPanelSearch({
             disabled={loading}
             onClick={search.loadMore}
           >
-            {translate('sessionSearch.panel.loadMore', 'Load more matches')}
+            {t('sessionSearch.panel.loadMore', 'Load more matches')}
           </Button>
         </div>
       )}

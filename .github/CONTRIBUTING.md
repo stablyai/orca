@@ -109,7 +109,7 @@ feedback, Vitest can select tests affected by your edits:
 ```bash
 pnpm test:changed src/main/runtime --maxWorkers=2
 pnpm test --changed=origin/main --maxWorkers=2
-pnpm test src/shared/automation-cron-dialect.test.ts --maxWorkers=2
+pnpm test src/shared/automations/scheduling/automation-cron-input-validation.test.ts --maxWorkers=2
 ```
 
 `test:changed` considers staged, unstaged, and untracked files. `--changed=origin/main`
@@ -120,6 +120,14 @@ When Git reports no changed files at all, the launcher exits before starting Vit
 Affected tests use Vitest's static import graph. Run suites explicitly for computed
 dynamic imports, fixture files, subprocess inputs, or other dependencies outside that
 graph. Local affected tests do not replace CI.
+
+Use `pnpm test`, not raw `vitest`: only it keeps the transform cache that makes repeat runs fast.
+
+Most unit files share a worker and its module cache with the files before them. After each file
+the worker undoes mocks, fake timers, stubs, env, cwd, and leftover timers, listeners, and globals.
+Files using `vi.doMock`, `vi.resetModules`, a DOM environment, or direct `globalThis` writes keep
+their own worker. If a file passes alone but fails after others, add `// @orca-isolated-worker`
+to it; `ORCA_VITEST_ISOLATE_EVERY_FILE=1` isolates every file to confirm a leak.
 
 To reduce main-process rebuild CPU and memory when you do not need its source maps,
 set `ORCA_DEV_MAIN_SOURCEMAPS=0` before `pnpm dev`. In Bash/zsh:

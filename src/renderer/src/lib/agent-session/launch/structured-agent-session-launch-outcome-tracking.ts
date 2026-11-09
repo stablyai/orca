@@ -1,10 +1,10 @@
-import { settleStructuredAgentSessionSendsFromJournal } from '@/components/native-chat/structured-agent-session-message-sender'
+import { settleStructuredAgentSessionSendsFromJournal } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import { settleStructuredLaunchCreateOptions } from './structured-agent-session-launch-options'
-import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/structured-agent-session-read-owner-registry'
+import { retireStructuredAgentSessionReadOwner } from '@/components/native-chat/session/structured/read/structured-agent-session-read-owner-registry'
 import { useAppStore } from '@/store/index'
-import { publishStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-pending-sends'
-import { agentSessionWriteFailureText } from '@/components/native-chat/agent-session-write-notice-text'
-import { getAgentLabel } from '@/lib/agent-catalog'
+import { publishStructuredAgentSessionSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
+import { agentSessionWriteFailureText } from '@/components/native-chat/messages/notices/agent-session-write-notice-text'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
 import { removeStructuredLaunchSlot } from './structured-agent-session-launch-slot'
 import {
   materializeStructuredLaunchSurface,

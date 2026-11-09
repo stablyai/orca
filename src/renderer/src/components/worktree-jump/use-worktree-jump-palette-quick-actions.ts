@@ -11,7 +11,7 @@ import { buildCmdJQuickActionContext } from '@/components/cmd-j/quick-action-con
 import { rankCmdJMiddleResults } from '@/components/cmd-j/palette-results'
 import { buildCmdJBrowserNavigationAction } from '@/components/cmd-j/browser-navigation-action'
 import { openWorkspaceBrowserTab } from '@/lib/browser/workspace/workspace-browser-tab-open'
-import { findGroupAndWorktree } from '@/store/slices/tab-group-state'
+import { findGroupAndWorktree } from '@/store/slices/tabs/tab-group-state'
 import {
   getComposerEligibleRepos,
   resolveComposerActiveRepoId,
@@ -25,17 +25,20 @@ import type { WorktreeJumpPaletteStoreState } from './use-worktree-jump-palette-
 import type { WorktreeJumpPaletteWorktrees } from './use-worktree-jump-palette-worktrees'
 import { recomputeOn } from '@/lib/recompute-on'
 
+/** Prefetch the repo New workspace will seed, mapping a per-workspace VM repo to its visible checkout. */
 function getComposerPrefetchRepoId(
   state: ReturnType<typeof useAppStore.getState>,
   initialRepoId?: string
 ): string | null {
+  const eligibleRepos = getComposerEligibleRepos(state.repos)
   return resolveComposerGitRepoId({
-    eligibleRepos: getComposerEligibleRepos(state.repos),
+    eligibleRepos,
     initialRepoId,
     activeRepoId: resolveComposerActiveRepoId(
       state.repos,
-      getComposerEligibleRepos(state.repos),
-      state.activeRepoId
+      eligibleRepos,
+      state.activeRepoId,
+      state.runtimeEnvironments
     ),
     focusedHostScope: state.workspaceHostScope
   })

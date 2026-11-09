@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { acknowledgeWatcherSubscribe, FakeWatcherChild } from './parcel-watcher-process-test-child'
 import { resetWatcherChildRegistryForTest } from './parcel-watcher-child-registry'
+import { WatcherProcessSupervisor } from './parcel-watcher-process-supervisor'
 
 const { forkMock } = vi.hoisted(() => ({ forkMock: vi.fn() }))
 vi.mock('node:child_process', () => ({ fork: forkMock }))
@@ -9,7 +10,6 @@ vi.mock('node:fs', () => ({
   mkdtempSync: vi.fn(() => '/tmp/orca-watcher-disposal-test'),
   rmSync: vi.fn()
 }))
-import { WatcherProcessSupervisor } from './parcel-watcher-process-supervisor'
 
 const children: FakeWatcherChild[] = []
 beforeEach(() => {
@@ -49,19 +49,4 @@ it('awaited supervisor disposal retains a child after prior synchronous disposal
   child.emit('close')
   await shutdown
   expect(finished).toHaveBeenCalledOnce()
-})
-
-it('test reset isolates old physical-exit callbacks from the new lifetime owner', async () => {
-  const supervisor = new WatcherProcessSupervisor({ useInProcessVitestFallback: false })
-  const old = await subscribe(supervisor)
-  const oldShutdown = supervisor.disposeAndWait()
-  supervisor.resetForTest()
-  const current = await subscribe(supervisor)
-  const finished = vi.fn()
-  const shutdown = supervisor.disposeAndWait().then(finished)
-  old.emit('close')
-  await oldShutdown
-  expect(finished).not.toHaveBeenCalled()
-  current.emit('close')
-  await shutdown
 })

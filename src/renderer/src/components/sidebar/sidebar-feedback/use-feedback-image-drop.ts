@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
-import { hasNativeFileDragTypes } from '../../../../../shared/native-file-drop'
-import { OS_FILE_DROP_OWNER_ATTRIBUTE } from '../../../../../shared/native-file-drop-preparation'
+import { hasNativeFileDragTypes } from '../../../../../shared/file-import/native-file-drop'
+import { OS_FILE_DROP_OWNER_ATTRIBUTE } from '../../../../../shared/file-import/native-file-drop-preparation'
 import { extractImageFilesFromDataTransfer } from '@/lib/feedback-image-attachments'
 
 type FeedbackImageDragHandlers = {

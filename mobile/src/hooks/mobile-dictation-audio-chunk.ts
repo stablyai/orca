@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   MOBILE_DICTATION_CONNECTION_SLOW_ERROR_MESSAGE,
   MOBILE_DICTATION_PCM_SAMPLE_RATE
@@ -6,19 +6,22 @@ import {
 import { bytesToBase64 } from './mobile-dictation-session-state'
 import { dictationAudioChunkSend } from '../dictation/mobile-dictation-operations'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../src/shared/rpc-contract/speech-params'
-import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { rpcPayloadMember } from '../transport/rpc-reader-payload'
-import { waitForRpcClientReconnected } from '../transport/rpc-client-reconnect-wait'
-import { probeLivenessWhileWaiting } from '../transport/rpc-liveness-probe-while-waiting'
-import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import { isLogicalClientSuspendedError } from '../transport/logical-client-suspended-error'
+import { isRpcDeliveryUnknown } from '../transport/rpc/rpc-delivery-ambiguity'
+import { rpcPayloadMember } from '../transport/rpc/rpc-reader-payload'
+import { waitForRpcClientReconnected } from '../transport/rpc/rpc-client-reconnect-wait'
+import { probeLivenessWhileWaiting } from '../transport/rpc/rpc-liveness-probe-while-waiting'
+import '../transport/connection/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
+import { isLogicalClientSuspendedError } from '../transport/connection/logical-client-suspended-error'
+import { dictationSessionErrorMessage } from '../dictation/mobile-dictation-setup'
 import type {
   DictationCapture,
   DictationCaptureChunk
 } from '../platform/dictation-capture-contract'
 import type { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 import type { MobileDictationHeldAudio } from './mobile-dictation-held-audio'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { MobileDictationRun } from './mobile-dictation-engine-run'
 
 type MobileDictationAudioChunkQueue = {
   // One promise per busy send slot; each settles once nothing is left to send.
@@ -28,6 +31,8 @@ type MobileDictationAudioChunkQueue = {
   isActive: (dictationId: string) => boolean
   failActiveDictation: (dictationId: string, err: unknown) => void
   transcriptSoFar: MobileDictationTranscriptSoFar
+  // Called for the active dictation when its host has stopped taking audio.
+  stopAtAudioLimit: () => void
 }
 
 // Holding: the microphone runs from the tap while the host's start reply is pending, or for a whole on-device dictation.
@@ -101,6 +106,33 @@ function waitForReconnect(client: RpcClient): Promise<boolean> {
     reconnectWaits.set(client, wait)
   }
   return wait
+}
+
+// Streams the microphone to the host for the run's active dictation.
+export function useMobileDictationAudioChunks(capture: DictationCapture, run: MobileDictationRun) {
+  useEffect(() => {
+    const source = {
+      getClient: () => run.client.current,
+      getActiveId: () => run.activeId.current,
+      audioPhase: () => (run.enabled.current ? run.audioPhase.current : 'closed')
+    }
+    const sub = subscribeMobileDictationAudioChunks(capture, source, {
+      pendingChunks: run.pendingChunks.current,
+      pendingAudioBudget: run.pendingAudioBudget.current,
+      failActiveDictation: run.failActiveDictation,
+      transcriptSoFar: run.keptTranscript,
+      heldAudio: run.heldAudio.current,
+      // Like desktop: stop as the user would, so what the host kept is transcribed and inserted.
+      stopAtAudioLimit: () => {
+        if (run.status.current === 'recording') {
+          run.onAudioLimitReached.current?.()
+          void run.finish.current(dictationSessionErrorMessage('no-speech'))
+        }
+      }
+    })
+    run.sendHeldAudio.current = sub.sendHeld
+    return () => sub.remove()
+  }, [capture, run])
 }
 
 export function subscribeMobileDictationAudioChunks(
@@ -228,7 +260,7 @@ async function sendAudioChunk(
     dictationId,
     audioBase64: bytesToBase64(bytes),
     sampleRate: MOBILE_DICTATION_PCM_SAMPLE_RATE,
-    seq: queue.pendingAudioBudget.nextSeq()
+    seq: queue.pendingAudioBudget.nextSeq(bytes.byteLength)
   }
   const hostDedupesResends = queue.pendingAudioBudget.hostDedupesResends
   try {
@@ -254,6 +286,11 @@ async function sendAudioChunk(
         text,
         typeof revision === 'number' ? revision : undefined
       )
+    }
+    // Newer hosts repeat this on every reply once a cloud dictation reaches its length cap.
+    const limitReached = result != null && rpcPayloadMember(result, 'audioLimitReached') === true
+    if (limitReached && queue.isActive(dictationId)) {
+      queue.stopAtAudioLimit()
     }
   } catch (err) {
     // A host that cannot dedupe loses only the audio in flight at a drop; for one that dedupes, still being offline here means the reconnect grace ran out and later held audio would wait it out again.

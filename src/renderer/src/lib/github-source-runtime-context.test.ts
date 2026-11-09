@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import {
   getGitHubRepoRoutingTarget,
   resolveGitHubRepoOperationOwner
 } from './github-source-runtime-context'
-import type { RepoRuntimeOwnerState } from './repo-runtime-owner'
+import type { RepoRuntimeOwnerState } from './workspace/ownership/repo-runtime-owner'
 
 const runtimeSourceContext: TaskSourceContext = {
   kind: 'task-source',

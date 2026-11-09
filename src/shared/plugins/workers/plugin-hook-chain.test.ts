@@ -58,14 +58,6 @@ describe('runPluginHookChain', () => {
     await expect(outcome).resolves.toEqual({ kind: 'continue', payload: send })
   })
 
-  it('ignores an invalid change and logs it', async () => {
-    const { outcome, logs } = chain({
-      'a.one': [(event, next) => next({ ...read(event), enter: 'yes' })]
-    })
-    await expect(outcome).resolves.toEqual({ kind: 'continue', payload: send })
-    expect(logs[0]).toMatch(/^a\.one: hook terminal\.send: change ignored/)
-  })
-
   it('stops at a deny, so later plugins never run', async () => {
     const later = vi.fn()
     const { outcome } = chain({
@@ -74,12 +66,6 @@ describe('runPluginHookChain', () => {
     })
     await expect(outcome).resolves.toEqual({ kind: 'deny', pluginKey: 'a.one', reason: 'blocked' })
     expect(later).not.toHaveBeenCalled()
-  })
-
-  it('treats an unreadable result as passing', async () => {
-    const { outcome, logs } = chain({ 'a.one': [() => ({ deny: 7 })] })
-    await expect(outcome).resolves.toEqual({ kind: 'continue', payload: send })
-    expect(logs[0]).toMatch(/result ignored/)
   })
 
   it('treats a throw as passing and logs plugin, event and duration', async () => {

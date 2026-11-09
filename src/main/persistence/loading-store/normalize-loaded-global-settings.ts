@@ -24,6 +24,8 @@ import { readLegacySidekickFlag } from '../applying-settings/onboarding-normaliz
 import { normalizeMachineName } from '../../../shared/machine-name'
 import { replaceRetiredSpeechModelId } from '../../speech/model-catalog'
 import type { PersistedState } from '../../../shared/persisted-state-types'
+import type { VoiceSettings } from '../../../shared/speech-types'
+import { dictationShortcutModeSettings } from '../../../shared/dictation-shortcut-mode'
 import type { PreparedLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import type { PreparedLoadedProfileSettings } from './prepare-loaded-profile-settings'
 
@@ -36,6 +38,7 @@ export function normalizeLoadedGlobalSettings(
     defaults,
     migratedExternalVisibility,
     migratedTerminalScrollback,
+    migratedTerminalFontWeight,
     migratedTerminalTuiScrollSensitivity,
     migratedSourceControlAi,
     migratedOptionAsAlt,
@@ -71,7 +74,11 @@ export function normalizeLoadedGlobalSettings(
     normalizedSourceControlGroupOrder
   } = profile
   const pluginOwnedSettings = normalizePluginOwnedSettings(parsed.settings ?? {})
-  const voice = { ...getDefaultVoiceSettings(), ...parsed.settings?.voice }
+  const voice = {
+    ...getDefaultVoiceSettings(),
+    ...parsed.settings?.voice,
+    ...migrateDictationShortcutMode(parsed.settings)
+  }
   const matchTerminalSidebarInputs = {
     pluginAppThemeLight: pluginOwnedSettings.pluginAppThemeLight,
     pluginAppThemeDark: pluginOwnedSettings.pluginAppThemeDark,
@@ -105,6 +112,7 @@ export function normalizeLoadedGlobalSettings(
     ...migratedNestedWorkerMaxDepth,
     ...migratedTerminalCursorStyle,
     terminalLineHeight: migratedTerminalLineHeight,
+    ...migratedTerminalFontWeight,
     // False was always explicit; the old true default may be reset once.
     terminalRightClickToPaste: terminalRightClickToPasteDefaultedForPlatform
       ? (parsed.settings?.terminalRightClickToPaste ?? defaults.settings.terminalRightClickToPaste)
@@ -182,6 +190,23 @@ export function normalizeLoadedGlobalSettings(
       migratedSourceControlAi,
       parsed.settings?.commitMessageAi ?? defaults.settings.commitMessageAi
     ),
-    voice: { ...voice, sttModel: replaceRetiredSpeechModelId(voice.sttModel) }
+    voice: { ...voice, sttModel: replaceRetiredSpeechModelId(voice.sttModel) },
+    voiceDictationModeDefaultedToAuto: true
   }
+}
+
+function migrateDictationShortcutMode(
+  settings: PersistedState['settings'] | undefined
+): Pick<VoiceSettings, 'dictationMode' | 'dictationHoldToRecord'> {
+  const stored: { dictationMode?: unknown; dictationHoldToRecord?: unknown } = settings?.voice ?? {}
+  if (stored.dictationMode === 'hold') {
+    return dictationShortcutModeSettings('hold')
+  }
+  // Builds from 3d2b0b12812 stored Auto as 'auto'. A 'toggle' saved before the marker was everyone's old default.
+  const dictationHoldToRecord =
+    stored.dictationMode === 'auto' ||
+    (typeof stored.dictationHoldToRecord === 'boolean'
+      ? stored.dictationHoldToRecord
+      : settings?.voiceDictationModeDefaultedToAuto !== true)
+  return dictationShortcutModeSettings(dictationHoldToRecord ? 'auto' : 'toggle')
 }

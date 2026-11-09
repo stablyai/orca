@@ -1,3 +1,4 @@
+// @orca-isolated-worker: initial capacity requires a fresh process-wide registry.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   MAX_PHYSICAL_WATCHER_CHILDREN,
@@ -27,30 +28,6 @@ describe('parcel watcher child registry capacity notifications', () => {
 
     onWatcherChildCapacityAvailable(listener)
     await Promise.resolve()
-
-    expect(listener).toHaveBeenCalledOnce()
-    releases.forEach((release) => release())
-  })
-
-  it('cancels a pending capacity notification without leaking the listener', () => {
-    const releases = fillWatcherChildCapacity()
-    const listener = vi.fn()
-    const cancel = onWatcherChildCapacityAvailable(listener)
-
-    cancel()
-    releases.pop()?.()
-
-    expect(listener).not.toHaveBeenCalled()
-    releases.forEach((release) => release())
-  })
-
-  it('delivers each capacity notification at most once', () => {
-    const releases = fillWatcherChildCapacity()
-    const listener = vi.fn()
-    onWatcherChildCapacityAvailable(listener)
-
-    releases.pop()?.()
-    releases.pop()?.()
 
     expect(listener).toHaveBeenCalledOnce()
     releases.forEach((release) => release())

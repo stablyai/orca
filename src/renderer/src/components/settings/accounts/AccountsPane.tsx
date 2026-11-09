@@ -7,6 +7,7 @@ import type { CodexConfigSyncStatus } from '../../../../../shared/codex-config-s
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   emptyClaudeAccountsState,
@@ -46,15 +47,11 @@ import { ZcodePlanAccountsSection } from './usage/ZcodePlanAccountsSection'
 import type {
   AccountsPaneProps,
   AccountsPaneSectionModel,
-  ClaudeAccountAction,
-  CodexAccountAction,
+  ProviderAccountAction,
   RemoveAccountTarget
 } from './accounts-pane-types'
-import {
-  EMPTY_WSL_DISTROS,
-  getRuntimeSentenceLabel,
-  getSelectedAccountRuntime
-} from './scope/accounts-pane-runtime'
+import { EMPTY_WSL_DISTROS, getSelectedAccountRuntime } from './scope/accounts-pane-runtime'
+import { getRuntimeSentenceLabel } from '../../../lib/provider-accounts/account-runtime-label'
 import { watchCodexConfigSyncStatus } from '../../../runtime/provider-accounts/codex-config-sync-observer'
 import {
   createClaudeAccountActionRunner,
@@ -63,10 +60,8 @@ import {
 import { renderAccountsLocationSection } from './scope/accounts-pane-location-section'
 import { renderClaudeAccountsSection } from './claude/accounts-pane-claude-section'
 import { renderCodexAccountsSection } from './codex/accounts-pane-codex-section'
-import {
-  renderGeminiAccountsSection,
-  renderOpenCodeAccountsSection
-} from './providers/accounts-pane-provider-setting-sections'
+import { renderGeminiAccountsSection } from './providers/accounts-pane-gemini-section'
+import { renderOpenCodeAccountsSection } from './providers/accounts-pane-opencode-section'
 import { MiniMaxAccountsSection } from './usage/MiniMaxAccountsSection'
 import { useUsageHostSettings } from './usage/use-usage-host-settings'
 import { ManagedDataAccountsSection } from './providers/ManagedDataAccountsSection'
@@ -86,6 +81,8 @@ export function AccountsPane({
   accountOwnerPlatform = null,
   wslHostDistro = null
 }: AccountsPaneProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
   const codexRateLimitTarget = useAppStore((s) => s.rateLimits.codexTarget)
@@ -102,7 +99,8 @@ export function AccountsPane({
     wslAvailable,
     wslDistros,
     wslCapabilitiesLoading,
-    wslHostDistro
+    wslHostDistro,
+    t
   )
   // Route all account actions to the Settings-selected owner, independent of focused host (#7973).
   const accountOwner = hostScope.target
@@ -122,7 +120,7 @@ export function AccountsPane({
     : null
   const remoteServerLabel = isRemoteAccountScope
     ? (remoteServerName ??
-      translate('auto.components.settings.AccountsPane.remoteServerFallback', 'the remote server'))
+      t('auto.components.settings.AccountsPane.remoteServerFallback', 'the remote server'))
     : null
   const accountRuntime = isRemoteAccountScope
     ? { runtime: 'host' as const, label: remoteServerLabel ?? '' }
@@ -135,11 +133,8 @@ export function AccountsPane({
   const remoteAccountScopeNotice =
     isRemoteAccountScope && !isWebClientLocation() ? (
       <ProviderHostScopeControl
-        labelPrefix={translate(
-          'auto.components.settings.AccountsPane.accountScopePrefix',
-          'Account scope'
-        )}
-        scope={getRemoteAccountsPaneScope(remoteServerName)}
+        labelPrefix={t('auto.components.settings.AccountsPane.accountScopePrefix', 'Account scope')}
+        scope={getRemoteAccountsPaneScope(remoteServerName, t)}
         className="text-xs"
       />
     ) : null
@@ -147,10 +142,10 @@ export function AccountsPane({
   const [codexAccounts, setCodexAccounts] =
     useState<CodexRateLimitAccountsState>(emptyCodexAccountsState)
   const [codexAccountsLoaded, setCodexAccountsLoaded] = useState(false)
-  const [codexAction, setCodexAction] = useState<CodexAccountAction>('idle')
+  const [codexAction, setCodexAction] = useState<ProviderAccountAction>('idle')
   const [claudeAccounts, setClaudeAccounts] =
     useState<ClaudeRateLimitAccountsState>(emptyClaudeAccountsState)
-  const [claudeAction, setClaudeAction] = useState<ClaudeAccountAction>('idle')
+  const [claudeAction, setClaudeAction] = useState<ProviderAccountAction>('idle')
   // Capture runtime slots at dialog opening; roster updates could remove the slot needed for restart diffs.
   const [removeCodexTarget, setRemoveCodexTarget] = useState<RemoveAccountTarget | null>(null)
   const [removeClaudeTarget, setRemoveClaudeTarget] = useState<RemoveAccountTarget | null>(null)
@@ -335,16 +330,16 @@ export function AccountsPane({
     !isRemoteAccountScope &&
     !wslHostDistro &&
     matchesSettingsSearch(searchQuery, getAccountsLocationSearchEntries())
-      ? renderAccountsLocationSection(model)
+      ? renderAccountsLocationSection(model, t)
       : null,
     matchesSettingsSearch(searchQuery, getAccountsClaudeSearchEntries())
-      ? renderClaudeAccountsSection(model)
+      ? renderClaudeAccountsSection(model, t, intlLocale)
       : null,
     matchesSettingsSearch(searchQuery, getAccountsCodexSearchEntries())
-      ? renderCodexAccountsSection(model)
+      ? renderCodexAccountsSection(model, t, intlLocale)
       : null,
     matchesSettingsSearch(searchQuery, getAccountsGeminiSearchEntries())
-      ? renderGeminiAccountsSection(model)
+      ? renderGeminiAccountsSection(model, t)
       : null,
     matchesSettingsSearch(searchQuery, getAccountsAntigravitySearchEntries()) ? (
       <AntigravityAccountsSection
@@ -356,7 +351,7 @@ export function AccountsPane({
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries())
-      ? renderOpenCodeAccountsSection(model)
+      ? renderOpenCodeAccountsSection(model, t)
       : null,
     matchesSettingsSearch(searchQuery, getAccountsMiniMaxSearchEntries()) ? (
       <MiniMaxAccountsSection
@@ -384,8 +379,8 @@ export function AccountsPane({
 
   return (
     <div className="space-y-8">
-      {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget)}
-      <SettingsSectionStack sections={visibleSections} spacing="group" />
+      {renderAccountsRemovalDialogs(model, removeCodexTarget, removeClaudeTarget, t)}
+      <SettingsSectionStack sections={visibleSections} />
     </div>
   )
 }
