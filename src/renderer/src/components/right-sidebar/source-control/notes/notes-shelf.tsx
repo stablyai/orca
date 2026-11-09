@@ -86,7 +86,7 @@ export function SourceControlNotesShelf({
             respondToOpenRequest
           />
           {diffCommentCount > 0 && (
-            <TooltipProvider delayDuration={400}>
+            <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -112,7 +112,7 @@ export function SourceControlNotesShelf({
             </TooltipProvider>
           )}
           <DropdownMenu>
-            <TooltipProvider delayDuration={400}>
+            <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <DropdownMenuTrigger asChild>

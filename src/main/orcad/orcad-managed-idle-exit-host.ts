@@ -1,5 +1,5 @@
 import { getAppEnvironment } from '../../shared/app-environment'
-import type { RuntimeRpcClientActivity } from '../runtime/rpc/server/runtime-rpc-shutdown'
+import type { RuntimeRpcClientActivity } from '../runtime/rpc/server/runtime-rpc'
 import type { OrcadIdleExitEvidence } from './orcad-idle-exit-monitor'
 import {
   activationFenceExists,

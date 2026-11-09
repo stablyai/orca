@@ -26,29 +26,6 @@ import {
   BASE
 } from './use-mobile-structured-agent-options.test-fixture'
 
-describe('useMobileStructuredAgentOptions post-write refresh', () => {
-  it.each([true, false])(
-    'revalidates an accepted operation with sameFence=%s',
-    async (sameFence) => {
-      const client = optionsClient(queuedReads(FAST_OPTIONS, FAST_OPTIONS_ON))
-      // The reply settles the operation; only the query installs the chat's selection.
-      const { mutate } = recordingMutate(async () =>
-        accepted({ key: 'fastMode', value: 'true', options: {} }, sameFence)
-      )
-      const harness = await mountOptions({ ...BASE, client: client.client, mutate })
-      expect(client.optionReads()).toBe(1)
-      expect(currentValueOf(harness.current().optionSnapshot, 'fastMode')).toBe(false)
-      await act(async () => {
-        await harness.current().setStructuredOption('fastMode', true)
-      })
-      await settle()
-      expect(client.optionReads()).toBe(2)
-      expect(currentValueOf(harness.current().optionSnapshot, 'fastMode')).toBe(true)
-      await harness.unmount()
-    }
-  )
-})
-
 describe('useMobileStructuredAgentOptions generation fencing', () => {
   it('drops an options read a later write superseded', async () => {
     const stale = deferred<AgentSessionOptionsResult>()

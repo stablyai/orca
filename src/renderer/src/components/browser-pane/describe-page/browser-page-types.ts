@@ -5,8 +5,8 @@ import type {
   BrowserGrabPayload,
   BrowserPageAnnotation,
   GrabIntent
-} from '../../../../../shared/browser-grab-types'
-import type { BrowserContextMenuRequestedEvent } from '../../../../../shared/browser-guest-events'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
+import type { BrowserContextMenuRequestedEvent } from '../../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import type { GrabModeHook } from '../annotate/useGrabMode'
 import type { BrowserOverlayViewport } from './browser-annotation-geometry'
@@ -30,8 +30,6 @@ export type BrowserChromeShortcutScope =
   | 'inactive'
   | 'owned-target'
   | 'owned-target-focused'
-
-export type { GrabIntent } from '../../../../../shared/browser-grab-types'
 
 export type BrowserPageContextMenuState = Pick<
   BrowserContextMenuRequestedEvent,

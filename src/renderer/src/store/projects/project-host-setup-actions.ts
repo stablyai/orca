@@ -262,7 +262,8 @@ export function createProjectHostSetupActions(
           target.kind === 'local'
             ? await window.api.repos.clone({
                 url: args.url,
-                destination: args.destination
+                destination: args.destination,
+                folderName: args.folderName
               })
             : (
                 await callRuntimeRpc<{ repo: Repo }>(
@@ -270,7 +271,8 @@ export function createProjectHostSetupActions(
                   'repo.clone',
                   {
                     url: args.url,
-                    destination: args.destination
+                    destination: args.destination,
+                    folderName: args.folderName
                   },
                   { timeoutMs: 10 * 60_000 }
                 )

@@ -49,24 +49,6 @@ export function normalizeAgentActivityDisplayMode(value: unknown): AgentActivity
   return value === 'full' || value === 'compact' ? value : DEFAULT_AGENT_ACTIVITY_DISPLAY_MODE
 }
 
-export const ORCA_BROWSER_PARTITION = 'persist:orca-browser'
-// Why: inert blank-tab URL shared by main/renderer so the attach policy can allow just this one data URL and reject others.
-export const ORCA_BROWSER_BLANK_URL = 'data:text/html,'
-
-export const BROWSER_FAMILY_LABELS: Record<string, string> = {
-  chrome: 'Google Chrome',
-  chromium: 'Chromium',
-  comet: 'Comet',
-  helium: 'Helium',
-  vivaldi: 'Vivaldi',
-  arc: 'Arc',
-  edge: 'Microsoft Edge',
-  brave: 'Brave',
-  firefox: 'Firefox',
-  safari: 'Safari',
-  manual: 'File'
-}
-
 /** ProseMirror mounts whole documents. M-series Electron measurements at 300/450/600KB: longest tasks 0.66/1.02/1.41s; 600KB typing p95 39ms (#17134/#17147/#17158). Use cheap pre-parse byte guard, then source mode with Open anyway. */
 export const RICH_MARKDOWN_MAX_SIZE_BYTES = 600 * 1024
 
@@ -120,6 +102,8 @@ export function getDefaultVoiceSettings(): VoiceSettings {
     modelsDir: '',
     dictationLanguage: DICTATION_LANGUAGE_AUTO,
     dictationMode: 'toggle' as const,
+    dictationHoldToRecord: true,
+    removeFillerWords: true,
     terminalConfirmBeforeInsert: false,
     userModels: [],
     openAiApiKeyConfigured: false,

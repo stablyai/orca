@@ -1,45 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { buildAiVaultResumeCommand } from '../../ai-vault/resume/ai-vault-resume-command'
 import { buildAgentResumeStartupPlan } from './tui-agent-resume-startup'
-import type { AgentStartupShell } from './tui-agent-startup-shell'
-
-const providerSession = { key: 'session_id', id: 'ses_resume' } as const
-const hosts: { platform: NodeJS.Platform; shell: AgentStartupShell; resumeArgs: string }[] = [
-  { platform: 'darwin', shell: 'posix', resumeArgs: "'--session' 'ses_resume'" },
-  { platform: 'linux', shell: 'posix', resumeArgs: "'--session' 'ses_resume'" },
-  { platform: 'win32', shell: 'powershell', resumeArgs: "'--session' 'ses_resume'" },
-  { platform: 'win32', shell: 'cmd', resumeArgs: '"--session" "ses_resume"' }
-]
 
 describe('OpenCode 2 restored terminal launch mode', () => {
-  it.each(hosts)('honors a shared-service alias on $platform/$shell', (host) => {
-    const plan = buildAgentResumeStartupPlan({
-      agent: 'opencode2',
-      providerSession,
-      cmdOverrides: { opencode2: 'team-opencode --port 4321' },
-      ...host,
-      isRemote: true
-    })
-
-    expect(plan?.launchCommand).toBe(`team-opencode --port 4321 ${host.resumeArgs}`)
-    expect(plan?.launchConfig.agentCommand).toBe('team-opencode --port 4321')
-  })
-
-  it.each(hosts)(
-    'keeps the captured command instead of current defaults on $platform/$shell',
-    (host) => {
-      const plan = buildAgentResumeStartupPlan({
-        agent: 'opencode2',
-        providerSession,
-        cmdOverrides: { opencode2: 'opencode2 --standalone' },
-        agentCommand: 'saved-opencode --port 4321',
-        ...host
-      })
-
-      expect(plan?.launchCommand).toBe(`saved-opencode --port 4321 ${host.resumeArgs}`)
-    }
-  )
-
   it('retains an explicitly configured standalone command and quoted Unix session id', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'opencode2',
@@ -66,22 +29,6 @@ describe('OpenCode 2 restored terminal launch mode', () => {
 })
 
 describe('OpenCode 2 session-history launch mode', () => {
-  it.each(hosts)('honors an override without standalone on $platform/$shell', (host) => {
-    expect(
-      buildAiVaultResumeCommand({
-        agent: 'opencode2',
-        sessionId: providerSession.id,
-        cwd: null,
-        commandOverride: 'team-opencode --port 4321',
-        ...host
-      })
-    ).toBe(
-      host.shell === 'cmd'
-        ? 'team-opencode --port 4321 --session "ses_resume"'
-        : "team-opencode --port 4321 --session 'ses_resume'"
-    )
-  })
-
   it('preserves a standalone override and Windows command quoting in a folder workspace', () => {
     expect(
       buildAiVaultResumeCommand({

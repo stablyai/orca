@@ -23,7 +23,8 @@ import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { findSiblingGroupId } from '../../../shared/workspace-layout/tab-group-layout-tree'
 import type { CreateBrowserTabOptions } from '@/store/slices/browser/browser-slice-contract'
-import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
+import '../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../shared/browser/browser-blank-page'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

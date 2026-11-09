@@ -7,6 +7,7 @@ import type {
 } from '../../shared/agent-status/contracts/agent-status-ipc-payload'
 import type { AgentInterruptInferenceRequest } from '../../shared/agent-status/lifecycle/agent-interrupt-intent'
 import type { AgentQuestionAnsweredInferenceRequest } from '../../shared/agent-status/lifecycle/agent-question-answered-intent'
+import type { AgentListPublication } from '../../shared/agent-status/presentation/agent-list-status'
 import type { PreloadApi } from '../api-types'
 
 export const agentStatusApi = {
@@ -71,6 +72,9 @@ export const agentStatusApi = {
   },
   dropPersistedBatch: (identities: readonly AgentStatusCacheIdentity[]): void => {
     ipcRenderer.send('agentStatus:dropPersistedBatch', identities)
+  },
+  publishListVerdicts: (publication: AgentListPublication | null): void => {
+    ipcRenderer.send('agentStatus:listVerdicts', publication)
   },
   reconcileEndedProcess: (paneKey: string): void => {
     ipcRenderer.send('agentStatus:reconcileEndedProcess', paneKey)
