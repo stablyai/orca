@@ -43,6 +43,11 @@ export async function runOrcaCloudTransferToLocal(
   let bytes: number | null = null
   let totalBytes: number | null = null
   let timedOut = false
+  let localWorktreeId: string | null = null
+  const isHidden = (): boolean => {
+    const current = getCloudMoveState()
+    return current.stage === 'running' && current.hidden
+  }
   const publish = (): void => {
     if (timedOut) {
       return
@@ -63,7 +68,15 @@ export async function runOrcaCloudTransferToLocal(
   }
   const timeout = setTimeout(() => {
     timedOut = true
-    setCloudMoveState({ stage: 'failed', workspaceId, name, step, timedOut: true })
+    setCloudMoveState({
+      stage: 'failed',
+      workspaceId,
+      name,
+      step,
+      timedOut: true,
+      localWorktreeId,
+      hidden: isHidden()
+    })
   }, MOVE_TIMEOUT_MS)
   const live = (): boolean => !timedOut && getCloudMoveState().stage === 'running'
   const dispose = api.onTransferProgress((event) => {
@@ -124,6 +137,7 @@ export async function runOrcaCloudTransferToLocal(
         undefined,
         { branchIntent: 'open-existing-v2' }
       )
+    localWorktreeId = worktree.id
     step = 'applying'
     publish()
     const finished = await api.finishTransferToLocal({ transferId, worktreePath: worktree.path })
@@ -134,6 +148,7 @@ export async function runOrcaCloudTransferToLocal(
       return
     }
     noteCloudWorkspaceMoved(workspaceId, Date.now(), worktree.id)
+    const hidden = isHidden()
     setCloudMoveState({
       stage: 'done',
       workspaceId,
@@ -142,9 +157,13 @@ export async function runOrcaCloudTransferToLocal(
       prepared: prepared.value,
       finished: finished.value,
       elapsedMs: Date.now() - startedAt,
-      archivedAfter: archiveAfter
+      archivedAfter: archiveAfter,
+      hidden
     })
-    activateAndRevealWorktree(worktree.id)
+    // Hidden: the user kept working elsewhere; the notice offers Open instead of jumping there.
+    if (!hidden) {
+      activateAndRevealWorktree(worktree.id)
+    }
     if (archiveAfter) {
       options.onArchive?.(workspaceId, name)
     }
@@ -152,7 +171,15 @@ export async function runOrcaCloudTransferToLocal(
     // Details go to the log, not the dialog (error tone: plain words, nothing lost, one action).
     console.error('[orca-cloud] move to this computer failed', error)
     if (live()) {
-      setCloudMoveState({ stage: 'failed', workspaceId, name, step, timedOut: false })
+      setCloudMoveState({
+        stage: 'failed',
+        workspaceId,
+        name,
+        step,
+        timedOut: false,
+        localWorktreeId,
+        hidden: isHidden()
+      })
     }
   } finally {
     clearTimeout(timeout)

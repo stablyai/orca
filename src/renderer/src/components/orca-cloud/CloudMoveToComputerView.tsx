@@ -8,8 +8,12 @@ import { InlineError } from '@/components/ui/inline-error'
 import { formatElapsedTime } from '@/components/worktree-creation/worktree-creation-clock'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
-import { CLOUD_MOVE_STEPS, type CloudMoveState } from '@/lib/orca-cloud/orca-cloud-move-store'
-import { cloudMoveStepLabel, formatMoveSize } from './cloud-move-copy'
+import {
+  CLOUD_MOVE_STEPS,
+  effectiveArchiveAfter,
+  type CloudMoveState
+} from '@/lib/orca-cloud/orca-cloud-move-store'
+import { cloudMoveFailureCause, cloudMoveStepLabel, formatMoveSize } from './cloud-move-copy'
 
 export { cloudMoveStepLabel, cloudMoveTitle } from './cloud-move-copy'
 
@@ -45,6 +49,7 @@ function useFocusOnStage(
 export function CloudMoveToComputerView({
   state,
   conflicts,
+  runningAgents,
   now,
   onConfirm,
   onCancel,
@@ -57,6 +62,8 @@ export function CloudMoveToComputerView({
 }: {
   state: OpenState
   conflicts: CloudMoveConflicts
+  /** Agents working in the cloud workspace now: archiving afterwards would stop them. */
+  runningAgents: number
   now: number
   onConfirm: () => void
   onCancel: () => void
@@ -131,13 +138,23 @@ export function CloudMoveToComputerView({
             )}
           />
         ) : null}
-        <label className="flex items-center gap-2 text-sm">
-          <Checkbox
-            checked={state.archiveAfter}
-            onCheckedChange={(checked) => onArchiveAfterChange(checked === true)}
-          />
-          {t('orcaCloudMove.confirm.archiveAfter', 'Archive the cloud workspace afterwards')}
-        </label>
+        <div className="flex flex-col gap-0.5">
+          <label className="flex items-center gap-2 text-sm">
+            <Checkbox
+              checked={effectiveArchiveAfter(state.archiveAfter, runningAgents)}
+              onCheckedChange={(checked) => onArchiveAfterChange(checked === true)}
+            />
+            {t('orcaCloudMove.confirm.archiveAfter', 'Archive the cloud workspace afterwards')}
+          </label>
+          {runningAgents > 0 ? (
+            <p className="pl-6 text-xs text-muted-foreground">
+              {t('orcaCloudMove.confirm.stopsAgents', 'Stops {{count}} running agents', {
+                count: runningAgents,
+                defaultValue_one: 'Stops {{count}} running agent'
+              })}
+            </p>
+          ) : null}
+        </div>
         <div className="flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={onCancel}>
             {t('orcaCloudMove.cancel', 'Cancel')}
@@ -237,23 +254,12 @@ export function CloudMoveToComputerView({
   }
 
   if (state.stage === 'failed') {
-    const localStarted = state.step === 'creating' || state.step === 'applying'
+    // Only when the local worktree really exists: a create that threw left nothing here.
+    const localStarted = state.localWorktreeId !== null
     return (
       <div className="flex flex-col gap-4">
         <InlineError
-          title={
-            state.timedOut
-              ? t(
-                  'orcaCloudMove.cause.timedOut',
-                  'It took too long while {{step}}, so Orca stopped it.',
-                  {
-                    step: cloudMoveStepLabel(state.step, t).toLowerCase()
-                  }
-                )
-              : t('orcaCloudMove.cause.step', 'Something went wrong while {{step}}.', {
-                  step: cloudMoveStepLabel(state.step, t).toLowerCase()
-                })
-          }
+          title={cloudMoveFailureCause(state.step, state.timedOut, t)}
           detail={
             localStarted
               ? t(
@@ -270,9 +276,22 @@ export function CloudMoveToComputerView({
           <Button variant="ghost" size="sm" onClick={onClose}>
             {t('orcaCloudMove.close', 'Close')}
           </Button>
-          <Button ref={primary} size="sm" onClick={onConfirm}>
-            {t('orcaCloudMove.retry', 'Try again')}
-          </Button>
+          {state.localWorktreeId ? (
+            <Button
+              ref={primary}
+              size="sm"
+              onClick={() => {
+                onOpenLocal(state.localWorktreeId!)
+                onClose()
+              }}
+            >
+              {t('orcaCloudMove.done.open', 'Open workspace')}
+            </Button>
+          ) : (
+            <Button ref={primary} size="sm" onClick={onConfirm}>
+              {t('orcaCloudMove.retry', 'Try again')}
+            </Button>
+          )}
         </div>
       </div>
     )
@@ -349,10 +368,11 @@ export function CloudMoveToComputerView({
             onClick={() => onOpenFolder(partial)}
           >
             <FolderOpen />
-            <span className="truncate">
-              {t('orcaCloudMove.openFolderAt', 'Open {{dir}}', { dir: partial })}
-            </span>
+            {t('orcaCloudMove.openFolder', 'Open folder')}
           </Button>
+          <p className="break-all font-mono text-xs text-muted-foreground" title={partial}>
+            {partial}
+          </p>
         </div>
       ) : null}
       <p className="text-xs text-muted-foreground">

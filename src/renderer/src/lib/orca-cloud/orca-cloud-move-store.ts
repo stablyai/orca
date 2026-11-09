@@ -23,7 +23,8 @@ export type CloudMoveState =
       name: string
       /** What the client cache already knows (asleep-view snapshot); null until read or when empty. */
       known: CloudMoveKnownCounts | null
-      archiveAfter: boolean
+      /** Null until the user touches the checkbox: then the default (on unless agents run there) applies. */
+      archiveAfter: boolean | null
     }
   | {
       stage: 'running'
@@ -49,6 +50,8 @@ export type CloudMoveState =
       elapsedMs: number
       /** "Archive the cloud workspace afterwards" was ticked: it is being archived (with undo). */
       archivedAfter: boolean
+      /** Settled while hidden: stays a notice until Show (never steals focus). */
+      hidden: boolean
     }
   | {
       stage: 'failed'
@@ -57,6 +60,10 @@ export type CloudMoveState =
       step: CloudMoveStep
       /** The move gave up after MOVE_TIMEOUT_MS. */
       timedOut: boolean
+      /** The local worktree that was created before the failure, if any. */
+      localWorktreeId: string | null
+      /** Settled while hidden: stays a notice until Show (never steals focus). */
+      hidden: boolean
     }
 
 export type CloudMoveKnownCounts = {
@@ -94,7 +101,15 @@ export function openMoveToThisComputer(workspaceId: string, name: string): void 
     }
     return
   }
-  setCloudMoveState({ stage: 'confirm', workspaceId, name, known: null, archiveAfter: true })
+  if (
+    (state.stage === 'done' || state.stage === 'failed') &&
+    state.hidden &&
+    state.workspaceId === workspaceId
+  ) {
+    setCloudMoveState({ ...state, hidden: false })
+    return
+  }
+  setCloudMoveState({ stage: 'confirm', workspaceId, name, known: null, archiveAfter: null })
   // Counts from the client cache, so the confirm screen can say what moves without waking anything.
   void (typeof window === 'undefined' ? undefined : window.api?.orcaCloudOffline)
     ?.getSnapshot({ workspaceId })
@@ -121,11 +136,19 @@ export function setMoveArchiveAfter(archiveAfter: boolean): void {
   }
 }
 
-/** "Hide": the move keeps going behind a toast; Show (or the result) brings the dialog back. */
+/** "Hide": the move keeps going behind a notice; only Show brings the dialog back. */
 export function hideRunningMove(hidden: boolean): void {
-  if (state.stage === 'running') {
+  if (state.stage === 'running' || state.stage === 'done' || state.stage === 'failed') {
     setCloudMoveState({ ...state, hidden })
   }
+}
+
+/** The checkbox default: archive afterwards unless agents are running there (archiving stops them). */
+export function effectiveArchiveAfter(
+  archiveAfter: boolean | null,
+  runningAgents: number
+): boolean {
+  return archiveAfter ?? runningAgents === 0
 }
 
 export function closeMoveToThisComputer(): void {

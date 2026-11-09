@@ -15,12 +15,16 @@ import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-a
 import {
   closeMoveToThisComputer,
   hideRunningMove,
+  effectiveArchiveAfter,
   setMoveArchiveAfter,
   useCloudMoveState,
   type CloudMoveState
 } from '@/lib/orca-cloud/orca-cloud-move-store'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { useAppStore } from '@/store'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { runArchiveCloudWorkspace } from './cloud-workspace-actions'
+import { returnFocusToWorkspace } from './cloud-focus-return'
 import {
   CloudMoveToComputerView,
   cloudMoveStepLabel,
@@ -30,38 +34,93 @@ import {
 
 export type { CloudMoveConflicts } from './CloudMoveToComputerView'
 
-/** While hidden, a running move shows as a quiet loading notice with Show. */
+/** Hide unmounts the dialog; give focus back to the workspace instead of leaving it on <body>. */
+function hideAndReturnFocus(): void {
+  hideRunningMove(true)
+  requestAnimationFrame(() =>
+    returnFocusToWorkspace(useAppStore.getState().activeTabId, (tabId) =>
+      focusTerminalTabSurface(tabId, null, { onlyIfFocusUnclaimed: true })
+    )
+  )
+}
+
+/**
+ * While hidden, a move is a notice: loading with Show; when it settles, success with Open
+ * workspace or an error with Show details. The dialog only comes back on Show, so a move that
+ * finishes while someone types never takes their focus.
+ */
 function useHiddenMoveToast(state: CloudMoveState, t: Translate): void {
-  const hiddenStep = state.stage === 'running' && state.hidden ? state.step : null
-  const name = state.stage === 'closed' ? null : state.name
+  const hidden = state.stage !== 'closed' && state.stage !== 'confirm' && state.hidden
+  const key = hidden ? `${state.stage}:${state.stage === 'running' ? state.step : ''}` : null
   useEffect(() => {
     const id = 'orca-cloud-move-hidden'
-    if (!hiddenStep || !name) {
+    const current = state
+    if (!key || current.stage === 'closed' || current.stage === 'confirm') {
       toast.dismiss(id)
       return
     }
-    toast.loading(t('orcaCloudMove.title.running', 'Moving {{name}} to this computer', { name }), {
-      id,
-      duration: Infinity,
-      description: cloudMoveStepLabel(hiddenStep, t),
-      action: { label: t('orcaCloudMove.show', 'Show'), onClick: () => hideRunningMove(false) }
-    })
-  }, [hiddenStep, name, t])
+    const show = { label: t('orcaCloudMove.show', 'Show'), onClick: () => hideRunningMove(false) }
+    if (current.stage === 'running') {
+      toast.loading(
+        t('orcaCloudMove.title.running', 'Moving {{name}} to this computer', {
+          name: current.name
+        }),
+        {
+          id,
+          duration: Infinity,
+          description: cloudMoveStepLabel(current.step, t),
+          action: show
+        }
+      )
+    } else if (current.stage === 'done') {
+      toast.success(
+        t('orcaCloudMove.notice.done', '{{name}} is on this computer', { name: current.name }),
+        {
+          id,
+          duration: 12_000,
+          action: {
+            label: t('orcaCloudMove.done.open', 'Open workspace'),
+            onClick: () => {
+              closeMoveToThisComputer()
+              activateAndRevealWorktree(current.localWorktreeId)
+            }
+          }
+        }
+      )
+    } else {
+      toast.error(
+        t('orcaCloudMove.title.failed', 'Couldn’t move {{name}}', { name: current.name }),
+        {
+          id,
+          duration: Infinity,
+          action: {
+            label: t('orcaCloudMove.showDetails', 'Show details'),
+            onClick: () => hideRunningMove(false)
+          }
+        }
+      )
+    }
+    // `key` captures the parts that change what the notice says.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key, t])
 }
 
 /** Mounted once in App; renders whatever move is open. */
 export function CloudMoveToComputerDialogHost({
-  conflictsFor
+  conflictsFor,
+  runningAgentsFor
 }: {
   conflictsFor: (workspaceId: string) => CloudMoveConflicts
+  runningAgentsFor: (workspaceId: string) => number
 }): React.JSX.Element | null {
   const t = useTranslate()
   const state = useCloudMoveState()
   const now = useNow(1_000, state.stage === 'running')
   useHiddenMoveToast(state, t)
-  if (state.stage === 'closed' || (state.stage === 'running' && state.hidden)) {
+  if (state.stage === 'closed' || (state.stage !== 'confirm' && state.hidden)) {
     return null
   }
+  const runningAgents = state.stage === 'confirm' ? runningAgentsFor(state.workspaceId) : 0
   const running = state.stage === 'running'
   const archive = (workspaceId: string, name: string): void =>
     void runArchiveCloudWorkspace(workspaceId, { name })
@@ -93,12 +152,13 @@ export function CloudMoveToComputerDialogHost({
         <CloudMoveToComputerView
           state={state}
           conflicts={conflictsFor(state.workspaceId)}
+          runningAgents={runningAgents}
           now={now}
           onConfirm={() =>
             void runOrcaCloudTransferToLocal(state.workspaceId, state.name, {
               archiveAfter:
                 state.stage === 'confirm'
-                  ? state.archiveAfter
+                  ? effectiveArchiveAfter(state.archiveAfter, runningAgents)
                   : state.stage === 'running'
                     ? state.archiveAfter
                     : false,
@@ -106,7 +166,7 @@ export function CloudMoveToComputerDialogHost({
             })
           }
           onArchiveAfterChange={setMoveArchiveAfter}
-          onHide={() => hideRunningMove(true)}
+          onHide={hideAndReturnFocus}
           onCancel={closeMoveToThisComputer}
           onClose={closeMoveToThisComputer}
           onOpenLocal={(worktreeId) => activateAndRevealWorktree(worktreeId)}

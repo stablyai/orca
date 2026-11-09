@@ -26201,7 +26201,7 @@
     "moveToComputer": "Move to this computer",
     "moveHere": "Move here",
     "openLocal": "Open local workspace",
-    "copiedOn": "Copied to this computer · {{date}}"
+    "copiedOn": "Moved to this computer · {{date}}"
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",
@@ -26435,7 +26435,9 @@
       "changesCount_other": "{{count}} uncommitted changes, plus untracked files",
       "chatsCount_one": "{{count}} agent chat, so the agent can resume here",
       "chatsCount_other": "{{count}} agent chats, so agents can resume here",
-      "archiveAfter": "Archive the cloud workspace afterwards"
+      "archiveAfter": "Archive the cloud workspace afterwards",
+      "stopsAgents_one": "Stops {{count}} running agent",
+      "stopsAgents_other": "Stops {{count}} running agents"
     },
     "cancel": "Cancel",
     "steps": "Steps",
@@ -26456,7 +26458,8 @@
       "changesPartial": "Uncommitted changes, partly",
       "archived": "The cloud workspace is archived. Unarchive it any time.",
       "stillRunning": "The cloud workspace is still running and using sandbox hours. Archive it to stop that; you can unarchive later.",
-      "open": "Open workspace"
+      "open": "Open workspace",
+      "openLocal": "Open local workspace"
     },
     "partialDetail": "Some changes didn’t apply cleanly. They were saved here, so nothing is lost:",
     "title": {
@@ -26480,8 +26483,23 @@
     "background": "You can keep working; this finishes in the background.",
     "cause": {
       "timedOut": "It took too long while {{step}}, so Orca stopped it.",
-      "step": "Something went wrong while {{step}}."
+      "step": "Something went wrong while {{step}}.",
+      "waking": "The sandbox didn’t wake up.",
+      "packing": "The workspace couldn’t be packed in the sandbox.",
+      "downloading": "The download from the sandbox didn’t finish.",
+      "creating": "The local workspace couldn’t be created.",
+      "applying": "The changes couldn’t be applied to the local workspace."
     },
-    "openFolderAt": "Open {{dir}}"
+    "notice": {
+      "done": "{{name}} is on this computer"
+    },
+    "showDetails": "Show details",
+    "timeout": {
+      "waking": "Waking the sandbox took too long, so Orca stopped.",
+      "packing": "Packing the workspace took too long, so Orca stopped.",
+      "downloading": "The download took too long, so Orca stopped.",
+      "creating": "Creating the local workspace took too long, so Orca stopped.",
+      "applying": "Applying the changes took too long, so Orca stopped."
+    }
   }
 }

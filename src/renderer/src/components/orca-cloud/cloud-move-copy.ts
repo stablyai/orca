@@ -41,3 +41,55 @@ export function cloudMoveTitle(state: CloudMoveState, t: Translate): string {
       return t('orcaCloudMove.title.confirm', 'Move to this computer')
   }
 }
+
+/** Why the move stopped, one sentence per step (separate keys: no case-folding of translations). */
+export function cloudMoveFailureCause(
+  step: CloudMoveStep,
+  timedOut: boolean,
+  t: Translate
+): string {
+  if (timedOut) {
+    switch (step) {
+      case 'waking':
+        return t(
+          'orcaCloudMove.timeout.waking',
+          'Waking the sandbox took too long, so Orca stopped.'
+        )
+      case 'packing':
+        return t(
+          'orcaCloudMove.timeout.packing',
+          'Packing the workspace took too long, so Orca stopped.'
+        )
+      case 'downloading':
+        return t(
+          'orcaCloudMove.timeout.downloading',
+          'The download took too long, so Orca stopped.'
+        )
+      case 'creating':
+        return t(
+          'orcaCloudMove.timeout.creating',
+          'Creating the local workspace took too long, so Orca stopped.'
+        )
+      case 'applying':
+        return t(
+          'orcaCloudMove.timeout.applying',
+          'Applying the changes took too long, so Orca stopped.'
+        )
+    }
+  }
+  switch (step) {
+    case 'waking':
+      return t('orcaCloudMove.cause.waking', 'The sandbox didn’t wake up.')
+    case 'packing':
+      return t('orcaCloudMove.cause.packing', 'The workspace couldn’t be packed in the sandbox.')
+    case 'downloading':
+      return t('orcaCloudMove.cause.downloading', 'The download from the sandbox didn’t finish.')
+    case 'creating':
+      return t('orcaCloudMove.cause.creating', 'The local workspace couldn’t be created.')
+    case 'applying':
+      return t(
+        'orcaCloudMove.cause.applying',
+        'The changes couldn’t be applied to the local workspace.'
+      )
+  }
+}

@@ -34,10 +34,12 @@ const finished = {
 /** The dialog as it renders: title + body, framed like DialogContent. */
 function Frame({
   state,
-  conflicts = noConflicts
+  conflicts = noConflicts,
+  runningAgents = 0
 }: {
   state: Exclude<CloudMoveState, { stage: 'closed' }>
   conflicts?: CloudMoveConflicts
+  runningAgents?: number
 }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -46,6 +48,7 @@ function Frame({
       <CloudMoveToComputerView
         state={state}
         conflicts={conflicts}
+        runningAgents={runningAgents}
         now={NOW}
         onConfirm={noop}
         onCancel={noop}
@@ -80,10 +83,12 @@ export const moveConfirmBranchTaken = defineFixture({
   width: 460,
   render: () => (
     <Frame
-      state={{ stage: 'confirm', ...base, known: null, archiveAfter: false }}
+      state={{ stage: 'confirm', ...base, known: null, archiveAfter: null }}
       conflicts={{
         branchCheckedOutLocally: { branch: 'fix-auth-redirect', newName: 'fix-auth-redirect-2' }
       }}
+      // An agent is working there, so archive-afterwards defaults off (archiving would stop it).
+      runningAgents={1}
     />
   )
 })
@@ -137,7 +142,8 @@ export const moveDone = defineFixture({
         prepared,
         finished,
         elapsedMs: 8_300,
-        archivedAfter: true
+        archivedAfter: true,
+        hidden: false
       }}
     />
   )
@@ -154,7 +160,8 @@ export const moveDonePartial = defineFixture({
         prepared: { ...prepared, branch: 'fix-auth-redirect-2' },
         finished: { ...finished, leftoverPatchDir: '/Users/me/Library/Orca/cloud-transfers/t1' },
         elapsedMs: 9_100,
-        archivedAfter: false
+        archivedAfter: false,
+        hidden: false
       }}
     />
   )
@@ -162,12 +169,34 @@ export const moveDonePartial = defineFixture({
 
 export const moveFailed = defineFixture({
   width: 460,
-  render: () => <Frame state={{ stage: 'failed', ...base, step: 'downloading', timedOut: false }} />
+  render: () => (
+    <Frame
+      state={{
+        stage: 'failed',
+        ...base,
+        step: 'downloading',
+        timedOut: false,
+        localWorktreeId: null,
+        hidden: false
+      }}
+    />
+  )
 })
 
 export const moveFailedAfterLocal = defineFixture({
   width: 460,
-  render: () => <Frame state={{ stage: 'failed', ...base, step: 'applying', timedOut: false }} />
+  render: () => (
+    <Frame
+      state={{
+        stage: 'failed',
+        ...base,
+        step: 'applying',
+        timedOut: false,
+        localWorktreeId: 'l1',
+        hidden: false
+      }}
+    />
+  )
 })
 
 /** After the move: the cloud workspace stays usable, with a quiet "Copied to this computer" line. */

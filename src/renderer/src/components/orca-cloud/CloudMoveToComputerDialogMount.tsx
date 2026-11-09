@@ -1,6 +1,7 @@
 // App-level mount for the "Move to this computer" dialog, with conflicts read from the store.
 import React from 'react'
 import { useAppStore } from '@/store'
+import { countWorkingAgents } from '@/lib/agent-status/aggregation/worktree-agent-status'
 import { CloudMoveToComputerDialogHost, type CloudMoveConflicts } from './CloudMoveToComputerDialog'
 
 /** The cloud branch is already checked out by another workspace here: the move gets a new name. */
@@ -27,6 +28,20 @@ export function cloudMoveConflictsFor(workspaceId: string): CloudMoveConflicts {
   return { branchCheckedOutLocally: { branch: shortBranch, newName: `${shortBranch}-${suffix}` } }
 }
 
+/** Agents working in this workspace right now (archiving afterwards would stop them). */
+export function cloudMoveRunningAgentsFor(workspaceId: string): number {
+  const state = useAppStore.getState()
+  return countWorkingAgents({
+    ...state,
+    tabsByWorktree: { [workspaceId]: state.tabsByWorktree[workspaceId] ?? [] }
+  })
+}
+
 export function CloudMoveToComputerDialogMount(): React.JSX.Element {
-  return <CloudMoveToComputerDialogHost conflictsFor={cloudMoveConflictsFor} />
+  return (
+    <CloudMoveToComputerDialogHost
+      conflictsFor={cloudMoveConflictsFor}
+      runningAgentsFor={cloudMoveRunningAgentsFor}
+    />
+  )
 }

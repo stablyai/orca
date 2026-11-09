@@ -281,7 +281,7 @@ export function CloudWorkspaceStatusPanel({
             {moved ? (
               <div className="flex flex-col gap-0.5 pt-1">
                 <dt className="text-muted-foreground">
-                  {t('orcaCloudWorkspace.copiedOn', 'Copied to this computer · {{date}}', {
+                  {t('orcaCloudWorkspace.copiedOn', 'Moved to this computer · {{date}}', {
                     date: formatShortDate(moved.at)
                   })}
                 </dt>
@@ -322,7 +322,9 @@ export function CloudWorkspaceStatusPanel({
                 {...busyProps(false, anyBusy, actions.onMoveToComputer)}
               >
                 <Laptop />
-                {t('orcaCloudWorkspace.moveHere', 'Move here')}
+                {moved
+                  ? t('orcaCloudWorkspace.moveAgain', 'Move again')
+                  : t('orcaCloudWorkspace.moveHere', 'Move here')}
               </Button>
             ) : null}
             {canArchive && !restarting ? (
