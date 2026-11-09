@@ -209,7 +209,7 @@ export function PipelineJobRow({
   const canRetry = job.id > 0 && ['failed', 'canceled', 'cancelled'].includes(job.status)
   return (
     <div className="rounded-md">
-      <div className="grid w-full grid-cols-[minmax(0,2fr)_minmax(0,1fr)_max-content_64px_96px] items-center gap-3 px-3 py-2 text-left text-sm hover:bg-muted/40">
+      <div className="grid w-full grid-cols-[minmax(0,2fr)_minmax(0,1fr)_160px_64px_96px] items-center gap-3 px-3 py-2 text-left text-sm hover:bg-muted/40">
         <button
           type="button"
           disabled={job.id <= 0}

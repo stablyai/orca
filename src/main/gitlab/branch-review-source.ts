@@ -1,5 +1,6 @@
 import type { GitReviewBranchSource } from '../../shared/git/remotes/git-review-branch-source'
-import { parseGitLabProjectRef, normalizeGitLabHost } from './project-ref-parser'
+import { parseRemoteProjectRefCandidate, normalizeGitLabHost } from './project-ref-parser'
+import { isUnresolvedSshHostAlias } from '../../shared/git/remotes/git-remote-host-alias'
 import { readReviewProjectIdentity } from './review-project-identity'
 import type { LocalGitExecOptions, ProjectRef } from './gl-utils'
 
@@ -13,11 +14,25 @@ export async function resolveReviewSourceProject(args: {
 }): Promise<{ project: ProjectRef; id: number }> {
   let source: { project: ProjectRef; id: number } | undefined
   const seen = new Set<string>()
+  const projects: ProjectRef[] = []
   for (const url of args.urls) {
-    const project = parseGitLabProjectRef(url, [args.target.host])
-    if (!project || normalizeGitLabHost(project.host) !== normalizeGitLabHost(args.target.host)) {
-      throw new Error('Review source is not on the target GitLab host')
+    const candidate = parseRemoteProjectRefCandidate(url)
+    if (!candidate) {
+      throw new Error('Review source is unavailable')
     }
+    const http = /^https?:\/\//i.test(url.trim())
+    const targetHost = normalizeGitLabHost(args.target.host)
+    const matches =
+      normalizeGitLabHost(candidate.host) === (http ? targetHost : targetHost.replace(/:\d+$/, ''))
+    if (!matches) {
+      if (!http && isUnresolvedSshHostAlias(candidate.host)) {
+        throw new Error('Review source alias is unresolved')
+      }
+      continue
+    }
+    projects.push({ host: args.target.host, path: candidate.path })
+  }
+  for (const project of projects) {
     const key = `${project.host}\0${project.path}`
     if (seen.has(key)) {
       continue
@@ -33,7 +48,7 @@ export async function resolveReviewSourceProject(args: {
     if (source && source.id !== identity.id) {
       throw new Error('Review source has multiple projects')
     }
-    source ??= { project, id: identity.id }
+    source ??= { project: { ...project, path: identity.path }, id: identity.id }
   }
   if (!source) {
     throw new Error('Review source is unavailable')

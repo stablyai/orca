@@ -42,6 +42,23 @@ it('resolves real Git tracking, triangular publication, local tracking and expli
       branchName: 'dot',
       urls: ['https://gitlab.com/team/repo.git']
     })
+    await git(['config', 'remote.origin.push', 'HEAD'])
+    expect((await snapshot()).get('feature')).toMatchObject({ branchName: 'feature' })
+    await git(['config', 'remote.origin.push', 'refs/heads/main:refs/heads/main'])
+    expect((await snapshot()).get('feature')).toMatchObject({
+      branchName: 'feature',
+      trackedBranchName: 'main'
+    })
+    await git(['config', '--unset', 'remote.origin.push'])
+    await git(['config', 'branch.feature.merge', 'refs/tags/v1'])
+    await git(['config', 'push.default', 'upstream'])
+    expect((await snapshot()).get('feature')).toEqual({
+      remoteName: 'origin',
+      branchName: 'feature',
+      urls: ['https://gitlab.com/team/repo.git']
+    })
+    await git(['config', 'push.default', 'simple'])
+    await git(['config', 'branch.feature.merge', 'refs/heads/main'])
     await git(['config', 'remote.pushDefault', 'fork'])
     expect((await snapshot()).get('feature')).toEqual({
       remoteName: 'fork',
@@ -56,6 +73,8 @@ it('resolves real Git tracking, triangular publication, local tracking and expli
       urls: ['https://gitlab.com/team/repo.git']
     })
     await git(['config', '--add', 'remote.origin.push', 'refs/heads/feature:refs/heads/other'])
+    expect((await snapshot()).get('feature')).toBeInstanceOf(Error)
+    await git(['config', '--replace-all', 'remote.origin.push', 'refs/heads/feature:refs/tags/v1'])
     expect((await snapshot()).get('feature')).toBeInstanceOf(Error)
   } finally {
     await rm(repo, { recursive: true, force: true })

@@ -1,10 +1,11 @@
+import { createHash } from 'node:crypto'
 import {
   MergedReviewMembershipMemo,
   type MergedReviewCommitMembership
 } from '../source-control/merged-review-membership-memo'
 import { codeHostReadExecutionScope } from '../source-control/code-host-read-execution-scope'
 import { runCoalescedProbe, type CoalescedProbes } from '../git/remotes/coalesced-probe'
-import { fetchAllGitLabPages } from './gitlab-paginated-list'
+import { consumeGitLabPages } from './gitlab-paginated-list'
 import { readGlabViewer } from './gitlab-auth-and-rate-limit'
 import {
   glabHostnameArgs,
@@ -14,30 +15,88 @@ import {
 } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
 
-const membershipMemo = new MergedReviewMembershipMemo()
+const membershipMemo = new MergedReviewMembershipMemo<ReadonlySet<string>>({
+  weight: (ids) => 1024 + 256 * ids.size,
+  maxWeight: 16 * 1024 * 1024,
+  failureWeight: 1024,
+  lru: true,
+  ttl: () => 6 * 60 * 60_000
+})
 const viewers: CoalescedProbes<number | null> = new Map()
+const digest = (parts: unknown[]) =>
+  createHash('sha256').update(JSON.stringify(parts)).digest('hex')
+const oid = (value: unknown): string | null =>
+  typeof value === 'string' && /^[0-9a-f]{40,64}$/i.test(value) ? value.toLowerCase() : null
+
+type MembershipTarget = {
+  repoPath: string
+  project: ProjectRef
+  connectionId?: string | null
+  localGitOptions: LocalGitExecOptions
+}
+
+function targetKey(args: MembershipTarget): string {
+  return digest([
+    'gitlab',
+    args.project.host.trim().toLowerCase(),
+    codeHostReadExecutionScope({
+      ...glabRepoExecOptions(args.repoPath, args.connectionId, args.localGitOptions),
+      connectionId: args.connectionId ?? null
+    })
+  ])
+}
+
+export function forgetMergedMRCommitMembership(
+  args: MembershipTarget & { targetProjectId: number }
+): void {
+  const prefix = `${targetKey(args)}:${args.targetProjectId}:`
+  membershipMemo.discardWhere((key) => key.startsWith(prefix))
+}
 
 export function resetMergedMRCommitMembershipForTest(): void {
   membershipMemo.clear()
   viewers.clear()
 }
 
-export async function mergedMRContainsHead(args: {
-  repoPath: string
-  project: ProjectRef
-  targetProjectId: number
-  iid: number
-  headOid: string
-  connectionId?: string | null
-  localGitOptions: LocalGitExecOptions
-  userRefresh?: boolean
-}): Promise<MergedReviewCommitMembership> {
+function revisionKey(headSha: unknown, diffRefs: unknown): (string | null)[] | null {
+  const head = oid(headSha)
+  if (!head) {
+    return null
+  }
+  if (diffRefs === undefined || diffRefs === null) {
+    return [head, null, null, null]
+  }
+  if (typeof diffRefs !== 'object') {
+    return null
+  }
+  const refs = diffRefs as Record<string, unknown>
+  const parts = ['head_sha', 'base_sha', 'start_sha'].map((key) =>
+    refs[key] === undefined || refs[key] === null ? null : oid(refs[key])
+  )
+  if (['head_sha', 'base_sha', 'start_sha'].some((key, i) => refs[key] != null && !parts[i])) {
+    return null
+  }
+  if (parts[0] && parts[0] !== head) {
+    return null
+  }
+  return [head, ...parts]
+}
+
+export async function mergedMRContainsHead(
+  args: MembershipTarget & {
+    targetProjectId: number
+    iid: number
+    headOid: string
+    revisionHeadSha?: string
+    diffRefs?: unknown
+    userRefresh?: boolean
+  }
+): Promise<MergedReviewCommitMembership> {
   const options = glabRepoExecOptions(args.repoPath, args.connectionId, args.localGitOptions)
   const scope = codeHostReadExecutionScope({ ...options, connectionId: args.connectionId ?? null })
-  const viewerKey = `${args.project.host.toLowerCase()}\0${scope}`
   const viewer = await runCoalescedProbe(
     viewers,
-    viewerKey,
+    digest([args.project.host.toLowerCase(), scope]),
     async () => {
       try {
         const data = await readGlabViewer(
@@ -54,40 +113,35 @@ export async function mergedMRContainsHead(args: {
     Infinity,
     { userRefresh: args.userRefresh }
   )
-  const load = async (): Promise<MergedReviewCommitMembership> => {
-    const commits = await fetchAllGitLabPages<{ id?: unknown }>(
+  const load = async (): Promise<ReadonlySet<string>> => {
+    const ids = new Set<string>()
+    await consumeGitLabPages<{ id?: unknown }>(
       args.repoPath,
       args.project,
       `projects/${encodedProject(args.project.path)}/merge_requests/${args.iid}/commits`,
       args.connectionId,
-      args.localGitOptions
+      args.localGitOptions,
+      (page) => {
+        for (const commit of page) {
+          const id = oid(commit?.id)
+          if (!id) {
+            throw new Error('Invalid GitLab merge request commits')
+          }
+          ids.add(id)
+        }
+      }
     )
-    if (
-      commits.some(
-        (commit) => typeof commit.id !== 'string' || !/^[0-9a-f]{40,64}$/i.test(commit.id)
-      )
-    ) {
-      throw new Error('Invalid GitLab merge request commits')
-    }
-    return commits.some(
-      (commit) =>
-        typeof commit.id === 'string' && commit.id.toLowerCase() === args.headOid.toLowerCase()
-    )
-      ? 'contained'
-      : 'not-contained'
+    return ids
   }
-  // A missing account identity disables bookkeeping, never the authorized fresh read.
-  if (viewer === null) {
-    return load()
-  }
-  const key = [
-    'gitlab',
-    args.project.host.toLowerCase(),
-    scope,
-    viewer,
-    args.targetProjectId,
-    args.iid,
-    args.headOid.toLowerCase()
-  ].join('\0')
-  return membershipMemo.read(key, load, { refreshFailed: args.userRefresh })
+  const revision = revisionKey(args.revisionHeadSha, args.diffRefs)
+  // Uncertain bookkeeping never refuses the authorized complete read.
+  const ids =
+    viewer === null || revision === null
+      ? await load()
+      : await membershipMemo.read(
+          `${targetKey(args)}:${args.targetProjectId}:${digest([viewer, args.iid, revision])}`,
+          load,
+          { refreshFailed: args.userRefresh }
+        )
+  return ids.has(args.headOid.toLowerCase()) ? 'contained' : 'not-contained'
 }

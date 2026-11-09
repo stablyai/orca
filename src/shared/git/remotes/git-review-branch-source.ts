@@ -20,7 +20,8 @@ function mappedPushBranch(spec: string, branch: string): string | null {
   if (clean === ':') {
     return branch
   }
-  const [source, destination = source] = clean.split(':')
+  const [source, explicitDestination] = clean.split(':')
+  const destination = explicitDestination ?? (source === 'HEAD' ? branch : source)
   if (!source) {
     return null
   }
@@ -117,33 +118,37 @@ export async function readGitReviewBranchSources(
         throw new Error('Review publish remote is local')
       }
       const specs = config.get(`remote.${remote}.push`) ?? []
-      let branchName = branch
       let trackedBranchName: string | undefined
-      if (specs.length) {
-        const destinations = new Set(
-          specs.map((spec) => mappedPushBranch(spec, branch)).filter((value) => value !== null)
-        )
-        if (destinations.size !== 1) {
-          throw new Error('Review push destination is ambiguous')
-        }
-        branchName = destinations.values().next().value!
-      } else if (!localTracking && remote === trackedRemote) {
-        const merge = get(`branch.${branch}.merge`)
-        const tracked = merge?.startsWith('refs/heads/')
-          ? merge.slice('refs/heads/'.length)
-          : undefined
-        if (
-          tracked &&
-          tracked !== branch &&
-          !gitRefTargetsBranchOnRemote(get(`branch.${branch}.base`), remote, tracked)
+      const destinations = new Set(
+        specs.map((spec) => mappedPushBranch(spec, branch)).filter((value) => value !== null)
+      )
+      if (destinations.size > 1) {
+        throw new Error('Review push destination is ambiguous')
+      }
+      const branchName = destinations.values().next().value ?? branch
+      if (destinations.size === 0) {
+        if (!localTracking && remote === trackedRemote) {
+          const merge = get(`branch.${branch}.merge`)
+          const tracked = merge?.startsWith('refs/heads/')
+            ? merge.slice('refs/heads/'.length)
+            : undefined
+          if (
+            tracked &&
+            tracked !== branch &&
+            !gitRefTargetsBranchOnRemote(get(`branch.${branch}.base`), remote, tracked)
+          ) {
+            trackedBranchName = tracked
+          }
+          if (get('push.default') === 'upstream' && !merge) {
+            throw new Error('Review upstream is unavailable')
+          }
+        } else if (
+          get('push.default') === 'upstream' &&
+          explicitRemote &&
+          remote !== trackedRemote
         ) {
-          trackedBranchName = tracked
+          throw new Error('Review upstream belongs to another remote')
         }
-        if (get('push.default') === 'upstream' && !tracked) {
-          throw new Error('Review upstream is unavailable')
-        }
-      } else if (get('push.default') === 'upstream' && explicitRemote && remote !== trackedRemote) {
-        throw new Error('Review upstream belongs to another remote')
       }
       sources.set(branch, {
         remoteName: remote,

@@ -18,6 +18,7 @@ const args = {
   targetProjectId: 1,
   iid: 7,
   headOid: 'f'.repeat(40),
+  revisionHeadSha: 'a'.repeat(40),
   localGitOptions: {}
 }
 beforeEach(() => {

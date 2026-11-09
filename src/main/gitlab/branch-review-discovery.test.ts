@@ -91,3 +91,27 @@ it('fails a legacy traversal rather than selecting from an incomplete foreign pr
     .mockRejectedValueOnce(new Error('offline'))
   await expect(createGitLabBranchDiscovery(args)('feature')).rejects.toThrow('incomplete')
 })
+
+it.each([100, 1000])(
+  'walks %s raw legacy rows once before choosing an eligible source',
+  async (count) => {
+    read.mockResolvedValue({ stdout: JSON.stringify([row(1, 'opened', 8)]) })
+    pages.mockImplementation(async ([endpoint]: string[]) => {
+      const page = Number(new URL(endpoint, 'https://gitlab.com').searchParams.get('page'))
+      return {
+        body: JSON.stringify(
+          Array.from({ length: 100 }, (_, i) => {
+            const iid = (page - 1) * 100 + i + 1
+            return row(iid, 'opened', iid === count ? 1 : 8)
+          })
+        ),
+        headers: { 'x-next-page': page * 100 < count ? String(page + 1) : '' }
+      }
+    })
+    await expect(createGitLabBranchDiscovery(args)('feature')).resolves.toMatchObject({
+      iid: count
+    })
+    expect(read).toHaveBeenCalledTimes(1)
+    expect(pages).toHaveBeenCalledTimes(count / 100)
+  }
+)

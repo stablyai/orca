@@ -114,6 +114,7 @@ async function readPRComments(
 
       // REST has no viewerDidAuthor, so conversation comments match the reading account's login instead.
       let restViewer: Promise<string | null> | undefined
+      let restFailure: unknown
       const readRestSource = async (endpoint: string, reviews: boolean): Promise<PRComment[]> => {
         await assertRateLimitBudget('core', ownerRepo, ghOptions).catch((error: unknown) => {
           restBudgetFailed = true
@@ -125,8 +126,14 @@ async function readPRComments(
         let page = 1
         try {
           while (true) {
+            if (restFailure) {
+              throw restFailure
+            }
             if (page > 1) {
               await assertRateLimitBudget('core', ownerRepo, ghOptions)
+            }
+            if (restFailure) {
+              throw restFailure
             }
             const needsViewer = !restViewer
             restViewer ??= readViewerLogin(ghOptions)
@@ -164,16 +171,20 @@ async function readPRComments(
           }
         } catch (error) {
           if (page > 1) {
-            throw new IncompletePRConversationError('GitHub REST conversation pagination failed', {
-              cause: error
-            })
+            restFailure ??= new IncompletePRConversationError(
+              'GitHub REST conversation pagination failed',
+              {
+                cause: error
+              }
+            )
+            throw restFailure
           }
           console.warn('Failed to fetch PR conversation fallback:', extractExecError(error).stderr)
           return []
         }
       }
 
-      const [issueResult, reviewsResult] = await Promise.all([
+      const results = await Promise.allSettled([
         issueComments === undefined
           ? readRestSource(`${base}/issues/${prNumber}/comments?per_page=100`, false)
           : null,
@@ -181,6 +192,14 @@ async function readPRComments(
           ? readRestSource(`${base}/pulls/${prNumber}/reviews?per_page=100`, true)
           : null
       ])
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          throw result.reason
+        }
+      }
+      const [issueResult, reviewsResult] = results.map((result) =>
+        result.status === 'fulfilled' ? result.value : null
+      )
       const all = [
         ...(issueComments ?? issueResult ?? []),
         ...reviewComments,

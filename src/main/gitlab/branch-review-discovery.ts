@@ -29,22 +29,27 @@ function validateReviews(rows: unknown[], branch: string): GitLabBranchReview[] 
       if (!row || typeof row !== 'object') {
         return false
       }
-      const data = row as Record<string, unknown>
       return (
-        typeof data.iid === 'number' &&
-        Number.isSafeInteger(data.iid) &&
-        data.iid > 0 &&
-        typeof data.source_project_id === 'number' &&
-        Number.isSafeInteger(data.source_project_id) &&
-        data.source_project_id > 0 &&
-        typeof data.target_project_id === 'number' &&
-        Number.isSafeInteger(data.target_project_id) &&
-        data.target_project_id > 0 &&
-        typeof data.state === 'string' &&
-        ['opened', 'locked', 'closed', 'merged'].includes(data.state) &&
-        data.source_branch === branch &&
-        typeof data.updated_at === 'string' &&
-        Number.isFinite(Date.parse(data.updated_at))
+        'iid' in row &&
+        typeof row.iid === 'number' &&
+        Number.isSafeInteger(row.iid) &&
+        row.iid > 0 &&
+        'source_project_id' in row &&
+        typeof row.source_project_id === 'number' &&
+        Number.isSafeInteger(row.source_project_id) &&
+        row.source_project_id > 0 &&
+        'target_project_id' in row &&
+        typeof row.target_project_id === 'number' &&
+        Number.isSafeInteger(row.target_project_id) &&
+        row.target_project_id > 0 &&
+        'state' in row &&
+        typeof row.state === 'string' &&
+        ['opened', 'locked', 'closed', 'merged'].includes(row.state) &&
+        'source_branch' in row &&
+        row.source_branch === branch &&
+        'updated_at' in row &&
+        typeof row.updated_at === 'string' &&
+        Number.isFinite(Date.parse(row.updated_at))
       )
     })
   ) {

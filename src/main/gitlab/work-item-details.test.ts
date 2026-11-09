@@ -287,4 +287,40 @@ describe('getWorkItemDetails', () => {
       await expect(getWorkItemDetails('/repo', 12, type)).resolves.toBeNull()
     }
   )
+  it.each([0, 100, 1000])(
+    'reads %s discussions through the admitted details entrypoint',
+    async (count) => {
+      glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+        const endpoint = args.at(-1) ?? ''
+        if (!endpoint.includes('/discussions')) {
+          return { stdout: '{"iid":12,"title":"Item","state":"opened"}' }
+        }
+        const page = Number(new URL(endpoint, 'https://gitlab.com').searchParams.get('page'))
+        const remaining = Math.max(0, count - (page - 1) * 100)
+        return {
+          stdout: JSON.stringify(
+            Array.from({ length: Math.min(100, remaining) }, (_, i) => ({
+              id: `D${page}-${i}`,
+              notes: [{ id: (page - 1) * 100 + i, body: 'Review' }]
+            }))
+          )
+        }
+      })
+      const details = await getWorkItemDetails(
+        '/repo',
+        12,
+        'mr',
+        undefined,
+        null,
+        undefined,
+        {},
+        { includeReviewDetails: false }
+      )
+      expect(details?.comments).toHaveLength(count)
+      // This fixture intentionally strips headers, so an exact full last page needs an empty proof page.
+      expect(
+        glabExecFileAsyncMock.mock.calls.filter(([args]) => args.at(-1).includes('/discussions'))
+      ).toHaveLength(Math.floor(count / 100) + 1)
+    }
+  )
 })

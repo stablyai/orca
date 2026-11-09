@@ -384,6 +384,71 @@ describe('PR conversation request reuse', () => {
     }
   )
 
+  it.each([10, 100])(
+    'stops sibling admission after a hard REST failure with %s remaining pages',
+    async (remaining) => {
+      let releaseSibling!: (value: { stdout: string }) => void
+      let rejectPage!: (error: Error) => void
+      const sibling = new Promise<{ stdout: string }>((resolve) => {
+        releaseSibling = resolve
+      })
+      const failed = new Promise<{ stdout: string }>((_resolve, reject) => {
+        rejectPage = reject
+      })
+      const fullPage = (page: number) =>
+        JSON.stringify(
+          Array.from({ length: 100 }, (_, i) => ({
+            id: (page - 1) * 100 + i,
+            body: 'Review',
+            user: null,
+            submitted_at: '2026-04-01T00:00:00Z',
+            created_at: '2026-04-01T00:00:00Z',
+            html_url: 'https://example.test/review'
+          }))
+        )
+      ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+        if (args.includes('graphql')) {
+          return response(null)
+        }
+        if (args.includes('user')) {
+          return { stdout: 'me' }
+        }
+        const endpoint = args.at(-1) ?? ''
+        const page = Number(new URL(endpoint, 'https://github.com').searchParams.get('page') ?? 1)
+        if (page === 2) {
+          return endpoint.includes('/issues/') ? failed : sibling
+        }
+        return { stdout: page <= remaining + 2 ? fullPage(page) : '[]' }
+      })
+      let settled = false
+      const read = getPRComments('/repo', 7, { ...options, noCache: true })
+      const outcome = read.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        }
+      )
+      await vi.waitFor(() =>
+        expect(
+          ghExecFileAsyncMock.mock.calls.filter(([args]) => args.at(-1)?.includes('&page=2'))
+        ).toHaveLength(2)
+      )
+      rejectPage(new Error('offline'))
+      await new Promise((resolve) => setImmediate(resolve))
+      expect(settled).toBe(false)
+      expect(clientMocks.releaseMock).not.toHaveBeenCalled()
+      releaseSibling({ stdout: fullPage(2) })
+      await expect(read).rejects.toThrow('pagination')
+      await outcome
+      expect(clientMocks.releaseMock).toHaveBeenCalledTimes(1)
+      expect(
+        ghExecFileAsyncMock.mock.calls.filter(([args]) => args.at(-1)?.includes('page=3'))
+      ).toHaveLength(0)
+    }
+  )
+
   it('pages raw REST review rows even when the first 100 bodies are hidden', async () => {
     const review = (id: number, body: string) => ({
       id,
@@ -412,4 +477,74 @@ describe('PR conversation request reuse', () => {
     ])
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(4)
   })
+  it.each([100, 1000])(
+    'walks %s independent conversation rows and replies with output-derived page counts',
+    async (count) => {
+      const connection = (nodes: unknown[], page: number) => ({
+        nodes,
+        pageInfo: {
+          hasNextPage: page * 100 < count,
+          endCursor: page * 100 < count ? String(page + 1) : null
+        }
+      })
+      const comments = (source: string, page: number) =>
+        Array.from({ length: 100 }, (_, i) => ({
+          ...comment,
+          id: `${source}-${(page - 1) * 100 + i}`,
+          databaseId:
+            (source === 'comments' ? 0 : source === 'reviews' ? 10000 : 20000) +
+            (page - 1) * 100 +
+            i,
+          ...(source === 'reply' ? { path: 'a.ts' } : {})
+        }))
+      const thread = (index: number) => ({
+        id: `T${index}`,
+        isResolved: false,
+        line: 4,
+        startLine: null,
+        originalLine: 4,
+        originalStartLine: null,
+        comments:
+          index === 0
+            ? connection(comments('reply', 1), 1)
+            : {
+                nodes: [{ ...comment, id: `C${index}`, databaseId: 30000 + index, path: 'a.ts' }],
+                pageInfo: { hasNextPage: false, endCursor: null }
+              }
+      })
+      const threads = (page: number) =>
+        connection(
+          Array.from({ length: 100 }, (_, i) => thread((page - 1) * 100 + i)),
+          page
+        )
+      ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+        const page = Number(args.find((arg) => arg.startsWith('cursor='))?.slice(7) ?? 1)
+        if (args.includes('threadId=T0')) {
+          return {
+            stdout: JSON.stringify({
+              data: { node: { ...thread(0), comments: connection(comments('reply', page), page) } }
+            })
+          }
+        }
+        if (page === 1) {
+          return response({
+            comments: connection(comments('comments', 1), 1),
+            reviews: connection(comments('reviews', 1), 1),
+            reviewThreads: threads(1)
+          })
+        }
+        const query = args.find((arg) => arg.startsWith('query=')) ?? ''
+        return response(
+          query.includes('reviewThreads(first:')
+            ? { reviewThreads: threads(page) }
+            : query.includes('reviews(first:')
+              ? { reviews: connection(comments('reviews', page), page) }
+              : { comments: connection(comments('comments', page), page) }
+        )
+      })
+      const result = await getPRComments('/repo', 7, { ...options, noCache: true })
+      expect(result).toHaveLength(count * 4 - 1)
+      expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(1 + 4 * (count / 100 - 1))
+    }
+  )
 })

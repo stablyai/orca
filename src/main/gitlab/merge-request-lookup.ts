@@ -2,12 +2,13 @@ import { getReviewBranchSource } from '../github/client/lookup/tracked-upstream-
 import { createGitLabBranchDiscovery } from './branch-review-discovery'
 import { resolveReviewSourceProject } from './branch-review-source'
 import { forgetReviewProjectIdentity } from './review-project-identity'
-import { mergedMRContainsHead } from './merged-mr-commit-membership'
+import { mergedMRContainsHead, forgetMergedMRCommitMembership } from './merged-mr-commit-membership'
 import { readCurrentReviewHead } from '../source-control/review-current-head'
 import { shouldHideMergedImplicitReview } from '../source-control/branch-review-selection'
 import {
   getRemoteHeadBranchName,
-  getRepoDefaultBranchName
+  getRepoDefaultBranchName,
+  shouldHideNonOpenReviewOnDefaultBranch
 } from '../source-control/repo-default-branch'
 import { extractExecError } from '../git/exec-error'
 import { classifyGlabError } from './glab-error-classification'
@@ -29,7 +30,6 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
-import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 
 type BranchReviewOptions = HostedReviewExecutionOptions & {
   currentHeadOid?: string | null
@@ -113,6 +113,7 @@ export async function getMergeRequestForBranch(
     return null
   }
   await acquire()
+  let membershipTargetId: number | undefined
   try {
     const fetchByIid = async (iid: number) => {
       const { stdout } = await glabExecFileAsync(
@@ -123,12 +124,13 @@ export async function getMergeRequestForBranch(
         ],
         glabRepoExecOptions(repoPath, connectionId, localGitOptions)
       )
-      const raw = JSON.parse(stdout) as Parameters<typeof mapMRInfo>[0] & {
+      const raw: Parameters<typeof mapMRInfo>[0] & {
         target_project_id?: number
         project_id?: number
         source_project_id?: number
         source_branch?: string
-      }
+        diff_refs?: unknown
+      } = JSON.parse(stdout)
       return {
         raw,
         info: mapMRInfo(raw, derivePipelineStatus(raw.head_pipeline ?? raw.pipeline ?? null))
@@ -144,6 +146,10 @@ export async function getMergeRequestForBranch(
       localGitOptions,
       options.userRefresh
     )
+    const readDefaultBranch = () =>
+      source.remoteName === 'origin'
+        ? getRepoDefaultBranchName(repoPath, connectionId, localGitOptions)
+        : getRemoteHeadBranchName(repoPath, source.remoteName, connectionId, localGitOptions)
     for (let attempt = 0; attempt < 2; attempt += 1) {
       const identityArgs = {
         repoPath,
@@ -169,7 +175,11 @@ export async function getMergeRequestForBranch(
             ...identityArgs,
             urls: source.trackedUrls
           })
-          if (trackedSource.id === sourceProject.id) {
+          const defaultBranch = await readDefaultBranch()
+          const provenDefault =
+            trackedSource.project.path === projectRef.path &&
+            source.trackedBranchName === defaultBranch
+          if (trackedSource.id === sourceProject.id && !provenDefault) {
             candidate = await discover(source.trackedBranchName)
             usedTrackedName = true
           }
@@ -178,19 +188,12 @@ export async function getMergeRequestForBranch(
           return null
         }
         if (usedTrackedName && candidate.source_project_id === candidate.target_project_id) {
-          const defaultBranch =
-            source.remoteName === 'origin'
-              ? await getRepoDefaultBranchName(repoPath, connectionId, localGitOptions)
-              : await getRemoteHeadBranchName(
-                  repoPath,
-                  source.remoteName,
-                  connectionId,
-                  localGitOptions
-                )
+          const defaultBranch = await readDefaultBranch()
           if (candidate.source_branch === defaultBranch) {
             return null
           }
         }
+        membershipTargetId = candidate.target_project_id
         const { info, raw } = await fetchByIid(candidate.iid)
         if (
           info.number !== candidate.iid ||
@@ -223,6 +226,8 @@ export async function getMergeRequestForBranch(
                 targetProjectId,
                 iid: info.number,
                 headOid: currentHead,
+                revisionHeadSha: info.headSha,
+                diffRefs: raw.diff_refs,
                 connectionId,
                 localGitOptions,
                 userRefresh: options.userRefresh
@@ -260,6 +265,27 @@ export async function getMergeRequestForBranch(
     }
     return null
   } catch (error) {
+    const detail = extractExecError(error)
+    const kind = classifyGlabError(
+      [detail.stderr, detail.stdout, error instanceof Error ? error.message : ''].join('\n')
+    ).type
+    if (
+      kind === 'not_found' ||
+      kind === 'permission_denied' ||
+      /HTTP\s+401|unauthorized/i.test(
+        [detail.stderr, detail.stdout, error instanceof Error ? error.message : ''].join('\n')
+      )
+    ) {
+      if (membershipTargetId !== undefined) {
+        forgetMergedMRCommitMembership({
+          targetProjectId: membershipTargetId,
+          repoPath,
+          project: projectRef,
+          connectionId,
+          localGitOptions
+        })
+      }
+    }
     if (throwOnFailure) {
       throw error
     }
