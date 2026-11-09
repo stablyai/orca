@@ -4,6 +4,10 @@ import { OrchestrationError } from '../../../../orchestration/orchestration-erro
 import { parseWorkerTerminalHostScope } from '../../../../../../shared/orchestration/workers/worker-terminal-host-scope'
 import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/db/orchestration-records'
 import { orchestrationTimestampToMs } from '../worker/worker-output'
+import {
+  REMOTE_CHAT_WORKER_READ_UNSUPPORTED,
+  remoteChatWorkerOf
+} from '../../../../orchestration/federation/remote-chat-worker'
 
 export function requireHomeAttachment(
   runtime: WorkerTerminalReleaseRuntime,
@@ -20,6 +24,16 @@ export function requireHomeAttachment(
   return attachment
 }
 
+/** A live read of a remote chat worker is refused plainly, until reads of one are supported. */
+export function refuseRemoteChatWorkerRead(
+  runtime: WorkerTerminalReleaseRuntime,
+  attachment: RemoteDispatchAttachmentRow
+): void {
+  if (remoteChatWorkerOf(runtime.getOrchestrationDb(), attachment)?.exact) {
+    throw new OrchestrationError('capability_unsupported', REMOTE_CHAT_WORKER_READ_UNSUPPORTED)
+  }
+}
+
 export async function inspectRemoteAttachment(
   runtime: WorkerTerminalReleaseRuntime,
   dispatchId: string
@@ -34,6 +48,16 @@ export async function inspectRemoteAttachment(
 }> {
   const db = runtime.getOrchestrationDb()
   const attachment = db.getRemoteDispatchAttachment(dispatchId)
+  const chat = remoteChatWorkerOf(db, attachment)
+  if (chat) {
+    // Said plainly rather than read through a terminal it does not have.
+    return {
+      terminal: null,
+      exact: chat.exact,
+      status: chat.exact ? 'unverifiable' : 'identity_changed',
+      ...(chat.exact ? { reason: REMOTE_CHAT_WORKER_READ_UNSUPPORTED } : {})
+    }
+  }
   if (!attachment?.terminal_handle) {
     return { terminal: null, exact: false, status: 'unattached' }
   }

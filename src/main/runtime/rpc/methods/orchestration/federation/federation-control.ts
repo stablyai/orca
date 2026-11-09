@@ -10,6 +10,7 @@ import { stopRemoteAttachment } from './federated-worker-stop-host'
 import {
   inspectRemoteAttachment,
   observeRemoteAttachmentLiveness,
+  refuseRemoteChatWorkerRead,
   requireHomeAttachment
 } from './federation-attachment-observation'
 import { releaseRemoteAttachment } from './federated-worker-release-host'
@@ -111,7 +112,10 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
     permission: 'workspace',
     params: FederationReadParams,
     handler: async (params, { runtime, authenticatedCallerFingerprint }) => {
-      requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
+      refuseRemoteChatWorkerRead(
+        runtime,
+        requireHomeAttachment(runtime, params.dispatchId, authenticatedCallerFingerprint)
+      )
       const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
       // Only exited proves death; an unverifiable terminal may still be readable after stop-contact loss.
       if (!observation.exact || !observation.terminal || observation.status === 'exited') {
@@ -171,6 +175,7 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS = [
           }
         }
       }
+      refuseRemoteChatWorkerRead(runtime, attachment)
       const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
       if (!observation.exact || !observation.terminal) {
         throw new OrchestrationError(

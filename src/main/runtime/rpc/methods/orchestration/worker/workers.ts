@@ -171,7 +171,7 @@ export async function startWorker(
     settings: readWorkerStartModeSettings(runtime)
   })
   if (params.on) {
-    // Remote workers are terminal-only; carry the mode receipt to explain structured-preference fallback.
+    // The server decides chat or terminal; one that cannot run chats leaves this host's terminal receipt.
     const receipt = await startFederatedWorker({
       params,
       runtime,
@@ -184,7 +184,7 @@ export async function startWorker(
       followUp
     })
     await stopHelperAfterStart(runtime, receipt, orchestrationMutation)
-    return withRun(receipt && typeof receipt === 'object' ? { ...receipt, mode } : receipt)
+    return withRun(receipt && typeof receipt === 'object' ? { mode, ...receipt } : receipt)
   }
   const receipt = await startLocalWorker({
     params: { ...params, timeoutMs: readinessTimeoutMs },

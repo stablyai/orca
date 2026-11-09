@@ -20,7 +20,8 @@ import { resolveFederatedWorkerStartBudgets } from '../worker/worker-start-budge
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import {
   isReadyRemoteFederatedWorkerStartReceipt,
-  parseRemoteFederatedWorkerStartReceipt
+  parseRemoteFederatedWorkerStartReceipt,
+  readyRemoteReceiptFields
 } from './federated-attach-receipt'
 import { isWorkerStartTimeoutWithinTimerLimit } from '../../../../../../shared/orchestration/orchestration-timing-budgets'
 import {
@@ -232,11 +233,9 @@ export async function startFederatedWorker(args: FederatedWorkerStartRequest): P
           state: 'ready',
           stage: readyWorker.stage,
           server: { environmentId: server.environmentId, name: server.name },
-          setup: remote.setup,
+          ...readyRemoteReceiptFields(remote),
           launch,
           timeoutMs: budgets.readinessTimeoutMs,
-          effects: remote.effects ?? [],
-          residualResources: remote.residualResources ?? [],
           ...(childParent && 'warning' in childParent ? { warning: childParent.warning } : {})
         },
         reportsTurnStops

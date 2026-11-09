@@ -21,6 +21,7 @@ import {
 import type { RunRow } from '../../db/orchestration-records'
 import { chatAssigneeSessionId } from '../../workers/lifecycle/chat-assignee'
 import { structuredWorkerCustody } from '../../terminal-authority/structured-sessions/structured-worker-authority'
+import { remoteChatWorkerOf } from '../../federation/remote-chat-worker'
 
 /** A handle-less coordinator uses its generation-current session id; structured workers resolve by handle. */
 export function handleLessCoordinatorSessionId(
@@ -118,7 +119,11 @@ export function structuredMailboxCustody(
   if (!mailboxHandle.startsWith('dispatch:')) {
     return workerMailCustody(mailboxHandle, db)
   }
-  const dispatch = db?.getDispatchContextById?.(mailboxHandle.slice('dispatch:'.length))
+  const dispatchId = mailboxHandle.slice('dispatch:'.length)
+  const dispatch = db?.getDispatchContextById?.(dispatchId)
+  if (!dispatch && db) {
+    return remoteDispatchMailCustody(dispatchId, db)
+  }
   // A Dispatch's mail follows its Task: none reaches the chat before it took the Task, or after it ended.
   if (!dispatch?.assignee_handle || dispatch.status !== 'dispatched') {
     return 'elsewhere'
@@ -127,6 +132,16 @@ export function structuredMailboxCustody(
   return chat
     ? withDispatch(structuredSessionMailCustody(chat, db), dispatch.id)
     : workerMailCustody(dispatch.assignee_handle, db, dispatch.id)
+}
+
+/** A Dispatch a coordinator on another computer runs here reaches its chat only while that chat still works it. */
+function remoteDispatchMailCustody(
+  dispatchId: string,
+  db: OrchestrationDb
+): StructuredMailboxCustody {
+  const attachment = db.getRemoteDispatchAttachment?.(dispatchId)
+  const chat = attachment?.state === 'ready' ? remoteChatWorkerOf(db, attachment) : null
+  return chat?.exact ? workerMailCustody(chat.identity.handle, db, dispatchId) : 'elsewhere'
 }
 
 /** Re-derive Run, direct and active-Dispatch mail on each idle edge, including root mail for /clear successors. */
@@ -143,6 +158,10 @@ export function structuredSessionOwnedMailboxes(sessionId: string, db: Orchestra
   const dispatch = db.findActiveDispatchForAssignee(party.address, party.paneKey ?? undefined)
   if (dispatch) {
     mailboxes.push(`dispatch:${dispatch.id}`)
+  }
+  const remote = party.paneKey ? db.findActiveRemoteAttachmentForPane(party.paneKey) : undefined
+  if (remote && remoteChatWorkerOf(db, remote)?.exact) {
+    mailboxes.push(`dispatch:${remote.dispatch_id}`)
   }
   return mailboxes
 }

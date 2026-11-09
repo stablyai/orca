@@ -94,3 +94,28 @@ export function monitorFederatedSetup(
     })
     .catch(() => undefined)
 }
+
+export function federatedSetupSource(
+  params: { setup?: WorkerSetupReceipt['requested']; setupSource?: WorkerSetupReceipt['source'] },
+  createsWorktree: boolean
+): WorkerSetupReceipt['source'] {
+  return createsWorktree
+    ? (params.setupSource ?? (params.setup ? 'explicit_request' : 'orchestration_default'))
+    : 'existing_worktree'
+}
+
+/** The setup a start reports before any setup ran: none for an existing worktree. */
+export function initialFederatedSetup(
+  params: { setup?: WorkerSetupReceipt['requested'] },
+  createsWorktree: boolean,
+  source: WorkerSetupReceipt['source']
+): WorkerSetupReceipt {
+  return {
+    requested: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
+    effective: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
+    source,
+    hookFound: false,
+    startupPolicy: 'start-immediately',
+    state: createsWorktree ? 'not_configured' : 'not_applicable'
+  }
+}

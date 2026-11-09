@@ -271,7 +271,7 @@ export function releaseUnknownRecovery(dispatchId: string): string {
   return `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then retry worker-release with a fresh request ID (omit --retry-request to let the CLI generate one). Reusing the prior request ID only replays this release_unknown receipt. Never substitute a broad terminal close.`
 }
 
-function retainedReason(resource: WorkerTerminalResourceRow): WorkerTerminalRetainedReason {
+export function retainedReason(resource: WorkerTerminalResourceRow): WorkerTerminalRetainedReason {
   if (resource.retained_reason) {
     return resource.retained_reason as WorkerTerminalRetainedReason
   }
@@ -281,6 +281,6 @@ function retainedReason(resource: WorkerTerminalResourceRow): WorkerTerminalReta
   return 'identity_unproven'
 }
 
-function isStillReleasing(resource: WorkerTerminalResourceRow): boolean {
+export function isStillReleasing(resource: WorkerTerminalResourceRow): boolean {
   return resource.ownership_state === 'owned' && resource.release_state === 'releasing'
 }
