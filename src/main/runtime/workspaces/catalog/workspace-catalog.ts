@@ -1,10 +1,10 @@
-import { OrcaRuntimeWithReadKittyFile } from '../../orca-runtime-read-kitty-file'
+import { OrcaRuntimeWithReadKittyFile } from '../../files/paths/orca-runtime-read-kitty-file'
 import type { RuntimeWorkspaceRepoScanRefresh } from './workspace-repo-scan-refresh'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import { splitWorktreeIdForFilesystem } from '../../../../shared/worktree/id'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
 import type { ResolvedWorktreeSnapshot } from './runtime-resolved-worktree-cache'
-import { RESOLVED_WORKTREE_CACHE_TTL_MS } from '../../orca-runtime-postlude'
+
 import { getWorktreeScanMutationRevision } from '../../../workspaces/catalog/local-worktree-scan-generation'
 import { resolveLocalProjectRuntimesForRepos } from '../../../workspaces/execution-host/local-project-runtime-resolution'
 import {
@@ -15,10 +15,8 @@ import {
 import {
   joinResolvedWorktreeScans,
   platformsByRepoId,
-  projectResolvedWorktreeScans,
   scanResolvedWorktreeRepos,
   type ResolvedWorktreeRepoScans,
-  type ResolvedWorktreeRowsJoin,
   type ResolvedWorktreeScanJoin
 } from './resolved-worktree-scan-join'
 import { projectResolvedWorktreeLineage } from '../../../../shared/resolved-worktree-lineage'
@@ -28,18 +26,15 @@ import {
 } from './runtime-worktree-filesystem'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { Repo } from '../../../../shared/repo-types'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../../shared/execution-host/project-execution-runtime'
 import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { withUnregisteredRemovalCheckouts } from '../../../workspaces/removal/worktree-removal-listing'
 import { withoutInFlightWorktreeCreates } from '../../../workspaces/creation/worktree-create-in-flight'
 import { preserveFolderUpgradeWorktreePath } from '../../../workspaces/catalog/folder-upgrade-worktree-path'
-import type { RuntimeWorktreeScanCache } from '../../orca-runtime-core'
-import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
-import {
-  resolveWorktreeScanCacheTtlMs,
-  resolveWorktreeScanRuntime
-} from './runtime-worktree-scan-cache'
+import type { RuntimeWorktreeScanCache } from './runtime-worktree-scan-state'
+import * as ScanCache from './runtime-worktree-scan-cache'
+const RESOLVED_WORKTREE_CACHE_TTL_MS = 1000
 
 export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFile {
   protected abstract refreshRepoWorktreeScan(
@@ -160,38 +155,6 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     )
   }
 
-  /** The fleet from cached scans for synchronous selector matching, reprojected only when its inputs change. */
-  protected projectCachedWorktrees(): ResolvedWorktreeRowsJoin {
-    const cachedScans = (this.store?.getRepos() ?? []).map((repo) => {
-      const entry = this.worktreeScanCache.get(`${repo.id}\0${getRepoExecutionHostId(repo)}`)
-      return { repo, entry, scan: entry && (entry.listing ?? entry.result) }
-    })
-    return this.resolvedWorktrees.projectCachedScans(
-      this.store,
-      cachedScans.flatMap(({ repo, entry, scan }) => [getRepoHostIdentity(repo), entry, scan]),
-      () => {
-        const scans: ResolvedWorktreeRepoScans = new Map()
-        for (const { repo, entry, scan } of cachedScans) {
-          if (entry && scan) {
-            scans.set(getRepoHostIdentity(repo), {
-              ...scan,
-              gitRun: entry
-            })
-          }
-        }
-        return projectResolvedWorktreeScans(
-          this.store,
-          () => ({
-            ...this.repoWorktreeRowDeps(),
-            listFolderWorkspaces: (repo, count) =>
-              projectRuntimeFolderWorkspaces(this.requireStore(), repo, count)
-          }),
-          scans
-        )
-      }
-    )
-  }
-
   protected repoWorktreeRowDeps(): RepoWorktreeRowDeps {
     const store = this.requireStore()
     return {
@@ -203,7 +166,7 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
         const cached = this.worktreeScanCache.get(key)
         if (
           cached?.generation === (this.worktreeScanGenerations.get(key) ?? 0) &&
-          cached.runtimeKey === resolveWorktreeScanRuntime(store, repo).runtimeKey &&
+          cached.runtimeKey === ScanCache.resolveWorktreeScanRuntime(store, repo).runtimeKey &&
           cached.listing?.ok
         ) {
           return cached.listing
@@ -254,7 +217,7 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     repo: Repo,
     projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
   ): Promise<RuntimeWorktreeScanResult> {
-    const { projectRuntime, runtimeKey, sshConnectionId } = resolveWorktreeScanRuntime(
+    const { projectRuntime, runtimeKey, sshConnectionId } = ScanCache.resolveWorktreeScanRuntime(
       this.requireStore(),
       repo,
       projectRuntimeByRepoId
@@ -298,7 +261,7 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
             generation,
             runtimeKey,
             result: refresh.result,
-            expiresAt: Date.now() + resolveWorktreeScanCacheTtlMs(repo),
+            expiresAt: Date.now() + ScanCache.resolveWorktreeScanCacheTtlMs(repo),
             adminFingerprint: refresh.adminFingerprint,
             scannedAt: refresh.scannedAt
           }
@@ -318,5 +281,9 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
       })
     this.worktreeScanInFlight.set(scanScopeKey, { generation, runtimeKey, promise })
     return (await promise).result
+  }
+
+  listRepos(): Repo[] {
+    return this.store?.getRepos() ?? []
   }
 }

@@ -843,8 +843,11 @@ jobs:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          git checkout "$WORKFLOW_SHA" -- \
-            src/main/skills/skill-provider-runtime-roots.test.ts
+          SKILL_ROOTS_TEST=src/main/skills/providers/skill-provider-runtime-roots.test.ts
+          if [ ! -f src/main/skills/providers/skill-provider-runtime-roots.ts ]; then
+            SKILL_ROOTS_TEST=src/main/skills/skill-provider-runtime-roots.test.ts
+          fi
+          git show "$WORKFLOW_SHA:src/main/skills/providers/skill-provider-runtime-roots.test.ts" > "$SKILL_ROOTS_TEST"
 
       - uses: ./.github/actions/install-node-dependencies
         with:
@@ -901,8 +904,11 @@ jobs:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
-          git checkout "$WORKFLOW_SHA" -- \
-            src/main/skills/skill-provider-runtime-roots.test.ts
+          SKILL_ROOTS_TEST=src/main/skills/providers/skill-provider-runtime-roots.test.ts
+          if [ ! -f src/main/skills/providers/skill-provider-runtime-roots.ts ]; then
+            SKILL_ROOTS_TEST=src/main/skills/skill-provider-runtime-roots.test.ts
+          fi
+          git show "$WORKFLOW_SHA:src/main/skills/providers/skill-provider-runtime-roots.test.ts" > "$SKILL_ROOTS_TEST"
 
       - uses: ./.github/actions/install-node-dependencies
         with:

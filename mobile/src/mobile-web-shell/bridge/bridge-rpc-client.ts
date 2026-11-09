@@ -1,5 +1,7 @@
-import type { RpcClient, SendRequestOptions } from '../../transport/rpc-client'
-import type { ConnectionState, RpcResponse, RpcSuccess } from '../../transport/types'
+import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
+import type { SendRequestOptions } from '../../transport/rpc/unvalidated-rpc-request-port'
+import type { ConnectionState } from '../../transport/connection/connection-state'
+import type { RpcResponse, RpcSuccess } from '../../transport/rpc/rpc-wire-types'
 import {
   BRIDGE_MAX_SUBSCRIPTIONS,
   bridgePendingRequestCap,
@@ -35,7 +37,7 @@ import { BridgeClientRequests } from './bridge-client-requests'
 import { readBridgeRequestFrameOptions, readBridgeRpcEnvelope } from './bridge-client-rpc-envelope'
 import { BridgeClientSubscriptions } from './bridge-client-subscriptions'
 import { isBridgeNativeMethod, type BridgeNativeVerb } from './bridge-native-verbs'
-import { BRIDGE_ROUTE_PARAM_CLEAR, type BridgeClearableRouteParam } from './bridge-route-update'
+import { routeParamClearFrame, type BridgeClearableRouteParam } from './bridge-route-update'
 import {
   BRIDGE_PROTOCOL_VERSION,
   BRIDGE_RPC_ENVELOPE_GRANT,
@@ -84,8 +86,13 @@ export type BridgeRpcClient = RpcClient &
     notifyExternalLink: (url: string) => boolean
     // Use the existing request/id/cap lane but keep native methods inside the bridge’s typed surface; they are device verbs, not catalogued desktop RPCs.
     callNativeVerb: (verb: BridgeNativeVerb, params: unknown) => Promise<RpcSuccess>
+    // How many more native calls the page-side cap admits now; a caller that must keep call order checks it
+    // before posting, since a refusal arrives only as a rejected promise.
+    nativeRequestRoom: () => number
     // Only the page can report a painted tree; WebView commit and ready happen before that proof exists.
     notifyPagePainted: () => void
+    // Where the page has navigated inside its document, so the shell knows which session it shows.
+    notifyPageLocation: (href: string) => void
     // Claim Back until disposal; invoke consumers newest-first with false fallthrough. Return unhandled presses to the shell so a race with sheet closure cannot swallow navigation.
     claimBack: (consumer: PageBackConsumer) => () => void
     notifyStorageWrite: (key: string, value: string | null) => boolean
@@ -191,6 +198,8 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     acceptState: (connection) => acceptState(cache.apply(connection)),
     acceptConnectionPath: (connection) => acceptState(cache.applyPath(connection)),
     acceptBack: back.press,
+    // Only a page booted before its screen, with no init yet, is parked; the shell answers its ready on adoption.
+    acceptParked: handshake.stop,
     acceptTerminalKey: (key, inputOwner) => terminalKeys.accept(key, inputOwner)
   })
 
@@ -340,18 +349,13 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     notifyHaptics: notifications.notifyHaptics,
     notifyPageFault: notifications.notifyPageFault,
     notifyPagePainted: notifications.notifyPagePainted,
+    notifyPageLocation: notifications.notifyPageLocation,
     claimBack: back.claim,
     close,
     ...shellSessionListeners(shellSession),
     claimTerminalKeyRail: terminalKeys.claim,
     getShellSession: shellSession.current,
-    clearRouteParam: (param, value) =>
-      posted({
-        v: BRIDGE_PROTOCOL_VERSION,
-        type: 'notify',
-        name: BRIDGE_ROUTE_PARAM_CLEAR,
-        param,
-        value
-      })
+    nativeRequestRoom: () => bridgePendingRequestCap(true) - requests.size,
+    clearRouteParam: (param, value) => posted(routeParamClearFrame(param, value))
   }
 }

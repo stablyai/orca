@@ -9,13 +9,13 @@ import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-stat
 import {
   useAgentMessageSenderViews,
   type AgentMessageSenderInput
-} from '../native-chat/native-chat-agent-message-sender-view'
+} from '../native-chat/messages/agent-senders/native-chat-agent-message-sender-view'
 import { isAgentStatusState } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import { isOrcaSessionId, formatOrcaSessionAddress } from '../../../../shared/orca-session-address'
 import type { AgentMessageSenderView } from '../../../../shared/agent-session/agent-message-presentation'
-import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
+import type { OrchestrationCrewRow } from '../../../../shared/orchestration/orchestration-crew'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 export type CrewRowLook = { partyKey: string; status: WorktreeStatus; agentType: string }

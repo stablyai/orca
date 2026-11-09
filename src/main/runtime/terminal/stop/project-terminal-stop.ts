@@ -9,8 +9,8 @@ import {
 import type { HostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { Repo } from '../../../../shared/repo-types'
-import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
-import { deleteRemovedOwnerBrowserProfile } from '../../browser-host/managed-browser-profile-removal'
+import { getRuntimeBrowserPageRegistry } from '../../browser/client-pages/runtime-browser-page-registry'
+import { deleteRemovedOwnerBrowserProfile } from '../../browser-host/profiles/managed-browser-profile-removal'
 import { listFailedAgentLaunchWorktreeIds } from '../../../agent-launch/agent-launch-pane-attachment'
 import {
   TerminalUpdateAdmission,

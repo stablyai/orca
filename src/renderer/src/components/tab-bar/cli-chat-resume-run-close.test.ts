@@ -1,3 +1,4 @@
+import type * as RuntimeCapabilityProofModule from '@/runtime/rpc/compatibility/runtime-capability-proof'
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
@@ -27,17 +28,23 @@ vi.mock('./cli-chat-resume-close-terminal', async (importOriginal) => ({
 }))
 vi.mock('./cli-chat-resume-source', () => ({ resolveCliChatResumeSource: () => mocks.source }))
 vi.mock('../terminal/pty-running-work-probe', () => ({ probePtyRunningWork: mocks.probe }))
-vi.mock('@/runtime/structured-agent-session-client', () => ({
-  structuredAgentSessionHostSupports: mocks.closeCapability,
-  structuredAgentSessionHostCapabilityState: async (...args: unknown[]) =>
-    (await mocks.capabilityState(...args)) ??
-    ((await mocks.closeCapability(...args)) ? 'supported' : 'unsupported'),
-  supportsStructuredAgentSessionCliSource: mocks.sourceCapability,
-  supportsStructuredAgentSessionCreateMessage: mocks.createCapability,
+vi.mock(
+  '../../runtime/native-chat/host-capabilities/structured-agent-session-host-support',
+  () => ({
+    structuredAgentSessionHostSupports: mocks.closeCapability,
+    structuredAgentSessionHostCapabilityState: async (...args: unknown[]) =>
+      (await mocks.capabilityState(...args)) ??
+      ((await mocks.closeCapability(...args)) ? 'supported' : 'unsupported'),
+    supportsStructuredAgentSessionCliSource: mocks.sourceCapability,
+    supportsStructuredAgentSessionCreateMessage: mocks.createCapability
+  })
+)
+
+vi.mock('../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: (...args: unknown[]) =>
     args[1] === 'agentSession.createSupport' ? mocks.createSupport(args[2]) : mocks.call(...args)
 }))
-vi.mock('@/runtime/structured-session-tab-inventory', () => ({
+vi.mock('@/runtime/native-chat/tab-inventory/structured-session-tab-inventory', () => ({
   readStructuredSessionTabInventory: async () => {
     throw new Error('Reply unavailable')
   }
@@ -63,15 +70,18 @@ vi.mock('@/lib/activate-ai-vault-structured-session', () => ({
   activateAiVaultStructuredSession: mocks.activate
 }))
 // Switch-on, main opens the chat's tab and its frame draws it.
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => ({
   ...(
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
-  ).runtimeRpcClientWithLayoutApply(await importOriginal()),
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await importOriginal())
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => ({
+  ...(await importOriginal<typeof RuntimeCapabilityProofModule>()),
   runtimeEnvironmentSupportsCapability: async () => true
 }))
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
@@ -79,15 +89,16 @@ import { useAppStore } from '@/store'
 
 import { getStructuredAgentSessionLaunchLifecycle } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
 import { startStructuredAgentLaunch } from '@/lib/agent-session/launch/structured-agent-session-launch'
-import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
+import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 import { runCliChatResume } from './cli-chat-resume-run'
 
 import {
   SOURCE,
+  refuse,
   resetCliChatResumeRun,
   showAgentInSource,
   tabs
@@ -130,6 +141,24 @@ describe('close terminal then continue on capable hosts', () => {
     await main?.settle()
     expect(creates()).toHaveLength(1)
     expect(resolveWebSessionVisibleTabId(useAppStore.getState(), 'wt-1')).toBe('picked')
+  })
+
+  it('starts the chat anew when the closed terminal never saved its conversation', async () => {
+    const answer = mocks.call.getMockImplementation()
+    mocks.call.mockImplementationOnce(async (_target, method) => {
+      expect(method).toBe('agentSession.create')
+      return { ok: false, refusal: refuse('transcriptNotFound') }
+    })
+    await runCliChatResume(SOURCE)
+    await vi.waitFor(() => expect(creates()).toHaveLength(2))
+    const [first, second] = creates().map(([, , params]) => params)
+    expect(first.resumeFrom?.providerSessionId).toBe(SOURCE.providerSessionId)
+    expect(second.resumeFrom).toBeUndefined()
+    expect(second.envelope.sessionId).toBe(first.envelope.sessionId)
+    mocks.call.mockImplementation(answer!)
+    await main?.settle()
+    expect(tabs().map((tab) => tab.entityId)).toEqual([first.envelope.sessionId])
+    expect(mocks.toast).not.toHaveBeenCalled()
   })
 
   // Joining it would re-send an unconfirmed chat's create beside the still-running CLI.

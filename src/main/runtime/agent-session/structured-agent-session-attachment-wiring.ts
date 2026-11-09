@@ -1,6 +1,6 @@
 // Keep chat attachment storage/sweeps beside the journal; its database owns upload claims the sweeps honor.
 
-import { JournalOutcomeSweeper } from '../../native-chat/agent-session-journal/journal-outcome-cleanup'
+import { JournalOutcomeSweeper } from '../../native-chat/agent-session-journal/outcomes/journal-outcome-cleanup'
 import { mkdirSync } from 'node:fs'
 import { AgentSessionAttachmentStore } from '../../native-chat/agent-session-attachments/agent-session-attachment-store'
 import {
@@ -12,8 +12,8 @@ import {
   type AgentSessionAttachmentSweeper
 } from '../../native-chat/agent-session-attachments/agent-session-attachment-sweep'
 import { agentSessionAttachmentStoreRoot } from '../../native-chat/agent-session-attachments/agent-session-attachment-references'
-import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/journal-host-database'
-import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
+import type { JournalHostDatabase } from '../../native-chat/agent-session-journal/database/journal-host-database'
+import type { StructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentSessionRecordStore } from './records/agent-session-record-store'
 
 const FIRST_SWEEP_DELAY_MS = 60 * 1000

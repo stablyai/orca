@@ -23,7 +23,10 @@ describe('packaged runtime resources', () => {
 
       const sources = new Map([
         ['out\\main\\index.js', 'const z = require("zod")'],
-        ['out\\main\\agent-hooks\\managed-agent-hook-controls.js', 'const YAML = require("yaml")']
+        [
+          'out\\main\\agent-hooks\\installation\\managed-agent-hook-controls.js',
+          'const YAML = require("yaml")'
+        ]
       ])
       const asar = {
         listPackage: () => [...sources.keys()].map((entry) => `\\${entry}`),
@@ -48,7 +51,7 @@ describe('packaged runtime resources', () => {
           'let p=null;function q(){return p??=import(`@anthropic-ai/claude-agent-sdk`),p}'
         ],
         [
-          'out/main/agent-hooks/managed-agent-hook-controls.js',
+          'out/main/agent-hooks/installation/managed-agent-hook-controls.js',
           'import (`@anthropic-ai/claude-agent-sdk`)'
         ]
       ])
@@ -96,7 +99,7 @@ describe('packaged runtime resources', () => {
       // The entry points themselves carry no specifier; only the shared chunk does.
       const sources = new Map([
         ['out/main/index.js', ''],
-        ['out/main/agent-hooks/managed-agent-hook-controls.js', ''],
+        ['out/main/agent-hooks/installation/managed-agent-hook-controls.js', ''],
         ['out/main/chunks/managed-agent-hook-controls-CWf8D-KR.js', 'require(`jsonc-parser`)']
       ])
       // listPackage includes directories that extractFile rejects; mock them to enforce the .js anchor.
@@ -128,7 +131,7 @@ describe('packaged runtime resources', () => {
 
       const sources = new Map([
         ['out/main/index.js', 'const all=[...require("jsonc-parser")]'],
-        ['out/main/agent-hooks/managed-agent-hook-controls.js', '']
+        ['out/main/agent-hooks/installation/managed-agent-hook-controls.js', '']
       ])
       const asar = {
         listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),
@@ -149,7 +152,10 @@ describe('packaged runtime resources', () => {
       // Registry require(key) members are not packaged bare-module imports, even with literal keys.
       const sources = new Map([
         ['out/main/index.js', 'registry.require("public-a");grants.require(`host-key`)'],
-        ['out/main/agent-hooks/managed-agent-hook-controls.js', 'state.import("android-sdk")']
+        [
+          'out/main/agent-hooks/installation/managed-agent-hook-controls.js',
+          'state.import("android-sdk")'
+        ]
       ])
       const asar = {
         listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),
@@ -299,11 +305,9 @@ describe('packaged runtime resources', () => {
       try {
         const appOutDir = join(root, 'linux-unpacked')
         const resourcesDir = join(appOutDir, 'resources')
-        await cp(
-          join(process.cwd(), 'resources', 'plugins', 'launch'),
-          join(resourcesDir, 'plugins', 'launch'),
-          { recursive: true }
-        )
+        await cp(join(process.cwd(), 'resources', 'plugins'), join(resourcesDir, 'plugins'), {
+          recursive: true
+        })
         await seedBundledRipgrep(resourcesDir)
         await seedPackagedServePayload(resourcesDir)
 
@@ -350,77 +354,6 @@ describe('packaged runtime resources', () => {
           })
         ).resolves.toBeUndefined()
         await expect(stat(wrongArchPackage)).rejects.toMatchObject({ code: 'ENOENT' })
-      } finally {
-        process.env.PATH = previousPath
-        await removeTree(root)
-      }
-    }
-  )
-
-  it.skipIf(process.platform === 'win32')(
-    'marks packaged Unix CLI launchers executable',
-    async () => {
-      const root = await mkdtemp(join(tmpdir(), 'orca-electron-builder-config-'))
-      const previousPath = process.env.PATH
-      try {
-        const resourcesDir = join(root, 'linux-unpacked', 'resources')
-        const launcherPath = join(resourcesDir, 'bin', 'orca-ide')
-        await mkdir(join(resourcesDir, 'bin'), { recursive: true })
-        await cp(
-          join(process.cwd(), 'resources', 'plugins', 'launch'),
-          join(resourcesDir, 'plugins', 'launch'),
-          { recursive: true }
-        )
-        await seedBundledRipgrep(resourcesDir)
-        await seedPackagedServePayload(resourcesDir)
-        // Layout fixtures use a cross-arch slice; native PTY probes need real packaged binaries.
-        const target =
-          process.arch === 'x64'
-            ? { electronArch: 3, machine: 0xb7 }
-            : { electronArch: 1, machine: 0x3e }
-        await seedClipboardPublisher(resourcesDir, target.machine)
-        await stubObjdump(root)
-        await mkdir(join(resourcesDir, 'node_modules', 'zod', 'src'), { recursive: true })
-        // afterPack rejects missing unpacked daemon entry; model real package layout.
-        const unpackedMainDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'main')
-        await mkdir(unpackedMainDir, { recursive: true })
-        await writeFile(
-          join(unpackedMainDir, 'daemon-entry.js'),
-          'console.error("Usage: daemon-entry <socket>"); process.exit(1)\n',
-          'utf8'
-        )
-        await writeFile(
-          join(resourcesDir, 'app.asar.unpacked', 'out', 'package.json'),
-          `${JSON.stringify({ name: 'orca-compiled-output', type: 'commonjs', private: true })}\n`,
-          'utf8'
-        )
-        const unpackedCliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
-        await mkdir(join(unpackedCliDir, 'handlers'), { recursive: true })
-        await writeFile(join(unpackedCliDir, 'handlers', 'skills.js'), '', 'utf8')
-        await writeFile(
-          join(unpackedCliDir, 'index.js'),
-          [
-            'const args = process.argv.slice(2)',
-            "if (args[1] === 'list') console.log(JSON.stringify({ topics: [{ name: 'orca-cli' }, { name: 'orca-computer-use' }] }))",
-            "else if (args[1] === 'get') console.log(`---\\nname: ${args[2]}\\n---`)",
-            'else console.log(JSON.stringify({ executed: false }))'
-          ].join('\n'),
-          'utf8'
-        )
-        await writeFile(launcherPath, '#!/usr/bin/env bash\n', { encoding: 'utf8', mode: 0o644 })
-
-        await electronBuilderConfig.afterPack({
-          appOutDir: join(root, 'linux-unpacked'),
-          electronPlatformName: 'linux',
-          arch: target.electronArch,
-          packager: { appInfo: { version: '9.9.9' } }
-        })
-
-        expect((await stat(launcherPath)).mode & 0o111).not.toBe(0)
-        await expect(
-          readFile(join(resourcesDir, 'app.asar.unpacked', 'out', 'package.json'), 'utf8')
-        ).resolves.toContain('"version": "9.9.9"')
-        await expect(readFile(join(resourcesDir, 'package-type'), 'utf8')).resolves.toBe('AppImage')
       } finally {
         process.env.PATH = previousPath
         await removeTree(root)

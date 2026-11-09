@@ -1,5 +1,5 @@
 import { WorktreeCreate } from '../../src/shared/rpc-contract/worktree-create-params'
-import { buildManagedWorktreeCreateArgs } from '../../src/main/runtime/rpc/methods/worktree-create-args'
+import { buildManagedWorktreeCreateArgs } from '../../src/main/runtime/rpc/methods/workspaces/worktree-create-args'
 import { resolveManagedWorktreeCreateStartup } from '../../src/main/runtime/workspaces/startup/managed-worktree-create-startup'
 import { buildWorktreeStartupForAgent } from '../../src/main/runtime/workspaces/startup/runtime-worktree-agent-startup'
 import { getDefaultSettings } from '../../src/shared/constants'
@@ -7,18 +7,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createCompatibleRuntimeStatusResponse,
   type RuntimeEnvironmentCallRequest
-} from '../../src/renderer/src/runtime/runtime-compatibility-test-fixture'
-import {
-  TEST_REPO,
-  makeWorktree
-} from '../../src/renderer/src/store/slices/worktrees-slice-test-fixtures'
+} from '../../src/renderer/src/runtime/rpc/testing/runtime-compatibility-test-fixture'
+import { TEST_REPO } from '../../src/renderer/src/store/repos/repo.test-fixture'
+import { makeWorktree } from '../../src/renderer/src/store/slices/worktrees/worktree.test-fixture'
 import {
   createTestStore,
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory,
   runtimeEnvironmentCall,
   runtimeEnvironmentTransportCall
-} from '../../src/renderer/src/store/slices/worktrees-slice-test-harness'
+} from '../../src/renderer/src/store/slices/worktrees/worktrees-slice-test-harness'
 
 vi.mock('sonner', () => ({
   toast: { warning: vi.fn(), info: vi.fn(), success: vi.fn(), error: vi.fn(), dismiss: vi.fn() }

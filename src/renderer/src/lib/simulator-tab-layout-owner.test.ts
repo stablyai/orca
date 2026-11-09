@@ -9,20 +9,17 @@ import type { LayoutCommand } from '../../../shared/workspace-layout/workspace-l
 import { loadWorkspaceLayoutWithoutReport } from '../../../shared/workspace-layout/workspace-layout-load'
 import { nameBasedLoadContext } from '../../../shared/workspace-layout/workspace-layout-minted-ids'
 import type { WorkspaceLayout } from '../../../shared/workspace-layout/workspace-layout-model'
-import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
-import {
-  createTestStore,
-  makeRuntimeOwnedWorktree,
-  makeWorktree,
-  runtimeOwnedRepoState,
-  seedStore
-} from '@/store/slices/store-test-helpers'
-import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { buildWorkspaceSessionPayload } from '@/lib/workspace/persistence/workspace-session'
+import { createTestStore, seedStore } from '@/store/testing/app-store-test-fixture'
+import { makeRuntimeOwnedWorktree } from '@/store/slices/worktrees/worktree-owner.test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { runtimeOwnedRepoState } from '@/store/repos/repo.test-fixture'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
 type LayoutLoad = ReturnType<typeof loadWorkspaceLayoutWithoutReport>
 
@@ -47,14 +44,14 @@ vi.mock('@/store', () => ({
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
 }))
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
 )
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 

@@ -1,7 +1,7 @@
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubIssueUpdate } from '../../../../../shared/issue-mutation-types'
 import type { Repo } from '../../../../../shared/repo-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import React, { useState, useMemo, useCallback } from 'react'
 import {
   createTaskPageGitHubStatusStateDraft,
@@ -20,7 +20,9 @@ import {
   getTaskPageGitHubDuplicateTargetErrorMessage
 } from '@/components/task-page/github/task-page-github-status-actions'
 import { translate } from '@/i18n/i18n'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { useTranslate } from '@/i18n/use-translate'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { gitHubSlugApiForTarget } from '@/runtime/repository-github/github-slug-owner-api'
 import { githubProjectHost } from '../../../../../shared/github/project-identity'
 import { TaskPageGitHubWorkItemStateBadge } from '@/components/task-page/github/task-page-github-work-item-status-badge'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -41,6 +43,7 @@ export function GHStatusCell({
   sourceContext?: TaskSourceContext | null
   workItemMutation: TaskPageGitHubWorkItemMutationRunner
 }): React.JSX.Element {
+  const t = useTranslate()
   const [statusStateDraft, setStatusStateDraft] = useState(() =>
     createTaskPageGitHubStatusStateDraft(item)
   )
@@ -74,7 +77,7 @@ export function GHStatusCell({
   }, [duplicateSearch, filteredDuplicateCandidates, item.number])
   const duplicatePickerTitle = parsedIssueLink?.slug
     ? `${parsedIssueLink.slug.owner}/${parsedIssueLink.slug.repo}`
-    : (repo?.displayName ?? translate('auto.components.TaskPage.repository', 'Repository'))
+    : (repo?.displayName ?? t('auto.components.TaskPage.repository', 'Repository'))
   const resolvedStatusStateDraft = resolveTaskPageGitHubStatusStateDraft(statusStateDraft, item)
   if (resolvedStatusStateDraft !== statusStateDraft) {
     // Why: item rows can refresh from the cache while this cell is mounted; reconcile before paint to avoid one stale status frame.
@@ -134,36 +137,14 @@ export function GHStatusCell({
             const target = ownerTarget
             // URL-sourced rows need slug-aware writes to preserve close reasons and duplicates.
             if (parsedOwnerRepo) {
-              return target.kind === 'environment'
-                ? callRuntimeRpc<{
-                    ok?: boolean
-                    error?:
-                      | {
-                          message?: string
-                        }
-                      | string
-                  }>(
-                    target,
-                    'github.project.updateIssueBySlug',
-                    {
-                      owner: parsedOwnerRepo.owner,
-                      repo: parsedOwnerRepo.repo,
-                      host: githubProjectHost(parsedOwnerRepo.host),
-                      number: item.number,
-                      updates
-                    },
-                    {
-                      timeoutMs: 30_000
-                    }
-                  )
-                : window.api.gh.updateIssueBySlug({
-                    owner: parsedOwnerRepo.owner,
-                    repo: parsedOwnerRepo.repo,
-                    host: githubProjectHost(parsedOwnerRepo.host),
-                    number: item.number,
-                    updates,
-                    wakeWslDistro: true
-                  })
+              return gitHubSlugApiForTarget(target).updateIssueBySlug({
+                owner: parsedOwnerRepo.owner,
+                repo: parsedOwnerRepo.repo,
+                host: githubProjectHost(parsedOwnerRepo.host),
+                number: item.number,
+                updates,
+                wakeWslDistro: true
+              })
             }
             if (!repo) {
               throw new Error(
@@ -275,8 +256,8 @@ export function GHStatusCell({
           {localState === 'open' ? <CircleDot className="size-2.5" /> : null}
           <span>
             {localState === 'closed'
-              ? translate('auto.components.TaskPage.d09bf34db7', 'Closed')
-              : translate('auto.components.TaskPage.606a85c774', 'Open')}
+              ? t('auto.components.TaskPage.d09bf34db7', 'Closed')
+              : t('auto.components.TaskPage.606a85c774', 'Open')}
           </span>
           <ChevronDown className="size-2.5 opacity-50" />
         </button>
@@ -314,7 +295,7 @@ export function GHStatusCell({
               )}
             >
               <CircleDot className="size-4 text-muted-foreground" />
-              {translate('auto.components.TaskPage.606a85c774', 'Open')}
+              {t('auto.components.TaskPage.606a85c774', 'Open')}
             </button>
             <button
               type="button"
@@ -330,7 +311,7 @@ export function GHStatusCell({
               )}
             >
               <CheckCircle2 className="size-4 text-muted-foreground" />
-              {translate('auto.components.TaskPage.closeAsCompleted', 'Close as completed')}
+              {t('auto.components.TaskPage.closeAsCompleted', 'Close as completed')}
             </button>
             <button
               type="button"
@@ -343,7 +324,7 @@ export function GHStatusCell({
               className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-[12px] hover:bg-accent"
             >
               <Ban className="size-4 text-muted-foreground" />
-              {translate('auto.components.TaskPage.closeAsNotPlanned', 'Close as not planned')}
+              {t('auto.components.TaskPage.closeAsNotPlanned', 'Close as not planned')}
             </button>
             <button
               type="button"
@@ -356,7 +337,7 @@ export function GHStatusCell({
             >
               <Copy className="size-4 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate">
-                {translate('auto.components.TaskPage.closeAsDuplicate', 'Close as duplicate')}
+                {t('auto.components.TaskPage.closeAsDuplicate', 'Close as duplicate')}
               </span>
               <ChevronRight className="size-3.5 text-muted-foreground" />
             </button>

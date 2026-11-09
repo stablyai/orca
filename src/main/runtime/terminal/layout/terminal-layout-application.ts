@@ -1,5 +1,5 @@
 import { OrcaRuntimeWithPickMostRecentActor } from './terminal-layout-queue'
-import type { ApplyLayoutResult, PtyLayoutState, PtyLayoutTarget } from '../../orca-runtime-core'
+import type { ApplyLayoutResult, PtyLayoutState, PtyLayoutTarget } from './terminal-layout-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from './runtime-layout-apply'

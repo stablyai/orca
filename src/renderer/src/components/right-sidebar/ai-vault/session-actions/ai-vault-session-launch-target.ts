@@ -1,18 +1,21 @@
-import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/ai-vault-resume-shell'
+import { getAiVaultResumeWorkspaceWslDistro } from '@/lib/agent-session/resume/history/ai-vault-resume-shell'
 import { canResumeAiVaultSessionOnTarget } from '../../../../../../shared/ai-vault/resume/ai-vault-resume-target'
 import {
   getAiVaultResumeWorkspaceExecutionHostId,
   getAiVaultResumeWorkspaceTargetStatus
-} from '@/lib/ai-vault-resume-target'
+} from '@/lib/agent-session/resume/history/ai-vault-resume-target'
 import { translate } from '@/i18n/i18n'
-import { findWorktreeById } from '@/store/slices/worktree-helpers'
+import { findFirstIndexedWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import {
   isKnownAiVaultResumeWorkspaceTarget,
   type AiVaultSessionResumeTargetState
 } from './ai-vault-session-resume'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function resolveAiVaultTargetWorkspacePath(
   state: AiVaultSessionResumeTargetState,
@@ -26,7 +29,7 @@ export function resolveAiVaultTargetWorkspacePath(
     )
   }
   const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
-  return findWorktreeById(selectWorktreesByRepo(state), worktreeId)?.path ?? null
+  return findFirstIndexedWorktree(selectWorktreesByRepo(state), worktreeId)?.path ?? null
 }
 
 export type AiVaultSessionLaunchTarget =

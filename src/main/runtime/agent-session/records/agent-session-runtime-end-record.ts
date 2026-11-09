@@ -4,7 +4,7 @@
 import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { durableWriteTempPath, writeFileDurableSync } from '../../../filesystem/durable-file-write'
-import { readNodeFileSyncWithinLimit } from '../../../../shared/node-bounded-file-reader'
+import { readNodeFileSyncWithinLimit } from '../../../../shared/file-content/node-bounded-file-reader'
 import type { AgentSessionOrcaStopCause } from '../../../../shared/agent-session/lifecycle/agent-session-orca-stop'
 import {
   AGENT_SESSION_RESUME_TRIGGERS,

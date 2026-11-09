@@ -7,7 +7,7 @@ import { isShellProcess } from '../../../../shared/agent-status/process/shell-pr
 import type { AgentStatus } from '../../../../shared/agent-status/title/agent-title-core'
 import { recognizeAgentProcess } from '../../../../shared/agent-status/process/agent-process-recognition'
 import type { RuntimeTerminalAgentStatus } from '../../../../shared/runtime-terminal-contracts'
-import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
+import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
@@ -39,7 +39,8 @@ type Dependencies = {
   getPrimaryLeaf(ptyId: string): RuntimeLeafRecord | null
   getTabTitle(tabId: string): string | null
   getExplicitStatus(
-    handle: string
+    handle: string,
+    ptyId: string
   ): { status: NonNullable<RuntimeTerminalAgentStatus['status']>; updatedAt: number } | null
   getLifecycleStatus(
     ptyId: string
@@ -78,7 +79,7 @@ export class RuntimeTerminalAgentStatusQuery {
     // Use display state: stale-spinner clearing leaves foreground evidence to identify agents that exited behind it.
     const clear = this.deps.getTitleDisplayClear(ptyId)
     const terminal = this.getSnapshot(handle, ptyId, clear)
-    const explicitStatus = this.deps.getExplicitStatus(handle)
+    const explicitStatus = this.deps.getExplicitStatus(handle, ptyId)
     const lifecycle = getDisplayPromptLifecycle(this.deps.getLifecycleStatus(ptyId), clear)
     const blockedByWaitText = detectTerminalWaitBlockedReason(terminal.waitText)
     const liveTitleClearsBlockedText =

@@ -1,3 +1,4 @@
+import type * as FilePromises from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -10,7 +11,26 @@ import {
 } from '../../command-runner/git-capability-state'
 import * as runner from '../../command-runner/git-exec-file'
 import { prepareWorktreeCreateCheckout } from './worktree-create-preparation'
+import {
+  startPreparation,
+  listPreparations,
+  _resetPreparationPoolForTests
+} from '../../../workspaces/creation/preparation/worktree-create-preparation-pool'
 import { WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS } from '../worktree-operation-options'
+
+const lockWrite = vi.hoisted((): { after: (() => void) | undefined } => ({ after: undefined }))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FilePromises>()
+  return {
+    ...actual,
+    writeFile: async (...args: Parameters<typeof actual.writeFile>) => {
+      await actual.writeFile(...args)
+      if (String(args[0]).endsWith('locked')) {
+        lockWrite.after?.()
+      }
+    }
+  }
+})
 
 const roots: string[] = []
 const unsupported = Object.assign(new Error("error: unknown option 'reason'"), { code: 129 })
@@ -21,6 +41,8 @@ beforeEach(() => {
 
 afterEach(async () => {
   vi.restoreAllMocks()
+  lockWrite.after = undefined
+  await _resetPreparationPoolForTests()
   clearGitCapabilityStateForTests()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
@@ -207,4 +229,39 @@ it('preserves a pre-existing empty target if its cached fallback lock-path probe
     false
   )
   expect((await run(['worktree', 'list', '--porcelain'], { cwd: repo })).stdout).toContain(prepared)
+})
+
+it('removes its completed fallback lock when cancellation arrives during the filesystem write', async () => {
+  const { repo, prepared } = await fixture()
+  const controller = new AbortController()
+  const failure = new Error('canceled while lock write completes')
+  getLocalGitCapabilityCache().rememberUnsupported('worktree-add-lock-reason')
+  lockWrite.after = () => controller.abort(failure)
+  await expect(
+    prepareWorktreeCreateCheckout(
+      repo,
+      prepared,
+      'main',
+      createWorktreePreparationLockReason('completed-lock'),
+      { signal: controller.signal }
+    )
+  ).rejects.toBe(failure)
+  expect(existsSync(prepared)).toBe(false)
+  expect(await git(repo, ['worktree', 'list', '--porcelain'])).not.toContain(prepared)
+})
+
+it('discards a ready available checkout when its preparation caller cancels', async () => {
+  const { repo } = await fixture()
+  const controller = new AbortController()
+  await startPreparation({
+    repoPath: repo,
+    workspaceRoot: join(repo, '..'),
+    baseBranch: 'main',
+    canonicalBase: 'refs/heads/main',
+    options: { signal: controller.signal }
+  })
+  const [entry] = listPreparations()
+  controller.abort()
+  await vi.waitFor(() => expect(existsSync(entry.preparedPath)).toBe(false), { timeout: 5000 })
+  expect(await git(repo, ['worktree', 'list', '--porcelain'])).not.toContain(entry.preparedPath)
 })

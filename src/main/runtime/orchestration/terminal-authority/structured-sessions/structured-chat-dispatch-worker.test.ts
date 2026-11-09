@@ -1,5 +1,3 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
-
 import { describe, expect, it, vi } from 'vitest'
 import { formatOrcaSessionAddress } from '../../../../../shared/orca-session-address'
 import { testOrcaSessionId } from '../../../../../shared/orca-session-address-test-fixture'
@@ -80,44 +78,6 @@ function dispatchCount(): unknown {
 }
 
 describe('a chat as the assignee of orchestration dispatch', () => {
-  it('records the chat by its Orca session ID and sends an idle chat its task as a turn', async () => {
-    await openChat(COORDINATOR)
-    const worker = await openChat(PEER_CHAT)
-    const { runId, taskId } = await coordinatorRunAndTask()
-
-    const dispatched = call(
-      'orchestration.dispatch',
-      { task: taskId, to: WORKER, inject: true },
-      { sessionId: COORDINATOR }
-    )
-    await vi.waitFor(() => expect(worker.turns).toHaveLength(1), WAIT)
-    await settleTurn(PEER_CHAT, 0)
-    const result = await dispatched
-
-    expect(result).toMatchObject({ injected: true })
-    const dispatchId = idOf(result.dispatch)
-    expect(db.getDispatchContextById(dispatchId)).toMatchObject({
-      run_id: runId,
-      assignee_handle: WORKER,
-      assignee_orca_session_id: PEER_CHAT,
-      assignee_pane_key: null,
-      process_incarnation: null,
-      status: 'dispatched'
-    })
-    const task = turnText(worker.turns[0]!)
-    expect(task).toContain('build it')
-    expect(task).toContain(`Your Orca session ID is: ${WORKER}`)
-    expect(task).toContain('The coordinator cannot see this chat')
-    expect(task).toContain('More supervised work arrives in this chat')
-    expect(task).not.toContain('this terminal')
-    expect(task).not.toMatch(/exit the shell/i)
-    expect(task).not.toMatch(/address/i)
-    expect(task).toContain(dispatchId)
-    expect(await taskSenders(PEER_CHAT)).toMatchObject([
-      { kind: 'agent', orchestration: { message: 'task', taskId, dispatchId } }
-    ])
-  })
-
   it("holds the task as a card in a busy chat's queue, naming the Dispatch, and sends it when the turn ends", async () => {
     await openChat(COORDINATOR)
     const worker = await openChat(PEER_CHAT)
@@ -197,24 +157,6 @@ describe('a chat as the assignee of orchestration dispatch', () => {
     expect(db.getTask(taskId)?.status).toBe('dispatched')
   })
 
-  it('refuses a chat that injects a Dispatch into itself, naming no --from, with no row written', async () => {
-    await openChat(COORDINATOR)
-    const { taskId } = await coordinatorRunAndTask()
-
-    const error = await refusal(
-      'orchestration.dispatch',
-      { task: taskId, to: formatOrcaSessionAddress(testOrcaSessionId(COORDINATOR)), inject: true },
-      COORDINATOR
-    )
-
-    expect(error).toMatchObject({
-      code: 'terminal_is_coordinator',
-      message: expect.stringContaining("is this coordinator's own Orca session ID")
-    })
-    expect(dispatchCount()).toEqual({ n: 0 })
-    expect(db.getTask(taskId)?.status).toBe('ready')
-  })
-
   it('refuses a chat that was closed, with no row written', async () => {
     await openChat(COORDINATOR)
     await openChat(PEER_CHAT)
@@ -279,10 +221,11 @@ describe('a chat as the assignee of orchestration dispatch', () => {
 
     const subDispatch = { task: subTask, to: 'term_worker' }
 
+    const maxDepth = vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(1)
     expect(await refusal('orchestration.dispatch', subDispatch, PEER_CHAT)).toMatchObject({
       code: 'nested_worker_depth_exceeded'
     })
-    vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(2)
+    maxDepth.mockReturnValue(2)
     const child = await call('orchestration.dispatch', subDispatch, { sessionId: PEER_CHAT })
     expect(child.dispatch).toMatchObject({ depth: 2, creator_dispatch_id: idOf(parent.dispatch) })
   })

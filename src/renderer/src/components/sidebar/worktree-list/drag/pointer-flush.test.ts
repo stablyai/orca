@@ -30,7 +30,7 @@ function setup() {
     return 1
   })
   let state = WORKTREE_ROW_DRAG_INITIAL_STATE
-  let target = NO_WORKTREE_SIDEBAR_DROP_TARGET
+  const target = NO_WORKTREE_SIDEBAR_DROP_TARGET
   const offsets = new Map([['parent', 56]])
   const args: WorktreePointerDragFrameArgs = {
     drag: {
@@ -43,6 +43,7 @@ function setup() {
       worktreeId: 'child',
       worktreeKey: 'child',
       draggedIds: ['child'],
+      pickedCopies: [],
       draggedCopies: [],
       reorderDraggedIds: ['child'],
       reorderDraggedKeys: ['child'],
@@ -95,9 +96,6 @@ function setup() {
     args,
     offsets,
     state: () => state,
-    nest: (id: string | null) => {
-      target = { ...NO_WORKTREE_SIDEBAR_DROP_TARGET, lineageParentId: id }
-    },
     tick: (ms: number) => {
       time += ms
       const callback = nextFrame

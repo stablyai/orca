@@ -11,14 +11,14 @@ import {
 } from '../../../ui/dialog'
 import { Input } from '../../../ui/input'
 import { Label } from '../../../ui/label'
-import { SshHostAdvancedFields } from './SshHostAdvancedFields'
+import { SshHostAdvancedFields } from '../../../ssh-host-form/SshHostAdvancedFields'
 import {
   applyParsedSshHostInput,
   hasAdvancedConnectionValues,
   isSshTargetFormDirty,
   type EditingTarget
-} from './ssh-target-draft'
-import { translate } from '@/i18n/i18n'
+} from '../../../ssh-host-form/ssh-target-draft'
+import { useTranslate } from '@/i18n/use-translate'
 import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 
 type SshTargetFormProps = {
@@ -51,6 +51,7 @@ export function SshTargetForm({
   onSave,
   onOpenChange
 }: SshTargetFormProps): React.JSX.Element {
+  const t = useTranslate()
   // Reveal custom advanced values per open/edit session; the mounted form must not retain cancelled disclosure state.
   const hasAdvancedConnectionFields = hasAdvancedConnectionValues(form)
   const [advancedOpen, setAdvancedOpen] = useState(hasAdvancedConnectionFields)
@@ -111,23 +112,23 @@ export function SshTargetForm({
           <DialogHeader className="shrink-0 gap-1.5 border-b border-border/60 px-6 pt-6 pr-12 pb-4 text-left">
             <DialogTitle>
               {isEditing
-                ? translate('auto.components.settings.SshTargetForm.editTitle', 'Edit SSH host')
-                : translate('auto.components.settings.SshTargetForm.addTitle', 'Add SSH host')}
+                ? t('auto.components.settings.SshTargetForm.editTitle', 'Edit SSH host')
+                : t('auto.components.settings.SshTargetForm.addTitle', 'Add SSH host')}
             </DialogTitle>
             <DialogDescription>
               {isEditing
-                ? translate(
+                ? t(
                     'auto.components.settings.SshTargetForm.editDescription',
                     'Update connection details for this machine. Changes apply on next connect.'
                   )
-                : translate(
+                : t(
                     'auto.components.settings.SshTargetForm.addDescription',
                     'Add a persistent machine you can log into over SSH.'
                   )}
             </DialogDescription>
             {showEditingChip ? (
               <p className="mt-0.5 inline-flex max-w-full items-center gap-1.5 truncate rounded-full border border-border/60 bg-muted/20 px-2.5 py-1 text-[11px] text-muted-foreground">
-                {translate('auto.components.settings.SshTargetForm.editingPrefix', 'Editing')}
+                {t('auto.components.settings.SshTargetForm.editingPrefix', 'Editing')}
                 {editingLabel !== '' ? (
                   <span className="font-medium text-foreground">{editingLabel}</span>
                 ) : null}
@@ -149,24 +150,18 @@ export function SshTargetForm({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="ssh-target-label">
-                  {translate('auto.components.settings.SshTargetForm.298de87a88', 'Label')}
+                  {t('auto.components.settings.SshTargetForm.298de87a88', 'Label')}
                 </Label>
                 <Input
                   id="ssh-target-label"
                   value={form.label}
                   onChange={(e) => onFormChange((f) => ({ ...f, label: e.target.value }))}
-                  placeholder={translate(
-                    'auto.components.settings.SshTargetForm.b8dab0aa7b',
-                    'My Server'
-                  )}
+                  placeholder={t('auto.components.settings.SshTargetForm.b8dab0aa7b', 'My Server')}
                 />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ssh-target-host">
-                  {translate(
-                    'auto.components.settings.SshTargetForm.ce370ce674',
-                    'Host or alias *'
-                  )}
+                  {t('auto.components.settings.SshTargetForm.ce370ce674', 'Host or alias *')}
                 </Label>
                 <Input
                   id="ssh-target-host"
@@ -174,7 +169,7 @@ export function SshTargetForm({
                   autoFocus
                   onChange={(e) => onFormChange((f) => ({ ...f, host: e.target.value }))}
                   onBlur={() => onFormChange(applyParsedSshHostInput)}
-                  placeholder={translate(
+                  placeholder={t(
                     'auto.components.settings.SshTargetForm.2ee9bcd2e8',
                     'server, deploy@server:2222, ssh://server'
                   )}
@@ -182,21 +177,18 @@ export function SshTargetForm({
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ssh-target-username">
-                  {translate('auto.components.settings.SshTargetForm.dc1dc52aaa', 'Username')}
+                  {t('auto.components.settings.SshTargetForm.dc1dc52aaa', 'Username')}
                 </Label>
                 <Input
                   id="ssh-target-username"
                   value={form.username}
                   onChange={(e) => onFormChange((f) => ({ ...f, username: e.target.value }))}
-                  placeholder={translate(
-                    'auto.components.settings.SshTargetForm.47e082bc17',
-                    'deploy'
-                  )}
+                  placeholder={t('auto.components.settings.SshTargetForm.47e082bc17', 'deploy')}
                 />
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="ssh-target-port">
-                  {translate('auto.components.settings.SshTargetForm.c94cfa634c', 'Port')}
+                  {t('auto.components.settings.SshTargetForm.c94cfa634c', 'Port')}
                 </Label>
                 <Input
                   id="ssh-target-port"
@@ -211,19 +203,19 @@ export function SshTargetForm({
               <div className="col-span-2 space-y-1.5">
                 <Label htmlFor="ssh-target-identity" className="flex items-center gap-1.5">
                   <FileKey className="size-3.5" />
-                  {translate('auto.components.settings.SshTargetForm.63c0c145c1', 'Identity File')}
+                  {t('auto.components.settings.SshTargetForm.63c0c145c1', 'Identity File')}
                 </Label>
                 <Input
                   id="ssh-target-identity"
                   value={form.identityFile}
                   onChange={(e) => onFormChange((f) => ({ ...f, identityFile: e.target.value }))}
-                  placeholder={translate(
+                  placeholder={t(
                     'auto.components.settings.SshTargetForm.d6a5f2ee5c',
                     '~/.ssh/id_ed25519 (leave empty for SSH agent)'
                   )}
                 />
                 <p className="text-[11px] text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.SshTargetForm.cb91f6375c',
                     'Optional. SSH agent is used by default.'
                   )}
@@ -243,12 +235,12 @@ export function SshTargetForm({
 
           <DialogFooter className="shrink-0 gap-2 border-t border-border/60 bg-muted/10 px-6 py-4 sm:justify-end">
             <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
-              {translate('auto.components.settings.SshTargetForm.fea9cb402e', 'Cancel')}
+              {t('auto.components.settings.SshTargetForm.fea9cb402e', 'Cancel')}
             </Button>
             <Button type="submit" size="sm" disabled={saving}>
               {isEditing
-                ? translate('auto.components.settings.SshTargetForm.a62b4cb39a', 'Save Changes')
-                : translate('auto.components.settings.SshTargetForm.addHost', 'Add host')}
+                ? t('auto.components.settings.SshTargetForm.a62b4cb39a', 'Save Changes')
+                : t('auto.components.settings.SshTargetForm.addHost', 'Add host')}
             </Button>
           </DialogFooter>
         </form>

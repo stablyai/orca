@@ -225,6 +225,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     await this.adapterFor(id).resetInputModes(id)
   }
 
+  reportFocusLost = async (id: string): Promise<void> => this.adapterFor(id).reportFocusLost?.(id)
+
   async closeStartupQueryAuthority(id: string): Promise<number> {
     return (await this.adapterFor(id).closeStartupQueryAuthority?.(id)) ?? 0
   }

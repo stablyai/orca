@@ -11,7 +11,7 @@ const toastError = vi.hoisted(() => vi.fn())
 vi.mock('sonner', () => ({ toast: { error: toastError } }))
 
 import NodeDistMirrorDialog from './NodeDistMirrorDialog'
-import { SshHostNodeMirrorAction } from '../../ssh/server-actions/SshHostNodeMirrorAction'
+import { SshHostNodeMirrorAction } from '../../../ssh-host-recovery/SshHostNodeMirrorAction'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { getDefaultSettings } from '../../../../../../shared/constants'
 

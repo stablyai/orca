@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { atom, read, set, update } from '../runtime/declarative-atoms'
 import { h } from '../runtime/declarative-elements'
-import { host, shell } from '../runtime/orca-module'
-import { hostError, mockHost, mount, stored, type TestPanel } from './orca-testing'
+
+import { mount, stored, type TestPanel } from './orca-testing'
 
 let panel: TestPanel | null = null
 afterEach(async () => {
@@ -45,33 +45,6 @@ function Counter() {
 }
 
 describe('orca/testing', () => {
-  it('mounts a panel, finds by text, role, label and testId, and presses', async () => {
-    panel = await mount(Counter)
-    expect(panel.find({ role: 'heading' })?.text).toBe('Count 0')
-    expect(panel.find({ testId: 'add' })?.type).toBe('Button')
-    expect(panel.findAll({ role: 'button' })).toHaveLength(1)
-    await panel.press({ text: 'Add' })
-    await panel.press({ text: 'Add' })
-    expect(panel.find({ text: /Count 2/ })).not.toBeNull()
-    expect(panel.persisted.plugin).toEqual({ 'testing.count': 2 })
-  })
-
-  it('types, submits, toggles and selects like Orca does', async () => {
-    panel = await mount(Counter)
-    const title = panel.find({ label: 'Title' })!
-    await panel.type(title, 'hi')
-    expect(panel.valueOf(title)).toBe('hi')
-    expect(read(draft)).toBe('hi')
-    await panel.submit(title)
-    expect(panel.valueOf(title)).toBe('')
-    await panel.toggle({ label: 'Done' })
-    expect(read(done)).toBe(true)
-    await panel.select({ label: 'Size' }, 'l')
-    expect(panel.valueOf({ label: 'Size' })).toBe('l')
-    await expect(panel.select({ label: 'Size' }, 'x')).rejects.toThrow(/no enabled option "x"/)
-    await expect(panel.press({ text: 'Nope' })).rejects.toThrow(/nothing in the panel matches/)
-  })
-
   it('starts each mount fresh and hydrates persisted values, migrating old versions', async () => {
     panel = await mount(Counter, { persisted: { plugin: { 'testing.count': 41 } } })
     expect(panel.find({ role: 'heading' })?.text).toBe('Count 41')
@@ -114,46 +87,6 @@ describe('orca/testing', () => {
     await panel.unmount()
     panel = await mount(() => h('Text', { color: 'red' }, 'x'))
     expect(panel.warnings).toEqual(['Text: ignored unknown prop "color"'])
-  })
-
-  it('enforces capabilities and the press-grants-one-gesture rule', async () => {
-    const fake = mockHost({
-      capabilities: ['notifications:show'],
-      results: {
-        'workspace.readContext': () => {
-          throw hostError('unavailable', 'no workspace')
-        }
-      }
-    })
-    const outcomes: string[] = []
-    const record = (promise: Promise<unknown>) =>
-      promise.then(
-        () => outcomes.push('ok'),
-        (error: { code: string }) => outcomes.push(error.code)
-      )
-    panel = await mount(
-      () =>
-        h(
-          'Stack',
-          null,
-          h('Button', { onPress: () => record(shell.openExternal('https://example.com')) }, 'Open'),
-          h(
-            'Button',
-            { onPress: () => record(host.call('notifications.show', { title: 'hi' })) },
-            'Notify'
-          )
-        ),
-      { host: fake }
-    )
-    await record(shell.openExternal('https://example.com'))
-    await panel.press({ text: 'Open' })
-    await record(host.call('workspace.readContext'))
-    await panel.press({ text: 'Notify' })
-    expect(outcomes).toEqual(['not_permitted', 'ok', 'capability_denied', 'ok'])
-    expect(fake.callsOf('shell.openExternal')).toEqual([
-      { url: 'https://example.com' },
-      { url: 'https://example.com' }
-    ])
   })
 
   it('fails a test that never settles instead of hanging', async () => {

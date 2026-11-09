@@ -3,9 +3,9 @@ import type { AppState } from '@/store/types'
 import { findKnownWorktreeById } from '@/store/slices/worktrees/listing/detected-worktree-meta'
 import {
   selectFolderWorkspaces,
-  selectWorktreesByRepo,
-  type WorkspaceRecordState
-} from '@/store/workspace-record-selectors'
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import type { WorkspaceRecordState } from '@/store/workspaces/selection/workspace-host-target'
 
 // Skill discovery omits detected rows, so detected-only workspaces have no directory there.
 export type WorkspaceDirectoryState = WorkspaceRecordState &

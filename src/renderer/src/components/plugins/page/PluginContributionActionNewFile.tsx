@@ -1,5 +1,5 @@
-import type { ActivePluginNewFile } from '@/store/plugin-new-files'
-import { translate } from '@/i18n/i18n'
+import type { ActivePluginNewFile } from '@/store/plugins/file-creation/plugin-new-files'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { Button } from '../../ui/button'
 import { pluginPanelUnavailableReason } from './plugin-contribution-action-availability'
@@ -20,6 +20,7 @@ export function PluginContributionActionNewFile({
 }: {
   newFile: ActivePluginNewFile
 }): React.JSX.Element {
+  const t = useTranslate()
   const unavailableReason = useAppStore((state) => pluginPanelUnavailableReason(state))
   return (
     <span className="flex items-center gap-2">
@@ -33,7 +34,7 @@ export function PluginContributionActionNewFile({
         aria-label={newFile.title}
         onClick={() => openPluginNewFileFromSettings(newFile)}
       >
-        {translate('auto.components.settings.PluginContributionActionNewFile.create', 'Create')}
+        {t('auto.components.settings.PluginContributionActionNewFile.create', 'Create')}
       </Button>
     </span>
   )

@@ -3,9 +3,9 @@
 
 import type { AgentJournalItemBody } from '../../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
-import type { StructuredAgentSessionItemAppendOptions } from '../agent-session-wire/structured-agent-session-event-sink'
-import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
+import type { JournalLifecycleMutationInput } from '../agent-session-journal/writing/journal-lifecycle-mutation'
+import type { StructuredAgentSessionItemAppendOptions } from '../agent-session-wire/journal-ingress/structured-agent-session-event-sink'
+import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/journal-ingress/structured-agent-session-transition'
 import type { ProviderTimelineContext } from './provider-timeline-context'
 import type { ProviderTimelineEvent } from './provider-timeline-event'
 import {
@@ -99,7 +99,7 @@ export function decideProviderTimelineEvent(
     case 'turn.end':
       return decideTurnEnd(input, event)
     case 'turn.settled':
-      return decideTurnSettled(event)
+      return decideTurnSettled(input, event)
     case 'item.open':
     case 'item.update':
     case 'item.close':

@@ -14,7 +14,7 @@ import React, { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
-import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
+import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
 import type {
   NormalizedWorkItemSourceSearchProps,
   RepoBackedSearchTarget

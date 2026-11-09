@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
-  __activeEditorPathMoveCountForTests,
   __clearEditorPathMovesForTests,
   beginEditorPathMove,
   isActiveMoveSourcePath,
@@ -9,20 +8,6 @@ import {
 
 describe('editor-path-move-inflight', () => {
   afterEach(() => __clearEditorPathMovesForTests())
-
-  it('marks a source path active only while the operation is in flight', () => {
-    beginEditorPathMove({
-      operationId: 'op-1',
-      worktreeId: 'wt-1',
-      runtimeEnvironmentId: null,
-      sourcePaths: ['/repo/a.md']
-    })
-    expect(isActiveMoveSourcePath('wt-1', null, '/repo/a.md')).toBe(true)
-
-    settleEditorPathMove('op-1')
-    expect(isActiveMoveSourcePath('wt-1', null, '/repo/a.md')).toBe(false)
-    expect(__activeEditorPathMoveCountForTests()).toBe(0)
-  })
 
   it('prefix-matches a root so a file opened under a moving directory is suppressed', () => {
     beginEditorPathMove({

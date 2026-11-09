@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type KeyboardEvent } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { findPage } from '@/store/slices/browser-page-records'
+import { findPage } from '@/store/slices/browser/pages/browser-page-records'
 import {
   buildOpenTabSearchBrowserPages,
   selectOpenTabSearchBrowserPageState
@@ -9,8 +9,8 @@ import {
 import {
   activateBrowserPagePaletteResult,
   type BrowserPagePaletteActivationTarget
-} from '@/lib/browser-page-palette-activation'
-import { isBlankBrowserUrl } from '@/lib/browser-palette-search'
+} from '@/lib/browser/palette/browser-page-palette-activation'
+import { isBlankBrowserUrl } from '@/lib/browser/palette/browser-palette-search'
 import { normalizeBrowserNavigationUrl } from '../../../../../shared/browser-url'
 import { requestBrowserFocus } from '../host-guest/browser-focus'
 import { toDisplayUrl } from '../describe-page/browser-page-url-display'

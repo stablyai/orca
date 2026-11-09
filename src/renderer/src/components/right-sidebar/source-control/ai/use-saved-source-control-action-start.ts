@@ -8,10 +8,8 @@ import {
 } from '@/lib/host-chat-program-acquisition'
 import { agentsOfferedForLaunch } from '@/lib/host-chat-program'
 import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
-import {
-  buildAgentLaunchRouteInput,
-  workspaceKindForWorktreeId
-} from '@/lib/agent-launch-route-input'
+import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
+import { workspaceKindForWorktreeId } from '../../../../../../shared/agent-launch/contracts/workspace-launch-kind'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { useRef, useState } from 'react'
 import { toast } from 'sonner'
@@ -65,10 +63,6 @@ export function useSavedSourceControlActionStart() {
         onFallback()
         return
       }
-      const projection = projectSelectedSourceControlActionLaunch(recipe, agent, {
-        basePrompt: args.basePrompt,
-        settings: args.settings
-      })
       const workspace = { worktreeId, kind: workspaceKindForWorktreeId(worktreeId) }
       const [choices, agentLaunchPreferences] = await Promise.all([
         acquireAgentLaunchChoices(
@@ -79,6 +73,11 @@ export function useSavedSourceControlActionStart() {
         ensureAgentLaunchPreferences(store, workspace, signal)
       ])
       signal?.throwIfAborted()
+      const settings = useAppStore.getState().settings
+      const projection = projectSelectedSourceControlActionLaunch(recipe, agent, {
+        basePrompt: args.basePrompt,
+        settings: settings
+      })
       const route = isTuiAgent(agent)
         ? buildAgentLaunchRouteInput(store, {
             agent,
@@ -105,7 +104,7 @@ export function useSavedSourceControlActionStart() {
             projection.preferredSurface ? agent : undefined
           )
       const plan = buildSourceControlAgentDeliveryPlan({
-        settings: args.settings,
+        settings,
         agentLaunchPreferences,
         selectedAgent: agent,
         commandInput: projection.commandInput,

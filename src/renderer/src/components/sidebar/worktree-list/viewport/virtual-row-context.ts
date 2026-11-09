@@ -84,6 +84,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       projectHeaderHostContexts: args.projectHeaderHostContexts,
       getCachedFolderWorkspacePathStatus: args.getCachedFolderWorkspacePathStatus,
       toggleGroupWithScrollAnchor: args.toggleGroupWithScrollAnchor,
+      toggleAllProjects: props.onToggleAllProjects,
       projectActions: args.projectActions,
       onRenameProjectGroup: props.handleRenameProjectGroup,
       onDeleteProjectGroup: props.handleDeleteProjectGroup,
@@ -102,7 +103,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       groupIndexByRowKey: session.groupIndexByRowKey,
       agentSendTargetWorktreeId: props.agentSendTargetWorktreeId,
       worktreeDragState: runtime.worktreeDragState,
-      nativeLineageDropTargetId: runtime.nativeLineageDropTargetId,
+      nativeLineageDropTargetIdentity: runtime.nativeLineageDropTargetIdentity,
       activeWorktreeId: props.activeWorktreeId,
       activeWorkspaceExecutionHostId: props.activeWorkspaceExecutionHostId,
       currentWorktreeId: props.currentWorktreeId,
@@ -132,6 +133,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       worktreeMap: props.worktreeMap,
       worktreeLineageById: props.worktreeLineageById,
       workspaceLineageByChildKey: props.workspaceLineageByChildKey,
+      crossStoreChildrenByFolderId: props.crossStoreChildrenByFolderId,
       prCache: props.prCache,
       hostedReviewCache: props.hostedReviewCache,
       getCachedFolderWorkspacePathStatus: args.getCachedFolderWorkspacePathStatus,
@@ -139,7 +141,9 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       onContextMenuSelect: props.onContextMenuSelect,
       onImmediateActivate: primaryActive.handleImmediateWorktreeRowActivate,
       onRowClickCapture: args.onRowClickCapture,
-      onRowPointerDown: args.onRowPointerDown
+      onRowPointerDown: args.onRowPointerDown,
+      worktreeDragState: runtime.worktreeDragState,
+      nativeLineageDropTargetIdentity: runtime.nativeLineageDropTargetIdentity
     }
   }
 }

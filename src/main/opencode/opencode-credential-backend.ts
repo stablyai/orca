@@ -45,7 +45,7 @@ export async function detectOpenCodeCredentialBackend(
     ])
     const cached = probes.get(key)
     if (cached && cached.expiresAt > Date.now()) {
-      return cached.result
+      return await cached.result
     }
     const result = probeBackend(binary, environment, cwd)
     const entry = { result, expiresAt: Number.POSITIVE_INFINITY }

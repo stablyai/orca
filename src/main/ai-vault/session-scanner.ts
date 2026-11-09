@@ -19,12 +19,18 @@ import { aiVaultScanWorkload, noteAiVaultScanReading } from './ai-vault-scan-pro
 import { yieldScanInventory } from './session-scanner-scope-inventory'
 import { prepareScopeScan, scanInScopeSessions } from './session-scanner-scope-walk'
 import { discoverAiVaultSessionSources } from './session-scanner-source-discovery'
+import { withAntigravityArtifactPaths } from './scanners/antigravity/antigravity-session-artifacts'
 import {
   cursorChatMetaRefusals,
   withCursorChatMetaScan
 } from './scanners/cursor/session-scanner-cursor-chat-meta'
 import type { AiVaultScanOptions } from './session-scanner-types'
 import { clampPositiveInteger } from './session-scanner-values'
+import { scopeOnlyScan } from './session-scope-cwd'
+import {
+  aiVaultSessionInScope,
+  createAiVaultScopeCwdMatcher
+} from '../../shared/ai-vault/scanning/ai-vault-scope-cwd-match'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault/scanning/ai-vault-session-depth'
 import { withDevinSessionsDbScan } from './scanners/devin/session-scanner-devin-db'
@@ -32,7 +38,7 @@ import { withOpenCodeSqliteScanScope } from './scanners/opencode/sqlite/session-
 
 const SESSION_PARSE_CANDIDATE_MULTIPLIER = 2
 
-/** Return recency-capped sessions plus recovered in-scope sessions, deduplicated and sorted. */
+/** Return recency-capped sessions plus recovered in-scope sessions (only those for scopeOnly), deduplicated and sorted. */
 export async function scanAiVaultSessions(
   options: AiVaultScanOptions = {}
 ): Promise<AiVaultListResult> {
@@ -79,9 +85,11 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
         throwIfAiVaultScanCancelled(options.signal)
         noteAiVaultScanReading(options.signal)
 
+        const scopeOnly = scopeOnlyScan(options)
         const parsedSessions = await parseSessionCandidates({
           candidates: parseCandidates,
-          limit,
+          // Scope-only parses the whole window: its in-scope rows must not depend on bucket agents' rows.
+          limit: scopeOnly ? Number.POSITIVE_INFINITY : limit,
           platform,
           executionHostId,
           issues,
@@ -91,16 +99,23 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
           settled: (candidate, parsed) => workload?.settle(candidate, 'global', parsed)
         })
 
-        const cappedSessions = dedupeScannedSessions(parsedSessions)
-          .sort((left, right) => sessionSortTime(right) - sessionSortTime(left))
-          .slice(0, limit)
+        const recentSessions = dedupeScannedSessions(parsedSessions).sort(
+          (left, right) => sessionSortTime(right) - sessionSortTime(left)
+        )
+        // Scope-only keeps the recency pass for agents without cwd buckets, but returns only its in-scope rows.
+        const inScope = scopeOnly ? createAiVaultScopeCwdMatcher(options.scopePaths ?? []) : null
+        const cappedSessions = inScope
+          ? recentSessions.filter((session) => aiVaultSessionInScope(inScope, session))
+          : recentSessions.slice(0, limit)
 
         const scopeSessions = await scanInScopeSessions({
           inventory,
           discoveries,
           options,
           limit,
-          alreadyParsedFilePaths: new Set(cappedSessions.map((session) => session.filePath)),
+          alreadyParsedFilePaths: new Set(
+            (scopeOnly ? recentSessions : cappedSessions).map((session) => session.filePath)
+          ),
           platform,
           executionHostId,
           issues,
@@ -127,7 +142,10 @@ async function scanAiVaultSessionStores(options: AiVaultScanOptions): Promise<Ai
         span.setAttribute('issues', issues.length)
 
         return {
-          sessions: mergeSessions(cappedSessions, scopeSessions),
+          sessions: withAntigravityArtifactPaths(
+            mergeSessions(cappedSessions, scopeSessions),
+            discoveries
+          ),
           issues: issues.map((issue) => ({ executionHostId, ...issue })),
           scannedAt: new Date().toISOString()
         }
