@@ -4,6 +4,8 @@ import {
 } from '../../../../shared/rpc-contract/speech-params'
 import type { DictationInsertionTarget } from './dictation-insertion-target'
 import type { DictationTranscriptDelivery } from './dictation-transcript-delivery'
+import { trimLandedOverlap } from './dictation-retry-overlap'
+import { showRetryOverlapUnmatchedToast } from './dictation-toasts'
 
 // The cloud cap, ten minutes, is about 38 MB of 16 kHz float audio.
 const MAX_KEPT_SAMPLES = CLOUD_DICTATION_MAX_SECONDS * DICTATION_SAMPLE_RATE
@@ -83,16 +85,31 @@ function* joinIntoBlocks(chunks: Float32Array[]): Generator<Float32Array> {
   }
 }
 
-/** Runs a kept recording through a new speech session; `finish` stops it and waits for its words to land. */
+// The retry repeats words that landed before the failure; only what follows them is typed.
+function insertAfterLanded(recording: DictationKeptRecording, retried: string[]): void {
+  const { text, matched } = trimLandedOverlap(recording.deliver.landedText(), retried.join(' '))
+  if (text) {
+    recording.deliver(text, recording.target)
+  }
+  if (!matched) {
+    showRetryOverlapUnmatchedToast()
+  }
+}
+
+/** Runs a kept recording through a new speech session; `finish` stops it and waits for its words. */
 export async function transcribeKeptRecording(args: {
   recording: DictationKeptRecording
   modelId: string
   sessionId: string
   isCurrent: () => boolean
-  finish: () => Promise<void>
+  /** Where the retry's finals go until it ends. */
+  routeFinals: (sink: (text: string) => void) => void
+  finish: (beforeEnd: () => void) => Promise<void>
   fail: (message: string) => void
 }): Promise<void> {
   const { sessionId, isCurrent } = args
+  const retried: string[] = []
+  args.routeFinals((text) => retried.push(text))
   try {
     await window.api.speech.startDictation(args.modelId, undefined, sessionId)
     for (const block of joinIntoBlocks(args.recording.chunks)) {
@@ -105,7 +122,7 @@ export async function transcribeKeptRecording(args: {
       await window.api.speech.cancelDictation(sessionId).catch(() => undefined)
       return
     }
-    await args.finish()
+    await args.finish(() => insertAfterLanded(args.recording, retried))
   } catch (error) {
     if (!isCurrent()) {
       return

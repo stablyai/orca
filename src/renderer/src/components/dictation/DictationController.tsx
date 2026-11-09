@@ -102,7 +102,7 @@ export function DictationController() {
   }, [])
 
   const finishDictationSession = useCallback(
-    async ({ run, sessionId }: DictationSession) => {
+    async ({ run, sessionId }: DictationSession, beforeEnd?: () => void) => {
       if (sessionId === null) {
         return
       }
@@ -124,6 +124,7 @@ export function DictationController() {
       if (!sessionRef.current.heardFinalText && getCapturedChunkCount() > 0) {
         showNoSpeechDetectedToast()
       }
+      beforeEnd?.()
       dispatch({ type: 'ended' })
     },
     [dispatch, finishCapture, getCapturedChunkCount]
@@ -315,13 +316,15 @@ export function DictationController() {
     if (sessionId === null) {
       return
     }
-    deliverRef.current = (text) => kept.deliver(text, kept.target)
     await transcribeKeptRecording({
       recording: kept,
       modelId,
       sessionId,
       isCurrent: () => sessionRef.current.run === run,
-      finish: () => finishDictationSession(sessionRef.current),
+      routeFinals: (sink) => {
+        deliverRef.current = sink
+      },
+      finish: (beforeEnd) => finishDictationSession(sessionRef.current, beforeEnd),
       fail: (message) =>
         showFailure(dictationStartFailureKind(message) ?? 'transcribe', () =>
           showDictationStartErrorToast(message)

@@ -17395,7 +17395,8 @@
           "micFallback": "Selected microphone unavailable. Using system default.",
           "micDisconnected": "Microphone disconnected. Dictation stopped.",
           "cloudLimitReached": "Dictation stopped at the 10-minute cloud limit.",
-          "stoppedAfterSilence": "Stopped after a minute of silence"
+          "stoppedAfterSilence": "Stopped after a minute of silence",
+          "retryUnmatched": "Retry couldn't tell which words were already typed, so it inserted them all."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Dictation couldn't be inserted, so it was copied to the clipboard.",

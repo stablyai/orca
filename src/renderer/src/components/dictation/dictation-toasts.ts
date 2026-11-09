@@ -89,6 +89,15 @@ export function showCloudLimitToast(): void {
   )
 }
 
+export function showRetryOverlapUnmatchedToast(): void {
+  toast.message(
+    translate(
+      'auto.components.dictation.DictationController.retryUnmatched',
+      "Retry couldn't tell which words were already typed, so it inserted them all."
+    )
+  )
+}
+
 export function showNoSpeechDetectedToast(): void {
   toast.message(
     translate('auto.components.dictation.DictationController.5d2c3e7ae3', 'No speech detected.')
