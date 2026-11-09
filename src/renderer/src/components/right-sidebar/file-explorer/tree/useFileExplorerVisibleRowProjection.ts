@@ -14,6 +14,7 @@ import {
   type FileExplorerNameFilterProjectionSource
 } from './file-explorer-name-filter-projection'
 import { useFileExplorerIgnoredPaths } from './use-file-explorer-ignored-paths'
+import { createCompactFileExplorerRowProjection } from './file-explorer-compact-folders'
 
 const EMPTY_RELATIVE_PATHS: string[] = []
 
@@ -23,6 +24,10 @@ type VisibleFileExplorerRowProjectionOptions = {
   nameFilterCollapsedPaths?: ReadonlySet<string> | null
   showDotfiles: boolean
   showGitIgnoredFiles: boolean
+  /** Folds each folder whose only visible child is a folder into that child's row. */
+  compactFolders?: boolean
+  /** Ends a folded chain at this folder: an open create input belongs under its own row. */
+  compactFoldersStopPath?: string | null
 }
 
 type VisibleFileExplorerRowProjectionInput = {
@@ -83,7 +88,9 @@ export function createVisibleFileExplorerRowProjection(
       showDotfiles: options.showDotfiles,
       showGitIgnoredFiles: options.showGitIgnoredFiles,
       worktreePath,
-      displayRootPath: displayRootPath ?? worktreePath
+      displayRootPath: displayRootPath ?? worktreePath,
+      compactFolders: options.compactFolders,
+      compactFoldersStopPath: options.compactFoldersStopPath
     })
   }
 
@@ -114,6 +121,14 @@ export function createVisibleFileExplorerRowProjection(
     visitChildren(displayRootPath)
   }
 
+  if (options.compactFolders) {
+    return createCompactFileExplorerRowProjection(
+      visibleFlatRows,
+      // Folding a failed read away would hide its error row.
+      (row) =>
+        row.path === options.compactFoldersStopPath || dirCache[row.path]?.error !== undefined
+    )
+  }
   return createFileExplorerRowProjectionFromParts(visibleFlatRows, rowsByPath)
 }
 
@@ -154,7 +169,8 @@ export function useFileExplorerVisibleRowProjection(
   showDotfiles: boolean,
   nameFilter: FileExplorerNameFilterProjectionSource | null,
   nameFilterCollapsedPaths: ReadonlySet<string> | null = null,
-  displayRootPath: string | null = worktreePath
+  displayRootPath: string | null = worktreePath,
+  compactFoldersStopPath: string | null = null
 ): {
   rowProjection: FileExplorerRowProjection
   ignoredByRelativePath: Set<string>
@@ -165,6 +181,8 @@ export function useFileExplorerVisibleRowProjection(
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
   const showGitIgnoredFiles = settings?.showGitIgnoredFiles ?? true
+  const compactFolders = settings?.fileExplorerCompactFolders === true
+  const compactStopPath = compactFolders ? compactFoldersStopPath : null
   const rebuiltRelativePaths = useMemo(
     () =>
       activeRepoSupportsGit
@@ -217,7 +235,9 @@ export function useFileExplorerVisibleRowProjection(
           nameFilter,
           nameFilterCollapsedPaths,
           showDotfiles,
-          showGitIgnoredFiles
+          showGitIgnoredFiles,
+          compactFolders,
+          compactFoldersStopPath: compactStopPath
         }
       ),
     [
@@ -228,6 +248,8 @@ export function useFileExplorerVisibleRowProjection(
       nameFilterCollapsedPaths,
       showDotfiles,
       showGitIgnoredFiles,
+      compactFolders,
+      compactStopPath,
       worktreePath,
       displayRootPath
     ]
