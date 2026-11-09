@@ -117,14 +117,19 @@ export function releaseWouldCoastARow(scope: TerminalDocumentScope) {
     }
     carry += v * COAST_FRAME_MS
   }
-  // The release inherits the gesture’s uncommitted sub-row offset; only the part in the flick’s direction reaches a row.
-  const pending =
-    (shouldRouteScrollToTerminalInput(scope)
-      ? scope.touchGesture.accumDelta
-      : scope.pendingNormalScrollDeltaY - scope.smoothScrollOffsetY) *
-    Math.sign(scope.touchGesture.velY)
+  // The release inherits the gesture’s uncommitted sub-row offset, signed into the flick’s direction so
+  // opposing movement reduces the predicted carry instead of being clipped to zero.
+  // A queued frame whose deltas netted to zero is a reset, not an offset against the visible row.
+  const queuedFrameReset =
+    scope.normalScrollFrameId !== null && scope.pendingNormalScrollDeltaY === 0
+  const rawPending = shouldRouteScrollToTerminalInput(scope)
+    ? scope.touchGesture.accumDelta
+    : queuedFrameReset
+      ? 0
+      : scope.pendingNormalScrollDeltaY - scope.smoothScrollOffsetY
+  const pending = rawPending * Math.sign(scope.touchGesture.velY)
   const effectiveCellH = getCellHeight(scope) * getTotalScale(scope)
-  return effectiveCellH > 0 && carry + Math.max(0, pending) >= effectiveCellH
+  return effectiveCellH > 0 && carry + pending >= effectiveCellH
 }
 
 export function resetSmoothScrollOffset(scope: TerminalDocumentScope) {
