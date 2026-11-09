@@ -29,6 +29,19 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
     return this.getState()
   }
 
+  /** The home and auth provenance the selected host-runtime reading was taken under. */
+  usageReadingAccount(provider: 'claude' | 'codex'): { home: string; provenance: string } | null {
+    return this.usageReadingAccounts[provider] ?? null
+  }
+
+  /** An automatic, non-forced read of one provider that waits out its Retry-After. */
+  requestUsageReading(provider: 'claude' | 'codex'): void {
+    if (this.isRetryAfterActive(this.state[provider])) {
+      return
+    }
+    void (provider === 'claude' ? this.fetchClaudeOnly() : this.fetchCodexOnly()).catch(() => {})
+  }
+
   async refreshGrok(): Promise<RateLimitState> {
     await this.fetchGrokOnly({ force: true })
     return this.getState()

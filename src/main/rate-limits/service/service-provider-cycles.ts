@@ -71,6 +71,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
 
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
+      this.rememberUsageReadingAccount('codex', codexTarget, codexHomePath, codexProvenance)
     }
     this.updateState({
       ...this.state,
@@ -136,6 +137,8 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
 
     if (shouldApplyClaude) {
       this.trackActiveFailureStreak('claude', claude)
+      const home = claudeAuthPreparation?.configDir
+      this.rememberUsageReadingAccount('claude', claudeTarget, home, claudeProvenance)
     }
     this.updateState({
       ...this.state,

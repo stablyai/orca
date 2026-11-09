@@ -26,6 +26,7 @@ import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/li
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionAccountHome } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
+import type { UsageLimitAccountUsage } from '../recovery/structured-agent-session-usage-limit-account-hold'
 import type {
   AgentSessionNamingError,
   AgentSessionStatusSummary
@@ -189,6 +190,11 @@ export type StructuredAgentSessionHostDeps = {
     isEnabled: () => boolean
     subscribe: (changed: () => void) => () => void
     isWorkspaceAsleep: (workspaceId: string) => boolean
+    /** The polled usage of the account at `home`; undefined when no reading Orca has describes it. */
+    accountUsage?: (
+      provider: AgentSessionRecord['provider'],
+      home: AgentSessionAccountHome
+    ) => Promise<UsageLimitAccountUsage | undefined>
   }
   startupLimits?: Partial<StructuredAgentSessionStartupLimits>
   /** Absent means no dispatch ownership. */

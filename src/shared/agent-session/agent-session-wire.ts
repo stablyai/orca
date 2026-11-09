@@ -193,6 +193,8 @@ export type AgentSessionStatusSummary = {
   usageLimitContinue?: {
     turnItemId: string
     resetsAt: number
+    /** The later reset the account still shows spent, which Orca waits for; absent: `resetsAt`. */
+    continueAt?: number
     state: 'scheduled' | 'cancelled' | 'failed' | 'off'
   }
   rewindBlockedReason?: AgentSessionRewindReason

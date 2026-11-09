@@ -30,6 +30,7 @@ export type FetchAllCyclePrepared = {
   codexFetchGated: boolean
   codexStateBeforeFetch: ProviderRateLimits | null
   codexProvenance: string | null
+  codexHomePath: string | null
   codexGeneration: number
   opencodeConfigChanged: boolean
   opencodeGeneration: number
@@ -297,6 +298,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       codexFetchGated,
       codexStateBeforeFetch,
       codexProvenance,
+      codexHomePath,
       codexGeneration,
       opencodeConfigChanged,
       opencodeGeneration,

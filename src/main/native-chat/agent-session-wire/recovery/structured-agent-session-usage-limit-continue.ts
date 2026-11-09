@@ -1,9 +1,6 @@
 import { AgentSessionPreDispatchError } from '../operations/structured-agent-session-operation-settlement'
 import { randomUUID } from 'node:crypto'
-import {
-  isNativeChatUsageLimitCutSchedulable,
-  NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE
-} from '../../../../shared/native-chat/native-chat-usage-limit-cut'
+import { NATIVE_CHAT_USAGE_LIMIT_CONTINUE_MESSAGE } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import {
   USAGE_LIMIT_CONTINUE_CHAIN_LIMIT,
   usageLimitContinueIdentity as identity,
@@ -13,15 +10,16 @@ import {
 } from './structured-agent-session-usage-limit-chain'
 import { structuredAgentSessionMessageSendMutation } from '../../../../shared/agent-session/requests/structured-agent-session-send-mutation'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session/agent-session-wire'
-import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
+import type { StructuredAgentSessionHostDeps as HostDeps } from '../host/structured-agent-session-host-types'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
 import type { sendStructuredAgentSessionTurn } from '../operations/structured-agent-session-host-mutations'
 import { RestartContinuationSupersededError } from './structured-agent-session-restart-continuation'
+import { UsageLimitAccountHolds } from './structured-agent-session-usage-limit-account-hold'
 
 type Cut = HostUsageLimitCut & { resetsAt: number; turnEndedAt: number }
 type Attempt = { identity: string; count: number; at: number; unconfirmed?: boolean }
 type Deps = {
-  host: Pick<StructuredAgentSessionHostDeps, 'usageLimitAutoContinue' | 'logger'> & {
+  host: Pick<HostDeps, 'usageLimitAutoContinue' | 'logger' | 'launchAccountHome'> & {
     store: Pick<
       AgentSessionRecordStore,
       | 'listVisibleSessionIds'
@@ -53,6 +51,7 @@ export class StructuredAgentSessionUsageLimitContinue {
   /** Pass of each chat's last failed history read; failed reads wait behind unread chats. */
   private readonly coldFailures = new Map<string, number>()
   private readonly attempts = new Map<string, Attempt>()
+  private readonly holds = new UsageLimitAccountHolds()
   private passes = 0
 
   constructor(private readonly deps: Deps) {}
@@ -110,6 +109,7 @@ export class StructuredAgentSessionUsageLimitContinue {
     this.coldCuts.clear()
     this.coldFailures.clear()
     this.attempts.clear()
+    this.holds.clear()
   }
 
   forget = (id: string): void => {
@@ -131,21 +131,28 @@ export class StructuredAgentSessionUsageLimitContinue {
   readState = (id: string): AgentSessionStatusSummary['usageLimitContinue'] => {
     const cut = this.readCut(id)
     // A cut Orca can never continue shows only the manual actions, whatever the setting.
-    if (!cut || !isNativeChatUsageLimitCutSchedulable(cut, this.deps.now())) {
+    if (!cut || !this.holds.schedulable(id, cut, this.deps.now())) {
       return undefined
     }
     const cancel = this.deps.host.store.getRecord(id)?.usageLimitContinueCancel
     const attempt = this.attempts.get(id)
+    const hold = this.holds.verdict(id, cut, this.deps.now())
     const state =
       cancel?.turnItemId === cut.turnItemId && cancel.resetsAt === cut.resetsAt
         ? 'cancelled'
         : cut.chain >= USAGE_LIMIT_CONTINUE_CHAIN_LIMIT ||
+            hold.unknownReset ||
             (attempt?.identity === identity(cut) && (attempt.count >= 5 || attempt.unconfirmed))
           ? 'failed'
           : this.eligible(id, cut)
             ? 'scheduled'
             : 'off'
-    return { turnItemId: cut.turnItemId, resetsAt: cut.resetsAt, state }
+    return {
+      turnItemId: cut.turnItemId,
+      resetsAt: cut.resetsAt,
+      ...(hold.resetsAt > cut.resetsAt ? { continueAt: hold.resetsAt } : {}),
+      state
+    }
   }
 
   private eligible(id: string, cut: HostUsageLimitCut): cut is Cut {
@@ -154,7 +161,7 @@ export class StructuredAgentSessionUsageLimitContinue {
       !this.disposed &&
       cut.chain < USAGE_LIMIT_CONTINUE_CHAIN_LIMIT &&
       this.deps.host.usageLimitAutoContinue?.isEnabled() === true &&
-      isNativeChatUsageLimitCutSchedulable(cut, this.deps.now()) &&
+      this.holds.schedulable(id, cut, this.deps.now()) &&
       record !== null &&
       record.location.executionHostId === this.deps.host.store.hostId &&
       !this.deps.host.usageLimitAutoContinue?.isWorkspaceAsleep(record.location.workspaceId) &&
@@ -195,6 +202,7 @@ export class StructuredAgentSessionUsageLimitContinue {
           }
         }
       }
+      this.holds.retain(shown)
       // Visibility and workspace sleep can change without a journal or settings commit.
       this.publishScheduled()
       this.readColdCuts(visible)
@@ -212,8 +220,12 @@ export class StructuredAgentSessionUsageLimitContinue {
         if (!cut || !this.eligible(id, cut) || attempt?.unconfirmed || (attempt?.count ?? 0) >= 5) {
           continue
         }
+        // Only a reading taken after the cut's reset counts, so attribution waits for it.
+        if (this.deps.now() >= cut.resetsAt) {
+          await this.holds.attribute(id, this.deps.host)
+        }
         const retryAt = attempt ? attempt.at + 60_000 * 2 ** Math.max(0, attempt.count - 1) : 0
-        if (this.deps.now() >= Math.max(cut.resetsAt + 15_000, retryAt)) {
+        if (this.holds.ready(id, cut, this.deps.now(), retryAt)) {
           due.push({ id, cut, at: attempt?.at ?? 0 })
         }
       }
@@ -277,11 +289,12 @@ export class StructuredAgentSessionUsageLimitContinue {
         }),
         beforeRun: () => {
           const current = this.readCut(id)
+          // The reading may have moved since the pass: the account's later reset still holds the send.
           if (
             !current ||
             identity(current) !== identity(cut) ||
             !this.eligible(id, current) ||
-            this.deps.now() < cut.resetsAt + 15_000
+            !this.holds.ready(id, current, this.deps.now())
           ) {
             throw new RestartContinuationSupersededError()
           }
