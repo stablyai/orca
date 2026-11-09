@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
-import type { RuntimeStatus } from '../../../../../shared/runtime-session-contracts'
+import { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
 import type { PeerMailConversationRow } from '../../db/federation/peer-mail-store'
 import { generateId } from '../../db/generated-id'
@@ -18,6 +18,7 @@ export type PeerMailRuntime = Pick<
 >
 
 const NOTHING_SENT = { effectsApplied: false } as const
+const RuntimeStatusCapabilities = z.object({ capabilities: z.array(z.string()).optional() })
 const DELIVER_TIMEOUT_MS = 15_000
 
 /** "term_9f3c on Jinwoo's Mac": who sent it, and the Orca server it came from. */
@@ -44,15 +45,20 @@ export async function requirePeerMailServer(
   selector: string
 ): Promise<OrchestrationWorkerServer> {
   const server = runtime.resolveOrchestrationWorkerServer(selector)
-  const status = (await runtime.callOrchestrationWorkerServer(
-    server.environmentId,
-    'status.get',
-    undefined,
-    DELIVER_TIMEOUT_MS,
-    undefined,
-    { expectedEnvironmentPairingRevision: server.pairingRevision }
-  )) as RuntimeStatus
-  if (!status.capabilities?.includes(ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY)) {
+  const status = RuntimeStatusCapabilities.safeParse(
+    await runtime.callOrchestrationWorkerServer(
+      server.environmentId,
+      'status.get',
+      undefined,
+      DELIVER_TIMEOUT_MS,
+      undefined,
+      { expectedEnvironmentPairingRevision: server.pairingRevision }
+    )
+  )
+  if (
+    !status.success ||
+    !status.data.capabilities?.includes(ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY)
+  ) {
     throw new OrchestrationError(
       'peer_mail_unsupported',
       `Server ${server.name} runs an older Orca that cannot receive agent mail from another server. Update Orca on ${server.name}, then send again. Nothing was sent.`,

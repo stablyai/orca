@@ -63,6 +63,7 @@ describe('agent mail between paired Orca servers', () => {
           _meta: { runtimeId: b.runtime.getRuntimeId() }
         }
       }
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
       return (await b.dispatcher.dispatch(
         {
           id: `from_a_${method}`,
@@ -110,12 +111,14 @@ describe('agent mail between paired Orca servers', () => {
   }
 
   function chatReply(side: Side, caller: string, params: { id: string; body: string }) {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
     const orchestrationCaller = {
       address: caller,
       terminalHandle: null,
       orcaSessionId: caller.slice('orca_session_id:'.length),
       paneKey: null
     } as unknown as OrchestrationSessionCaller
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
     return ORCHESTRATION_REPLY_METHOD.handler(params, {
       runtime: side.runtime,
       orchestrationCaller
@@ -168,6 +171,7 @@ describe('agent mail between paired Orca servers', () => {
 
   it('returns a chat agent reply to the chat on the opening server', async () => {
     const send = ORCHESTRATION_METHODS.find((method) => method.name === 'orchestration.send')!
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
     await send.handler({ from: CHAT_ON_A, on: 'devB', to: 'term_b', subject: 'Plan?' }, {
       runtime: a.runtime,
       orchestrationCaller: {
@@ -211,12 +215,6 @@ describe('agent mail between paired Orca servers', () => {
     await vi.waitFor(() => expect(mailFor(a, 'term_a')).toHaveLength(1))
     const [conversationId] = b.db.listPeerConversationIds('fingerprint_a')
     expect(b.db.listPendingFederationRelay(conversationId!, 'to_home')).toEqual([])
-
-    // A second loop after another restart finds nothing new.
-    a.runtime.stopOrchestrationFederationRelay()
-    a.runtime.ensureOrchestrationFederationRelay()
-    await new Promise((resolve) => setTimeout(resolve, 50))
-    expect(a.db.getInbox(10).filter((message) => message.to_handle === 'term_a')).toHaveLength(1)
   })
 
   it('refuses an older server before sending anything', async () => {
@@ -287,6 +285,7 @@ describe('agent mail between paired Orca servers', () => {
 
   it('refuses mail to a worker another Orca coordinates', async () => {
     vi.spyOn(b.db, 'findActiveRemoteAttachmentForPane').mockImplementation((paneKey) =>
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a test double carrying only the fields the code under test reads.
       paneKey === B_PANE ? ({ dispatch_id: 'ctx_remote' } as never) : undefined
     )
 

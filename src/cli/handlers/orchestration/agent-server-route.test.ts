@@ -14,6 +14,7 @@ vi.mock('../../runtime-client', async (importOriginal) => {
 })
 
 function ctx(command: string[], flags: [string, string | boolean][]) {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a handler context with only the fields this function reads.
   return {
     flags: new Map(flags),
     client: { isRemote: true },
@@ -83,6 +84,7 @@ describe('send --on from an older Orca', () => {
     const call = vi
       .fn()
       .mockResolvedValue({ result: { capabilities: ['orchestration.contract.v1'] } })
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a handler context with only the fields this function reads.
     const context = {
       flags: new Map([['on', 'devB']]),
       client: { call },
