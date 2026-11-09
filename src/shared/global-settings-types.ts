@@ -86,6 +86,12 @@ export type GlobalSettings = GlobalSettingsBase & {
   editorMinimapEnabled: boolean
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
+  /**
+   * In-editor keybinding preset for the Monaco file editor. Defaults to `'default'` (standard
+   * bindings); `'vim'` enables modal editing via monaco-vim. Modeled as a union so further
+   * presets can be added without a schema change.
+   */
+  editorKeybindings?: 'default' | 'vim'
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
   /** View newly opened Markdown files start in (see markdown-default-view-mode.ts); absent = Rich. */

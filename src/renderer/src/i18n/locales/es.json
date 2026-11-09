@@ -13103,6 +13103,12 @@
           "shownPluginCount_other": "{{count}} complementos coincidentes mostrados, incluido este",
           "samePublisher": "Más elementos incluidos como {{value0}}",
           "shownPluginCount_many": "{{count}} complementos coincidentes mostrados, incluido este"
+        },
+        "EditorKeybindingsSetting": {
+          "78648745bc": "Atajos del editor",
+          "1b23c01cc6": "Predeterminado",
+          "77674e2d1e": "Vim",
+          "a30ca600ee": "Usa los atajos modales de Vim en el editor de código en lugar de la edición estándar."
         }
       },
       "right": {

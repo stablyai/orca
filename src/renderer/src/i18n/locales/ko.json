@@ -12816,6 +12816,12 @@
           "shownPluginCount_one": "이 플러그인을 포함해 일치하는 플러그인 {{count}}개 표시 중",
           "shownPluginCount_other": "이 플러그인을 포함해 일치하는 플러그인 {{count}}개 표시 중",
           "samePublisher": "{{value0}}(으)로 등록된 다른 플러그인"
+        },
+        "EditorKeybindingsSetting": {
+          "78648745bc": "편집기 키 바인딩",
+          "1b23c01cc6": "기본값",
+          "77674e2d1e": "Vim",
+          "a30ca600ee": "표준 편집 대신 코드 편집기에서 Vim 모달 키 바인딩을 사용합니다."
         }
       },
       "right": {

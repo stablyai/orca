@@ -12816,6 +12816,12 @@
           "shownPluginCount_one": "显示 {{count}} 个匹配的插件，包括此插件",
           "shownPluginCount_other": "显示 {{count}} 个匹配的插件，包括此插件",
           "samePublisher": "更多列为 {{value0}} 的插件"
+        },
+        "EditorKeybindingsSetting": {
+          "78648745bc": "编辑器按键绑定",
+          "1b23c01cc6": "默认",
+          "77674e2d1e": "Vim",
+          "a30ca600ee": "在代码编辑器中使用 Vim 模式按键绑定，而非标准编辑方式。"
         }
       },
       "right": {

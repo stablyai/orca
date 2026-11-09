@@ -35,6 +35,11 @@ import {
 } from '@/lib/monaco-languages/plugin-syntax-editor-options'
 import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 import { useEditorModelRekeyCarry } from './model-lifetime/identity/editor-model-rekey-carry'
+import { installMonacoVimMode } from './monaco-vim-mode'
+import { VimCheatsheet } from './VimCheatsheet'
+
+/** Reserved height (px) for the Vim status bar row; keep in sync with the render class. */
+const VIM_STATUS_BAR_HEIGHT = 22
 
 type MonacoEditorProps = {
   fileId: string
@@ -88,6 +93,10 @@ export default function MonacoEditor({
 }: MonacoEditorProps): React.JSX.Element {
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const editorContainerRef = useRef<HTMLDivElement | null>(null)
+  // Why: the editor + overlays live in their own flex child so the Vim status bar can occupy a
+  // real row below the editor instead of overlapping it.
+  const editorBodyRef = useRef<HTMLDivElement | null>(null)
+  const vimStatusBarRef = useRef<HTMLDivElement | null>(null)
   const [mountedEditor, setMountedEditor] = useState<editor.IStandaloneCodeEditor | null>(null)
   const [autoHeightContentHeight, setAutoHeightContentHeight] = useState<number | null>(null)
   const language = usePluginSyntaxLanguage(filePath, coreLanguage)
@@ -101,9 +110,10 @@ export default function MonacoEditor({
   const { setupCopy, toastNode } = useContextualCopySetup()
   // Cancel pending throttled writes before snapshotting final scroll on unmount.
   const scrollThrottleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const propsRef = useRef({ relativePath, language, onSave, onContentChange })
-  // Refresh during render so event handlers cannot read one-render-stale props.
-  propsRef.current = { relativePath, language, onSave, onContentChange }
+  const closeFile = useAppStore((s) => s.closeFile)
+  const propsRef = useRef({ relativePath, language, onSave, onContentChange, fileId, closeFile })
+  // Why: assign during render so the ref is current before any handler reads it (a useEffect would leave a one-render stale window).
+  propsRef.current = { relativePath, language, onSave, onContentChange, fileId, closeFile }
   const readOnlyRef = useRef(readOnly)
   readOnlyRef.current = readOnly
   const contentSyncModeRef = useRef<MonacoContentSyncMode>('undoable')
@@ -128,6 +138,10 @@ export default function MonacoEditor({
     [filePath, modelOwnerKey]
   )
   useEditorModelRekeyCarry(fileId, modelUri)
+  // Why: Vim's modal editing and status bar only apply to the editable, full-height file editor —
+  // not read-only diffs or the auto-height inline editors used for previews.
+  const vimModeEnabled =
+    (settings?.editorKeybindings ?? 'default') === 'vim' && !readOnly && !autoHeight
   const estimatedAutoHeight = useMemo(() => {
     if (!autoHeight) {
       return null
@@ -197,6 +211,38 @@ export default function MonacoEditor({
       readOnly
     })
   }, [typographyOptions, editorWordWrap, readOnly])
+
+  // Why: install Vim keybindings on the mounted editor and tear them down when the setting flips
+  // or the editor unmounts, so toggling never leaks a stale adapter. monaco-vim loads lazily, so
+  // guard against the editor unmounting before the import settles.
+  useEffect(() => {
+    const ed = mountedEditor
+    const statusNode = vimStatusBarRef.current
+    if (!ed || !vimModeEnabled || !statusNode) {
+      return
+    }
+    let cancelled = false
+    let controller: { dispose: () => void } | null = null
+    void installMonacoVimMode(ed, statusNode, {
+      onWrite: () => propsRef.current.onSave(ed.getValue()),
+      onClose: () => propsRef.current.closeFile(propsRef.current.fileId),
+      editor: ed
+    })
+      .then((installed) => {
+        if (cancelled) {
+          installed.dispose()
+        } else {
+          controller = installed
+        }
+      })
+      .catch((error) => {
+        console.error('Failed to enable Vim keybindings', error)
+      })
+    return () => {
+      cancelled = true
+      controller?.dispose()
+    }
+  }, [mountedEditor, vimModeEnabled])
 
   const decorations = useMonacoEditorDecorations({
     editorRef,
@@ -278,73 +324,96 @@ export default function MonacoEditor({
   return (
     <div
       ref={editorContainerRef}
-      className={autoHeight ? 'relative' : 'relative h-full'}
+      data-orca-file-editor
+      // Why: a flex column lets the Vim status bar occupy a real row below the editor instead of
+      // overlaying it. autoHeight editors are content-sized (and never show the bar), so they keep
+      // the plain block layout.
+      className={autoHeight ? 'relative' : 'flex h-full flex-col'}
       style={renderedEditorHeight === null ? undefined : { height: renderedEditorHeight }}
     >
-      <MonacoMarkdownAnnotationOverlay
-        shouldShowMarkdownAnnotations={annotations.shouldShowMarkdownAnnotations}
-        commentPopover={annotations.commentPopover}
-        setCommentPopover={annotations.setCommentPopover}
-        selectionAnnotationTarget={annotations.selectionAnnotationTarget}
-        setSelectionAnnotationTarget={annotations.setSelectionAnnotationTarget}
-        onSubmitMarkdownComment={annotations.handleSubmitMarkdownComment}
-      />
-      <Editor
-        key={modelUri}
-        height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}
-        language={language}
-        // Use defaultValue because Orca owns later content sync; controlled values would duplicate setValue.
-        defaultValue={content}
-        theme={monacoTheme}
-        onMount={handleMount}
-        options={{
-          dropIntoEditor: { enabled: false },
-          // This global option also affects diff and Peek; it is defense in depth, not protection from Monarch embedding recursion below the cap.
-          maxTokenizationLineLength: MAX_TOKENIZATION_LINE_LENGTH,
-          // Monaco 0.55 forcibly disables diff sub-editor minimaps; only file editors honor this setting.
-          minimap: { enabled: settings?.editorMinimapEnabled ?? false },
-          scrollBeyondLastLine: false,
-          ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
-          ...buildFileEditorWordWrapOptions(editorWordWrap),
-          ...typographyOptions,
-          lineNumbers: 'on',
-          renderLineHighlight: 'line',
-          automaticLayout: true,
-          unicodeHighlight: buildEditorUnicodeHighlightOptions(language),
-          tabSize: 2,
-          readOnly,
-          scrollbar: autoHeight
-            ? {
-                vertical: autoHeightUsesInternalScroll ? 'auto' : 'hidden',
-                handleMouseWheel: autoHeightUsesInternalScroll
-              }
-            : undefined,
-          smoothScrolling: true,
-          cursorSmoothCaretAnimation: 'off',
-          padding: { top: 0 },
-          find: monacoFindOptions,
-          // Monaco owns rendered lines, so its selection clipboard must enforce the app opt-out independently of the global DOM hook.
-          selectionClipboard: settings?.primarySelectionMiddleClickPaste ?? isLinuxUserAgent()
-        }}
-        // Build a model URI because the React wrapper’s Uri.parse treats Windows drive letters as schemes.
-        path={modelUri}
-        // Orca owns cursor/scroll restoration; disable the wrapper’s competing view-state map.
-        saveViewState={false}
-        keepCurrentModel
-      />
+      <div ref={editorBodyRef} className={autoHeight ? 'relative' : 'relative min-h-0 flex-1'}>
+        <MonacoMarkdownAnnotationOverlay
+          shouldShowMarkdownAnnotations={annotations.shouldShowMarkdownAnnotations}
+          commentPopover={annotations.commentPopover}
+          setCommentPopover={annotations.setCommentPopover}
+          selectionAnnotationTarget={annotations.selectionAnnotationTarget}
+          setSelectionAnnotationTarget={annotations.setSelectionAnnotationTarget}
+          onSubmitMarkdownComment={annotations.handleSubmitMarkdownComment}
+        />
+        <Editor
+          key={modelUri}
+          height={renderedEditorHeight === null ? '100%' : `${renderedEditorHeight}px`}
+          language={language}
+          // Use defaultValue because Orca owns later content sync; controlled values would duplicate setValue.
+          defaultValue={content}
+          theme={monacoTheme}
+          onMount={handleMount}
+          options={{
+            dropIntoEditor: { enabled: false },
+            // This global option also affects diff and Peek; it is defense in depth, not protection from Monarch embedding recursion below the cap.
+            maxTokenizationLineLength: MAX_TOKENIZATION_LINE_LENGTH,
+            // Monaco 0.55 forcibly disables diff sub-editor minimaps; only file editors honor this setting.
+            minimap: { enabled: settings?.editorMinimapEnabled ?? false },
+            scrollBeyondLastLine: false,
+            ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
+            ...buildFileEditorWordWrapOptions(editorWordWrap),
+            ...typographyOptions,
+            lineNumbers: 'on',
+            renderLineHighlight: 'line',
+            automaticLayout: true,
+            unicodeHighlight: buildEditorUnicodeHighlightOptions(language),
+            tabSize: 2,
+            readOnly,
+            scrollbar: autoHeight
+              ? {
+                  vertical: autoHeightUsesInternalScroll ? 'auto' : 'hidden',
+                  handleMouseWheel: autoHeightUsesInternalScroll
+                }
+              : undefined,
+            smoothScrolling: true,
+            cursorSmoothCaretAnimation: 'off',
+            padding: { top: 0 },
+            find: monacoFindOptions,
+            // Monaco owns rendered lines, so its selection clipboard must enforce the app opt-out independently of the global DOM hook.
+            selectionClipboard: settings?.primarySelectionMiddleClickPaste ?? isLinuxUserAgent()
+          }}
+          // Build a model URI because the React wrapper’s Uri.parse treats Windows drive letters as schemes.
+          path={modelUri}
+          // Orca owns cursor/scroll restoration; disable the wrapper’s competing view-state map.
+          saveViewState={false}
+          keepCurrentModel
+        />
 
-      {toastNode}
-      <MonacoGutterContextMenu
-        open={gutterMenuOpen}
-        onOpenChange={setGutterMenuOpen}
-        point={gutterMenuPoint}
-        line={gutterMenuLine}
-        selection={gutterMenuSelection}
-        fileId={fileId}
-        filePath={filePath}
-        relativePath={relativePath}
-        worktreeId={worktreeId}
-      />
+        {toastNode}
+        <MonacoGutterContextMenu
+          open={gutterMenuOpen}
+          onOpenChange={setGutterMenuOpen}
+          point={gutterMenuPoint}
+          line={gutterMenuLine}
+          selection={gutterMenuSelection}
+          fileId={fileId}
+          filePath={filePath}
+          relativePath={relativePath}
+          worktreeId={worktreeId}
+        />
+      </div>
+
+      {vimModeEnabled ? (
+        <div
+          // Why: the monaco-vim status node must stay a dedicated element the adapter owns, so the
+          // cheatsheet hint lives as a sibling in this row rather than inside the node React and
+          // monaco-vim would otherwise both mutate.
+          className="flex shrink-0 items-center gap-2 border-t border-border bg-editor-surface px-2"
+          style={{ height: VIM_STATUS_BAR_HEIGHT }}
+        >
+          <div
+            ref={vimStatusBarRef}
+            data-orca-vim-statusbar
+            className="min-w-0 flex-1 overflow-hidden font-mono text-xs text-muted-foreground"
+          />
+          <VimCheatsheet />
+        </div>
+      ) : null}
     </div>
   )
 }
