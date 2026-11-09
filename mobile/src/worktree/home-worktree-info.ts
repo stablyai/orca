@@ -31,11 +31,10 @@ export type HostWorktreeInfo = {
   hostId: string
   totalWorktrees: number
   activeCount: number
-  lastActiveWorktree: HomeWorktreeSummary | null
   /** Every agent from this connection's latest list read. */
-  agents?: HomeAgentEntry[]
+  agents?: readonly HomeAgentEntry[]
   /** The agents of a read the connection has since lost: what they were, not what they are. */
-  lastSeenAgents?: HomeAgentEntry[]
+  lastSeenAgents?: readonly HomeAgentEntry[]
   catalogUnavailable?: boolean
   // The counts are the last proven ones, kept across a failed refresh.
   staleCounts?: boolean
@@ -57,41 +56,41 @@ export function homeAgentEntries(worktrees: readonly HomeWorktreeSummary[]): Hom
   )
 }
 
-/** Agent states are live facts; a saved copy can't vouch for them, even as last seen. */
-export function withoutHomeAgentStates(info: HostWorktreeInfo): HostWorktreeInfo {
-  if (!info.agents && !info.lastSeenAgents) {
-    return info
-  }
-  const { agents: _agents, lastSeenAgents: _lastSeenAgents, ...rest } = info
-  return rest
+/** One desktop's counts read, as its card and the Agents list see it. */
+export type HomeWorktreeRead = {
+  data:
+    | { totalWorktrees: number; activeCount: number; agents: readonly HomeAgentEntry[] }
+    | undefined
+  dataUpdatedAt: number
+  // The latest read failed; counts it had stay, as stale ones.
+  failed: boolean
 }
 
-/** A dropped connection keeps its agents only as last seen; the reconnect read makes them live again. */
-export function withLastSeenHomeAgents(info: HostWorktreeInfo): HostWorktreeInfo {
-  if (!info.agents) {
-    return info
+/**
+ * A card's worktree info, or undefined while nothing is known. Agents read on this connection are live;
+ * older ones, from a lost connection or an earlier launch's store (which keeps none), are only last seen.
+ */
+export function homeWorktreeInfo(
+  hostId: string,
+  read: HomeWorktreeRead,
+  liveSince: number | undefined
+): HostWorktreeInfo | undefined {
+  const { data, failed } = read
+  if (!data) {
+    // Never claim a count the host has not proven (STA-3123).
+    return failed
+      ? { hostId, totalWorktrees: 0, activeCount: 0, catalogUnavailable: true }
+      : undefined
   }
-  const { agents, ...rest } = info
-  return { ...rest, lastSeenAgents: agents }
-}
-
-export function markHomeWorktreeCatalogUnavailable(
-  current: HostWorktreeInfo | undefined,
-  hostId: string
-): HostWorktreeInfo {
-  if (current?.catalogUnavailable) {
-    return current
-  }
-  if (current) {
-    // A dropped socket cannot disprove prior counts; retain them as stale.
-    return { ...current, catalogUnavailable: true, staleCounts: true }
-  }
+  const live = liveSince !== undefined && read.dataUpdatedAt >= liveSince
+  const agents = data.agents.length > 0 ? data.agents : undefined
   return {
     hostId,
-    totalWorktrees: 0,
-    activeCount: 0,
-    lastActiveWorktree: null,
-    catalogUnavailable: true
+    totalWorktrees: data.totalWorktrees,
+    activeCount: data.activeCount,
+    ...(live ? { agents: data.agents } : agents ? { lastSeenAgents: agents } : {}),
+    ...(failed ? { catalogUnavailable: true, staleCounts: true } : {}),
+    countsProvenAt: read.dataUpdatedAt
   }
 }
 

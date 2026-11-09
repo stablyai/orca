@@ -48,8 +48,17 @@ function hostQueryPersistOf(query: Query): HostQueryPersist<unknown> | undefined
 
 // Per world, the keys whose data came from the store and no read has replaced yet.
 const restoredKeys = new WeakMap<QueryClient, Set<string>>()
-// Per world, its store; absent in a document that keeps queries in memory only.
-const persistences = new WeakMap<QueryClient, HostQueryPersistence>()
+// Per world, a store per host: one in a page document, one per paired host in native Home. Absent keeps memory only.
+const persistences = new WeakMap<QueryClient, Map<string, HostQueryPersistence>>()
+
+function restoredKeysOf(queryClient: QueryClient): Set<string> {
+  let keys = restoredKeys.get(queryClient)
+  if (!keys) {
+    keys = new Set()
+    restoredKeys.set(queryClient, keys)
+  }
+  return keys
+}
 
 /**
  * Whether a key still holds what an earlier launch stored: shown, but possibly days old and unconfirmed by
@@ -75,7 +84,21 @@ export function restoreStoredHostQueries(
   queryClient: QueryClient,
   keys: readonly PersistedHostQueryKey[]
 ): Promise<void> {
-  return persistences.get(queryClient)?.restore(keys) ?? Promise.resolve()
+  const byHost = persistences.get(queryClient)
+  const hostIds = new Set(keys.map((key) => key.queryKey[1]))
+  return Promise.all(
+    [...hostIds].map((hostId) =>
+      byHost?.get(hostId)?.restore(keys.filter((key) => key.queryKey[1] === hostId))
+    )
+  ).then(() => undefined)
+}
+
+/** This world's store for one host, if it keeps one. */
+export function hostQueryPersistenceOf(
+  queryClient: QueryClient,
+  hostId: string
+): HostQueryPersistence | undefined {
+  return persistences.get(queryClient)?.get(hostId)
 }
 
 export type HostQueryPersistence = {
@@ -83,6 +106,19 @@ export type HostQueryPersistence = {
   restore(keys: readonly PersistedHostQueryKey[]): Promise<void>
   // Writes what is pending now; for hidden and page close.
   flush(): Promise<void>
+  // Stops writing this host's queries, as when the host is removed; writes already pending still flush.
+  stop(): void
+}
+
+// How long a first screen holds its render for stored data once everything else it waits on is ready.
+const FIRST_PAINT_STORE_WAIT_MS = 150
+
+/** Waits for the stored first screen, but never more than a short cap; a later answer still fills empty keys. */
+export function awaitFirstPaintRestore(restore: Promise<void>): Promise<void> {
+  return Promise.race([
+    restore.catch(() => undefined),
+    new Promise<void>((resolve) => setTimeout(resolve, FIRST_PAINT_STORE_WAIT_MS))
+  ])
 }
 
 // The boot read fetches every first-paint key in one store call; each key's later getItem takes its value once.
@@ -123,6 +159,8 @@ export function createHostQueryPersistence(
   queryClient: QueryClient,
   store: OrcaQueryStoreBackend
 ): HostQueryPersistence {
+  const byHost = persistences.get(queryClient) ?? new Map<string, HostQueryPersistence>()
+  persistences.set(queryClient, byHost)
   const primer = primedBackend(store)
   const storage = createOrcaQueryStorage(primer.backend)
   const persisters = new Map<string, ReturnType<typeof createFamilyPersister>>()
@@ -135,10 +173,9 @@ export function createHostQueryPersistence(
   // Keys a restore found empty: neither the screen's first observer nor a later restore reads them again.
   const missedAtBoot = new Set<string>()
   const triedOnMiss = new WeakSet<Query>()
-  const restored = new Set<string>()
+  const restored = restoredKeysOf(queryClient)
   // The key a restore is writing, so its own success leaves the mark.
   let applyingRestore: string | null = null
-  restoredKeys.set(queryClient, restored)
 
   function storedData(queryHash: string, data: unknown, persist: HostQueryPersist<unknown>) {
     const last = lastStored.get(queryHash)
@@ -231,10 +268,10 @@ export function createHostQueryPersistence(
     return restore
   }
 
-  queryClient.getQueryCache().subscribe((event) => {
+  const unsubscribe = queryClient.getQueryCache().subscribe((event) => {
     const { query } = event
     const persist = hostQueryPersistOf(query)
-    if (!persist) {
+    if (!persist || familyOf(query.queryKey) === null) {
       return
     }
     // An observed key with no data, such as one past its gcTime, reads its record once beside the fetch.
@@ -302,8 +339,15 @@ export function createHostQueryPersistence(
         })
       )
     },
-    flush: () => storage.flush()
+    flush: () => storage.flush(),
+    stop() {
+      unsubscribe()
+      if (byHost.get(store.hostId) === persistence) {
+        byHost.delete(store.hostId)
+      }
+    }
   }
-  persistences.set(queryClient, persistence)
+  byHost.get(store.hostId)?.stop()
+  byHost.set(store.hostId, persistence)
   return persistence
 }

@@ -1,6 +1,8 @@
 import { z } from 'zod'
 import { salvagedOptional } from '../../../src/shared/zod-salvage'
-import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import { HOST_LIST_TARGET, NO_HOST_LIST_INPUT } from '../host-screen/host-list-queries'
+import { defineHostQuery } from '../query/host-query'
+import { hostQueryKey } from '../query/host-query-key'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import type { HomeStatsRow } from './home-stats-total'
@@ -15,7 +17,6 @@ const homeStatsSummarySchema = z
   .nullish()
   .catch(undefined)
 
-// Decorative totals: a refusal keeps the last shown reply.
 const homeStatsSummaryRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'stats.home-summary-or-skip',
@@ -26,23 +27,35 @@ const homeStatsSummaryRead = bindDeferredRpcOperation(
   })
 )
 
-export type HomeStatsSetter = (
-  updater: (previous: Record<string, HomeStatsRow>) => Record<string, HomeStatsRow>
-) => void
+type HomeStats = Exclude<HomeStatsRow, undefined>
 
-export function fetchHomeHostStats(
-  client: RpcClient,
-  hostId: string,
-  setStats: HomeStatsSetter,
-  disposed: () => boolean
-): void {
-  homeStatsSummaryRead
-    .requestSingleFlight(client, hostId)
-    .then((reply) => {
-      const summary = homeStatsSummaryRead.interpret(reply)
-      if (!disposed() && summary.accepted) {
-        setStats((previous) => ({ ...previous, [hostId]: summary.value }))
-      }
-    })
-    .catch(() => {})
-}
+export const homeStatsQuery = defineHostQuery<typeof NO_HOST_LIST_INPUT, HomeStats>({
+  family: 'stats.summary',
+  fetch: async (client, _target, _input, previous) => {
+    const summary = homeStatsSummaryRead.interpret(await homeStatsSummaryRead.request(client))
+    if (summary.accepted) {
+      return summary.value ?? null
+    }
+    // Decorative totals: a refusal keeps the last shown reply.
+    if (previous !== undefined) {
+      return previous
+    }
+    throw new Error('stats.summary unavailable')
+  },
+  // Re-read each time Home comes back, as before; nothing on the desktop signals new totals.
+  staleTime: 0,
+  gcTime: Infinity,
+  persist: {
+    version: 1,
+    dataSchema: z
+      .looseObject({
+        totalAgentsSpawned: z.number().optional(),
+        totalPRsCreated: z.number().optional(),
+        totalAgentTimeMs: z.number().optional()
+      })
+      .nullable()
+  }
+})
+
+export const homeStatsKey = (hostId: string) =>
+  hostQueryKey(hostId, homeStatsQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
