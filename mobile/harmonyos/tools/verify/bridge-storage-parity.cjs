@@ -37,7 +37,7 @@ function controller() {
     }
   }
 }
-async function bridgeSession(grants = []) {
+async function bridgeSession(grants = [], pathname = `/h/${hostId}`) {
   const peer = createRpcPeer()
   const client = new peer.SpikeRpcClient()
   await client.connect('ws://test', 'synthetic-token', 'key', 'v2')
@@ -52,13 +52,71 @@ async function bridgeSession(grants = []) {
         optionalGrants: [],
         canOwnHostArea: true,
         canOwnHostAreaAcrossLayouts: true
-      }
+      },
+      { pathname: '/h/[hostId]/session/[worktreeId]', grants, optionalGrants: [] }
     ]
   }
-  const bridge = new BridgeHost(client, view, manifest, meta, `/h/${hostId}`)
+  const bridge = new BridgeHost(client, view, manifest, meta, pathname)
   bridge.onPushChannelReady()
   return { ...peer, client, bridge, view }
 }
+
+test('a host-area document can save and read chat view after entering a workspace', async () => {
+  const { bridge, client, view } = await bridgeSession(['storage'])
+  const key = `orca:nativeChatTabs:${hostId}:tree`
+  const foreignKey = 'orca:nativeChatTabs:other-host:tree'
+  bridge.setStorage({
+    entries: () => new Map([[foreignKey, '{"other":"chat"}']]),
+    write() {}
+  })
+  post(bridge, { type: 'ready' })
+  post(bridge, { type: 'notify', name: 'location', href: `/h/${hostId}/session/tree` })
+  post(bridge, { type: 'notify', name: 'storage', key, value: '{"tab":"chat"}' })
+  post(bridge, {
+    type: 'request',
+    id: 'read-chat',
+    method: 'native.storage.read',
+    params: { key }
+  })
+  const reply = view.frames.find((frame) => frame.id === 'read-chat')
+  assert.deepEqual(reply.payload.result, { value: '{"tab":"chat"}' })
+  post(bridge, {
+    type: 'request',
+    id: 'read-other-host',
+    method: 'native.storage.read',
+    params: { key: foreignKey }
+  })
+  const refused = view.frames.find((frame) => frame.id === 'read-other-host')
+  assert.equal(refused.payload.ok, false)
+  bridge.dispose()
+  client.close()
+})
+
+test('a standalone session stores its exact workspace key without accepting a prefixed sibling', async () => {
+  const pathname = `/h/${hostId}/session/tree%7Ctopic`
+  const { bridge, client } = await bridgeSession(['storage'], pathname)
+  const writes = new Map()
+  bridge.setStorage({
+    entries: () => new Map(),
+    write: (key, value) => writes.set(key, value)
+  })
+  post(bridge, { type: 'ready' })
+  post(bridge, {
+    type: 'notify',
+    name: 'storage',
+    key: `orca:nativeChatTabs:${hostId}:tree%7Ctopic-other`,
+    value: '{"other":"chat"}'
+  })
+  post(bridge, {
+    type: 'notify',
+    name: 'storage',
+    key: `orca:nativeChatTabs:${hostId}:tree%7Ctopic`,
+    value: '{"own":"chat"}'
+  })
+  assert.deepEqual([...writes], [[`orca:nativeChatTabs:${hostId}:tree%7Ctopic`, '{"own":"chat"}']])
+  bridge.dispose()
+  client.close()
+})
 
 test('large multilingual desktop replies reach the page in bounded reconstructable parts', async () => {
   const { bridge, client, view, sent, receiveText } = await bridgeSession()

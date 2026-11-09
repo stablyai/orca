@@ -54,12 +54,12 @@ const PAGE_STORAGE_EXACT_KEYS: string[] = [
   'orca:terminalLinkOpenMode',
   'orca:terminalSplitLayout'
 ];
-const PAGE_STORAGE_KEY_PREFIXES: string[] = [
-  'orca:pins:',
+const PAGE_WORKSPACE_STORAGE_KEY_PREFIXES: string[] = [
   'orca:nativeChatTabs:',
   'orca:terminalLiveInputDisabled:',
   'orca:terminalDrafts:'
 ];
+const PAGE_STORAGE_KEY_PREFIXES: string[] = ['orca:pins:', ...PAGE_WORKSPACE_STORAGE_KEY_PREFIXES];
 const NEGOTIATED_PAGE_STORAGE_KEY = 'orca:terminalSplitLayout';
 const PAGE_STORAGE_MAX_VALUE_CHARS = 16 * 1024;
 const PAGE_STORAGE_MAX_KEY_CHARS = 256;
@@ -817,28 +817,25 @@ export class BridgeHost {
     return false;
   }
 
-  /** Workspace scope derived from the route (/h/<host>/session/<worktree>); see pageRouteWorkspace. */
-  private pageRouteWorkspace(): string | null {
-    let segments = this.routePathname.split('/');
+  private pageRouteWorkspaceScope(pathname: string): string | null {
+    let segments = pathname.split('/');
     if (segments.length !== 5 || segments[0] !== '' || segments[1] !== 'h' || segments[3] !== 'session') {
       return null;
     }
-    let hostId = '';
-    let worktreeId = '';
     try {
-      hostId = decodeURIComponent(segments[2]);
-      worktreeId = decodeURIComponent(segments[4]);
+      let hostId = decodeURIComponent(segments[2]);
+      let worktreeId = decodeURIComponent(segments[4]);
+      if (hostId === this.meta.id && worktreeId.length > 0) {
+        return `${encodeURIComponent(hostId)}:${encodeURIComponent(worktreeId)}`;
+      }
     } catch (e) {
       return null;
     }
-    if (hostId.length === 0 || worktreeId.length === 0) {
-      return null;
-    }
-    return `${hostId}|${worktreeId}`;
+    return null;
   }
 
   /** pageStorageKeysForRoute: exact keys + this host's pins key + workspace-scoped keys. */
-  private isPageStorageKeyForRoute(key: string): boolean {
+  private isPageStorageKeyForRoute(key: string, pathname: string = this.routePathname): boolean {
     if (!this.isPageStorageKey(key)) {
       return false;
     }
@@ -850,19 +847,12 @@ export class BridgeHost {
     if (key === `orca:pins:${this.meta.id}`) {
       return true;
     }
-    let workspace = this.pageRouteWorkspace();
-    if (workspace === null) {
+    let scope = this.pageRouteWorkspaceScope(pathname);
+    if (scope === null) {
       return false;
     }
-    let parts = workspace.split('|');
-    if (parts[0] !== this.meta.id) {
-      return false;
-    }
-    let scope = `${encodeURIComponent(this.meta.id)}:${encodeURIComponent(parts[1])}`;
-    let scopedPrefixes: string[] = ['orca:nativeChatTabs:', 'orca:terminalLiveInputDisabled:', 'orca:terminalDrafts:'];
-    for (let i = 0; i < scopedPrefixes.length; i++) {
-      let prefix = scopedPrefixes[i];
-      if (key.startsWith(prefix + scope) && key.length > prefix.length + scope.length) {
+    for (let i = 0; i < PAGE_WORKSPACE_STORAGE_KEY_PREFIXES.length; i++) {
+      if (key === PAGE_WORKSPACE_STORAGE_KEY_PREFIXES[i] + scope) {
         return true;
       }
     }
@@ -875,9 +865,8 @@ export class BridgeHost {
       return false;
     }
     let scope = `${encodeURIComponent(this.meta.id)}:`;
-    let prefixes: string[] = ['orca:nativeChatTabs:', 'orca:terminalLiveInputDisabled:', 'orca:terminalDrafts:'];
-    for (let i = 0; i < prefixes.length; i++) {
-      let prefix = prefixes[i];
+    for (let i = 0; i < PAGE_WORKSPACE_STORAGE_KEY_PREFIXES.length; i++) {
+      let prefix = PAGE_WORKSPACE_STORAGE_KEY_PREFIXES[i];
       if (key.startsWith(prefix + scope) && key.length > prefix.length + scope.length) {
         return true;
       }
@@ -896,12 +885,13 @@ export class BridgeHost {
     let key: string = msg['key'];
     let valueValue: ESObject = msg['value'];
     let value: string | null = typeof valueValue === 'string' ? valueValue : null;
-    let hostArea = this.ownsHostArea();
+    let hostArea = this.ownsHostArea(this.entryPathname);
     if (typeof key !== 'string'
       || key.length === 0
       || key.length > PAGE_STORAGE_MAX_KEY_CHARS
       || !(this.isPageStorageKeyForRoute(key) || (hostArea && this.isHostWorkspaceStorageKey(key)))
       || this.oversizeKeys.has(key)
+      || (this.pageStorage.get(key)?.length ?? 0) > PAGE_STORAGE_MAX_VALUE_CHARS
       || (value !== null && value.length > PAGE_STORAGE_MAX_VALUE_CHARS)) {
       this.log(`storage refused: ${key}`);
       return;
@@ -1161,21 +1151,22 @@ export class BridgeHost {
       this.sendLocalNativeError(id, 'native_verb_failed', `${method} could not be served on this device`);
       return;
     }
-    let granted = this.routeGrants().includes('native.storage.read');
+    let granted = this.ownsHostArea(this.entryPathname);
     if (!granted) {
       this.sendLocalNativeError(id, 'native_verb_ungranted', 'the page was not granted native.storage.read');
       return;
     }
     let key = '';
     let paramsValue: ESObject = msg['params'];
-    if (paramsValue !== undefined && paramsValue !== null) {
+    if (paramsValue !== null && typeof paramsValue === 'object' && !Array.isArray(paramsValue)
+      && Object.keys(paramsValue).length === 1) {
       let params = paramsValue as Record<string, Object>;
       let keyValue: Object = params['key'];
       if (typeof keyValue === 'string') {
         key = keyValue;
       }
     }
-    if (key.length === 0 || key.length > PAGE_STORAGE_MAX_KEY_CHARS) {
+    if (!this.isHostWorkspaceStorageKey(key)) {
       this.sendLocalNativeError(id, 'native_verb_params', 'native.storage.read was called with params it does not take');
       return;
     }
@@ -1331,7 +1322,7 @@ export class BridgeHost {
     let oversize: string[] = [];
     let count = 0;
     this.pageStorage.forEach((value: string, key: string) => {
-      if (!this.pageReadsStorageKey(key)) {
+      if (!this.pageReadsStorageKey(key) || !this.isPageStorageKeyForRoute(key, route.pathname)) {
         return;
       }
       if (value.length > PAGE_STORAGE_MAX_VALUE_CHARS) {
