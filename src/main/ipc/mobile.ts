@@ -7,37 +7,42 @@ import type { DeviceEntry } from '../runtime/rpc/server/pairing/device-entry'
 import {
   requestMobilePairingOffer,
   requestRuntimePairingOffer
-} from '../runtime/pairing-offer-requests'
+} from '../runtime/rpc/server/pairing/pairing-offer-requests'
 import {
   getPairingNetworkInterfaces,
   type DefaultRouteInterfaceLookup,
   type NetworkInterface
-} from '../runtime/pairing-network-interfaces'
+} from '../runtime/rpc/server/pairing/network/pairing-network-interfaces'
 import type { OrcaRuntimeRpcServer } from '../runtime/rpc/server/runtime-rpc'
 import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/mobile-relay-status'
 import {
   encodeMobilePairingQr,
   type MobilePairingQrResult
 } from '../runtime/rpc/server/pairing/mobile-pairing-qr'
+import { usesOlderPairingMethod } from '../runtime/rpc/server/pairing/pairing-ticket-exchange'
 import {
   MOBILE_PAIRING_OFFER_TTL_MS,
   RUNTIME_PAIRING_OFFER_TTL_MS
 } from '../runtime/rpc/server/pairing/pairing-offer-expiry'
-import { getWindowsDefaultRouteInterfaceNames } from '../runtime/windows-default-route-interfaces'
+import { getWindowsDefaultRouteInterfaceNames } from '../runtime/rpc/server/pairing/network/windows-default-route-interfaces'
 import {
   getWebSocketPort,
   inspectWindowsMobileFirewall,
   repairWindowsMobileFirewall,
   type WindowsMobileFirewallEnvironment
-} from '../runtime/windows-mobile-firewall'
+} from '../runtime/rpc/server/pairing/network/windows-mobile-firewall'
 
-function toRuntimeAccessGrant(device: DeviceEntry): RuntimeAccessGrant {
+function toRuntimeAccessGrant(
+  device: DeviceEntry,
+  devices: readonly DeviceEntry[]
+): RuntimeAccessGrant {
   return {
     deviceId: device.deviceId,
     name: device.name,
     createdAt: device.pairedAt,
     lastSeenAt: device.lastSeenAt > 0 ? device.lastSeenAt : null,
-    usesLegacyEncryption: usesLegacyE2EE(device)
+    usesLegacyEncryption: usesLegacyE2EE(device),
+    ...(usesOlderPairingMethod(device, devices) ? { olderPairingMethod: true as const } : {})
   }
 }
 
@@ -154,17 +159,18 @@ export function registerMobileHandlers(
     if (!registry) {
       return { devices: [] }
     }
+    const all = registry.listDevices()
     // Never-scanned QR tokens are not paired devices.
     return {
-      devices: registry
-        .listDevices()
+      devices: all
         .filter((d) => d.scope === 'mobile' && d.lastSeenAt > 0)
         .map((d) => ({
           deviceId: d.deviceId,
           name: d.name,
           pairedAt: d.pairedAt,
           lastSeenAt: d.lastSeenAt,
-          usesLegacyEncryption: usesLegacyE2EE(d)
+          usesLegacyEncryption: usesLegacyE2EE(d),
+          ...(usesOlderPairingMethod(d, all) ? { olderPairingMethod: true as const } : {})
         }))
     }
   })
@@ -175,12 +181,12 @@ export function registerMobileHandlers(
       return { grants: [] }
     }
     // Runtime links are bearer credentials immediately, so unconnected grants must remain revocable.
+    const all = registry.listDevices()
     return {
-      grants: registry
-        .listDevices()
+      grants: all
         .filter((d) => d.scope === 'runtime')
         .sort((a, b) => b.pairedAt - a.pairedAt)
-        .map(toRuntimeAccessGrant)
+        .map((d) => toRuntimeAccessGrant(d, all))
     }
   })
 

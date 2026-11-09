@@ -4,7 +4,7 @@ import type { PreviewTerminalPasteSource } from './preview-terminal-paste'
 import {
   claimTerminalRightClickPasteMouseDown,
   isTerminalRightClickPasteGesture
-} from '@/components/terminal-pane/terminal-right-click-paste-gesture'
+} from '@/components/terminal-pane/input/paste/terminal-right-click-paste-gesture'
 
 type PreviewRightClickTerminal = Pick<Terminal, 'getSelection' | 'clearSelection' | 'focus'>
 

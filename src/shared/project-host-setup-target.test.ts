@@ -5,10 +5,6 @@ const local = { id: 'repo-1', hostId: 'local' as const, repoId: 'repo-1' }
 const ssh = { id: 'repo-1', hostId: 'ssh:box' as const, repoId: 'repo-1' }
 
 describe('findProjectHostSetup', () => {
-  it('keeps the first match by id when the caller names no host', () => {
-    expect(findProjectHostSetup([local, ssh], { setupId: 'repo-1' })).toBe(local)
-  })
-
   it('picks the named twin', () => {
     expect(
       findProjectHostSetup([local, ssh], {

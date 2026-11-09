@@ -156,7 +156,7 @@ export function createWebSpeechApi(): Pick<
         if (active === dictation) {
           active = null
         }
-        // A start that timed out may still finish on the host and hold its one dictation slot.
+        // A start that timed out may still finish on the host and hold one of its dictation slots.
         void cancelOnHost(dictation)
         throw error
       }
@@ -205,7 +205,7 @@ export function createWebSpeechApi(): Pick<
         }
       } catch (error) {
         if (dictation) {
-          // A finish that timed out here may still hold the host's one dictation slot.
+          // A finish that timed out here may still hold one of the host's dictation slots.
           void cancelOnHost(dictation)
           fail(dictation, error)
         }

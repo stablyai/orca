@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { globSync, readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { normalizePath, transformWithOxc, type Plugin } from 'vite'
@@ -9,6 +9,7 @@ import {
   UNIT_SETUP_FILES
 } from './scripts/ci/unit-selection/dependency-graph/ci-unit-files.mjs'
 import TimingSequencer from './scripts/ci/sharding/ci-unit-sequencer.mjs'
+import { filesSafeToShareWorker } from './scripts/test-runtime/execution-policy/vitest-shared-worker-files.mjs'
 import RuntimeSequencer from './scripts/test-runtime/execution-policy/vitest-runtime-sequencer.mjs'
 import { getNodeRuntimeInclude } from './scripts/test-runtime/sqlite-admission/vitest-node-runtime-files.mjs'
 import { nodeRuntimePool } from './scripts/test-runtime/node-worker/vitest-node-runtime-pool'
@@ -21,8 +22,6 @@ const nodeRuntimeInclude = process.versions.bun
   : []
 const balancedShards = process.env.ORCA_BALANCE_UNIT_SHARDS === '1'
 const moduleCachePath = process.env.ORCA_UNIT_MODULE_CACHE_PATH
-const measurementFile = 'src/main/foreign-sqlite-readers/foreign-sqlite-reader-event-loop.test.ts'
-const measurementFiles = [measurementFile]
 const phoneContractPattern = /\/mobile\/src\/.*\.(?:ts|tsx)(?:\?.*)?$/
 const transforms = {
   // Auto-discovery climbs past the repo for files no in-repo tsconfig owns, into an enclosing checkout.
@@ -105,7 +104,6 @@ const nodeProject = {
     name: process.versions.bun ? 'node-runtime' : 'node',
     env: { ORCA_VITEST_RUNTIME: process.versions.bun ? 'node-runtime' : 'node' },
     include: process.versions.bun ? nodeRuntimeInclude : UNIT_INCLUDE,
-    exclude: [...testOptions.exclude, ...measurementFiles],
     sequence: { groupOrder: 1 },
     ...(process.versions.bun
       ? { pool: 'node-runtime', poolRunner: nodeRuntimePool }
@@ -120,26 +118,50 @@ const bunProject = {
     name: 'bun',
     env: { ORCA_VITEST_RUNTIME: 'bun' },
     pool: 'forks',
-    exclude: [...testOptions.exclude, ...nodeRuntimeInclude, ...measurementFiles],
+    exclude: [...testOptions.exclude, ...nodeRuntimeInclude],
     sequence: { groupOrder: 1 }
   }
 }
-const projects = [
-  ...(process.versions.bun ? [bunProject] : []),
-  nodeProject,
-  // Keep the event-loop measurement free of other suites without weakening its limits.
-  {
-    ...nodeProject,
-    test: {
-      ...nodeProject.test,
-      name: 'node-measurement',
-      include: [measurementFile],
-      exclude: testOptions.exclude,
-      maxWorkers: 1,
-      sequence: { groupOrder: 2 }
-    }
-  }
+// Files whose state the per-file reset can undo share one worker's module cache instead of
+// re-importing thousands of modules each. ORCA_VITEST_ISOLATE_EVERY_FILE=1 turns it off.
+const runtimeProject = process.versions.bun ? bunProject : nodeProject
+const nodeRuntimeFiles = new Set(nodeRuntimeInclude.map((file) => file.replaceAll('\\', '/')))
+const sharedWorkerFiles =
+  process.env.ORCA_VITEST_ISOLATE_EVERY_FILE === '1'
+    ? []
+    : filesSafeToShareWorker(
+        process.cwd(),
+        globSync(UNIT_INCLUDE)
+          .map((file) => file.replaceAll('\\', '/'))
+          .filter((file) => !nodeRuntimeFiles.has(file)),
+        [
+          { find: '@renderer', replacement: resolve('src/renderer/src') },
+          { find: '@', replacement: resolve('src/renderer/src') }
+        ]
+      )
+const sharedProjects =
+  sharedWorkerFiles.length > 0
+    ? [
+        {
+          ...runtimeProject,
+          test: {
+            ...runtimeProject.test,
+            name: `${runtimeProject.test.name}-shared`,
+            include: sharedWorkerFiles,
+            isolate: false,
+            setupFiles: [
+              ...runtimeProject.test.setupFiles,
+              resolve('config/scripts/test-runtime/environment/vitest-shared-worker-file-reset.mjs')
+            ]
+          }
+        }
+      ]
+    : []
+runtimeProject.test.exclude = [
+  ...(runtimeProject.test.exclude ?? testOptions.exclude),
+  ...sharedWorkerFiles
 ]
+const projects = [...(process.versions.bun ? [bunProject] : []), nodeProject, ...sharedProjects]
 
 export default defineConfig({
   ...transforms,
@@ -160,6 +182,9 @@ export default defineConfig({
         }
       : {}),
     projects,
+    // A finished file's background log can lose the race with worker teardown; only that log line is lost.
+    onUnhandledError: (error) =>
+      !(error.name === 'EnvironmentTeardownError' && error.message.includes('"onUserConsoleLog"')),
     ...(process.platform === 'win32' ? { maxWorkers: 4 } : {})
   }
 })

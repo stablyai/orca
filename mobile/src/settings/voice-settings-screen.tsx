@@ -18,6 +18,7 @@ import {
 } from '../dictation/mobile-dictation-setup'
 import { MobileSwitch } from '../components/MobileSwitch'
 import { SettingsNote, SettingsScreen, SettingsSection } from './settings-screen-frame'
+import { VoiceTranscribeOnSection, voiceTranscribeOnShown } from './voice-transcribe-on-section'
 
 const POLL_INTERVAL_MS = 1500
 
@@ -274,6 +275,7 @@ export default function VoiceSettingsScreen({
         </BottomDrawer>
       }
     >
+      <VoiceTranscribeOnSection />
       {showLoading ? (
         <MobileStateView
           loading
@@ -294,7 +296,7 @@ export default function VoiceSettingsScreen({
       ) : (
         <>
           <SettingsSection
-            first
+            first={!voiceTranscribeOnShown()}
             title={t('settings.voiceSettingsScreen.dictationHeading', 'DICTATION')}
             // The segmented control leaves the mode row no room for two lines of explanation.
             footer={t(

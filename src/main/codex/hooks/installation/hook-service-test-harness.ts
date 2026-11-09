@@ -2,7 +2,7 @@ import { afterEach, beforeEach, vi, type Mock } from 'vitest'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createManagedCommandMatcher } from '../../../agent-hooks/installer-utils'
+import { createManagedCommandMatcher } from '../../../agent-hooks/installation/commands/managed-hook-command-matching'
 import '../../trust/toml/config-toml-trust'
 import {
   getExplicitHomeCodexHookSourcePath as getCodexExplicitHomeHookSourcePath,

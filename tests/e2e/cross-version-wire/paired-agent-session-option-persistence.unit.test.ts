@@ -42,12 +42,12 @@ import {
   structuredAgentSessionSendSelection
 } from '../../../src/shared/agent-session/options/structured-agent-session-option-view'
 import { runtimeStub } from './structured-agent-session-surface-execution'
-import { enqueueSessionOptionSettingsWrite } from '../../../src/renderer/src/components/native-chat/native-chat-session-option-settings-write'
-import { clearRuntimeCompatibilityCacheForTests } from '../../../src/renderer/src/runtime/runtime-rpc-client'
+import { enqueueSessionOptionSettingsWrite } from '../../../src/renderer/src/components/native-chat/session/options/native-chat-session-option-settings-write'
+import { clearRuntimeCompatibilityCache as clearRuntimeCompatibilityCacheForTests } from '../../../src/renderer/src/runtime/rpc/compatibility/runtime-compatibility-cache'
 import type { NativeChatSessionOptionSettingsMutation } from '../../../src/shared/native-chat/input/native-chat-session-options'
 
 const pairedPort = vi.hoisted(() => ({ call: vi.fn() }))
-vi.mock('../../../src/renderer/src/runtime/runtime-rpc-environment-call', () => ({
+vi.mock('../../../src/renderer/src/runtime/rpc/calls/runtime-rpc-environment-call', () => ({
   callRuntimeEnvironmentWithRevision: pairedPort.call
 }))
 afterEach(() => {

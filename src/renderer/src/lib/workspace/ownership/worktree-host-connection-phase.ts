@@ -4,17 +4,17 @@ import type { AppState } from '@/store/types'
 import '@/lib/connection-context'
 import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
 import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
-import '@/store/slices/runtime-environment-ssh'
+import '@/store/slices/ssh/runtime-environment-ssh'
 import {
   selectRuntimeAwareSshConnectionGeneration,
   selectRuntimeAwareSshStatus
-} from '@/store/slices/runtime-environment-ssh-selectors'
+} from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import type { SshConnectionStatus } from '../../../../../shared/ssh-types'
 import { isRuntimeOwnedSshTargetId } from '../../../../../shared/execution-host'
 import { getOrcadSshDeployment } from '../../../../../shared/remote-runtime/host-catalog/runtime-environments'
 import { isConnectedRuntimeHostState } from '../../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
-import { runtimeHostConnectionStateForEntry } from '@/runtime/runtime-host-connection-state'
+import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
 
 /**
  * `local`: no SSH target this client dials for the worktree — a local workspace, a

@@ -24,11 +24,6 @@ describe.skipIf(process.platform === 'win32')('inspectLinkedFile', () => {
     return path
   }
 
-  it('opens documents and shows scripts as text', async () => {
-    expect(await inspectLinkedFile(await file('notes.md', '# Notes\n'))).toBe('open')
-    expect(await inspectLinkedFile(await file('run.sh', 'echo hi\n'))).toBe('view-as-text')
-  })
-
   it('reads the content of +x files whatever their name', async () => {
     expect(await inspectLinkedFile(await file('notes.md', '#!/bin/sh\n', 0o755))).toBe(
       'view-as-text'

@@ -22,8 +22,8 @@ import {
   resolveRuntimeGitConflict,
   stageRuntimeGitPath,
   unstageRuntimeGitPath
-} from '@/runtime/runtime-git-working-tree-client'
-import type { RuntimeGitContext } from '@/runtime/runtime-git-client-context'
+} from '@/runtime/source-control/git/runtime-git-working-tree-client'
+import type { RuntimeGitContext } from '@/runtime/source-control/git/runtime-git-client-context'
 import {
   dismissSourceControlEntryFailureToast,
   showSourceControlEntryFailureToast

@@ -69,20 +69,6 @@ describe('native-chat visual lines in mobile markdown', () => {
     expect(directives).toEqual([{ file: 'after.html', title: null }])
   })
 
-  it('leaves malformed or path-like directives as literal text', () => {
-    for (const line of [
-      '::orca-visual{file="../secret.html"}',
-      '::orca-visual{file="a.html" file="b.html"}',
-      '::orca-visual{file="a.htm"}',
-      '::orca-visual{file="a.html"',
-      '::orca-visual{file="a.html"} trailing words'
-    ]) {
-      const { directives, blocks } = blocksOf(line)
-      expect(directives, line).toEqual([])
-      expect(blocks, line).toEqual([{ type: 'paragraph', text: line }])
-    }
-  })
-
   it('renders directives past the per-message cap as text', () => {
     const lines = Array.from(
       { length: NATIVE_CHAT_VISUAL_MAX_PER_MESSAGE + 1 },

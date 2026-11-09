@@ -29,15 +29,13 @@ import { useAppStore } from '@/store/index'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
 import { hasCtrlEnterCsiUAuthorityForPane } from './terminal-ctrl-enter'
-import { titleHasExplicitAgentIdentity } from '../../title-agent-identity'
+import { titleHasExplicitAgentIdentity } from '../../titles/title-agent-identity'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
 import { isTerminalPaneLocalWindowsConpty } from '../../host-state/terminal-pane-local-windows-conpty'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
-import {
-  isEditableTarget,
-  resolveTerminalKeyboardShortcutAction
-} from './terminal-keyboard-shortcut-matching'
+import { isEditableTarget } from './terminal-keyboard-shortcut-matching'
+import { resolveTerminalShortcutAction as resolveTerminalKeyboardShortcutAction } from './terminal-shortcut-policy'
 import { createTerminalNativeOnlyShortcutTracker } from './terminal-native-only-shortcut'
 
 type RuntimeOptions = {

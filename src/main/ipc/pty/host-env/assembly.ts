@@ -1,6 +1,6 @@
 import { applyClaudeAgentViewEnv } from './claude-agent-view'
 import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal/images/terminal-inline-images-settings'
-import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/setup-agent-sequencing'
+import { resolveSetupAgentSequenceLaunchCommand } from '../../../../shared/agent-launch/startup/setup-agent-sequencing'
 import {
   detectExplicitPiAgentKindFromCommand,
   isPiCompatibleAgentType
@@ -8,8 +8,8 @@ import {
 import { applyTerminalGitCredentialPromptGuard } from '../../../../shared/shell/launch/terminal-git-credential-guard'
 import { ensureOpenCodeStartupPromptForLaunch } from '../../../opencode/opencode-startup-prompt-installer'
 import { mimoCodeHookService } from '../../../mimo/hook-service'
-import { agentHookServer } from '../../../agent-hooks/server'
-import { wslHookRelayManager } from '../../../agent-hooks/wsl-hook-relay-manager'
+import { agentHookServer } from '../../../agent-hooks/server/agent-hook-server'
+import { wslHookRelayManager } from '../../../agent-hooks/wsl-relay/wsl-hook-relay-manager'
 import { wslInteropHealthMonitor } from '../../../wsl/execution/wsl-interop-health'
 import { piTitlebarExtensionService } from '../../../pi/titlebar-extension-service'
 import { prependOrcaCliDirToChildPath } from '../../../cli/orca-cli-child-path'

@@ -2,8 +2,8 @@ import { resolveTerminalPaneAppearance } from '../appearance/resolve-terminal-pa
 import { useSshReconnectErrorOwnership } from '../errors/use-ssh-reconnect-error-ownership'
 import { useTerminalPaneChatProjection } from '../chat/use-terminal-pane-chat-projection'
 
-import { agentLaunchPaneOutcomeForLeaf } from '../agent-launch-pane-notice-text'
-import { terminalErrorForPane } from '../terminal-error-accumulation'
+import { agentLaunchPaneOutcomeForLeaf } from '../launch-outcome/agent-launch-pane-notice-text'
+import { terminalErrorForPane } from '../errors/terminal-error-accumulation'
 
 import type { TerminalPaneMobileController } from './use-terminal-pane-mobile-actions'
 
@@ -57,6 +57,9 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
   })
   const activePane = managerRef.current?.getActivePane()
   const managedPanes = managerRef.current?.getPanes() ?? []
+  const activePaneRuntimeEnvironmentId = activePane
+    ? (paneTransportsRef.current.get(activePane.id)?.getRuntimeEnvironmentId?.() ?? null)
+    : undefined
   const showSshReconnectOverlay = isActive && isVisible && sshReconnectOwnsTerminalErrors
 
   useSshReconnectErrorOwnership({
@@ -121,6 +124,7 @@ export function useTerminalPaneProjection(controller: TerminalPaneMobileControll
     hiddenStartupStyle,
     terminalContainerStyle,
     activePane,
+    activePaneRuntimeEnvironmentId,
     managedPanes,
     showSshReconnectOverlay,
     visibleLaunchRefusal,

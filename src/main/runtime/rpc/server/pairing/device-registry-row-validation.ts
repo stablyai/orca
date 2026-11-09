@@ -3,6 +3,7 @@ import type { RelayDeviceBinding } from '../../../mobile-cloud-relay/relay-revok
 import type { DeviceEntry } from './device-entry'
 import { parseMobilePushRegistration } from '../../../../../shared/mobile-push-contract'
 import { isDevicePublicKeyB64 } from '../../../../../shared/remote-runtime/pairing/device-key-proof'
+import { isExchangeDeviceToken } from '../../../../../shared/remote-runtime/pairing/ticket-exchange-contract'
 import { RUNTIME_DEVICE_GRANTS, type RuntimeDeviceGrant } from '../../rpc-method-permission'
 import { isRecord } from '../../../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 import { NETWORK_SOURCE_CLASSES } from '../../network-source-class'
@@ -90,6 +91,10 @@ export function normalizeLoadedDeviceRow(device: unknown): DeviceEntry | null {
         : undefined,
     // Unreadable expiry fails open to today's never-expiring offer.
     offerExpiresAt: isTimestamp(device.offerExpiresAt) ? device.offerExpiresAt : undefined,
+    ticket: device.ticket === true ? true : undefined,
+    exchangeToken: isExchangeDeviceToken(device.exchangeToken) ? device.exchangeToken : undefined,
+    ticketFirstSeenAt: isTimestamp(device.ticketFirstSeenAt) ? device.ticketFirstSeenAt : undefined,
+    servesSessionBrowsers: device.servesSessionBrowsers === true ? true : undefined,
     ...validDeviceKeyFields(device)
   }
 }

@@ -1,6 +1,6 @@
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
 import type { BrowserSessionProfile } from '../../../../../shared/browser-workspace-types'
 import { getDefaultSettings } from '../../../../../shared/constants'
 import { openFileInBrowserTab } from '../../file-preview'
@@ -120,8 +120,19 @@ describe.each(['repo', 'worktree'] as const)('%s browser profile isolation', (sc
             (workspace) => workspace.id === opened.result.browserWorkspaceId
           )
       ).toMatchObject({ sessionProfileId: profile.id, sessionPartition: profile.partition })
-      expect(await open(surface)).toEqual(opened)
-      expect(store.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(2)
+      const reopened = await open(surface)
+      if (surface === 'html') {
+        expect(reopened).toEqual(opened)
+      } else {
+        expect(reopened.status).toBe('opened')
+        if (reopened.status !== 'opened') {
+          throw new Error('Expected opened link')
+        }
+        expect(reopened.result.browserWorkspaceId).not.toBe(opened.result.browserWorkspaceId)
+      }
+      expect(store.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(
+        surface === 'http' ? 3 : 2
+      )
     }
   )
 })

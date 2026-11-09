@@ -5,32 +5,26 @@ import { performance } from 'node:perf_hooks'
 import { build } from 'esbuild'
 
 // Pipe the baseline ssh-target-cleanup.ts source on stdin; no app or network is used.
-const entry = path.resolve('src/renderer/src/store/slices/ssh-target-cleanup.ts')
-const sources = [readFileSync(0, 'utf8'), readFileSync(entry, 'utf8')]
+const baselineEntry = path.resolve('src/renderer/src/store/slices/ssh-target-cleanup.ts')
+const entry = path.resolve('src/renderer/src/store/slices/ssh/ssh-target-cleanup.ts')
+const sources = [
+  { source: readFileSync(0, 'utf8'), resolveDir: path.dirname(baselineEntry) },
+  { source: readFileSync(entry, 'utf8'), resolveDir: path.dirname(entry) }
+]
 assert(
-  sources.every((source) => source.includes('export function buildRemovedSshTargetCleanupPatch'))
+  sources.every(({ source }) =>
+    source.includes('export function buildRemovedSshTargetCleanupPatch')
+  )
 )
 
-async function load(source) {
-  source += "\nexport { toAppSshPtyId } from '../../../../shared/ssh-pty-id';"
+async function load({ source, resolveDir }) {
+  source += `\nexport { toAppSshPtyId } from ${JSON.stringify(path.resolve('src/shared/ssh-pty-id.ts'))};`
   const result = await build({
-    entryPoints: [entry],
+    stdin: { contents: source, loader: 'ts', resolveDir },
     bundle: true,
     platform: 'node',
     format: 'esm',
-    write: false,
-    plugins: [
-      {
-        name: 'cleanup-source',
-        setup(builder) {
-          builder.onLoad({ filter: /ssh-target-cleanup\.ts$/ }, () => ({
-            contents: source,
-            loader: 'ts',
-            resolveDir: path.dirname(entry)
-          }))
-        }
-      }
-    ]
+    write: false
   })
   const bundled = `${result.outputFiles[0].text}\n//# sourceURL=ssh-cleanup-benchmark-bundle.js`
   return import(`data:text/javascript;base64,${Buffer.from(bundled).toString('base64')}`)

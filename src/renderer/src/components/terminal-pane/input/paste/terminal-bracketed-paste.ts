@@ -47,10 +47,6 @@ function hasBracketedPasteModeSequence(data: string): boolean {
   return false
 }
 
-export function sanitizeTerminalPasteText(text: string): string {
-  return sanitizeBracketedPasteText(text)
-}
-
 export function encodeWindowsInputRecordPasteText(
   text: string,
   newline: WindowsInputRecordNewline
@@ -134,7 +130,7 @@ export function pasteTerminalText(
   // Ctrl+C can leave paste mode stale after process exit; omit unnecessary single-line wrappers to avoid leaks.
   terminal.options.ignoreBracketedPasteMode = true
   try {
-    terminal.paste(sanitizeTerminalPasteText(text))
+    terminal.paste(sanitizeBracketedPasteText(text))
   } finally {
     terminal.options.ignoreBracketedPasteMode = previousIgnoreBracketedPasteMode
   }

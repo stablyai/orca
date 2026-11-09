@@ -22,7 +22,7 @@ import {
   localizedHostedReviewCopy,
   resolveSupportedHostedReviewCopyProvider
 } from '@/i18n/hosted-review-localized-copy'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   hostedReviewProviderSupportsDraft,
   type HostedReviewProvider
@@ -125,7 +125,8 @@ export function CreateHostedReviewComposer({
   onPrimaryAction,
   onDropdownAction
 }: CreateHostedReviewComposerProps): React.JSX.Element {
-  const copy = localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider))
+  const t = useTranslate()
+  const copy = localizedHostedReviewCopy(resolveSupportedHostedReviewCopyProvider(provider), t)
   // Providers without draft reviews must not carry a stale draft flag into submit.
   const supportsDraft = hostedReviewProviderSupportsDraft(provider)
   const effectiveDraft = supportsDraft && draft
@@ -156,23 +157,23 @@ export function CreateHostedReviewComposer({
   // Explain disabled submission instead of leaving a silent gray button.
   let createDisabledReason: string | undefined
   if (generating) {
-    createDisabledReason = translate(
+    createDisabledReason = t(
       'auto.components.right.sidebar.SourceControl.318e2a7f88',
       'Wait for AI generation to finish.'
     )
   } else if (title.trim().length === 0) {
-    createDisabledReason = translate(
+    createDisabledReason = t(
       'auto.components.right.sidebar.SourceControl.f3a8b2c1d0e5',
       'Enter a {{value0}} title.',
       { value0: copy.reviewLabel }
     )
   } else if (normalizedBase.trim().length === 0) {
-    createDisabledReason = translate(
+    createDisabledReason = t(
       'auto.components.right.sidebar.SourceControl.f76307c1f7',
       'Choose a base branch.'
     )
   } else if (baseSameAsBranch) {
-    createDisabledReason = translate(
+    createDisabledReason = t(
       'auto.components.right.sidebar.SourceControl.4f76c0a9de',
       'Base branch must differ from the head branch.'
     )
@@ -180,12 +181,12 @@ export function CreateHostedReviewComposer({
 
   // Lock fields during generation to preserve the untouched revisions required for safe hydration.
   const fieldsLocked = generating
-  const generateDetailsLabel = translate(
+  const generateDetailsLabel = t(
     'auto.components.right.sidebar.SourceControl.02d8c04339',
     'Generate {{value0}} details with AI',
     { value0: copy.reviewLabel }
   )
-  const stopGeneratingDetailsLabel = translate(
+  const stopGeneratingDetailsLabel = t(
     'auto.components.right.sidebar.SourceControl.b355e740b2',
     'Stop generating {{value0}} details',
     { value0: copy.reviewLabel }
@@ -203,9 +204,7 @@ export function CreateHostedReviewComposer({
       aria-label={stopGeneratingDetailsLabel}
     >
       <RefreshCw className="size-3 animate-spin" />
-      <span>
-        {translate('auto.components.right.sidebar.SourceControl.e868cec4e1', 'Generating…')}
-      </span>
+      <span>{t('auto.components.right.sidebar.SourceControl.e868cec4e1', 'Generating…')}</span>
       <Square className="size-2.5 fill-current" />
     </Button>
   ) : (
@@ -219,7 +218,7 @@ export function CreateHostedReviewComposer({
       aria-label={generateDetailsLabel}
     >
       <Sparkles className="size-3" />
-      {translate('auto.components.right.sidebar.SourceControl.aee92f8684', 'Generate')}
+      {t('auto.components.right.sidebar.SourceControl.aee92f8684', 'Generate')}
     </Button>
   )
   const effectiveDropdownItems = dropdownItems ?? EMPTY_DROPDOWN_ITEMS
@@ -232,11 +231,9 @@ export function CreateHostedReviewComposer({
           <div className="flex min-w-0 items-center gap-1.5 text-xs">
             <ReviewIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
             <span className="font-medium text-foreground">
-              {translate(
-                'auto.components.right.sidebar.SourceControl.e1970d327d',
-                'New {{value0}}',
-                { value0: copy.reviewLabel }
-              )}
+              {t('auto.components.right.sidebar.SourceControl.e1970d327d', 'New {{value0}}', {
+                value0: copy.reviewLabel
+              })}
             </span>
           </div>
           {aiGenerationEnabled ? (
@@ -305,13 +302,16 @@ export function CreateHostedReviewComposer({
               <ReviewIcon className="size-3.5" />
             )}
             <span className={RIGHT_SIDEBAR_PRIMARY_BUTTON_LABEL_CLASS}>
-              {getCreateButtonLabel({
-                isCreating,
-                pushBeforeCreate,
-                draft: effectiveDraft,
-                stacked: effectiveStacked,
-                shortLabel: copy.shortLabel
-              })}
+              {getCreateButtonLabel(
+                {
+                  isCreating,
+                  pushBeforeCreate,
+                  draft: effectiveDraft,
+                  stacked: effectiveStacked,
+                  shortLabel: copy.shortLabel
+                },
+                t
+              )}
             </span>
           </Button>
           {showDropdown ? (
@@ -324,12 +324,12 @@ export function CreateHostedReviewComposer({
                     'h-8 rounded-l-none border-l border-primary-foreground/20 px-1.5 shrink-0',
                     createDisabled && 'opacity-50'
                   )}
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.right.sidebar.SourceControl.c5e4175139',
                     'More {{value0}} and remote actions',
                     { value0: copy.reviewLabel }
                   )}
-                  title={translate(
+                  title={t(
                     'auto.components.right.sidebar.SourceControl.4d6e1fd7f3',
                     'More actions'
                   )}

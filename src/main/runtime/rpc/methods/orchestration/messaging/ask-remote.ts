@@ -2,8 +2,8 @@ import type { z } from 'zod'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { WorkerDispatchState } from '../../../../orchestration/db/orchestration-records'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration-ask-timeout'
-import type { AskParams } from '../schemas'
+import { clampOrchestrationAskTimeoutMs } from '../../../../../../shared/orchestration/mailbox/orchestration-ask-timeout'
+import type { AskParams } from '../../../../../../shared/rpc-contract/orchestration-params'
 import { assertWorkerCanReport } from '../../../../orchestration/workers/reports/worker-report-admission'
 import {
   askedQuestionReceipt,

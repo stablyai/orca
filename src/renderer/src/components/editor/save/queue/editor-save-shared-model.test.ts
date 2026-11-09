@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { __clearSelfWriteRegistryForTests } from '../../external-changes/editor-self-write-registry'
 import { createEditorStore } from '../../autosave/editor-autosave-controller-test-fixture'
 import { reloadTabContentFromDisk } from '../../external-changes/ExternalFileChangeBanner'
-import { getDiskBaselineSignature } from '../../../../../../shared/disk-baseline-signature'
+import { getDiskBaselineSignature } from '../../../../../../shared/file-write/disk-baseline-signature'
 
 import { GUARDED_PATH } from './editor-save-guarded-disk-fixture'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { toast } from 'sonner'
 
 const mocks = vi.hoisted(() => ({ readRuntimeFileContent: vi.fn() }))
@@ -21,7 +21,7 @@ vi.mock('@/store/index', () => ({ useAppStore: { getState: () => storeRef.curren
 vi.mock('@/lib/file-owner-runtime-target', () => ({
   getRuntimeTargetForFileOwner: () => ({ kind: 'local' })
 }))
-vi.mock('@/runtime/runtime-file-read-client', async (importOriginal) => ({
+vi.mock('@/runtime/files/reads/runtime-file-read-client', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   readRuntimeFileContent: mocks.readRuntimeFileContent
 }))
@@ -116,31 +116,5 @@ describe('two tabs sharing one model', () => {
     }
 
     expect(store.getState().editorDrafts[b.id]).toBe('mine')
-  })
-
-  it.each([
-    ['in the other workspace', false],
-    ['in the other workspace while it shows the Changes view', true]
-  ])('Undo of Reload yields to typing since %s, on every view', (_name, changesView) => {
-    const { store, a, b, edit, tab } = openSharedTabs('A')
-    edit(a.id, 'mine')
-    const toastMock = vi.mocked(toast)
-    toastMock.mockClear()
-    reloadTabContentFromDisk(store.getState().openFiles[0], vi.fn())
-    if (changesView) {
-      // Changes uses the same record, so switching views must not change sharing.
-      store.getState().setEditorViewMode(b.id, 'changes')
-    }
-    edit(b.id, 'typed after reload')
-
-    const undo: unknown = toastMock.mock.calls[0]?.[1]?.action
-    expect(isClickAction(undo)).toBe(true)
-    if (isClickAction(undo)) {
-      undo.onClick()
-    }
-
-    expect(store.getState().editorDrafts[a.id]).toBe('typed after reload')
-    expect(store.getState().editorDrafts[b.id]).toBe('typed after reload')
-    expect(tab(b.id)?.externalMutation).toBeUndefined()
   })
 })

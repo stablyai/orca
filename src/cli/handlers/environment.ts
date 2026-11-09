@@ -24,7 +24,7 @@ import {
 
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import { redactRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeStatus } from '../../shared/runtime-types'
+import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import {
   addEnvironmentFromPairingCode,
   removeEnvironment,
@@ -32,6 +32,8 @@ import {
   type EnvironmentAddResult,
   type EnvironmentRemoveResult
 } from '../runtime/environments'
+import { exchangeCliPairingCode } from '../runtime/environment-pairing-exchange'
+import { refuseReservedEnvironmentName } from '../local-environment-selector'
 import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 
 export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
@@ -57,7 +59,8 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
   },
   'environment add': async ({ flags, json }) => {
     const name = getRequiredStringFlag(flags, 'name')
-    const pairingCode = getRequiredStringFlag(flags, 'pairing-code')
+    refuseReservedEnvironmentName(name)
+    const pairingCode = await exchangeCliPairingCode(getRequiredStringFlag(flags, 'pairing-code'))
     const environment = redactRuntimeEnvironment(
       addEnvironmentFromPairingCode(getDefaultUserDataPath(), {
         name,

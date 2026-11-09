@@ -20,6 +20,7 @@ import { NodeDistMirrorSettingField } from './NodeDistMirrorSettingField'
 import { SearchableSetting } from '../../section-layout/SearchableSetting'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from '../../search/settings-search'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 
 export function shouldOpenNetworkProxyConfig(searchQuery: string): boolean {
   return (
@@ -44,22 +45,19 @@ export type HttpProxyUrlDraftState = {
   error: ProxyUrlFailureCode | null
 }
 
-function proxyUrlErrorText(code: ProxyUrlFailureCode): string {
+function proxyUrlErrorText(code: ProxyUrlFailureCode, t: Translate = translate): string {
   switch (code) {
     case 'tooLong':
-      return translate('settings.network.proxyUrlErrors.tooLong', PROXY_URL_FAILURE_COPY.tooLong)
+      return t('settings.network.proxyUrlErrors.tooLong', PROXY_URL_FAILURE_COPY.tooLong)
     case 'invalid':
-      return translate('settings.network.proxyUrlErrors.invalid', PROXY_URL_FAILURE_COPY.invalid)
+      return t('settings.network.proxyUrlErrors.invalid', PROXY_URL_FAILURE_COPY.invalid)
     case 'unsupportedProtocol':
-      return translate(
+      return t(
         'settings.network.proxyUrlErrors.unsupportedProtocol',
         PROXY_URL_FAILURE_COPY.unsupportedProtocol
       )
     case 'missingHost':
-      return translate(
-        'settings.network.proxyUrlErrors.missingHost',
-        PROXY_URL_FAILURE_COPY.missingHost
-      )
+      return t('settings.network.proxyUrlErrors.missingHost', PROXY_URL_FAILURE_COPY.missingHost)
   }
 }
 
@@ -151,6 +149,7 @@ export function AdvancedNetworkSettingsSection({
   settings,
   updateSettings
 }: AdvancedNetworkSettingsSectionProps): React.JSX.Element {
+  const t = useTranslate()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const [proxyConfigOpen, setProxyConfigOpen] = useState(false)
   const proxyConfigForcedOpen =
@@ -225,11 +224,8 @@ export function AdvancedNetworkSettingsSection({
 
   return (
     <SearchableSetting
-      title={translate(
-        'auto.components.settings.AdvancedNetworkSettingsSection.c46cdbbd4e',
-        'Network'
-      )}
-      description={translate(
+      title={t('auto.components.settings.AdvancedNetworkSettingsSection.c46cdbbd4e', 'Network')}
+      description={t(
         'auto.components.settings.AdvancedNetworkSettingsSection.823e0f15b1',
         'Proxy URL for Orca network requests and local terminal children.'
       )}
@@ -244,18 +240,15 @@ export function AdvancedNetworkSettingsSection({
         'mirror',
         'nodejs'
       ]}
-      className="space-y-3"
+      className="space-y-3 py-3"
     >
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0 space-y-0.5">
           <Label>
-            {translate(
-              'auto.components.settings.AdvancedNetworkSettingsSection.f00daf6324',
-              'HTTP Proxy'
-            )}
+            {t('auto.components.settings.AdvancedNetworkSettingsSection.f00daf6324', 'HTTP Proxy')}
           </Label>
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.AdvancedNetworkSettingsSection.1e214e265a',
               'Leave empty to use system proxy settings and inherited proxy environment variables.'
             )}
@@ -271,7 +264,7 @@ export function AdvancedNetworkSettingsSection({
             size="sm"
             className="-ml-2 h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
           >
-            {translate(
+            {t(
               'auto.components.settings.AdvancedNetworkSettingsSection.configureProxy',
               'Configure proxy'
             )}
@@ -284,7 +277,7 @@ export function AdvancedNetworkSettingsSection({
           <div className="mt-2 space-y-4 rounded-md border border-border/60 bg-muted/20 px-3 py-3">
             <div className="space-y-2">
               <Label htmlFor="settings-http-proxy-url">
-                {translate(
+                {t(
                   'auto.components.settings.AdvancedNetworkSettingsSection.f00daf6324',
                   'HTTP Proxy'
                 )}
@@ -301,7 +294,7 @@ export function AdvancedNetworkSettingsSection({
                     e.currentTarget.blur()
                   }
                 }}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.settings.AdvancedNetworkSettingsSection.476f302aca',
                   'http://proxy.example.com:8080'
                 )}
@@ -313,10 +306,12 @@ export function AdvancedNetworkSettingsSection({
                 className="font-mono text-xs"
               />
               {httpProxyUrlError ? (
-                <p className="text-xs text-destructive">{proxyUrlErrorText(httpProxyUrlError)}</p>
+                <p className="text-xs text-destructive">
+                  {proxyUrlErrorText(httpProxyUrlError, t)}
+                </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.settings.AdvancedNetworkSettingsSection.0adfce9fa7',
                     'Supports http, https, socks, socks4, and socks5 URLs.'
                   )}
@@ -326,7 +321,7 @@ export function AdvancedNetworkSettingsSection({
 
             <div className="space-y-2">
               <Label htmlFor="settings-http-proxy-bypass-rules">
-                {translate(
+                {t(
                   'auto.components.settings.AdvancedNetworkSettingsSection.f6d76cc8f4',
                   'Proxy Bypass Rules'
                 )}
@@ -336,7 +331,7 @@ export function AdvancedNetworkSettingsSection({
                 value={httpProxyBypassRulesDraft}
                 onChange={(e) => updateHttpProxyBypassRulesDraft(e.target.value)}
                 onBlur={commitHttpProxyBypassRules}
-                placeholder={translate(
+                placeholder={t(
                   'auto.components.settings.AdvancedNetworkSettingsSection.3e431564b5',
                   'localhost, 127.0.0.1, *.internal'
                 )}
@@ -348,7 +343,7 @@ export function AdvancedNetworkSettingsSection({
                 className="font-mono text-xs"
               />
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.AdvancedNetworkSettingsSection.33ee3ca3af',
                   'Optional. Separate hosts with commas, semicolons, or new lines.'
                 )}

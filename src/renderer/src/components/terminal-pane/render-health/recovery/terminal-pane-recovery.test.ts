@@ -6,25 +6,25 @@ import {
   requestTerminalPaneRecovery,
   settleTerminalPaneRecovery
 } from './terminal-pane-recovery'
-import { requestAndSettle, settleCurrentRecovery } from '../../terminal-recovery-ledger-test-driver'
+import { requestAndSettle, settleCurrentRecovery } from './terminal-recovery-ledger-test-driver'
 import {
   recoveryLedgerMocks as mocks,
   resetRecoveryLedgerStore,
   setTerminalTabs,
   terminalTabs
-} from '../../terminal-recovery-ledger-test-store'
+} from './terminal-recovery-ledger-test-store'
 import { isTerminalInputQuarantined } from '../../input/terminal-input-quarantine'
 
 const { notifyTerminalInputNotSent } = vi.hoisted(() => ({ notifyTerminalInputNotSent: vi.fn() }))
 vi.mock('../../input/terminal-input-not-sent-notice', () => ({ notifyTerminalInputNotSent }))
 
 vi.mock('@/store/index', async () => {
-  const store = await import('../../terminal-recovery-ledger-test-store')
+  const store = await import('./terminal-recovery-ledger-test-store')
   return { useAppStore: { getState: () => store.recoveryLedgerStoreState() } }
 })
 
 vi.mock('@/lib/crash-breadcrumb-recorder', async () => {
-  const store = await import('../../terminal-recovery-ledger-test-store')
+  const store = await import('./terminal-recovery-ledger-test-store')
   return { recordRendererCrashBreadcrumb: store.recoveryLedgerMocks.recordRendererCrashBreadcrumb }
 })
 

@@ -17,8 +17,8 @@ import {
   moveWebRuntimeLeafToNewTab,
   resolvePaneMoveHost,
   settleHostPaneMove
-} from '@/runtime/web-runtime-leaf-move'
-import { resolveHostTabDropTarget } from '@/runtime/web-runtime-session-tab-move'
+} from '@/runtime/hosted-terminals/actions/web-runtime-leaf-move'
+import { resolveHostTabDropTarget } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-move'
 
 export type TerminalPaneTabDetachStore = Pick<
   AppState,

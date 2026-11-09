@@ -1,4 +1,3 @@
-import '../../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { execFileSync } from 'node:child_process'
 import { stripTypeScriptTypes } from 'node:module'
 import { beforeAll, expect, it, vi } from 'vitest'

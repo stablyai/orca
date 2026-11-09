@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { listServerRepos, type ListedRepo } from './server-repos'
 
 type ServerRepo<Repo> = Repo & { executionHostId: ExecutionHostId }

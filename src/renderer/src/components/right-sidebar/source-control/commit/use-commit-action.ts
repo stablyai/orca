@@ -1,9 +1,13 @@
+import { GIT_GRAPH_REFRESH_EVENT } from '@/lib/git-graph-tab'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { requireGitOwnerTarget } from '../sync/worktree-git-owner-target'
 import { translate } from '@/i18n/i18n'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
-import { commitRuntimeGit, completeRuntimeGitMerge } from '@/runtime/runtime-git-sync-client'
+import {
+  commitRuntimeGit,
+  completeRuntimeGitMerge
+} from '@/runtime/source-control/git/runtime-git-sync-client'
 import type { SourceControlOperationTarget } from '../listing/operation-target'
 import type { SourceControlStoreActions } from '../listing/use-store-actions'
 import type { SourceControlWorktreeContext } from '../listing/use-worktree-context'
@@ -112,6 +116,9 @@ export function useSourceControlCommitAction({
         }
         if (!options?.target) {
           void refreshBranchCompareRef.current()
+          window.dispatchEvent(
+            new CustomEvent(GIT_GRAPH_REFRESH_EVENT, { detail: target.worktreeId })
+          )
           void refreshGitHistoryRef.current()
         }
         return true
@@ -184,6 +191,7 @@ export function useSourceControlCommitAction({
       )
     }
     void refreshBranchCompareRef.current()
+    window.dispatchEvent(new CustomEvent(GIT_GRAPH_REFRESH_EVENT, { detail: activeWorktreeId }))
     void refreshGitHistoryRef.current()
   }, [
     activeRepoTarget,

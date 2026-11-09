@@ -7,7 +7,7 @@ import { runTerminalCopy, runTerminalIdentityCopy } from './terminal-copy-reject
 import { readTerminalClipboardSelection } from './terminal-clipboard-selection-text'
 import { useAppStore } from '@/store/index'
 import { fencedCode } from '../../editor/selection-copy'
-import { formatNativeChatQuote } from '../../native-chat/native-chat-quote-selection'
+import { formatNativeChatQuote } from '../../native-chat/selection-quotes/native-chat-quote-selection'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
 
 export const copyTerminalPaneMenuSelection = async (pane: ManagedPane | null): Promise<void> => {

@@ -95,7 +95,7 @@ async function publishHostSurface(
   }
   // Why dynamic: the harness resets modules, so the transport's channel is the freshly loaded one.
   const { queueAcceptedWebSessionTerminalSnapshot } =
-    await import('../../../../runtime/web-session-terminal-handle-events')
+    await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
   queueAcceptedWebSessionTerminalSnapshot(
     {
       worktree: 'wt-1',

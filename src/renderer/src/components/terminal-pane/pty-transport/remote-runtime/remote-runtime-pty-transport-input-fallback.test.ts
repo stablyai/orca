@@ -254,6 +254,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       inputLedgerId: vi.fn(() => null),
       resize: vi.fn(() => true),
       serializeBuffer: vi.fn(async () => null),
+      setOutputCadence: vi.fn(),
       close: vi.fn()
     }
     const subscribeTerminal = vi
@@ -268,9 +269,12 @@ describe('createRemoteRuntimePtyTransport', () => {
         args.callbacks.onSubscribed?.()
         return newStream
       })
-    vi.doMock('../../../../runtime/remote-runtime-terminal-multiplexer', () => ({
-      getRemoteRuntimeTerminalMultiplexer: vi.fn(() => ({ subscribeTerminal }))
-    }))
+    vi.doMock(
+      '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry',
+      () => ({
+        getRemoteRuntimeTerminalMultiplexer: vi.fn(() => ({ subscribeTerminal }))
+      })
+    )
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
     const onError = vi.fn()
     const onPtyExit = vi.fn()

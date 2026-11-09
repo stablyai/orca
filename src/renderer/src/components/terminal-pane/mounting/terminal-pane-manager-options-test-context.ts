@@ -1,6 +1,6 @@
 import { vi } from 'vitest'
 import type { PanePtyBinding } from '../pty-connection/pane-pty-binding'
-import type { PtyConnectionDeps } from '../pty-connection-types'
+import type { PtyConnectionDeps } from '../pty-connection/pty-connection-deps'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
 
 export function createPaneManagerOptionsTestContext(

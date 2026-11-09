@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store/index'
-import { createEditorTabsStore } from '@/store/slices/editor-slice-test-harness'
+import { createEditorTabsStore } from '@/store/slices/editor/editor-slice-test-harness'
 import type { PRCheckRunDetails } from '../../../../../../shared/github/check-types'
 import { readingCheck, readingDetails } from '../reading/check-details-reading-fixture'
 import { CheckRunDetailsPanel } from './CheckRunDetailsPanel'

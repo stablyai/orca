@@ -7,7 +7,7 @@ import {
   type ExecutionHostKind,
   type ExecutionHostScope
 } from '../execution-host'
-import type { ExecutionHostHealth } from '../execution-host-registry'
+import type { ExecutionHostHealth } from '../execution-host/execution-host-health'
 import type { RuntimeCompatVerdict } from '../protocol-compat'
 import type { RuntimeHostBlockedReason } from '../remote-runtime/host-status/runtime-host-status'
 import type { SshConnectionStatus } from '../ssh-types'
@@ -82,7 +82,7 @@ function localizePendingRowsForHost(
   const localized: Extract<Row, { type: 'header' }>[] = []
   for (const row of rows) {
     if (!row.hostWorktreeCounts) {
-      localized.push(row)
+      localized.push({ ...row, hostId })
       continue
     }
     const count = row.hostWorktreeCounts.get(hostId)
