@@ -147,14 +147,20 @@ export async function waitForIdle(page: Page, sessionId: string, timeoutMs = 120
   throw new Error(`${sessionId}: still active after ${timeoutMs} ms`)
 }
 
-export async function userItemIds(page: Page, sessionId: string, limit = 200): Promise<string[]> {
+/** Message item ids of one role, oldest first: rewind cuts at a user prompt, fork copies through a response. */
+export async function messageItemIds(
+  page: Page,
+  sessionId: string,
+  role: 'user' | 'assistant',
+  limit = 200
+): Promise<string[]> {
   const ids: string[] = []
   let cursor: unknown
   for (;;) {
     const read = await history(page, sessionId, cursor ? 'before' : 'tail', 200, cursor)
     ids.unshift(
       ...read.page.items
-        .filter((item) => item.body?.kind === 'message' && item.body.role === 'user')
+        .filter((item) => item.body?.kind === 'message' && item.body.role === role)
         .map((item) => item.itemId)
     )
     if (!read.page.hasOlder || ids.length >= limit) {
