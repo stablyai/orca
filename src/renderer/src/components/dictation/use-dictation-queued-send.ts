@@ -105,14 +105,17 @@ export function useDictationQueuedSend(
         return
       }
       const landed = await delivery.settled()
-      // A later session may have queued its own send meanwhile; leave that one alone.
-      if (queuedRef.current === queued) {
-        clear()
-      }
       // A cancel or failure while the words were landing drops the send.
       const stillQueued = (): boolean => sessionRef.current.run === run
-      if (landed && stillQueued()) {
-        await queued.send(stillQueued)
+      try {
+        if (landed && stillQueued()) {
+          await queued.send(stillQueued)
+        }
+      } finally {
+        // A later session may have queued its own send meanwhile; leave that one alone.
+        if (queuedRef.current === queued) {
+          clear()
+        }
       }
     },
     [keptRef, sessionRef, clear]
