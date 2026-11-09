@@ -34,6 +34,9 @@ beforeEach(() => {
     configurable: true,
     value: {
       emulator: {
+        startControlStream: () => Promise.resolve(),
+        stopControlStream: () => Promise.resolve(),
+        onControlStreamEvent: () => () => {},
         startFrameStream,
         stopFrameStream,
         onFrameStreamFrame: (_listener: FrameListener) => () => {},

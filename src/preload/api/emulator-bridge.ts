@@ -1,7 +1,20 @@
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
+import type { EmulatorControlStreamEvent } from './emulator-api'
 
 export const emulatorApi = {
+  startControlStream: (args: { wsUrl: string; streamId: string }): Promise<void> =>
+    ipcRenderer.invoke('emulator:controlStreamStart', args),
+  stopControlStream: (args: { streamId: string }): Promise<void> =>
+    ipcRenderer.invoke('emulator:controlStreamStop', args),
+  sendControlStream: (args: { streamId: string; data: string | Uint8Array }): void =>
+    ipcRenderer.send('emulator:controlStreamSend', args),
+  onControlStreamEvent: (callback: (data: EmulatorControlStreamEvent) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, data: EmulatorControlStreamEvent) =>
+      callback(data)
+    ipcRenderer.on('emulator:controlStreamEvent', listener)
+    return () => ipcRenderer.removeListener('emulator:controlStreamEvent', listener)
+  },
   startFrameStream: (args: {
     streamUrl: string
     streamKey?: string

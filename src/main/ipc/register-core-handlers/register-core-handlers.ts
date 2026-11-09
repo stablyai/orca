@@ -62,9 +62,8 @@ import { registerPetHandlers } from '../pets/pet'
 import { registerPluginHandlers } from '../plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
 import { registerEmulatorFrameStreamHandlers } from '../emulator-frame-stream'
+import { registerEmulatorControlStreamHandlers } from '../emulator-control-stream'
 import { registerEmulatorVideoStreamHandlers } from '../emulator-video-stream'
-import { registerEmulatorScrcpyTouchHandler } from '../emulator-scrcpy-touch'
-import { registerEmulatorScrcpyKeyboardHandler } from '../emulator-scrcpy-keyboard'
 import { registerSpeechHandlers } from '../speech'
 import { registerTerminalRenderDesyncEvidenceHandler } from '../terminal-render-desync-evidence'
 import { registerOrcaProfileHandlers } from '../profiles/orca-profiles'
@@ -241,9 +240,8 @@ export function registerCoreHandlers(
   registerSessionHandlers(store, runtime)
   registerUIHandlers(store, { isDashboardPopoutRenderer })
   registerEmulatorFrameStreamHandlers()
+  registerEmulatorControlStreamHandlers(() => runtime.getEmulatorBridge())
   registerEmulatorVideoStreamHandlers((id) => runtime.getEmulatorBridge()?.getIosVideoStreamUrl(id))
-  registerEmulatorScrcpyTouchHandler()
-  registerEmulatorScrcpyKeyboardHandler()
   registerWorkspaceSpaceHandlers(store)
   registerWorkspacePortHandlers(store)
   registerLinkPreviewHandlers()
