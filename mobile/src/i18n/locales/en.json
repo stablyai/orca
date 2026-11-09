@@ -3598,7 +3598,8 @@
       "loadReposRetry": "Load repositories",
       "setupChoiceTitle": "Retry without setup?",
       "setupChoiceMessage": "Orca couldn't confirm the last create in {{repo}}. Retrying it needs a setup choice; it will be created without running the repository's setup.",
-      "setupChoiceSkip": "Retry without setup"
+      "setupChoiceSkip": "Retry without setup",
+      "checking": "A worktree from {{repo}} may already have been created. Checking the folder…"
     },
     "hostedReviewCopy": {
       "updatingBranch": "Updating branch...",

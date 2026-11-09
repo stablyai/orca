@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { FolderListRow } from './mobile-folder-attached-worktrees'
 
 const seen = vi.hoisted(() => {
-  const state: { composerOpen: boolean; membersObserving: boolean[]; rowsSubscribed: boolean[] } = {
-    composerOpen: false,
+  const state: { covered: boolean; membersObserving: boolean[]; rowsSubscribed: boolean[] } = {
+    covered: false,
     membersObserving: [],
     rowsSubscribed: []
   }
@@ -61,7 +61,7 @@ vi.mock('../../components/host-protocol-gates-context', () => ({
 vi.mock('./use-folder-create-flow', () => ({
   useFolderCreateFlow: () => ({
     onCreate: async () => {},
-    composerOpen: seen.composerOpen,
+    covered: seen.covered,
     composerElement: null,
     toastElement: null
   })
@@ -101,14 +101,14 @@ let renderer: ReactTestRenderer | null = null
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
-  seen.composerOpen = false
+  seen.covered = false
   seen.membersObserving = []
   seen.rowsSubscribed = []
 })
 
 describe('MobileFolderSourceControlPanel', () => {
   it('pauses row status under the create form while the folder members stay live', () => {
-    seen.composerOpen = true
+    seen.covered = true
     act(() => {
       renderer = create(
         createElement(MobileFolderSourceControlPanel, {

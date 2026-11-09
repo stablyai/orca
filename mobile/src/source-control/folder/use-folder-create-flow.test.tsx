@@ -12,7 +12,7 @@ import { useFolderCreateFlow, type FolderCreateRepo } from './use-folder-create-
 const seen = vi.hoisted(() => {
   const state: {
     composer: NewWorktreeModalProps | null
-    confirm: { visible: boolean; onConfirm?: () => void } | null
+    confirm: { visible: boolean; onConfirm?: () => void; onCancel: () => void } | null
     toasts: string[]
     haptics: number
   } = { composer: null, confirm: null, toasts: [], haptics: 0 }
@@ -26,7 +26,7 @@ vi.mock('../../components/NewWorktreeModalController', () => ({
   }
 }))
 vi.mock('../../components/ConfirmModal', () => ({
-  ConfirmModal: (props: { visible: boolean; onConfirm?: () => void }) => {
+  ConfirmModal: (props: { visible: boolean; onConfirm?: () => void; onCancel: () => void }) => {
     seen.confirm = props
     return null
   }
@@ -251,5 +251,52 @@ describe('useFolderCreateFlow', () => {
 
     form.folderLaunch?.submit.begin({ ...b.repo, path: '/w/b' })?.settle('uncertain')
     expect(refetch).toHaveBeenCalledTimes(1)
+  })
+  async function setupRefusedRetry(flow: { current: Flow | null }) {
+    const a = repoIn()
+    const lost = new FakeSession('connected')
+    lost.sendRequest.mockRejectedValueOnce(markRpcDeliveryUnknown(new Error('connection lost')))
+    await act(() => flow.current!.onCreate(a.repo, a.target, lost, 'payments'))
+    vi.advanceTimersByTime(60_000)
+    const retry = replying({
+      id: '1',
+      ok: false,
+      error: { code: 'x', message: 'Setup decision required for this repository' }
+    })
+    return { a, pending: flow.current!.onCreate(a.repo, a.target, retry.client, 'payments'), retry }
+  }
+
+  it("doesn't open a setup choice over another form, and the repository can retry after", async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    const { flow } = mountFlow(() => {})
+    const { a, pending, retry } = await setupRefusedRetry(flow)
+    const form = await openComposer(flow)
+    retry.answer()
+    await act(() => pending)
+
+    expect(seen.confirm?.visible).toBe(false)
+    expect(composer().folderLaunch?.repoId).toBe(form.folderLaunch?.repoId)
+    expect(isFolderRepoCreateBusy(a.target)).toBe(false)
+  })
+
+  it("doesn't open a composer over a setup choice, and covers the list while it is open", async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
+    const { flow } = mountFlow(() => {})
+    const { pending, retry } = await setupRefusedRetry(flow)
+    retry.answer()
+    await act(() => pending)
+    expect(seen.confirm?.visible).toBe(true)
+    expect(flow.current!.covered).toBe(true)
+
+    const b = repoIn()
+    const refusal = replying({ id: '1', ok: false, error: { code: 'x', message: TAKEN } })
+    const opening = flow.current!.onCreate(b.repo, b.target, refusal.client, 'payments')
+    refusal.answer()
+    await act(() => opening)
+    expect(composer().visible).toBe(false)
+    expect(isFolderRepoCreateBusy(b.target)).toBe(false)
+
+    act(() => seen.confirm?.onCancel())
+    expect(flow.current!.covered).toBe(false)
   })
 })

@@ -274,17 +274,25 @@ describe('beginFolderComposerSubmission', () => {
     expect(isFolderRepoCreateBusy(repo)).toBe(false)
     expect(isFolderRepoCreateBusy(other)).toBe(true)
   })
-  it("never sends a form's lost create again: the form is refused and a card tap resends only the exact name", async () => {
+  it("never sends anything from a card for a form's unconfirmed create, whatever name it used", async () => {
     vi.useFakeTimers({ toFake: ['setTimeout'] })
     const { repo, launch } = await composing()
+    // The form may have sent another name or branch than the card's.
     beginFolderComposerSubmission(repo, launch, () => true)?.settle('uncertain')
     vi.advanceTimersByTime(60_000)
 
     expect(beginFolderComposerSubmission(repo, launch, () => true)).toBeNull()
-    const tap = host(refused(TAKEN))
-    await expect(create(repo, tap)).resolves.toEqual({ kind: 'maybe-created' })
-    expect(tap.sendRequest.mock.calls.map(([, params]) => params)).toEqual([
-      expect.objectContaining({ name: 'payments', branchIntent: 'create-exact' })
-    ])
+    const tap = host(CREATED)
+    await expect(create(repo, tap)).resolves.toEqual({ kind: 'checking' })
+    await expect(
+      createFolderRepoWorktree({
+        target: repo,
+        client: tap,
+        name: 'payments',
+        setupDecision: 'skip'
+      })
+    ).resolves.toEqual({ kind: 'checking' })
+    expect(tap.sendRequest).not.toHaveBeenCalled()
+    expect(isFolderRepoCreateBusy(repo)).toBe(false)
   })
 })

@@ -80,8 +80,8 @@ export function MobileFolderSourceControlPanel({
     refetch,
     bottomInset: insets.bottom
   })
-  // Rows and repositories under the create form wait; the folder's members stay live so creates still reconcile.
-  const statusObserving = observing && !createFlow.composerOpen
+  // Rows and repositories under a create form wait; the folder's members stay live so creates still reconcile.
+  const statusObserving = observing && !createFlow.covered
   const refresh = () => {
     refetch()
     for (const refreshNow of refreshers) {

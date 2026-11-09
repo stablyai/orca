@@ -31,8 +31,17 @@ type Phase =
   /** Created, or possibly created: kept until the folder's members show it. */
   | 'held'
 
-/** `name` is the exact name it was sent as, so an unresolved create is retried as itself. */
-type Operation = FolderRepoTarget & { id: number; phase: Phase; busy: boolean; name: string }
+/**
+ * `name` is the exact name a direct create was sent as, so an unresolved one is retried as itself.
+ * A composer's create may have used another name or branch, so it is never resent from a card.
+ */
+type Operation = FolderRepoTarget & {
+  id: number
+  phase: Phase
+  busy: boolean
+  name: string
+  origin: 'direct' | 'composer'
+}
 
 // In memory and shared across screens, so a remount or a reopened composer can't send a second create.
 const operations = new Map<string, Operation>()
@@ -65,8 +74,13 @@ export function isFolderRepoCreateBusy(target: FolderRepoTarget): boolean {
   return operations.get(folderRepoCreateKey(target))?.busy === true
 }
 
-function start(target: FolderRepoTarget, phase: Phase, name: string): Operation {
-  const operation = { ...target, id: nextId++, phase, busy: true, name }
+function start(
+  target: FolderRepoTarget,
+  phase: Phase,
+  name: string,
+  origin: Operation['origin']
+): Operation {
+  const operation = { ...target, id: nextId++, phase, busy: true, name, origin }
   operations.set(folderRepoCreateKey(target), operation)
   notify()
   return operation
@@ -138,6 +152,8 @@ export type FolderRepoCreateOutcome =
   | { kind: 'maybe-created' }
   /** An unconfirmed create's resend needs a setup choice; it is resent as the same exact name with it. */
   | { kind: 'needs-setup-choice' }
+  /** A composer's create is unconfirmed: nothing is sent, the folder is checked until it lists it. */
+  | { kind: 'checking' }
   | { kind: 'failed'; message: string }
   | { kind: 'already-running' }
 
@@ -157,10 +173,13 @@ export async function createFolderRepoWorktree(args: {
   if (existing && (existing.phase !== 'held' || existing.busy)) {
     return { kind: 'already-running' }
   }
+  if (existing?.origin === 'composer') {
+    return { kind: 'checking' }
+  }
   // An unconfirmed create is retried as the same exact name, even after a rename: a taken name may be its own.
   const unresolved = existing !== undefined
   const name = existing?.name ?? args.name
-  const operation = start(args.target, 'creating', name)
+  const operation = start(args.target, 'creating', name, 'direct')
   const settleUnresolved = (outcome: FolderRepoCreateOutcome): FolderRepoCreateOutcome => {
     hold(operation)
     return outcome
@@ -260,7 +279,7 @@ export function beginFolderComposerSubmission(
   if (existing && !ownsReservation) {
     return null
   }
-  const operation = start(target, 'submitting', launch.name)
+  const operation = start(target, 'submitting', launch.name, 'composer')
   return {
     settle: (outcome) => {
       if (outcome === 'created' || outcome === 'uncertain') {

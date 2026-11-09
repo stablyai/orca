@@ -61,8 +61,9 @@ export function useFolderCreateFlow(args: {
   const { message, showToast } = useTransientToast()
   const [composer, setComposer] = useState<ComposerLaunch | null>(null)
   const [setupChoice, setSetupChoice] = useState<SetupChoice | null>(null)
-  // Set as forms open and close, not after render, so two refusals landing together can't both open one.
-  const composerRef = useRef<ComposerLaunch | null>(null)
+  // The one form on screen, composer or setup choice. Set as forms open and close, not after render, so
+  // two answers landing together can't both open one.
+  const openRef = useRef<ComposerLaunch | SetupChoice | null>(null)
   // The newest opening: an older form's late answer shows nothing over it.
   const latestLaunchRef = useRef<ComposerLaunch | null>(null)
   // Late answers show nothing once this screen is left or covered; the create itself still settles.
@@ -74,10 +75,10 @@ export function useFolderCreateFlow(args: {
     () => () => {
       presentingRef.current = false
       latestLaunchRef.current = null
-      const open = composerRef.current
-      composerRef.current = null
+      const open = openRef.current
+      openRef.current = null
       // Left without sending from the form: its repository takes taps again.
-      if (open) {
+      if (open && 'reservation' in open) {
         releaseFolderComposerReservation(open.target, open.reservation)
       }
     },
@@ -103,12 +104,19 @@ export function useFolderCreateFlow(args: {
       setupDecision?: 'skip'
     ) => {
       const outcome = await createFolderRepoWorktree({ target, client, name, setupDecision })
-      if (outcome.kind === 'created' || outcome.kind === 'maybe-created') {
+      if (
+        outcome.kind === 'created' ||
+        outcome.kind === 'maybe-created' ||
+        outcome.kind === 'checking'
+      ) {
         refetch()
       }
-      if (outcome.kind === 'needs-composer' && (!presenting() || composerRef.current)) {
+      const opensForm = outcome.kind === 'needs-composer' || outcome.kind === 'needs-setup-choice'
+      if (opensForm && (!presenting() || openRef.current)) {
         // Left, or another form is open: keep that form and leave this repository to try again.
-        releaseFolderComposerReservation(target, outcome.reservation)
+        if (outcome.kind === 'needs-composer') {
+          releaseFolderComposerReservation(target, outcome.reservation)
+        }
         return
       }
       if (!presenting()) {
@@ -123,8 +131,18 @@ export function useFolderCreateFlow(args: {
               repo: repo.displayName
             })
         )
+      } else if (outcome.kind === 'checking') {
+        showToast(
+          t(
+            'sourceControl.folder.checking',
+            'A worktree from {{repo}} may already have been created. Checking the folder…',
+            { repo: repo.displayName }
+          )
+        )
       } else if (outcome.kind === 'needs-setup-choice') {
-        setSetupChoice({ repo, target, client, name })
+        const choice = { repo, target, client, name }
+        openRef.current = choice
+        setSetupChoice(choice)
       } else if (outcome.kind === 'needs-composer') {
         const launch = {
           target,
@@ -132,7 +150,7 @@ export function useFolderCreateFlow(args: {
           executionHostId: getRepoExecutionHostId(repo),
           name
         }
-        composerRef.current = launch
+        openRef.current = launch
         latestLaunchRef.current = launch
         setComposer(launch)
       } else if (outcome.kind === 'failed') {
@@ -171,7 +189,7 @@ export function useFolderCreateFlow(args: {
                   const submission = beginFolderComposerSubmission(
                     { ...launch.target, repoId: repo.id },
                     launch,
-                    () => composerRef.current === launch
+                    () => openRef.current === launch
                   )
                   return (
                     submission && {
@@ -205,14 +223,22 @@ export function useFolderCreateFlow(args: {
         // Only this opening's close: an older submission settling can't close a newer form.
         if (launch) {
           releaseFolderComposerReservation(launch.target, launch.reservation)
-          if (composerRef.current === launch) {
-            composerRef.current = null
+          if (openRef.current === launch) {
+            openRef.current = null
           }
         }
         setComposer((current) => (current === launch ? null : current))
       }}
     />
   )
+  const choice = setupChoice
+  // Only this dialog's own answer: it closes itself and nothing newer.
+  const closeChoice = () => {
+    if (openRef.current === choice) {
+      openRef.current = null
+    }
+    setSetupChoice((current) => (current === choice ? null : current))
+  }
   const setupChoiceElement = (
     <ConfirmModal
       visible={setupChoice !== null}
@@ -220,28 +246,23 @@ export function useFolderCreateFlow(args: {
       message={t(
         'sourceControl.folder.setupChoiceMessage',
         "Orca couldn't confirm the last create in {{repo}}. Retrying it needs a setup choice; it will be created without running the repository's setup.",
-        { repo: setupChoice?.repo.displayName ?? '' }
+        { repo: choice?.repo.displayName ?? '' }
       )}
       confirmLabel={t('sourceControl.folder.setupChoiceSkip', 'Retry without setup')}
       onConfirm={() => {
-        if (setupChoice) {
-          setSetupChoice(null)
-          void onCreate(
-            setupChoice.repo,
-            setupChoice.target,
-            setupChoice.client,
-            setupChoice.name,
-            'skip'
-          )
+        if (choice) {
+          closeChoice()
+          void onCreate(choice.repo, choice.target, choice.client, choice.name, 'skip')
         }
       }}
-      onCancel={() => setSetupChoice(null)}
+      onCancel={closeChoice}
     />
   )
   const toastElement = <TransientToast message={message} bottomInset={args.bottomInset} />
   return {
     onCreate,
-    composerOpen: composer !== null,
+    /** A form covers the screen: the list under it waits. */
+    covered: composer !== null || setupChoice !== null,
     composerElement: (
       <>
         {composerElement}
