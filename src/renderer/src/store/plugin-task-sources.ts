@@ -1,6 +1,9 @@
 import { useEffect, useMemo } from 'react'
 import type { PluginHostListEntry } from '../../../preload/api-types'
-import { ensurePluginPanelsLoaded, usePluginPanelsStore } from './plugin-panels'
+import {
+  ensurePluginPanelsLoaded,
+  usePluginPanelsStore
+} from './plugins/catalog/plugin-contribution-catalog'
 import {
   pluginTaskSourceKey,
   type PluginTaskSourceRef

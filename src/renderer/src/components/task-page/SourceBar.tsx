@@ -101,10 +101,7 @@ export function TaskPageSourceBar({
                   defaultPluginTaskSource: null
                 }).catch(() => {
                   toast.error(
-                    t(
-                      'auto.components.TaskPage.609532fae7',
-                      'Failed to save default task source.'
-                    )
+                    t('auto.components.TaskPage.609532fae7', 'Failed to save default task source.')
                   )
                 })
               }}

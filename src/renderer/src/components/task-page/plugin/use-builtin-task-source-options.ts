@@ -3,7 +3,7 @@ import { useAppStore } from '@/store'
 import {
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider
-} from '../../../../../shared/task-providers'
+} from '../../../../../shared/work-items/task-providers'
 import { getSourceOptions } from '../task-page-localized-options'
 
 /** Built-in source tabs for the plugin page, filtered the same way the built-in page filters them. */

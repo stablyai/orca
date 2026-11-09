@@ -116,7 +116,6 @@ describe('normalizeWorktreeLinkedItemMetadata', () => {
     expect(state.worktreeMeta['r1::/tmp/partial']?.linkedPluginTask).toBeNull()
     expect(state.worktreeMeta['r1::/tmp/valid']?.linkedPluginTask).toEqual(link)
   })
-
 })
 
 describe('gcStaleWorktreeMeta', () => {
