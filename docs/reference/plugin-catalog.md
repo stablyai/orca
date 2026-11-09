@@ -26,6 +26,7 @@ One installable plugin.
 | `id` | string | yes | 1.4.245 | `<publisher>.<id>`: the publisher is the repository owner, lowercased (Orca installs under this key, whatever the manifest's deprecated `publisher` says), and the id is the manifest's `id`. Each half is at most 64 characters, and the reserved names `constructor` and `prototype` are refused. Example: `"acme.gleam-syntax"` |
 | `source` | [CatalogGitSource](#cataloggitsource) | yes |  | Where the plugin source lives. |
 | `ownerId` | integer | no | 1.4.246 | GitHub's numeric id of the repository owner, recorded the first time the plugin was listed. Names can be renamed or re-registered; this id cannot. Informational: Orca does not read it yet, and older Orca ignores it. Example: `1234567` |
+| `addedAt` | string | no | 1.4.256 | When the plugin was first listed in this catalog, as an ISO 8601 date or date-time. Written by the catalog, not the author; Orca shows the newest plugins in a Newly added row. Example: `"2026-11-09T12:47:57Z"` |
 | `description` | string | no | 1.4.245 | Listing text shown in the catalog. |
 | `categories` | string[] | no | 1.4.245 | Lowercase slugs used to filter the catalog, each listed once. At most 16; extras are ignored. |
 | `releases` | [CatalogRelease](#catalogrelease)[] | yes | 1.4.245 | Installable releases, newest first. Orca installs the first one whose `minimumOrca` it meets, so keep older releases listed when you raise `engines.orca`. At most 32. |

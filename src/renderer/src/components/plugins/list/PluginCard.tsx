@@ -1,4 +1,4 @@
-import { BadgeCheck, Check } from 'lucide-react'
+import { BadgeCheck, Check, Sparkles } from 'lucide-react'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { pluginOfficialLabel } from '../presentation/plugin-official-label'
 import { Badge } from '../../ui/badge'
@@ -19,6 +19,10 @@ type PluginCardProps = {
   /** Replaces the description, e.g. an install error; keeps the two-line height. */
   notice?: { text: string; tone: 'destructive' | 'warning' }
   chips?: React.ReactNode
+  /** Listed recently: a New badge on the art unless it is installed. */
+  isNew?: boolean
+  /** Replaces the install count after the publisher, e.g. "Added 3h ago". */
+  metaDetail?: string
   action: React.ReactNode
   onOpen: () => void
   onIntent?: () => void
@@ -35,6 +39,8 @@ export function PluginCard({
   palettes,
   notice,
   chips,
+  isNew = false,
+  metaDetail,
   action,
   onOpen,
   onIntent,
@@ -80,6 +86,11 @@ export function PluginCard({
             <Check className="text-status-success" aria-hidden="true" />
             {t('auto.components.settings.PluginCardAction.installed', 'Installed')}
           </Badge>
+        ) : isNew ? (
+          <Badge variant="dot" data-plugin-new-badge="" className="absolute top-2 left-2">
+            <Sparkles aria-hidden="true" />
+            {t('auto.components.plugins.PluginCard.new', 'New')}
+          </Badge>
         ) : null}
       </div>
       <div className="flex flex-1 flex-col gap-1 px-3.5 pt-3 pb-3">
@@ -105,7 +116,12 @@ export function PluginCard({
         </div>
         <p className="h-4 truncate text-xs text-muted-foreground">
           {entry.publisher}
-          {installCount !== null ? (
+          {metaDetail ? (
+            <span data-plugin-meta-detail="">
+              {entry.publisher ? ' · ' : ''}
+              {metaDetail}
+            </span>
+          ) : installCount !== null ? (
             <span data-plugin-install-count="">
               {entry.publisher ? ' · ' : ''}
               {pluginInstallCountLabel(installCount, t, intlLocale)}

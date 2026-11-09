@@ -18,6 +18,8 @@ type PluginListGroupProps = {
   showHeading?: boolean
   /** `grid` lays its children out as catalog cards. */
   layout?: 'list' | 'grid'
+  /** Grid only: show just the cards that fit one row at the current column count. */
+  singleRow?: boolean
   children?: React.ReactNode
 }
 
@@ -32,6 +34,7 @@ export function PluginListGroup({
   onShowAll,
   showHeading = true,
   layout = 'list',
+  singleRow = false,
   children
 }: PluginListGroupProps): React.JSX.Element {
   const t = useTranslate()
@@ -65,7 +68,8 @@ export function PluginListGroup({
       {children ? (
         <ul
           data-layout={layout}
-          className="list-none data-[layout=grid]:grid data-[layout=grid]:grid-cols-1 data-[layout=grid]:gap-4 data-[layout=grid]:@min-[460px]/plugin-catalog:grid-cols-2 data-[layout=grid]:@min-[720px]/plugin-catalog:grid-cols-3 data-[layout=grid]:@min-[1056px]/plugin-catalog:grid-cols-4"
+          data-single-row={singleRow || undefined}
+          className="list-none data-single-row:[&>li:nth-child(n+5)]:hidden data-single-row:@max-[1056px]/plugin-catalog:[&>li:nth-child(n+4)]:hidden data-single-row:@max-[720px]/plugin-catalog:[&>li:nth-child(n+3)]:hidden data-single-row:@max-[460px]/plugin-catalog:[&>li:nth-child(n+2)]:hidden data-[layout=grid]:grid data-[layout=grid]:grid-cols-1 data-[layout=grid]:gap-4 data-[layout=grid]:@min-[460px]/plugin-catalog:grid-cols-2 data-[layout=grid]:@min-[720px]/plugin-catalog:grid-cols-3 data-[layout=grid]:@min-[1056px]/plugin-catalog:grid-cols-4"
         >
           {children}
         </ul>

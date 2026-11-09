@@ -50,14 +50,16 @@ function FilterOption({
 export function PluginFilterPopover({
   filter,
   sources,
+  showAddedThisWeek,
   onChange
 }: {
   filter: PluginListFilter
   sources: readonly PluginMarketplaceHostSourceState[]
+  showAddedThisWeek: boolean
   onChange: (filter: PluginListFilter) => void
 }): React.JSX.Element {
   const t = useTranslate()
-  const active = filter.sourceIds.size
+  const active = filter.sourceIds.size + (filter.addedThisWeek ? 1 : 0)
   const label = t('auto.components.settings.PluginFilterPopover.catalogLabel', 'Filter by catalog')
   return (
     <Popover>
@@ -89,13 +91,36 @@ export function PluginFilterPopover({
             ))}
           </div>
         ) : null}
+        {showAddedThisWeek || filter.addedThisWeek ? (
+          <div
+            role="group"
+            aria-label={t('auto.components.plugins.PluginFilterPopover.added', 'Added')}
+            className="mt-1 border-t border-border pt-1"
+          >
+            <p className="px-2 pt-1.5 pb-1 text-xs font-medium text-muted-foreground">
+              {t('auto.components.plugins.PluginFilterPopover.added', 'Added')}
+            </p>
+            <FilterOption
+              id="plugin-filter-added-this-week"
+              label={t('auto.components.plugins.PluginFilterPopover.thisWeek', 'This week')}
+              checked={filter.addedThisWeek}
+              onChange={(on) => onChange({ ...filter, addedThisWeek: on })}
+            />
+          </div>
+        ) : null}
         <div className="mt-1 border-t border-border pt-1">
           <Button
             variant="ghost"
             size="sm"
             className="w-full justify-start"
             disabled={active === 0}
-            onClick={() => onChange({ ...filter, sourceIds: NO_PLUGIN_LIST_FILTER.sourceIds })}
+            onClick={() =>
+              onChange({
+                ...filter,
+                sourceIds: NO_PLUGIN_LIST_FILTER.sourceIds,
+                addedThisWeek: false
+              })
+            }
           >
             {t('auto.components.settings.PluginFilterPopover.clear', 'Clear filters')}
           </Button>

@@ -44,6 +44,8 @@ export type PluginMarketplaceListing = {
   official: boolean
   bundled: boolean
   blockedByKillList?: { reason: string; advisoryUrl?: string }
+  /** When the catalog first listed the plugin (ISO 8601); absent when the catalog doesn't say. */
+  addedAt?: string
   /** The release offered to this host: the newest it can install, else the one needing the least
    *  newer Orca. Absent for v1 catalogs. */
   release?: PluginCatalogRelease
@@ -145,6 +147,7 @@ export function pluginMarketplaceListing(input: {
     pluginKey: entry.id,
     source: entry.source,
     ...(entry.description ? { description: entry.description } : {}),
+    ...(entry.addedAt ? { addedAt: entry.addedAt } : {}),
     categories: entry.categories,
     official,
     bundled: false,

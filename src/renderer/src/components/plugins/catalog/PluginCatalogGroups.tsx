@@ -1,4 +1,6 @@
+import { useCallback } from 'react'
 import { AlertTriangle, CircleAlert } from 'lucide-react'
+import { useNowSnapshot } from '@/hooks/use-now'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
 import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
@@ -11,6 +13,7 @@ import { PluginChips } from '../list/PluginChips'
 import { PluginCardAction } from './PluginCardAction'
 import { Badge } from '../../ui/badge'
 import { PluginCategoryBadge } from '../list/PluginCategoryBadge'
+import { isPluginListedWithin, PLUGIN_NEW_BADGE_MS } from '../list/plugin-listed-at'
 import { usePluginArtPalettes } from '../state/use-plugin-art-palettes'
 import { installedPluginControls, type InstalledRowHandlers } from '../list/PluginManagerRows'
 import type { usePluginCatalog } from '../state/use-plugin-catalog'
@@ -70,13 +73,19 @@ export type CatalogCardHandlers = {
 
 export function CatalogCard({
   entry,
-  handlers
+  handlers,
+  metaDetail
 }: {
   entry: PluginListEntry
   handlers: CatalogCardHandlers
+  metaDetail?: string
 }): React.JSX.Element {
   const t = useTranslate()
   const palettes = usePluginArtPalettes(entry.pluginKey, entry.listing?.release?.themePreview)
+  const isNew = useNowSnapshot(
+    60_000,
+    useCallback((now: number) => isPluginListedWithin(entry, PLUGIN_NEW_BADGE_MS, now), [entry])
+  )
   const phase = handlers.install.phaseOf(entry.pluginKey)
   const listing = entry.listing
   const installed = entry.installed
@@ -105,6 +114,8 @@ export function CatalogCard({
       entry={entry}
       statusText={controls?.statusText}
       palettes={palettes}
+      isNew={isNew}
+      metaDetail={metaDetail}
       notice={
         phase?.kind === 'error'
           ? { text: phase.message, tone: 'destructive' }
