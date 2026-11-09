@@ -1,3 +1,4 @@
+import { useId } from 'react'
 import { Trash2 } from 'lucide-react'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -6,6 +7,7 @@ import type { WorktreeContextMenuModel } from './use-worktree-context-menu-model
 
 export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeContextMenuModel }) {
   const t = useTranslate()
+  const primaryDeleteDescriptionId = useId()
   const deleteShortcut = useOptionalShortcutLabel('workspace.delete')
   const {
     batchDeleteWorktrees,
@@ -42,7 +44,10 @@ export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeConte
             <Trash2 className="size-3.5" />
             {t('auto.components.sidebar.WorktreeContextMenu.deleteWorktree', 'Delete Worktree')}
           </DropdownMenuItem>
-          <p className="max-w-64 px-2 py-1.5 text-xs text-muted-foreground">
+          <p
+            id={primaryDeleteDescriptionId}
+            className="max-w-64 px-2 py-1.5 text-xs text-muted-foreground"
+          >
             {t(
               'auto.components.sidebar.WorktreeContextMenu.primaryDeleteDisabled',
               "Primary worktree — can't be deleted. Remove the project instead."
@@ -53,6 +58,9 @@ export function WorktreeContextMenuDeleteItems({ model }: { model: WorktreeConte
       {/* Use Radix’s direct title prop for project-removal copy; wrapper elements break flat roving-keyboard navigation. */}
       <DropdownMenuItem
         variant="destructive"
+        aria-describedby={
+          !isMultiContext && removesProject ? primaryDeleteDescriptionId : undefined
+        }
         onSelect={handleDelete}
         disabled={
           contextDeletePending ||

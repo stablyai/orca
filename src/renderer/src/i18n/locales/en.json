@@ -20772,6 +20772,7 @@
       "composerWorkspace": {
         "copyFailed": "Failed to copy",
         "copyIdentity": "Copy {{value0}}",
+        "detachedCommit": "Commit {{head}} (not a branch)",
         "folder": "Folder",
         "mainCheckout": "Main checkout",
         "turnWorking": "This chat's agent is working. Switch branches after its turn finishes.",
