@@ -122,6 +122,7 @@ class RpcSuccess {
 function pdfHarness(client, preview = {}) {
   const shown = []
   const removed = []
+  let visible = null
   const fs = {
     open: async (path) => ({ path, fd: path }),
     close: async () => {},
@@ -135,6 +136,16 @@ function pdfHarness(client, preview = {}) {
     util: { generateRandomUUID: () => 'document' },
     fs,
     fileUri: { getUriFromPath: (path) => `file://${path}` },
+    canIUse: () => Boolean(preview.load),
+    pdfService: { ParseResult: { PARSE_SUCCESS: 0, PARSE_ERROR_PASSWORD: 3 } },
+    pdfViewManager: {
+      PdfController: class {
+        loadDocument(path) {
+          return preview.load(path)
+        }
+        releaseDocument() {}
+      }
+    },
     ...bytes,
     RpcSuccess,
     filePreview: {
@@ -147,7 +158,10 @@ function pdfHarness(client, preview = {}) {
       }
     }
   }).NativePdfViewer
-  return { viewer: new NativePdfViewer({ cacheDir: '/cache' }, client), shown, removed }
+  const viewer = new NativePdfViewer({ cacheDir: '/cache' }, client, (document) => {
+    visible = document
+  })
+  return { viewer, shown, removed, visible: () => visible }
 }
 function pdfClient(onRequest) {
   return {
@@ -255,6 +269,28 @@ test('system preview can finish opening its PDF after Orca is backgrounded', asy
   await viewer.dispose()
   assert.equal(visible, false)
   assert.equal(removed.includes(previewPath), true)
+})
+
+test('closing the page during in-app PDF parsing cannot replace the visible document', async () => {
+  const parsing = deferred()
+  const parsed = deferred()
+  const client = pdfClient(async (request) =>
+    request.method === 'files.stat' ? fileStat : fileChunk
+  )
+  const { viewer, visible, removed } = pdfHarness(client, {
+    load: async (path) => {
+      parsing.resolve(path)
+      return parsed.promise
+    }
+  })
+  const opening = viewer.serve({ action: 'open', worktreeId: 'w', relativePath: 'new.pdf' })
+  const rejected = assert.rejects(opening, /cancelled/)
+  const path = await parsing.promise
+  const closing = viewer.serve({ action: 'cancel' })
+  parsed.resolve(0)
+  await Promise.all([rejected, closing])
+  assert.equal(visible(), null)
+  assert.ok(removed.includes(path))
 })
 
 function preferencesHarness() {

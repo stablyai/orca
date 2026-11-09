@@ -11,7 +11,7 @@ import { base64Encode } from '../transport/crypto/Bytes';
 import { SpikeRpcClient } from '../transport/SpikeRpcClient';
 import { NativeSpeech } from './NativeSpeech';
 import { NativeImageActions } from './NativeImageActions';
-import { NativePdfViewer } from './NativePdfViewer';
+import { NativePdfViewer, PdfPreview } from './NativePdfViewer';
 
 const AUDIO_LIMIT = 160000;
 const MEDIA_LIMIT = 18 * 1024 * 1024;
@@ -51,20 +51,22 @@ export class NativeDevice {
   private picking = false;
   private selectionGeneration = 0;
 
-  constructor(context: common.UIAbilityContext, client: SpikeRpcClient | null = null) {
+  constructor(context: common.UIAbilityContext, client: SpikeRpcClient | null = null,
+    onPdfPreview: (preview: PdfPreview | null) => void = (_preview: PdfPreview | null): void => {}) {
     this.context = context; this.speech = new NativeSpeech(context);
-    this.images = new NativeImageActions(context); this.pdf = new NativePdfViewer(context, client);
+    this.images = new NativeImageActions(context); this.pdf = new NativePdfViewer(context, client, onPdfPreview);
   }
   setDesktopClient(client: SpikeRpcClient | null): void { this.pdf.setClient(client); }
+  closePdf(): Promise<void> { return this.pdf.cancel(); }
   async dispose(): Promise<void> {
     this.disposed = true; this.generation++; this.selectionGeneration++; this.media.clear();
     this.speech.dispose(); this.images.dispose();
     let pdf = this.pdf.dispose();
     await this.stopCapture(); await pdf; this.pcm = new Uint8Array(0);
   }
-  async pause(): Promise<void> {
+  async pause(covered: boolean = false): Promise<void> {
     this.selectionGeneration++; this.speech.cancel(); this.images.pause();
-    let pdf = this.pdf.pause();
+    let pdf = covered ? this.pdf.cancel() : this.pdf.pause();
     await this.stopCapture(); await pdf;
   }
   async stopCapture(): Promise<void> {

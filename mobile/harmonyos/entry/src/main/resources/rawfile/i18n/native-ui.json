@@ -4830,5 +4830,31 @@
     "ru": "Закрыть сообщение",
     "tr": "Bildirimi kapat",
     "de": "Hinweis verwerfen"
+  },
+  "完成": {
+    "zh": "完成",
+    "tr": "Bitti",
+    "ja": "完了",
+    "de": "Abschließen",
+    "ru": "Готово",
+    "pt": "Concluído",
+    "en": "Done",
+    "fr": "Terminé",
+    "ko": "완료",
+    "es": "Listo",
+    "zh-Hant": "完成"
+  },
+  "共享…": {
+    "zh": "共享…",
+    "tr": "Paylaş…",
+    "ja": "共有…",
+    "de": "Teilen …",
+    "ru": "Поделиться…",
+    "pt": "Compartilhar…",
+    "en": "Share…",
+    "fr": "Partager…",
+    "ko": "공유…",
+    "es": "Compartir…",
+    "zh-Hant": "分享⋯"
   }
 }

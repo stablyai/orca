@@ -3,6 +3,8 @@ import { SessionPhase } from '../transport/HostSession';
 import { DesktopConnectionLease, retainDesktopConnection } from '../transport/DesktopConnections';
 import { readHomeResume, saveHomeResume, resumeFromLocation } from '../home/HomeResume';
 import { NATIVE_DEVICE_METHODS, NativeDevice } from './NativeDevice';
+import { PdfPreview } from './NativePdfViewer';
+import { PdfPreviewSurface } from './PdfPreviewSurface';
 import { PageStorageStore } from '../storage/PageStorageStore';
 import { appendLog as recordConnection, LOG_LEVEL_INFO, LOG_LEVEL_ERROR, LOG_LEVEL_WARN } from '../diagnostics/ConnectionLogStore';
 import { common } from '@kit.AbilityKit';
@@ -86,6 +88,7 @@ export struct ShellSurface {
   @State railClaim: TerminalRailClaim | null = null;
   @State railKeys: string[] = [];
   @State directionPadAvailable: boolean = false;
+  @State pdfPreview: PdfPreview | null = null;
   private startup: ShellStartup = new ShellStartup((message: string): void => this.failStartup(message));
   private startupGeneration: number = 0;
   private routePathname: string = '';
@@ -172,6 +175,7 @@ export struct ShellSurface {
 
   private handleBack(): boolean {
     if (!this.ownsNavigation() || this.navigation.isPending()) { return true; }
+    if (this.pdfPreview) { this.nativeDevice?.closePdf().catch(() => {}); return true; }
     let bridge = this.bridge;
     let stamp = this.navigation.stamp();
     if (this.painted && bridge?.handleBack((): void => {
@@ -236,7 +240,7 @@ export struct ShellSurface {
       this.pendingSession = null;
       this.pendingDrawerRoute = null;
       this.clearViewing();
-      this.nativeDevice?.pause().catch(() => {});
+      this.nativeDevice?.pause(true).catch(() => {});
     }
   }
 
@@ -311,6 +315,7 @@ export struct ShellSurface {
 
   private releaseBridge(): void {
     this.cacheOnly = false; this.attachingClient = null; this.activationFallback = null; this.updateFailed = false;
+    this.pdfPreview = null;
     this.downloadPercent = -1; this.downloadCaption = '';
     this.railClaim = null; this.railKeys = []; this.sideRail = null; this.directionPadAvailable = false;
     if (this.bridge) {
@@ -607,7 +612,11 @@ export struct ShellSurface {
     let document = warm ?? new ShellDocument(manifest, baseDir, false);
     this.document = document;
     let storage = new PageStorageStore(getContext(this), meta.id);
-    let nativeDevice = new NativeDevice(getContext(this) as common.UIAbilityContext, client); this.nativeDevice = nativeDevice;
+    let nativeDevice = new NativeDevice(getContext(this) as common.UIAbilityContext, client,
+      (preview: PdfPreview | null): void => {
+        if (this.nativeDevice === nativeDevice) { this.pdfPreview = preview; }
+      });
+    this.nativeDevice = nativeDevice;
     let root = desktopPath(meta.id);
     let shown: ShellRoute = { hostId: meta.id, pathname: this.routePathname, params: this.routeParams };
     if (!this.pendingSession && this.request.pathname === root && isDesktopSession(shown)) { this.pendingSession = shown; }
@@ -811,9 +820,14 @@ export struct ShellSurface {
   }
 
   build() {
-    Column() {
-      if (!this.asDrawer && this.painted && this.updateFailed) { this.updateNotice() }
-      this.pageSurface()
+    Stack() {
+      Column() {
+        if (!this.asDrawer && this.painted && this.updateFailed) { this.updateNotice() }
+        this.pageSurface()
+      }.width('100%').height('100%').accessibilityLevel(this.pdfPreview ? 'no-hide-descendants' : 'auto')
+      if (this.pdfPreview) {
+        PdfPreviewSurface({ preview: this.pdfPreview, onClose: (): void => { this.nativeDevice?.closePdf().catch(() => {}); } })
+      }
     }.width('100%').height('100%')
   }
 }

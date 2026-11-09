@@ -1,6 +1,7 @@
 import { util } from '@kit.ArkTS';
 import { common } from '@kit.AbilityKit';
 import { fileIo as fs, fileUri } from '@kit.CoreFileKit';
+import { pdfService, pdfViewManager } from '@kit.PDFKit';
 import { filePreview } from '@kit.PreviewKit';
 import { SpikeRpcClient, RpcSuccess } from '../transport/SpikeRpcClient';
 import { base64Decode } from '../transport/crypto/Bytes';
@@ -8,18 +9,29 @@ import { base64Decode } from '../transport/crypto/Bytes';
 const PDF_LIMIT = 256 * 1024 * 1024;
 const CHUNK_BYTES = 384 * 1024;
 
+export interface PdfPreview {
+  title: string;
+  path: string;
+  controller: pdfViewManager.PdfController;
+}
+
 export class NativePdfViewer {
   private context: common.UIAbilityContext;
   private client: SpikeRpcClient | null;
+  private onPreview: (preview: PdfPreview | null) => void;
   private generation = 0;
   private documentId: string = util.generateRandomUUID();
   private counter = 0;
   private requests: Set<string> = new Set();
   private path = '';
+  private controller: pdfViewManager.PdfController | null = null;
+  private external = false;
   private presentation: Promise<void> = Promise.resolve();
   private disposed = false;
 
-  constructor(context: common.UIAbilityContext, client: SpikeRpcClient | null) { this.context = context; this.client = client; }
+  constructor(context: common.UIAbilityContext, client: SpikeRpcClient | null, onPreview: (preview: PdfPreview | null) => void) {
+    this.context = context; this.client = client; this.onPreview = onPreview;
+  }
 
   setClient(client: SpikeRpcClient | null): void {
     if (this.client === client) { return; }
@@ -90,11 +102,11 @@ export class NativePdfViewer {
     let present = this.presentation.then(async (): Promise<void> => {
       try {
         this.active(generation); this.path = path;
-        await filePreview.openPreview(this.context, { uri: fileUri.getUriFromPath(path), mimeType: 'application/pdf',
-          title: value['relativePath'].split(/[\\/]/).pop() ?? 'PDF' });
+        await this.present(path, value['relativePath'].split(/[\\/]/).pop() ?? 'PDF', generation);
       } catch (e) {
         try { await fs.unlink(path); } catch (ignored) { }
         if (this.path === path) { this.path = ''; }
+        this.external = false;
         throw new Error((e as Error).message);
       }
       this.active(generation);
@@ -104,9 +116,28 @@ export class NativePdfViewer {
     return {};
   }
 
+  private async present(path: string, title: string, generation: number): Promise<void> {
+    if (canIUse('SystemCapability.OfficeService.PDFService.Core')) {
+      let controller = new pdfViewManager.PdfController();
+      try {
+        let result = await controller.loadDocument(path);
+        this.active(generation);
+        if (result === pdfService.ParseResult.PARSE_SUCCESS) {
+          this.onPreview({ title: title, path: path, controller: controller });
+          this.controller = controller;
+          return;
+        }
+        if (result !== pdfService.ParseResult.PARSE_ERROR_PASSWORD) { throw new Error('The PDF could not be opened'); }
+      } finally {
+        if (this.controller !== controller) { try { controller.releaseDocument(); } catch (e) { } }
+      }
+    }
+    this.external = true;
+    await filePreview.openPreview(this.context, { uri: fileUri.getUriFromPath(path), mimeType: 'application/pdf', title: title });
+  }
+
   pause(): Promise<void> {
-    // Preview Kit itself backgrounds Orca and can still be opening the cached file.
-    return this.path ? Promise.resolve() : this.cancel();
+    return this.external || this.controller ? Promise.resolve() : this.cancel();
   }
 
   cancel(): Promise<void> {
@@ -116,7 +147,15 @@ export class NativePdfViewer {
       let path = this.path;
       if (!path) { return; }
       this.path = '';
-      try { await filePreview.closePreview(this.context); } catch (e) { }
+      let controller = this.controller; this.controller = null;
+      if (controller) {
+        this.onPreview(null);
+        try { controller.releaseDocument(); } catch (e) { }
+      }
+      if (this.external) {
+        this.external = false;
+        try { await filePreview.closePreview(this.context); } catch (e) { }
+      }
       try { await fs.unlink(path); } catch (e) { }
     });
     this.presentation = close;
