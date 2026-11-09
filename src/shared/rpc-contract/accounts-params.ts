@@ -113,6 +113,8 @@ export const FinishClaudeSignInParams = z
 
 export const HostAccountSignInStartParams = z.object({ provider: z.enum(['claude', 'codex']) })
 
+export const HostAgentSignInStatusParams = z.object({ force: z.boolean().optional() })
+
 export const HostAccountSignInWaitParams = z.object({
   flowId: z.string().min(1).max(64),
   afterRevision: z.number().int().nonnegative().default(0)

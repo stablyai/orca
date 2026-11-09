@@ -3,6 +3,7 @@ import type { OrcadFeature } from '../../orcad-feature-readiness'
 import { rpcCallerOperationKey } from '../../rpc-caller-identity'
 import { HostAccountSignInFlows } from '../../../agent-session/environment/host-account-sign-in-flows'
 import type { OrcaRuntimeService } from '../../../orca-runtime'
+import { AGENT_SIGN_IN_STATUS_METHOD } from './agent-sign-in-status-method'
 import {
   AddDataAccountParams,
   SelectDataAccountParams,
@@ -217,6 +218,7 @@ const ACCOUNT_METHOD_DEFINITIONS = [
       })
     }
   }),
+  AGENT_SIGN_IN_STATUS_METHOD,
   // Credentials stay on this host; the caller opens the page and relays its code (#20009).
   defineMethod({
     name: 'accounts.hostSignInStart',

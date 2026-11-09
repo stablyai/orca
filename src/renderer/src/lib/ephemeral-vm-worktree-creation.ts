@@ -6,6 +6,7 @@ import { getProjectIdentityKey } from '../../../shared/project-host-setup-projec
 import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
+import { offerAgentSignInForNewVm } from '@/lib/vm-agent-sign-in-prompt'
 import {
   appendProvisioningLog,
   appendProvisioningWarnings
@@ -154,10 +155,14 @@ export async function attachEphemeralVmRuntimeToWorkspace(
       runtimeId: request.ephemeralVmRuntimeId,
       workspaceId
     })
-    if (request.ephemeralVmRuntimeEnvironmentId) {
-      void useAppStore
-        .getState()
-        .refreshRuntimeEnvironmentStatus(request.ephemeralVmRuntimeEnvironmentId)
+    const environmentId = request.ephemeralVmRuntimeEnvironmentId
+    if (environmentId) {
+      const store = useAppStore.getState()
+      void store.refreshRuntimeEnvironmentStatus(environmentId)
+      const hostLabel =
+        store.runtimeEnvironments.find((environment) => environment.id === environmentId)?.name ??
+        request.name
+      void offerAgentSignInForNewVm(environmentId, hostLabel).catch(() => {})
     }
   } catch (error) {
     console.error('Failed to attach ephemeral VM runtime to workspace:', error)

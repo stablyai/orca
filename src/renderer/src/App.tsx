@@ -13,6 +13,7 @@ import RunningTerminalCloseDialog from './components/terminal-pane/layout/close/
 import WorktreeBaseFallbackDialog from './components/WorktreeBaseFallbackDialog'
 import AgentWorkspaceTrustDecisionDialog from './components/agent-workspace-trust/AgentWorkspaceTrustDecisionDialog'
 import ClaudeAccountSwitchDialog from './components/ClaudeAccountSwitchDialog'
+import HostAgentSignInDialog from './components/settings/accounts/sign-in/host-agents/HostAgentSignInDialog'
 import { useUnreadDockBadge } from './hooks/useUnreadDockBadge'
 import { AppBackgroundServices } from './app-shell/AppBackgroundServices'
 import { AppRootSurfaces } from './app-shell/AppRootSurfaces'
@@ -130,6 +131,7 @@ function App(): React.JSX.Element {
       <WorktreeBaseFallbackDialog />
       <AgentWorkspaceTrustDecisionDialog />
       <ClaudeAccountSwitchDialog />
+      <HostAgentSignInDialog />
       <PinnedTabCloseDialog />
       <RunningTerminalCloseDialog />
       {/* Electron drag hit-testing follows DOM order, ignoring z-index; render controls last to keep them clickable. */}

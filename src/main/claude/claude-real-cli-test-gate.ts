@@ -1,3 +1,5 @@
+import { parseClaudeAuthStatusReport } from './claude-auth-status-report'
+
 /** Opt-in for tests that drive the real `claude` CLI on this machine's signed-in account. */
 export const REAL_CLAUDE_CLI_TEST_ENV = 'ORCA_REAL_CLAUDE_CLI_TEST'
 
@@ -12,34 +14,16 @@ export type RealClaudeCliGate = {
 }
 
 function parseAuthStatus(stdout: string): RealClaudeAuthStatus | null {
-  const start = stdout.search(/[[{]/)
-  if (start === -1) {
-    return null
-  }
-  // CLI warnings may precede the report, but another JSON value makes it ambiguous.
-  for (const line of stdout.slice(0, start).split('\n')) {
-    try {
-      JSON.parse(line)
-      return null
-    } catch {
-      continue
-    }
-  }
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(stdout.slice(start))
-  } catch {
-    return null
-  }
-  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+  const report = parseClaudeAuthStatusReport(stdout)
+  if (!report) {
     return null
   }
   const status: RealClaudeAuthStatus = {}
-  if ('loggedIn' in parsed && typeof parsed.loggedIn === 'boolean') {
-    status.loggedIn = parsed.loggedIn
+  if (report.loggedIn !== undefined) {
+    status.loggedIn = report.loggedIn
   }
-  if ('projectsDirectory' in parsed && typeof parsed.projectsDirectory === 'string') {
-    status.projectsDirectory = parsed.projectsDirectory
+  if (report.projectsDirectory !== undefined) {
+    status.projectsDirectory = report.projectsDirectory
   }
   return status
 }

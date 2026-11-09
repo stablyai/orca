@@ -22599,7 +22599,36 @@
         "failed": "Sign-in failed. Try again."
       }
     },
-    "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser."
+    "remoteScopeAccountsAddHere": "Showing accounts managed by {{value0}}. New accounts sign in there; you finish in this device’s browser.",
+    "hostAgentSignIn": {
+      "chipCheckFailed": "Couldn’t check agents · Retry",
+      "chipApiKeyTooltip": "{{agent}} uses an API key here.",
+      "chipSignedInTooltip": "{{agent}} is signed in here.",
+      "chipSignedOutTooltip": "{{agent}} isn’t signed in here. Click to sign in.",
+      "chipUnknownTooltip": "Couldn’t tell if {{agent}} is signed in here.",
+      "chipSignIn": "Sign in",
+      "chipUnknown": "Unknown",
+      "signedInApiKey": "Signed in with an API key",
+      "signedIn": "Signed in",
+      "signedOut": "Not signed in",
+      "notInstalled": "Not installed on this host",
+      "unknown": "Couldn’t check",
+      "asleep": "{{host}} is asleep. Open one of its workspaces to wake it, then check again.",
+      "unsupported": "Update Orca on {{host}} to sign in agents from here.",
+      "checkFailed": "Couldn’t reach {{host}} to check agents.",
+      "retry": "Try again",
+      "checking": "Checking agents on {{host}}…",
+      "signIn": "Sign in",
+      "codexDeviceCodeHint": "Codex signs in with a device code. If it fails, turn on device code login in ChatGPT under Settings → Security, then try again.",
+      "title": "Sign in agents",
+      "description": "Each agent runs its own sign-in on {{host}}. Your login stays on {{host}}; Orca only passes along the link and code.",
+      "apiKeyNote": "Using an API key instead? Set ANTHROPIC_API_KEY or OPENAI_API_KEY in that host’s shell profile.",
+      "recheck": "Check again",
+      "done": "Done",
+      "toastTitle": "Sign in agents on {{host}}",
+      "toastDescriptionOne": "{{agent}} isn’t signed in on this VM yet.",
+      "toastDescriptionMany": "{{agents}} aren’t signed in on this VM yet."
+    }
   },
   "fileSearch": {
     "failed": "Search failed. Try again.",

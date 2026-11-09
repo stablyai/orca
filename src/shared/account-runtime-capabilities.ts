@@ -13,6 +13,9 @@ export const DATA_ACCOUNT_RUNTIME_CAPABILITY = 'accounts.managed-data-profiles.v
 export const USAGE_CREDENTIALS_RUNTIME_CAPABILITY = 'accounts.usage-credentials.v1' as const
 // Why: a paired client adds a Claude/Codex account whose login runs on this host (#20009).
 export const HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY = 'accounts.host-sign-in.v1' as const
+// Why: older hosts lack the agent sign-in check, so their rows show no sign-in chips.
+export const HOST_AGENT_SIGN_IN_STATUS_RUNTIME_CAPABILITY =
+  'accounts.agent-sign-in-status.v1' as const
 
 export const ACCOUNT_RUNTIME_CAPABILITIES = [
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
@@ -23,5 +26,6 @@ export const ACCOUNT_RUNTIME_CAPABILITIES = [
   DATA_ACCOUNT_RUNTIME_CAPABILITY,
   CODEX_RESET_CREDIT_RUNTIME_CAPABILITY,
   USAGE_CREDENTIALS_RUNTIME_CAPABILITY,
-  HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY
+  HOST_ACCOUNT_SIGN_IN_RUNTIME_CAPABILITY,
+  HOST_AGENT_SIGN_IN_STATUS_RUNTIME_CAPABILITY
 ] as const

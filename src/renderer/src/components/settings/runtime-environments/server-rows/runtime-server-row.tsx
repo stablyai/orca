@@ -31,6 +31,7 @@ import {
   ServerRowDetailsToggle,
   type ServerRowStatus
 } from '../../host-rows/ServerListRow'
+import { HostAgentSignInChips } from '../../accounts/sign-in/host-agents/HostAgentSignInChips'
 import { RuntimeSshAccessControl } from '../ssh-access/RuntimeSshAccessControl'
 import { RuntimeSshAccessDialog } from '../ssh-access/runtime-ssh-access-dialog'
 import {
@@ -298,16 +299,15 @@ export function RuntimeServerRow({
       </>
     ) : null
 
+  const rowName = deployment
+    ? (sshTargets.find((target) => target.id === deployment.sshTargetId)?.label ?? environment.name)
+    : row.title
+
   return (
     <>
       <ServerListRow
         sectionId={environment.id}
-        name={
-          deployment
-            ? (sshTargets.find((target) => target.id === deployment.sshTargetId)?.label ??
-              environment.name)
-            : row.title
-        }
+        name={rowName}
         descriptor={row.hostDescriptorText}
         chips={
           <>
@@ -321,6 +321,11 @@ export function RuntimeServerRow({
                 {t('auto.components.settings.serverList.sshTunnelChip', 'SSH tunnel')}
               </ServerRowChip>
             ) : null}
+            <HostAgentSignInChips
+              environmentId={environment.id}
+              hostLabel={rowName}
+              reachable={row.isReachable}
+            />
           </>
         }
         meta={meta}
