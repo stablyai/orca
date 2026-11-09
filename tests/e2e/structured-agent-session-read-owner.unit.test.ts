@@ -68,7 +68,7 @@ async function fixture() {
       { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
     )
   }
-  for (let index = 1; index < 99; index += 1) {
+  for (let index = 1; index <= 99; index += 1) {
     await appendOutput(index)
   }
   await journal.appendSubmission({

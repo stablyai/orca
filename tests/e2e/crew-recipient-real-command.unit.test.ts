@@ -10,8 +10,10 @@ import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orches
 import { TERMINAL_QUERY_METHODS } from '../../src/main/runtime/rpc/methods/terminal/terminal-query-methods'
 import {
   openTestAgentSessionDatabase,
-  openTestAgentSessionRecordStore
+  openTestAgentSessionRecordStore,
+  openTestAgentSessionRecordStoreSlot
 } from '../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/host/structured-agent-session-logger'
 import type { AgentSessionRecordStore } from '../../src/main/runtime/agent-session/records/agent-session-record-store'
 import {
   peekOpenedAgentSessionRecordStore,
@@ -96,6 +98,12 @@ it('keeps imported and local peer authority through real CLI import, settlement,
     h.db.db.prepare('SELECT * FROM federation_relay_items ORDER BY direction, sequence').all()
   const directory = mkdtempSync(join(tmpdir(), 'orca-pr34890-real-command-'))
   vi.spyOn(profileStorage, 'getProfileUserDataPath').mockReturnValue(directory)
+  await openTestAgentSessionRecordStoreSlot({
+    stateDirectory: directory,
+    hostId: 'local',
+    legacySessionTabIds: [],
+    logger: createStructuredAgentSessionLogger()
+  })
   const homeJournal = await openTestAgentSessionDatabase(join(directory, 'home-journal'))
   const homeStore = await openTestAgentSessionRecordStore(join(directory, 'home-journal'))
   const localStore = await worker.runtime.openAgentSessionRecordStore()
@@ -574,6 +582,14 @@ it('publishes a restored session peer in the first completed Crew frame', async 
   const controller = new AbortController()
   let subscription: Promise<void> | undefined
   try {
+    const openSlot = () =>
+      openTestAgentSessionRecordStoreSlot({
+        stateDirectory: directory,
+        hostId: 'local',
+        legacySessionTabIds: [],
+        logger: createStructuredAgentSessionLogger()
+      })
+    await openSlot()
     const seed = await h.runtime.openAgentSessionRecordStore()
     for (const [i, sessionId] of ids.entries()) {
       await seed.founding.commit({
@@ -606,6 +622,7 @@ it('publishes a restored session peer in the first completed Crew frame', async 
       }
       await opened.journalDatabase.close()
     })
+    await openSlot()
     h.db.insertMessage({
       from: `orca_session_id:${ids[1]}`,
       to: `orca_session_id:${ids[0]}`,

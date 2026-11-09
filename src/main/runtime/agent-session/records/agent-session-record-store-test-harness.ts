@@ -42,15 +42,23 @@ const databases = new Map<string, Promise<JournalSqlDatabase>>()
 export async function ensureTestStructuredAgentSessionHost(
   deps: Parameters<typeof ensureStructuredAgentSessionHost>[0]
 ): ReturnType<typeof ensureStructuredAgentSessionHost> {
-  await openAgentSessionRecordStoreOnce({
+  await openTestAgentSessionRecordStoreSlot({
     stateDirectory: deps.stateDirectory,
     hostId: deps.hostId,
     logger: deps.logger,
-    legacySessionTabIds: deps.legacySessionTabIds ?? [],
+    legacySessionTabIds: deps.legacySessionTabIds ?? []
+  })
+  return ensureStructuredAgentSessionHost(deps)
+}
+
+export function openTestAgentSessionRecordStoreSlot(
+  location: Omit<Parameters<typeof openAgentSessionRecordStoreOnce>[0], 'writerPath' | 'readerPath'>
+): ReturnType<typeof openAgentSessionRecordStoreOnce> {
+  return openAgentSessionRecordStoreOnce({
+    ...location,
     writerPath: journalSqlWorkerPath(),
     readerPath: journalSqlReaderPath()
   })
-  return ensureStructuredAgentSessionHost(deps)
 }
 
 /** Stores reopened in one directory share its writer, like one runtime's slot. */

@@ -25,7 +25,11 @@ import {
   createTestParams,
   CREATE_TEST_CALLER
 } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-create.test-fixture'
-import { seedTestAgentSessionRecordStore } from '../records/agent-session-record-store-test-harness'
+import {
+  seedTestAgentSessionRecordStore,
+  openTestAgentSessionRecordStoreSlot
+} from '../records/agent-session-record-store-test-harness'
+import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { withChatTabChanges } from '../agent-session-tab-layout'
 import { collectSavedStructuredAgentSessionIds } from './saved-structured-agent-session-restoration'
@@ -142,6 +146,12 @@ export async function openAuthorityRuntime(
   runtime = new AuthorityRuntime(rig.profile),
   installFirst = false
 ): Promise<AuthorityRig> {
+  await openTestAgentSessionRecordStoreSlot({
+    stateDirectory: root,
+    hostId: 'local',
+    legacySessionTabIds: runtime.capturedSelection(),
+    logger: createStructuredAgentSessionLogger()
+  })
   // Exercise the production admission route before the real host installer reuses its slot.
   if (installFirst) {
     await runtime.ensureStructuredAgentSessionHost()

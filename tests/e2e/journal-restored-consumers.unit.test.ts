@@ -352,6 +352,22 @@ it.each(cases)(
       )
       expect(subscribe).toHaveBeenLastCalledWith(expect.objectContaining({ snapshotCatchUp }))
       expect(subscribe.mock.calls.at(-1)?.[0].boundedFrames === true).toBe(bounded)
+      await vi.waitFor(() =>
+        expect(
+          events.some((event) => {
+            const delivered =
+              event.type === 'batch'
+                ? event.batch.cursor
+                : event.type === 'snapshot' || event.type === 'reset'
+                  ? event.page.liveCursor
+                  : undefined
+            return (
+              delivered?.epoch === restoredPage.liveCursor?.epoch &&
+              delivered?.sequence === restoredPage.liveCursor?.sequence
+            )
+          })
+        ).toBe(true)
+      )
       return { events, rawFrames }
     }
     const hydrated = await stream()
