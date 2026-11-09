@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 import { insertDictationTextIntoGuest } from './browser-guest-dictation-text'
 
 function guestWithFocusedField(field: unknown) {
-  const executeJavaScript = vi.fn(async (_code: string): Promise<unknown> => field)
-  executeJavaScript.mockResolvedValueOnce(field).mockResolvedValueOnce(true)
+  const executeJavaScript = vi
+    .fn<(code: string) => Promise<unknown>>()
+    .mockResolvedValueOnce(field)
+    .mockResolvedValueOnce(true)
   const frame = { executeJavaScript }
   return { guest: { focusedFrame: frame, mainFrame: frame }, executeJavaScript }
 }
