@@ -8,14 +8,8 @@ import {
   replaceLeaf
 } from '../../../../../shared/workspace-layout/tab-group-layout-tree'
 import { buildActiveSurfacePatch } from './tabs-surface'
-import {
-  findGroupAndWorktree,
-  findGroupForTab,
-  findTabAndWorktree,
-  pickNextActiveTab,
-  pushRecentTabId,
-  sanitizeRecentTabIds
-} from '../tab-group-state'
+import { findGroupAndWorktree, findGroupForTab, findTabAndWorktree } from './tab-group-state'
+import { pickNextActiveTab, pushRecentTabId, sanitizeRecentTabIds } from './tab-selection-history'
 import { dedupeTabOrder } from '../../../../../shared/workspace-layout/tab-order'
 
 export function createTabsDropActions(

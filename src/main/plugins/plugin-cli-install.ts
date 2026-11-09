@@ -172,7 +172,10 @@ export async function settlePluginCliCandidate(
     growth !== null && repositoryMoved === null && !pluginUpdateGrowsAccess(growth)
   // Why: updating a plugin that is not running grants nothing; it stays as the user left it.
   const grants = action === 'install' || predecessor !== null
-  const needsFlag = grants && !keepsApproval && pluginNeedsCliApproval(candidate.manifest)
+  // Why a move needs the flag for every kind: a content-only fingerprint does not name its source.
+  const needsFlag =
+    grants &&
+    (repositoryMoved !== null || (!keepsApproval && pluginNeedsCliApproval(candidate.manifest)))
   if (needsFlag) {
     const update: PluginApprovalUpdateInfo | undefined = previous
       ? { fromVersion: previous.version, growth, repositoryMoved }

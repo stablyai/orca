@@ -14,7 +14,7 @@ import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner
 } from './workspace/ownership/worktree-runtime-owner-index'
-import { resolveQualifiedIndexedFolderWorkspace } from '@/store/workspace-record-selectors'
+import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
 import type { SingleRuntimeLegacyOwnerState } from './single-runtime-legacy-owner'
 import { getPairedWebClientEnvironmentId } from './paired-web-client-host'
 

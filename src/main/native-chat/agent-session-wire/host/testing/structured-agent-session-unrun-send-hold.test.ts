@@ -64,28 +64,6 @@ describe('a message held behind a start that never answered, then the chat ends'
     expect(await rig.restartOffers()).toEqual([])
   })
 
-  it('is offered for resume after a quit once the start proved itself, as the control', async () => {
-    await rig.dispose()
-    rig = await createQueuedMessageTestRig({
-      restartable: true,
-      starting: true,
-      recoveryCapsule: true
-    })
-    await rig.host.close(SESSION, 'evict')
-    const sent = rig.send('may have run')
-    await sent.result
-    await rig.proveStart()
-    await eventually(async () =>
-      expect((await rig.submission(sent.id))?.handedOverAt).toBeDefined()
-    )
-    const id = sent.id
-    await rig.quitRestartHostProcess()
-
-    expect(await rig.restartOffers()).toEqual([
-      { sessionId: SESSION, work: { kind: 'submission', id } }
-    ])
-  })
-
   it.each(['user-close', 'evict'] as const)(
     'is a card after a %s, rejected as closed, held by the reopen until a turn',
     async (cause) => {

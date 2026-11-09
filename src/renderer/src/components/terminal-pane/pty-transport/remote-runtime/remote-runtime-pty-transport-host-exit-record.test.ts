@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createRemoteRuntimeTransportMocks,
   readyHostSessionInventoryResponse
-} from '../../remote-runtime-pty-transport-test-harness'
-import type { MultiplexSubscriptionCallbacks } from '../../remote-runtime-pty-transport-stream-fixtures'
+} from '../remote/remote-runtime-pty-transport-test-harness'
+import type { MultiplexSubscriptionCallbacks } from '../remote/remote-runtime-pty-transport-stream-fixtures'
 
 const appStore = vi.hoisted(() => ({
   getState: vi.fn(() => {
@@ -95,7 +95,7 @@ async function publishHostSurface(
   }
   // Why dynamic: the harness resets modules, so the transport's channel is the freshly loaded one.
   const { queueAcceptedWebSessionTerminalSnapshot } =
-    await import('../../../../runtime/web-session-terminal-handle-events')
+    await import('../../../../runtime/web-session-tabs-sync/terminal-handles/web-session-terminal-handle-events')
   queueAcceptedWebSessionTerminalSnapshot(
     {
       worktree: 'wt-1',

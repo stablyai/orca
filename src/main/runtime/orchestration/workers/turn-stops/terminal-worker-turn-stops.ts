@@ -1,4 +1,4 @@
-import type { AgentPaneChange } from '../../../../agent-hooks/agent-transition-detector'
+import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent-transition-detector'
 import { agentVerdictDisplayMark } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import type { AgentStatusIpcPayload } from '../../../../../shared/agent-status/contracts/agent-status-ipc-payload'
 import { hookRowAgentPhase } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
@@ -6,7 +6,7 @@ import type { RuntimeTerminalRead } from '../../../../../shared/runtime-terminal
 import {
   TerminalAgentTurnNews,
   type TerminalAgentTurnNewsItem
-} from '../../../terminal-agent-turn-news'
+} from '../../../push/notifications/terminal-agent-turn-news'
 import type { OrchestrationDb } from '../../db/orchestration-db'
 import { redactWorkerTerminalView } from '../../terminal-authority/views/worker-terminal-redaction'
 import {

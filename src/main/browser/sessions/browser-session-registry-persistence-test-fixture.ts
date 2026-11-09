@@ -130,7 +130,7 @@ export function installModuleMocks(
     })
   }))
 
-  vi.doMock('../browser-manager', () => ({
+  vi.doMock('../guest-lifecycle/manager/browser-manager', () => ({
     browserManager: {
       notifyPermissionDenied: browserManagerNotifyPermissionDeniedMock,
       handleGuestWillDownload: browserManagerHandleGuestWillDownloadMock,

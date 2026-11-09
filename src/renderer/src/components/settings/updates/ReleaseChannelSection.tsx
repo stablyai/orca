@@ -10,7 +10,7 @@ import {
   SettingsSubsectionHeader
 } from '../form-controls/SettingsFormControls'
 import { Badge } from '../../ui/badge'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { updaterMessageText } from '@/lib/updater-message-copy'
 import { errorMessage } from '../../../../../shared/error-message'
 import type { UpdaterCodedMessage } from '../../../../../shared/updater-failure-copy'
@@ -57,6 +57,7 @@ const DEDICATED_CHANNEL_WARNINGS: Record<DedicatedRepoChannel, { key: string; fa
   }
 
 export function ReleaseChannelSection(): React.JSX.Element {
+  const t = useTranslate()
   const updateStatus = useAppStore((s) => s.updateStatus)
   const releaseChannelOverride = useAppStore((s) => s.releaseChannelOverride)
   const setReleaseChannelOverride = useAppStore((s) => s.setReleaseChannelOverride)
@@ -146,7 +147,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
       .check({ channel: build.channel, targetTag: build.tag })
       .catch((error) => {
         toast.error(
-          translate(
+          t(
             'auto.components.settings.ReleaseChannelSection.switchFailed',
             'Could not switch to that build.'
           ),
@@ -168,21 +169,20 @@ export function ReleaseChannelSection(): React.JSX.Element {
     void window.api.shell.openUrl(build.installerUrl ?? build.releaseUrl)
   }
 
+  const title = t('auto.components.settings.ReleaseChannelSection.title', 'Release channel')
+
   return (
-    <section className="space-y-4">
+    <div data-settings-row="" className="space-y-4 py-3">
       <div className="flex items-start justify-between gap-3">
         <SettingsSubsectionHeader
-          title={translate(
-            'auto.components.settings.ReleaseChannelSection.title',
-            'Release channel'
-          )}
-          description={translate(
+          title={title}
+          description={t(
             'auto.components.settings.ReleaseChannelSection.description',
             'Switch update channels or jump to any published build, including older ones. Downgrades are allowed and unvetted builds can be broken.'
           )}
         />
         <Badge variant="outline" className="mt-0.5 shrink-0">
-          {translate('auto.components.settings.ReleaseChannelSection.devOnly', 'Dev only')}
+          {t('auto.components.settings.ReleaseChannelSection.devOnly', 'Dev only')}
         </Badge>
       </div>
 
@@ -193,7 +193,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
           onChange={(channel) =>
             setReleaseChannelOverride(channel === runningChannel ? null : channel)
           }
-          ariaLabel={translate(
+          ariaLabel={t(
             'auto.components.settings.ReleaseChannelSection.channelAriaLabel',
             'Update channel'
           )}
@@ -206,14 +206,14 @@ export function ReleaseChannelSection(): React.JSX.Element {
               disabled: !supported,
               ariaLabel: supported
                 ? undefined
-                : translate(
+                : t(
                     'auto.components.settings.ReleaseChannelSection.devChannelUnsupportedAria',
                     '{{value0}} ({{value1}} only)',
                     { value0: RELEASE_CHANNEL_LABELS[channel], value1: DEV_CHANNEL_PLATFORM_LABEL }
                   ),
               tooltip: supported
                 ? undefined
-                : translate(
+                : t(
                     'auto.components.settings.ReleaseChannelSection.devChannelUnsupported',
                     '{{value0}} builds are produced only for {{value1}}. Linux stays on Stable or RC.',
                     { value0: RELEASE_CHANNEL_LABELS[channel], value1: DEV_CHANNEL_PLATFORM_LABEL }
@@ -228,7 +228,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
         <div className="flex items-start gap-2 rounded-md border border-border bg-muted/40 p-3">
           <AlertTriangle className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" />
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               DEDICATED_CHANNEL_WARNINGS[activeChannel].key,
               DEDICATED_CHANNEL_WARNINGS[activeChannel].fallback
             )}
@@ -246,14 +246,11 @@ export function ReleaseChannelSection(): React.JSX.Element {
             disabled={loading || !builds || builds.length === 0}
             placeholder={
               loading || (builds === null && loadError === null)
-                ? translate(
+                ? t(
                     'auto.components.settings.ReleaseChannelSection.loadingBuilds',
                     'Loading builds…'
                   )
-                : translate(
-                    'auto.components.settings.ReleaseChannelSection.noBuilds',
-                    'No builds found'
-                  )
+                : t('auto.components.settings.ReleaseChannelSection.noBuilds', 'No builds found')
             }
           />
 
@@ -261,7 +258,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
             variant="ghost"
             size="icon-sm"
             type="button"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.settings.ReleaseChannelSection.refresh',
               'Refresh build list'
             )}
@@ -296,22 +293,19 @@ export function ReleaseChannelSection(): React.JSX.Element {
             ) : needsManualInstall ? (
               <span className="inline-flex items-center gap-1.5">
                 <Download className="size-3.5" aria-hidden="true" />
-                {translate(
+                {t(
                   'auto.components.settings.ReleaseChannelSection.downloadInstaller',
                   'Download installer'
                 )}
               </span>
             ) : (
-              translate(
-                'auto.components.settings.ReleaseChannelSection.switchTo',
-                'Switch to build'
-              )
+              t('auto.components.settings.ReleaseChannelSection.switchTo', 'Switch to build')
             )}
           </Button>
         </div>
 
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.ReleaseChannelSection.cacheHint',
             'Build lists are cached for 5 minutes. Refresh to check for new builds.'
           )}
@@ -321,7 +315,7 @@ export function ReleaseChannelSection(): React.JSX.Element {
           <p className="text-xs text-destructive">{updaterMessageText(loadError)}</p>
         ) : needsManualInstall && selectedBuild ? (
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.ReleaseChannelSection.manualInstallHint',
               '{{value0}} builds are unsigned on Windows, so the in-app updater cannot install one over a signed build. Run the downloaded installer once — Windows will warn about an unknown publisher — and every later switch, including back to Stable, works from here.',
               { value0: RELEASE_CHANNEL_LABELS[activeChannel] }
@@ -329,14 +323,14 @@ export function ReleaseChannelSection(): React.JSX.Element {
           </p>
         ) : isRunningBuild ? (
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.ReleaseChannelSection.alreadyRunning',
               'This is the build you are running.'
             )}
           </p>
         ) : selectedBuild ? (
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.ReleaseChannelSection.willSwitch',
               '{{value0}} → {{value1}}',
               { value0: appVersion ?? '…', value1: selectedBuild.version }
@@ -344,6 +338,6 @@ export function ReleaseChannelSection(): React.JSX.Element {
           </p>
         ) : null}
       </div>
-    </section>
+    </div>
   )
 }

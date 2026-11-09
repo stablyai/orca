@@ -1,7 +1,7 @@
 import { detectLanguage } from '@/lib/language-detect'
 import { canPreviewLanguage } from '@/lib/file-preview'
 import type { useAppStore } from '@/store'
-import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor/types/open-file'
 import type { MarkdownDefaultViewMode } from '../../../../shared/markdown-default-view-mode'
 import {
   canOpenMarkdownPreview,
@@ -28,7 +28,7 @@ import {
 import type {
   ActivePluginCustomEditor,
   CustomEditorViewChoice
-} from '@/store/plugin-custom-editors'
+} from '@/store/plugins/file-editors/plugin-custom-editors'
 
 type StoreState = ReturnType<typeof useAppStore.getState>
 
@@ -244,7 +244,7 @@ export function getEditorPanelRenderModel({
       activeFile.mode !== 'check-details' &&
       activeFile.mode !== 'markdown-preview',
     // Preview reads disk; exclude deleted modified sides and historical commit snapshots that may not match it.
-    canOpenPreviewToSide:
+    canOpenPreview:
       canOpenWorkspaceFileBrowser &&
       canPreviewLanguage(viewerLanguage) &&
       (activeFile.mode === 'edit' || (isSingleDiff && openFileState.canOpen)),

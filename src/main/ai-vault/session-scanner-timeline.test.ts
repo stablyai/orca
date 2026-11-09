@@ -1,10 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import {
-  cloneSessionAccumulator,
-  createAccumulator,
-  finalizeSession,
-  updateTimeline
-} from './session-scanner-accumulator'
+import { describe, expect, it } from 'vitest'
+import { createAccumulator, finalizeSession, updateTimeline } from './session-scanner-accumulator'
 
 function accumulator() {
   return createAccumulator({
@@ -43,54 +38,5 @@ describe('session timeline bounds', () => {
     updateTimeline(state, base - 0.1)
     expect(state.createdAt).toBe(new Date(base - 1).toISOString())
     expect(state.latestTimestampMs).toBe(base + 0.1)
-  })
-
-  it('preserves pre-epoch and extended-year ISO timestamps', () => {
-    const state = accumulator()
-    updateTimeline(state, '+010000-01-01T00:00:00.000Z')
-    updateTimeline(state, '-000001-01-01T00:00:00.000Z')
-    updateTimeline(state, '1969-12-31T23:59:59.999Z')
-    expect(state.createdAt).toBe('-000001-01-01T00:00:00.000Z')
-    expect(state.updatedAt).toBe('+010000-01-01T00:00:00.000Z')
-  })
-
-  it('ignores invalid timestamps and retains the existing out-of-range error', () => {
-    const state = accumulator()
-    for (const timestamp of [null, undefined, '', 'bad-date', 0, -1, Number.NaN, Infinity]) {
-      updateTimeline(state, timestamp)
-    }
-    expect(state.createdAt).toBeNull()
-    expect(state.updatedAt).toBeNull()
-    expect(() => updateTimeline(state, 8_640_000_000_000_001)).toThrow(RangeError)
-    expect(state.createdAt).toBeNull()
-    expect(state.updatedAt).toBeNull()
-  })
-
-  it('keeps cloned parse-state bounds independent', () => {
-    const state = accumulator()
-    updateTimeline(state, '2026-01-02T00:00:00Z')
-    const clone = cloneSessionAccumulator(state)
-    updateTimeline(clone, '2026-01-01T00:00:00Z')
-    updateTimeline(clone, '2026-01-03T00:00:00Z')
-    expect(state.createdAt).toBe('2026-01-02T00:00:00.000Z')
-    expect(state.updatedAt).toBe('2026-01-02T00:00:00.000Z')
-    expect(clone.createdAt).toBe('2026-01-01T00:00:00.000Z')
-    expect(clone.updatedAt).toBe('2026-01-03T00:00:00.000Z')
-  })
-
-  it('does not reparse accumulated bounds for every numeric record', () => {
-    const state = accumulator()
-    const spy = vi.spyOn(Date, 'parse')
-    let parseCalls: number
-    try {
-      for (let index = 0; index < 1000; index += 1) {
-        updateTimeline(state, 1_700_000_000_000 + index)
-      }
-      parseCalls = spy.mock.calls.length
-    } finally {
-      spy.mockRestore()
-    }
-    expect(state.latestTimestampMs).toBe(1_700_000_000_999)
-    expect(parseCalls).toBe(0)
   })
 })

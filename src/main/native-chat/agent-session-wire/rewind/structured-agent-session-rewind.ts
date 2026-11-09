@@ -1,3 +1,4 @@
+import { usableJournalHistoryOrigin } from '../../agent-session-journal/context-epochs/journal-history-origin'
 import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { JournalOperationReceipt } from '../../agent-session-journal/writing/journal-row-writer'
 import type {
@@ -134,6 +135,17 @@ export async function rewindStructuredAgentSession(
           if (fork && !fork.ok) {
             return rewindRefusal(fork.reason)
           }
+          const proof =
+            'beforeTurnId' in cut
+              ? await ctx.adapter.prepareRewind?.({
+                  sessionId,
+                  fence: ctx.fence,
+                  beforeTurnId: cut.beforeTurnId
+                })
+              : undefined
+          if ('beforeTurnId' in cut && !proof?.ok) {
+            return rewindRefusal(proof?.reason ?? 'unsupported')
+          }
           const contextFloor = ctx.journal.context.floor()
           const prepared: AgentSessionRewindRecord = {
             operationId: clientOperationId,
@@ -142,7 +154,18 @@ export async function rewindStructuredAgentSession(
             providerItemId: providerItemIdOf(ctx.journal, params.itemId),
             expectedEpoch: params.expectedEpoch,
             phase: 'prepared',
-            ...(fork?.ok ? { providerFork: fork.fork } : {}),
+            ...(fork?.ok
+              ? {
+                  providerFork: {
+                    ...fork.fork,
+                    ...(usableJournalHistoryOrigin(ctx.journal.historyOrigin())?.kind ===
+                    'native_copy'
+                      ? {}
+                      : { coverage: undefined })
+                  }
+                }
+              : {}),
+            ...(proof?.ok ? { providerRevert: proof.revert } : {}),
             ...(contextFloor && record.providerContextBoundary
               ? {
                   contextClearOperationId: record.providerContextBoundary.operationId,

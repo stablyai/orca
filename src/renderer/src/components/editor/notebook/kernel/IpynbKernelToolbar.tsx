@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type {
   PythonEnvironment,
@@ -44,22 +45,25 @@ function environmentLabel({ name, version }: PythonEnvironment): string {
   return version ? `${name} (Python ${version})` : name
 }
 
-function kernelLabel({ environment, status, setup }: KernelState): string {
+function kernelLabel(
+  { environment, status, setup }: KernelState,
+  t: Translate = translate
+): string {
   if (setup?.phase === 'installing') {
-    return translate('auto.components.editor.IpynbViewer.kernelInstalling', 'Installing ipykernel…')
+    return t('auto.components.editor.IpynbViewer.kernelInstalling', 'Installing ipykernel…')
   }
   if (setup?.phase === 'creating-venv') {
-    return translate('auto.components.editor.IpynbViewer.kernelCreatingVenv', 'Creating .venv…')
+    return t('auto.components.editor.IpynbViewer.kernelCreatingVenv', 'Creating .venv…')
   }
   if (status === 'starting') {
-    return translate('auto.components.editor.IpynbViewer.kernelStarting', 'Starting…')
+    return t('auto.components.editor.IpynbViewer.kernelStarting', 'Starting…')
   }
   if (status === 'dead') {
-    return translate('auto.components.editor.IpynbViewer.kernelDead', 'Kernel died')
+    return t('auto.components.editor.IpynbViewer.kernelDead', 'Kernel died')
   }
   return environment
     ? environmentLabel(environment)
-    : translate('auto.components.editor.IpynbViewer.selectKernel', 'Select Kernel')
+    : t('auto.components.editor.IpynbViewer.selectKernel', 'Select Kernel')
 }
 
 function EnvironmentItems({ environments }: { environments: PythonEnvironment[] }) {
@@ -102,6 +106,7 @@ export function IpynbKernelToolbar({
   onRunAll: () => void
   onClearAll: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const kernel = useNotebookKernelState(filePath)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [environments, setEnvironments] = useState<PythonEnvironments | null>(null)
@@ -109,7 +114,7 @@ export function IpynbKernelToolbar({
     kernel.status === 'starting' || (kernel.setup !== null && kernel.setup.phase !== 'idle')
   // A PATH interpreter, not the selected one: that may be the very .venv being (re)created.
   const venvBase = environments?.path[0]
-  const untrustedHint = translate(
+  const untrustedHint = t(
     'auto.components.editor.IpynbViewer.trustFirst',
     'Run a cell to trust this notebook first'
   )
@@ -144,14 +149,14 @@ export function IpynbKernelToolbar({
     <div className="flex items-center gap-1">
       {kernel.busy ? (
         <IpynbToolbarButton
-          label={translate('auto.components.editor.IpynbViewer.interrupt', 'Interrupt')}
+          label={t('auto.components.editor.IpynbViewer.interrupt', 'Interrupt')}
           onClick={() => interruptKernel(filePath)}
         >
           <Square />
         </IpynbToolbarButton>
       ) : null}
       <IpynbToolbarButton
-        label={translate('auto.components.editor.IpynbViewer.restart', 'Restart kernel')}
+        label={t('auto.components.editor.IpynbViewer.restart', 'Restart kernel')}
         // No kernel can start before trust, so a restart there would silently do nothing.
         disabled={!kernel.environment || !kernel.trusted || settling}
         disabledReason={kernel.environment && !kernel.trusted ? untrustedHint : undefined}
@@ -160,23 +165,20 @@ export function IpynbKernelToolbar({
         <RotateCcw />
       </IpynbToolbarButton>
       <IpynbToolbarButton
-        label={translate('auto.components.editor.IpynbViewer.runAll', 'Run all')}
+        label={t('auto.components.editor.IpynbViewer.runAll', 'Run all')}
         onClick={onRunAll}
       >
         <FastForward />
       </IpynbToolbarButton>
       <IpynbToolbarButton
-        label={translate('auto.components.editor.IpynbViewer.clearAll', 'Clear all outputs')}
+        label={t('auto.components.editor.IpynbViewer.clearAll', 'Clear all outputs')}
         onClick={onClearAll}
       >
         <Eraser />
       </IpynbToolbarButton>
       {kernel.interruptStalled ? (
         <Button type="button" variant="link" size="xs" onClick={() => restartKernel(filePath)}>
-          {translate(
-            'auto.components.editor.IpynbViewer.notResponding',
-            'Not responding. Restart kernel'
-          )}
+          {t('auto.components.editor.IpynbViewer.notResponding', 'Not responding. Restart kernel')}
         </Button>
       ) : null}
       <DropdownMenu open={pickerOpen} onOpenChange={setPickerOpen}>
@@ -195,7 +197,7 @@ export function IpynbKernelToolbar({
               />
             ) : null}
             <span className={cn(kernel.status === 'dead' && 'text-destructive')}>
-              {kernelLabel(kernel)}
+              {kernelLabel(kernel, t)}
             </span>
             <ChevronDown className="size-3" />
           </Button>
@@ -204,7 +206,7 @@ export function IpynbKernelToolbar({
           {environments === null ? (
             <DropdownMenuItem disabled>
               <Loader2 className="animate-spin" />
-              {translate(
+              {t(
                 'auto.components.editor.IpynbViewer.findingPython',
                 'Finding Python environments…'
               )}
@@ -213,13 +215,13 @@ export function IpynbKernelToolbar({
             <DropdownMenuRadioGroup value={kernel.environment?.path ?? ''} onValueChange={choose}>
               {environments.workspace.length > 0 ? (
                 <DropdownMenuLabel>
-                  {translate('auto.components.editor.IpynbViewer.recommended', 'Recommended')}
+                  {t('auto.components.editor.IpynbViewer.recommended', 'Recommended')}
                 </DropdownMenuLabel>
               ) : null}
               <EnvironmentItems environments={environments.workspace} />
               {environments.path.length > 0 ? (
                 <DropdownMenuLabel>
-                  {translate('auto.components.editor.IpynbViewer.pythonOnPath', 'Python on PATH')}
+                  {t('auto.components.editor.IpynbViewer.pythonOnPath', 'Python on PATH')}
                 </DropdownMenuLabel>
               ) : null}
               <EnvironmentItems environments={environments.path} />
@@ -228,7 +230,7 @@ export function IpynbKernelToolbar({
           <DropdownMenuSeparator />
           <DropdownMenuItem onSelect={() => void browseForPython(filePath)}>
             <FolderOpen />
-            {translate('auto.components.editor.IpynbViewer.browsePython', 'Browse for Python…')}
+            {t('auto.components.editor.IpynbViewer.browsePython', 'Browse for Python…')}
           </DropdownMenuItem>
           {/* Why trusted: it reuses an existing .venv, running a Python the repo may have shipped. */}
           <DropdownMenuItem
@@ -242,7 +244,7 @@ export function IpynbKernelToolbar({
             <Plus />
             <span className="flex min-w-0 flex-col">
               <span>
-                {translate(
+                {t(
                   'auto.components.editor.IpynbViewer.createVenvItem',
                   'Create virtual environment…'
                 )}

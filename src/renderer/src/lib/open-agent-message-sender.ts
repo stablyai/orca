@@ -2,8 +2,8 @@
 
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
-import type { OrchestrationCrewRow } from '../../../shared/orchestration-crew'
+import { isRuntimeCompatBlockError } from '@/runtime/rpc/compatibility/runtime-protocol-compat'
+import type { OrchestrationCrewRow } from '../../../shared/orchestration/orchestration-crew'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import {
   openDesktopStructuredSession,
@@ -18,20 +18,20 @@ import {
   showLookupFailure,
   type LookupFailure
 } from './open-located-agent-message-sender'
-import { unnamedSenderLabel } from '@/components/native-chat/native-chat-agent-message-sender-label'
+import { unnamedSenderLabel } from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-label'
 import {
   agentMessageSenderOpens,
   agentMessageSenderReplacedOnHandle,
   agentMessageSenderUnavailableText,
   resolveAgentMessageSenderTarget
-} from '@/components/native-chat/native-chat-agent-message-sender-target'
+} from '@/components/native-chat/messages/agent-senders/native-chat-agent-message-sender-target'
 import { getKnownExecutionHostIdForWorktree } from './workspace/ownership/worktree-runtime-owner'
 import {
   executionHostIdForStructuredTarget,
   resolveStructuredAgentSessionOwner,
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForHost
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 
 type Sender = AgentMessageSource['senders'][number]
 const opensInFlight = new Map<string, Promise<void>>()

@@ -1,7 +1,7 @@
 // Resolve tab conversations through Session History so both surfaces share switch eligibility.
 
 import type { AppState } from '@/store/types'
-import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
   collectAgentPaneConversations,
   resolvePaneAgentConversation,
@@ -44,8 +44,11 @@ import { claimAiVaultForcedRescan } from '../right-sidebar/ai-vault/scanning/ai-
 import { structuredAgentSessionLaunchFeasible } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
 import { resolveHostCapabilities } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
 
 /** Find native chats by Orca session ID and terminal tabs by their provider conversation. */
 export type TabSessionHistorySubject = {

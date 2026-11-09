@@ -10,9 +10,9 @@ import type { ChecksPanelReviewState } from '../use-checks-panel-review-state'
 import type { ChecksPanelControllerState } from '../use-checks-panel-controller-state'
 import type { ChecksPanelComposerState } from '../use-checks-panel-composer-state'
 import type { ChecksPanelBranchActionsState } from './use-checks-panel-branch-actions'
-import { clearPullRequestGenerationRequiresPushBeforeCreate } from '@/store/slices/pull-request-generation'
+import { clearPullRequestGenerationRequiresPushBeforeCreate } from '@/store/slices/hosted-review/generation/pull-request-generation'
 import { translate } from '@/i18n/i18n'
-import type { PullRequestGenerationFields } from '@/store/slices/pull-request-generation'
+import type { PullRequestGenerationFields } from '@/store/slices/hosted-review/generation/pull-request-generation-state'
 import { useGenerateBeforeCreatePullRequest } from '../../hosted-review/creation/use-generate-before-create-pull-request'
 import { createdReviewIsForeground } from '../../hosted-review/creation/created-review-foreground'
 import {
@@ -39,7 +39,6 @@ type ChecksPanelCreateReviewInput = ChecksPanelCreatedReviewInput &
     | 'createPrInFlightRef'
     | 'createStackedHostedReview'
     | 'mountedRef'
-    | 'ownerSettings'
     | 'panelContextKey'
     | 'panelContextKeyRef'
     | 'setCreatePrError'
@@ -47,7 +46,10 @@ type ChecksPanelCreateReviewInput = ChecksPanelCreatedReviewInput &
     | 'setIsCreatingPr'
     | 'updatePullRequestGenerationRecord'
   > &
-  Pick<ChecksPanelComposerState, 'prBase' | 'prBody' | 'prDraft' | 'prGenerating' | 'prTitle'> &
+  Pick<
+    ChecksPanelComposerState,
+    'prImageUploadPendingRef' | 'prBase' | 'prBody' | 'prDraft' | 'prGenerating' | 'prTitle'
+  > &
   Pick<ChecksPanelComposerState, 'handleGeneratePullRequestFields' | 'prAiGenerationEnabled'> &
   Pick<
     ChecksPanelComposerState,
@@ -70,11 +72,11 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
     hostedReviewCreateCopy,
     hostedReviewCreateProvider,
     hostedReviewCreation,
-    ownerSettings,
     panelContextKey,
     panelContextKeyRef,
     prAiGenerationEnabled,
     prBase,
+    prImageUploadPendingRef,
     prBody,
     prCreationDefaults,
     prDraft,
@@ -113,6 +115,9 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
         if (isCurrentCreateRequest()) {
           setCreatePrError(message)
         }
+      }
+      if (prImageUploadPendingRef.current) {
+        return
       }
       const fields = generated ?? { base: prBase, title: prTitle, body: prBody, draft: prDraft }
       const base = stripBaseRef(fields.base).trim()
@@ -172,6 +177,9 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
           draft: fields.draft && hostedReviewProviderSupportsDraft(hostedReviewCreateProvider),
           worktreePath,
           useTemplate: prCreationDefaults.useTemplate
+        }
+        if (prImageUploadPendingRef.current) {
+          return
         }
         const result = stacked
           ? await createStackedHostedReview(repo.path, createInput)
@@ -282,6 +290,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
       model.mountedRef,
       panelContextKey,
       prBase,
+      prImageUploadPendingRef,
       prBody,
       prCreationDefaults.openAfterCreate,
       prCreationDefaults.useTemplate,
@@ -308,8 +317,7 @@ export function useChecksPanelCreateReview(model: ChecksPanelCreateReviewInput) 
     fieldsAreSeedPlaceholders: prFieldsAreSeedPlaceholders,
     generatePullRequestFields: handleGeneratePullRequestFields,
     generationKey: activePullRequestGenerationKey,
-    repo,
-    settings: ownerSettings
+    repo
   })
   return { handlePullRequestCreated, handleCreatePullRequest }
 }

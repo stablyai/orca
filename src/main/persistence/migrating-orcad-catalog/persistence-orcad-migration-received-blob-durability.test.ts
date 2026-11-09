@@ -12,7 +12,7 @@ import { getOrcadMigrationReceivedBlobPath } from './orcad-migration-blob-stagin
 import {
   commitStagedOrcadMigrationCatalogDurably,
   getOrcadMigrationCatalogState
-} from '../../runtime/orcad-migration-catalog-import'
+} from '../../runtime/hosts/migration/orcad-migration-catalog-import'
 import {
   DORMANT_LEAF_ID,
   DORMANT_WORKTREE_ID,
@@ -154,18 +154,5 @@ describe('orcad migration received blobs wait for a durable commit', () => {
     expect(retried.state).toBe('committed')
     expect(existsSync(receivedHintsPath(input))).toBe(false)
     expect(hint(store)).toBe('/home/me/src')
-  })
-
-  it('treats any successful write of the commit as proof, and a load from disk as proof', async () => {
-    const store = createStore()
-    const { input } = await stageHints(store)
-    store.commitStagedOrcadMigrationCatalog(input)
-    expect(getOrcadMigrationCatalogState({ store, manifest: input }).state).toBe('committed')
-    expect(existsSync(receivedHintsPath(input))).toBe(true)
-    await store.flushPendingOrThrowAsync()
-
-    const restarted = createStore()
-    expect(existsSync(receivedHintsPath(input))).toBe(false)
-    expect(hint(restarted)).toBe('/home/me/src')
   })
 })

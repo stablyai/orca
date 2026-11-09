@@ -5,7 +5,7 @@ import type {
 import type {
   AutomaticWorkResumeOutcome,
   AutomaticWorkStatus
-} from '../../../../shared/host-spawn-admission'
+} from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { DaemonPtyAdapter } from '../adapter/daemon-pty-adapter'
 import { DaemonPtyRouter } from '../routing/daemon-pty-router'

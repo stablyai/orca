@@ -8,7 +8,7 @@ import type {
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
-import type { AppState } from '@/store/index'
+import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 
 export type ParentPrChecksCacheEntry<T> = {

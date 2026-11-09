@@ -1,11 +1,11 @@
-import { automationCanonicalLaunchSetup } from '../../../../shared/automation-launch-setup'
-import type { Automation } from '../../../../shared/automations-types'
+import { automationCanonicalLaunchSetup } from '../../../../shared/automations/launch/automation-canonical-launch-setup'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import { translate } from '@/i18n/i18n'
-import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
+import { getAutomationRunRepoId } from '../../../../shared/automations/history/automation-run-identity'
 import {
   isRunnableAutomationSchedule,
   tryParseAutomationRrule
-} from '../../../../shared/automation-schedule-parsing'
+} from '../../../../shared/automations/scheduling/automation-schedule-parsing'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AUTOMATION_DEFAULT_TIME, formatTimeInput } from './automation-draft-model'
 import { getAutomationSetupDecisionDraftValue } from './automation-setup-decision'

@@ -3,7 +3,7 @@ import { useAppStore } from '@/store/index'
 import {
   confirmRuntimeTerminalForegroundProcess,
   inspectRuntimeTerminalProcess
-} from '@/runtime/runtime-terminal-inspection'
+} from '@/runtime/hosted-terminals/inspection/runtime-terminal-process-inspection'
 
 import { translate } from '@/i18n/i18n'
 import {

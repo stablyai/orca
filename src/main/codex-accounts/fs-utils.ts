@@ -3,7 +3,7 @@ import { existsSync, linkSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl } from '../windows/windows-directory-acl'
 import { isPermissionError } from '../filesystem/permission-errors'
-import { nodeFileContentsEqualSync } from '../../shared/node-file-content-equality'
+import { nodeFileContentsEqualSync } from '../../shared/file-content/node-file-content-equality'
 import {
   copyFileWithWindowsRetry,
   renameFileWithWindowsRetry,

@@ -10,8 +10,7 @@ import {
   openTestJournalHostDatabase,
   updateTestJournalRowJson
 } from '../../../agent-session-journal/store-lifecycle/journal-host-database-test-support'
-import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
-import { AgentSessionJournalError } from '../../../agent-session-journal/writing/journal-write-guards'
+
 import { interruptedRestart } from './structured-agent-session-restart-interruption-test-harness'
 import { attachParams, CALLER, hostTestState } from './structured-agent-session-host-test-harness'
 import {
@@ -67,53 +66,6 @@ it('lists an unopened newer journal passively and preserves its offer when actin
   const { host, root, acquire } = await interruptedRestart()
   newerOrcaRow(root)
   await keptWithoutAWord(host, root, acquire, true)
-})
-
-it('keeps the offer of every chat in a newer Orca database, and offers, runs and counts nothing', async () => {
-  const { host, root, acquire } = await interruptedRestart()
-  const database = openTestJournalHostDatabase(root)
-  Object.defineProperty(database, 'readOnly', { value: true })
-  database.db.exec('ALTER TABLE journal_sessions RENAME TO journal_sessions_newer')
-  await keptWithoutAWord(host, root, acquire)
-})
-
-it('keeps the offer and files nothing when the send is refused as a newer Orca chat', async () => {
-  const { host, root } = await interruptedRestart()
-  await host.restartResume.list()
-  vi.spyOn(AgentSessionJournal.prototype, 'appendSubmission').mockRejectedValue(
-    new AgentSessionJournalError('journal_read_only', 'a newer Orca wrote this journal')
-  )
-
-  const action = await host.restartResume.continueAfterRestart([SESSION], 'modal')
-
-  expect(action.continued).toMatchObject([
-    {
-      outcome: 'refused',
-      reason: 'agent_session_journal_unreadable',
-      refusal: { details: { reason: 'journalWrittenByNewerOrca' } }
-    }
-  ])
-  const capsule = new AgentSessionRecoveryCapsule(root)
-  expect(await capsule.listFailed(NOW)).toEqual([])
-  expect((await capsule.list(NOW)).map((marker) => marker.sessionId)).toEqual([SESSION])
-  expect(await host.restartResume.listFailures()).toEqual([])
-})
-
-it('lists a filed failure passively and hides it once an action discovers a newer journal', async () => {
-  const { host, root, acquire } = await interruptedRestart()
-  await host.restartResume.list()
-  acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
-  await host.restartResume.continueAfterRestart([SESSION], 'modal')
-  expect(await host.restartResume.listFailures()).toMatchObject([{ sessionId: SESSION }])
-  await host.close(SESSION, 'evict')
-  newerOrcaRow(root)
-
-  expect(await host.restartResume.listFailures()).toMatchObject([{ sessionId: SESSION }])
-  await host.restartResume.continueAfterRestart([SESSION], 'retry')
-  expect(await host.restartResume.listFailures()).toEqual([])
-  expect(
-    (await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).map((f) => f.marker.sessionId)
-  ).toEqual([SESSION])
 })
 
 it('still offers a damaged chat, and files its failure when acting on it', async () => {

@@ -27,12 +27,8 @@ import type {
   JournalQueuedMessagesDeps,
   JournalSubmissionConsume
 } from '../journal-store-contracts'
-import {
-  deriveQueuePauses,
-  journalUserStopInForce,
-  type DerivedQueuePause,
-  type JournalQueuePauseMarks
-} from './queued-message-pause'
+import { deriveQueuePauses, type DerivedQueuePause } from './queued-message-pause'
+import { journalUserStopInForce, type JournalQueuePauseMarks } from './queued-message-pause-marks'
 import {
   isUnsettledQueuedMessage,
   type QueuedMessageHoldReason,
@@ -85,8 +81,11 @@ export class JournalQueuedMessages {
     const key = this.revision()
     if (this.viewed?.key !== key) {
       const state = this.inputState()
-      const cards = [...journalInputOrder(state).liveCards(state)]
-      this.viewed = { key, cards: cards.sort((a, b) => a.position - b.position) }
+      const cards = journalInputOrder(state).cards.list()
+      this.viewed = {
+        key,
+        cards
+      }
     }
     return this.viewed.cards
   }
@@ -114,6 +113,7 @@ export class JournalQueuedMessages {
       editHeld: (messageId) => automatic && this.editLeases.isHeld(messageId),
       revisions: [this.revision(), automatic ? this.editLeases.version() : -1],
       unavailable: this.mailUnavailable,
+      automatic,
       steer
     })
   }
@@ -123,6 +123,8 @@ export class JournalQueuedMessages {
     input: {
       messageId: string
       body: AgentJournalMessageItem
+      deliveryMode?: 'queue' | 'steer'
+      unattended?: boolean
       requireAttachments?: true
       holdReason?: QueuedMessageHoldReason
       options?: AgentSessionExecutionOptions
@@ -146,6 +148,8 @@ export class JournalQueuedMessages {
           body,
           position,
           queuedAt: { epoch, sequence: lastSequence },
+          ...(input.deliveryMode !== undefined ? { deliveryMode: input.deliveryMode } : {}),
+          ...(input.unattended !== undefined ? { unattended: input.unattended } : {}),
           ...(input.holdReason ? { holdReason: input.holdReason } : {}),
           ...(input.options ? { options: input.options } : {})
         }
@@ -254,7 +258,16 @@ export class JournalQueuedMessages {
   }
 
   pauses(): DerivedQueuePause[] {
-    return this.derivePauses(this.list())
+    const state = this.deps.state()
+    return deriveQueuePauses({
+      epoch: state.epoch,
+      marks: state.queuePauseMarks,
+      latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
+      latestPersonAcceptedTurnSequence: journalInputOrder(state).latestPersonAcceptedSequence(),
+      failedAt: journalInputOrder(state).newestTurn.failure(),
+      cards: this.list(),
+      reopenFloor: this.deps.reopenFloor()
+    })
   }
 
   awaitReopenMark(): boolean {
@@ -277,19 +290,10 @@ export class JournalQueuedMessages {
 
   userStopInForce(): JournalQueuePauseMarks['latestStop'] {
     const state = this.deps.state()
-    return journalUserStopInForce(state.queuePauseMarks, state.latestAcceptedTurnSequence)
-  }
-
-  private derivePauses(cards: readonly QueuedMessageRow[]): DerivedQueuePause[] {
-    const state = this.deps.state()
-    return deriveQueuePauses({
-      epoch: state.epoch,
-      marks: state.queuePauseMarks,
-      latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
-      failedAt: journalInputOrder(state).newestTurn.failure(),
-      cards,
-      reopenFloor: this.deps.reopenFloor()
-    })
+    return journalUserStopInForce(
+      state.queuePauseMarks,
+      journalInputOrder(state).latestPersonAcceptedSequence()
+    )
   }
 
   /** Resolve after preceding writes; commit receipts with changed rows and skip empty plans. */

@@ -5,6 +5,7 @@ import { AgentStateDot } from '@/components/AgentStateDot'
 import { ClaudeIcon } from '../status-bar/icons'
 import { FeatureWallClickRing } from './FeatureWallClickRing'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type Issue = {
   number: number
@@ -116,6 +117,7 @@ function useFakeCursor(
 }
 
 export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Element {
+  const t = useTranslate()
   const { reducedMotion } = props
   const panelRef = useRef<HTMLDivElement | null>(null)
   const rowRefs = useRef<(HTMLDivElement | null)[]>([])
@@ -240,10 +242,7 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
               <div className="relative flex items-center justify-end">
                 {!isActive ? (
                   <span className="inline-flex items-center justify-center rounded-full border border-emerald-500/35 bg-emerald-500/10 px-2 py-px text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">
-                    {translate(
-                      'auto.components.feature.wall.TasksAnimatedVisual.4331c4d0f8',
-                      'Open'
-                    )}
+                    {t('auto.components.feature.wall.TasksAnimatedVisual.4331c4d0f8', 'Open')}
                   </span>
                 ) : (
                   <button
@@ -257,7 +256,7 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
                       isPressing ? 'scale-[0.94] brightness-[1.4]' : 'scale-100'
                     }`}
                   >
-                    {translate(
+                    {t(
                       'auto.components.feature.wall.TasksAnimatedVisual.b68c92fbdc',
                       'Start workspace'
                     )}
@@ -285,14 +284,11 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
           )}
           <span>
             {workspaceCreating
-              ? translate(
+              ? t(
                   'auto.components.feature.wall.TasksAnimatedVisual.61ffda7601',
                   'Creating workspace'
                 )
-              : translate(
-                  'auto.components.feature.wall.TasksAnimatedVisual.fe47c9c9e8',
-                  'Workspace ready'
-                )}
+              : t('auto.components.feature.wall.TasksAnimatedVisual.fe47c9c9e8', 'Workspace ready')}
           </span>
         </div>
         {workspaceIssue ? (
@@ -315,7 +311,7 @@ export function TasksAnimatedVisual(props: { reducedMotion: boolean }): JSX.Elem
                 </span>
                 <ClaudeIcon size={14} />
                 <span className="truncate font-mono text-[11px] leading-[1.2] text-muted-foreground">
-                  {translate(
+                  {t(
                     'auto.components.feature.wall.TasksAnimatedVisual.readingIssue',
                     'Reading issue #{{number}}…',
                     { number: workspaceIssue.number }

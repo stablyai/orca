@@ -23,11 +23,15 @@ import {
 import { notifyInstalledAgentSkillsChanged } from '@/hooks/useInstalledAgentSkills'
 import { useSkillInstallProgress } from './skill-install-progress-state'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { resolveSkillShareForInstall } from './skill-warning-preview-gate'
 import { useSkillInstallRisk } from './use-skill-install-risk'
 import { SkillInstallDialogFooter } from './SkillInstallDialogFooter'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export function SkillInstallDialog({
   open,
@@ -38,6 +42,7 @@ export function SkillInstallDialog({
   onOpenChange: (open: boolean) => void
   initialLink?: string
 }): React.JSX.Element {
+  const t = useTranslate()
   const runtimeEnvironments = useAppStore((state) => state.runtimeEnvironments)
   const runtimeStatus = useAppStore((state) => state.runtimeStatusByEnvironmentId)
   const worktreesByRepo = useAppStore((state) => selectWorktreesByRepo(state))
@@ -144,7 +149,7 @@ export function SkillInstallDialog({
     }
     const choice = workspaceChoices.find((candidate) => candidate.id === workspace)
     if (scope === 'workspace' && !choice) {
-      setError(translate('auto.components.skills.install.chooseWorkspace', 'Choose a workspace.'))
+      setError(t('auto.components.skills.install.chooseWorkspace', 'Choose a workspace.'))
       return
     }
     setBusy(true)
@@ -210,7 +215,7 @@ export function SkillInstallDialog({
       if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
-            ? translate(
+            ? t(
                 'auto.components.skills.install.reconnectBeforeInstalling',
                 'Reconnect your Orca account before installing.'
               )
@@ -225,7 +230,7 @@ export function SkillInstallDialog({
     } catch (cause) {
       console.warn('[skills] install failed:', cause)
       setError(
-        translate(
+        t(
           'auto.components.skills.install.requestedVersionVerificationFailed',
           'Installation failed before Orca could verify the requested version.'
         )
@@ -246,7 +251,7 @@ export function SkillInstallDialog({
     })
     if (!cancelled.cancelled) {
       setError(
-        translate(
+        t(
           'auto.components.skills.install.destinationAlreadyFinished',
           'The destination had already finished this installation.'
         )
@@ -278,14 +283,8 @@ export function SkillInstallDialog({
         <DialogHeader>
           <DialogTitle>
             {bundleVersion
-              ? translate(
-                  'auto.components.skills.SkillInstallDialog.01c5a14e01',
-                  'Install shared skills'
-                )
-              : translate(
-                  'auto.components.skills.SkillInstallDialog.fcbec627cc',
-                  'Install shared skill'
-                )}
+              ? t('auto.components.skills.SkillInstallDialog.01c5a14e01', 'Install shared skills')
+              : t('auto.components.skills.SkillInstallDialog.fcbec627cc', 'Install shared skill')}
           </DialogTitle>
         </DialogHeader>
 
@@ -293,7 +292,7 @@ export function SkillInstallDialog({
           // Avoid flashing the paste form while the supplied link’s review loads.
           <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">
             <Loader2 className="size-4 animate-spin" />
-            {translate('auto.components.skills.SkillInstallDialog.opening', 'Opening this link…')}
+            {t('auto.components.skills.SkillInstallDialog.opening', 'Opening this link…')}
           </p>
         ) : !preview ? (
           <SkillShareLinkInputForm

@@ -8,13 +8,13 @@ import {
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR
 } from '../../../src/shared/clipboard-image'
-import { isKnownRasterImageMimeType } from '../../../src/shared/raster-image-preview-limits'
+import { isKnownRasterImageMimeType } from '../../../src/shared/file-preview/raster-image-preview-limits'
 import {
   imageParamsSchema,
   type BridgeImageRunParams
 } from '../mobile-web-shell/bridge/bridge-image-verbs'
 import { BridgeNativeVerbRefusedError } from '../mobile-web-shell/bridge-host-errors'
-import { decodeCanonicalBase64Bytes } from '../transport/base64-byte-codec'
+import { decodeCanonicalBase64Bytes } from '../transport/encryption/base64-byte-codec'
 import { mobileFileExtensionForMime } from './mobile-picked-file-name'
 import { freshCacheFolder } from './native-media-device'
 

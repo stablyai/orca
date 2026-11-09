@@ -2,7 +2,7 @@
 import { moveManagedOrcadLocalPort } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
 import { resolveEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { getOrcadSshDeployment } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import { reserveLocalForwardPort } from '../../ssh/system-transport/system-ssh-forward-port-reservation'
+import { reserveLocalForwardPort } from '../../ssh/system-transport/forwarding/system-ssh-forward-port-reservation'
 import { notifyManagedOrcadPairingRepaired } from './orcad-managed-pairing-repaired-listener'
 
 // Reservation reports the bind error code as `cause`; Windows excluded ranges answer EACCES.

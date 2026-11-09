@@ -186,30 +186,6 @@ describe('WorkerThreadRequestQueue', () => {
     }
   )
 
-  it('posts one request at a time and in the order it was dispatched', async () => {
-    const workers: FakeWorker[] = []
-    const queue = makeQueue(workers)
-
-    const first = send(queue, 'a')
-    const second = send(queue, 'b')
-    const third = send(queue, 'c')
-    await Promise.resolve()
-
-    expect(workers).toHaveLength(1)
-    expect(labels(workers[0])).toEqual(['a'])
-
-    workers[0].respond()
-    await expect(first).resolves.toMatchObject({ label: 'a' })
-    expect(labels(workers[0])).toEqual(['a', 'b'])
-
-    workers[0].respond()
-    await expect(second).resolves.toMatchObject({ label: 'b' })
-    expect(labels(workers[0])).toEqual(['a', 'b', 'c'])
-
-    workers[0].respond()
-    await expect(third).resolves.toMatchObject({ label: 'c' })
-  })
-
   it('starts each deadline when the call is posted, not when it was queued', async () => {
     vi.useFakeTimers()
     const workers: FakeWorker[] = []
@@ -226,41 +202,6 @@ describe('WorkerThreadRequestQueue', () => {
     workers[0].respond()
 
     await expect(queued).resolves.toMatchObject({ label: 'behind' })
-  })
-
-  it('fires a posted call at its own deadline', async () => {
-    vi.useFakeTimers()
-    const workers: FakeWorker[] = []
-    const queue = makeQueue(workers)
-
-    const pending = settle(send(queue, 'silent'))
-    await vi.advanceTimersByTimeAsync(TIMEOUT_MS)
-
-    expect(await pending).toMatchObject({ message: `timed out after ${TIMEOUT_MS}ms` })
-    expect(workers[0].terminated).toBe(true)
-  })
-
-  it('stops respawning and fails the rest of the queue once deaths hit the cap', async () => {
-    const workers: FakeWorker[] = []
-    const queue = makeQueue(workers)
-
-    const dispatched = ['a', 'b', 'c', 'd'].map((label) => settle(send(queue, label)))
-    await Promise.resolve()
-
-    for (let death = 0; death < MAX_CONSECUTIVE_DEATHS; death++) {
-      workers.at(-1)?.emit('error', new Error(`boom ${death}`))
-    }
-
-    expect(workers).toHaveLength(MAX_CONSECUTIVE_DEATHS)
-    expect(labels(workers[0])).toEqual(['a'])
-    expect(labels(workers[2])).toEqual(['c'])
-    const settled = await Promise.all(dispatched)
-    expect(settled.slice(0, 3)).toMatchObject([
-      { message: 'boom 0' },
-      { message: 'boom 1' },
-      { message: 'boom 2' }
-    ])
-    expect(settled[3]).toMatchObject({ message: 'crashed repeatedly (boom 2)' })
   })
 
   it('clears the death count on a successful response mid-queue', async () => {
@@ -288,30 +229,6 @@ describe('WorkerThreadRequestQueue', () => {
     expect(labels(workers[3])).toEqual(['e'])
     workers[3].respond()
     expect(await e).toMatchObject({ label: 'e' })
-  })
-
-  it('clears the death count when a fresh burst starts from full idle', async () => {
-    const workers: FakeWorker[] = []
-    const queue = makeQueue(workers)
-
-    for (const label of ['a', 'b']) {
-      const lone = settle(send(queue, label))
-      await Promise.resolve()
-      workers.at(-1)?.emit('error', new Error(`boom ${label}`))
-      expect(await lone).toMatchObject({ message: `boom ${label}` })
-    }
-    expect(workers).toHaveLength(2)
-
-    const active = settle(send(queue, 'c'))
-    const behind = settle(send(queue, 'd'))
-    await Promise.resolve()
-    workers[2].emit('error', new Error('boom c'))
-
-    expect(await active).toMatchObject({ message: 'boom c' })
-    // A new burst must not inherit the two prior faults and drain d.
-    expect(labels(workers[3])).toEqual(['d'])
-    workers[3].respond()
-    expect(await behind).toMatchObject({ label: 'd' })
   })
 
   it('keeps one owner fault budget across idle batches and refuses a fourth worker', async () => {

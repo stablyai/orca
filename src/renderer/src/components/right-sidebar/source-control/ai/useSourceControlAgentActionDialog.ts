@@ -1,3 +1,4 @@
+import { useSourceControlState } from '../panel/worktree-scope'
 import type {
   AgentPickerDraft,
   AgentPickerEntry
@@ -14,8 +15,7 @@ import {
 import { captureSourceControlActionSelection } from '../../../../../../shared/source-control/ai/source-control-ai-operation-policy'
 import { useCallback, useMemo, useState } from 'react'
 import { resolveSourceControlLaunchAgentScope } from '../../../../../../shared/source-control/ai/source-control-launch-agent-selection'
-import { useAppStore } from '@/store/index'
-import { useRepoById } from '@/store/selectors'
+import { selectRepoByIdForActiveWorkspace } from '@/store/repos/active-workspace-repository'
 import { renderSourceControlActionCommandTemplate } from '../../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
@@ -29,6 +29,7 @@ import {
 } from './source-control-agent-action-dialog-support'
 import { useSourceControlAgentActionStart } from './useSourceControlAgentActionStart'
 import { useSourceControlActionAgentChoice } from './use-source-control-action-agent-choice'
+import { useTranslate } from '@/i18n/use-translate'
 
 const DEFAULT_SAVE_TARGET_VALUE = 'global'
 
@@ -41,6 +42,8 @@ export function useSourceControlAgentActionDialog({
   baseCommandInput,
   worktreeId,
   groupId,
+  placementWorkspaceId,
+  initialCwd,
   connectionId,
   repoId,
   promptDelivery = 'submit-after-ready',
@@ -53,8 +56,11 @@ export function useSourceControlAgentActionDialog({
   onLaunched,
   onStart
 }: SourceControlAgentActionDialogProps): UseSourceControlAgentActionDialogResult {
-  const settings = useAppStore((state) => state.settings)
-  const repo = useRepoById(repoId ?? null)
+  const t = useTranslate()
+  const settings = useSourceControlState((state) => state.settings)
+  const repo = useSourceControlState((state) =>
+    selectRepoByIdForActiveWorkspace(state, repoId ?? null)
+  )
   const [currentSelection, setCurrentSelection] = useState<CurrentActionSelection>(
     () =>
       initialSelection ??
@@ -83,7 +89,8 @@ export function useSourceControlAgentActionDialog({
     repoId,
     repo,
     recipe,
-    livePick
+    livePick,
+    terminalOnly: Boolean(placementWorkspaceId)
   })
   const launchAgentScope = useMemo(
     () =>
@@ -130,11 +137,12 @@ export function useSourceControlAgentActionDialog({
     saveTargetValue,
     actionId,
     repoId,
-    settings,
     agentLaunchPreferences: choice.observation.preferences,
     repo,
     worktreeId,
     groupId,
+    placementWorkspaceId,
+    initialCwd,
     promptDelivery,
     launchPlatform,
     // Why: an SSH host runs the plain `orca` shim; keep the previewed command
@@ -162,13 +170,16 @@ export function useSourceControlAgentActionDialog({
     selection.ready &&
     !isStarting
 
-  const statusCopy = buildSourceControlAgentStatusCopy({
-    selectedAgent,
-    selectedAgentUnavailable: choice.selectedAgentUnavailable,
-    connectionUnavailable,
-    hasEnabledAgents: choice.hasEnabledAgents,
-    detecting
-  })
+  const statusCopy = buildSourceControlAgentStatusCopy(
+    {
+      selectedAgent,
+      selectedAgentUnavailable: choice.selectedAgentUnavailable,
+      connectionUnavailable,
+      hasEnabledAgents: choice.hasEnabledAgents,
+      detecting
+    },
+    t
+  )
 
   // Why: editing any launch field invalidates the previewed delivery plan.
   const resetPlanAfter = useCallback(

@@ -4,11 +4,13 @@ type RuntimeGitCommandName =
   | 'getRuntimeGitStatus'
   | 'getRuntimeGitSubmoduleStatus'
   | 'checkRuntimeGitIgnoredPaths'
+  | 'getRuntimeGitRefs'
   | 'getRuntimeGitHistory'
   | 'getRuntimeGitConflictOperation'
   | 'getRuntimeGitMutationInFlight'
   | 'abortRuntimeGitMerge'
   | 'abortRuntimeGitRebase'
+  | 'switchRuntimeGitBranch'
   | 'checkoutRuntimeGitBranch'
   | 'listRuntimeGitLocalBranches'
   | 'getRuntimeGitDiff'
@@ -24,6 +26,11 @@ type RuntimeGitCommandName =
   | 'getRuntimeGitBranchDiff'
   | 'getRuntimeGitCommitDiff'
   | 'commitRuntimeGit'
+  | 'createRuntimeGitBranch'
+  | 'cherryPickRuntimeGit'
+  | 'revertRuntimeGit'
+  | 'sequencerAbortRuntimeGit'
+  | 'sequencerContinueRuntimeGit'
   | 'completeRuntimeGitMerge'
   | 'generateRuntimeCommitMessage'
   | 'discoverRuntimeCommitMessageModels'
@@ -50,11 +57,13 @@ export function installRuntimeGitCommandSurface(
     getRuntimeGitStatus: commands.getRuntimeGitStatus.bind(commands),
     getRuntimeGitSubmoduleStatus: commands.getRuntimeGitSubmoduleStatus.bind(commands),
     checkRuntimeGitIgnoredPaths: commands.checkRuntimeGitIgnoredPaths.bind(commands),
+    getRuntimeGitRefs: commands.getRuntimeGitRefs.bind(commands),
     getRuntimeGitHistory: commands.getRuntimeGitHistory.bind(commands),
     getRuntimeGitConflictOperation: commands.getRuntimeGitConflictOperation.bind(commands),
     getRuntimeGitMutationInFlight: commands.getRuntimeGitMutationInFlight.bind(commands),
     abortRuntimeGitMerge: commands.abortRuntimeGitMerge.bind(commands),
     abortRuntimeGitRebase: commands.abortRuntimeGitRebase.bind(commands),
+    switchRuntimeGitBranch: commands.switchRuntimeGitBranch.bind(commands),
     checkoutRuntimeGitBranch: commands.checkoutRuntimeGitBranch.bind(commands),
     listRuntimeGitLocalBranches: commands.listRuntimeGitLocalBranches.bind(commands),
     getRuntimeGitDiff: commands.getRuntimeGitDiff.bind(commands),
@@ -70,6 +79,11 @@ export function installRuntimeGitCommandSurface(
     getRuntimeGitBranchDiff: commands.getRuntimeGitBranchDiff.bind(commands),
     getRuntimeGitCommitDiff: commands.getRuntimeGitCommitDiff.bind(commands),
     commitRuntimeGit: commands.commitRuntimeGit.bind(commands),
+    createRuntimeGitBranch: commands.createRuntimeGitBranch.bind(commands),
+    cherryPickRuntimeGit: commands.cherryPickRuntimeGit.bind(commands),
+    revertRuntimeGit: commands.revertRuntimeGit.bind(commands),
+    sequencerAbortRuntimeGit: commands.sequencerAbortRuntimeGit.bind(commands),
+    sequencerContinueRuntimeGit: commands.sequencerContinueRuntimeGit.bind(commands),
     completeRuntimeGitMerge: commands.completeRuntimeGitMerge.bind(commands),
     generateRuntimeCommitMessage: commands.generateRuntimeCommitMessage.bind(commands),
     discoverRuntimeCommitMessageModels: commands.discoverRuntimeCommitMessageModels.bind(commands),

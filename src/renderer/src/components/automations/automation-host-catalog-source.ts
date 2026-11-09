@@ -1,10 +1,10 @@
 /** Build catalog input only from mirrored store state. Fold query results into the separate health projection so cache commits cannot trigger generation changes/cancellation. */
 
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
-import { AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import { AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY } from '../../../../shared/automations/automation-runtime-capabilities'
+import type { RuntimeStatus } from '../../../../shared/runtime-session-contracts'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { StableAutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type { StableAutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import type {
   AutomationAuthorityHealth,
   AutomationCatalogSshMirrorInput,
@@ -30,6 +30,7 @@ export type AutomationCatalogRuntimeSource = {
   /** Undefined until this client has probed the environment at all. */
   status: { status: RuntimeStatus | null } | undefined
   ssh: AutomationCatalogSshSource | undefined
+  managedSshTargetId?: string
 }
 
 export type AutomationHostCatalogSource = {
@@ -129,6 +130,7 @@ export function buildAutomationHostCatalogSource(
         authorityHealth: runtimeAuthorityHealth(runtime),
         querySupport: runtimeQuerySupport(runtime),
         ssh: toSshMirror(runtime.ssh ?? EMPTY_SSH),
+        ...(runtime.managedSshTargetId ? { managedSshTargetId: runtime.managedSshTargetId } : {}),
         ...withOrphanCount(orphanCountFor(source, authority))
       }
     }),

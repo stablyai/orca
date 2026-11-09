@@ -26,9 +26,7 @@ import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
-
-export * from './activity-prototype-page-exports'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 export default function ActivityPrototypePage(): React.JSX.Element {
   const [query, setQuery] = useState('')

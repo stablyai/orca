@@ -1,4 +1,4 @@
-import { useImperativeHandle, type ReactNode, type Ref } from 'react'
+import { useImperativeHandle, type ReactNode, type Ref, type RefObject } from 'react'
 import type {
   AiVaultAgent,
   AiVaultScope
@@ -34,10 +34,10 @@ export function useAiVaultPanelHandle(
     query: string
     setQuery: (query: string) => void
     changeScope: (scope: AiVaultScope) => void
-    setFocusSearchRequestId: (update: (id: number) => number) => void
+    searchInputRef: RefObject<HTMLInputElement | null>
   }
 ): void {
-  const { query, setQuery, changeScope, setFocusSearchRequestId } = panel
+  const { query, setQuery, changeScope, searchInputRef } = panel
   useImperativeHandle(
     ref,
     () => ({
@@ -45,13 +45,14 @@ export function useAiVaultPanelHandle(
         if (nextScope) {
           changeScope(nextScope)
         }
-        setFocusSearchRequestId((id) => id + 1)
+        searchInputRef.current?.focus()
+        searchInputRef.current?.select()
       },
       clearSearch: () => {
         setQuery('')
         return query !== ''
       }
     }),
-    [changeScope, query, setFocusSearchRequestId, setQuery]
+    [changeScope, query, searchInputRef, setQuery]
   )
 }
