@@ -448,3 +448,121 @@ it('publishes metadata retained on a pre-existing row after explicit setup fails
     }
   })
 })
+
+it.each(['recovered parent', 'unavailable'] as const)(
+  'settles an explicit origin after ordinary alias enrichment: %s',
+  async (evidence) => {
+    await withGitFolder({ origin: 'git@gh-personal:me/repo-a.git' }, async (path) => {
+      const repos: Repo[] = []
+      const runtime = createRuntime(repos)
+      const origin = { owner: 'me', repo: 'repo-a' }
+      const ordinary = Promise.withResolvers<forkMetadata.RepoUpstreamProbe>()
+      const ordinaryStarted = Promise.withResolvers<void>()
+      const ordinaryFinished = Promise.withResolvers<void>()
+      const required = Promise.withResolvers<forkMetadata.RepoUpstreamProbe>()
+      const requiredStarted = Promise.withResolvers<void>()
+      parentProbe
+        .mockImplementationOnce(() => {
+          ordinaryStarted.resolve()
+          return ordinary.promise
+        })
+        .mockImplementationOnce(() => {
+          requiredStarted.resolve()
+          return required.promise
+        })
+      const unsubscribe = runtime.onClientEvent((event) => {
+        if (event.type === 'reposChanged' && repos[0]?.repoIcon?.type === 'image') {
+          ordinaryFinished.resolve()
+        }
+      })
+      try {
+        const added = await runtime.addRepo(path, 'git', 'runtime:env-1')
+        await ordinaryStarted.promise
+        ordinary.resolve({ upstream: undefined, origin })
+        await ordinaryFinished.promise
+        expect(added.id).toBe(repos[0].id)
+        expect(repos[0].gitRemoteIdentity).toEqual({
+          canonicalKey: 'gh-personal/me/repo-a',
+          remoteName: 'origin',
+          remoteUrl: 'git@gh-personal:me/repo-a.git'
+        })
+        expect(repos[0].repoIcon).toEqual({
+          type: 'image',
+          source: 'github',
+          src: 'https://github.com/me.png?size=64',
+          label: 'me/repo-a'
+        })
+        expect(repos[0].upstream).toBeUndefined()
+
+        const setup = runtime.setupProjectExistingFolder({
+          projectId: 'github:me/repo-a',
+          projectProviderIdentity: { provider: 'github', ...origin },
+          hostId: 'runtime:env-1',
+          path,
+          kind: 'git'
+        })
+        await requiredStarted.promise
+        const completion = runtime.repositoryForkBackfill.resolve(repos[0])
+        required.resolve({
+          upstream: evidence === 'recovered parent' ? { owner: 'acme', repo: 'repo-a' } : undefined,
+          origin
+        })
+        const result = await setup
+        await completion
+        expect(result.project.id).toBe('github:me/repo-a')
+        expect(result.repo.upstream).toEqual(evidence === 'recovered parent' ? origin : null)
+        parentProbe.mockResolvedValue({ upstream: { owner: 'acme', repo: 'repo-a' }, origin })
+        await runtime.repositoryForkBackfill.run()
+        expect(repos[0].upstream).toEqual(evidence === 'recovered parent' ? origin : null)
+        expect(
+          projectHostSetupProjectionFromRepos(JSON.parse(JSON.stringify(repos))).setups[0].projectId
+        ).toBe('github:me/repo-a')
+      } finally {
+        ordinary.resolve({ upstream: undefined, origin })
+        required.resolve({ upstream: undefined, origin })
+        unsubscribe()
+      }
+    })
+  }
+)
+
+it('accepts remote-less saved-avatar equality without a required probe or new stamp', async () => {
+  await withGitFolder({}, async (path) => {
+    const repos: Repo[] = [
+      {
+        id: 'legacy',
+        path: realpathSync(path),
+        displayName: 'repo-a',
+        badgeColor: 'blue',
+        addedAt: 1,
+        kind: 'git',
+        executionHostId: 'runtime:env-1',
+        repoIcon: {
+          type: 'image',
+          source: 'github',
+          src: 'https://github.com/me.png?size=64',
+          label: 'me/repo-a'
+        }
+      }
+    ]
+    const runtime = createRuntime(repos)
+    const background = Promise.withResolvers<forkMetadata.RepoUpstreamProbe>()
+    parentProbe.mockImplementationOnce(() => background.promise)
+    try {
+      const result = await runtime.setupProjectExistingFolder({
+        projectId: 'github:me/repo-a',
+        projectProviderIdentity: { provider: 'github', owner: 'me', repo: 'repo-a' },
+        hostId: 'runtime:env-1',
+        path,
+        kind: 'git'
+      })
+      expect(result.project.id).toBe('github:me/repo-a')
+      expect(result.repo.upstream).toBeUndefined()
+    } finally {
+      const completion = runtime.repositoryForkBackfill.resolve(repos[0])
+      background.resolve({ upstream: undefined, origin: null })
+      await completion
+    }
+    expect(repos[0].upstream).toBeUndefined()
+  })
+})

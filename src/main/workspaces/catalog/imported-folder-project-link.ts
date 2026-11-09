@@ -6,7 +6,7 @@ import {
 import {
   getProjectIdentityKey,
   getProjectIdForProviderIdentity,
-  getGitRemoteProviderIdentity
+  hasProjectRemoteIdentity
 } from '../../../shared/project-host-setup-projection'
 import type { ProjectHostSetupExistingFolderArgs } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -63,7 +63,7 @@ export async function linkImportedFolderToProject(
     getProjectIdentityKey(repo) === args.projectId &&
     repo.repoIcon?.type === 'image' &&
     repo.repoIcon.source === 'github' &&
-    !getGitRemoteProviderIdentity(folderRemote)
+    !hasProjectRemoteIdentity({ gitRemoteIdentity: folderRemote.gitRemoteIdentity })
   const needsEvidence = !!selectedProvider && repo.upstream === undefined && !legacyMatch
   let metadataFinished = false
   if (needsEvidence) {
