@@ -1,8 +1,12 @@
-import { holdBrowserAttachmentFiles } from '@/lib/browser-attachment-files'
-import { decodeBase64Bytes } from '@/lib/base64-bytes'
+import {
+  holdBrowserAttachmentFiles,
+  readBrowserAttachmentFile
+} from '@/lib/browser-attachment-files'
+import { decodeBase64Bytes, encodeBase64Bytes } from '@/lib/base64-bytes'
 import {
   agentSessionPastedImageName,
-  type AgentSessionAttachmentClipboardTarget
+  type AgentSessionAttachmentClipboardTarget,
+  type AgentSessionAttachmentPathUploadResult
 } from '../../../../shared/agent-session/agent-session-attachments'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
@@ -137,7 +141,12 @@ export async function writeWebClipboardImage(dataUrl: string): Promise<void> {
 
 export async function saveClipboardImageAsTempFileInRuntime(
   contentBase64: string,
-  args?: { connectionId?: string | null; runtimeEnvironmentId?: string | null }
+  args?: {
+    connectionId?: string | null
+    runtimeEnvironmentId?: string | null
+    /** Keeps a dropped file's own name in the server's temp folder. */
+    fileName?: string
+  }
 ): Promise<string> {
   if (contentBase64.length > MAX_CLIPBOARD_IMAGE_BASE64_CHARS) {
     throw new Error(CLIPBOARD_IMAGE_TOO_LARGE_ERROR)
@@ -145,12 +154,18 @@ export async function saveClipboardImageAsTempFileInRuntime(
   const connectionId = args?.connectionId ?? null
   const startResponse = await callRuntimeEnvelope<{ uploadId: string }>(
     'clipboard.startImageUpload',
-    { expectedBase64Length: contentBase64.length, connectionId },
+    {
+      expectedBase64Length: contentBase64.length,
+      connectionId,
+      ...(args?.fileName ? { fileName: args.fileName } : {})
+    },
     CLIPBOARD_IMAGE_SAVE_TIMEOUT_MS
   )
   if (!startResponse.ok) {
     if (
       startResponse.error.code === 'method_not_found' &&
+      // The single-frame method cannot carry a name; a named file must not land as an image.
+      !args?.fileName &&
       contentBase64.length <= CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS
     ) {
       return callRuntimeResult<string>(
@@ -239,4 +254,41 @@ export async function saveWebClipboardImageAsTempFile(args?: {
     })
   }
   return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
+}
+
+const TEMP_FILE_MAX_MEGABYTES = Math.floor(CLIPBOARD_IMAGE_MAX_SOURCE_BYTES / (1024 * 1024))
+
+/** Upload picked/dropped files to the paired server's temp folder for a terminal-backed chat, as desktop does. */
+export async function uploadBrowserFilesToWebRuntimeTempFiles(args: {
+  environmentId: string
+  paths: readonly string[]
+}): Promise<AgentSessionAttachmentPathUploadResult> {
+  const result: AgentSessionAttachmentPathUploadResult = { uploaded: [], skipped: [], failed: [] }
+  for (const sourcePath of args.paths) {
+    const file = readBrowserAttachmentFile(sourcePath)
+    if (!file) {
+      result.failed.push({ sourcePath, reason: 'Attach the file again.' })
+      continue
+    }
+    if (file.size > CLIPBOARD_IMAGE_MAX_SOURCE_BYTES) {
+      result.failed.push({
+        sourcePath,
+        reason: `'${file.name}' is over the ${TEMP_FILE_MAX_MEGABYTES} MB chat attachment limit`
+      })
+      continue
+    }
+    try {
+      const path = await saveClipboardImageAsTempFileInRuntime(
+        encodeBase64Bytes(new Uint8Array(await file.arrayBuffer())),
+        { runtimeEnvironmentId: args.environmentId, fileName: file.name }
+      )
+      result.uploaded.push({ sourcePath, path })
+    } catch (error) {
+      result.failed.push({
+        sourcePath,
+        reason: error instanceof Error ? error.message : String(error)
+      })
+    }
+  }
+  return result
 }
