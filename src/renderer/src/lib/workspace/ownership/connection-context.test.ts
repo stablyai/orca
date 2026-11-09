@@ -6,9 +6,11 @@ import type { Worktree } from '../../../../../shared/worktree/types'
 import { useAppStore } from '@/store/index'
 import type { AppState } from '@/store/types'
 import { getConnectionId, getConnectionIdForFile } from './connection-context'
-import { getConnectionIdFromState } from './connection-owner-resolution'
+import {
+  createConnectionIdForFileSelector,
+  getConnectionIdFromState
+} from './connection-owner-resolution'
 import { folderWorkspaceKey } from '../../../../../shared/workspace-scope'
-import { createConnectionIdForFileSelector } from './connection-owner-resolution'
 
 const initialState = useAppStore.getInitialState()
 
