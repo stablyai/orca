@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type * as SessionHostCapabilityModule from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { fireEvent, render, screen, cleanup, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import type * as I18nModule from '@/i18n/i18n'
@@ -15,9 +16,7 @@ vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
 vi.mock(
   '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability',
   async (importOriginal) => ({
-    ...(await importOriginal<
-      typeof import('@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability')
-    >()),
+    ...(await importOriginal<typeof SessionHostCapabilityModule>()),
     structuredAgentSessionHostSupports: async () => true
   })
 )
