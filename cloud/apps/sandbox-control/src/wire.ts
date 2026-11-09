@@ -29,7 +29,11 @@ export const CreateRequestSchema = z
       .string()
       .regex(/^bld_[0-9a-f]{8,40}$/)
       .optional(),
-    useEnvironment: z.boolean().optional()
+    useEnvironment: z.boolean().optional(),
+    // Registry metadata (0006); all optional so older desktops keep working.
+    title: z.string().trim().min(1).max(120).regex(/^[^\u0000-\u001f]+$/).optional(),
+    visibility: z.enum(['private', 'team']).optional(),
+    section: z.string().trim().min(1).max(64).regex(/^[^\u0000-\u001f]+$/).optional()
   })
   .strict()
 

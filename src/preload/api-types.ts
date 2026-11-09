@@ -74,6 +74,7 @@ import type { UpdaterApi } from './api/updater-api'
 import type { WorkspaceCleanupApi, WorkspaceSpaceApi } from './api/workspace-cleanup-api'
 import type { LocalhostWorktreeLabelsApi, WorkspacePortsApi } from './api/workspace-port-api'
 import type { LinkPreviewApi } from './api/link-preview-api'
+import type { CloudWorkspacesApi } from './api/cloud-workspaces-api'
 import type { WorkspaceSessionApi } from './api/workspace-session-api'
 import type { FolderWorkspacesApi, SparsePresetsApi, WorktreeApi } from './api/worktree-api'
 
@@ -95,6 +96,7 @@ export type PreloadApi = {
   workspaceSpace: WorkspaceSpaceApi
   workspacePorts: WorkspacePortsApi
   linkPreview: LinkPreviewApi
+  cloudWorkspaces: CloudWorkspacesApi
   pty: PtyApi
   feedback: FeedbackApi
   crashReports: CrashReportsApi

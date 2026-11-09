@@ -1,5 +1,6 @@
 import { pluginInstallLinkFromArguments } from '../../shared/plugins/catalog/plugin-install-link'
 import { skillShareIdFromArguments } from '../../shared/skill-share-link'
+import { parseCloudWorkspaceLink } from '../../shared/cloud-workspaces/cloud-workspaces-wire'
 
 const REPEAT_WINDOW_MS = 3_000
 const BURST_LIMIT = 5
@@ -41,6 +42,13 @@ export class PendingDeepLinkState {
 export class SkillShareDeepLinkState extends PendingDeepLinkState {
   constructor() {
     super(skillShareIdFromArguments)
+  }
+}
+
+/** orca://cloud/w/<id>[/c/<chat>] from launch argv or open-url (team workspace and chat links). */
+export class CloudWorkspaceLinkState extends PendingDeepLinkState {
+  constructor(now?: () => number) {
+    super((argv) => argv.find((arg) => parseCloudWorkspaceLink(arg) !== null) ?? null, now)
   }
 }
 

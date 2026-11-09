@@ -8,7 +8,7 @@
 // A new image becomes active only after a smoke boot reaches orcad ready; the previous one is kept
 // (`retired`, still bootable) until the next rotation succeeds, so a bad build never strands creates.
 import { MANIFEST, PROVISION_SCRIPT, SOURCE_BUILD_SCRIPT, VM_SCRIPT_SOURCES } from '../image/vm-scripts.generated'
-import { provisionEnv, resolveReleaseBundle, utf8Base64, type GoldenImageManifest } from '../image/golden-image'
+import { VM_SCRIPTS, provisionEnv, resolveReleaseBundle, utf8Base64, type GoldenImageManifest } from '../image/golden-image'
 import { parseGitSource, resolveSourceHead, type AppRequest, type GitSource, type SourceHead } from './golden-source'
 import type { GoldenImageProviderApi } from './golden-image-provider'
 import { compileNetworkPolicy } from './network-policy'
@@ -245,6 +245,9 @@ async function startRefresh(deps: GoldenImageDeps, active: GoldenRow): Promise<G
       tags: { orcaGoldenImage: id, orcaEnv: deps.config.environment },
       snapshotExpirationMs: 86_400_000
     })
+    // A refresh also rolls out the control plane's current VM entry points (grant/revoke, start
+    // script fixes) without waiting for the next release build.
+    await installEntryPoints(deps, box.session.id)
     await finishBuild(deps, id, name, box.session.id)
     return 'refresh-started'
   } catch (error) {
@@ -310,6 +313,26 @@ async function stepBuild(deps: GoldenImageDeps, row: GoldenRow): Promise<GoldenT
 }
 
 /** Wipe identity, snapshot (stops the box), drop the build box; the snapshot then waits for its smoke test. */
+/** Rewrites /opt/orca/bin/<entry point> from VM_SCRIPT_SOURCES (same bytes a release build installs). */
+export async function installEntryPoints(deps: { provider: Pick<SandboxProviderApi, 'runCommand'> }, sessionId: string): Promise<void> {
+  const env = provisionEnv({ manifest: MANIFEST, provisionScript: PROVISION_SCRIPT, vmScripts: VM_SCRIPT_SOURCES, buildId: 'sync' })
+  const scriptEnv = Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith('ORCA_VM_SCRIPT_')))
+  const install = [
+    'set -euo pipefail',
+    `for name in ${VM_SCRIPTS.join(' ')}; do`,
+    '  var="ORCA_VM_SCRIPT_${name//[-.]/_}"',
+    '  printf %s "${!var}" | base64 -d >"/tmp/$name.new"',
+    '  sudo install -o root -g root -m 0755 "/tmp/$name.new" "/opt/orca/bin/$name"',
+    '  rm -f "/tmp/$name.new"',
+    'done',
+    'echo synced'
+  ].join('\n')
+  const result = await deps.provider.runCommand(sessionId, { command: 'bash', args: ['-c', install], env: scriptEnv, timeoutMs: 60_000 })
+  if (result.exitCode !== 0 || !result.stdout.includes('synced')) {
+    throw new Error('entry_point_sync_failed')
+  }
+}
+
 async function finishBuild(deps: GoldenImageDeps, id: string, name: string, sessionId: string): Promise<void> {
   const { provider } = deps
   const wipe = await provider.runCommand(sessionId, { command: WIPE, timeoutMs: 60_000 })

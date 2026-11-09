@@ -56,6 +56,7 @@ import { createWebUiApi } from './preload-api/web-ui-api'
 import { createUpdaterApi } from './preload-api/web-updater-api'
 import { createWebWorkspacePortsApi } from './preload-api/web-workspace-ports-api'
 import { createWebLinkPreviewApi } from './preload-api/web-link-preview-api'
+import { createWebCloudWorkspacesApi } from './preload-api/web-cloud-workspaces-api'
 import { createWebWorkspaceSessionApi } from './preload-api/web-workspace-session-api'
 import { createWorktreesApi } from './preload-api/web-worktrees-api'
 import { readStoredWebRuntimeEnvironment } from './web-runtime-environment'
@@ -85,6 +86,7 @@ function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings' | 'plugins'
     ...createWebPlatformApi(),
     ...createWebWorkspacePortsApi(),
     linkPreview: createWebLinkPreviewApi(),
+    cloudWorkspaces: createWebCloudWorkspacesApi(),
     ...createWebOrcaProfilesApi(),
     ...createWebE2EApi(),
     ...createWebSettingsApi(),

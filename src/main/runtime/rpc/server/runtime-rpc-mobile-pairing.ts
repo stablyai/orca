@@ -23,7 +23,13 @@ const RELAY_PROVIDER_INSTALL_WAIT_MS = 15_000
 
 export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
   protected override ownerPairingOffers(): PairingOffersRpcContext {
-    return { create: (params) => createOwnerPairingOffer(this, params) }
+    return {
+      create: (params) => createOwnerPairingOffer(this, params),
+      // Phones go through the mobile path (Relay/push cleanup); everything else is runtime access.
+      revoke: async ({ deviceId }) => ({
+        revoked: (await this.revokeMobileDevice(deviceId)) || this.revokeRuntimeAccess(deviceId)
+      })
+    }
   }
 
   async createMobilePairingOffer(args: {

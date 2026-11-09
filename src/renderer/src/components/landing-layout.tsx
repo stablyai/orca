@@ -1,3 +1,4 @@
+import { cn } from '@/lib/utils'
 import { ShortcutKeyCombo } from './ShortcutKeyCombo'
 import type { ShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import logo from '../../../../resources/logo.svg'
@@ -12,21 +13,30 @@ export type LandingShortcutItem = {
 export const LANDING_ACTION_BUTTON_CLASS =
   'inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors'
 
-export function LandingBrand(): React.JSX.Element {
+/** `compact` when Home also lists cloud workspaces, so the list starts higher on the page. */
+export function LandingBrand({ compact = false }: { compact?: boolean }): React.JSX.Element {
   const t = useTranslate()
   return (
     <>
       <div
-        className="flex items-center justify-center size-20 rounded-2xl border border-border/80 shadow-lg shadow-black/40"
+        className={cn(
+          'flex items-center justify-center border border-border/80 shadow-lg shadow-black/40',
+          compact ? 'size-12 rounded-xl' : 'size-20 rounded-2xl'
+        )}
         style={{ backgroundColor: '#12181e' }}
       >
         <img
           src={logo}
           alt={t('auto.components.Landing.520304a067', 'Orca logo')}
-          className="size-12"
+          className={compact ? 'size-7' : 'size-12'}
         />
       </div>
-      <h1 className="text-4xl font-bold text-foreground tracking-tight">
+      <h1
+        className={cn(
+          'font-bold text-foreground tracking-tight',
+          compact ? 'text-2xl' : 'text-4xl'
+        )}
+      >
         {t('auto.components.Landing.6ca6ff404e', 'ORCA')}
       </h1>
     </>
