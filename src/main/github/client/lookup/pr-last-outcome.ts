@@ -9,6 +9,7 @@ type PRLookupStart = { startedAt: number; sequence: number }
 type PRLastOutcome = {
   start: PRLookupStart
   linkedPRNumber: number | null
+  fallbackPRNumber: number | null
   // null: the last lookup was narrowed (CI-line watch), so nothing is reusable until a full one.
   outcome: PRRefreshOutcome | null
 }
@@ -43,7 +44,11 @@ export function recordPRLastOutcome(key: string, entry: PRLastOutcome): void {
  * fallback rules still get a real lookup. */
 export function readRecentOpenPROutcome(
   key: string,
-  request: { linkedPRNumber: number | null; currentHeadOid: string | null }
+  request: {
+    linkedPRNumber: number | null
+    fallbackPRNumber: number | null
+    currentHeadOid: string | null
+  }
 ): PRRefreshOutcome | null {
   const entry = lastOutcomes.get(key)
   const outcome = entry?.outcome
@@ -53,6 +58,9 @@ export function readRecentOpenPROutcome(
     Date.now() - entry.start.startedAt >= PHONE_REUSE_MAX_AGE_MS ||
     (outcome.pr.state !== 'open' && outcome.pr.state !== 'draft') ||
     entry.linkedPRNumber !== request.linkedPRNumber ||
+    // The stored fallback number may be how it was found; another fallback could find another PR.
+    (outcome.pr.number === entry.fallbackPRNumber &&
+      entry.fallbackPRNumber !== request.fallbackPRNumber) ||
     !request.currentHeadOid ||
     outcome.pr.headSha !== request.currentHeadOid
   ) {

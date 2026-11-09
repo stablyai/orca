@@ -105,6 +105,7 @@ export class RuntimeHostedReviewCommands {
         branch,
         linkedPRNumber ?? null,
         connectionId,
+        fallbackPRNumber ?? null,
         lookupOptions
       )
       if (recent) {

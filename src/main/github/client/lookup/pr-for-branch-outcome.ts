@@ -53,6 +53,7 @@ export async function readRecentPhonePROutcome(
   branch: string,
   linkedPRNumber: number | null,
   connectionId: string | null,
+  fallbackPRNumber: number | null,
   options: GitHubPRBranchLookupOptions
 ): Promise<PRRefreshOutcome | null> {
   if (options.userRefresh === true) {
@@ -69,7 +70,11 @@ export async function readRecentPhonePROutcome(
           branch.replace(/^refs\/heads\//, ''),
           prLookupScope(repoPath, connectionId, options)
         ),
-        { linkedPRNumber, currentHeadOid: options.currentHeadOid ?? null }
+        {
+          linkedPRNumber,
+          fallbackPRNumber: linkedPRNumber === null ? fallbackPRNumber : null,
+          currentHeadOid: options.currentHeadOid ?? null
+        }
       )
   )
 }
@@ -139,6 +144,7 @@ export async function getPRForBranchOutcome(
           recordPRLastOutcome(lastOutcomeKey(repoPath, branchName, scope), {
             start,
             linkedPRNumber: linkedPRNumber ?? null,
+            fallbackPRNumber: fallbackPRNumber ?? null,
             outcome: narrowed ? null : outcome
           })
           return outcome

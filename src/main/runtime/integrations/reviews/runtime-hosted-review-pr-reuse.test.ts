@@ -68,6 +68,8 @@ describe('phone PR lookups reuse the desktop’s last result', () => {
     clientKind?: DeviceScope
     reason?: GitHubPRRefreshReason
     userRefresh?: boolean
+    seedFallback?: number
+    fallback?: number
     expected: string
   }>([
     {
@@ -76,6 +78,23 @@ describe('phone PR lookups reuse the desktop’s last result', () => {
       headOid: 'head-a',
       clientKind: 'mobile',
       expected: 'from desktop lookup'
+    },
+    {
+      label: 'serves a phone read with the fallback number the PR was found by',
+      branch: 'same-fallback',
+      headOid: 'head-a',
+      clientKind: 'mobile',
+      seedFallback: 7,
+      fallback: 7,
+      expected: 'from desktop lookup'
+    },
+    {
+      label: 'looks up again when the PR may have come from another fallback number',
+      branch: 'other-fallback',
+      headOid: 'head-a',
+      clientKind: 'mobile',
+      seedFallback: 7,
+      expected: 'from fresh lookup'
     },
     {
       label: 'looks up again when the PR head differs',
@@ -107,13 +126,22 @@ describe('phone PR lookups reuse the desktop’s last result', () => {
       clientKind: 'runtime',
       expected: 'from fresh lookup'
     }
-  ])('$label', async ({ branch, headOid, clientKind, reason, userRefresh, expected }) => {
-    await commands.getRepoPRForBranch(repo.id, branch, null, null, false, 'head-a', 'visible')
+  ])('$label', async (testCase) => {
+    const { branch, headOid, clientKind, reason, userRefresh, expected } = testCase
+    await commands.getRepoPRForBranch(
+      repo.id,
+      branch,
+      null,
+      testCase.seedFallback ?? null,
+      false,
+      'head-a',
+      'visible'
+    )
     const outcome = await commands.getRepoPRForBranch(
       repo.id,
       branch,
       null,
-      null,
+      testCase.fallback ?? null,
       false,
       headOid,
       reason,
