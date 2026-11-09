@@ -1,266 +1,195 @@
-import { uiText } from '../settings/NativeUi';
-import { appendLog as recordConnection, LOG_LEVEL_INFO } from '../diagnostics/ConnectionLogStore';
-import { router } from '@kit.ArkUI';
+import { KeyboardAvoidMode as PageKeyboardAvoidMode, promptAction, router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
-import { HostSession, SessionPhase } from '../transport/HostSession';
-import { SpikeRpcClient, RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
-import { listHosts, getDeviceToken, getRelayCredential, updateHostNameAndEndpoint, HostMeta } from '../storage/HostStore';
+import { uiText } from '../settings/NativeUi';
+import { lucideColorFilter } from '../settings/LucideColor';
+import { DesktopEndpointEdit, displayHostEndpoint, resolveDesktopEndpoint } from '../diagnostics/ConnectionDiagnostics';
+import { listHosts, updateHostNameAndEndpoint, HostMeta } from '../storage/HostStore';
+import { removeDesktop } from '../storage/HostRemoval';
+import { activeHostSession } from '../transport/HostSession';
 
-/**
- * Host detail: supervised connection UI. Auto-reconnects (capped backoff) and probes
- * liveness while shown; manual status.get surfaces the desktop's live state.
- */
 @Entry
 @Component
 struct HostDetail {
-  @StorageProp('uiLocale') uiLocale: string = 'en';
-  @StorageProp('themeBg') themeBg: string = '#111111';
-  @StorageProp('themeSurface') themeSurface: string = '#1c1c1c';
-  @StorageProp('themeBorder') themeBorder: string = '#353a42';
-  @StorageProp('themeText') themeText: string = '#e8e8e8';
-  @StorageProp('themeMuted') themeMuted: string = '#a3a9b2';
-  @StorageProp('themeSecondary') themeSecondary: string = '#b5bec9';
-  @StorageProp('themeAccent') themeAccent: string = '#7ddf7d';
-  @StorageProp('themeLink') themeLink: string = '#96b8e5';
-  @StorageProp('themeWarning') themeWarning: string = '#e0c070';
-  @State phase: string = 'idle';
-  @State logs: string[] = [];
-  @State statusText: string = '';
+  @StorageProp('uiLocale') locale: string = 'en';
+  @StorageProp('themeScheme') scheme: string = 'dark';
+  @StorageProp('themeBg') backgroundTint: string = '#0a0a0a';
+  @StorageProp('themeSurface') surface: string = '#171717';
+  @StorageProp('themeBorder') borderTint: string = '#2c2c2c';
+  @StorageProp('themeText') ink: string = '#fafafa';
+  @StorageProp('themeSecondary') secondary: string = '#acacac';
+  @StorageProp('themeMuted') muted: string = '#898989';
+  @State host: HostMeta | null = null;
   @State personalName: string = '';
-  @State endpoint: string = '';
-  @State editorError: string = '';
+  @State address: string = '';
+  @State endpointEdit: DesktopEndpointEdit | null = null;
+  @State loadError: string = '';
+  @State saveError: string = '';
   @State saving: boolean = false;
-  @State fieldsLoaded: boolean = false;
-  @State showDiagnostics: boolean = false;
-  private editorEpoch: number = 0;
-  private initialName: string = '';
-  private initialEndpoint: string = '';
-  private endpointScheme: string = 'ws://';
-  private session: HostSession | null = null;
-  private hostId: string = '';
-  private active: boolean = false;
   private epoch: number = 0;
-
-  appendLog(line: string): void {
-    let stamped = `${new Date().toLocaleTimeString()}  ${line}`;
-    let next = this.logs.slice();
-    next.push(stamped);
-    if (next.length > 200) {
-      next.splice(0, next.length - 200);
-    }
-    this.logs = next;
-  }
+  private hostId: string = '';
+  private priorKeyboardMode?: PageKeyboardAvoidMode;
 
   aboutToAppear(): void {
     let params = (router.getParams() ?? {}) as Record<string, string>;
-    this.hostId = params['hostId'];
-    this.showDiagnostics = params['diagnostics'] === '1';
-    this.loadEditor();
+    this.hostId = params['hostId'] ?? '';
+    this.loadEditor().catch(() => {});
   }
+  onPageShow(): void {
+    let ui = this.getUIContext();
+    this.priorKeyboardMode = ui.getKeyboardAvoidMode(); ui.setKeyboardAvoidMode(PageKeyboardAvoidMode.RESIZE);
+  }
+  onPageHide(): void { this.restoreKeyboardMode(); }
+  aboutToDisappear(): void { this.epoch++; this.restoreKeyboardMode(); }
 
-  onPageShow(): void { this.active = true; if (this.showDiagnostics) { this.startSession(); } }
-  onPageHide(): void { this.stopSession(); }
-
-  aboutToDisappear(): void { this.editorEpoch++; this.stopSession(); }
-  private stopSession(): void {
-    this.active = false; this.epoch++;
-    if (this.session) {
-      this.session.stop();
-      this.session = null;
+  private restoreKeyboardMode(): void {
+    if (this.priorKeyboardMode !== undefined) {
+      this.getUIContext().setKeyboardAvoidMode(this.priorKeyboardMode);
+      this.priorKeyboardMode = undefined;
     }
   }
+
+  private t(label: string): string { return uiText(label, this.locale); }
+  private danger(): string { return this.scheme === 'light' ? '#b91c1c' : '#ff6568'; }
 
   private async loadEditor(): Promise<void> {
-    let epoch = ++this.editorEpoch;
+    let epoch = ++this.epoch;
     try {
       let hosts = await listHosts(getContext(this));
-      if (epoch !== this.editorEpoch) { return; }
-      let found = hosts.find((host: HostMeta): boolean => host.id === this.hostId);
-      if (!found) { this.editorError = '桌面已从此手机移除'; return; }
-      this.personalName = found.personalName ?? '';
-      this.endpoint = found.endpoint;
-      this.initialName = this.personalName; this.initialEndpoint = this.endpoint;
-      this.endpointScheme = found.endpoint.startsWith('wss://') ? 'wss://' : 'ws://';
-      this.fieldsLoaded = true;
-    } catch (e) { if (epoch === this.editorEpoch) { this.editorError = '无法读取桌面，请重试'; } }
+      if (epoch !== this.epoch) { return; }
+      let host = hosts.find((item: HostMeta): boolean => item.id === this.hostId);
+      if (!host) { this.loadError = '桌面已从此手机移除'; return; }
+      this.host = host;
+      this.personalName = host.personalName ?? '';
+      this.address = displayHostEndpoint(host.endpoint);
+      this.endpointEdit = resolveDesktopEndpoint(host.endpoint, this.address);
+    } catch (e) { if (epoch === this.epoch) { this.loadError = '无法读取桌面，请重试'; } }
   }
 
-  async saveEditor(): Promise<void> {
-    if (this.saving || !this.fieldsLoaded) { return; }
-    this.saving = true; this.editorError = '';
-    let epoch = this.editorEpoch;
+  private canSave(): boolean {
+    return this.host !== null && this.endpointEdit !== null && this.endpointEdit.kind !== 'invalid' && !this.saving &&
+      (this.personalName.trim() !== (this.host.personalName ?? '') || this.endpointEdit.kind === 'changed');
+  }
+
+  private async saveEditor(): Promise<void> {
+    let endpoint = this.endpointEdit?.endpoint;
+    if (!this.canSave() || !endpoint) { return; }
+    let changed = this.endpointEdit?.kind === 'changed';
+    this.saving = true; this.saveError = '';
+    let epoch = this.epoch;
     try {
-      let endpoint = this.endpoint.trim();
-      if (!/^wss?:\/\//.test(endpoint)) { endpoint = `${this.endpointScheme}${endpoint}`; }
       let context = getContext(this) as common.UIAbilityContext;
       await updateHostNameAndEndpoint(context, this.hostId, this.personalName.trim(), endpoint);
-      context.eventHub.emit('orcaHostEndpointSaved', this.hostId, endpoint);
-      if (epoch !== this.editorEpoch) { return; }
-      router.back();
+      if (changed) { context.eventHub.emit('orcaHostEndpointSaved', this.hostId, endpoint); }
+      if (epoch === this.epoch) { router.back(); }
     } catch (e) {
-      if (epoch === this.editorEpoch) { this.editorError = '保存失败，请检查桌面地址并重试'; }
-    } finally { if (epoch === this.editorEpoch) { this.saving = false; } }
+      if (epoch === this.epoch) { this.saveError = '保存失败，请检查桌面地址并重试'; }
+    } finally { if (epoch === this.epoch) { this.saving = false; } }
   }
 
-  toggleDiagnostics(): void {
-    this.showDiagnostics = !this.showDiagnostics;
-    if (this.showDiagnostics) { this.active = true; this.startSession(); }
-    else { this.stopSession(); }
-  }
-
-  async startSession(): Promise<void> {
-    let epoch = ++this.epoch;
-    if (this.session) { this.session.stop(); this.session = null; }
+  private async confirmRemove(): Promise<void> {
+    let host = this.host;
+    if (!host || this.saving) { return; }
+    let epoch = this.epoch;
+    let answer = await promptAction.showDialog({ title: this.t('移除主机'),
+      message: this.t('移除“{{name}}”？之后可以重新配对。').replace('{{name}}', host.name),
+      buttons: [{ text: this.t('取消'), color: this.secondary }, { text: this.t('移除'), color: this.danger() }] });
+    if (answer.index !== 1 || epoch !== this.epoch || this.saving) { return; }
+    this.saving = true; this.saveError = '';
+    let removed = false;
+    let id = host.id;
     try {
-      let hosts: HostMeta[] = await listHosts(getContext(this));
-      let meta: HostMeta | null = null;
-      for (let i = 0; i < hosts.length; i++) {
-        if (hosts[i].id === this.hostId) {
-          meta = hosts[i];
-          break;
-        }
-      }
-      if (meta === null) {
-        this.appendLog('主机不存在');
-        return;
-      }
-      let token = await getDeviceToken(getContext(this), meta.id);
-      if (token === null) {
-        this.appendLog('凭证缺失（Asset Store）— 请重新配对');
-        return;
-      }
-      if (!this.active || epoch !== this.epoch) { return; }
-      this.appendLog(`正在连接 ${meta.name}`);
-      let context = getContext(this);
-      let relayCredential = await getRelayCredential(context, meta.id);
-      if (!this.active || epoch !== this.epoch) { return; }
-      let session = new HostSession(meta, token, relayCredential ?? undefined, context);
-      this.session = session;
-      session.setLogSink((line: string): void => this.appendLog(line));
-      session.addListener((phase: SessionPhase, detail: string): void => {
-
-        let label = phase === 'connected' ? '已连接' : phase === 'reconnecting' ? '正在重连' : phase === 'connecting' ? '正在连接' : '已断开';
-        recordConnection(getContext(this), LOG_LEVEL_INFO, label, '').catch(() => {});
-        this.phase = detail.length > 0 ? `${label} · ${detail}` : label;
-      });
-      session.start();
+      await removeDesktop(getContext(this), id, (): void => { removed = true; activeHostSession(id)?.stop(); });
     } catch (e) {
-      this.appendLog(`启动失败: ${(e as Error).message}`);
+      if (epoch === this.epoch) { this.saveError = '移除失败，凭证或页面数据未能清理，请重试。'; }
+    } finally {
+      if (epoch === this.epoch) {
+        this.saving = false;
+        if (removed) { router.back({ url: 'pages/Home' }); }
+      }
     }
   }
 
-  async doStatusGet(): Promise<void> {
-    let session = this.session;
-    if (!session) {
-      return;
-    }
-    let client: SpikeRpcClient | null = session.getClient();
-    if (!client) {
-      this.appendLog('通道未就绪');
-      return;
-    }
-    let response: RpcResponse = await client.request('status.get', null);
-    if (response instanceof RpcSuccess) {
-      try {
-        let result = JSON.parse(response.result) as Record<string, Object>;
-        let name = result['machineName'];
-        let caps = result['capabilities'];
-        this.statusText = `${typeof name === 'string' ? name : '桌面'} · ${Array.isArray(caps) ? caps.length : 0} 项能力`;
-      } catch (e) { this.statusText = '桌面返回了无法读取的状态'; }
-      this.appendLog('status.get ok');
-    } else {
-      this.appendLog('status.get 失败（通道可能已断，等待自动重连）');
-    }
+  @Builder
+  private navBar() {
+    Stack({ alignContent: Alignment.Center }) {
+      Text(this.t('编辑桌面')).fontFamily('Geist').fontSize(17).fontWeight(FontWeight.Medium).fontColor(this.ink)
+      Row() {
+        Button({ type: ButtonType.Normal }) {
+          Image($r('app.media.lucide_chevron_left')).supportSvg2(true).width(22).height(22)
+            .colorFilter(lucideColorFilter(this.secondary))
+        }.width(40).height(40).borderRadius(12).backgroundColor(Color.Transparent)
+          .accessibilityText(this.t('返回')).onClick((): void => router.back())
+        Blank()
+        Button({ type: ButtonType.Normal }) {
+          if (this.saving) {
+            LoadingProgress().width(18).height(18).color(this.secondary)
+          } else {
+            Image($r('app.media.lucide_check')).supportSvg2(true).width(22).height(22)
+              .colorFilter(lucideColorFilter(this.canSave() ? this.ink : this.muted))
+          }
+        }.width(40).height(40).borderRadius(12).backgroundColor(Color.Transparent)
+          .enabled(this.canSave()).accessibilityText(this.t('保存桌面'))
+          .onClick((): void => { this.saveEditor().catch(() => {}); })
+      }.width('100%')
+    }.width('100%').height(48).padding({ left: 12, right: 12 })
+  }
+
+  @Builder
+  private form() {
+    Scroll() {
+      Column({ space: 8 }) {
+        Text(this.t('桌面编辑说明')).fontFamily('Geist').fontSize(14).lineHeight(20).fontColor(this.secondary).margin({ bottom: 8 })
+        Text(this.t('名称')).fontFamily('Geist').fontSize(12).fontWeight(FontWeight.Medium).fontColor(this.secondary).letterSpacing(0.4)
+        TextInput({ text: this.personalName, placeholder: this.host?.machineName ?? this.t('桌面名称') })
+          .fontFamily('Geist').fontSize(14).fontColor(this.ink).placeholderColor(this.muted).height(44)
+          .backgroundColor(this.backgroundTint).border({ width: 1, color: this.borderTint, radius: 12 })
+          .enabled(!this.saving).enterKeyType(EnterKeyType.Next).accessibilityText(this.t('名称'))
+          .onChange((value: string): void => { this.personalName = value; this.saveError = ''; })
+        Text(this.t('地址')).fontFamily('Geist').fontSize(12).fontWeight(FontWeight.Medium).fontColor(this.secondary)
+          .letterSpacing(0.4).margin({ top: 8 })
+        TextInput({ text: this.address, placeholder: '192.168.1.10:6768' })
+          .fontFamily('Geist').fontSize(14).fontColor(this.ink).placeholderColor(this.muted).height(44)
+          .backgroundColor(this.backgroundTint).border({ width: 1, color: this.borderTint, radius: 12 })
+          .enabled(!this.saving).enterKeyType(EnterKeyType.Done).accessibilityText(this.t('地址'))
+          .onChange((value: string): void => {
+            this.address = value; this.saveError = '';
+            if (this.host) { this.endpointEdit = resolveDesktopEndpoint(this.host.endpoint, value); }
+          }).onSubmit((): void => { this.saveEditor().catch(() => {}); })
+        Text(this.t('桌面地址格式说明')).fontFamily('Geist').fontSize(12).lineHeight(16).fontColor(this.muted)
+        if (this.endpointEdit?.endpoint) {
+          Text(this.t('连接到 {{endpoint}}').replace('{{endpoint}}', this.endpointEdit.endpoint))
+            .fontFamily('monospace').fontSize(12).maxLines(2).fontColor(this.secondary).margin({ top: 8 })
+        } else if (this.address.trim() && this.endpointEdit?.error) {
+          Text(this.t(this.endpointEdit.error)).fontFamily('Geist').fontSize(14).fontColor(this.danger()).margin({ top: 8 })
+        }
+        if (this.saveError) {
+          Text(this.t(this.saveError)).fontFamily('Geist').fontSize(14).fontColor(this.danger()).margin({ top: 8 })
+        }
+        Button({ type: ButtonType.Normal }) {
+          Text(this.t('移除桌面')).fontFamily('Geist').fontSize(15).fontColor(this.danger())
+            .width('100%').textAlign(TextAlign.Start)
+        }.height(46).width('100%').padding({ left: 14, right: 14 }).borderRadius(16)
+          .backgroundColor(this.surface).margin({ top: 24 }).enabled(!this.saving)
+          .onClick((): void => { this.confirmRemove().catch(() => {}); })
+      }.width('100%').alignItems(HorizontalAlign.Start).padding({ left: 16, right: 16, top: 12, bottom: 24 })
+    }.width('100%').layoutWeight(1).scrollBar(BarState.Off)
   }
 
   build() {
-    Column({ space: 10 }) {
-      Row({ space: 10 }) {
-        Button(uiText('返回', this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeText).backgroundColor(Color.Transparent)
-          .onClick(() => router.back())
-        Text(uiText('编辑桌面', this.uiLocale))
-          .fontFamily('Geist').fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.themeText)
-          .layoutWeight(1)
-        Text(uiText(this.phase, this.uiLocale))
-          .fontFamily('Geist').fontSize(12)
-          .fontColor(this.phase.startsWith('已连接') ? this.themeAccent : this.themeWarning)
-      }
-      .width('100%')
-      .padding({ left: 14, right: 14, top: 10 })
-
-      Text(uiText('个人名称', this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary).width('100%')
-      TextInput({ text: this.personalName, placeholder: uiText('留空使用桌面名称', this.uiLocale) })
-        .fontFamily('Geist').fontSize(16).fontColor(this.themeText).height(44).enabled(this.fieldsLoaded && !this.saving)
-        .onChange((value: string) => { this.personalName = value; })
-      Text(uiText('桌面地址', this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary).width('100%')
-      TextInput({ text: this.endpoint, placeholder: 'ws://192.168.1.2:9000' })
-        .fontFamily('Geist').fontSize(16).fontColor(this.themeText).height(44).enabled(this.fieldsLoaded && !this.saving)
-        .onChange((value: string) => { this.endpoint = value; })
-      if (this.editorError.length > 0) { Text(uiText(this.editorError, this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeWarning) }
-      Button(uiText(this.saving ? '保存中…' : '保存', this.uiLocale)).width('100%').height(44).fontFamily('Geist').fontSize(16)
-        .enabled(this.fieldsLoaded && !this.saving && this.endpoint.trim().length > 0
-          && (this.personalName.trim() !== this.initialName || this.endpoint.trim() !== this.initialEndpoint))
-        .onClick(() => { this.saveEditor().catch(() => {}); })
-      Button(uiText('连接诊断', this.uiLocale)).fontFamily('Geist').fontSize(14).fontColor(this.themeSecondary).backgroundColor(Color.Transparent)
-        .onClick(() => this.toggleDiagnostics())
-      if (this.showDiagnostics) {
-      Row({ space: 8 }) {
-        Button(uiText('打开会话', this.uiLocale))
-          .fontFamily('Geist').fontSize(12)
-          .layoutWeight(1)
-          .backgroundColor(this.themeLink)
-          .onClick(() => {
-            router.pushUrl({ url: 'pages/ShellScreen', params: { hostId: this.hostId } });
-          })
-        Button('status.get')
-          .fontFamily('Geist').fontSize(12)
-          .layoutWeight(1)
-          .onClick(() => {
-            this.doStatusGet().catch(() => this.appendLog('状态读取失败'));
-          })
-        Button(uiText('返回', this.uiLocale))
-          .fontFamily('Geist').fontSize(12)
-          .layoutWeight(1)
-          .backgroundColor(Color.Transparent).fontColor(this.themeSecondary)
-          .onClick(() => {
-            if (this.session) {
-              this.session.stop();
-            }
-            router.back();
-          })
-      }
-      .width('100%')
-      .padding({ left: 12, right: 12 })
-
-      if (this.statusText.length > 0) {
-        Text(uiText(this.statusText, this.uiLocale))
-          .fontFamily('Geist').fontSize(10)
-          .fontColor(this.themeLink)
-          .maxLines(8)
-          .width('100%')
-          .padding({ left: 12, right: 12 })
-      }
-
-      List({ space: 2 }) {
-        ForEach(this.logs, (line: string) => {
-          ListItem() {
-            Text(line)
-              .fontFamily('Geist').fontSize(10)
-              .fontColor(this.themeSecondary)
-              .maxLines(3)
+    Column() {
+      this.navBar()
+      if (this.host) {
+        this.form()
+      } else {
+        Column({ space: 12 }) {
+          if (this.loadError) {
+            Text(this.t(this.loadError)).fontFamily('Geist').fontSize(14).fontColor(this.danger())
+            Button(this.t('返回')).backgroundColor(Color.Transparent).fontColor(this.ink).onClick((): void => router.back())
+          } else {
+            LoadingProgress().width(28).height(28).color(this.secondary)
           }
-        }, (line: string, index: number) => `${index}-${line}`)
+        }.width('100%').layoutWeight(1).justifyContent(FlexAlign.Center)
       }
-      .layoutWeight(1)
-      .width('100%')
-      .padding({ left: 12, right: 12 })
-      }
-    }
-    .width('100%')
-    .height('100%')
-    .padding({ left: 16, right: 16 })
-    .backgroundColor(this.themeBg)
+    }.width('100%').height('100%').backgroundColor(this.backgroundTint)
   }
 }

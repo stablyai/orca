@@ -418,7 +418,13 @@ test('the bridge offers preview links only from a granted user navigation', () =
 test('a socket close reconnects the supervised session and stop cancels further retries', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
   const peer = createRpcPeer()
-  const { HostSession } = loadArkts('transport/HostSession.ets', ['HostSession'], peer)
+  const { HostSession } = loadArkts('transport/HostSession.ets', ['HostSession'], {
+    ...peer,
+    directPath: () => 'lan',
+    LOG_LEVEL_INFO: 'info',
+    LOG_LEVEL_SUCCESS: 'success',
+    LOG_LEVEL_WARN: 'warn'
+  })
   const session = new HostSession(meta, 'synthetic-token')
   const phases = []
   let connected

@@ -303,7 +303,7 @@ struct PairScan {
       if (this.disposed) { return; }
       this.pairingCode = '';
       this.appendLog('配对成功');
-      recordConnection(getContext(this), LOG_LEVEL_INFO, '桌面配对成功', '').catch(() => {});
+      recordConnection(getContext(this), LOG_LEVEL_INFO, '桌面配对成功', '', meta.id).catch(() => {});
       attempt.close();
       this.confirmedOffer = null; this.pairedHostId = meta.id;
       await new Promise<void>((resolve): void => { setTimeout(resolve, PAIRED_HOLD_MS); });
@@ -314,7 +314,7 @@ struct PairScan {
       this.error = this.timedOut ? '未能在 {{seconds}} 秒内连接，请查看下方日志' :
         (e as Error).message === PAIRING_CODE_REFUSED ? REJECTED_CODE : '配对失败，请检查配对码和网络连接后重试';
       this.appendLog(this.t(this.error).replace('{{seconds}}', String(PAIR_TIMEOUT_MS / 1000)));
-      recordConnection(getContext(this), LOG_LEVEL_ERROR, '桌面配对失败', '').catch(() => {});
+      recordConnection(getContext(this), LOG_LEVEL_ERROR, '桌面配对失败', '', hostIdFor(offer.publicKeyB64)).catch(() => {});
     } finally {
       if (this.deadline >= 0) { clearTimeout(this.deadline); this.deadline = -1; }
       attempt.close();

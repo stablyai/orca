@@ -1,99 +1,99 @@
 import { preferences } from '@kit.ArkData';
 import { common } from '@kit.AbilityKit';
-
-/** 最近 100 条连接事件；串行读写保留冷启动历史。 */
+import { redactDiagnosticText } from './ConnectionDiagnostics';
 
 const PREFS_NAME = 'orca_connection_log';
 const PREFS_KEY = 'entries';
-const MAX_ENTRIES = 100;
+const MAX_HOST_ENTRIES = 100;
+const MAX_TOTAL_ENTRIES = 500;
+const MAX_TEXT = 1024;
 
 export const LOG_LEVEL_INFO = 'info';
+export const LOG_LEVEL_SUCCESS = 'success';
 export const LOG_LEVEL_WARN = 'warn';
 export const LOG_LEVEL_ERROR = 'error';
 
 export interface ConnectionLogEntry {
-  ts: number; // epoch millis
-  level: string; // info | warn | error
+  id: string;
+  ts: number;
+  level: string;
   message: string;
-  detail: string; // 补充信息，可为空串
+  detail: string;
+  hostId: string;
+  code?: string;
+  path?: string;
+  relayCloseCode?: number;
 }
 
-// 内存镜像，按时间升序（最旧在前）。冷启动后首次 listLogs 时从 preferences 回填。
 let memoryEntries: ConnectionLogEntry[] = [];
-let loaded = false;
+let hydration: Promise<void> | null = null;
 let writes: Promise<void> = Promise.resolve();
-
-function clampToMax(entries: ConnectionLogEntry[]): ConnectionLogEntry[] {
-  if (entries.length <= MAX_ENTRIES) {
-    return entries;
-  }
-  return entries.slice(entries.length - MAX_ENTRIES);
-}
+let sequence = 0;
+const subscribers: Set<() => void> = new Set();
 
 function parseEntries(text: string): ConnectionLogEntry[] {
-  let parsed: Object | null = JSON.parse(text) as Object | null;
-  if (parsed === null || !Array.isArray(parsed)) {
-    return [];
-  }
-  let arr = parsed as Array<Object>;
+  let parsed = JSON.parse(text) as Array<Object>;
+  if (!Array.isArray(parsed)) { return []; }
   let entries: ConnectionLogEntry[] = [];
-  for (let i = 0; i < arr.length; i++) {
-    let item = arr[i] as Record<string, Object>;
-    let ts = item['ts'];
-    let level = item['level'];
-    let message = item['message'];
-    let detail = item['detail'];
-    if (typeof ts !== 'number' || typeof level !== 'string' || typeof message !== 'string') {
-      continue;
-    }
+  parsed.slice(-MAX_TOTAL_ENTRIES).forEach((value: Object, index: number): void => {
+    if (!value || typeof value !== 'object') { return; }
+    let item = value as Record<string, Object>;
+    let ts = item['ts']; let level = item['level']; let message = item['message']; let detail = item['detail'];
+    if (typeof ts !== 'number' || (!Number.isFinite(ts) || ts < 0 || ts > 8640000000000000) || typeof level !== 'string' || typeof message !== 'string') { return; }
     let entry: ConnectionLogEntry = {
-      ts: ts,
-      level: level,
-      message: message,
-      detail: typeof detail === 'string' ? detail : ''
+      id: typeof item['id'] === 'string' ? item['id'] as string : `legacy:${index}:${ts}`,
+      ts: ts, level: level, message: redactDiagnosticText(message).slice(0, MAX_TEXT),
+      detail: typeof detail === 'string' ? redactDiagnosticText(detail).slice(0, MAX_TEXT) : '',
+      hostId: typeof item['hostId'] === 'string' ? item['hostId'] as string : '',
+      code: typeof item['code'] === 'string' ? item['code'] as string : undefined,
+      path: typeof item['path'] === 'string' ? item['path'] as string : undefined,
+      relayCloseCode: typeof item['relayCloseCode'] === 'number' ? item['relayCloseCode'] as number : undefined
     };
     entries.push(entry);
-  }
+  });
   return entries;
 }
 
-async function loadPrefs(context: common.Context): Promise<preferences.Preferences> {
+function loadPrefs(context: common.Context): Promise<preferences.Preferences> {
   return preferences.getPreferences(context, { name: PREFS_NAME });
 }
 
-/** 追加一条连接事件（同时写内存与 preferences；preferences 失败不影响内存副本）。 */
-export function appendLog(context: common.Context, level: string, message: string, detail: string): Promise<void> {
+function hydrate(context: common.Context): Promise<void> {
+  if (!hydration) {
+    hydration = loadPrefs(context).then(async (prefs: preferences.Preferences): Promise<void> => {
+      memoryEntries = parseEntries(await prefs.get(PREFS_KEY, '[]') as string);
+    }).catch((): void => {});
+  }
+  return hydration;
+}
+
+export function subscribeLogs(listener: () => void): () => void {
+  subscribers.add(listener);
+  return (): void => { subscribers.delete(listener); };
+}
+
+export function appendLog(context: common.Context, level: string, message: string, detail: string,
+  hostId: string = '', code?: string, path?: string, relayCloseCode?: number): Promise<void> {
+  let ts = Date.now();
+  let entry: ConnectionLogEntry = { id: `${ts}:${++sequence}`, ts: ts, level: level,
+    message: redactDiagnosticText(message).slice(0, MAX_TEXT), detail: redactDiagnosticText(detail).slice(0, MAX_TEXT),
+    hostId: hostId, code: code, path: path, relayCloseCode: relayCloseCode };
   writes = writes.catch(() => {}).then(async (): Promise<void> => {
     await hydrate(context);
-    let entry: ConnectionLogEntry = { ts: Date.now(), level: level, message: message, detail: detail };
-    memoryEntries.push(entry); memoryEntries = clampToMax(memoryEntries);
+    let count = 1;
+    memoryEntries = memoryEntries.reverse().filter((held: ConnectionLogEntry): boolean =>
+      held.hostId !== hostId || ++count <= MAX_HOST_ENTRIES).reverse();
+    memoryEntries.push(entry);
+    memoryEntries = memoryEntries.slice(-MAX_TOTAL_ENTRIES);
+    subscribers.forEach((listener: () => void): void => listener());
     let prefs = await loadPrefs(context);
     await prefs.put(PREFS_KEY, JSON.stringify(memoryEntries)); await prefs.flush();
   });
   return writes;
 }
 
-async function hydrate(context: common.Context): Promise<void> {
-  if (loaded) { return; }
-  try {
-    let prefs = await loadPrefs(context);
-    memoryEntries = parseEntries(await prefs.get(PREFS_KEY, '[]') as string);
-  } catch (e) { memoryEntries = []; }
-  loaded = true;
-}
-
-/** 读取全部日志（时间升序）。进程内首次调用会用 preferences 回填内存镜像。 */
-export async function listLogs(context: common.Context): Promise<ConnectionLogEntry[]> {
-  await writes.catch(() => {});
+export async function listLogs(context: common.Context, hostId: string): Promise<ConnectionLogEntry[]> {
   await hydrate(context);
-  return memoryEntries.slice();
-}
-
-/** 清空日志（内存 + preferences）。 */
-export function clearLogs(context: common.Context): Promise<void> {
-  writes = writes.catch(() => {}).then(async (): Promise<void> => {
-    memoryEntries = []; loaded = true;
-    let prefs = await loadPrefs(context); await prefs.put(PREFS_KEY, '[]'); await prefs.flush();
-  });
-  return writes;
+  await writes.catch(() => {});
+  return memoryEntries.filter((entry: ConnectionLogEntry): boolean => entry.hostId === hostId);
 }

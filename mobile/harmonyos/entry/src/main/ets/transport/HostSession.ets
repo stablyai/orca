@@ -6,9 +6,18 @@ import { HostMeta, updateRelayCredential, getRelayCredential, getDeviceToken, Re
 import { RelayCredential, RelayEndpoint, relayConnectUrl } from './RelayProtocol';
 import { resolveRelayEndpoint } from './RelayRouting';
 import { rotateRelayCredential } from './RelayCredentialManager';
+import { appendLog, LOG_LEVEL_INFO, LOG_LEVEL_SUCCESS, LOG_LEVEL_WARN, LOG_LEVEL_ERROR } from '../diagnostics/ConnectionLogStore';
+import { directPath } from '../diagnostics/ConnectionDiagnostics';
 
 export type SessionPhase = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'stopped' | 'auth-failed';
 type Listener = (phase: SessionPhase, detail: string) => void;
+
+const activeSessions = new Map<string, HostSession[]>();
+
+export function activeHostSession(hostId: string): HostSession | undefined {
+  let sessions = activeSessions.get(hostId);
+  return sessions?.[sessions.length - 1];
+}
 
 export class HostSession {
   private client: SpikeRpcClient | null = null;
@@ -27,6 +36,10 @@ export class HostSession {
   private usingGrace: boolean = false;
   private directorNext: boolean = false;
   private activePath: string = 'lan';
+  private pendingPath?: string;
+  private phase: SessionPhase = 'idle';
+  private connectedAt: number | null = null;
+  private readonly localPath: string;
   private rotating: boolean = false;
   private ownerSuperseded: boolean = false;
   private listeners: Listener[] = [];
@@ -35,20 +48,41 @@ export class HostSession {
 
   constructor(meta: HostMeta, token: string, credential?: RelayCredential, context?: common.Context) {
     this.meta = meta; this.token = token; this.credential = credential ?? null; this.context = context ?? null;
+    this.localPath = directPath(meta.endpoint);
   }
   setLogSink(sink: (line: string) => void): void { this.logSink = sink; }
   setClientSetup(setup: (client: SpikeRpcClient) => void): void { this.setup = setup; }
-  addListener(listener: Listener): void { this.listeners.push(listener); }
+  addListener(listener: Listener): () => void {
+    this.listeners.push(listener);
+    return (): void => { this.listeners = this.listeners.filter((held: Listener): boolean => held !== listener); };
+  }
   getClient(): SpikeRpcClient | null { return this.client; }
   getActivePath(): string { return this.activePath; }
+  getPendingPath(): string | undefined { return this.pendingPath; }
+  getPhase(): SessionPhase { return this.phase; }
+  getConnectedAt(): number | null { return this.connectedAt; }
   getReconnectAttempt(): number { return this.attempt; }
   private publish(phase: SessionPhase, detail: string): void {
-    for (let i = 0; i < this.listeners.length; i++) { this.listeners[i](phase, detail); }
+    this.phase = phase;
+    this.listeners.slice().forEach((listener: Listener): void => listener(phase, detail));
   }
   private log(line: string): void { if (this.logSink) { this.logSink(line); } }
-  start(): void { if (!this.stopped) { return; } this.stopped = false; this.dial(); }
+  private record(level: string, message: string, code?: string, path?: string, closeCode?: number): void {
+    let context = this.context;
+    if (context) { appendLog(context, level, message, '', this.meta.id, code, path, closeCode).catch(() => {}); }
+  }
+  start(): void {
+    if (!this.stopped) { return; }
+    let sessions = activeSessions.get(this.meta.id) ?? [];
+    if (!sessions.includes(this)) { sessions.push(this); activeSessions.set(this.meta.id, sessions); }
+    this.stopped = false;
+    this.record(LOG_LEVEL_INFO, '正在连接桌面', 'client-session-started');
+    this.dial();
+  }
   stop(): void {
-    this.stopped = true; this.clearTimers();
+    let active = activeSessions.get(this.meta.id)?.filter((session: HostSession): boolean => session !== this) ?? [];
+    if (active.length > 0) { activeSessions.set(this.meta.id, active); } else { activeSessions.delete(this.meta.id); }
+    this.stopped = true; this.pendingPath = undefined; this.clearTimers();
     let old = this.client; this.client = null;
     if (old) { old.close(); }
     let upgrade = this.upgradeClient; this.upgradeClient = null;
@@ -65,7 +99,7 @@ export class HostSession {
     this.clearTimers();
     this.usingGrace = false;
     let useRelay = this.useRelayNext && this.meta.relay !== undefined && this.credential !== null;
-    this.useRelayNext = false;
+    this.useRelayNext = false; this.pendingPath = useRelay ? 'relay' : this.localPath;
     let client = new SpikeRpcClient(useRelay ? 30000 : 10000); this.client = client;
     client.setFflate(fflateModule); client.setLogSink((line: string): void => this.log(line));
     if (this.setup) { this.setup(client); }
@@ -73,12 +107,19 @@ export class HostSession {
     this.publish(this.attempt === 0 ? 'connecting' : 'reconnecting', useRelay ? '正在通过 Relay 连接' : '正在连接');
     this.connectAttempt(client, useRelay).then((): void => {
       if (this.stopped || this.client !== client) { client.close(); return; }
-      this.attempt = 0; this.activePath = useRelay ? 'relay' : 'lan'; this.directorNext = false;
-      this.publish('connected', this.meta.name); this.probeLater(client);
+      this.markConnected(useRelay);
+      this.probeLater(client);
       if (useRelay) { this.scheduleDirectUpgrade(client); }
       this.bookkeep(client).catch((): void => this.log('Relay 凭证更新暂未完成，将在下次认证后核对'));
     }).catch((_e: Error): void => this.retry(client));
   }
+  private markConnected(relay: boolean): void {
+    this.attempt = 0; this.activePath = relay ? 'relay' : this.localPath; this.directorNext = false;
+    this.pendingPath = undefined; this.connectedAt = Date.now();
+    this.record(LOG_LEVEL_SUCCESS, '已连接', relay ? 'relay-connected' : 'direct-connected', this.activePath);
+    this.publish('connected', this.meta.name);
+  }
+
   private relayFence(credential: RelayCredential): RelayCredentialFence {
     let fence: RelayCredentialFence = { deviceToken: this.token, hash: credential.hash, version: credential.version, pendingReqId: credential.pendingReqId };
     return fence;
@@ -112,13 +153,23 @@ export class HostSession {
     await client.connect(relayConnectUrl(endpoint.cellUrl, endpoint.relayHostId), this.token, this.meta.publicKeyB64, 'v2');
     await settleRuntimeCapabilities(client);
   }
-  private retry(client: SpikeRpcClient): void {
+  private retry(client: SpikeRpcClient, livenessFailed: boolean = false): void {
     if (this.stopped || this.client !== client || this.reconnectTimer >= 0) { return; }
     let wasRelay = client.isRelay();
     let code = client.getRelayCloseCode();
+    let wasConnected = this.phase === 'connected';
+    let path = wasConnected ? this.activePath : this.pendingPath ?? this.localPath;
     this.clearTimers(); this.client = null; client.close();
     if (this.upgradeClient) { this.upgradeClient.close(); this.upgradeClient = null; }
-    if (client.authenticationRejected() || this.ownerSuperseded) { this.stopped = true; this.publish('auth-failed', '凭证已失效，请重新配对'); return; }
+    if (client.authenticationRejected() || this.ownerSuperseded) {
+      this.pendingPath = undefined;
+      this.record(LOG_LEVEL_ERROR, '凭证已失效，请重新配对', 'authentication-rejected', path);
+      this.stopped = true; this.publish('auth-failed', '凭证已失效，请重新配对'); return;
+    }
+    let failure = livenessFailed ? 'liveness-timeout'
+      : path === 'relay' ? (wasConnected ? 'relay-session-failed' : 'relay-dial-failed')
+      : client.getDeadlineFailure() || 'socket-closed';
+    this.record(LOG_LEVEL_WARN, '连接中断，正在重试', failure, path, path === 'relay' ? code : undefined);
     this.attempt++;
     let relay = this.meta.relay;
     let canRelay = relay && this.credential && (this.credential.expiresAt > Date.now() || (this.credential.graceExpiresAt ?? 0) > Date.now());
@@ -129,6 +180,7 @@ export class HostSession {
     } else if (wasRelay && canRelay && !this.directorNext && [0, 1006, 4409, 4503].includes(code)) {
       this.useRelayNext = true; this.directorNext = true;
     }
+    this.pendingPath = this.useRelayNext ? 'relay' : this.localPath;
     this.log('连接中断，正在重试');
     this.publish('reconnecting', delay === 0 ? '正在切换到 Relay' : `${Math.ceil(delay / 1000)} 秒后重试`);
     this.reconnectTimer = setTimeout((): void => { this.reconnectTimer = -1; this.dial(); }, delay);
@@ -166,8 +218,8 @@ export class HostSession {
         if (this.stopped || this.client !== client) { return; }
         if (response instanceof RpcSuccess) {
           this.probeLater(client); this.bookkeep(client).catch((): void => {});
-        } else { this.retry(client); }
-      }).catch((): void => this.retry(client));
+        } else { this.retry(client, true); }
+      }).catch((): void => this.retry(client, true));
     }, 20000);
   }
   private scheduleDirectUpgrade(relay: SpikeRpcClient): void {
@@ -180,9 +232,9 @@ export class HostSession {
       candidate.connect(this.meta.endpoint, this.token, this.meta.publicKeyB64, 'v2').then(async (): Promise<void> => {
         await settleRuntimeCapabilities(candidate);
         if (this.stopped || this.client !== relay) { candidate.close(); return; }
-        this.clearTimers(); this.upgradeClient = null; this.client = candidate; this.activePath = 'lan';
+        this.clearTimers(); this.upgradeClient = null; this.client = candidate;
         candidate.onSocketClosed((): void => this.retry(candidate));
-        this.publish('connected', this.meta.name); relay.close(); this.probeLater(candidate);
+        this.markConnected(false); relay.close(); this.probeLater(candidate);
       }).catch((): void => {
         candidate.close(); this.upgradeClient = null;
         if (!this.stopped && this.client === relay) { this.scheduleDirectUpgrade(relay); }

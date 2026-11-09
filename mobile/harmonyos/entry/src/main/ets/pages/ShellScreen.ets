@@ -288,7 +288,7 @@ struct ShellScreen {
   private publishPhase(state: string): void {
     if (this.disposed || this.phase === state) { return; }
     this.phase = state;
-    recordConnection(getContext(this), state.startsWith('失败') ? LOG_LEVEL_ERROR : LOG_LEVEL_INFO, state, '').catch(() => {});
+    recordConnection(getContext(this), state.startsWith('失败') ? LOG_LEVEL_ERROR : LOG_LEVEL_INFO, state, '', this.hostId, 'web-shell-flow').catch(() => {});
   }
 
   /** Phase 4a: watch agent states on the open channel and raise local notifications. */

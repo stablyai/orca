@@ -216,6 +216,41 @@
       "package": "lucide-static",
       "version": "0.577.0",
       "source": "package/icons/chevron-left.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_copy.svg",
+      "sha256": "cf73c4ed4b138198eb4d62d0feff42031c1e57b690f2dad020b3eb65c80ef18e",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/copy.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_power_off.svg",
+      "sha256": "c4b8090fbb0ff7f3a49e3ae6fe6d7e434429b9e02ac16c5f970edc110329f8a0",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/power-off.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_activity.svg",
+      "sha256": "03123bb380621319db011d2bcfbbc58bf542b7a0efc3145ea27df09e8fa535c3",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/activity.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_pen_line.svg",
+      "sha256": "42af2ff556bcac8c87bc2f11b387ee9f4275a505979e4db0e222aa27e1cf694b",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/pen-line.svg"
+    },
+    {
+      "path": "entry/src/main/resources/base/media/lucide_trash_2.svg",
+      "sha256": "f373ec082dfac372e12122b41c11936dfcb5859811d22ddcb4e97f550a3199c6",
+      "package": "lucide-static",
+      "version": "0.577.0",
+      "source": "package/icons/trash-2.svg"
     }
   ]
 }

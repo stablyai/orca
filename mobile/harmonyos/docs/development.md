@@ -37,6 +37,6 @@ The source export uses an explicit file set. IDE state, staging copies, local si
 
 Regenerate ArkTS vendor modules with `node tools/prepare-vendor.mjs`. `tools/patch-nacl-arkts.mjs` remains an alias. A vendor update must retain licenses, update the provenance manifest and pass `tools/check.mjs`. Run a clean SDK build after changing vendored JavaScript.
 
-The native Agents tab uses the pure iOS and Android agent-list model. From a checkout with the upstream dependencies installed, run `node mobile/harmonyos/tools/sync-agent-list.mjs` to rebuild it from `origin/main`. The script records the upstream revision and input files and rejects runtime imports. Standalone exports build with the checked-in output.
+The native Agents tab and Network diagnostics use the shared iOS and Android models. From a checkout with the upstream dependencies installed, run `node mobile/harmonyos/tools/sync-mobile-models.mjs` to rebuild the bundles from `origin/main`. The script records the upstream revision and input files and rejects runtime imports. Standalone exports build with the checked-in output.
 
 The build/export commands fingerprint the explicit source set. A source change during SDK compilation or copying fails delivery instead of stamping a newer source fingerprint onto an older HAP. Keep the source stable for a final build. UI assets have separate pinned hashes and packaged licenses; the source checks validate them too.

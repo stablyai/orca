@@ -8,20 +8,22 @@ import { LocalNotifier, DesktopNotification } from '../notifications/LocalNotifi
 import { getBool, KEY_NOTIFICATIONS_LOCAL_ENABLED } from '../settings/SettingsStore';
 import { parseLaunchRoute } from '../navigation/LaunchRoute';
 import { getNumber, KEY_HOME_FONT_SCALE } from '../settings/SettingsStore';
-import { deletePageStorage } from '../storage/PageStorageStore';
-import { listHosts, deleteHost, getDeviceToken, getRelayCredential, HostMeta } from '../storage/HostStore';
+import { removeDesktop } from '../storage/HostRemoval';
+import { listHosts, getDeviceToken, getRelayCredential, HostMeta } from '../storage/HostStore';
 import { SpikeRpcClient, RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
 import { HostSession, SessionPhase } from '../transport/HostSession';
 import { HomeWorktree, readHomeCatalog } from '../home/HomeCatalog';
 import { AgentDesktop, AgentListRow, HomeAgentEntry, agentsNeedingYou } from '../home/AgentListModel';
 import { AgentListRows } from '../home/AgentListRows';
 import { AgentsTab } from '../home/AgentsTab';
+import { DesktopActions } from '../home/DesktopActions';
+import { endpointLabel } from '../diagnostics/ConnectionDiagnostics';
+import { appendLog, LOG_LEVEL_INFO } from '../diagnostics/ConnectionLogStore';
 import { HomeUsageCard, HomeUsageWindow, HomeAutomation, HomeAutomationRun, readHomeUsage, readHomeAutomations,
   readHomeAutomationRuns, homeAutomationToggleParams } from '../home/HomeAccountUsage';
 import { SETTINGS_LINK_ITEMS, SETTINGS_MENU_ITEMS, SettingsMenuItem } from '../settings/SettingsMenu';
 import { loadMobileOnboardingSteps } from '../onboarding/MobileOnboardingPlan';
 import { recoverRelayPairings } from '../transport/RelayPairing';
-import { clearHomeResume } from '../home/HomeResume';
 import { HomeStats, readHomeStats, totalHomeStats } from '../home/HomeStats';
 import { HomeQuotaOffer, HomeQuotaScope, readHomeQuotaOffer, consumeHomeQuotaReset } from '../home/HomeQuotaReset';
 
@@ -114,6 +116,13 @@ struct Home {
   @State loaded: boolean = false;
   @State fontScale: number = 1;
   @State online: Record<string, boolean> = {};
+  @State hostPhases: Record<string, string> = {};
+  @State hostActionTarget: HostMeta | null = null;
+  @State hostSheetOpen: boolean = false;
+  private hostAction: string = '';
+  private manualDisconnects: Set<string> = new Set();
+  private probeOwners: Map<string, number> = new Map();
+  private nextProbeOwner: number = 0;
   @State connecting: boolean = false;
   @State agentRows: AgentListRow[] = [];
   @State agentDesktops: AgentDesktop[] = [];
@@ -183,6 +192,7 @@ struct Home {
   }
 
   onBackPress(): boolean {
+    if (this.hostSheetOpen) { this.hostSheetOpen = false; return true; }
     if (this.hostPickerRoute) { this.hostPickerRoute = ''; return true; }
     if (this.activeTab !== 'feed') { this.activeTab = 'feed'; return true; }
     return false;
@@ -194,6 +204,9 @@ struct Home {
     recoverRelayPairings(context).then(() => listHosts(context)).then((hosts: HostMeta[]): void => {
       if (!this.visible || loadEpoch !== this.loadEpoch) { return; }
       this.hosts = hosts;
+      this.manualDisconnects.forEach((id: string): void => {
+        if (!hosts.some((host: HostMeta): boolean => host.id === id)) { this.manualDisconnects.delete(id); }
+      });
       this.agentCatalogs.forEach((_catalog: AgentCatalog, id: string): void => {
         if (!hosts.some((host: HostMeta): boolean => host.id === id)) { this.agentCatalogs.delete(id); }
       });
@@ -254,14 +267,18 @@ struct Home {
 
   private syncConnState(): void {
     let next: Record<string, boolean> = {};
+    let phases: Record<string, string> = {};
     let anyConnecting = false;
+    this.probeOwners.forEach((_owner: number, hostId: string): void => { phases[hostId] = 'connecting'; });
     this.runtimes.forEach((rt: HostRuntime, hostId: string): void => {
       next[hostId] = rt.online;
+      phases[hostId] = rt.session.getPhase();
       if (rt.connecting) {
         anyConnecting = true;
       }
     });
     this.online = next;
+    this.hostPhases = phases;
     this.connecting = anyConnecting;
     this.rebuildRows();
   }
@@ -270,6 +287,7 @@ struct Home {
     this.epoch++;
     let runtimes = Array.from(this.runtimes.values());
     this.runtimes.clear();
+    this.probeOwners.clear();
     for (let i = 0; i < runtimes.length; i++) {
       let rt = runtimes[i];
       if (rt.refreshTimer >= 0) { clearTimeout(rt.refreshTimer); }
@@ -278,6 +296,7 @@ struct Home {
     }
     this.accByHost.clear();
     this.online = {};
+    this.hostPhases = {};
     this.usageByHost = {}; this.automationsByHost = {};
     this.usageErrors = {}; this.automationErrors = {};
     this.automationRunsByHost = {}; this.automationBusy = []; this.automationRequested = {};
@@ -292,12 +311,35 @@ struct Home {
     for (let i = 0; i < this.hosts.length; i++) { this.probeHost(this.hosts[i], epoch); }
   }
 
+  private stopDesktop(hostId: string): void {
+    this.probeOwners.delete(hostId);
+    let runtime = this.runtimes.get(hostId);
+    this.runtimes.delete(hostId);
+    if (runtime) {
+      if (runtime.refreshTimer >= 0) { clearTimeout(runtime.refreshTimer); }
+      runtime.watch?.stop();
+      runtime.session.stop();
+    }
+    this.accByHost.delete(hostId);
+    this.usageByHost[hostId] = []; this.automationsByHost[hostId] = []; this.automationRunsByHost[hostId] = [];
+    this.quotaAllowed[hostId] = false;
+    this.setHostError('usageErrors', hostId, ''); this.setHostError('automationErrors', hostId, '');
+    this.syncConnState();
+  }
+
   private probeHost(host: HostMeta, epoch: number): void {
-    getDeviceToken(getContext(this) as common.Context, host.id).then(async (token: string | null): Promise<void> => {
-      if (!this.visible || epoch !== this.epoch || !token) { return; }
-      let context = getContext(this) as common.Context;
+    if (this.manualDisconnects.has(host.id) || this.runtimes.has(host.id) || this.probeOwners.has(host.id)) { return; }
+    let owner = ++this.nextProbeOwner;
+    this.probeOwners.set(host.id, owner);
+    this.syncConnState();
+    let context = getContext(this) as common.Context;
+    let current = (): boolean => this.visible && epoch === this.epoch && this.probeOwners.get(host.id) === owner;
+    getDeviceToken(context, host.id).then(async (token: string | null): Promise<void> => {
+      if (!current()) { return; }
+      if (!token) { this.probeOwners.delete(host.id); this.syncConnState(); return; }
       let relay = await getRelayCredential(context, host.id);
-      if (!this.visible || epoch !== this.epoch) { return; }
+      if (!current()) { return; }
+      this.probeOwners.delete(host.id);
       let session = new HostSession(host, token, relay ?? undefined, context);
       let rt: HostRuntime = { session: session, client: null, online: false,
         connecting: true, refreshTimer: -1, catalogPending: false, catalogRefetch: false, automationPending: false, automationFetchedAt: 0, watch: null };
@@ -327,7 +369,9 @@ struct Home {
       });
       session.start();
       this.syncConnState();
-    }).catch((_e: Error): void => {});
+    }).catch((_e: Error): void => {
+      if (current()) { this.probeOwners.delete(host.id); this.syncConnState(); }
+    });
   }
 
   private startHostNotifications(client: SpikeRpcClient, hostId: string, epoch: number): void {
@@ -598,6 +642,8 @@ struct Home {
   // ---------------------------------------------------------------- actions
 
   openHostDetail(hostId: string): void {
+    if (this.hostPhases[hostId] === 'auth-failed') { this.openPairScan(); return; }
+    this.manualDisconnects.delete(hostId);
     this.openHostRoute(hostId, '');
   }
 
@@ -707,38 +753,68 @@ struct Home {
     this.openHostRoute(hostId, '/automations', params);
   }
 
-  async hostActions(host: HostMeta): Promise<void> {
-    try {
-      let choice = await promptAction.showActionMenu({ title: host.name,
-        buttons: [{ text: uiText('编辑桌面', this.uiLocale), color: this.pal().textPrimary },
-          { text: uiText('重新连接', this.uiLocale), color: this.pal().textPrimary },
-          { text: uiText('连接诊断', this.uiLocale), color: this.pal().textPrimary },
-          { text: uiText('重新配对', this.uiLocale), color: this.pal().textPrimary },
-          { text: uiText('移除桌面', this.uiLocale), color: this.pal().statusRed }] });
-      if (choice.index === 0) {
-        router.pushUrl({ url: 'pages/HostDetail', params: { 'hostId': host.id } }).catch(() => {});
-      } else if (choice.index === 1) { this.reload(); }
-      else if (choice.index === 2) {
-        router.pushUrl({ url: 'pages/HostDetail', params: { 'hostId': host.id, 'diagnostics': '1' } }).catch(() => {});
-      } else if (choice.index === 3) { this.openPairScan(); }
-      else if (choice.index === 4) { this.removeHost(host).catch(() => {}); }
-    } catch (e) {}
+  private desktopIsLive(id: string): boolean {
+    return ['connecting', 'connected', 'reconnecting'].includes(this.hostPhases[id]);
+  }
+
+  private desktopSubtitle(host: HostMeta | null): string {
+    if (!host) { return ''; }
+    let path = this.runtimes.get(host.id)?.session.getActivePath();
+    let label = path === 'relay' ? 'Orca Relay' : uiText(path === 'tailscale' ? '直连 · Tailscale' : '直连 · 局域网', this.uiLocale);
+    return this.online[host.id] === true ? `${label} · ${endpointLabel(host.endpoint)}` : endpointLabel(host.endpoint);
+  }
+
+  private openDesktopActions(host: HostMeta): void {
+    this.hostAction = ''; this.hostActionTarget = host; this.hostSheetOpen = true;
+  }
+
+  @Builder
+  private desktopActionsSheet() {
+    DesktopActions({ name: this.hostActionTarget?.name ?? '', subtitle: this.desktopSubtitle(this.hostActionTarget),
+      live: this.desktopIsLive(this.hostActionTarget?.id ?? ''),
+      reconnect: this.desktopIsLive(this.hostActionTarget?.id ?? '') && (this.hostActionTarget?.lastConnected ?? 0) > 0,
+      onChoose: (action: string): void => { this.hostAction = action; this.hostSheetOpen = false; } })
+  }
+
+  private afterDesktopActions(): void {
+    let id = this.hostActionTarget?.id;
+    let action = this.hostAction;
+    this.hostSheetOpen = false; this.hostActionTarget = null; this.hostAction = '';
+    let host = this.hosts.find((item: HostMeta): boolean => item.id === id);
+    if (!this.visible || !host) { return; }
+    if (action === 'connect') {
+      this.manualDisconnects.delete(host.id);
+      this.stopDesktop(host.id); this.probeHost(host, this.epoch);
+    } else if (action === 'disconnect') {
+      this.manualDisconnects.add(host.id);
+      this.stopDesktop(host.id);
+      appendLog(getContext(this), LOG_LEVEL_INFO, '已断开连接', '', host.id).catch(() => {});
+    } else if (action === 'diagnostics') {
+      this.manualDisconnects.delete(host.id);
+      router.pushUrl({ url: 'pages/ConnectionLog', params: { 'hostId': host.id } }).catch(() => {});
+    } else if (action === 'edit') {
+      router.pushUrl({ url: 'pages/HostDetail', params: { 'hostId': host.id } }).catch(() => {});
+    } else if (action === 'remove') { this.removeHost(host).catch(() => {}); }
   }
 
   async removeHost(host: HostMeta): Promise<void> {
     let answer = await promptAction.showDialog({
       title: uiText('移除主机', this.uiLocale),
-      message: `要移除“${host.name}”吗？之后可重新配对。`,
+      message: uiText('移除“{{name}}”？之后可以重新配对。', this.uiLocale).replace('{{name}}', host.name),
       buttons: [{ text: uiText('取消', this.uiLocale), color: this.pal().textMuted }, { text: uiText('移除', this.uiLocale), color: this.pal().statusRed }]
     });
     if (answer.index !== 1) {
       return;
     }
     try {
-      await deleteHost(getContext(this) as common.Context, host.id);
-      await deletePageStorage(getContext(this) as common.Context, host.id);
-      clearHomeResume(getContext(this), host.id);
-      this.reload();
+      let context = getContext(this) as common.Context;
+      await removeDesktop(context, host.id, (): void => {
+        this.loadEpoch++;
+        this.hosts = this.hosts.filter((item: HostMeta): boolean => item.id !== host.id);
+        this.manualDisconnects.delete(host.id);
+        this.agentCatalogs.delete(host.id);
+        this.stopDesktop(host.id);
+      });
     } catch (e) {
       this.loadError = '移除失败，凭证或页面数据未能清理，请重试。';
     }
@@ -815,18 +891,16 @@ struct Home {
           .textOverflow({ overflow: TextOverflow.Ellipsis })
           .width('100%')
         Row() {
-          Text(this.hostStatusLine(host))
+          Text(uiText(this.hostStatusLine(host), this.uiLocale))
             .fontFamily('Geist').fontSize(14)
             .fontColor(this.online[host.id] === true
               ? this.pal().textSecondary
-              : (this.connecting ? this.pal().statusAmber : this.pal().textSecondary))
+              : (this.desktopIsLive(host.id) ? this.pal().statusAmber : this.pal().textSecondary))
             .maxLines(1)
-          Text(` · ${host.endpoint}`)
-            .fontFamily('Geist').fontSize(14)
-            .fontColor(this.pal().textSecondary)
-            .maxLines(1)
-            .textOverflow({ overflow: TextOverflow.Ellipsis })
-            .layoutWeight(1)
+          if (host.machineName && host.machineName !== host.name) {
+            Text(` · ${host.machineName}`).fontFamily('Geist').fontSize(14).fontColor(this.pal().textSecondary)
+              .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
+          }
         }
         .width('100%')
         .margin({ top: 1 })
@@ -850,7 +924,7 @@ struct Home {
       this.openHostDetail(host.id);
     })
     .gesture(LongPressGesture().onAction(() => {
-      this.hostActions(host);
+      this.openDesktopActions(host);
     }))
   }
 
@@ -866,8 +940,10 @@ struct Home {
   /** 连接行的状态文案：已连接 → worktree 概要（上游 homeHostWorktreeSummary）。 */
   hostStatusLine(host: HostMeta): string {
     if (this.online[host.id] !== true) {
-      let runtime = this.runtimes.get(host.id);
-      return runtime && runtime.connecting ? '正在连接' : '离线';
+      let phase = this.hostPhases[host.id];
+      if (phase === 'auth-failed') { return '配对无效'; }
+      if (phase === 'reconnecting') { return '正在重连'; }
+      return phase === 'connecting' ? '正在连接' : '已断开';
     }
     let summary = this.summaries[host.id];
     return summary !== undefined && summary.length > 0 ? summary : '已连接';
@@ -903,7 +979,7 @@ struct Home {
                 onClear: (rows: AgentListRow[]): void => { this.changeAgentActivity(rows).catch(() => {}); } })
             }
 
-            this.sectionHeading(uiText('台式机', this.uiLocale), '', this.agentRows.length === 0)
+            this.sectionHeading(uiText('已配对桌面', this.uiLocale), '', this.agentRows.length === 0)
             Column() {
               ForEach(this.hosts, (host: HostMeta, index: number) => {
                 Column() {
@@ -913,7 +989,7 @@ struct Home {
                   this.desktopRow(host)
                 }
                 .width('100%')
-              }, (host: HostMeta, index: number) => `${index}-${host.id}`)
+              }, (host: HostMeta): string => `${host.id}:${host.name}:${host.endpoint}`)
             }
             .width('100%')
             .borderRadius(16)
@@ -1443,5 +1519,7 @@ struct Home {
     .width('100%')
     .height('100%')
     .backgroundColor(this.pal().bgBase)
+    .bindSheet(this.hostSheetOpen, this.desktopActionsSheet, { height: SheetSize.FIT_CONTENT,
+      backgroundColor: this.pal().bgBase, showClose: false, onDisappear: (): void => this.afterDesktopActions() })
   }
 }

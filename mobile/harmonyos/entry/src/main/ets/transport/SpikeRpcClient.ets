@@ -68,6 +68,8 @@ export class SpikeRpcClient {
   private resumeConfirmation: Record<string, Object> | null = null;
   private relayCloseCode: number = 0;
   private authRejected: boolean = false;
+  private deadlineFailure: string = '';
+  getDeadlineFailure(): string { return this.deadlineFailure; }
   authenticationRejected(): boolean { return this.authRejected; }
   configureRelay(options: RelayConnectionOptions): void {
     if (!/^[A-Za-z0-9_-]{16}$/.test(options.relayHostId) || !/^[A-Za-z0-9_-]{43}$/.test(options.credential)
@@ -146,7 +148,10 @@ export class SpikeRpcClient {
       this.state = 'connecting';
       this.closedNotified = false;
       this.rejectConnect = reject;
-      this.connectTimer = setTimeout((): void => this.terminate('连接超时，请检查桌面和网络'), this.handshakeMs);
+      this.connectTimer = setTimeout((): void => {
+        this.deadlineFailure = this.state === 'connecting' ? 'connect-timeout' : 'handshake-timeout';
+        this.terminate('连接超时，请检查桌面和网络');
+      }, this.handshakeMs);
       let connected = (): void => { this.finishConnect(); resolve(); };
       let failed = (error: Error): void => this.terminate(error.message);
       this.log(this.relayOptions ? '正在建立 Relay 加密连接' : '正在建立直连加密连接');

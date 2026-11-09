@@ -299,6 +299,9 @@ test('a running supervisor dials the durable relay credential instead of an obso
     isRelay() {
       return this.relay !== null
     }
+    getDeadlineFailure() {
+      return ''
+    }
     getRelayCloseCode() {
       return 0
     }
@@ -320,6 +323,11 @@ test('a running supervisor dials the durable relay credential instead of an obso
   }
   const { HostSession } = loadArkts('transport/HostSession.ets', ['HostSession'], {
     SpikeRpcClient: Client,
+    directPath: () => 'lan',
+    appendLog: async () => {},
+    LOG_LEVEL_INFO: 'info',
+    LOG_LEVEL_SUCCESS: 'success',
+    LOG_LEVEL_WARN: 'warn',
     fflateModule: {},
     settleRuntimeCapabilities: async () => {},
     getDeviceToken: async () => 'device-token',
