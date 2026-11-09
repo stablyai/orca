@@ -1,5 +1,5 @@
 import '../../../../../../shared/protocol-version'
-import { terminalInputRecordChangedKeys } from '@/store/terminals/terminal-input-record-transition'
+import { readRecordChanges } from '@/store/keyed-record-transitions'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import {
   isRuntimeHostContactRevoked,
@@ -47,7 +47,8 @@ export function createPairedRuntimeParkingEnvironmentIdsSelector() {
       return cached.environmentIds
     }
 
-    const changedIds = cached ? terminalInputRecordChangedKeys(cached.statuses, statuses) : null
+    const changes = cached ? readRecordChanges(statuses, cached.statuses) : null
+    const changedIds = changes?.kind === 'addressed' ? changes.keys : null
     const capable = changedIds ? new Set(cached?.environmentIds) : new Set<string>()
     const environmentIdsToInspect = changedIds ?? statuses.keys()
     for (const environmentId of environmentIdsToInspect) {
