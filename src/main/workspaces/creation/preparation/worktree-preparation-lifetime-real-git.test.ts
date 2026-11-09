@@ -439,7 +439,7 @@ it('leaves stopped hosts untouched and retries only after the host becomes eligi
   expect(existsSync(entry.preparedPath)).toBe(true)
   blocked.mockResolvedValue(null)
   await arm()
-  expect(existsSync(entry.preparedPath)).toBe(false)
+  await vi.waitFor(() => expect(existsSync(entry.preparedPath)).toBe(false))
 })
 
 it('releases exhausted capacity when the final admitted removal completes late', async () => {
@@ -750,15 +750,8 @@ it.each([750, 7500])(
       await writeFile(join(admin, 'HEAD'), `${head}\n`)
     }
     const blockedRoot = join(owner.root, 'read-only-root')
-    const mkdir = fsPromises.mkdir
-    vi.spyOn(fsPromises, 'mkdir').mockImplementation((path, options) => {
-      if (path === join(blockedRoot, '.orca-preparing')) {
-        return Promise.reject(
-          Object.assign(new Error('read-only workspace root'), { code: 'EACCES' })
-        )
-      }
-      return mkdir(path, options)
-    })
+    await fsPromises.mkdir(blockedRoot)
+    await writeFile(join(blockedRoot, '.orca-preparing'), 'obstruct directory creation\n')
     const read = gitAdmin.readGitAdminFile
     let unrelatedReads = 0
     vi.spyOn(gitAdmin, 'readGitAdminFile').mockImplementation((path, signal) => {
@@ -778,7 +771,7 @@ it.each([750, 7500])(
           canonicalBase: 'refs/heads/main',
           options: {}
         })
-      ).rejects.toThrow('read-only workspace root')
+      ).rejects.toMatchObject({ code: 'EEXIST' })
       await vi.waitFor(() => expect(preparationCapacityUsed()).toBe(0))
     }
     expect(unrelatedReads).toBe(0)

@@ -61,7 +61,8 @@ describe('worktree create preparation registry', () => {
       'main',
       undefined,
       {},
-      mocks.prepareCheckout.mock.calls[0]?.[3]
+      mocks.prepareCheckout.mock.calls[0]?.[3],
+      expect.anything()
     )
   })
 
