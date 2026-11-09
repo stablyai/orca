@@ -8,6 +8,10 @@ import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrat
 import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/skills/linear/linear-agent-skill-search'
 import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile/mobile-settings-search'
 import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/accounts/orca/orca-account-settings-search'
+import {
+  getCloudApiKeysSearchEntries,
+  getCloudRoutinesSearchEntries
+} from '@/components/settings/cloud-api/cloud-api-search'
 import { OrcaLogoSettingsIcon } from '@/components/settings/page/orca-logo-settings-icon'
 import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration/orchestration-search'
 import { getVoicePaneSearchEntries } from '@/components/settings/voice/voice-pane-search'
@@ -19,12 +23,14 @@ import {
   Bot,
   CircleUserRound,
   KeyRound,
+  KeySquare,
   Mic,
   MousePointerClick,
   Network,
   SlidersHorizontal,
   Smartphone,
-  UserCog
+  UserCog,
+  Workflow
 } from 'lucide-react'
 import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
 
@@ -139,7 +145,7 @@ export function buildCapabilitySettingsSections(
 }
 
 export function buildSetupSettingsSections(
-  { isLocalWindowsHost, isWebClient }: SettingsNavigationBuildOptions,
+  { isLocalWindowsHost, isWebClient, isOrcaCloudApiAvailable }: SettingsNavigationBuildOptions,
   t: Translate = translate
 ): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
@@ -156,6 +162,32 @@ export function buildSetupSettingsSections(
             icon: CircleUserRound,
             searchEntries: getOrcaAccountSettingsSearchEntries(),
             group: 'setup'
+          }
+        ]
+      : []),
+    ...(showDesktopOnlySettings && isOrcaCloudApiAvailable
+      ? [
+          {
+            id: 'cloud-api-keys',
+            title: t('auto.components.settings.cloudApi.sectionTitle', 'API Keys'),
+            description: t(
+              'auto.components.settings.cloudApi.sectionDescription',
+              'Orca Cloud API keys, the MCP server and what agents in cloud workspaces may do.'
+            ),
+            icon: KeySquare,
+            searchEntries: getCloudApiKeysSearchEntries(),
+            group: 'setup' as const
+          },
+          {
+            id: 'cloud-routines',
+            title: t('auto.components.settings.cloudRoutines.sectionTitle', 'Routines'),
+            description: t(
+              'auto.components.settings.cloudRoutines.sectionDescription',
+              'Agents that run in Orca Cloud on a schedule, on GitHub events or from a webhook.'
+            ),
+            icon: Workflow,
+            searchEntries: getCloudRoutinesSearchEntries(),
+            group: 'setup' as const
           }
         ]
       : []),

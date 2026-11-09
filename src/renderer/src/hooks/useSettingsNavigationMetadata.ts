@@ -9,6 +9,7 @@ import {
 import { getTerminalPaneSearchEntries } from '@/components/settings/terminal/terminal-search'
 import { isMacUserAgent, isWindowsUserAgent } from '@/lib/user-agent-platform'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
+import { useOrcaCloudApiAvailable } from '@/hooks/useOrcaCloudApiAvailability'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import { isWebClientLocation } from '@/lib/web-client-location'
@@ -52,6 +53,7 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled = !isWebClient,
     isDev = import.meta.env.DEV,
     isLinearConnected = false,
+    isOrcaCloudApiAvailable = false,
     repos,
     projectGrouping
   }: {
@@ -66,6 +68,7 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled?: boolean
     isDev?: boolean
     isLinearConnected?: boolean
+    isOrcaCloudApiAvailable?: boolean
     repos: readonly Repo[]
     projectGrouping?: ProjectGroupingModel
   },
@@ -100,6 +103,7 @@ export function buildSettingsNavigationMetadata(
     mobileEmulatorCreationEnabled,
     isDev,
     isLinearConnected,
+    isOrcaCloudApiAvailable,
     repos,
     projectGrouping
   }
@@ -136,6 +140,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
   const isWindows = isWindowsUserAgent()
   const isWebClient = isWebClientLocation()
   const isLinearConnected = useLinearProviderConnected()
+  const isOrcaCloudApiAvailable = useOrcaCloudApiAvailable()
   const windowsTerminalCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
     settings?.activeRuntimeEnvironmentId
   )
@@ -179,6 +184,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
           mobileEmulatorCreationEnabled,
           isDev: import.meta.env.DEV,
           isLinearConnected,
+          isOrcaCloudApiAvailable,
           repos,
           projectGrouping: {
             projects: projectHostSetupProjection.projects,
@@ -199,6 +205,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       managedBrowserCreationEnabled,
       mobileEmulatorCreationEnabled,
       isLinearConnected,
+      isOrcaCloudApiAvailable,
       repos,
       projectHostSetupProjection,
       languageRevision,
