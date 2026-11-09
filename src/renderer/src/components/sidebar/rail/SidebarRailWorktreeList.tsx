@@ -149,8 +149,8 @@ export function SidebarRailWorktreeList({
     if (!pendingReveal) {
       return
     }
-    clearPendingReveal(pendingReveal)
     const frame = window.requestAnimationFrame(() => {
+      clearPendingReveal(pendingReveal)
       scrollRef.current
         ?.querySelector(`[data-rail-worktree-id="${CSS.escape(pendingReveal.worktreeId)}"]`)
         ?.scrollIntoView({ block: 'nearest', behavior: pendingReveal.behavior })

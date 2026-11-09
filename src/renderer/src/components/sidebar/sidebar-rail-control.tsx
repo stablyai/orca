@@ -71,12 +71,12 @@ export function SidebarRailBadge({
 }): React.JSX.Element {
   return (
     <span
-      aria-label={label}
       className={cn(
         'pointer-events-none absolute right-0.5 top-0.5 flex items-center justify-center',
         className
       )}
     >
+      {label ? <span className="sr-only">{label}</span> : null}
       {children}
     </span>
   )
