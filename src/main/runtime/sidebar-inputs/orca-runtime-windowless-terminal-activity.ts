@@ -12,7 +12,7 @@ import { createKeyedTrailingEdgeCoalescer } from '../client/events/keyed-trailin
 import {
   agentPaneWorkspace,
   type AgentPaneWorkspace
-} from '../../agent-hooks/agent-transition-detector'
+} from '../../agent-hooks/observations/agent-transition-detector'
 import type { RuntimePtyWorktreeRecord } from '../terminal/records/runtime-terminal-state-records'
 import {
   isWslMoveProjectBlocked,

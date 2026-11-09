@@ -2,7 +2,7 @@
 import { z } from 'zod'
 import { getChromeExtensionOrigin } from '../../../../shared/browser/extensions/browser-extension-url'
 import type { InstalledBrowserExtension } from '../../../../shared/browser/extensions/browser-extension-types'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { getBrowserExtensionInstallStore } from '../installation/browser-extension-install-store'
 import { notifyBrowserExtensionListChanged } from '../installation/browser-extension-list-changes'
 import { setBrowserExtensionEnabled } from '../browser-extension-management'
@@ -12,7 +12,7 @@ import {
   registerBrowserExtensionNamespace,
   type BrowserExtensionCaller
 } from '../api-runtime/browser-extension-namespace-registry'
-import { hasBrowserExtensionUserGesture } from './permissions'
+import { hasBrowserExtensionUserGesture } from '../permissions/browser-extension-user-gesture'
 
 /**
  * chrome.management for extensions that declare "management": Orca's installed list as the

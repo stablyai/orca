@@ -11,9 +11,11 @@ export function createOrchestrationProjectionScope(
   const runs = new Map<string, ReturnType<OrchestrationDb['getRun']>>()
   const panes = new Map<string, ReturnType<OrchestrationDb['runsBoundToPane']>>()
   const now = Date.now()
-  const resolve = createCanonicalSessionPaneResolver(deps.getSessionRecords())
+  const records = deps.getSessionRecords()
+  const resolve = createCanonicalSessionPaneResolver(records)
   return {
     now,
+    records,
     resolve,
     sessionDispatches: () => {
       const destinations = new Map<

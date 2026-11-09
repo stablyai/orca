@@ -2,6 +2,8 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { ProfileStateBackupRotation } from './profile-state-backup-rotation'
 import { ProfileStateWriteWorkerClient } from './profile-state-writer-worker-client'
+import { openProfileStateDatabaseReadOnly } from './profile-state-database'
+import { isRecord } from './profile-state-document-validation'
 import {
   createWorkerMaintenanceFixture,
   maintenanceBarrier
@@ -17,6 +19,37 @@ vi.mock('../../ssh/config/ssh-config-parser', () => ({
 }))
 
 describe('worker authority close admission', () => {
+  it('leaves the older-build copy alone for maintenance and brings it current on close', async () => {
+    const { authority, databaseFile, profileId } = await createWorkerMaintenanceFixture()
+    const v1 = '{"runtime:a":{"activeTabId":"t1"}}'
+    const v2 = '{"runtime:a":{"activeTabId":"t2"}}'
+    const v3 = '{"runtime:a":{"activeTabId":"t3"}}'
+    // What a build without per-entry storage reads.
+    const readAsOlderBuild = () => {
+      const { db } = openProfileStateDatabaseReadOnly(databaseFile, profileId)
+      try {
+        const row: unknown = db
+          .prepare(`SELECT payload FROM profile_state_documents WHERE domain = ?`)
+          .get('workspaceSessionsByHostId')
+        return isRecord(row) ? row.payload : undefined
+      } finally {
+        db.close()
+      }
+    }
+    await authority.writeSerializedDomains([{ domain: 'workspaceSessionsByHostId', payload: v1 }])
+    // Restarting the writer catches the older-build copy up to v1.
+    await (await authority.pauseForMaintenance()).resume()
+    await authority.writeSerializedDomains([{ domain: 'workspaceSessionsByHostId', payload: v2 }])
+
+    const maintenance = await authority.pauseForMaintenance()
+    expect(readAsOlderBuild()).toBe(v1)
+    await maintenance.resume()
+    await authority.writeSerializedDomains([{ domain: 'workspaceSessionsByHostId', payload: v3 }])
+
+    await authority.close()
+    expect(readAsOlderBuild()).toBe(v3)
+  })
+
   it('reports a failed maintenance resume without accepting a changed database', async () => {
     const notify = vi.fn()
     const { authority, peer } = await createWorkerMaintenanceFixture(undefined, notify)

@@ -3667,6 +3667,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "开启"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "已按其他窗口调整大小",
+            "fitHere": "在此适配"
           }
         }
       },
@@ -15613,6 +15617,7 @@
           "kernelStartFailed": "内核启动失败。",
           "noPython": "在此电脑上未找到 Python。请从 [python.org](https://www.python.org/downloads/) 安装，然后重新运行单元格。",
           "kernelDied": "内核已停止。",
+          "outputTruncated": "输出已截断：Orca 保留了此单元格输出的开头部分，并丢弃了其余内容。如需保留全部输出，请改为写入文件。",
           "localOnly": "笔记本单元格只能针对此电脑上的文件运行。",
           "pythonOnly": "Orca 中只能运行 Python 笔记本。",
           "commandCopied": "命令已复制",
@@ -19426,6 +19431,7 @@
         "copyIdentity": "复制 {{value0}}",
         "folder": "文件夹",
         "mainCheckout": "主工作副本",
+        "turnWorking": "此聊天的代理正在工作。请在其回合结束后再切换分支。",
         "worktree": "工作树"
       },
       "explicitChatWindows": "此 Agent 的聊天暂不支持 Windows。请改为在终端中打开。",
@@ -21012,6 +21018,7 @@
       "switch": "切换分支：{{branch}}",
       "search": "搜索分支",
       "recover": "切换到 {{branch}}",
+      "copy": "复制分支名称",
       "create": "从 {{branch}} 创建分支 {{name}}",
       "open": "打开工作区",
       "occupied": "已在 {{path}} 中检出",

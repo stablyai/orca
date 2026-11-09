@@ -148,6 +148,7 @@ export function renderCommentCard(
         />
         <CommentMarkdown
           content={comment.body}
+          bodyImageUrls={comment.bodyImageUrls}
           variant="document"
           githubRepo={ctx.markdownGitHubRepo}
           className="min-w-0 max-w-full overflow-hidden break-words text-[13px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"

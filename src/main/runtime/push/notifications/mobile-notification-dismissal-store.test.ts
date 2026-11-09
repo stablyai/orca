@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -87,7 +87,7 @@ it('lists only live deliveries across a restart', async () => {
   expect(restarted.liveDeliveries()[0]).toMatchObject({ workspaceExecutionHostId: null })
 })
 
-it('keeps a record whose origin a newer build wrote, losing only that origin', () => {
+it("imports an older build's file, keeping a record whose origin it cannot read", async () => {
   const h = fixture()
   const origin = {
     scope: {
@@ -114,7 +114,12 @@ it('keeps a record whose origin a newer build wrote, losing only that origin', (
       }
     ])
   )
-  expect(new MobileNotificationDismissalStore(h.path).liveDeliveries()).toEqual([
+  const imported = new MobileNotificationDismissalStore(h.path)
+  await imported.close()
+  expect(existsSync(join(h.path, 'mobile-notification-dismissals.json'))).toBe(false)
+  const restarted = new MobileNotificationDismissalStore(h.path)
+  stores.push(restarted)
+  expect(restarted.liveDeliveries()).toEqual([
     shown,
     expect.objectContaining({ notificationId: 'known', structuredOrigin: expect.anything() })
   ])
@@ -123,7 +128,7 @@ it('keeps a record whose origin a newer build wrote, losing only that origin', (
 it('retains in-memory delivery and retirement when durable writes fail', async () => {
   const h = fixture()
   const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-  mkdirSync(join(h.path, 'mobile-notification-dismissals.json'))
+  mkdirSync(join(h.path, 'mobile-notification-dismissals.db'))
   h.store.record({ ...alert, ...shown })
   expect(h.store.liveDeliveries()).toHaveLength(1)
   h.store.record({
@@ -144,10 +149,11 @@ it('retains in-memory delivery and retirement when durable writes fail', async (
 
 it('saves records synchronously from the moment close() is called, ahead of the queued async write', async () => {
   const h = fixture()
-  const savedIds = () =>
-    new MobileNotificationDismissalStore(h.path)
-      .liveDeliveries()
-      .map((entry) => entry.notificationId)
+  const savedIds = () => {
+    const reader = new MobileNotificationDismissalStore(h.path)
+    void reader.close()
+    return reader.liveDeliveries().map((entry) => entry.notificationId)
+  }
   h.store.record({ ...alert, ...shown, notificationId: 'before-close' })
   const closing = h.store.close()
   h.store.record({ ...alert, ...shown, notificationId: 'while-closing' })

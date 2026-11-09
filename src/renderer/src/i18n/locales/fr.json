@@ -3960,6 +3960,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Activer"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Dimensionné pour une autre fenêtre",
+            "fitHere": "Ajuster ici"
           }
         }
       },
@@ -16231,6 +16235,7 @@
           "kernelStartFailed": "Le kernel n'a pas pu démarrer.",
           "noPython": "Python est introuvable sur cet ordinateur. Installez-le depuis [python.org](https://www.python.org/downloads/), puis réexécutez la cellule.",
           "kernelDied": "Le kernel est mort.",
+          "outputTruncated": "Sortie tronquée : Orca a conservé le début de la sortie de cette cellule et supprimé le reste. Pour tout garder, écrivez-la plutôt dans un fichier.",
           "localOnly": "Les cellules du notebook ne peuvent s'exécuter que pour des fichiers sur cet ordinateur.",
           "pythonOnly": "Seuls les notebooks Python peuvent s'exécuter dans Orca.",
           "commandCopied": "Commande copiée.",
@@ -20215,6 +20220,7 @@
         "copyIdentity": "Copier {{value0}}",
         "folder": "Dossier",
         "mainCheckout": "Copie principale",
+        "turnWorking": "L’agent de ce chat est en cours d’exécution. Changez de branche une fois son tour terminé.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "Le chat de cet agent n’est pas encore disponible sous Windows. Ouvrez-le plutôt dans un terminal.",
@@ -21651,6 +21657,7 @@
       "switch": "Changer de branche : {{branch}}",
       "search": "Rechercher des branches",
       "recover": "Passer à {{branch}}",
+      "copy": "Copier le nom de la branche",
       "create": "Créer la branche {{name}} à partir de {{branch}}",
       "open": "Ouvrir l’espace de travail",
       "occupied": "Extraite dans {{path}}",

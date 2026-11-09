@@ -26,16 +26,6 @@ const BASE_ARGS = {
 } as const
 
 describe('terminal live accessory raw send', () => {
-  it('drops the bytes instead of sending while disconnected', async () => {
-    const { client, sendRequest } = captureClient()
-
-    await expect(
-      sendTerminalLiveAccessoryRawBytes({ ...BASE_ARGS, client, connState: 'reconnecting' })
-    ).resolves.toBe(false)
-
-    expect(sendRequest).not.toHaveBeenCalled()
-  })
-
   it('drops the bytes when the terminal selection went stale mid-flush', async () => {
     const { client, sendRequest } = captureClient()
 

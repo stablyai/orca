@@ -3,21 +3,22 @@ import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { useResponsiveLayout } from '../../layout/responsive-layout'
 import { spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
+import type { AgentListRowHandlers } from '../../agents/MobileAgentListRows'
 import type { HostCatalogEntry } from '../../transport/hosts/host-profile'
-import type { HomeJumpBackInRow } from '../../worktree/home-jump-back-in'
 import { MobileHomeAppUpdateCard } from '../MobileHomeAppUpdateCard'
 import { MobileHomeEmptyState } from '../MobileHomeEmptyState'
 import { MobileHomeHostList } from '../MobileHomeHostList'
-import { MobileHomeJumpBackIn } from '../MobileHomeJumpBackIn'
+import { MobileHomeNeedsYou } from '../MobileHomeNeedsYou'
 import { MobileHomeTasksSection } from '../MobileHomeTasksSection'
 import type { MobileHomeData } from '../use-mobile-home-data'
 import { MobileHomeTabHeader } from './MobileHomeTabHeader'
 
-/** Home's first tab: agents to get back to, the desktops, and Tasks. */
+/** Home's first tab: agents that need you, the desktops, and Tasks. */
 export function MobileHomeFeedTab(props: {
   data: MobileHomeData
   bottomInset: number
-  onOpenWorktree: (row: HomeJumpBackInRow) => void
+  agentHandlers: AgentListRowHandlers
+  onSeeAllAgents: () => void
   onOpenHost: (host: HostCatalogEntry) => void
   onOpenHostActions: (host: HostCatalogEntry) => void
   onPairDesktop: () => void
@@ -41,7 +42,7 @@ export function MobileHomeFeedTab(props: {
       />
     )
   }
-  const hasAgents = data.jumpBackInRows.length > 0
+  const needsYou = data.agentsNeedingYou.length > 0
   return (
     <>
       {title}
@@ -52,20 +53,22 @@ export function MobileHomeFeedTab(props: {
           isWideLayout && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
         ]}
       >
-        <MobileHomeJumpBackIn
-          rows={data.jumpBackInRows}
-          hosts={data.sortedHostCatalog}
-          first
-          onOpen={props.onOpenWorktree}
+        <MobileHomeNeedsYou
+          rows={data.agentsNeedingYou}
+          hosts={data.sortedHosts}
+          now={data.agentList.now}
+          handlers={props.agentHandlers}
+          onSeeAll={props.onSeeAllAgents}
         />
         <MobileHomeHostList
           autoConnectHostIds={data.autoConnectHostIds}
-          first={!hasAgents}
+          first={!needsYou}
           hostAttempts={data.hostAttempts}
           hostLastConnected={data.hostLastConnected}
           hostConnections={data.hostConnections}
           hosts={data.sortedHostCatalog}
           hostStates={data.hostStates}
+          needsYouByHost={data.needsYouByHost}
           worktreeInfo={data.worktreeInfo}
           onOpen={props.onOpenHost}
           onOpenActions={props.onOpenHostActions}

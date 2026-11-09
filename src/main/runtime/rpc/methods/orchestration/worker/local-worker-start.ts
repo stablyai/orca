@@ -1,4 +1,5 @@
 import { createLocalWorkerStartDispatch } from './local-worker-start-dispatch'
+import { refuseClaimedWorkerTerminal } from '../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 import { waitForWorkerAgentReady } from '../../../../terminal/wait/launched-agent-composer-readiness'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
@@ -130,6 +131,8 @@ export async function startLocalWorker(args: {
     )
   }
 
+  // Synchronous through the Dispatch insert, so nothing else claims the terminal in between.
+  refuseClaimedWorkerTerminal(db, params.terminal, runtime, args.followUp?.of)
   const run = args.bindRun()
   const started = createLocalWorkerStartDispatch(args, {
     params,
