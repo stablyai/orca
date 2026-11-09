@@ -31,6 +31,9 @@ const VARIABLE_REWRITES: [RegExp, string][] = [
   [/\$\{(?:local|container)Env:([A-Za-z_][A-Za-z0-9_]*)\}/g, '${$1}']
 ]
 
+const UNREWRITTEN_VARIABLE =
+  /\$\{(?:(?:local|container)Env:|devcontainerId\}|(?:container|local)WorkspaceFolder)/
+
 export async function inspectDevcontainerConfig(
   readFile: SetupScriptImportFileRead
 ): Promise<SetupScriptImportCandidate | null> {
@@ -101,7 +104,12 @@ function lifecycleCommandToShell(
 
 function singleCommandToShell(value: unknown): string {
   if (typeof value === 'string') {
-    return normalizeSetupScriptImportCommand(rewriteDevcontainerVariables(value))
+    const rewritten = rewriteDevcontainerVariables(value)
+    // Leftover spec variables (e.g. ${localEnv:X:default}) are a bash "bad substitution" error.
+    if (UNREWRITTEN_VARIABLE.test(rewritten)) {
+      return ''
+    }
+    return normalizeSetupScriptImportCommand(rewritten)
   }
   if (!Array.isArray(value) || value.length === 0) {
     return ''

@@ -119,6 +119,7 @@ describe('devcontainer.json', () => {
           "server": "npm install --prefix \${containerWorkspaceFolder}/server",
           "client": ["npm", "install", "--prefix", "client"],
           "quoted": ["sh", "-c", "echo hi"],
+          "token": "npm config set token \${localEnv:NPM_TOKEN:none}",
         },
         "onCreateCommand": ["git", "lfs", "pull"],
       }`
@@ -126,7 +127,7 @@ describe('devcontainer.json', () => {
     expect(candidate).toMatchObject({
       setup:
         'git lfs pull\nnpm install --prefix ${ORCA_WORKTREE_PATH}/server\nnpm install --prefix client',
-      unsupportedFields: ['postCreateCommand.quoted']
+      unsupportedFields: ['postCreateCommand.quoted', 'postCreateCommand.token']
     })
   })
 })

@@ -31,7 +31,9 @@ export function parseJsoncObject(content: string | null): Record<string, unknown
   try {
     const errors: ParseError[] = []
     // Editors on Windows often save a BOM, which the parser otherwise reports as an error.
-    const value: unknown = parseJsonc(content.replace(/^﻿/, ''), errors, {
+    // A charCode check, not a regex literal: bundlers emit that as a raw BOM, which the orcad bundle rejects.
+    const text = content.charCodeAt(0) === 0xfeff ? content.slice(1) : content
+    const value: unknown = parseJsonc(text, errors, {
       allowTrailingComma: true,
       disallowComments: false
     })
