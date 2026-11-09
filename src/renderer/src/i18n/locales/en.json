@@ -484,13 +484,27 @@
         "never": "Never for this site",
         "notNow": "Not now",
         "update": "Update",
-        "save": "Save"
+        "save": "Save",
+        "saveChip": "Save password",
+        "updateChip": "Update password"
       },
       "fill": {
         "noUsername": "(no username)",
         "title": "Saved logins",
         "otherLogins": "Other logins on this site"
       }
+    },
+    "toolbar": {
+      "annotate": "Annotate",
+      "grab": "Grab",
+      "draw": "Draw",
+      "annotateOptions": "More annotate tools",
+      "copyAllNotes": "Copy all notes",
+      "clearNotes": "Clear notes",
+      "resetZoom": "Reset zoom",
+      "resetViewport": "Reset viewport size",
+      "findOnPage": "Find on page",
+      "profile": "Profile"
     }
   },
   "editor": {
@@ -17602,10 +17616,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Grab page context for agents",
-                      "body": "Use the grab tool to copy a page element's context for agents."
-                    },
                     "annotate": {
                       "title": "Mark design feedback in place",
                       "body": "Annotate elements and send those notes to an agent."
@@ -17743,7 +17753,6 @@
             "244266c122": "Import…",
             "e52a955e6f": "You can always find this in Settings > Browser.",
             "4f5ffaa6a1": "Import browser data",
-            "b24fef25be": "Import",
             "02e89014c5": "Imported {{value0}} cookies from {{value1}}{{value2}}.",
             "d40d584769": "Imported {{value0}} cookies from file."
           },
@@ -17805,7 +17814,6 @@
             "4328a0a062": "Grab failed: {{value0}}",
             "759f32af29": "Downloading",
             "4300f38145": "Downloading from {{value0}}{{value1}}",
-            "acbe79fd01": "Grab page element ({{value0}})",
             "cc4a071d3a": "Annotate page element ({{value0}})",
             "572046436a": "Remote browser",
             "b313a7275b": "Opening remote browser",
