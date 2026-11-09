@@ -5,6 +5,7 @@
     versionCode: 1000000,
     versionName: '0.1.0',
     icon: '$media:app_icon',
-    label: '$string:app_name'
+    label: '$string:app_name',
+    configuration: '$profile:configuration'
   }
 }
