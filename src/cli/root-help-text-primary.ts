@@ -216,6 +216,8 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '  tab profile clone         Clone a browser tab into another profile',
   '  tab switch                Switch the active browser tab by --index or --page',
   '  tab close                 Close a browser tab by --index/--page or the current tab',
+  '  extension list            List installed browser extensions',
+  '  extension reload          Reload an unpacked extension across enabled profiles',
   '  snapshot                  Accessibility snapshot with element refs (e.g. @e1, @e2)',
   '  goto                      Navigate the active tab to --url',
   '  click                     Click element by --element ref',

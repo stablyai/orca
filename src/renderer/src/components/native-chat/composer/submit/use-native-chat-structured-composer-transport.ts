@@ -174,6 +174,7 @@ export function useNativeChatStructuredComposerTransport(args: {
       sessionCommands: controller.sessionCommands,
       refreshCommands: controller.refreshCommands,
       setCommandsMenuOpen: controller.setCommandsMenuOpen,
+      commandsChecking: controller.commandsChecking,
       acceptsImages,
       contextUsage: controller.contextUsage,
       worktreeId,

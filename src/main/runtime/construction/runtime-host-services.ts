@@ -276,7 +276,8 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
     getStore: () => this.store,
     listRepos: () => this.listRepos(),
     addRepo: (path, kind, hostId) => this.repositoryRegistrations.add(path, kind, hostId),
-    cloneRepo: (url, destination, hostId) => this.repositoryClones.clone(url, destination, hostId),
+    cloneRepo: (args) =>
+      this.repositoryClones.clone(args.url, args.destination, args.hostId, args.folderName),
     resolveRepositoryMetadata: (repo) => this.repositoryForkBackfill.resolve(repo),
     enqueueRepositoryMetadata: (repos) => void this.repositoryForkBackfill.enqueue(repos),
     invalidateResolvedWorktrees: () => this.invalidateResolvedWorktreeCache(),

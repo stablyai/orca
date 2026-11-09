@@ -2189,8 +2189,7 @@
       "copyPathLabel": "複製 Markdown 路徑",
       "copySource": "複製 Markdown 原始碼",
       "discard": "放棄",
-      "dismissKeyboard": "收起鍵盤",
-      "dismissKeyboardHint": "隱藏螢幕鍵盤，並保持 Markdown 編輯器開啟。",
+      "previewTruncated": "預覽內容已截斷。",
       "readOnly": "唯讀"
     },
     "nativeChatAttachActions": {

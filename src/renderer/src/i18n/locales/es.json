@@ -5556,7 +5556,10 @@
           "69f5b5380d": "Clonando...",
           "cloneOnHostDescription": "Introduce la URL de Git y elige dónde clonarlo en {{value0}}.",
           "cloneParentFolder": "Carpeta padre",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Nombre de la carpeta",
+          "cloneFolderTakenByRepo": "\"{{value0}}\" en esta carpeta ya es otro repositorio, así que este clon necesita su propia carpeta.",
+          "cloneFolderNotEmpty": "\"{{value0}}\" ya existe en esta carpeta, así que este clon necesita su propia carpeta."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Cerrar",
@@ -19231,6 +19234,7 @@
         "noCommandsOrSkills": "No hay comandos o habilidades coincidentes",
         "commands": "Comandos",
         "skills": "Habilidades",
+        "checkingSkills": "Buscando habilidades nuevas…",
         "loadingSkills": "Cargando habilidades…",
         "clearDescription": "Borrar el contexto de la conversación",
         "skillsUnavailableHost": "Las habilidades no se pueden listar en los chats SSH",

@@ -4,7 +4,7 @@ import { useAppStore } from '@/store'
 import {
   getClaudeAccountErrorDescription,
   isClaudeAccountCancellation
-} from '@/components/settings/accounts/accounts-pane-action-errors'
+} from './provider-accounts/provider-account-action-errors'
 
 /** Sign in again via hidden claude auth login in the account folder; toast failures and keep cancellation silent. */
 export async function signInToClaudeAccount(accountId: string): Promise<boolean> {

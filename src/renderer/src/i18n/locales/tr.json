@@ -5957,7 +5957,10 @@
           "69f5b5380d": "Klonlanıyor...",
           "cloneOnHostDescription": "Git URL'sini girin ve {{value0}} üzerinde nereye klonlanacağını seçin.",
           "cloneParentFolder": "Üst klasör",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Klasör adı",
+          "cloneFolderTakenByRepo": "Bu klasördeki \"{{value0}}\" zaten farklı bir depo, bu yüzden bu klonun kendi klasörü olmalı.",
+          "cloneFolderNotEmpty": "Bu klasörde \"{{value0}}\" zaten var, bu yüzden bu klonun kendi klasörü olmalı."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Kapat",
@@ -19469,6 +19472,7 @@
         "noCommands": "Eşleşen komut yok",
         "commands": "Komutlar",
         "skills": "Beceriler",
+        "checkingSkills": "Yeni beceriler denetleniyor…",
         "loadingSkills": "Beceriler yükleniyor...",
         "skillsLoaded": "Beceriler yüklendi",
         "clearDescription": "Konuşma bağlamını temizle",

@@ -65,6 +65,7 @@ export type RuntimeRepositoryCommandSurface = {
   addRepo: RuntimeRepositoryRegistrationController['add']
   createRepo: RuntimeRepositoryRegistrationController['create']
   cloneRepo: RuntimeRepositoryCloneController['clone']
+  checkCloneTarget: RuntimeRepositoryCloneController['checkTarget']
   showRepo: RuntimeRepositorySettingsController['show']
   setRepoBaseRef: RuntimeRepositorySettingsController['setBaseRef']
   updateRepo: RuntimeRepositorySettingsController['update']
@@ -159,6 +160,7 @@ export function installRuntimeRepositoryCommandSurface(
       void target.repositoryForkBackfill.enqueue([repo])
       return repo
     },
+    checkCloneTarget: clones.checkTarget.bind(clones),
     showRepo: settings.show.bind(settings),
     setRepoBaseRef: settings.setBaseRef.bind(settings),
     updateRepo: settings.update.bind(settings),

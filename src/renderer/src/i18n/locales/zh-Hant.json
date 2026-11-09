@@ -5827,7 +5827,10 @@
           "69f5b5380d": "複製中...",
           "cloneOnHostDescription": "輸入 Git URL，並選擇要在 {{value0}} 上複製到的位置。",
           "cloneParentFolder": "父資料夾",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "資料夾名稱",
+          "cloneFolderTakenByRepo": "此資料夾中的「{{value0}}」已是另一個儲存庫，因此這次複製需要使用獨立的資料夾。",
+          "cloneFolderNotEmpty": "此資料夾中已存在「{{value0}}」，因此這次複製需要使用獨立的資料夾。"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "關閉",
@@ -19223,6 +19226,7 @@
         "noCommands": "沒有符合的命令",
         "commands": "命令",
         "skills": "技能",
+        "checkingSkills": "正在檢查新技能…",
         "loadingSkills": "正在載入技能…",
         "skillsLoaded": "技能已載入",
         "clearDescription": "清除對話上下文",
