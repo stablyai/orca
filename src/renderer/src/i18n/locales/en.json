@@ -24393,6 +24393,7 @@
     }
   },
   "checks": {
+    "gitlabAllowedFailure": "Allowed to fail",
     "rerunUnsuccessful": "Rerun unsuccessful"
   },
   "gitGraph": {

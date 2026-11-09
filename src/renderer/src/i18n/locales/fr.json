@@ -23979,5 +23979,8 @@
     "branchName": "Nom de la branche",
     "invalidBranchName": "Ce nom de branche n’est pas valide. Choisissez un autre nom.",
     "createBranchFailed": "Orca n’a pas pu créer la branche. Vérifiez ce dépôt dans un terminal, puis réessayez."
+  },
+  "checks": {
+    "gitlabAllowedFailure": "Échec autorisé"
   }
 }

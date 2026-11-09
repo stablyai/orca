@@ -23572,5 +23572,8 @@
     "branchName": "Branch-Name",
     "invalidBranchName": "Dieser Branchname ist ungültig. Wähle einen anderen Namen.",
     "createBranchFailed": "Orca konnte den Branch nicht erstellen. Prüfe dieses Repository im Terminal und versuche es erneut."
+  },
+  "checks": {
+    "gitlabAllowedFailure": "Fehlschlag erlaubt"
   }
 }
