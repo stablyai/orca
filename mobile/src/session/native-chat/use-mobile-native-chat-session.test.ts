@@ -584,9 +584,9 @@ describe('useMobileNativeChatSession after a relaunch', () => {
     })
     const subscribe = vi.fn<RpcClient['subscribe']>(() => () => {})
     const client = stubRpcClient({ subscribe })
-    let state: MobileNativeChatSession | null = null
+    const seen: { state: MobileNativeChatSession | null } = { state: null }
     function Harness(): null {
-      state = useMobileNativeChatSession({
+      seen.state = useMobileNativeChatSession({
         client,
         sourceIdentity: 'host-a\0relaunched',
         agent: 'claude',
@@ -603,7 +603,7 @@ describe('useMobileNativeChatSession after a relaunch', () => {
     expect(subscribe.mock.calls[0]?.[1]).toMatchObject({
       resumeAfter: { id: 'm2', transcriptOrder: 200, timestamp: 1 }
     })
-    expect(state?.messages.map((entry) => entry.id)).toEqual(['m1', 'm2'])
-    expect(state?.savedAt).toBe(1_700_000_000_000)
+    expect(seen.state?.messages.map((entry) => entry.id)).toEqual(['m1', 'm2'])
+    expect(seen.state?.savedAt).toBe(1_700_000_000_000)
   })
 })
