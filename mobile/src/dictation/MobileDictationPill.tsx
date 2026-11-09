@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useContext, useEffect } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CircleAlert, Laptop, Smartphone } from 'lucide-react-native'
@@ -27,6 +27,7 @@ import { composerInputStyles } from '../components/composer-input/composer-input
 import {
   useMobileDictationHost,
   useMobileDictationHostLive,
+  MobileDictationPillContext,
   type MobileDictationHostToast
 } from './mobile-dictation-host-context'
 
@@ -188,13 +189,17 @@ function MobileDictationToast({
 }
 
 // Floats over every screen of the host document, above the bottom inset.
-export function MobileDictationPillLayer(): React.JSX.Element {
+export function MobileDictationPillLayer(): React.JSX.Element | null {
   useMobileColorScheme()
   useMobileTranslation()
   const insets = useSafeAreaInsets()
   const host = useMobileDictationHost()
   const dictation = useMobileDictationHostLive(host)
-  const { stop, pill } = host
+  const { stop } = host
+  const pill = useContext(MobileDictationPillContext)
+  if (!pill) {
+    return null
+  }
   // Above the home indicator, or above a screen's bottom bar when it reported one.
   const pillBottom = Math.max(insets.bottom + spacing.md, pill.clearance + spacing.sm)
   return (

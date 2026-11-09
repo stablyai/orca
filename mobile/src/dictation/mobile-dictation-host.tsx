@@ -13,6 +13,7 @@ import { dictationAwayCopy } from './mobile-dictation-away-copy'
 import {
   MobileDictationClearanceContext,
   MobileDictationHostContext,
+  MobileDictationPillContext,
   type MobileDictationHost,
   type MobileDictationHostToast,
   type MobileDictationOwner,
@@ -25,23 +26,19 @@ export {
   type MobileDictationScreen
 } from './mobile-dictation-host-context'
 
-// The owner's screen: the one in front when two show its session, else the first; startingOnly asks for the screen that started it.
+// The owner's screen; startingOnly asks only for the screen that started it.
 function screenFor(
   screens: ReadonlySet<MobileDictationScreen>,
   owner: MobileDictationOwner | null,
   startingOnly: boolean
 ): MobileDictationScreen | null {
-  let found: MobileDictationScreen | null = null
-  for (const screen of screens) {
-    if (!owner || screen.sessionKey !== owner.sessionKey) {
-      continue
-    }
-    if (startingOnly ? screen.instance === owner.instance : screen.shown()) {
-      return screen
-    }
-    found ??= startingOnly ? null : screen
+  const matches = [...screens].filter((screen) => owner && screen.sessionKey === owner.sessionKey)
+  const starting = matches.find((screen) => screen.instance === owner?.instance) ?? null
+  if (startingOnly) {
+    return starting
   }
-  return found
+  // Else the one in front, then the one that started it, then the newest copy of its session.
+  return matches.find((screen) => screen.shown()) ?? starting ?? matches.at(-1) ?? null
 }
 
 function isUnderway(dictation: UseMobileDictationResult): boolean {
@@ -238,26 +235,16 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
       subscribe,
       getDictation,
       getIdleDictation,
-      getUnderway,
-      pill
+      getUnderway
     }),
-    [
-      attach,
-      getDictation,
-      getIdleDictation,
-      getUnderway,
-      owner,
-      pill,
-      refresh,
-      start,
-      stop,
-      subscribe
-    ]
+    [attach, getDictation, getIdleDictation, getUnderway, owner, refresh, start, stop, subscribe]
   )
   return (
     <MobileDictationClearanceContext.Provider value={setClearance}>
       <MobileDictationHostContext.Provider value={value}>
-        {children}
+        <MobileDictationPillContext.Provider value={pill}>
+          {children}
+        </MobileDictationPillContext.Provider>
       </MobileDictationHostContext.Provider>
     </MobileDictationClearanceContext.Provider>
   )

@@ -52,19 +52,22 @@ export type MobileDictationHost = {
   readonly getIdleDictation: () => UseMobileDictationResult
   // Starting, recording, finishing, or a failure kept for Retry.
   readonly getUnderway: () => boolean
-  // The floating pill: shown while the dictation's own screen is not, with the host's toast.
-  readonly pill: {
-    readonly away: boolean
-    readonly title: string
-    readonly open: () => void
-    readonly toast: MobileDictationHostToast | null
-    readonly clearToast: () => void
-    // The tallest bottom bar a screen reported, so the pill floats above it.
-    readonly clearance: number
-  }
+}
+
+// The floating pill's own state, apart from the host's so a bar height or toast re-renders only the pill.
+export type MobileDictationPill = {
+  // Shown while the dictation's own screen is not.
+  readonly away: boolean
+  readonly title: string
+  readonly open: () => void
+  readonly toast: MobileDictationHostToast | null
+  readonly clearToast: () => void
+  // The tallest bottom bar a screen reported, so the pill floats above it.
+  readonly clearance: number
 }
 
 export const MobileDictationHostContext = createContext<MobileDictationHost | null>(null)
+export const MobileDictationPillContext = createContext<MobileDictationPill | null>(null)
 
 export function useMobileDictationHost(): MobileDictationHost {
   const host = useContext(MobileDictationHostContext)

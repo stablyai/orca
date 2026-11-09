@@ -1,5 +1,5 @@
 // Mount the real composing hooks over native capture: refused starts and lost transcripts were in how the session hook and dictation hook meet, which isolated handler tests would miss.
-import { createElement, useRef } from 'react'
+import { createElement, useContext, useRef } from 'react'
 import { act } from 'react-test-renderer'
 import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -115,6 +115,10 @@ import {
   MobileDictationHostProvider,
   useMobileDictationHost
 } from '../dictation/mobile-dictation-host'
+import {
+  MobileDictationPillContext,
+  type MobileDictationPill
+} from '../dictation/mobile-dictation-host-context'
 
 type Model = ReturnType<typeof useMobileSessionNativeChatDictation>
 
@@ -124,7 +128,7 @@ const typeIntoTerminal = async (_handle: string, text: string): Promise<boolean>
   return true
 }
 
-type Host = ReturnType<typeof useMobileDictationHost>
+type Host = ReturnType<typeof useMobileDictationHost> & { pill: MobileDictationPill | null }
 
 function mount(
   client: FakeRpcClient,
@@ -136,7 +140,7 @@ function mount(
     screen: true
   }
   function HostProbe(): null {
-    held.host = useMobileDictationHost()
+    held.host = { ...useMobileDictationHost(), pill: useContext(MobileDictationPillContext) }
     return null
   }
 
@@ -368,11 +372,11 @@ describe('a dictation whose session screen was left', () => {
     const mounted = await startRecording(rpc)
     mounted.leave()
     expect(mounted.host().getDictation().isRecording).toBe(true)
-    expect(mounted.host().pill.away).toBe(true)
+    expect(mounted.host().pill?.away).toBe(true)
     act(() => mounted.host().stop())
     await settle(rpc, 'ship it')
     expect(seen.chatWrites).toEqual([['chat-a', 'ship it']])
-    expect(mounted.host().pill.toast?.message).toBe('Inserted in Claude Code')
-    expect(mounted.host().pill.toast?.open).toBeTypeOf('function')
+    expect(mounted.host().pill?.toast?.message).toBe('Inserted in Claude Code')
+    expect(mounted.host().pill?.toast?.open).toBeTypeOf('function')
   })
 })
