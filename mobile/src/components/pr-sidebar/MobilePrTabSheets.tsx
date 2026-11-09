@@ -202,8 +202,17 @@ function PrEditTextSheet({
     if (!tab.ownsSheet(request)) {
       return
     }
-    if (await textAction.save(field, draft, current)) {
-      setDraft(base)
+    const sent = draft
+    if (await textAction.save(field, sent, current)) {
+      // Only the saved edit; one typed since in a reopened sheet stays.
+      let saved = false
+      setKeptText((text) => {
+        saved = text === sent
+        return saved ? '' : text
+      })
+      if (saved) {
+        setKeptAgainst('')
+      }
       tab.closeSheetIf(request)
     }
   }

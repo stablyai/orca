@@ -1,13 +1,11 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, type SetStateAction } from 'react'
 import type { DiffComment } from '../../../../src/shared/diff-comment-types'
 import { useDurableDraftField } from '../../drafts/durable-draft-fields'
-import type { ComposerState } from './mobile-diff-review-screen-model'
 import type { ReviewSheet, ReviewSheetIntents } from './mobile-diff-review-sheets'
 
 type NoteDraftInput = {
   // Where the new note waits through leaving the review and the app being killed.
   draftKey: string
-  composer: ComposerState | null
   openSheet: ReviewSheetIntents['openSheet']
 }
 
@@ -16,13 +14,24 @@ type NewNoteSheet =
   | { kind: 'composer'; composer: { mode: 'create'; lineNumber: number } }
 
 /** The review's unsaved new note: kept across Cancel, reopen and picking other lines, cleared only once saved. */
-export function useMobileDiffReviewNoteDraft({ draftKey, composer, openSheet }: NoteDraftInput) {
+export function useMobileDiffReviewNoteDraft({ draftKey, openSheet }: NoteDraftInput) {
   const [newNote, setNewNote] = useDurableDraftField(draftKey, 'note')
-  // An edit borrows the text field with its own text; the new note is untouched underneath.
-  const [editBody, setEditBody] = useState('')
-  const editing = composer?.mode === 'edit'
+  // An edit borrows the text field with its own text, until a new-note sheet opens; the new note is untouched
+  // underneath. Kept past the edit sheet closing, so its text stays while it slides away.
+  const [editBody, setEditBody] = useState<string | null>(null)
+  const setEditText = useCallback(
+    (next: SetStateAction<string>) =>
+      setEditBody((current) => (typeof next === 'function' ? next(current ?? '') : next)),
+    []
+  )
 
-  const openNewNoteSheet = useCallback((sheet: NewNoteSheet) => openSheet(sheet), [openSheet])
+  const openNewNoteSheet = useCallback(
+    (sheet: NewNoteSheet) => {
+      setEditBody(null)
+      openSheet(sheet)
+    },
+    [openSheet]
+  )
 
   // The user may have moved on while a note was saving; drop only the text that was saved.
   const clearSavedNote = useCallback(
@@ -39,8 +48,8 @@ export function useMobileDiffReviewNoteDraft({ draftKey, composer, openSheet }: 
   )
 
   return {
-    composerBody: editing ? editBody : newNote,
-    setComposerBody: editing ? setEditBody : setNewNote,
+    composerBody: editBody ?? newNote,
+    setComposerBody: editBody === null ? setNewNote : setEditText,
     openNewNoteSheet,
     openEditComposer,
     clearSavedNote

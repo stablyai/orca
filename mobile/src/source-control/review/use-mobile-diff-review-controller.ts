@@ -80,7 +80,6 @@ export function useMobileDiffReviewController(input: ControllerInput) {
   const executionHost = useWorkspaceExecutionHost()
   const noteDraft = useMobileDiffReviewNoteDraft({
     draftKey: workspaceDraftRowKey('reviewNote', { hostId, executionHost, worktreeId }, ''),
-    composer,
     openSheet: sheetIntents.openSheet
   })
   const { composerBody, setComposerBody } = noteDraft

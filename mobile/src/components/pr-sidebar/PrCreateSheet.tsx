@@ -42,13 +42,15 @@ import { useWorkspaceExecutionHost } from '../../navigation/workspace-execution-
 // The provider rides along so a kept draft reopens without asking the host again.
 type Fields = { title: string; body: string; base: string; draft: boolean; provider: string }
 
-// Every edit keeps the whole form. The provider is never empty, so it is what marks a kept draft.
+function keepCreateField(key: string, patch: Partial<Fields>): void {
+  for (const [name, value] of Object.entries(patch)) {
+    updateDurableDraftField(key, name, value === true ? 'yes' : value === false ? '' : value)
+  }
+}
+
+// The first edit keeps the whole form. The provider is never empty, so it is what marks a kept draft.
 function keepCreateFields(key: string, fields: Fields | null): void {
-  updateDurableDraftField(key, 'provider', fields?.provider ?? '')
-  updateDurableDraftField(key, 'title', fields?.title ?? '')
-  updateDurableDraftField(key, 'body', fields?.body ?? '')
-  updateDurableDraftField(key, 'base', fields?.base ?? '')
-  updateDurableDraftField(key, 'draft', fields?.draft ? 'yes' : '')
+  keepCreateField(key, fields ?? { provider: '', title: '', body: '', base: '', draft: false })
 }
 
 function useKeptCreateFields(key: string | null): Fields | null {
@@ -137,9 +139,19 @@ export function PrCreateSheet({ tab }: { tab: MobilePrTab }) {
   const title = t('pullRequest.createSheet.title', 'Create {{reviewLabel}}', {
     reviewLabel: copy.reviewLabel
   })
-  // The first edit turns the seeded fields into a kept draft.
+  // The first edit turns the seeded fields into a kept draft. Later ones write only what they change, so a
+  // late Write with AI answer can't undo a toggle made meanwhile.
+  const keptRef = useRef(kept)
+  useLayoutEffect(() => {
+    keptRef.current = kept
+  })
   const update = (patch: Partial<Fields>) => {
-    if (keptKey && fields) {
+    if (!keptKey || !fields) {
+      return
+    }
+    if (keptRef.current) {
+      keepCreateField(keptKey, patch)
+    } else {
       keepCreateFields(keptKey, { ...fields, ...patch })
     }
   }
