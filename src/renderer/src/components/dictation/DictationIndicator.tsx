@@ -8,20 +8,28 @@ import { KEEPS_FOCUS_ATTRIBUTE } from '@/lib/focus-keeping-press'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { Check, Loader2, X } from 'lucide-react'
+import { Check, Loader2 } from 'lucide-react'
 import { isDictationPillShown } from '../../../../shared/dictation-session-machine'
+import { CLOUD_DICTATION_MAX_SECONDS } from '../../../../shared/rpc-contract/speech-params'
+import type { SpeechModelManifest } from '../../../../shared/speech-types'
 import { dispatchDictationControl } from './dictation-control-events'
 import { DictationGrapes } from './DictationGrapes'
 import { useDictationMeter } from './dictation-meter-store'
 import { useDictationPillBox, type DictationPillAnchor } from './dictation-pill-anchor'
+import { DictationPillCloseButton, DictationPillFailure } from './DictationPillFailure'
+import type { DictationFailureKind } from './dictation-toasts'
 
 // The finish button turns into a spinner only when finishing is slow enough to notice.
 const FINISH_SPINNER_DELAY_MS = 200
+// The timer warns a minute before cloud dictation stops.
+const CLOUD_LIMIT_WARNING_SECONDS = CLOUD_DICTATION_MAX_SECONDS - 60
 
 type DictationIndicatorProps = {
   /** The mic is recording (and buffering) while the speech engine is still starting. */
   captureLive: boolean
   anchor: DictationPillAnchor | null
+  /** Set while the error pill shows a failed recording that can be retried. */
+  failure: DictationFailureKind | null
 }
 
 export function DictationIndicator(props: DictationIndicatorProps) {
@@ -52,6 +60,31 @@ function useElapsedSeconds(running: boolean): number {
     })
   }, [running])
   return seconds
+}
+
+// The catalog never changes while the app runs; the paired web client has none and its host caps itself.
+let catalogRequest: Promise<SpeechModelManifest[]> | null = null
+
+function useIsCloudModel(): boolean {
+  const modelId = useAppStore((state) => state.settings?.voice?.sttModel)
+  const [cloud, setCloud] = useState(false)
+  useEffect(() => {
+    let current = true
+    if (!catalogRequest) {
+      catalogRequest = Promise.resolve()
+        .then(() => window.api.speech.getCatalog())
+        .catch(() => [])
+    }
+    void catalogRequest.then((catalog) => {
+      if (current) {
+        setCloud(catalog.some((model) => model.id === modelId && model.provider === 'openai'))
+      }
+    })
+    return () => {
+      current = false
+    }
+  }, [modelId])
+  return cloud
 }
 
 function useDelayedFlag(on: boolean, delayMs: number): boolean {
@@ -92,23 +125,29 @@ function DictationPillMeter({ recording, status }: { recording: boolean; status:
 const keepFocus = (event: React.MouseEvent): void => event.preventDefault()
 const keepFocusProps = { [KEEPS_FOCUS_ATTRIBUTE]: '', onMouseDown: keepFocus }
 
-function DictationPill({ captureLive, anchor }: DictationIndicatorProps) {
+function DictationPill({ captureLive, anchor, failure }: DictationIndicatorProps) {
   const t = useTranslate()
   const dictationState = useAppStore((state) => state.dictationState)
   const partialTranscript = useAppStore((state) => state.partialTranscript)
   const isHoldMode = useAppStore((state) => state.settings?.voice?.dictationMode === 'hold')
   const shortcut = useShortcutKeyDetails('voice.dictation')
   const box = useDictationPillBox(anchor)
+  const cloudModel = useIsCloudModel()
 
   const finishing = dictationState === 'stopping'
   const recording = dictationState === 'listening' || (dictationState === 'starting' && captureLive)
   // Counts recorded time, so it waits for the mic to open.
   const seconds = useElapsedSeconds(recording)
   const showSpinner = useDelayedFlag(finishing, FINISH_SPINNER_DELAY_MS)
+  const nearCloudLimit = cloudModel && seconds >= CLOUD_LIMIT_WARNING_SECONDS
+  const failedKind = dictationState === 'error' ? failure : null
   const transcript = partialTranscript.trim()
   const status = finishing
     ? t('auto.components.dictation.DictationIndicator.finishing', 'Finishing…')
     : t('auto.components.dictation.DictationIndicator.listening', 'Listening…')
+  const announced = nearCloudLimit
+    ? `${status} ${t('auto.components.dictation.DictationIndicator.oneMinuteLeft', 'One minute left.')}`
+    : status
   const cancelLabel = t('auto.components.dictation.DictationIndicator.cancel', 'Cancel')
   const finishLabel = t('auto.components.dictation.DictationIndicator.finish', 'Finish')
 
@@ -119,78 +158,73 @@ function DictationPill({ captureLive, anchor }: DictationIndicatorProps) {
         'fixed z-50 flex h-10 -translate-x-1/2 items-center gap-2 rounded-full px-2 text-[13px]',
         'border border-border bg-popover/95 text-popover-foreground shadow-floating backdrop-blur',
         'transition-[opacity,translate] duration-180 ease-out starting:translate-y-1.5 starting:opacity-0 motion-reduce:transition-opacity',
-        !box && 'bottom-12 left-1/2 w-[min(440px,calc(100vw-2rem))]'
+        !box && 'bottom-12 left-1/2 w-[min(440px,calc(100vw-2rem))]',
+        failedKind && 'border-destructive/40'
       )}
       style={box ? { left: box.left, bottom: box.bottom, width: box.width } : undefined}
       {...keepFocusProps}
     >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon-xs"
-            aria-label={cancelLabel}
-            onClick={() => dispatchDictationControl('cancel')}
-          >
-            <X className="size-3.5" />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="top" sideOffset={4}>
-          {cancelLabel}
-        </TooltipContent>
-      </Tooltip>
-      <DictationPillMeter recording={recording} status={status} />
-      {transcript ? (
-        <span
-          aria-hidden
-          className="flex h-6 min-w-0 flex-1 items-center justify-end overflow-hidden whitespace-nowrap text-muted-foreground [mask-image:linear-gradient(to_right,transparent,black_24px)]"
-        >
-          <span className="shrink-0">{transcript}</span>
-        </span>
+      {failedKind ? (
+        <DictationPillFailure kind={failedKind} />
       ) : (
-        <span aria-hidden className="min-w-0 flex-1 truncate text-muted-foreground">
-          {status}
-        </span>
-      )}
-      <span
-        aria-hidden
-        className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground"
-      >
-        {formatElapsed(seconds)}
-      </span>
-      {finishing ? (
-        <span
-          aria-hidden
-          className="grid size-6 shrink-0 place-items-center rounded-full bg-secondary text-muted-foreground"
-        >
-          {showSpinner ? (
-            <Loader2 className="size-3.5 animate-spin" />
-          ) : (
-            <Check className="size-3.5" strokeWidth={2.5} />
-          )}
-        </span>
-      ) : (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              type="button"
-              size="icon-xs-round"
-              aria-label={finishLabel}
-              onClick={() => dispatchDictationControl('stop')}
+        <>
+          <DictationPillCloseButton label={cancelLabel} />
+          <DictationPillMeter recording={recording} status={announced} />
+          {transcript ? (
+            <span
+              aria-hidden
+              className="flex h-6 min-w-0 flex-1 items-center justify-end overflow-hidden whitespace-nowrap text-muted-foreground [mask-image:linear-gradient(to_right,transparent,black_24px)]"
             >
-              <Check className="size-3.5" strokeWidth={2.5} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top" sideOffset={4}>
-            <span className="flex items-center gap-1.5">
-              {finishLabel}
-              {!isHoldMode && shortcut.keys.length > 0 ? (
-                <ShortcutKeyCombo keys={shortcut.keys} doubleTap={shortcut.doubleTap} />
-              ) : null}
+              <span className="shrink-0">{transcript}</span>
             </span>
-          </TooltipContent>
-        </Tooltip>
+          ) : (
+            <span aria-hidden className="min-w-0 flex-1 truncate text-muted-foreground">
+              {status}
+            </span>
+          )}
+          <span
+            aria-hidden
+            className={cn(
+              'w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground',
+              nearCloudLimit && 'text-status-warning'
+            )}
+          >
+            {formatElapsed(seconds)}
+          </span>
+          {finishing ? (
+            <span
+              aria-hidden
+              className="grid size-6 shrink-0 place-items-center rounded-full bg-secondary text-muted-foreground"
+            >
+              {showSpinner ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Check className="size-3.5" strokeWidth={2.5} />
+              )}
+            </span>
+          ) : (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  size="icon-xs-round"
+                  aria-label={finishLabel}
+                  onClick={() => dispatchDictationControl('stop')}
+                >
+                  <Check className="size-3.5" strokeWidth={2.5} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={4}>
+                <span className="flex items-center gap-1.5">
+                  {finishLabel}
+                  {!isHoldMode && shortcut.keys.length > 0 ? (
+                    <ShortcutKeyCombo keys={shortcut.keys} doubleTap={shortcut.doubleTap} />
+                  ) : null}
+                </span>
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </>
       )}
     </div>
   )
