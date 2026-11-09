@@ -67,6 +67,7 @@ export abstract class OrcaRuntimeWithBuildHeadlessMobileSessionBrowserTabs exten
         loading: false,
         canGoBack: false,
         canGoForward: false,
+        faviconUrl: this.agentBrowserBridge?.getRemoteTabFaviconUrl(tab.browserPageId) ?? null,
         loadError: tab.loadError ?? undefined,
         certificateFailure: tab.certificateFailure ?? undefined,
         ...(persistedProps ? { color: persistedProps.color } : {}),
