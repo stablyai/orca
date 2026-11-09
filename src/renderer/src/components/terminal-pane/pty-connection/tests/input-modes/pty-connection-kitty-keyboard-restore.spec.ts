@@ -64,8 +64,9 @@ export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
 
     async function reattachWithSnapshotFlags(kittyKeyboard: boolean) {
       const { connectPanePty } = await import('../../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('tab-pty')
       transport.connect.mockImplementation(async ({ sessionId }: { sessionId?: string }) =>
         sessionId
@@ -114,8 +115,9 @@ export function registerPtyConnectionKittyKeyboardRestoreTests(): void {
 
     it('grounds xterm and the mirror with one scanned write before a restart-in-place spawns', async () => {
       const { connectPanePty } = await import('../../connect-pane-pty')
-      const agentTitleMocks2 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       transportFactoryQueue.push(createMockTransport())
       const pane = createPane(91)
       // Use a unique tab ID to avoid other tests’ pending-spawn entries and force fresh spawn.

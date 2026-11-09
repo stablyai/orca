@@ -54,7 +54,9 @@ vi.mock('@/components/agent-tab-launch-context', () => ({
   captureAgentTabLaunchContext: () => ({ groupId: 'group', focusIntent })
 }))
 vi.mock('@/lib/telemetry', () => ({ track }))
-vi.mock('@/lib/agent-detection-target-inventory', () => ({ loadDetectedAgentsForWorktree: detect }))
+vi.mock('@/lib/agent-session/launch/inventory/agent-detection-target-inventory', () => ({
+  loadDetectedAgentsForWorktree: detect
+}))
 vi.mock('@/lib/host-chat-program-acquisition', () => ({
   acquireAgentLaunchChoices: acquireChoices
 }))

@@ -17,7 +17,7 @@ import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui
 import type { AppState } from '@/store/types'
 import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { resolveDefaultAgentForWorkspace } from '../../../agent-tab-shortcuts'
+import { resolveDefaultAgentForWorkspace } from '../../../agent-session/launch/shortcuts/agent-tab-shortcuts'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { agentChoiceMayOpenAsChat } from '@/lib/host-chat-program'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
@@ -30,7 +30,7 @@ import type { DeclinedStructuredLaunchTerminalOptions } from '@/lib/agent-sessio
 import {
   ensureDetectedAgentsForNewWorktree,
   type RepoHostFields
-} from '@/lib/agent-detection-target-inventory'
+} from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 
 export function buildDirectWorkItemStartup(args: {
   agent: TuiAgent | null

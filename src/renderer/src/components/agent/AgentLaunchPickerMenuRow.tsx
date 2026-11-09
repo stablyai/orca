@@ -6,7 +6,7 @@ import {
   DropdownMenuShortcut,
   useDropdownMenuClose
 } from '@/components/ui/dropdown-menu'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { AgentDefaultContextMenu } from './agent-combobox-items'
 import { AgentLaunchSetupButton, type AgentPickerSetupIdentity } from './AgentLaunchSetupButton'

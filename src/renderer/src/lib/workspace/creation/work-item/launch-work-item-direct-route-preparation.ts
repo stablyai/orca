@@ -2,7 +2,7 @@ import { ensureAgentLaunchPreferences } from '@/runtime/agent-launch-settings/us
 import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '@/store/types'
 import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
-import type { RepoHostFields } from '@/lib/agent-detection-target-inventory'
+import type { RepoHostFields } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/execution-host/project-execution-runtime'
 import {
   refineLocalLaunchPlatform,

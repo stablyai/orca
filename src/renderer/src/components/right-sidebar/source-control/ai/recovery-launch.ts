@@ -22,7 +22,7 @@ import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   ensureDetectedAgentsForWorktree,
   type WorktreeAgentInventoryState
-} from '@/lib/agent-detection-target-inventory'
+} from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import {
   pickSourceControlLaunchAgent,
   readSourceControlLaunchRecipeAgentId

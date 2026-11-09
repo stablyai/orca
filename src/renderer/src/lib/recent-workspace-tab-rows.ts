@@ -6,11 +6,13 @@ import {
 } from '../../../shared/sidebar-list/smart-attention'
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import { agentVerdictDisplayMark } from '../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
-import { isExplicitAgentStatusFresh } from './pane-agent-evidence'
+import {
+  isAgentStatusFresh,
+  AGENT_STATUS_STALE_AFTER_MS
+} from '../../../shared/agent-status/contracts/agent-status-freshness'
 import type { WorktreeStatus } from './worktree-status'
 import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../shared/agent-status/contracts/agent-status-freshness'
 
 /** Row model for Cmd+J's empty-query recent tabs section. */
 export type RecentWorkspaceTabRow = {
@@ -58,8 +60,7 @@ export function resolveRecentWorkspaceTabStatus(
   }
   const verdicts = new Set(
     panes.flatMap((pane) =>
-      pane.kind === 'hook' &&
-      isExplicitAgentStatusFresh(pane.entry, now, AGENT_STATUS_STALE_AFTER_MS)
+      pane.kind === 'hook' && isAgentStatusFresh(pane.entry, now, AGENT_STATUS_STALE_AFTER_MS)
         ? [agentVerdictDisplayMark(pane.entry)]
         : []
     )

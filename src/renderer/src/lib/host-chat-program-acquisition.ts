@@ -26,7 +26,7 @@ import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-confi
 import {
   getDetectionTargetIdentityForWorktree,
   readAgentInventoryForWorktree
-} from './agent-detection-target-inventory'
+} from './agent-session/launch/inventory/agent-detection-target-inventory'
 
 export const useChatProgramFactsVersion = (): number =>
   useAppViewExternalStore(

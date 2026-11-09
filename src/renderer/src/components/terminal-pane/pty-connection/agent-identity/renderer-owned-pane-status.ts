@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status-terminal-title'
+import { resolveAgentStatusTerminalTitle } from '@/lib/agent-status/evidence/agent-status-terminal-title'
 import {
   normalizeCompatibleAgentTitleForOwner,
   resolveCompatibleAgentTypeForOwner

@@ -10,7 +10,7 @@ import {
   resolveHostCapabilities,
   type ProspectiveWorkspace
 } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import type { AgentCatalogEntry } from '@/lib/agent-catalog'
+import type { AgentCatalogEntry } from '@/lib/agent-catalog/agent-catalog'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { AUTOMATION_LAUNCH_SETUP_RUNTIME_CAPABILITY } from '../../../../shared/automations/automation-runtime-capabilities'
 import { automationLegacyArguments } from '../../../../shared/automations/launch/automation-legacy-arguments'
