@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
 
 const historySchema = z.looseObject({

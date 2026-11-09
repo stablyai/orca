@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { AiVaultSession } from './ai-vault/contracts/ai-vault-types'
 import { sessionFileExecutionNamespace } from './ai-vault/scanning/ai-vault-scope-cwd-match'
 import { antigravitySessionOrigin } from './antigravity-session-origin'
