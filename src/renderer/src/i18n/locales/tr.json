@@ -2760,7 +2760,7 @@
         "untitled": "Başlıksız sohbet",
         "listLabel": "Devam edilecek sohbetler",
         "dontAskAgain": "Bir daha sorma (otomatik devam et)",
-        "dontAskAgainHint": "Bu seçeneği Ayarlar → Deneysel → Sohbet Arayüzü bölümünden kapatabilirsiniz.",
+        "dontAskAgainHint": "Bu seçeneği Ayarlar → Sohbet → Davranış bölümünden kapatabilirsiniz.",
         "selectAgent": "{{value2}} içindeki \"{{value1}}\" adlı {{value0}} sohbetine devam et",
         "dismissAll": "Tümünü kapat",
         "viewChats": "Sohbetleri görüntüle",
