@@ -30,6 +30,7 @@ import {
   advanceRuntimeEnvironmentTransportGeneration,
   getRuntimeEnvironmentTransportGeneration
 } from './runtime-environment-transport-generation'
+import { noteRuntimeEnvironmentSharedControlContact } from './runtime-environment-contact-loss'
 import { declareWslHostClient } from '../../wsl/host-lifecycle/wsl-host-client-declaration'
 
 type CachedRuntimeConnection = {
@@ -300,6 +301,7 @@ function getSharedControlConnection(
             transportGeneration,
             diagnostics
           })
+          noteRuntimeEnvironmentSharedControlContact(environmentId, diagnostics)
           statusOwners
             .get(environmentId)
             ?.owner.connectionChanged(
