@@ -5,8 +5,11 @@ import type {
 } from '../../shared/runtime-port-forwards'
 import type {
   AuthCallbackForwardRequest,
-  AuthCallbackForwardResult
+  AuthCallbackForwardResult,
+  LoopbackCallbackForwardRequest
 } from '../../shared/auth-callback-forward'
+import type { McpSyncStatus } from '../../shared/agent-mcp-sync/mcp-sync-contract'
+import type { CloudMcpSyncPreferences } from '../../shared/agent-mcp-sync/mcp-sync-preferences'
 import type {
   CrewSubscriptionAttemptArgs,
   CrewSubscriptionAttemptCallbacks,
@@ -116,6 +119,18 @@ export type RuntimeApi = {
     closePortForward?: (request: { id: string }) => Promise<RuntimePortForward | null>
     wakePortForwardHost?: (request: { environmentId: string }) => Promise<boolean>
     onPortForwardsChanged?: (callback: (forwards: RuntimePortForward[]) => void) => () => void
+    // An agent's own OAuth callback on the host (e.g. an MCP server sign-in); desktop only.
+    openLoopbackCallbackForward?: (
+      request: LoopbackCallbackForwardRequest
+    ) => Promise<AuthCallbackForwardResult>
+    // Orca Cloud MCP sync; absent in the web client, which has no local agent configs.
+    getMcpSyncStatus?: (environmentId: string) => Promise<McpSyncStatus | null>
+    syncMcpServersNow?: (environmentId: string) => Promise<McpSyncStatus | null>
+    getMcpSyncPreferences?: () => Promise<CloudMcpSyncPreferences | null>
+    setMcpSyncPreferences?: (
+      preferences: Partial<CloudMcpSyncPreferences>
+    ) => Promise<CloudMcpSyncPreferences | null>
+    onMcpSyncChanged?: (callback: (status: McpSyncStatus) => void) => () => void
     getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>
     onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void) => () => void
     // Absent in the web client, whose catalog lives in the browser rather than a CLI-editable file.

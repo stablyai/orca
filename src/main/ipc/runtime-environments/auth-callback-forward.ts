@@ -15,6 +15,7 @@ import {
   type AuthCallbackForwardRequest,
   type AuthCallbackForwardResult
 } from '../../../shared/auth-callback-forward'
+import { flowOf, loopbackRequestOf, requestOf } from './auth-callback-forward-requests'
 import { BrowserNetworkTunnelClient } from '../../browser/network/tunnels/browser-network-tunnel-client'
 import { BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL } from '../../browser/network/tunnels/browser-network-tunnel-stream-state'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
@@ -25,11 +26,17 @@ const ATTACH_TIMEOUT_MS = 20_000
 export type AuthCallbackTunnel = { client: BrowserNetworkTunnelClient; close: () => void }
 /** Opens the host end of one sign-in's forward; injectable so tests can wire it in-process. */
 export type AuthCallbackTunnelOpener = (onClosed: () => void) => Promise<AuthCallbackTunnel>
+/** A sign-in's callback (flowId) or, without one, any OAuth callback an agent on the host listens for. */
+export type AuthCallbackForwardTarget = {
+  environmentId: string
+  port: number
+  flowId: string | null
+}
 
 /** Opens the host end: a tunnel that reaches only this flow's callback port there. */
 async function openHostTunnel(
   userDataPath: string,
-  request: AuthCallbackForwardRequest,
+  request: AuthCallbackForwardTarget,
   onClosed: () => void
 ): Promise<AuthCallbackTunnel> {
   await ensureOrcadManagedTunnel(userDataPath, request.environmentId)
@@ -45,8 +52,8 @@ async function openHostTunnel(
   }
   subscription = await subscribeRemoteRuntimeTransport(
     connection,
-    'network.authCallbackTunnel',
-    { flowId: request.flowId },
+    request.flowId === null ? 'network.loopbackCallbackTunnel' : 'network.authCallbackTunnel',
+    request.flowId === null ? { port: request.port } : { flowId: request.flowId },
     ATTACH_TIMEOUT_MS,
     {
       onResponse: (response) => {
@@ -129,7 +136,7 @@ export class AuthCallbackForward {
   private readonly ttl: ReturnType<typeof setTimeout>
 
   constructor(
-    readonly request: AuthCallbackForwardRequest,
+    readonly request: AuthCallbackForwardTarget,
     private readonly onClosed: () => void
   ) {
     this.ttl = setTimeout(() => this.close(), TTL_MS)
@@ -235,36 +242,8 @@ export class AuthCallbackForward {
 }
 
 const forwards = new Map<string, AuthCallbackForward>()
-const keyOf = (request: Pick<AuthCallbackForwardRequest, 'environmentId' | 'flowId'>): string =>
-  `${request.environmentId}\u0000${request.flowId}`
-
-function field(value: unknown, name: string): unknown {
-  return value && typeof value === 'object'
-    ? Object.getOwnPropertyDescriptor(value, name)?.value
-    : undefined
-}
-
-function flowOf(
-  value: unknown
-): Pick<AuthCallbackForwardRequest, 'environmentId' | 'flowId'> | null {
-  const environmentId = field(value, 'environmentId')
-  const flowId = field(value, 'flowId')
-  return typeof environmentId === 'string' && typeof flowId === 'string'
-    ? { environmentId, flowId }
-    : null
-}
-
-function requestOf(value: unknown): AuthCallbackForwardRequest | null {
-  const flow = flowOf(value)
-  const port = field(value, 'port')
-  return flow &&
-    typeof port === 'number' &&
-    Number.isInteger(port) &&
-    port >= 1024 &&
-    port <= 65_535
-    ? { ...flow, port }
-    : null
-}
+const keyOf = (request: { environmentId: string; flowId: string | null; port?: number }): string =>
+  `${request.environmentId}\u0000${request.flowId ?? `port:${request.port}`}`
 
 export function closeAuthCallbackForward(
   request: Pick<AuthCallbackForwardRequest, 'environmentId' | 'flowId'>
@@ -274,25 +253,33 @@ export function closeAuthCallbackForward(
 
 export async function openAuthCallbackForward(
   userDataPath: string,
-  request: AuthCallbackForwardRequest
+  request: AuthCallbackForwardRequest | AuthCallbackForwardTarget
 ): Promise<AuthCallbackForwardResult> {
+  const target: AuthCallbackForwardTarget = { ...request, flowId: request.flowId ?? null }
   // A retried sign-in replaces this computer's earlier listener on the same port.
   for (const existing of forwards.values()) {
     if (existing.request.port === request.port) {
       existing.close()
     }
   }
-  const key = keyOf(request)
-  const forward = new AuthCallbackForward(request, () => {
+  const key = keyOf(target)
+  const forward = new AuthCallbackForward(target, () => {
     if (forwards.get(key) === forward) {
       forwards.delete(key)
     }
   })
   forwards.set(key, forward)
-  return forward.start((onClosed) => openHostTunnel(userDataPath, request, onClosed))
+  return forward.start((onClosed) => openHostTunnel(userDataPath, target, onClosed))
 }
 
 export function registerAuthCallbackForwardHandlers(getUserDataPath: () => string): void {
+  // An agent on the host (an MCP server sign-in) waits on its own loopback callback; carry it there.
+  ipcMain.handle('runtimeEnvironments:openLoopbackCallbackForward', (_event, value: unknown) => {
+    const request = loopbackRequestOf(value)
+    return request
+      ? openAuthCallbackForward(getUserDataPath(), { ...request, flowId: null })
+      : { ok: false, code: 'listen_failed', message: 'Invalid sign-in forward.' }
+  })
   ipcMain.handle('runtimeEnvironments:openAuthCallbackForward', (_event, value: unknown) => {
     const request = requestOf(value)
     return request

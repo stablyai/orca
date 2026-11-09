@@ -34,6 +34,10 @@ import {
 } from './hosted-workspace-runtime'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import type { HostedSessionRestartResult } from '../../shared/hosted-sandbox/hosted-session-events'
+import {
+  installCloudMcpSync,
+  registerCloudMcpSyncHandlers
+} from '../agent-mcp-sync/desktop/cloud-mcp-sync-ipc'
 
 /** Capability Orca Cloud auth grants per account (stablyai/orca-cloud#689). */
 export const ORCA_CLOUD_SANDBOX_CAPABILITY = 'sandbox'
@@ -54,6 +58,7 @@ export function installHostedSandbox(): void {
   ipcMain.handle('orcaCloud:restartNow', (_event, args: { workspaceId: string }) =>
     restartHostedWorkspace(args.workspaceId)
   )
+  registerCloudMcpSyncHandlers()
   const userDataPath = app.getPath('userData')
   const config = getHostedSandboxConfig(
     userDataPath,
@@ -67,6 +72,7 @@ export function installHostedSandbox(): void {
   const client = createHostedSandboxRecipeClient(config)
   const base = createHostedSandboxRecipeDriver(config, client)
   controlPlaneClient = client
+  const mcpSync = installCloudMcpSync(userDataPath)
   // Dev rehearsals shorten idle sleep; packaged builds always use the provider's default.
   const idleOverride = app.isPackaged
     ? Number.NaN
@@ -77,7 +83,8 @@ export function installHostedSandbox(): void {
   const registry = createHostedSessionRegistry({
     userDataPath,
     driver,
-    windows: () => BrowserWindow.getAllWindows()
+    windows: () => BrowserWindow.getAllWindows(),
+    onConnected: (runtimeEnvironmentId) => void mcpSync.sync(runtimeEnvironmentId, 'connect')
   })
   const workspaces = installHostedWorkspaceService({
     userDataPath,

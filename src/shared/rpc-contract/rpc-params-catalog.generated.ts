@@ -2,6 +2,7 @@
 // run `pnpm run generate:rpc-params-catalog`.
 import type { z } from 'zod'
 import { HostAccountLaunchEnvParams } from '../agent-launch/startup/host-account-launch-env'
+import { AgentMcpSyncParams } from '../agent-mcp-sync/mcp-sync-contract'
 import { AgentSkillShareRequestSchema } from '../agent-skill-sharing-contract'
 import {
   AiVaultSearchRequestSchema,
@@ -67,6 +68,7 @@ import {
   HostAgentSignInStatusParams,
   HostAgentSignOutParams,
   ListAccountsParams,
+  LoopbackCallbackTunnelParams,
   RemoveAccountParams,
   RemoveDataAccountParams,
   SelectAccountParams,
@@ -824,6 +826,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'agent.launchReplay': AgentLaunchReplay,
   'agentActivity.clear': AgentActivityClearParams,
   'agentActivity.setRead': AgentActivitySetReadParams,
+  'agentConfig.syncMcpServers': AgentMcpSyncParams,
   'agentHooks.prepareCodexForWslPane': PrepareCodexForWslPaneParams,
   'agentSession.accountUsage': OptionsParams,
   'agentSession.acknowledgeAttention': AcknowledgeAttentionParams,
@@ -1333,6 +1336,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'nativeChat.unsubscribe': NativeChatUnsubscribe,
   'network.authCallbackTunnel': AuthCallbackTunnelParams,
   'network.browserTunnel': BrowserNetworkTunnelAttachParams,
+  'network.loopbackCallbackTunnel': LoopbackCallbackTunnelParams,
   'notifications.getMissedSince': NotificationGetMissedSinceParams,
   'notifications.registerPush': NotificationRegisterPushParams,
   'notifications.reportDesktopPresence': NotificationReportDesktopPresenceParams,
