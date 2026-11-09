@@ -16,6 +16,7 @@ import {
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getWorkspaceSessionTabActivityIds } from '../../../shared/workspace-session/workspace-session-tab-activity'
 import { worktreeIdentityKey } from '../../../shared/worktree/id'
+import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { SERVER_FETCH_TIMEOUT_MS } from './server-worktree-fetch'
 import { normalizePairedServerRow } from '../../../shared/sidebar-list/paired-server-rows'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
@@ -142,7 +143,63 @@ export class MobileRelayHostCatalog {
     return null
   }
 
+  // The list phones were last told about; null until a phone first lists.
+  private announcedList: string | null = null
+
   list(): MobileRelayHostsListResult {
+    const result = this.describe()
+    this.announcedList ??= JSON.stringify(result)
+    return result
+  }
+
+  /** Calls `changed` whenever list() would answer differently, so phones need not poll it. */
+  publishListChanges(sources: {
+    onClientEvent: (listener: (event: RuntimeClientEvent) => void) => () => void
+    changed: () => void
+  }): () => void {
+    let stopped = false
+    let queued = false
+    const check = (): void => {
+      if (queued) {
+        return
+      }
+      queued = true
+      // One change can reach several sources, e.g. a retirement and its new status owner.
+      queueMicrotask(() => {
+        queued = false
+        if (stopped || this.announcedList === null) {
+          return
+        }
+        const next = JSON.stringify(this.describe())
+        if (next !== this.announcedList) {
+          this.announcedList = next
+          sources.changed()
+        }
+      })
+    }
+    const stops = [
+      this.options.hosts.onStatusChanged(check),
+      this.options.hosts.onEnvironmentRetired(check),
+      this.options.hosts.onCatalogChanged?.(check),
+      sources.onClientEvent((event) => {
+        // SSH targets carry managed servers' labels and health; host label overrides live in settings.
+        if (
+          event.type === 'sshStateChanged' ||
+          (event.type === 'settingsChanged' && event.keys.includes('hostSettingOverrides'))
+        ) {
+          check()
+        }
+      })
+    ]
+    return () => {
+      stopped = true
+      for (const stop of stops) {
+        stop?.()
+      }
+    }
+  }
+
+  private describe(): MobileRelayHostsListResult {
     return {
       hosts: describeRelayHosts(this.options.hosts, this.options.hostLabelOverrides()).map(
         ({

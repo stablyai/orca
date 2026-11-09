@@ -20,6 +20,7 @@ import { savePinnedIds } from '../storage/preferences'
 import type { HostScreenState } from './use-host-screen-state'
 import { relaysToServers } from '../worktree/execution-host-scoped-rpc-client'
 import { NO_SERVER_WORKSPACES } from '../worktree/server-workspaces'
+import { useRelayHosts } from '../worktree/relay-hosts-feed'
 import { WorktreeCatalogReadError } from '../worktree/worktree-catalog-snapshot-client'
 import { useHostQuery } from '../query/host-query'
 import { hostReadClient } from '../query/host-read-client'
@@ -122,6 +123,8 @@ export function useHostWorktreeCatalog(args: {
   const relays = client !== null && relaysToServers(client, hostCapabilities)
   // Until the host's status is read, stored server rows paint and nothing reads them.
   const relaysRuledOut = hostStatusReadable && !relays
+  // Held while server rows poll, so a desktop that announces host changes isn't asked for its hosts on every poll.
+  useRelayHosts(subscribed && relays ? client : null, hostCapabilities)
   const servers = useHostQuery(
     hostServerWorkspacesQuery,
     host,

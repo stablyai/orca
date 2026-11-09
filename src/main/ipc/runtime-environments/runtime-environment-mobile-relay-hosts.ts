@@ -41,6 +41,7 @@ import {
   runtimeEnvironmentManualDisconnectCount
 } from './runtime-environment-manual-disconnect'
 import { onRuntimeEnvironmentStatusPublished } from './runtime-environment-status-owner'
+import { onRuntimeEnvironmentCatalogChanged } from './runtime-environment-catalog-broadcast'
 import { getRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environment-registry-root'
 import { recipeVmServerState } from './runtime-environment-recipe-vm-wake'
@@ -196,6 +197,7 @@ export function createRuntimeEnvironmentMobileRelayHosts(): MobileDesktopRelayHo
       return () => retirementListeners.delete(listener)
     },
     onStatusChanged: onRuntimeEnvironmentStatusPublished,
+    onCatalogChanged: onRuntimeEnvironmentCatalogChanged,
     watchChanges: (host, expected, callbacks) =>
       watchRuntimeEnvironmentChanges(userDataPath, host.environmentId, expected, callbacks)
   }
