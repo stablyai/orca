@@ -23,7 +23,7 @@ import type { HostedReviewInfo } from '../../../../../../shared/source-control/h
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorkspaceLastActiveAt } from '../../../../../../shared/workspace-last-active'
-import { getWorktreeVisitTimestamp } from '../../../worktree-visit-recency'
+import { getWorktreeVisitTimestamp } from '../../activation/worktree-visit-recency'
 import {
   getPaletteWorktreeExecutionHostId,
   getPaletteWorktreeIdentity,

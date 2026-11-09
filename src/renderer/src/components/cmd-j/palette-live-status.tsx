@@ -11,7 +11,10 @@ import {
   buildExplicitEntriesByTabId,
   type TabPaneInputSources
 } from '../../../../shared/sidebar-list/smart-attention'
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
+import {
+  isAgentStatusFresh,
+  AGENT_STATUS_STALE_AFTER_MS
+} from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import {
   getLiveAgentStatusByWorktreeId,
   type LiveAgentWorktreeStatus
@@ -32,7 +35,6 @@ import {
 } from '@/components/tab-bar/terminal-tab-activity-status'
 import { useTranslate } from '@/i18n/use-translate'
 
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
@@ -162,7 +164,7 @@ function buildLiveAgentStatusPaneIdsByTabId(
       }
       if (
         entry.restoredUnconfirmed !== true &&
-        !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+        !isAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
       ) {
         stalePaneIds.add(paneId)
         continue

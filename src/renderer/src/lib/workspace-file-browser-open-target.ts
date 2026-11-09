@@ -1,7 +1,7 @@
 import { absolutePathToFileUri } from '@/components/editor/markdown/link-routing/markdown-internal-links'
-import { getConnectionIdForFile } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import { basename } from '@/lib/path'
-import { isTwinWorkspace } from '@/lib/resolve-owner'
+import { isTwinWorkspace } from '@/lib/workspace/ownership/resolve-owner'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 

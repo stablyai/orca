@@ -1,7 +1,7 @@
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 import { useCallback, useMemo, useState } from 'react'
 import { AlertCircle, Save } from 'lucide-react'
-import { computeEditorFontSize } from '@/lib/editor-font-zoom'
+import { computeEditorFontSize } from '@/lib/editor/appearance/editor-font-zoom'
 import { useAppStore } from '@/store/index'
 import { Button } from '@/components/ui/button'
 import {

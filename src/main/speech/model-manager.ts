@@ -1,19 +1,18 @@
-import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync } from 'node:fs'
 import { rename, rm } from 'node:fs/promises'
 import { join, relative, resolve } from 'node:path'
-import type {
-  SpeechModelManifest,
-  SpeechModelState,
-  SpeechModelStatus
-} from '../../shared/speech-types'
+import type { SpeechModelState, SpeechModelStatus } from '../../shared/speech-types'
 import { SPEECH_MODEL_CATALOG, getCatalogModel, isLocalSpeechModel } from './model-catalog'
-import { hasOpenAiSpeechApiKey } from './openai-api-key-store'
+import type { SpeechModelDownload } from './model-download-catalog'
+import { downloadSileroVadInBackground, speechModelDownload } from './speech-vad-model'
+import { hasCloudSpeechCredentials } from './cloud-transcription-target'
 import {
   getSpeechModelCacheDirCandidates,
   migrateSpeechModelCacheIfNeeded,
   type SpeechModelCacheDir
 } from './model-cache-path'
 import { SpeechModelDownloadTransport } from './speech-model-download-transport'
+import { hasSpeechModelFiles } from './speech-model-files'
 import type { OpenSpeechDownloadRequest } from './speech-model-download-response'
 import { getAppEnvironment } from '../../shared/app-environment'
 import {
@@ -38,7 +37,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
   constructor(
     customModelsDir: string | undefined,
     openRequest: OpenSpeechDownloadRequest,
-    private readonly hasOpenAiKey: () => boolean = hasOpenAiSpeechApiKey
+    private readonly hasCloudCredentials = hasCloudSpeechCredentials
   ) {
     super(openRequest)
     const requestedModelsDir =
@@ -98,20 +97,24 @@ export class ModelManager extends SpeechModelDownloadTransport {
       return cached
     }
 
-    const manifest = getCatalogModel(modelId)
+    const manifest = speechModelDownload(modelId)
     if (!manifest) {
       return { id: modelId, status: 'error', error: 'Unknown model' }
     }
 
-    if (manifest.provider === 'openai') {
-      return { id: modelId, status: this.hasOpenAiKey() ? 'ready' : 'not-downloaded' }
+    if (manifest.provider !== 'local') {
+      const ready = this.hasCloudCredentials(manifest.provider)
+      return { id: modelId, status: ready ? 'ready' : 'not-downloaded' }
     }
 
     const modelDir = this.getModelDir(modelId)
-    if (existsSync(modelDir) && this.validateModelFiles(manifest, modelDir)) {
+    if (existsSync(modelDir) && hasSpeechModelFiles(manifest.downloadFiles, modelDir)) {
       const state: SpeechModelState = { id: modelId, status: 'ready' }
       this.modelStates.set(modelId, state)
       return state
+    }
+    if (existsSync(modelDir) && hasSpeechModelFiles(manifest.legacyDownloadFiles, modelDir)) {
+      return { id: modelId, status: 'not-downloaded', needsUpdate: true }
     }
 
     return { id: modelId, status: 'not-downloaded' }
@@ -122,7 +125,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
   }
 
   private getSafeModelDir(modelId: string, root: string = this.modelsDir): string {
-    const manifest = getCatalogModel(modelId)
+    const manifest = speechModelDownload(modelId)
     if (!manifest) {
       throw new Error(`Unknown model: ${modelId}`)
     }
@@ -135,30 +138,17 @@ export class ModelManager extends SpeechModelDownloadTransport {
     return modelDir
   }
 
-  private validateModelFiles(manifest: SpeechModelManifest, modelDir: string): boolean {
-    if (!manifest.downloadFiles) {
-      return false
-    }
-    return manifest.downloadFiles.every(({ name, sizeBytes }) => {
-      try {
-        return statSync(join(modelDir, name)).size === sizeBytes
-      } catch {
-        return false
-      }
-    })
-  }
-
   async downloadModel(modelId: string): Promise<void> {
     // Do not await migration: downloads cannot race it, and cancellation needs synchronous setup.
     if (this.activeDownloads.has(modelId)) {
       return
     }
 
-    const manifest = getCatalogModel(modelId)
+    const manifest = speechModelDownload(modelId)
     if (!manifest) {
       throw new Error(`Unknown model: ${modelId}`)
     }
-    if (!isLocalSpeechModel(manifest)) {
+    if (manifest.provider !== 'local') {
       throw new Error(`Model does not support downloads: ${modelId}`)
     }
     if (!manifest.downloadFiles?.length || !manifest.sizeBytes) {
@@ -166,7 +156,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
     }
 
     const modelDir = this.getModelDir(modelId)
-    if (existsSync(modelDir) && this.validateModelFiles(manifest, modelDir)) {
+    if (existsSync(modelDir) && hasSpeechModelFiles(manifest.downloadFiles, modelDir)) {
       this.updateState(modelId, 'ready')
       return
     }
@@ -211,6 +201,9 @@ export class ModelManager extends SpeechModelDownloadTransport {
       await rm(modelDir, { recursive: true, force: true })
       await rename(stagingDir, modelDir)
       this.updateState(modelId, 'ready')
+      if (getCatalogModel(modelId)?.files?.some((file) => file.endsWith('.gguf'))) {
+        downloadSileroVadInBackground(this)
+      }
     } catch (err) {
       if (!aborted) {
         console.error('[speech] Model download failed:', modelId, err)
@@ -291,7 +284,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
   }
 
   private async downloadModelFiles(
-    manifest: SpeechModelManifest,
+    manifest: SpeechModelDownload,
     stagingDir: string,
     modelId: string,
     isAborted: () => boolean,
@@ -330,7 +323,7 @@ export class ModelManager extends SpeechModelDownloadTransport {
       completedBytes += file.sizeBytes
     }
 
-    if (!this.validateModelFiles(manifest, stagingDir)) {
+    if (!hasSpeechModelFiles(manifest.downloadFiles, stagingDir)) {
       throw new Error('Model files missing after download')
     }
   }

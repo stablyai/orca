@@ -16,6 +16,8 @@ import {
   buildRetiredWorktreeNamesRefreshKey,
   useRetiredWorktreeNames
 } from '../worktree/use-retired-worktree-names'
+import { durableDraftRowKey } from '../drafts/durable-draft-rows'
+import { useDurableDraftField } from '../drafts/durable-draft-fields'
 import { BottomDrawerModalHost } from './bottom-drawer/bottom-drawer-modal-host'
 import {
   getMobileWorkspaceRepoBadgeColor,
@@ -82,7 +84,12 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
   const repoServer = selectedRepo ? serverOf(selectedRepo) : undefined
   const client = repoServer ? (serverClients?.get(repoServer) ?? null) : desktopClient
   const navigation = useNewWorktreeDrawerNavigation(visible)
-  const [note, setNote] = useState('')
+  // Kept per desktop until a create succeeds, and read only once the form shows. The host is in the key
+  // because the tablet sidebar's native host list has no shell to bind it.
+  const [note, setNote] = useDurableDraftField(
+    visible ? durableDraftRowKey('workspaceCreate', '', hostId ?? '') : null,
+    'note'
+  )
   const [error, setError] = useState('')
   const runtime = useNewWorkspaceRuntimeContext(client, visible, hostId, repoServer)
   const repoRuntime = useNewWorktreeRuntimeCapabilities(client, visible)
@@ -103,6 +110,12 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     visible
   })
   const setupScript = useNewWorkspaceSetupScript({ client, selectedRepo })
+  // A kept note opens Options until the user folds them, so it isn't sent unseen.
+  const [noteOptions, setNoteOptions] = useState<'closed' | 'open' | 'folded'>('closed')
+  if (note && noteOptions === 'closed') {
+    setNoteOptions('open')
+  }
+  const showOptions = setupScript.showAdvanced || noteOptions === 'open'
   const selectedRepoWorktreeBranches = useMemo(
     () => getComposerRepoWorktreeBranches(existingWorktrees ?? [], selectedRepo?.id ?? null),
     [existingWorktrees, selectedRepo]
@@ -161,7 +174,11 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     getAgentLaunchSupport,
     transitionDrawer: navigation.transitionDrawer,
     setError,
-    onCreated: (worktreeId, name, warning) => onCreated(worktreeId, name, warning, repoServer),
+    onCreated: (worktreeId, name, warning) => {
+      // A note typed in a reopened form while this create ran is not the one it sent.
+      setNote((current) => (current === note ? '' : current))
+      onCreated(worktreeId, name, warning, repoServer)
+    },
     onClose
   })
 
@@ -254,7 +271,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         sshGate={executionTarget.sshGate}
         composer={composer}
         selectedAgent={agentSelection.selectedAgent}
-        showAdvanced={setupScript.showAdvanced}
+        showAdvanced={showOptions}
         note={note}
         setupCommand={setupScript.setupCommand}
         setupSource={setupScript.setupSource}
@@ -272,7 +289,12 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         onClearError={() => setError('')}
         onConnect={() => void executionTarget.connect()}
         onOpenAgent={() => openPicker('agent')}
-        onShowAdvancedChange={setupScript.setShowAdvanced}
+        onShowAdvancedChange={(show) => {
+          if (!show) {
+            setNoteOptions('folded')
+          }
+          setupScript.setShowAdvanced(show)
+        }}
         onNoteChange={setNote}
         onSetupDecisionChange={setupScript.setSetupDecisionChoice}
         onRunSetupChange={setupScript.setRunSetup}

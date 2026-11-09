@@ -15,8 +15,6 @@ import {
   registerPtyConnectionRemoteWindowsFocusReportTests,
   registerPtyConnectionWindowsFocusReportAuthorityTests
 } from '../input/pty-connection-windows-focus-report-authority.spec'
-import { registerPtyConnectionWindowsCjkRepaintTests } from '../output/pty-connection-windows-cjk-repaint.spec'
-import { registerPtyConnectionRendererRiskRepaintTests } from '../output/pty-connection-renderer-risk-repaint.spec'
 import { registerPtyConnectionTerminalInputGatingTests } from '../input/pty-connection-terminal-input-gating.spec'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
@@ -40,6 +38,4 @@ describe('pty-connection-windows-keyboard-reset', () => {
   registerPtyConnectionWindowsFocusReportAuthorityTests()
   registerPtyConnectionWindowsCursorResetDisposalTests()
 })
-describe('pty-connection-windows-cjk-repaint', registerPtyConnectionWindowsCjkRepaintTests)
-describe('pty-connection-renderer-risk-repaint', registerPtyConnectionRendererRiskRepaintTests)
 describe('pty-connection-terminal-input-gating', registerPtyConnectionTerminalInputGatingTests)

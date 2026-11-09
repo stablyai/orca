@@ -114,6 +114,7 @@ export function PrThreadScreen({
               placeholder={t('pullRequest.screens.replyPlaceholder', 'Reply…')}
               submitLabel={t('pullRequest.commentCard.reply', 'Reply')}
               submitting={actions.isReplyBusy(root.id)}
+              draftKey={actions.draftKey(root.id)}
               onSubmit={(body) => actions.reply(root, body)}
               autoFocus={focusReply}
               inline

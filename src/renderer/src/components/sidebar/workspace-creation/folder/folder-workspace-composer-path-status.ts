@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
-import { useFolderWorkspacePathStatusCacheExpiryTick } from '@/lib/folder-workspace-path-status-cache-expiry'
+import { useFolderWorkspacePathStatusCacheExpiryTick } from '@/lib/workspace/paths/folder-workspace-path-status-cache-expiry'
 import {
   getFolderWorkspacePathStatusDescription,
   getFolderWorkspacePathStatusTitle
-} from '@/lib/folder-workspace-path-status'
+} from '@/lib/workspace/paths/folder-workspace-path-status'
 import { isConfirmedStaleFolderPathStatus } from '../../../../../../shared/folder-workspaces/folder-workspace-path-status'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import { recomputeOn } from '@/lib/recompute-on'

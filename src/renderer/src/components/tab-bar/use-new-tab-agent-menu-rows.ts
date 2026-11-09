@@ -19,7 +19,7 @@ import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-co
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
-import { useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
+import { useHostStructuredAgentsVersion } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
   readHostStructuredAgents,
@@ -30,16 +30,16 @@ import {
   buildNewTabAgentMenuRows,
   type HostChatAnswer
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
-import { hostChatAnswer } from '@/lib/new-tab-agent-menu-rows'
+import { hostChatAnswer } from '@/lib/agent-session/launch/routing/new-tab-agent-menu-rows'
 import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
 } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
-import { readDetectedAgentsForTarget } from '@/lib/agent-detection-target-inventory'
+import { readDetectedAgentsForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { readChatProgram } from '@/lib/host-chat-program'
-import { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
+import { resolveAgentMenuSelection } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import { useHostAgentMenuSettings } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'

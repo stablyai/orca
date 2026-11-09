@@ -7,8 +7,8 @@ import {
 } from './stt-session-state'
 import { waitForSttWorkerStop, type SttWorkerStopOutcome } from './stt-worker-stop'
 import { STT_WORKER_HUNG_ERROR } from './stt-worker-process'
+import { LOCAL_DICTATION_STOP_TIMEOUT_MS } from '../../shared/dictation-finish-deadlines'
 
-const STOP_DICTATION_TIMEOUT_MS = 60_000
 // A cancel waits only this long behind a busy decode before giving up on it.
 const DISCARD_DICTATION_TIMEOUT_MS = 2_000
 
@@ -27,6 +27,10 @@ export function stopSttDictation(
     return Promise.resolve()
   }
   if (session.phase === 'stopping') {
+    // A cancel after Finish still aborts the cloud upload whose text it would throw away.
+    if (options.discard) {
+      session.cloud?.cancel()
+    }
     return session.stopPromise ?? Promise.resolve()
   }
   session.phase = 'stopping'
@@ -70,7 +74,7 @@ function stopLocalSession(
     worker: engine.worker,
     streamId: session.streamId,
     sink: session.sink,
-    timeoutMs: discard ? DISCARD_DICTATION_TIMEOUT_MS : STOP_DICTATION_TIMEOUT_MS,
+    timeoutMs: discard ? DISCARD_DICTATION_TIMEOUT_MS : LOCAL_DICTATION_STOP_TIMEOUT_MS,
     discard,
     finish: (outcome) => finishLocalStop(state, session, engine, outcome, discard)
   })
@@ -109,7 +113,17 @@ export function releaseSttSession(state: SttSessionState, session: SttSession): 
     engine.worker.postMessage({ type: 'discard', streamId: session.streamId })
   }
   if (sttEngineUsers(state, engine).length === 0) {
-    scheduleSttIdleTeardown(state)
+    if (engine.onUnloaded.length > 0) {
+      void teardownSttEngine(state, engine)
+    } else {
+      scheduleSttIdleTeardown(state)
+    }
+  }
+}
+
+function notifyUnloaded(engine: SttEngine): void {
+  for (const unloaded of engine.onUnloaded.splice(0)) {
+    unloaded()
   }
 }
 
@@ -129,7 +143,7 @@ export function failSttEngine(state: SttSessionState, engine: SttEngine, error: 
     session.sink({ type: 'error', error })
     session.sink({ type: 'stopped' })
   }
-  void engine.worker.terminate()
+  void engine.worker.terminate().finally(() => notifyUnloaded(engine))
 }
 
 export async function prepareSttModelForDeletion(
@@ -192,4 +206,5 @@ export async function teardownSttEngine(state: SttSessionState, engine: SttEngin
   engine.detach()
   // Resolves once the process is gone, so its model files are free to delete.
   await engine.worker.terminate()
+  notifyUnloaded(engine)
 }

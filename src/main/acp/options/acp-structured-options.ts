@@ -64,6 +64,26 @@ export class AcpStructuredOptions {
   // selector, so a concrete change away from this retires it; ordinary control proof never does.
   private selectorProof: Readonly<Record<string, string | undefined>> | null = null
 
+  // Native controls a withdrawn send stopped waiting for; their call deadline bounds each one.
+  private readonly unsettled = new Set<Promise<unknown>>()
+
+  /** Later controls and prompts wait for it, and its key is re-sent once it settles. */
+  holdUntilSettled(native: Promise<unknown>, key: string): void {
+    this.unsettled.add(native)
+    const settled = (): void => {
+      this.unsettled.delete(native)
+      this.invalidateInput(key)
+    }
+    native.then(settled, settled)
+  }
+
+  /** Resolves once no withdrawn control can still land at the agent. */
+  async whenControlsSettle(): Promise<void> {
+    while (this.unsettled.size > 0) {
+      await Promise.allSettled(this.unsettled)
+    }
+  }
+
   invalidateInput(key: string): void {
     this.appliedInput.delete(key)
     if (key === 'model') {

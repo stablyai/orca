@@ -1,12 +1,10 @@
+import type { CapturePaintHold } from '../debugger/guest-paint-hold'
 import type { WebContents } from 'electron'
 import { sendGuestCdpCommand } from '../debugger/guest-cdp-command'
 import {
   assertRemoteCliPageAccess,
   readRemoteCliAdmittedPage
 } from '../../routing/input-ownership/remote-cli-page-admission'
-
-/** Draws a hidden guest while a capture or agent input needs its frames; returns its release. */
-export type CapturePaintHold = () => () => void
 
 export const SCREENSHOT_TIMEOUT_MS = 8000
 // Probe offsets leave time for the original capture to finish before the deadline.

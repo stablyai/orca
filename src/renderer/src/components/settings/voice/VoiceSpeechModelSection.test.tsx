@@ -2,14 +2,12 @@
 
 // @vitest-environment happy-dom
 import { act } from 'react'
-import type { ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SpeechModelManifest, SpeechModelState } from '../../../../../shared/speech-types'
 import { getDefaultVoiceSettings } from '../../../../../shared/constants'
 
 const toastErrorMock = vi.hoisted(() => vi.fn())
-const menuDismissMock = vi.hoisted(() => vi.fn())
 
 vi.mock('sonner', () => ({
   toast: {
@@ -18,42 +16,9 @@ vi.mock('sonner', () => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({
+  getIntlLocale: () => 'en',
   translate: (_key: string, fallback: string, values?: Record<string, string>) =>
     values ? fallback.replace('{{value0}}', values.value0) : fallback
-}))
-
-vi.mock('../../ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DropdownMenuContent: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuItem: ({
-    children,
-    disabled,
-    onSelect,
-    className
-  }: {
-    children: ReactNode
-    disabled?: boolean
-    onSelect?: (event: Event) => void
-    className?: string
-  }) => (
-    <div
-      className={className}
-      aria-disabled={disabled}
-      role="option"
-      onClick={() => {
-        if (!disabled) {
-          const selectEvent = new Event('select', { cancelable: true })
-          onSelect?.(selectEvent)
-          if (!selectEvent.defaultPrevented) {
-            menuDismissMock()
-          }
-        }
-      }}
-    >
-      {children}
-    </div>
-  )
 }))
 
 import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
@@ -61,9 +26,9 @@ import { VoiceSpeechModelSection } from './VoiceSpeechModelSection'
 const localModel: SpeechModelManifest = {
   id: 'model-a',
   label: 'Local Model',
-  description: 'Runs offline',
   provider: 'local',
   language: 'en',
+  languages: ['en'],
   type: 'transducer',
   streaming: true,
   sampleRate: 16000,
@@ -106,8 +71,10 @@ function renderSection(args: {
         catalog={catalog}
         modelStates={modelStates}
         onUpdateVoiceSettings={vi.fn()}
-        onOpenOpenAiDialog={vi.fn()}
+        ratingLanguage="en"
+        onOpenCloudSetup={vi.fn()}
         onRefreshModelStates={args.refreshModelStates ?? vi.fn()}
+        cloudSettings={null}
       />
     )
   })
@@ -118,7 +85,6 @@ function renderSection(args: {
 describe('VoiceSpeechModelSection', () => {
   beforeEach(() => {
     toastErrorMock.mockReset()
-    menuDismissMock.mockReset()
   })
 
   afterEach(() => {

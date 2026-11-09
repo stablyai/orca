@@ -44,6 +44,8 @@ export type PrThreadActions = {
   isResolveBusy: (threadId: string) => boolean
   isEditBusy: (commentId: number) => boolean
   isDeleteBusy: (commentId: number) => boolean
+  // Where a reply to a comment waits until it is posted.
+  draftKey: (replyTo: number) => string | null
   // Repo slug for the slug-addressed edit/delete RPCs; gates the affordances when absent.
   prRepo: PRCommentRepoSlug | null
 }

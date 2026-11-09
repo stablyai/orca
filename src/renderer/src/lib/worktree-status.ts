@@ -1,6 +1,6 @@
 import { translate } from '@/i18n/i18n'
 import { resolveAgentTypeFromTerminalTitle } from '@/components/sidebar/workspace-card/activity/worktree-title-derived-agent-rows'
-import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
+import { detectAgentStatusFromTitle } from '../../../shared/agent-status/title/agent-title-status'
 import { tabHasLivePty } from '../../../shared/tab-has-live-pty'
 import {
   collectRuntimePaneLeafIds,
@@ -128,7 +128,7 @@ function tabHasStatus(
         continue
       }
       if (
-        classifyTitleActivity(title) === status &&
+        detectAgentStatusFromTitle(title) === status &&
         titleStatusIsAgentAttributable(title, tab.launchAgent)
       ) {
         return true
@@ -147,7 +147,7 @@ function tabHasStatus(
     return false
   }
   return (
-    classifyTitleActivity(tab.title) === status &&
+    detectAgentStatusFromTitle(tab.title) === status &&
     titleStatusIsAgentAttributable(tab.title, tab.launchAgent)
   )
 }

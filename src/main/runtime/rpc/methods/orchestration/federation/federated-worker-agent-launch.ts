@@ -102,7 +102,12 @@ export async function launchFederatedWorkerAgent(args: {
           activate: false,
           ...(args.creatorProvenance ? { creatorProvenance: args.creatorProvenance } : {}),
           lineage: params.crossStoreParent
-            ? { crossStoreParent: params.crossStoreParent }
+            ? {
+                crossStoreParent: params.crossStoreParent,
+                ...(params.crossStoreParentInferredFrom
+                  ? { crossStoreParentInferredFrom: params.crossStoreParentInferredFrom }
+                  : {})
+              }
             : { noParent: true }
         })
         created = result.worktree

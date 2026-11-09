@@ -3,7 +3,7 @@ import type { RateLimitRuntimeTarget } from '../../../../shared/rate-limit-types
 import { resolveLocalAccountRuntimeTarget } from '../../../../shared/local-account-runtime'
 import { getRendererAppPlatform } from '../../lib/renderer-app-platform'
 import { translate } from '@/i18n/i18n'
-import { getHostRuntimeLabel } from '../settings/accounts/scope/accounts-pane-runtime'
+import { getHostRuntimeLabel } from '../../lib/provider-accounts/account-runtime-label'
 
 export type CodexStatusRuntimeTarget = {
   runtime: 'host' | 'wsl'

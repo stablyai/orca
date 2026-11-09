@@ -13,7 +13,7 @@ import {
   COMPUTER_USE_SKILL_NAME,
   LINEAR_AGENT_SKILL_NAMES,
   ORCHESTRATION_SKILL_NAME
-} from '@/lib/agent-feature-skill-names'
+} from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill,
@@ -38,7 +38,7 @@ import {
 } from '../navigation/settings-project-list'
 import { resolveSettingsHostScope } from '../host-scope/settings-host-scope'
 import { useSettingsHostNavigation } from '../host-scope/use-settings-host-navigation'
-import { defaultScopeHost } from '@/lib/default-creation-host'
+import { defaultScopeHost } from '@/runtime/hosts/selection/default-creation-host'
 import {
   blockRemovalForUnsavedFiles,
   projectRemovalTargets

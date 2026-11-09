@@ -16,7 +16,7 @@ import type { AssignBody, DeviceRow } from './admin'
 import { ADMIN_JTI_KEY, admitJti, type AdminReplayGuard, type ReplayRefusal, type SeenJtis } from './admin-jti'
 import type { AssignResult, StoredAssignment } from './object-store'
 import type { EdgeClaims } from './env'
-import { SWEEP_AT_KEY, type Session } from './host-relay-base'
+import { KEEPALIVE_PROBE_MS, SWEEP_AT_KEY, type Session } from './host-relay-base'
 import { HostRelayPhones } from './host-relay-phones'
 
 export type { AuthorizeResult, ConfirmResult } from './host-relay-base'
@@ -48,6 +48,7 @@ export class HostRelay extends HostRelayPhones {
   > {
     const refused = await this.claimAdminJti(replay)
     if (refused) { return refused }
+    await this.closeSilentControls()
     if (this.liveControls().length > 0) { return { outcome: 'busy' } }
     const devices = this.store.freezeForExport()
     await this.closeSplices(() => true, RELAY_CLOSE_CODE.WRONG_CELL, 'host moving')
@@ -64,7 +65,8 @@ export class HostRelay extends HostRelayPhones {
     const assignment = this.store.assignment()
     // Another account now holds this machine's object; its move on wiped the earlier account's data.
     if (assignment && assignment.userId !== userId) { return { outcome: 'mismatch' } }
-    if (this.ctx.getWebSockets('control').length > 0 || this.store.activeBases() > 0) { return { outcome: 'busy' } }
+    await this.closeSilentControls()
+    if (this.liveControls().length > 0 || this.store.activeBases() > 0) { return { outcome: 'busy' } }
     await this.ctx.storage.deleteAlarm()
     await this.ctx.storage.deleteAll()
     this.storeCache = null
@@ -76,6 +78,7 @@ export class HostRelay extends HostRelayPhones {
   // desktop re-asks the director), and goes through the same path as that expiry. The assignment,
   // devices and splices are left as they are.
   async adminDrain(replay?: AdminReplayGuard | null): Promise<ReplayRefusal | { outcome: 'idle' } | { outcome: 'drained'; controls: number }> {
+    await this.closeSilentControls()
     const controls = this.liveControls()
     // An idle drain of a host nobody pushed changes nothing and must not give the object storage,
     // so its jti is not recorded; a copy of that token can at most drain a control that arrived
@@ -128,6 +131,8 @@ export class HostRelay extends HostRelayPhones {
       })
     }
     if (kind !== 'control') { return new Response(null, { status: 404 }) }
+    // A new control's hello decides rebind against the controls still listed.
+    await this.closeSilentControls()
     const origin = request.headers.get('x-edge-origin') ?? ''
     const claims = JSON.parse(request.headers.get('x-edge-claims') ?? 'null') as EdgeClaims
     const pair = new WebSocketPair()
@@ -166,7 +171,15 @@ export class HostRelay extends HostRelayPhones {
       const a = this.attachment(ws)
       if (!a) { continue }
       if (a.k === 'control' && a.phase === 'active') {
-        if (now - (a.lastPongAt ?? now) > this.config.silenceTimeoutMs) {
+        const seen = a.lastPongAt === undefined ? now : this.lastSeen(ws, a)
+        // A keepalive control gets one relay ping first (probeSilentControls); closed if it stays silent.
+        if (this.keepalive(a) && now - seen > this.config.silenceTimeoutMs && (a.probeAt === undefined || a.probeAt < seen)) {
+          this.send(ws, { type: 'ping', t: now })
+          a.probeAt = now
+          this.attach(ws, a)
+          continue
+        }
+        if (now - seen > this.config.silenceTimeoutMs && (!this.keepalive(a) || now - a.probeAt! >= KEEPALIVE_PROBE_MS - 50)) {
           this.close(ws, RELAY_CLOSE_CODE.PEER_DROPPED, 'control silence timeout')
           await this.onSocketGone(ws, RELAY_CLOSE_CODE.PEER_DROPPED, '')
           continue
@@ -185,7 +198,7 @@ export class HostRelay extends HostRelayPhones {
           await this.onSocketGone(ws, RELAY_CLOSE_CODE.DRAINING, '')
           continue
         }
-        if (now - (a.lastPingAt ?? 0) >= this.config.pingIntervalMs - 50) {
+        if (!this.keepalive(a) && now - (a.lastPingAt ?? 0) >= this.config.pingIntervalMs - 50) {
           if (a.lastPingAt) { metric(this.env, 'alarm_lag_ms', Math.max(0, now - (a.lastPingAt + this.config.pingIntervalMs)), '', [], '', a.place) }
           this.send(ws, { type: 'ping', t: now })
           a.lastPingAt = now

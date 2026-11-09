@@ -18,7 +18,6 @@ import { isFinalAgentSessionReadRefusal } from '../../../src/shared/agent-sessio
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
-  reduceStructuredAgentSession,
   type StructuredAgentSessionAction,
   type StructuredAgentSessionState
 } from '../../../src/shared/agent-session/structured-agent-session-reducer'
@@ -41,8 +40,18 @@ import {
 } from './mobile-structured-agent-session-rpc'
 import { subscribeTranscriptAfterHold } from './mobile-structured-transcript-subscription'
 import { useMobileOlderPageLoader, type OlderPagePhase } from './use-mobile-older-page-loader'
+import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
+import {
+  reduceStructuredChatState,
+  noteChatTranscript,
+  storedStructuredSessionState,
+  storedStructuredCopy,
+  unconfirmedStructuredStateSavedAt
+} from './native-chat/mobile-native-chat-transcript-writer'
+import { useStoredChatTranscript } from './native-chat/use-stored-chat-transcript'
 
 const MAX_RETAINED_SESSION_STATES = 32
+
 /** The host already batches streamed text, so phones merge only within about a frame; desktop keeps the shared window. */
 const STREAMED_TEXT_COALESCE_MS = 16
 
@@ -90,6 +99,8 @@ export function useMobileStructuredAgentState(args: {
   queuePause: AgentSessionQueuePause | null
   olderPages: OlderPagePhase
   loadEarlier: () => void
+  /** When the transcript on screen was saved, while it is an earlier launch's copy no read has confirmed. */
+  savedAt: number | null
 } {
   const { client, connected, enabled, sessionId, sessionKey } = args
   const commandsChanged = useRef(args.onCommandsChanged)
@@ -100,10 +111,23 @@ export function useMobileStructuredAgentState(args: {
   const [sessionStates, setSessionStates] = useState<Map<string, StructuredAgentSessionState>>(
     () => new Map()
   )
-  const state =
-    enabled && sessionKey
-      ? (sessionStates.get(sessionKey) ?? EMPTY_STRUCTURED_AGENT_SESSION)
-      : EMPTY_STRUCTURED_AGENT_SESSION
+  const retained = enabled && sessionKey ? sessionStates.get(sessionKey) : undefined
+  const stored =
+    enabled && sessionKey && !retained ? storedStructuredSessionState(sessionKey) : null
+  const state = retained ?? stored ?? EMPTY_STRUCTURED_AGENT_SESSION
+  // The phone's copy is written when a turn settles, on hidden and when the chat closes; never per frame.
+  const liveRead = enabled && sessionKey !== null && state.status === 'ready'
+  useEffect(() => {
+    if (liveRead && sessionKey) {
+      const isLive = () => client?.getState() === 'connected'
+      noteChatTranscript(sessionKey, state, isLive, (at) => storedStructuredCopy(state, at))
+    }
+  }, [client, liveRead, sessionKey, state])
+  const readingStore = useStoredChatTranscript({
+    identity: enabled && sessionId ? sessionKey : null,
+    read: !retained,
+    turnSettled: liveRead && !mobileStructuredAgentSessionWorking(state)
+  })
   const { phase: olderPages, load: loadOlderPages, supersede } = useMobileOlderPageLoader()
   const stateRef = useRef(state)
   useLayoutEffect(() => {
@@ -116,8 +140,11 @@ export function useMobileStructuredAgentState(args: {
         return
       }
       setSessionStates((current) => {
-        const previous = current.get(sessionKey) ?? EMPTY_STRUCTURED_AGENT_SESSION
-        const next = reduceStructuredAgentSession(previous, action, Date.now())
+        const previous =
+          current.get(sessionKey) ??
+          storedStructuredSessionState(sessionKey) ??
+          EMPTY_STRUCTURED_AGENT_SESSION
+        const next = reduceStructuredChatState(previous, action, Date.now())
         if (next === previous) {
           return current
         }
@@ -141,7 +168,7 @@ export function useMobileStructuredAgentState(args: {
     if (!client || !sessionId || !enabled) {
       return
     }
-    if (!connected) {
+    if (!connected || readingStore) {
       return
     }
     apply({ type: 'loading' })
@@ -198,7 +225,7 @@ export function useMobileStructuredAgentState(args: {
         )
         .catch(() => undefined)
     }
-  }, [apply, client, connected, enabled, sessionId, sessionKey, supersede])
+  }, [apply, client, connected, enabled, readingStore, sessionId, sessionKey, supersede])
 
   const loadEarlier = useCallback(() => {
     const start = oldestStructuredAgentSessionCursor(stateRef.current)
@@ -282,6 +309,7 @@ export function useMobileStructuredAgentState(args: {
     queuedMessages: state.queuedMessages === undefined ? null : (state.queuedMessages ?? []),
     queuePause: state.queuePause ?? null,
     olderPages,
-    loadEarlier
+    loadEarlier,
+    savedAt: unconfirmedStructuredStateSavedAt(state)
   }
 }

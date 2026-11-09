@@ -1,6 +1,6 @@
 import type { AgentLaunchChoices } from './agent-launch/choices/agent-launch-choices'
 import type { TelemetrySettings } from './telemetry-settings-types'
-import type { BrowserProfileScope } from './browser-profile-scope'
+import type { BrowserProfileScope } from './browser/profiles/browser-profile-scope'
 import type { GlobalSettingsBase } from './global-settings-base'
 import type { ExecutionHostId } from './execution-host'
 import type { OrcaWorkspaceLayout } from './orca-workspace-layout'
@@ -131,7 +131,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalDividerColorLight: string
   /** Mirror the terminal palette into Claude Code's theme; off restores the theme Orca replaced. */
   claudeCodeThemeSync: boolean
-  /** Existing profiles get `pending` and an offer toast at their next Claude launch; `settled` once shown or for new profiles. */
+  /** `pending` until the offer toast shows at the next Claude launch, then `settled`. */
   claudeCodeThemeSyncOffer?: 'pending' | 'settled'
   terminalInactivePaneOpacity: number
   terminalActivePaneOpacity: number
@@ -493,6 +493,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   telemetry?: TelemetrySettings
   /** Voice/dictation settings; persistence merge hydrates getDefaultSettings() values for older profiles. */
   voice?: VoiceSettings
+  /** One-shot migration flag for the Auto dictation-mode default; after migration an explicit Toggle sticks. */
+  voiceDictationModeDefaultedToAuto?: boolean
   /** Transcript full-text search consent + retention. Absent means off; nothing indexes until the user opts in. */
   aiVaultSearch?: AiVaultSearchSettings
 }
