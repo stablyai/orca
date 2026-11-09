@@ -26,6 +26,11 @@ export function WorkspaceSetupChoice({
     if (revealRequest === 0) {
       return
     }
+    if (decision !== null) {
+      // Chosen before the reveal fired: drop it rather than move focus onto Run.
+      onRevealed?.()
+      return
+    }
     // A submit without a choice lands here; scroll the choice into the dialog's view and focus it.
     const timer = setTimeout(() => {
       runButtonRef.current?.scrollIntoView({ block: 'nearest' })
@@ -33,7 +38,7 @@ export function WorkspaceSetupChoice({
       onRevealed?.()
     }, REVEAL_AFTER_EXPAND_MS)
     return () => clearTimeout(timer)
-  }, [revealRequest, onRevealed])
+  }, [revealRequest, onRevealed, decision])
 
   return (
     <div className="flex flex-wrap items-center gap-2">

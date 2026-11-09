@@ -35,4 +35,19 @@ describe('WorkspaceSetupChoice', () => {
     // Each handled request is cleared so a remount after a project switch cannot replay it.
     expect(onRevealed).toHaveBeenCalledTimes(2)
   })
+
+  it('does not move focus onto Run when the user chose before the reveal fired', () => {
+    vi.useFakeTimers()
+    Element.prototype.scrollIntoView = vi.fn()
+    const onRevealed = vi.fn()
+    const props = { onChange: vi.fn(), runLabel: 'Run', skipLabel: 'Skip', onRevealed }
+    const { rerender } = render(
+      <WorkspaceSetupChoice {...props} decision={null} revealRequest={1} />
+    )
+    rerender(<WorkspaceSetupChoice {...props} decision="skip" revealRequest={1} />)
+    vi.runAllTimers()
+
+    expect(document.activeElement).not.toBe(screen.getByRole('button', { name: 'Run' }))
+    expect(onRevealed).toHaveBeenCalledTimes(1)
+  })
 })
