@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
-import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-skill-names'
-import { getLinearAgentSkillUpdateTarget } from '@/lib/linear-agent-skill-update-target'
+import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/skills/installation/agent-feature-skill-names'
+import { getLinearAgentSkillUpdateTarget } from '@/lib/skills/installation/linear-agent-skill-update-target'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkillNames

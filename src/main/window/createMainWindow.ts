@@ -101,7 +101,7 @@ export function createMainWindow(
   const settings = store?.getSettings()
   browserManager.setDictationShortcutForwardingPredicate(() => {
     const voice = store?.getSettings().voice
-    // Guests forward only keydown, so Hold's release can't reach the renderer; the page keeps the key then.
+    // Chromium drops a page's key releases after a press cancelled here, so Hold can't see its release; the page keeps the key then.
     return voice?.enabled === true && voice.dictationMode !== 'hold'
   })
   const windowMaterial = resolveWindowMaterial(

@@ -11,6 +11,7 @@ const { getPathMock, handleMock, resolveProvisionedRootSourceMock } = vi.hoisted
 }))
 
 vi.mock('electron', () => ({
+  BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: getPathMock },
   ipcMain: { handle: handleMock, removeHandler: vi.fn() }
 }))

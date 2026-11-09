@@ -18,6 +18,7 @@ import {
   getSpeechModelDeletionErrorCode
 } from '../../speech/speech-model-deletion'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
+import { hostDictationTerms } from './runtime-dictation-terms'
 import {
   clearOpenAiSpeechApiKey,
   getOpenAiSpeechApiKeyProtection,
@@ -34,23 +35,28 @@ export type OpenAiSpeechKeyStatus = {
 export class RuntimeMobileSpeechCatalog {
   constructor(private readonly getStore: () => RuntimeStore | null) {}
 
-  async list(): Promise<RuntimeSpeechSetupState> {
+  /** `worktreeId` picks the repo terms a phone recognizing on its own spells with. */
+  async list(worktreeId?: string): Promise<RuntimeSpeechSetupState> {
     const store = this.requireStore()
     const voice = store.getSettings().voice ?? getDefaultVoiceSettings()
     const states = await getSpeechModelManager(store).getModelStates()
     const stateById = new Map(states.map((state) => [state.id, state]))
     // Omit unsupported status variants; older phones could treat them as pickable models.
-    const localRunnable = hasLocalSpeechRecognizer()
     const runnable = SPEECH_MODEL_CATALOG.filter(
       (manifest) =>
-        isOfferedSpeechModel(manifest) && (localRunnable || !isLocalSpeechModel(manifest))
+        isOfferedSpeechModel(manifest) &&
+        (!isLocalSpeechModel(manifest) || hasLocalSpeechRecognizer()) &&
+        // Phones offer an unready cloud row as "add an OpenAI key", which can't set this one up.
+        (manifest.provider !== 'openai-compatible' ||
+          stateById.get(manifest.id)?.status === 'ready')
     )
     const models: RuntimeSpeechModelSummary[] = runnable.map((manifest) => {
       const state = stateById.get(manifest.id)
       return {
         id: manifest.id,
         label: manifest.label,
-        provider: manifest.provider === 'openai' ? 'openai' : 'local',
+        // Older phones know only these two; both cloud providers transcribe on this host.
+        provider: isLocalSpeechModel(manifest) ? 'local' : 'openai',
         sizeBytes: manifest.sizeBytes ?? null,
         recommended: manifest.recommended === true,
         status: state?.status ?? 'not-downloaded',
@@ -63,6 +69,7 @@ export class RuntimeMobileSpeechCatalog {
       dictationMode: voice.dictationMode === 'hold' ? 'hold' : 'toggle',
       dictationHoldToRecord: voice.dictationHoldToRecord !== false,
       removeFillerWords: voice.removeFillerWords !== false,
+      dictationTerms: hostDictationTerms(store, worktreeId),
       models
     }
   }

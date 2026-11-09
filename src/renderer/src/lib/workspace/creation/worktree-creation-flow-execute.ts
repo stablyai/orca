@@ -1,9 +1,7 @@
 import { prepareWorktreeCreationHooks, setupCreateArgs } from './worktree-creation-hook-preparation'
 import { useAppStore } from '@/store/index'
-import {
-  activateAndRevealWorktree,
-  type ActivateAndRevealResult
-} from '@/lib/workspace/activation/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 import {
   attachEphemeralVmRuntimeToWorkspace,
@@ -11,6 +9,7 @@ import {
   prepareRequestForCreate
 } from '@/lib/ephemeral-vm-worktree-creation'
 import { getProvisionedRootCreateOptions } from '@/lib/provisioned-root-create-options'
+import { releaseVmCreateCheckout } from '@/lib/vm-create-hidden-checkouts'
 import {
   formatWorkspaceCreateError,
   getWorkspaceCreateErrorToastMessage
@@ -127,7 +126,7 @@ export async function executeWorktreeCreation(
       return
     }
     if (preparedRequest.ephemeralVmRuntimeId) {
-      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
+      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest, creationId)
     }
     if (recoverWorktreeLegacyPreparation(creationId, preparedRequest, error)) {
       return
@@ -147,10 +146,12 @@ export async function executeWorktreeCreation(
   // Why: cancellation can race a successful backend adoption; clean up again after it settles so an adopted workspace cannot outlive its destroyed VM.
   if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
     if (preparedRequest.ephemeralVmRuntimeId) {
-      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
+      await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest, creationId)
     }
     return
   }
+  // The VM's checkout is now this workspace (or its project), so the sidebar may list it.
+  releaseVmCreateCheckout(creationId)
   await attachEphemeralVmRuntimeToWorkspace(preparedRequest, worktree.id)
 
   const backendSpawned = result.startupTerminal?.spawned === true

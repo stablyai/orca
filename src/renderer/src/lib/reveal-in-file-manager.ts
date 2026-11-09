@@ -12,7 +12,7 @@ import {
 } from './local-path-open-guard'
 import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
 import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
-import { getConnectionIdFromState } from './connection-owner-resolution'
+import { getConnectionIdFromState } from './workspace/ownership/connection-owner-resolution'
 import type { AppState } from '@/store/types'
 
 /** Menu label for showing a path in the OS file manager, as each platform names it. */

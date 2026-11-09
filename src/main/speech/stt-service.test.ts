@@ -89,10 +89,7 @@ const {
     static instances: HoistedMockOpenAiTranscriptionSession[] = []
     feedCalls: { samples: Float32Array; sampleRate: number }[] = []
 
-    constructor(
-      readonly modelId: string,
-      readonly readApiKey: () => string
-    ) {
+    constructor(readonly readTarget: () => { model: string; apiKey: string }) {
       HoistedMockOpenAiTranscriptionSession.instances.push(this)
     }
 
@@ -101,7 +98,8 @@ const {
     }
 
     finish(): Promise<string> {
-      return Promise.resolve(`${this.modelId}:${this.readApiKey()}`)
+      const target = this.readTarget()
+      return Promise.resolve(`${target.model}:${target.apiKey}`)
     }
   }
 
@@ -185,8 +183,11 @@ vi.mock('./model-catalog', () => ({
           }
 }))
 
-vi.mock('./openai-api-key-store', () => ({
-  readOpenAiSpeechApiKey: readOpenAiSpeechApiKeyMock
+vi.mock('./cloud-transcription-target', () => ({
+  resolveCloudTranscriptionTarget: (modelId: string) => ({
+    model: modelId,
+    apiKey: readOpenAiSpeechApiKeyMock()
+  })
 }))
 
 vi.mock('./openai-transcription-client', () => ({
@@ -266,6 +267,35 @@ describe('SttService', () => {
       [{ type: 'partial', text: 'Um, ship' }],
       [{ type: 'final', text: 'Um, ship it, uh, today.' }]
     ])
+  })
+
+  it('spells each dictation with its own terms on one shared recognizer', async () => {
+    const service = new SttService(readyModels(), spawnMockWorker)
+    const desktop = vi.fn<SttEventSink>()
+    const phone = vi.fn<SttEventSink>()
+
+    await service.startDictation('model-a', desktop, [{ term: 'pnpm' }], 'desktop')
+    await service.startDictation(
+      'model-a',
+      phone,
+      [{ term: 'kubectl', heardAs: 'cube control' }],
+      'mobile:phone-a:1'
+    )
+    const worker = getLastWorker()!
+    const opens = worker.messages.filter((message) => message.type === 'open')
+    for (const { streamId } of opens) {
+      worker.emit('message', { type: 'final', streamId, text: 'Run PNPM and cube control.' })
+    }
+
+    expect(getCreatedWorkerCount()).toBe(1)
+    expect(opens).toEqual([
+      { type: 'open', streamId: opens[0].streamId, vocabulary: ['pnpm'] },
+      { type: 'open', streamId: opens[1].streamId, vocabulary: ['kubectl'] }
+    ])
+    expect(desktop.mock.calls.at(-1)).toEqual([
+      { type: 'final', text: 'Run pnpm and cube control.' }
+    ])
+    expect(phone.mock.calls.at(-1)).toEqual([{ type: 'final', text: 'Run PNPM and kubectl.' }])
   })
 
   it("hands a renderer's audio port only to its own on-device stream", async () => {
@@ -353,6 +383,24 @@ describe('SttService', () => {
     await service.startDictation('model-a', vi.fn(), undefined, 'mobile:2')
 
     expect(getCreatedWorkerCount()).toBe(1)
+  })
+
+  it('keeps a recognizer marked for unload until its dictation ends, then unloads it', async () => {
+    const service = new SttService(readyModels(), spawnMockWorker)
+
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+    const worker = getLastWorker()!
+    let unloaded = false
+    const unload = service.unloadModelWhenIdle().then(() => {
+      unloaded = true
+    })
+    await Promise.resolve()
+    expect(worker.terminated).toBe(false)
+    expect(unloaded).toBe(false)
+
+    await service.stopDictation('desktop')
+    await unload
+    expect(worker.terminated).toBe(true)
   })
 
   it('kills a worker stuck in a decode instead of making a cancel wait for it', async () => {
@@ -587,12 +635,17 @@ describe('SttService', () => {
   it('does not treat internal warm-worker replacement as startup cancellation', async () => {
     const service = new SttService(readyModels(), spawnMockWorker)
 
-    await service.startDictation('model-a', vi.fn(), '/tmp/hotwords-a.txt', 'desktop:1')
+    await service.startDictation('whisper-model', vi.fn(), undefined, 'desktop:1', {
+      dictationLanguage: 'ja'
+    })
     await service.stopDictation('desktop:1')
 
     await expect(
-      service.startDictation('model-a', vi.fn(), '/tmp/hotwords-b.txt', 'desktop:1')
+      service.startDictation('whisper-model', vi.fn(), undefined, 'desktop:1', {
+        dictationLanguage: 'ko'
+      })
     ).resolves.toBe(undefined)
+    expect(getCreatedWorkerCount()).toBe(2)
   })
 
   it('removes lifecycle listeners when the active worker errors', async () => {

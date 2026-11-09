@@ -907,15 +907,13 @@
       "modelDescriptions": {
         "parakeetV3": "為 25 種歐洲語言提供最高準確度。支援標點符號、大小寫及詞級時間戳記。",
         "parakeetV2": "僅限英文。準確度與 v3 相近，速度更快。支援標點符號及大小寫。",
-        "zipformerBilingual": "中文 + 英文，支援語言混用。低延遲即時串流。",
-        "paraformerBilingual": "中文（國語 + 方言）+ 英文。擅長辨識各地口音與方言。",
         "zipformerStreamingEnRetired": "已不再提供：它會遺漏句子開頭。刪除它以釋放空間。",
-        "zipformerStreamingZh": "僅限中文。1,400 萬個參數的超輕量模型，適合資源有限的裝置。",
-        "zipformerStreamingKo": "僅限韓文。低延遲即時串流。",
-        "parakeetJa": "僅限日文。使用超過 3.5 萬小時的自然語音訓練。支援標點符號。",
         "whisperTiny": "支援 90 多種語言。準確度低於 Parakeet，但語言涵蓋範圍最廣。",
         "senseVoice": "支援中文、英文、日文、韓文及粵語，並自動偵測語言。",
-        "gptTranscribe": "準確度高的雲端轉錄。需要 OpenAI API 金鑰。"
+        "gptTranscribe": "準確度高的雲端轉錄。需要 OpenAI API 金鑰。",
+        "whisperLargeV3Turbo": "日語、韓語和中文準確度最高，支援 90 多種語言。速度比 Parakeet 慢。",
+        "retiredForEngine": "已不再提供：語音引擎已無法執行此模型。刪除它以釋放空間。",
+        "nemotron": "支援英語、西班牙語、德語等多種語言，可自動辨識語言。"
       }
     },
     "diagnostics": {
@@ -9290,7 +9288,10 @@
           "openAiKeyName": "您的 OpenAI 轉錄金鑰",
           "dictationShortcutDescription": "按 {{shortcut}} 可將文字聽寫到目前取得焦點的任意窗格中。",
           "dictationModeAuto": "自動",
-          "dictationModesWithAutoDescription": "自動：按住 {{shortcut}} 聽寫，放開即停止；輕按則開始或停止。按住：按住 {{shortcut}} 期間進行聽寫。切換：按一次 {{shortcut}} 開始，再按一次停止。"
+          "dictationModesWithAutoDescription": "自動：按住 {{shortcut}} 聽寫，放開即停止；輕按則開始或停止。按住：按住 {{shortcut}} 期間進行聽寫。切換：按一次 {{shortcut}} 開始，再按一次停止。",
+          "speechGpuLabel": "使用 GPU",
+          "speechGpuDescription": "顯示卡可用時在顯示卡上辨識語音，失敗時改用 CPU。如果聽寫導致電腦當機或重新啟動，請關閉。",
+          "updateToFasterVersion": "更新到更快的版本（{{value0}} MB）"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "刪除 {{value0}}",
@@ -16742,12 +16743,14 @@
           "noModel": "未選擇語音模型。請在「設定 > 語音」中下載一個。",
           "disabled": "語音聽寫已停用。請在「設定 > 語音」中啟用。",
           "notReady": "語音模型尚未就緒。請在「設定 > 語音」中下載。",
+          "modelNeedsUpdate": "你的語音模型需要更新才能繼續使用。請在「設定 > 語音」中更新到更快的版本。",
           "unknownModel": "所選模型已無法使用。請在「設定 > 語音」中選擇其他模型。",
           "5d2c3e7ae3": "未偵測到語音。",
           "micFallback": "所選麥克風不可用。使用系統預設值。",
           "micDisconnected": "麥克風已中斷連線。聽寫已停止。",
           "cloudLimitReached": "已達 10 分鐘雲端上限。聽寫已停止。",
-          "stoppedAfterSilence": "靜音一分鐘後已停止"
+          "stoppedAfterSilence": "靜音一分鐘後已停止",
+          "retryUnmatched": "重試時無法判斷哪些字詞已輸入，因此已全部插入。"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "無法插入聽寫內容，已複製到剪貼簿。",
@@ -16755,7 +16758,21 @@
           "lost": "無法插入或複製聽寫內容。"
         },
         "DictationIndicator": {
-          "4977162383": "聲音太大"
+          "4977162383": "聲音太大",
+          "finishing": "正在完成…",
+          "listening": "正在聆聽…",
+          "cancel": "取消",
+          "finish": "完成",
+          "oneMinuteLeft": "剩下 1 分鐘。",
+          "sendsWhenLanded": "文字送達後自動傳送",
+          "entersWhenLanded": "文字送達後自動按 Enter"
+        },
+        "DictationPillFailure": {
+          "discard": "捨棄錄音",
+          "modelFailed": "無法載入語音模型。",
+          "transcribeFailed": "無法轉錄。已保留錄音。",
+          "openSettings": "開啟設定",
+          "retry": "重試"
         }
       },
       "dashboard": {
@@ -19194,6 +19211,7 @@
         "orcaStopCanContinue": "你可以在此對話中繼續。",
         "orcaStopUnnamedServer": "遠端伺服器",
         "permissionDenied": "{{agent}} 拒絕了權限。查看詳細資訊。",
+        "safetyReviewApproved": "{{agent}} 已核准此操作。查看詳細資訊。",
         "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
         "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
         "forkedFrom": "分支來源"
@@ -19629,7 +19647,8 @@
       "contextUsage": {
         "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
         "title": "上下文",
-        "estimated": "根據上一次回應的估算值。"
+        "estimated": "根據上一次回應的估算值。",
+        "deferredNote": "按需載入，不計入已用總量。"
       },
       "contextMenu": {
         "copyOrcaSessionId": "複製 Orca 工作階段 ID",
@@ -23238,5 +23257,31 @@
     "branchName": "分支名稱",
     "invalidBranchName": "此分支名稱無效。請選擇其他名稱。",
     "createBranchFailed": "Orca 無法建立分支。請在終端機中檢查此儲存庫，然後重試。"
+  },
+  "speechModelUpdate": {
+    "updateTitle": "更新你的語音模型",
+    "updateDescription": "聽寫現在使用更快的引擎。{{model}} 需要下載一次（{{size}} MB）才能再次聽寫。",
+    "update": "更新",
+    "replacedTitle": "你的語音模型已被取代",
+    "replacedDescription": "{{old}} 無法在新的語音引擎上執行。{{model}} 將取代它（{{size}} MB）。",
+    "downloadReplacement": "下載 {{model}}",
+    "later": "稍後",
+    "dismiss": "關閉",
+    "updatingTitle": "正在更新 {{model}}",
+    "downloadingTitle": "正在下載 {{model}}",
+    "downloadingDescription": "你可以繼續工作。完成後即可再次使用聽寫。",
+    "progress": "{{done}} / {{total}} MB",
+    "cancel": "取消",
+    "doneTitle": "聽寫已就緒",
+    "doneDescription": "{{model}} 已更新。舊檔案已移除。",
+    "doneRetiredDescription": "{{model}} 已設定完成。舊的 {{old}} 檔案仍在磁碟上。",
+    "keep": "保留",
+    "deleteOld": "刪除舊模型",
+    "deleteFailed": "無法刪除 {{model}}。",
+    "updateFailedTitle": "無法更新 {{model}}",
+    "downloadFailedTitle": "無法下載 {{model}}",
+    "failedAtDescription": "下載在 {{mb}} MB 時中斷。請檢查連線後再試一次。",
+    "failedDescription": "下載已中斷。請檢查連線後再試一次。",
+    "tryAgain": "再試一次"
   }
 }

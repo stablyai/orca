@@ -15,8 +15,11 @@ import {
   bundledSkillInstallNeedsAttention,
   useBundledSkillInstall
 } from '@/hooks/use-bundled-skill-install'
-import { LINEAR_AGENT_SKILL_NAMES, ORCA_LINEAR_SKILL_NAME } from '@/lib/agent-feature-skill-names'
-import { getLinearAgentSkillUpdateTarget } from '@/lib/linear-agent-skill-update-target'
+import {
+  LINEAR_AGENT_SKILL_NAMES,
+  ORCA_LINEAR_SKILL_NAME
+} from '@/lib/skills/installation/agent-feature-skill-names'
+import { getLinearAgentSkillUpdateTarget } from '@/lib/skills/installation/linear-agent-skill-update-target'
 import { cn } from '@/lib/utils'
 import { getLinearAgentSkillSetupInlineRuntimeCopy } from '../../sidebar/linear-agent-skill-setup-copy'
 import type { LinearAgentSkillPromptSettings } from '../../sidebar/linear-agent-skill-runtime'

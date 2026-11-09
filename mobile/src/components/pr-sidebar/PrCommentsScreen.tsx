@@ -91,6 +91,7 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
             isResolveBusy: commentActions.isResolveBusy,
             isEditBusy: commentActions.isEditBusy,
             isDeleteBusy: commentActions.isDeleteBusy,
+            draftKey: commentActions.draftKey,
             prRepo: data?.pr.prRepo ?? null
           }
         : undefined,
@@ -195,6 +196,7 @@ export function PrCommentsScreen({ tab, onBack, bottomInset = 0, onOpenFile }: S
                   })}
                   submitLabel={t('pullRequest.commentsSection.comment', 'Comment')}
                   submitting={commentActions.isRootBusy}
+                  draftKey={commentActions.draftKey(null)}
                   onSubmit={commentActions.addRootComment}
                   inline
                 />

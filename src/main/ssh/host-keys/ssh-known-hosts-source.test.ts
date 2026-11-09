@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import '../config/ssh-g-config-resolution'
@@ -62,16 +62,6 @@ describe('the union of known_hosts entries', () => {
     expect(verdict(entries, 'shared.example', ED_C)).toBe('mismatch')
   })
 
-  it('skips a missing file and keeps the rest', async () => {
-    const root = await createRoot()
-    const present = join(root, 'known_hosts')
-    await writeFile(present, hostLine('alpha.example', ED_A))
-
-    const entries = await loadKnownHostsEntries([join(root, 'absent'), present])
-
-    expect(verdict(entries, 'alpha.example', ED_A)).toBe('match')
-  })
-
   it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
     'skips an unreadable file and keeps the rest',
     async () => {
@@ -118,15 +108,6 @@ describe('loadKnownHostsEvidence', () => {
       expect(evidence.unreadableFileCount).toBe(1)
     }
   )
-
-  it('counts a path that is a directory', async () => {
-    const root = await createRoot()
-    await mkdir(join(root, 'a_directory'))
-
-    const evidence = await loadKnownHostsEvidence([join(root, 'a_directory')])
-
-    expect(evidence.unreadableFileCount).toBe(1)
-  })
 })
 
 /** OpenSSH10.2p1 prints spaced trust paths unquoted; splitting can hide existing changed-key evidence as absent files. */

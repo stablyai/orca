@@ -501,15 +501,13 @@
       "modelDescriptions": {
         "parakeetV3": "유럽 25개 언어에서 가장 높은 정확도. 문장 부호, 대소문자, 단어별 타임스탬프 지원.",
         "parakeetV2": "영어 전용. v3와 정확도는 비슷하며 속도는 더 빠릅니다. 문장 부호와 대소문자 지원.",
-        "zipformerBilingual": "중국어 + 영어 혼용 지원. 지연 시간이 짧은 실시간 스트리밍.",
-        "paraformerBilingual": "중국어(표준 중국어 + 방언) + 영어. 다양한 중국어 억양과 지역 방언에 강합니다.",
         "zipformerStreamingEnRetired": "더 이상 제공되지 않습니다. 문장 앞부분이 누락됩니다. 삭제하여 공간을 확보하세요.",
-        "zipformerStreamingZh": "중국어 전용. 파라미터 1,400만 개의 초경량 모델로, 자원이 제한된 기기에 적합합니다.",
-        "zipformerStreamingKo": "한국어 전용. 지연 시간이 짧은 실시간 스트리밍.",
-        "parakeetJa": "일본어 전용. 3만 5천 시간 이상의 자연 발화로 학습했습니다. 문장 부호 지원.",
         "whisperTiny": "90개 이상 언어 지원. Parakeet보다 정확도는 낮지만 지원 언어가 가장 다양합니다.",
         "senseVoice": "중국어, 영어, 일본어, 한국어, 광둥어를 지원하며 언어를 자동으로 감지합니다.",
-        "gptTranscribe": "정확도가 높은 클라우드 전사. OpenAI API 키가 필요합니다."
+        "gptTranscribe": "정확도가 높은 클라우드 전사. OpenAI API 키가 필요합니다.",
+        "whisperLargeV3Turbo": "일본어, 한국어, 중국어에서 가장 정확하며 90개 이상의 언어를 지원합니다. Parakeet보다 느립니다.",
+        "retiredForEngine": "더 이상 제공되지 않음: 음성 엔진에서 더 이상 실행할 수 없습니다. 삭제하여 공간을 확보하세요.",
+        "nemotron": "영어, 스페인어, 독일어 등 다양한 언어를 지원하며 언어를 자동으로 감지합니다."
       }
     },
     "diagnostics": {
@@ -8773,7 +8771,10 @@
           "openAiKeyName": "OpenAI 트랜스크립션 키",
           "dictationShortcutDescription": "{{shortcut}} 단축키를 눌러 포커스된 패널에 텍스트를 받아쓰세요.",
           "dictationModeAuto": "자동",
-          "dictationModesWithAutoDescription": "자동: {{shortcut}} 단축키를 길게 누르면 손을 뗄 때까지 받아쓰기하고, 짧게 누르면 시작하고 중지합니다. 길게 누르기: {{shortcut}} 단축키를 누르고 있는 동안 받아쓰기합니다. 토글: {{shortcut}} 단축키를 한 번 누르면 받아쓰기를 시작하고, 다시 누르면 중지합니다."
+          "dictationModesWithAutoDescription": "자동: {{shortcut}} 단축키를 길게 누르면 손을 뗄 때까지 받아쓰기하고, 짧게 누르면 시작하고 중지합니다. 길게 누르기: {{shortcut}} 단축키를 누르고 있는 동안 받아쓰기합니다. 토글: {{shortcut}} 단축키를 한 번 누르면 받아쓰기를 시작하고, 다시 누르면 중지합니다.",
+          "speechGpuLabel": "GPU 사용",
+          "speechGpuDescription": "그래픽 카드가 작동하면 그래픽 카드에서, 실패하면 CPU에서 음성을 인식합니다. 받아쓰기 중 컴퓨터가 멈추거나 다시 시작되면 끄세요.",
+          "updateToFasterVersion": "더 빠른 버전으로 업데이트 ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} 제거",
@@ -16293,12 +16294,14 @@
           "noModel": "선택된 음성 모델이 없습니다. 설정 > 음성에서 다운로드하세요.",
           "disabled": "음성 받아쓰기가 비활성화되어 있습니다. 설정 > 음성에서 활성화하세요.",
           "notReady": "음성 모델이 준비되지 않았습니다. 설정 > 음성에서 다운로드하세요.",
+          "modelNeedsUpdate": "음성 모델을 계속 사용하려면 업데이트가 필요합니다. 설정 > 음성에서 더 빠른 버전으로 업데이트하세요.",
           "unknownModel": "선택한 모델을 더 이상 사용할 수 없습니다. 설정 > 음성에서 다른 모델을 선택하세요.",
           "5d2c3e7ae3": "음성이 감지되지 않았습니다.",
           "micFallback": "선택한 마이크를 사용할 수 없습니다. 시스템 기본값을 사용합니다.",
           "micDisconnected": "마이크 연결이 끊어졌습니다. 받아쓰기가 중지되었습니다.",
           "cloudLimitReached": "클라우드 10분 제한에 도달해 받아쓰기가 중지되었습니다.",
-          "stoppedAfterSilence": "1분 동안 말소리가 없어 중지했습니다."
+          "stoppedAfterSilence": "1분 동안 말소리가 없어 중지했습니다.",
+          "retryUnmatched": "다시 시도할 때 이미 입력된 단어를 찾지 못해 전부 삽입했습니다."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "받아쓰기를 삽입할 수 없어 클립보드에 복사했습니다.",
@@ -16306,7 +16309,21 @@
           "lost": "받아쓰기를 삽입하거나 복사할 수 없습니다."
         },
         "DictationIndicator": {
-          "4977162383": "음량이 너무 큽니다"
+          "4977162383": "음량이 너무 큽니다",
+          "finishing": "마무리 중…",
+          "listening": "듣는 중…",
+          "cancel": "취소",
+          "finish": "완료",
+          "oneMinuteLeft": "1분 남았습니다.",
+          "sendsWhenLanded": "텍스트가 입력되면 전송합니다",
+          "entersWhenLanded": "텍스트가 입력되면 Enter를 누릅니다"
+        },
+        "DictationPillFailure": {
+          "discard": "녹음 삭제",
+          "modelFailed": "음성 모델을 불러오지 못했습니다.",
+          "transcribeFailed": "받아쓰기에 실패했습니다. 녹음은 보관됩니다.",
+          "openSettings": "설정 열기",
+          "retry": "다시 시도"
         }
       },
       "dashboard": {
@@ -19072,6 +19089,7 @@
         "orcaStopCanContinue": "이 대화에서 계속할 수 있습니다.",
         "orcaStopUnnamedServer": "원격 서버",
         "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
+        "safetyReviewApproved": "{{agent}}이(가) 이 작업을 승인했습니다. 세부 정보 보기.",
         "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
         "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트).",
         "forkedFrom": "분기 원본"
@@ -19202,7 +19220,8 @@
       "contextUsage": {
         "label": "컨텍스트 {{used}}/{{window}} 토큰, {{percent}}% 사용",
         "title": "컨텍스트",
-        "estimated": "마지막 응답 기준 추정치입니다."
+        "estimated": "마지막 응답 기준 추정치입니다.",
+        "deferredNote": "필요할 때 불러옵니다. 사용량에 포함되지 않습니다."
       },
       "dismissDeliveryNotice": "닫기",
       "addSelectionToChat": "채팅에 추가",
@@ -23289,5 +23308,31 @@
     "branchName": "브랜치 이름",
     "invalidBranchName": "이 브랜치 이름은 유효하지 않습니다. 다른 이름을 선택하세요.",
     "createBranchFailed": "Orca가 브랜치를 만들지 못했습니다. 터미널에서 이 저장소를 확인한 후 다시 시도하세요."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "음성 모델을 업데이트하세요",
+    "updateDescription": "이제 받아쓰기가 더 빠른 엔진에서 실행됩니다. 다시 받아쓰려면 {{model}}을(를) 한 번 다운로드해야 합니다({{size}} MB).",
+    "update": "업데이트",
+    "replacedTitle": "음성 모델이 교체되었습니다",
+    "replacedDescription": "{{old}}은(는) 새 음성 엔진에서 실행할 수 없습니다. {{model}}이(가) 대신합니다({{size}} MB).",
+    "downloadReplacement": "{{model}} 다운로드",
+    "later": "나중에",
+    "dismiss": "닫기",
+    "updatingTitle": "{{model}} 업데이트 중",
+    "downloadingTitle": "{{model}} 다운로드 중",
+    "downloadingDescription": "계속 작업하셔도 됩니다. 완료되면 받아쓰기를 다시 사용할 수 있습니다.",
+    "progress": "{{done}} / {{total}} MB",
+    "cancel": "취소",
+    "doneTitle": "받아쓰기 준비 완료",
+    "doneDescription": "{{model}}이(가) 업데이트되었습니다. 이전 파일은 삭제되었습니다.",
+    "doneRetiredDescription": "{{model}} 설정이 완료되었습니다. 이전 {{old}} 파일은 아직 디스크에 있습니다.",
+    "keep": "유지",
+    "deleteOld": "이전 모델 삭제",
+    "deleteFailed": "{{model}}을(를) 삭제하지 못했습니다.",
+    "updateFailedTitle": "{{model}}을(를) 업데이트하지 못했습니다",
+    "downloadFailedTitle": "{{model}}을(를) 다운로드하지 못했습니다",
+    "failedAtDescription": "다운로드가 {{mb}} MB에서 중단되었습니다. 연결을 확인하고 다시 시도하세요.",
+    "failedDescription": "다운로드가 중단되었습니다. 연결을 확인하고 다시 시도하세요.",
+    "tryAgain": "다시 시도"
   }
 }

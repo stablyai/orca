@@ -1,5 +1,5 @@
 import { pickApprovedSetupHashes } from '../../../../../../shared/worktree/approved-setup-hashes'
-import { agentLaunchRecoveryMessage } from '@/lib/agent-launch-failure'
+import { agentLaunchRecoveryMessage } from '@/lib/agent-session/launch/failure/agent-launch-failure'
 import { prepareDirectWorkItemSetup } from './direct-work-item-setup'
 import type { DirectWorkItemLaunchResult } from './direct-work-item-setup'
 import { useAppStore } from '@/store/index'

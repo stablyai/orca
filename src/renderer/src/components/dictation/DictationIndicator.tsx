@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
 import { ArrowUp, Check, CornerDownLeft, Loader2 } from 'lucide-react'
 import { isDictationPillShown } from '../../../../shared/dictation-session-machine'
+import { dictationSeparators } from '../../../../shared/dictation-transcript-spacing'
 import { CLOUD_DICTATION_MAX_SECONDS } from '../../../../shared/rpc-contract/speech-params'
 import type { SpeechModelManifest } from '../../../../shared/speech-types'
 import { dispatchDictationControl } from './dictation-control-events'
@@ -75,12 +76,13 @@ function useIsCloudModel(): boolean {
     let current = true
     if (!catalogRequest) {
       catalogRequest = Promise.resolve()
-        .then(() => window.api.speech.getCatalog())
+        // The paired web client's fallback resolves with nothing rather than a list.
+        .then(async () => (await window.api.speech.getCatalog()) ?? [])
         .catch(() => [])
     }
     void catalogRequest.then((catalog) => {
       if (current) {
-        setCloud(catalog.some((model) => model.id === modelId && model.provider === 'openai'))
+        setCloud(catalog.some((model) => model.id === modelId && model.provider !== 'local'))
       }
     })
     return () => {
@@ -131,7 +133,7 @@ const keepFocusProps = { [KEEPS_FOCUS_ATTRIBUTE]: '', onMouseDown: keepFocus }
 function DictationPill({ captureLive, anchor, failure, queued }: DictationIndicatorProps) {
   const t = useTranslate()
   const dictationState = useAppStore((state) => state.dictationState)
-  const partialTranscript = useAppStore((state) => state.partialTranscript)
+  const liveText = useAppStore((state) => state.liveText)
   const isHoldMode = useAppStore((state) => state.settings?.voice?.dictationMode === 'hold')
   const shortcut = useShortcutKeyDetails('voice.dictation')
   const box = useDictationPillBox(anchor)
@@ -144,7 +146,8 @@ function DictationPill({ captureLive, anchor, failure, queued }: DictationIndica
   const showSpinner = useDelayedFlag(finishing, FINISH_SPINNER_DELAY_MS)
   const nearCloudLimit = cloudModel && seconds >= CLOUD_LIMIT_WARNING_SECONDS
   const failedKind = dictationState === 'error' ? failure : null
-  const transcript = partialTranscript.trim()
+  const committed = liveText.committed
+  const tentative = liveText.tentative.trim()
   const queuedStatus =
     queued === 'chat'
       ? t(
@@ -197,12 +200,17 @@ function DictationPill({ captureLive, anchor, failure, queued }: DictationIndica
               )}
               <span className="truncate">{queuedStatus}</span>
             </span>
-          ) : transcript ? (
+          ) : committed || tentative ? (
+            // Right-aligned so the newest words stay in view; older ones fade off the left edge.
             <span
               aria-hidden
-              className="flex h-6 min-w-0 flex-1 items-center justify-end overflow-hidden whitespace-nowrap text-muted-foreground [mask-image:linear-gradient(to_right,transparent,black_24px)]"
+              className="flex h-6 min-w-0 flex-1 items-center justify-end overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_right,transparent,black_24px)]"
             >
-              <span className="shrink-0">{transcript}</span>
+              <span className="shrink-0">
+                {committed}
+                {dictationSeparators(committed, tentative, '').leading}
+                <span className="text-muted-foreground">{tentative}</span>
+              </span>
             </span>
           ) : (
             <span aria-hidden className="min-w-0 flex-1 truncate text-muted-foreground">

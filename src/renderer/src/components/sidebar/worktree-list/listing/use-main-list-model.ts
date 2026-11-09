@@ -9,6 +9,11 @@ import {
 } from '@/lib/sidebar-pending-layer'
 import { useSidebarListSession } from '@/lib/sidebar-list-session'
 import { readEndedCreations, subscribeEndedCreations } from '@/lib/sidebar-ended-creations'
+import {
+  readHiddenVmCheckouts,
+  subscribeHiddenVmCheckouts,
+  withoutHiddenVmCheckouts
+} from '@/lib/vm-create-hidden-checkouts'
 import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
@@ -73,6 +78,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
   const feed = useDesktopSidebarFeed()
   const pending = useSyncExternalStore(subscribeSidebarPendingLayer, readSidebarPendingLayer)
   const endedCreationIds = useSyncExternalStore(subscribeEndedCreations, readEndedCreations)
+  const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
   const pendingCreationKeys = useAppStore(
     useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations))
   )
@@ -84,10 +90,13 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
   const domains = useMemo(
     () =>
       withWindowCreations(
-        overlaySidebarPendingLayer(feed?.domains ?? EMPTY_SIDEBAR_FEED_DOMAINS, pending, {
-          repos,
-          lineageById: args.worktreeLineageById
-        }),
+        withoutHiddenVmCheckouts(
+          overlaySidebarPendingLayer(feed?.domains ?? EMPTY_SIDEBAR_FEED_DOMAINS, pending, {
+            repos,
+            lineageById: args.worktreeLineageById
+          }),
+          hiddenVmCheckouts
+        ),
         pendingCreationKeys,
         endedCreationIds,
         hiddenCreationKeys
@@ -98,6 +107,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       pendingCreationKeys,
       endedCreationIds,
       hiddenCreationKeys,
+      hiddenVmCheckouts,
       repos,
       args.worktreeLineageById
     ]

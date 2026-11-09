@@ -300,6 +300,7 @@
       "plan": "Plan",
       "stoppedManually": "Manuell gestoppt",
       "permissionDenied": "{{agent}} hat die Berechtigung verweigert. Details anzeigen.",
+      "safetyReviewApproved": "{{agent}} hat diese Aktion genehmigt. Details anzeigen.",
       "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
       "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
       "modelFallback": "Claude hat das Modell gewechselt: {{from}} → {{to}}.",
@@ -602,6 +603,7 @@
       "fullCopySaveUpdate": "„Vollständig kopieren“ und Speichern werden für diesen Anhang mit einem Smartphone-Update verfügbar sein."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} ist offline · Stand {{time}}",
       "reconnecting": "{{hostName}} verbindet sich erneut…",
       "stopped": "{{hostName}} ist gestoppt. Starte es auf deinem Computer.",
       "server": "Der Server",
@@ -1317,13 +1319,36 @@
       "durationSeconds_one": "{{count}} Sekunde",
       "durationSeconds_other": "{{count}} Sekunden",
       "durationMinutes_one": "{{count}} Minute",
-      "durationMinutes_other": "{{count}} Minuten"
+      "durationMinutes_other": "{{count}} Minuten",
+      "discard": "Aufnahme verwerfen",
+      "retry": "Diktat wiederholen",
+      "retryShort": "Wiederholen"
     },
     "status": {
       "finishingOn": "Wird auf {{computer}} abgeschlossen",
       "finishingOnComputer": "Wird auf dem Computer abgeschlossen",
       "movedTo": "Zu {{computer}} gewechselt",
       "movedToComputer": "Zum Computer gewechselt"
+    },
+    "failure": {
+      "connectionLost": "Verbindung unterbrochen",
+      "connectionSlow": "Verbindung zu langsam",
+      "phoneStopped": "Auf diesem Telefon gestoppt",
+      "stopped": "Diktat gestoppt",
+      "recordingKept": "Aufnahme behalten"
+    },
+    "announce": {
+      "typedInto": "Eingetippt in {{target}}",
+      "insertedIn": "Eingefügt in {{target}}"
+    },
+    "pill": {
+      "open": "Öffnen",
+      "listening": "Hört zu",
+      "starting": "Startet",
+      "finishing": "Wird abgeschlossen",
+      "stopped": "Diktat gestoppt",
+      "label": "Diktat in {{target}}, {{duration}}",
+      "hint": "Doppeltippen, um zurückzukehren"
     }
   },
   "files": {

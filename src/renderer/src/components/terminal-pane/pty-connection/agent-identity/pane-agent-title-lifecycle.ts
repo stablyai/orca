@@ -1,6 +1,9 @@
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import type { AgentIdleEdgeMeta } from '../../../../../../shared/terminal/output/terminal-output-side-effects'
-import { idleEdgeSettledAtRest, isClaudeIdleEdge } from '@/lib/agent-idle-edge'
+import {
+  idleEdgeSettledAtRest,
+  isClaudeIdleEdge
+} from '@/components/terminal-pane/agent-status/agent-idle-edge'
 import { useAppStore } from '@/store/index'
 
 export function installPaneAgentTitleLifecycle(session: ConnectPanePtySession): void {

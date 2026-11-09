@@ -1,4 +1,4 @@
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import type { FileSearchResultOwner } from '@/lib/file-search-result-owner'
 import type {
   SearchFileResult,

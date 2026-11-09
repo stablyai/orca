@@ -8,7 +8,7 @@ import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishBut
 import { ArtifactPublishPreparationError } from '@/components/artifacts/artifact-publish-flow'
 import type { BrowserChromeShareControl } from '@/components/browser-pane/assemble-chrome/browser-chrome-toolbar'
 import { isShareableHtmlPath } from '@/components/editor/editor-artifact-upload'
-import type { DocPreviewGrantLocation } from '@/lib/doc-preview-grants'
+import type { DocPreviewGrantLocation } from '@/lib/browser/documents/doc-preview-grants'
 import { fileArtifactSourceKey, type FileArtifactOwner } from '@/lib/file-artifact-source-key'
 import { basename } from '@/lib/path'
 import { readRuntimeFilePreview } from '@/runtime/files/reads/runtime-file-read-client'

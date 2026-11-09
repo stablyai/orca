@@ -3,6 +3,7 @@ import { useAppStore } from '@/store'
 import { useAudioCapture } from '@/hooks/use-audio-capture'
 import { DictationIndicator } from './DictationIndicator'
 import { captureInsertionTarget } from './dictation-insertion-target'
+import { captureDictationContext } from './dictation-context'
 import { dictationPillAnchorFor, type DictationPillAnchor } from './dictation-pill-anchor'
 import {
   canRetryDictation,
@@ -30,6 +31,7 @@ import { useHoldDictationGesture } from './use-hold-dictation-gesture'
 import { publishDictationMeter } from './dictation-meter-store'
 import { useDictationSilenceStop } from './use-dictation-silence-stop'
 import { useDictationSpeechEvents } from './use-dictation-speech-events'
+import { NO_DICTATION_LIVE_TEXT } from '@/store/slices/dictation/dictation'
 import {
   canStartDictation,
   initialDictationSession,
@@ -42,7 +44,7 @@ import {
 export function DictationController() {
   const dictationState = useAppStore((s) => s.dictationState)
   const setDictationState = useAppStore((s) => s.setDictationState)
-  const setPartialTranscript = useAppStore((s) => s.setPartialTranscript)
+  const setLiveText = useAppStore((s) => s.setLiveText)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const settings = useAppStore((s) => s.settings)
   const keybindings = useAppStore((s) => s.keybindings)
@@ -82,11 +84,11 @@ export function DictationController() {
       if (next.sessionId === null) {
         deliverRef.current = null
       }
+      if (next.sessionId !== previous.sessionId) {
+        setLiveText(NO_DICTATION_LIVE_TEXT)
+      }
       if (next.phase !== previous.phase) {
         setDictationState(next.phase)
-        if (next.phase !== 'listening' && next.phase !== 'stopping') {
-          setPartialTranscript('')
-        }
         if (next.phase === 'idle') {
           setPillAnchor(null)
           keptRef.current = null
@@ -100,7 +102,7 @@ export function DictationController() {
       }
       return next
     },
-    [setDictationState, setPartialTranscript, clearQueuedSend]
+    [setDictationState, setLiveText, clearQueuedSend]
   )
 
   const drainStoppedSession = useCallback((sessionId: string) => {
@@ -206,7 +208,8 @@ export function DictationController() {
     const insertionTarget = captureInsertionTarget()
     const deliver = createDictationTranscriptDelivery()
     deliverRef.current = (text) => deliver(text, insertionTarget)
-    const kept = createDictationKeptRecording(insertionTarget, deliver)
+    const context = captureDictationContext()
+    const kept = createDictationKeptRecording(insertionTarget, deliver, context)
     keptRef.current = kept
     setRecordingKey((key) => key + 1)
     setCaptureLive(false)
@@ -269,7 +272,7 @@ export function DictationController() {
       }
       setCaptureLive(true)
 
-      await window.api.speech.startDictation(modelId, undefined, sessionId)
+      await window.api.speech.startDictation(modelId, context, sessionId)
       if (!isCurrent()) {
         await releaseStart(true)
         return
@@ -379,9 +382,8 @@ export function DictationController() {
 
   useDictationSpeechEvents({
     currentSessionId: () => sessionRef.current.sessionId,
-    onPartial: setPartialTranscript,
+    onLiveText: setLiveText,
     onFinal: (text) => {
-      setPartialTranscript('')
       dispatch({ type: 'final-text' })
       deliverRef.current?.(text)
     },

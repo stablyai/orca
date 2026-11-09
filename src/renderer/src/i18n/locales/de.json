@@ -958,15 +958,13 @@
       "modelDescriptions": {
         "parakeetV3": "Höchste Genauigkeit für 25 europäische Sprachen. Zeichensetzung, Groß- und Kleinschreibung und Zeitstempel auf Wortebene.",
         "parakeetV2": "Nur Englisch. Schneller als v3 bei ähnlicher Genauigkeit. Zeichensetzung und Groß- und Kleinschreibung.",
-        "zipformerBilingual": "Chinesisch + Englisch mit Sprachwechsel. Echtzeit-Streaming mit geringer Latenz.",
-        "paraformerBilingual": "Chinesisch (Mandarin + Dialekte) + Englisch. Stark bei Akzenten und regionalen Varianten des Chinesischen.",
         "zipformerStreamingEnRetired": "Wird nicht mehr angeboten: Es verschluckt den Anfang von Sätzen. Löschen Sie es, um Speicherplatz freizugeben.",
-        "zipformerStreamingZh": "Nur Chinesisch. Sehr schlankes Modell mit 14 Mio. Parametern, ideal für Geräte mit wenig Ressourcen.",
-        "zipformerStreamingKo": "Nur Koreanisch. Echtzeit-Streaming mit geringer Latenz.",
-        "parakeetJa": "Nur Japanisch. Mit über 35.000 Stunden natürlicher Sprache trainiert. Mit Zeichensetzung.",
         "whisperTiny": "Über 90 Sprachen. Geringere Genauigkeit als Parakeet, aber die größte Sprachabdeckung.",
         "senseVoice": "Chinesisch, Englisch, Japanisch, Koreanisch und Kantonesisch mit automatischer Erkennung der gesprochenen Sprache.",
-        "gptTranscribe": "Cloud-Transkription mit hoher Genauigkeit. Benötigt einen OpenAI-API-Schlüssel."
+        "gptTranscribe": "Cloud-Transkription mit hoher Genauigkeit. Benötigt einen OpenAI-API-Schlüssel.",
+        "whisperLargeV3Turbo": "Beste Genauigkeit für Japanisch, Koreanisch und Chinesisch sowie über 90 Sprachen. Langsamer als Parakeet.",
+        "retiredForEngine": "Nicht mehr verfügbar: Die Spracherkennung kann dieses Modell nicht mehr ausführen. Löschen Sie es, um Speicherplatz freizugeben.",
+        "nemotron": "Englisch, Spanisch, Deutsch und viele weitere Sprachen, mit automatischer Spracherkennung."
       }
     },
     "diagnostics": {
@@ -9469,7 +9467,10 @@
           "openAiKeyName": "OpenAI-Transkriptionsschlüssel",
           "dictationShortcutDescription": "Mit {{shortcut}} Text in den jeweils fokussierten Bereich diktieren.",
           "dictationModeAuto": "Automatisch",
-          "dictationModesWithAutoDescription": "Automatisch: Halten Sie {{shortcut}} gedrückt, um bis zum Loslassen zu diktieren, oder tippen Sie kurz zum Starten und Stoppen. Gedrückt halten: Diktieren, solange {{shortcut}} gedrückt bleibt. Umschalten: {{shortcut}} einmal zum Starten und erneut zum Stoppen drücken."
+          "dictationModesWithAutoDescription": "Automatisch: Halten Sie {{shortcut}} gedrückt, um bis zum Loslassen zu diktieren, oder tippen Sie kurz zum Starten und Stoppen. Gedrückt halten: Diktieren, solange {{shortcut}} gedrückt bleibt. Umschalten: {{shortcut}} einmal zum Starten und erneut zum Stoppen drücken.",
+          "speechGpuLabel": "GPU verwenden",
+          "speechGpuDescription": "Sprache auf der Grafikkarte erkennen, wenn sie funktioniert, und auf der CPU, wenn sie versagt. Deaktivieren, wenn das Diktieren Ihren Computer einfrieren oder neu starten lässt.",
+          "updateToFasterVersion": "Auf die schnellere Version aktualisieren ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} entfernen",
@@ -16969,12 +16970,14 @@
           "noModel": "Kein Sprachmodell ausgewählt. Laden Sie eines unter Einstellungen > Spracheingabe herunter.",
           "disabled": "Spracheingabe ist deaktiviert. Aktivieren Sie sie unter Einstellungen > Spracheingabe.",
           "notReady": "Sprachmodell nicht bereit. Laden Sie es unter Einstellungen > Spracheingabe herunter.",
+          "modelNeedsUpdate": "Ihr Sprachmodell braucht ein Update, um weiter zu funktionieren. Aktualisieren Sie es unter Einstellungen > Spracheingabe auf die schnellere Version.",
           "unknownModel": "Das ausgewählte Modell ist nicht mehr verfügbar. Wählen Sie unter Einstellungen > Spracheingabe ein anderes aus.",
           "5d2c3e7ae3": "Keine Sprache erkannt.",
           "micFallback": "Ausgewähltes Mikrofon nicht verfügbar. Systemstandard wird verwendet.",
           "micDisconnected": "Mikrofon getrennt. Diktat gestoppt.",
           "cloudLimitReached": "Diktat am 10-Minuten-Limit der Cloud gestoppt.",
-          "stoppedAfterSilence": "Nach einer Minute Stille beendet"
+          "stoppedAfterSilence": "Nach einer Minute Stille beendet",
+          "retryUnmatched": "Beim erneuten Versuch war nicht erkennbar, welche Wörter schon eingegeben waren, daher wurden alle eingefügt."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Das Diktat konnte nicht eingefügt werden und wurde in die Zwischenablage kopiert.",
@@ -16982,7 +16985,21 @@
           "lost": "Das Diktat konnte weder eingefügt noch kopiert werden."
         },
         "DictationIndicator": {
-          "4977162383": "Zu laut"
+          "4977162383": "Zu laut",
+          "finishing": "Wird abgeschlossen…",
+          "listening": "Hört zu…",
+          "cancel": "Abbrechen",
+          "finish": "Fertig",
+          "oneMinuteLeft": "Noch eine Minute.",
+          "sendsWhenLanded": "Sendet, sobald der Text da ist",
+          "entersWhenLanded": "Drückt Enter, sobald der Text da ist"
+        },
+        "DictationPillFailure": {
+          "discard": "Aufnahme verwerfen",
+          "modelFailed": "Modell nicht geladen.",
+          "transcribeFailed": "Nicht erkannt. Aufnahme behalten.",
+          "openSettings": "Einstellungen",
+          "retry": "Wiederholen"
         }
       },
       "dashboard": {
@@ -19455,6 +19472,7 @@
         "orcaStopCanContinue": "Die Unterhaltung kann fortgesetzt werden.",
         "orcaStopUnnamedServer": "dem entfernten Server",
         "permissionDenied": "{{agent}} hat die Berechtigung verweigert. Details anzeigen.",
+        "safetyReviewApproved": "{{agent}} hat diese Aktion genehmigt. Details anzeigen.",
         "safetyReview": "{{agent}} hat eine Warnung zur Sicherheitsprüfung gemeldet. Details anzeigen.",
         "truncatedResponse": "Anbieterantwort gekürzt (ursprüngliche Größe: {{bytes}} Bytes).",
         "forkedFrom": "Abgezweigt von"
@@ -19935,7 +19953,8 @@
       "contextUsage": {
         "label": "Kontext: {{used}} von {{window}} Token, {{percent}} % genutzt",
         "title": "Kontext",
-        "estimated": "Anhand der letzten Antwort geschätzt."
+        "estimated": "Anhand der letzten Antwort geschätzt.",
+        "deferredNote": "Bei Bedarf geladen. Nicht in der Nutzung enthalten."
       },
       "contextMenu": {
         "copyOrcaSessionId": "Orca-Sitzungs-ID kopieren",
@@ -23575,5 +23594,31 @@
   },
   "checks": {
     "gitlabAllowedFailure": "Fehlschlag erlaubt"
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Sprachmodell aktualisieren",
+    "updateDescription": "Die Diktierfunktion läuft jetzt mit einer schnelleren Engine. {{model}} muss einmalig heruntergeladen werden ({{size}} MB), bevor Sie wieder diktieren können.",
+    "update": "Aktualisieren",
+    "replacedTitle": "Ihr Sprachmodell wurde ersetzt",
+    "replacedDescription": "{{old}} läuft nicht mit der neuen Spracherkennung. {{model}} ersetzt es ({{size}} MB).",
+    "downloadReplacement": "{{model}} herunterladen",
+    "later": "Später",
+    "dismiss": "Schließen",
+    "updatingTitle": "{{model}} wird aktualisiert",
+    "downloadingTitle": "{{model}} wird heruntergeladen",
+    "downloadingDescription": "Sie können weiterarbeiten. Die Diktierfunktion ist wieder da, sobald dies abgeschlossen ist.",
+    "progress": "{{done}} von {{total}} MB",
+    "cancel": "Abbrechen",
+    "doneTitle": "Diktieren ist bereit",
+    "doneDescription": "{{model}} ist aktualisiert. Die alten Dateien wurden entfernt.",
+    "doneRetiredDescription": "{{model}} ist eingerichtet. Die alten Dateien von {{old}} sind noch auf dem Datenträger.",
+    "keep": "Behalten",
+    "deleteOld": "Altes Modell löschen",
+    "deleteFailed": "{{model}} konnte nicht gelöscht werden.",
+    "updateFailedTitle": "{{model}} konnte nicht aktualisiert werden",
+    "downloadFailedTitle": "{{model}} konnte nicht heruntergeladen werden",
+    "failedAtDescription": "Der Download wurde bei {{mb}} MB unterbrochen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "failedDescription": "Der Download wurde unterbrochen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "tryAgain": "Erneut versuchen"
   }
 }

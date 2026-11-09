@@ -1148,15 +1148,14 @@
       "modelDescriptions": {
         "parakeetV3": "Highest accuracy for 25 European languages. Punctuation, capitalization, and word-level timestamps.",
         "parakeetV2": "English only. Faster than v3 with similar accuracy. Punctuation and capitalization.",
-        "zipformerBilingual": "Chinese + English with code-switching. Low-latency real-time streaming.",
-        "paraformerBilingual": "Chinese (Mandarin + dialects) + English. Strong on accented and regional Chinese.",
         "zipformerStreamingEnRetired": "No longer offered: it drops the start of sentences. Delete it to free up space.",
-        "zipformerStreamingZh": "Chinese only. Ultra-lightweight 14M-param model, ideal for low-resource devices.",
-        "zipformerStreamingKo": "Korean only. Low-latency real-time streaming.",
-        "parakeetJa": "Japanese only. Trained on 35k+ hours of natural speech. Punctuation included.",
         "whisperTiny": "90+ languages. Lower accuracy than Parakeet but broadest language coverage.",
         "senseVoice": "Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.",
-        "gptTranscribe": "Cloud transcription with high accuracy. Requires an OpenAI API key."
+        "gptTranscribe": "Cloud transcription with high accuracy. Requires an OpenAI API key.",
+        "openAiCompatible": "Any service with an OpenAI-style transcription API, such as Groq, Mistral or a local server.",
+        "whisperLargeV3Turbo": "Best accuracy for Japanese, Korean, and Chinese, and 90+ languages. Slower than Parakeet.",
+        "retiredForEngine": "No longer offered: the speech engine can no longer run it. Delete it to free up space.",
+        "nemotron": "English, Spanish, German and many more languages, with automatic language detection."
       }
     },
     "diagnostics": {
@@ -6890,7 +6889,12 @@
           "projectGroupRefreshSuccess_other": "Added {{count}} projects to {{group}}",
           "projectGroupRefreshing": "Refreshing {{group}}…",
           "refreshProjectGroup": "Refresh projects",
-          "hostServerReplaced": "Different server: forget it, then connect"
+          "hostServerReplaced": "Different server: forget it, then connect",
+          "hostVmResumeFailed": "Resume failed",
+          "hostVmSetupFailed": "Setup failed",
+          "hostVmSuspended": "Suspended",
+          "hostVmWaking": "Waking…",
+          "hostVmProvisioning": "Provisioning…"
         },
         "WorktreeMetaDialog": {
           "3db0a2a593": "Cancel",
@@ -9803,7 +9807,10 @@
           "openAiKeyName": "Your OpenAI transcription key",
           "dictationShortcutDescription": "Press {{shortcut}} to dictate text into any focused pane.",
           "dictationModeAuto": "Auto",
-          "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop."
+          "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop.",
+          "speechGpuLabel": "Use GPU",
+          "speechGpuDescription": "Recognize speech on the graphics card when it works, and on the CPU when it fails. Turn off if dictation freezes or restarts your computer.",
+          "updateToFasterVersion": "Update to the faster version ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -17425,6 +17432,7 @@
           "noModel": "No speech model selected. Download one in Settings > Voice.",
           "disabled": "Voice dictation is disabled. Enable it in Settings > Voice.",
           "notReady": "Speech model not ready. Download it in Settings > Voice.",
+          "modelNeedsUpdate": "Your speech model needs an update to keep working. Update it to the faster version in Settings > Voice.",
           "unknownModel": "Selected model is no longer available. Please choose another in Settings > Voice.",
           "5d2c3e7ae3": "No speech detected.",
           "micFallback": "Selected microphone unavailable. Using system default.",
@@ -18905,7 +18913,10 @@
         "projectCount_one": "{{count}} project",
         "selectedProjectCount_one": "{{count}} selected project",
         "sourceHostCount_one": "{{count}} source host",
-        "unavailableCount_one": "{{count}} unavailable"
+        "unavailableCount_one": "{{count}} unavailable",
+        "statusProvisioning": "provisioning",
+        "statusSuspended": "suspended",
+        "statusWaking": "waking"
       },
       "ShortcutKeyCombo": {
         "07eb4985a1": "Double-tap {{value0}}"
@@ -20063,6 +20074,7 @@
         "orcaStopCanContinue": "You can continue in this conversation.",
         "orcaStopUnnamedServer": "the remote server",
         "permissionDenied": "{{agent}} denied permission. View details.",
+        "safetyReviewApproved": "{{agent}} approved this action. View details.",
         "safetyReview": "{{agent}} reported a safety review warning. View details.",
         "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes).",
         "modelFallback": "Claude switched models: {{from}} → {{to}}.",
@@ -20550,7 +20562,8 @@
       "contextUsage": {
         "label": "Context {{used}} of {{window}} tokens, {{percent}}% used",
         "title": "Context",
-        "estimated": "Estimated from the last response."
+        "estimated": "Estimated from the last response.",
+        "deferredNote": "Loaded on demand. Not counted in the used total."
       },
       "contextMenu": {
         "noSessionContext": "No chat context is available.",
@@ -21370,6 +21383,24 @@
         "fillerWords": {
           "title": "Remove Filler Words",
           "description": "Drops sounds like “um” and “uh” from dictated text, in the dictation language."
+        },
+        "openAiCompatible": {
+          "updateFailed": "Could not update the provider",
+          "title": "OpenAI-compatible provider",
+          "description": "Audio goes to this service only while the OpenAI-compatible model is selected. It works with Groq, Mistral, OpenAI and local servers.",
+          "baseUrl": "Base URL",
+          "baseUrlPlaceholder": "https://api.groq.com/openai/v1",
+          "model": "Model",
+          "modelPlaceholder": "whisper-large-v3-turbo",
+          "apiKey": "API Key",
+          "keySaved": "Saved key kept",
+          "keyOptional": "Optional for local servers",
+          "save": "Save",
+          "rowConfigured": "Base URL and model saved for the OpenAI-compatible model.",
+          "rowMissing": "Add a base URL and model before selecting the OpenAI-compatible model.",
+          "edit": "Edit",
+          "removeLabel": "Remove OpenAI-compatible provider",
+          "setUp": "Set up"
         }
       },
       "repositoryHooks": {
@@ -22922,6 +22953,30 @@
       "checksPending": "{{review}} checks: Pending",
       "checksPassing": "{{review}} checks: Passing",
       "open": "{{review}}: Open"
+    },
+    "vm": {
+      "menu": {
+        "waking": "Waking VM…",
+        "retryResume": "Retry Resume VM",
+        "resume": "Resume VM",
+        "suspend": "Suspend VM",
+        "suspendDescription": "Close this workspace's panels and suspend its VM. Opening the workspace wakes it."
+      },
+      "state": {
+        "provisioning": "VM provisioning",
+        "suspended": "VM suspended",
+        "waking": "VM waking",
+        "resumeFailed": "VM resume failed",
+        "provisionFailed": "VM setup failed"
+      },
+      "hint": {
+        "provisioning": "The VM is being created.",
+        "suspended": "Asleep to save cost. Opening the workspace wakes it.",
+        "waking": "Resuming the VM and reconnecting.",
+        "resumeFailed": "The VM could not be resumed. Right-click and choose Resume VM to retry.",
+        "provisionFailed": "The VM was not created, or creation was interrupted. Open Settings to destroy or remove it."
+      },
+      "suspendFailed": "Failed to suspend VM workspace"
     }
   },
   "tabHoverCard": {
@@ -23762,7 +23817,12 @@
       "error": "Needs attention",
       "repair": "Re-pair needed",
       "update": "Update needed",
-      "serverReplaced": "Different server"
+      "serverReplaced": "Different server",
+      "resumeFailed": "Resume failed",
+      "setupFailed": "Setup failed",
+      "provisioning": "Provisioning",
+      "suspended": "Suspended",
+      "waking": "Waking"
     },
     "compat": {
       "compatible": "Runtime client and server are compatible.",
@@ -24486,5 +24546,31 @@
     "stopped": "{{host}} stopped controlling browser tabs until Orca restarts.",
     "disallowed": "{{host}} can no longer control browser tabs. Turn it back on in Settings > SSH.",
     "failed": "Couldn’t stop {{host}}. Turn off its browser control in Settings > SSH."
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Update your speech model",
+    "updateDescription": "Dictation now runs on a faster engine. {{model}} needs a one-time download ({{size}} MB) before you can dictate again.",
+    "update": "Update",
+    "replacedTitle": "Your speech model was replaced",
+    "replacedDescription": "{{old}} can't run on the new speech engine. {{model}} replaces it ({{size}} MB).",
+    "downloadReplacement": "Download {{model}}",
+    "later": "Later",
+    "dismiss": "Dismiss",
+    "updatingTitle": "Updating {{model}}",
+    "downloadingTitle": "Downloading {{model}}",
+    "downloadingDescription": "You can keep working. Dictation is back when this finishes.",
+    "progress": "{{done}} of {{total}} MB",
+    "cancel": "Cancel",
+    "doneTitle": "Dictation is ready",
+    "doneDescription": "{{model}} is updated. The old files were removed.",
+    "doneRetiredDescription": "{{model}} is set up. The old {{old}} files are still on disk.",
+    "keep": "Keep",
+    "deleteOld": "Delete old model",
+    "deleteFailed": "Failed to delete {{model}}.",
+    "updateFailedTitle": "Couldn't update {{model}}",
+    "downloadFailedTitle": "Couldn't download {{model}}",
+    "failedAtDescription": "The download stopped at {{mb}} MB. Check your connection and try again.",
+    "failedDescription": "The download stopped. Check your connection and try again.",
+    "tryAgain": "Try again"
   }
 }

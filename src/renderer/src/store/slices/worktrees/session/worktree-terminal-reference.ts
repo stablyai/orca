@@ -11,7 +11,7 @@ import { branchName } from '@/lib/git-utils'
 import {
   getWorkspaceAttachmentObservedOrigin,
   resolveWorkspaceReferenceObservationOwner
-} from '@/lib/workspace-attachment-observed-origin'
+} from '@/lib/workspace/attachments/workspace-attachment-observed-origin'
 import { getWorkspaceAttachments } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { getWorkspaceAttachmentKey } from '../../../../../../shared/workspace-attachments/workspace-attachment-normalization'
 import {
