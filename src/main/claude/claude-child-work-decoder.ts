@@ -22,8 +22,9 @@ import {
   terminalClaudeTaskRunState
 } from './claude-background-task-frames'
 import { isClaudeSubagentTask } from './claude-subagent-task-frames'
-import { ClaudeAgentWaitCalls } from './claude-agent-wait-calls'
+import { ClaudeBashTaskCalls } from './claude-bash-task-calls'
 import { ORCA_ORCHESTRATION_WAIT_COMMAND } from '../../shared/orca-cli-invocations'
+import type { TerminalAgent } from '../../shared/agent-status/identity/terminal-agent'
 import {
   claudeChildWorkOutcome,
   claudeTaskProgressFacts,
@@ -40,6 +41,8 @@ type DecodedClaudeTask = {
   toolUseId?: string
   /** Runs `orca orchestration check --wait`: waiting on worker agents, so agent work. */
   awaitsAgents?: true
+  /** A shell running another agent's CLI names that agent as its type. */
+  launchedAgent?: TerminalAgent
 }
 
 type ClaudeToolOwner = (toolUseId: string) => string | null
@@ -73,6 +76,7 @@ function observation(
     residency: task.backgrounded ? 'background' : 'foreground',
     state: waiting ? 'waiting' : task.running || task.kind !== 'monitor' ? 'working' : 'monitoring',
     ...(task.name ? { name: task.name, agentType: task.name } : {}),
+    ...(task.launchedAgent ? { agentType: task.launchedAgent } : {}),
     ...(task.description ? { description: task.description } : {}),
     ...(facts.totalTokens !== undefined ? { totalTokens: facts.totalTokens } : {}),
     ...(operation ? { operation } : {}),
@@ -95,11 +99,11 @@ export class ClaudeChildWorkDecoder {
   >()
   private waiting: ReadonlySet<string> = new Set()
   private pending: PendingEdge[] = []
-  private readonly agentWaits = new ClaudeAgentWaitCalls()
+  private readonly bashCalls = new ClaudeBashTaskCalls()
   /** `ownerOf` names the subagent that made a child tool call; an ending task wakes it. */
   observe(message: Record<string, unknown>, ownerOf?: ClaudeToolOwner): void {
     if (message.type === 'assistant') {
-      this.agentWaits.observe(message)
+      this.bashCalls.observe(message)
       return
     }
     if (message.type !== 'system') {
@@ -147,7 +151,7 @@ export class ClaudeChildWorkDecoder {
   clear(): void {
     this.live.clear()
     this.ended.clear()
-    this.agentWaits.clear()
+    this.bashCalls.clear()
     this.waiting = new Set()
     this.pending.push((observedAt) => ({ type: 'session-ended', observedAt }))
   }
@@ -160,7 +164,7 @@ export class ClaudeChildWorkDecoder {
 
   private started(id: string, message: Record<string, unknown>): void {
     const toolUseId = taskAliasId(message.tool_use_id)
-    const awaitsAgents = this.agentWaits.take(toolUseId)
+    const bashCall = this.bashCalls.take(toolUseId)
     if (message.ambient === true || message.skip_transcript === true) {
       return
     }
@@ -185,7 +189,10 @@ export class ClaudeChildWorkDecoder {
         name: taskName(message) ?? existing?.name,
         description: taskDescription(message.description) ?? existing?.description,
         toolUseId: toolUseId ?? existing?.toolUseId,
-        ...(awaitsAgents || existing?.awaitsAgents ? { awaitsAgents: true as const } : {})
+        ...(bashCall?.awaitsAgents || existing?.awaitsAgents
+          ? { awaitsAgents: true as const }
+          : {}),
+        launchedAgent: bashCall?.launchedAgent ?? existing?.launchedAgent
       },
       {},
       restart
@@ -251,7 +258,8 @@ export class ClaudeChildWorkDecoder {
         name: name ?? existing?.name,
         description: description ?? existing?.description,
         toolUseId: existing?.toolUseId,
-        ...(existing?.awaitsAgents ? { awaitsAgents: true as const } : {})
+        ...(existing?.awaitsAgents ? { awaitsAgents: true as const } : {}),
+        launchedAgent: existing?.launchedAgent
       },
       {},
       false

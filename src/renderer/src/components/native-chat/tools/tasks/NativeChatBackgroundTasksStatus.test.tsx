@@ -46,3 +46,37 @@ it("shows an agent by the provider's id, beside its own Stop, and leaves command
   expect(onStop).not.toHaveBeenCalled()
   expect(screen.queryByRole('button', { name: /Show child s/ })).toBeNull()
 })
+
+it('renders the agent icon when a background command runs a recognized agent CLI', () => {
+  render(
+    <NativeChatBackgroundTasksStatus
+      expanded
+      onExpandedChange={() => {}}
+      isVisible
+      tasks={[]}
+      settledTasks={[]}
+      childViews={[
+        {
+          id: 'host-cmd',
+          providerId: 'provider-cmd',
+          kind: 'command',
+          agentType: 'antigravity',
+          description: 'Flash worker',
+          state: 'working',
+          membership: 'live',
+          firstObservedAt: 1_000,
+          observedAt: 2_000,
+          stoppable: true,
+          invocation: { invocationId: 'spawn-cmd', generation: 1 }
+        }
+      ]}
+      indicatorActive
+      supportsTaskStop
+      offersStopAll={false}
+      stoppingTaskIds={new Set()}
+      stoppingAll={false}
+      onStop={() => {}}
+    />
+  )
+  expect(screen.getByRole('img', { name: 'antigravity' })).toBeInTheDocument()
+})
