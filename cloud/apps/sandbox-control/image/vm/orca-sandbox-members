@@ -51,4 +51,11 @@ fi
 user_home="$(getent passwd "$USER_NAME" | cut -d: -f6)"
 [ -n "$orcad_pid" ] && user_home="$(tr '\0' '\n' <"/proc/$orcad_pid/environ" | sed -n 's/^HOME=//p' | head -n 1)"
 [ -n "$user_home" ] && rm -rf "$user_home/.orca-sandbox/members"
+# Commits outside a teammate's turn still need an author (images older than orca-sandbox-start's default).
+if [ -n "$user_home" ]; then
+  sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.email >/dev/null 2>&1 \
+    || sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.email 'cloud@users.noreply.onorca.dev'
+  sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.name >/dev/null 2>&1 \
+    || sudo -u "$USER_NAME" env HOME="$user_home" git config --global user.name 'Orca Cloud'
+fi
 echo "{\"members\":$count,\"devices\":$devices}"
