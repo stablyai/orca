@@ -123,6 +123,10 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       if (!isMainFrame || isChromiumInternalErrorUrl(url)) {
         return
       }
+      // Like the tab strip: a load that fails on the new origin never commits to clear it.
+      if (!isInPlace && browserNavigationLeavesFaviconOrigin(guest.getURL(), url)) {
+        this.remoteTabFaviconUrlByGuestId.delete(guest.id)
+      }
       // getURL() still names the committed document; UA writers need the in-flight target.
       this.startPendingNavigation(guest.id, url)
       void this.presentTabIdentityAtNavigationStart(guest, url, isInPlace)
@@ -143,7 +147,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     let publishedUrl: string | null = null
 
     const didNavigateHandler = (_event: Electron.Event, url: string): void => {
-      // The new origin reports its own icons; until then the old site's must not show.
+      // A redirect can still land on another origin.
       if (browserNavigationLeavesFaviconOrigin(publishedUrl, url)) {
         this.remoteTabFaviconUrlByGuestId.delete(guest.id)
       }
