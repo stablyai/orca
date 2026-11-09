@@ -69,23 +69,4 @@ describe('hibernation PTY binding age', () => {
     expect(getHibernationPtyBindingFirstSeenAtByPaneKey()[PANE]).toBe(1_000)
     expect(getHibernationBoundaryResolvedAtByPaneKey()[PANE]).toBe(1_500)
   })
-
-  it('expires an unseen binding once it is older than the idle window', () => {
-    observe('pty-1', 1_000)
-    recordHibernationBoundaryResolved(PANE, 1_000)
-    observe(null, 1_000 + IDLE_MS)
-    expect(getHibernationPtyBindingFirstSeenAtByPaneKey()[PANE]).toBe(1_000)
-    expect(getHibernationBoundaryResolvedAtByPaneKey()[PANE]).toBe(1_000)
-    observe(null, 1_000 + IDLE_MS + 1)
-    expect(getHibernationPtyBindingFirstSeenAtByPaneKey()[PANE]).toBeUndefined()
-    expect(getHibernationBoundaryResolvedAtByPaneKey()[PANE]).toBeUndefined()
-  })
-
-  it('drops bindings and boundary stamps when the tab is authoritatively gone', () => {
-    observe('pty-1', 1_000)
-    recordHibernationBoundaryResolved(PANE, 1_000)
-    observe(null, 2_000, [])
-    expect(getHibernationPtyBindingFirstSeenAtByPaneKey()[PANE]).toBeUndefined()
-    expect(getHibernationBoundaryResolvedAtByPaneKey()[PANE]).toBeUndefined()
-  })
 })

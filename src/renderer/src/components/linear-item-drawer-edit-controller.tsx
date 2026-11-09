@@ -15,7 +15,7 @@ import { linearUpdateIssue } from '@/runtime/linear/runtime-linear-issue-client'
 import { translate } from '@/i18n/i18n'
 import { formatLinearEstimateInput } from '@/components/linear-item-drawer-edit-controls'
 import type { LinearIssueEditSectionProps } from '@/components/linear-item-drawer-types'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 export function useLinearIssueEditController({
   issue,

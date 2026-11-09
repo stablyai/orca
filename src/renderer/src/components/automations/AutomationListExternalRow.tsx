@@ -20,7 +20,7 @@ import type {
   ExternalAutomationAction,
   ExternalAutomationJob,
   ExternalAutomationManager
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/external/external-automation'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import type { ExternalAutomationScope } from './external-automation-scope-client'

@@ -28,7 +28,7 @@ import { resolvePullRequestRepo } from '@/components/github/github-work-item-ide
 import { useTranslate } from '@/i18n/use-translate'
 import { getPullRequestMergeMethodLabel } from '@/components/github/pull-request-confirmation-copy'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { PullRequestPageProjectOrigin } from '../page-types'
 import { WorkItemStateBadge } from '../presentation/state-badge'
 import { changePullRequestState, mergePullRequest, setPullRequestAutoMerge } from './merge-actions'

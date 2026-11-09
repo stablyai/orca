@@ -41,7 +41,7 @@ import { publishHapticsNotifier } from '../src/platform/haptics.web'
 import { startBlurringOnKeyboardClose } from '../src/platform/keyboard-close-blur.web'
 import { publishShellKeyboardSource } from '../src/platform/keyboard-occlusion.web'
 // Select the page-client provider explicitly; the builder aliases extensionless screen imports to this same web module.
-import { RpcClientProvider } from '../src/transport/client-context.web'
+import { RpcClientProvider } from '../src/transport/connection/client-context.web'
 import { OrcaQueryProvider } from '../src/query/orca-query-provider.web'
 import { createOrcaQueryClient } from '../src/query/orca-query-client'
 import {

@@ -1,5 +1,5 @@
 import * as z from 'zod'
-import type { ExecutionHostHealth } from '../../../src/shared/execution-host-health'
+import type { ExecutionHostHealth } from '../../../src/shared/execution-host/execution-host-health'
 import { parseExecutionHostId } from '../../../src/shared/execution-host'
 import {
   MOBILE_RELAY_HOST_WORKTREES_METHOD,
@@ -7,8 +7,8 @@ import {
   type MobileRelayHost,
   type MobileRelayHostRelay
 } from '../../../src/shared/remote-runtime/relay/mobile-relay-hosts-contract'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import { worktreeCatalogSchema } from './worktree-catalog-reply-schema'
 
 const HEALTH = [

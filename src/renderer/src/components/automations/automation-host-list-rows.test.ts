@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Automation } from '../../../../shared/automations-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { AutomationHostCacheEntry, AutomationHostRow } from './automation-host-cache-types'
 import type {
   AutomationHostCatalog,

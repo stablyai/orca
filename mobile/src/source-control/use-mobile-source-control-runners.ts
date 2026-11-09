@@ -1,7 +1,7 @@
 import { useCallback, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import { translate } from '../i18n/mobile-i18n'
 import type { RouteHandoff } from '../navigation/route-handoff'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { triggerError, triggerSuccess } from '../platform/haptics'
 import { useMobileCommitMessageGeneration } from './use-mobile-commit-message-generation'
 import { useMobileSourceControlCommitRunners } from './use-mobile-source-control-commit-runners'
@@ -83,7 +83,7 @@ export function useMobileSourceControlRunners(params: Params) {
     async (
       actionId: string,
       runner: () => Promise<void>,
-      options?: { clearCommitMessage?: boolean; refreshOnError?: boolean }
+      options?: { clearCommitMessage?: string; refreshOnError?: boolean }
     ) => {
       if (busyActionRef.current) {
         return false
@@ -94,11 +94,13 @@ export function useMobileSourceControlRunners(params: Params) {
       recordCommitFailure(null)
       try {
         await runner()
+        // The commit landed, so its message must not come back, even when the screen has left.
+        const committed = options?.clearCommitMessage
+        if (committed !== undefined) {
+          setCommitMessage((current) => (current.trim() === committed ? '' : current))
+        }
         if (!mountedRef.current) {
           return false
-        }
-        if (options?.clearCommitMessage) {
-          setCommitMessage('')
         }
         triggerSuccess()
         await loadStatus({ force: true })
@@ -148,7 +150,7 @@ export function useMobileSourceControlRunners(params: Params) {
   )
 
   const runGitSequence = useCallback(
-    async (actionId: string, steps: GitStep[], options?: { clearCommitMessage?: boolean }) => {
+    async (actionId: string, steps: GitStep[], options?: { clearCommitMessage?: string }) => {
       return await runGitWorkflow(
         actionId,
         async () => {

@@ -36,7 +36,7 @@ import {
   shouldApplyWorkspaceSourceAutoName
 } from '../../../../shared/new-workspace/workspace-source'
 import { getLinkedItemDisplayName } from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
-import { runtimeTargetForRepoOwner } from '@/lib/repo-runtime-owner'
+import { runtimeTargetForRepoOwner } from '@/lib/workspace/ownership/repo-runtime-owner'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { toast } from 'sonner'

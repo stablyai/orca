@@ -509,8 +509,7 @@
         "parakeetJa": "仅限日语。使用超过 3.5 万小时的自然语音训练。支持标点。",
         "whisperTiny": "支持 90 多种语言。准确度低于 Parakeet，但语言覆盖最广。",
         "senseVoice": "支持中文、英语、日语、韩语和粤语，并自动检测语言。",
-        "gpt4oMiniTranscribe": "准确度高、成本低的云端转录。需要 OpenAI API 密钥。",
-        "gpt4oTranscribe": "准确度更高的云端转录。需要 OpenAI API 密钥。"
+        "gptTranscribe": "准确度高的云端转录。需要 OpenAI API 密钥。"
       }
     },
     "diagnostics": {
@@ -3191,7 +3190,6 @@
             "a3346fc6ed": "取消工作树创建",
             "532aea14ce": "取消",
             "767951265d": "创建工作树时出现问题。",
-            "vmProvisioningTitle": "正在预配虚拟机",
             "cancelProvisioning": "取消",
             "vmProvisioningLogEmpty": "正在等待环境模板输出…"
           }
@@ -3667,6 +3665,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "开启"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "已按其他窗口调整大小",
+            "fitHere": "在此适配"
           }
         }
       },
@@ -3769,7 +3771,6 @@
             "4f327c8b3d": "打开 Markdown...",
             "3d5d6c960d": "新 Markdown",
             "fd2b42aaa3": "新的手机模拟器",
-            "aea43b5748": "打开现有的模拟器选项卡。",
             "b426bb2615": "转到手机模拟器",
             "4833fb2cbe": "新浏览器选项卡",
             "d364f3c8d4": "新终端",
@@ -4472,6 +4473,9 @@
             "accounts": "已保存的 Antigravity 账户",
             "readAgo": "读取于 {{time}}",
             "notRead": "用量未知：尚未读取"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "将在 {{when}} 重置"
           }
         }
       },
@@ -5337,7 +5341,10 @@
           "69f5b5380d": "克隆...",
           "cloneOnHostDescription": "输入 Git URL，并选择要在 {{value0}} 上克隆到的位置。",
           "cloneParentFolder": "父文件夹",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "文件夹名称",
+          "cloneFolderTakenByRepo": "此文件夹中的“{{value0}}”已是另一个仓库，因此此克隆需要使用单独的文件夹。",
+          "cloneFolderNotEmpty": "此文件夹中已存在“{{value0}}”，因此此克隆需要使用单独的文件夹。"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "关闭",
@@ -5518,8 +5525,6 @@
           "888b83bf78": "无法保存设置脚本",
           "a49196d538": "当 Orca 创建新工作树时运行。",
           "savedSetupCommand": "已保存设置命令。",
-          "savedWithSkippedFields_one": "已跳过 {{count}} 个不受支持的字段。设置命令已保存。",
-          "savedWithSkippedFields_other": "已跳过 {{count}} 个不受支持的字段。设置命令已保存。",
           "savedInProjectSettings": "已保存在此<settings>项目的设置</settings>中"
         },
         "SetupScriptPromptCardViews": {
@@ -5532,13 +5537,12 @@
           "eefa756190": "手动配置",
           "ca4efcbc25": "保存",
           "fdbc6cb064": "已检测的安装脚本",
-          "7275f674cc": "已检测的设置",
           "822ff300ad": "关闭",
           "5bfd5c8779": "关闭安装脚本",
-          "detectedFromSource": "从 <source>{{source}}</source> 已检测",
           "ignoresSharedSetup": "此仓库会忽略共享的 <yaml>orca.yaml</yaml> 设置脚本。请添加本地命令，或在“设置”中更改来源。",
-          "foundSetupCommandIn": "在 <source>{{source}}</source> 中找到设置命令。保存后即可在新工作树中运行。",
-          "reviewSetupScript": "查看设置脚本"
+          "reviewSetupScript": "查看设置脚本",
+          "7275f674cc": "已检测的设置",
+          "detectedFromSource": "从 <file>{{source}}</file> 已检测"
         },
         "SetupScriptReviewDialog": {
           "title": "查看设置脚本",
@@ -7881,7 +7885,6 @@
           "f828e1de19": "- 与您的团队分享",
           "673a7fd10e": "检查中...",
           "5426ecbdcb": "本地脚本将不会运行",
-          "b2b06c7ce8": "可用的环境变量（将鼠标悬停以查看详细信息）：",
           "95a0411b3e": "模板",
           "175daba180": "例子",
           "b20c5df6ca": "添加“orca.yaml”文件以启用此仓库的共享设置、存档或议题自动化默认值。示例模板：",
@@ -8769,7 +8772,8 @@
           "6fa734ed95": "删除 {{value0}}",
           "openAiKeyName": "您的 OpenAI 转录密钥",
           "dictationShortcutDescription": "按 {{shortcut}} 可将文本听写到当前聚焦的任意窗格中。",
-          "dictationModesDescription": "切换：按一次 {{shortcut}} 开始，再按一次停止。按住：按住 {{shortcut}} 期间进行听写。"
+          "dictationModeAuto": "自动",
+          "dictationModesWithAutoDescription": "自动：按住 {{shortcut}} 听写，松开即停止；轻按则开始或停止。按住：按住 {{shortcut}} 期间进行听写。切换：按一次 {{shortcut}} 开始，再按一次停止。"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "删除 {{value0}}",
@@ -10601,7 +10605,10 @@
               "modelUnloadTitle": "卸载语音模型",
               "modelUnloadDescription": "选择何时从内存中卸载本地语音模型。",
               "modelUnloadKeyword": "卸载",
-              "modelMemoryKeyword": "内存"
+              "modelMemoryKeyword": "内存",
+              "fillerWordsTitle": "移除语气词",
+              "fillerWordsDescription": "从听写文本中去掉“嗯”“呃”之类的语气词。",
+              "fillerWordsKeyword": "语气词"
             }
           }
         },
@@ -14840,7 +14847,7 @@
         "terminal": {
           "FloatingTerminalIconContextMenu": {
             "8e7d775287": "隐藏浮动工作区",
-            "763f5fa2c1": "手机到浮动按钮",
+            "763f5fa2c1": "移至浮动按钮",
             "0ee79e0674": "移至状态栏"
           },
           "FloatingTerminalOrchestrationDialog": {
@@ -15613,6 +15620,7 @@
           "kernelStartFailed": "内核启动失败。",
           "noPython": "在此电脑上未找到 Python。请从 [python.org](https://www.python.org/downloads/) 安装，然后重新运行单元格。",
           "kernelDied": "内核已停止。",
+          "outputTruncated": "输出已截断：Orca 保留了此单元格输出的开头部分，并丢弃了其余内容。如需保留全部输出，请改为写入文件。",
           "localOnly": "笔记本单元格只能针对此电脑上的文件运行。",
           "pythonOnly": "Orca 中只能运行 Python 笔记本。",
           "commandCopied": "命令已复制",
@@ -16290,7 +16298,8 @@
           "micFallback": "所选麦克风不可用。使用系统默认值。",
           "micDisconnected": "麦克风已断开。听写停止了。",
           "cloudLimitReached": "已达 10 分钟云端上限。听写已停止。",
-          "stoppedAfterSilence": "静音一分钟后已停止"
+          "stoppedAfterSilence": "静音一分钟后已停止",
+          "retryUnmatched": "重试时无法判断哪些字词已输入，因此已全部插入。"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "无法插入听写内容，已复制到剪贴板。",
@@ -16298,13 +16307,21 @@
           "lost": "无法插入或复制听写内容。"
         },
         "DictationIndicator": {
-          "335e1bc6cb": "停止听写",
-          "7f3660a7ba": "正在启动麦克风…",
-          "f082d0cb9d": "正在处理…",
-          "3de5a129e7": "正在聆听",
           "4977162383": "音量过大",
-          "25f2b7a6a5": "正在说话",
-          "loadingModel": "正在加载语音模型…"
+          "finishing": "正在完成…",
+          "listening": "正在聆听…",
+          "cancel": "取消",
+          "finish": "完成",
+          "oneMinuteLeft": "还剩 1 分钟。",
+          "sendsWhenLanded": "文字送达后自动发送",
+          "entersWhenLanded": "文字送达后自动按 Enter"
+        },
+        "DictationPillFailure": {
+          "discard": "舍弃录音",
+          "modelFailed": "无法加载语音模型。",
+          "transcribeFailed": "无法转录。已保留录音。",
+          "openSettings": "打开设置",
+          "retry": "重试"
         }
       },
       "dashboard": {
@@ -18745,6 +18762,7 @@
         "noCommandsOrSkills": "没有匹配的命令或技能",
         "commands": "命令",
         "skills": "技能",
+        "checkingSkills": "正在检查新技能…",
         "loadingSkills": "正在加载技能…",
         "clearDescription": "清除对话上下文",
         "skillsUnavailableHost": "SSH 聊天中无法列出技能",
@@ -19014,6 +19032,7 @@
         "orcaStopCanContinue": "你可以在此对话中继续。",
         "orcaStopUnnamedServer": "远程服务器",
         "permissionDenied": "{{agent}} 拒绝了权限。查看详情。",
+        "safetyReviewApproved": "{{agent}} 已批准此操作。查看详情。",
         "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
         "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。",
         "forkedFrom": "分支来源"
@@ -19144,7 +19163,8 @@
       "contextUsage": {
         "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
         "title": "上下文",
-        "estimated": "根据上一次响应的估算值。"
+        "estimated": "根据上一次响应的估算值。",
+        "deferredNote": "按需加载，不计入已用总量。"
       },
       "dismissDeliveryNotice": "关闭",
       "addSelectionToChat": "添加到聊天",
@@ -19424,8 +19444,10 @@
       "composerWorkspace": {
         "copyFailed": "复制失败",
         "copyIdentity": "复制 {{value0}}",
+        "detachedCommit": "提交 {{head}}（非分支）",
         "folder": "文件夹",
         "mainCheckout": "主工作副本",
+        "turnWorking": "此聊天的代理正在工作。请在其回合结束后再切换分支。",
         "worktree": "工作树"
       },
       "explicitChatWindows": "此 Agent 的聊天暂不支持 Windows。请改为在终端中打开。",
@@ -19953,7 +19975,14 @@
           "cloud": "云端模型在服务商的服务器上运行，因此这里不会加载任何内容。",
           "never": "从不",
           "immediately": "立即"
+        },
+        "fillerWords": {
+          "title": "移除语气词",
+          "description": "按听写语言，从听写文本中去掉“嗯”“呃”之类的语气词。"
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "可用的环境变量"
       }
     },
     "agentChildRow": {
@@ -21012,6 +21041,7 @@
       "switch": "切换分支：{{branch}}",
       "search": "搜索分支",
       "recover": "切换到 {{branch}}",
+      "copy": "复制分支名称",
       "create": "从 {{branch}} 创建分支 {{name}}",
       "open": "打开工作区",
       "occupied": "已在 {{path}} 中检出",
@@ -21061,7 +21091,6 @@
       "sortRelevance": "最相关的",
       "sortNewest": "最新",
       "sortResultsAriaLabel": "排序结果：{{value0}}",
-      "consent": "启用全文搜索吗？ Orca 根据本地智能体记录在此计算机上构建索引，包括完整对话和每个工具输出最多 3,072 个字符。内容未经过编辑。经过身份验证的配对客户端可以搜索它。",
       "remoteDisabled": "此计算机上已禁用搜索。在该计算机上启用转录索引以搜索其会话。",
       "titleOnly": "此计算机上的全文搜索已关闭，因此仅匹配会话标题。",
       "notReady": "搜索索引尚未准备好。稍后再试。",
@@ -21118,7 +21147,6 @@
       "description": "在此计算机和任何配对的 Orca 服务器上搜索您的智能体所说和所做的一切。",
       "searchDescription": "打开此计算机和配对服务器的会话搜索，或清除搜索数据。",
       "indexComputers": "在会话内搜索",
-      "computersConsent": "每台计算机都保留自己的智能体对话和工具输出的可搜索副本。没有任何东西离开那台计算机。",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "搜索 {{host}} 上的会话",
       "serverOffline": "离线",
@@ -21688,9 +21716,9 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "无法保存删除偏好设置",
     "alwaysForceDelete": "始终强制删除",
+    "alwaysForceDeleteDescription": "适用于今后所有工作区删除操作。",
     "moreActions": "更多强制删除选项",
-    "alwaysForceDeleteTooltip": "适用于今后所有工作区删除操作。",
-    "alwaysForceDeleteBranchesTooltip": "适用于将来删除工作区后保留的分支。",
+    "alwaysForceDeleteBranchesDescription": "适用于将来删除工作区后保留的分支。",
     "moreBranchActions": "更多分支删除选项",
     "alwaysForceDeleteBranches": "始终删除保留的分支",
     "moreDeleteOptions": "更多删除选项",
@@ -22053,7 +22081,8 @@
     "refresh": "刷新",
     "restartLocal": "重启本地守护进程",
     "killAllLocal": "结束所有本地会话",
-    "killFailed": "无法结束终端。将保留上次观察到的会话。"
+    "killFailed": "无法结束终端。将保留上次观察到的会话。",
+    "metricDetails": "指标详情"
   },
   "browserExtensions": {
     "permission": {

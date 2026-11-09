@@ -9,7 +9,7 @@ vi.mock('./macos-tahoe-release', async () =>
 vi.mock('./desktop-integration/app-icon', async () =>
   (await import('./createMainWindow-test-harness')).appIconMock()
 )
-vi.mock('../browser/browser-manager', async () =>
+vi.mock('../browser/guest-lifecycle/manager/browser-manager', async () =>
   (await import('./createMainWindow-test-harness')).browserManagerMock()
 )
 vi.mock('../browser/routing/sessions/browser-route-session-runtime', async () => {
@@ -36,6 +36,7 @@ import { resetExpectedTeardownStateForTest } from '../crash-reporting/expected-t
 import {
   attachClientPageRendererMock,
   browserWindowMock,
+  createRendererRecoveryWindowHarness,
   resetMainWindowMocks,
   retireClientPageRendererMock,
   retireRouteRendererMock
@@ -46,6 +47,38 @@ describe('createMainWindow', () => {
     resetMainWindowMocks()
     resetExpectedTeardownStateForTest()
     vi.useRealTimers()
+  })
+
+  it('sends the next close as a plain close once its renderer cancels the newest quit request', () => {
+    const ipcHandlers: Record<string, (...args: any[]) => void> = {}
+    vi.mocked(ipcMain.on).mockImplementation((channel, handler) => {
+      ipcHandlers[channel] = handler as (...args: any[]) => void
+      return ipcMain
+    })
+    const { browserWindowInstance, windowHandlers } = createRendererRecoveryWindowHarness()
+    let isQuitting = true
+    createMainWindow(null, {
+      getIsQuitting: () => isQuitting,
+      onQuitAborted: () => {
+        isQuitting = false
+      }
+    })
+    const cancel = (senderId: number): void =>
+      ipcHandlers['window:close-cancelled']?.({ sender: { id: senderId } })
+    const retryClose = (): unknown => {
+      windowHandlers.close({ preventDefault: vi.fn() } as never)
+      return browserWindowInstance.webContents.send.mock.lastCall
+    }
+
+    expect(retryClose()).toEqual(['window:close-requested', { isQuitting: true, requestId: 1 }])
+    // Why: a cancel sent before the renderer saw this quit belongs to an older prompt.
+    cancel(143)
+    ipcHandlers['window:close-request-received']?.({ sender: { id: 143 } }, 1)
+    cancel(99)
+    expect(retryClose()).toEqual(['window:close-requested', { isQuitting: true, requestId: 2 }])
+    ipcHandlers['window:close-request-received']?.({ sender: { id: 143 } }, 2)
+    cancel(143)
+    expect(retryClose()).toEqual(['window:close-requested', { isQuitting: false, requestId: 3 }])
   })
 
   it('allows close after the renderer process is gone', () => {

@@ -1,7 +1,7 @@
 import {
   isDurableMutation,
   isTerminalPromptMutation
-} from '../../../shared/orchestration-rpc-contract'
+} from '../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 import { OrchestrationError } from '../orchestration/orchestration-error'

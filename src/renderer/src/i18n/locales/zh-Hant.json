@@ -915,8 +915,7 @@
         "parakeetJa": "僅限日文。使用超過 3.5 萬小時的自然語音訓練。支援標點符號。",
         "whisperTiny": "支援 90 多種語言。準確度低於 Parakeet，但語言涵蓋範圍最廣。",
         "senseVoice": "支援中文、英文、日文、韓文及粵語，並自動偵測語言。",
-        "gpt4oMiniTranscribe": "準確度高、成本低的雲端轉錄。需要 OpenAI API 金鑰。",
-        "gpt4oTranscribe": "準確度更高的雲端轉錄。需要 OpenAI API 金鑰。"
+        "gptTranscribe": "準確度高的雲端轉錄。需要 OpenAI API 金鑰。"
       }
     },
     "diagnostics": {
@@ -3646,7 +3645,6 @@
             "a3346fc6ed": "取消工作樹建立",
             "532aea14ce": "取消",
             "767951265d": "建立工作樹時出現問題。",
-            "vmProvisioningTitle": "正在佈建虛擬機器",
             "cancelProvisioning": "取消",
             "vmProvisioningLogEmpty": "正在等待環境範本輸出…"
           }
@@ -4122,6 +4120,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "開啟"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "已依其他視窗調整大小",
+            "fitHere": "在此調整"
           }
         }
       },
@@ -4224,7 +4226,6 @@
             "4f327c8b3d": "開啟 Markdown...",
             "3d5d6c960d": "新 Markdown",
             "fd2b42aaa3": "新的手機模擬器",
-            "aea43b5748": "開啟現有的模擬器分頁。",
             "b426bb2615": "轉到手機模擬器",
             "4833fb2cbe": "新瀏覽器分頁",
             "d364f3c8d4": "新終端機",
@@ -4927,6 +4928,9 @@
             "accounts": "已儲存的 Antigravity 帳戶",
             "readAgo": "讀取於 {{time}}",
             "notRead": "用量未知：尚未讀取"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "將於 {{when}} 重設"
           }
         }
       },
@@ -5823,7 +5827,10 @@
           "69f5b5380d": "複製中...",
           "cloneOnHostDescription": "輸入 Git URL，並選擇要在 {{value0}} 上複製到的位置。",
           "cloneParentFolder": "父資料夾",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "資料夾名稱",
+          "cloneFolderTakenByRepo": "此資料夾中的「{{value0}}」已是另一個儲存庫，因此這次複製需要使用獨立的資料夾。",
+          "cloneFolderNotEmpty": "此資料夾中已存在「{{value0}}」，因此這次複製需要使用獨立的資料夾。"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "關閉",
@@ -6004,8 +6011,6 @@
           "888b83bf78": "無法儲存設定指令碼",
           "a49196d538": "當 Orca 建立新工作樹時執行。",
           "savedSetupCommand": "已儲存設定命令。",
-          "savedWithSkippedFields_one": "已略過 {{count}} 個不支援的欄位。已儲存設定命令。",
-          "savedWithSkippedFields_other": "已略過 {{count}} 個不支援的欄位。已儲存設定命令。",
           "savedInProjectSettings": "已儲存於此<settings>專案的設定</settings>中"
         },
         "SetupScriptPromptCardViews": {
@@ -6018,13 +6023,12 @@
           "eefa756190": "手動設定",
           "ca4efcbc25": "儲存",
           "fdbc6cb064": "已偵測的設定指令碼",
-          "7275f674cc": "已偵測的設定",
           "822ff300ad": "關閉",
           "5bfd5c8779": "關閉設定指令碼",
-          "detectedFromSource": "從 <source>{{source}}</source> 偵測到",
           "ignoresSharedSetup": "此存放庫會忽略共用的 <yaml>orca.yaml</yaml> 設定指令碼。請新增本機命令，或在「設定」中變更來源。",
-          "foundSetupCommandIn": "在 <source>{{source}}</source> 中找到設定命令。儲存後即可在新工作樹中執行。",
-          "reviewSetupScript": "檢查設定指令碼"
+          "reviewSetupScript": "檢查設定指令碼",
+          "7275f674cc": "已偵測的設定",
+          "detectedFromSource": "從 <file>{{source}}</file> 偵測到"
         },
         "SetupScriptReviewDialog": {
           "title": "檢查設定指令碼",
@@ -8394,7 +8398,6 @@
           "f828e1de19": "- 與您的團隊分享",
           "673a7fd10e": "檢查中...",
           "5426ecbdcb": "本機指令碼將不會執行",
-          "b2b06c7ce8": "可用的環境變數（將游標移至上方以檢視詳細資訊）：",
           "95a0411b3e": "範本",
           "175daba180": "例子",
           "b20c5df6ca": "新增 `orca.yaml` 檔案以啟用此存放庫的共用設定、封存或議題自動化預設值。範例範本：",
@@ -9286,7 +9289,8 @@
           "cd9fe37556": "已授予麥克風權限",
           "openAiKeyName": "您的 OpenAI 轉錄金鑰",
           "dictationShortcutDescription": "按 {{shortcut}} 可將文字聽寫到目前取得焦點的任意窗格中。",
-          "dictationModesDescription": "切換：按一次 {{shortcut}} 開始，再按一次停止。按住：按住 {{shortcut}} 期間進行聽寫。"
+          "dictationModeAuto": "自動",
+          "dictationModesWithAutoDescription": "自動：按住 {{shortcut}} 聽寫，放開即停止；輕按則開始或停止。按住：按住 {{shortcut}} 期間進行聽寫。切換：按一次 {{shortcut}} 開始，再按一次停止。"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "刪除 {{value0}}",
@@ -11114,7 +11118,10 @@
               "modelUnloadTitle": "卸載語音模型",
               "modelUnloadDescription": "選擇何時從記憶體中卸載本機語音模型。",
               "modelUnloadKeyword": "卸載",
-              "modelMemoryKeyword": "記憶體"
+              "modelMemoryKeyword": "記憶體",
+              "fillerWordsTitle": "移除語氣詞",
+              "fillerWordsDescription": "從聽寫文字中移除「嗯」「呃」之類的語氣詞。",
+              "fillerWordsKeyword": "語氣詞"
             }
           }
         },
@@ -16080,6 +16087,7 @@
           "kernelStartFailed": "核心啟動失敗。",
           "noPython": "在此電腦上未找到 Python。請從 [python.org](https://www.python.org/downloads/) 安裝，然後重新執行儲存格。",
           "kernelDied": "核心已停止。",
+          "outputTruncated": "輸出已截斷：Orca 保留了此儲存格輸出的開頭部分，並捨棄其餘內容。如需保留全部輸出，請改為寫入檔案。",
           "localOnly": "筆記本儲存格只能針對此電腦上的檔案執行。",
           "pythonOnly": "Orca 中只能執行 Python 筆記本。",
           "ownerUnresolved": "Orca 尚無法判斷此筆記本位於哪台電腦，因此無法執行其中的儲存格。",
@@ -16739,7 +16747,8 @@
           "micFallback": "所選麥克風不可用。使用系統預設值。",
           "micDisconnected": "麥克風已中斷連線。聽寫已停止。",
           "cloudLimitReached": "已達 10 分鐘雲端上限。聽寫已停止。",
-          "stoppedAfterSilence": "靜音一分鐘後已停止"
+          "stoppedAfterSilence": "靜音一分鐘後已停止",
+          "retryUnmatched": "重試時無法判斷哪些字詞已輸入，因此已全部插入。"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "無法插入聽寫內容，已複製到剪貼簿。",
@@ -16747,13 +16756,21 @@
           "lost": "無法插入或複製聽寫內容。"
         },
         "DictationIndicator": {
-          "335e1bc6cb": "停止聽寫",
-          "7f3660a7ba": "啟動麥克風...",
-          "f082d0cb9d": "正在處理…",
-          "3de5a129e7": "正在聆聽",
           "4977162383": "聲音太大",
-          "25f2b7a6a5": "正在說話",
-          "loadingModel": "正在載入語音模型…"
+          "finishing": "正在完成…",
+          "listening": "正在聆聽…",
+          "cancel": "取消",
+          "finish": "完成",
+          "oneMinuteLeft": "剩下 1 分鐘。",
+          "sendsWhenLanded": "文字送達後自動傳送",
+          "entersWhenLanded": "文字送達後自動按 Enter"
+        },
+        "DictationPillFailure": {
+          "discard": "捨棄錄音",
+          "modelFailed": "無法載入語音模型。",
+          "transcribeFailed": "無法轉錄。已保留錄音。",
+          "openSettings": "開啟設定",
+          "retry": "重試"
         }
       },
       "dashboard": {
@@ -19192,6 +19209,7 @@
         "orcaStopCanContinue": "你可以在此對話中繼續。",
         "orcaStopUnnamedServer": "遠端伺服器",
         "permissionDenied": "{{agent}} 拒絕了權限。查看詳細資訊。",
+        "safetyReviewApproved": "{{agent}} 已核准此操作。查看詳細資訊。",
         "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
         "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
         "forkedFrom": "分支來源"
@@ -19218,6 +19236,7 @@
         "noCommands": "沒有符合的命令",
         "commands": "命令",
         "skills": "技能",
+        "checkingSkills": "正在檢查新技能…",
         "loadingSkills": "正在載入技能…",
         "skillsLoaded": "技能已載入",
         "clearDescription": "清除對話上下文",
@@ -19626,7 +19645,8 @@
       "contextUsage": {
         "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
         "title": "上下文",
-        "estimated": "根據上一次回應的估算值。"
+        "estimated": "根據上一次回應的估算值。",
+        "deferredNote": "按需載入，不計入已用總量。"
       },
       "contextMenu": {
         "copyOrcaSessionId": "複製 Orca 工作階段 ID",
@@ -19880,8 +19900,10 @@
       "composerWorkspace": {
         "copyFailed": "複製失敗",
         "copyIdentity": "複製 {{value0}}",
+        "detachedCommit": "提交 {{head}}（非分支）",
         "folder": "資料夾",
         "mainCheckout": "主要工作副本",
+        "turnWorking": "此聊天的代理正在工作。請在其回合結束後再切換分支。",
         "worktree": "工作樹"
       },
       "explicitChatWindows": "此 Agent 的聊天尚不支援 Windows。請改為在終端機中開啟。",
@@ -20338,7 +20360,14 @@
           "cloud": "雲端模型在服務商的伺服器上執行，因此這裡不會載入任何內容。",
           "never": "從不",
           "immediately": "立即"
+        },
+        "fillerWords": {
+          "title": "移除語氣詞",
+          "description": "依聽寫語言，從聽寫文字中移除「嗯」「呃」之類的語氣詞。"
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "可用的環境變數"
       }
     },
     "agentChildRow": {
@@ -20981,6 +21010,7 @@
       "switch": "切換分支：{{branch}}",
       "search": "搜尋分支",
       "recover": "切換到 {{branch}}",
+      "copy": "複製分支名稱",
       "create": "從 {{branch}} 建立分支 {{name}}",
       "open": "開啟工作區",
       "occupied": "已在 {{path}} 中簽出",
@@ -21071,7 +21101,6 @@
       "sortRelevance": "最相關",
       "sortNewest": "最新",
       "sortResultsAriaLabel": "排序結果：{{value0}}",
-      "consent": "要啟用全文搜尋嗎？Orca 會在此電腦上，根據本機代理程式對話紀錄建立索引，包括完整對話及每筆工具輸出最多 3,072 個字元。內容不會經過遮蔽。已驗證的配對用戶端可以搜尋此索引。",
       "remoteDisabled": "此電腦已停用搜尋。請在該電腦啟用對話紀錄索引，以搜尋其工作階段。",
       "titleOnly": "此電腦上的全文搜尋已關閉，因此僅比對工作階段標題。",
       "notReady": "搜尋索引尚未就緒。請稍後重試。",
@@ -21128,7 +21157,6 @@
       "description": "搜尋此電腦及任何已配對 Orca 伺服器上代理程式說過或做過的事。",
       "searchDescription": "啟用此電腦與已配對伺服器的工作階段搜尋，或清除搜尋資料。",
       "indexComputers": "搜尋工作階段內容",
-      "computersConsent": "每台電腦會在本機儲存自己的代理程式對話與工具輸出的可搜尋副本。資料不會離開該電腦。",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "搜尋 {{host}} 上的工作階段",
       "serverOffline": "離線",
@@ -21525,11 +21553,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "無法儲存刪除偏好設定",
     "alwaysForceDelete": "始終強制刪除",
+    "alwaysForceDeleteDescription": "適用於今後所有工作區刪除操作。",
     "moreActions": "更多強制刪除選項",
-    "alwaysForceDeleteTooltip": "適用於今後所有工作區刪除操作。",
     "moreBranchActions": "更多分支刪除選項",
     "alwaysForceDeleteBranches": "始終刪除保留的分支",
-    "alwaysForceDeleteBranchesTooltip": "適用於日後刪除工作區後保留的分支。",
+    "alwaysForceDeleteBranchesDescription": "適用於日後刪除工作區後保留的分支。",
     "moreDeleteOptions": "更多刪除選項",
     "alwaysDelete": "始終刪除",
     "alwaysDeleteTooltip": "日後刪除時略過此確認。"
@@ -22061,7 +22089,8 @@
     "refresh": "重新整理",
     "restartLocal": "重新啟動本機常駐程式",
     "killAllLocal": "結束所有本機工作階段",
-    "killFailed": "無法結束終端機。將保留上次觀察到的工作階段。"
+    "killFailed": "無法結束終端機。將保留上次觀察到的工作階段。",
+    "metricDetails": "指標詳細資訊"
   },
   "browserExtensions": {
     "permission": {

@@ -1,5 +1,5 @@
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
-import { hostStableKey } from '../../../../shared/automation-owner-key'
+import { hostStableKey } from '../../../../shared/automations/ownership/automation-owner-key'
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import {

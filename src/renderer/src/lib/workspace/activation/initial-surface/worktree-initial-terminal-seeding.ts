@@ -9,12 +9,12 @@ import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-t
 import { hasSplitLandingGroup } from '@/store/slices/tabs/split-landing-groups'
 import { isTerminalWorkspaceEmptiedOnPurpose } from '../../../../../../shared/workspace-layout/closed-terminal-tab-tombstones'
 import { shouldSeedWorktreePrimaryTerminal } from '../../../../../../shared/worktree-first-surface'
-import { createSequencedSetupAgentCommands } from '../../../../../../shared/setup-agent-sequencing'
-import { getSetupRunnerCommandPlatformForPath } from '../../../../../../shared/setup-runner-command'
+import { createSequencedSetupAgentCommands } from '../../../../../../shared/agent-launch/startup/setup-agent-sequencing'
+import { getSetupRunnerCommandPlatformForPath } from '../../../../../../shared/agent-launch/startup/setup-runner-command'
 import { agentKindToTuiAgent } from '../../../../../../shared/agent-kind'
 import { useAppStore } from '@/store/index'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
-import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace-terminal-host-authority'
+import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace/ownership/workspace-terminal-host-authority'
 import { seedNativeChatAppliedSessionOptions } from '../../../../../../shared/native-chat/input/native-chat-session-option-cache'
 import type {
   InitialTerminalOptions,

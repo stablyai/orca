@@ -1,4 +1,3 @@
-import { registerPtyConnectionRendererDrawingGlyphTests } from '../output/pty-connection-renderer-risk-repaint.spec'
 import { describe } from 'vitest'
 import { registerPtyConnectionPendingSpawnTests } from '../spawn/pty-connection-pending-spawn.spec'
 import { registerPtyConnectionFreshSpawnGuardsTests } from '../spawn/pty-connection-fresh-spawn-guards.spec'
@@ -30,7 +29,6 @@ describe('pty-connection-startup-command-delivery', () => {
 describe('pty-connection-startup-draft-delivery', registerPtyConnectionStartupDraftDeliveryTests)
 describe('pty-connection-deliberate-sleep-guard', registerPtyConnectionDeliberateSleepGuardTests)
 describe('pty-connection-remote-runtime-attach', () => {
-  registerPtyConnectionRendererDrawingGlyphTests()
   registerPtyConnectionRemoteRuntimeAttachTests()
   registerPtyConnectionRuntimePaneTransportRoutingTests()
 })

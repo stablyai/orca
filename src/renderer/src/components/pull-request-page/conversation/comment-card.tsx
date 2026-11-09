@@ -17,7 +17,7 @@ import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../../shared/github/pull-request-types'
 import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import type { MentionOption } from '../page-types'
 import { loadPRFileContents } from '../cache/file-content'
 import { CommentReplyForm } from '../comments/reply-form'
@@ -157,6 +157,7 @@ export function ConversationCommentCard({
         />
         <CommentMarkdown
           content={comment.body}
+          bodyImageUrls={comment.bodyImageUrls}
           variant="document"
           githubRepo={markdownGitHubRepo}
           className="min-w-0 max-w-full overflow-hidden break-words text-[13px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"

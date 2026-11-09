@@ -28,6 +28,10 @@ export function TerminalWorkspaceDialogs({
     windowCloseDialogKind,
     windowCloseDialogOpen
   } = controller
+  const cancelWindowClose = (): void => {
+    setWindowCloseDialogOpen(false)
+    window.api.ui.cancelWindowClose()
+  }
   return (
     <>
       <Dialog
@@ -71,7 +75,7 @@ export function TerminalWorkspaceDialogs({
         open={windowCloseDialogOpen}
         onOpenChange={(open) => {
           if (!open) {
-            setWindowCloseDialogOpen(false)
+            cancelWindowClose()
           }
         }}
       >
@@ -93,12 +97,7 @@ export function TerminalWorkspaceDialogs({
             </DialogDescription>
           </DialogHeader>
           <DialogFooter className="gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => setWindowCloseDialogOpen(false)}
-            >
+            <Button type="button" variant="outline" size="sm" onClick={cancelWindowClose}>
               {t('auto.components.Terminal.f82e9f02df', 'Cancel')}
             </Button>
             <Button

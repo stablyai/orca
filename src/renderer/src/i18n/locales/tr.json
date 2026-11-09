@@ -942,8 +942,7 @@
         "parakeetJa": "Yalnızca Japonca. 35 bini aşkın saatlik doğal konuşmayla eğitildi. Noktalama dâhil.",
         "whisperTiny": "90'dan fazla dil. Parakeet'ten daha düşük doğruluk, ancak en geniş dil kapsamı.",
         "senseVoice": "Otomatik dil algılamayla Çince, İngilizce, Japonca, Korece ve Kantonca.",
-        "gpt4oMiniTranscribe": "Yüksek doğruluk ve düşük maliyetle bulut transkripsiyonu. OpenAI API anahtarı gerektirir.",
-        "gpt4oTranscribe": "Daha yüksek doğrulukla bulut transkripsiyonu. OpenAI API anahtarı gerektirir."
+        "gptTranscribe": "Yüksek doğrulukla bulut transkripsiyonu. OpenAI API anahtarı gerektirir."
       }
     },
     "diagnostics": {
@@ -3697,7 +3696,6 @@
             "a3346fc6ed": "Worktree oluşturmayı iptal et",
             "532aea14ce": "İptal",
             "767951265d": "Worktree oluşturulurken bir şeyler ters gitti.",
-            "vmProvisioningTitle": "VM Hazırlanıyor",
             "cancelProvisioning": "İptal",
             "vmProvisioningLogEmpty": "Kurulum çıktısı bekleniyor…"
           }
@@ -4178,6 +4176,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "Aç"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "Başka bir pencereye göre boyutlandı",
+            "fitHere": "Buraya sığdır"
           }
         }
       },
@@ -4280,7 +4282,6 @@
             "4f327c8b3d": "Markdown Aç...",
             "3d5d6c960d": "Yeni Markdown",
             "fd2b42aaa3": "Yeni Mobil Emülatör",
-            "aea43b5748": "Mevcut emülatör sekmesini açın.",
             "b426bb2615": "Mobil Emülatöre Git",
             "4833fb2cbe": "Yeni Tarayıcı Sekmesi",
             "d364f3c8d4": "Yeni Terminal",
@@ -5026,6 +5027,9 @@
             "accounts": "Kayıtlı Antigravity Hesapları",
             "readAgo": "Okunma zamanı: {{time}}",
             "notRead": "Kullanım bilinmiyor: henüz okunmadı"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "Sıfırlanma zamanı: {{when}}"
           }
         }
       },
@@ -5953,7 +5957,10 @@
           "69f5b5380d": "Klonlanıyor...",
           "cloneOnHostDescription": "Git URL'sini girin ve {{value0}} üzerinde nereye klonlanacağını seçin.",
           "cloneParentFolder": "Üst klasör",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "Klasör adı",
+          "cloneFolderTakenByRepo": "Bu klasördeki \"{{value0}}\" zaten farklı bir depo, bu yüzden bu klonun kendi klasörü olmalı.",
+          "cloneFolderNotEmpty": "Bu klasörde \"{{value0}}\" zaten var, bu yüzden bu klonun kendi klasörü olmalı."
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "Kapat",
@@ -6147,8 +6154,6 @@
           "888b83bf78": "Kurulum betiği kaydedilemedi",
           "a49196d538": "Orca yeni bir worktree oluşturduğunda çalışır.",
           "savedSetupCommand": "Kurulum komutu kaydedildi.",
-          "savedWithSkippedFields_one": "Desteklenmeyen {{count}} alan atlandı. Kurulum komutu kaydedildi.",
-          "savedWithSkippedFields_other": "Desteklenmeyen {{count}} alan atlandı. Kurulum komutu kaydedildi.",
           "savedInProjectSettings": "Bu <settings>projenin ayarlarında</settings> kayıtlı"
         },
         "SetupScriptPromptCardViews": {
@@ -6161,13 +6166,12 @@
           "eefa756190": "Manuel yapılandır",
           "ca4efcbc25": "Kaydet",
           "fdbc6cb064": "Algılanan kurulum betiği",
-          "7275f674cc": "Algılanan kurulum",
           "822ff300ad": "Kapat",
           "5bfd5c8779": "Kurulum betiklerini kapat",
-          "detectedFromSource": "<source>{{source}}</source> kaynağından algılandı",
           "ignoresSharedSetup": "Bu repo, paylaşılan <yaml>orca.yaml</yaml> kurulum betiklerini yok sayıyor. Yerel bir komut ekleyin veya Ayarlar bölümünde kaynağı değiştirin.",
-          "foundSetupCommandIn": "<source>{{source}}</source> içinde bir kurulum komutu bulundu. Yeni worktree'lerde çalıştırmak için kaydedin.",
-          "reviewSetupScript": "Kurulum betiğini incele"
+          "reviewSetupScript": "Kurulum betiğini incele",
+          "7275f674cc": "Algılanan kurulum",
+          "detectedFromSource": "<file>{{source}}</file> kaynağından algılandı"
         },
         "SetupScriptReviewDialog": {
           "title": "Kurulum betiğini incele",
@@ -8557,7 +8561,6 @@
           "f828e1de19": "- ekibinizle paylaşılır",
           "673a7fd10e": "Kontrol ediliyor...",
           "5426ecbdcb": "Yerel betikler çalıştırılmayacak",
-          "b2b06c7ce8": "Kullanılabilir ortam değişkenleri (ayrıntılar için üzerine gelin):",
           "95a0411b3e": "şablon",
           "175daba180": "Örnek",
           "b20c5df6ca": "Bu repo için paylaşılan kurulum, arşiv veya sorun otomasyonu varsayılanlarını etkinleştirmek üzere bir `orca.yaml` dosyası ekleyin. Örnek şablon:",
@@ -9449,7 +9452,8 @@
           "cd9fe37556": "Mikrofon izni verildi",
           "openAiKeyName": "OpenAI transkripsiyon anahtarınız",
           "dictationShortcutDescription": "Odaktaki herhangi bir bölmeye metin dikte etmek için {{shortcut}} tuşlarına basın.",
-          "dictationModesDescription": "Aç/kapat: başlatmak için {{shortcut}} tuşlarına bir kez, durdurmak için tekrar basın. Basılı tut: {{shortcut}} basılıyken dikte edin."
+          "dictationModeAuto": "Otomatik",
+          "dictationModesWithAutoDescription": "Otomatik: bırakana kadar dikte etmek için {{shortcut}} tuşlarını basılı tutun veya başlatıp durdurmak için kısaca dokunun. Basılı tut: {{shortcut}} basılıyken dikte edin. Aç/kapat: başlatmak için {{shortcut}} tuşlarına bir kez, durdurmak için tekrar basın."
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} kaldırılsın mı",
@@ -11277,7 +11281,10 @@
               "modelUnloadTitle": "Konuşma modelini bellekten kaldır",
               "modelUnloadDescription": "Yerel konuşma modelinin bellekten ne zaman kaldırılacağını seçin.",
               "modelUnloadKeyword": "kaldır",
-              "modelMemoryKeyword": "bellek"
+              "modelMemoryKeyword": "bellek",
+              "fillerWordsTitle": "Dolgu seslerini kaldır",
+              "fillerWordsDescription": "Dikte edilen metinden “hmm” gibi duraksama seslerini çıkarır.",
+              "fillerWordsKeyword": "dolgu"
             }
           }
         },
@@ -16286,6 +16293,7 @@
           "kernelStartFailed": "Çekirdek başlatılamadı.",
           "noPython": "Bu bilgisayarda Python bulunamadı. [python.org](https://www.python.org/downloads/) adresinden yükleyin, ardından hücreyi yeniden çalıştırın.",
           "kernelDied": "Çekirdek sonlandı.",
+          "outputTruncated": "Çıktı kısaltıldı: Orca bu hücrenin çıktısının başını tuttu ve gerisini attı. Tamamını korumak için çıktıyı bir dosyaya yazın.",
           "localOnly": "Not defteri hücreleri yalnızca bu bilgisayardaki dosyalar için çalıştırılabilir.",
           "pythonOnly": "Orca'da yalnızca Python not defterleri çalıştırılabilir.",
           "ownerUnresolved": "Orca bu not defterinin hangi bilgisayarda olduğunu henüz belirleyemediği için hücreleri çalıştırılamıyor.",
@@ -16950,7 +16958,8 @@
           "micFallback": "Seçili mikrofon kullanılamıyor. Sistem varsayılanı kullanılıyor.",
           "micDisconnected": "Mikrofon bağlantısı kesildi. Dikte durduruldu.",
           "cloudLimitReached": "Dikte, 10 dakikalık bulut sınırında durduruldu.",
-          "stoppedAfterSilence": "Bir dakika sessizlikten sonra durduruldu"
+          "stoppedAfterSilence": "Bir dakika sessizlikten sonra durduruldu",
+          "retryUnmatched": "Yeniden deneme hangi kelimelerin zaten yazıldığını anlayamadı, bu yüzden hepsini ekledi."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Dikte eklenemedi, bu yüzden panoya kopyalandı.",
@@ -16958,13 +16967,21 @@
           "lost": "Dikte eklenemedi ve kopyalanamadı."
         },
         "DictationIndicator": {
-          "335e1bc6cb": "Dikteyi durdur",
-          "7f3660a7ba": "Mikrofon başlatılıyor…",
-          "f082d0cb9d": "İşleniyor…",
-          "3de5a129e7": "Dinliyor",
           "4977162383": "Çok yüksek sesli",
-          "25f2b7a6a5": "Konuşuyor",
-          "loadingModel": "Konuşma modeli yükleniyor…"
+          "finishing": "Tamamlanıyor…",
+          "listening": "Dinleniyor…",
+          "cancel": "İptal",
+          "finish": "Bitir",
+          "oneMinuteLeft": "Bir dakika kaldı.",
+          "sendsWhenLanded": "Metin gelince gönderilecek",
+          "entersWhenLanded": "Metin gelince Enter'a basılacak"
+        },
+        "DictationPillFailure": {
+          "discard": "Kaydı sil",
+          "modelFailed": "Model yüklenemedi.",
+          "transcribeFailed": "Yazıya dökülemedi. Kayıt saklandı.",
+          "openSettings": "Ayarlar",
+          "retry": "Yeniden dene"
         }
       },
       "dashboard": {
@@ -19438,6 +19455,7 @@
         "orcaStopCanContinue": "Bu konuşmada devam edebilirsiniz.",
         "orcaStopUnnamedServer": "uzak sunucu",
         "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
+        "safetyReviewApproved": "{{agent}} bu işleme onay verdi. Ayrıntıları görüntüleyin.",
         "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
         "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
         "forkedFrom": "Çatallandığı kaynak"
@@ -19464,6 +19482,7 @@
         "noCommands": "Eşleşen komut yok",
         "commands": "Komutlar",
         "skills": "Beceriler",
+        "checkingSkills": "Yeni beceriler denetleniyor…",
         "loadingSkills": "Beceriler yükleniyor...",
         "skillsLoaded": "Beceriler yüklendi",
         "clearDescription": "Konuşma bağlamını temizle",
@@ -19917,7 +19936,8 @@
       "contextUsage": {
         "label": "Bağlam: {{used}} / {{window}} token kullanıldı (%{{percent}})",
         "title": "Bağlam",
-        "estimated": "Son yanıta göre tahmin edilmiştir."
+        "estimated": "Son yanıta göre tahmin edilmiştir.",
+        "deferredNote": "İhtiyaç olduğunda yüklenir. Kullanılan toplama dahil değildir."
       },
       "contextMenu": {
         "copyOrcaSessionId": "Orca Oturum Kimliğini Kopyala",
@@ -20171,8 +20191,10 @@
       "composerWorkspace": {
         "copyFailed": "Kopyalanamadı",
         "copyIdentity": "{{value0}} kopyala",
+        "detachedCommit": "Commit {{head}} (dal değil)",
         "folder": "Klasör",
         "mainCheckout": "Ana çalışma kopyası",
+        "turnWorking": "Bu sohbetin ajanı çalışıyor. Dalı, sırası bittikten sonra değiştirin.",
         "worktree": "Worktree"
       },
       "explicitChatWindows": "Bu ajanın sohbeti henüz Windows'ta kullanılamıyor. Bunun yerine bir terminalde açın.",
@@ -20636,7 +20658,14 @@
           "cloud": "Bulut modelleri sağlayıcının sunucularında çalışır, bu yüzden burada hiçbir şey yüklü kalmaz.",
           "never": "Asla",
           "immediately": "Hemen"
+        },
+        "fillerWords": {
+          "title": "Dolgu seslerini kaldır",
+          "description": "Dikte edilen metinden “hmm” gibi duraksama seslerini dikte diline göre çıkarır."
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "Kullanılabilir ortam değişkenleri"
       }
     },
     "agentChildRow": {
@@ -21281,6 +21310,7 @@
       "switch": "Dal değiştir: {{branch}}",
       "search": "Dallarda ara",
       "recover": "{{branch}} dalına geç",
+      "copy": "Dal adını kopyala",
       "create": "{{branch}} dalından {{name}} dalını oluştur",
       "open": "Çalışma alanını aç",
       "occupied": "{{path}} konumunda kullanımda",
@@ -21371,7 +21401,6 @@
       "sortRelevance": "En alakalı",
       "sortNewest": "En yeni",
       "sortResultsAriaLabel": "Sonuçları sırala: {{value0}}",
-      "consent": "Tam metin arama etkinleştirilsin mi? Orca, tam konuşmalar ve araç çıktısı başına 3.072 karaktere kadar dahil olmak üzere yerel ajan dökümlerinden bu bilgisayarda bir dizin oluşturur. İçerik sansürlenmez. Kimliği doğrulanmış eşlenmiş istemciler bu dizinde arama yapabilir.",
       "remoteDisabled": "Arama bu bilgisayarda devre dışı. Oturumlarında arama yapmak için o bilgisayarda döküm dizinlemeyi etkinleştirin.",
       "titleOnly": "Bu bilgisayarda tam metin araması kapalı olduğu için yalnızca oturum başlıklarında eşleşme aranır.",
       "notReady": "Arama dizini henüz hazır değil. Birazdan tekrar deneyin.",
@@ -21431,7 +21460,6 @@
       "description": "Bu bilgisayarda ve eşlenmiş herhangi bir Orca sunucusunda ajanlarınızın söylediği ve yaptığı her şeyi arayın.",
       "searchDescription": "Bu bilgisayar ve eşlenmiş sunucular için oturum aramasını açın veya arama verilerini temizleyin.",
       "indexComputers": "Oturumların içinde ara",
-      "computersConsent": "Her bilgisayar, kendi ajan konuşmalarının ve araç çıktısının aranabilir bir kopyasını tutar. Hiçbir şey o bilgisayardan dışarı çıkmaz.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "{{host}} üzerindeki oturumları ara",
       "serverOffline": "Çevrimdışı",
@@ -21832,11 +21860,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "Silme tercihi kaydedilemedi",
     "alwaysForceDelete": "Her zaman zorla sil",
+    "alwaysForceDeleteDescription": "Bundan sonraki tüm çalışma alanı silme işlemlerine uygulanır.",
     "moreActions": "Diğer zorla silme seçenekleri",
-    "alwaysForceDeleteTooltip": "Bundan sonraki tüm çalışma alanı silme işlemlerine uygulanır.",
     "moreBranchActions": "Diğer branch silme seçenekleri",
     "alwaysForceDeleteBranches": "Korunan branch'leri her zaman sil",
-    "alwaysForceDeleteBranchesTooltip": "Bundan sonraki çalışma alanı silme işlemlerinde korunan branch'lere uygulanır.",
+    "alwaysForceDeleteBranchesDescription": "Bundan sonraki çalışma alanı silme işlemlerinde korunan branch'lere uygulanır.",
     "moreDeleteOptions": "Diğer silme seçenekleri",
     "alwaysDelete": "Her zaman sil",
     "alwaysDeleteTooltip": "Bundan sonraki silme işlemlerinde bu onayı atla."
@@ -22375,7 +22403,8 @@
     "refresh": "Yenile",
     "restartLocal": "Yerel arka plan hizmetini yeniden başlat",
     "killAllLocal": "Tüm yerel oturumları sonlandır",
-    "killFailed": "Terminal sonlandırılamadı. Son gözlemlenen oturumlar korunur."
+    "killFailed": "Terminal sonlandırılamadı. Son gözlemlenen oturumlar korunur.",
+    "metricDetails": "Metrik ayrıntıları"
   },
   "browserExtensions": {
     "permission": {

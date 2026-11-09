@@ -2,13 +2,13 @@ import * as fs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as FsUtils from '../codex-accounts/fs-utils'
+import type * as FsUtils from '../filesystem/atomic-file-publication'
 vi.mock('electron', () => ({ app: { getPath: () => '/unused-test-path' } }))
 vi.mock('node:fs', async (original) => {
   const actual = await original<typeof fs>()
   return { ...actual, symlinkSync: vi.fn(actual.symlinkSync) }
 })
-vi.mock('../codex-accounts/fs-utils', async (original) => {
+vi.mock('../filesystem/atomic-file-publication', async (original) => {
   const actual = await original<typeof FsUtils>()
   return { ...actual, writeFileAtomically: vi.fn(actual.writeFileAtomically) }
 })

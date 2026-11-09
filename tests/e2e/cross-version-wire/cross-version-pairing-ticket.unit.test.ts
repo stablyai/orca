@@ -10,12 +10,14 @@ import '../../../src/shared/remote-runtime/pairing/remote-pairing-ticket-exchang
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
+  releaseModuleExport,
   resolveBaselineReleaseRef
 } from './release-checkout'
 
 // Single-use pairing must survive a downgrade, accept rows an older host made, and stay invisible to old clients.
 const SUITE_TIMEOUT_MS = 180_000
 const EXCHANGED = 'e'.repeat(48)
+const PRE_TICKET_RELEASE_REF = 'v1.4.253'
 
 type ReleasedRegistryLike = {
   addDevice(name: string, scope: 'mobile' | 'runtime'): { deviceId: string; token: string }
@@ -24,15 +26,25 @@ type ReleasedRegistryLike = {
 }
 
 let ReleasedRegistry: new (userDataPath: string) => ReleasedRegistryLike
+let PreTicketRegistry: typeof ReleasedRegistry
 
 beforeAll(async () => {
-  const checkout = await materializeReleaseCheckout(resolveBaselineReleaseRef())
-  const registryModule = await importReleaseCheckoutModule(
-    checkout,
-    'src/main/runtime/rpc/server/pairing/device-registry.ts'
+  const [checkout, preTicketCheckout] = await Promise.all([
+    materializeReleaseCheckout(resolveBaselineReleaseRef()),
+    materializeReleaseCheckout(PRE_TICKET_RELEASE_REF)
+  ])
+  const [registryModule, preTicketModule] = await Promise.all([
+    importReleaseCheckoutModule(checkout, 'src/main/runtime/rpc/server/pairing/device-registry.ts'),
+    importReleaseCheckoutModule(
+      preTicketCheckout,
+      'src/main/runtime/rpc/server/pairing/device-registry.ts'
+    )
+  ])
+  ReleasedRegistry = releaseModuleExport<typeof ReleasedRegistry>(registryModule, 'DeviceRegistry')
+  PreTicketRegistry = releaseModuleExport<typeof ReleasedRegistry>(
+    preTicketModule,
+    'DeviceRegistry'
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the pinned release's DeviceRegistry class; a changed shape fails the assertions below.
-  ReleasedRegistry = registryModule.DeviceRegistry as typeof ReleasedRegistry
 }, SUITE_TIMEOUT_MS)
 
 function pairedTicket(registry: DeviceRegistry, name: string) {
@@ -64,7 +76,7 @@ describe('cross-version: single-use pairing tickets', () => {
 
   it('rows an older host minted keep working and are never treated as single-use', () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-xv-ticket-'))
-    const released = new ReleasedRegistry(userDataPath)
+    const released = new PreTicketRegistry(userDataPath)
     const phone = released.addDevice('Phone', 'mobile')
     released.updateLastSeen(phone.deviceId)
 

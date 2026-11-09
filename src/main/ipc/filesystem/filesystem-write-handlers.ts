@@ -1,7 +1,7 @@
 import { ipcMain, shell } from 'electron'
 import { lstat, rm, writeFile } from 'node:fs/promises'
 import type { SshMutationExpectation } from '../../../shared/ssh-types'
-import { assertSshMutationExpectation } from '../../ssh/connection/ssh-connection-generation'
+import { assertSshMutationExpectation } from '../../ssh/connection/authority/ssh-connection-generation'
 import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error'
 import { tryDeleteWslUncPath } from '../../wsl/filesystem/wsl-unc-delete'
 import type { LocalFileAccess } from '../../../shared/file-access/local-file-access'

@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-import { readHooksJson, wrapWindowsHookCommand } from '../agent-hooks/installer-utils'
+import { readHooksJson } from '../agent-hooks/installation/configuration/hooks-json-read'
+import { wrapWindowsHookCommand } from '../agent-hooks/installation/commands/windows-hook-command'
 import { COPILOT_EVENTS, getManagedCommand } from './copilot-managed-hook-definitions'
 import { CopilotHookService } from './hook-service'
 

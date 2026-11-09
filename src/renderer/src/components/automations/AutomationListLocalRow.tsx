@@ -19,10 +19,10 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { AgentIcon } from '@/lib/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { cn } from '@/lib/utils'
-import type { AutomationRun } from '../../../../shared/automations-types'
-import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
+import { getAutomationRunRepoId } from '../../../../shared/automations/history/automation-run-identity'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
 import {
   getExecutionHostLabel,

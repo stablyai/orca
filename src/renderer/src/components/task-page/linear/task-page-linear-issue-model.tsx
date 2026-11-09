@@ -7,7 +7,7 @@ import type {
   LinearCollectionResult,
   LinearWorkflowState
 } from '../../../../../shared/linear/workspace-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import React, { useState, useRef, useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { useTeamStates } from '@/hooks/useIssueMetadata'
@@ -22,7 +22,7 @@ import {
   getLinearStateMarkerStyle
 } from '@/components/linear-state-pill-style'
 import { LoaderCircle, ChevronDown } from 'lucide-react'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 export type LinearProjectTab = 'overview' | 'issues'
 export type LinearGroupSection = {
   key: string

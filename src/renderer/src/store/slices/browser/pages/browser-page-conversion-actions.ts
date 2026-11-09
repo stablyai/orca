@@ -10,7 +10,7 @@ import { findPage, findWorkspace, mirrorWorkspaceFromActivePage } from './browse
 import { assertManagedBrowserMaterializationAllowed } from '@/lib/client-creation-action-policy'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { closeRemoteBrowserPageInOwningEnvironment } from '../hosts/browser-remote-close'
-import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
+import { releaseDocPreviewGrant } from '@/lib/browser/documents/doc-preview-grants'
 import { isLocalBrowserPageOwner } from '../hosts/browser-host-state'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { sendBrowserLayoutCommand } from '../tabs/browser-layout-owner-commands'

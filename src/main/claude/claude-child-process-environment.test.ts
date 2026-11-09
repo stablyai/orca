@@ -27,6 +27,19 @@ describe('Claude child process environment', () => {
     })
   })
 
+  it('lets a launch value replace a differently cased inherited one on Windows only', () => {
+    const inheritedEnv = { CLAUDE_CODE_ENTRYPOINT: 'cli', Path: 'C:\\inherited' }
+    const configured = { claude_code_entrypoint: 'company-client', PATH: 'C:\\launch' }
+    expect(buildClaudeChildProcessEnv(configured, { platform: 'win32', inheritedEnv })).toEqual({
+      claude_code_entrypoint: 'company-client',
+      PATH: 'C:\\launch'
+    })
+    expect(buildClaudeChildProcessEnv(configured, { platform: 'linux', inheritedEnv })).toEqual({
+      ...inheritedEnv,
+      ...configured
+    })
+  })
+
   it('can strip child-session stamps reintroduced by a full SDK launch overlay', () => {
     expect(
       buildClaudeChildProcessEnv(

@@ -7,7 +7,7 @@ import {
   joinStructuredAgentSessionStop,
   structuredAgentSessionStopIsJoinable
 } from '../../../src/shared/agent-session/requests/structured-agent-session-stop-join'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   requestStructuredAgentSessionMutation,
   type StructuredAgentSessionMutationCallResult

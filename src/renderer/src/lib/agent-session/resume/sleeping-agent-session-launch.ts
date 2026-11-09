@@ -1,4 +1,4 @@
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store/index'
 import { buildAgentResumeStartupPlan } from '../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
@@ -11,9 +11,9 @@ import {
   resolveSshHostReportedPlatform,
   resolveAgentResumeLaunchTarget,
   type AgentResumeLaunchTarget
-} from '@/lib/agent-resume-launch-target'
+} from '@/lib/agent-session/resume/agent-resume-launch-target'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { resolveResumeLaunchRecipe } from '../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'

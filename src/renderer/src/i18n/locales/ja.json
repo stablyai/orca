@@ -509,8 +509,7 @@
         "parakeetJa": "日本語のみ。3.5 万時間以上の自然な音声で学習。句読点に対応。",
         "whisperTiny": "90 以上の言語に対応。Parakeet より精度は低いものの、対応言語が最も豊富。",
         "senseVoice": "中国語、英語、日本語、韓国語、広東語に対応。言語を自動検出。",
-        "gpt4oMiniTranscribe": "高精度で低コストのクラウド文字起こし。OpenAI API キーが必要です。",
-        "gpt4oTranscribe": "より高精度なクラウド文字起こし。OpenAI API キーが必要です。"
+        "gptTranscribe": "高精度なクラウド文字起こし。OpenAI API キーが必要です。"
       }
     },
     "diagnostics": {
@@ -3191,7 +3190,6 @@
             "a3346fc6ed": "ワークツリーの作成をキャンセルする",
             "532aea14ce": "キャンセル",
             "767951265d": "ワークツリーの作成中に問題が発生しました。",
-            "vmProvisioningTitle": "VMのプロビジョニング",
             "cancelProvisioning": "キャンセル",
             "vmProvisioningLogEmpty": "レシピの出力を待っています…"
           }
@@ -3667,6 +3665,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "オンにする"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "別のウィンドウに合わせたサイズ",
+            "fitHere": "ここに合わせる"
           }
         }
       },
@@ -3769,7 +3771,6 @@
             "4f327c8b3d": "Markdown を開く…",
             "3d5d6c960d": "新規 Markdown",
             "fd2b42aaa3": "新規モバイルエミュレータ",
-            "aea43b5748": "既存のエミュレータタブを開きます。",
             "b426bb2615": "モバイルエミュレータに移動",
             "4833fb2cbe": "新規ブラウザタブ",
             "d364f3c8d4": "新規ターミナル",
@@ -4472,6 +4473,9 @@
             "accounts": "保存済み Antigravity アカウント",
             "readAgo": "{{time}} に取得",
             "notRead": "使用量は不明：未取得"
+          },
+          "InlineUsageBars": {
+            "resetsAt": "{{when}} にリセット"
           }
         }
       },
@@ -5337,7 +5341,10 @@
           "69f5b5380d": "クローン作成中…",
           "cloneOnHostDescription": "Git URL を入力し、{{value0}} 上のクローン先を選択してください。",
           "cloneParentFolder": "親フォルダー",
-          "remoteCloneParentPlaceholder": "/home/user/projects"
+          "remoteCloneParentPlaceholder": "/home/user/projects",
+          "cloneFolderName": "フォルダー名",
+          "cloneFolderTakenByRepo": "このフォルダー内の「{{value0}}」はすでに別のリポジトリのため、このクローンには専用のフォルダーが必要です。",
+          "cloneFolderNotEmpty": "このフォルダーには「{{value0}}」がすでに存在するため、このクローンには専用のフォルダーが必要です。"
         },
         "AutoRenameFailedDialog": {
           "aed1623b1e": "閉じる",
@@ -5518,8 +5525,6 @@
           "888b83bf78": "セットアップスクリプトの保存に失敗しました",
           "a49196d538": "Orca が新規ワークツリーを作成するときに実行されます。",
           "savedSetupCommand": "セットアップコマンドを保存しました。",
-          "savedWithSkippedFields_one": "未対応の項目を {{count}} 件スキップしました。セットアップコマンドを保存しました。",
-          "savedWithSkippedFields_other": "未対応の項目を {{count}} 件スキップしました。セットアップコマンドを保存しました。",
           "savedInProjectSettings": "この<settings>プロジェクトの設定</settings>に保存済み"
         },
         "SetupScriptPromptCardViews": {
@@ -5532,13 +5537,12 @@
           "eefa756190": "手動で構成する",
           "ca4efcbc25": "保存",
           "fdbc6cb064": "検出されたセットアップスクリプト",
-          "7275f674cc": "検出されたセットアップ",
           "822ff300ad": "閉じる",
           "5bfd5c8779": "セットアップスクリプトを閉じる",
-          "detectedFromSource": "<source>{{source}}</source> から検出",
           "ignoresSharedSetup": "このリポジトリは共有の <yaml>orca.yaml</yaml> セットアップスクリプトを無視します。ローカルコマンドを追加するか、設定でソースを変更してください。",
-          "foundSetupCommandIn": "<source>{{source}}</source> でセットアップコマンドが見つかりました。新規ワークツリーで実行するには保存してください。",
-          "reviewSetupScript": "セットアップスクリプトを確認"
+          "reviewSetupScript": "セットアップスクリプトを確認",
+          "7275f674cc": "検出されたセットアップ",
+          "detectedFromSource": "<file>{{source}}</file> から検出"
         },
         "SetupScriptReviewDialog": {
           "title": "セットアップスクリプトを確認",
@@ -7918,7 +7922,6 @@
           "f828e1de19": "- チームと共有",
           "673a7fd10e": "確認中…",
           "5426ecbdcb": "ローカルスクリプトは実行されません",
-          "b2b06c7ce8": "利用可能な環境変数 (カーソルを合わせると詳細が表示されます):",
           "95a0411b3e": "テンプレート",
           "175daba180": "例",
           "b20c5df6ca": "「orca.yaml」ファイルを追加して、このリポジトリの共有セットアップ、アーカイブ、または Issue 自動化のデフォルトを有効にします。テンプレートの例:",
@@ -8806,7 +8809,8 @@
           "6fa734ed95": "{{value0}} を削除",
           "openAiKeyName": "OpenAI 転写キー",
           "dictationShortcutDescription": "{{shortcut}} を押すと、フォーカスされているペインにテキストを音声入力できます。",
-          "dictationModesDescription": "トグル: {{shortcut}} を1回押すと開始し、もう一度押すと停止します。ホールド: {{shortcut}} を押している間、音声入力します。"
+          "dictationModeAuto": "自動",
+          "dictationModesWithAutoDescription": "自動：{{shortcut}} を押し続けると離すまで音声入力し、短く押すと開始と停止を切り替えます。ホールド：{{shortcut}} を押している間、音声入力します。トグル：{{shortcut}} を1回押すと開始し、もう一度押すと停止します。"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} を削除",
@@ -10638,7 +10642,10 @@
               "modelUnloadTitle": "音声モデルの解放",
               "modelUnloadDescription": "ローカル音声モデルをメモリから解放するタイミングを選びます。",
               "modelUnloadKeyword": "解放",
-              "modelMemoryKeyword": "メモリ"
+              "modelMemoryKeyword": "メモリ",
+              "fillerWordsTitle": "フィラーを削除",
+              "fillerWordsDescription": "「えーと」「うーん」などのつなぎ言葉を音声入力のテキストから取り除きます。",
+              "fillerWordsKeyword": "フィラー"
             }
           }
         },
@@ -15613,6 +15620,7 @@
           "kernelStartFailed": "カーネルの起動に失敗しました。",
           "noPython": "このコンピュータに Python が見つかりません。[python.org](https://www.python.org/downloads/) からインストールして、セルを再実行してください。",
           "kernelDied": "カーネルが停止しました。",
+          "outputTruncated": "出力を切り詰めました: Orca はこのセルの出力の先頭部分を保持し、残りを破棄しました。すべて残すには、ファイルに書き出してください。",
           "localOnly": "ノートブックセルはこのコンピュータ上のファイルでのみ実行できます。",
           "pythonOnly": "Orca では Python ノートブックのみ実行できます。",
           "commandCopied": "コマンドをコピーしました",
@@ -16290,7 +16298,8 @@
           "micFallback": "選択したマイクが使用できません。システムのデフォルトを使用します。",
           "micDisconnected": "マイクが接続されていません。ディクテーションが停止しました。",
           "cloudLimitReached": "クラウドの10分の上限に達したため、ディクテーションが停止しました。",
-          "stoppedAfterSilence": "1分間音声がなかったため停止しました。"
+          "stoppedAfterSilence": "1分間音声がなかったため停止しました。",
+          "retryUnmatched": "再試行で入力済みの語句を特定できなかったため、すべて挿入しました。"
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "音声入力を挿入できなかったため、クリップボードにコピーしました。",
@@ -16298,13 +16307,21 @@
           "lost": "音声入力を挿入もコピーもできませんでした。"
         },
         "DictationIndicator": {
-          "335e1bc6cb": "ディクテーションを停止する",
-          "7f3660a7ba": "マイクを起動中…",
-          "f082d0cb9d": "処理中…",
-          "3de5a129e7": "聞き取り中",
           "4977162383": "音量が大きすぎます",
-          "25f2b7a6a5": "発話中",
-          "loadingModel": "音声モデルを読み込み中…"
+          "finishing": "仕上げ中…",
+          "listening": "聞き取り中…",
+          "cancel": "キャンセル",
+          "finish": "完了",
+          "oneMinuteLeft": "残り1分です。",
+          "sendsWhenLanded": "テキストの入力後に送信します",
+          "entersWhenLanded": "テキストの入力後に Enter を押します"
+        },
+        "DictationPillFailure": {
+          "discard": "録音を破棄",
+          "modelFailed": "音声モデルを読み込めません。",
+          "transcribeFailed": "文字起こしに失敗。録音は保持しました。",
+          "openSettings": "設定を開く",
+          "retry": "再試行"
         }
       },
       "dashboard": {
@@ -18803,6 +18820,7 @@
         "noCommandsOrSkills": "一致するコマンドやスキルがありません",
         "commands": "コマンド",
         "skills": "スキル",
+        "checkingSkills": "新しいスキルを確認しています…",
         "loadingSkills": "スキルを読み込み中…",
         "clearDescription": "会話のコンテキストをクリア",
         "skillsUnavailableHost": "SSH チャットではスキルを一覧表示できません",
@@ -19069,6 +19087,7 @@
         "orcaStopCanContinue": "この会話で続行できます。",
         "orcaStopUnnamedServer": "リモートサーバー",
         "permissionDenied": "{{agent}} が権限を拒否しました。詳細を表示。",
+        "safetyReviewApproved": "{{agent}} がこの操作を承認しました。詳細を表示。",
         "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
         "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。",
         "forkedFrom": "分岐元"
@@ -19199,7 +19218,8 @@
       "contextUsage": {
         "label": "コンテキスト {{used}} / {{window}} トークン、{{percent}}% 使用済み",
         "title": "コンテキスト",
-        "estimated": "最後の応答から推定。"
+        "estimated": "最後の応答から推定。",
+        "deferredNote": "必要時に読み込まれます。使用量には含まれません。"
       },
       "dismissDeliveryNotice": "閉じる",
       "addSelectionToChat": "チャットに追加",
@@ -19483,8 +19503,10 @@
       "composerWorkspace": {
         "copyFailed": "コピーできませんでした",
         "copyIdentity": "{{value0}} をコピー",
+        "detachedCommit": "コミット {{head}}（ブランチではありません）",
         "folder": "フォルダー",
         "mainCheckout": "メインチェックアウト",
+        "turnWorking": "このチャットの Agent が作業中です。ターンが終わってからブランチを切り替えてください。",
         "worktree": "ワークツリー"
       },
       "explicitChatWindows": "この Agent のチャットはまだ Windows では利用できません。ターミナルで開いてください。",
@@ -19953,7 +19975,14 @@
           "cloud": "クラウドモデルはプロバイダーのサーバーで動くため、ここには何も読み込まれません。",
           "never": "しない",
           "immediately": "すぐに"
+        },
+        "fillerWords": {
+          "title": "フィラーを削除",
+          "description": "音声入力の言語に合わせて、「えーと」「うーん」などのつなぎ言葉を入力テキストから取り除きます。"
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "利用可能な環境変数"
       }
     },
     "agentChildRow": {
@@ -21012,6 +21041,7 @@
       "switch": "ブランチを切り替え: {{branch}}",
       "search": "ブランチを検索",
       "recover": "{{branch}} に切り替え",
+      "copy": "ブランチ名をコピー",
       "create": "{{branch}} からブランチ {{name}} を作成",
       "open": "ワークスペースを開く",
       "occupied": "{{path}} でチェックアウト済み",
@@ -21061,7 +21091,6 @@
       "sortRelevance": "最も関連性の高い",
       "sortNewest": "最新",
       "sortResultsAriaLabel": "ソート結果: {{value0}}",
-      "consent": "全文検索を有効にしますか? Orca は、完全な会話とツール出力ごとに最大 3,072 文字を含む、ローカル Agent のトランスクリプトからこのコンピュータ上にインデックスを作成します。内容は編集されていません。認証されたペアリングされたクライアントは検索できます。",
       "remoteDisabled": "このコンピュータでは検索が無効になっています。そのコンピュータ上でトランスクリプトのインデックス作成を有効にして、セッションを検索します。",
       "titleOnly": "このコンピュータでは全文検索がオフのため、セッションのタイトルのみが照合されます。",
       "notReady": "検索インデックスはまだ準備ができていません。しばらくしてからもう一度お試しください。",
@@ -21118,7 +21147,6 @@
       "description": "このコンピュータおよびペアになっている Orca サーバー上で、Agent の言動をすべて検索します。",
       "searchDescription": "このコンピュータとペアリングされたサーバーのセッション検索をオンにするか、検索データをクリアします。",
       "indexComputers": "セッション内を検索",
-      "computersConsent": "各コンピュータは、自身の Agent の会話とツールの出力の検索可能なコピーを保持します。そのコンピュータからは何も残りません。",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "{{host}} のセッションを検索",
       "serverOffline": "オフライン",
@@ -21688,11 +21716,11 @@
   "workspaceDeletion": {
     "preferenceSaveFailed": "削除の設定を保存できませんでした",
     "alwaysForceDelete": "常に強制削除",
+    "alwaysForceDeleteDescription": "今後のすべてのワークスペース削除に適用されます。",
     "moreActions": "その他の強制削除オプション",
-    "alwaysForceDeleteTooltip": "今後のすべてのワークスペース削除に適用されます。",
     "alwaysForceDeleteBranches": "保持したブランチを常に削除する",
     "moreBranchActions": "その他のブランチ削除オプション",
-    "alwaysForceDeleteBranchesTooltip": "将来のワークスペースの削除後に保持されるブランチに適用されます。",
+    "alwaysForceDeleteBranchesDescription": "将来のワークスペースの削除後に保持されるブランチに適用されます。",
     "moreDeleteOptions": "その他の削除オプション",
     "alwaysDelete": "常に削除",
     "alwaysDeleteTooltip": "今後の削除ではこの確認をスキップします。"
@@ -22053,7 +22081,8 @@
     "refresh": "更新",
     "restartLocal": "ローカルデーモンを再起動",
     "killAllLocal": "すべてのローカルセッションを終了",
-    "killFailed": "ターミナルを終了できませんでした。最後に観測されたセッションを保持しています。"
+    "killFailed": "ターミナルを終了できませんでした。最後に観測されたセッションを保持しています。",
+    "metricDetails": "メトリクスの詳細"
   },
   "workspaceSpace": {
     "table": {

@@ -49,7 +49,7 @@ vi.mock('./MobileFileMarkdownPreview', () => ({
 vi.mock('../components/MobileSourceCopyButton', () => ({ MobileSourceCopyButton: () => null }))
 vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: () => null }))
 // No shell client initially: the screen must settle on waiting.
-vi.mock('../transport/host-client-hooks', () => ({
+vi.mock('../transport/connection/host-client-hooks', () => ({
   useForceReconnect: () => transport.forceReconnect,
   useHostClient: () => ({ ...transport.connection, clientId: null })
 }))

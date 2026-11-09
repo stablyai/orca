@@ -7,13 +7,14 @@ import {
   TASK_PROVIDERS,
   normalizeVisibleTaskProviders,
   resolveVisibleTaskProvider
-} from '../../../../../shared/task-providers'
+} from '../../../../../shared/work-items/task-providers'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
-import { CodeHostSetupSteps, JiraSetupSteps } from './TaskSourceSimpleSetup'
+import { CodeHostSetupSteps } from './TaskSourceCodeHostSetup'
+import { JiraSetupSteps } from './TaskSourceJiraSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
 import {
