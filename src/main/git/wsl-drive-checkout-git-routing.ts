@@ -3,7 +3,7 @@ import {
   isWslLinkedWorktreeGitRoutingCandidate,
   prepareWslLinkedWorktreeGitRouting,
   usesHostGitForWslLinkedWorktree
-} from './wsl-linked-worktree-git-routing'
+} from './command-runner/wsl-linked-worktree-git-routing'
 import { pendingWslWindowsCheckoutGitConfig } from './wsl-windows-checkout-git-probe'
 
 /** Settle checkout ownership and Windows-Git config before synchronous routing; null means no drive-checkout command. */

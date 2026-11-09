@@ -1,8 +1,9 @@
+import './session-search-worker.test-fixture'
 import { chmod, rm } from 'node:fs/promises'
 import { delimiter, join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
-import { resetSessionParseCacheForTests } from '../ai-vault/session-scanner-parse-cache'
-import { resetTranscriptConsumersForTests } from '../ai-vault/session-transcript-consumers'
+import { resetSessionParseCacheForTests } from '../ai-vault/parse-cache/session-parse-cache-store'
+import { resetTranscriptConsumersForTests } from '../ai-vault/transcripts/session-transcript-consumers'
 import type SyncDatabase from '../sqlite/sync-database'
 import { SessionSearchIndexer } from './session-search-indexer'
 import {
@@ -29,7 +30,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  indexer.close()
+  await indexer.close()
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()
   await harness.cleanup()

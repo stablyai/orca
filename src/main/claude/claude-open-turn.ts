@@ -1,11 +1,9 @@
-import type { AgentSessionContextUsage } from '../../shared/agent-session-context-usage'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity,
-  type AgentJournalTurnScope
-} from '../../shared/agent-session-journal-types'
-import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { AgentSessionContextUsage } from '../../shared/agent-session/agent-session-context-usage'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalTurnScope } from '../../shared/agent-session/journal/agent-session-journal-turn-scope'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import {
   claudeCurrentTurnIdentity,
   claudeTurnLifecycleItem,
@@ -80,6 +78,10 @@ export class ClaudeOpenTurn {
 
   get startedAt(): number | null {
     return this.current?.startedAt ?? null
+  }
+
+  get userItemId(): string | null {
+    return this.current?.userItemId ?? null
   }
 
   get isOpen(): boolean {

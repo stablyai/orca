@@ -1,5 +1,5 @@
 import type { PluginHostPanel } from '../../../../../preload/api-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { Button } from '../../ui/button'
 import { pluginPanelUnavailableReason } from './plugin-contribution-action-availability'
@@ -21,6 +21,7 @@ export function PluginContributionActionPanel({
 }: {
   panel: PluginHostPanel
 }): React.JSX.Element {
+  const t = useTranslate()
   const unavailableReason = useAppStore((state) => pluginPanelUnavailableReason(state))
   return (
     <span className="flex items-center gap-2">
@@ -31,14 +32,14 @@ export function PluginContributionActionPanel({
         variant="outline"
         size="xs"
         disabled={unavailableReason !== null}
-        aria-label={translate(
+        aria-label={t(
           'auto.components.settings.PluginContributionActionPanel.openName',
           'Open panel: {{value0}}',
           { value0: panel.title }
         )}
         onClick={() => openPluginPanelFromSettings(panel)}
       >
-        {translate('auto.components.settings.PluginContributionActionPanel.open', 'Open panel')}
+        {t('auto.components.settings.PluginContributionActionPanel.open', 'Open panel')}
       </Button>
     </span>
   )

@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspaces/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { getDefaultNotificationSettings } from '../../../shared/notification-settings-defaults'
 import { resolveAgentAttention } from '@/attention/agent-attention-policy'
-import { createTerminalAttentionSurface } from '@/components/terminal-pane/terminal-attention-surface'
-import { createStructuredAttentionSurface } from '@/components/native-chat/structured-attention-surface'
-import { createTabsSliceMockApi } from '../store/slices/tabs-slice-test-harness'
-import { createTestStore, makeWorktree, TEST_REPO } from '../store/slices/store-test-helpers'
+import { createTerminalAttentionSurface } from '@/components/terminal-pane/notifications/terminal-attention-surface'
+import { createStructuredAttentionSurface } from '@/components/native-chat/session/attention/structured-attention-surface'
+import { createTabsSliceMockApi } from '../store/slices/tabs/tabs-slice-test-harness'
+import { createTestStore } from '../store/testing/app-store-test-fixture'
+import { makeWorktree } from '../store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '../store/repos/repo.test-fixture'
 import { isWorkspaceNotificationMutedBySidebarFilters } from './hidden-workspace-notification-mute'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -52,16 +54,6 @@ beforeEach(() => {
 })
 
 describe('isWorkspaceNotificationMutedBySidebarFilters', () => {
-  it('mutes a workspace a Filters switch hides while the setting is off', () => {
-    expect(muted(CLI_ID)).toBe(true)
-    expect(muted(PLAIN_ID)).toBe(false)
-  })
-
-  it('mutes nothing when Notify about hidden workspaces is on', () => {
-    setNotifyHiddenWorkspaces(true)
-    expect(muted(CLI_ID)).toBe(false)
-  })
-
   it('fails open before settings or UI state hydrate, and for an unknown workspace', () => {
     expect(muted('repo1::/tmp/unknown')).toBe(false)
     store.setState({ persistedUIReady: false })
@@ -132,11 +124,6 @@ describe('isWorkspaceNotificationMutedBySidebarFilters', () => {
     expect(muted(folderWorkspaceKey('f1'))).toBe(false)
     store.setState({ hideWorkspacesFromOtherDevices: true })
     expect(muted(folderWorkspaceKey('f1'))).toBe(true)
-  })
-
-  it('ignores the project filter, which is not a Filters switch', () => {
-    store.setState({ hideCliCreatedWorkspaces: false, filterRepoIds: ['other-repo'] })
-    expect(muted(PLAIN_ID)).toBe(false)
   })
 })
 

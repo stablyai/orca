@@ -7,7 +7,7 @@ import {
   type Range
 } from '@tanstack/react-virtual'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { ActivityThreadListToolbar } from './activity-thread-list-toolbar'
 import {
   getActiveStickyHeaderIndex,
@@ -27,10 +27,9 @@ import { ActivityThreadCollapseContext } from './activity-thread-collapse-contex
 import { useActivityThreadSelection } from './use-activity-thread-selection'
 import type {
   ActivityGroupBy,
-  ActivityThreadGroup,
-  AgentPaneThread,
   ThreadReadFilter
-} from './activity-thread-types'
+} from '../../../../shared/agents-view-thread-filters'
+import type { ActivityThreadGroup, AgentPaneThread } from './activity-thread-types'
 
 const ZERO_RECT_FALLBACK_VIEWPORT = { width: 320, height: 600 }
 const observeActivityListRect: typeof observeElementRect = (instance, cb) =>
@@ -119,6 +118,7 @@ export function ActivityThreadListPane({
   /** Optional view-local scroll memory; updated without triggering React renders. */
   scrollTopRef?: React.MutableRefObject<number>
 }): React.JSX.Element {
+  const t = useTranslate()
   const [internalCollapsedGroupKeys, setInternalCollapsedGroupKeys] = useState<Set<string>>(
     () => new Set()
   )
@@ -387,7 +387,7 @@ export function ActivityThreadListPane({
           </div>
           {visibleThreadCount === 0 ? (
             <div className="px-3 py-8 text-center text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.activity.ActivityPrototypePage.7cd632006b',
                 'No agent activity matches these filters.'
               )}

@@ -7,6 +7,7 @@ import RepoBadgeLabel from '@/components/repo/RepoBadgeLabel'
 import { isRepoSearchQueryTooLarge, searchRepos } from '@/lib/repo-search'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { projectHostCountLabel } from './project-host-count-label'
 import type { Repo } from '../../../shared/repo-types'
 import type { TaskProjectPickerGroup } from './task-page/task-page-default-repo-selection'
@@ -36,12 +37,13 @@ type TaskProjectSourceComboboxProps = {
 
 function renderTriggerLabel(
   groups: readonly TaskProjectPickerGroup[],
-  selected: ReadonlySet<string>
+  selected: ReadonlySet<string>,
+  t: Translate = translate
 ): React.JSX.Element {
   if (groups.length === 0) {
     return (
       <span className="text-muted-foreground">
-        {translate('auto.components.task.project.source.combobox.noProjects', 'No projects')}
+        {t('auto.components.task.project.source.combobox.noProjects', 'No projects')}
       </span>
     )
   }
@@ -49,7 +51,7 @@ function renderTriggerLabel(
   if (selectedProjectGroups.length === groups.length) {
     return (
       <span className="inline-flex min-w-0 items-center gap-1.5">
-        {translate('auto.components.task.project.source.combobox.allProjects', 'All projects')}
+        {t('auto.components.task.project.source.combobox.allProjects', 'All projects')}
       </span>
     )
   }
@@ -73,12 +75,13 @@ function getProjectDetail(
   group: TaskProjectPickerGroup,
   selected: ReadonlySet<string>,
   showHostLabels: boolean,
-  getRepoHostLabel?: (repo: Repo) => string | null | undefined
+  getRepoHostLabel?: (repo: Repo) => string | null | undefined,
+  t?: Translate
 ): string {
   const selectedSource = getSelectedTaskProjectSource(group, selected)
   const hostLabel = showHostLabels ? getRepoHostLabel?.(selectedSource)?.trim() : ''
   if (hasMultipleTaskProjectHostsInGroup(group)) {
-    const hostCount = projectHostCountLabel(group.sources.length)
+    const hostCount = projectHostCountLabel(group.sources.length, t)
     return hostLabel ? `${hostLabel} · ${hostCount}` : hostCount
   }
   return hostLabel ? `${hostLabel} · ${selectedSource.path}` : selectedSource.path
@@ -97,6 +100,7 @@ export default function TaskProjectSourceCombobox({
   getRepoSourceStatus,
   triggerClassName
 }: TaskProjectSourceComboboxProps): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [sourceMenuProjectKey, setSourceMenuProjectKey] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -222,7 +226,7 @@ export default function TaskProjectSourceCombobox({
           aria-expanded={open}
           className={cn('h-8 w-full justify-between px-3 text-xs font-normal', triggerClassName)}
         >
-          {renderTriggerLabel(groups, selected)}
+          {renderTriggerLabel(groups, selected, t)}
           <ChevronsUpDown className="size-3.5 opacity-50" />
         </Button>
       </PopoverTrigger>
@@ -233,7 +237,7 @@ export default function TaskProjectSourceCombobox({
         <Command shouldFilter={false} value={commandValue} onValueChange={setCommandValue}>
           <CommandInput
             autoFocus
-            placeholder={translate(
+            placeholder={t(
               'auto.components.task.project.source.combobox.searchProjects',
               'Search projects...'
             )}
@@ -259,17 +263,14 @@ export default function TaskProjectSourceCombobox({
                 )}
               />
               <span>
-                {translate(
-                  'auto.components.task.project.source.combobox.allProjects',
-                  'All projects'
-                )}
+                {t('auto.components.task.project.source.combobox.allProjects', 'All projects')}
               </span>
             </button>
           </div>
           <CommandList>
             {filteredGroups.length === 0 ? (
               <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.task.project.source.combobox.noMatches',
                   'No projects match your search.'
                 )}
@@ -278,7 +279,7 @@ export default function TaskProjectSourceCombobox({
             {filteredGroups.map((group) => {
               const selectedProject = isTaskProjectGroupSelected(group, selected)
               const selectedSource = getSelectedTaskProjectSource(group, selected)
-              const detail = getProjectDetail(group, selected, showHostLabels, getRepoHostLabel)
+              const detail = getProjectDetail(group, selected, showHostLabels, getRepoHostLabel, t)
               const hasSourceMenu = hasMultipleTaskProjectHostsInGroup(group)
               return (
                 <div
@@ -332,7 +333,7 @@ export default function TaskProjectSourceCombobox({
                       <PopoverTrigger asChild>
                         <button
                           type="button"
-                          title={translate(
+                          title={t(
                             'auto.components.task.project.source.combobox.chooseSource',
                             'Choose task source'
                           )}

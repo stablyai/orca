@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { Loader2, RefreshCw, Trash2 } from 'lucide-react'
 import type { PluginMarketplaceHostSourceState } from '../../../../../preload/api-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Button } from '../../ui/button'
 import { Badge } from '../../ui/badge'
 import {
@@ -33,18 +33,21 @@ export function PluginMarketplaceSourceDialog({
   onOpenChange,
   onChanged
 }: PluginMarketplaceSourceDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const urlRef = useRef<HTMLInputElement>(null)
   const [url, setUrl] = useState('')
   const [gitRef, setGitRef] = useState('main')
   const [busyAction, setBusyAction] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const [prevOpen, setPrevOpen] = useState(open)
+  if (prevOpen !== open) {
+    setPrevOpen(open)
     if (!open) {
       setBusyAction(null)
       setError(null)
     }
-  }, [open])
+  }
 
   const add = async (): Promise<void> => {
     if (!url.trim() || !gitRef.trim() || busyAction) {
@@ -65,7 +68,7 @@ export function PluginMarketplaceSourceDialog({
       setError(
         sourceError(
           cause,
-          translate(
+          t(
             'auto.components.settings.PluginMarketplaceSourceDialog.addFailed',
             'Couldn’t add this catalog. Check the URL and ref.'
           )
@@ -86,7 +89,7 @@ export function PluginMarketplaceSourceDialog({
       setError(
         sourceError(
           cause,
-          translate(
+          t(
             'auto.components.settings.PluginMarketplaceSourceDialog.refreshFailed',
             "Couldn't refresh this catalog. Try again."
           )
@@ -107,7 +110,7 @@ export function PluginMarketplaceSourceDialog({
       setError(
         sourceError(
           cause,
-          translate(
+          t(
             'auto.components.settings.PluginMarketplaceSourceDialog.removeFailed',
             'Could not remove this catalog.'
           )
@@ -131,13 +134,10 @@ export function PluginMarketplaceSourceDialog({
       >
         <DialogHeader>
           <DialogTitle>
-            {translate(
-              'auto.components.settings.PluginMarketplaceSourceDialog.title',
-              'Catalog sources'
-            )}
+            {t('auto.components.settings.PluginMarketplaceSourceDialog.title', 'Catalog sources')}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.settings.PluginMarketplaceSourceDialog.description',
               'Git repositories that list plugins'
             )}
@@ -146,13 +146,10 @@ export function PluginMarketplaceSourceDialog({
         <div className="space-y-3 rounded-lg border border-border p-4">
           <div className="space-y-1">
             <Label htmlFor="plugin-marketplace-url">
-              {translate(
-                'auto.components.settings.PluginMarketplaceSourceDialog.urlLabel',
-                'Git URL'
-              )}
+              {t('auto.components.settings.PluginMarketplaceSourceDialog.urlLabel', 'Git URL')}
             </Label>
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.PluginMarketplaceSourceDialog.urlDescription',
                 'HTTPS or SSH, with an orca-catalog.json'
               )}
@@ -163,7 +160,7 @@ export function PluginMarketplaceSourceDialog({
             id="plugin-marketplace-url"
             value={url}
             disabled={Boolean(busyAction)}
-            placeholder={translate(
+            placeholder={t(
               'auto.components.settings.PluginMarketplaceSourceDialog.urlPlaceholder',
               'https://git.example.com/team/plugins.git'
             )}
@@ -171,13 +168,10 @@ export function PluginMarketplaceSourceDialog({
           />
           <div className="space-y-1">
             <Label htmlFor="plugin-marketplace-ref">
-              {translate(
-                'auto.components.settings.PluginMarketplaceSourceDialog.refLabel',
-                'Git ref'
-              )}
+              {t('auto.components.settings.PluginMarketplaceSourceDialog.refLabel', 'Git ref')}
             </Label>
             <p className="text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.PluginMarketplaceSourceDialog.refDescription',
                 'Branch, tag, or commit'
               )}
@@ -202,30 +196,18 @@ export function PluginMarketplaceSourceDialog({
             >
               {busyAction === 'add' ? <Loader2 className="animate-spin" /> : null}
               {busyAction === 'add'
-                ? translate(
-                    'auto.components.settings.PluginMarketplaceSourceDialog.adding',
-                    'Adding…'
-                  )
-                : translate(
-                    'auto.components.settings.PluginMarketplaceSourceDialog.add',
-                    'Add source'
-                  )}
+                ? t('auto.components.settings.PluginMarketplaceSourceDialog.adding', 'Adding…')
+                : t('auto.components.settings.PluginMarketplaceSourceDialog.add', 'Add source')}
             </Button>
           </div>
         </div>
         <div className="space-y-2">
           <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-            {translate(
-              'auto.components.settings.PluginMarketplaceSourceDialog.configured',
-              'Sources'
-            )}
+            {t('auto.components.settings.PluginMarketplaceSourceDialog.configured', 'Sources')}
           </p>
           {sources.length === 0 ? (
             <p className="rounded-lg border border-dashed border-border px-4 py-5 text-center text-sm text-muted-foreground">
-              {translate(
-                'auto.components.settings.PluginMarketplaceSourceDialog.empty',
-                'No sources yet'
-              )}
+              {t('auto.components.settings.PluginMarketplaceSourceDialog.empty', 'No sources yet')}
             </p>
           ) : (
             <div className="overflow-hidden rounded-lg border border-border">
@@ -242,7 +224,7 @@ export function PluginMarketplaceSourceDialog({
                         {source.marketplace?.name ?? source.source.url}
                         {source.official ? (
                           <Badge variant="outline" className="ml-2 align-middle">
-                            {translate(
+                            {t(
                               'auto.components.settings.PluginMarketplaceSourceDialog.official',
                               'Official'
                             )}
@@ -251,7 +233,7 @@ export function PluginMarketplaceSourceDialog({
                       </p>
                       {source.marketplace ? (
                         <p className="text-xs text-muted-foreground">
-                          {translate(
+                          {t(
                             'auto.components.settings.PluginMarketplaceSourceDialog.owner',
                             'Owner: {{value0}}',
                             { value0: source.marketplace.owner }
@@ -266,7 +248,7 @@ export function PluginMarketplaceSourceDialog({
                           className="truncate font-mono text-[11px] text-muted-foreground"
                           title={source.marketplace.resolvedCommit}
                         >
-                          {translate(
+                          {t(
                             'auto.components.settings.PluginMarketplaceSourceDialog.pinnedCommit',
                             'Pinned at {{value0}}',
                             { value0: source.marketplace.resolvedCommit.slice(0, 10) }
@@ -275,7 +257,7 @@ export function PluginMarketplaceSourceDialog({
                       ) : null}
                       {source.stale ? (
                         <p className="mt-1 text-xs text-destructive">
-                          {translate(
+                          {t(
                             'auto.components.settings.PluginMarketplaceSourceDialog.stale',
                             'Couldn’t refresh. May be out of date.'
                           )}
@@ -286,7 +268,7 @@ export function PluginMarketplaceSourceDialog({
                       variant="ghost"
                       size="icon-xs"
                       disabled={Boolean(busyAction)}
-                      aria-label={translate(
+                      aria-label={t(
                         'auto.components.settings.PluginMarketplaceSourceDialog.refreshLabel',
                         'Refresh {{value0}}',
                         { value0: source.marketplace?.name ?? source.source.url }
@@ -300,7 +282,7 @@ export function PluginMarketplaceSourceDialog({
                         variant="ghost"
                         size="icon-xs"
                         disabled={Boolean(busyAction)}
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.settings.PluginMarketplaceSourceDialog.removeLabel',
                           'Remove {{value0}}',
                           { value0: source.marketplace?.name ?? source.source.url }
@@ -327,7 +309,7 @@ export function PluginMarketplaceSourceDialog({
             disabled={Boolean(busyAction)}
             onClick={() => onOpenChange(false)}
           >
-            {translate('auto.components.settings.PluginMarketplaceSourceDialog.done', 'Done')}
+            {t('auto.components.settings.PluginMarketplaceSourceDialog.done', 'Done')}
           </Button>
         </DialogFooter>
       </DialogContent>

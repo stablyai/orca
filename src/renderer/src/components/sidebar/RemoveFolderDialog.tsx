@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import {
   getRepoExecutionHostId,
@@ -18,18 +18,19 @@ import {
 } from '../../../../shared/execution-host'
 import { countOpenRepoTerminalTabs } from '@/store/repos/repo-removal'
 import { getRecipeVmSshTargetForHost } from '@/lib/recipe-vm-managed-host'
-import { RemovalUnsavedFilesNotice } from './RemovalUnsavedFilesNotice'
+import { RemovalUnsavedFilesNotice } from './workspace-actions/deletion/RemovalUnsavedFilesNotice'
 import { confirmUnsavedDiscard } from '@/store/slices/worktrees/teardown/removed-workspace-unsaved-files'
-import { projectRemovalTargets } from './removal-unsaved-files'
+import { projectRemovalTargets } from './workspace-actions/deletion/removal-unsaved-files'
 import {
   selectDetectedWorktreesByRepo,
   selectWorktreesByRepo
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 // NUL cannot occur in project names, so translated name-token splitting is unambiguous.
 const NAME_TOKEN = '\u0000'
 
 const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
+  const t = useTranslate()
   useUiLanguageRevision()
   const activeModal = useAppStore((s) => s.activeModal)
   const modalData = useAppStore((s) => s.modalData)
@@ -86,7 +87,7 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   const openTerminalWarning =
     openTerminalCount === 0
       ? null
-      : translate(
+      : t(
           'auto.components.sidebar.RemoveFolderDialog.openTerminalWarning',
           '{{count}} open terminals in this project will be closed.',
           {
@@ -98,18 +99,18 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   // Translate the whole sentence for reorderable locales, then restore emphasis at the name sentinel.
   const description =
     onRecipeVmServer || isRuntimeOwnedSshTargetId(sshConnectionId)
-      ? translate(
+      ? t(
           'auto.components.sidebar.RemoveFolderDialog.removeDescriptionVmRecipe',
           'This removes {{name}} from Orca. Its VM recipe determines whether the environment and its files are permanently deleted.',
           { name: NAME_TOKEN }
         )
       : sshHostLabel
-        ? translate(
+        ? t(
             'auto.components.sidebar.RemoveFolderDialog.removeDescriptionSsh',
             'This only removes {{name}} from Orca. Its files stay on {{host}} — re-add that SSH host to recover it.',
             { name: NAME_TOKEN, host: sshHostLabel }
           )
-        : translate(
+        : t(
             'auto.components.sidebar.RemoveFolderDialog.removeDescriptionLocal',
             'This only removes {{name}} from Orca. It is still on your disk.',
             { name: NAME_TOKEN }
@@ -142,7 +143,7 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
       <DialogContent surface="security" className="max-w-sm sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle className="text-sm">
-            {translate('auto.components.sidebar.RemoveFolderDialog.b79b39d865', 'Remove Project')}
+            {t('auto.components.sidebar.RemoveFolderDialog.b79b39d865', 'Remove Project')}
           </DialogTitle>
           <DialogDescription className="text-xs">
             {descriptionBeforeName}
@@ -156,10 +157,10 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
         <RemovalUnsavedFilesNotice targets={unsavedTargets} enabled={isOpen} />
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
-            {translate('auto.components.sidebar.RemoveFolderDialog.d36883e046', 'Cancel')}
+            {t('auto.components.sidebar.RemoveFolderDialog.d36883e046', 'Cancel')}
           </Button>
           <Button variant="destructive" onClick={handleConfirm}>
-            {translate('auto.components.sidebar.RemoveFolderDialog.4dc5b5065b', 'Remove')}
+            {t('auto.components.sidebar.RemoveFolderDialog.4dc5b5065b', 'Remove')}
           </Button>
         </DialogFooter>
       </DialogContent>

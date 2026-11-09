@@ -26,13 +26,13 @@ vi.mock('@/store', () => ({
     getState: () => ({ openFiles: [] })
   })
 }))
-vi.mock('@/runtime/runtime-host-contact-regained', () => ({
+vi.mock('@/runtime/hosts/connections/runtime-host-contact-regained', () => ({
   subscribeRuntimeHostContactRegained: (id: string, listener: () => void) => {
     subscriptionState.contacts.set(id, listener)
     return subscriptionState.unsubscribeContact
   }
 }))
-vi.mock('@/runtime/runtime-file-watch-client', () => ({
+vi.mock('@/runtime/files/watching/runtime-file-watch-client', () => ({
   subscribeRuntimeFileChanges: subscriptionState.subscribeRuntimeFileChanges
 }))
 vi.mock('./editor-external-watch-targets', () => ({

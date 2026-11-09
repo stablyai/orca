@@ -5,7 +5,9 @@ import { claudeChildCloseProven } from '../claude/claude-child-exit-proof-ladder
 import { spawnManagedProviderProcess } from './managed-provider-process'
 
 const taskkill = vi.hoisted(() => vi.fn(async () => false))
-vi.mock('../windows-process-tree-kill', () => ({ terminateWindowsProcessTree: taskkill }))
+vi.mock('../pty/process-retirement/windows-process-tree-kill', () => ({
+  terminateWindowsProcessTree: taskkill
+}))
 
 afterEach(() => {
   vi.useRealTimers()
@@ -33,7 +35,11 @@ it('retains irreversible delivery through explicit strict cleanup retries withou
   vi.useFakeTimers()
   const { managed, child } = fixture(true)
   const kill = vi.fn().mockResolvedValueOnce(true).mockResolvedValue(false)
-  const tree = createClaudeChildTreeReaper(child, { platform: 'win32', terminateWindowsTree: kill })
+  const tree = createClaudeChildTreeReaper(child, {
+    site: 'claude-structured-child-close',
+    platform: 'win32',
+    terminateWindowsTree: kill
+  })
   const first = managed.close(tree)
   await vi.advanceTimersByTimeAsync(15)
   expect(await first).toMatchObject({ root: 'live', killDelivered: true })

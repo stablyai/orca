@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 import { connect } from 'node:net'
-import { BrowserNetworkTunnelSession } from '../main/browser/browser-network-tunnel-session'
+import { BrowserNetworkTunnelSession } from '../main/browser/network/tunnels/browser-network-tunnel-session'
 import {
   BrowserNetworkTunnelStreamFrameDecoder,
   BrowserNetworkTunnelStreamFrameWriter
-} from '../shared/browser-network-tunnel-stream-framing'
+} from '../shared/browser/network/tunnels/browser-network-tunnel-stream-framing'
 import { WSL_BROWSER_NETWORK_RELAY_SENTINEL } from '../shared/wsl-browser-network-relay-contract'
 
 function main(): void {

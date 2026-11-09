@@ -1,9 +1,15 @@
 /** Carry the listed owner into actions so a host move fences against the incarnation the user saw. Owned rows act normally, orphans allow pause/delete/history but cannot execute, and unfenced legacy rows stay view-only. */
 
-import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref'
-import { ownerKey } from '../../../../shared/automation-owner-key'
-import type { AutomationOwnerPrecondition } from '../../../../shared/automation-owner-precondition'
+import { AUTOMATION_CAPTURED_HOST_REFUSALS } from '../../../../shared/automations/ownership/automation-owner-conflict'
+import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automations/ownership/automation-list-scope'
+import type {
+  AutomationAuthorityRef,
+  AutomationOwnerRef
+} from '../../../../shared/automations/ownership/automation-owner-ref'
+import { ownerKey } from '../../../../shared/automations/ownership/automation-owner-key'
+import type { AutomationOwnerPrecondition } from '../../../../shared/automations/ownership/automation-owner-precondition'
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { AutomationHostRow, AutomationHostRowSelector } from './automation-host-cache-types'
 import { ORPHAN_OWNER_PRECONDITION, ownerPrecondition } from './automation-scoped-list-client'
 import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
@@ -22,6 +28,7 @@ export type AutomationActionBlock = {
 
 export type AutomationCapturedOwner = {
   owner: AutomationOwnerRef | null
+  authority?: AutomationAuthorityRef
   /** How the authority qualified the row; null when no list metadata was captured at all. */
   selector: AutomationHostRowSelector | null
 }
@@ -38,21 +45,39 @@ export const UNCAPTURED_AUTOMATION_OWNER: AutomationCapturedOwner = { owner: nul
 /** Orphans retain pause, delete and history; execution requires a live owning host. */
 const ORPHAN_ACTIONS: ReadonlySet<AutomationRowAction> = new Set(['delete', 'toggle', 'history'])
 
-function orphanBlock(): AutomationActionBlock {
+export function automationHostReselectionMessage(
+  captured: AutomationCapturedOwner | undefined,
+  t: Translate = translate
+): string | null {
+  return captured?.selector?.kind === 'orphan' &&
+    captured.selector.issue === AUTOMATION_ORPHAN_ISSUES.hostReselection
+    ? t(
+        'auto.components.automations.capturedOwner.hostReselection',
+        AUTOMATION_CAPTURED_HOST_REFUSALS[AUTOMATION_ORPHAN_ISSUES.hostReselection]
+      )
+    : null
+}
+
+function orphanBlock(
+  captured: AutomationCapturedOwner,
+  t: Translate = translate
+): AutomationActionBlock {
   return {
     reason: 'orphan',
-    message: translate(
-      'auto.components.automations.capturedOwner.orphan',
-      'This automation has no host to run on. Delete it, or re-add the host it belongs to.'
-    ),
+    message:
+      automationHostReselectionMessage(captured, t) ??
+      t(
+        'auto.components.automations.capturedOwner.orphan',
+        'This automation has no host to run on. Delete it, or re-add the host it belongs to.'
+      ),
     recovery: null
   }
 }
 
-function unfencedBlock(): AutomationActionBlock {
+function unfencedBlock(t: Translate = translate): AutomationActionBlock {
   return {
     reason: 'unfenced',
-    message: translate(
+    message: t(
       'auto.components.automations.capturedOwner.unfenced',
       'Orca on this host needs an update before you can view run history or manage this automation. Scheduled runs may still continue on the host.'
     ),
@@ -62,7 +87,8 @@ function unfencedBlock(): AutomationActionBlock {
 
 export function automationActionAvailability(
   captured: AutomationCapturedOwner,
-  action: AutomationRowAction
+  action: AutomationRowAction,
+  t?: Translate
 ): AutomationActionAvailability {
   if (captured.owner) {
     return {
@@ -75,12 +101,16 @@ export function automationActionAvailability(
     return { kind: 'uncaptured' }
   }
   if (captured.selector.kind === 'orphan') {
-    return ORPHAN_ACTIONS.has(action)
+    const repair =
+      captured.authority &&
+      captured.selector.issue === AUTOMATION_ORPHAN_ISSUES.hostReselection &&
+      (action === 'edit' || action === 'save')
+    return ORPHAN_ACTIONS.has(action) || repair
       ? { kind: 'orphan-fenced', precondition: ORPHAN_OWNER_PRECONDITION }
-      : { kind: 'blocked', block: orphanBlock() }
+      : { kind: 'blocked', block: orphanBlock(captured, t) }
   }
   // A qualified selector with no owner is a legacy row: no generation was ever captured.
-  return { kind: 'blocked', block: unfencedBlock() }
+  return { kind: 'blocked', block: unfencedBlock(t) }
 }
 
 /** True only for actions the user can start right now; drives the disabled state. */
@@ -104,7 +134,7 @@ export function captureAutomationOwners(
 ): Map<string, AutomationCapturedOwner> {
   const captured = new Map<string, AutomationCapturedOwner>()
   for (const { rowKey, row } of rows) {
-    captured.set(rowKey, { owner: row.owner, selector: row.selector })
+    captured.set(rowKey, { owner: row.owner, selector: row.selector, authority: row.authority })
   }
   return captured
 }
@@ -114,7 +144,10 @@ export function capturedAutomationOwnerKey(captured: AutomationCapturedOwner): s
   if (captured.owner) {
     return ownerKey(captured.owner)
   }
-  return captured.selector ? `selector:${captured.selector.kind}` : 'uncaptured'
+  const authority = captured.authority
+    ? ownerKey({ authority: captured.authority, selector: { kind: 'self' } })
+    : ''
+  return captured.selector ? `${authority}selector:${captured.selector.kind}` : 'uncaptured'
 }
 
 export function capturedAutomationOwner(

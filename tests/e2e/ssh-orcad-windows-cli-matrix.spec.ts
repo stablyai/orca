@@ -17,8 +17,8 @@ import {
   listHostOrcadProcesses,
   listHostOrcadServerProcesses
 } from './helpers/windows-host-orcad-processes'
-import { readWindowsHostCellDescriptor } from '../../src/main/ssh/ssh-windows-host-cells'
-import { runtimeHostContactFromSnapshot } from '../../src/shared/runtime-host-contact'
+import { readWindowsHostCellDescriptor } from '../../src/main/ssh/hostile-host-test-support/ssh-windows-host-cells'
+import { runtimeHostContactFromSnapshot } from '../../src/shared/remote-runtime/host-status/runtime-host-contact'
 import type {
   RuntimeTerminalListResult,
   RuntimeTerminalRead

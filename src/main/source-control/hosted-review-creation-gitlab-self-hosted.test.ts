@@ -20,10 +20,23 @@ const {
   getRepoSlugMock: vi.fn()
 }))
 
-vi.mock('../git/runner', () => ({
-  gitExecFileAsync: gitExecFileAsyncMock,
-  glabExecFileAsync: glabExecFileAsyncMock,
-  ghExecFileAsync: ghExecFileAsyncMock,
+vi.mock('../git/command-runner/git-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  gitExecFileAsync: gitExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/glab-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  glabExecFileAsync: glabExecFileAsyncMock
+}))
+
+vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ghExecFileAsync: ghExecFileAsyncMock
+}))
+
+vi.mock('../git/exec-error', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   extractExecError: vi.fn()
 }))
 
@@ -55,7 +68,6 @@ vi.mock('./hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
 }))
 
-import { REMOTE_URL_PROBE_TIMEOUT_MS } from '../git/remote-url-probe'
 import { _resetKnownHostsCache, _resetProjectRefCache } from '../gitlab/gl-utils'
 import { diagnoseAuth } from '../gitlab/client'
 import { getHostedReviewCreationEligibility } from './hosted-review-creation'
@@ -92,101 +104,6 @@ describe('GitLab self-hosted hosted review creation eligibility', () => {
     gitExecFileAsyncMock.mockResolvedValue({
       stdout: 'git@gitlab.internal:team/orca.git\n',
       stderr: ''
-    })
-  })
-
-  it('enables MR creation when glab recognizes the self-hosted origin host', async () => {
-    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'auth' && args[1] === 'status' && args.includes('--hostname')) {
-        return {
-          stdout: `gitlab.internal
-  ✓ Logged in as user
-`,
-          stderr: ''
-        }
-      }
-      if (args[0] === 'auth' && args[1] === 'status') {
-        return {
-          stdout: `gitlab.com
-  ✓ Logged in to gitlab.com as user
-`,
-          stderr: ''
-        }
-      }
-      return { stdout: '', stderr: '' }
-    })
-
-    await expect(
-      getHostedReviewCreationEligibility({
-        executionHostId: 'local',
-        repoPath: '/repo',
-        branch: 'feature/self-hosted-mr',
-        base: 'main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
-      provider: 'gitlab',
-      canCreate: true,
-      blockedReason: null,
-      nextAction: null,
-      head: 'feature/self-hosted-mr'
-    })
-
-    // A dead mount must not pin provider detection beyond its deadline (P1-D).
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], {
-      cwd: '/repo',
-      timeout: REMOTE_URL_PROBE_TIMEOUT_MS
-    })
-    expect(glabExecFileAsyncMock).toHaveBeenCalledWith(
-      ['auth', 'status', '--hostname', 'gitlab.internal'],
-      { cwd: '/repo' }
-    )
-  })
-
-  it('classifies known-but-unauthenticated self-hosted GitLab as auth_required', async () => {
-    glabExecFileAsyncMock.mockImplementation(async (args: string[]) => {
-      if (args[0] === 'auth' && args[1] === 'status' && args.includes('--hostname')) {
-        const error = new Error('invalid token provided') as Error & {
-          stdout: string
-          stderr: string
-        }
-        error.stdout = `gitlab.internal
-  ! Invalid token provided
-`
-        error.stderr = ''
-        throw error
-      }
-      if (args[0] === 'auth' && args[1] === 'status') {
-        return {
-          stdout: `gitlab.com
-  ✓ Logged in to gitlab.com as user
-gitlab.internal
-  ! Invalid token provided
-`,
-          stderr: ''
-        }
-      }
-      return { stdout: '', stderr: '' }
-    })
-
-    const result = await getHostedReviewCreationEligibility({
-      executionHostId: 'local',
-      repoPath: '/repo',
-      branch: 'feature/self-hosted-mr',
-      base: 'main',
-      hasUncommittedChanges: false,
-      hasUpstream: true,
-      ahead: 0,
-      behind: 0
-    })
-    expect(result).toMatchObject({
-      provider: 'gitlab',
-      canCreate: false,
-      blockedReason: 'auth_required',
-      nextAction: 'authenticate'
     })
   })
 

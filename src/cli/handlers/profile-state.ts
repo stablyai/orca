@@ -62,11 +62,13 @@ function formatRollback(result: ProfileStateRollbackResult): string {
   ].join('\n')
 }
 
-function formatRepairedSection({
-  domain,
-  backupId,
-  backupCreatedAtMs
-}: NonNullable<ProfileStateRollbackResult['repairedSections']>[number]): string {
+function formatRepairedSection(
+  section: NonNullable<ProfileStateRollbackResult['repairedSections']>[number]
+): string {
+  if ('source' in section) {
+    return `repaired ${section.domain}: current runs kept`
+  }
+  const { domain, backupId, backupCreatedAtMs } = section
   if (backupId === null) {
     return `repaired ${domain}: no readable backup, starts empty`
   }

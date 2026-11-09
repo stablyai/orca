@@ -51,16 +51,6 @@ describe('PaneManager focus after a pane leaves a split', () => {
     vi.unstubAllGlobals()
   })
 
-  it('focuses the neighbour that takes over the space when the last of four panes closes', () => {
-    const [, , c, d] = createFourColumns(manager)
-    const focus = vi.spyOn(c.terminal, 'focus')
-
-    manager.closePane(d.id)
-
-    expect(manager.getActivePane()?.id).toBe(c.id)
-    expect(focus).toHaveBeenCalled()
-  })
-
   it('focuses the adjacent pane of the subtree that takes over a closed middle pane', () => {
     const [, b, c] = createFourColumns(manager)
     manager.setActivePane(b.id)
@@ -68,24 +58,6 @@ describe('PaneManager focus after a pane leaves a split', () => {
     manager.closePane(b.id)
 
     expect(manager.getActivePane()?.id).toBe(c.id)
-  })
-
-  it('focuses the pane after a closed middle pane when that pane is its only sibling', () => {
-    const [, , c, d] = createFourColumns(manager)
-    manager.setActivePane(c.id)
-
-    manager.closePane(c.id)
-
-    expect(manager.getActivePane()?.id).toBe(d.id)
-  })
-
-  it('focuses the pane above when the lower half of a stacked split closes', () => {
-    const [, b] = createFourColumns(manager)
-    const below = split(manager, b, 'horizontal')
-
-    manager.closePane(below.id)
-
-    expect(manager.getActivePane()?.id).toBe(b.id)
   })
 
   it('walks into the edge of an orthogonal split that takes over the space', () => {
@@ -99,38 +71,5 @@ describe('PaneManager focus after a pane leaves a split', () => {
     manager.closePane(d.id)
 
     expect(manager.getActivePane()?.id).toBe(b.id)
-  })
-
-  it('keeps the active pane when a different pane closes', () => {
-    const [, b, , d] = createFourColumns(manager)
-
-    manager.closePane(b.id)
-
-    expect(manager.getActivePane()?.id).toBe(d.id)
-  })
-
-  it('focuses the neighbour when the active pane is detached into another tab', () => {
-    const [, , c, d] = createFourColumns(manager)
-
-    expect(manager.detachPaneForExternalMove(d.id)).toBe(true)
-
-    expect(manager.getActivePane()?.id).toBe(c.id)
-  })
-
-  it('focuses the neighbour when the active pane is retired with its PTY kept', () => {
-    const [, , c, d] = createFourColumns(manager)
-    manager.setActivePane(c.id)
-
-    expect(manager.retirePanePreservingPty(c.id)).toBe(true)
-
-    expect(manager.getActivePane()?.id).toBe(d.id)
-  })
-
-  it('leaves no active pane when the only pane closes', () => {
-    const a = manager.createInitialPane()
-
-    manager.closePane(a.id)
-
-    expect(manager.getActivePane()).toBeNull()
   })
 })

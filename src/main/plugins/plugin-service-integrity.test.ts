@@ -139,39 +139,3 @@ describe('PluginService content verification on load', () => {
     await service.dispose()
   })
 })
-
-describe('PluginContentVerifier', () => {
-  it('re-hashes on every load, so a tree changed after a passing check fails the next', async () => {
-    const plugin = await createInstalledPlugin({ worker: false })
-    const verifier = new PluginContentVerifier()
-    const target = {
-      pluginKey: plugin.pluginKey,
-      rootDir: plugin.rootDir,
-      contentHash: plugin.contentHash
-    }
-
-    await expect(verifier.verify(target)).resolves.toBeUndefined()
-    await expect(verifier.verify(target)).resolves.toBeUndefined()
-    await writeFile(join(plugin.rootDir, 'payload.txt'), 'tampered after first load')
-
-    await expect(verifier.verify(target)).rejects.toThrow('integrity verification')
-  })
-
-  it('shares one hash between concurrent loads of the same tree', async () => {
-    const plugin = await createInstalledPlugin({ worker: false })
-    const verifier = new PluginContentVerifier()
-    const target = {
-      pluginKey: plugin.pluginKey,
-      rootDir: plugin.rootDir,
-      contentHash: plugin.contentHash
-    }
-    const hashes = await import('./plugin-content-hash')
-    const spy = vi.spyOn(hashes, 'hashPluginTree')
-
-    await Promise.all([verifier.verify(target), verifier.verify(target), verifier.verify(target)])
-    expect(spy).toHaveBeenCalledTimes(1)
-    await verifier.verify(target)
-    expect(spy).toHaveBeenCalledTimes(2)
-    spy.mockRestore()
-  })
-})

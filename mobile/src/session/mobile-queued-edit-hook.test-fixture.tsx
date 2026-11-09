@@ -9,16 +9,17 @@ import {
   resetMobileNativeChatDraftInputsForTests
 } from './native-chat/composer/mobile-native-chat-draft-inputs'
 import { createElement, type ReactNode } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { afterEach, expect, vi } from 'vitest'
 import type {
   AgentSessionQueuedMessage,
   AgentSessionQueuedMessageEditHoldResult
-} from '../../../src/shared/agent-session-wire'
-import { agentSessionSendBodyFingerprint } from '../../../src/shared/structured-agent-session-send-mutation'
+} from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import { agentSessionSendBodyFingerprint } from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { queuedMessageWithEdit } from '../../../src/shared/queued-message-edit'
-import type { RpcClient } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import {
   CAPABLE,
@@ -27,7 +28,7 @@ import {
   mutationOk,
   ok,
   snapshotEvent
-} from './use-mobile-structured-agent-session-queued.test-fixture'
+} from './native-chat/agent-session/use-mobile-structured-agent-session-queued.test-fixture'
 
 export function withText(body: AgentSessionQueuedMessage['body'], text: string) {
   const edited = queuedMessageWithEdit(body, { text })
@@ -51,7 +52,8 @@ export function readOrHoldReply(method: string, params: unknown): RpcResponse {
     : ok({ models: [], current: {} })
 }
 
-vi.mock('react-native', () => ({
+vi.mock('react-native', async () => ({
+  ...(await import('../test-support/react-native-motion-stub')).reactNativeMotionStub(),
   Text: 'Text',
   View: 'View',
   Pressable: 'Pressable',
@@ -110,7 +112,9 @@ export function mobileQueuedEditHarness() {
   const client: RpcClient = {
     sendRequest,
     subscribe: (_method, _params, onData) => {
-      state.listener = onData
+      if (_method === 'agentSession.subscribe') {
+        state.listener = onData
+      }
       return () => {}
     },
     updateTerminalSubscriptionViewport: () => {},
@@ -147,6 +151,7 @@ export function mobileQueuedEditHarness() {
     state.bottomText = useMobileNativeChatDraft('original-bottom')
     state.hook = useMobileStructuredAgentSession({
       client: transport,
+      pairedHostClient: transport,
       sessionId,
       sourceIdentity: 'host-a',
       enabled,
@@ -223,7 +228,9 @@ export function mobileQueuedEditHarness() {
         : readOrHoldReply(method, params)
     )
     await act(async () => {
-      state.renderer = create(createElement(Harness, { editSupport, agent, sessionId }))
+      state.renderer = createWithQueryClient(
+        createElement(Harness, { editSupport, agent, sessionId })
+      )
     })
     const snapshot = snapshotEvent({ queuedMessages: [message], runningTurn: true })
     act(() => state.listener?.({ ...snapshot, sessionId, page: { ...snapshot.page, sessionId } }))

@@ -101,6 +101,8 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
       launchImageLibraryAsync: () => Promise.resolve({ canceled: true }),
       requestMediaLibraryPermissionsAsync: () => Promise.resolve({ granted: false })
     }),
+    // The store module loads the pairing keychain, whose native module the react-native mock lacks.
+    '../device-store/device-store': () => ({ processDeviceStore: () => ({}) }),
     'expo-file-system': () => ({
       File: class {
         readonly size = 0
@@ -123,7 +125,8 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
       useNavigation: () => ({
         setOptions: dependencies.setScreenOptions,
         dispatch: dependencies.dispatch,
-        isFocused: () => dependencies.screenFocused
+        isFocused: () => dependencies.screenFocused,
+        getParent: () => undefined
       }),
       useNavigationContainerRef: () => ({ getRootState: () => dependencies.rootState }),
       useFocusEffect: (effect: () => undefined | (() => void)) => React.useEffect(effect, [effect])
@@ -164,7 +167,7 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
     },
     '../app-update/use-wall-app-update': () => ({ useWallAppUpdate: () => null }),
     // Keep the real bridge hook; stub only Expo-dependent client lookup.
-    '../transport/host-client-hooks': () => ({
+    '../transport/connection/host-client-hooks': () => ({
       useHostClient: () => ({ client: dependencies.client })
     }),
     // Reaching the real one imports the host store and expo-secure-store, whose module touches an Expo
@@ -205,7 +208,9 @@ export function screenModuleMocks(dependencies: ScreenDependencies) {
         pageReady: dependencies.pageReady,
         pageFrame: dependencies.pageFrame,
         backClaimed: dependencies.backClaimed,
-        ownsHostArea: dependencies.ownsHostArea
+        ownsHostArea: dependencies.ownsHostArea,
+        // This connection's verdict is open, so the page's desktop-bound frames pass.
+        hostStatus: { protocolVersion: 1 }
       })
     })
   }

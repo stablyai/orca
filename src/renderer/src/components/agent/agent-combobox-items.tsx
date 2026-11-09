@@ -8,7 +8,7 @@ import {
   ContextMenuTrigger
 } from '@/components/ui/context-menu'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type ItemRenderArgs = {
   key: string
@@ -53,18 +53,31 @@ export function AgentDefaultContextMenu({
   isDefault,
   onSetDefault
 }: AgentDefaultContextMenuProps): React.ReactNode {
+  const t = useTranslate()
+  const [open, setOpen] = React.useState(false)
   if (!onSetDefault) {
+    // Unmounting an open menu skips onOpenChange; reset so a remount is not marked open.
+    if (open) {
+      setOpen(false)
+    }
     return children
   }
   return (
-    <ContextMenu>
-      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent className="z-[70]">
+    <ContextMenu onOpenChange={setOpen}>
+      {/* Row highlight follows focus, which moves into the menu; this marker keeps the row lit. */}
+      <ContextMenuTrigger asChild data-context-menu-open={open || undefined}>
+        {children}
+      </ContextMenuTrigger>
+      <ContextMenuContent
+        className="z-[70]"
+        // Why: hovered menu rows beneath take focus; that must not dismiss this menu.
+        onFocusOutside={(event) => event.preventDefault()}
+      >
         <ContextMenuItem onSelect={onSetDefault} disabled={isDefault}>
           <Star className="size-3.5" />
           {isDefault
-            ? translate('auto.components.agent.AgentCombobox.1b0d6965fa', 'Current default')
-            : translate('auto.components.agent.AgentCombobox.9c6b59fe58', 'Set as default')}
+            ? t('auto.components.agent.AgentCombobox.1b0d6965fa', 'Current default')
+            : t('auto.components.agent.AgentCombobox.9c6b59fe58', 'Set as default')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

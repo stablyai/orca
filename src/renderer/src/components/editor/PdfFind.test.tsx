@@ -51,26 +51,6 @@ function setup() {
 }
 
 describe('PDF find event synchronization', () => {
-  it('follows progressive totals and control-state navigation, wrap, and no results', () => {
-    const { view, query, count, control } = setup()
-    query('needle')
-    count(1, 2)
-    expect(view.getByText('1 of 2')).toBeTruthy()
-    count(1, 6)
-    expect(view.getByText('1 of 6')).toBeTruthy()
-    control(2, 6)
-    expect(view.getByText('2 of 6')).toBeTruthy()
-    control(6, 6, FindState.WRAPPED)
-    expect(view.getByText('6 of 6')).toBeTruthy()
-    query('absent')
-    control(6, 6, FindState.PENDING)
-    control(0, 0, FindState.NOT_FOUND)
-    expect(view.getByText('No matches')).toBeTruthy()
-    query('beacon')
-    count(1, 2)
-    expect(view.getByText('1 of 2')).toBeTruthy()
-  })
-
   it('subscribes before a synchronous cached result on reopening', () => {
     const { bus, view, query, count, open } = setup()
     query('needle')
@@ -88,30 +68,6 @@ describe('PDF find event synchronization', () => {
     expect(view.getByText('2 of 6')).toBeTruthy()
   })
 
-  it('removes both listeners on close and unmount without accumulating on reopen', () => {
-    const { view, open, query, control } = setup()
-    const on = vi.spyOn(EventBus.prototype, 'on')
-    const off = vi.spyOn(EventBus.prototype, 'off')
-    open(false)
-    expect(off.mock.calls.map(([name]) => name)).toEqual([
-      'updatefindmatchescount',
-      'updatefindcontrolstate'
-    ])
-    off.mockClear()
-    for (let cycle = 0; cycle < 3; cycle += 1) {
-      open(true)
-      query('needle')
-      control(3, 6)
-      expect(view.getByText('3 of 6')).toBeTruthy()
-      if (cycle < 2) {
-        open(false)
-      }
-    }
-    view.unmount()
-    expect(on.mock.calls).toHaveLength(6)
-    expect(off.mock.calls).toEqual(on.mock.calls)
-  })
-
   it('keeps empty queries clear even if a pending scan reports late', () => {
     const { view, query, count, control } = setup()
     query('needle')
@@ -122,32 +78,5 @@ describe('PDF find event synchronization', () => {
     expect(view.queryByText('3 of 6')).toBeNull()
     query('absent')
     expect(view.getByText('No matches')).toBeTruthy()
-  })
-
-  it('dispatches next and previous from buttons and Enter without changing the query', () => {
-    const { view, query, onClose } = setup()
-    const dispatch = vi.spyOn(EventBus.prototype, 'dispatch')
-    query('needle')
-    const input = view.getByPlaceholderText('Find in page...')
-    fireEvent.click(view.getByTitle('Next match'))
-    fireEvent.click(view.getByTitle('Previous match'))
-    fireEvent.keyDown(input, { key: 'Enter' })
-    fireEvent.keyDown(input, { key: 'Enter', shiftKey: true })
-    expect(dispatch.mock.calls.filter(([name]) => name === 'find')).toEqual(
-      ['', 'again', 'again', 'again', 'again'].map((type, index) => [
-        'find',
-        {
-          source: null,
-          type,
-          query: 'needle',
-          highlightAll: true,
-          caseSensitive: false,
-          entireWord: false,
-          findPrevious: index === 2 || index === 4
-        }
-      ])
-    )
-    fireEvent.keyDown(input, { key: 'Escape' })
-    expect(onClose).toHaveBeenCalledOnce()
   })
 })

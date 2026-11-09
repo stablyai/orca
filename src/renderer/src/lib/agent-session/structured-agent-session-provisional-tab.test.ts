@@ -1,80 +1,89 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import type * as launchModule from '../structured-agent-session-launch-create-call'
-import type { AgentSessionLaunchPlan } from '../agent-session-launch-plan'
-import { adoptAgentSessionLaunchVerdict } from '../agent-session-launch-plan'
+import type * as launchModule from './launch/structured-agent-session-launch-create-call'
+import {
+  type AgentSessionLaunchPlan,
+  adoptAgentSessionLaunchVerdict
+} from './launch/routing/agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from './structured-agent-session-provisional-tab'
-import { StructuredAgentSessionCreateRefusalError } from '../structured-agent-session-launch-errors'
+import { StructuredAgentSessionCreateRefusalError } from './launch/structured-agent-session-launch-errors'
 import { act, renderHook } from '@testing-library/react'
-import { useNativeChatProvisionalLaunch } from '@/components/native-chat/use-native-chat-provisional-launch'
+import { useNativeChatProvisionalLaunch } from '@/components/native-chat/host-access/use-native-chat-provisional-launch'
 import {
   getStructuredAgentSessionLaunchFailure,
   getStructuredLaunchStateBySessionId,
   hasStructuredAgentSessionLaunchCancellationTombstone,
   resetStructuredAgentLaunchRegistryForTests
 } from './launch/structured-agent-session-launch-registry'
-import { structuredSessionNotices } from '@/components/native-chat/native-chat-structured-session-notices'
-import type { AgentTerminalLaunchCompletion } from '../structured-agent-session-launch-admission'
+import { structuredSessionNotices } from '../../components/native-chat/messages/notices/native-chat-structured-session-notices'
+import type { AgentTerminalLaunchCompletion } from './launch/structured-agent-session-launch-admission'
 import {
   addNativeChatPendingAttachment,
   clearNativeChatPendingAttachmentsForTests,
   nativeChatPendingAttachmentSnapshot
-} from '@/components/native-chat/native-chat-pending-attachment-cache'
+} from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
 import { applyStructuredSessionTabSnapshots } from '@/runtime/local-structured-session-tabs-sync/snapshot-apply'
-import { makeEmptyHostSnapshot } from '@/runtime/host-session-mirror-frame-fixtures'
-import * as unlisted from '../structured-agent-session-unlisted-created-chats'
+import { makeEmptyHostSnapshot } from '@/runtime/web-session-tabs-sync/hydration/testing/host-session-mirror-frame-fixtures'
+import * as unlisted from './launch/pane/structured-agent-session-unlisted-created-chats'
 import { buildFullWorktreePurgeState } from '@/store/slices/worktrees/teardown/worktree-purge-state'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { sendLayoutCommandToOwner } from '@/runtime/layout-owner-command'
-import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { sendLayoutCommandToOwner } from '@/runtime/workspace-layout/commands/layout-owner-command'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+} from '@/store/slices/tabs/tabs-drawn-from-main.test-fixture'
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) =>
-  (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
+  const client = (
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
-)
-vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
+  return {
+    ...client,
+    callRuntimeRpc: (...args: Parameters<typeof client.callRuntimeRpc>) =>
+      args[1] === 'agentSession.close' || args[1] === 'session.tabs.close'
+        ? Promise.resolve(null)
+        : client.callRuntimeRpc(...args)
+  }
+})
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (importOriginal) =>
   (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 
 const mocks = vi.hoisted(() => ({ focus: vi.fn(), toast: vi.fn(), launch: vi.fn() }))
-vi.mock('../structured-agent-session-launch-create-call', async (original) => ({
+vi.mock('./launch/structured-agent-session-launch-create-call', async (original) => ({
   ...(await original<typeof launchModule>()),
   launchStructuredAgentSession: mocks.launch
 }))
 vi.mock('sonner', () => ({ toast: { info: mocks.toast, error: vi.fn() } }))
 vi.mock('../focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
-  hydrateNativeChatComposerDrafts,
-  nativeChatComposerDraftWritesSettled,
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/drafts/native-chat-composer-draft-load'
+import { nativeChatComposerDraftWritesSettled } from '@/components/native-chat/drafts/native-chat-composer-draft-persistence'
 import {
   createMemoryNativeChatComposerDraftStorage,
   setNativeChatComposerDraftStorageForTests
-} from '@/components/native-chat/native-chat-composer-draft-storage'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import { restorePersistedStructuredLaunchState } from './launch/structured-agent-session-launch-reload'
-import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
-import { useNativeChatDraft } from '@/components/native-chat/use-native-chat-draft'
-import { wasStructuredAgentLaunchClosedByLocalCancel } from '../structured-agent-session-local-launch-cancel'
+import { promptTextContent } from '@/components/native-chat/composer/editor/native-chat-prompt-document-text'
+import { useNativeChatDraft } from '@/components/native-chat/drafts/use-native-chat-draft'
+import { wasStructuredAgentLaunchClosedByLocalCancel } from './launch/structured-agent-session-local-launch-cancel'
 import {
   startStructuredAgentLaunch,
   retryStructuredAgentSessionLaunch
-} from '../structured-agent-session-launch'
+} from './launch/structured-agent-session-launch'
 import { assertProvisionalSelectionLifetime } from './structured-agent-session-provisional-selection-lifetime.test-fixture'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
-import { openStructuredAgentSessionProvisionalTab } from '../structured-agent-session-launch-surface'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
+import { openStructuredAgentSessionProvisionalTab } from './launch/structured-agent-session-launch-surface'
 import { markStructuredAgentSessionLaunchPublished } from './launch/structured-agent-session-launch-publication'
 
 function terminalRecord(id: string): TerminalTab {
@@ -222,6 +231,33 @@ function openChat(
 }
 
 describe('a provisional structured chat tab', () => {
+  it.skipIf(!ORCA_LAYOUT_OWNER_IS_MAIN)(
+    'cancels a launch whose owning tab main refuses, even if the provider later succeeds',
+    async () => {
+      layoutApplyTestTransport.answerWith((command) =>
+        command.type === 'openAgentSessionTab' ? 'pending' : 'apply'
+      )
+      const launch = beginStructuredAgentSessionProvisionalLaunch({
+        plan: planSettlingAs(new StructuredAgentSessionCreateRefusalError('no'), ''),
+        hooks: {},
+        focusIntent: { request: mocks.focus, cancel: vi.fn() }
+      })
+      if (!launch?.tab) {
+        throw new Error('No provisional chat')
+      }
+      await vi.waitFor(() => expect(mocks.launch).toHaveBeenCalled())
+      layoutApplyTestTransport.answerWith({ refuse: 'group_not_found' })
+      layoutApplyTestTransport.answerPending()
+      await main.settle()
+      expect(wasStructuredAgentLaunchClosedByLocalCancel(launch.tab.entityId)).toBe(true)
+
+      accept({ sessionId: launch.tab.entityId, fence: 1 })
+      expect((await launch.settlement).kind).not.toBe('structured')
+      await main.settle()
+      expect(useAppStore.getState().getTab(launch.tab.id)).toBeNull()
+    }
+  )
+
   it.each(['before', 'after'] as const)(
     'retains a draft initialized %s host publication through close and reopen',
     async (order) => {

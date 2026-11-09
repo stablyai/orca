@@ -1,11 +1,11 @@
 /** Invalidate immediately from the completed write’s known host instead of waiting for a droppable change event. Uncaptured rows invalidate their authority without guessing a selector. */
 
-import { toStableCatalogRef } from '../../../../shared/automation-owner-key'
+import { toStableCatalogRef } from '../../../../shared/automations/ownership/automation-owner-key'
 import type {
   AutomationAuthorityRef,
   StableAutomationAuthorityRef,
   StableAutomationCatalogRef
-} from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
 import type { AutomationCapturedOwner } from './automation-captured-owner'
 import type {
   AutomationAuthorityChangeEvent,
@@ -31,8 +31,9 @@ export function automationRowCatalogRef(
   if (!captured.selector) {
     return null
   }
-  const stable = stableAutomationAuthorityRef(authority)
-  // Rebuild selector variants so kind stays discriminated while dropping generation/orphan-issue details.
+  const stable = stableAutomationAuthorityRef(captured.authority ?? authority)
+  // Rebuilt per variant rather than spread: the stable ref drops the generation and the
+  // orphan issue, and a widened `kind` would not discriminate.
   switch (captured.selector.kind) {
     case 'ssh':
       return {

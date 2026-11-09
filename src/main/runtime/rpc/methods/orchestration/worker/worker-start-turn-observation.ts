@@ -1,5 +1,5 @@
-import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../../../../../shared/orchestration-timing-budgets'
-import type { RuntimeTerminalPromptDelivery } from '../../../../../../shared/runtime-terminal-contracts'
+import { AGENT_PROMPT_EFFECT_TIMEOUT_MS } from '../../../../../../shared/orchestration/orchestration-timing-budgets'
+import type { RuntimeTerminalPromptDelivery } from '../../../../../../shared/runtime-terminal-send-contract'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 
 /** Observed/permission prove live input handling; unsupported keeps accepted-write evidence.
@@ -11,6 +11,8 @@ export type WorkerTurnStartObservation = {
   prompt?: RuntimeTerminalPromptDelivery
   /** Why an `unobserved` start is unknown, when the default PTY wording does not fit. */
   reason?: string
+  /** Held as a card in a chat's queue; it runs when the chat's current turn ends. */
+  queued?: boolean
 }
 
 function classifyPromptDelivery(prompt: RuntimeTerminalPromptDelivery): WorkerTurnStartVerdict {

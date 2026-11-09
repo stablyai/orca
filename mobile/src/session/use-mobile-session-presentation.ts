@@ -1,17 +1,22 @@
+import { useMemo } from 'react'
 import {
   classifyConnection,
   isConnectionOutage,
   verdictDisplayLabel
-} from '../transport/connection-health'
-import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
-import { useInitialSessionTerminalAutoCreate } from './use-initial-session-terminal-autocreate'
-import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
-import type { MobileSessionBulkCloseModel } from './use-mobile-session-bulk-close'
-import { hostOs } from '../platform/host-os'
+} from '../transport/connection/connection-health'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useInitialSessionTerminalAutoCreate } from '../terminal/session/use-initial-session-terminal-autocreate'
+import { MOBILE_SESSION_STATUS_LABELS } from '../transport/connection/mobile-session-connection-copy'
+import type { MobileSessionBulkCloseModel } from './tabs/use-mobile-session-bulk-close'
+import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { useDirectionPadAvailable, useShellSideRail } from '../layout/use-shell-side-rail'
-import { useCalmConnectionState } from '../transport/calm-connection-state'
+import { useCalmConnectionState } from '../transport/connection/calm-connection-state'
+
+// The toast rises this far as it fades in; Reduce Motion keeps the fade alone.
+const TOAST_RISE_PX = 8
 
 export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel) {
+  const t = useMobileTranslation()
   const {
     created,
     worktreeId,
@@ -26,18 +31,16 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     creating,
     creatingBrowser,
     creatingMarkdown,
-    keyboardHeight,
-    terminalKeyboardMetrics,
     toastOpacityRef,
     hostEndpoint,
     initialSessionAutoCreateRef,
-    terminalFrameRef,
-    getTerminalPaneViewport,
     handleCreateTerminal,
     visibleTabs,
     forceReconnectHost
   } = scope
-  const showLoadingState = connState === 'connected' && !terminalsLoaded && visibleTabs.length === 0
+  // A strip drawn from cache has no active tab until the host's snapshot lands, so the body shows a state, not an empty frame.
+  const nothingActive = scope.activeSessionTab === null && !activeHandle
+  const showLoadingState = connState === 'connected' && !terminalsLoaded && nothingActive
   const showEmptyState =
     connState === 'connected' && terminalsLoaded && visibleTabs.length === 0 && !activeHandle
 
@@ -67,15 +70,21 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
 
   // Delay reconnect header changes so brief self-healing drops cannot flicker the label.
   const presentedConnState = useCalmConnectionState(connState, lastConnectedAt)
+  // A session with nothing to draw says it is offline instead of showing an empty frame.
+  const showOfflineState = presentedConnState !== 'connected' && nothingActive
   const terminalSummary =
     presentedConnState === 'connected'
-      ? showLoadingState
-        ? 'Loading tabs'
+      ? showLoadingState && visibleTabs.length === 0
+        ? t('session.presentation.loadingTabs', 'Loading tabs')
         : visibleTabs.length === 1
-          ? '1 tab'
-          : `${visibleTabs.length} tabs`
+          ? t('session.presentation.oneTab', '1 tab')
+          : t('session.presentation.tabCount', '{{tabCount}} tabs', {
+              tabCount: visibleTabs.length
+            })
       : showConnectionRetry
-        ? `${verdictDisplayLabel(connectionVerdict)} — tap to retry`
+        ? t('session.presentation.tapToRetry', '{{status}} — tap to retry', {
+            status: verdictDisplayLabel(connectionVerdict)
+          })
         : connectionEscalated
           ? verdictDisplayLabel(connectionVerdict)
           : MOBILE_SESSION_STATUS_LABELS[presentedConnState]
@@ -87,38 +96,28 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     !scope.activeFileTab &&
     !scope.activeBrowserTab
   const dockBottomInset = dockShown && (sideRail || padAvailable) ? 0 : insets.bottom
-  // Subtract only the space actually reserved below the input dock.
-  const keyboardLift =
-    keyboardHeight > 0
-      ? hostOs() === 'ios'
-        ? Math.max(0, keyboardHeight - dockBottomInset)
-        : keyboardHeight
-      : 0
-  const activeTerminalKeyboardLift = computeActiveTerminalKeyboardLift({
-    keyboardLift,
-    metrics: activeHandle ? terminalKeyboardMetrics.get(activeHandle) : undefined,
-    terminalFrameHeight:
-      (activeHandle
-        ? getTerminalPaneViewport?.(activeHandle).terminalFrameRef.current?.height
-        : null) ??
-      terminalFrameRef.current?.height ??
-      0
-  })
-  const toastAnimatedStyle = {
-    opacity: toastOpacityRef.current,
-    transform: [{ translateY: -keyboardLift }]
-  }
+  const reducedMotion = useReducedMotionEnabled()
+  const toastRise = useMemo(
+    () =>
+      reducedMotion === false
+        ? toastOpacityRef.current.interpolate({
+            inputRange: [0, 1],
+            outputRange: [TOAST_RISE_PX, 0]
+          })
+        : 0,
+    [reducedMotion, toastOpacityRef]
+  )
   return {
     presentedConnState,
     showLoadingState,
     showEmptyState,
+    showOfflineState,
     connectionVerdict,
     showConnectionRetry,
     connectionEscalated,
     terminalSummary,
-    keyboardLift,
-    activeTerminalKeyboardLift,
-    toastAnimatedStyle
+    dockBottomInset,
+    toastRise
   }
 }
 

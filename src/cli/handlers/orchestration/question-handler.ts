@@ -4,16 +4,18 @@ import { printResult } from '../../format'
 import { renderCommand } from '../../orchestration-mutation-recovery'
 import { RuntimeClientError, type RuntimeClient } from '../../runtime-client'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import { ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY } from '../../../shared/orchestration/orchestration-runtime-capabilities'
 import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
 import {
   clampOrchestrationAskTimeoutMs,
   ORCHESTRATION_ASK_MAX_TIMEOUT_MS,
   resolveOrchestrationAskClientTimeoutMs
-} from '../../../shared/orchestration-ask-timeout'
-import type { LegacyCompatibilityResult } from '../../../shared/orchestration-check-output'
+} from '../../../shared/orchestration/mailbox/orchestration-ask-timeout'
+import type { LegacyCompatibilityResult } from '../../../shared/orchestration/mailbox/orchestration-check-output'
 import { callOrchestrationMutation } from './mutation-request'
 import { withReceiptNext } from './receipt-next-text'
+import { askView, type AskResult } from './ask-agent-view'
+import { printOrchestrationResult } from './agent-view'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import {
   flushOrchestrationStdout,
@@ -91,6 +93,19 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
         orchestrationCapability: getOptionalStringFlag(flags, 'dispatch-capability')
       }
     )
+    if (!flags.has('full')) {
+      printOrchestrationResult(
+        result,
+        json,
+        askView({
+          from,
+          dispatchCapability: getOptionalStringFlag(flags, 'dispatch-capability'),
+          timeoutMs
+        })
+      )
+      await finishLegacyAsk(client, from, result.result)
+      return
+    }
     if (json) {
       printResult(result, true, () => '')
     } else if (result.result.pending) {
@@ -153,5 +168,25 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
       }
       process.exitCode = 1
     }
+  }
+}
+
+// Legacy hosts need stdout flushed before exit 75, and the answer acknowledged once printed.
+async function finishLegacyAsk(
+  client: RuntimeClient,
+  from: string | undefined,
+  value: AskResult
+): Promise<void> {
+  const legacy = value.legacyCompatibility
+  const answerAck =
+    !legacy?.resumeRequired && value.answer !== null ? legacy?.answerAcknowledgement : undefined
+  if (legacy?.resumeRequired || answerAck) {
+    await flushOrchestrationStdout()
+  }
+  if (answerAck) {
+    await client.call('orchestration.check', {
+      terminal: from,
+      compatibilityQuestionAck: JSON.stringify(answerAck)
+    })
   }
 }

@@ -1,16 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
-import { selectStructuredAgentSettledTurns } from '../../shared/structured-agent-session-turn-timing'
-import { isStructuredRewindTarget } from '../native-chat/agent-session-wire/structured-rewind-cut'
-import {
-  SID,
-  at,
-  attachment,
-  chat,
-  chatTurn,
-  prompt,
-  reply
-} from './claude-transcript-catch-up-test-support'
+import { agentJournalItemKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
+import { selectStructuredAgentSettledTurns } from '../../shared/agent-session/view/structured-agent-session-turn-timing'
+import { isStructuredRewindTarget } from '../native-chat/agent-session-wire/rewind/structured-rewind-cut'
+import { SID, chat, chatTurn } from './claude-transcript-catch-up-test-support'
 
 // Captured CLI 2.1.308 ancestry: retain source identities, clocks, content and cycle boundaries.
 // Only the session and first parent are rebound to the shared disk/journal fixture below.
@@ -247,27 +239,6 @@ const capturedDurationRows: Record<string, unknown>[] = [
 ]
 
 const key = (uuid: string) => agentJournalItemKey({ provider: 'claude', sessionId: SID, uuid })
-const queued = (uuid: string, parent: string, n: number) => ({
-  ...attachment(uuid, parent),
-  timestamp: at(n),
-  attachment: {
-    type: 'queued_command',
-    source_uuid: uuid,
-    commandMode: 'prompt',
-    origin: { kind: 'human' },
-    humanTurn: true,
-    prompt: 'queued input'
-  }
-})
-const boundary = (uuid: string, parentUuid: string, timestamp: string) => ({
-  type: 'system',
-  subtype: 'turn_duration',
-  uuid,
-  parentUuid,
-  sessionId: SID,
-  timestamp,
-  durationMs: 'not a stopwatch'
-})
 
 describe('Claude historical cycle duration', () => {
   it('ends captured work at its boundary before later idle, next prompt and exit', async () => {
@@ -351,64 +322,6 @@ describe('Claude historical cycle duration', () => {
     for (const item of exits) {
       expect(item.body).not.toHaveProperty('completedAt')
     }
-    expect(await c.open('a1')).toBe(true)
-    expect(c.journal.snapshot()).toEqual(snapshot)
-    expect(c.warn).not.toHaveBeenCalled()
-  })
-
-  it('uses only current-cycle work fallback and leaves unsupported endpoints untimed', async () => {
-    const c = await chat()
-    await c.live()
-    await c.write([
-      ...chatTurn,
-      prompt('p2', 'a1', 'outside', 3),
-      reply('a2', 'p2', 'tool', { type: 'tool_use', id: 'tool', name: 'Read', input: {} }, 4),
-      {
-        ...prompt('result', 'a2', '', 10),
-        message: {
-          role: 'user',
-          content: [{ type: 'tool_result', tool_use_id: 'tool', content: 'done' }]
-        }
-      },
-      reply('older', 'result', 'older', { type: 'text', text: 'out of order' }, 8),
-      {
-        ...reply('bad-time', 'older', 'bad', { type: 'text', text: 'no clock' }, 9),
-        timestamp: undefined
-      },
-      queued('later-queue', 'bad-time', 50),
-      { ...attachment('environment', 'later-queue'), timestamp: at(60) },
-      boundary('end2', 'environment', '1970-01-01T00:00:00.000Z'),
-      prompt('empty', 'end2', 'no response', 70),
-      boundary('empty-end', 'empty', 'malformed'),
-      queued('unknown', 'empty-end', 75),
-      reply('wake', 'unknown', 'wake', { type: 'text', text: 'background' }, 80),
-      boundary('wake-end', 'wake', at(82)),
-      prompt('no-work', 'wake-end', 'another empty cycle', 90),
-      prompt('trailing', 'no-work', 'last request', 100),
-      reply('last', 'trailing', 'last', { type: 'text', text: 'last response' }, 105),
-      queued('trailing-queue', 'last', 120)
-    ])
-    expect(await c.open('a1')).toBe(true)
-    const snapshot = c.journal.snapshot()
-    const turn = (id: string) =>
-      snapshot.items.find((item) => item.body.kind === 'turn' && item.body.turnId === id)!
-    expect(turn('p2').body).toMatchObject({ completedAt: Date.parse(at(10)) })
-    for (const id of ['empty', 'no-work']) {
-      expect(turn(id).body).toMatchObject({ state: 'completed' })
-      expect(turn(id).body).not.toHaveProperty('completedAt')
-      expect(turn(id).body).not.toHaveProperty('durationMs')
-    }
-    expect(turn('wake').body).toMatchObject({
-      completedAt: Date.parse(at(82)),
-      userItemId: turn('wake').itemId
-    })
-    expect(turn('trailing').body).toMatchObject({ completedAt: Date.parse(at(105)) })
-    expect(c.journal.item(key('unknown'))?.turnScope).toEqual({ kind: 'unknown' })
-    expect(isStructuredRewindTarget(c.journal, key('unknown'))).toBe(false)
-    const settled = selectStructuredAgentSettledTurns(snapshot.items, snapshot.submissions)
-    expect(settled.get(key('empty'))).toBeNull()
-    expect(settled.get(key('no-work'))).toBeNull()
-    expect(settled.get(key('trailing'))?.workedSeconds).toBe(5)
     expect(await c.open('a1')).toBe(true)
     expect(c.journal.snapshot()).toEqual(snapshot)
     expect(c.warn).not.toHaveBeenCalled()

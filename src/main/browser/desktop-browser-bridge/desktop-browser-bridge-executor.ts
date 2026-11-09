@@ -11,11 +11,11 @@ import {
 } from '../../../shared/desktop-browser-bridge-protocol'
 import type { RpcResponse } from '../../runtime/rpc/core'
 import { runInRemoteCliBrowserScope } from '../../runtime/desktop-browser-bridge/remote-cli-browser-scope'
-import { parseCdpKeyEvent } from '../cdp-keyboard-us-layout'
+import { parseCdpKeyEvent } from '../cdp/input/cdp-keyboard-us-layout'
 
 export type DesktopBrowserBridgeOutcome =
   | { ok: true; result: unknown }
-  | { ok: false; error: { code: string; message: string } }
+  | { ok: false; error: { code: string; message: string; data?: unknown } }
 
 export type DesktopBrowserBridgeAuditEntry = {
   environmentId: string
@@ -30,6 +30,8 @@ export type DesktopBrowserBridgeAuditEntry = {
 
 export type DesktopBrowserBridgeExecutorDeps = {
   environmentId: string
+  /** The SSH host the bridge serves; its tabs say it is controlling them. */
+  targetId: string
   hostLabel: string
   /** Resolve host ownership via the renderer, which also knows unmounted pages. */
   resolveWorkspace(scope: {
@@ -98,11 +100,12 @@ export async function executeDesktopBrowserBridgeRequest(
       signal,
       (webContentsId) =>
         deps.isHostBrowsingRouted() && deps.isGuestRoutedThroughHost(webContentsId),
-      hostRevoked
+      hostRevoked,
+      { targetId: deps.targetId, hostLabel: deps.hostLabel }
     )
     if (!response.ok) {
       deps.audit({ ...audit, outcome: 'failed', code: response.error.code })
-      return { ok: false, error: { code: response.error.code, message: response.error.message } }
+      return { ok: false, error: response.error }
     }
     deps.audit({ ...audit, outcome: 'ok' })
     return { ok: true, result: response.result }

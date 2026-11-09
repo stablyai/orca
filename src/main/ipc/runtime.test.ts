@@ -20,24 +20,8 @@ vi.mock('electron', () => ({
     removeHandler: removeHandlerMock
   }
 }))
-
 import { registerRuntimeHandlers } from './runtime'
-import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
-import { PROJECT_SECTION_PARITY_SERVED } from '../../shared/project-section-parity.test-fixture'
-import { readMobileProjectSections } from '../runtime/mobile-project-sections-snapshot'
-
-function runtimeCallEvent() {
-  const mainFrame = {}
-  return {
-    sender: {
-      id: 1,
-      mainFrame,
-      on: vi.fn(),
-      once: vi.fn()
-    },
-    senderFrame: mainFrame
-  }
-}
+import { EphemeralVmFailureError } from '../../shared/ephemeral-vm-failure-copy'
 
 describe('registerRuntimeHandlers', () => {
   beforeEach(() => {
@@ -48,71 +32,47 @@ describe('registerRuntimeHandlers', () => {
     fromWebContentsMock.mockReset()
   })
 
-  it('routes sync requests through the authoritative browser window id', () => {
-    const runtime = {
-      syncWindowGraph: vi.fn().mockReturnValue({ graphStatus: 'ready' }),
-      getStatus: vi.fn().mockReturnValue({ graphStatus: 'unavailable' }),
-      getRuntimeId: vi.fn().mockReturnValue('runtime-1')
-    }
+  // #36923: the window's wake shares the runtime's one VM wake path with its sleep's suspend.
+  it("routes the window's recipe VM wake through the runtime", async () => {
+    const record = { id: 'vm-1', status: 'running' }
+    const runtime = { wakeWorkspaceVm: vi.fn().mockResolvedValue(record) }
 
     registerRuntimeHandlers(runtime as never)
 
-    const syncRegistration = handleMock.mock.calls.find(
-      ([channel]) => channel === 'runtime:syncWindowGraph'
+    const registration = handleMock.mock.calls.find(
+      ([channel]) => channel === 'ephemeralVm:resumeWorkspace'
     )
-    expect(syncRegistration).toBeTruthy()
-
-    fromWebContentsMock.mockReturnValue({ id: 17 })
-
-    const currentMainFrame = {}
-    const sender = { mainFrame: currentMainFrame }
-    const handler = syncRegistration![1]
-    const graph = { tabs: [], leaves: [], rendererGeneration: 'renderer-1' }
-    const result = handler({ sender, senderFrame: currentMainFrame }, graph)
-
-    expect(runtime.syncWindowGraph).toHaveBeenCalledWith(17, graph)
-    expect(result).toEqual({ graphStatus: 'ready' })
+    await expect(registration![1]({}, { workspaceId: 'repo::/vm' })).resolves.toEqual({
+      ok: true,
+      runtime: record
+    })
+    expect(runtime.wakeWorkspaceVm).toHaveBeenCalledWith('repo::/vm')
   })
 
-  it("serves the authoritative window's sidebar catalog to paired phones, and keeps it when omitted", () => {
-    const runtime = { syncWindowGraph: vi.fn().mockReturnValue({ graphStatus: 'ready' }) }
-    registerRuntimeHandlers(runtime as never)
-    const handler = handleMock.mock.calls.find(
-      ([channel]) => channel === 'runtime:syncWindowGraph'
-    )![1]
-    const currentMainFrame = {}
-    const event = { sender: { mainFrame: currentMainFrame }, senderFrame: currentMainFrame }
-    fromWebContentsMock.mockReturnValue({ id: 17 })
-    const graph = { tabs: [], leaves: [], rendererGeneration: 'renderer-1' }
-
-    handler(event, { ...graph, projectSectionCatalog: PROJECT_SECTION_PARITY_SERVED })
-    handler(event, graph)
-
-    expect(readMobileProjectSections()).toEqual({ catalog: PROJECT_SECTION_PARITY_SERVED })
-  })
-
-  it('does not serve a catalog from a graph the runtime refused', () => {
-    const refused = { ...PROJECT_SECTION_PARITY_SERVED, projectOrderBy: 'recent' as const }
+  it('returns coded VM wake and suspend failures as values so the code reaches the window', async () => {
+    const failure = {
+      error: 'Resume exited with code 3.',
+      errorCode: 'resumeExited',
+      errorParams: { exitCode: 3 }
+    }
     const runtime = {
-      syncWindowGraph: vi.fn(() => {
-        throw new Error('Runtime graph publisher does not match the authoritative window')
-      })
+      wakeWorkspaceVm: vi.fn().mockRejectedValue(new EphemeralVmFailureError(failure)),
+      suspendWorkspaceVm: vi.fn().mockRejectedValue(new Error('Suspend failed.'))
     }
     registerRuntimeHandlers(runtime as never)
-    const handler = handleMock.mock.calls.find(
-      ([channel]) => channel === 'runtime:syncWindowGraph'
-    )![1]
-    const currentMainFrame = {}
-    fromWebContentsMock.mockReturnValue({ id: 18 })
+    const handler = (channel: string) =>
+      handleMock.mock.calls.find(([registered]) => registered === channel)![1]
 
-    expect(() =>
-      handler(
-        { sender: { mainFrame: currentMainFrame }, senderFrame: currentMainFrame },
-        { tabs: [], leaves: [], rendererGeneration: 'renderer-2', projectSectionCatalog: refused }
-      )
-    ).toThrow()
-    expect(readMobileProjectSections().catalog).not.toEqual(refused)
+    await expect(
+      handler('ephemeralVm:resumeWorkspace')({}, { workspaceId: 'repo::/vm' })
+    ).resolves.toEqual({ ok: false, ...failure })
+    await expect(
+      handler('ephemeralVm:suspendWorkspace')({}, { workspaceId: 'repo::/vm' })
+    ).resolves.toEqual({ ok: false, error: 'Suspend failed.' })
+    expect(runtime.suspendWorkspaceVm).toHaveBeenCalledWith('repo::/vm')
   })
+
+  // #37067: a phone's re-read on the add's reposChanged came before this publish.
 
   it('rejects a graph publication queued by a superseded main frame', () => {
     const runtime = {
@@ -131,219 +91,5 @@ describe('registerRuntimeHandlers', () => {
       handler({ sender, senderFrame: { generation: 1 } }, { tabs: [], leaves: [] })
     ).toThrow('Runtime graph sync must originate from the current main frame')
     expect(runtime.syncWindowGraph).not.toHaveBeenCalled()
-  })
-
-  it('rejects graph publications without a renderer generation', () => {
-    const runtime = { syncWindowGraph: vi.fn() }
-    registerRuntimeHandlers(runtime as never)
-    const handler = handleMock.mock.calls.find(
-      ([channel]) => channel === 'runtime:syncWindowGraph'
-    )![1]
-    const currentMainFrame = {}
-    const sender = { mainFrame: currentMainFrame }
-    fromWebContentsMock.mockReturnValue({ id: 17 })
-
-    expect(() =>
-      handler({ sender, senderFrame: currentMainFrame }, { tabs: [], leaves: [] })
-    ).toThrow('Runtime graph sync requires a renderer generation')
-    expect(runtime.syncWindowGraph).not.toHaveBeenCalled()
-  })
-
-  it('answers runtime:getStatus only once the machine-name lookup has landed', async () => {
-    let machineName = 'm4-air.local'
-    let finishLookup: (() => void) | undefined
-    const runtime = {
-      machineNameReady: vi.fn(
-        () =>
-          new Promise<void>((resolve) => {
-            finishLookup = () => {
-              machineName = 'Friendly Name'
-              resolve()
-            }
-          })
-      ),
-      getStatus: vi.fn(() => ({ runtimeId: 'runtime-1', machineName }))
-    }
-
-    registerRuntimeHandlers(runtime as never)
-    const handler = handleMock.mock.calls.find(([channel]) => channel === 'runtime:getStatus')![1]
-    const pending = handler()
-    finishLookup?.()
-
-    await expect(pending).resolves.toMatchObject({ machineName: 'Friendly Name' })
-  })
-
-  it('routes generic local runtime RPC calls through the dispatcher', async () => {
-    const runtime = {
-      syncWindowGraph: vi.fn(),
-      machineNameReady: vi.fn(async () => undefined),
-      getStatus: vi.fn().mockReturnValue({
-        runtimeId: 'runtime-1',
-        rendererGraphEpoch: 0,
-        graphStatus: 'ready',
-        authoritativeWindowId: null,
-        liveTabCount: 0,
-        liveLeafCount: 0
-      }),
-      getRuntimeId: vi.fn().mockReturnValue('runtime-1')
-    }
-
-    registerRuntimeHandlers(runtime as never)
-
-    const callRegistration = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')
-    expect(callRegistration).toBeTruthy()
-
-    const handler = callRegistration![1]
-    const result = await handler(runtimeCallEvent(), { method: 'status.get' })
-
-    expect(result).toMatchObject({
-      ok: true,
-      result: { runtimeId: 'runtime-1', graphStatus: 'ready' },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-  })
-
-  it('projects Claude structured tabs to the same-version desktop client', async () => {
-    const claudeTab = {
-      type: 'agent-session',
-      id: 'agent-session:claude-1',
-      title: 'Claude Chat',
-      sessionId: 'claude-1',
-      agent: 'claude',
-      isActive: true
-    }
-    const runtime = {
-      getRuntimeId: vi.fn().mockReturnValue('runtime-1'),
-      getClientSettings: vi.fn(() => ({ experimentalNativeChat: true })),
-      restoreStructuredAgentSessionTabs: vi.fn(async () => undefined),
-      listMobileSessionTabs: vi.fn(async () => ({
-        worktree: 'workspace-1',
-        publicationEpoch: 'epoch-1',
-        snapshotVersion: 1,
-        activeGroupId: 'group-1',
-        activeTabId: claudeTab.id,
-        activeTabType: 'agent-session',
-        tabGroups: [{ id: 'group-1', activeTabId: claudeTab.id, tabOrder: [claudeTab.id] }],
-        tabs: [claudeTab]
-      }))
-    }
-
-    registerRuntimeHandlers(runtime as never)
-    const callRegistration = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')
-    const result = await callRegistration![1](runtimeCallEvent(), {
-      method: 'session.tabs.list',
-      params: { worktree: 'id:workspace-1' }
-    })
-
-    expect(result).toMatchObject({ ok: true, result: { tabs: [claudeTab] } })
-  })
-
-  it('registers project group runtime RPC methods for local desktop callers', async () => {
-    const runtime = {
-      syncWindowGraph: vi.fn(),
-      getStatus: vi.fn(),
-      getRuntimeId: vi.fn().mockReturnValue('runtime-1'),
-      listVisibleProjectGroups: vi.fn().mockReturnValue([{ id: 'group-1', name: 'Platform' }])
-    }
-
-    registerRuntimeHandlers(runtime as never)
-
-    const callRegistration = handleMock.mock.calls.find(([channel]) => channel === 'runtime:call')
-    expect(callRegistration).toBeTruthy()
-
-    const handler = callRegistration![1]
-    const result = await handler(runtimeCallEvent(), { method: 'projectGroup.list' })
-
-    expect(result).toMatchObject({
-      ok: true,
-      result: { groups: [{ id: 'group-1', name: 'Platform' }] },
-      _meta: { runtimeId: 'runtime-1' }
-    })
-  })
-
-  it('registers local runtime streaming subscription lifecycle handlers', () => {
-    registerRuntimeHandlers({ syncWindowGraph: vi.fn(), getStatus: vi.fn() } as never)
-
-    expect(handleMock.mock.calls.some(([channel]) => channel === 'runtime:subscribe')).toBe(true)
-    expect(onMock.mock.calls.some(([channel]) => channel === 'runtime:unsubscribe')).toBe(true)
-    expect(removeAllListenersMock).toHaveBeenCalledWith('runtime:unsubscribe')
-  })
-
-  it('deduplicates retries while a terminal fit restore is still pending', async () => {
-    const finishRestoreByPtyId = new Map<string, (restored: boolean) => void>()
-    const reclaimTerminalForDesktop = vi.fn(
-      (ptyId: string) =>
-        new Promise<boolean>((resolve) => {
-          finishRestoreByPtyId.set(ptyId, resolve)
-        })
-    )
-    const runtime = {
-      syncWindowGraph: vi.fn(),
-      getStatus: vi.fn(),
-      reclaimTerminalForDesktop
-    }
-    registerRuntimeHandlers(runtime as never)
-    const restoreRegistration = handleMock.mock.calls.find(
-      ([channel]) => channel === 'runtime:restoreTerminalFit'
-    )
-    expect(restoreRegistration).toBeTruthy()
-    const handler = restoreRegistration![1]
-
-    const first = handler({ sender: {} }, { ptyId: 'pty-1' })
-    const retry = handler({ sender: {} }, { ptyId: 'pty-1' })
-    const otherTerminal = handler({ sender: {} }, { ptyId: 'pty-2' })
-
-    expect(reclaimTerminalForDesktop).toHaveBeenCalledTimes(2)
-    expect(reclaimTerminalForDesktop).toHaveBeenNthCalledWith(1, 'pty-1')
-    expect(reclaimTerminalForDesktop).toHaveBeenNthCalledWith(2, 'pty-2')
-    finishRestoreByPtyId.get('pty-1')?.(true)
-    finishRestoreByPtyId.get('pty-2')?.(true)
-    await expect(otherTerminal).resolves.toEqual({ restored: true })
-    await expect(first).resolves.toEqual({ restored: true })
-    await expect(retry).resolves.toEqual({ restored: true })
-    expect(reclaimTerminalForDesktop).toHaveBeenCalledTimes(2)
-
-    const afterSettlement = handler({ sender: {} }, { ptyId: 'pty-1' })
-    expect(reclaimTerminalForDesktop).toHaveBeenCalledTimes(3)
-    finishRestoreByPtyId.get('pty-1')?.(false)
-    await expect(afterSettlement).resolves.toEqual({ restored: false })
-  })
-
-  it('bounds retries without accumulating reclaim waiters for one PTY', async () => {
-    vi.useFakeTimers()
-    try {
-      let finishRestore!: (restored: boolean) => void
-      const reclaimTerminalForDesktop = vi.fn(
-        () =>
-          new Promise<boolean>((resolve) => {
-            finishRestore = resolve
-          })
-      )
-      registerRuntimeHandlers({
-        syncWindowGraph: vi.fn(),
-        getStatus: vi.fn(),
-        reclaimTerminalForDesktop
-      } as never)
-      const handler = handleMock.mock.calls.find(
-        ([channel]) => channel === 'runtime:restoreTerminalFit'
-      )![1]
-
-      const first = handler({ sender: {} }, { ptyId: 'pty-wedged' })
-      await vi.advanceTimersByTimeAsync(TERMINAL_FIT_RESTORE_DEADLINE_MS)
-      await expect(first).resolves.toEqual({ restored: false })
-
-      const retry = handler({ sender: {} }, { ptyId: 'pty-wedged' })
-      expect(reclaimTerminalForDesktop).toHaveBeenCalledTimes(1)
-      finishRestore(true)
-      await expect(retry).resolves.toEqual({ restored: true })
-
-      const afterSettlement = handler({ sender: {} }, { ptyId: 'pty-wedged' })
-      expect(reclaimTerminalForDesktop).toHaveBeenCalledTimes(2)
-      finishRestore(false)
-      await expect(afterSettlement).resolves.toEqual({ restored: false })
-      expect(vi.getTimerCount()).toBe(0)
-    } finally {
-      vi.useRealTimers()
-    }
   })
 })

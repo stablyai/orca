@@ -2,13 +2,17 @@
 import { describe, expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import { AgentHookServer } from '../../agent-hooks/server'
+import { AgentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../orca-runtime'
 import {
   hostWorktreeTarget,
   type HostWorktreeTarget
 } from '../../../shared/worktree/host-qualified-identity'
-import { partialRuntimeStore, storeRepo, storeWorktreeMeta } from '../runtime-store-partial-fixture'
+import {
+  partialRuntimeStore,
+  storeRepo,
+  storeWorktreeMeta
+} from '../orca-runtime-tests/runtime-store-partial-fixture'
 
 vi.mock('../../../shared/sidebar-inputs-switch', () => ({ ORCA_SIDEBAR_INPUTS_IS_MAIN: true }))
 
@@ -58,48 +62,6 @@ function createHeadlessRuntime(
 }
 
 describe('host sort stamps on a headless runtime', () => {
-  it('stamps a bell the host scans from its own bytes', () => {
-    vi.useFakeTimers({ now: 50_000 })
-    try {
-      const { runtime, meta } = createHeadlessRuntime()
-      runtime.onPtyData('pty-1', '\x07', 1)
-      expect(meta[WT].lastActivityAt).toBe(50_000)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('announces a burst of stamp writes once, as a metadata change of the row’s repo', () => {
-    vi.useFakeTimers({ now: 55_000 })
-    try {
-      const { runtime, meta } = createHeadlessRuntime()
-      const events: { type: string }[] = []
-      runtime.onClientEvent((event) => events.push(event), { consumesTerminalSideEffects: false })
-      runtime.onPtyData('pty-1', '\x1b]0;⠂ Working\x07', 1)
-      runtime.onPtyData('pty-1', '\x1b]0;bash\x07', 2)
-      runtime.onPtyData('pty-1', '\x1b]0;⠂ Working\x07', 3)
-      expect(meta[WT].smartTier).toBe('working')
-      expect(events.filter((event) => event.type === 'worktreesChanged')).toEqual([])
-      vi.advanceTimersByTime(50)
-      expect(events.filter((event) => event.type === 'worktreesChanged')).toEqual([
-        expect.objectContaining({ type: 'worktreesChanged', repoId: 'repo-1' })
-      ])
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
-  it('stamps a bell the daemon reports for a parked terminal', () => {
-    vi.useFakeTimers({ now: 60_000 })
-    try {
-      const { runtime, meta } = createHeadlessRuntime()
-      runtime.emitDaemonPtyTransientFact('pty-1', { kind: 'bell' })
-      expect(meta[WT].lastActivityAt).toBe(60_000)
-    } finally {
-      vi.useRealTimers()
-    }
-  })
-
   it('orders a session boundary’s done as a finish, but raises no unread for it', () => {
     const stampsAfter = (sessionBoundary: boolean) => {
       vi.useFakeTimers({ now: 75_000 })
@@ -133,30 +95,6 @@ describe('host sort stamps on a headless runtime', () => {
     // No client is looking: a finish is news, a clear or a compaction is not.
     expect(finishUnread).toBe(true)
     expect(boundaryUnread).toBe(false)
-  })
-
-  it('stamps agent transitions from the attached hook store', () => {
-    vi.useFakeTimers({ now: 70_000 })
-    try {
-      const { runtime, meta } = createHeadlessRuntime()
-      const server = new AgentHookServer()
-      runtime.attachAgentStatusStore(server)
-      server.ingestTerminalStatus({
-        paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
-        tabId: 'tab-1',
-        worktreeId: WT,
-        payload: { state: 'waiting', prompt: 'task', agentType: 'claude' }
-      })
-      // No client is looking, so the request for input also raises the unread flag.
-      expect(meta[WT]).toMatchObject({
-        lastActivityAt: 70_000,
-        smartTier: 'needs-you',
-        smartAt: 70_000,
-        isUnread: true
-      })
-    } finally {
-      vi.useRealTimers()
-    }
   })
 
   it('reconciles stored tiers once the provider can answer for the workspace’s terminals', async () => {

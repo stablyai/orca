@@ -1,6 +1,6 @@
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
-import { translate } from '@/i18n/i18n'
-import { isNativeChatDefaultFor } from '../../../../shared/structured-native-chat-launch-route'
+import { useTranslate } from '@/i18n/use-translate'
+import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Field, AUTOMATION_EDITOR_SECTION_LABEL_CLASS } from './automation-page-parts'
 import { automationDraftSurface } from './automation-launch-surface'
@@ -17,21 +17,22 @@ export function AutomationSurfaceField({
   supported: boolean | null
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (supported === false && draft.surface !== 'chat') {
     return <div className="h-14" aria-hidden />
   }
-  const defaultSurface = isNativeChatDefaultFor(settings, draft.agentId) ? 'chat' : 'terminal'
+  const defaultSurface = nativeChatPreferenceFor(settings, draft.agentId) ? 'chat' : 'terminal'
   const surfaces =
     defaultSurface === 'chat' ? (['terminal', 'chat'] as const) : (['chat', 'terminal'] as const)
   return (
     <Field
       className="h-14"
       labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
-      label={translate('components.automations.openIn', 'Open in')}
+      label={t('components.automations.openIn', 'Open in')}
     >
       <ToggleGroup
         role="radiogroup"
-        aria-label={translate('components.automations.openIn', 'Open in')}
+        aria-label={t('components.automations.openIn', 'Open in')}
         type="single"
         spacing={1}
         size="sm"
@@ -53,8 +54,8 @@ export function AutomationSurfaceField({
             disabled={surface === 'chat' && supported !== true}
           >
             {surface === 'chat'
-              ? translate('components.automations.chat', 'Chat')
-              : translate('components.automations.terminal', 'Terminal')}
+              ? t('components.automations.chat', 'Chat')
+              : t('components.automations.terminal', 'Terminal')}
           </ToggleGroupItem>
         ))}
       </ToggleGroup>

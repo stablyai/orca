@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, rmSync } from 'node:fs'
-import { writeFileAtomically } from './fs-utils'
+import { writeFileAtomically } from '../filesystem/atomic-file-publication'
 import type {
   CodexSharedRuntimeAuthPendingProvenance,
   CodexSharedRuntimeAuthProvenance,

@@ -4,16 +4,18 @@ import type { RuntimeHydrationModel } from './use-mobile-tasks-runtime-hydration
 import { readJiraConnection, reconcileJiraConnection } from './jira-mobile-connection'
 import {
   CROSS_REPO_DISPLAY_LIMIT,
+  PER_REPO_FETCH_LIMIT,
+  getTaskPagePerRepoLimit,
+  getWorkItemCountedTotalPages,
+  taskPageToGitHubApiPage
+} from '../../../src/shared/work-items/work-item-pagination'
+import { isGitHubWorkItemsSshRemoteRequiredError } from '../../../src/shared/github/work-item-ssh-error'
+import {
   type GitHubIssueSourceError,
   type GitHubIssueSourceFallback,
-  PER_REPO_FETCH_LIMIT,
   type RpcClient,
   extractGitHubIssueSourceError,
   extractGitHubIssueSourceFallback,
-  getTaskPagePerRepoLimit,
-  getWorkItemCountedTotalPages,
-  isGitHubWorkItemsSshRemoteRequiredError,
-  taskPageToGitHubApiPage,
   useCallback
 } from './mobile-tasks-dependencies'
 import {
@@ -25,9 +27,9 @@ import {
   type TaskItem,
   createGitHubTask,
   mapWithConcurrency,
-  reconcileTeamSelection,
-  scopeGitHubTaskSearch
+  reconcileTeamSelection
 } from './mobile-tasks-legacy-foundation'
+import { scopeGitHubTaskSearch } from '../../../src/shared/work-items/task-github-search'
 import {
   githubWorkItemCountRead,
   linearAccountStatusRead,
@@ -44,6 +46,7 @@ export type ProviderLoadActionsInput = Pick<
   | 'connState'
   | 'defaultLinearTeamSelectionRef'
   | 'githubKind'
+  | 'keepSettings'
   | 'setJiraConnection'
   | 'jiraStatusRequestIdRef'
   | 'setLinearConnected'
@@ -65,6 +68,7 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
     connState,
     defaultLinearTeamSelectionRef,
     githubKind,
+    keepSettings,
     setJiraConnection,
     jiraStatusRequestIdRef,
     setLinearConnected,
@@ -122,13 +126,14 @@ export function useMobileTasksProviderLoadActions<Model extends ProviderLoadActi
       }
       const selection = teamIds.size === allTeams.length ? null : [...teamIds]
       defaultLinearTeamSelectionRef.current = selection
+      keepSettings({ defaultLinearTeamSelection: selection })
       void taskSettingsWrite
         .request(client, { defaultLinearTeamSelection: selection })
         .catch(() => {
           // Preference persistence is best-effort; the local picker already changed.
         })
     },
-    [client, taskUiReady]
+    [client, keepSettings, taskUiReady]
   )
 
   const fetchGitHubItemsPage = useCallback(

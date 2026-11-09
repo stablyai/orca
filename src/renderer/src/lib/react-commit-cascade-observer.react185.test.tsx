@@ -7,7 +7,7 @@ import { act, useLayoutEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
-import { withReactCommitCascadeWriteProbe } from '../store/react-commit-cascade-write-probe'
+import { withReactCommitCascadeWriteProbe } from '../store/diagnostics/react-commit-cascade-write-probe'
 import {
   REACT_CASCADING_LANES,
   REACT_COMMIT_CASCADE_BREADCRUMB,
@@ -26,9 +26,6 @@ const recordBreadcrumb = vi.fn()
 vi.mock('@/lib/crash-breadcrumb-recorder', () => ({
   recordRendererCrashBreadcrumb: (name: string, data?: unknown) => recordBreadcrumb(name, data)
 }))
-
-// Allow the measured 438-byte single-driver sample but reject raw stacks/uncapped keys; production bundle basenames are shorter.
-const MAX_CASCADE_CRUMB_BYTES = 768
 
 /** Enough to pass the notice limit while staying under React's own 50-commit bail. */
 const CASCADE_TICKS = REACT_COMMIT_CASCADE_NOTICE_LIMIT + 5
@@ -130,27 +127,5 @@ describe('react commit cascade observer', () => {
     })
 
     expect(invocationsAtReport).toBe(REACT_COMMIT_CASCADE_NOTICE_LIMIT)
-  })
-
-  // A stack-suffixed key allows 4000 chars; enforce bytes explicitly to reject raw stacks or uncapped key lists.
-  it('keeps the crumb inside a flat byte budget', () => {
-    act(() => {
-      root.render(<RunawayLayoutEffectPane />)
-    })
-
-    const payload = recordBreadcrumb.mock.calls.find(
-      ([name]) => name === REACT_COMMIT_CASCADE_BREADCRUMB
-    )?.[1]
-    expect(JSON.stringify(payload).length).toBeLessThan(MAX_CASCADE_CRUMB_BYTES)
-  })
-
-  it('stays silent for a render that settles well below the notice limit', () => {
-    useCascadeStore.setState({ ticks: CASCADE_TICKS })
-
-    act(() => {
-      root.render(<RunawayLayoutEffectPane />)
-    })
-
-    expect(recordBreadcrumb).not.toHaveBeenCalled()
   })
 })

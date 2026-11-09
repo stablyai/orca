@@ -1,7 +1,10 @@
-import type { AutomationDispatchResult, AutomationRun } from '../../shared/automations-types'
-import { automationRunRecency } from '../../shared/automation-session-reuse'
-import type { Store } from '../persistence'
-import { runOwnHandle } from './headless-automation-agent-launch'
+import type {
+  AutomationDispatchResult,
+  AutomationRun
+} from '../../shared/automations/history/automation-run'
+import { automationRunRecency } from '../../shared/automations/history/automation-session-reuse'
+import type { Store } from '../persistence/loading-store/store'
+import { runOwnHandle } from './automation-terminal-launch'
 import {
   AGENT_HOOKS_REVIEW_BLOCKED_ERROR,
   type AutomationRunTerminalHost

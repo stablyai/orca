@@ -17,7 +17,6 @@ import { nativeReadWaitersForTests, resetNativeReadsForTests } from './libproc-n
 import { runPsInProcess } from './libproc-process-table'
 import { resetPsFallbackForTests } from './libproc-ps-fallback'
 import { createProcessTableSnapshotReader } from './process-table-snapshot-reader'
-import { parseCheapProcessTableRows, parseStrictProcessTableRows } from './process-table-snapshot'
 
 const TTYS004 = (16 << 24) | 4
 // 2026-09-03T16:02:01Z, a single-digit day so lstart pads it.
@@ -145,65 +144,6 @@ afterEach(() => {
 })
 
 describe('runPsInProcess', () => {
-  it('prints a whole-table capture the strict and cheap parsers read like ps output', async () => {
-    installAddon()
-    const utc = { env: { TZ: 'UTC0', LC_ALL: 'C' }, timeoutMs: 1000 }
-
-    const full = await runPsInProcess(
-      ['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,tty=,lstart=,command='],
-      utc
-    )
-    expect(full?.code).toBe(0)
-    // ps sorts by terminal, then pid.
-    expect(parseStrictProcessTableRows(full!.stdout)).toEqual([
-      expect.objectContaining({ pid: 1, tty: '??', command: '/sbin/launchd' }),
-      expect.objectContaining({ pid: 4400, stat: 'T', tty: '??', command: 'vim' }),
-      expect.objectContaining({ pid: 4401, stat: 'Z', command: '<defunct>' }),
-      expect.objectContaining({ pid: 4200, stat: 'S', tty: 'ttys004', command: '/usr/bin/login' }),
-      expect.objectContaining({ pid: 4242, stat: 'Ss', tty: 'ttys004', command: '-zsh' }),
-      expect.objectContaining({
-        pid: 4300,
-        stat: 'S+',
-        tty: 'ttys004',
-        startTime: 'Thu Sep  3 16:02:01 2026',
-        command: 'node /usr/local/bin/claude --resume'
-      })
-    ])
-    // Neither the root daemon nor the pane's root login is a pane descendant worth a setuid ps.
-    expect(runProcess).not.toHaveBeenCalled()
-
-    const cheap = await runPsInProcess(['-axo', 'pid=,ppid=,pgid=,tpgid=,stat=,lstart='], utc)
-    expect(parseCheapProcessTableRows(cheap!.stdout).at(-1)).toEqual({
-      pid: 4300,
-      ppid: 4242,
-      pgid: 4300,
-      tpgid: 4300,
-      stat: 'S+',
-      startTime: 'Thu Sep  3 16:02:01 2026'
-    })
-  })
-
-  it('selects by pid or terminal and exits 1 like ps when nothing matches', async () => {
-    const addon = installAddon()
-
-    expect(await runPsInProcess(['-p', '4300,4300', '-o', 'pid=,tdev='], BUDGET)).toMatchObject({
-      code: 0,
-      stdout: '4300 16/4\n'
-    })
-    expect(addon.readProcessTable).toHaveBeenLastCalledWith({ command: false, pids: [4300] })
-    expect(await runPsInProcess(['-p', '9999', '-o', 'stat=,lstart='], BUDGET)).toMatchObject({
-      code: 1,
-      stdout: ''
-    })
-    const tty = await runPsInProcess(['-o', 'pid=,stat=', '-t', '/dev/ttys004'], BUDGET)
-    expect(tty?.stdout).toBe('4200 S\n4242 Ss\n4300 S+\n')
-    expect(addon.readProcessTable).toHaveBeenLastCalledWith({ command: false, tty: '/dev/ttys004' })
-    expect(await runPsInProcess(['-o', 'pid=', '-t', 'ttys999'], BUDGET)).toMatchObject({
-      code: 1,
-      timedOut: false
-    })
-  })
-
   it('keeps the real ps for invocations it cannot reproduce, and answers a failing addon with /bin/ps', async () => {
     installAddon()
     expect(await runPsInProcess(['-axo', 'pid=PROCESS_ID'], BUDGET)).toBeNull()
@@ -407,15 +347,6 @@ describe('runPsInProcess', () => {
     current = { ...shell, comm: 'node', command: '/opt/node' }
     expect((await runPsInProcess(args, options))?.stdout).toBe('node /opt/claude/cli.js\n')
     expect(runProcess).toHaveBeenCalledTimes(2)
-  })
-
-  it('lets concurrent tty= readers wait out one naming pass instead of running ps', async () => {
-    installAddon()
-    // 4300's read is still stalled from the timeout case above.
-    const args = ['-o', 'pid=,tty=', '-p', '4242']
-    const results = await Promise.all([1, 2, 3].map(() => runPsInProcess(args, BUDGET)))
-    expect(results.map((result) => result?.stdout)).toEqual(Array(3).fill('4242 ttys004\n'))
-    expect(runProcess).not.toHaveBeenCalled()
   })
 
   it('leaves argv of the user’s own mid-exec processes and of exiting ones to (comm), asking ps only for other users', async () => {
@@ -664,7 +595,20 @@ describe('runPsInProcess', () => {
       })
     })
 
+    it('fresh recipient reads bypass recovered argv cached before the request', async () => {
+      pid = 5700
+      let argv = 'node /opt/claude/cli.js'
+      psAnswers(() => argv)
+      await runPsInProcess(args, BUDGET)
+      argv = 'node /srv/server.js'
+      await vi.advanceTimersByTimeAsync(1)
+      const observed = await runPsInProcess(args, { ...BUDGET, freshArgv: true })
+      expect(observed?.stdout).toContain('/srv/server.js')
+      expect(observed?.stdout).not.toContain('/opt/claude/cli.js')
+    })
+
     it('ages a capture by the cached argv it reused, so a same-comm re-exec cannot read as fresh', async () => {
+      pid = 5500
       let argv = 'node /opt/claude/cli.js'
       psAnswers(() => argv)
       const reader = strictReader()

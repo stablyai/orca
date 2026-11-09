@@ -1,36 +1,40 @@
-import { aiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
-import { AiVaultChatForkSourceSchema } from '../../shared/ai-vault-chat-fork-contract'
+import { aiVaultScanIssueText } from '../../shared/ai-vault/scanning/ai-vault-scan-issue-copy'
+import { AiVaultChatForkSourceSchema } from '../../shared/ai-vault/contracts/ai-vault-chat-fork-contract'
 import { z } from 'zod'
 import {
   AI_VAULT_AGENTS,
   AI_VAULT_SCOPE_PATHS_MAX_COUNT,
+  boundedAiVaultScopeArgs,
   type AiVaultListArgs,
   type AiVaultListResult,
   type AiVaultSession
-} from '../../shared/ai-vault-types'
+} from '../../shared/ai-vault/contracts/ai-vault-types'
 import { toRuntimeExecutionHostId } from '../../shared/execution-host'
-import { listEnvironments, resolveEnvironment } from '../../shared/runtime-environment-store'
+import {
+  listEnvironments,
+  resolveEnvironment
+} from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import type {
   AiVaultPrepareSessionResumeRequest,
   AiVaultPrepareSessionResumeResult
-} from '../../shared/ai-vault-resume-preparation'
+} from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
 import type {
   AiVaultSessionTitlesArgs,
   AiVaultSessionTitlesResult
-} from '../../shared/ai-vault-session-title'
+} from '../../shared/ai-vault/contracts/ai-vault-session-title'
 import { parseAiVaultListResult } from './session-list-result-validation'
-import { parseAiVaultSessionTitlesResult } from './session-title-result-validation'
-import { isGatedOffWslHost } from '../wsl/wsl-host-gate'
+import { parseAiVaultSessionTitlesResult } from './session-titles/session-title-result-validation'
+import { isGatedOffWslHost } from '../wsl/host-lifecycle/wsl-host-gate'
 import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
-} from '../../shared/ai-vault-session-deletion'
+} from '../../shared/ai-vault/contracts/ai-vault-session-deletion'
 import {
   readRuntimeAiVaultDeleteSessionResponse,
   runtimeAiVaultDeleteSessionParams
-} from '../../shared/ai-vault-runtime-session-delete'
-import type { RuntimeAiVaultHostInfo } from '../ipc/ai-vault-runtime-scan'
+} from '../../shared/ai-vault/contracts/ai-vault-runtime-session-delete'
+import type { RuntimeAiVaultHostInfo } from './ai-vault-runtime-scan'
 
 export type RuntimeAiVaultScanOptions = {
   timeoutMs?: number
@@ -84,7 +88,7 @@ export async function scanRuntimeAiVaultSessions(
       force: args.force,
       ...(args.afterFingerprint !== undefined ? { afterFingerprint: args.afterFingerprint } : {}),
       // Cap paths for older hosts too; omitted scope paths lose deep-history coverage, not recent sessions.
-      scopePaths: args.scopePaths?.slice(0, AI_VAULT_SCOPE_PATHS_MAX_COUNT),
+      ...boundedAiVaultScopeArgs(args.scopePaths, args.scopeOnly),
       executionHostId
     },
     options.timeoutMs

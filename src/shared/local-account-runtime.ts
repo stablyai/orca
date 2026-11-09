@@ -1,5 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
-import { normalizeGlobalWindowsRuntimeDefault } from './project-execution-runtime'
+import { normalizeGlobalWindowsRuntimeDefault } from './execution-host/project-runtime-preference'
 
 export type LocalAccountRuntimeTarget = {
   runtime: 'host' | 'wsl'
@@ -32,6 +32,20 @@ export function resolveLocalAccountRuntimeTarget(
     return { runtime: 'wsl', wslDistro: runtimeDefault.distro }
   }
   return { runtime: 'host', wslDistro: null }
+}
+
+/** Usage pollers read the host off Windows, where a synced WSL policy has no distro to reach. */
+export function resolveLocalAccountUsageTarget(
+  settings: LocalAccountRuntimeSettings,
+  platform: NodeJS.Platform = process.platform
+): LocalAccountRuntimeTarget {
+  return platform === 'win32'
+    ? resolveLocalAccountRuntimeTarget(settings, platform)
+    : { runtime: 'host', wslDistro: null }
+}
+
+export function localAccountRuntimeTargetKey(target: LocalAccountRuntimeTarget): string {
+  return target.runtime === 'wsl' ? `wsl:${target.wslDistro?.trim().toLowerCase() ?? ''}` : 'host'
 }
 
 function normalizeDistro(value: string | null | undefined): string | null {

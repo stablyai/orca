@@ -1,4 +1,5 @@
-import { CURRENT_CONTRACT_VERSION, LEGACY_RUN_ID } from '../contract-constants'
+import { ORCHESTRATION_CONTRACT_VERSION as CURRENT_CONTRACT_VERSION } from '../../../../../shared/orchestration/orchestration-runtime-capabilities'
+import { ORCHESTRATION_LEGACY_RUN_ID as LEGACY_RUN_ID } from '../../../../../shared/orchestration/orchestration-rpc-contract'
 import {
   REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL,
   RUN_PANE_KEY_MATCH_SUFFIX_SQL
@@ -181,7 +182,11 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   dispatched_at       TEXT,
   completed_at        TEXT,
   created_at          TEXT NOT NULL DEFAULT (datetime('now')),
-  last_heartbeat_at   TEXT
+  last_heartbeat_at   TEXT,
+  -- The settled Dispatch whose worker this one continues (a follow-up sent to it).
+  follow_up_of_dispatch_id TEXT,
+  -- Set when the worker reported with coordinator mail unread; cleared once that mail continues it.
+  follow_up_mail_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_dispatch_task ON dispatch_contexts(task_id);

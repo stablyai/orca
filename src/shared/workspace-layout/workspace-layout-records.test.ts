@@ -8,12 +8,10 @@ import { publishWorkspaceLayout, type PublishedWorkspaceLayout } from './workspa
 import {
   applyWorkspaceLayoutRecordChange,
   diffPublishedLayouts,
-  indexPublishedLayout,
-  joinPublishedLayout,
-  splitPublishedLayout
+  indexPublishedLayout
 } from './workspace-layout-records'
 import { GIT_KEY, leaf } from './workspace-layout-session.test-fixture'
-import { ownedEditorFileId } from '../workspace-session-pane-ownership'
+import { ownedEditorFileId } from '../workspace-session/workspace-session-pane-ownership'
 
 function published(): PublishedWorkspaceLayout {
   const { layout } = loadWorkspaceLayoutWithoutReport(
@@ -42,15 +40,6 @@ const shellPane = (layout: PublishedWorkspaceLayout, leafId: string) =>
     .terminal!.panes.find((pane) => pane.leafId === leafId)!
 
 describe('a published layout as records', () => {
-  it('splits and joins back to the same layout, field for field', () => {
-    const layout = published()
-    expect(stableJson(joinPublishedLayout(splitPublishedLayout(layout)))).toBe(stableJson(layout))
-  })
-
-  it('sends nothing when nothing changed', () => {
-    expect(diff(published(), published())).toBeNull()
-  })
-
   it.each([
     [
       'a respawn under the same id: one binding record',

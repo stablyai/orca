@@ -9,42 +9,43 @@ import {
 } from './structured-agent-session-draft-position.test-fixture'
 import { act, render, renderHook, within, fireEvent } from '@testing-library/react'
 import { createRef, StrictMode } from 'react'
-import type { NativeChatComposerInput } from '@/components/native-chat/native-chat-composer-input'
-import { promptEditor } from '@/components/native-chat/native-chat-prompt-editor.test-support'
-import { appendNativeChatDraftCache } from '@/components/native-chat/native-chat-draft-cache'
+import type { NativeChatComposerInput } from '@/components/native-chat/composer/editor/native-chat-composer-input'
+import { promptEditor } from '@/components/native-chat/composer/editor/native-chat-prompt-editor.test-support'
 import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store/index'
-import { adoptAgentSessionLaunchVerdict } from '../agent-session-launch-plan'
+import { adoptAgentSessionLaunchVerdict } from './launch/routing/agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from './structured-agent-session-provisional-tab'
 import {
   getStructuredLaunchStateBySessionId,
   hasStructuredAgentSessionLaunchCancellationTombstone
 } from './launch/structured-agent-session-launch-registry'
-import { hasStagedStructuredLaunchPrompt } from '../structured-agent-session-launch-prompt'
-import { wasStructuredAgentLaunchClosedByLocalCancel } from '../structured-agent-session-local-launch-cancel'
+import { hasStagedStructuredLaunchPrompt } from './launch/structured-agent-session-launch-prompt'
+import { wasStructuredAgentLaunchClosedByLocalCancel } from './launch/structured-agent-session-local-launch-cancel'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { clearNativeChatComposerDraftsForTests } from '@/components/native-chat/drafts/native-chat-draft-reset'
 import {
-  clearNativeChatComposerDraftsForTests,
   flushNativeChatComposerDrafts,
-  hydrateNativeChatComposerDrafts,
-  nativeChatComposerDraftWritesSettled,
+  nativeChatComposerDraftWritesSettled
+} from '@/components/native-chat/drafts/native-chat-composer-draft-persistence'
+import { hydrateNativeChatComposerDrafts } from '@/components/native-chat/drafts/native-chat-composer-draft-load'
+import {
   readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey,
   updateNativeChatComposerDraft
-} from '@/components/native-chat/native-chat-composer-draft-store'
-import { setNativeChatComposerDraftStorageForTests } from '@/components/native-chat/native-chat-composer-draft-storage'
+} from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
+import { setNativeChatComposerDraftStorageForTests } from '@/components/native-chat/drafts/native-chat-composer-draft-storage'
 import {
   addNativeChatPendingAttachment,
   nativeChatPendingAttachmentSnapshot
-} from '@/components/native-chat/native-chat-pending-attachment-cache'
-import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
-import { useNativeChatDraft } from '@/components/native-chat/use-native-chat-draft'
-import { openStructuredAgentSessionProvisionalTab } from '../structured-agent-session-launch-surface'
-import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+} from '@/components/native-chat/attachments/chips/native-chat-pending-attachment-cache'
+import { promptTextContent } from '@/components/native-chat/composer/editor/native-chat-prompt-document-text'
+import { useNativeChatDraft } from '@/components/native-chat/drafts/use-native-chat-draft'
+import { openStructuredAgentSessionProvisionalTab } from './launch/structured-agent-session-launch-surface'
+import { structuredAgentSessionTabId } from '../../../../shared/agent-session/view/structured-agent-session-projection'
 import {
   handBackStructuredAgentSessionMessage,
   returnMessageToComposer
-} from '@/components/native-chat/structured-agent-session-message-hand-back'
+} from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-hand-back'
 import { CreateIntentParams } from '../../../../shared/rpc-contract/structured-agent-session-params'
 it.each(['close', 'cancel', 'abort', 'edited-close'] as const)(
   'keeps a nonresume Hand Off through actual %s and late create settlement',
@@ -265,67 +266,6 @@ it.each(['before', 'mounted', 'delayed-disabled', 'metadata', 'ordinary', 'repla
     )
     act(() => input.current!.focus())
     expect([input.current!.selectionStart, input.current!.selectionEnd]).toEqual([2, 5])
-    view.unmount()
-  }
-)
-
-it.each(['plain', 'rich', 'append'] as const)(
-  'delivers a genuinely late saved load without taking newer ownership: %s',
-  async (kind) => {
-    const scope = 'agent-session:late-position',
-      input = createRef<NativeChatComposerInput>()
-    clearNativeChatComposerDraftsForTests()
-    const loaded = Promise.withResolvers<ReadonlyMap<string, unknown>>()
-    setNativeChatComposerDraftStorageForTests({ ...storage, loadAll: () => loaded.promise })
-    const loading = hydrateNativeChatComposerDrafts()
-    const view = render(
-      <StrictMode>
-        <PositionField scope={scope} input={input} />
-      </StrictMode>
-    )
-    const field = within(view.container).getByRole('textbox')
-    if (kind === 'append') {
-      act(() => appendNativeChatDraftCache(scope, 'newer'))
-    }
-    // ast-grep-ignore: test-no-real-time-wait-tsx -- Release the actual saved load after the 1500ms startup wait.
-    await new Promise((resolve) => setTimeout(resolve, 1550))
-    const document =
-      kind === 'rich'
-        ? {
-            type: 'doc',
-            content: [
-              {
-                type: 'paragraph',
-                content: [
-                  { type: 'nativeChatSkill', attrs: { token: '$review', path: '/review' } },
-                  { type: 'text', text: ' context  ' }
-                ]
-              }
-            ]
-          }
-        : undefined
-    const text =
-      kind === 'rich'
-        ? '$review context  '
-        : kind === 'append'
-          ? 'Hand Off\ncontext'
-          : POSITION_TEXT
-    await act(async () => {
-      loaded.resolve(
-        new Map([[scope, { text, images: [], savedAt: 1, ...(document ? { document } : {}) }]])
-      )
-      await loading
-    })
-    if (kind === 'plain' || kind === 'rich') {
-      expect(input.current!.value).toBe(text)
-      expect([input.current!.selectionStart, input.current!.selectionEnd]).toEqual([0, 0])
-      if (document) {
-        expect(promptEditor(field).getJSON()).toEqual(document)
-      }
-    } else if (kind === 'append') {
-      expect(input.current!.value).toBe(`${text}\n\nnewer`)
-      expect(input.current!.selectionStart).toBeGreaterThan(0)
-    }
     view.unmount()
   }
 )

@@ -4,20 +4,27 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { encodePairingOffer } from '../../../shared/pairing'
+import {
+  createSharedControlTestServer,
+  closeSharedControlTestServers
+} from '../../../shared/remote-runtime/control/remote-runtime-shared-control-test-server'
+import type { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
-import { addEnvironmentFromPairingCode } from '../../../shared/runtime-environment-store'
+import {
+  addEnvironmentFromPairingCode,
+  markEnvironmentUsed
+} from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 
-const { sendRemoteRuntimeRequestMock, sendRemoteRuntimeSharedControlRequestMock } = vi.hoisted(
-  () => ({
-    sendRemoteRuntimeRequestMock: vi.fn(),
+const { sendRemoteRuntimeRequestOnSocketMock, sendRemoteRuntimeSharedControlRequestMock } =
+  vi.hoisted(() => ({
+    sendRemoteRuntimeRequestOnSocketMock: vi.fn(),
     sendRemoteRuntimeSharedControlRequestMock: vi.fn()
-  })
-)
+  }))
 
-vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequest: sendRemoteRuntimeRequestMock
+vi.mock('../../../shared/remote-runtime/requests/remote-runtime-request-socket', () => ({
+  sendRemoteRuntimeRequestOnSocket: sendRemoteRuntimeRequestOnSocketMock
 }))
 
 vi.mock('./runtime-environment-request-connections', async () => {
@@ -33,6 +40,10 @@ vi.mock('./runtime-environment-request-connections', async () => {
 
 import { callRuntimeEnvironment } from './runtime-environment-transport-routing'
 import { resetSharedControlSupport } from './runtime-environment-shared-control-support'
+
+const actual = await vi.importActual<{
+  sendRemoteRuntimeRequestOnSocket: typeof sendRemoteRuntimeRequestOnSocket
+}>('../../../shared/remote-runtime/requests/remote-runtime-request-socket')
 
 describe('federated read RPC transport routing', () => {
   let userDataPath: string
@@ -50,11 +61,12 @@ describe('federated read RPC transport routing', () => {
       })
     }).id
     resetSharedControlSupport()
-    sendRemoteRuntimeRequestMock.mockReset()
+    sendRemoteRuntimeRequestOnSocketMock.mockReset()
     sendRemoteRuntimeSharedControlRequestMock.mockReset()
   })
 
-  afterEach(() => {
+  afterEach(async () => {
+    await closeSharedControlTestServers()
     resetRuntimeEnvironmentStatusOwners()
     rmSync(userDataPath, { recursive: true, force: true })
   })
@@ -71,7 +83,7 @@ describe('federated read RPC transport routing', () => {
         launchToken: 'launch-1'
       }
     }
-    sendRemoteRuntimeRequestMock.mockResolvedValue({
+    sendRemoteRuntimeRequestOnSocketMock.mockResolvedValue({
       id: 'status',
       ok: true,
       result: { capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY] },
@@ -96,7 +108,9 @@ describe('federated read RPC transport routing', () => {
       )
     ).resolves.toMatchObject({ ok: true })
 
-    expect(sendRemoteRuntimeRequestMock.mock.calls.map((call) => call[1])).toEqual(['status.get'])
+    expect(sendRemoteRuntimeRequestOnSocketMock.mock.calls.map((call) => call[1])).toEqual([
+      'status.get'
+    ])
     expect(sendRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledWith(
       environmentId,
       expect.any(Object),
@@ -107,40 +121,122 @@ describe('federated read RPC transport routing', () => {
     )
   })
 
-  it('keeps enveloped federation mutations on the one-shot transport', async () => {
-    const envelope = { orchestrationContractVersion: 1, orchestrationRequestId: 'ack-1' }
-    sendRemoteRuntimeRequestMock.mockResolvedValue({
-      id: 'ack',
+  it.each([
+    ['orchestration.federationAck', { dispatchId: 'dispatch-1', throughSequence: 4 }],
+    ['orchestration.federationImport', { dispatchId: 'dispatch-1', items: [] }]
+  ])(
+    'routes enveloped %s over shared control with its authority intact',
+    async (method, params) => {
+      const envelope = { orchestrationContractVersion: 1, orchestrationRequestId: 'relay-1' }
+      sendRemoteRuntimeRequestOnSocketMock.mockResolvedValue({
+        id: 'status',
+        ok: true,
+        result: { capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY] },
+        _meta: { runtimeId: 'runtime-worker' }
+      })
+      sendRemoteRuntimeSharedControlRequestMock.mockResolvedValue({
+        id: 'relay',
+        ok: true,
+        result: { acknowledgedThrough: 4 },
+        _meta: { runtimeId: 'runtime-worker' }
+      })
+
+      await callRuntimeEnvironment(
+        userDataPath,
+        environmentId,
+        method,
+        params,
+        15_000,
+        undefined,
+        envelope
+      )
+
+      expect(sendRemoteRuntimeRequestOnSocketMock.mock.calls.map((call) => call[1])).toEqual([
+        'status.get'
+      ])
+      expect(sendRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledWith(
+        environmentId,
+        expect.any(Object),
+        method,
+        params,
+        15_000,
+        envelope
+      )
+    }
+  )
+
+  it.each([
+    ['orchestration.federationAck', { dispatchId: 'dispatch-1', throughSequence: 4 }],
+    ['orchestration.federationImport', { dispatchId: 'dispatch-1', items: [] }]
+  ])('falls back to one-shot for %s when the host lacks shared control', async (method, params) => {
+    const envelope = { orchestrationContractVersion: 1, orchestrationRequestId: 'relay-1' }
+    sendRemoteRuntimeRequestOnSocketMock.mockImplementation(async (_pairing, calledMethod) => ({
+      id: calledMethod,
       ok: true,
-      result: { acknowledgedThrough: 4 },
+      result: calledMethod === 'status.get' ? { capabilities: [] } : { acknowledgedThrough: 4 },
       _meta: { runtimeId: 'runtime-worker' }
-    })
+    }))
 
     await callRuntimeEnvironment(
       userDataPath,
       environmentId,
-      'orchestration.federationAck',
-      { dispatchId: 'dispatch-1', throughSequence: 4 },
+      method,
+      params,
       15_000,
       undefined,
       envelope
     )
 
-    expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledWith(
+    expect(sendRemoteRuntimeRequestOnSocketMock.mock.calls.map((call) => call[1])).toEqual([
+      'status.get',
+      method
+    ])
+    expect(sendRemoteRuntimeRequestOnSocketMock).toHaveBeenLastCalledWith(
       expect.any(Object),
-      'orchestration.federationAck',
-      { dispatchId: 'dispatch-1', throughSequence: 4 },
+      method,
+      params,
       15_000,
       envelope,
       undefined,
-      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      undefined,
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+      undefined,
+      undefined
     )
     expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })
 
+  it('refuses a runtime-pinned one-shot mutation when its socket reaches a restarted host', async () => {
+    const server = await createSharedControlTestServer({
+      resultForRequest: (method) =>
+        method === 'status.get' ? { runtimeId: 'runtime-restarted', capabilities: [] } : {}
+    })
+    const paired = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'Restarted host',
+      pairingCode: encodePairingOffer(server.offer)
+    })
+    markEnvironmentUsed(userDataPath, paired.id, { runtimeId: 'runtime-proven' })
+    sendRemoteRuntimeRequestOnSocketMock.mockImplementation(actual.sendRemoteRuntimeRequestOnSocket)
+    await expect(
+      callRuntimeEnvironment(
+        userDataPath,
+        paired.id,
+        'orchestration.federationRelease',
+        { dispatchId: 'dispatch-1' },
+        15_000,
+        undefined,
+        { orchestrationContractVersion: 1, orchestrationRequestId: 'release-1' },
+        { expectedEnvironmentRuntimeId: 'runtime-proven' }
+      )
+    ).resolves.toMatchObject({ ok: false, error: { code: 'runtime_environment_changed' } })
+    expect(
+      server.requests.filter((request) => request.method === 'orchestration.federationRelease')
+    ).toEqual([])
+  })
+
   it('falls back to one-shot with the envelope when shared control is unavailable', async () => {
     const envelope = { orchestrationContractVersion: 1 }
-    sendRemoteRuntimeRequestMock.mockImplementation(async (_pairing, method) =>
+    sendRemoteRuntimeRequestOnSocketMock.mockImplementation(async (_pairing, method) =>
       method === 'status.get'
         ? {
             id: 'status',
@@ -166,18 +262,21 @@ describe('federated read RPC transport routing', () => {
       envelope
     )
 
-    expect(sendRemoteRuntimeRequestMock.mock.calls.map((call) => call[1])).toEqual([
+    expect(sendRemoteRuntimeRequestOnSocketMock.mock.calls.map((call) => call[1])).toEqual([
       'status.get',
       'orchestration.federationPull'
     ])
-    expect(sendRemoteRuntimeRequestMock).toHaveBeenLastCalledWith(
+    expect(sendRemoteRuntimeRequestOnSocketMock).toHaveBeenLastCalledWith(
       expect.any(Object),
       'orchestration.federationPull',
       { dispatchId: 'dispatch-1', afterSequence: 0, limit: 50 },
       15_000,
       envelope,
       undefined,
-      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      undefined,
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+      undefined,
+      undefined
     )
     expect(sendRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })

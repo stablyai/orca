@@ -1,4 +1,5 @@
 import { GLOBAL_FLAGS, type CommandSpec } from '../args'
+import { ORCHESTRATION_GATE_COMMAND_SPECS } from './orchestration-gate-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
 
 export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
@@ -78,7 +79,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'On Windows PowerShell, quote group addresses such as --to "@all" or --to "@worktree:<id>".',
       "worker_done and heartbeat are exact-Dispatch signals and cannot target groups; omit --to to use the Dispatch's Run mailbox.",
       'worker_done requires --outcome succeeded or --outcome failed.',
-      'From an active Dispatch, an omitted recipient defaults to its owning Run mailbox.',
+      'From a worker, an omitted recipient defaults to its coordinator, also after it finished; mail sent after finishing, worker_done included, leaves the finished task unchanged.',
       'Use --to dispatch:<id> for attempt-specific coordinator guidance; Orca durably relays it to a connected worker server.',
       'A worker_done with the active task/dispatch IDs completes that task only from the dispatched pane. When stable pane identity is unavailable, the sender handle must exactly match the dispatch assignee; injected preambles include the correct --from value.',
       'Prefer --task-id/--dispatch-id/etc. over raw --payload JSON in worker commands; PowerShell strips JSON quotes easily.'
@@ -133,16 +134,20 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Show messages across (or for) recipients',
     usage: 'orca orchestration inbox [--limit <n>] [--terminal <handle>] [--full] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'limit', 'terminal', 'full'],
-    identityFlagRoles: { terminal: 'target' }
+    identityFlagRoles: { terminal: 'target' },
+    notes: [
+      'Rows preview each body in 200 characters and keep only payload ids; --full prints them whole.'
+    ]
   },
   {
     path: ['orchestration', 'task-create'],
     summary: 'Create an orchestration task',
     usage:
-      'orca orchestration task-create --spec <text> [--task-title <text>] [--display-name <text>] [--deps <json_array>] [--parent <task_id>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration task-create (--spec <text> | --spec-file <path|->) [--task-title <text>] [--display-name <text>] [--deps <json_array>] [--parent <task_id>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'spec',
+      'spec-file',
       'task-title',
       'display-name',
       'deps',
@@ -160,7 +165,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'orca orchestration task-list [--status <status>] [--ready] [--brief] [--run <run_id>] [--from <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'status', 'ready', 'brief', 'run', 'from'],
     identityFlagRoles: { from: 'caller' },
-    notes: ['--brief collapses whitespace and caps each spec at 160 characters.']
+    notes: [
+      'Rows show id, status, and title; --full adds each spec and result, where --brief collapses whitespace and caps each spec at 160 characters.'
+    ]
   },
   {
     path: ['orchestration', 'task-update'],
@@ -232,7 +239,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     ],
     identityFlagRoles: { from: 'caller' },
     notes: [
-      'From an active Dispatch, a new question goes to its owning Run mailbox and ask returns at once: end your turn, and Orca wakes you with the answer as mail. --wait and --resume block until the answer instead; --timeout-ms accepts 1 to 1800000 ms per wait (default 600000 = 10 minutes, max 30 minutes), and a timeout leaves the question pending.'
+      'From a worker, a new question goes to its coordinator and ask returns at once: end your turn, and Orca wakes you with the answer as mail. A worker that already finished waits for the answer instead. --wait and --resume block until the answer instead; --timeout-ms accepts 1 to 1800000 ms per wait (default 600000 = 10 minutes, max 30 minutes), and a timeout leaves the question pending.'
     ]
   },
   {
@@ -265,31 +272,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'This command performs no effects and returns the exact `skills get orchestration --full` recovery action.'
     ]
   },
-  {
-    path: ['orchestration', 'gate-create'],
-    summary: 'Create a decision gate blocking a task',
-    usage:
-      'orca orchestration gate-create --task <task_id> --question <text> [--options <json_array>] [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'task', 'question', 'options', 'from', 'retry-request'],
-    identityFlagRoles: { from: 'caller' }
-  },
-  {
-    path: ['orchestration', 'gate-resolve'],
-    summary: 'Resolve a pending decision gate',
-    usage:
-      'orca orchestration gate-resolve --id <gate_id> --resolution <text> [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'resolution', 'from', 'retry-request'],
-    identityFlagRoles: { from: 'caller' }
-  },
-  {
-    path: ['orchestration', 'gate-list'],
-    summary: 'List decision gates',
-    usage:
-      'orca orchestration gate-list [--task <task_id>] [--status <status>] [--run <run_id>] [--from <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'task', 'status', 'run', 'from'],
-    identityFlagRoles: { from: 'caller' },
-    notes: ['--run inspects a named Run without binding; otherwise gates are scoped to the caller.']
-  },
+  ...ORCHESTRATION_GATE_COMMAND_SPECS,
   {
     path: ['orchestration', 'reset'],
     destructive: true,

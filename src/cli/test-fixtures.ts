@@ -1,4 +1,6 @@
 import type { Mock } from 'vitest'
+import type { ExecutionHostId } from '../shared/execution-host'
+import { RuntimeRpcFailureError } from './runtime/types'
 
 type OkFixture = {
   id: string
@@ -34,7 +36,7 @@ export function buildWorktree(
   branch: string,
   head = 'abc',
   repoId = 'repo'
-): WorktreeFixture {
+): WorktreeFixture & { hostId?: ExecutionHostId } {
   return {
     id: `${repoId}::${path}`,
     repoId,
@@ -82,4 +84,21 @@ export function queueFixtures(mock: Mock, ...fixtures: OkFixture[]): void {
   for (const fixture of fixtures) {
     mock.mockResolvedValueOnce(fixture)
   }
+}
+
+/** Answers the folder lookup an explicit path:/name: selector makes first: no folder workspace there. */
+export function queueNoFolderAtSelector(mock: Mock): void {
+  mock.mockRejectedValueOnce(
+    new RuntimeRpcFailureError({
+      id: 'req_folder_lookup',
+      ok: false,
+      error: { code: 'selector_not_found', message: 'selector_not_found' },
+      _meta: { runtimeId: 'runtime-1' }
+    })
+  )
+}
+
+/** Answers the folder catalog a cwd selection reads beside worktree.list: no folder workspaces. */
+export function noFolderWorkspacesFixture(): OkFixture {
+  return okFixture('req_folders', { folderWorkspaces: [] })
 }

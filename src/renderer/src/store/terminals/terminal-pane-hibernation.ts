@@ -1,12 +1,13 @@
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
 import {
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers
-} from '@/components/terminal-pane/pty-dispatcher'
-import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+} from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension'
+import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shutdown-buffer-captures'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
 import '../slices/agent-status/agent-status'
 import {
   collectHibernatedCompletionEvidenceForWorktree,

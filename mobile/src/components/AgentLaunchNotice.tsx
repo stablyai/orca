@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { Pressable, Text, View, type StyleProp, type TextStyle } from 'react-native'
 import { useClipboardWriter } from '../platform/clipboard'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { MobileAgentLaunchAvailability } from '../session/mobile-agent-launch-availability'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import type { MobileAgentLaunchAvailability } from '../session/agent-launch/mobile-agent-launch-availability'
+import { colors, spacing, typography, pressedStyle } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
@@ -66,6 +66,7 @@ export function AgentLaunchNotice({
       {note ? <Text style={styles.warningText}>{note}</Text> : null}
       {undeliveredPrompt ? (
         <Pressable
+          style={({ pressed }) => pressed && pressedStyle}
           onPress={() => {
             clipboard.writeText(undeliveredPrompt).then(
               () => setCopyState({ prompt: undeliveredPrompt, status: 'copied' }),

@@ -1,10 +1,17 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
-import type { ProspectiveWorkspace } from '@/lib/agent-launch-route-input'
+import {
+  agentPickerLaunchInputs,
+  agentPickerFreshLaunchInputs,
+  type AgentPickerDraft,
+  type AgentPickerEntry
+} from '../../../shared/agent-launch/picker/agent-launch-picker'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
+import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import {
   isTuiAgentEnabled,
   pickTuiAgent,
   TUI_AGENT_AUTO_PICK_ORDER
-} from '../../../shared/tui-agent-selection'
+} from '../../../shared/agent-launch/catalog/tui-agent-selection'
 
 /** `offeredAgentIds`: chosen agents that open as a chat without a CLI; auto-picks stay detected. */
 export function pickQuickWorkspaceAgent(
@@ -90,5 +97,27 @@ export function composerLaunchWorkspace(props: {
     ...(props.selectedRepoExecutionHostId
       ? { executionHostId: props.selectedRepoExecutionHostId }
       : {})
+  }
+}
+
+export function quickWorkspacePickerInputs(
+  draft: AgentPickerDraft | undefined,
+  entry: AgentPickerEntry | undefined,
+  executionHostId: ExecutionHostId | undefined
+) {
+  if (!draft) {
+    return {}
+  }
+  const legacyDraft =
+    draft.surface === 'terminal' && draft.arguments === undefined && entry && !entry.defaultsPending
+      ? { ...draft, arguments: entry.arguments ?? null }
+      : draft
+  return {
+    launchInputs: agentPickerFreshLaunchInputs(
+      draft,
+      { surface: draft.surface, executionHostId },
+      entry
+    ),
+    legacyLaunchInputs: agentPickerLaunchInputs(legacyDraft, entry)
   }
 }

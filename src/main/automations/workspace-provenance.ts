@@ -1,7 +1,8 @@
 import { z } from 'zod'
-import type { Automation, AutomationRun } from '../../shared/automations-types'
-import { getAutomationRunRepoId } from '../../shared/automation-run-identity'
-import { buildAutomationWorkspaceProvenance } from '../../shared/automation-workspace-provenance'
+import type { Automation } from '../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../shared/automations/history/automation-run'
+import { getAutomationRunRepoId } from '../../shared/automations/history/automation-run-identity'
+import { buildAutomationWorkspaceProvenance } from '../../shared/automations/ownership/automation-workspace-provenance'
 import type { Repo } from '../../shared/repo-types'
 import type {
   AutomationWorkspaceProvenance,

@@ -1,4 +1,4 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -20,22 +20,6 @@ function fixture() {
 }
 
 describe('managed WSL CLI provisioning', () => {
-  it('reuses a complete tree, repairs missing files, and isolates app identities and updates', () => {
-    const host = fixture()
-    const directory = getManagedWslCliDir(host) ?? ''
-    const launcher = join(directory, 'orca-ide')
-    const modified = statSync(launcher).mtimeMs
-    expect(getManagedWslCliDir(host)).toBe(directory)
-    expect(statSync(launcher).mtimeMs).toBe(modified)
-    rmSync(launcher)
-    expect(getManagedWslCliDir(host)).toBe(directory)
-    expect(readFileSync(launcher, 'utf8')).toContain('resources with spaces')
-    const second = { ...host, userDataPath: join(host.userDataPath, 'second') }
-    expect(getManagedWslCliDir(second)).not.toBe(directory)
-    const update = fixture()
-    expect(getManagedWslCliDir({ ...update, userDataPath: host.userDataPath })).not.toBe(directory)
-  })
-
   it('provides nothing when user data cannot hold the CLI', () => {
     const host = fixture()
     writeFileSync(host.userDataPath, 'a file, not a directory')

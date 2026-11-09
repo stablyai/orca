@@ -1,4 +1,4 @@
-import type { MessageRow } from '../types'
+import type { MessageRow } from './orchestration-records'
 
 export function normalizeLegacyQuestionText(value: string): string {
   return value.replace(/\r\n/g, '\n').trim()

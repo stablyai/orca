@@ -1,12 +1,12 @@
 import {
   __resetCreatedWorktreeRootsForTests,
   invalidateAuthorizedRootsCache
-} from './registered-worktree-roots-cache'
+} from './worktrees/removal/registered-worktree-roots-cache'
 import { registerWorktreeHandlers } from './worktrees'
 import { __resetDetectedWorktreeScanCacheForTests } from './worktrees/listing/detected-worktree-scan-cache'
-import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktree-shared-directories'
-import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
-import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
+import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktrees/content-paths/worktree-shared-directories'
+import { resetRetirementCollisionKeyCacheForTests } from '../workspaces/removal/retirement/worktree-name-retirement'
+import { resetSshProviderAuthorities } from '../ssh/connection/authority/ssh-provider-authority'
 import { createWorktreeRuntimeStub, type WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 import { handlers, mainWindow, store } from './worktrees-test-ipc-surface'
 import { configureMetadataPruningStoreMocks } from './worktrees-test-metadata-pruning-store'
@@ -28,9 +28,9 @@ import {
   resolveLocalGitUsernameMock,
   getBaseRefDefaultMock,
   resolveDefaultBaseRefWithLocalGitMock,
-  resolveDefaultBaseRefViaExecMock,
   getDefaultRemoteMock,
   getBranchConflictKindMock,
+  getBranchConflictKindStrictMock,
   getPRForBranchMock,
   getHostedReviewForBranchMock,
   getWorkItemMock,
@@ -100,9 +100,9 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     resolveLocalGitUsernameMock,
     getBaseRefDefaultMock,
     resolveDefaultBaseRefWithLocalGitMock,
-    resolveDefaultBaseRefViaExecMock,
     getDefaultRemoteMock,
     getBranchConflictKindMock,
+    getBranchConflictKindStrictMock,
     getPRForBranchMock,
     getHostedReviewForBranchMock,
     getWorkItemMock,
@@ -225,9 +225,9 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
   resolveLocalGitUsernameMock.mockResolvedValue('')
   getBaseRefDefaultMock.mockResolvedValue('origin/main')
   resolveDefaultBaseRefWithLocalGitMock.mockResolvedValue('origin/main')
-  resolveDefaultBaseRefViaExecMock.mockResolvedValue('origin/main')
   getDefaultRemoteMock.mockResolvedValue('origin')
   getBranchConflictKindMock.mockResolvedValue(null)
+  getBranchConflictKindStrictMock.mockResolvedValue(null)
   getPRForBranchMock.mockResolvedValue(null)
   getHostedReviewForBranchMock.mockResolvedValue(null)
   getWorkItemMock.mockResolvedValue(null)
@@ -253,7 +253,7 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
       GHOSTX_ROOT_PATH: repoArg.path
     })
   )
-  createSetupRunnerScriptMock.mockReturnValue({
+  createSetupRunnerScriptMock.mockResolvedValue({
     runnerScriptPath: '/workspace/repo/.git/orca/setup-runner.sh',
     envVars: {
       ORCA_ROOT_PATH: '/workspace/repo',

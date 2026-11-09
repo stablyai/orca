@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
-import { getSystemCodexHomePath } from '../codex/codex-home-paths'
+import { getSystemCodexHomePath } from '../codex/configuration/homes/codex-home-paths'
 import { resolveHostCodexManagedHomeVerdict } from './host-codex-managed-home-ownership'
 
 // Guest homes use $HOME/<root>/<accountId>/home with an account-ID ownership marker.
