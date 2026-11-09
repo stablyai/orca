@@ -3,7 +3,6 @@ import type { AgentChildWorkKind } from '../agent-status/child-work/agent-status
 import type { ClaudeLeadTurnState, CodexLeadTurnState } from './main-agent-turn-state'
 
 import {
-  AGENT_STATUS_2A_CURRENT_PRODUCER_MODE,
   createAgentStatusLegacyAdapter,
   type AgentStatusLegacyAdapter,
   type AgentStatusLegacyAdapterOptions,
@@ -215,23 +214,6 @@ export function getLegacyStatusListingOrder(
   paneKey: string
 ): number | undefined {
   return legacyStatusAdapter(state).listingOrder(paneKey)
-}
-
-/** Test harnesses seed the same compatibility region without exposing a mutable Map. */
-export function seedLegacyAgentStatusForTests(
-  state: HookListenerState,
-  entry: AgentHookEventPayload
-): void {
-  if (
-    !admitLegacyAgentStatus(
-      state,
-      'main-status-update',
-      entry,
-      AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
-    )
-  ) {
-    throw new Error('Test legacy agent-status seed was refused')
-  }
 }
 
 export function clearPaneCacheState(state: HookListenerState, paneKey: string): void {
