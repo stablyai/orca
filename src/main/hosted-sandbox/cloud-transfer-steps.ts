@@ -7,7 +7,7 @@
 // files, and install Claude/Codex sessions remapped to the new path so native resume works.
 import { execFile } from 'node:child_process'
 import { createWriteStream } from 'node:fs'
-import { cp, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { cp, lstat, mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises'
 import { join, relative } from 'node:path'
 import { promisify } from 'node:util'
 import {
@@ -15,7 +15,8 @@ import {
   CLOUD_TRANSFER_LOG,
   CLOUD_TRANSFER_MAX_BYTES,
   CLOUD_TRANSFER_SCRIPT,
-  CloudTransferManifestSchema,
+  CloudTransferResultSchema,
+  CLOUD_TRANSFER_RESULT,
   cloudTransferPackScript,
   pickTransferBranchName,
   remapSessionTranscript,
@@ -93,11 +94,11 @@ async function runInCloud(
   }
 }
 
-/** Packs the worktree in the VM; returns the manifest the script echoes into its log. */
+/** Packs the worktree in the VM; returns its manifest and the archive size (checked before any download). */
 export async function packInCloud(
   call: RuntimeCall,
   worktree: string
-): Promise<CloudTransferManifest> {
+): Promise<{ manifest: CloudTransferManifest; archiveBytes: number }> {
   const script = Buffer.from(cloudTransferPackScript(), 'utf8').toString('base64')
   await runInCloud(
     call,
@@ -105,15 +106,38 @@ export async function packInCloud(
     `mkdir -p ${CLOUD_TRANSFER_DIR} && printf %s ${script} | base64 -d >${CLOUD_TRANSFER_SCRIPT} && exec bash ${CLOUD_TRANSFER_SCRIPT} >${CLOUD_TRANSFER_LOG} 2>&1`,
     'Moving to this computer'
   )
-  const log = (await readCloudText(call, worktree, CLOUD_TRANSFER_LOG)).trim()
-  const lines = log.split('\n')
-  if (lines.at(-1) !== 'ORCA_TRANSFER_OK') {
+  const raw = await readCloudText(call, worktree, CLOUD_TRANSFER_RESULT).catch(() => '')
+  const parsed = raw ? CloudTransferResultSchema.safeParse(JSON.parse(raw)) : null
+  if (!parsed?.success) {
+    // Only the log's tail matters for the error (git can be chatty).
+    const log = await readCloudTail(call, worktree, CLOUD_TRANSFER_LOG).catch(() => '')
     throw new Error(
-      `Packing the cloud workspace failed: ${lines.slice(-3).join(' ').slice(0, 300)}`
+      `Packing the cloud workspace failed: ${log.trim().split('\n').slice(-3).join(' ').slice(0, 300)}`
     )
   }
-  const manifestLine = lines.findLast((line) => line.startsWith('{"version":1'))
-  return CloudTransferManifestSchema.parse(JSON.parse(manifestLine ?? '{}'))
+  if (parsed.data.archiveBytes > CLOUD_TRANSFER_MAX_BYTES) {
+    throw new Error('This workspace is too large to move in one go.')
+  }
+  return parsed.data
+}
+
+/** The last ≤8 KB of a cloud file. */
+async function readCloudTail(
+  call: RuntimeCall,
+  worktree: string,
+  relativePath: string
+): Promise<string> {
+  const stat = (await call('files.stat', { worktree, relativePath })) as { size?: number }
+  const offset = Math.max(0, (stat.size ?? 0) - 8192)
+  const page = (await call('files.readChunk', {
+    worktree,
+    relativePath,
+    offset,
+    length: 8192
+  })) as {
+    contentBase64: string
+  }
+  return Buffer.from(page.contentBase64, 'base64').toString('utf8')
 }
 
 /** Removes the scratch directory in the VM (best effort). */
@@ -276,8 +300,13 @@ export async function installSessions(
   fromRoot: string,
   toRoot: string
 ): Promise<number> {
+  // The source came out of a VM archive: refuse a symlinked root, install transcripts only.
+  const root = await lstat(sourceDir).catch(() => null)
+  if (!root || !root.isDirectory()) {
+    return 0
+  }
   let installed = 0
-  for (const file of await listFiles(sourceDir)) {
+  for (const file of (await listFiles(sourceDir)).filter((name) => name.endsWith('.jsonl'))) {
     const target = join(targetDir, relative(sourceDir, file))
     if (
       await stat(target).then(

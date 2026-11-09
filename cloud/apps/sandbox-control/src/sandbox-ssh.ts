@@ -19,7 +19,9 @@ const SSHD_PORT = 2200
 const BRIDGE_JS = String.raw`
 const http = require('http'), net = require('net'), crypto = require('crypto'), fs = require('fs')
 const port = Number(process.argv[2]), target = Number(process.argv[3]), tokenFile = process.argv[4]
-const token = fs.readFileSync(tokenFile, 'utf8').trim()
+// Re-read per upgrade: a rotated token (re-setup) takes effect without restarting the bridge.
+const currentToken = () => { try { return fs.readFileSync(tokenFile, 'utf8').trim() } catch { return '' } }
+const PROTOCOL_PREFIX = 'orca-bridge.'
 const eq = (a, b) => { const x = Buffer.from(a), y = Buffer.from(b); return x.length === y.length && crypto.timingSafeEqual(x, y) }
 function frame(op, data) {
   const len = data.length
@@ -28,11 +30,14 @@ function frame(op, data) {
 }
 const server = http.createServer((req, res) => { res.writeHead(req.url === '/healthz' ? 200 : 404); res.end() })
 server.on('upgrade', (req, sock, head) => {
-  const t = new URL(req.url, 'http://x').searchParams.get('t') || ''
+  // The token rides in Sec-WebSocket-Protocol, so it never appears in a URL or a proxy access log.
+  const offered = String(req.headers['sec-websocket-protocol'] || '').split(',').map((p) => p.trim())
+  const proto = offered.find((p) => p.startsWith(PROTOCOL_PREFIX)) || ''
+  const token = currentToken()
   const key = req.headers['sec-websocket-key']
-  if (!key || !eq(t, token)) { sock.end('HTTP/1.1 403 Forbidden\r\n\r\n'); return }
+  if (!key || !token || !eq(proto.slice(PROTOCOL_PREFIX.length), token)) { sock.end('HTTP/1.1 403 Forbidden\r\n\r\n'); return }
   const accept = crypto.createHash('sha1').update(key + '258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest('base64')
-  sock.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n')
+  sock.write('HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Protocol: ' + proto + '\r\nSec-WebSocket-Accept: ' + accept + '\r\n\r\n')
   sock.setNoDelay(true)
   const tcp = net.connect(target, '127.0.0.1'); tcp.setNoDelay(true)
   let buf = head && head.length ? Buffer.from(head) : Buffer.alloc(0), closed = false
@@ -70,6 +75,20 @@ server.listen(port, '0.0.0.0')
 export const SSH_START_SCRIPT = String.raw`
 set -euo pipefail
 d="$HOME/.orca-ssh"; mkdir -p "$d"; chmod 700 "$d"
+# Pids live under /tmp keyed by this boot: pid files that survived a snapshot never name a live process.
+run="/tmp/orca-ssh-$(id -u)-$(cut -c1-8 /proc/sys/kernel/random/boot_id)"; mkdir -p "$run"; chmod 700 "$run"
+alive() { [ -s "$1" ] && grep -qa -- "$2" "/proc/$(cat "$1")/cmdline" 2>/dev/null; }
+mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"; touch "$HOME/.ssh/authorized_keys"; chmod 600 "$HOME/.ssh/authorized_keys"
+# The Orca-managed block holds exactly the one stored key; anything the user added stays untouched.
+begin='# >>> orca-cloud-ssh (managed; replaced on every start)'; finish='# <<< orca-cloud-ssh'
+awk -v b="$begin" -v e="$finish" '$0==b{skip=1;next} $0==e{skip=0;next} !skip' "$HOME/.ssh/authorized_keys" >"$d/ak.tmp"
+if [ -n "${'$'}{ORCA_SSH_PUBKEY:-}" ]; then printf '%s\n%s\n%s\n' "$begin" "$ORCA_SSH_PUBKEY" "$finish" >>"$d/ak.tmp"; fi
+cat "$d/ak.tmp" >"$HOME/.ssh/authorized_keys"; rm -f "$d/ak.tmp"
+if [ "${'$'}{ORCA_SSH_REVOKE:-}" = 1 ]; then
+  for f in bridge sshd; do alive "$run/$f.pid" "$f" && kill "$(cat "$run/$f.pid")" 2>/dev/null || true; done
+  rm -f "$d/bridge-token"
+  echo '{"ok":true,"user":"'"$(id -un)"'"}'; exit 0
+fi
 # Golden images ship openssh-server; older ones get it once (persists on the sandbox disk).
 if ! [ -x /usr/sbin/sshd ]; then
   if command -v dnf >/dev/null; then sudo -n dnf -y -q install openssh-server >/dev/null 2>&1 || true
@@ -77,34 +96,36 @@ if ! [ -x /usr/sbin/sshd ]; then
   [ -x /usr/sbin/sshd ] || { echo '{"ok":false,"error":"sshd_unavailable"}'; exit 0; }
 fi
 [ -s "$d/ssh_host_ed25519_key" ] || ssh-keygen -q -t ed25519 -N '' -f "$d/ssh_host_ed25519_key"
-mkdir -p "$HOME/.ssh"; chmod 700 "$HOME/.ssh"; touch "$HOME/.ssh/authorized_keys"; chmod 600 "$HOME/.ssh/authorized_keys"
-if [ -n "${'$'}{ORCA_SSH_PUBKEY:-}" ] && ! grep -qxF "$ORCA_SSH_PUBKEY" "$HOME/.ssh/authorized_keys"; then printf '%s\n' "$ORCA_SSH_PUBKEY" >>"$HOME/.ssh/authorized_keys"; fi
 # A locked account (shadow "!") refuses even key logins; "*" keeps passwords impossible but allows keys.
 if sudo -n grep -q "^$(id -un):!" /etc/shadow 2>/dev/null; then sudo -n usermod -p '*' "$(id -un)"; fi
-umask 077; printf '%s' "$ORCA_SSH_BRIDGE_TOKEN" >"$d/bridge-token"
+umask 077; printf '%s' "$ORCA_SSH_BRIDGE_TOKEN" >"$d/bridge-token.tmp"; mv -f "$d/bridge-token.tmp" "$d/bridge-token"
 cat >"$d/sshd_config" <<EOF
 Port ${SSHD_PORT}
 ListenAddress 127.0.0.1
 HostKey $d/ssh_host_ed25519_key
-PidFile $d/sshd.pid
+PidFile $run/sshd.pid
 PasswordAuthentication no
 KbdInteractiveAuthentication no
 PubkeyAuthentication yes
 PermitRootLogin no
+AllowAgentForwarding no
+X11Forwarding no
 AuthorizedKeysFile $HOME/.ssh/authorized_keys
 AllowUsers $(id -un)
 StrictModes no
 Subsystem sftp internal-sftp
 EOF
-if ! { [ -s "$d/sshd.pid" ] && kill -0 "$(cat "$d/sshd.pid")" 2>/dev/null; }; then sudo -n mkdir -p /run/sshd 2>/dev/null || true; /usr/sbin/sshd -f "$d/sshd_config" -E "$d/sshd.log"; fi
+if ! alive "$run/sshd.pid" "sshd"; then sudo -n mkdir -p /run/sshd 2>/dev/null || true; /usr/sbin/sshd -f "$d/sshd_config" -E "$d/sshd.log"; fi
 cat >"$d/bridge.js" <<'BRIDGE'
 ${BRIDGE_JS}
 BRIDGE
 node="$(command -v node || find /opt/orca/runtime/runtimes -type f -name node | head -n 1)"
-if ! { [ -s "$d/bridge.pid" ] && kill -0 "$(cat "$d/bridge.pid")" 2>/dev/null; }; then
-  setsid nohup "$node" "$d/bridge.js" ${SSH_BRIDGE_PORT} ${SSHD_PORT} "$d/bridge-token" >"$d/bridge.log" 2>&1 </dev/null & echo $! >"$d/bridge.pid"
+if ! alive "$run/bridge.pid" "bridge.js"; then
+  setsid nohup "$node" "$d/bridge.js" ${SSH_BRIDGE_PORT} ${SSHD_PORT} "$d/bridge-token" >"$d/bridge.log" 2>&1 </dev/null & echo $! >"$run/bridge.pid"
 fi
-for _ in $(seq 1 50); do curl -fsS -o /dev/null "http://127.0.0.1:${SSH_BRIDGE_PORT}/healthz" 2>/dev/null && break; sleep 0.1; done
+ok=0
+for _ in $(seq 1 50); do curl -fsS -o /dev/null "http://127.0.0.1:${SSH_BRIDGE_PORT}/healthz" 2>/dev/null && { ok=1; break; }; sleep 0.1; done
+[ "$ok" = 1 ] && alive "$run/sshd.pid" "sshd" || { echo '{"ok":false,"error":"start_failed"}'; exit 0; }
 printf '{"ok":true,"user":"%s"}\n' "$(id -un)"
 `
 
@@ -116,7 +137,7 @@ export const SshPublicKeySchema = z
 
 const StartResult = z.union([
   z.object({ ok: z.literal(true), user: z.string().regex(/^[a-z_][a-z0-9_-]{0,31}$/) }),
-  z.object({ ok: z.literal(false), error: z.enum(['sshd_unavailable']) })
+  z.object({ ok: z.literal(false), error: z.enum(['sshd_unavailable', 'start_failed']) })
 ])
 
 export class SshUnavailableError extends Error {
@@ -130,14 +151,18 @@ export class SshUnavailableError extends Error {
 export async function startSshBridge(
   provider: SandboxProviderApi,
   sessionId: string,
-  inputs: { publicKey?: string; bridgeToken: string }
+  inputs: { publicKey?: string; bridgeToken: string; revoke?: boolean }
 ): Promise<{ user: string }> {
   let stdout: string
   try {
     const result = await provider.runCommand(sessionId, {
       command: 'bash',
       args: ['-c', SSH_START_SCRIPT],
-      env: { ORCA_SSH_BRIDGE_TOKEN: inputs.bridgeToken, ...(inputs.publicKey ? { ORCA_SSH_PUBKEY: inputs.publicKey } : {}) },
+      env: {
+        ORCA_SSH_BRIDGE_TOKEN: inputs.bridgeToken,
+        ...(inputs.publicKey ? { ORCA_SSH_PUBKEY: inputs.publicKey } : {}),
+        ...(inputs.revoke ? { ORCA_SSH_REVOKE: '1' } : {})
+      },
       timeoutMs: 120_000
     })
     if (result.exitCode !== 0) {
@@ -184,9 +209,9 @@ function timingSafeEqualHex(a: string, b: string): boolean {
 }
 
 /**
- * Desktop (account-authenticated) SSH setup: authorizes `publicKey`, rotates the scoped wake
- * secret (returned once, stored hashed) and the bridge token. The ProxyCommand then needs only
- * the wake secret, never the user's Orca token.
+ * Desktop (owner-authenticated) SSH setup: authorizes `publicKey` (replacing the previous one),
+ * rotates the scoped wake secret (returned once, stored hashed) and keeps the bridge token stable,
+ * so a running bridge keeps accepting it. The ProxyCommand needs only the wake secret.
  */
 export async function setupSsh(db: D1Database, row: SandboxRow, publicKey: string, now: number): Promise<{ wakeSecret: string }> {
   const wakeSecret = `osw_${randomToken(32)}`
@@ -195,7 +220,7 @@ export async function setupSsh(db: D1Database, row: SandboxRow, publicKey: strin
       `INSERT INTO sandbox_ssh (sandbox_id, wake_secret_sha256, bridge_token, public_key, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT (sandbox_id) DO UPDATE SET wake_secret_sha256 = excluded.wake_secret_sha256,
-         bridge_token = excluded.bridge_token, public_key = excluded.public_key, updated_at = excluded.updated_at`
+         public_key = excluded.public_key, updated_at = excluded.updated_at`
     )
     .bind(row.id, await sha256Hex(wakeSecret), randomToken(24), publicKey, now, now)
     .run()
@@ -220,7 +245,8 @@ export async function wakeForSsh(
   row: SandboxRow,
   ssh: SshRow,
   config: WorkspaceConfig & { waitMs: number }
-): Promise<WakeAnswer> {
+): Promise<SshWakeAnswer> {
+  await assertSshOwnerActive(deps, row)
   let answer = await wakeSandbox(deps, row, config)
   if (answer.state !== 'ready') {
     return answer
@@ -246,8 +272,52 @@ export async function wakeForSsh(
     // Created before the bridge port existed: SSH needs a new workspace (or a provider port update).
     throw new SshUnavailableError('no_bridge_route')
   }
-  await startSshBridge(deps.provider, state.session.id, { publicKey: ssh.public_key, bridgeToken: ssh.bridge_token })
-  return { ...answer, endpoint: `${route.url.replace(/^https:/, 'wss:')}/?t=${encodeURIComponent(ssh.bridge_token)}` }
+  const { user } = await startSshBridge(deps.provider, state.session.id, { publicKey: ssh.public_key, bridgeToken: ssh.bridge_token })
+  return {
+    ...answer,
+    endpoint: route.url.replace(/^https:/, 'wss:'),
+    protocol: `orca-bridge.${ssh.bridge_token}`,
+    user
+  }
+}
+
+/** Answer of /v1/ssh-wake: the wake shape plus the bridge subprotocol (carries its token) and login user. */
+export type SshWakeAnswer = WakeAnswer & { protocol?: string; user?: string }
+
+/** Refusals that mean the owner lost access (not a transient capacity limit). */
+const CAPACITY_REASONS = new Set(['concurrency_limit', 'member_concurrency_limit'])
+
+/**
+ * /v1/ssh-wake bypasses desktop auth (the ProxyCommand holds only a scoped secret), so each wake
+ * re-asks billing whether the sandbox's owner still has access to the account.
+ */
+export async function assertSshOwnerActive(deps: LifecycleDeps, row: SandboxRow): Promise<void> {
+  const decision = await deps.entitlements.checkStart({
+    accountId: row.account_id,
+    userId: row.user_id,
+    machineSize: row.machine_size,
+    runningSandboxes: 0,
+    runningSandboxesForUser: 0
+  })
+  if (!decision.allow && !CAPACITY_REASONS.has(decision.reason ?? '')) {
+    throw new SshForbiddenError(decision.reason ?? 'denied')
+  }
+}
+
+export class SshForbiddenError extends Error {
+  constructor(readonly reason: string) {
+    super(reason)
+    this.name = 'SshForbiddenError'
+  }
+}
+
+/** Revokes SSH: forget the secret and key, and (if the VM is up) clear the key and stop sshd + bridge. */
+export async function removeSsh(deps: LifecycleDeps, row: SandboxRow): Promise<void> {
+  const stored = await deps.db.prepare('SELECT * FROM sandbox_ssh WHERE sandbox_id = ?').bind(row.id).first<SshRow>()
+  await deps.db.prepare('DELETE FROM sandbox_ssh WHERE sandbox_id = ?').bind(row.id).run()
+  if (stored && row.status === 'running' && row.session_id) {
+    await startSshBridge(deps.provider, row.session_id, { bridgeToken: '', revoke: true }).catch(() => undefined)
+  }
 }
 
 /** The VM's login user varies by golden image (Amazon Linux: vercel-sandbox, Ubuntu: ubuntu). */

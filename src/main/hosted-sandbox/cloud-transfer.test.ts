@@ -11,7 +11,12 @@ import {
   pickTransferBranchName,
   remapSessionTranscript
 } from '../../shared/hosted-sandbox/cloud-transfer-pack'
-import { importBundle, installSessions, pickCloudWorktree } from './cloud-transfer'
+import {
+  importBundle,
+  installSessions,
+  pickCloudWorktree,
+  sweepCloudTransfers
+} from './cloud-transfer'
 
 const git = (cwd: string, ...args: string[]) =>
   execFileSync('git', ['-c', 'user.email=t@t', '-c', 'user.name=t', ...args], {
@@ -114,5 +119,28 @@ describe('cloud transfer import', () => {
     expect(
       await installSessions(sessions, target, '/vercel/sandbox/project', '/Users/me/other')
     ).toBe(0)
+  })
+})
+
+describe('cloud transfer housekeeping', () => {
+  it('sweeps abandoned transfer dirs at startup but keeps recent unapplied patches', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-sweep-'))
+    mkdirSync(join(root, 'abandoned'))
+    writeFileSync(join(root, 'abandoned', 'transfer.tar'), 'x')
+    mkdirSync(join(root, 'kept', 'unapplied'), { recursive: true })
+    expect(await sweepCloudTransfers(root, Date.now())).toBe(1)
+    expect(await sweepCloudTransfers(root, Date.now() + 31 * 86_400_000)).toBe(1)
+    expect(await sweepCloudTransfers(join(root, 'missing'), Date.now())).toBe(0)
+  })
+
+  it('installs only session transcripts, never other files from the project folder', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-sessions-'))
+    const source = join(root, 'src')
+    mkdirSync(join(source, 'memory'), { recursive: true })
+    writeFileSync(join(source, 's.jsonl'), '{}\n')
+    writeFileSync(join(source, 'memory', 'notes.md'), 'x')
+    expect(await installSessions(source, join(root, 'out'), '/a', '/b')).toBe(1)
+    expect(readFileSync(join(root, 'out', 's.jsonl'), 'utf8')).toBe('{}\n')
+    expect(() => readFileSync(join(root, 'out', 'memory', 'notes.md'))).toThrow()
   })
 })

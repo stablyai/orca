@@ -2,18 +2,18 @@
 // workspace's E2EE orcad connection; the control plane never sees repository content. prepare packs
 // in the VM, downloads and imports the branch; finish (after the window created the local worktree
 // through its ordinary create path) applies changes and installs remapped agent sessions.
-import { execFile } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir, readdir, rm, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
 import { ipcMain, type BrowserWindow } from 'electron'
 import { getEphemeralVmRecipeResultConnection } from '../../shared/ephemeral-vm-recipes'
 import {
   CLOUD_TRANSFER_ARCHIVE,
+  CLOUD_TRANSFER_MAX_BYTES,
   claudeProjectDirName
 } from '../../shared/hosted-sandbox/cloud-transfer-pack'
+import { gunzipCapped, safeExtractTar } from './cloud-transfer-tar'
 import {
   ORCA_CLOUD_TRANSFER_CHANNELS as CH,
   type CloudTransferFinished,
@@ -37,8 +37,6 @@ import {
 } from './cloud-transfer-steps'
 import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
 import { findCloudRuntime } from './hosted-workspace-service'
-
-const run = promisify(execFile)
 
 export { importBundle, installSessions, pickCloudWorktree } from './cloud-transfer-steps'
 
@@ -72,6 +70,9 @@ export function installCloudTransferHandlers(deps: {
     return { ok: false, code: 'failed', message }
   }
 
+  void sweepCloudTransfers(join(deps.userDataPath, 'cloud-transfers'), Date.now()).catch(
+    () => undefined
+  )
   ipcMain.removeHandler(CH.prepare)
   ipcMain.removeHandler(CH.finish)
   ipcMain.handle(
@@ -108,6 +109,7 @@ export function installCloudTransferHandlers(deps: {
         deps.userDataPath,
         runtime.runtimeEnvironmentId
       )
+      let selector: string | null = null
       try {
         step('packing')
         const listing = (await call('worktree.list', {})) as { worktrees?: WorktreeRow[] }
@@ -119,9 +121,9 @@ export function installCloudTransferHandlers(deps: {
         if (!worktree) {
           throw new Error('Could not find the workspace on the cloud host.')
         }
-        const selector = `id:${worktree.id}`
-        const manifest = await packInCloud(call, selector)
-        step('downloading', { bytes: 0 })
+        selector = `id:${worktree.id}`
+        const { manifest, archiveBytes } = await packInCloud(call, selector)
+        step('downloading', { bytes: 0, totalBytes: archiveBytes })
         await mkdir(dir, { recursive: true })
         const tarPath = join(dir, 'transfer.tar')
         const total = await downloadCloudFile(
@@ -129,11 +131,11 @@ export function installCloudTransferHandlers(deps: {
           selector,
           CLOUD_TRANSFER_ARCHIVE,
           tarPath,
-          (bytes) => step('downloading', { bytes })
+          (bytes) => step('downloading', { bytes, totalBytes: archiveBytes })
         )
-        await cleanUpCloud(call, selector)
         step('importing', { bytes: total, totalBytes: total })
-        await run('tar', ['-xf', tarPath, '-C', dir])
+        // The VM's archive is untrusted: regular files and dirs only, no escapes, capped.
+        await safeExtractTar(tarPath, dir, { maxBytes: CLOUD_TRANSFER_MAX_BYTES })
         await rm(tarPath, { force: true })
         const branch = manifest.hasBundle
           ? await importBundle(repoPath, join(dir, 'repo.bundle'), manifest)
@@ -163,6 +165,11 @@ export function installCloudTransferHandlers(deps: {
       } catch (error) {
         await rm(dir, { recursive: true, force: true }).catch(() => undefined)
         return fail(args.workspaceId, transferId, error)
+      } finally {
+        // The VM's scratch copy goes whether the move succeeded or not.
+        if (selector) {
+          await cleanUpCloud(call, selector)
+        }
       }
     }
   )
@@ -195,8 +202,18 @@ export function installCloudTransferHandlers(deps: {
           leftovers
         )
         if ((await fileSize(join(entry.dir, 'untracked.tgz'))) > 0) {
-          // -k: never clobber a file the local branch already has.
-          await run('tar', ['-xzkf', join(entry.dir, 'untracked.tgz'), '-C', args.worktreePath])
+          // Inflate with a cap (no gzip bombs), then extract without clobbering the branch's files.
+          const untrackedTar = join(entry.dir, 'untracked.tar')
+          await gunzipCapped(
+            join(entry.dir, 'untracked.tgz'),
+            untrackedTar,
+            CLOUD_TRANSFER_MAX_BYTES
+          )
+          await safeExtractTar(untrackedTar, args.worktreePath, {
+            maxBytes: CLOUD_TRANSFER_MAX_BYTES,
+            noClobber: true
+          })
+          await rm(untrackedTar, { force: true })
         }
         const claudeSessions = await installSessions(
           join(entry.dir, 'claude'),
@@ -237,4 +254,27 @@ export function installCloudTransferHandlers(deps: {
     ipcMain.removeHandler(CH.prepare)
     ipcMain.removeHandler(CH.finish)
   }
+}
+
+const LEFTOVER_TTL_MS = 30 * 86_400_000
+
+/**
+ * Prepared transfers live only in memory, so anything on disk at startup is abandoned: removed,
+ * except saved patches that did not apply (the user's work), which are kept for 30 days.
+ */
+export async function sweepCloudTransfers(root: string, now: number): Promise<number> {
+  let removed = 0
+  for (const entry of await readdir(root, { withFileTypes: true }).catch(() => [])) {
+    if (!entry.isDirectory()) {
+      continue
+    }
+    const dir = join(root, entry.name)
+    const leftovers = await stat(join(dir, 'unapplied')).catch(() => null)
+    if (leftovers && now - leftovers.mtimeMs < LEFTOVER_TTL_MS) {
+      continue
+    }
+    await rm(dir, { recursive: true, force: true })
+    removed++
+  }
+  return removed
 }

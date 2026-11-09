@@ -87,7 +87,9 @@ import {
 import { wakeForPreview } from './preview-wake'
 import {
   SshPublicKeySchema,
+  SshForbiddenError,
   SshUnavailableError,
+  removeSsh,
   setupSsh,
   sshLoginUser,
   sshRowForSecret,
@@ -683,7 +685,17 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       case 'POST env/refresh':
         return json({ applied: await refreshSandboxEnv(life, row) })
+      case 'DELETE ssh':
+        if (row.user_id !== caller.userId) {
+          return fail('not_found', 404)
+        }
+        await removeSsh(life, row)
+        return json({ removed: true })
       case 'POST ssh': {
+        // Only the sandbox's owner may put a key into it (a teammate in the same account may not).
+        if (row.user_id !== caller.userId) {
+          return fail('not_found', 404)
+        }
         const body = SshSetupRequestSchema.safeParse(await readJson(request))
         if (!body.success) {
           return fail('invalid_request', 400)
@@ -766,6 +778,9 @@ function errorResponse(error: unknown): Response {
   }
   if (error instanceof BillingUnavailableError) {
     return fail('billing_unavailable', 503)
+  }
+  if (error instanceof SshForbiddenError) {
+    return fail('entitlement_denied', 403, error.reason.slice(0, 64))
   }
   if (error instanceof SshUnavailableError) {
     return fail('conflict', 409, `ssh_${error.reason}`)

@@ -8,6 +8,7 @@ export const CLOUD_TRANSFER_DIR = '.orca-transfer'
 export const CLOUD_TRANSFER_ARCHIVE = `${CLOUD_TRANSFER_DIR}/transfer.tar`
 export const CLOUD_TRANSFER_SCRIPT = `${CLOUD_TRANSFER_DIR}/pack.sh`
 export const CLOUD_TRANSFER_LOG = `${CLOUD_TRANSFER_DIR}/pack.log`
+export const CLOUD_TRANSFER_RESULT = `${CLOUD_TRANSFER_DIR}/result.json`
 /** Refuse absurd transfers instead of filling the user's disk; a git bundle of a big repo fits easily. */
 export const CLOUD_TRANSFER_MAX_BYTES = 2 * 1024 * 1024 * 1024
 
@@ -27,6 +28,10 @@ export const CloudTransferManifestSchema = z
   })
   .strict()
 export type CloudTransferManifest = z.infer<typeof CloudTransferManifestSchema>
+
+export const CloudTransferResultSchema = z
+  .object({ manifest: CloudTransferManifestSchema, archiveBytes: z.number().int().nonnegative() })
+  .strict()
 
 /**
  * Bash run in the cloud worktree (cwd) by an orcad terminal. Writes one tar with: a git bundle of
@@ -64,12 +69,18 @@ tar --null -T "$stage/untracked.list" -czf "$stage/untracked.tgz"
 rm -f "$stage/untracked.list"
 enc="$(printf '%s' "$root" | sed 's#[^A-Za-z0-9]#-#g')"
 claude_home="${'$'}{CLAUDE_CONFIG_DIR:-$HOME/.claude}"
-if [ -d "$claude_home/projects/$enc" ]; then cp -R "$claude_home/projects/$enc/." "$stage/claude/"; fi
+# Session transcripts only (*.jsonl, regular files): not memory/ or anything else in the folder.
+if [ -d "$claude_home/projects/$enc" ] && [ ! -L "$claude_home/projects/$enc" ]; then
+  find "$claude_home/projects/$enc" -maxdepth 1 -type f -name '*.jsonl' -exec cp -p {} "$stage/claude/" \;
+fi
 claude=$(find "$stage/claude" -name '*.jsonl' -type f | wc -l | tr -d ' ')
 codex_home="${'$'}{CODEX_HOME:-$HOME/.codex}"
 if [ -d "$codex_home/sessions" ]; then
   (cd "$codex_home/sessions" && grep -rlF --include='*.jsonl' -e "\"cwd\":\"$root\"" -e "\"cwd\": \"$root\"" . 2>/dev/null || true) |
-    while IFS= read -r f; do mkdir -p "$stage/codex/$(dirname "$f")"; cp "$codex_home/sessions/$f" "$stage/codex/$f"; done
+    while IFS= read -r f; do
+      [ -f "$codex_home/sessions/$f" ] && [ ! -L "$codex_home/sessions/$f" ] || continue
+      mkdir -p "$stage/codex/$(dirname "$f")"; cp "$codex_home/sessions/$f" "$stage/codex/$f"
+    done
 fi
 codex=$(find "$stage/codex" -name '*.jsonl' -type f | wc -l | tr -d ' ')
 ORCA_T_ROOT="$root" ORCA_T_BRANCH="$branch" ORCA_T_HEAD="$head" ORCA_T_UPSTREAM="$upstream" \
@@ -80,9 +91,9 @@ process.stdout.write(JSON.stringify({ version: 1, root: e.ORCA_T_ROOT, branch: s
   upstream: s(e.ORCA_T_UPSTREAM), hasBundle: e.ORCA_T_BUNDLE === "true", stagedBytes: n(e.ORCA_T_STAGED),
   unstagedBytes: n(e.ORCA_T_UNSTAGED), untrackedFiles: n(e.ORCA_T_UNTRACKED), claudeSessions: n(e.ORCA_T_CLAUDE), codexSessions: n(e.ORCA_T_CODEX) }))
 ' >"$stage/manifest.json"
-cat "$stage/manifest.json"
-echo
 tar -cf "$out/transfer.tar" -C "$stage" .
+# The desktop reads this small file (not the log) and checks the size before downloading.
+printf '{"manifest":%s,"archiveBytes":%s}\n' "$(cat "$stage/manifest.json")" "$(wc -c <"$out/transfer.tar" | tr -d ' ')" >"$out/result.json"
 rm -rf "$stage"
 echo ORCA_TRANSFER_OK
 `
@@ -109,7 +120,11 @@ export function remapSessionTranscript(text: string, fromRoot: string, toRoot: s
 }
 
 /** Local branch name for the transferred branch: its own name unless that is taken by different work. */
-export function pickTransferBranchName(branch: string | null, taken: (name: string) => boolean, fallback: string): string {
+export function pickTransferBranchName(
+  branch: string | null,
+  taken: (name: string) => boolean,
+  fallback: string
+): string {
   const base = branch && /^[A-Za-z0-9._/-]{1,200}$/.test(branch) ? branch : fallback
   if (!taken(base)) {
     return base
