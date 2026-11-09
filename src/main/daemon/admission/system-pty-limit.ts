@@ -1,5 +1,5 @@
 import { runProcess } from '@orca/process-host'
-import { readNodeFileWithinLimit } from '../../../shared/node-bounded-file-reader'
+import { readNodeFileWithinLimit } from '../../../shared/file-content/node-bounded-file-reader'
 import { InFlightPromiseDedupe } from '../../../shared/in-flight-promise-dedupe'
 import { awaitDaemonValueWithinCallerDeadline } from '../launch/daemon-request-deadline'
 

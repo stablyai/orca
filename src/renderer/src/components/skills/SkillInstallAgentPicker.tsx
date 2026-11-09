@@ -5,7 +5,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { SkillInstallProviderId } from '../../../../shared/skill-install-providers'
 import {
   groupSkillInstallProviders,
@@ -72,6 +72,7 @@ export function SkillInstallAgentPicker({
   busy: boolean
   onChange: (next: Set<SkillInstallProviderId>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const { canonical, selectable } = groupSkillInstallProviders(scope, detectedAgents)
   const installed = detectedAgents ? new Set(detectedAgents) : null
@@ -106,19 +107,17 @@ export function SkillInstallAgentPicker({
 
   const summaryText =
     chosen.length === 0
-      ? translate('auto.components.skills.install.agentsNone', 'No agents selected')
-      : translate('auto.components.skills.install.agentsSelected', 'Installing for: {{value0}}', {
+      ? t('auto.components.skills.install.agentsNone', 'No agents selected')
+      : t('auto.components.skills.install.agentsSelected', 'Installing for: {{value0}}', {
           value0: chosen.join(', ')
         })
 
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
-        <Label htmlFor={id}>
-          {translate('auto.components.skills.install.agentsLabel', 'Agents')}
-        </Label>
+        <Label htmlFor={id}>{t('auto.components.skills.install.agentsLabel', 'Agents')}</Label>
         <span className="text-[11px] text-muted-foreground">
-          {translate('auto.components.skills.install.agentsCountBadge', '{{count}} selected', {
+          {t('auto.components.skills.install.agentsCountBadge', '{{count}} selected', {
             count: chosen.length
           })}
         </span>
@@ -141,12 +140,12 @@ export function SkillInstallAgentPicker({
               <span className="min-w-0 flex-1 truncate">
                 {chosen.length === 0 ? (
                   <span className="text-muted-foreground">
-                    {translate('auto.components.skills.install.agentsNone', 'No agents selected')}
+                    {t('auto.components.skills.install.agentsNone', 'No agents selected')}
                   </span>
                 ) : (
                   <>
                     <span className="font-medium text-foreground">
-                      {translate('auto.components.skills.install.agentCount', '{{count}} agents', {
+                      {t('auto.components.skills.install.agentCount', '{{count}} agents', {
                         count: chosen.length,
                         defaultValue_one: '{{count}} agent'
                       })}
@@ -168,14 +167,14 @@ export function SkillInstallAgentPicker({
               <div className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">
                 <Sparkles className="size-3 text-primary shrink-0" />
                 <span>
-                  {translate(
+                  {t(
                     'auto.components.skills.install.canonicalHeader',
                     'Standard Agents (Always Included)'
                   )}
                 </span>
               </div>
               <p className="mt-1 text-[11px] leading-normal text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.skills.install.canonicalExplanation',
                   'These agents natively read {{root}}, which Orca installs to by default:',
                   { root: canonicalRoot }
@@ -198,11 +197,11 @@ export function SkillInstallAgentPicker({
           <div className="flex items-center justify-between border-b border-border/60 px-3 py-2">
             <span className="text-xs font-semibold text-foreground">
               {selectable.length > 0
-                ? translate(
+                ? t(
                     'auto.components.skills.install.additionalAgentsHeader',
                     'Additional Agent Directories'
                   )
-                : translate('auto.components.skills.install.targetAgentsHeader', 'Target Agents')}
+                : t('auto.components.skills.install.targetAgentsHeader', 'Target Agents')}
             </span>
             {selectable.length > 0 ? (
               <button
@@ -212,8 +211,8 @@ export function SkillInstallAgentPicker({
                 className="cursor-pointer text-[11px] text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none"
               >
                 {allSelectableChosen
-                  ? translate('auto.components.skills.install.deselectAll', 'Deselect all')
-                  : translate('auto.components.skills.install.selectAll', 'Select all')}
+                  ? t('auto.components.skills.install.deselectAll', 'Deselect all')
+                  : t('auto.components.skills.install.selectAll', 'Select all')}
               </button>
             ) : null}
           </div>
@@ -227,7 +226,7 @@ export function SkillInstallAgentPicker({
                 disabled={busy}
                 note={
                   installed !== null && !installed.has(provider.id)
-                    ? translate('auto.components.skills.install.agentNotInstalled', 'Not installed')
+                    ? t('auto.components.skills.install.agentNotInstalled', 'Not installed')
                     : null
                 }
                 onCheckedChange={(checked) =>

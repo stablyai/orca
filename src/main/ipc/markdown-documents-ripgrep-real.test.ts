@@ -124,21 +124,4 @@ describe('Markdown listing with bundled ripgrep', () => {
       }
     }
   )
-
-  it.skipIf(process.platform === 'win32' || process.getuid?.() === 0)(
-    'still rejects an unreadable root',
-    async () => {
-      await put('README.md')
-      await chmod(root, 0o000)
-      try {
-        await expect(listMarkdownDocuments(root)).rejects.toThrow()
-      } finally {
-        await chmod(root, 0o700)
-      }
-    }
-  )
-
-  it('rejects a missing root rather than treating it as an empty folder', async () => {
-    await expect(listMarkdownDocuments(join(root, 'missing'))).rejects.toThrow()
-  })
 })

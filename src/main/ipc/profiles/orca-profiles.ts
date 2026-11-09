@@ -27,7 +27,7 @@ import {
   getOrcaProfileListState,
   setActiveOrcaProfile
 } from '../../orca-profiles/profile-index-store'
-import { seedNewOrcaProfileTelemetryConsent } from '../../orca-profiles/profile-telemetry-consent-seed'
+import { initializeNewOrcaProfileState } from '../../orca-profiles/new-profile-state'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 import { isMultiProfileUiEnabled } from '../../orca-profiles/profile-ui-scope'
 import { transferOrcaProfileProject } from '../../orca-profiles/profile-project-transfer'
@@ -169,7 +169,7 @@ export function registerOrcaProfileHandlers(
     'orcaProfiles:createLocal',
     (_event, args?: CreateLocalOrcaProfileArgs): CreateLocalOrcaProfileResult => {
       const result = createLocalOrcaProfile(args)
-      seedNewOrcaProfileTelemetryConsent(result.profile.id, store.getSettings().telemetry)
+      initializeNewOrcaProfileState(result.profile.id, store.getSettings().telemetry)
       return result
     }
   )
@@ -278,7 +278,7 @@ export function registerOrcaProfileHandlers(
         createCloudLinkedProfileArgsFromUnknown(rawArgs)
       )
       if (result.status === 'created') {
-        seedNewOrcaProfileTelemetryConsent(result.profile.id, store.getSettings().telemetry)
+        initializeNewOrcaProfileState(result.profile.id, store.getSettings().telemetry)
         options.onAuthMutation?.()
       }
       return result

@@ -1,5 +1,6 @@
 import { ToggleGroup, ToggleGroupItem } from './ui/toggle-group'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatNativeChatDuration } from '../../../shared/native-chat/transcript/native-chat-turn-status'
 import type { ResumeRunFilter, ResumeRunView } from './native-chat-resume-run-view'
 import type { ResumeRunStartPhase } from './NativeChatResumeRunStatusIcon'
@@ -8,10 +9,11 @@ import type { ResumeRunStartPhase } from './NativeChatResumeRunStatusIcon'
 
 function progressText(
   counts: ResumeRunView['counts'],
-  phases: readonly ResumeRunStartPhase[]
+  phases: readonly ResumeRunStartPhase[],
+  t: Translate = translate
 ): string {
   const parts = [
-    translate('auto.components.NativeChatResumeRunSummary.done', '{{value0}} of {{value1}} done', {
+    t('auto.components.NativeChatResumeRunSummary.done', '{{value0}} of {{value1}} done', {
       value0: counts.done,
       value1: counts.total
     })
@@ -21,14 +23,14 @@ function progressText(
   const waitingForReply = phases.filter((phase) => phase === 'ready').length
   if (starting > 0) {
     parts.push(
-      translate('auto.components.NativeChatResumeRunSummary.starting', '{{value0}} starting', {
+      t('auto.components.NativeChatResumeRunSummary.starting', '{{value0}} starting', {
         value0: starting
       })
     )
   }
   if (waitingForReply > 0) {
     parts.push(
-      translate(
+      t(
         'auto.components.NativeChatResumeRunSummary.waitingForReply',
         '{{value0}} waiting for a reply',
         { value0: waitingForReply }
@@ -37,7 +39,7 @@ function progressText(
   }
   if (waitingToStart > 0) {
     parts.push(
-      translate(
+      t(
         'auto.components.NativeChatResumeRunSummary.waitingToStart',
         '{{value0}} waiting to start',
         { value0: waitingToStart }
@@ -63,31 +65,28 @@ export function ResumeRunSummary({
   filter: ResumeRunFilter
   onFilterChange: (filter: ResumeRunFilter) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const filters: readonly [ResumeRunFilter, string, number][] = [
-    ['all', translate('auto.components.NativeChatResumeRunSummary.all', 'All'), counts.all],
+    ['all', t('auto.components.NativeChatResumeRunSummary.all', 'All'), counts.all],
     [
       'in-progress',
-      translate('auto.components.NativeChatResumeRunSummary.inProgress', 'In progress'),
+      t('auto.components.NativeChatResumeRunSummary.inProgress', 'In progress'),
       counts.inProgress
     ],
-    [
-      'resumed',
-      translate('auto.components.NativeChatResumeRunSummary.resumed', 'Resumed'),
-      counts.resumed
-    ],
+    ['resumed', t('auto.components.NativeChatResumeRunSummary.resumed', 'Resumed'), counts.resumed],
     [
       'attention',
-      translate('auto.components.NativeChatResumeRunSummary.attention', 'Need you'),
+      t('auto.components.NativeChatResumeRunSummary.attention', 'Need you'),
       counts.attention
     ]
   ]
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3 text-xs text-muted-foreground">
-        <span className="min-w-0">{progressText(counts, phases)}</span>
+        <span className="min-w-0">{progressText(counts, phases, t)}</span>
         {counts.inProgress > 0 && (
           <span className="shrink-0 tabular-nums">
-            {translate('auto.components.NativeChatResumeRunSummary.running', 'Running {{value0}}', {
+            {t('auto.components.NativeChatResumeRunSummary.running', 'Running {{value0}}', {
               value0: formatNativeChatDuration((now - startedAt) / 1000)
             })}
           </span>
@@ -109,7 +108,7 @@ export function ResumeRunSummary({
             onFilterChange(next)
           }
         }}
-        aria-label={translate('auto.components.NativeChatResumeRunSummary.filter', 'Show chats')}
+        aria-label={t('auto.components.NativeChatResumeRunSummary.filter', 'Show chats')}
       >
         {filters.map(([value, label, count]) => (
           <ToggleGroupItem key={value} value={value}>

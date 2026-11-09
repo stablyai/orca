@@ -7,7 +7,7 @@ import {
   type HostOfferRead
 } from './native-chat-restart-host-offer'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
+import { getStructuredAgentSessionStatusFeed } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 import { markNativeChatLaunchResumeDecided } from './native-chat-launch-resume-decision'
 import { announceRestartResults } from './native-chat-restart-action-notifications'
 import {

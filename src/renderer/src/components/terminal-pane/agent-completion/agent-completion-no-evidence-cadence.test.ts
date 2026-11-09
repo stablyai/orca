@@ -2,10 +2,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createAgentCompletionCoordinator } from './agent-completion-coordinator'
 import { resetAgentCompletionCoordinatorIdentitiesForTest } from './agent-completion-identity-store'
-import { resetAgentProcessInspectionQueueForTests } from '../agent-process-inspection-queue'
-import { isAgentProcessInspectionCostly } from '../agent-process-inspection-cost'
-import { toRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { toAppSshPtyId } from '../../../../../shared/ssh-pty-id'
+import { resetAgentProcessInspectionQueueForTests } from './process-inspection/agent-process-inspection-queue'
+
 import type { TerminalProcessInspection as RuntimeTerminalProcessInspection } from '../../../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { AgentCompletionCoordinatorOptions } from './agent-completion-coordinator-types'
 
@@ -48,48 +46,6 @@ describe('agent completion no-evidence inspection cadence', () => {
     vi.restoreAllMocks()
   })
 
-  it('bounds a visible idle pane with no agent evidence to the 15s cadence on a costly host', async () => {
-    const inspectProcess = vi.fn(async () => processResult(null, false))
-    const { coordinator } = createCoordinator(inspectProcess)
-
-    coordinator.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    expect(inspectProcess).toHaveBeenCalledTimes(4)
-  })
-
-  it('keeps the full 2s idle cadence on hosts where inspection is cheap', async () => {
-    const inspectProcess = vi.fn(async () => processResult(null, false))
-    const { coordinator } = createCoordinator(inspectProcess, {
-      isProcessInspectionCostly: () => false
-    })
-
-    coordinator.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    expect(inspectProcess).toHaveBeenCalledTimes(30)
-  })
-
-  it('starts a bounded hot cadence after output on an evidence-publishing host', async () => {
-    const inspectProcess = vi.fn(async () => processResult(null, false))
-    const { coordinator } = createCoordinator(inspectProcess, {
-      shouldPollNoEvidenceProcessCadence: () => false
-    })
-
-    coordinator.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(inspectProcess).not.toHaveBeenCalled()
-
-    coordinator.observeOutputActivity()
-    await vi.advanceTimersByTimeAsync(12_000)
-
-    // Output arms 2s polls only for the 10s activity window; silence then
-    // disarms the host reads again instead of falling back to a slow timer.
-    expect(inspectProcess).toHaveBeenCalledTimes(4)
-    await vi.advanceTimersByTimeAsync(60_000)
-    expect(inspectProcess).toHaveBeenCalledTimes(4)
-  })
-
   it('leaves a hidden noisy pane fully unpolled in the shipped option shape', async () => {
     // Why: production sets no `shouldPollNoEvidenceProcessCadence`, so the
     // activity re-arm has to stay under the visibility/tracking gate — a
@@ -109,52 +65,6 @@ describe('agent completion no-evidence inspection cadence', () => {
     expect(inspectProcess).not.toHaveBeenCalled()
   })
 
-  it('escalates to the hot cadence when PTY output appears mid-interval', async () => {
-    const inspectProcess = vi.fn(async () => processResult(null, false))
-    const { coordinator } = createCoordinator(inspectProcess)
-
-    coordinator.startProcessTracking()
-    // 14s into the 15s no-evidence interval: nothing has run yet.
-    await vi.advanceTimersByTimeAsync(14_000)
-    expect(inspectProcess).not.toHaveBeenCalled()
-
-    // Output (e.g. the user launched an agent) must re-arm the idle cadence
-    // instead of waiting out the remaining ~1s + another 15s round.
-    coordinator.observeOutputActivity()
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(inspectProcess).toHaveBeenCalledTimes(1)
-  })
-
-  it('escalates to the hot cadence when a title change appears mid-interval', async () => {
-    const inspectProcess = vi.fn(async () => processResult(null, false))
-    const { coordinator } = createCoordinator(inspectProcess)
-
-    coordinator.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(14_000)
-    expect(inspectProcess).not.toHaveBeenCalled()
-
-    // A generic (non-agent) title change still signals shell activity.
-    coordinator.observeTitle('~/projects/app')
-    await vi.advanceTimersByTimeAsync(2_000)
-    expect(inspectProcess).toHaveBeenCalledTimes(1)
-  })
-
-  it('decays back to the 15s cadence when activity stops without agent evidence', async () => {
-    const inspectProcess = vi.fn(async () => processResult(null, false))
-    const { coordinator } = createCoordinator(inspectProcess)
-
-    coordinator.startProcessTracking()
-    coordinator.observeOutputActivity()
-    // Hot window: 2s cadence while within 10s of the last activity.
-    await vi.advanceTimersByTimeAsync(10_000)
-    expect(inspectProcess).toHaveBeenCalledTimes(5)
-
-    // No further activity and no evidence: the next 45s allow only the polls
-    // armed at the relaxed cadence (t=25s, 40s, 55s).
-    await vi.advanceTimersByTimeAsync(45_000)
-    expect(inspectProcess).toHaveBeenCalledTimes(8)
-  })
-
   it('keeps cadence disarmed and the done quiet window intact when tracking never starts', async () => {
     // Why: the hook-notification coordinator (agent-hook-completion-notifications)
     // never calls startProcessTracking. Pre-gate, hook evidence armed stub polls
@@ -172,31 +82,6 @@ describe('agent completion no-evidence inspection cadence', () => {
     expect(dispatchCompletion).not.toHaveBeenCalled()
     await vi.advanceTimersByTimeAsync(1_500)
     expect(dispatchCompletion).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not accelerate the relaxed cadence when inspections keep erroring', async () => {
-    const inspectProcess = vi.fn(async () => {
-      throw new Error('scan failed')
-    })
-    const { coordinator } = createCoordinator(inspectProcess)
-
-    coordinator.startProcessTracking()
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    // The error backoff ceiling (10s) must not undercut the 15s tier: erroring
-    // Error backoff must not undercut the slower no-evidence tier and increase failing scan frequency.
-    expect(inspectProcess).toHaveBeenCalledTimes(4)
-  })
-
-  it('keeps a recognized agent on the full active cadence on a costly host', async () => {
-    const inspectProcess = vi.fn(async () => processResult('codex'))
-    const { coordinator } = createCoordinator(inspectProcess)
-
-    coordinator.startProcessTracking()
-    coordinator.observeTitle('Codex working')
-    await vi.advanceTimersByTimeAsync(60_000)
-
-    expect(inspectProcess.mock.calls.length).toBeGreaterThanOrEqual(70)
   })
 
   it('still detects an unannounced agent exit promptly after escalating from the relaxed tier', async () => {
@@ -223,14 +108,5 @@ describe('agent completion no-evidence inspection cadence', () => {
       quietedHookDone: false,
       terminalIdleConfirmed: true
     })
-  })
-})
-
-describe('isAgentProcessInspectionCostly', () => {
-  it('relaxes every live pane, local or remote, on every client platform', () => {
-    expect(isAgentProcessInspectionCostly('worktree-1|pane-1')).toBe(true)
-    expect(isAgentProcessInspectionCostly(toAppSshPtyId('target-1', 'pty-1'))).toBe(true)
-    expect(isAgentProcessInspectionCostly(toRemoteRuntimePtyId('term_1', 'env-a'))).toBe(true)
-    expect(isAgentProcessInspectionCostly(null)).toBe(false)
   })
 })

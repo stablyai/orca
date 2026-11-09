@@ -1,3 +1,4 @@
+import type { PtyForegroundGroupReader } from '../../../shared/terminal/pty/ingress/pty-startup-ingress-contract'
 import type { TerminalForegroundSample } from '../../../shared/terminal/pty/lifecycle/terminal-foreground-observation'
 import type { PtyChildProcessVerdict } from '../../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 import type { TerminalExitCause } from '../../../shared/terminal/pty/lifecycle/terminal-exit-cause'
@@ -25,6 +26,8 @@ export type SubprocessHandle = {
   shellPath?: string
   shellCwd?: string
   shellPathEnv?: string
+  /** The PTY's foreground process group (tcgetpgrp); absent for ConPTY. */
+  readForegroundGroup?: PtyForegroundGroupReader
   /** POSIX slave path for reading line discipline; absent for ConPTY. */
   slavePath?: string
   write(data: string): void

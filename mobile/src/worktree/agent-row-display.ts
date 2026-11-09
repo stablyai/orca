@@ -3,21 +3,11 @@ import { isAgentStatusFresh } from '../../../src/shared/agent-status/contracts/a
 import { agentVerdictDisplayMark } from '../../../src/shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { resolveDecayedAgentRowState } from '../../../src/shared/agent-status/presentation/agent-row-decay-state'
 import { getAgentRowPrimaryText } from '../../../src/shared/agent-status/presentation/agent-row-primary-text'
+import type { AgentListStatus } from '../../../src/shared/agent-status/presentation/agent-list-status'
 import { translate } from '../i18n/mobile-i18n'
 
-// Mirror desktop AgentStateDot vocabulary.
-export type AgentDotState =
-  | 'working'
-  | 'monitoring'
-  | 'blocked'
-  | 'waiting'
-  | 'unread'
-  | 'done'
-  | 'idle'
-  | 'unverifiable'
-  | 'interrupted'
-  | 'failed'
-  | 'unconfirmed'
+// Desktop AgentStateDot vocabulary, plus session-tab unread (not an Agents-list status).
+export type AgentDotState = AgentListStatus | 'unread'
 
 // A session tab's AgentStatusEntry leaves `interrupted` optional; worktree rows always send it.
 type AgentRowVerdictSource = Pick<RuntimeWorktreeAgentRow, 'state' | 'mainAgent'> & {
@@ -72,6 +62,8 @@ export function agentStateLabel(state: AgentDotState): string {
       return translate('worktree.agentRowDisplay.idle', 'Idle')
     case 'unverifiable':
       return translate('worktree.agentRowDisplay.unverifiable', 'No recent update')
+    case 'permission':
+      return translate('worktree.agentRowDisplay.permission', 'Needs attention')
   }
 }
 

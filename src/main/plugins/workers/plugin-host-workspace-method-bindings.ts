@@ -11,6 +11,7 @@ import {
 } from './plugin-host-method-bind'
 import type { PluginHostServices } from './plugin-host-method-bindings'
 import { PluginHostCallError } from './plugin-host-call-scope'
+import { claimPluginReplacedActionRun } from '../plugin-command-replacement-deadline'
 import type { PluginHostRendererActions } from '../view/plugin-host-renderer-actions'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 
@@ -217,8 +218,9 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
     await renderer(services).openFile(workspaceId, path)
     return { opened: true as const }
   }),
-  'commands.run': bind(api['commands.run'], async ({ action }, { services, scope }) => {
+  'commands.run': bind(api['commands.run'], async ({ action }, { pluginId, services, scope }) => {
     scope.assertActive()
+    claimPluginReplacedActionRun(pluginId, action)
     // Always Orca's own action, never a plugin command that replaces it: a replacement that
     // calls commands.run for the original would otherwise call itself.
     await renderer(services).runAction(action)

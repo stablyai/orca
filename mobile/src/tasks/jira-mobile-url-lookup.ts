@@ -4,7 +4,7 @@ import {
   isResolvedJiraIssueMatch,
   parseJiraIssueUrl
 } from '../../../src/shared/jira/jira-issue-url'
-import type { RpcOperationSender } from '../transport/rpc-operation-sender'
+import type { RpcOperationSender } from '../transport/rpc/rpc-operation-sender'
 import { jiraIssueRead } from './mobile-jira-operations'
 
 // Match a connected site before resolving keys that may exist on several sites.

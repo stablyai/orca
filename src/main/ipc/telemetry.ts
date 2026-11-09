@@ -13,7 +13,8 @@ import { getOnboardingCohortAtEmit } from '../telemetry/onboarding-cohort-classi
 import { resolveConsent, type ConsentState } from '../telemetry/consent'
 import type { Store } from '../persistence/loading-store/store'
 import { isCohortExtendedEvent, isOnboardingEvent } from '../../shared/telemetry-events'
-import type { EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
+import type { EventName, OptInVia } from '../../shared/telemetry-events'
+import type { EventProps } from '../../shared/telemetry-event-classification'
 
 // Derive consent provenance synchronously from pre-mutation settings.
 let storeRef: Store | null = null

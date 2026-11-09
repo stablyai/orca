@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { measureRootProjectHeaderDragRects } from './root-project-header-drop'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 
 import {
   computeProjectGroupHeaderDropPreview,
@@ -24,6 +25,8 @@ export function useProjectGroupHeaderDrag({
   sidebarProjectGroupHeaderIdsByBucket,
   projectGroupById,
   onCommitProjectGroupTabOrder,
+  rootProjectHeaderKeys,
+  onCommitRootProjectOrder,
   getScrollContainer
 }: UseProjectGroupHeaderDragArgs): ProjectGroupHeaderDragController {
   const [state, setState] = useState<ProjectGroupDragState>(INITIAL_PROJECT_GROUP_DRAG_STATE)
@@ -36,6 +39,10 @@ export function useProjectGroupHeaderDrag({
   projectGroupByIdRef.current = projectGroupById
   const onCommitProjectGroupTabOrderRef = useRef(onCommitProjectGroupTabOrder)
   onCommitProjectGroupTabOrderRef.current = onCommitProjectGroupTabOrder
+  const rootDragRef = useRef({ rootProjectHeaderKeys, onCommitRootProjectOrder })
+  useLayoutEffect(() => {
+    rootDragRef.current = { rootProjectHeaderKeys, onCommitRootProjectOrder }
+  }, [rootProjectHeaderKeys, onCommitRootProjectOrder])
   const getContainerRef = useRef(getScrollContainer)
   getContainerRef.current = getScrollContainer
   const autoscrollLastFrameTimeRef = useRef<number | null>(null)
@@ -50,7 +57,16 @@ export function useProjectGroupHeaderDrag({
     if (!container || !session) {
       return []
     }
-    const rects = measureProjectGroupHeaderDragRects(container, session.bucketKey)
+    const rects = session.rootProjectHeaderKeys
+      ? measureRootProjectHeaderDragRects(
+          container,
+          session.rootProjectHeaderKeys,
+          session.rootProjectHeaderHostId
+        ).map((rect) => ({
+          ...rect,
+          groupId: rect.key
+        }))
+      : measureProjectGroupHeaderDragRects(container, session.bucketKey)
     session.headerRects = rects
     return rects
   }, [])
@@ -131,6 +147,7 @@ export function useProjectGroupHeaderDrag({
       commitProjectGroupHeaderDragDrop({
         session,
         sidebarDropIndex,
+        onCommitRootProjectOrder: rootDragRef.current.onCommitRootProjectOrder,
         projectGroupById: projectGroupByIdRef.current,
         onCommitProjectGroupTabOrder: onCommitProjectGroupTabOrderRef.current
       })
@@ -139,7 +156,7 @@ export function useProjectGroupHeaderDrag({
   )
 
   const runAutoscrollFrame = useCallback(
-    (frameTime: number) => {
+    function runFrame(frameTime: number) {
       autoscrollFrameIdRef.current = null
       const session = dragSessionRef.current
       const container = getContainerRef.current()
@@ -165,7 +182,7 @@ export function useProjectGroupHeaderDrag({
 
       applyDrop(session.groupId, computeDrop(session.latestPointerY))
 
-      autoscrollFrameIdRef.current = window.requestAnimationFrame(runAutoscrollFrame)
+      autoscrollFrameIdRef.current = window.requestAnimationFrame(runFrame)
     },
     [applyDrop, cancelAutoscroll, computeDrop, refreshHeaderRects]
   )
@@ -283,6 +300,7 @@ export function useProjectGroupHeaderDrag({
       const session = createProjectGroupHeaderDragSession({
         event,
         groupId,
+        rootProjectHeaderKeys: rootDragRef.current.rootProjectHeaderKeys,
         projectGroupById: projectGroupByIdRef.current,
         sidebarProjectGroupHeaderIdsByBucket: sidebarProjectGroupHeaderIdsByBucketRef.current,
         getScrollContainer: getContainerRef.current

@@ -4,7 +4,7 @@ import {
   type JiraProjectReference
 } from '../../../shared/jira/jira-project-reference'
 import { getJiraProjectSelectionKey } from './task-page/jira/task-page-jira-project-selection'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { WorkItemScopePicker, type WorkItemScopeOption } from './work-item-scope-picker'
 
 export function JiraProjectPicker({
@@ -22,6 +22,7 @@ export function JiraProjectPicker({
   emptyLabel: string
   disabled?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const options: WorkItemScopeOption<JiraProjectReference>[] = projects.flatMap((project) => {
     const reference = normalizeJiraProjectReference(project)
     return reference
@@ -44,8 +45,8 @@ export function JiraProjectPicker({
       onChange={onChange}
       label={label}
       allLabel={emptyLabel}
-      searchPlaceholder={translate('components.jiraProjectPicker.search', 'Search Jira projects')}
-      emptyLabel={translate('components.jiraProjectPicker.empty', 'No projects found.')}
+      searchPlaceholder={t('components.jiraProjectPicker.search', 'Search Jira projects')}
+      emptyLabel={t('components.jiraProjectPicker.empty', 'No projects found.')}
       disabled={disabled}
     />
   )

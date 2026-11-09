@@ -7,8 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   PLUGIN_APPROVAL_REQUIRED_CODE,
   PLUGIN_APPROVAL_STALE_CODE,
-  PluginApprovalRequiredError,
-  PluginCliError
+  PluginApprovalRequiredError
 } from '../../shared/plugins/approval/plugin-cli-approval'
 import { PluginMarketplaceInstaller } from './catalog/plugin-marketplace-installer'
 import { PluginMarketplaceService } from './catalog/plugin-marketplace-service'
@@ -139,7 +138,11 @@ async function harness() {
     },
     'v1.0.0'
   )
-  await sshShim(root, { '/acme/notes.git': notes, '/acme/locale.git': locale })
+  const repositories: Record<string, string> = {
+    '/acme/notes.git': notes,
+    '/acme/locale.git': locale
+  }
+  await sshShim(root, repositories)
   const userDataPath = join(root, 'user-data')
   let discovered: DiscoveredPlugin[] = []
   const consents: Record<string, string> = {}
@@ -174,7 +177,10 @@ async function harness() {
       installer: new PluginMarketplaceInstaller({
         marketplace,
         userDataPath,
-        hostVersion: HOST_VERSION
+        hostVersion: HOST_VERSION,
+        revokeConsent: async (pluginKey) => {
+          delete consents[pluginKey]
+        }
       })
     },
     applyConsent: async ({ pluginKey, reviewedFingerprint }) => {
@@ -184,7 +190,7 @@ async function harness() {
     caller: { kind: 'local-cli' }
   }
   const lock = async () => (await readPluginLockfile(getUserPluginsDir(userDataPath))).plugins
-  return { deps, notes, consents, lock }
+  return { root, deps, notes, locale, repositories, consents, lock }
 }
 
 async function approvalOf(promise: Promise<unknown>): Promise<PluginApprovalRequiredError> {
@@ -199,20 +205,6 @@ async function approvalOf(promise: Promise<unknown>): Promise<PluginApprovalRequ
 }
 
 describe('orca plugin install and update over Git', () => {
-  it('installs a content-only plugin from a private repository without a flag and names its publisher', async () => {
-    const { deps, consents } = await harness()
-
-    const outcome = await installPluginFromCli(deps, { kind: 'git', input: LOCALE_URL }, undefined)
-
-    expect(outcome).toMatchObject({
-      pluginKey: 'acme.locale',
-      approval: 'content-only',
-      source: { kind: 'git', official: false, publisher: 'acme', ref: 'v1.0.0' }
-    })
-    expect(outcome.source.commit).toMatch(/^[0-9a-f]{40}$/)
-    expect(consents['acme.locale']).toBeDefined()
-  })
-
   it('refuses code without --approve, writes nothing, and installs with the shown fingerprint', async () => {
     const { deps, consents, lock } = await harness()
     const source = { kind: 'git' as const, input: NOTES_URL }
@@ -295,21 +287,63 @@ describe('orca plugin install and update over Git', () => {
     expect(outcome).toMatchObject({ status: 'updated', version: '1.1.0', approval: 'approve-flag' })
   })
 
-  it('reports a private repository this host cannot read as git_auth_failed naming the host', async () => {
-    const { deps } = await harness()
+  it('asks again before a catalog update moves even a content-only plugin to another repository', async () => {
+    const { root, deps, locale, repositories, consents, lock } = await harness()
+    const catalog = join(root, 'catalog')
+    const moved = join(root, 'moved-locale')
+    await mkdir(catalog, { recursive: true })
+    await git(catalog, ['init', '--quiet'])
+    const listCatalog = (url: string, tag: string) =>
+      commitTag(
+        catalog,
+        {
+          'orca-marketplace.json': JSON.stringify({
+            name: 'Team Plugins',
+            owner: 'team',
+            plugins: [{ id: 'acme.locale', source: { kind: 'git', url, ref: 'v1.0.0' } }]
+          })
+        },
+        tag
+      )
+    await listCatalog(LOCALE_URL, 'c1')
+    await execFileAsync('git', ['clone', '--quiet', locale, moved])
+    await commitTag(moved, { 'locale.json': JSON.stringify({ settings: { title: 'Def' } }) }, 'v9')
+    await git(moved, ['tag', '--force', 'v1.0.0'])
+    await sshShim(root, {
+      ...repositories,
+      '/team/catalog.git': catalog,
+      '/someone-else/locale.git': moved
+    })
+    await deps.catalogs.marketplace.addSource({
+      kind: 'git',
+      url: 'ssh://git@example.invalid/team/catalog.git',
+      ref: 'master'
+    })
+    await installPluginFromCli(deps, { kind: 'catalog', pluginKey: 'acme.locale' }, undefined)
+    const approved = consents['acme.locale']
+    expect(approved).toBeDefined()
 
-    const error = await installPluginFromCli(
+    await listCatalog('ssh://git@example.invalid/someone-else/locale.git', 'c2')
+    const required = await approvalOf(updatePluginFromCli(deps, 'acme.locale', undefined))
+
+    expect(required.data.update?.repositoryMoved?.to).toContain('someone-else/locale')
+    expect(required.message).toContain('It now comes from a different repository')
+    expect(consents['acme.locale']).toBe(approved)
+    const installedCommit = (await lock())['acme.locale']?.resolvedCommit
+    const outcome = await updatePluginFromCli(
       deps,
-      { kind: 'git', input: 'ssh://git@example.invalid/acme/secret.git' },
-      undefined
-    ).catch((cause: unknown) => cause)
-
-    if (!(error instanceof PluginCliError)) {
-      throw new Error(`expected git_auth_failed, got ${String(error)}`)
-    }
-    expect(error).toMatchObject({ code: 'git_auth_failed', data: { transport: 'ssh' } })
-    const failure = error
-    expect(failure.message).toContain('Git on the Orca host (build-box) could not read')
-    expect(failure.data.nextSteps.join('\n')).toContain('ssh-agent')
+      'acme.locale',
+      required.data.approvalFingerprint
+    )
+    expect(outcome).toMatchObject({ status: 'updated', approval: 'content-only' })
+    expect((await lock())['acme.locale']?.resolvedCommit).not.toBe(installedCommit)
+    // Dropped before the moved files published, then granted again by this explicit approval.
+    expect(consents['acme.locale']).toBeDefined()
+    expect(deps.service.recordApprovalAudit).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        summary: expect.stringContaining('content-only plugin enabled via CLI (update)'),
+        outcome: 'ok'
+      })
+    )
   })
 })

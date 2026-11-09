@@ -1,3 +1,5 @@
+import { withoutGitGraph } from '../../../../../shared/workspace-layout/workspace-layout-client-visibility'
+import { readsGitGraph, createGitGraphFrameProjection } from '../../git-graph-layout-projection'
 // Paired desktops use layout read/stream/apply only when the server offers layout.intents.v1; mobile is excluded.
 
 import {
@@ -23,9 +25,11 @@ export const WORKSPACE_LAYOUT_METHODS = [
     name: 'layout.subscribe',
     permission: 'workspace',
     params: LayoutSubscribeParams,
-    handler: async (params, { runtime, connectionId, signal }, emitFrame) => {
+    handler: async (params, { runtime, connectionId, signal, clientCapabilities }, emitFrame) => {
       // Keep emitted frames checked against the client contract.
-      const emit = (frame: WorkspaceLayoutStreamFrame): void => emitFrame(frame)
+      const project = createGitGraphFrameProjection()
+      const emit = (frame: WorkspaceLayoutStreamFrame): void =>
+        emitFrame(readsGitGraph(clientCapabilities) ? frame : project(frame))
       const keys = params?.workspaces
       const wanted = (key: string) => !Array.isArray(keys) || keys.includes(key)
       await new Promise<void>((resolve) => {
@@ -97,7 +101,12 @@ export const LAYOUT_APPLY_METHODS = [
     name: 'layout.apply',
     permission: 'workspace',
     params: LayoutApplyParams,
-    handler: async (params, { runtime }) => runtime.applyLayoutCommand(params.command)
+    handler: async (params, { runtime, clientCapabilities }) => {
+      return runtime.applyLayoutCommand(
+        params.command,
+        readsGitGraph(clientCapabilities) ? undefined : { visibility: withoutGitGraph }
+      )
+    }
   }),
   // Reopen held panes; main's frames, not the reply, show their start.
   defineMethod({

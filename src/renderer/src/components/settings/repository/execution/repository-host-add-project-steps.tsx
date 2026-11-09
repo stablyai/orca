@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react'
 import { ArrowLeft, Download, FolderOpen, Plus } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { Button } from '../../../ui/button'
 import { Input } from '../../../ui/input'
@@ -19,12 +19,13 @@ export function HostSetupStartActions({
   onClone: () => void
   onPlan: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-3 pt-1">
       <HostSetupActionButton
         icon={FolderOpen}
-        title={translate('auto.components.settings.RepositoryPane.browseFolder', 'Browse folder')}
-        description={translate(
+        title={t('auto.components.settings.RepositoryPane.browseFolder', 'Browse folder')}
+        description={t(
           'auto.components.settings.RepositoryPane.browseFolderHelp',
           'Use an existing checkout or folder on this host.'
         )}
@@ -34,16 +35,13 @@ export function HostSetupStartActions({
       />
       <div className="space-y-1.5">
         <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
-          {translate('auto.components.settings.RepositoryPane.otherWaysToAdd', 'Other ways to add')}
+          {t('auto.components.settings.RepositoryPane.otherWaysToAdd', 'Other ways to add')}
         </p>
         <div className="overflow-hidden rounded-md border border-input bg-background">
           <HostSetupActionButton
             icon={Download}
-            title={translate(
-              'auto.components.settings.RepositoryPane.cloneFromUrl',
-              'Clone from URL'
-            )}
-            description={translate(
+            title={t('auto.components.settings.RepositoryPane.cloneFromUrl', 'Clone from URL')}
+            description={t(
               'auto.components.settings.RepositoryPane.cloneFromUrlHelp',
               'Clone this repository onto the selected host.'
             )}
@@ -53,11 +51,11 @@ export function HostSetupStartActions({
           />
           <HostSetupActionButton
             icon={Plus}
-            title={translate(
+            title={t(
               'auto.components.settings.RepositoryPane.addPlannedHost',
               'Add host placeholder'
             )}
-            description={translate(
+            description={t(
               'auto.components.settings.RepositoryPane.addPlannedHostHelp',
               'Remember this host and finish adding the project later.'
             )}
@@ -90,20 +88,18 @@ export function HostSetupExistingFolderStep({
   onKindChange: (value: 'git' | 'folder') => void
   onSubmit: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
       <StepBackButton
         onBack={onBack}
-        label={translate(
-          'auto.components.settings.RepositoryPane.existingFolder',
-          'Existing folder'
-        )}
+        label={t('auto.components.settings.RepositoryPane.existingFolder', 'Existing folder')}
       />
       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_8rem]">
         <Input
           value={setupPath}
           onChange={(event) => onPathChange(event.target.value)}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.settings.RepositoryPane.setupExistingFolderPathPlaceholder',
             '/path/to/project/on/host'
           )}
@@ -118,10 +114,10 @@ export function HostSetupExistingFolderStep({
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="git">
-              {translate('auto.components.settings.RepositoryPane.setupKindGit', 'Git repo')}
+              {t('auto.components.settings.RepositoryPane.setupKindGit', 'Git repo')}
             </SelectItem>
             <SelectItem value="folder">
-              {translate('auto.components.settings.RepositoryPane.setupKindFolder', 'Folder')}
+              {t('auto.components.settings.RepositoryPane.setupKindFolder', 'Folder')}
             </SelectItem>
           </SelectContent>
         </Select>
@@ -134,8 +130,8 @@ export function HostSetupExistingFolderStep({
           onClick={onSubmit}
         >
           {isSettingUp
-            ? translate('auto.components.settings.RepositoryPane.addingProject', 'Adding...')
-            : translate('auto.components.settings.RepositoryPane.setupHost', 'Add project')}
+            ? t('auto.components.settings.RepositoryPane.addingProject', 'Adding...')
+            : t('auto.components.settings.RepositoryPane.setupHost', 'Add project')}
         </Button>
       </div>
     </div>
@@ -161,17 +157,18 @@ export function HostSetupCloneStep({
   onCloneDestinationChange: (value: string) => void
   onSubmit: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
       <StepBackButton
         onBack={onBack}
-        label={translate('auto.components.settings.RepositoryPane.cloneFromUrl', 'Clone from URL')}
+        label={t('auto.components.settings.RepositoryPane.cloneFromUrl', 'Clone from URL')}
       />
       <div className="grid gap-2 sm:grid-cols-2">
         <Input
           value={cloneUrl}
           onChange={(event) => onCloneUrlChange(event.target.value)}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.settings.RepositoryPane.cloneUrlPlaceholder',
             'Repository URL'
           )}
@@ -180,7 +177,7 @@ export function HostSetupCloneStep({
         <Input
           value={cloneDestination}
           onChange={(event) => onCloneDestinationChange(event.target.value)}
-          placeholder={translate(
+          placeholder={t(
             'auto.components.settings.RepositoryPane.cloneDestinationPlaceholder',
             '/destination/on/host'
           )}
@@ -195,8 +192,8 @@ export function HostSetupCloneStep({
           onClick={onSubmit}
         >
           {isCloning
-            ? translate('auto.components.settings.RepositoryPane.cloningHost', 'Cloning...')
-            : translate('auto.components.settings.RepositoryPane.cloneHost', 'Clone')}
+            ? t('auto.components.settings.RepositoryPane.cloningHost', 'Cloning...')
+            : t('auto.components.settings.RepositoryPane.cloneHost', 'Clone')}
         </Button>
       </div>
     </div>
@@ -216,7 +213,8 @@ export function HostSetupPlannedStep({
   onBack: () => void
   onSubmit: () => void
 }): React.JSX.Element {
-  const addHostLabel = translate(
+  const t = useTranslate()
+  const addHostLabel = t(
     'auto.components.settings.RepositoryPane.addPlannedHostToHost',
     'Add {{host}}',
     { host: hostLabel }
@@ -226,13 +224,10 @@ export function HostSetupPlannedStep({
     <div className="space-y-3 rounded-md border border-border bg-muted/20 p-3">
       <StepBackButton
         onBack={onBack}
-        label={translate(
-          'auto.components.settings.RepositoryPane.addPlannedHost',
-          'Add host placeholder'
-        )}
+        label={t('auto.components.settings.RepositoryPane.addPlannedHost', 'Add host placeholder')}
       />
       <p className="text-xs text-muted-foreground">
-        {translate(
+        {t(
           'auto.components.settings.RepositoryPane.addPlannedHostConfirm',
           'This only records that the project should be available on this host. You can add the folder or clone later.'
         )}
@@ -245,7 +240,7 @@ export function HostSetupPlannedStep({
           onClick={onSubmit}
         >
           {isCreatingPendingSetup
-            ? translate('auto.components.settings.RepositoryPane.creatingPendingSetup', 'Adding...')
+            ? t('auto.components.settings.RepositoryPane.creatingPendingSetup', 'Adding...')
             : addHostLabel}
         </Button>
       </div>

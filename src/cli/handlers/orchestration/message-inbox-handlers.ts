@@ -9,7 +9,7 @@ import {
 import {
   formatMessageReadOnlyTag,
   type OrchestrationMessageSummary as MessageSummary
-} from '../../../shared/orchestration-check-output'
+} from '../../../shared/orchestration/mailbox/orchestration-check-output'
 import { callOrchestrationMutation } from './mutation-request'
 import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 import { withReceiptNext } from './receipt-next-text'
@@ -19,27 +19,37 @@ import { formatMessageViewText, toMessageView, type MessageView } from './messag
 export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
   'orchestration reply': async ({ flags, client, cwd, json }) => {
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    const result = await callOrchestrationMutation<{ message: { id: string }; next?: string }>(
-      client,
-      flags,
-      'orchestration.reply',
-      {
-        id: getRequiredStringFlag(flags, 'id'),
-        body: getRequiredStringFlag(flags, 'body'),
-        run: getOptionalStringFlag(flags, 'run'),
-        from
-      }
-    )
+    const result = await callOrchestrationMutation<{
+      message: { id: string }
+      warnings?: { message: string }[]
+      next?: string
+    }>(client, flags, 'orchestration.reply', {
+      id: getRequiredStringFlag(flags, 'id'),
+      body: getRequiredStringFlag(flags, 'body'),
+      run: getOptionalStringFlag(flags, 'run'),
+      from
+    })
     if (!flags.has('full')) {
       printOrchestrationResult(result, json, {
         fields: (value) => ({
           messageId: value.message.id,
+          warnings: value.warnings?.length
+            ? value.warnings.map((warning) => warning.message)
+            : undefined,
           next: value.next
         })
       })
       return
     }
-    printResult(result, json, (value) => withReceiptNext(`Replied ${value.message.id}`, value))
+    printResult(result, json, (value) =>
+      withReceiptNext(
+        [
+          `Replied ${value.message.id}`,
+          ...(value.warnings ?? []).map((warning) => `Warning: ${warning.message}`)
+        ].join('\n'),
+        value
+      )
+    )
   },
 
   'orchestration inbox': async ({ flags, client, json }) => {

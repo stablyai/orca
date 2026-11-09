@@ -1,11 +1,11 @@
 import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
-import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration-party-identity'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import type { DispatchContextRow } from '../../../../orchestration/db/orchestration-records'
 import { dispatchReportMailbox } from '../../../../orchestration/workers/reports/dispatch-report-mailbox'
 import { reportCorrectsUnobservedPrompt } from '../../../../orchestration/workers/reports/worker-report-admission'
 import { isDispatchAssignee } from '../../../../orchestration/db/dispatch-context/dispatch-lookup'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { isDispatchMutationMessageType } from '../schemas'
+import { isDispatchMutationMessageType } from '../../../../../../shared/rpc-contract/orchestration-params'
 import type { MessageRouting } from '../routing'
 
 /** A terminal also proves its process, so a new process in the same pane is not taken for the old worker;

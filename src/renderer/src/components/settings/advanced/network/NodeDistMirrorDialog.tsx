@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useAppStore } from '@/store/index'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { nodeDistMirrorRefusalText } from '@/ssh/ssh-host-node-download-copy'
 import {
   NODE_DIST_MIRROR_SUGGESTION,
@@ -26,6 +26,7 @@ const HINT_ID = 'node-dist-mirror-dialog-hint'
 
 /** "Use a Node.js mirror" for an SSH host whose setup couldn't download Node on either machine. */
 export default function NodeDistMirrorDialog(): React.JSX.Element | null {
+  const t = useTranslate()
   const targetId = useAppStore((s) => readNodeDistMirrorDialogTarget(s.modalData))
   const closeModal = useAppStore((s) => s.closeModal)
   const mountedRef = useMountedRef()
@@ -50,10 +51,7 @@ export default function NodeDistMirrorDialog(): React.JSX.Element | null {
         toastSshConnectFailure(
           targetId,
           cause,
-          translate(
-            'auto.components.settings.nodeDistMirrorDialog.retryFailed',
-            'Connection failed'
-          )
+          t('auto.components.settings.nodeDistMirrorDialog.retryFailed', 'Connection failed')
         )
       )
       if (mountedRef.current) {
@@ -93,13 +91,10 @@ export default function NodeDistMirrorDialog(): React.JSX.Element | null {
         >
           <DialogHeader>
             <DialogTitle>
-              {translate(
-                'auto.components.settings.nodeDistMirrorDialog.title',
-                'Use a Node.js mirror'
-              )}
+              {t('auto.components.settings.nodeDistMirrorDialog.title', 'Use a Node.js mirror')}
             </DialogTitle>
             <DialogDescription>
-              {translate(
+              {t(
                 'auto.components.settings.nodeDistMirrorDialog.description',
                 'Orca’s server needs Node.js, and neither this computer nor this host could download it from nodejs.org. A mirror is a copy of nodejs.org/dist that Orca tries first on both machines.'
               )}
@@ -107,7 +102,7 @@ export default function NodeDistMirrorDialog(): React.JSX.Element | null {
           </DialogHeader>
           <div className="space-y-2">
             <Label htmlFor={INPUT_ID}>
-              {translate('auto.components.settings.nodeDistMirrorDialog.urlLabel', 'Mirror URL')}
+              {t('auto.components.settings.nodeDistMirrorDialog.urlLabel', 'Mirror URL')}
             </Label>
             <Input
               id={INPUT_ID}
@@ -131,7 +126,7 @@ export default function NodeDistMirrorDialog(): React.JSX.Element | null {
               </p>
             ) : (
               <p id={HINT_ID} className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.nodeDistMirrorDialog.checksum',
                   'Each download is still checked against the checksum Orca pins for this Node.js release. Saved to Settings > Advanced > Network.'
                 )}
@@ -140,10 +135,10 @@ export default function NodeDistMirrorDialog(): React.JSX.Element | null {
           </div>
           <DialogFooter>
             <Button type="button" variant="ghost" onClick={closeModal} disabled={busy}>
-              {translate('auto.components.settings.nodeDistMirrorDialog.cancel', 'Cancel')}
+              {t('auto.components.settings.nodeDistMirrorDialog.cancel', 'Cancel')}
             </Button>
             <Button type="submit" disabled={busy}>
-              {translate('auto.components.settings.nodeDistMirrorDialog.save', 'Save and retry')}
+              {t('auto.components.settings.nodeDistMirrorDialog.save', 'Save and retry')}
             </Button>
           </DialogFooter>
         </form>

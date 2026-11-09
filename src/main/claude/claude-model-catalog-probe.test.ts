@@ -5,6 +5,9 @@ import { describe, expect, it } from 'vitest'
 import { PROVIDER_STDIN_END_GRACE_MS } from '../provider-process/provider-process-supervisor'
 import { createClaudeModelCatalogProbe } from './claude-model-catalog-probe'
 import { resolveStructuredAgentCommand } from '../native-chat/structured-agent-command-resolution'
+import type { runAgentModelCatalogListing } from '../native-chat/agent-model-catalog/agent-model-catalog-probe-runner'
+
+type ListingCall = Parameters<typeof runAgentModelCatalogListing>
 
 const AUTH_POLICY = { account: 'system' } as const
 
@@ -30,7 +33,68 @@ function probeDeps(command = `"${process.execPath}"`): {
   }
 }
 
+const LISTED = `${JSON.stringify({
+  type: 'control_response',
+  response: {
+    subtype: 'success',
+    request_id: 'orca-model-discovery',
+    response: {
+      models: [
+        {
+          value: 'sonnet',
+          displayName: 'Sonnet',
+          supportsEffort: true,
+          supportedEffortLevels: ['low']
+        }
+      ]
+    }
+  }
+})}\n`
+
 describe('claude model catalog probe', () => {
+  it.each([
+    [[], [], ['/orca-probe', '/orca-probe'], 'user,project,local'],
+    [['node_modules/claude/cli.js'], [], ['/chat-a', '/chat-b'], 'user'],
+    [['--env-file=work env', '--', 'claude'], [], ['/chat-a', '/chat-b'], 'user'],
+    [[], ['--settings', 'settings.json'], ['/chat-a', '/chat-b'], 'user']
+  ])(
+    'lists prefix %j with arguments %j from %j, reading %s settings',
+    async (prefixArgs, launchArgs, listedIn, sources) => {
+      // A user command line may name files in the chat's folder, so it runs there, but reads only
+      // user settings there so the project's own settings never narrow the account's list.
+      const calls: ListingCall[] = []
+      const probe = createClaudeModelCatalogProbe({
+        ...probeDeps(),
+        resolveCommand: () => ({ command: process.execPath, prefixArgs }),
+        resolveLaunchArgs: async () => launchArgs,
+        runListing: async (...call) => {
+          calls.push(call)
+          return LISTED
+        }
+      })
+      const identities: unknown[] = []
+      for (const folder of ['/chat-a', '/chat-b']) {
+        const resolved = await probe.resolve?.(
+          HOME('/homes/a'),
+          '/orca-probe',
+          'snapshot',
+          undefined,
+          folder
+        )
+        identities.push(resolved?.identity)
+        await resolved?.run()
+      }
+      expect(calls.map(([launch]) => launch.cwd)).toEqual(listedIn)
+      const args = calls[0]?.[0].args ?? []
+      expect(args.slice(0, prefixArgs.length)).toEqual(prefixArgs)
+      expect(args.slice(args.length - launchArgs.length)).toEqual(launchArgs)
+      expect(args[args.indexOf('--setting-sources') + 1]).toBe(sources)
+      expect(JSON.stringify(identities[0]) === JSON.stringify(identities[1])).toBe(
+        listedIn[0] === listedIn[1]
+      )
+    }
+  )
+
   it.runIf(process.platform !== 'win32')(
     'lists through a supervised one-shot that answers after its input ends',
     async () => {

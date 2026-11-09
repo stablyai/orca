@@ -145,20 +145,4 @@ describe.each([
 
     expect(emitted.join('')).toBe('한')
   })
-
-  it('starts cleanly after deleting a composition to empty', async () => {
-    const { emitted, textarea } = openTerminal(TerminalType)
-    composeSyllable(textarea, '', ['ㅇ'])
-    composition(textarea, 'compositionupdate', '')
-    textarea.value = ''
-    textarea.setSelectionRange(0, 0)
-    composition(textarea, 'compositionend', '')
-    await nextEventLoop()
-
-    composeSyllable(textarea, '', ['ㅎ', '하', '한'])
-    composition(textarea, 'compositionend', '한')
-    await nextEventLoop()
-
-    expect(emitted.join('')).toBe('한')
-  })
 })

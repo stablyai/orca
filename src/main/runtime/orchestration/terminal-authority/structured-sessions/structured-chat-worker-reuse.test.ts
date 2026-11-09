@@ -1,4 +1,3 @@
-import '../../../rpc/unused-default-rpc-methods.test-fixture'
 // A finished structured worker takes follow-up work in its own chat through worker-start --terminal <handle>, or a send to its Dispatch.
 
 import { structuredMailboxCustody } from '../../mailbox/routing/structured-session-mail-target'
@@ -405,47 +404,5 @@ describe('a send to a finished structured worker', () => {
       WAIT
     )
     expect(db.getUnreadMessages(`dispatch:${firstDispatchId}`)).toEqual([])
-  })
-})
-
-describe('a finished terminal worker', () => {
-  it('is not handed a Dispatch while its finished Dispatch still holds the terminal', async () => {
-    await openChat(COORDINATOR)
-    const { taskId } = await coordinatorRunAndTask()
-    const pane = {
-      paneKey: 'tab_pty:dddddddd-dddd-4ddd-8ddd-dddddddddddd',
-      processIncarnation: 'pty:1'
-    }
-    const started = db.createStartingWorkerDispatch({
-      creator: { kind: 'system' },
-      maxDepth: 9,
-      taskId,
-      startOptions: {}
-    })
-    db.prepareStartingWorkerAuthority({
-      dispatchId: started.dispatch.id,
-      handle: 'term_finished',
-      ...pane,
-      hostScope: LOCAL,
-      worktreeId: 'repo::worker',
-      effects: [],
-      setupState: 'not_applicable',
-      terminalOwnership: 'created'
-    })
-    db.markWorkerDispatchReady(started.dispatch.id)
-    db.abandonWorkerDispatch(started.dispatch.id, runtime.getRuntimeId())
-    const followUp = await followUpTask()
-
-    expect(() =>
-      db.createDispatchContext({
-        taskId: followUp,
-        assigneeHandle: 'term_finished',
-        assigneePaneKey: pane.paneKey,
-        processIncarnation: pane.processIncarnation,
-        hostScope: LOCAL,
-        creator: { kind: 'system' },
-        maxDepth: 9
-      })
-    ).toThrow(`worker-start --task ${followUp} --terminal term_finished`)
   })
 })

@@ -11,7 +11,8 @@ import {
   settle
 } from '../../use-mobile-structured-agent-options.test-fixture'
 import { createElement, useState, type ReactNode } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../../../test-support/query-client-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AccessibilityInfo, Platform } from 'react-native'
 
@@ -111,7 +112,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
       })
     }
     act(() => {
-      renderer = create(createElement(Pickers, { working: isWorking }))
+      renderer = createWithQueryClient(createElement(Pickers, { working: isWorking }))
     })
     return (working: boolean, nextSnapshot = snapshot): void => {
       controller.snapshot = nextSnapshot
@@ -291,7 +292,7 @@ describe('MobileNativeChatSessionOptionPickers', () => {
     }
     try {
       await act(async () => {
-        renderer = create(createElement(ActualPickers))
+        renderer = createWithQueryClient(createElement(ActualPickers))
       })
       for (const [index, value] of ['full-access', 'own'].entries()) {
         let pick!: Promise<boolean>

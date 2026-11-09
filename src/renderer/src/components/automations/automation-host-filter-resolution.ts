@@ -2,8 +2,8 @@ import {
   ALL_AUTOMATION_HOSTS_FILTER,
   automationHostFilterStableKey,
   type AutomationHostFilter
-} from '../../../../shared/automation-host-filter'
-import type { StableAutomationCatalogRef } from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/ownership/automation-host-filter'
+import type { StableAutomationCatalogRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import {
   automationAuthorityCatalogKey,
   type AutomationCatalogHydrationEvidence,

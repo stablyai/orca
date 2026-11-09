@@ -6,7 +6,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
-import type * as NativeHookExecutableModule from '../agent-hooks/windows-native-hook-executable'
+import type * as NativeHookExecutableModule from '../agent-hooks/installation/commands/windows-native-hook-executable'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/tmp/userData' } }))
 
@@ -14,21 +14,26 @@ const { bundledHook } = vi.hoisted(() => {
   const bundledHook: { path: string | null } = { path: null }
   return { bundledHook }
 })
-vi.mock('../agent-hooks/windows-native-hook-executable', async (importOriginal) => ({
-  ...(await importOriginal<typeof NativeHookExecutableModule>()),
-  resolveBundledWindowsNativeHookExecutable: () => bundledHook.path
-}))
+vi.mock(
+  '../agent-hooks/installation/commands/windows-native-hook-executable',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof NativeHookExecutableModule>()),
+    resolveBundledWindowsNativeHookExecutable: () => bundledHook.path
+  })
+)
 
 import {
   createManagedCommandMatcher,
-  removeManagedCommands,
-  type HookCommandConfig,
-  type HookDefinition
-} from '../agent-hooks/installer-utils'
+  removeManagedCommands
+} from '../agent-hooks/installation/commands/managed-hook-command-matching'
+import type {
+  HookCommandConfig,
+  HookDefinition
+} from '../agent-hooks/installation/configuration/hook-config-schema'
 import {
   buildWindowsNativeHookExecutable,
   WINDOWS_NATIVE_HOOK_BUILD_TIMEOUT_MS
-} from '../agent-hooks/windows-native-hook-exe.test-fixture'
+} from '../agent-hooks/installation/commands/testing/windows-native-hook-exe.test-fixture'
 import { ClaudeHookService } from './hook-service'
 
 const CURRENT_CLAUDE = { claudeVersion: '2.1.261 (Claude Code)' }

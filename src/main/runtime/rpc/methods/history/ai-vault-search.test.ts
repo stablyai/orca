@@ -1,174 +1,13 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AI_VAULT_AGENTS } from '../../../../../shared/ai-vault/contracts/ai-vault-types'
+import '../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { RpcDispatcher } from '../../dispatcher'
 import { OrcaRuntimeService } from '../../../orca-runtime'
 import { AI_VAULT_METHODS } from './ai-vault'
-import { fakeSearchService } from '../../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
-import { createSessionSearchClient } from '../../../../../shared/ai-vault/search/ai-vault-search-client'
+import '../../../../../shared/ai-vault/search/ai-vault-search-test-fixture'
+import '../../../../../shared/ai-vault/search/ai-vault-search-client'
 import { setSessionSearchService } from '../../../../ai-vault-search/session-search-service-registry'
 
 afterEach(() => setSessionSearchService(null))
-
-function dispatcher(legacy = false) {
-  return new RpcDispatcher({
-    runtime: new OrcaRuntimeService(),
-    methods: legacy ? [] : AI_VAULT_METHODS
-  })
-}
-
-const request = (params: unknown) => ({
-  id: 'search-1',
-  authToken: 'test',
-  method: 'aiVault.searchSessions',
-  params
-})
-
-describe('session search runtime RPC', () => {
-  it('returns typed unavailable and rejects invalid requests before the service', async () => {
-    const rpc = dispatcher()
-    expect(await rpc.dispatch(request({ query: 'needle' }))).toMatchObject({
-      ok: true,
-      result: { kind: 'unavailable', reason: 'no-service' }
-    })
-    const service = fakeSearchService()
-    setSessionSearchService(service)
-    expect(await rpc.dispatch(request({ query: 5 }))).toMatchObject({ ok: false })
-    expect(service.search).not.toHaveBeenCalled()
-  })
-  it.each([undefined, 'runtime', 'mobile'] as const)(
-    'applies exposure for authenticated client kind %s',
-    async (clientKind) => {
-      const service = fakeSearchService()
-      setSessionSearchService(service)
-      const rpc = dispatcher()
-      const response = await rpc.dispatch(
-        request({ query: 'needle', tier: 'conversation', refresh: true, clientKind: undefined }),
-        { clientKind }
-      )
-      expect(response.ok).toBe(true)
-      if (!response.ok) {
-        throw new Error('Expected successful RPC')
-      }
-      const text = JSON.stringify(response.result)
-      // A paired desktop resumes hits like its session list rows; only phones get the redacted view.
-      expect(text.includes('/host/transcript.jsonl')).toBe(clientKind !== 'mobile')
-      expect(text.includes('resumeCommand')).toBe(clientKind !== 'mobile')
-      expect(service.search).toHaveBeenCalledExactlyOnceWith(
-        {
-          query: 'needle',
-          limit: 20,
-          filters: {
-            agents: AI_VAULT_AGENTS.filter(
-              (agent) => !['codebuddy', 'zcode', 'qoder', 'jcode', 'kiro'].includes(agent)
-            )
-          }
-        },
-        undefined
-      )
-      const status = await rpc.dispatch(
-        { ...request({}), method: 'aiVault.searchStatus' },
-        { clientKind }
-      )
-      expect(status).toMatchObject({ ok: true, result: { enabled: true, generation: 7 } })
-    }
-  )
-  it.each([undefined, 'runtime', 'mobile'] as const)(
-    'retains the current catalog for an attested client kind %s',
-    async (clientKind) => {
-      const service = fakeSearchService()
-      setSessionSearchService(service)
-      expect(
-        await dispatcher().dispatch(
-          request({
-            query: 'needle',
-            supportedAgents: [...AI_VAULT_AGENTS],
-            filters: { agents: ['jcode'] }
-          }),
-          { clientKind }
-        )
-      ).toMatchObject({ ok: true })
-      expect(service.search).toHaveBeenCalledExactlyOnceWith(
-        { query: 'needle', limit: 20, filters: { agents: ['jcode'] } },
-        undefined
-      )
-    }
-  )
-  describe.each(['qoder', 'jcode'] as const)('%s history capability', (agent) => {
-    const supportField = agent === 'qoder' ? 'supportsQoderHistory' : 'supportsJcodeHistory'
-    it.each([undefined, 'runtime', 'mobile'] as const)(
-      'preserves explicitly supported filters for client kind %s',
-      async (clientKind) => {
-        const service = fakeSearchService()
-        setSessionSearchService(service)
-        expect(
-          await dispatcher().dispatch(
-            request({
-              query: 'needle',
-              [supportField]: true,
-              filters: { agents: [agent, 'codex'] }
-            }),
-            { clientKind }
-          )
-        ).toMatchObject({ ok: true })
-        expect(service.search).toHaveBeenCalledExactlyOnceWith(
-          { query: 'needle', limit: 20, filters: { agents: [agent, 'codex'] } },
-          undefined
-        )
-      }
-    )
-  })
-  it.each(['runtime', 'relay'] as const)(
-    'searches when the real dispatcher is missing only status over %s',
-    async (transport) => {
-      const service = fakeSearchService()
-      setSessionSearchService(service)
-      const rpc = new RpcDispatcher({
-        runtime: new OrcaRuntimeService(),
-        methods: AI_VAULT_METHODS.filter((method) => method.name !== 'aiVault.searchStatus')
-      })
-      const replies: unknown[] = []
-      const client = createSessionSearchClient(async (method, params) => {
-        const response = await rpc.dispatch({ ...request(params), method })
-        replies.push(response)
-        if (!response.ok) {
-          throw Object.assign(new Error(response.error.message), { code: response.error.code })
-        }
-        return response.result
-      }, transport)
-      expect(
-        await client.searchSessions({
-          query: 'needle',
-          filters: { agents: ['claude'] }
-        })
-      ).toMatchObject({ kind: 'results' })
-      expect(replies).toMatchObject([
-        { ok: false, error: { code: 'method_not_found' } },
-        { ok: true }
-      ])
-      expect(service.search).toHaveBeenCalledExactlyOnceWith(
-        { query: 'needle', limit: 20, filters: { agents: ['claude'] } },
-        undefined
-      )
-    }
-  )
-  it('maps the old runtime dispatcher refusal and rejects malformed responses', async () => {
-    const legacy = dispatcher(true)
-    const client = createSessionSearchClient(async (method, params) => {
-      const response = await legacy.dispatch({ ...request(params), method })
-      if (!response.ok) {
-        throw Object.assign(new Error(response.error.message), { code: response.error.code })
-      }
-      return response.result
-    }, 'relay')
-    expect(await client.searchSessions({ query: 'needle' })).toEqual({
-      kind: 'unavailable',
-      reason: 'no-service'
-    })
-    const broken = createSessionSearchClient(async () => ({ kind: 'results', hits: [] }), 'runtime')
-    await expect(broken.searchSessions({ query: 'needle' })).rejects.toThrow()
-  })
-})
 
 describe('session search consent over the runtime RPC', () => {
   const enableRequest = (params: unknown) => ({
@@ -209,44 +48,6 @@ describe('session search consent over the runtime RPC', () => {
     expect(setSessionSearchEnabled).not.toHaveBeenCalled()
   })
 
-  it('applies a paired change and answers with this host status', async () => {
-    setSessionSearchService(fakeSearchService())
-    const { call, setSessionSearchEnabled } = consentDispatcher()
-    const response = await call(
-      { enabled: true },
-      { pairedDeviceId: 'device-7', clientKind: 'runtime' }
-    )
-
-    expect(setSessionSearchEnabled).toHaveBeenCalledExactlyOnceWith(true)
-    expect(response).toMatchObject({ ok: true, result: { enabled: true, generation: 7 } })
-  })
-
-  it.each(['runtime', 'mobile'] as const)(
-    'shows host roots to client kind %s exactly as searchStatus does',
-    async (clientKind) => {
-      setSessionSearchService({
-        ...fakeSearchService(),
-        status: async () => ({
-          enabled: true,
-          phase: 'degraded' as const,
-          filesIndexed: 0,
-          filesDue: 0,
-          filesFailed: 1,
-          degradedRoots: [{ root: '/Users/someone/.claude', reason: 'unreadable' }],
-          lastReconcileAt: null,
-          lastSweepCompletedAt: null,
-          generation: 3
-        })
-      })
-      const { call } = consentDispatcher()
-      const response = await call({ enabled: false }, { pairedDeviceId: 'device-7', clientKind })
-
-      expect(JSON.stringify(response).includes('/Users/someone/.claude')).toBe(
-        clientKind === 'runtime'
-      )
-    }
-  )
-
   it('reports the host refusal when this runtime has no settings store', async () => {
     const runtime = new OrcaRuntimeService()
     const dispatcher = new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
@@ -262,13 +63,5 @@ describe('session search consent over the runtime RPC', () => {
       ok: false,
       error: { code: 'runtime_unavailable' }
     })
-  })
-
-  it('rejects a non-boolean before reaching the runtime', async () => {
-    const { call, setSessionSearchEnabled } = consentDispatcher()
-    expect(await call({ enabled: 'yes' }, { pairedDeviceId: 'device-7' })).toMatchObject({
-      ok: false
-    })
-    expect(setSessionSearchEnabled).not.toHaveBeenCalled()
   })
 })

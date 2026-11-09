@@ -1,0 +1,267 @@
+import { keepsTerminalPaneVisible } from '../../terminal/session/mobile-terminal-pane-layout'
+import { useCallback } from 'react'
+import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../../src/shared/startup-cwd-fallback'
+import { triggerSelection } from '../../platform/haptics'
+import type { RpcResponse } from '../../transport/rpc/rpc-wire-types'
+import { isCachedActiveDocumentRetap } from '../../files/session-documents/mobile-session-active-document-retap'
+import { activateMobileSessionTab } from './mobile-session-tab-activation'
+import { activatedAtWorkspaceRoot } from '../../terminal/session/mobile-session-terminal-reply-schema'
+import { getMobileTerminalTabHostAgentIdentity } from '../../terminal/session/mobile-terminal-tab-agent'
+import { buildRecentSessionCardFromTab, recordRecentSessionCardVisit } from '../recent-session-cards'
+import type { MobileSessionTab } from './mobile-session-tabs'
+import type { MobileSessionKeyboardStateModel } from '../../terminal/session/use-mobile-session-keyboard-state'
+
+function rememberRecentSessionCard(args: {
+  hostId: string | undefined
+  worktreeId: string | undefined
+  worktreeName: string | undefined
+  tab: MobileSessionTab
+  terminals: MobileSessionKeyboardStateModel['terminals']
+}): void {
+  if (!args.hostId || !args.worktreeId) {
+    return
+  }
+  recordRecentSessionCardVisit(
+    buildRecentSessionCardFromTab({
+      hostId: args.hostId,
+      worktreeId: args.worktreeId,
+      worktreeName: args.worktreeName || '',
+      tab: args.tab,
+      hostAgentIdentity: getMobileTerminalTabHostAgentIdentity(args.tab, args.terminals)
+    })
+  )
+}
+
+export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateModel) {
+  const {
+    hostId,
+    worktreeId,
+    worktreeName,
+    client,
+    sessionTabs,
+    terminals,
+    setActiveHandle,
+    setSplitTerminalHandles,
+    setActiveSessionTabId,
+    activeSessionTabId,
+    markdownDocs,
+    fileDocs,
+    terminalUnsubsRef,
+    subscribingHandlesRef,
+    terminalDiagnosticsRef,
+    activeHandleRef,
+    activeSessionTabIdRef,
+    selectedSessionTabIdRef,
+    visibleTerminalHandlesRef,
+    activeSessionTabTypeRef,
+    pendingSelectionRef,
+    switchSessionTabRef,
+    unsubscribeTerminal,
+    subscribeToTerminal,
+    readMarkdownTab,
+    readFileTab,
+    showToast
+  } = scope
+  const reportActivation = useCallback(
+    (response: RpcResponse) => {
+      if (response.ok && activatedAtWorkspaceRoot(response.result)) {
+        showToast(STARTUP_CWD_FALLBACK_SENTENCE, 1800)
+      }
+    },
+    [showToast]
+  )
+  // Why: unsubscribe restores old dims (clears phone-fit banner); resubscribe phone-fits the new one.
+  const switchTab = useCallback(
+    (handle: string) => {
+      triggerSelection()
+      const matchingTab = sessionTabs.find(
+        (tab): tab is Extract<MobileSessionTab, { type: 'terminal' }> =>
+          tab.type === 'terminal' && tab.terminal === handle
+      )
+      terminalDiagnosticsRef.current.tabSwitch('terminal', matchingTab?.id ?? '', false, handle)
+      pendingSelectionRef.current = { kind: 'terminal', handle, tabId: matchingTab?.id ?? null }
+      activeSessionTabTypeRef.current = 'terminal'
+      if (activeSessionTabIdRef) {
+        activeSessionTabIdRef.current = matchingTab?.id ?? null
+      }
+      if (selectedSessionTabIdRef) {
+        selectedSessionTabIdRef.current = matchingTab?.id ?? null
+      }
+      setActiveSessionTabId(matchingTab?.id ?? null)
+      const visible = visibleTerminalHandlesRef?.current
+      if (visible?.length === 2 && !visible.includes(handle)) {
+        const pair = [handle, visible[0]]
+        visibleTerminalHandlesRef.current = pair
+        setSplitTerminalHandles(pair)
+      }
+      const prev = activeHandleRef.current
+      activeHandleRef.current = handle
+      setActiveHandle(handle)
+      if (prev && prev !== handle) {
+        if (!keepsTerminalPaneVisible(prev, visibleTerminalHandlesRef?.current)) {
+          unsubscribeTerminal(prev)
+        }
+      }
+      // Force a fresh subscribe even if eagerly subscribed without viewport
+      if (
+        terminalUnsubsRef.current.has(handle) &&
+        (visibleTerminalHandlesRef?.current.length ?? 0) < 2
+      ) {
+        unsubscribeTerminal(handle)
+      }
+      subscribeToTerminal(handle)
+      if (matchingTab) {
+        rememberRecentSessionCard({ hostId, worktreeId, worktreeName, tab: matchingTab, terminals })
+      }
+      if (client) {
+        if (matchingTab) {
+          void activateMobileSessionTab(client, {
+            worktree: `id:${worktreeId}`,
+            tabId: matchingTab.id,
+            notifyClients: false,
+            navigation: 'caller',
+            intent: 'user'
+          })
+            .then(reportActivation)
+            .catch(() => {})
+        }
+      }
+    },
+    [
+      client,
+      hostId,
+      reportActivation,
+      sessionTabs,
+      setSplitTerminalHandles,
+      subscribeToTerminal,
+      terminals,
+      unsubscribeTerminal,
+      worktreeId,
+      worktreeName
+    ]
+  )
+
+  const switchSessionTab = useCallback(
+    (tab: MobileSessionTab, options?: { activate?: boolean }) => {
+      if (isCachedActiveDocumentRetap(tab, activeSessionTabId, { markdownDocs, fileDocs })) {
+        return
+      }
+      rememberRecentSessionCard({ hostId, worktreeId, worktreeName, tab, terminals })
+      if (tab.type === 'terminal') {
+        if (typeof tab.terminal === 'string') {
+          if (
+            tab.id === activeSessionTabId &&
+            tab.terminal === activeHandleRef.current &&
+            (terminalUnsubsRef.current.has(tab.terminal) ||
+              subscribingHandlesRef.current.has(tab.terminal))
+          ) {
+            return
+          }
+          switchTab(tab.terminal)
+          return
+        }
+        terminalDiagnosticsRef.current.tabSwitch('terminal', tab.id, true)
+        triggerSelection()
+        pendingSelectionRef.current = { kind: 'tab', tabId: tab.id }
+        activeSessionTabTypeRef.current = 'terminal'
+        if (activeSessionTabIdRef) {
+          activeSessionTabIdRef.current = tab.id
+        }
+        if (selectedSessionTabIdRef) {
+          selectedSessionTabIdRef.current = tab.id
+        }
+        setActiveSessionTabId(tab.id)
+        const prev = activeHandleRef.current
+        if (prev) {
+          if (!keepsTerminalPaneVisible(prev, visibleTerminalHandlesRef?.current)) {
+            unsubscribeTerminal(prev)
+          }
+        }
+        activeHandleRef.current = null
+        setActiveHandle(null)
+        if (client && options?.activate !== false) {
+          void activateMobileSessionTab(client, {
+            worktree: `id:${worktreeId}`,
+            tabId: tab.id,
+            notifyClients: false,
+            navigation: 'caller',
+            intent: 'user'
+          })
+            .then(reportActivation)
+            .catch(() => {})
+        }
+        return
+      }
+
+      triggerSelection()
+      terminalDiagnosticsRef.current.tabSwitch(tab.type, tab.id, false)
+      pendingSelectionRef.current = { kind: 'tab', tabId: tab.id }
+      activeSessionTabTypeRef.current = tab.type
+      if (activeSessionTabIdRef) {
+        activeSessionTabIdRef.current = tab.id
+      }
+      if (selectedSessionTabIdRef) {
+        selectedSessionTabIdRef.current = tab.id
+      }
+      setActiveSessionTabId(tab.id)
+      const prev = activeHandleRef.current
+      if (prev) {
+        if (!keepsTerminalPaneVisible(prev, visibleTerminalHandlesRef?.current)) {
+          unsubscribeTerminal(prev)
+        }
+      }
+      activeHandleRef.current = null
+      setActiveHandle(null)
+      if (client && options?.activate !== false) {
+        void activateMobileSessionTab(client, {
+          worktree: `id:${worktreeId}`,
+          tabId: tab.id,
+          notifyClients: false,
+          navigation: 'caller',
+          intent: 'user'
+        })
+          .then(reportActivation)
+          .catch(() => {})
+      }
+      if (tab.type === 'browser') {
+        return
+      }
+      if (tab.type === 'file') {
+        void readFileTab(tab)
+        return
+      }
+      if (tab.type === 'agent-session') {
+        return
+      }
+      const cached = markdownDocs.get(tab.id)
+      if (cached?.status === 'ready' && cached.isDirty) {
+        return
+      }
+      // Revisit rereads clean desktop saves because tab snapshots lack a reliable document version; preserve phone drafts.
+      void readMarkdownTab(tab)
+    },
+    [
+      activeSessionTabId,
+      client,
+      fileDocs,
+      hostId,
+      markdownDocs,
+      readFileTab,
+      readMarkdownTab,
+      reportActivation,
+      switchTab,
+      terminals,
+      unsubscribeTerminal,
+      worktreeId,
+      worktreeName
+    ]
+  )
+  switchSessionTabRef.current = switchSessionTab
+  return {
+    switchTab,
+    switchSessionTab
+  }
+}
+
+export type MobileSessionTabSwitchingModel = MobileSessionKeyboardStateModel &
+  ReturnType<typeof useMobileSessionTabSwitching>

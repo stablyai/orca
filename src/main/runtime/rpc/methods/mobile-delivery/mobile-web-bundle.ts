@@ -18,7 +18,7 @@ import type { MobileWebBundleAsset } from '../../../../../shared/mobile-web-bund
 import {
   loadBundledMobileWebBundle,
   type BundledMobileWebBundle
-} from '../../../bundled-mobile-web-bundle'
+} from './bundled-mobile-web-bundle'
 import { isClientDisconnectedError } from '../../../client/runtime-client-disconnect'
 import { defineMethod, InvalidArgumentError, type RpcContext } from '../../core'
 import {

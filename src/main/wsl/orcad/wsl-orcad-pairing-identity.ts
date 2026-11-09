@@ -7,13 +7,13 @@ import {
   verifyOrcadPairingIdentity,
   type OrcadTunnelIdentity
 } from '../../managed-server/lifecycle/orcad-managed-tunnel-identity'
-import { tunneledOrcadPairingCode } from '../../ssh/orcad-tunneled-pairing'
+import { tunneledOrcadPairingCode } from '../../managed-server/lifecycle/orcad-tunneled-pairing'
 import { getPreferredPairingOffer } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import {
   buildWithPairingRepair,
   type ManagedOrcadPairingRecovery
 } from '../../managed-server/lifecycle/orcad-managed-tunnel-pairing-recovery'
-import type { WslOrcadLaunch } from './wsl-orcad-deploy'
+import type { WslOrcadLaunch } from './wsl-orcad-launch-contract'
 
 /** The managed repair gate a refused enrolled token goes through, for one WSL host. */
 export type WslOrcadPairingRecovery = Omit<ManagedOrcadPairingRecovery, 'ensure'> & {

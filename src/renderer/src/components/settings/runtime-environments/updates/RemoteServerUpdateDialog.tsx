@@ -12,35 +12,36 @@ import {
 } from '@/components/ui/dialog'
 import { Progress } from '@/components/ui/progress'
 import { useAppStore } from '@/store/index'
-import type { RemoteServerUpdateEntry } from '@/runtime/remote-server-update-coordinator'
+import type { RemoteServerUpdateEntry } from '@/runtime/hosts/updates/remote-server-update-coordinator'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import {
   getRemoteServerManualUpdateHelp,
   RemoteServerUpdateStatus
 } from './RemoteServerUpdateStatus'
 
-function versionDescription(entry: RemoteServerUpdateEntry): string {
+function versionDescription(entry: RemoteServerUpdateEntry, t: Translate = translate): string {
   if (entry.currentVersion && entry.targetVersion && entry.currentVersion !== entry.targetVersion) {
     return `${entry.currentVersion} → ${entry.targetVersion}`
   }
   if (entry.currentVersion) {
     return `v${entry.currentVersion}`
   }
-  return translate(
+  return t(
     'auto.components.settings.RemoteServerUpdateDialog.versionUnavailable',
     'Version unavailable'
   )
 }
 
-function entryHelp(entry: RemoteServerUpdateEntry): string | null {
+function entryHelp(entry: RemoteServerUpdateEntry, t: Translate = translate): string | null {
   if (entry.error) {
     return entry.error
   }
   if (entry.phase === 'manual') {
-    return getRemoteServerManualUpdateHelp(entry)
+    return getRemoteServerManualUpdateHelp(entry, t)
   }
   if (entry.phase === 'restarting') {
-    return translate(
+    return t(
       'auto.components.settings.RemoteServerUpdateDialog.restartingHelp',
       'Waiting for the replacement server to reconnect on the new version.'
     )
@@ -57,8 +58,9 @@ function ServerUpdateRow({
   disabled: boolean
   onUpdate: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const canUpdate = entry.phase === 'available' || entry.phase === 'failed'
-  const help = entryHelp(entry)
+  const help = entryHelp(entry, t)
   return (
     <div className="space-y-2 px-3 py-3">
       <div className="flex items-start gap-3">
@@ -67,23 +69,20 @@ function ServerUpdateRow({
             <span className="text-sm font-medium">{entry.name}</span>
             <RemoteServerUpdateStatus entry={entry} compact />
           </div>
-          <p className="text-xs text-muted-foreground">{versionDescription(entry)}</p>
+          <p className="text-xs text-muted-foreground">{versionDescription(entry, t)}</p>
         </div>
         {canUpdate ? (
           <Button type="button" variant="outline" size="xs" onClick={onUpdate} disabled={disabled}>
             {entry.phase === 'failed'
-              ? translate('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')
-              : translate(
-                  'auto.components.settings.RemoteServerUpdateDialog.update',
-                  'Update this server'
-                )}
+              ? t('auto.components.settings.RemoteServerUpdateDialog.retry', 'Retry')
+              : t('auto.components.settings.RemoteServerUpdateDialog.update', 'Update this server')}
           </Button>
         ) : null}
       </div>
       {entry.phase === 'downloading' && entry.progress !== null ? (
         <Progress
           value={entry.progress}
-          aria-label={translate(
+          aria-label={t(
             'auto.components.settings.RemoteServerUpdateDialog.downloadProgress',
             '{{value0}} download progress',
             { value0: entry.name }
@@ -106,6 +105,7 @@ function ServerUpdateRow({
 }
 
 export function RemoteServerUpdateDialog(): React.JSX.Element {
+  const t = useTranslate()
   const open = useAppStore((state) => state.remoteServerUpdateDialogOpen)
   const setOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
   const entryMap = useAppStore((state) => state.remoteServerUpdates)
@@ -126,20 +126,16 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
   const liveLeafCount = eligible.reduce((total, entry) => total + entry.liveLeafCount, 0)
   const liveTabLabel =
     liveTabCount === 1
-      ? translate('auto.components.settings.RemoteServerUpdateDialog.liveTabOne', '1 live tab')
-      : translate(
-          'auto.components.settings.RemoteServerUpdateDialog.liveTabs',
-          '{{value0}} live tabs',
-          { value0: liveTabCount }
-        )
+      ? t('auto.components.settings.RemoteServerUpdateDialog.liveTabOne', '1 live tab')
+      : t('auto.components.settings.RemoteServerUpdateDialog.liveTabs', '{{value0}} live tabs', {
+          value0: liveTabCount
+        })
   const liveLeafLabel =
     liveLeafCount === 1
-      ? translate('auto.components.settings.RemoteServerUpdateDialog.livePaneOne', '1 live pane')
-      : translate(
-          'auto.components.settings.RemoteServerUpdateDialog.livePanes',
-          '{{value0}} live panes',
-          { value0: liveLeafCount }
-        )
+      ? t('auto.components.settings.RemoteServerUpdateDialog.livePaneOne', '1 live pane')
+      : t('auto.components.settings.RemoteServerUpdateDialog.livePanes', '{{value0}} live panes', {
+          value0: liveLeafCount
+        })
 
   useEffect(() => {
     if (open) {
@@ -152,13 +148,13 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
       <DialogContent className="max-h-[min(720px,calc(100vh-2rem))] gap-4 sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
-            {translate(
+            {t(
               'auto.components.settings.RemoteServerUpdateDialog.title',
               'Update Remote Orca Servers'
             )}
           </DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.settings.RemoteServerUpdateDialog.description',
               'Review paired servers and update supported installs from this Orca client.'
             )}
@@ -169,7 +165,7 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
           <div className="flex gap-2 rounded-lg border border-border bg-muted/40 p-3 text-xs">
             <AlertTriangle className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
             <p>
-              {translate(
+              {t(
                 'auto.components.settings.RemoteServerUpdateDialog.restartWarning',
                 'Updating restarts these servers. {{value0}} and {{value1}} may briefly disconnect.',
                 { value0: liveTabLabel, value1: liveLeafLabel }
@@ -184,13 +180,13 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
               {checking ? (
                 <span className="inline-flex items-center gap-2">
                   <Loader2 className="size-4 animate-spin" />
-                  {translate(
+                  {t(
                     'auto.components.settings.RemoteServerUpdateDialog.checking',
                     'Checking paired servers…'
                   )}
                 </span>
               ) : (
-                translate(
+                t(
                   'auto.components.settings.RemoteServerUpdateDialog.empty',
                   'No paired Remote Orca Servers.'
                 )
@@ -213,14 +209,14 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
         {checking ? (
           <div className="inline-flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="size-3.5 animate-spin" />
-            {translate(
+            {t(
               'auto.components.settings.RemoteServerUpdateDialog.checking',
               'Checking paired servers…'
             )}
           </div>
         ) : allCurrent ? (
           <p className="text-xs text-muted-foreground">
-            {translate(
+            {t(
               'auto.components.settings.RemoteServerUpdateDialog.noUpdates',
               'All servers are up to date.'
             )}
@@ -236,7 +232,7 @@ export function RemoteServerUpdateDialog(): React.JSX.Element {
               onClick={() => void start()}
               disabled={checking || running}
             >
-              {translate(
+              {t(
                 'auto.components.settings.RemoteServerUpdateDialog.updateAll',
                 'Update all {{value0}} servers',
                 { value0: eligible.length }

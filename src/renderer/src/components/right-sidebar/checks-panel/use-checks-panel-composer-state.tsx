@@ -1,7 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import { useCreatePullRequestDialogFields } from '../hosted-review/creation/useCreatePullRequestDialogFields'
 import { useHostedReviewStackParent } from '../hosted-review/provider-actions/useHostedReviewStackParent'
-import { shouldHydratePullRequestGenerationResult } from '@/store/slices/pull-request-generation'
+import { shouldHydratePullRequestGenerationResult } from '@/store/slices/hosted-review/generation/pull-request-generation'
 import {
   checksPanelAsyncResultKey,
   checksPanelHostedReviewAsyncResultKey,
@@ -100,6 +100,9 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     setBase: setPrBase,
     title: prTitle,
     setTitle: setPrTitle,
+    imageUploadPending: prImageUploadPending,
+    imageUploadPendingRef: prImageUploadPendingRef,
+    onImageUploadPending: onPrImageUploadPending,
     body: prBody,
     setBody: setPrBody,
     draft: prDraft,
@@ -268,6 +271,9 @@ export function useChecksPanelComposerState(model: ChecksPanelComposerStateInput
     setPrBase,
     prTitle,
     setPrTitle,
+    prImageUploadPending,
+    prImageUploadPendingRef,
+    onPrImageUploadPending,
     prBody,
     setPrBody,
     prDraft,

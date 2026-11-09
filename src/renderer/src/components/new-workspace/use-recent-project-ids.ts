@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { useAllWorktrees } from '@/store/selectors'
+import { useAllWorktrees } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import { NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX } from '@/lib/new-workspace-project-options'
 
 /** Use each project’s newest workspace creation as recency; it matches this picker’s action without separate persisted state. */

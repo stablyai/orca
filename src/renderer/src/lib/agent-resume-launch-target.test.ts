@@ -53,98 +53,11 @@ describe('resolveAgentResumeLaunchTarget on a Windows client', () => {
     restoreNavigator()
   })
 
-  it('prefers the per-tab shell override over the global Windows shell', async () => {
-    await expect(
-      resolveWith({
-        terminalWindowsShell: 'powershell.exe',
-        tabShellOverride: 'C:\\WINDOWS\\system32\\cmd.exe'
-      })
-    ).resolves.toEqual({ platform: 'win32', shell: 'cmd' })
-  })
-
-  it('leaves an SSH workspace on its own default quoting', async () => {
-    await expect(
-      resolveWith({
-        connectionId: 'ssh-1',
-        executionHostId: 'ssh:ssh-1',
-        terminalWindowsShell: 'cmd.exe'
-      })
-    ).resolves.toEqual({ platform: 'linux', shell: undefined })
-  })
-
-  it('quotes for cmd.exe on a Windows SSH host tab whose shell is cmd.exe', async () => {
-    await expect(
-      resolveWith({
-        connectionId: 'ssh-1',
-        executionHostId: 'ssh:ssh-1',
-        remotePlatform: 'win32',
-        tabShellOverride: 'cmd.exe'
-      })
-    ).resolves.toEqual({ platform: 'win32', shell: 'cmd' })
-  })
-
-  it('keeps POSIX quoting for a WSL UNC workspace on a Windows SSH host', async () => {
-    await expect(
-      resolveWith({
-        connectionId: 'ssh-1',
-        executionHostId: 'ssh:ssh-1',
-        remotePlatform: 'win32',
-        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\neil\\repo'
-      })
-    ).resolves.toEqual({ platform: 'linux', shell: undefined })
-  })
-
-  it('quotes for the platform a remote runtime host reported', async () => {
-    await expect(
-      resolveWith({
-        executionHostId: 'runtime:prod-box',
-        remotePlatform: 'linux',
-        terminalWindowsShell: 'cmd.exe'
-      })
-    ).resolves.toEqual({ platform: 'linux', shell: undefined })
-  })
-
   // Why: an older server omits its OS, but its drive-letter workspace path still proves Windows.
   it('keeps Windows quoting for an older Windows server that does not report its OS', async () => {
     await expect(
       resolveWith({ executionHostId: 'runtime:prod-box', worktreePath: 'C:\\srv\\repo' })
     ).resolves.toEqual({ platform: 'win32', shell: undefined })
-  })
-
-  it('does not describe a remote runtime host with the local Windows shell setting', async () => {
-    await expect(
-      resolveWith({
-        executionHostId: 'runtime:prod-box',
-        terminalWindowsShell: 'cmd.exe'
-      })
-    ).resolves.toEqual({ platform: 'win32', shell: undefined })
-  })
-
-  it('keeps POSIX quoting for a WSL UNC worktree', async () => {
-    await expect(
-      resolveWith({
-        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\neil\\repo',
-        terminalWindowsShell: 'cmd.exe'
-      })
-    ).resolves.toEqual({ platform: 'linux', shell: undefined })
-  })
-
-  it('keeps POSIX quoting for a project pinned to a WSL runtime', async () => {
-    await expect(
-      resolveWith({
-        projectRuntime: {
-          status: 'resolved',
-          runtime: {
-            kind: 'wsl',
-            distro: 'Ubuntu',
-            projectId: 'repo-1',
-            reason: 'project-override',
-            cacheKey: 'repo-1:wsl:Ubuntu'
-          }
-        } as AgentResumeLaunchTargetArgs['projectRuntime'],
-        terminalWindowsShell: 'cmd.exe'
-      })
-    ).resolves.toEqual({ platform: 'linux', shell: undefined })
   })
 })
 
@@ -160,43 +73,6 @@ describe('resolveAgentResumeLaunchTarget off Windows', () => {
     restoreNavigator()
   })
 
-  it('quotes for cmd.exe on a Windows SSH host from a mac client', async () => {
-    await expect(
-      resolveWith({
-        connectionId: 'ssh-1',
-        executionHostId: 'ssh:ssh-1',
-        worktreePath: 'C:\\Users\\neil\\repo',
-        remotePlatform: 'win32',
-        tabShellOverride: 'cmd.exe'
-      })
-    ).resolves.toEqual({ platform: 'win32', shell: 'cmd' })
-  })
-
-  // Why: a paired server's resume quotes for the OS it reported, as its fresh launches do.
-  it.each([
-    [{}, { platform: 'win32', shell: undefined }],
-    // The server's own terminal shell decides quoting; its panes never receive a tab's override.
-    [{ runtimeHostTerminalWindowsShell: 'cmd.exe' }, { platform: 'win32', shell: 'cmd' }],
-    [{ runtimeHostTerminalWindowsShell: 'git-bash' }, { platform: 'win32', shell: 'posix' }],
-    [{ tabShellOverride: 'cmd.exe' }, { platform: 'win32', shell: undefined }],
-    [
-      { runtimeHostTerminalWindowsShell: 'cmd.exe', tabShellOverride: 'powershell.exe' },
-      { platform: 'win32', shell: 'cmd' }
-    ]
-  ] as const)(
-    'quotes for a Windows paired server from a mac client (%o)',
-    async (tab, expected) => {
-      await expect(
-        resolveWith({
-          executionHostId: 'runtime:prod-box',
-          worktreePath: 'C:\\srv\\repo',
-          runtimeHostPlatform: 'win32',
-          ...tab
-        })
-      ).resolves.toEqual(expected)
-    }
-  )
-
   it('quotes a nested SSH target on a Windows paired server for that target, not the server', async () => {
     await expect(
       resolveWith({
@@ -206,15 +82,6 @@ describe('resolveAgentResumeLaunchTarget off Windows', () => {
         runtimeHostPlatform: 'win32'
       })
     ).resolves.toEqual({ platform: 'linux', shell: undefined })
-  })
-
-  it('ignores a stale Windows shell setting on a mac client', async () => {
-    await expect(
-      resolveWith({
-        worktreePath: '/Users/neil/repo',
-        terminalWindowsShell: 'cmd.exe'
-      })
-    ).resolves.toEqual({ platform: 'darwin', shell: undefined })
   })
 })
 

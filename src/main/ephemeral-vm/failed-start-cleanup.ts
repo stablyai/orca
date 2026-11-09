@@ -1,3 +1,4 @@
+import { toEphemeralVmRuntimeRecipeSnapshot } from '../../shared/ephemeral-vm-recipe-timeouts'
 import {
   getEphemeralVmRecipeResultConnection,
   type EphemeralVmRecipeResult
@@ -39,7 +40,7 @@ export async function cleanupFailedEphemeralVmStart(
   const recovery: EphemeralVmRuntimeRecord = {
     id: start.context.instanceId ?? start.context.recipeId,
     recipeId: args.recipe.id,
-    recipe: args.recipe,
+    recipe: toEphemeralVmRuntimeRecipeSnapshot(args.recipe),
     ...(args.repoId ? { repoId: args.repoId } : {}),
     ...(args.projectId ? { projectId: args.projectId } : {}),
     ...(args.workspaceId ? { workspaceId: args.workspaceId } : {}),

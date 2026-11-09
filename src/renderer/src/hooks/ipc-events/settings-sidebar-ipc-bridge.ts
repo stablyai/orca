@@ -6,7 +6,7 @@ import { subscribeToUnpairedDeviceAuthNotification } from '../unpaired-device-au
 import { translate } from '@/i18n/i18n'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
-import { openPluginInstallLink } from '../../store/plugin-preview-request'
+import { openPluginInstallLink } from '../../store/plugins/navigation/plugin-preview-request'
 
 function getShortcutPlatform(): NodeJS.Platform {
   if (navigator.userAgent.includes('Mac')) {

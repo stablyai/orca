@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 /** Freeze choices on acceptance; permission stays a launch setting. Strip unknown keys from free-form send/saved options. */
 export const AgentSessionExecutionOptionsSchema = z.object({
