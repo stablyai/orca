@@ -7,6 +7,10 @@ import type {
   RecipeWorkspaceCreateParams,
   RecipeWorkspaceCreation
 } from '../../../ephemeral-vm/recipe-workspace-create-params'
+import type {
+  RecipeWorkspaceRemoval as RecipeWorkspaceRemovalResult,
+  RecipeWorkspaceRemoveParams
+} from '../../../ephemeral-vm/workspace-removal'
 import { worktreeCreateRepoSelector } from '../../rpc/methods/workspaces/worktree-create-args'
 import { RuntimeProvisionedWorkspaceAdoption } from './runtime-provisioned-workspace-adoption'
 
@@ -27,8 +31,33 @@ export type RecipeWorkspaceService = {
   list: (repo: Repo | null) => Promise<RecipeCatalogListing[]>
 }
 
+/** Desktop-only wiring: removal of a workspace whose recipe environment this host provisioned. */
+export type RecipeWorkspaceRemoval = {
+  owns: (params: RecipeWorkspaceRemoveParams) => boolean
+  remove: (params: RecipeWorkspaceRemoveParams) => Promise<RecipeWorkspaceRemovalResult>
+}
+
 export abstract class RuntimeRecipeWorkspaceCreation extends RuntimeProvisionedWorkspaceAdoption {
   private recipeWorkspaceService: RecipeWorkspaceService | null = null
+  private recipeWorkspaceRemoval: RecipeWorkspaceRemoval | null = null
+
+  setRecipeWorkspaceRemoval(removal: RecipeWorkspaceRemoval): void {
+    this.recipeWorkspaceRemoval = removal
+  }
+
+  /** Throws when several recipe records claim the workspace, so nothing is destroyed on a guess. */
+  ownsRecipeWorkspaceRemoval(params: RecipeWorkspaceRemoveParams): boolean {
+    return this.recipeWorkspaceRemoval?.owns(params) ?? false
+  }
+
+  removeRecipeWorkspace(
+    params: RecipeWorkspaceRemoveParams
+  ): Promise<RecipeWorkspaceRemovalResult> {
+    if (!this.recipeWorkspaceRemoval) {
+      throw new Error('This Orca host cannot remove recipe workspaces.')
+    }
+    return this.recipeWorkspaceRemoval.remove(params)
+  }
 
   setRecipeWorkspaceService(service: RecipeWorkspaceService): void {
     this.recipeWorkspaceService = service

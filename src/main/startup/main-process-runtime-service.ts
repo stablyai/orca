@@ -1,3 +1,10 @@
+import { cleanupOwnedEphemeralVmRuntime } from '../ephemeral-vm/owned-runtime-cleanup'
+import {
+  assertRecipeRemovalConfirmed,
+  ownsRecipeWorkspaceRemoval,
+  removeRecipeWorkspace
+} from '../ephemeral-vm/workspace-removal'
+import { RECIPE_REMOVAL_REQUEST_TIMEOUT_MS } from '../../shared/ephemeral-vm-workspace-owner'
 import {
   applySessionSearchSettingsChange,
   installChildSessionSearchService
@@ -173,6 +180,36 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   startAgentStateRulesLiveUpdates(store, (rules) =>
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
+  runtime.setRecipeWorkspaceRemoval({
+    owns: (params) => ownsRecipeWorkspaceRemoval(app.getPath('userData'), params),
+    remove: async (params) => {
+      // Refuse before the lifecycle delete cancels this workspace's queued sleeps.
+      assertRecipeRemovalConfirmed(app.getPath('userData'), params)
+      return runtime.removeRecipeWorkspaceVm(
+        params.worktree.slice('id:'.length),
+        params.hostId ?? '',
+        params.force === true,
+        (orderDestroy) =>
+          removeRecipeWorkspace(
+            app.getPath('userData'),
+            params,
+            {
+              call: (environmentId, method, payload) =>
+                callRuntimeEnvironment(
+                  getRuntimeEnvironmentRegistryRoot(),
+                  `id:${environmentId}`,
+                  method,
+                  payload,
+                  RECIPE_REMOVAL_REQUEST_TIMEOUT_MS
+                ),
+              cleanup: (runtimeId) =>
+                cleanupOwnedEphemeralVmRuntime(store, app.getPath('userData'), runtimeId)
+            },
+            orderDestroy
+          )
+      )
+    }
+  })
   state.runtime = runtime
   // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
   registerRecipeVmWaker({

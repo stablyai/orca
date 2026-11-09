@@ -33,6 +33,8 @@ export const FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY =
 // Replay ambiguous creates only with advertised idempotency support; older hosts strip clientMutationId. status.worktreeCreateIdempotency supplies optional retention policy.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
+// Hosts that destroy a recipe-provisioned environment when its workspace is removed over RPC.
+export const WORKTREE_RECIPE_REMOVAL_RUNTIME_CAPABILITY = 'worktree.recipe-removal.v1' as const
 export const WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY =
   'worktree.remove-branch-policy.v1' as const
 // A failed running archive hook blocks deletion. This does not prove a hook was found: unreadable SSH orca.yaml is indistinguishable from absence (#20196).
@@ -127,6 +129,7 @@ export const WORKTREE_RUNTIME_CAPABILITIES = [
   FOLDER_WORKSPACE_UNIQUE_ID_MUTATION_RUNTIME_CAPABILITY,
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   WORKTREE_ARCHIVE_FAILURE_BLOCKING_RUNTIME_CAPABILITY,
+  WORKTREE_RECIPE_REMOVAL_RUNTIME_CAPABILITY,
   WORKTREE_REMOVE_BRANCH_POLICY_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,

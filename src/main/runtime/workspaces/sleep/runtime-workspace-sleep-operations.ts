@@ -12,6 +12,13 @@ import type { RestoredPane } from '../../terminal/recovery/restored-pane-start'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
 import { WorkspaceLifecycleQueue } from '../lifecycle/workspace-lifecycle-queue'
+import {
+  deleteLostContact,
+  runWorkspaceLifecycleCommand,
+  workspaceLifecycleKey
+} from '../lifecycle/workspace-lifecycle-commands'
+import { getRuntimeWorktreeRemovalOptionsKey } from '../catalog/runtime-worktree-selection'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../shared/sidebar-inputs-switch'
 export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce {
   // Switch point: only a build where main produces the sidebar's inputs queues lifecycle commands.
@@ -67,6 +74,40 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
   /** Opening a workspace wakes its recipe VM, if this host holds one; resolves with the VM's record. */
   wakeWorkspaceVm(worktreeId: string): Promise<EphemeralVmRuntimeRecord | null> {
     return this.workspaceSleep.wakeVm(worktreeId)
+  }
+
+  /** Removes a workspace whose recipe VM this host provisioned. It is a lifecycle delete, so it
+   *  cancels queued sleeps and waits for a running one; `destroyVm` then orders the VM's destroy
+   *  behind any wake or suspend still running. */
+  removeRecipeWorkspaceVm<T>(
+    worktreeId: string,
+    hostId: string,
+    force: boolean,
+    remove: (destroyVm: <D>(destroy: () => Promise<D>) => Promise<D>) => Promise<T>
+  ): Promise<T> {
+    const host = parseExecutionHostId(hostId)
+    if (!host) {
+      throw new Error('Recipe workspace removal needs a host-qualified workspace.')
+    }
+    return runWorkspaceLifecycleCommand(
+      this.workspaceLifecycle,
+      workspaceLifecycleKey(host.id, worktreeId),
+      {
+        kind: 'delete',
+        lostContact: deleteLostContact,
+        run: () => remove((destroy) => this.workspaceSleep.destroyVm(worktreeId, destroy)),
+        delete: {
+          key: getRuntimeWorktreeRemovalOptionsKey({
+            force,
+            runHooks: false,
+            allowUnverifiedPtyStop: force,
+            allowFailedArchiveHook: false
+          }),
+          force,
+          label: worktreeId
+        }
+      }
+    )
   }
 
   /** Where this workspace's recipe VM stands for a client about to reach its server. */
