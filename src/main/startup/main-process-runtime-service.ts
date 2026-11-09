@@ -1,3 +1,4 @@
+import { wireRecipeWorkspaceRemoval } from '../ephemeral-vm/recipe-workspace-removal-wiring'
 import {
   applySessionSearchSettingsChange,
   installChildSessionSearchService
@@ -157,6 +158,7 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
   startAgentStateRulesLiveUpdates(store, (rules) =>
     recordDurableCrashBreadcrumb('agent_state_rules_active', rules)
   )
+  wireRecipeWorkspaceRemoval(runtime, store, () => app.getPath('userData'))
   state.runtime = runtime
   // Opening a recipe VM's workspace from a client wakes the VM through the runtime's one owner.
   registerRecipeVmWaker({

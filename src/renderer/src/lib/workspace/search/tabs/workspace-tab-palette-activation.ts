@@ -15,7 +15,7 @@ import {
   hasOpenFileExecutionHostEvidence,
   isOpenFileOwnedByWorktree,
   isUnifiedTabOwnedByWorktree
-} from '../../../unified-tab-host-ownership'
+} from '../../ownership/unified-tab-host-ownership'
 import type { WorkspaceTabPaletteSearchResult } from './workspace-tab-palette-results'
 
 export type WorkspaceTabPaletteActivationFailure =

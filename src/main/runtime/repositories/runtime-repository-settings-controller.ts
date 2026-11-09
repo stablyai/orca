@@ -41,6 +41,7 @@ type RepositoryUpdates = Partial<
     | 'worktreeBasePath'
     | 'kind'
     | 'symlinkPaths'
+    | 'dictationTerms'
     | 'issueSourcePreference'
     | 'defaultJiraProject'
     | 'externalWorktreeVisibility'

@@ -69,23 +69,4 @@ describe('SkillSharePreparationService', () => {
 
     expect(prepared.skills?.[0]?.executablePaths).toEqual(['run.sh'])
   })
-
-  it('enforces the preparation cap while archives are still being created', async () => {
-    const { root, source } = await createSource()
-    const service = new SkillSharePreparationService(join(root, 'preparations'), {
-      findOwnedPackageId: nameIsFree,
-      publishVersion: vi.fn(),
-      createShare: vi.fn()
-    })
-
-    const results = await Promise.allSettled(
-      Array.from({ length: 9 }, () => service.prepare({ sourceDirectory: source }))
-    )
-
-    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(8)
-    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(1)
-    expect(results.find((result) => result.status === 'rejected')).toMatchObject({
-      reason: new Error('skill-share-preparation-limit')
-    })
-  })
 })

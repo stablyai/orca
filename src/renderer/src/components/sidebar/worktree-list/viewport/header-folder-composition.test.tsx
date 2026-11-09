@@ -163,6 +163,7 @@ it('composes real dispatched headers, current repo gates and folder cache refres
         repoHeaderSectionEndByRepoId: new Map(),
         projectGroupHeaderSectionEndByGroupId: new Map(),
         rootProjectHeaderKeys: undefined,
+        rootProjectHeaderCountByOccurrenceKey: new Map(),
         rootProjectHeaderSectionEndByKey: new Map()
       },
       projectActions: {

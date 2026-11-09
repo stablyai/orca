@@ -1,6 +1,6 @@
 import { useLinearIssueResult } from '@/hooks/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import {
   mapLinearIssueRead,
   type LinearIssueLease

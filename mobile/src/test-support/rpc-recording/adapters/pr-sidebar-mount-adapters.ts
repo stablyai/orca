@@ -1,3 +1,4 @@
+import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { hookMount, performHookAction } from '../hook-mount'
 import type { MountAdapter } from '../recording-scenario'
 import type { operationModuleLoader } from '../operation-module-loader'
@@ -55,7 +56,9 @@ export function prSidebarMountAdapters(
       ).useMobilePrCommentActions
       let controller: ReturnType<typeof useController> | undefined
       let comments: ReturnType<typeof useCommentActions> | undefined
+      let queryClient: QueryClient | undefined
       const hook = hookMount(() => {
+        queryClient = useQueryClient()
         controller = useController({
           hostId: HOST,
           client,
@@ -98,6 +101,17 @@ export function prSidebarMountAdapters(
           }
           if (name === 'resolve-thread') {
             return performHookAction(() => comments!.toggleResolve(firstThreadComment()))
+          }
+          // Coming back to a stale PR: a revalidation that builds on the cached review.
+          if (name === 'revisit') {
+            return performHookAction(() =>
+              queryClient!.invalidateQueries({
+                predicate: (query) => query.queryKey[2] === 'pr.forBranch'
+              })
+            )
+          }
+          if (name === 'refresh') {
+            return performHookAction(() => controller!.refetchPRSidebar({ refresh: true }))
           }
           if (name === 'unmount') {
             return hook.unmount()

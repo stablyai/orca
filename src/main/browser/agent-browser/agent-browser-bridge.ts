@@ -11,7 +11,7 @@ import type {
   BrowserCaptureStopResult,
   BrowserConsoleResult,
   BrowserNetworkLogResult
-} from '../../../shared/runtime-browser-contracts'
+} from '../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../browser-error'
 import {
   parseShellArgs,

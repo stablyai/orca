@@ -1,4 +1,5 @@
 import type { MessagePortMain } from 'electron'
+import { dictationVocabulary, type DictationTerm } from '../../shared/dictation-dictionary'
 import {
   createDictationTextPipeline,
   type DictationTextSettings
@@ -16,12 +17,14 @@ import {
   teardownIdleSttEngine
 } from './stt-session-stop'
 
-export { START_DICTATION_TIMEOUT_MS } from './stt-session-timeouts'
+export { START_DICTATION_TIMEOUT_MS } from '../../shared/dictation-finish-deadlines'
 
 export type SttEvent =
   | { type: 'ready' }
   | { type: 'partial'; text?: string }
   | { type: 'final'; text?: string }
+  /** Speech was heard that no final has committed yet; only from pause-cut on-device models. */
+  | { type: 'speech-pending'; pending: boolean }
   | { type: 'stopped' }
   | { type: 'error'; error?: string }
 
@@ -44,19 +47,20 @@ export class SttService {
     this.state = createSttSessionState(modelManager, spawnWorker)
   }
 
+  /** `terms`: the dictionary for where this dictation goes, repo terms first (mergeDictationTerms). */
   startDictation(
     modelId: string,
     sink: SttEventSink,
-    hotwordsFilePath?: string,
+    terms: readonly DictationTerm[] = [],
     owner = 'desktop',
     voice?: Partial<DictationTextSettings>
   ): Promise<void> {
-    const clean = createDictationTextPipeline(getCatalogModel(modelId), voice)
+    const clean = createDictationTextPipeline(getCatalogModel(modelId), voice, terms)
     return startSttDictation(
       this.state,
       modelId,
       clean ? cleanTranscriptEvents(sink, clean) : sink,
-      hotwordsFilePath,
+      dictationVocabulary(terms),
       owner,
       voice?.dictationLanguage
     )
@@ -120,5 +124,15 @@ export class SttService {
     // A pre-warm still reading the model state must not load it after this.
     this.state.prewarmGeneration += 1
     return teardownIdleSttEngine(this.state)
+  }
+
+  /** Unloads the recognizer now, or when the dictations using it end; resolves once it is gone. */
+  unloadModelWhenIdle(): Promise<void> {
+    this.state.prewarmGeneration += 1
+    const engine = this.state.engine
+    if (!engine || sttEngineUsers(this.state, engine).length === 0) {
+      return teardownIdleSttEngine(this.state)
+    }
+    return new Promise((resolve) => engine.onUnloaded.push(resolve))
   }
 }

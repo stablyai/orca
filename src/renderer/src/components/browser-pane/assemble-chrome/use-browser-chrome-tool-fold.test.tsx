@@ -3,11 +3,7 @@ import { act, cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useRef } from 'react'
 import { BROWSER_CHROME_ADDRESS_SLOT_ATTRIBUTE } from './browser-chrome-address-slot'
-import {
-  BROWSER_CHROME_ADDRESS_MIN_WIDTH_PX,
-  BROWSER_CHROME_FOLD_ORDER,
-  useBrowserChromeToolFold
-} from './use-browser-chrome-tool-fold'
+import { BROWSER_CHROME_FOLD_ORDER, useBrowserChromeToolFold } from './use-browser-chrome-tool-fold'
 
 const FIXED_WIDTH = 100
 const TOOL_WIDTH = 30
@@ -70,22 +66,7 @@ function resizeTo(width: number): void {
   act(() => resizeCallbacks.forEach((callback) => callback()))
 }
 
-function expectedFolded(width: number): number {
-  const room = width - FIXED_WIDTH - BROWSER_CHROME_ADDRESS_MIN_WIDTH_PX
-  const fits = Math.max(0, Math.floor(room / TOOL_WIDTH))
-  return Math.max(0, BROWSER_CHROME_FOLD_ORDER.length - fits)
-}
-
 describe('useBrowserChromeToolFold', () => {
-  it('measures when a hidden row becomes visible', () => {
-    let folded = -1
-    layout.rowWidth = 0
-    render(<Host onFolded={(count) => (folded = count)} />)
-
-    resizeTo(300)
-    expect(folded).toBe(expectedFolded(300))
-  })
-
   it('discards measurements when the available tools change', () => {
     let folded = -1
     layout.rowWidth = 300

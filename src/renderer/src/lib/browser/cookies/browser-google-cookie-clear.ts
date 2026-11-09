@@ -2,8 +2,8 @@ import { toast } from 'sonner'
 import type {
   GoogleCookieClearTarget,
   GoogleCookieClearResult
-} from '../../../../../shared/browser-google-cookie-clear'
-import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../../../../shared/browser-runtime-capabilities'
+} from '../../../../../shared/browser/cookies/browser-google-cookie-clear'
+import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import type { ConfirmationDialogContextValue } from '@/components/confirmation-dialog-context'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store/index'

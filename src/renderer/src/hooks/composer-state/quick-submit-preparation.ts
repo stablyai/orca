@@ -40,7 +40,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
     selectedRepoExecutionHostId,
     selectedRepoHookContextKey,
     selectedRepoIsGit,
-    setAdvancedOpen,
+    revealSetupChoice,
     settings,
     setupConfig,
     setupSupport,
@@ -123,7 +123,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       }
 
       if (submitSetupConfig && setupPolicy === 'ask' && !setupDecision) {
-        setAdvancedOpen(true)
+        revealSetupChoice()
         return null
       }
 
@@ -240,7 +240,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       selectedRepoExecutionHostId,
       selectedRepoHookContextKey,
       selectedRepoIsGit,
-      setAdvancedOpen,
+      revealSetupChoice,
       settings,
       setupConfig,
       setupSupport,

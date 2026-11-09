@@ -38,7 +38,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
 import { isTuiAgentEnabled } from '../../../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import {
   agentChoiceOpensAsChat,
   readChatProgram,
@@ -56,7 +56,10 @@ import {
   AgentChatRuntimeArea,
   chatUnavailableOnThisDesktop
 } from '@/components/agent/launch-settings/AgentChatChoiceControls'
-import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
+import {
+  chatProviderAgents,
+  useHostStructuredAgentsVersion
+} from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { readHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { useTranslate } from '@/i18n/use-translate'

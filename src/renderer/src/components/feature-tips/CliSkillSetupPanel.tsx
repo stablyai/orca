@@ -1,6 +1,9 @@
 import { CliSkillSetupTerminal } from './CliSkillSetupTerminal'
 import { AgentSkillSetupPanel } from '@/components/skills/setup/AgentSkillSetupPanel'
-import { ORCA_CLI_SKILL_NAME, ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import {
+  ORCA_CLI_SKILL_NAME,
+  ORCHESTRATION_SKILL_NAME
+} from '@/lib/skills/installation/agent-feature-skill-names'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,

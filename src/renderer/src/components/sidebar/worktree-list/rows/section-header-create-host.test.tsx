@@ -103,6 +103,7 @@ function headerContext(): SectionHeaderRowContext {
       repoHeaderSectionEndByRepoId: new Map(),
       projectGroupHeaderSectionEndByGroupId: new Map(),
       rootProjectHeaderKeys: undefined,
+      rootProjectHeaderCountByOccurrenceKey: new Map(),
       rootProjectHeaderSectionEndByKey: new Map()
     },
     projectActions: {
@@ -161,4 +162,49 @@ it("leaves an empty twin header to the composer's focused host, not the registra
 
   expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
   expect(useAppStore.getState().modalData).not.toHaveProperty('initialWorkspaceTarget')
+})
+
+it('arms a remote root header with its ordering anchor in a view without host headers', () => {
+  const remote = { ...serverTwin, id: 'remote-twin' }
+  useAppStore.setState({ repos: [localTwin, remote] })
+  const ctx = headerContext()
+  ctx.headerDrag = {
+    ...ctx.headerDrag,
+    canReorderRepoHeaders: true,
+    rootProjectHeaderKeys: ['group:projects', 'repo:repo-twin'],
+    rootProjectHeaderCountByOccurrenceKey: new Map([
+      ['["","group:projects"]', 2],
+      ['["","repo:repo-twin"]', 2]
+    ]),
+    sidebarRepoHeaderIdsByBucket: new Map([['ungrouped', ['repo-twin']]]),
+    repoHeaderIndexByRepoId: new Map([['repo-twin', 0]]),
+    repoHeaderBucketByRepoId: new Map([['repo-twin', 'ungrouped']])
+  }
+  const view = render(
+    <TooltipProvider>
+      {renderWorktreeSectionHeaderRow({
+        ctx,
+        row: {
+          type: 'header',
+          key: 'remote-header',
+          count: 1,
+          icon: { kind: 'project' },
+          repo: remote,
+          anchorRepo: localTwin,
+          hostId: 'runtime:home',
+          repeated: true
+        },
+        vItem: { key: 'header', index: 0, start: 0, size: 35, end: 35, lane: 0 },
+        isActiveStickyHeader: false,
+        hasStickyHost: false,
+        hasHeaderTopSpacing: false,
+        measureVirtualRowElement: vi.fn()
+      })}
+    </TooltipProvider>
+  )
+  const header = view.container.querySelector('[data-root-project-header-key]')
+  expect(header?.getAttribute('data-root-project-header-key')).toBe('repo:repo-twin')
+  expect(header?.getAttribute('data-repo-header-id')).toBe('repo-twin')
+  expect(header?.getAttribute('data-root-project-header-host')).toBe('runtime:home')
+  expect(header?.getAttribute('data-repo-header-drag-handle')).toBe('')
 })

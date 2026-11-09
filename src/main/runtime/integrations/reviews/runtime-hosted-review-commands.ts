@@ -13,7 +13,11 @@ import type {
   PRRefreshOutcome
 } from '../../../../shared/github/pull-request-refresh-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getPRForBranchOutcome } from '../../../github/client/lookup/pr-for-branch-outcome'
+import type { DeviceScope } from '../../../../shared/runtime-session-contracts'
+import {
+  getPRForBranchOutcome,
+  readRecentPhonePROutcome
+} from '../../../github/client/lookup/pr-for-branch-outcome'
 import { getRepoSlug, getRepoUpstream } from '../../../github/client/fetch/repo-slug-upstream'
 import type { GitHubPRBranchLookupOptions } from '../../../github/client/lookup/pull-request-lookup-data'
 import { admissionTierForRefreshReason } from '../../../github/pr-refresh-candidate-policy'
@@ -72,7 +76,8 @@ export class RuntimeHostedReviewCommands {
     acceptMergedFallbackPR?: boolean,
     currentHeadOid?: string | null,
     reason?: GitHubPRRefreshReason,
-    userRefresh?: boolean
+    userRefresh?: boolean,
+    clientKind?: DeviceScope
   ): Promise<PRRefreshOutcome> {
     const repo = await this.deps.resolveRepo(repoSelector)
     const lookupOptions: GitHubPRBranchLookupOptions = {
@@ -93,6 +98,20 @@ export class RuntimeHostedReviewCommands {
     const lookupOptionArgs: [] | [GitHubPRBranchLookupOptions] =
       Object.keys(lookupOptions).length > 0 ? [lookupOptions] : []
     const connectionId = hostedReviewSshConnectionId(getStoredRepoExecutionHostId(repo))
+    // Desktop callers and reason-carrying refreshes keep their own GitHub read.
+    if (clientKind === 'mobile' && reason === undefined) {
+      const recent = await readRecentPhonePROutcome(
+        repo.path,
+        branch,
+        linkedPRNumber ?? null,
+        connectionId,
+        fallbackPRNumber ?? null,
+        lookupOptions
+      )
+      if (recent) {
+        return recent
+      }
+    }
     // Through the coordinator, so a client's read also serves this server's CI-line watches.
     return runHostedPRRead(
       {

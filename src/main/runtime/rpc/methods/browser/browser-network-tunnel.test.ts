@@ -4,7 +4,7 @@ import {
   BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_EXECUTION_HOSTS_RUNTIME_CAPABILITY,
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
-} from '../../../../../shared/browser-runtime-capabilities'
+} from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import type { BrowserHostLease } from '../../../browser-host/leases/browser-host-lease-records'
 import type { OrcaRuntimeService } from '../../../orca-runtime'

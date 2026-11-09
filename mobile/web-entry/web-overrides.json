@@ -240,6 +240,10 @@
     {
       "file": "src/session/native-chat/MobileNativeChatLowerRegion.web.tsx",
       "reason": "The shipping web session owns DOM scroll anchoring and reveals focused lower controls inside the keyboard-safe viewport. Native rendering keeps its existing scroll behavior."
+    },
+    {
+      "file": "src/platform/page-box.web.ts",
+      "reason": "RNW's measure() is asynchronous and drops its callback for a detached node, so a held mic released over the dictation cancel button would never stop. The page reads the DOM box synchronously; native keeps measure()."
     }
   ]
 }
