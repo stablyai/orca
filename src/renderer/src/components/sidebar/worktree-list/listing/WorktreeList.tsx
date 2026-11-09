@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from 'react'
+import React, { useCallback, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useAppStore } from '@/store'
 import { selectCrossStoreFolderChildrenById } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
@@ -130,6 +130,7 @@ const WorktreeList = React.memo(function WorktreeList({
   )
 
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
+  const [railRevealTarget, setRailRevealTarget] = useState<string | null>(null)
   const { filterState, hasFilters, clearFilters, revealWorkspaceFilters } =
     useSidebarWorktreeFilters()
   const manualOrderCatalog = useMemo(
@@ -156,7 +157,7 @@ const WorktreeList = React.memo(function WorktreeList({
     projectGrouping,
     detectedWorktreesByRepo,
     prCache,
-    agentSendTargetWorktreeId
+    agentSendTargetWorktreeId: agentSendTargetWorktreeId ?? railRevealTarget
   })
   const visibleProjectRepoIdsBySection = useMemo(
     () => new Map(rowModel.occurrencePlan.sections.map(({ key, group }) => [key, group.repoIds])),
@@ -264,6 +265,8 @@ const WorktreeList = React.memo(function WorktreeList({
         selectedWorktreeIds={selection.selectedWorktreeIds}
         workspaceStatuses={boardStatuses}
         toggleGroup={handleToggleGroup}
+        forcedRevealWorktreeId={railRevealTarget}
+        onForceReveal={setRailRevealTarget}
         onSelectionGesture={selection.updateSelectionForGesture}
         onContextMenuSelect={selection.selectForContextMenu}
         onImmediateActivate={handleImmediateWorktreeActivate}

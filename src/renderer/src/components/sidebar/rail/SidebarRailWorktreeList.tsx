@@ -1,7 +1,6 @@
 import React from 'react'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { useAppStore } from '@/store'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { getWorktreeHostIdentity } from '../../../../../shared/worktree/host-qualified-identity'
 import { VirtualizedList } from '@/components/virtualized-list'
@@ -17,6 +16,7 @@ import { getSidebarHeaderVisual } from '../worktree-list/rows/header-visuals'
 import { resolveRepoHeaderColor } from '../worktree-list/rows/project-header-color'
 import type { SidebarRailRow } from './sidebar-rail-rows'
 import { SidebarRailWorktreeTile } from './SidebarRailWorktreeTile'
+import { useRailPendingReveal } from './use-rail-pending-reveal'
 import {
   SIDEBAR_RAIL_HEADER_SIZE,
   SIDEBAR_RAIL_HOST_HEADER_SIZE,
@@ -34,6 +34,8 @@ type SidebarRailWorktreeListProps = {
   selectedWorktreeIds: ReadonlySet<string>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   toggleGroup: (groupKey: string) => void
+  forcedRevealWorktreeId: string | null
+  onForceReveal: (worktreeId: string | null) => void
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
   onContextMenuSelect: (
     event: React.MouseEvent<HTMLElement>,
@@ -119,6 +121,8 @@ export function SidebarRailWorktreeList({
   selectedWorktreeIds,
   workspaceStatuses,
   toggleGroup,
+  forcedRevealWorktreeId,
+  onForceReveal,
   onSelectionGesture,
   onContextMenuSelect,
   onImmediateActivate,
@@ -143,26 +147,17 @@ export function SidebarRailWorktreeList({
       })
   )
 
-  const pendingReveal = useAppStore((s) => s.pendingRevealWorktree)
-  const clearPendingReveal = useAppStore((s) => s.clearPendingRevealWorktreeId)
-  React.useEffect(() => {
-    if (!pendingReveal) {
-      return
-    }
-    const frame = window.requestAnimationFrame(() => {
-      clearPendingReveal(pendingReveal)
-      scrollRef.current
-        ?.querySelector(`[data-rail-worktree-id="${CSS.escape(pendingReveal.worktreeId)}"]`)
-        ?.scrollIntoView({ block: 'nearest', behavior: pendingReveal.behavior })
-    })
-    return () => window.cancelAnimationFrame(frame)
-  }, [clearPendingReveal, pendingReveal])
+  const scrollTargetKey = useRailPendingReveal({
+    rows,
+    scrollRef,
+    activeRowKey: activeRow?.key,
+    forcedRevealWorktreeId,
+    onForceReveal,
+    toggleGroup
+  })
 
   const renderRow = (row: SidebarRailRow): React.ReactNode => (
-    <div
-      style={{ height: getRowSize(row) }}
-      data-rail-worktree-id={row.kind === 'tile' ? row.worktree.id : undefined}
-    >
+    <div style={{ height: getRowSize(row) }} data-rail-row-key={row.key}>
       {row.kind === 'host' ? (
         <div className="flex flex-col">
           {row.separated ? <RailSeparator /> : null}
@@ -212,7 +207,7 @@ export function SidebarRailWorktreeList({
         renderRow={renderRow}
         scrollElement={scrollElement}
         estimateRowHeightPx={SIDEBAR_RAIL_TILE_SIZE}
-        activeRowKey={activeRow?.key}
+        activeRowKey={scrollTargetKey}
         minimumRows={1}
       />
     </div>
