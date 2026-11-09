@@ -105,10 +105,7 @@ export function VoiceControlIndicator() {
         'auto.components.voice.control.VoiceControlIndicator.d666fd4996',
         'Unmute microphone'
       )
-    : translate(
-        'auto.components.voice.control.VoiceControlIndicator.c78204a814',
-        'Mute microphone'
-      )
+    : translate('auto.components.voice.control.VoiceControlIndicator.c78204a814', 'Mute microphone')
 
   const isError = state === 'error'
   const label =
@@ -216,11 +213,7 @@ export function VoiceControlIndicator() {
           </>
         ) : (
           <>
-            <DictationGrapes
-              level={micLevel}
-              active={state === 'live'}
-              transitioning={state !== 'live'}
-            />
+            <DictationGrapes level={micLevel} active={state === 'live'} />
             {state === 'live' ? (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -254,7 +247,7 @@ export function VoiceControlIndicator() {
               // Why: the coordinator's own voice, mirrored and muted so it reads as
               // incoming against the mic's grapes without adding a second color.
               <span aria-hidden className="inline-flex shrink-0 -scale-x-100 text-muted-foreground">
-                <DictationGrapes level={outputLevel} active transitioning={false} />
+                <DictationGrapes level={outputLevel} active />
               </span>
             ) : null}
             <span aria-hidden className="ml-0.5 h-4 w-px shrink-0 bg-border" />
