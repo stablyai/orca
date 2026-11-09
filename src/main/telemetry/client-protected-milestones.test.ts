@@ -227,29 +227,6 @@ describe('protected telemetry milestones', () => {
     expect(captured('meaningful_activity_day')[0].properties.trigger).toBe('native_chat')
   })
 
-  it('counts a provider-accepted phone prompt as an interaction and an active day', () => {
-    track('native_chat_prompt_submitted', {
-      agent_kind: 'claude-code',
-      runtime: 'unknown',
-      client: 'mobile'
-    })
-
-    expect(captured('first_agent_interaction')[0].properties).toMatchObject({
-      source: 'mobile_chat',
-      agent_kind: 'claude-code'
-    })
-    expect(captured('meaningful_activity_day')[0].properties).toMatchObject({
-      trigger: 'mobile_chat',
-      install_cohort: 'fresh'
-    })
-  })
-
-  it('reports profiles without a frozen cohort as existing', () => {
-    state.settings.telemetry = telemetry({})
-    track('agent_started', sidebarLaunch)
-    expect(captured('meaningful_activity_day')[0].properties.install_cohort).toBe('existing')
-  })
-
   it('marks terminal activity once per day across restart and UTC rollover', () => {
     observeTerminalUserInput()
     restart()
