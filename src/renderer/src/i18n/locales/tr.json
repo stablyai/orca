@@ -11353,7 +11353,10 @@
               "modelMemoryKeyword": "bellek",
               "fillerWordsTitle": "Dolgu seslerini kaldır",
               "fillerWordsDescription": "Dikte edilen metinden “hmm” gibi duraksama seslerini çıkarır.",
-              "fillerWordsKeyword": "dolgu"
+              "fillerWordsKeyword": "dolgu",
+              "vocabularyTitle": "Sözcük dağarcığı",
+              "vocabularyDescription": "Diktenin senin yazımınla yazdığı adlar ve kod terimleri, senin için veya bir depo için.",
+              "vocabularyKeyword": "sözlük"
             }
           }
         },
@@ -17210,10 +17213,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Ajanlar için sayfa bağlamını alın",
-                      "body": "Bir sayfa öğesinin bağlamını ajanlar için kopyalamak üzere yakalama aracını kullanın."
-                    },
                     "annotate": {
                       "title": "Tasarım geri bildirimlerini yerinde işaretleyin",
                       "body": "Öğelere açıklamalar ekleyin ve bu notları bir ajana gönderin."
@@ -17346,7 +17345,6 @@
             "244266c122": "İçe Aktar…",
             "e52a955e6f": "Bunu her zaman Ayarlar > Tarayıcı bölümünde bulabilirsiniz.",
             "4f5ffaa6a1": "Tarayıcı verilerini içe aktar",
-            "b24fef25be": "İçe Aktar",
             "02e89014c5": "{{value1}}{{value2}} konumundan {{value0}} çerez içe aktarıldı.",
             "d40d584769": "Dosyadan {{value0}} çerez içe aktarıldı."
           },
@@ -17408,7 +17406,6 @@
             "4328a0a062": "Sayfa öğesi yakalanamadı: {{value0}}",
             "759f32af29": "İndiriliyor",
             "4300f38145": "{{value0}}{{value1}} adresinden indiriliyor",
-            "acbe79fd01": "Sayfa öğesini yakala ({{value0}})",
             "cc4a071d3a": "Sayfa öğesine açıklama ekle ({{value0}})",
             "572046436a": "Uzak tarayıcı",
             "b313a7275b": "Uzak tarayıcı açılıyor",
@@ -19827,6 +19824,8 @@
         "showAgent": "{{value0}} öğesini konuşmada göster"
       },
       "jumpToLatest": "En son öğeye git",
+      "newRowsAnnouncement": "Siz yokken yeni mesajlar geldi",
+      "newRowsMarker": "Yeni",
       "find": {
         "label": "Sohbette bul",
         "noResults": "Sonuç yok",
@@ -20693,6 +20692,9 @@
         "scrollToLatestOnSendTitle": "Gönderirken en son mesaja kaydır",
         "scrollToLatestOnSendCopy": "Yukarı kaydırılmışken göndermek en son mesaja atlar ve yanıtı takip eder. Konumunuzu korumak için kapatın.",
         "scrollToLatestOnSendSearchPosition": "konum",
+        "markNewMessagesTitle": "Bir sohbete dönünce yeni mesajları işaretle",
+        "markNewMessagesCopy": "Bir sohbete döndüğünüzde, siz yokken gelenlerin üstünde bir Yeni çizgisi gösterilir. En son mesajları okuyorduysanız sohbet oraya kaydırılır.",
+        "markNewMessagesSearchUnread": "okunmamış",
         "inlineVisualsTitle": "Yanıtlarda görseller",
         "inlineVisualsCopy": "Ajanın yanıtlarında grafikler, diyagramlar ve taslaklar göstermesine izin verin. Yeni başlatılan sohbetlere uygulanır.",
         "inlineVisualsToggleLabel": "Yanıtlardaki görselleri aç/kapat",
@@ -20799,6 +20801,24 @@
           "local": "Bu bilgisayarda",
           "cloudDescription": "Bulut modelleri sesinizi sağlayıcıya gönderir. Bu bilgisayardaki modeller sesi burada tutar.",
           "sendsToCompatible": "Sesinizi kurduğunuz hizmete gönderir."
+        },
+        "vocabulary": {
+          "title": "Sözcük dağarcığı",
+          "description": "Kendi yazımınla yazılacak adlar ve kod terimleri. Model sürekli yanlış duyuyorsa nasıl duyduğunu da ekle.",
+          "repoScope": "Yalnızca {{repo}} içinde dikte ederken kullanılır.",
+          "personalScope": "Her depoda kullanılır.",
+          "scope": "Terimler",
+          "personal": "Kişisel · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "{{term}} kaldır",
+          "term": "Sözcük veya ifade",
+          "heardAs": "Duyulan biçim (isteğe bağlı)",
+          "heardAsLabel": "Duyulan biçim",
+          "add": "Ekle",
+          "repoNameHint": "Depo adını ipucu olarak kullan",
+          "repoNameHintDescription": "Depo adının tanınmasına yardımcı olur.",
+          "repoSaveFailed": "Deponun terimleri kaydedilemedi. Bu deponun ana makinesinde Orca güncellemesi gerekebilir."
         }
       },
       "repositoryHooks": {

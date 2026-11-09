@@ -10876,7 +10876,10 @@
               "modelMemoryKeyword": "内存",
               "fillerWordsTitle": "移除语气词",
               "fillerWordsDescription": "从听写文本中去掉“嗯”“呃”之类的语气词。",
-              "fillerWordsKeyword": "语气词"
+              "fillerWordsKeyword": "语气词",
+              "vocabularyTitle": "词汇",
+              "vocabularyDescription": "听写按你的写法拼写的名称和代码术语，可用于个人或某个仓库。",
+              "vocabularyKeyword": "词典"
             }
           }
         },
@@ -16798,10 +16801,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "为智能体抓取页面上下文",
-                      "body": "使用抓取工具复制页面元素的上下文，供智能体使用"
-                    },
                     "annotate": {
                       "title": "就地标注设计反馈",
                       "body": "为元素添加批注，并把这些备注发送给智能体"
@@ -16934,7 +16933,6 @@
             "244266c122": "导入…",
             "e52a955e6f": "您始终可以在\"设置\">\"浏览器\"中找到它",
             "4f5ffaa6a1": "导入浏览器数据",
-            "b24fef25be": "导入",
             "02e89014c5": "从 {{value1}}{{value2}} 导入 {{value0}} cookie",
             "d40d584769": "已从文件导入 {{value0}} 个 Cookie"
           },
@@ -16995,7 +16993,6 @@
             "4328a0a062": "抓取失败：{{value0}}",
             "759f32af29": "正在下载",
             "4300f38145": "从 {{value0}}{{value1}} 下载",
-            "acbe79fd01": "抓取页面元素 ({{value0}})",
             "cc4a071d3a": "注释页面元素 ({{value0}})",
             "572046436a": "远程浏览器",
             "b313a7275b": "打开远程浏览器",
@@ -19846,7 +19843,9 @@
         "many_other": "已创建 {{count}} 个拉取请求"
       },
       "splitRight": "向右拆分",
-      "splitDown": "向下拆分"
+      "splitDown": "向下拆分",
+      "newRowsAnnouncement": "你离开期间有新消息",
+      "newRowsMarker": "新消息"
     },
     "tab": {
       "bar": {
@@ -20330,7 +20329,10 @@
         "turnDiffsTitle": "每轮更改",
         "turnDiffsCopy": "在回复下方显示每轮更改的文件及其行数。",
         "turnDiffsSearchChangedFiles": "已更改文件",
-        "turnDiffsSearchEdits": "编辑"
+        "turnDiffsSearchEdits": "编辑",
+        "markNewMessagesTitle": "返回聊天时标记新消息",
+        "markNewMessagesCopy": "返回聊天时，在你离开期间收到的内容上方显示“新消息”分隔线；如果你之前在看最新消息，会滚动到该处。",
+        "markNewMessagesSearchUnread": "未读"
       },
       "voice": {
         "dictationLanguage": {
@@ -20411,6 +20413,24 @@
           "local": "这台电脑",
           "cloudDescription": "云端模型会把你的音频发送给服务商。本机模型会把音频留在这台电脑上。",
           "sendsToCompatible": "会把你的音频发送到你设置的服务。"
+        },
+        "vocabulary": {
+          "title": "词汇",
+          "description": "按你的写法拼写的名称和代码术语。如果模型总是听错，可以加上它听成的说法。",
+          "repoScope": "仅在 {{repo}} 中听写时使用。",
+          "personalScope": "在所有仓库中使用。",
+          "scope": "术语范围",
+          "personal": "个人 · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "移除 {{term}}",
+          "term": "词语或短语",
+          "heardAs": "听成（可选）",
+          "heardAsLabel": "听成",
+          "add": "添加",
+          "repoNameHint": "将仓库名用作提示",
+          "repoNameHintDescription": "帮助识别仓库名称。",
+          "repoSaveFailed": "无法保存仓库的术语。运行此仓库的主机可能需要更新 Orca。"
         }
       },
       "repositoryHooks": {
