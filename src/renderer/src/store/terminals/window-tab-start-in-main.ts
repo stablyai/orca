@@ -1,4 +1,4 @@
-import { annotateRecordReplacement } from '@/store/keyed-record-transitions'
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 // Main starts window-drawn tabs under their IDs after recording them; panes wait (D1b-1). Inputs main cannot carry retain window spawn (L252).
 
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -94,13 +94,8 @@ export function startWindowTabInMain(
   const cwd = state.pendingInitialCwdByTabId[tab.id] ?? tab.startupCwd
   if (startup) {
     // Main runs it; a later mount of the pane must not run it again.
-    const { [tab.id]: _started, ...pendingStartupByTabId } = state.pendingStartupByTabId
     store.setState({
-      pendingStartupByTabId: annotateRecordReplacement(
-        state.pendingStartupByTabId,
-        pendingStartupByTabId,
-        [tab.id]
-      )
+      pendingStartupByTabId: replaceRecordEntries(state.pendingStartupByTabId, [[tab.id, null]])
     })
   }
   void callRuntimeRpc<{ terminal: { ptyId: string } }>({ kind: 'local' }, 'terminal.create', {
@@ -132,11 +127,7 @@ export function startWindowTabInMain(
         if (startup && store.getState().terminalLayoutsByTabId[tab.id]) {
           const pending = store.getState().pendingStartupByTabId
           store.setState({
-            pendingStartupByTabId: annotateRecordReplacement(
-              pending,
-              { ...pending, [tab.id]: startup },
-              [tab.id]
-            )
+            pendingStartupByTabId: replaceRecordEntries(pending, [[tab.id, startup]])
           })
         }
         clearWindowTabMark(store, paneKey, mark)

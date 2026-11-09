@@ -1,7 +1,4 @@
-import {
-  annotateTabBucketReplacement,
-  annotateRecordReplacement
-} from '@/store/keyed-record-transitions'
+import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { getFirstTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
@@ -62,17 +59,14 @@ export function createTerminalPtyReleaseActions(
                 : {}),
               ptyId: nextTabPtyId
             }
-            nextTabsByWorktree = { ...s.tabsByWorktree, [wId]: nextTabs }
+            nextTabsByWorktree = replaceTabBuckets(s.tabsByWorktree, [[wId, nextTabs]])
           }
           break
         }
-        const nextPtyIdsByTabId = { ...s.ptyIdsByTabId }
-        if (worktreeId) {
-          nextPtyIdsByTabId[tabId] = remainingPtyIds
-        } else {
-          // Why: repo purge can retire the owning tab before its async exit arrives; don't resurrect an orphan PTY index.
-          delete nextPtyIdsByTabId[tabId]
-        }
+        // Repo purge can retire the tab before exit; a missing owner must not regain bindings.
+        const nextPtyIdsByTabId = replaceRecordEntries(s.ptyIdsByTabId, [
+          [tabId, worktreeId ? remainingPtyIds : null]
+        ])
         const nextPendingPaneAccountRestarts = { ...s.pendingPaneAccountRestarts }
         const nextCodexRestartNoticeByPtyId = { ...s.codexRestartNoticeByPtyId }
         if (ptyId) {
@@ -85,31 +79,21 @@ export function createTerminalPtyReleaseActions(
           }
         }
         // Why: an explicit exit drops the dead relay ID; bulk clears retain it for relay grace.
-        const nextLastKnownRelay = { ...s.lastKnownRelayPtyIdByTabId }
-        if (ptyId && nextLastKnownRelay[tabId] === ptyId) {
+        const relayReplacements: [string, string | null][] = []
+        if (ptyId && s.lastKnownRelayPtyIdByTabId[tabId] === ptyId) {
           // If last-bound relay slot exits, promote a survivor or later bulk relay clearing makes orphan sweep delete the still-live split tab (#9911).
-          const survivingPtyId = remainingPtyIds.at(-1)
-          if (survivingPtyId) {
-            nextLastKnownRelay[tabId] = survivingPtyId
-          } else {
-            delete nextLastKnownRelay[tabId]
-          }
+          relayReplacements.push([tabId, remainingPtyIds.at(-1) || null])
         }
         return {
           ...(nextTabsByWorktree !== s.tabsByWorktree
             ? {
-                tabsByWorktree: annotateTabBucketReplacement(
-                  s.tabsByWorktree,
-                  nextTabsByWorktree,
-                  worktreeId ? [worktreeId] : []
-                )
+                tabsByWorktree: nextTabsByWorktree
               }
             : {}),
-          ptyIdsByTabId: annotateRecordReplacement(s.ptyIdsByTabId, nextPtyIdsByTabId, [tabId]),
-          lastKnownRelayPtyIdByTabId: annotateRecordReplacement(
+          ptyIdsByTabId: nextPtyIdsByTabId,
+          lastKnownRelayPtyIdByTabId: replaceRecordEntries(
             s.lastKnownRelayPtyIdByTabId,
-            nextLastKnownRelay,
-            [tabId]
+            relayReplacements
           ),
           pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId

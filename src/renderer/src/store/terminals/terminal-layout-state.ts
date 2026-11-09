@@ -1,4 +1,4 @@
-import { annotateRecordReplacement } from '@/store/keyed-record-transitions'
+import { replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { terminalLayoutEqual } from '../../../../shared/workspace-layout/terminal-layout-equality'
@@ -50,17 +50,15 @@ export function createTerminalLayoutActions(
           return s
         }
         return {
-          terminalLayoutsByTabId: annotateRecordReplacement(
-            s.terminalLayoutsByTabId,
-            {
-              ...s.terminalLayoutsByTabId,
-              [tabId]: {
+          terminalLayoutsByTabId: replaceRecordEntries(s.terminalLayoutsByTabId, [
+            [
+              tabId,
+              {
                 ...layout,
                 ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId }
               }
-            },
-            [tabId]
-          )
+            ]
+          ])
         }
       })
     },
@@ -87,12 +85,8 @@ export function createTerminalLayoutActions(
           if (!(tabId in s.terminalLayoutsByTabId)) {
             return s
           }
-          const next = { ...s.terminalLayoutsByTabId }
-          delete next[tabId]
           return {
-            terminalLayoutsByTabId: annotateRecordReplacement(s.terminalLayoutsByTabId, next, [
-              tabId
-            ])
+            terminalLayoutsByTabId: replaceRecordEntries(s.terminalLayoutsByTabId, [[tabId, null]])
           }
         }
         const normalized = normalizeTerminalLayoutPtyOwnership(layout)
@@ -109,11 +103,9 @@ export function createTerminalLayoutActions(
           return s
         }
         return {
-          terminalLayoutsByTabId: annotateRecordReplacement(
-            s.terminalLayoutsByTabId,
-            { ...s.terminalLayoutsByTabId, [tabId]: normalized.snapshot },
-            [tabId]
-          )
+          terminalLayoutsByTabId: replaceRecordEntries(s.terminalLayoutsByTabId, [
+            [tabId, normalized.snapshot]
+          ])
         }
       })
       transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, ownershipTransfers)
@@ -140,24 +132,23 @@ export function createTerminalLayoutActions(
           layoutSourcePtyIds.length > 0 ? layoutSourcePtyIds : existingSourcePtyIds
         const sourcePrimaryPtyId =
           resolvePrimaryLayoutPtyId(sourceLayout) ?? sourcePtyIds[0] ?? null
-        const nextPtyIdsByTabId = {
-          ...s.ptyIdsByTabId,
-          [sourceTabId]: sourcePtyIds
-        }
+        const ptyReplacements: [string, string[]][] = [[sourceTabId, sourcePtyIds]]
         if (detachedPtyId) {
-          nextPtyIdsByTabId[targetTabId] = uniquePtyIds([
-            ...(nextPtyIdsByTabId[targetTabId] ?? []),
-            detachedPtyId
+          ptyReplacements.push([
+            targetTabId,
+            uniquePtyIds([
+              ...(targetTabId === sourceTabId
+                ? sourcePtyIds
+                : (s.ptyIdsByTabId[targetTabId] ?? [])),
+              detachedPtyId
+            ])
           ])
         }
-        const nextLastKnownRelayPtyIdByTabId = { ...s.lastKnownRelayPtyIdByTabId }
-        if (sourcePrimaryPtyId) {
-          nextLastKnownRelayPtyIdByTabId[sourceTabId] = sourcePrimaryPtyId
-        } else {
-          delete nextLastKnownRelayPtyIdByTabId[sourceTabId]
-        }
+        const relayReplacements: [string, string | null][] = [
+          [sourceTabId, sourcePrimaryPtyId || null]
+        ]
         if (detachedPtyId) {
-          nextLastKnownRelayPtyIdByTabId[targetTabId] = detachedPtyId
+          relayReplacements.push([targetTabId, detachedPtyId])
         }
         // Why: pane-to-tab detach moves a live PTY without spawning or exiting, so transfer identity without activity bumps.
         const nextTabsByWorktree = withTerminalTabPtyIds(s.tabsByWorktree, [
@@ -165,14 +156,10 @@ export function createTerminalLayoutActions(
           ...(detachedPtyId ? [{ tabId: targetTabId, ptyId: detachedPtyId }] : [])
         ])
         return {
-          ptyIdsByTabId: annotateRecordReplacement(s.ptyIdsByTabId, nextPtyIdsByTabId, [
-            sourceTabId,
-            targetTabId
-          ]),
-          lastKnownRelayPtyIdByTabId: annotateRecordReplacement(
+          ptyIdsByTabId: replaceRecordEntries(s.ptyIdsByTabId, ptyReplacements),
+          lastKnownRelayPtyIdByTabId: replaceRecordEntries(
             s.lastKnownRelayPtyIdByTabId,
-            nextLastKnownRelayPtyIdByTabId,
-            [sourceTabId, targetTabId]
+            relayReplacements
           ),
           ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {})
         }

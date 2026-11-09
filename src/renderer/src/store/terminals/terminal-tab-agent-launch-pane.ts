@@ -1,4 +1,4 @@
-import { annotateTabBucketReplacement } from '@/store/keyed-record-transitions'
+import { replaceTabBuckets } from '@/store/keyed-record-transitions'
 import { getTerminalTabOwnerWorktreeIds } from './terminal-tab-owner-index'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalSlice, TerminalStoreSet } from './terminal-state'
@@ -13,12 +13,12 @@ export function createTerminalTabAgentLaunchPaneActions(
         if (owners.length === 0) {
           return s
         }
-        const next = { ...s.tabsByWorktree }
+        const replacements: [string, TerminalTab[]][] = []
         for (const wId of owners) {
-          if (!next[wId].some((t) => t.id === tabId)) {
+          if (!s.tabsByWorktree[wId].some((t) => t.id === tabId)) {
             continue
           }
-          next[wId] = next[wId].map((t): TerminalTab => {
+          const tabs = s.tabsByWorktree[wId].map((t): TerminalTab => {
             if (t.id !== tabId) {
               return t
             }
@@ -30,8 +30,9 @@ export function createTerminalTabAgentLaunchPaneActions(
               : rest
             return launchPane ? { ...remounted, agentLaunchPane: launchPane } : remounted
           })
+          replacements.push([wId, tabs])
         }
-        return { tabsByWorktree: annotateTabBucketReplacement(s.tabsByWorktree, next, owners) }
+        return { tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, replacements) }
       })
     }
   }

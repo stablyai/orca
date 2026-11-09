@@ -1,4 +1,4 @@
-import { annotateTabBucketReplacement } from '@/store/keyed-record-transitions'
+import { replaceTabBuckets } from '@/store/keyed-record-transitions'
 import { getTerminalTabOwnerWorktreeIds } from './terminal-tab-owner-index'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
@@ -22,12 +22,15 @@ export function createTerminalTabAppearanceActions(
         if (owners.length === 0) {
           return s
         }
-        const next = { ...s.tabsByWorktree }
-        for (const wId of owners) {
-          next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, customTitle: title } : t))
-        }
+        const replacements = owners.map(
+          (wId) =>
+            [
+              wId,
+              s.tabsByWorktree[wId].map((t) => (t.id === tabId ? { ...t, customTitle: title } : t))
+            ] as const
+        )
         scheduleRuntimeGraphSync()
-        return { tabsByWorktree: annotateTabBucketReplacement(s.tabsByWorktree, next, owners) }
+        return { tabsByWorktree: replaceTabBuckets(s.tabsByWorktree, replacements) }
       })
       const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
       if (item?.contentType === 'agent-session') {
@@ -54,11 +57,18 @@ export function createTerminalTabAppearanceActions(
         if (owners.length === 0) {
           return s
         }
-        const next = { ...s.tabsByWorktree }
-        for (const wId of owners) {
-          next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, color } : t))
+        return {
+          tabsByWorktree: replaceTabBuckets(
+            s.tabsByWorktree,
+            owners.map(
+              (wId) =>
+                [
+                  wId,
+                  s.tabsByWorktree[wId].map((t) => (t.id === tabId ? { ...t, color } : t))
+                ] as const
+            )
+          )
         }
-        return { tabsByWorktree: annotateTabBucketReplacement(s.tabsByWorktree, next, owners) }
       })
       const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
       if (item) {

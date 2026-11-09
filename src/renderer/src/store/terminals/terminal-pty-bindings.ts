@@ -1,7 +1,4 @@
-import {
-  annotateTabBucketReplacement,
-  annotateRecordReplacement
-} from '@/store/keyed-record-transitions'
+import { replaceTabBuckets, replaceRecordEntries } from '@/store/keyed-record-transitions'
 import { getFirstTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import {
   isRemoteRuntimePtyId,
@@ -67,10 +64,9 @@ export function createTerminalPtyBindingActions(
               })
             )
             if (changed) {
-              nextTerminalLayoutsByTabId = {
-                ...s.terminalLayoutsByTabId,
-                [tabId]: { ...existingLayout, ptyIdsByLeafId: nextBindings }
-              }
+              nextTerminalLayoutsByTabId = replaceRecordEntries(s.terminalLayoutsByTabId, [
+                [tabId, { ...existingLayout, ptyIdsByLeafId: nextBindings }]
+              ])
             }
           }
         }
@@ -106,7 +102,7 @@ export function createTerminalPtyBindingActions(
                 : {}),
               ptyId: nextTabPtyId
             }
-            nextTabsByWorktree = { ...s.tabsByWorktree, [wId]: nextTabs }
+            nextTabsByWorktree = replaceTabBuckets(s.tabsByWorktree, [[wId, nextTabs]])
           }
           break
         }
@@ -184,29 +180,19 @@ export function createTerminalPtyBindingActions(
         return {
           ...(nextTabsByWorktree !== s.tabsByWorktree
             ? {
-                tabsByWorktree: annotateTabBucketReplacement(
-                  s.tabsByWorktree,
-                  nextTabsByWorktree,
-                  worktreeId ? [worktreeId] : []
-                )
+                tabsByWorktree: nextTabsByWorktree
               }
             : {}),
           ...(nextPtyIds !== existingPtyIds || !(tabId in s.ptyIdsByTabId)
             ? {
-                ptyIdsByTabId: annotateRecordReplacement(
-                  s.ptyIdsByTabId,
-                  { ...s.ptyIdsByTabId, [tabId]: nextPtyIds },
-                  [tabId]
-                )
+                ptyIdsByTabId: replaceRecordEntries(s.ptyIdsByTabId, [[tabId, nextPtyIds]])
               }
             : {}),
           ...(s.lastKnownRelayPtyIdByTabId[tabId] !== ptyId
             ? {
-                lastKnownRelayPtyIdByTabId: annotateRecordReplacement(
-                  s.lastKnownRelayPtyIdByTabId,
-                  { ...s.lastKnownRelayPtyIdByTabId, [tabId]: ptyId },
-                  [tabId]
-                )
+                lastKnownRelayPtyIdByTabId: replaceRecordEntries(s.lastKnownRelayPtyIdByTabId, [
+                  [tabId, ptyId]
+                ])
               }
             : {}),
           ...(nextUnverifiedPtyLossTabIds !== s.unverifiedPtyLossTabIds
@@ -221,11 +207,7 @@ export function createTerminalPtyBindingActions(
           migrationUnsupportedByPtyId: nextMigrationUnsupportedByPtyId,
           ...(nextTerminalLayoutsByTabId !== s.terminalLayoutsByTabId
             ? {
-                terminalLayoutsByTabId: annotateRecordReplacement(
-                  s.terminalLayoutsByTabId,
-                  nextTerminalLayoutsByTabId,
-                  [tabId]
-                )
+                terminalLayoutsByTabId: nextTerminalLayoutsByTabId
               }
             : {}),
           ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})

@@ -1,4 +1,4 @@
-import { annotateTabBucketReplacement } from '@/store/keyed-record-transitions'
+import { replaceTabBuckets } from '@/store/keyed-record-transitions'
 import { getFirstTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import type {
   TerminalLayoutSnapshot,
@@ -56,25 +56,20 @@ export function withTerminalTabPtyIds(
   tabsByWorktree: Record<string, TerminalTab[]>,
   changes: readonly { tabId: string; ptyId: string | null }[]
 ): Record<string, TerminalTab[]> {
-  let next = tabsByWorktree
-  const changedWorktreeIds = new Set<string>()
+  const replacements = new Map<string, TerminalTab[]>()
   for (const { tabId, ptyId } of changes) {
     const worktreeId = getFirstTerminalTabOwnerWorktreeId(tabsByWorktree, tabId)
     if (!worktreeId) {
       continue
     }
-    const tabs = next[worktreeId] ?? []
+    const tabs = replacements.get(worktreeId) ?? tabsByWorktree[worktreeId] ?? []
     const index = tabs.findIndex((tab) => tab.id === tabId)
     if (index === -1 || tabs[index]?.ptyId === ptyId) {
       continue
     }
-    if (next === tabsByWorktree) {
-      next = { ...tabsByWorktree }
-    }
     const nextTabs = [...tabs]
     nextTabs[index] = { ...nextTabs[index]!, ptyId }
-    next[worktreeId] = nextTabs
-    changedWorktreeIds.add(worktreeId)
+    replacements.set(worktreeId, nextTabs)
   }
-  return annotateTabBucketReplacement(tabsByWorktree, next, changedWorktreeIds)
+  return replacements.size > 0 ? replaceTabBuckets(tabsByWorktree, replacements) : tabsByWorktree
 }
