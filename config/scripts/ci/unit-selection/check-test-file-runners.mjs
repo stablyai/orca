@@ -62,6 +62,15 @@ const NON_UNIT_TEST_RUNNERS = [
     sources: ['cloud/apps/relay-edge/vitest.config.ts'],
     mirrors: ["include: ['test/**/*.test.ts']"]
   },
+  {
+    name: 'cloud sandbox-control',
+    include: [
+      'cloud/apps/sandbox-control/test/**/*.test.ts',
+      'cloud/apps/sandbox-control/image/**/*.test.ts'
+    ],
+    sources: ['cloud/apps/sandbox-control/vitest.config.ts'],
+    mirrors: ["include: ['test/**/*.test.ts', 'image/**/*.test.ts']"]
+  },
   ...[
     'cloud/apps/relay-fence-broker',
     'cloud/packages/cloud-database',

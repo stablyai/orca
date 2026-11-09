@@ -1,0 +1,28 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Local `wrangler dev` only. No routes and workers.dev is off, so a deploy from this file
+  // publishes nothing reachable. Deployed environments live in the private deploy config.
+  // Secrets (stdin only, never here): VERCEL_TOKEN (Orca's team, Sandbox scope) and
+  // CONTROL_PLANE_TOKEN (shared with the billing Worker). Local dev: an untracked .dev.vars.
+  "name": "orca-sandbox-control-local",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "d1_databases": [
+    {
+      "binding": "SANDBOX_DB",
+      "database_name": "orca-sandbox-control-local",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Usage settlement, lease/deadline enforcement and stuck-row reconciliation.
+  "triggers": { "crons": ["*/5 * * * *"] },
+  "vars": {
+    "SANDBOX_ENV": "local",
+    "SANDBOX_JWT_AUDIENCE": "orca-sandbox",
+    "VERCEL_REGION": "iad1",
+    // Local dev never calls billing; deployed configs set BILLING_URL and drop this.
+    "ENTITLEMENTS_MODE": "stub"
+  }
+}
