@@ -27,7 +27,7 @@ export function MobileNativeChatDictationLeading({
     return <View style={styles.leadingControls}>{children}</View>
   }
   return (
-    <View style={styles.leadingControls}>
+    <View style={[styles.leadingControls, styles.dictationLeading]}>
       <MobileDictationCancelButton onCancel={live.cancel} targetRef={cancelRef} />
       {micProcessing ? (
         <MobileDictationFinishingNote engine={live.engine} computerName={live.computerName} />

@@ -21,5 +21,9 @@ export const mobileNativeChatComposerStyles = themedStyleSheet(() => ({
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: spacing.sm
+  },
+  // One line while dictating: a long computer name truncates instead of wrapping and growing the composer.
+  dictationLeading: {
+    flexWrap: 'nowrap'
   }
 }))
