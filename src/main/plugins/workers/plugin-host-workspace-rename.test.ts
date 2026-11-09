@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { executePluginHostCall, type PluginHostServices } from './plugin-host-methods'
+import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
 
 function services(runtimeRpc: PluginHostServices['runtimeRpc']): PluginHostServices {
   return {
@@ -32,14 +33,14 @@ const call = (
   method: string,
   params: unknown,
   rpc: PluginHostServices['runtimeRpc'],
-  granted = ['workspace:write']
+  granted: PluginCapabilityKind[] = ['workspace:write']
 ) =>
   executePluginHostCall({
     pluginId: 'samples.demo',
     method,
     params,
     surface: 'worker',
-    grantedCapabilities: granted as never,
+    grantedCapabilities: granted,
     services: services(rpc),
     audit: { record: vi.fn().mockResolvedValue(undefined) }
   })
@@ -68,18 +69,27 @@ describe('workspace.rename', () => {
     await call('workspace.rename', { workspaceId: 'folder:f1', name: 'Notes' }, rpc)
     expect(rpc).toHaveBeenCalledWith(
       'folderWorkspace.update',
-      { folderWorkspaceId: 'f1', updates: { name: 'Notes' } },
+      { folderWorkspaceId: 'f1', requireUniqueId: true, updates: { name: 'Notes' } },
       expect.anything()
     )
   })
 
-  it('refuses blank or multi-line names and plugins without workspace:write', async () => {
+  it('fails when no folder workspace has the id', async () => {
+    const rpc = vi.fn().mockResolvedValue({ folderWorkspace: null })
+    expect(
+      await call('workspace.rename', { workspaceId: 'folder:gone', name: 'Notes' }, rpc)
+    ).toMatchObject({ ok: false, code: 'action_failed' })
+  })
+
+  it('refuses blank, multi-line, bidi or invisible names and plugins without workspace:write', async () => {
     const rpc = vi.fn()
-    for (const name of ['   ', 'a\nb', 'x'.repeat(201)]) {
-      expect(await call('workspace.rename', { workspaceId: 'id-1', name }, rpc)).toMatchObject({
-        ok: false,
-        code: 'invalid_params'
-      })
+    const outcomes = await Promise.all(
+      ['   ', 'a\nb', 'x'.repeat(201), 'main\u202egnp', 'a\u200bb', 'a\u0085b'].map((name) =>
+        call('workspace.rename', { workspaceId: 'id-1', name }, rpc)
+      )
+    )
+    for (const outcome of outcomes) {
+      expect(outcome).toMatchObject({ ok: false, code: 'invalid_params' })
     }
     expect(
       await call('workspace.rename', { workspaceId: 'id-1', name: 'ok' }, rpc, ['workspace:read'])

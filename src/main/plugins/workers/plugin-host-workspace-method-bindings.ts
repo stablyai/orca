@@ -57,6 +57,7 @@ const folderListAnswer = z.object({
     })
   )
 })
+const folderUpdateAnswer = z.object({ folderWorkspace: z.object({}).nullable() })
 const terminalCreateAnswer = z.object({ terminal: z.object({ handle: z.string() }) })
 const terminalReadAnswer = z.object({
   terminal: z.object({
@@ -167,10 +168,15 @@ export const PLUGIN_WORKSPACE_ACTION_HANDLERS = {
     const trimmed = name.trim()
     const scope = parseWorkspaceKey(workspaceId)
     if (scope?.type === 'folder') {
-      await effect(ctx, 'folderWorkspace.update', {
+      // Twins on two hosts can share a folder id; refuse rather than rename both.
+      const answer = await effect(ctx, 'folderWorkspace.update', {
         folderWorkspaceId: scope.folderWorkspaceId,
+        requireUniqueId: true,
         updates: { name: trimmed }
       })
+      if (!folderUpdateAnswer.parse(answer).folderWorkspace) {
+        throw new PluginHostCallError('action_failed', 'no folder workspace has this id')
+      }
       return { name: trimmed }
     }
     // The same update as a rename in the sidebar: the name is pinned, so a branch change keeps it.
