@@ -7,12 +7,16 @@ import {
   Terminal,
   Trash2
 } from 'lucide-react'
+import { useEffect } from 'react'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-disk-space/workspace-space-types'
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { HoverCardContent } from '../ui/hover-card'
 import { formatBytes, getWorkspaceSpaceBranchLabel } from './workspace-space-format'
 import { useTranslate } from '@/i18n/use-translate'
+import { useAppStore } from '@/store'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
+import { findWorktreeReviewOwner } from '@/store/github/refresh/worktree-refresh'
 import type { WorkspaceDecisionDetails } from './workspace-space-decision-details'
 import type { WorkspaceGitRefreshState } from './workspace-space-manager-state-types'
 import { WorkspaceSpaceStatusBadge } from './workspace-space-status-badge'
@@ -69,6 +73,20 @@ export function WorkspaceDecisionHoverCard({
   onOpenWorkspace: () => void
 }): React.JSX.Element {
   const t = useTranslate()
+  // Why: this card shows the linked issue's state, so it owns that issue's freshness while open, reveals included.
+  useEffect(() => {
+    const state = useAppStore.getState()
+    const owner = findWorktreeReviewOwner(state, worktree.worktreeId, worktree.executionHostId)
+    const issueNumber = owner?.worktree.linkedIssue
+    if (!owner || !issueNumber) {
+      return
+    }
+    const { repo } = owner
+    return installWindowVisibilityInterval({
+      run: () => void state.fetchIssue(repo.path, issueNumber, { repoId: repo.id }),
+      intervalMs: 5 * 60_000
+    })
+  }, [worktree.worktreeId, worktree.executionHostId])
   const deleteDecision = getDeleteDecisionLabel(worktree, details, t)
   const issueLabel =
     [details.issueLabel, details.linearIssueLabel].filter(Boolean).join(' · ') ||

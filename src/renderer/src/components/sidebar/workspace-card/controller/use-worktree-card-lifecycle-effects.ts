@@ -110,16 +110,9 @@ export function useWorktreeCardLifecycleEffects({
   ])
 
   // Poll issues only while visible; hidden metadata does not justify GitHub calls.
+  // Why web clients and folders too: this card is the only owner of its issue's freshness; nothing sweeps the catalog.
   useEffect(() => {
-    // Why: per-card decoration lookups from the browser flood the RPC path at paired-web startup; the host is authoritative.
-    if (
-      isWebClient() ||
-      !repo ||
-      isFolder ||
-      !worktree.linkedIssue ||
-      !issueCacheKey ||
-      !showIssue
-    ) {
+    if (!repo || !worktree.linkedIssue || !issueCacheKey || !showIssue) {
       return
     }
 
@@ -130,16 +123,14 @@ export function useWorktreeCardLifecycleEffects({
       run: () => void fetchIssue(repo.path, issueNumber, { repoId: repo.id }),
       intervalMs: 5 * 60_000
     })
-  }, [repo, isFolder, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
+  }, [repo, worktree.linkedIssue, fetchIssue, issueCacheKey, showIssue])
 
   useEffect(() => {
     if (
       !newCardStyle ||
       !hoverDetailsOpen ||
       showIssue ||
-      isWebClient() ||
       !repo ||
-      isFolder ||
       !worktree.linkedIssue ||
       !issueCacheKey
     ) {
@@ -151,7 +142,6 @@ export function useWorktreeCardLifecycleEffects({
     hoverDetailsOpen,
     showIssue,
     repo,
-    isFolder,
     worktree.linkedIssue,
     fetchIssue,
     issueCacheKey
