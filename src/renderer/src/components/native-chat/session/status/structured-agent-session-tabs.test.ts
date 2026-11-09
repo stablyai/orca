@@ -49,4 +49,18 @@ describe('getStructuredAgentSessionTabs order', () => {
     expect(ids(restored)).toEqual(['c2', 'c1'])
     expect(ids({ ...restored })).toEqual(['c2', 'c1'])
   })
+
+  it('keeps the list through chatless workspace changes and places new workspaces last', () => {
+    const start = { a: [tab('c1', 'a', 'agent-session')] }
+    const list = getStructuredAgentSessionTabs(start)
+    const added = replaceTabBuckets(start, [['b', [tab('t1', 'b', 'terminal')]]])
+    expect(getStructuredAgentSessionTabs(added)).toBe(list)
+    const chat = replaceTabBuckets(added, [
+      ['b', [tab('t1', 'b', 'terminal'), tab('cb', 'b', 'agent-session')]]
+    ])
+    expect(ids(chat)).toEqual(['c1', 'cb'])
+    const removed = replaceTabBuckets(chat, [['a', null]])
+    expect(ids(removed)).toEqual(['cb'])
+    expect(ids({ ...removed })).toEqual(['cb'])
+  })
 })
