@@ -6,6 +6,7 @@ import {
   canCopyClaudeSignInLink
 } from '../../shared/claude-sign-in-link'
 import type { ClaudeCommandConfig } from './claude-command-process'
+import { LOCAL_CALLBACK_HOSTS } from '../../shared/host-account-sign-in-types'
 
 const HELPER_NAME = '.orca-sign-in-browser'
 const LINK_SUFFIX = '.link'
@@ -14,7 +15,6 @@ const LINK_WAIT_MS = 60_000
 // Claude discards BROWSER stdout; its printed link uses a different pasted-code flow.
 const HELPER_SCRIPT = `#!/bin/sh\nprintf '%s' "$1" > "$0.tmp" && mv "$0.tmp" "$0${LINK_SUFFIX}"\n`
 const CLAUDE_AUTHORIZE_HOSTS = new Set(['claude.com', 'claude.ai'])
-const LOCAL_CALLBACK_HOSTS = new Set(['localhost', '127.0.0.1'])
 
 export type ClaudeSignInBrowser = {
   /** BROWSER as the Claude process sees it. */

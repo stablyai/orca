@@ -31,6 +31,7 @@ import type {
 import { toCodexManagedAccountSummary } from './codex-account-service-types'
 import { CODEX_LOGIN_CANCELLED_MESSAGE } from '../../shared/codex-auth-errors'
 import type { HostAccountSignInChannel } from '../../shared/host-account-sign-in-types'
+import { publishCodexCallbackPrompt, withoutHostBrowser } from './codex-remote-browser-login'
 export type {
   CodexAccountAddTarget,
   CodexAccountReauthenticateOptions,
@@ -302,7 +303,7 @@ export class CodexAccountService {
             stdio,
             // Hide the outer wrapper; the dedicated login console remains visible.
             windowsHide: true,
-            env
+            env: deviceChannel?.callback ? withoutHostBrowser(env) : env
           })
         },
         killProcessTree: killLoginProcessTree,
@@ -310,9 +311,14 @@ export class CodexAccountService {
           this.cancelPendingCodexLogin = cancel
           cancelThisLogin = cancel
         },
-        onAuthUrl: (url) => this.setPendingLoginUrl(url),
+        // A remote person's sign-in link is theirs; this host's Orca windows don't offer it.
+        onAuthUrl: (url) =>
+          deviceChannel?.callback
+            ? publishCodexCallbackPrompt(deviceChannel, url)
+            : this.setPendingLoginUrl(url),
         openWslAuthUrl: this.openWslLoginUrl,
-        ...(deviceChannel
+        ...(deviceChannel?.callback ? { remoteBrowser: true as const } : {}),
+        ...(deviceChannel && !deviceChannel.callback
           ? {
               deviceAuth: {
                 onPrompt: ({ url, userCode }) =>

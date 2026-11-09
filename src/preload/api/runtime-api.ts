@@ -1,4 +1,8 @@
 import type {
+  AuthCallbackForwardRequest,
+  AuthCallbackForwardResult
+} from '../../shared/auth-callback-forward'
+import type {
   CrewSubscriptionAttemptArgs,
   CrewSubscriptionAttemptCallbacks,
   CrewSubscriptionSetupResult
@@ -92,6 +96,13 @@ export type RuntimeApi = {
   }
   runtimeEnvironments: {
     desktopCreatedChatIds?: () => Promise<string[]>
+    // Absent in the web client, which cannot listen on this computer's loopback.
+    openAuthCallbackForward?: (
+      request: AuthCallbackForwardRequest
+    ) => Promise<AuthCallbackForwardResult>
+    closeAuthCallbackForward?: (
+      request: Pick<AuthCallbackForwardRequest, 'environmentId' | 'flowId'>
+    ) => Promise<void>
     getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>
     onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void) => () => void
     // Absent in the web client, whose catalog lives in the browser rather than a CLI-editable file.
