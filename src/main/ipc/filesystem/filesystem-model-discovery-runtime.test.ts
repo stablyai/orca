@@ -1,6 +1,9 @@
 import { afterEach, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ handle: vi.fn(), env: vi.fn(), discover: vi.fn() }))
-vi.mock('electron', () => ({ ipcMain: { handle: mocks.handle } }))
+vi.mock('electron', () => ({
+  app: { getPath: () => '/tmp', isPackaged: false },
+  ipcMain: { handle: mocks.handle }
+}))
 vi.mock('../../text-generation/commit-message-agent-environment', () => ({
   prepareLocalCommitMessageAgentEnv: mocks.env
 }))
