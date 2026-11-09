@@ -1,7 +1,8 @@
-// 4a rows, percentiles and the PR-body table: main vs candidate per row, keyed by each arm's head SHA.
+// 4a rows, percentiles and the PR-body table: main vs candidate per row, keyed by each arm's pinned full SHA.
 import { writeFileSync } from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import type { ArmProvenance } from './native-chat-4a-arm-provenance'
 import type { HostWork } from './native-chat-4a-probes'
 import type { Workload } from './native-chat-4a-workloads'
 
@@ -32,6 +33,7 @@ export type Row = {
 export type ArmResult = {
   arm: string
   sha: string
+  provenance: ArmProvenance
   startedAt: string
   finishedAt: string
   rows: Row[]
@@ -90,6 +92,14 @@ function delta(base: Stat | null, next: Stat | null): string {
   return `${change >= 0 ? '+' : ''}${ms(change)}${percent}`
 }
 
+/** One line per arm: the full pinned SHA and the build output that proved it. */
+const provenanceLine = ({ arm, provenance: p }: ArmResult): string =>
+  `- ${arm}: \`${p.sha}\` (pinned \`${p.expectedSha}\`, committed ${p.headCommittedAt}); clean product sources; build stamp \`${p.builtCommit}\` in ${p.stampFiles}; out/main/index.js sha256 \`${p.mainBundleSha256}\`; built ${p.artifactBuiltAt}, after the newest source ${p.newestSourceFile} (${p.newestSourceModifiedAt}).`
+
+// No product hook or timing field exposes it, and SQLite state records no transaction start, so it is disclosed, not derived.
+const WRITER_SPAN_DISCLOSURE =
+  'Not measured: writer BEGIN → COMMIT and grouped-transaction spans. Neither arm exposes them without a product hook, and on-disk SQLite state records commits but not when a transaction began; host spans above include storage but are not transaction durations.'
+
 const caseCell = (row: Row): string =>
   row.endToEndOnly ? `${row.variant} (end-to-end only: ${row.endToEndOnly})` : row.variant
 
@@ -113,6 +123,9 @@ export function comparisonMarkdown(base: ArmResult, next: ArmResult): string {
   const lines = [
     `4a comparison: ${base.arm} \`${base.sha.slice(0, 11)}\` vs ${next.arm} \`${next.sha.slice(0, 11)}\` (p50 / p95 / max ms, nearest rank).`,
     '',
+    provenanceLine(base),
+    provenanceLine(next),
+    '',
     `| Family | Operation | Case | ${base.arm} | ${next.arm} | Δ p95 | Host span p95 ${base.arm} → ${next.arm} | Off-main CPU p95 ${base.arm} → ${next.arm} | Shape |`,
     '| --- | --- | --- | --- | --- | --- | --- | --- | --- |'
   ]
@@ -134,7 +147,9 @@ export function comparisonMarkdown(base: ArmResult, next: ArmResult): string {
   }
   lines.push(
     '',
-    'Primary latency is action → visible result where the row has a rendered end point, else the RPC host span. Off-main CPU is process CPU minus main-thread event-loop active time (storage workers). Conversion rows are one-time import cost, reported separately from steady state; steady-state families start only after every chat is seen ready. Rows whose Shape names `observedDatabase` end at an outside read-only SQLite observation and carry its resolution. Per-row spans, WAL/file growth, event-loop lag and peak memory are in the JSON.'
+    'Primary latency is action → visible result where the row has a rendered end point, else the RPC host span. Off-main CPU is process CPU minus main-thread event-loop active time (storage workers). Conversion rows are one-time import cost, reported separately from steady state; steady-state families start only after every chat is seen ready. Rows whose Shape names `observedDatabase` end at an outside read-only SQLite observation and carry its resolution. Per-row spans, WAL/file growth, event-loop lag and peak memory are in the JSON.',
+    '',
+    WRITER_SPAN_DISCLOSURE
   )
   return `${lines.join('\n')}\n`
 }
@@ -142,6 +157,8 @@ export function comparisonMarkdown(base: ArmResult, next: ArmResult): string {
 export function armMarkdown(result: ArmResult): string {
   const lines = [
     `4a ${result.arm} \`${result.sha.slice(0, 11)}\` (p50 / p95 / max ms).`,
+    '',
+    provenanceLine(result),
     '',
     '| Family | Operation | Case | Primary | Host span | Shape |',
     '| --- | --- | --- | --- | --- | --- |'

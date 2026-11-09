@@ -1,7 +1,7 @@
 // The 4a "no slower than main" comparison: one profile seeded once, every arm measured on its own copy, one JSON + one table.
 // Dry run (no app): pnpm exec tsx config/scripts/performance/native-chat/native-chat-4a-comparison.ts --profile full --dry-run
-// Full run:        ... --arm main=<built main checkout> --arm candidate=<built candidate checkout> --profile full --out <dir> [--large-source]
-// Re-table:        ... --out <dir> --report-only
+// Full run:        ... --arm main=<built main checkout>@<full sha> --arm candidate=<built candidate checkout>@<full sha> --profile full --out <dir> [--large-source]
+// Re-table:        ... --out <dir> --report-only [--arm main=@<full sha> --arm candidate=@<full sha>]
 import {
   existsSync,
   mkdirSync,
@@ -14,6 +14,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { parseArgs } from 'node:util'
 import type { Arm } from './native-chat-4a-arm'
+import { assertOneRun, parseArmSpec, seededBy } from './native-chat-4a-arm-provenance'
 import type { Manifest } from './native-chat-4a-fixture'
 import type { RunContext } from './native-chat-4a-run-context'
 import { armMarkdown, writeComparison, type ArmResult, type Row } from './native-chat-4a-report'
@@ -194,6 +195,7 @@ async function runArm(input: {
   return {
     arm: input.arm.name,
     sha: input.arm.sha,
+    provenance: input.arm.provenance,
     startedAt,
     finishedAt: new Date().toISOString(),
     rows,
@@ -202,6 +204,8 @@ async function runArm(input: {
       worktreeIds: input.manifest.workspace.worktreeIds.join(' '),
       seedArm: input.manifest.seedArm,
       seedSha: input.manifest.seedSha,
+      recipe: input.manifest.recipe,
+      largeSourceRecipe: input.largeSource?.manifest.recipe ?? 'none',
       largeItems: input.manifest.largeItems,
       storageBytes: input.manifest.storageBytes,
       seedMs: input.manifest.seedMs
@@ -221,6 +225,7 @@ async function main(): Promise<void> {
       .filter((file) => /^arm-.*\.json$/.test(file))
       .map((file): ArmResult => JSON.parse(readFileSync(path.join(out, file), 'utf8')))
       .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
+    assertOneRun(results, values.arm.map(parseArmSpec))
     writeComparison(out, workload, results, log)
     return
   }
@@ -237,15 +242,16 @@ async function main(): Promise<void> {
   const scratch = path.join(out, 'scratch')
   mkdirSync(scratch, { recursive: true })
   const arms: Arm[] = []
-  for (const spec of values.arm) {
-    const [name, root] = spec.split('=')
-    if (!name || !root) {
-      throw new Error(`--arm takes name=checkout, got ${spec}`)
+  for (const spec of values.arm.map(parseArmSpec)) {
+    if (!spec.root) {
+      throw new Error(`--arm ${spec.name} names no checkout`)
     }
-    arms.push(await resolveArm(name, root, scratch))
+    arms.push(await resolveArm(spec, scratch))
   }
   if (arms.length === 0) {
-    throw new Error('Pass at least one --arm name=<built checkout>; main first, then the candidate')
+    throw new Error(
+      'Pass at least one --arm name=<built checkout>@<full sha>; main first, then the candidate'
+    )
   }
   const stubCommand = writeProviderStub(path.join(out, 'stub'))
   const repoFile = path.join(out, 'repo-path.txt')
@@ -265,13 +271,16 @@ async function main(): Promise<void> {
       toolOutputBytes,
       log
     })
-  const manifest = await seed(workload.history.toolOutputBytes, workload)
+  const manifest = seededBy(seedArm, await seed(workload.history.toolOutputBytes, workload))
   const large =
     values['large-source'] && workload.conversionSourceBytes > 0
-      ? await seed(conversionToolOutputBytes(workload), {
-          ...workload,
-          history: { ...workload.history, fillerChats: 5, mediumTurns: 0 }
-        })
+      ? seededBy(
+          seedArm,
+          await seed(conversionToolOutputBytes(workload), {
+            ...workload,
+            history: { ...workload.history, fillerChats: 5, mediumTurns: 0 }
+          })
+        )
       : null
   const results: ArmResult[] = []
   for (const arm of arms) {
