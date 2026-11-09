@@ -47,6 +47,8 @@ export type PrepareEphemeralVmWorkspaceTargetResult =
   | {
       ok: false
       error: string
+      /** Catalogued failure code, e.g. cloudPlanRequired for the Orca Cloud upsell. */
+      errorCode?: string
       stderr: string
     }
 
@@ -63,7 +65,12 @@ export async function prepareEphemeralVmWorkspaceTarget(
     ...(args.provisionId ? { provisionId: args.provisionId } : {})
   })
   if (!provisioned.ok) {
-    return { ok: false, error: ephemeralVmErrorText(provisioned), stderr: provisioned.stderr }
+    return {
+      ok: false,
+      error: ephemeralVmErrorText(provisioned),
+      ...(provisioned.errorCode ? { errorCode: provisioned.errorCode } : {}),
+      stderr: provisioned.stderr
+    }
   }
 
   const checkoutMode = getEphemeralVmRecipeResultCheckoutMode(provisioned.runtime.recipeResult)

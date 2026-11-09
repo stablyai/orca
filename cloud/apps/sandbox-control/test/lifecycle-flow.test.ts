@@ -225,4 +225,17 @@ describe('sandbox control plane cron', () => {
     const h = await createHarness()
     expect((await h.call('POST', '/v1/sandboxes', { body: { ...create, machineSize: 'xlarge' } })).status).toBe(400)
   })
+
+  it('applies billing\'s account cap and tells billing which member starts and ran each segment', async () => {
+    const h = await createHarness()
+    h.billing.decision = { allow: true, reason: null, suspendRunning: false, maxConcurrentSandboxes: 1 }
+    const first = await h.call('POST', '/v1/sandboxes', { body: create })
+    expect(first.status).toBe(200)
+    const second = await h.call('POST', '/v1/sandboxes', { body: { ...create, workspaceId: 'ws-2' }, as: 'alice' })
+    expect(second.status).toBe(403)
+    expect(h.billing.requests[1]).toMatchObject({ userId: 'alice', runningSandboxes: 1, runningSandboxesForUser: 1 })
+    h.advance(5 * MIN)
+    await h.call('POST', `/v1/sandboxes/${first.body.sandbox.id}/suspend`)
+    expect(h.billing.usage[0]).toMatchObject({ userId: 'alice', sandboxId: first.body.sandbox.id })
+  })
 })

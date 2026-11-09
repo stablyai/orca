@@ -40,7 +40,11 @@ export type OrcaVmRecipe = {
   destroyDisabled?: boolean
   // Per-mode wall-clock limits; orca.yaml accepts one number for every mode or a per-mode map.
   timeoutSeconds?: OrcaVmRecipeTimeoutSeconds
+  /** Built-in providers run in-process; the lifecycle strings are labels, never executed. */
+  provider?: OrcaVmRecipeProviderId
 }
+
+export type OrcaVmRecipeProviderId = 'orca-cloud'
 
 export type OrcaVmRecipeLifecycleMode = 'create' | 'suspend' | 'resume' | 'destroy'
 

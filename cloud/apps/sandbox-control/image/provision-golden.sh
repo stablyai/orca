@@ -32,6 +32,14 @@ bundle="$(mktemp -d)/orcad.tgz"
 fetch_verified "$ORCAD_BUNDLE_URL" "$ORCAD_BUNDLE_SHA256" "$bundle"
 tar -xzf "$bundle" -C "$ORCA_HOME/runtime"
 rm -rf "$(dirname "$bundle")"
+# Release tarballs (orca-server-linux-*) may nest the server; normalize to runtime/orcad + runtime/runtimes.
+if [ ! -s "$ORCA_HOME/runtime/orcad/orcad-server.js" ]; then
+  server="$(find "$ORCA_HOME/runtime" -name orcad-server.js -type f | head -n 1)"
+  [ -n "$server" ] || { log 'bundle has no orcad-server.js'; exit 1; }
+  root="$(dirname "$(dirname "$server")")"
+  ln -sfn "$(dirname "$server")" "$ORCA_HOME/runtime/orcad"
+  [ -d "$ORCA_HOME/runtime/runtimes" ] || ln -sfn "$root/runtimes" "$ORCA_HOME/runtime/runtimes"
+fi
 test -s "$ORCA_HOME/runtime/orcad/orcad-server.js"
 node="$(find "$ORCA_HOME/runtime/runtimes" -type f -name node | head -n 1)"
 test -x "$node"

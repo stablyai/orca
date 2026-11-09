@@ -1,0 +1,30 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Local `wrangler dev` only. No routes and workers.dev is off, so a deploy from this file
+  // publishes nothing reachable. Deployed environments live in the private deploy config.
+  // Secrets (stdin only, never here): STRIPE_SECRET_KEY (rk_test_...), STRIPE_WEBHOOK_SECRET,
+  // CONTROL_PLANE_TOKEN. For local dev put them in an untracked .dev.vars.
+  "name": "orca-billing-local",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": false,
+  "d1_databases": [
+    {
+      "binding": "BILLING_DB",
+      "database_name": "orca-billing-local",
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Retries Stripe meter reports that failed inline.
+  "triggers": { "crons": ["*/10 * * * *"] },
+  "vars": {
+    "STRIPE_API_VERSION": "2025-09-30.clover",
+    "STRIPE_METER_EVENT_NAME": "orca_sandbox_seconds",
+    "STRIPE_PRICE_TEAM_MONTHLY": "price_local_team_month",
+    "STRIPE_PRICE_TEAM_ANNUAL": "price_local_team_year",
+    "STRIPE_PRICE_OVERAGE": "price_local_overage",
+    "BILLING_RETURN_URL": "http://127.0.0.1:8790/return",
+    "BILLING_JWT_AUDIENCE": "orca-billing"
+  }
+}

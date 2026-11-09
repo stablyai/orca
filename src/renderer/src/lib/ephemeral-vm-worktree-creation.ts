@@ -7,6 +7,7 @@ import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
 import { gateVmCreateOnEnvironmentCheck } from '@/lib/ephemeral-vm-environment-check'
+import { showOrcaCloudPlanUpsell } from '@/lib/orca-cloud-session-events'
 import {
   appendProvisioningLog,
   appendProvisioningWarnings
@@ -73,7 +74,9 @@ async function prepareEphemeralVmRecipeRequest(
       status: 'error',
       error: preparedTarget.error
     })
-    if (useAppStore.getState().activePendingCreationId !== creationId) {
+    if (preparedTarget.errorCode === 'cloudPlanRequired') {
+      showOrcaCloudPlanUpsell(preparedTarget.error)
+    } else if (useAppStore.getState().activePendingCreationId !== creationId) {
       toast.error(preparedTarget.error)
     }
     return null

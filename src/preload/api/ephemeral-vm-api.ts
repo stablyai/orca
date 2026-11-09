@@ -1,4 +1,8 @@
 import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
+import type {
+  HostedSessionIdleSleepEvent,
+  HostedSessionWarningEvent
+} from '../../shared/hosted-sandbox/hosted-session-events'
 import type { PublicKnownRuntimeEnvironment } from '../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { EphemeralVmRecipeDoctorResult } from '../../shared/ephemeral-vm-recipes'
 import type { EphemeralVmRecipeResultWarning } from '../../shared/ephemeral-vm-recipe-diagnostics'
@@ -63,6 +67,10 @@ export type EphemeralVmApi = {
   onProvisionEvent: (
     callback: (event: { provisionId: string; stream: 'stdout' | 'stderr'; chunk: string }) => void
   ) => () => void
+  /** Orca Cloud: the session nears its cap (60/15 min left); running agents resume after the restart. */
+  onCloudSessionWarning: (callback: (event: HostedSessionWarningEvent) => void) => () => void
+  /** Orca Cloud: the workspace has been idle long enough to sleep through the ordinary Sleep flow. */
+  onCloudIdleSleepRequested: (callback: (event: HostedSessionIdleSleepEvent) => void) => () => void
   listRuntimes: () => Promise<EphemeralVmRuntimeRecord[]>
   attachWorkspace: (args: {
     runtimeId: string

@@ -64,5 +64,9 @@ export const orcaProfilesApi = {
   orgMemberInvite: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberInvite', args),
   orgInviteRevoke: (args) => ipcRenderer.invoke('orcaProfiles:orgInviteRevoke', args),
   orgMemberChangeRole: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberChangeRole', args),
-  orgMemberRemove: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberRemove', args)
+  orgMemberRemove: (args) => ipcRenderer.invoke('orcaProfiles:orgMemberRemove', args),
+  billingStatus: () => ipcRenderer.invoke('orcaProfiles:billingStatus'),
+  billingOpenCheckout: (args) => ipcRenderer.invoke('orcaProfiles:billingOpenCheckout', args),
+  billingOpenPortal: () => ipcRenderer.invoke('orcaProfiles:billingOpenPortal'),
+  billingSetOverage: (args) => ipcRenderer.invoke('orcaProfiles:billingSetOverage', args)
 } satisfies PreloadApi['orcaProfiles']

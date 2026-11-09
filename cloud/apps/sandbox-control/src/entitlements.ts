@@ -13,6 +13,8 @@ export type StartDecision = {
   suspendRunning: boolean
   /** Paid seats, when billing reports them; scales the control plane's per-account backstop. */
   seats?: number
+  /** Billing's account-wide cap (3 × billed seats); replaces the seat-derived backstop when present. */
+  maxConcurrentSandboxes?: number
 }
 
 export type UsageSegment = {
@@ -22,6 +24,8 @@ export type UsageSegment = {
   machineSize: MachineSize
   startedAt: number
   endedAt: number
+  /** The member who ran the sandbox, for per-member attribution in billing. */
+  userId?: string
 }
 
 export type UsageAnswer = { canStartSandbox: boolean; reason: string | null; suspendRunning: boolean }
@@ -31,6 +35,9 @@ export type EntitlementClient = {
     accountId: string
     machineSize: MachineSize
     runningSandboxes: number
+    /** The member starting it; billing caps each member (member_concurrency_limit). */
+    userId?: string
+    runningSandboxesForUser?: number
   }): Promise<StartDecision>
   reportUsage(segment: UsageSegment): Promise<UsageAnswer>
   /** Accounts whose payment grace expired; polled by the cron. */
@@ -48,7 +55,8 @@ const StartAnswer = z.looseObject({
   allow: z.boolean(),
   reason: z.string().nullable(),
   suspendRunning: z.boolean().default(false),
-  seats: z.number().int().positive().max(100_000).optional()
+  seats: z.number().int().nonnegative().max(100_000).optional(),
+  maxConcurrentSandboxes: z.number().int().nonnegative().max(1_000_000).optional()
 })
 const UsageResponse = z.looseObject({
   canStartSandbox: z.boolean(),
@@ -77,7 +85,8 @@ export const STOP_RUNNING_REASONS: ReadonlySet<string> = new Set([
 
 /** Dev operator test accounts (`dev:*`, see auth.ts) never reach billing outside prod. */
 export function withDevAccountBypass(env: Env, client: EntitlementClient): EntitlementClient {
-  if (env.SANDBOX_ENV === 'prod') {
+  // SANDBOX_DEV_BILLING_PASSTHROUGH=true sends dev accounts to billing too (live smoke of the internal routes).
+  if (env.SANDBOX_ENV === 'prod' || env.SANDBOX_DEV_BILLING_PASSTHROUGH === 'true') {
     return client
   }
   return {

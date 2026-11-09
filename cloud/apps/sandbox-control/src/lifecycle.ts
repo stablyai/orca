@@ -20,6 +20,7 @@ import { ORCAD_PORT, drainOrcad, startOrcad, type OrcadReady } from './sandbox-v
 import {
   NO_SESSION,
   countActiveSandboxes,
+  countActiveSandboxesForUser,
   getSandbox,
   insertSandbox,
   listAccountSandboxes,
@@ -156,17 +157,27 @@ export function guardrails(deps: LifecycleDeps): GuardrailConfig {
   return deps.config.guardrails ?? DEFAULT_GUARDRAILS
 }
 
-async function requireStart(deps: LifecycleDeps, accountId: string, machineSize: MachineSize) {
+async function requireStart(deps: LifecycleDeps, accountId: string, userId: string, machineSize: MachineSize) {
   await assertStartsOpen(deps.db, guardrails(deps))
   const runningSandboxes = await countActiveSandboxes(deps.db, accountId)
-  const decision = await deps.entitlements.checkStart({ accountId, machineSize, runningSandboxes })
+  const runningSandboxesForUser = await countActiveSandboxesForUser(deps.db, accountId, userId)
+  const decision = await deps.entitlements.checkStart({
+    accountId,
+    machineSize,
+    runningSandboxes,
+    userId,
+    runningSandboxesForUser
+  })
   if (decision.suspendRunning) {
     await suspendAccountRunning(deps, accountId)
   }
   if (!decision.allow) {
     throw new LifecycleError('entitlement_denied', decision.reason ?? 'denied')
   }
-  await assertAccountCapacity(deps.db, guardrails(deps), accountId, decision.seats)
+  await assertAccountCapacity(deps.db, guardrails(deps), accountId, {
+    seats: decision.seats,
+    maxConcurrentSandboxes: decision.maxConcurrentSandboxes
+  })
 }
 
 async function boot(deps: LifecycleDeps, row: SandboxRow, state: ProviderSandboxState, repo?: { url: string; ref?: string }): Promise<Ready> {
@@ -249,7 +260,7 @@ export async function createSandbox(
     }
     return { row: existing, connection: await startOrcad(deps.provider, state, { sandboxId: existing.id }) }
   }
-  await requireStart(deps, caller.accountId, request.machineSize)
+  await requireStart(deps, caller.accountId, caller.userId, request.machineSize)
   const id = randomId()
   const row = await insertSandbox(
     deps.db,
@@ -362,7 +373,7 @@ export async function resumeSandbox(deps: LifecycleDeps, row: SandboxRow): Promi
   if (row.status !== 'suspended') {
     throw new LifecycleError('conflict', `sandbox_${row.status}`)
   }
-  await requireStart(deps, row.account_id, row.machine_size)
+  await requireStart(deps, row.account_id, row.user_id, row.machine_size)
   const resuming = await claim(deps, row, { status: 'resuming' })
   return wake(deps, resuming)
 }

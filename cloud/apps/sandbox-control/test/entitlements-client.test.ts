@@ -13,13 +13,16 @@ describe('billing client', () => {
       if (url.pathname === '/v1/internal/suspensions') {
         return Response.json({ accounts: [{ accountId: 'org:o1', pastDueSince: 1, graceEndsAt: 2 }] })
       }
-      return Response.json({ allow: false, reason: 'payment_grace_expired', suspendRunning: true, entitlement: {} })
+      // Live billing dev answers seats 0 / cap 0 for an account without a subscription.
+      return Response.json({ allow: false, reason: 'payment_grace_expired', suspendRunning: true, seats: 0, maxConcurrentSandboxes: 0, entitlement: {} })
     })
     expect(await client.listSuspensions()).toEqual(['org:o1'])
     expect(await client.checkStart({ accountId: 'org:o1', machineSize: 'standard', runningSandboxes: 0 })).toEqual({
       allow: false,
       reason: 'payment_grace_expired',
       suspendRunning: true,
+      seats: 0,
+      maxConcurrentSandboxes: 0,
       entitlement: {}
     })
     expect(seen[0]).toBe(`GET /v1/internal/suspensions Bearer ${env.CONTROL_PLANE_TOKEN}`)

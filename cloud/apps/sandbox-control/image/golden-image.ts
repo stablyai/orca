@@ -34,6 +34,32 @@ export function manifestGaps(manifest: GoldenImageManifest): string[] {
   return gaps
 }
 
+/**
+ * Orca releases ship `orca-server-linux-<arch>.tar.gz` plus `orca-server-sha256sums.txt` (stablyai/orca#40280).
+ * Pinning a release tag replaces the ~100 s in-sandbox source build; a manual bundleUrl/sha256 stays the fallback.
+ */
+export async function resolveReleaseBundle(
+  tag: string,
+  arch: 'x64' | 'arm64' = 'x64',
+  doFetch: typeof fetch = fetch
+): Promise<{ bundleUrl: string; sha256: string }> {
+  if (!/^v\d+\.\d+\.\d+$/.test(tag)) {
+    throw new Error(`release tag must look like v1.2.3: ${tag}`)
+  }
+  const base = `https://github.com/stablyai/orca/releases/download/${tag}`
+  const asset = `orca-server-linux-${arch}.tar.gz`
+  const response = await doFetch(`${base}/orca-server-sha256sums.txt`)
+  if (!response.ok) {
+    throw new Error(`${tag} has no orca-server-sha256sums.txt (HTTP ${response.status}); use the source build`)
+  }
+  const line = (await response.text()).split('\n').find((l) => l.trim().endsWith(asset))
+  const sha256 = line?.trim().split(/\s+/)[0]
+  if (!sha256 || !/^[a-f0-9]{64}$/.test(sha256)) {
+    throw new Error(`${tag} lists no checksum for ${asset}`)
+  }
+  return { bundleUrl: `${base}/${asset}`, sha256 }
+}
+
 export type BuildInputs = {
   manifest: GoldenImageManifest
   provisionScript: string

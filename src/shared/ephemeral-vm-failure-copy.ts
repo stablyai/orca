@@ -35,7 +35,13 @@ export const EPHEMERAL_VM_FAILURE_COPY = {
   destroyDisabled: 'Destroy is disabled for this recipe.',
   cleanupStopped: 'Cleanup stopped by user.',
   cleanupInterrupted: 'Cleanup was interrupted. Retry cleanup to continue.',
-  sshTargetRemoveFailed: 'Failed to remove the hidden SSH target.'
+  sshTargetRemoveFailed: 'Failed to remove the hidden SSH target.',
+  cloudPlanRequired:
+    'Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.',
+  cloudConcurrencyLimit:
+    'You already have as many Orca Cloud workspaces running as your plan allows. Sleep or delete one, then try again.',
+  cloudSignInRequired: 'Sign in to Orca to use Orca Cloud workspaces.',
+  cloudUnavailable: 'Orca Cloud is unavailable right now. Try again in a moment.'
 } as const
 
 export type EphemeralVmFailureCode = keyof typeof EPHEMERAL_VM_FAILURE_COPY

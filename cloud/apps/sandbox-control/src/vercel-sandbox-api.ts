@@ -295,8 +295,21 @@ export function createVercelSandboxApi(
       }
     },
 
-    deleteSnapshot: (snapshotId) =>
-      missingOk(() => request('DELETE', `/v2/sandboxes/snapshots/${encodeURIComponent(snapshotId)}`))
+    async deleteSnapshot(snapshotId) {
+      const path = `/v2/sandboxes/snapshots/${encodeURIComponent(snapshotId)}`
+      try {
+        await missingOk(() => request('DELETE', path))
+      } catch (error) {
+        // Vercel answers 400 "Snapshot expired or deleted" for one already gone (found live); confirm, then accept.
+        if (!(error instanceof ProviderError && error.status === 400)) {
+          throw error
+        }
+        const current = await json(z.looseObject({ snapshot: Snapshot }), await request('GET', path))
+        if (current.snapshot.status !== 'deleted') {
+          throw error
+        }
+      }
+    }
   }
 }
 

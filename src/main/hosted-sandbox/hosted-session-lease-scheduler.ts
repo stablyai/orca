@@ -25,6 +25,8 @@ export type HostedSessionLeasePorts = {
   reconnect: (ready: EnvironmentReady) => Promise<void>
   resumeAgents: (drainStartedAt: number) => Promise<HostedAgentAutoResumeOutcome>
   onSuspended: () => void
+  /** Replaces the driver suspend, e.g. to run the window's ordinary Sleep for the workspace. */
+  suspend?: () => Promise<void>
   log?: (line: string) => void
   now?: () => number
 }
@@ -98,7 +100,9 @@ export class HostedSessionLeaseScheduler {
         this.ports.warn(action.minutesLeft)
         break
       case 'idle-suspend':
-        await this.ports.driver.suspend(this.ports.handle)
+        await (this.ports.suspend
+          ? this.ports.suspend()
+          : this.ports.driver.suspend(this.ports.handle))
         this.stop()
         this.ports.onSuspended()
         break

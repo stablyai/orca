@@ -121,7 +121,13 @@ const COPY: Record<EphemeralVmFailureCode, (params: Params | undefined) => strin
   cleanupInterrupted: () =>
     translate('ephemeralVm.errors.cleanupInterrupted', EN.cleanupInterrupted),
   sshTargetRemoveFailed: () =>
-    translate('ephemeralVm.errors.sshTargetRemoveFailed', EN.sshTargetRemoveFailed)
+    translate('ephemeralVm.errors.sshTargetRemoveFailed', EN.sshTargetRemoveFailed),
+  cloudPlanRequired: () => translate('ephemeralVm.errors.cloudPlanRequired', EN.cloudPlanRequired),
+  cloudConcurrencyLimit: () =>
+    translate('ephemeralVm.errors.cloudConcurrencyLimit', EN.cloudConcurrencyLimit),
+  cloudSignInRequired: () =>
+    translate('ephemeralVm.errors.cloudSignInRequired', EN.cloudSignInRequired),
+  cloudUnavailable: () => translate('ephemeralVm.errors.cloudUnavailable', EN.cloudUnavailable)
 }
 
 function isEphemeralVmFailureCode(code: string): code is EphemeralVmFailureCode {

@@ -9,6 +9,7 @@ import {
 } from '../../shared/ephemeral-vm-recipes'
 import { resolveEnvironment } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 import { resumeEphemeralVmRuntime } from './runtime-service'
+import { syncHostedSessions } from '../hosted-sandbox/hosted-session-sync'
 import { connectRuntimeOwnedSshTarget, refreshRuntimeOwnedSshTarget } from './runtime-ssh'
 import { noteRecipeVmWakePairing } from './recipe-vm-wake-pairings'
 import { applyResumedRuntimePairing } from './runtime-resume-pairing'
@@ -149,6 +150,7 @@ export async function resumeEphemeralVmWorkspace(
       throw error
     }
   }
+  syncHostedSessions()
   return result.runtime
 }
 

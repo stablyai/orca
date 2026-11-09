@@ -41,7 +41,8 @@ const EphemeralVmRuntimeRecipeSchema = z
     suspend: z.string().min(1).optional(),
     resume: z.string().min(1).optional(),
     destroy: z.string().min(1).optional(),
-    destroyDisabled: z.boolean().optional()
+    destroyDisabled: z.boolean().optional(),
+    provider: z.literal('orca-cloud').optional()
   })
   .strict()
 

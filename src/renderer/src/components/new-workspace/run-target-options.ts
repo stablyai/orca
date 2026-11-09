@@ -45,6 +45,10 @@ export function getRecipeDestroyLabel(
 }
 
 export function getRecipeDetail(recipe: EphemeralVmRecipeOption, t?: Translate): string {
+  // Built-in providers run in-process; their lifecycle strings are labels, not commands to show.
+  if (recipe.provider && recipe.description) {
+    return recipe.description
+  }
   return `${getRecipeCommandDisplay(recipe.create)} · ${getRecipeDestroyLabel(recipe, t)}`
 }
 

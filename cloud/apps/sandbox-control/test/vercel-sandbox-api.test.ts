@@ -87,6 +87,16 @@ describe('Vercel Sandbox REST client', () => {
     expect(seen[1]!.url.searchParams.get('deleteOrphanSnapshots')).toBe('true')
   })
 
+  it('accepts deleting a snapshot Vercel already deleted (400 "expired or deleted")', async () => {
+    const { client, seen } = api((s) =>
+      s.method === 'DELETE'
+        ? Response.json({ error: { code: 'bad_request', message: 'Snapshot expired or deleted.' } }, { status: 400 })
+        : Response.json({ snapshot: { id: 'snap_1', status: 'deleted', sourceSessionId: 'sess_1' } })
+    )
+    await client.deleteSnapshot('snap_1')
+    expect(seen.map((s) => s.method)).toEqual(['DELETE', 'GET'])
+  })
+
   it('surfaces provider failures as codes without their bodies', async () => {
     const { client } = api(() => Response.json({ error: { code: 'rate_limited', message: 'secret detail' } }, { status: 429 }))
     const error = await client.stopSession('sess_1').catch((caught: unknown) => caught)

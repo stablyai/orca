@@ -1,12 +1,21 @@
 // Operator CLI. Dry run by default (prints the plan, touches nothing). With --execute it builds in
 // Orca's Vercel team and prints {imageVersion, snapshotId, report}; set GOLDEN_SNAPSHOT_ID from it.
-//   pnpm --filter @orca-cloud/sandbox-control exec tsx image/build-golden-image.ts [--execute]
+//   pnpm --filter @orca-cloud/sandbox-control exec tsx image/build-golden-image.ts [--release v1.4.256] [--execute]
+// --release pins the released orca-server tarball + checksum; without it the manifest's bundleUrl is used.
 // --execute needs VERCEL_TOKEN, VERCEL_TEAM_ID, VERCEL_PROJECT_ID in the environment (never in git).
 import { randomBytes } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { createVercelSandboxApi } from '../src/vercel-sandbox-api'
-import { ManifestSchema, VM_SCRIPTS, buildGoldenImage, manifestGaps, provisionEnv, type BuildInputs } from './golden-image'
+import {
+  ManifestSchema,
+  VM_SCRIPTS,
+  buildGoldenImage,
+  manifestGaps,
+  provisionEnv,
+  resolveReleaseBundle,
+  type BuildInputs
+} from './golden-image'
 
 const here = (path: string): string => fileURLToPath(new URL(path, import.meta.url).href)
 
@@ -25,6 +34,11 @@ function loadInputs(): BuildInputs {
 
 async function main(): Promise<void> {
   const inputs = loadInputs()
+  const releaseFlag = process.argv.indexOf('--release')
+  if (releaseFlag !== -1) {
+    const pinned = await resolveReleaseBundle(process.argv[releaseFlag + 1] ?? '')
+    inputs.manifest = { ...inputs.manifest, orcad: { bundleUrl: pinned.bundleUrl, sha256: pinned.sha256 } }
+  }
   const execute = process.argv.includes('--execute')
   const gaps = manifestGaps(inputs.manifest)
   if (!execute) {

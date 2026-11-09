@@ -5626,6 +5626,10 @@
           "allProjects": "すべてのプロジェクト",
           "selectedProjects_other": "{{count}} 件のプロジェクト"
         },
+        "SidebarAccountMenu": {
+          "account": "アカウント",
+          "signIn": "サインイン"
+        },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Orca を再起動",
           "29c56f30ee": "アップデートをチェックする",

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { ScrollToCurrentWorkspaceToolbarButton } from './worktree-list/navigation/ScrollToCurrentWorkspaceToolbarButton'
-import { SidebarSettingsHelpMenu } from './SidebarSettingsHelpMenu'
+import { SidebarAccountMenu } from './account-menu/SidebarAccountMenu'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import { hasFeatureInteraction } from '../../../../shared/feature-interactions'
@@ -69,7 +69,7 @@ const SidebarToolbar = React.memo(function SidebarToolbar({
     <div className="mt-auto shrink-0">
       <div className="flex items-center justify-between border-t border-worktree-sidebar-border px-2 py-1.5">
         <div className="flex min-w-0 items-center gap-1">
-          <SidebarSettingsHelpMenu />
+          <SidebarAccountMenu />
         </div>
         <div className="flex items-center gap-1">
           <ScrollToCurrentWorkspaceToolbarButton />

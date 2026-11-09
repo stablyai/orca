@@ -1,0 +1,159 @@
+// "Orca Cloud" as a built-in per-workspace environment: listed first wherever recipes are, run
+// in-process through the HostedSandboxDriver, and answering like a recipe process would.
+import { z } from 'zod'
+import { EphemeralVmRecipeResultSchema } from '../../shared/ephemeral-vm-recipes'
+import { ephemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
+import { normalizeGitRemoteUrl } from '../../shared/git/remotes/git-remote-identity'
+import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
+import {
+  registerEphemeralVmRecipeStepProvider,
+  type RecipeStepProvider,
+  type RecipeStepProviderResult
+} from '../../shared/ephemeral-vm-recipe-step-providers'
+import { getRemoteUrl } from '../git/repo'
+import {
+  isEnvironmentProviderError,
+  type EnvironmentProviderDriver,
+  type EnvironmentReady
+} from '../environment-providers/environment-provider-driver'
+import {
+  environmentHandleFromRecipeResult,
+  environmentReadyToRecipeResult
+} from '../environment-providers/environment-provider-recipe-adapter'
+import { createHostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
+import { createHostedSandboxDriver, HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
+import type { HostedSandboxConfig } from './hosted-sandbox-config'
+
+/** Reserved id: `--on cloud` in the CLI design, first in every provider list. */
+export const ORCA_CLOUD_RECIPE_ID = 'cloud'
+
+export const ORCA_CLOUD_RECIPE: OrcaVmRecipe = {
+  id: ORCA_CLOUD_RECIPE_ID,
+  name: 'Orca Cloud',
+  description: 'A cloud VM run by Orca. Sleeps when idle; files persist.',
+  provider: 'orca-cloud',
+  create: 'orca-cloud create',
+  suspend: 'orca-cloud suspend',
+  resume: 'orca-cloud resume',
+  destroy: 'orca-cloud destroy',
+  timeoutSeconds: { create: 300, resume: 180, suspend: 420, destroy: 120 }
+}
+
+const LifecyclePayload = z.looseObject({ recipeResult: EphemeralVmRecipeResultSchema.optional() })
+
+export function createHostedSandboxRecipeDriver(
+  config: HostedSandboxConfig
+): EnvironmentProviderDriver {
+  return createHostedSandboxDriver(
+    createHostedSandboxControlPlaneClient({
+      baseUrl: config.controlPlaneUrl,
+      getAccessToken: config.getAccessToken
+    })
+  )
+}
+
+/** https clone URL the control plane can mint a GitHub App token for; null for non-GitHub remotes. */
+export async function hostedSandboxRepoUrl(repoPath: string): Promise<string | null> {
+  const remote = await getRemoteUrl(repoPath)
+  const normalized = remote ? normalizeGitRemoteUrl(remote) : null
+  return normalized?.startsWith('github.com/') ? `https://${normalized}.git` : null
+}
+
+function ok(stdout: string): RecipeStepProviderResult {
+  return { stdout, stderr: '', exitCode: 0, signal: null }
+}
+
+function failed(error: unknown): RecipeStepProviderResult {
+  const base = { stdout: '', exitCode: 1, signal: null }
+  if (
+    isEnvironmentProviderError(error, 'entitlement_denied') &&
+    (error.reason === 'concurrency_limit' || error.reason === 'member_concurrency_limit')
+  ) {
+    return {
+      ...base,
+      stderr: `Orca Cloud: ${error.reason}\n`,
+      failure: ephemeralVmFailure('cloudConcurrencyLimit')
+    }
+  }
+  if (isEnvironmentProviderError(error, 'entitlement_denied')) {
+    return {
+      ...base,
+      stderr: `Orca Cloud: ${error.reason ?? 'no plan'}\n`,
+      failure: ephemeralVmFailure('cloudPlanRequired')
+    }
+  }
+  if (isEnvironmentProviderError(error, 'unauthorized')) {
+    return { ...base, stderr: '', failure: ephemeralVmFailure('cloudSignInRequired') }
+  }
+  if (
+    isEnvironmentProviderError(error, 'unavailable') ||
+    isEnvironmentProviderError(error, 'timeout')
+  ) {
+    return {
+      ...base,
+      stderr: `${error.message}\n`,
+      failure: ephemeralVmFailure('cloudUnavailable')
+    }
+  }
+  return { ...base, stderr: `${error instanceof Error ? error.message : String(error)}\n` }
+}
+
+export function createHostedSandboxStepProvider(
+  driver: EnvironmentProviderDriver,
+  hooks: {
+    onReady?: (ready: EnvironmentReady) => void
+    onStopped?: (environmentId: string) => void
+  } = {}
+): RecipeStepProvider {
+  return async ({ mode, repoPath, context, stdin, signal, onStderr }) => {
+    const ctx = {
+      signal,
+      onProgress: ({ phase }: { phase: string }) => onStderr?.(`[orca-cloud] ${phase}\n`)
+    }
+    try {
+      if (mode === 'create') {
+        const repoUrl = await hostedSandboxRepoUrl(repoPath)
+        const ready = await driver.create(
+          {
+            // One create attempt = one sandbox: a retried attempt reuses the instance id.
+            workspaceId: context.instanceId ?? context.workspaceId ?? 'workspace',
+            machineSize: 'standard',
+            ...(repoUrl
+              ? { repo: { url: repoUrl, ...(context.branch ? { ref: context.branch } : {}) } }
+              : {})
+          },
+          ctx
+        )
+        hooks.onReady?.(ready)
+        return ok(JSON.stringify(environmentReadyToRecipeResult(ready, 'orca-worktree')))
+      }
+      const payload = LifecyclePayload.parse(JSON.parse(stdin ?? '{}'))
+      const handle = payload.recipeResult
+        ? environmentHandleFromRecipeResult(payload.recipeResult, HOSTED_SANDBOX_DRIVER_ID)
+        : null
+      if (!handle) {
+        return { stdout: '', stderr: 'Not an Orca Cloud environment.\n', exitCode: 1, signal: null }
+      }
+      if (mode === 'resume') {
+        const ready = await driver.resume(handle, ctx)
+        hooks.onReady?.(ready)
+        return ok(JSON.stringify(environmentReadyToRecipeResult(ready, 'orca-worktree')))
+      }
+      await (mode === 'suspend' ? driver.suspend(handle, ctx) : driver.destroy(handle, ctx))
+      hooks.onStopped?.(handle.environmentId)
+      return ok('')
+    } catch (error) {
+      return failed(error)
+    }
+  }
+}
+
+export function registerHostedSandboxRecipe(
+  driver: EnvironmentProviderDriver,
+  hooks: Parameters<typeof createHostedSandboxStepProvider>[1] = {}
+): () => void {
+  return registerEphemeralVmRecipeStepProvider(
+    'orca-cloud',
+    createHostedSandboxStepProvider(driver, hooks)
+  )
+}
