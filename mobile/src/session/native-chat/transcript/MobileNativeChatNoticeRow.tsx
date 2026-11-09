@@ -21,7 +21,7 @@ import {
   readWholeAgentSessionFailureFact
 } from '../../../../../src/shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureSentence } from '../../../../../src/shared/agent-session/failures/agent-session-failure-words'
-import { agentSessionRemoteSignInCommand } from '../../../../../src/shared/agent-session/lifecycle/agent-session-sign-in'
+import { agentSessionSignInCommand } from '../../../../../src/shared/agent-session/lifecycle/agent-session-setup-commands'
 import { nativeChatOrcaStopRowText } from '../../../../../src/shared/native-chat/native-chat-orca-stop-words'
 import {
   MobileNativeChatForkedFromContext,
@@ -127,7 +127,7 @@ export function MobileNativeChatNoticeRow({
   const failureDetail = agentSessionFailureDetailText(failure)
   const signInCommand =
     failure?.kind === 'notSignedIn'
-      ? agentSessionRemoteSignInCommand(names.agentName, failure.account)
+      ? agentSessionSignInCommand(names.agentName, { account: failure.account, remote: true })
       : null
   const runInTerminal = names.onRunInTerminal
   const detail = failureDetail?.trim() !== lineText.trim() ? failureDetail : undefined
