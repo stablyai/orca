@@ -1,6 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import type { Translate } from '@/i18n/use-translate'
 import { formatUiRelativeTime } from '@/i18n/relative-time-format'
+import { formatElapsedTime } from '@/components/worktree-creation/worktree-creation-clock'
 import { formatUiAutomationSchedule } from '@/components/automations/automation-schedule-label'
 import {
   CLOUD_API_ADMIN_SCOPES,
@@ -59,31 +60,9 @@ export function formatAbsoluteTime(timestamp: number, intlLocale?: string): stri
   )
 }
 
-export function formatRunDuration(ms: number | null, t: Translate = translate): string {
-  if (ms === null) {
-    return '—'
-  }
-  const seconds = Math.round(ms / 1000)
-  if (seconds < 60) {
-    return t('auto.components.settings.cloudRoutines.duration.seconds', '{{value0}}s', {
-      value0: String(seconds)
-    })
-  }
-  const minutes = Math.floor(seconds / 60)
-  if (minutes < 60) {
-    return seconds % 60 === 0
-      ? t('auto.components.settings.cloudRoutines.duration.minutesOnly', '{{value0}}m', {
-          value0: String(minutes)
-        })
-      : t('auto.components.settings.cloudRoutines.duration.minutes', '{{value0}}m {{value1}}s', {
-          value0: String(minutes),
-          value1: String(seconds % 60)
-        })
-  }
-  return t('auto.components.settings.cloudRoutines.duration.hours', '{{value0}}h {{value1}}m', {
-    value0: String(Math.floor(minutes / 60)),
-    value1: String(minutes % 60)
-  })
+/** Run durations and live elapsed time share the app's one "1m 42s" format. */
+export function formatRunDuration(ms: number | null): string {
+  return ms === null ? '—' : formatElapsedTime(ms)
 }
 
 export function githubEventLabel(event: RoutineGithubEvent, t: Translate = translate): string {

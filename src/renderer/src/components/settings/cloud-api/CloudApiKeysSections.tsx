@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ExternalLink, History, ShieldCheck } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Switch } from '@/components/ui/switch'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import type {
@@ -165,10 +166,7 @@ export function OrgSettings({
           ) : null}
         </div>
         {settings.status === 'loading' ? (
-          <div
-            aria-hidden
-            className="mt-0.5 h-5 w-9 shrink-0 rounded-full bg-muted/60 animate-pulse motion-reduce:animate-none"
-          />
+          <Skeleton className="mt-0.5 h-5 w-9 shrink-0" />
         ) : (
           <Switch
             className="mt-0.5"

@@ -220,8 +220,8 @@ function RunRow({
   const live = isActiveRunStatus(run.status)
   // A run still going shows a live elapsed time instead of a frozen dash.
   const duration = live
-    ? formatRunDuration(Math.max(0, now - started), t)
-    : formatRunDuration(run.durationMs, t)
+    ? formatRunDuration(Math.max(0, now - started))
+    : formatRunDuration(run.durationMs)
   return (
     <li className="grid gap-1.5 px-3 py-2.5">
       <div className={ROW_GRID}>

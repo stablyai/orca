@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { AlertCircle, Check, Copy, RefreshCw } from 'lucide-react'
+import type { AlertCircle } from 'lucide-react'
+import { Check, Copy } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { RoutineRunStatus } from '../../../../../shared/cloud-api/cloud-api-types'
@@ -92,6 +95,7 @@ export function CopyValueButton({
   )
 }
 
+/** The shared InlineError, worded from a CloudApiErrorCode upstream. */
 export function CloudApiErrorNotice({
   message,
   onRetry,
@@ -103,22 +107,12 @@ export function CloudApiErrorNotice({
 }): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div
-      role="alert"
-      className={cn(
-        'flex items-start gap-2.5 rounded-lg border border-destructive/35 bg-destructive/5 px-3 py-2.5 text-xs leading-5',
-        className
-      )}
-    >
-      <AlertCircle className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden />
-      <p className="min-w-0 flex-1 text-foreground">{message}</p>
-      {onRetry ? (
-        <Button type="button" variant="outline" size="xs" onClick={onRetry}>
-          <RefreshCw />
-          {t('auto.components.settings.cloudApi.retry', 'Try again')}
-        </Button>
-      ) : null}
-    </div>
+    <InlineError
+      title={message}
+      onRetry={onRetry}
+      retryLabel={t('auto.components.settings.cloudApi.retry', 'Try again')}
+      className={className}
+    />
   )
 }
 
@@ -134,13 +128,9 @@ export function CloudApiSkeletonRows({
     <div role="status" aria-label={label} aria-busy="true">
       {Array.from({ length: rows }, (_, index) => (
         <div key={index} data-settings-row="" className="flex items-center gap-3 py-3.5">
-          <div className="size-8 shrink-0 rounded-md bg-muted/60 animate-pulse motion-reduce:animate-none" />
           <div className="min-w-0 flex-1 space-y-2">
-            <div
-              className="h-3.5 rounded bg-muted/60 animate-pulse motion-reduce:animate-none"
-              style={{ width: `${40 - index * 6}%` }}
-            />
-            <div className="h-3 w-3/5 rounded bg-muted/40 animate-pulse motion-reduce:animate-none" />
+            <Skeleton className="h-3.5" style={{ width: `${40 - index * 6}%` }} />
+            <Skeleton className="h-3 w-3/5" />
           </div>
         </div>
       ))}

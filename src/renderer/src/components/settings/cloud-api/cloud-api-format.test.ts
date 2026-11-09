@@ -41,7 +41,7 @@ describe('formatting', () => {
     expect(formatRunDuration(null)).toBe('—')
     expect(formatRunDuration(38_000)).toBe('38s')
     expect(formatRunDuration(252_000)).toBe('4m 12s')
-    expect(formatRunDuration(3_900_000)).toBe('1h 5m')
+    expect(formatRunDuration(1_800_000)).toBe('30m 00s')
     expect(formatCountdown(582_000)).toBe('9:42')
     expect(formatCountdown(-5)).toBe('0:00')
   })
