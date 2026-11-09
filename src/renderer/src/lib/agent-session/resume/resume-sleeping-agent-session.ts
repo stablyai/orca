@@ -31,7 +31,7 @@ import {
   sleepingRecordHostAllowsSessionClaim,
   sleepingRecordNamesAnotherExecutionHost
 } from './sleeping-record-execution-host-scope'
-import { resolveWorkspaceTerminalHostAuthority } from '../../workspace-terminal-host-authority'
+import { resolveWorkspaceTerminalHostAuthority } from '../../workspace/ownership/workspace-terminal-host-authority'
 import { parkUntilHostSessionMirrorHydrates } from '@/runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration'
 
 function clearPassiveCompletedRecordsForClaimKey(

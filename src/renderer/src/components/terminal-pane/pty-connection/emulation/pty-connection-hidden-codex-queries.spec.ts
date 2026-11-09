@@ -55,8 +55,9 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
 
     it('keeps hidden Codex redraw floods off the live xterm path', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -103,8 +104,9 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
       'keeps hidden %s terminal query chunks on the live xterm path',
       async (command) => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks2 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('pty-id')
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -142,8 +144,9 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
 
     it('keeps only coalesced hidden Codex terminal queries on the live xterm path', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -182,8 +185,9 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
 
     it('answers hidden OSC color queries directly inside a mixed capability-query burst', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -227,8 +231,9 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
 
     it('answers adjacent hidden Codex OSC color queries directly', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -272,8 +277,9 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
 
     it('keeps split hidden Codex terminal queries on the live xterm path', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -315,8 +321,9 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
 
     it('keeps hidden Codex terminal queries split after ESC on the live xterm path', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(
@@ -358,8 +365,9 @@ export function registerPtyConnectionHiddenCodexQueriesTests(): void {
 
     it('flushes pending hidden Codex query prefixes when the pane becomes visible', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-id')
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       transport.connect.mockImplementation(

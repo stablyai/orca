@@ -16,7 +16,7 @@ import {
 } from '../../../shared/remote-runtime/pairing/remote-pairing-verification'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { exchangeRemotePairingTicket } from '../../../shared/remote-runtime/pairing/remote-pairing-ticket-exchange'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
   getPreferredPairingOffer,
@@ -58,14 +58,17 @@ async function verifyPairingCode(
     }
   }
   try {
-    const response = await sendRemoteRuntimeRequest<RuntimeStatus>(
+    const response = await sendRemoteRuntimeRequestOnSocket<RuntimeStatus>(
       pairedRuntimeConnectionFromOffer(parsed.value.pairing),
       'status.get',
       undefined,
       15_000,
       undefined,
       undefined,
-      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+      undefined,
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+      undefined,
+      undefined
     )
     if (!response.ok) {
       return {

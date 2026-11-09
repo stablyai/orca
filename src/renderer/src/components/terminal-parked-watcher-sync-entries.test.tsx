@@ -19,7 +19,7 @@ vi.mock('@/store', () => ({
     getState: () => ({ activeWorktreeId: null })
   })
 }))
-vi.mock('@/lib/workspace-terminal-host-authority', () => ({
+vi.mock('@/lib/workspace/ownership/workspace-terminal-host-authority', () => ({
   createWorkspaceTerminalHostAuthoritySelector: () => () => 'unverifiable'
 }))
 vi.mock('./terminal-pane/parking/output-watchers/terminal-parked-tab-watchers', () => ({

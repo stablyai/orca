@@ -1,4 +1,4 @@
-import { resolveHiddenProbeCwd } from '../../../../../rate-limits/hidden-probe-cwd'
+import { resolveHiddenProbeCwd } from '../../../../../lib/hidden-probe-cwd'
 import { agentSessionConversationView } from '../../../../../../shared/agent-session/lifecycle/agent-session-conversation-view'
 
 // The catalog read behind the picker: which directory a named worktree runs in on this host.

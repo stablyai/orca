@@ -1,4 +1,7 @@
-import { notifyAgentLaunchFailure, agentLaunchRecoveryMessage } from '@/lib/agent-launch-failure'
+import {
+  notifyAgentLaunchFailure,
+  agentLaunchRecoveryMessage
+} from '@/lib/agent-session/launch/failure/agent-launch-failure'
 import type { StructuredLaunchSurfaceAddress } from '../structured-agent-session-launch-record'
 import type {
   StructuredAgentSessionForkSource,

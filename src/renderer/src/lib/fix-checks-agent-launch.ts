@@ -15,7 +15,7 @@ import {
   ensureDetectedAgentsForRepo,
   ensureDetectedAgentsForWorktree,
   type RepoHostFields
-} from '@/lib/agent-detection-target-inventory'
+} from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import type { ProspectiveWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { worktreeLaunchWorkspace } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
@@ -24,8 +24,8 @@ import { launchAgentInNewTab } from '@/lib/agent-session/launch/new-tab/launch-a
 import { newAgentLaunchRequestId } from '@/lib/agent-session/launch/routing/agent-launch-request-id'
 import { launchWorkItemDirect } from '@/lib/workspace/creation/work-item/launch-work-item-direct'
 import { readSourceControlLaunchRecipeAgentId } from '../../../shared/source-control/ai/source-control-launch-agent-selection'
-import { resolveRepoWorktreeLaunchPlatform } from '@/lib/execution-host-facts'
-import { reportAgentWorkspaceActivation } from '@/lib/worktree-activation-outcome'
+import { resolveRepoWorktreeLaunchPlatform } from '@/runtime/hosts/platform/execution-host-facts'
+import { reportAgentWorkspaceActivation } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { activateAndRevealWorktreeWithOutcome } from '@/lib/workspace/activation/worktree-activation'
 import { useAppStore } from '@/store'
 import { resolveSourceControlActionRecipe } from '../../../shared/source-control/ai/source-control-ai-operation-policy'

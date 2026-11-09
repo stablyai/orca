@@ -9,7 +9,7 @@ import {
 import { AgentSkillSetupPanel } from '@/components/skills/setup/AgentSkillSetupPanel'
 import { IntegrationStatusPill } from '@/components/integration-status-pill'
 import { SkillFreshnessStatusPill } from '@/components/skills/SkillFreshnessStatusPill'
-import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
+import { ORCHESTRATION_SKILL_NAME } from '@/lib/skills/installation/agent-feature-skill-names'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkill

@@ -18,7 +18,7 @@ import type {
   BrowserSessionProfile,
   BrowserSessionProfileScope
 } from '../../../shared/browser-workspace-types'
-import type { ManagedBrowserProfileOwner } from '../../../shared/browser-profile-scope'
+import type { ManagedBrowserProfileOwner } from '../../../shared/browser/profiles/browser-profile-scope'
 import { ensureManagedBrowserProfile } from '../../browser/sessions/profiles/browser-managed-session-profiles'
 import {
   getBrowserIdentityModeStatus,

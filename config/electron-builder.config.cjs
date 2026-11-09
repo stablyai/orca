@@ -20,9 +20,12 @@ const {
   assertPackagedNativeVariantsInstalled,
   assertProcessHostOutputBuilt,
   createPackagedRuntimeNodeModuleResources,
+  normalizeElectronArchitecture,
   prunePackagedRuntimeNodeModules,
+  readPackage,
   verifyPackagedMainRuntimeDeps
 } = require('./packaged-runtime-node-modules.cjs')
+const { copyPackagedTranscribeCpp } = require('./packaged-transcribe-cpp.cjs')
 const {
   assertNoWindowsExecutablesInRuntimeNodeModules
 } = require('./packaged-windows-only-runtime-files.cjs')
@@ -330,7 +333,7 @@ module.exports = {
     // extraResources already ships plugin bytes; exclude source duplicates.
     '!resources/plugins/launch/**',
     // Platform extraResources selects speech natives; asar would duplicate it and ship other variants.
-    '!node_modules/sherpa-onnx*{,/**/*}',
+    '!node_modules/{sherpa-onnx*,transcribe-cpp,@transcribe-cpp,koffi,@koromix}{,/**/*}',
     // CLI shim belongs beside resources/bin/orca.exe; unpacking source creates a second .cmd without its executable (#7351).
     '!resources/win32{,/**/*}'
   ],
@@ -359,6 +362,8 @@ module.exports = {
     'out/main/orca-profiles/profile-index-store.js',
     'out/main/persistence/profile-state/**',
     'out/main/plugins/plugin-authoring-checks.js',
+    'out/main/environment-doctor/environment-doctor.js',
+    'out/main/environment-doctor/environment-doctor-host.js',
     // `orca plugin test` and `orca plugin check` load the runtime, kit and hooks in Node.
     'resources/plugins/declarative/*.mjs',
     'out/main/skills/bundled-skill-install/bundled-skill-local-host.js',
@@ -448,6 +453,13 @@ module.exports = {
       writeMacBuildCompatibility(resourcesDir, { version, commit, architecture })
     }
     stampPackagedCliVersion(resourcesDir, context.packager.appInfo.version)
+    // Before the prune, which drops the copied packages' type declarations too.
+    copyPackagedTranscribeCpp(
+      readPackage,
+      resourcesDir,
+      context.electronPlatformName,
+      normalizeElectronArchitecture(context.arch)
+    )
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
     assertNoWindowsExecutablesInRuntimeNodeModules(resourcesDir, context.electronPlatformName)
     // Gate native glibc floor after pruning foreign CPU variants; GLIBC_2.34 once broke Ubuntu 20.04 startup (#9902).

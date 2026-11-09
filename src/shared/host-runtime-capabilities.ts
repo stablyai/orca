@@ -4,6 +4,7 @@ import {
 } from './managed-runtime-install'
 import { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
 import { SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY } from './ssh-target-management'
+import { ENVIRONMENT_DOCTOR_RUNTIME_CAPABILITY } from './environment-doctor-runtime'
 
 export const REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY = 'remote-runtime.shared-control.v1' as const
 // Why conditional: only a desktop runtime holds the SSH registry managed servers are run from.
@@ -28,5 +29,6 @@ export const HOST_RUNTIME_CAPABILITIES = [
   MANAGED_RUNTIME_REMOVE_RUNTIME_CAPABILITY,
   RUNTIME_SOURCE_FENCE_RUNTIME_CAPABILITY,
   SETTINGS_CHANGED_EVENT_RUNTIME_CAPABILITY,
-  SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY
+  SSH_TARGET_MANAGEMENT_RUNTIME_CAPABILITY,
+  ENVIRONMENT_DOCTOR_RUNTIME_CAPABILITY
 ] as const

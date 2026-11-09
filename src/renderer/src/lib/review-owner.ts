@@ -9,7 +9,10 @@ import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../shared/execution-host'
-import { findIndexedReviewRepository, hasIndexedRepository } from './repository-owner-index'
+import {
+  findIndexedReviewRepository,
+  hasIndexedRepository
+} from './workspace/ownership/repository-owner-index'
 
 type ReviewWorkspaceOwner = Pick<Worktree, 'repoId' | 'hostId' | 'runtimeOwnerEnvironmentId'>
 
