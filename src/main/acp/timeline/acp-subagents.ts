@@ -88,7 +88,7 @@ export class AcpSubagents {
       this.known.set(update.id, subagent)
       if (update.restart && subagent.ended !== undefined) {
         subagent.ended = undefined
-        subagent.reply = undefined
+        subagent.replyDigest = undefined
       }
       const ending = update.state !== undefined && acpSubagentOutcome(update.state) !== undefined
       // Late live reports must not resurrect an ended run after the host retires its record.
