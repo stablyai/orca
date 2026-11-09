@@ -61,7 +61,7 @@ vi.mock('@/runtime/hosted-terminals/input/runtime-terminal-verified-input', () =
 vi.mock('@/runtime/hosted-terminals/streams/runtime-terminal-data-subscription', () => ({
   subscribeToRuntimeTerminalData: vi.fn()
 }))
-vi.mock('../../../agent-ready-wait', () => ({
+vi.mock('../../messaging/paste/agent-ready-wait', () => ({
   waitForAgentReady: vi.fn(async () => ({ ready: false }))
 }))
 vi.mock('@/lib/telemetry', () => ({ track: vi.fn(), tuiAgentToAgentKind: mockLaunchAgentKind }))
@@ -238,7 +238,8 @@ describe('an AI button whose agent is ready before the host answers', () => {
     expect(testState.writes.filter(({ data }) => data.includes('task'))).toHaveLength(1)
   })
   it('does not paste into a cancelled hosted launch after its composer becomes ready', async () => {
-    const { pasteDraftWhenAgentReady } = await import('@/lib/agent-paste-draft')
+    const { pasteDraftWhenAgentReady } =
+      await import('@/lib/agent-session/messaging/paste/agent-paste-draft')
     let cancelled = false
     const delivery = pasteDraftWhenAgentReady({
       tabId: TAB,

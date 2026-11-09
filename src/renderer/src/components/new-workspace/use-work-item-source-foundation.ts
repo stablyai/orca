@@ -6,7 +6,7 @@ import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provi
 import { useLinearIssueResult } from '@/hooks/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { getSelectedWorkspaceId } from '@/store/slices/linear/linear-cache'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import { parseBoundedSmartWorkspaceLinearIssueUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
 import { isSmartWorkspaceSourceQueryWithinLimit } from '../../../../shared/new-workspace/smart-workspace-source-results'

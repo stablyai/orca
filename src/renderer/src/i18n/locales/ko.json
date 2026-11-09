@@ -19087,6 +19087,7 @@
         "orcaStopCanContinue": "이 대화에서 계속할 수 있습니다.",
         "orcaStopUnnamedServer": "원격 서버",
         "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
+        "safetyReviewApproved": "{{agent}}이(가) 이 작업을 승인했습니다. 세부 정보 보기.",
         "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
         "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트).",
         "forkedFrom": "분기 원본"
@@ -19217,7 +19218,8 @@
       "contextUsage": {
         "label": "컨텍스트 {{used}}/{{window}} 토큰, {{percent}}% 사용",
         "title": "컨텍스트",
-        "estimated": "마지막 응답 기준 추정치입니다."
+        "estimated": "마지막 응답 기준 추정치입니다.",
+        "deferredNote": "필요할 때 불러옵니다. 사용량에 포함되지 않습니다."
       },
       "dismissDeliveryNotice": "닫기",
       "addSelectionToChat": "채팅에 추가",

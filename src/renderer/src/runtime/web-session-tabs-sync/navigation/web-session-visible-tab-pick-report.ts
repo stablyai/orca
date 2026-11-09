@@ -236,11 +236,13 @@ function reassertVisibleNonTerminalTab(worktreeId: string, stillCurrent: () => b
   }
   const next = { type: visible.contentType, id: visible.entityId, tabId: visible.id }
   // Loaded lazily: the owner activations reach the session-tab lifecycle, which loads this module.
-  void import('../../../lib/cycled-tab-owner-activation').then(({ activateCycledTabOnOwner }) => {
-    if (stillCurrent()) {
-      activateCycledTabOnOwner(worktreeId, next)
+  void import('../../../lib/workspace/tabs/cycled-tab-owner-activation').then(
+    ({ activateCycledTabOnOwner }) => {
+      if (stillCurrent()) {
+        activateCycledTabOnOwner(worktreeId, next)
+      }
     }
-  })
+  )
 }
 
 /** The activate answer is the host's per-device frame after the report. */

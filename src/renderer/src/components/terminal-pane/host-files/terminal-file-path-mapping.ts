@@ -1,10 +1,10 @@
 import { useAppStore } from '@/store/index'
-import { getConnectionId } from '@/lib/connection-context'
-import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
+import { resolveWorktreeOperationRouteResult } from '@/lib/workspace/ownership/worktree-operation-route'
 import {
   buildWorkspaceFileContext,
   canClientOsOpenWorkspaceFile
-} from '@/lib/workspace-file-host-routing'
+} from '@/runtime/files/workspace-file-host-routing'
 import { getRuntimeTargetForWorktreeOwner } from '@/lib/file-owner-runtime-target'
 import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { parseExecutionHostId } from '../../../../../shared/execution-host'
