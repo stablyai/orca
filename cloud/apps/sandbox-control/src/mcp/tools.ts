@@ -233,6 +233,14 @@ export const TOOLS = [
     run: async (args, api) => fromApi(await api('GET', `/v1/workspaces/${args.workspaceId}/sessions`))
   }),
   tool({
+    name: 'read_session',
+    description:
+      "Reads what an agent session in a workspace currently shows on screen (the rendered terminal, up to ~16k characters) and its status. Use it to see an agent's answer or progress after send_message; get the handle from list_sessions or the message's `session`.",
+    input: z.object({ workspaceId: Id('workspace'), session: z.string().regex(/^term_[A-Za-z0-9-]{1,80}$/).describe('Session handle (term_…) from list_sessions or a message.') }).strict(),
+    annotations: read('Read agent session'),
+    run: async (args, api) => fromApi(await api('GET', `/v1/workspaces/${args.workspaceId}/sessions/${args.session}`))
+  }),
+  tool({
     name: 'list_routines',
     description: 'Lists routines: saved agent prompts that run in a fresh workspace on a schedule, a GitHub event or a webhook, with their trigger and last run.',
     input: z.object({}).strict(),

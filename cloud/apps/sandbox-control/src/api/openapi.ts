@@ -406,7 +406,7 @@ curl -X DELETE ${o}/v1/workspaces/$ID       -H "Authorization: Bearer $ORCA_API_
 <p>Point any MCP client at <code>${o}/mcp</code> (Streamable HTTP). Clients that support OAuth register themselves and open an approval page in the browser: approve with a one-time code from Orca → Settings → API keys → <i>Approve an app</i>, or with one of your API keys. The app never gets more than that key may do. Clients without OAuth can send an API key as a bearer token.</p>
 <pre>claude mcp add --transport http orca-cloud ${o}/mcp
 claude mcp add --transport http orca-cloud ${o}/mcp --header "Authorization: Bearer $ORCA_API_KEY"</pre>
-<p>Tools: whoami, list_projects, list_workspaces, get_workspace, create_workspace, sleep_workspace, wake_workspace, archive_workspace, destroy_workspace, send_message, get_message, list_sessions, list_routines, run_routine. They use the same scopes, rate limits and audit log as the REST API.</p>
+<p>Tools: whoami, list_projects, list_workspaces, get_workspace, create_workspace, sleep_workspace, wake_workspace, archive_workspace, destroy_workspace, send_message, get_message, list_sessions, read_session, list_routines, run_routine. They use the same scopes, rate limits and audit log as the REST API.</p>
 <h2>Limits and errors</h2>
 <div class="grid">
 <div class="card"><b>Rate limits</b>120 requests/min per key, 30 messages/min per user, 10 workspace creates/min per org. 429 responses carry <code>Retry-After</code>.</div>

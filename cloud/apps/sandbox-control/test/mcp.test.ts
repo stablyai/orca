@@ -130,7 +130,7 @@ describe('MCP protocol', () => {
     const tools = list.body.result.tools as { name: string; inputSchema: any; annotations: any; description: string }[]
     expect(tools.map((t) => t.name)).toEqual([
       'whoami', 'list_projects', 'list_workspaces', 'get_workspace', 'create_workspace', 'sleep_workspace', 'wake_workspace',
-      'archive_workspace', 'destroy_workspace', 'send_message', 'get_message', 'list_sessions', 'list_routines', 'run_routine'
+      'archive_workspace', 'destroy_workspace', 'send_message', 'get_message', 'list_sessions', 'read_session', 'list_routines', 'run_routine'
     ])
     for (const t of tools) {
       expect(t.inputSchema.type).toBe('object')
@@ -176,6 +176,7 @@ describe('MCP protocol', () => {
     h.vercel.commandHandler = (params) => {
       const args = params.args ?? []
       if (args.includes('agent')) return { exitCode: 0, stdout: JSON.stringify({ ok: true, result: { outcome: { kind: 'terminal', handle: 'term_abc' } } }), stderr: '' }
+      if (args.includes('read')) return { exitCode: 0, stdout: JSON.stringify({ ok: true, result: { terminal: { handle: 'term_abc', status: 'idle', tail: ['> hello', 'pong   ', '', ''] } } }), stderr: '' }
       if (args.includes('terminal')) return { exitCode: 0, stdout: JSON.stringify({ ok: true, result: { terminals: [{ handle: 'term_abc', title: 'claude', connected: true, preview: 'done' }] } }), stderr: '' }
       return undefined
     }
@@ -186,6 +187,8 @@ describe('MCP protocol', () => {
     expect(message.structuredContent.message).toMatchObject({ status: 'delivered', session: 'term_abc' })
     const sessions = await h.tool(key, 'list_sessions', { workspaceId: ws.id })
     expect(sessions.structuredContent.sessions[0]).toMatchObject({ handle: 'term_abc', connected: true })
+    const screen = await h.tool(key, 'read_session', { workspaceId: ws.id, session: 'term_abc' })
+    expect(screen.structuredContent.session).toMatchObject({ handle: 'term_abc', status: 'idle', screen: '> hello\npong' })
 
     expect((await h.tool(key, 'archive_workspace', { workspaceId: ws.id })).structuredContent.workspace.archived).toBe(true)
     expect((await h.tool(key, 'destroy_workspace', { workspaceId: ws.id })).structuredContent.workspace.status).toBe('destroyed')
