@@ -4,10 +4,10 @@ import {
   getSidebarLineageAncestors
 } from '../../../shared/sidebar-list/worktree-lineage-projection'
 import {
-  getAllWorktreesFromState,
-  getWorktreeMapFromState,
-  getWorktreeOnHostFromState
-} from '@/store/selectors'
+  getIndexedAllWorktrees,
+  getIndexedWorktreeMap
+} from '@/store/slices/worktrees/listing/worktree-catalog-index'
+import { getWorktreeOnHostFromState } from '@/store/workspaces/selection/worktree-on-host-selector'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
@@ -15,7 +15,7 @@ import {
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { useAppStore } from '../store'
 import type { ResumeWorkspaceGroup } from './native-chat-resume-on-restart-grouping'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 /** The store's row for a workspace on its own host; folder workspaces included. Stable per row. */
 export function useWorkspaceWorktree(workspaceId: string, hostId: ExecutionHostId | undefined) {
@@ -49,13 +49,13 @@ export function useLineageAncestors(
     const state = { worktreesByRepo }
     // Why: archived rows never render in the sidebar, so nothing nests under them.
     const rows = new Map(
-      getAllWorktreesFromState(state)
+      getIndexedAllWorktrees(selectWorktreesByRepo(state))
         .filter((worktree) => !worktree.isArchived)
         .map((worktree) => [getWorktreeHostIdentity(worktree), worktree])
     )
     const cyclic = getCyclicProjectedWorktreeLineageIds(
       worktreeLineageById,
-      getWorktreeMapFromState(state)
+      getIndexedWorktreeMap(selectWorktreesByRepo(state))
     )
     return new Map(
       workspaces.map((group) => {

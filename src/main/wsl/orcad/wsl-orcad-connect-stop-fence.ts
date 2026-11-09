@@ -4,11 +4,11 @@
  * the connect fails instead of booting the distro again.
  */
 import { onWslDistroGateNote } from '../discovery/wsl-background-distro-gate'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import { wslDistroHolderKey } from '../discovery/wsl-distro-holder-record'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import { WslDistroNotRunningError } from './wsl-orcad-connection-errors'
-import type { WslOrcadDeployOptions } from './wsl-orcad-deploy'
+import type { WslOrcadDeployOptions } from './wsl-orcad-launch-contract'
 
 // A previous run's holder has no exit listener here; its process-table row is polled instead.
 export const ADOPTED_HOLDER_POLL_MS = 1_000

@@ -11,7 +11,7 @@ import {
   prepareOrchestrationCheckOutput,
   type LegacyCompatibilityResult,
   type OrchestrationMessageSummary as MessageSummary
-} from '../../../shared/orchestration-check-output'
+} from '../../../shared/orchestration/mailbox/orchestration-check-output'
 import { startCheckKeepalive } from './check-keepalive'
 import { callOrchestrationMutation } from './mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'

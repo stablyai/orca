@@ -10,7 +10,7 @@ import {
   CommandItem,
   CommandList
 } from '@/components/ui/command'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { SimulatorDeviceRow } from './emulator-pane-types'
 import { emulatorDeviceDescription, groupEmulatorDevices } from './emulator-device-picker-groups'
 
@@ -22,13 +22,14 @@ type Props = {
 }
 
 export function EmulatorDevicePicker({ devices, selectedUdid, disabled, onSelectDevice }: Props) {
+  const t = useTranslate()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [otherOpen, setOtherOpen] = useState(false)
   const [unavailableOpen, setUnavailableOpen] = useState(false)
   const groups = groupEmulatorDevices(devices, selectedUdid)
   const selected = devices.find((device) => device.udid === selectedUdid)
-  const chooseLabel = translate('emulator.picker.choose', 'Choose emulator')
+  const chooseLabel = t('emulator.picker.choose', 'Choose emulator')
   const duplicateKeys = new Map<string, number>()
   for (const device of devices) {
     const key = `${device.name} ${emulatorDeviceDescription(device)}`
@@ -39,10 +40,10 @@ export function EmulatorDevicePicker({ devices, selectedUdid, disabled, onSelect
     const duplicate = (duplicateKeys.get(`${device.name} ${description}`) ?? 0) > 1
     const status =
       device.state === 'Booted'
-        ? translate('emulator.picker.running', 'Running')
+        ? t('emulator.picker.running', 'Running')
         : device.state === 'Booting'
-          ? translate('emulator.picker.starting', 'Starting')
-          : translate('emulator.picker.stopped', 'Stopped')
+          ? t('emulator.picker.starting', 'Starting')
+          : t('emulator.picker.stopped', 'Stopped')
     return (
       <CommandItem
         key={device.udid}
@@ -67,7 +68,7 @@ export function EmulatorDevicePicker({ devices, selectedUdid, disabled, onSelect
           {device.isAvailable === false && (
             <div className="text-xs text-muted-foreground">
               {device.availabilityError ||
-                translate('emulator.picker.runtimeUnavailable', 'Runtime unavailable')}
+                t('emulator.picker.runtimeUnavailable', 'Runtime unavailable')}
             </div>
           )}
         </div>
@@ -106,12 +107,12 @@ export function EmulatorDevicePicker({ devices, selectedUdid, disabled, onSelect
           <CommandInput
             value={search}
             onValueChange={setSearch}
-            placeholder={translate('emulator.picker.search', 'Search devices…')}
+            placeholder={t('emulator.picker.search', 'Search devices…')}
           />
           <CommandList className="max-h-80">
-            <CommandEmpty>{translate('emulator.picker.empty', 'No matching devices')}</CommandEmpty>
+            <CommandEmpty>{t('emulator.picker.empty', 'No matching devices')}</CommandEmpty>
             {groups.used.length > 0 && (
-              <CommandGroup heading={translate('emulator.picker.used', 'Used devices')}>
+              <CommandGroup heading={t('emulator.picker.used', 'Used devices')}>
                 {groups.used.map(renderDevice)}
               </CommandGroup>
             )}
@@ -125,7 +126,7 @@ export function EmulatorDevicePicker({ devices, selectedUdid, disabled, onSelect
                     selection="palette"
                   >
                     <ChevronRight className={otherOpen ? 'rotate-90' : ''} />
-                    {translate('emulator.picker.other', 'Other devices on this computer')} (
+                    {t('emulator.picker.other', 'Other devices on this computer')} (
                     {groups.other.length})
                   </CommandItem>
                 )}
@@ -142,7 +143,7 @@ export function EmulatorDevicePicker({ devices, selectedUdid, disabled, onSelect
                     selection="palette"
                   >
                     <ChevronRight className={unavailableOpen ? 'rotate-90' : ''} />
-                    {translate('emulator.picker.unavailable', 'Unavailable runtimes')} (
+                    {t('emulator.picker.unavailable', 'Unavailable runtimes')} (
                     {groups.unavailable.length})
                   </CommandItem>
                 )}

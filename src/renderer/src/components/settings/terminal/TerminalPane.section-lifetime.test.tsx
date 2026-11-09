@@ -47,7 +47,7 @@ vi.mock('@/store/index', () => ({
       setSettingsSearchQuery: fake.action
     })
 }))
-vi.mock('@/components/terminal-pane/pane-helpers', () => ({
+vi.mock('@/lib/user-agent-platform', () => ({
   isMacUserAgent: () => fake.isMac,
   isWindowsUserAgent: () => fake.isWindows
 }))

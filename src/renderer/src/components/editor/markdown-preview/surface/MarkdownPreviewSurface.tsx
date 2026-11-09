@@ -9,7 +9,7 @@ import type { VirtualMarkdownPreviewNavigation } from '../viewport/use-markdown-
 import type { useMarkdownPreviewDocument } from '../document-worker/use-markdown-preview-document'
 import type { useMarkdownPreviewDocumentSearch } from '../search/use-markdown-preview-document-search'
 import type { Components } from 'react-markdown'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { MarkdownTableOfContentsPanel } from '../../markdown/navigation/MarkdownTableOfContentsPanel'
 import { MarkdownPreviewBody } from '../render-tree/MarkdownPreviewBody'
 import { MarkdownPreviewReviewToolbar } from '../review/MarkdownPreviewReviewToolbar'
@@ -45,6 +45,7 @@ export function MarkdownPreviewSurface({
   showTableOfContents: boolean
   onCloseTableOfContents?: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const {
     isSearchOpen,
     canShowReviewTools,
@@ -114,7 +115,7 @@ export function MarkdownPreviewSurface({
           {frontMatter && frontmatterVisible ? (
             <div className="mb-4 rounded border border-border/60 bg-muted/40 px-3 py-2">
               <div className="mb-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                {translate('auto.components.editor.MarkdownPreview.2b2b31382c', 'Front Matter')}
+                {t('auto.components.editor.MarkdownPreview.2b2b31382c', 'Front Matter')}
               </div>
               <pre className="max-h-48 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground font-mono scrollbar-editor">
                 {frontMatterInner}
@@ -124,7 +125,7 @@ export function MarkdownPreviewSurface({
           {largePreview ? (
             <>
               <p className="relative text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'editor.markdownPreview.largeNotice',
                   'Large preview. Use source view to copy the complete document. PDF export is unavailable.'
                 )}
@@ -134,11 +135,11 @@ export function MarkdownPreviewSurface({
                     className="absolute inset-0 bg-background"
                   >
                     {documentState.refreshError
-                      ? translate(
+                      ? t(
                           'editor.markdownPreview.refreshFailed',
                           'Preview update failed. Showing the previous version; open source view for current content.'
                         )
-                      : translate('editor.markdownPreview.preparing', 'Preparing preview…')}
+                      : t('editor.markdownPreview.preparing', 'Preparing preview…')}
                   </span>
                 ) : null}
               </p>
@@ -161,7 +162,7 @@ export function MarkdownPreviewSurface({
                 />
               ) : documentState.status === 'error' ? (
                 <p role="alert" className="text-sm text-muted-foreground">
-                  {translate(
+                  {t(
                     'editor.markdownPreview.processingFailed',
                     'This document cannot be rendered within the preview limits. Open source view to read the complete file.'
                   )}
@@ -169,7 +170,7 @@ export function MarkdownPreviewSurface({
               ) : (
                 <p role="status" className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
-                  {translate('editor.markdownPreview.preparing', 'Preparing preview…')}
+                  {t('editor.markdownPreview.preparing', 'Preparing preview…')}
                 </p>
               )}
             </>

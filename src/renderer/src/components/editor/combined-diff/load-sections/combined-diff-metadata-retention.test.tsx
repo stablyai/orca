@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from 'react'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { clearCombinedDiffViewMemory } from '../remember-view/combined-diff-view-cache'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import type {
   GitDiffResult,

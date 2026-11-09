@@ -1,5 +1,5 @@
 import type { JSX, RefObject } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 
 export function BrowserPricingStoryboard(props: {
@@ -9,20 +9,18 @@ export function BrowserPricingStoryboard(props: {
   ctaHighlighted: boolean
   ctaPressing: boolean
 }): JSX.Element {
+  const t = useTranslate()
   return (
     <>
       <div className="text-[15px] font-bold leading-tight">
-        {translate('auto.components.feature.wall.BrowserAnimatedVisual.9e0f530390', 'Pricing')}
+        {t('auto.components.feature.wall.BrowserAnimatedVisual.9e0f530390', 'Pricing')}
       </div>
       <div className="h-2 w-4/5 rounded bg-foreground/10" />
       <div className="mt-1 grid grid-cols-2 gap-2.5">
         <PricingCard
           cardRef={props.cardRef}
           ctaRef={props.ctaRef}
-          label={translate(
-            'auto.components.feature.wall.BrowserAnimatedVisual.59ae327405',
-            'Starter'
-          )}
+          label={t('auto.components.feature.wall.BrowserAnimatedVisual.59ae327405', 'Starter')}
           cta="Try free"
           target
           ringActive={props.ringStarter}
@@ -30,7 +28,7 @@ export function BrowserPricingStoryboard(props: {
           ctaPressing={props.ctaPressing}
         />
         <PricingCard
-          label={translate('auto.components.feature.wall.BrowserAnimatedVisual.25f15c2219', 'Pro')}
+          label={t('auto.components.feature.wall.BrowserAnimatedVisual.25f15c2219', 'Pro')}
           cta="Get Pro"
           highlighted
         />

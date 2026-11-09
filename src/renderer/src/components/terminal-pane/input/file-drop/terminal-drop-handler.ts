@@ -5,7 +5,7 @@ import {
   parseExecutionHostId,
   toRuntimeExecutionHostId
 } from '../../../../../../shared/execution-host'
-import { recordTerminalUserInputForLeaf } from '../../terminal-input-activity'
+import { recordTerminalUserInputForLeaf } from '../terminal-input-activity'
 import {
   isResolvedWorkspaceFileDragExecutionHost,
   readWorkspaceFileDragPaths,

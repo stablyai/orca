@@ -1,7 +1,8 @@
 import { getDefaultSettings } from '../../../shared/constants'
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { useAppStore, type AppState } from '@/store'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { activateAndRevealWorktree } from './workspace/activation/worktree-activation'
 import { waitForWorktreeAgentActivationGateForTests } from './workspace/activation/worktree-agent-activation-gate'
 import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/workspace/activation/worktree-activation-created-agent.test-fixture'
@@ -15,16 +16,16 @@ import {
   emptySession
 } from '../../../shared/workspace-layout/workspace-layout-session.test-fixture'
 import type { WorkspaceLayoutChangeFrame } from '../../../shared/workspace-layout/workspace-layout-stream-frames'
-import { provideLayoutFrameTerminalPanes } from '@/runtime/layout-frame-terminal-panes'
-import { layoutApplyTestDouble } from '@/runtime/layout-apply-test-double'
+import { provideLayoutFrameTerminalPanes } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
+import { layoutApplyTestDouble } from '@/runtime/workspace-layout/testing/layout-apply-test-double'
 import {
   openWorkspaceLayoutFrameSync,
   type WorkspaceLayoutFrameSync
-} from '@/runtime/workspace-layout-frame-sync'
+} from '@/runtime/workspace-layout/frames/workspace-layout-frame-sync'
 
 type FrameDouble = { onFrame: ((frame: WorkspaceLayoutChangeFrame) => void) | null }
 const frames = vi.hoisted((): FrameDouble => ({ onFrame: null }))
-vi.mock('@/runtime/runtime-layout-client', () => ({
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', () => ({
   subscribeRuntimeLayout: (
     _target: unknown,
     _params: unknown,

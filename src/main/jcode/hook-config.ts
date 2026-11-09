@@ -11,7 +11,7 @@ import {
   parseTomlKeyPath,
   parseTomlTableHeaderPath
 } from '../codex/configuration/toml/config-toml-key-path'
-import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
+import { createManagedCommandMatcher } from '../agent-hooks/installation/commands/managed-hook-command-matching'
 import {
   appendJcodeHookCommand,
   removeJcodeHookCommand,

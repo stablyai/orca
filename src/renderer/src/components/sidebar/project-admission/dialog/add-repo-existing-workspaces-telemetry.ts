@@ -1,7 +1,5 @@
-import type {
-  AddRepoExistingWorkspaceSource,
-  EventProps
-} from '../../../../../../shared/telemetry-events'
+import type { AddRepoExistingWorkspaceSource } from '../../../../../../shared/telemetry-events'
+import type { EventProps } from '../../../../../../shared/telemetry-event-classification'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
 

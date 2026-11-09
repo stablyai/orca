@@ -25,7 +25,7 @@ import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/a
 import { AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-launch/contracts/agent-launch-runtime-capability'
 import type { SourceControlActionRecipe } from '../../../../../shared/source-control/ai/recipes/source-control-ai-actions'
 import type { TuiAgent } from '../../../../../shared/agent-launch/catalog/tui-agent'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 /** The shared surface rows configure a recipe here; they never start an agent. */
 type PickerProps = {
@@ -160,6 +160,7 @@ const SelectedSourceControlActionAgentPicker = memo(
     onSelection: ComponentProps<typeof AgentLaunchPicker>['onPick']
     onDefault: () => void
   }) {
+    const t = useTranslate()
     useUiLanguageRevision()
     const selection =
       props.selection ??
@@ -172,7 +173,7 @@ const SelectedSourceControlActionAgentPicker = memo(
         agent={props.agent}
         cli={props.cli}
         disabled={props.disabled}
-        emptyLabel={translate(
+        emptyLabel={t(
           'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
           'Use default agent'
         )}
@@ -187,7 +188,7 @@ const SelectedSourceControlActionAgentPicker = memo(
         onPick={onSelection}
       >
         <DropdownMenuItem onSelect={onDefault}>
-          {translate(
+          {t(
             'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
             'Use default agent'
           )}

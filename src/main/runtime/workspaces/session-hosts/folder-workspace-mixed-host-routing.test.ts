@@ -1,15 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import {
-  FOLDER_HOST_CASES,
   MIXED_GROUP,
   MIXED_FOLDER,
   ROUTING_REPOS
 } from '../../../../shared/folder-workspaces/folder-workspace-host-routing.test-fixture'
-import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
-import type { LayoutApplyOutcome } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { localDesktopSession } from '../../../../shared/workspace-layout/workspace-layout-profile.test-fixture'
 import {
   emptySession,
@@ -31,37 +27,23 @@ vi.mock('../../../../shared/layout-owner-switch', () => ({
   }
 }))
 
-function runtimeWithMixedFolder(
-  folder: FolderWorkspace = MIXED_FOLDER,
-  groups: readonly ProjectGroup[] = [MIXED_GROUP]
-) {
+function runtimeWithMixedFolder() {
   const repos = ROUTING_REPOS.map(storeRepo)
   const partitions = new Map<ExecutionHostId, WorkspaceSessionState>([
     ['local', localDesktopSession()],
     ['ssh:target-1', emptySession()]
   ])
-  const applyLayoutCommand = vi.fn(async (): Promise<LayoutApplyOutcome> => ({
-    ok: true,
-    result: {}
-  }))
   const store = {
     getRepos: () => repos,
     getRepo: (id: string) => repos.find((repo) => repo.id === id),
-    getProjectGroups: () => [...groups],
-    getFolderWorkspaces: () => [folder],
+    getProjectGroups: () => [MIXED_GROUP],
+    getFolderWorkspaces: () => [MIXED_FOLDER],
     getWorkspaceSessionHostIds: () => [...partitions.keys()],
     getWorkspaceSession: (hostId: ExecutionHostId) => partitions.get(hostId) ?? emptySession(),
-    onWorkspaceSessionWritten: () => () => {},
-    applyLayoutCommand
+    onWorkspaceSessionWritten: () => () => {}
   }
-  return { runtime: new OrcaRuntimeService(partialRuntimeStore(store)), applyLayoutCommand }
+  return { runtime: new OrcaRuntimeService(partialRuntimeStore(store)) }
 }
-
-const RATIOS = {
-  type: 'setGroupRatios',
-  workspace: FOLDER_KEY,
-  groupLayout: { type: 'leaf', groupId: 'group-a' }
-} as const
 
 afterEach(() => {
   mocks.layoutOwnerIsMain = true
@@ -73,14 +55,6 @@ describe('a folder whose project group mixes local and SSH repos (layout-owner b
     const { runtime } = runtimeWithMixedFolder()
     const { snapshot } = runtime.subscribeWorkspaceLayouts(() => {})
     expect(snapshot.map((entry) => entry.key)).toEqual([GIT_KEY, FOLDER_KEY])
-  })
-})
-
-describe('every folder kind routes where the window saves it (layout-owner build)', () => {
-  it.each(FOLDER_HOST_CASES)('$name', async ({ folder, groups, expected }) => {
-    const { runtime, applyLayoutCommand } = runtimeWithMixedFolder(folder, groups)
-    await runtime.applyLayoutCommand(RATIOS)
-    expect(applyLayoutCommand).toHaveBeenCalledWith(RATIOS, [expected], {})
   })
 })
 

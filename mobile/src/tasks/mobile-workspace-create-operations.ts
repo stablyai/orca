@@ -1,10 +1,11 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import {
   isAgentLaunchResult,
   type AgentLaunchResult
 } from '../../../src/shared/agent-launch/contracts/agent-launch-intent'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import { connectionHostStatusRead } from '../query/host-status-query'
 import {
   agentLaunchCreateReceiptSchema,
   worktreeCreateReceiptSchema,
@@ -67,14 +68,16 @@ export const worktreeMrBaseResolve = bindDeferredRpcOperation(
 )
 
 // Create-time status is advisory and may skip refusal; Tasks hydration requires the same reply to succeed.
-export const worktreeCreateCapabilityRead = bindDeferredRpcOperation(
-  defineRpcOperation({
-    name: 'status.create-capabilities-or-skip',
-    method: 'status.get',
-    acceptance: 'success-result-or-skip',
-    barrier: 'after-caller-barrier',
-    read: rpcResultVariant('runtime-status', taskRuntimeStatusSchema)
-  })
+export const worktreeCreateCapabilityRead = connectionHostStatusRead(
+  bindDeferredRpcOperation(
+    defineRpcOperation({
+      name: 'status.create-capabilities-or-skip',
+      method: 'status.get',
+      acceptance: 'success-result-or-skip',
+      barrier: 'after-caller-barrier',
+      read: rpcResultVariant('runtime-status', taskRuntimeStatusSchema)
+    })
+  )
 )
 
 // Warmup refusal only loses a speed-up, including on older hosts without the method.

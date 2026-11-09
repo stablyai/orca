@@ -1,16 +1,17 @@
 import { resolveAutomationEditDestination } from './automation-orca-save-operations'
-import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automation-list-scope'
+import { AUTOMATION_ORPHAN_ISSUES } from '../../../../shared/automations/ownership/automation-list-scope'
 import {
   recordedAutomationRunContext,
   isSameAutomationWorkspace
 } from './automation-recorded-target'
 import { useCallback, useEffect, useMemo } from 'react'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { automationWorktreesForRepo } from './automation-list-row-identity'
 import { getAutomationCreateRepos } from './automation-create-projects'
 import {
   automationCreateEligibleProjects,
+  automationCreateHostFor,
   automationCreateHostStableKey,
   automationCreateProjectMismatch,
   resolveAutomationCreateDestination,
@@ -44,6 +45,7 @@ export function useAutomationsPageDestinationForm({
   list: AutomationsPageListState
   base: AutomationsPageDestinationState
 }) {
+  const t = useTranslate()
   const {
     repos,
     projectHostSetups,
@@ -129,17 +131,28 @@ export function useAutomationsPageDestinationForm({
     automationAuthorityCatalogKey(editHostResolution.authority) !== dialogAuthorityKey
       ? editHostResolution.entry
       : null
-  const editSaveDestination = resolveAutomationEditDestination({
-    currentAutomation: editingRow?.automation ?? null,
-    editingAutomationId,
-    editingDestination: local.editingDestination,
-    draft,
-    targetEdited: local.targetEdited,
-    rowKey: editingRowKey,
-    automationDialogTarget,
-    editHostEntries,
-    rowRecoveryHost: base.rowRecoveryHost
-  })
+  // A host's project table can load after the editor opened on it; the chosen project then holds.
+  const editingDestination =
+    local.editingDestination ??
+    (editHostResolution.status === 'ready' &&
+    draft.projectId &&
+    !automationCreateProjectMismatch(repoTables, editHostResolution, draft.projectId)
+      ? { projectId: draft.projectId, destination: editHostResolution }
+      : null)
+  const editSaveDestination = resolveAutomationEditDestination(
+    {
+      currentAutomation: editingRow?.automation ?? null,
+      editingAutomationId,
+      editingDestination,
+      draft,
+      targetEdited: local.targetEdited,
+      rowKey: editingRowKey,
+      automationDialogTarget,
+      editHostEntries,
+      rowRecoveryHost: base.rowRecoveryHost
+    },
+    t
+  )
   const editorSaveAuthority =
     editingAutomationId === null
       ? base.createDestination.control.resolution.status === 'ready'
@@ -205,7 +218,7 @@ export function useAutomationsPageDestinationForm({
         ? { id: recordedAutomation.projectId, label: recordedAutomation.runContext!.path }
         : undefined,
     moveWarning: editMoveTargetEntry
-      ? translate(
+      ? t(
           'auto.components.automations.createDestination.move',
           'Saving creates this automation on {host} and deletes the original and its run history.'
         ).replace('{host}', () => editMoveTargetEntry.authorityLabel)
@@ -252,10 +265,10 @@ export function useAutomationsPageDestinationForm({
       if (!runContext) {
         return null
       }
-      const stableKey = automationCreateHostStableKey(runContext.hostId)
-      const entry = stableKey
-        ? hostCatalog.entries.find((candidate) => candidate.stableKey === stableKey)
-        : undefined
+      const entry = automationCreateHostFor(
+        hostCatalog.entries,
+        automationCreateHostStableKey(runContext.hostId)
+      )
       const resolved = resolveAutomationCreateDestination(entry)
       return resolved.status === 'ready' ? resolved : null
     },
@@ -264,6 +277,7 @@ export function useAutomationsPageDestinationForm({
 
   return {
     editingRow,
+    editingDestination,
     editorSaveAuthority,
     recordedTargetSelected,
     editingRowCapturedOwner,

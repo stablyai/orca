@@ -55,6 +55,7 @@ const store = {
   tabsByWorktree: {
     'wt-1': [{ id: 'tab-1' }]
   },
+  unifiedTabsByWorktree: {},
   openFiles: [] as { id: string; worktreeId: string }[],
   browserTabsByWorktree: {} as Record<string, { id: string }[]>,
   tabBarOrderByWorktree: {} as Record<string, string[]>,
@@ -107,11 +108,13 @@ vi.mock('../../../../../../shared/agent-kind', async (importOriginal) => ({
   tuiAgentToAgentKind: mockLaunchAgentKind
 }))
 
-vi.mock('@/runtime/web-runtime-terminal-creation', () => ({
-  createWebRuntimeSessionTerminal: vi.fn(),
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation', () => ({
+  createWebRuntimeSessionTerminal: vi.fn()
+}))
+vi.mock('@/runtime/hosted-terminals/creation/web-runtime-created-agent-prompt-delivery', () => ({
   deliverCreatedWebRuntimeAgentSessionPrompt: vi.fn(async () => true)
 }))
-vi.mock('@/runtime/web-runtime-session-environment', () => ({
+vi.mock('@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment', () => ({
   isWebRuntimeSessionActive: mockIsWebRuntimeSessionActive
 }))
 vi.mock('../../../../../../shared/workspace-layout/terminal-surface-id', () => ({

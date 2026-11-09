@@ -3,9 +3,9 @@ import type { RuntimeCreateAgentSessionResult } from '../../../../../../shared/a
 import {
   createAgentSessionCreateOperation,
   type AgentSessionCreateOperation
-} from '../../../../runtime/agent-session-create-operation'
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
-import { toRuntimeTerminalWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
+} from '../../../../runtime/hosted-terminals/creation/agent-launch/agent-session-create-operation'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
+import { toRuntimeTerminalWorktreeSelector } from '../../../../runtime/rpc/targets/runtime-worktree-selector'
 
 type PtyConnectOptions = Parameters<PtyTransport['connect']>[0]
 const modelLaunchOperations = new WeakMap<IpcPtyTransportOptions, AgentSessionCreateOperation>()
@@ -19,7 +19,9 @@ export type IpcPtySpawnResponse = PtyConnectResult & {
 export async function spawnIpcPty(
   transportOptions: IpcPtyTransportOptions,
   connectOptions: PtyConnectOptions,
-  admittedSessionId?: string
+  admittedSessionId?: string,
+  /** The user's "let agents ask" answer for this launch. */
+  skipAgentWorkspaceTrust = false
 ): Promise<IpcPtySpawnResponse> {
   if (
     !admittedSessionId &&
@@ -50,6 +52,9 @@ export async function spawnIpcPty(
           agentArgs: transportOptions.agentArgsOverride,
           launchPreferences: transportOptions.agentLaunchPreferences,
           startupCwd: transportOptions.cwd,
+          ...(transportOptions.trustWorktreeId
+            ? { trustWorktreeId: transportOptions.trustWorktreeId }
+            : {}),
           placement: { tabId, leafId },
           presentation: 'background',
           ...(transportOptions.terminalKittyKeyboardProtocol === true
@@ -133,11 +138,15 @@ export async function spawnIpcPty(
     ...(connectOptions.initiallyHidden ? { initiallyHidden: true } : {}),
     ...(connectOptions.attachOnlyView ? { attachOnlyView: true } : {}),
     worktreeId,
+    ...(transportOptions.trustWorktreeId
+      ? { trustWorktreeId: transportOptions.trustWorktreeId }
+      : {}),
     ...(tabId ? { tabId } : {}),
     ...(leafId ? { leafId } : {}),
     ...(placement && !admittedSessionId ? { placement } : {}),
     ...(spawnIntent ? { spawnIntent } : {}),
     ...(connectOptions.wslPassiveRestore ? { wslPassiveRestore: true as const } : {}),
+    ...(skipAgentWorkspaceTrust ? { skipAgentWorkspaceTrust: true as const } : {}),
     ...(replacesPtyId ? { replacesPtyId } : {}),
     ...(shellOverride ? { shellOverride } : {}),
     ...(projectRuntime ? { projectRuntime } : {}),

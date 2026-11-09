@@ -2,7 +2,6 @@ import { getRepoRegistrationHostIds } from '../../../../shared/repo-host-identit
 import type { GitPushTarget, Worktree } from '../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import {
-  type WorkspaceKey,
   folderWorkspaceKey,
   parseWorkspaceKey,
   worktreeWorkspaceKey
@@ -16,25 +15,37 @@ import {
   writeWorktreeSortOrder,
   type WorktreeSortOrderRequest
 } from '../../../persistence/worktree-sort-order-write'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   isWslMoveSourceHost,
   isWslMoveWorkspaceBlocked,
   shouldDropWslMoveProjectUpdate,
   wslMoveProjectRefForWorkspace
 } from '../../../persistence/moving-wsl-projects/wsl-move-scope-guard'
-import { RuntimeLineageError } from '../lineage/runtime-worktree-lineage-resolution'
+import { RuntimeLineageError, explicitParentError } from '../lineage/runtime-lineage-error'
+import type { ResolvedWorkspaceParent } from '../lineage/runtime-worktree-lineage-resolution'
 import { assertParentInAnotherStore } from '../lineage/cross-store-parent-store-check'
 import type { CrossStoreParentRef } from '../../../../shared/worktree/lineage-types'
 import type { ResolvedWorktree } from '../catalog/runtime-worktree-path-identity'
 
 type Updates = Omit<Partial<WorktreeMeta>, 'pushTarget'> & {
   pushTarget?: GitPushTarget | null
-  lineage?: { parentWorktree?: string; crossStoreParent?: CrossStoreParentRef; noParent?: boolean }
+  lineage?: {
+    parentWorktree?: string
+    /** path: and name: in parentWorktree may name a folder workspace. */
+    matchFolderWorkspaces?: boolean
+    crossStoreParent?: CrossStoreParentRef
+    noParent?: boolean
+  }
 }
 
 type Ports = {
   resolveWorktree: (selector: string) => Promise<ResolvedWorktree>
+  /** The parent by its real kind; throws `selector_not_found` when absent. */
+  resolveParent: (
+    selector: string,
+    options: { matchFolders: boolean }
+  ) => Promise<ResolvedWorkspaceParent>
   validateParent: (worktree: ResolvedWorktree, parent: ResolvedWorktree) => void
   readStoreInstallationId?: () => Promise<string | undefined>
   invalidateResolved: () => void
@@ -51,7 +62,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
 }): Promise<Worktree> {
   const worktree = await args.ports.resolveWorktree(args.selector)
   const { lineage, ...metaUpdates } = args.updates
-  const folderParentKey = getFolderParentKey(lineage?.parentWorktree)
+  const folderParent = lineage?.parentWorktree ? folderParentKey(lineage.parentWorktree) : undefined
   const previousParentRepoId = lineage
     ? splitWorktreeId(args.store.getWorktreeLineage?.(worktree.id)?.parentWorktreeId ?? '')?.repoId
     : undefined
@@ -71,7 +82,7 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
   if (!target) {
     throw new Error('selector_ambiguous')
   }
-  if (lineage?.parentWorktree && !folderParentKey) {
+  if (lineage?.parentWorktree && !folderParent) {
     args.ports.invalidateResolved()
     args.ports.invalidateScan(worktree.repoId)
   }
@@ -123,67 +134,21 @@ export async function updateRuntimeManagedWorktreeMetadata(args: {
         'A same-id workspace on another host owns this lineage.'
       )
     }
-  } else if (folderParentKey) {
-    if (!worktree.instanceId) {
-      throw new RuntimeLineageError(
-        'LINEAGE_PARENT_CONTEXT_MISSING',
-        'Worktree instance identity was unavailable.'
-      )
-    }
-    if (!args.store.setFolderParentLineage) {
-      throw new RuntimeLineageError(
-        'LINEAGE_PARENT_CONTEXT_MISSING',
-        'Worktree lineage storage was unavailable.'
-      )
-    }
-    // Same rule as create: the folder must exist; folder parents have no host boundary.
-    if (
-      !args.store
-        .getFolderWorkspaces?.()
-        .some((folder) => folderWorkspaceKey(folder.id) === folderParentKey)
-    ) {
-      throw new Error('selector_not_found')
-    }
-    const recorded = args.store.setFolderParentLineage(target, {
-      childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
-      childInstanceId: worktree.instanceId,
-      parentWorkspaceKey: folderParentKey,
-      parentInstanceId: null,
-      origin: 'manual',
-      capture: { source: 'manual-action', confidence: 'explicit' },
-      createdAt: Date.now()
-    })
-    if (!recorded) {
-      throw new RuntimeLineageError(
-        'LINEAGE_PARENT_CONTEXT_CONFLICT',
-        'A same-id workspace on another host owns this lineage.'
-      )
-    }
   } else if (lineage?.parentWorktree) {
-    const parent = await args.ports.resolveWorktree(lineage.parentWorktree)
-    args.ports.validateParent(worktree, parent)
-    nextParentRepoId = parent.repoId
-    if (!worktree.instanceId || !parent.instanceId) {
-      throw new RuntimeLineageError(
-        'LINEAGE_PARENT_CONTEXT_MISSING',
-        'Worktree instance identity was unavailable.'
-      )
+    const parent = await args.ports
+      .resolveParent(lineage.parentWorktree, {
+        matchFolders: lineage.matchFolderWorkspaces === true
+      })
+      .catch((error: unknown) => {
+        throw explicitParentError(error)
+      })
+    const recorded =
+      parent.type === 'folder'
+        ? recordFolderParent(args.store, target, worktree, parent)
+        : recordWorktreeParent(args, target, worktree, parent.worktree)
+    if (parent.type === 'worktree') {
+      nextParentRepoId = parent.worktree.repoId
     }
-    if (!args.store.setWorktreeLineage) {
-      throw new RuntimeLineageError(
-        'LINEAGE_PARENT_CONTEXT_MISSING',
-        'Worktree lineage storage was unavailable.'
-      )
-    }
-    const recorded = args.store.setWorktreeLineage(target, {
-      worktreeId: worktree.id,
-      worktreeInstanceId: worktree.instanceId,
-      parentWorktreeId: parent.id,
-      parentWorktreeInstanceId: parent.instanceId,
-      origin: 'manual',
-      capture: { source: 'manual-action', confidence: 'explicit' },
-      createdAt: Date.now()
-    })
     if (!recorded) {
       throw new RuntimeLineageError(
         'LINEAGE_PARENT_CONTEXT_CONFLICT',
@@ -243,14 +208,70 @@ export function persistRuntimeManagedWorktreeSortOrder(args: {
   return { updated: updates.length }
 }
 
-function getFolderParentKey(selector: string | undefined): WorkspaceKey | undefined {
-  const raw = selector?.startsWith('id:') ? selector.slice('id:'.length) : selector
-  const parsed = raw ? parseWorkspaceKey(raw) : null
-  return parsed?.type === 'folder' ? folderWorkspaceKey(parsed.folderWorkspaceId) : undefined
+type HostTarget = NonNullable<ReturnType<typeof worktreeRowTarget>>
+
+// A folder parent may live on a different host from its child; only a unique folder id is required.
+function recordFolderParent(
+  store: RuntimeStore,
+  target: HostTarget,
+  worktree: ResolvedWorktree,
+  parent: Extract<ResolvedWorkspaceParent, { type: 'folder' }>
+): unknown {
+  if (!worktree.instanceId || !store.setFolderParentLineage) {
+    throw new RuntimeLineageError(
+      'LINEAGE_PARENT_CONTEXT_MISSING',
+      'Worktree instance identity or lineage storage was unavailable.'
+    )
+  }
+  return store.setFolderParentLineage(target, {
+    childWorkspaceKey: worktreeWorkspaceKey(worktree.id),
+    childInstanceId: worktree.instanceId,
+    parentWorkspaceKey: folderWorkspaceKey(parent.folderWorkspace.id),
+    parentInstanceId: parent.folderWorkspace.id,
+    origin: 'manual',
+    capture: { source: 'manual-action', confidence: 'explicit' },
+    createdAt: Date.now()
+  })
+}
+
+function recordWorktreeParent(
+  args: { store: RuntimeStore; ports: Ports },
+  target: HostTarget,
+  worktree: ResolvedWorktree,
+  parent: ResolvedWorktree
+): unknown {
+  args.ports.validateParent(worktree, parent)
+  if (!worktree.instanceId || !parent.instanceId) {
+    throw new RuntimeLineageError(
+      'LINEAGE_PARENT_CONTEXT_MISSING',
+      'Worktree instance identity was unavailable.'
+    )
+  }
+  if (!args.store.setWorktreeLineage) {
+    throw new RuntimeLineageError(
+      'LINEAGE_PARENT_CONTEXT_MISSING',
+      'Worktree lineage storage was unavailable.'
+    )
+  }
+  return args.store.setWorktreeLineage(target, {
+    worktreeId: worktree.id,
+    worktreeInstanceId: worktree.instanceId,
+    parentWorktreeId: parent.id,
+    parentWorktreeInstanceId: parent.instanceId,
+    origin: 'manual',
+    capture: { source: 'manual-action', confidence: 'explicit' },
+    createdAt: Date.now()
+  })
 }
 
 function omitUndefinedProperties<T extends Record<string, unknown>>(value: T): Partial<T> {
   return Object.fromEntries(
     Object.entries(value).filter(([, entry]) => entry !== undefined)
   ) as Partial<T>
+}
+
+/** `folder:<id>` or `id:folder:<id>` names a multi-repo folder workspace parent. */
+function folderParentKey(selector: string): string | undefined {
+  const raw = selector.startsWith('id:') ? selector.slice(3) : selector
+  return parseWorkspaceKey(raw)?.type === 'folder' ? raw : undefined
 }

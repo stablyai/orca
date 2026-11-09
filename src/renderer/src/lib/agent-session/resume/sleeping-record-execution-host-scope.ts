@@ -7,7 +7,7 @@ import {
   type ExecutionHostId
 } from '../../../../../shared/execution-host'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../shared/constants'
-import '@/store/slices/worktree-helpers'
+
 import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import {

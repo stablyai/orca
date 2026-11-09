@@ -15,7 +15,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '../../../ui/dropdown-menu'
-import { isSshTargetConnecting, type SshTargetBusyAction } from './ssh-target-action-state'
+import { isConnectingSshStatus } from '../../../../ssh/ssh-connection-recoverability'
+import type { SshTargetBusyAction } from './ssh-target-action-state'
 import { sshIdentityFileName } from './ssh-target-list-model'
 import { isManagedServerSshHost } from './SshManagedHostRemoveDialog'
 import {
@@ -25,6 +26,7 @@ import {
   type SshTargetServerDialog
 } from '../server-actions/SshTargetServerStatus'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 
 export const STATUS_LABELS: Record<SshConnectionStatus, string> = {
@@ -100,6 +102,7 @@ export function SshTargetCard({
   onRemove,
   onServerChanged
 }: SshTargetCardProps): React.JSX.Element {
+  const t = useTranslate()
   const status: SshConnectionStatus = state?.status ?? 'disconnected'
   const [actionInFlight, setActionInFlight] = useState<'connect' | 'disconnect' | null>(null)
   const [serverDialog, setServerDialog] = useState<SshTargetServerDialog | null>(null)
@@ -146,8 +149,8 @@ export function SshTargetCard({
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <Loader2 className="size-3 animate-spin" />
           {removeInFlight
-            ? translate('auto.components.settings.SshTargetCard.removing', 'Removing…')
-            : translate('auto.components.settings.SshTargetCard.testing', 'Testing…')}
+            ? t('auto.components.settings.SshTargetCard.removing', 'Removing…')
+            : t('auto.components.settings.SshTargetCard.testing', 'Testing…')}
         </span>
       )
     }
@@ -167,21 +170,21 @@ export function SshTargetCard({
     if (status === 'connected') {
       return (
         <Button variant="ghost" size="xs" onClick={handleDisconnect} disabled={hasActionInFlight}>
-          {translate('auto.components.settings.SshTargetCard.4c86f30877', 'Disconnect')}
+          {t('auto.components.settings.SshTargetCard.4c86f30877', 'Disconnect')}
         </Button>
       )
     }
-    if (isSshTargetConnecting(status)) {
+    if (isConnectingSshStatus(status)) {
       return (
         <Button variant="ghost" size="xs" disabled>
-          {translate('auto.components.settings.SshTargetCard.1810b51482', 'Connecting')}
+          {t('auto.components.settings.SshTargetCard.1810b51482', 'Connecting')}
         </Button>
       )
     }
     const button = (
       <Button variant="ghost" size="xs" onClick={handleConnect} disabled={hasActionInFlight}>
         {actionInFlight === 'connect' ? <Loader2 className="size-3 animate-spin" /> : null}
-        {translate('auto.components.settings.SshTargetCard.ec6543cee9', 'Connect')}
+        {t('auto.components.settings.SshTargetCard.ec6543cee9', 'Connect')}
       </Button>
     )
     if (status !== 'disconnected' || actionInFlight === 'connect') {
@@ -207,13 +210,9 @@ export function SshTargetCard({
         <Checkbox
           className="mt-0.5"
           checked={selected}
-          aria-label={translate(
-            'auto.components.settings.SshTargetCard.select',
-            'Select {{label}}',
-            {
-              label: target.label
-            }
-          )}
+          aria-label={t('auto.components.settings.SshTargetCard.select', 'Select {{label}}', {
+            label: target.label
+          })}
           onClick={(event) => {
             // Selection owns modifier-aware state; suppress Radix’s modifier-blind click toggle.
             event.preventDefault()
@@ -227,7 +226,7 @@ export function SshTargetCard({
           <span className="truncate text-sm font-medium">{target.label}</span>
           {servedByOrcaServer ? (
             <Badge variant="hostContext" className="self-center">
-              {translate('auto.components.settings.SshTargetCard.orcaServer', 'Orca server')}
+              {t('auto.components.settings.SshTargetCard.orcaServer', 'Orca server')}
             </Badge>
           ) : null}
           {/* Keep the separator outside monospace spans so its width stays compact. */}
@@ -258,7 +257,7 @@ export function SshTargetCard({
               variant="ghost"
               size="icon-xs"
               disabled={removeInFlight}
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.settings.SshTargetCard.moreActions',
                 'More actions for {{label}}',
                 { label: target.label }
@@ -273,19 +272,16 @@ export function SshTargetCard({
                 testing ||
                 hasActionInFlight ||
                 status === 'connected' ||
-                isSshTargetConnecting(status)
+                isConnectingSshStatus(status)
               }
               onSelect={() => void onTest(target.id)}
             >
               <PlugZap />
-              {translate(
-                'auto.components.settings.SshTargetCard.testConnection',
-                'Test connection'
-              )}
+              {t('auto.components.settings.SshTargetCard.testConnection', 'Test connection')}
             </DropdownMenuItem>
             <DropdownMenuItem disabled={hasActionInFlight} onSelect={() => onEdit(target)}>
               <Pencil />
-              {translate('auto.components.settings.SshTargetCard.edit', 'Edit…')}
+              {t('auto.components.settings.SshTargetCard.edit', 'Edit…')}
             </DropdownMenuItem>
             <SshTargetServerMenuItems
               target={target}
@@ -299,7 +295,7 @@ export function SshTargetCard({
               onSelect={() => onRemove(target.id)}
             >
               <Trash2 />
-              {translate('auto.components.settings.SshTargetCard.remove', 'Remove…')}
+              {t('auto.components.settings.SshTargetCard.remove', 'Remove…')}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -47,7 +47,7 @@ export function registerMainOwnedResumeDrainTests(
       }))
       const helper = await import('./main-resumed-sleep-pane')
       const attach = vi.spyOn(helper, 'attachToMainResumedSleepPane')
-      const recovery = await import('../../terminal-pane-recovery')
+      const recovery = await import('../../render-health/recovery/terminal-pane-recovery')
       const settled = vi.spyOn(recovery, 'settleTerminalPaneRecovery')
       const {
         mainResume,

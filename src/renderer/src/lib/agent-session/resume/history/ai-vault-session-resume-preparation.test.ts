@@ -6,10 +6,10 @@ import {
   prepareAiVaultSessionForTerminalResume
 } from './ai-vault-session-resume-preparation'
 
-import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
+import { RuntimeRpcCallError } from '@/runtime/rpc/calls/runtime-rpc-result'
 
 const browseServerDir = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/runtime-server-directory-browser', () => ({
+vi.mock('@/runtime/files/reads/runtime-server-directory-browser', () => ({
   browseRuntimeServerDirectory: browseServerDir
 }))
 

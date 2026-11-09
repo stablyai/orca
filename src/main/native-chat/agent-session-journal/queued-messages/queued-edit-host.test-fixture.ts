@@ -54,6 +54,3 @@ export const queuedEditHost: QueuedEditHostFixtureModule['queuedEditHost'] = (
       )
   }
 }
-
-export const queuedMessageUpdateDecision: QueuedEditHostFixtureModule['queuedMessageUpdateDecision'] =
-  decideUpdate

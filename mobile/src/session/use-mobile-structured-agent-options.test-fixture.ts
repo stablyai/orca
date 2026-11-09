@@ -1,5 +1,6 @@
 import { createElement, useLayoutEffect } from 'react'
-import { act, create, type ReactTestRenderer } from 'react-test-renderer'
+import { act, type ReactTestRenderer } from 'react-test-renderer'
+import { createWithQueryClient } from '../test-support/query-client-test-renderer'
 import { vi } from 'vitest'
 import type {
   AgentSessionModelCatalogResult,
@@ -7,7 +8,7 @@ import type {
 } from '../../../src/shared/agent-session/agent-session-wire'
 import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session/options/agent-session-options-result'
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type {
   StructuredAgentSessionMutate,
   StructuredAgentSessionMutationResult
@@ -147,6 +148,7 @@ type ProbeProps = {
   coherentCatalog?: boolean
   modelEffortDiscovery?: boolean
   permissionOwn?: boolean
+  onOptionError?: (message: string) => void
   onRender: (controller: Controller) => void
 }
 
@@ -159,6 +161,7 @@ function Probe(props: ProbeProps): null {
     fence: props.fence,
     unloadedTurnRevisions: undefined,
     mutate: props.mutate,
+    onOptionError: props.onOptionError,
     turnId: props.turnId ?? null,
     ...(props.optionStamp ? { optionStamp: props.optionStamp } : {}),
     hostSupport: {
@@ -191,7 +194,7 @@ async function mountOptions(props: Omit<ProbeProps, 'onRender'>) {
   }
   let renderer: ReactTestRenderer | null = null
   await act(async () => {
-    renderer = create(createElement(Probe, { ...props, onRender }))
+    renderer = createWithQueryClient(createElement(Probe, { ...props, onRender }))
   })
   await settle()
   const current = (): Controller => {

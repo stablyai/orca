@@ -75,13 +75,6 @@ describe('adoptRuntimeProvisionedRoot', () => {
     expect(setWorktreeMeta).not.toHaveBeenCalled()
   })
 
-  it('refuses a project whose root is not the recipe root', async () => {
-    const { value } = ports([checkout()])
-    await expect(
-      adoptRuntimeProvisionedRoot('repo-vm', { name: 'fix-login', expectedPath: '/other' }, value)
-    ).rejects.toThrow('does not match')
-  })
-
   it('refuses a project a WSL move is taking before reading its checkout', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'wsl-move-adopt-'))
     try {

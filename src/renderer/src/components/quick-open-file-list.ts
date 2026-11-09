@@ -15,28 +15,29 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react'
 export { isNestedWorktreePath, getNestedWorktreeExcludePaths } from './quick-open-nested-worktrees'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../shared/non-secure-context-uuid'
-import { isQuickOpenRemoteQueryTooLarge } from '@/components/quick-open-search'
-import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../../shared/quick-open-listing-limits'
+import { isQuickOpenRemoteQueryTooLarge } from '../../../shared/quick-open/quick-open-path-search'
+import { QUICK_OPEN_LISTING_MAX_RESULTS } from '../../../shared/quick-open/quick-open-listing-limits'
 import {
   cancelRuntimeFileList,
   listRuntimeFiles,
   searchRuntimeFilePaths
-} from '@/runtime/runtime-file-search-client'
-import { debounceRuntimeFileRequest } from '@/runtime/runtime-file-request-debounce'
-import { splitFileNameFilterTokens } from '../../../shared/file-name-filter-tokens'
+} from '@/runtime/files/search/runtime-file-search-client'
+import { debounceRuntimeFileRequest } from '@/runtime/files/runtime-file-request-debounce'
+import { splitFileNameFilterTokens } from '../../../shared/file-listing/file-name-filter-tokens'
 import {
   nextCappedLocalListing,
   type CappedLocalListing
 } from '@/components/quick-open-capped-local-listing'
 import { useAppStore } from '@/store'
-import { useFileListWorktree, useWorktreesForRepo } from '@/store/selectors'
+import { useFileListWorktree } from '@/store/workspaces/selection/use-selected-worktree'
+import { useWorktreesForRepo } from '@/store/slices/worktrees/listing/use-worktree-catalog'
 import type { FileExplorerOperationOwner } from '@/components/right-sidebar/file-explorer/tree/file-explorer-types'
 import {
   getFileExplorerOwnerUnresolvedMessage,
   getFileExplorerOperationRoute,
   useFileListOperationOwner
 } from '@/components/right-sidebar/file-explorer/navigation/file-explorer-operation-owner'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 
 export type RuntimeFileListState = {
   files: string[]

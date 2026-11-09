@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef } from 'react'
 import { BadgeCheck, ChevronLeft } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { pluginOfficialLabel } from '../presentation/plugin-official-label'
 import { Button } from '../../ui/button'
 import { needsNewerOrca, type PluginListEntry } from '../list/plugin-list-entries'
@@ -55,16 +56,16 @@ type PluginDetailPageProps = {
   onOpenPlugin: (pluginKey: string) => void
 }
 
-function sourceLabel(entry: PluginListEntry): string | null {
+function sourceLabel(entry: PluginListEntry, t: Translate = translate): string | null {
   const source = entry.installed?.source
   if (entry.installed?.bundled || source?.kind === 'bundled') {
-    return translate('auto.components.settings.PluginDetailPage.bundled', 'Bundled with Orca')
+    return t('auto.components.settings.PluginDetailPage.bundled', 'Bundled with Orca')
   }
   if (source?.kind === 'local-path') {
-    return translate('auto.components.settings.PluginDetailPage.localFolder', 'Local folder')
+    return t('auto.components.settings.PluginDetailPage.localFolder', 'Local folder')
   }
   if (source?.kind === 'git') {
-    return translate('auto.components.settings.PluginDetailPage.gitUrl', 'Git URL')
+    return t('auto.components.settings.PluginDetailPage.gitUrl', 'Git URL')
   }
   // Why: the verified-source chip already names a community catalog.
   return entry.verifiedSource.kind === 'catalog' ? null : (entry.listing?.marketplaceName ?? null)
@@ -87,6 +88,8 @@ export function PluginDetailPage({
   entries,
   onOpenPlugin
 }: PluginDetailPageProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const model = usePluginPageModel({ entry: currentEntry, fetchPreview, refreshing })
   const { entry, plugin, listing, preview, stale } = model
   const palettes = usePluginArtPalettes(entry.pluginKey, listing?.release?.themePreview)
@@ -114,12 +117,17 @@ export function PluginDetailPage({
   }, [entry.pluginKey])
 
   const controls = plugin
-    ? installedPluginControls(plugin, entry, {
-        busy,
-        canCheckUpdate: entry.updatable,
-        handlers,
-        inPage: true
-      })
+    ? installedPluginControls(
+        plugin,
+        entry,
+        {
+          busy,
+          canCheckUpdate: entry.updatable,
+          handlers,
+          inPage: true
+        },
+        t
+      )
     : null
   const version = plugin?.version ?? preview?.manifest.version ?? entry.version
   const description = plugin?.description ?? preview?.manifest.description ?? entry.description
@@ -137,8 +145,8 @@ export function PluginDetailPage({
     alert = (
       <Alert
         tone="destructive"
-        title={translate('auto.components.settings.PluginStatus.blocked', 'Blocked')}
-        body={translate(
+        title={t('auto.components.settings.PluginStatus.blocked', 'Blocked')}
+        body={t(
           'auto.components.settings.PluginSettingsRow.killListMessage',
           "Orca's safety list disabled this plugin: {{value0}}",
           { value0: plugin.blockedByKillList.reason }
@@ -149,18 +157,18 @@ export function PluginDetailPage({
     alert = (
       <Alert
         tone="destructive"
-        title={translate(
+        title={t(
           'auto.components.settings.PluginDetailPage.stoppedTitle',
           'Stopped after an error'
         )}
         body={
           // Why: a content-only plugin has no code to crash; its files failed to load.
           plugin?.execution === 'data'
-            ? translate(
+            ? t(
                 'auto.components.settings.PluginDetailPage.stoppedDataBody',
                 'Couldn’t load its files. Restart to try again.'
               )
-            : translate(
+            : t(
                 'auto.components.settings.PluginDetailPage.stoppedBody',
                 'It kept crashing. Restart to try again.'
               )
@@ -171,7 +179,7 @@ export function PluginDetailPage({
     alert = (
       <Alert
         tone="destructive"
-        title={translate(
+        title={t(
           'auto.components.settings.PluginDetailPage.invalidTitle',
           'Orca can’t load this plugin'
         )}
@@ -182,8 +190,8 @@ export function PluginDetailPage({
     alert = (
       <Alert
         tone="destructive"
-        title={translate('auto.components.settings.PluginStatus.blocked', 'Blocked')}
-        body={translate(
+        title={t('auto.components.settings.PluginStatus.blocked', 'Blocked')}
+        body={t(
           'auto.components.settings.PluginMarketplaceListingRow.blocked',
           "Blocked by Orca's safety list: {{value0}}",
           { value0: listing.blockedByKillList.reason }
@@ -194,17 +202,14 @@ export function PluginDetailPage({
     alert = (
       <Alert
         tone="info"
-        title={translate(
-          'auto.components.settings.PluginDetailPage.newerTitle',
-          'Newer version available'
-        )}
-        body={translate(
+        title={t('auto.components.settings.PluginDetailPage.newerTitle', 'Newer version available')}
+        body={t(
           'auto.components.settings.PluginDetailPage.newerBody',
           'The catalog changed while you were here.'
         )}
         action={
           <Button variant="outline" size="xs" onClick={model.showNewer}>
-            {translate('auto.components.settings.PluginDetailPage.showNewer', 'Show newer')}
+            {t('auto.components.settings.PluginDetailPage.showNewer', 'Show newer')}
           </Button>
         }
       />
@@ -213,14 +218,14 @@ export function PluginDetailPage({
     alert = (
       <Alert
         tone="warning"
-        title={translate(
+        title={t(
           'auto.components.settings.PluginDetailPage.needsOrcaTitle',
           'Needs Orca {{value0}} or later',
           {
             value0: entry.minimumOrca ?? ''
           }
         )}
-        body={translate(
+        body={t(
           'auto.components.settings.PluginDetailPage.needsOrcaBody',
           'You have Orca {{value0}}.',
           {
@@ -236,8 +241,8 @@ export function PluginDetailPage({
       <Button variant="ghost" size="xs" className="-ml-2" onClick={onBack}>
         <ChevronLeft />
         {hasPreviousPage
-          ? translate('auto.components.settings.PluginDetailPage.backToPlugin', 'Back')
-          : translate('auto.components.settings.PluginDetailPage.back', 'Plugins')}
+          ? t('auto.components.settings.PluginDetailPage.backToPlugin', 'Back')
+          : t('auto.components.settings.PluginDetailPage.back', 'Plugins')}
       </Button>
       <div className="mt-4 flex flex-wrap items-start gap-x-4 gap-y-3">
         <PluginPageIcon entry={entry} icon={model.images?.icon} />
@@ -255,7 +260,7 @@ export function PluginDetailPage({
               <BadgeCheck
                 className="plugin-security-chrome size-5 shrink-0 text-muted-foreground"
                 role="img"
-                aria-label={pluginOfficialLabel()}
+                aria-label={pluginOfficialLabel(t)}
               />
             ) : null}
           </div>
@@ -263,8 +268,8 @@ export function PluginDetailPage({
             {author ? <PluginAuthorByline author={author} /> : null}
             {[
               version ? `v${version}` : null,
-              installCount !== null ? pluginInstallCountLabel(installCount) : null,
-              sourceLabel(entry)
+              installCount !== null ? pluginInstallCountLabel(installCount, t, intlLocale) : null,
+              sourceLabel(entry, t)
             ]
               .filter(Boolean)
               .map((fact, index) => (
@@ -285,7 +290,7 @@ export function PluginDetailPage({
           ) : null}
           {entry.alsoListedBy.length > 0 ? (
             <p data-plugin-also-listed="" className="mt-1 text-xs text-muted-foreground">
-              {translate(
+              {t(
                 'auto.components.settings.PluginDetailPage.alsoListedBy',
                 'Also listed by {{value0}}. Updates come only from the catalog it was installed from; to switch, remove it and install it again.',
                 { value0: entry.alsoListedBy.join(', ') }

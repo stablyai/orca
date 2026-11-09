@@ -1,6 +1,6 @@
 import type { TerminalTab } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import type { useAppStore } from '@/store/index'
-import { collectLeafIdsInOrder } from '../../terminal-layout-leaf-ids'
+import { collectLeafIdsInOrder } from '../../layout/terminal-layout-leaf-traversal'
 import { resolveRootlessTerminalLayoutLeafId } from '../../../../../../shared/workspace-layout/terminal-pane-tree'
 import {
   capturedPanesByTabId,

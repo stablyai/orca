@@ -2,7 +2,7 @@ import type { WebSocket } from 'ws'
 import type { ServerResponse } from 'node:http'
 import type { WebContents } from 'electron'
 import type { CdpClientResponseWriter } from './cdp-client-response-writer'
-import type { CdpSyntheticSessionRegistry } from '../commands/cdp-synthetic-session-registry'
+import type { CdpSyntheticSessionRegistry } from './cdp-synthetic-session-registry'
 
 export class CdpTargetDiscovery {
   constructor(

@@ -23,7 +23,10 @@ describe('packaged runtime resources', () => {
 
       const sources = new Map([
         ['out\\main\\index.js', 'const z = require("zod")'],
-        ['out\\main\\agent-hooks\\managed-agent-hook-controls.js', 'const YAML = require("yaml")']
+        [
+          'out\\main\\agent-hooks\\installation\\managed-agent-hook-controls.js',
+          'const YAML = require("yaml")'
+        ]
       ])
       const asar = {
         listPackage: () => [...sources.keys()].map((entry) => `\\${entry}`),
@@ -48,7 +51,7 @@ describe('packaged runtime resources', () => {
           'let p=null;function q(){return p??=import(`@anthropic-ai/claude-agent-sdk`),p}'
         ],
         [
-          'out/main/agent-hooks/managed-agent-hook-controls.js',
+          'out/main/agent-hooks/installation/managed-agent-hook-controls.js',
           'import (`@anthropic-ai/claude-agent-sdk`)'
         ]
       ])
@@ -96,7 +99,7 @@ describe('packaged runtime resources', () => {
       // The entry points themselves carry no specifier; only the shared chunk does.
       const sources = new Map([
         ['out/main/index.js', ''],
-        ['out/main/agent-hooks/managed-agent-hook-controls.js', ''],
+        ['out/main/agent-hooks/installation/managed-agent-hook-controls.js', ''],
         ['out/main/chunks/managed-agent-hook-controls-CWf8D-KR.js', 'require(`jsonc-parser`)']
       ])
       // listPackage includes directories that extractFile rejects; mock them to enforce the .js anchor.
@@ -128,7 +131,7 @@ describe('packaged runtime resources', () => {
 
       const sources = new Map([
         ['out/main/index.js', 'const all=[...require("jsonc-parser")]'],
-        ['out/main/agent-hooks/managed-agent-hook-controls.js', '']
+        ['out/main/agent-hooks/installation/managed-agent-hook-controls.js', '']
       ])
       const asar = {
         listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),
@@ -149,7 +152,10 @@ describe('packaged runtime resources', () => {
       // Registry require(key) members are not packaged bare-module imports, even with literal keys.
       const sources = new Map([
         ['out/main/index.js', 'registry.require("public-a");grants.require(`host-key`)'],
-        ['out/main/agent-hooks/managed-agent-hook-controls.js', 'state.import("android-sdk")']
+        [
+          'out/main/agent-hooks/installation/managed-agent-hook-controls.js',
+          'state.import("android-sdk")'
+        ]
       ])
       const asar = {
         listPackage: () => [...sources.keys()].map((entry) => `/${entry}`),

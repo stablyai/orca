@@ -72,6 +72,8 @@ export type OrcadInstanceLockHooks = OrcadDataRootPrivacyHooks & {
   holderIdentity?: (record: OrcadLockRecord) => OrcadProcessIdentityVerdict
   /** Desktop callers must first hold Electron’s single-instance lock to reclaim desktop records. */
   role?: 'orcad' | 'desktop'
+  /** Tighten and verify data-root permissions; defaults to on for the orcad role only. */
+  enforcePrivateDataRoot?: boolean
   machineIdentity?: () => string | null
   /** Establishes locality for legacy machine-less records. */
   dataRootIsOnLocalDisk?: (dataRoot: string) => boolean
@@ -118,7 +120,7 @@ export function acquireOrcadInstanceLock(
     )
   }
   // Desktop profiles retain existing permissions; orcad tightens its own roots.
-  if ((hooks.role ?? 'orcad') === 'orcad') {
+  if (hooks.enforcePrivateDataRoot ?? (hooks.role ?? 'orcad') === 'orcad') {
     assertOrcadDataRootIsPrivate(dataRoot, hooks)
   }
 

@@ -1,5 +1,6 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import { connectionHostStatusRead } from '../query/host-status-query'
 import {
   taskLinearStatusSchema,
   taskPreferenceWriteSchema,
@@ -9,14 +10,16 @@ import {
 } from './task-runtime-reply-schema'
 
 // Task hydration requires status; create-time capability probing may skip the same method’s refusal.
-export const taskRuntimeStatusRead = bindDeferredRpcOperation(
-  defineRpcOperation({
-    name: 'status.task-runtime',
-    method: 'status.get',
-    acceptance: 'require-result-or-throw-message',
-    barrier: 'after-caller-barrier',
-    read: rpcResultVariant('runtime-status', taskRuntimeStatusSchema)
-  })
+export const taskRuntimeStatusRead = connectionHostStatusRead(
+  bindDeferredRpcOperation(
+    defineRpcOperation({
+      name: 'status.task-runtime',
+      method: 'status.get',
+      acceptance: 'require-result-or-throw-message',
+      barrier: 'after-caller-barrier',
+      read: rpcResultVariant('runtime-status', taskRuntimeStatusSchema)
+    })
+  )
 )
 
 // Persisted UI state is advisory; refusal retains screen defaults.

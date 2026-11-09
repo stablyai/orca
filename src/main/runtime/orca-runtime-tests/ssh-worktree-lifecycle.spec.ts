@@ -13,6 +13,7 @@ import { SshHostNotServedError } from '../../providers/ssh-host-not-served-error
 import type { WorkspaceLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
 import {
+  TEST_FOLDER_WORKSPACE_ID,
   TEST_FOLDER_WORKSPACE_KEY,
   TEST_REPO_ID,
   TEST_REPO_PATH,
@@ -177,7 +178,7 @@ describe('OrcaRuntimeService', () => {
       childWorkspaceKey: `worktree:${childId}`,
       childInstanceId: metaById[childId].instanceId,
       parentWorkspaceKey: TEST_FOLDER_WORKSPACE_KEY,
-      parentInstanceId: null,
+      parentInstanceId: TEST_FOLDER_WORKSPACE_ID,
       origin: 'cli',
       capture: { source: 'env-workspace', confidence: 'inferred' }
     })

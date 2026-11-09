@@ -14,6 +14,7 @@ import {
 } from '@/components/task-page/github/task-page-github-status-actions'
 import { parseOwnerRepoFromItemUrl } from '@/components/github/github-work-item-identity'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { GitHubItemDialogEditSectionProps } from '../load-item-details/github-item-dialog-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -68,6 +69,7 @@ function GHEditSectionItem({
   attachedWorkspaceLabel,
   layout = 'horizontal'
 }: GitHubItemDialogEditSectionProps): React.JSX.Element | null {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const [labelPopoverOpen, setLabelPopoverOpen] = useState(false)
   const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false)
@@ -158,9 +160,9 @@ function GHEditSectionItem({
     const parsed = parseOwnerRepoFromItemUrl(item.url)
     return parsed
       ? `${parsed.owner}/${parsed.repo}`
-      : translate('auto.components.TaskPage.repository', 'Repository')
+      : t('auto.components.TaskPage.repository', 'Repository')
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
-  }, [item.url, projectOrigin, languageRevision])
+  }, [item.url, projectOrigin, languageRevision, t])
   const handleOpenOrUseWorkspace = useCallback((): void => {
     if (onOpenOrUse) {
       onOpenOrUse(item)
