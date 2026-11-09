@@ -7,6 +7,7 @@ import type {
   HostedSessionInfo
 } from './hosted-environment-provider'
 import type { HostedAgentAutoResumeOutcome } from './hosted-agent-auto-resume'
+import type { HostedSessionStateEvent } from '../../shared/hosted-sandbox/hosted-session-events'
 import {
   HOSTED_LEASE_POLICY,
   decideHostedLeaseAction,
@@ -32,6 +33,8 @@ export type HostedSessionLeasePorts = {
   onSuspended: () => void
   /** Replaces the driver suspend, e.g. to run the window's ordinary Sleep for the workspace. */
   suspend?: () => Promise<void>
+  /** A rollover started (`restarting`), its new session is back (`running`), or it failed. */
+  onRolloverStateChange?: (state: HostedSessionStateEvent['state']) => void
   log?: (line: string) => void
   now?: () => number
 }
@@ -47,6 +50,7 @@ export class HostedSessionLeaseScheduler {
   private readonly warned = new Set<HostedLeaseWarning>()
   private timer: ReturnType<typeof setTimeout> | null = null
   private running: Promise<HostedLeaseAction> | null = null
+  private restarting: Promise<boolean> | null = null
   private stopped = false
   private readonly now: () => number
   private readonly log: (line: string) => void
@@ -76,6 +80,43 @@ export class HostedSessionLeaseScheduler {
       this.running = null
     })
     return this.running
+  }
+
+  /** "Restart now": the forced rollover, run in turn with any in-flight tick. False if it cannot roll over. */
+  restartNow(): Promise<boolean> {
+    // Two windows asking at once share one restart.
+    this.restarting ??= this.runRestartNow().finally(() => {
+      this.restarting = null
+    })
+    return this.restarting
+  }
+
+  private async runRestartNow(): Promise<boolean> {
+    if (this.stopped || !this.ports.driver.rollover) {
+      return false
+    }
+    const sessionBefore = this.session
+    while (this.running) {
+      await this.running.catch(() => undefined)
+    }
+    // The tick it waited on may have slept the workspace or already rolled the session over.
+    if (this.stopped) {
+      return false
+    }
+    if (this.session !== sessionBefore) {
+      return true
+    }
+    const restart = this.rollover('forced').then((): HostedLeaseAction => ({
+      kind: 'rollover',
+      reason: 'forced'
+    }))
+    this.running = restart
+      .catch((): HostedLeaseAction => ({ kind: 'none' }))
+      .finally(() => {
+        this.running = null
+      })
+    await restart
+    return true
   }
 
   private async runOnce(): Promise<HostedLeaseAction> {
@@ -125,10 +166,17 @@ export class HostedSessionLeaseScheduler {
     const offersBeforeDrain = (await this.ports.snapshotOffers?.().catch(() => null)) ?? null
     const drainStartedAt = this.now()
     this.log(`[orca-cloud] ${reason} rollover`)
-    const ready = await driver.rollover(handle)
-    this.session = ready.session
-    this.warned.clear()
-    await this.ports.reconnect(ready)
+    this.ports.onRolloverStateChange?.('restarting')
+    try {
+      const ready = await driver.rollover(handle)
+      this.session = ready.session
+      this.warned.clear()
+      await this.ports.reconnect(ready)
+    } catch (error) {
+      this.ports.onRolloverStateChange?.('restart-failed')
+      throw error
+    }
+    this.ports.onRolloverStateChange?.('running')
     try {
       const outcome = await this.ports.resumeAgents(drainStartedAt, offersBeforeDrain)
       this.log(

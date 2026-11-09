@@ -12,7 +12,7 @@ export type HostedActivitySample = {
   lastPtyInputAt: number | null
 }
 
-export type HostedLeaseWarning = 60 | 15
+export type HostedLeaseWarning = 60 | 15 | 5
 
 export type HostedLeaseAction =
   | { kind: 'none' }
@@ -28,7 +28,8 @@ export const HOSTED_LEASE_POLICY = {
   /** After this session age, roll over quietly the first time nothing is running. */
   opportunisticAfterMs: 12 * 60 * 60_000,
   ptyQuietMs: 2 * 60_000,
-  warnings: [60, 15] as const
+  /** The last tier keeps the window's toast up until the restart. */
+  warnings: [60, 15, 5] as const
 }
 
 export function decideHostedLeaseAction(input: {

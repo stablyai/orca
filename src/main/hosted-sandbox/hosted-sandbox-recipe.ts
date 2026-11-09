@@ -22,8 +22,9 @@ import { createHostedSandboxControlPlaneClient } from './hosted-sandbox-control-
 import { createHostedSandboxDriver, HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
 import type { HostedSandboxConfig } from './hosted-sandbox-config'
 
-/** Reserved id: `--on cloud` in the CLI design, first in every provider list. */
-export const ORCA_CLOUD_RECIPE_ID = 'cloud'
+import { ORCA_CLOUD_RECIPE_ID } from '../../shared/hosted-sandbox/orca-cloud-recipe-id'
+
+export { ORCA_CLOUD_RECIPE_ID }
 
 export const ORCA_CLOUD_RECIPE: OrcaVmRecipe = {
   id: ORCA_CLOUD_RECIPE_ID,

@@ -2,6 +2,7 @@ import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
 import type {
   HostedSessionIdleSleepEvent,
+  HostedSessionStateEvent,
   HostedSessionWarningEvent
 } from '../../shared/hosted-sandbox/hosted-session-events'
 import { EPHEMERAL_VM_RUNTIMES_CHANGED_CHANNEL } from '../../shared/ephemeral-vm-runtime-store-events'
@@ -34,6 +35,13 @@ export const ephemeralVmApi = {
     ipcRenderer.on('orcaCloud:idleSleepRequested', listener)
     return () => ipcRenderer.removeListener('orcaCloud:idleSleepRequested', listener)
   },
+  onCloudSessionState: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, event: HostedSessionStateEvent): void =>
+      callback(event)
+    ipcRenderer.on('orcaCloud:sessionState', listener)
+    return () => ipcRenderer.removeListener('orcaCloud:sessionState', listener)
+  },
+  restartCloudSession: (args) => ipcRenderer.invoke('orcaCloud:restartNow', args),
   listRuntimes: () => ipcRenderer.invoke('ephemeralVm:listRuntimes'),
   attachWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:attachWorkspace', args),
   resumeWorkspace: (args) => ipcRenderer.invoke('ephemeralVm:resumeWorkspace', args),

@@ -2151,10 +2151,27 @@
         "unreachable": "The environment checks could not finish: {{error}}"
       },
       "orcaCloudSession": {
-        "restartSoon": "Cloud workspace restarts in {{minutes}} min",
-        "restartSoonDetail": "{{name}} reaches its 24-hour session limit. Files stay; running agents pick up where they left off.",
-        "thisWorkspace": "This workspace",
-        "seePlans": "See plans"
+        "seePlans": "See plans",
+        "workspaceGone": "That workspace is no longer in Orca.",
+        "thisWorkspaceLower": "this workspace",
+        "sandboxRestartSoon": "Sandbox for {{name}} restarts in {{minutes}} min",
+        "sandboxRestartSoonDetail": "Cloud sandboxes restart after 24 hours. Files are kept and Orca resumes your agents after the restart.",
+        "restartNow": "Restart now",
+        "open": "Open",
+        "sandboxRestartFailed": "Couldn't restart the sandbox for {{name}}",
+        "restartNotRunning": "The sandbox isn't running. Open the workspace to wake it.",
+        "restartFailedDetail": "It still restarts on its own after 24 hours.",
+        "sandboxRestarted": "Sandbox for {{name}} restarted",
+        "restartedResumingDetail": "Files are kept and Orca is resuming your agents. The next restart is in 24 hours.",
+        "sandboxRestarting": "Restarting the sandbox for {{name}}…",
+        "restartingDetail": "Usually under a minute. Orca resumes your agents once it is back.",
+        "cleaningUp": "Cleaning up the Orca Cloud sandbox…",
+        "cleaningUpDetail": "Creation was cancelled. Deleting the sandbox so it stops using sandbox hours.",
+        "cleanedUp": "Orca Cloud sandbox cleaned up",
+        "cleanedUpDetail": "Nothing from the cancelled workspace is left running.",
+        "cleanupFailed": "Couldn't finish cleaning up the Orca Cloud sandbox",
+        "cleanupFailedDetail": "It may still be running and using sandbox hours. Retry the cleanup from Settings.",
+        "openSettings": "Open Settings"
       },
       "runtimePortForwards": {
         "desktopOnly": "Port forwarding needs the desktop app.",
@@ -20230,6 +20247,22 @@
         "workspaceFallback": "workspace",
         "workspaceLinkCopied": "Workspace link copied",
         "you": "You"
+      },
+      "orcaCloud": {
+        "QueuedPrompt": {
+          "label": "First prompt for {{agent}}",
+          "placeholder": "What should {{agent}} work on?",
+          "hint": "{{agent}} starts with it as soon as the workspace is ready.",
+          "cancelEdit": "Cancel",
+          "queue": "Queue prompt",
+          "lateEdit": "Too late to change: {{agent}} is starting with the queued prompt. Send your edit once the workspace opens:",
+          "lateQueue": "Too late to queue: {{agent}} is already starting. Send this once the workspace opens:",
+          "draftQueued": "Draft for {{agent}}, typed in when ready",
+          "queued": "Queued for {{agent}}",
+          "drafting": "Ready as a draft in {{agent}}",
+          "sending": "Sending to {{agent}} next",
+          "edit": "Edit queued prompt"
+        }
       }
     },
     "i18n": {

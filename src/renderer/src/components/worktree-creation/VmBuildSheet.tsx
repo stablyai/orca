@@ -14,6 +14,7 @@ import { StepIcon } from './WorktreeSetupSteps'
 import { firstBuildLogErrorLine, VmBuildLog } from './VmBuildLog'
 import { VmBuildFailureCard } from './VmBuildFailureCard'
 import { VmBuildAgentSignInRow } from './VmBuildAgentSignInRow'
+import { OrcaCloudQueuedPrompt } from '@/components/orca-cloud/OrcaCloudQueuedPrompt'
 import { classifyVmBuildFailure, isAccountGate, type VmBuildFailure } from './vm-build-failure'
 import {
   deriveVmBuildSteps,
@@ -237,6 +238,8 @@ export function VmBuildSheet({
             }}
           />
         </div>
+
+        {building ? <OrcaCloudQueuedPrompt creationId={creationId} /> : null}
 
         {cloud ? (
           <button

@@ -1,4 +1,4 @@
-// Window side of Orca Cloud's session lifecycle: cap warnings and idle sleep requests from main.
+// Window side of Orca Cloud's session lifecycle: cap warnings, rollovers and idle sleep from main.
 import { createElement } from 'react'
 import { toast } from 'sonner'
 import { CloudStateDot } from '@/components/orca-cloud/CloudStateDot'
@@ -9,35 +9,53 @@ import { runSleepWorktree } from '@/components/sidebar/workspace-actions/sleep/s
 import { openPlansPage } from '@/components/billing/plans/plans-page-store'
 import { activateWorktreeFromSidebar } from '@/lib/workspace/activation/sidebar-worktree-activation'
 import { installOrcaCloudWorkspaceStore } from '@/lib/orca-cloud/orca-cloud-workspace-store'
+import type { HostedSessionRestartResult } from '../../../shared/hosted-sandbox/hosted-session-events'
+import {
+  dismissOrcaCloudRestartWarning,
+  noteOrcaCloudRolloverState,
+  showOrcaCloudRestartWarningToast
+} from '@/lib/orca-cloud-session-toasts'
+
+function openWorkspace(workspaceId: string): void {
+  if (findWorktreeById(useAppStore.getState(), workspaceId)) {
+    void activateWorktreeFromSidebar(workspaceId)
+    return
+  }
+  toast.error(
+    translate('auto.lib.orcaCloudSession.workspaceGone', 'That workspace is no longer in Orca.')
+  )
+}
+
+/** The sidebar's name for the workspace; main only knows the name it was created with. */
+function displayName(
+  workspaceId: string | null,
+  fallback: string | null | undefined
+): string | null {
+  const worktree = workspaceId ? findWorktreeById(useAppStore.getState(), workspaceId) : undefined
+  return worktree?.displayName || fallback || null
+}
+
+function restartNow(workspaceId: string): Promise<HostedSessionRestartResult> {
+  return window.api.ephemeralVm.restartCloudSession({ workspaceId })
+}
 
 export function installOrcaCloudSessionEvents(): () => void {
   const api = window.api?.ephemeralVm
   if (!api?.onCloudSessionWarning || !api.onCloudIdleSleepRequested) {
     return () => {}
   }
-  const disposeWarning = api.onCloudSessionWarning(({ workspaceName, minutesLeft }) => {
-    toast.warning(
-      translate(
-        'auto.lib.orcaCloudSession.restartSoon',
-        'Cloud workspace restarts in {{minutes}} min',
-        {
-          minutes: minutesLeft
-        }
-      ),
-      {
-        duration: 20_000,
-        description: translate(
-          'auto.lib.orcaCloudSession.restartSoonDetail',
-          '{{name}} reaches its 24-hour session limit. Files stay; running agents pick up where they left off.',
-          {
-            name:
-              workspaceName ??
-              translate('auto.lib.orcaCloudSession.thisWorkspace', 'This workspace')
-          }
-        )
-      }
+  const disposeWarning = api.onCloudSessionWarning((event) =>
+    showOrcaCloudRestartWarningToast(
+      { ...event, workspaceName: displayName(event.workspaceId, event.workspaceName) },
+      { restartNow, open: openWorkspace }
     )
-  })
+  )
+  const disposeState =
+    api.onCloudSessionState?.(({ workspaceId, state }) => {
+      if (workspaceId) {
+        noteOrcaCloudRolloverState(workspaceId, displayName(workspaceId, null), state)
+      }
+    }) ?? (() => {})
   const disposeIdle = api.onCloudIdleSleepRequested(({ workspaceId, idleMs }) => {
     const worktree = workspaceId ? findWorktreeById(useAppStore.getState(), workspaceId) : null
     if (!workspaceId || !worktree) {
@@ -45,6 +63,7 @@ export function installOrcaCloudSessionEvents(): () => void {
     }
     void runSleepWorktree(workspaceId).then((results) => {
       if (results.some((result) => result.workspaceId === workspaceId && result.completed)) {
+        dismissOrcaCloudRestartWarning(workspaceId)
         showIdleSleepNotice(workspaceId, worktree.displayName, idleMs ?? null)
       }
     })
@@ -52,6 +71,7 @@ export function installOrcaCloudSessionEvents(): () => void {
   const disposeStore = installOrcaCloudWorkspaceStore()
   return () => {
     disposeWarning()
+    disposeState()
     disposeIdle()
     disposeStore()
   }

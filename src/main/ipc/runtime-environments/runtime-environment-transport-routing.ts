@@ -16,6 +16,7 @@ import {
   type ManagedRuntimeCallPreparation
 } from './runtime-environment-managed-tunnel'
 import { markEnvironmentUsedFromResponse } from './runtime-environment-usage-marking'
+import { recordRuntimeEnvironmentUsage } from '../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
 import type * as Rpc from '../../../shared/runtime-rpc-envelope'
 import '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { subscribeRemoteRuntimeTransport } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'

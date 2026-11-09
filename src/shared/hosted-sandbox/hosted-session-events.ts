@@ -16,7 +16,7 @@ export type OrcadWorkVerdict = {
 export type HostedSessionWarningEvent = {
   workspaceId: string | null
   workspaceName: string | null
-  minutesLeft: 60 | 15
+  minutesLeft: 60 | 15 | 5
 }
 
 export type HostedSessionIdleSleepEvent = {
@@ -24,3 +24,11 @@ export type HostedSessionIdleSleepEvent = {
   /** How long the workspace was idle before sleeping (for "slept after N min idle"); optional for older mains. */
   idleMs?: number | null
 }
+
+/** A session rollover (scheduled or "Restart now") is restarting the workspace's sandbox. */
+export type HostedSessionStateEvent = {
+  workspaceId: string | null
+  state: 'restarting' | 'running' | 'restart-failed'
+}
+
+export type HostedSessionRestartResult = { status: 'restarted' | 'not-running' | 'failed' }
