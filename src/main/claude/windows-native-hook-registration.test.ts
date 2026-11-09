@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
-import type { PipedChildProcess } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 import { once } from 'node:events'
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -85,7 +85,7 @@ describe.skipIf(process.platform !== 'win32')('ClaudeHookService native hook ins
     `${join(hooksDir, EXE).replaceAll('\\', '/')} claude`
 
   // Holding stdin open keeps the hook image mapped to exercise locked-executable replacement.
-  function startHeldHook(program: string): PipedChildProcess {
+  function startHeldHook(program: string): ChildProcessWithoutNullStreams {
     return spawnProcess({
       program,
       args: ['claude'],
