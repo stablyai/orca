@@ -56,3 +56,46 @@ describe('a request whose own recipe VM wake re-paired its server', () => {
     expect((await fence(1, 'before')).failure).toMatchObject({ ok: false })
   })
 })
+
+describe('a fenced request that waited through a wake already in flight', () => {
+  beforeEach(() => {
+    prepare.mockClear()
+    // By the time the request takes its slot the record already holds the new pairing; its own
+    // preparation woke nothing.
+    prepared.current = { environment: AFTER_WAKE, before: AFTER_WAKE, wokenPairingRevision: null }
+  })
+
+  const heldFence = (pairingRevision: number, wokenPairingRevision: number | null) =>
+    prepareFencedRuntimeRequest(
+      '/user-data',
+      'env-vm',
+      'terminal.list',
+      undefined,
+      { pairingRevision, runtimeId: 'before' },
+      undefined,
+      { before: BEFORE as never, wokenPairingRevision }
+    )
+
+  it('passes the pre-wake fence and then expects the pairing that wake made', async () => {
+    await expect(heldFence(1, 2)).resolves.toMatchObject({
+      failure: null,
+      expected: { pairingRevision: 2, runtimeId: undefined }
+    })
+  })
+
+  it('still refuses a caller fenced to an older pairing', async () => {
+    expect((await heldFence(0, 2)).failure).toMatchObject({ ok: false })
+    expect(prepare).not.toHaveBeenCalled()
+  })
+
+  it('without the held wake, the same call is refused as changed', async () => {
+    const result = await prepareFencedRuntimeRequest(
+      '/user-data',
+      'env-vm',
+      'terminal.list',
+      undefined,
+      { pairingRevision: 1, runtimeId: 'before' }
+    )
+    expect(result.failure).toMatchObject({ ok: false })
+  })
+})

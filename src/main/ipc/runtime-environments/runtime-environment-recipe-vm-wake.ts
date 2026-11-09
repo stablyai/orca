@@ -127,21 +127,35 @@ export const RECIPE_VM_IN_FLIGHT_WAKE_HOLD_MS = 60_000
  * and never retried. Never starts a wake and never refuses: the request's own preparation decides
  * what happens next (it is refused there if the wake failed or is still running).
  */
-export async function awaitRecipeVmInFlightWake(
+export async function awaitRecipeVmInFlightWake<E extends RecipeVmEnvironment>(
   userDataPath: string,
-  environment: RecipeVmEnvironment,
+  environment: E,
   holdMs: number,
   signal?: AbortSignal
-): Promise<void> {
+): Promise<HeldRecipeVmWake<E> | null> {
   const waker = getRecipeVmWaker()
   if (holdMs <= 0 || !waker?.awaitWake) {
-    return
+    return null
   }
   const vm = recipeVmOf(userDataPath, environment)
   if (!vm || waker.state(vm.workspaceId, vm.recordSuspended) !== 'waking') {
-    return
+    return null
   }
+  const before = latestRecipeVmWake(environment.id)
   await waker.awaitWake(vm.workspaceId, vm.recordSuspended, holdMs, signal).catch(() => undefined)
+  const woken = latestRecipeVmWake(environment.id)
+  // The wake this request waited through re-paired the server: the caller's fence names the pairing
+  // before it, exactly as for a request that woke the VM itself.
+  return woken !== before
+    ? { before: environment, wokenPairingRevision: woken?.pairingRevision ?? null }
+    : null
+}
+
+/** A wake a request waited through before taking its call slot: the record from before it and
+ *  the pairing it left. */
+export type HeldRecipeVmWake<E = RecipeVmEnvironment> = {
+  before: E
+  wokenPairingRevision: number | null
 }
 
 /** The pairing revision a recipe VM wake this request waited for left its server on, if any. */
@@ -186,15 +200,15 @@ function refusal(outcome: Exclude<RecipeVmOpening, 'up'> | 'asleep'): RemoteRunt
 /** A request that does not open the workspace waits (bounded by its own timeout and hold) for a wake
  *  already in flight. Called before the request takes a per-environment call slot, so held
  *  background requests never block an open. */
-export function holdForInFlightRecipeVmWake(
+export function holdForInFlightRecipeVmWake<E extends RecipeVmEnvironment>(
   userDataPath: string,
-  environment: RecipeVmEnvironment,
+  environment: E,
   method: string,
   timeoutMs: number | undefined,
   options?: { preparation?: { recipeVmHoldMs?: number }; signal?: AbortSignal }
-): Promise<void> {
+): Promise<HeldRecipeVmWake<E> | null> {
   if (recipeVmWakeIntentFor(method) !== 'none') {
-    return Promise.resolve()
+    return Promise.resolve(null)
   }
   const holdMs = Math.min(
     RECIPE_VM_IN_FLIGHT_WAKE_HOLD_MS,

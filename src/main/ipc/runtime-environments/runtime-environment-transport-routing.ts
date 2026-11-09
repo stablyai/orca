@@ -15,7 +15,7 @@ import {
   resolveManagedRuntimeEnvironment,
   type ManagedRuntimeCallPreparation
 } from './runtime-environment-managed-tunnel'
-import { recordRuntimeEnvironmentUsage } from '../../../shared/remote-runtime/host-store/runtime-environment-usage-record'
+import { markEnvironmentUsedFromResponse } from './runtime-environment-usage-marking'
 import type * as Rpc from '../../../shared/runtime-rpc-envelope'
 import '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { subscribeRemoteRuntimeTransport } from '../../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
@@ -81,7 +81,13 @@ export async function callRuntimeEnvironment(
     )
   }
   const environment = resolveEnvironment(userDataPath, selector)
-  await holdForInFlightRecipeVmWake(userDataPath, environment, method, timeoutMs, options)
+  const held = await holdForInFlightRecipeVmWake(
+    userDataPath,
+    environment,
+    method,
+    timeoutMs,
+    options
+  )
   // Connect failures reject; retain the dispatched endpoint for hints because queued re-pairing can change it.
   let endpoint = getPreferredPairedRuntimeConnection(environment).endpoint
   try {
@@ -98,7 +104,8 @@ export async function callRuntimeEnvironment(
             pairingRevision: expectedEnvironmentPairingRevision,
             runtimeId: options?.expectedEnvironmentRuntimeId
           },
-          options?.signal
+          options?.signal,
+          held ?? undefined
         )
         if (prepared.failure) {
           return prepared.failure
@@ -289,18 +296,6 @@ export async function subscribeRuntimeEnvironment(
     }
     crewAttempt?.observeFailure(runtimeEnvironmentSetupFailure(error, 'subscription'))
     throw error
-  }
-}
-
-function markEnvironmentUsedFromResponse(
-  userDataPath: string,
-  environmentId: string,
-  response: Rpc.RuntimeRpcResponse<unknown>
-): void {
-  if (response.ok === true) {
-    recordRuntimeEnvironmentUsage(userDataPath, environmentId, {
-      runtimeId: response._meta.runtimeId
-    })
   }
 }
 

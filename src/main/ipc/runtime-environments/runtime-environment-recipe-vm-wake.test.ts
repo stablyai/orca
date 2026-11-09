@@ -172,6 +172,24 @@ describe('a request to a recipe VM environment', () => {
     expect(awaitWake).toHaveBeenCalledWith('workspace-of-vm-1', false, 60_000, undefined)
   })
 
+  it('reports the pairing a wake it waited through left, for the caller fence', async () => {
+    recordVm('running')
+    ownerState = 'waking'
+    registerRecipeVmWaker({
+      state,
+      noteOpened: vi.fn(),
+      holdOpen,
+      awaitWake: async () => {
+        noteRecipeVmWakePairing(VM_ENVIRONMENT.id, 9, true)
+        return 'up' as const
+      },
+      openEnvironment: async () => 'up'
+    })
+    await expect(
+      holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list', 5_000)
+    ).resolves.toEqual({ before: VM_ENVIRONMENT, wokenPairingRevision: 9 })
+  })
+
   // A phone gives up after 30 seconds, so its open is held for less.
 
   // A Disconnect made before the open holds: no client's open wakes the VM behind that server.

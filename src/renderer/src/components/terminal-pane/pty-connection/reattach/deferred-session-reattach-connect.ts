@@ -1,5 +1,6 @@
 import {
   NOT_REOPENED,
+  markInterruptedTurnContinued,
   reopenPaneAfterMissingReattach
 } from '../startup/cold-restore-resume-startup'
 import { writeStartupCwdFallbackNotice } from '../startup/startup-cwd-fallback-notice'
@@ -134,6 +135,10 @@ function connectDeferredSessionReattach(
   )
   session.beginReattachLiveDataDeferral(outputCallbacks.generation)
   session.transportConnectInFlightSince = Date.now()
+  // The command goes to the server now: a `continue` it carries is spent.
+  if (coldRestoreStartup?.command) {
+    markInterruptedTurnContinued(coldRestoreStartup.interruptedTurnKey)
+  }
   const reattachPromise = session.transport.connect({
     url: '',
     cols: session.cols,

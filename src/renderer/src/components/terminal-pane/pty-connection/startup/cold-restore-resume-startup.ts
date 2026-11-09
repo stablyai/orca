@@ -38,6 +38,22 @@ export const NOT_REOPENED: HeldPaneReopenOutcome = { reopened: false, agentResum
 /** Interrupted turns already continued, so a retried cold restore never sends `continue` twice. */
 const continuedInterruptedTurns = new Set<string>()
 
+/** Identity of the turn an agent was in when its host went away. */
+export function interruptedTurnKey(
+  entry: { updatedAt: number; stateStartedAt?: number },
+  paneKey: string
+): string {
+  return `${paneKey}\u0000${entry.stateStartedAt ?? entry.updatedAt}`
+}
+
+/** Called when a resume that carries `continue` actually launches (startups are often built and
+ *  discarded, e.g. on every reattach check). */
+export function markInterruptedTurnContinued(key: string | undefined): void {
+  if (key) {
+    continuedInterruptedTurns.add(key)
+  }
+}
+
 /**
  * A cold-restored agent on a remote host whose last status was working lost its turn when the host
  * restarted (reboot, crash, rollover): carry it on. Only with fresh evidence (a recent working
@@ -55,12 +71,7 @@ export function shouldContinueInterruptedTurn(
   if ((context.now ?? Date.now()) - entry.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
     return false
   }
-  const turn = `${context.paneKey}\u0000${entry.stateStartedAt ?? entry.updatedAt}`
-  if (continuedInterruptedTurns.has(turn)) {
-    return false
-  }
-  continuedInterruptedTurns.add(turn)
-  return true
+  return !continuedInterruptedTurns.has(interruptedTurnKey(entry, context.paneKey))
 }
 
 type AppState = ReturnType<typeof useAppStore.getState>
@@ -141,6 +152,12 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
         session.executionHostId
       )
     })
+    const continueTurn =
+      entry !== null &&
+      shouldContinueInterruptedTurn(entry, session.transport.getRuntimeEnvironmentId?.() ?? null, {
+        paneKey: session.cacheKey,
+        hasSleepingRecord: Boolean(sleepingRecord)
+      })
     const startupPlan = buildAgentResumeStartupPlan({
       agent,
       providerSession,
@@ -152,13 +169,7 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       launchCwd: session.worktree?.path,
       // A remote host that restarted under a working agent (reboot, crash, VM rollover) killed it
       // mid-turn; its last status still says working. Carry the turn on instead of waiting.
-      continuePrompt: shouldContinueInterruptedTurn(
-        entry,
-        session.transport.getRuntimeEnvironmentId?.() ?? null,
-        { paneKey: session.cacheKey, hasSleepingRecord: Boolean(sleepingRecord) }
-      )
-        ? INTERRUPTED_TURN_CONTINUE_PROMPT
-        : null
+      continuePrompt: continueTurn ? INTERRUPTED_TURN_CONTINUE_PROMPT : null
     })
     if (!startupPlan) {
       return null
@@ -192,6 +203,9 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
           : {})
       },
       launchToken: coldRestoreLaunchToken,
+      ...(continueTurn && entry
+        ? { interruptedTurnKey: interruptedTurnKey(entry, session.cacheKey) }
+        : {}),
       useLiveEntry: Boolean(useLiveEntry),
       hasSleepingRecord: Boolean(sleepingRecord),
       sleepingRecordEntry

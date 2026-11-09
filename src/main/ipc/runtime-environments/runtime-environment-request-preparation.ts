@@ -22,14 +22,17 @@ export async function prepareFencedRuntimeRequest(
   method: string,
   preparation: ManagedRuntimeCallPreparation | undefined,
   expected: Expected,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  /** A recipe VM wake this request waited through before its call slot: its fence is checked
+   *  against the record from before that wake, as for a wake the request made itself. */
+  heldWake?: { before: KnownRuntimeEnvironment; wokenPairingRevision: number | null }
 ): Promise<
   | { failure: Rpc.RuntimeRpcResponse<never> }
   | { failure: null; environment: KnownRuntimeEnvironment; expected: Expected }
 > {
   // A stale caller is refused before its request can wake (and re-pair) a VM.
   const stale = runtimeEnvironmentRevisionFailure(
-    resolveEnvironment(userDataPath, environmentId),
+    heldWake?.before ?? resolveEnvironment(userDataPath, environmentId),
     expected.pairingRevision,
     method,
     expected.runtimeId
@@ -44,7 +47,10 @@ export async function prepareFencedRuntimeRequest(
     method,
     signal
   )
-  const { environment, wokenPairingRevision: woken } = prepared
+  const { environment } = prepared
+  const woken = prepared.wokenPairingRevision ?? heldWake?.wokenPairingRevision ?? null
+  const before =
+    prepared.wokenPairingRevision !== null ? prepared.before : (heldWake?.before ?? prepared.before)
   const failure =
     woken === null
       ? runtimeEnvironmentRevisionFailure(
@@ -54,7 +60,7 @@ export async function prepareFencedRuntimeRequest(
           expected.runtimeId
         )
       : (runtimeEnvironmentRevisionFailure(
-          prepared.before,
+          before,
           expected.pairingRevision,
           method,
           expected.runtimeId

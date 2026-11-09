@@ -38,10 +38,13 @@ function hasCode(error: unknown, code: string): boolean {
  *  the host cannot answer (an unresponsive host is often why it is being restarted). */
 export async function listRestartOfferIds(call: RuntimeCall): Promise<ReadonlySet<string> | null> {
   try {
+    let timer: ReturnType<typeof setTimeout> | undefined
     const listed = await Promise.race([
       call('agentSession.restartResumable'),
-      new Promise<null>((resolve) => setTimeout(() => resolve(null), OFFER_SNAPSHOT_TIMEOUT_MS))
-    ])
+      new Promise<null>((resolve) => {
+        timer = setTimeout(() => resolve(null), OFFER_SNAPSHOT_TIMEOUT_MS)
+      })
+    ]).finally(() => clearTimeout(timer))
     const list = OfferList.safeParse(listed)
     if (!list.success) {
       return null
