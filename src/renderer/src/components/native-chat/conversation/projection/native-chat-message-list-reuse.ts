@@ -39,7 +39,7 @@ export function reuseUnits(
     return null
   }
   // Subagent rows keep their turns only while no earlier turn input changed.
-  const appendedItems = subagents ? appendedTurnNeutralItems(state.journal, journal) : null
+  let appendedItems = subagents ? appendedTurnNeutralItems(state.journal, journal) : null
   // Only explicit turn scopes prove an appended row leaves earlier rows' turns alone.
   if (subagents && (!appendedItems || (messages.length > before.length && !state.turnKeys))) {
     return null
@@ -70,9 +70,11 @@ export function reuseUnits(
   let last = before.at(-1)
   for (const message of appended) {
     if (agentJournalItemSubagentId(message) !== null) {
-      const items = appendedItems ?? appendedTurnNeutralItems(state.journal, journal)
+      appendedItems ??= appendedTurnNeutralItems(state.journal, journal)
       const turn =
-        items && state.turnKeys && appendedSubagentTurnKey(message, items, state.turnKeys)
+        appendedItems &&
+        state.turnKeys &&
+        appendedSubagentTurnKey(message, appendedItems, state.turnKeys)
       if (!turn) {
         return null
       }
@@ -237,14 +239,19 @@ export function reuseUnits(
       lastRun.set(agentId, next)
     }
   }
+  const lastScope = new Map<string, number>()
+  if (runs.length > 0) {
+    scopes.forEach((scope, index) => scope.agentId !== null && lastScope.set(scope.agentId, index))
+  }
   for (const { agentId, turnKey, rows } of runs) {
-    const tail = scopes.findLastIndex((scope) => scope.agentId === agentId)
+    const tail = lastScope.get(agentId) ?? -1
     let index = tail
     if (tail === -1 || !scopes[tail]!.turn || scopes[tail]!.turn!.key !== turnKey) {
       if (tail !== -1 && !scopes[tail]!.turn) {
         return null
       }
       index = scopes.length
+      lastScope.set(agentId, index)
       scopes.push({
         agentId,
         offset: agentRowsFor(agentId).length,
