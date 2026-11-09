@@ -120,6 +120,21 @@ export function createStripeClient(env: Env, fetchImpl: typeof fetch = fetch) {
     createCheckoutSession(params: FormRecord, idempotencyKey: string) {
       return request<{ id: string; url: string }>('POST', '/v1/checkout/sessions', params, idempotencyKey)
     },
+    listOpenCheckoutSessions(customer: string) {
+      return request<{ data: Array<{ id: string; status: string }> }>('GET', '/v1/checkout/sessions', {
+        customer,
+        status: 'open',
+        limit: '10'
+      })
+    },
+    expireCheckoutSession(id: string) {
+      return request<{ id: string; status: string }>(
+        'POST',
+        `/v1/checkout/sessions/${encodeURIComponent(id)}/expire`,
+        {},
+        `checkout-expire:${id}`
+      )
+    },
     createPortalSession(args: { customer: string; returnUrl: string; configuration?: string }, idempotencyKey: string) {
       return request<{ id: string; url: string }>(
         'POST',

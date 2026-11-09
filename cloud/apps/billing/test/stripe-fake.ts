@@ -21,6 +21,7 @@ export function createFakeStripe() {
   const customers = new Map<string, { id: string; metadata: Record<string, string> }>()
   const subscriptions = new Map<string, FakeSubscription>()
   const idempotent = new Map<string, unknown>()
+  const checkoutSessions = new Map<string, { id: string; customer: string; status: string }>()
   const meterEvents: Array<Record<string, string>> = []
   let nextId = 1
   let failMeterEvents = 0
@@ -52,7 +53,26 @@ export function createFakeStripe() {
     }
     if (method === 'POST' && url.pathname === '/v1/checkout/sessions') {
       const id = `cs_test_${nextId++}`
+      checkoutSessions.set(id, { id, customer: form.get('customer') ?? '', status: 'open' })
       return respond({ id, object: 'checkout.session', url: `https://checkout.stripe.com/c/pay/${id}` })
+    }
+    if (method === 'GET' && url.pathname === '/v1/checkout/sessions') {
+      const customer = url.searchParams.get('customer')
+      const status = url.searchParams.get('status')
+      return Response.json({
+        data: [...checkoutSessions.values()].filter(
+          (session) => (!customer || session.customer === customer) && (!status || session.status === status)
+        )
+      })
+    }
+    const expire = /^\/v1\/checkout\/sessions\/([^/]+)\/expire$/.exec(url.pathname)
+    if (method === 'POST' && expire) {
+      const session = checkoutSessions.get(decodeURIComponent(expire[1]!))
+      if (!session || session.status !== 'open') {
+        return Response.json({ error: { code: 'checkout_session_not_open', message: 'not open' } }, { status: 400 })
+      }
+      session.status = 'expired'
+      return respond(session)
     }
     if (method === 'POST' && url.pathname === '/v1/billing_portal/sessions') {
       const id = `bps_test_${nextId++}`

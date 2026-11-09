@@ -7,34 +7,28 @@
 //   owner    session screens, unarchive        owner only (W4: pairing/screen material)
 //   manage   sleep, archive, destroy           owner · org admin
 // API keys, OAuth tokens and workspace tokens all act as the member who created them.
+import { canOpen as w4CanOpen, canSee as w4CanSee, isOrgAdmin as w4IsOrgAdmin, isOwner } from '../workspaces'
 import { ApiError, type ApiCaller } from './caller'
 import type { WorkspaceRow } from './workspaces'
 
 export type WorkspaceAction = 'read' | 'open' | 'owner' | 'manage'
 
-export function isOrgAdmin(caller: Pick<ApiCaller, 'orgId' | 'orgRole'>): boolean {
-  return caller.orgId !== undefined && (caller.orgRole === 'owner' || caller.orgRole === 'admin')
+export function isOrgAdmin(caller: ApiCaller): boolean {
+  return w4IsOrgAdmin(caller)
 }
 
 export function isWorkspaceOwner(caller: ApiCaller, row: WorkspaceRow): boolean {
-  return row.account_id === caller.accountId && row.user_id === caller.userId
+  return isOwner(caller, row)
 }
 
-/** `visibility` arrives with W4's migration; until then every workspace is private. */
-function isTeamVisible(caller: ApiCaller, row: WorkspaceRow): boolean {
-  return caller.orgId !== undefined && (row as { visibility?: string | null }).visibility === 'team'
+/** In-VM tokens see their own VM and the siblings it created, nothing else. */
+function withinTokenReach(caller: ApiCaller, row: WorkspaceRow): boolean {
+  return caller.via !== 'workspace' || row.id === caller.sandboxId || row.origin_ref === caller.sandboxId
 }
 
-/** Owner or team-visible: the caller may know this workspace exists and look inside it. */
+/** W4's rule: owner, or every org member when visibility is `team`. */
 export function canSee(caller: ApiCaller, row: WorkspaceRow): boolean {
-  if (row.account_id !== caller.accountId || row.status === 'destroyed') {
-    return false
-  }
-  if (caller.via === 'workspace' && row.id !== caller.sandboxId && row.origin_ref !== caller.sandboxId) {
-    // In-VM tokens see their own VM and the siblings it created, nothing else.
-    return false
-  }
-  return isWorkspaceOwner(caller, row) || isTeamVisible(caller, row)
+  return withinTokenReach(caller, row) && w4CanSee(caller, row)
 }
 
 export function allowed(caller: ApiCaller, row: WorkspaceRow, action: WorkspaceAction): boolean {
@@ -43,7 +37,7 @@ export function allowed(caller: ApiCaller, row: WorkspaceRow, action: WorkspaceA
     case 'read':
       return canSee(caller, row) || adminMetadata
     case 'open':
-      return canSee(caller, row) && row.archived_at === null
+      return withinTokenReach(caller, row) && w4CanOpen(caller, row)
     case 'owner':
       return isWorkspaceOwner(caller, row) && canSee(caller, row)
     case 'manage':

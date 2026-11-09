@@ -1,3 +1,6 @@
+import type { OrcaProfileOrgCreateResult } from '../../shared/orca-org-management'
+import { randomUUID } from 'node:crypto'
+import { addDevOrganization, removeDevOrganization } from './profile-cloud-dev-auth'
 import type {
   OrcaOrgMember,
   OrcaOrgMembersRoster,
@@ -66,8 +69,29 @@ function getDevRoster(orgId: string): DevOrgRoster {
   return seeded
 }
 
+/** ORCA_CLOUD_DEV_INVITE_ACCEPT_MS: invites older than this are accepted (dev demos of seats). */
+function acceptAgedDevInvites(roster: DevOrgRoster): void {
+  const acceptAfterMs = Number(process.env.ORCA_CLOUD_DEV_INVITE_ACCEPT_MS)
+  if (!Number.isFinite(acceptAfterMs) || acceptAfterMs <= 0) {
+    return
+  }
+  const now = Date.now()
+  const accepted = roster.pendingInvites.filter((invite) => now - invite.createdAt >= acceptAfterMs)
+  roster.pendingInvites = roster.pendingInvites.filter((invite) => !accepted.includes(invite))
+  for (const invite of accepted) {
+    const local = invite.email.split('@')[0] ?? invite.email
+    roster.members.push({
+      userId: `dev-${local}`,
+      email: invite.email,
+      displayName: local.charAt(0).toUpperCase() + local.slice(1),
+      role: invite.role
+    })
+  }
+}
+
 export function listDevOrcaCloudOrgMembers(orgId: string): OrcaOrgMembersRoster {
   const roster = getDevRoster(orgId)
+  acceptAgedDevInvites(roster)
   return {
     members: roster.members.map((member) => ({ ...member })),
     pendingInvites: roster.pendingInvites.map((invite) => ({ ...invite })),
@@ -131,5 +155,30 @@ export function removeDevOrcaCloudOrgMember(
     return { status: 'not-found' }
   }
   roster.members.splice(index, 1)
+  return { status: 'ok' }
+}
+
+export function createDevOrcaCloudOrg(name: string): OrcaProfileOrgCreateResult {
+  const trimmed = name.trim()
+  if (!trimmed) {
+    return { status: 'invalid' }
+  }
+  const orgId = `dev-team-${randomUUID().slice(0, 8)}`
+  addDevOrganization({ orgId, name: trimmed, role: 'Owner' })
+  // A new team starts with just its creator.
+  devRostersByOrg.set(orgId, { members: [devSelf()], pendingInvites: [] })
+  return { status: 'created', orgId, name: trimmed }
+}
+
+export function leaveDevOrcaCloudOrg(orgId: string): OrcaProfileOrgMemberMutationResult {
+  const roster = getDevRoster(orgId)
+  const self = devSelf()
+  const owners = roster.members.filter((member) => member.role === 'owner')
+  const selfMember = roster.members.find((member) => member.userId === self.userId)
+  if (selfMember?.role === 'owner' && owners.length <= 1) {
+    return { status: 'invalid', reason: 'last_owner' }
+  }
+  roster.members = roster.members.filter((member) => member.userId !== self.userId)
+  removeDevOrganization(orgId)
   return { status: 'ok' }
 }

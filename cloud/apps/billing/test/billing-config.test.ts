@@ -13,7 +13,7 @@ describe('config: tax and plan catalog', () => {
       const h = await createHarness(flag ? { STRIPE_AUTOMATIC_TAX: flag } : {})
       const token = await h.desktopToken({ sub: 'u1' })
       await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team' }, headers: { authorization: `Bearer ${token}` } })
-      const session = h.stripe.calls.find((call) => call.path === '/v1/checkout/sessions')!
+      const session = h.stripe.calls.find((call) => call.method === 'POST' && call.path === '/v1/checkout/sessions')!
       expect(session.form.get('automatic_tax[enabled]')).toBe(expected)
       expect(session.form.get('tax_id_collection[enabled]')).toBe(expected)
       // Stripe Tax needs the customer's address; Checkout saves it back to the customer.

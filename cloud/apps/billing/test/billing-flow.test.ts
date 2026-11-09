@@ -49,7 +49,11 @@ describe('checkout and portal', () => {
     await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team', seats: 4 }, headers: auth })
     expect(h.stripe.customers.size).toBe(1)
 
-    const [annual, monthly] = h.stripe.calls.filter((call) => call.path === '/v1/checkout/sessions')
+    const [annual, monthly] = h.stripe.calls.filter(
+      (call) => call.method === 'POST' && call.path === '/v1/checkout/sessions'
+    )
+    // The second Checkout expired the first, so two tabs can't both be paid.
+    expect(h.stripe.calls.filter((call) => call.path.endsWith('/expire'))).toHaveLength(1)
     expect(annual!.form.get('mode')).toBe('subscription')
     expect(annual!.form.get('line_items[0][price]')).toBe('price_team_year')
     expect(monthly!.form.get('line_items[0][price]')).toBe('price_team_month')
