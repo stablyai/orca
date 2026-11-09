@@ -91,6 +91,7 @@
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-focus-ring: var(--focus-ring);
+  --color-skeleton: var(--skeleton);
   --color-editor-surface: var(--editor-surface);
   --color-floating-surface: var(--floating-surface);
   --color-dialog-surface: var(--dialog-surface);
@@ -253,6 +254,8 @@
   /* Keyboard focus indicator, derived from the theme so plugin themes keep >=3:1 against
      background, card, muted and accent (WCAG 2.2 focus appearance). */
   --focus-ring: color-mix(in oklab, var(--foreground) 55%, var(--background));
+  /* Loading placeholders: visible on white cards (bg-muted alone is ~1.05:1) without reading as content. */
+  --skeleton: color-mix(in oklab, var(--foreground) 9%, transparent);
   --terminal-pane-locate: var(--color-blue-600);
   --ai-action-accent: var(--color-violet-500);
   /* Use one question hue across surfaces, distinct from working-yellow. */
@@ -375,6 +378,7 @@
   --input: rgb(255 255 255 / 0.15);
   --ring: #737373;
   --focus-ring: color-mix(in oklab, var(--foreground) 65%, var(--background));
+  --skeleton: color-mix(in oklab, var(--foreground) 10%, transparent);
   --terminal-pane-locate: var(--color-blue-400);
   --ai-action-accent: var(--color-violet-400);
   --agent-question: var(--color-orange-500);

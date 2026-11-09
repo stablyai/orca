@@ -81,6 +81,7 @@ export function AgentDashboardSettingsMenu({
             </div>
             <div className="px-1.5 pb-1">
               <SettingsSegmentedControl
+                activation="manual"
                 value={mode}
                 onChange={handleModeChange}
                 ariaLabel={t(
