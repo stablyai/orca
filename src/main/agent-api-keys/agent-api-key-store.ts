@@ -93,7 +93,7 @@ export class AgentApiKeyStore {
         return (this.cached = { ...empty, keys: parsed.keys.filter(isStoredKey) })
       }
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
         return (this.cached = empty)
       }
       if (!isUnreadableError(error)) {
