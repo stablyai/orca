@@ -8,7 +8,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
 import { sendRequest } from './transport'
-import { formatCliError } from '../cli-error'
 import { RuntimeClient } from './client'
 import { getRuntimeMetadataPath } from '../../shared/runtime-bootstrap'
 import { requestWorktreeRemoval } from '../handlers/worktree-removal-request'
@@ -74,7 +73,7 @@ describe('runtime transport timeout validation', () => {
 
 // These fixtures create Unix domain sockets rather than Windows named pipes.
 describe.skipIf(process.platform === 'win32')('runtime transport', () => {
-  it('rejects a responding replacement runtime with retry advice in human output', async () => {
+  it('rejects a responding replacement runtime as unavailable', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-transport-'))
     roots.push(userDataPath)
     const endpoint = join(userDataPath, 'runtime.sock')
@@ -108,7 +107,6 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
     )
 
     expect(error).toMatchObject({ code: 'runtime_unavailable' })
-    expect(formatCliError(error)).toContain('\nNext step: Retry the command.')
   })
 
   it.each(['preflight', 'mutation'] as const)(

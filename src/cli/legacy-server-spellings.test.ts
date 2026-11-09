@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   canonicalizeLegacyFlagArgv,
   normalizeCommandPositionals,
@@ -8,6 +8,7 @@ import {
 import { unknownCommandData } from './command-suggestion'
 import { ignoresRemoteSelection } from './remote-selection-scope'
 import { COMMAND_SPECS } from './specs'
+import { main } from './index'
 
 function normalize(argv: string[]) {
   return normalizeCommandPositionals(COMMAND_SPECS, parseArgs(argv, undefined, COMMAND_SPECS))
@@ -66,5 +67,20 @@ describe('old server spellings are input only', () => {
   it('routes `server name` but keeps saved-server management on this computer', () => {
     expect(ignoresRemoteSelection(['server', 'name'])).toBe(false)
     expect(ignoresRemoteSelection(['server', 'list'])).toBe(true)
+  })
+
+  it('prints the canonical group for `help environment` as for `environment --help`', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await main(['help', 'environment'])
+    await main(['environment', '--help'])
+    const [viaHelp, viaFlag] = log.mock.calls.map((call) => String(call[0]))
+    log.mockRestore()
+    expect(viaHelp).toBe(viaFlag)
+    expect(viaHelp.startsWith('orca server\n')).toBe(true)
+    expect(viaHelp).not.toContain('environment')
+  })
+
+  it('names the canonical group when an old-spelling subcommand is unknown', () => {
+    expect(normalize(['environment', 'stp']).commandPath).toEqual(['server', 'stp'])
   })
 })

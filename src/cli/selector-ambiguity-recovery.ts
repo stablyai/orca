@@ -8,13 +8,13 @@ export type SelectorAmbiguityRecovery = {
 const EXACT_FORMS = {
   repo: {
     forms:
-      'id:<repo-id> or path:<absolute-path>; if two hosts share that id or path, use --project <id> --host <host> where the command takes them',
+      'id:<repo-id> or path:<absolute-path>; if the project is set up for more than one server here, use --project <id> with --server <id> where the command takes them',
     list: 'orca repo list --json',
     noun: 'project'
   },
   worktree: {
     forms:
-      'identity:<identity.key> (host-qualified), id:<repo-id>::<absolute-path> when only one server has that checkout, or folder:<folder-id> for a folder workspace',
+      'identity:<identity.key> (unique to one row), id:<repo-id>::<absolute-path> when only one row has that checkout, or folder:<folder-id> for a folder workspace',
     list: 'orca worktree ps --json',
     noun: 'workspace'
   }
@@ -45,7 +45,7 @@ export function selectorAmbiguityRecovery(selectors: {
       return [
         `${matched} Pass an exact selector: ${exact.forms}.`,
         selectors.remoteServerSelected
-          ? `List the exact values with \`${exact.list}\`, passing the same server flag (--server, --pairing-code or --host runtime:<id>) as this command.`
+          ? `List the exact values with \`${exact.list}\`, passing the same --server or --pairing-code as this command.`
           : `List the exact values with \`${exact.list}\`.`
       ]
     })

@@ -178,13 +178,17 @@ describe('runtime environment store with records this build cannot read', () => 
       const { pinned, other } = setup()
 
       expect(listEnvironments(userDataPath)).toEqual([other])
-      expect(() => resolveEnvironment(userDataPath, pinned.id)).toThrow('Unknown environment')
-      expect(() => removeEnvironment(userDataPath, pinned.id)).toThrow('Unknown environment')
+      expect(() => resolveEnvironment(userDataPath, pinned.id)).toThrow(
+        expect.objectContaining({ code: 'invalid_argument' })
+      )
+      expect(() => removeEnvironment(userDataPath, pinned.id)).toThrow(
+        expect.objectContaining({ code: 'invalid_argument' })
+      )
       expect(() =>
         updateEnvironmentFromPairingCode(userDataPath, pinned.id, {
           pairingCode: encodePairingOffer(pairing)
         })
-      ).toThrow('Unknown environment')
+      ).toThrow(expect.objectContaining({ code: 'invalid_argument' }))
       expect(() => readCurrentRuntimeEnvironmentSidecarEntry(userDataPath, pinned)).toThrow(
         'newer version of Orca'
       )

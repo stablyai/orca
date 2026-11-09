@@ -73,7 +73,12 @@ export async function main(
     COMMAND_SPECS,
     parseArgs(argv, COMMAND_PATHS, COMMAND_SPECS)
   )
-  const helpPath = resolveHelpPath(parsed)
+  const rawHelpPath = resolveHelpPath(parsed)
+  // `orca help environment` names the same group as `orca environment --help`.
+  const helpPath =
+    rawHelpPath &&
+    normalizeCommandPositionals(COMMAND_SPECS, { commandPath: rawHelpPath, flags: new Map() })
+      .commandPath
   if (helpPath !== null) {
     printHelp(COMMAND_SPECS, helpPath)
     if (

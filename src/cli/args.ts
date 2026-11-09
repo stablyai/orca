@@ -1,9 +1,11 @@
 import { RuntimeClientError } from './runtime/types'
 import { unknownCommandData, unknownFlagData } from './command-suggestion'
 import { INPUT_ONLY_FLAGS, specPaths, type CommandSpec } from './command-spec'
+import { canonicalizeFlagAliases, canonicalizeGroupAlias } from './legacy-spelling-canonicalization'
+
+export { canonicalizeLegacyFlagArgv } from './legacy-spelling-canonicalization'
 import {
   CLI_BOOLEAN_FLAGS,
-  CLI_FLAG_ALIASES,
   CLI_GLOBAL_FLAGS,
   CLI_GLOBAL_VALUE_FLAGS,
   findCliCommandIndex
@@ -174,65 +176,6 @@ export function isCommandGroup(specs: CommandSpec[], commandPath: string[]): boo
   )
 }
 
-/** Raw argv with old flag spellings renamed, so commands rebuilt from argv print only canonical flags. */
-export function canonicalizeLegacyFlagArgv(argv: readonly string[]): string[] {
-  const end = argv.indexOf('--')
-  return argv.map((token, index) => {
-    if ((end !== -1 && index >= end) || !token.startsWith('--')) {
-      return token
-    }
-    const [name, ...value] = token.slice(2).split('=')
-    const canonical = CLI_FLAG_ALIASES[name]
-    return canonical === undefined ? token : [`--${canonical}`, ...value].join('=')
-  })
-}
-
-/** Renames old flag spellings so every later reader sees only canonical flags. */
-function canonicalizeFlagAliases(parsed: ParsedArgs): ParsedArgs {
-  if (!Object.keys(CLI_FLAG_ALIASES).some((alias) => parsed.flags.has(alias))) {
-    return parsed
-  }
-  const flags = new Map<string, string | boolean>()
-  const conflicts: { flag: string; alias: string }[] = []
-  for (const [name, value] of parsed.flags) {
-    const canonical = CLI_FLAG_ALIASES[name]
-    if (canonical === undefined) {
-      flags.set(name, value)
-    } else if (!parsed.flags.has(canonical)) {
-      flags.set(canonical, value)
-    } else if (parsed.flags.get(canonical) !== value) {
-      conflicts.push({ flag: canonical, alias: name })
-    }
-  }
-  return {
-    ...parsed,
-    flags,
-    ...(conflicts.length > 0 ? { flagAliasConflicts: conflicts } : {})
-  }
-}
-
-/** A group typed under an alias (`orca environment`) names the canonical group (`orca server`). */
-function canonicalizeGroupAlias(specs: CommandSpec[], parsed: ParsedArgs): ParsedArgs {
-  const path = parsed.commandPath
-  if (path.length === 0 || isCanonicalPrefix(specs, path)) {
-    return parsed
-  }
-  for (const spec of specs) {
-    for (const alias of [...(spec.aliases ?? []), ...(spec.legacyAliases ?? [])]) {
-      if (alias.length > path.length && matches(alias.slice(0, path.length), path)) {
-        return { ...parsed, commandPath: spec.path.slice(0, path.length) }
-      }
-    }
-  }
-  return parsed
-}
-
-function isCanonicalPrefix(specs: CommandSpec[], path: string[]): boolean {
-  return specs.some(
-    (spec) => spec.path.length >= path.length && matches(spec.path.slice(0, path.length), path)
-  )
-}
-
 export function normalizeCommandPositionals(specs: CommandSpec[], input: ParsedArgs): ParsedArgs {
   const parsed = canonicalizeFlagAliases(input)
   for (const spec of specs) {
@@ -269,7 +212,7 @@ export function normalizeCommandPositionals(specs: CommandSpec[], input: ParsedA
       return { ...parsed, commandPath: spec.path, flags, positionalFlagConflicts }
     }
   }
-  return canonicalizeGroupAlias(specs, parsed)
+  return { ...parsed, commandPath: canonicalizeGroupAlias(specs, parsed.commandPath) }
 }
 
 export function findCommandSpec(
@@ -310,7 +253,7 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
   if (aliasConflict) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `--${aliasConflict.flag} and --${aliasConflict.alias} name different values; pass only --${aliasConflict.flag}.`
+      `--${aliasConflict.flag} was given two different values; pass it once.`
     )
   }
 

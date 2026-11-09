@@ -165,7 +165,7 @@ orca reference find STA-1234 --json
 - **Writes:** full URLs only; no custom shorthand. `remove --key` supports older entries without URLs. Source-unknown legacy links cannot match an exact URL; native issue keys remain searchable when stored. Duplicate adds and absent removals are no-ops. Unrelated links and current selection are preserved. Older hosts without safe delta merging refuse writes.
 - **Create:** repeat `--reference`; incompatible with `--pr`, `--issue`, `--linear-issue`, `--gitlab-issue`, and `--gitlab-mr`. References persist before setup or agent startup.
 - **Find:** a full URL or native issue key; bare numbers are rejected. Keys search all matching sources. Reads stored metadata, without provider requests or conversation searches. Use `orca search` for conversation text.
-- **Scope:** `--worktree` selects a worktree or folder workspace. Find also accepts `--repo` instead, plus `--include-archived` and `--limit` (default 50 workspaces). `truncated: true` means more matched. Remote selectors refer to the execution host; `current` is local only.
+- **Scope:** `--worktree` selects a worktree or folder workspace. Find also accepts `--repo` instead, plus `--include-archived` and `--limit` (default 50 workspaces). `truncated: true` means more matched. With `--server`, selectors refer to that server; `current` is local only.
 - **Output:** list returns `references` with opaque `key` and `selected`; writes also return `changes`. Worktree show/list/ps retain `linkedItems`. Find returns workspace matches and agents with `linked`, `liveness`, and available `terminal`/`mailbox` addresses. `linked: false` means ownership is unknown; sharing a workspace is insufficient evidence.
 
 Choose an agent from `find`, then use its exact address:

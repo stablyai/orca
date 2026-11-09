@@ -68,7 +68,27 @@ function savedServerInAnswerNamespace(
   return context.answering.id === LOCAL_ENVIRONMENT ? context.savedServer(id) : undefined
 }
 
+/**
+ * The owner of a stored catalog row (workspace or project setup). A runtime stamp there may have been
+ * written by another client in its own namespace, so it is never named; see {@link ownerOfMirrorHostId}.
+ */
 export function ownerOfHostId(hostId: string | null | undefined, context: OwnerContext): RowOwner {
+  return ownerOf(hostId, () => undefined, context)
+}
+
+/** The owner of a terminal: a mirror's stamp is written by the local Orca from this computer's store. */
+export function ownerOfMirrorHostId(
+  hostId: string | null | undefined,
+  context: OwnerContext
+): RowOwner {
+  return ownerOf(hostId, (id) => savedServerInAnswerNamespace(id, context), context)
+}
+
+function ownerOf(
+  hostId: string | null | undefined,
+  savedServer: (id: string) => WorkspaceServer | undefined,
+  context: OwnerContext
+): RowOwner {
   const stored = hostId?.trim() || null
   if (!stored) {
     return { server: null, unknown: 'owner-not-reported', stored }
@@ -83,10 +103,7 @@ export function ownerOfHostId(hostId: string | null | undefined, context: OwnerC
   if (parsed?.kind === 'ssh') {
     return { server: null, unknown: 'legacy-ssh-row', stored }
   }
-  const saved =
-    parsed?.kind === 'runtime'
-      ? savedServerInAnswerNamespace(parsed.environmentId, context)
-      : undefined
+  const saved = parsed?.kind === 'runtime' ? savedServer(parsed.environmentId) : undefined
   return saved ? { server: saved } : { server: null, unknown: 'unverified-owner', stored }
 }
 
@@ -132,7 +149,8 @@ export function formatOwnerToken(owner: RowOwner): string {
 /** A row's `server=` token, or none when no owner context was given. */
 export function ownerTokenOf(
   hostId: string | null | undefined,
-  context: OwnerContext | undefined
+  context: OwnerContext | undefined,
+  resolve: (hostId: string | null | undefined, context: OwnerContext) => RowOwner = ownerOfHostId
 ): string {
-  return context ? `  ${formatOwnerToken(ownerOfHostId(hostId, context))}` : ''
+  return context ? `  ${formatOwnerToken(resolve(hostId, context))}` : ''
 }

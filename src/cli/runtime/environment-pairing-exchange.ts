@@ -7,13 +7,13 @@ import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../shared/runtime-session-contracts'
 import { RuntimeClientError } from './types'
 
-// `environment add` works offline; a short probe keeps an unreachable host from stalling it.
+// `server add` works offline; a short probe keeps an unreachable server from stalling it.
 const STATUS_PROBE_TIMEOUT_MS = 5_000
 
 function pairingCodeRefused(): RuntimeClientError {
   return new RuntimeClientError(
     'unauthorized',
-    'The host refused this pairing code. It may have expired or already been used by another device. Show a new pairing code on the host (`orca pair`, or Settings → Remote Orca Servers in Orca) and run `orca server add` again.'
+    'The server refused this pairing code. It may have expired or already been used by another device. Show a new pairing code on the server (`orca pair`, or Settings → Remote Orca Servers in Orca) and run `orca server add` again.'
   )
 }
 

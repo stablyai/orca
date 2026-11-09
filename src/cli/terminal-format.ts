@@ -4,7 +4,7 @@ import {
 } from '../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { describeTerminalWaitBlockedReason } from '../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
-import { ownerTokenOf, type OwnerContext } from './row-owner-server'
+import { ownerOfMirrorHostId, ownerTokenOf, type OwnerContext } from './row-owner-server'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
@@ -34,7 +34,7 @@ export function formatTerminalList(
   const body = result.terminals
     .map(
       (terminal) =>
-        `${terminal.handle}  ${terminal.paneTitle ?? terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}${terminal.orphaned ? '  orphaned' : ''}${ownerTokenOf(terminal.executionHostId, owners)}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
+        `${terminal.handle}  ${terminal.paneTitle ?? terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}${terminal.orphaned ? '  orphaned' : ''}${ownerTokenOf(terminal.executionHostId, owners, ownerOfMirrorHostId)}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
     )
     .join('\n\n')
   const visualLayout = formatTerminalVisualLayouts(result.visualLayouts)

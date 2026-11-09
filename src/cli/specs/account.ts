@@ -16,7 +16,7 @@ export const ACCOUNT_COMMAND_SPECS: CommandSpec[] = [
       'Use --integration <id> to skip the OpenCode integration picker; --label names the saved OpenCode or Devin profile.',
       'Use --method <id> and repeated --answer <key=value> to pass OpenCode its login method and form answers, so sign-in can finish without an interactive terminal.',
       'Antigravity accounts are saved from the current `agy` login in Orca Settings > AI Provider Accounts.',
-      'OpenCode and Devin profiles apply to new explicit host agent launches. Direct SSH relay and Windows-hosted WSL selection are not supported; run the command on a headless Orca runtime on that host.',
+      'OpenCode and Devin profiles apply to new explicit agent launches on this server. Direct SSH relay and Windows-hosted WSL selection are not supported; run the command on a headless Orca server on that computer.',
       'Sign in with the account you want to add (e.g. use a private/incognito browser window for a second account).',
       '--agent defaults to claude. Requires Orca to be running on this computer.'
     ],

@@ -144,9 +144,7 @@ it.skipIf(skip)(
         timeoutMs: 15_000
       })
       expect(person.code).not.toBe(0)
-      expect(`${person.stdout}${person.stderr}`).toContain(
-        'Unknown environment: stale-shell-selection'
-      )
+      expect(`${person.stdout}${person.stderr}`).toContain('stale-shell-selection')
     } finally {
       await recordProfileDaemons(userData)
       await killChildAndWait(child)

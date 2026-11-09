@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  formatOwnerToken,
   ownerOfHostId,
+  ownerOfMirrorHostId,
   ownerOfWorkerHost,
   type OwnerContext,
   type WorkspaceServer
@@ -22,9 +22,17 @@ describe('the server that owns a row', () => {
     expect(ownerOfHostId('local', context(BUILD_BOX))).toEqual({ server: BUILD_BOX })
   })
 
-  it("names a runtime owner only from the local answer's own store", () => {
-    expect(ownerOfHostId('runtime:env-1', context(LOCAL))).toEqual({ server: BUILD_BOX })
-    expect(ownerOfHostId('runtime:env-9', context(LOCAL))).toEqual({
+  it("never names a stored row's runtime stamp, which another client may have written", () => {
+    expect(ownerOfHostId('runtime:env-1', context(LOCAL))).toEqual({
+      server: null,
+      unknown: 'unverified-owner',
+      stored: 'runtime:env-1'
+    })
+  })
+
+  it("names a terminal mirror's runtime owner only from the local answer's own store", () => {
+    expect(ownerOfMirrorHostId('runtime:env-1', context(LOCAL))).toEqual({ server: BUILD_BOX })
+    expect(ownerOfMirrorHostId('runtime:env-9', context(LOCAL))).toEqual({
       server: null,
       unknown: 'unverified-owner',
       stored: 'runtime:env-9'
@@ -32,7 +40,7 @@ describe('the server that owns a row', () => {
   })
 
   it("never joins a remote server's runtime stamp against this computer's store", () => {
-    expect(ownerOfHostId('runtime:env-1', context(BUILD_BOX))).toEqual({
+    expect(ownerOfMirrorHostId('runtime:env-1', context(BUILD_BOX))).toEqual({
       server: null,
       unknown: 'unverified-owner',
       stored: 'runtime:env-1'
@@ -54,13 +62,6 @@ describe('the server that owns a row', () => {
     })
   })
 
-  it('prints a known owner by name and an unknown one as server=unknown', () => {
-    expect(formatOwnerToken(ownerOfHostId('runtime:env-1', context(LOCAL)))).toBe(
-      'server=build-box'
-    )
-    expect(formatOwnerToken(ownerOfHostId('ssh:box', context(LOCAL)))).toMatch(/^server=unknown /)
-  })
-
   it('names federated workers by their saved id and the home coordinator as answering', () => {
     expect(ownerOfWorkerHost({ kind: 'local', id: 'local' }, context(BUILD_BOX))).toEqual({
       server: BUILD_BOX
@@ -77,7 +78,7 @@ describe('the server that owns a row', () => {
 
 describe('workspace annotation JSON', () => {
   it('names the owner and route under server keys', () => {
-    const [mirror, stranger] = annotateWorkspaces(
+    const [stamped, stranger] = annotateWorkspaces(
       [
         { id: 'repo::/srv/app', hostId: 'runtime:env-1', identityKey: 'wt2:a' },
         {
@@ -93,8 +94,9 @@ describe('workspace annotation JSON', () => {
       ],
       { owners: context(LOCAL), localInstallationId: 'mine' }
     )
-    expect(mirror).toEqual({
-      server: BUILD_BOX,
+    expect(stamped).toEqual({
+      server: null,
+      serverUnknown: 'unverified-owner',
       address: {
         server: 'local',
         worktree: 'identity:wt2:a',
