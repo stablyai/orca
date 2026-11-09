@@ -19,7 +19,7 @@ export const WATCHER_IGNORE_DIRS: string[] = [
 // Installers stage under suffixed dirs (Docker Desktop: DockerDesktop.staging) and extract Electron
 // archives into them; Electron's asar fs integration opens and caches a handle on any *.asar path the
 // main process stats, locking installers out of their staged files (#40204).
-const WATCHER_IGNORE_DIR_SUFFIXES = ['.staging', '.asar']
+export const WATCHER_IGNORE_DIR_SUFFIXES = ['.staging', '.asar']
 
 // FSEvents rejects all exclusions above eight paths; regex filtering covers the remaining names at every depth.
 export const MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT = 8

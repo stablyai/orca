@@ -9,6 +9,7 @@ import { createWslWatcherProcessExit, createWslWatcherStartup } from './wsl-watc
 import * as watcherChildRegistry from '../watcher-process/child-lifecycle/parcel-watcher-child-registry'
 import { createDebouncedBatch, type DebouncedBatch } from './filesystem-watcher-batch-control'
 import { spawnWslWatcherProcess } from './wsl-watcher-spawn'
+import { buildWslSnapshotScript } from './filesystem-watcher-wsl-snapshot-script'
 
 export type WatcherSubscription = {
   unsubscribe(): Promise<void>
@@ -24,13 +25,14 @@ export type WatchedRoot = {
 
 export type WslWatcherDeps = {
   ignoreDirs: string[]
+  /** Component suffixes (installer staging dirs, Electron archives) dropped at any depth (#40204). */
+  ignoreDirSuffixes: string[]
   scheduleBatchFlush: (root: WatchedRoot) => void
   watchedRoots: Map<string, WatchedRoot>
   /** The child died on its own, e.g. the distro stopped; runs before the overflow refresh. */
   onUnexpectedStop?: (root: WatchedRoot, distro: string) => void
 }
 
-const POLL_INTERVAL_SECONDS = 2
 const STARTUP_TIMEOUT_MS = 10_000
 const [SNAPSHOT_START, SNAPSHOT_END] = ['\0\x1e\0', '\0\x1f\0']
 const MAX_STREAM_BUFFER_CHARS = 10 * 1024 * 1024
@@ -45,37 +47,6 @@ type WslSnapshot = Map<string, WslSnapshotEntry>
 
 function toWslUncPath(linuxPath: string, distro: string): string {
   return `\\\\wsl.localhost\\${distro}${linuxPath.replace(/\//g, '\\')}`
-}
-
-function quoteSafeFindName(name: string): string {
-  if (!/^[A-Za-z0-9_.-]+$/.test(name)) {
-    throw new Error(`Unsupported WSL watcher ignore name: ${name}`)
-  }
-  return `'${name}'`
-}
-
-function buildPruneExpression(ignoreDirs: readonly string[]): string {
-  if (ignoreDirs.length === 0) {
-    return ''
-  }
-  const names = ignoreDirs.map((name) => `-name ${quoteSafeFindName(name)}`).join(' -o ')
-  return `\\( -type d \\( ${names} \\) -prune \\) -o`
-}
-
-function buildSnapshotScript(ignoreDirs: readonly string[]): string {
-  const prune = buildPruneExpression(ignoreDirs)
-  return [
-    'set -efu',
-    'root=$1',
-    'while :; do',
-    "  printf '\\000\\036\\000'",
-    '  if [ -d "$root" ]; then',
-    `    find "$root" -mindepth 1 -maxdepth 2 ${prune} -printf '%y\\t%T@\\t%p\\0' 2>/dev/null || true`,
-    '  fi',
-    "  printf '\\000\\037\\000'",
-    `  sleep ${POLL_INTERVAL_SECONDS} || exit 0`,
-    'done'
-  ].join('\n')
 }
 
 function parseSnapshotFrame(frame: string, distro: string): WslSnapshot {
@@ -322,7 +293,7 @@ export async function createWslWatcher(
   })
 
   try {
-    child.stdin.end(buildSnapshotScript(deps.ignoreDirs))
+    child.stdin.end(buildWslSnapshotScript(deps.ignoreDirs, deps.ignoreDirSuffixes))
     await startup.ready
   } catch (error) {
     // Destructive cancellation must retain ownership until WSL confirms physical exit.
