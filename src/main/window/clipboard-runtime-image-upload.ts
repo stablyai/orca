@@ -1,4 +1,7 @@
-import { assertClipboardImageByteLengthWithinLimit } from '../../shared/clipboard-image'
+import {
+  assertClipboardImageByteLengthWithinLimit,
+  assertNamedTempUploadKeptName
+} from '../../shared/clipboard-image'
 import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 
 const CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
@@ -91,6 +94,9 @@ async function saveClipboardImageBase64InRuntime(
     )
     if (typeof remotePath !== 'string') {
       throw new Error('Remote clipboard image save returned an invalid path')
+    }
+    if (fileName) {
+      assertNamedTempUploadKeptName(remotePath)
     }
     return remotePath
   } catch (error) {

@@ -16,6 +16,7 @@ import {
   CLIPBOARD_IMAGE_MAX_SOURCE_BYTES,
   CLIPBOARD_IMAGE_TOO_LARGE_ERROR,
   assertClipboardImageByteLengthWithinLimit,
+  assertNamedTempUploadKeptName,
   assertClipboardImageDimensionsWithinLimit,
   clipboardFormatsIncludeImage,
   clipboardImageThumbnailSize,
@@ -203,7 +204,11 @@ export async function saveClipboardImageAsTempFileInRuntime(
         )
       })
     }
-    return await result<string>('clipboard.commitImageUpload', { uploadId })
+    const remotePath = await result<string>('clipboard.commitImageUpload', { uploadId })
+    if (args?.fileName) {
+      assertNamedTempUploadKeptName(remotePath)
+    }
+    return remotePath
   } catch (error) {
     // Why: after chunked paste holds server-side state, release the bounded slot on failure rather than wait for TTL cleanup.
     await result('clipboard.abortImageUpload', { uploadId }).catch(() => {})

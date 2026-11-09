@@ -114,3 +114,17 @@ export function clipboardImageThumbnailSize({
 export function clipboardFormatsIncludeImage(formats: readonly string[]): boolean {
   return formats.some((format) => format.startsWith('image/'))
 }
+
+const NAMED_TEMP_UPLOAD_FOLDER =
+  /^orca-paste-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/**
+ * A named upload lands in its own `orca-paste-<uuid>` folder. A host too old to read `fileName` still
+ * takes the upload but saves it beside the others as `.png`, which would turn a document into an image.
+ */
+export function assertNamedTempUploadKeptName(savedPath: string): void {
+  const folder = savedPath.split(/[\\/]/).at(-2) ?? ''
+  if (!NAMED_TEMP_UPLOAD_FOLDER.test(folder)) {
+    throw new Error('The Orca server is too old to keep file names. Update it and try again.')
+  }
+}
