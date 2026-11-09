@@ -82,6 +82,34 @@ export function TerminalWindowSection({
 
         {isWebClientLocation() ? null : (
           <SearchableSetting
+            title={t('settings.sidebarOpacity.title', 'Sidebar opacity')}
+            description={t(
+              'settings.sidebarOpacity.description',
+              'Lets the window material show through the left and right sidebars.'
+            )}
+            keywords={['sidebar', 'opacity', 'transparency', 'glass', 'blur']}
+          >
+            <NumberField
+              label={t('settings.sidebarOpacity.title', 'Sidebar opacity')}
+              description={t(
+                'settings.sidebarOpacity.fieldDescription',
+                'Needs a Window Material other than Opaque. 1 is fully opaque, 0 is fully transparent.'
+              )}
+              value={settings.sidebarBackgroundOpacity ?? 1}
+              defaultValue={1}
+              min={0}
+              max={1}
+              step={0.05}
+              suffix="0 to 1"
+              onChange={(value) =>
+                updateSettings({ sidebarBackgroundOpacity: clampNumber(value, 0, 1) })
+              }
+            />
+          </SearchableSetting>
+        )}
+
+        {isWebClientLocation() ? null : (
+          <SearchableSetting
             title={t('settings.windowMaterial.fc2ba9b528', 'Window material')}
             description={t(
               'settings.windowMaterial.description',
