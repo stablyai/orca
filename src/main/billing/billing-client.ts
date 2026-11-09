@@ -93,6 +93,14 @@ async function billingRequest(
 
 const seconds = z.number().catch(0)
 
+const PlanOptionSchema = z.object({
+  plan: z.enum(ORCA_BILLING_PLAN_IDS),
+  label: z.string().max(40),
+  priceLabel: z.string().max(40),
+  includedHours: z.number().nonnegative(),
+  perSeat: z.boolean()
+})
+
 // Lenient by design: an unknown plan/reason or a missing field degrades to "none"/0, never an error,
 // so a newer billing service cannot break an older desktop.
 const EntitlementSchema = z.object({
@@ -119,7 +127,17 @@ const EntitlementSchema = z.object({
     ])
     .nullable()
     .catch(null),
-  canManageBilling: z.boolean().catch(false)
+  canManageBilling: z.boolean().catch(false),
+  // Unknown plans (a newer service) are dropped rather than failing the whole response.
+  plans: z
+    .array(z.unknown())
+    .catch([])
+    .transform((items) =>
+      items.flatMap((item) => {
+        const parsed = PlanOptionSchema.safeParse(item)
+        return parsed.success ? [parsed.data] : []
+      })
+    )
 })
 
 export function normalizeEntitlement(value: Record<string, unknown>): OrcaBillingEntitlement {

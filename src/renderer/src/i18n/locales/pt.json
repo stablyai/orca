@@ -11958,6 +11958,10 @@
           "cloneFolderTakenByRepo": "\"{{value0}}\" nesta pasta já é outro repositório, então este clone precisa da sua própria pasta.",
           "cloneFolderNotEmpty": "\"{{value0}}\" já existe nesta pasta, então este clone precisa da sua própria pasta."
         },
+        "SidebarAccountMenu": {
+          "account": "Conta",
+          "signIn": "Entrar"
+        },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Reiniciar o Orca",
           "29c56f30ee": "Verificar Atualizações",

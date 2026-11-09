@@ -20,7 +20,12 @@ const pro: OrcaBillingEntitlement = {
   overageCapSeconds: 100 * HOUR,
   canStartSandbox: true,
   reason: null,
-  canManageBilling: true
+  canManageBilling: true,
+  plans: [
+    { plan: 'pro', label: 'Pro', priceLabel: '$25/mo', includedHours: 50, perSeat: false },
+    { plan: 'max', label: 'Max', priceLabel: '$100/mo', includedHours: 300, perSeat: false },
+    { plan: 'team', label: 'Team', priceLabel: '$60/seat/mo', includedHours: 150, perSeat: true }
+  ]
 }
 
 const handlers = {

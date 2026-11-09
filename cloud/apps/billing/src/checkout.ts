@@ -70,6 +70,9 @@ export async function createCheckout(
       success_url: returnUrl(env, { checkout: 'success', session_id: 'CHECKOUT_SESSION_ID_PLACEHOLDER' }),
       cancel_url: returnUrl(env, { checkout: 'cancel' }),
       metadata: { account_id: caller.accountId, plan: request.plan },
+      ...(env.STRIPE_AUTOMATIC_TAX === 'true'
+        ? { automatic_tax: { enabled: true }, tax_id_collection: { enabled: true } }
+        : {}),
       subscription_data: {
         metadata: { account_id: caller.accountId, plan: request.plan },
         trial_period_days: Number.isInteger(trialDays) && trialDays > 0 ? trialDays : undefined

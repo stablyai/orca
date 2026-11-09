@@ -4,7 +4,7 @@
 // price on a "standard seconds" meter with transform_quantity divide_by=3600.
 import { z } from 'zod'
 import type { Env } from './env'
-import { MACHINE_SIZE_WEIGHT, MACHINE_SIZES, includedSeconds } from './plans'
+import { MACHINE_SIZE_WEIGHT, MACHINE_SIZES, includedSeconds, planCatalog } from './plans'
 import type { StripeClient } from './stripe'
 import { currentSubscription, customerFor, insertUsage, markMeterReport, pendingMeterReports, usageOverage } from './store'
 
@@ -66,7 +66,7 @@ export async function recordUsage(
     endedAt: report.endedAt,
     weightedSeconds,
     periodStart: subscription?.current_period_start ?? null,
-    includedSeconds: subscription ? includedSeconds(subscription.plan, subscription.seats) : 0,
+    includedSeconds: subscription ? includedSeconds(planCatalog(env)[subscription.plan], subscription.seats) : 0,
     now,
     meterCustomer: customer
   })

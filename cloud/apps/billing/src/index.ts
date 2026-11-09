@@ -14,7 +14,7 @@ import { authenticateControlPlane, authenticateDesktop } from './auth'
 import { CheckoutRequestSchema, createCheckout, createPortal } from './checkout'
 import { checkStart, computeEntitlement } from './entitlements'
 import type { Env } from './env'
-import { MACHINE_SIZES } from './plans'
+import { MACHINE_SIZES, PlanConfigError, planCatalog, publicPlans } from './plans'
 import { LiveModeRefusedError, StripeError, createStripeClient, type StripeClient } from './stripe'
 import { UsageReportSchema, flushMeterReports, recordUsage, validateSegment } from './usage'
 import { handleStripeWebhook } from './webhook'
@@ -58,8 +58,8 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         if (!caller) {
           return json({ error: 'unauthorized' }, 401)
         }
-        const entitlement = await computeEntitlement(env.BILLING_DB, caller.accountId)
-        return json({ ...entitlement, canManageBilling: caller.canManage })
+        const entitlement = await computeEntitlement(env, caller.accountId)
+        return json({ ...entitlement, canManageBilling: caller.canManage, plans: publicPlans(planCatalog(env)) })
       }
 
       case 'POST /v1/billing/checkout': {
@@ -92,7 +92,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         if (!body.success) {
           return json({ error: 'invalid_request' }, 400)
         }
-        const entitlement = await computeEntitlement(env.BILLING_DB, body.data.accountId)
+        const entitlement = await computeEntitlement(env, body.data.accountId)
         return json({ ...checkStart(entitlement, body.data), entitlement })
       }
 
@@ -113,7 +113,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
           // Best effort inline; the cron trigger retries whatever is still pending.
           ctx.waitUntil(flushMeterReports(env, stripe, now, { usageId: body.data.usageId }).catch(() => undefined))
         }
-        const entitlement = await computeEntitlement(env.BILLING_DB, body.data.accountId)
+        const entitlement = await computeEntitlement(env, body.data.accountId)
         return json({ ...result, canStartSandbox: entitlement.canStartSandbox, reason: entitlement.reason })
       }
 
@@ -124,7 +124,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
     if (error instanceof SyntaxError) {
       return json({ error: 'invalid_json' }, 400)
     }
-    if (error instanceof LiveModeRefusedError) {
+    if (error instanceof LiveModeRefusedError || error instanceof PlanConfigError) {
       return json({ error: 'billing_misconfigured' }, 503)
     }
     if (error instanceof StripeError) {

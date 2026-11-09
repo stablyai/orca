@@ -6,15 +6,16 @@ vi.mock('@/store/index', () => ({
   useAppStore: { getState: () => ({ openSettingsTarget, openSettingsPage }) }
 }))
 
-import { registeredAccountMenuItemsForTest } from './account-menu-adapter'
+import {
+  getRegisteredAccountMenuItems,
+  selectVisibleAccountMenuItems
+} from '../sidebar/account-menu/account-menu-items'
 import { BILLING_CAPABILITY, registerPlanBillingMenuItem } from './register-plan-billing-menu-item'
 
 describe('Plan & billing account menu item', () => {
   it('registers behind the billing capability and opens Orca account settings', () => {
     const dispose = registerPlanBillingMenuItem()
-    const item = registeredAccountMenuItemsForTest().find(
-      (entry) => entry.id === 'orca.plan-billing'
-    )
+    const item = getRegisteredAccountMenuItems().find((entry) => entry.id === 'orca.plan-billing')
     expect(item?.requiredCapability).toBe(BILLING_CAPABILITY)
     expect(item?.label()).toBe('Plan & billing')
     item?.onSelect()
@@ -23,7 +24,20 @@ describe('Plan & billing account menu item', () => {
       repoId: null
     })
     expect(openSettingsPage).toHaveBeenCalled()
+
+    const visible = (flags: Record<string, boolean>): string[] =>
+      selectVisibleAccountMenuItems(getRegisteredAccountMenuItems(), {
+        activeProfileId: 'p1',
+        configured: true,
+        state: 'connected',
+        persistence: 'encrypted',
+        capabilities: { flags, refreshedAt: 0 }
+      }).map((entry) => entry.id)
+    expect(visible({})).not.toContain('orca.plan-billing')
+    expect(visible({ [BILLING_CAPABILITY]: true })).toContain('orca.plan-billing')
+    expect(selectVisibleAccountMenuItems(getRegisteredAccountMenuItems(), null)).toHaveLength(0)
+
     dispose()
-    expect(registeredAccountMenuItemsForTest()).toHaveLength(0)
+    expect(getRegisteredAccountMenuItems()).toHaveLength(0)
   })
 })

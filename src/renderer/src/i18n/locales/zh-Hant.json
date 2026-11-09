@@ -6114,6 +6114,10 @@
           "allProjects": "所有專案",
           "selectedProjects_other": "{{count}} 個專案"
         },
+        "SidebarAccountMenu": {
+          "account": "帳戶",
+          "signIn": "登入"
+        },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "重新啟動 Orca",
           "29c56f30ee": "檢查更新",

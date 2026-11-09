@@ -15,32 +15,6 @@ import type {
 import { formatHours, includedUsagePercent, planBillingTone } from './plan-billing-format'
 import { useOrcaBillingStatus } from './use-orca-billing-status'
 
-// Display only: the billing service and Stripe own the real catalog and prices.
-function planOptions(
-  t: Translate
-): { plan: OrcaBillingPlanId; label: string; price: string; hours: string }[] {
-  return [
-    {
-      plan: 'pro',
-      label: t('auto.components.billing.planPro', 'Pro'),
-      price: t('auto.components.billing.pricePro', '$25/mo'),
-      hours: '50'
-    },
-    {
-      plan: 'max',
-      label: t('auto.components.billing.planMax', 'Max'),
-      price: t('auto.components.billing.priceMax', '$100/mo'),
-      hours: '300'
-    },
-    {
-      plan: 'team',
-      label: t('auto.components.billing.planTeam', 'Team'),
-      price: t('auto.components.billing.priceTeam', '$60/seat/mo'),
-      hours: '150'
-    }
-  ]
-}
-
 function denyReasonCopy(reason: OrcaBillingDenyReason, t: Translate): string {
   switch (reason) {
     case 'no_subscription':
@@ -281,26 +255,26 @@ export function PlanBillingView({
         <p className="text-xs text-muted-foreground">{denyReasonCopy(entitlement.reason, t)}</p>
       ) : null}
 
-      {!hasPlan && entitlement.canManageBilling ? (
+      {!hasPlan && entitlement.canManageBilling && entitlement.plans.length > 0 ? (
         <div className="grid gap-3 md:grid-cols-3">
-          {planOptions(t).map((option) => (
+          {entitlement.plans.map((option) => (
             <div
               key={option.plan}
               className="flex flex-col gap-2 rounded-md border border-border/60 p-3"
             >
               <div className="flex items-baseline justify-between gap-2">
                 <p className="text-sm font-medium">{option.label}</p>
-                <p className="text-xs text-muted-foreground">{option.price}</p>
+                <p className="text-xs text-muted-foreground">{option.priceLabel}</p>
               </div>
               <p className="flex-1 text-xs text-muted-foreground">
-                {option.plan === 'team'
+                {option.perSeat
                   ? t(
                       'auto.components.billing.teamHours',
                       '{{value0}} sandbox hours per seat, pooled',
-                      { value0: option.hours }
+                      { value0: String(option.includedHours) }
                     )
                   : t('auto.components.billing.planHours', '{{value0}} sandbox hours per month', {
-                      value0: option.hours
+                      value0: String(option.includedHours)
                     })}
               </p>
               <Button
