@@ -164,6 +164,7 @@ const props: CloudRoutinesViewProps = {
   projects: PROJECTS,
   installations: [{ installationId: '1', account: 'acme', accountType: 'Organization' }],
   now: NOW,
+  fixtureNow: NOW,
   localTimezone: 'America/New_York',
   onRefresh: () => {},
   onCreate: async () => ({ ok: false, error: 'server' }),

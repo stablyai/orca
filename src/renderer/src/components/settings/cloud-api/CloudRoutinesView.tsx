@@ -43,6 +43,8 @@ export type CloudRoutinesViewProps = {
   /** The newest run from an open history, so the row's pill matches it. */
   onLatestRun?: (routine: Routine, run: RoutineRun | null) => void
   onOpenWorkspace?: (workspaceId: string) => void
+  /** Fixtures: a pinned clock for run history times. */
+  fixtureNow?: number
   /** A refresh is running while the current list stays on screen. */
   refreshing?: boolean
   /** Fixtures: start with the editor, history or delete confirmation open. */
@@ -174,6 +176,7 @@ export function CloudRoutinesView(props: CloudRoutinesViewProps): React.JSX.Elem
                 onToggle={(enabled) => props.onToggle(routine, enabled)}
                 onLatestRun={(run) => props.onLatestRun?.(routine, run)}
                 onOpenWorkspace={props.onOpenWorkspace}
+                fixedNow={props.fixtureNow}
                 onRunNow={async () => {
                   const failure = await props.onRunNow(routine)
                   if (!failure) {

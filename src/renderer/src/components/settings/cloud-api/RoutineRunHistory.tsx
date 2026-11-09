@@ -44,7 +44,8 @@ export function RoutineRunHistory({
   loadRuns,
   refreshKey = 0,
   onLatestRun,
-  onOpenWorkspace
+  onOpenWorkspace,
+  fixedNow
 }: {
   routineId: string
   loadRuns: LoadRoutineRuns
@@ -52,10 +53,13 @@ export function RoutineRunHistory({
   onLatestRun?: (run: RoutineRun | null) => void
   /** Opens a run's cloud workspace; when absent, runs carry no workspace action. */
   onOpenWorkspace?: (workspaceId: string) => void
+  /** Fixtures pin the clock so relative and elapsed times are deterministic. */
+  fixedNow?: number
 }): React.JSX.Element {
   const t = useTranslate()
   const [state, setState] = useState<State>({ status: 'loading' })
-  const [now, setNow] = useState(() => Date.now())
+  const [liveNow, setNow] = useState(() => Date.now())
+  const now = fixedNow ?? liveNow
   const generation = useRef(0)
   const latestRef = useRef(onLatestRun)
   latestRef.current = onLatestRun
@@ -93,7 +97,7 @@ export function RoutineRunHistory({
 
   const active = state.status === 'ok' && state.runs.some((run) => isActiveRunStatus(run.status))
   useEffect(() => {
-    if (!active) {
+    if (!active || fixedNow !== undefined) {
       return
     }
     // In-flight runs: refetch every few seconds and tick the elapsed clock every second.
@@ -103,7 +107,7 @@ export function RoutineRunHistory({
       clearInterval(poll)
       clearInterval(tick)
     }
-  }, [active, load])
+  }, [active, fixedNow, load])
 
   useEffect(
     () => () => {

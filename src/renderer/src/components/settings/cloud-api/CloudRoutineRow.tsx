@@ -57,7 +57,8 @@ export function RoutineRow({
   onToggle,
   onRunNow,
   onLatestRun,
-  onOpenWorkspace
+  onOpenWorkspace,
+  fixedNow
 }: {
   routine: Routine
   projects: readonly CloudApiProject[]
@@ -72,6 +73,7 @@ export function RoutineRow({
   onRunNow: () => Promise<string | null>
   onLatestRun?: (run: RoutineRun | null) => void
   onOpenWorkspace?: (workspaceId: string) => void
+  fixedNow?: number
 }): React.JSX.Element {
   const t = useTranslate()
   const locale = useIntlLocale()
@@ -267,6 +269,7 @@ export function RoutineRow({
             refreshKey={historyRefresh}
             onLatestRun={onLatestRun}
             onOpenWorkspace={onOpenWorkspace}
+            fixedNow={fixedNow}
           />
         </div>
       ) : null}
