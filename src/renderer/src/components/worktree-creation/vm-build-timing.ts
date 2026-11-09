@@ -9,8 +9,8 @@ export type VmBuildStepTimings = Partial<Record<VmBuildStepId, VmBuildStepTiming
 
 const NONE: VmBuildStepTimings = {}
 
-// One read per window: the control plane measures recent sandbox starts (GET /v1/config) and
-// main caches the answer, so every build sheet shows the same median.
+// Each new build sheet asks again: the control plane re-measures recent sandbox starts
+// (GET /v1/config) and main caches the answer for 5 minutes. The last answer shows meanwhile.
 let measured: VmBuildStepTimings | null = null
 let pending: Promise<VmBuildStepTimings> | null = null
 
@@ -24,6 +24,7 @@ function loadMeasuredTimings(): Promise<VmBuildStepTimings> {
       }
       // Only "Start sandbox" is measured. Without a measurement there is no hint, never a guess.
       measured = config.createTiming ? { provision: config.createTiming } : NONE
+      pending = null
       return measured
     })
     .catch(() => {
@@ -39,7 +40,7 @@ export function useVmBuildStepTimings(cloud: boolean): VmBuildStepTimings {
     cloud ? (measured ?? NONE) : NONE
   )
   React.useEffect(() => {
-    if (!cloud || measured) {
+    if (!cloud) {
       return
     }
     let live = true
@@ -52,7 +53,7 @@ export function useVmBuildStepTimings(cloud: boolean): VmBuildStepTimings {
       live = false
     }
   }, [cloud])
-  return cloud ? (measured ?? timings) : NONE
+  return cloud ? timings : NONE
 }
 
 /** The hint in whole seconds, never "~0s". */

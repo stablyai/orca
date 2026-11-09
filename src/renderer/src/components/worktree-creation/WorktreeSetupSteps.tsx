@@ -32,10 +32,7 @@ export function StepIcon({ state }: { state: WorktreeSetupStep['state'] }): Reac
   switch (state) {
     case 'running':
       return (
-        <Loader2
-          aria-hidden
-          className="size-3.5 shrink-0 text-muted-foreground motion-safe:animate-spin"
-        />
+        <Loader2 aria-hidden className="size-3.5 shrink-0 text-muted-foreground animate-spin" />
       )
     case 'done':
       return <CircleCheck aria-hidden className="size-3.5 shrink-0 text-foreground" />
@@ -102,7 +99,10 @@ export function WorktreeSetupSteps({
       </ol>
       {error !== null ? (
         <div className="mt-1 flex flex-col gap-2 border-t border-border pt-2">
-          <p className="break-words text-xs text-muted-foreground">{error}</p>
+          {/* The failure is the one thing that changed; announce it like the VM sheet's card does. */}
+          <p role="alert" className="break-words text-xs text-foreground">
+            {error}
+          </p>
           <div className="flex items-center gap-1.5">
             <Button type="button" variant="outline" size="xs" onClick={onRetry}>
               <RotateCcw />

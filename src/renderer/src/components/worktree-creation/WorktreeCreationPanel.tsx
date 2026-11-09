@@ -32,6 +32,31 @@ export default function WorktreeCreationPanel({
   const now = useWorktreeCreationClock(
     entry?.status === 'creating' && entry.environmentCheck?.status !== 'failed'
   )
+  // Time spent waiting on the user after failed checks: Retry checks resumes the clock from where it
+  // stopped instead of jumping ahead by the wait.
+  const [paused, setPaused] = React.useState<{
+    run: number | undefined
+    ms: number
+    waitingSince: number | undefined
+  }>({ run: entry?.startedAt, ms: 0, waitingSince: undefined })
+  const restartedChecksAt =
+    entry?.environmentCheck?.status === 'running' ? entry.environmentCheck.startedAt : undefined
+  if (paused.run !== entry?.startedAt) {
+    // Try again starts a new run with its own clock.
+    setPaused({ run: entry?.startedAt, ms: 0, waitingSince: checksFinishedAt })
+  } else if (checksFinishedAt !== undefined && paused.waitingSince !== checksFinishedAt) {
+    setPaused({ ...paused, waitingSince: checksFinishedAt })
+  } else if (
+    checksFinishedAt === undefined &&
+    paused.waitingSince !== undefined &&
+    restartedChecksAt !== undefined
+  ) {
+    setPaused({
+      ...paused,
+      ms: paused.ms + Math.max(0, restartedChecksAt - paused.waitingSince),
+      waitingSince: undefined
+    })
+  }
   if (!entry) {
     return null
   }
@@ -47,7 +72,7 @@ export default function WorktreeCreationPanel({
   const isVmCreation = Boolean(entry.request.ephemeralVmRecipe) || entry.phase === 'provisioning-vm'
   const title = entry.request.displayName || entry.request.name
   const stoppedAt = checksFinishedAt ?? (isError ? entry.errorAt : undefined)
-  const elapsedLabel = formatElapsedTime((stoppedAt ?? now) - entry.startedAt)
+  const elapsedLabel = formatElapsedTime((stoppedAt ?? now) - entry.startedAt - paused.ms)
   const checkoutProgress = getVisibleCheckoutProgress(entry)
 
   return (
