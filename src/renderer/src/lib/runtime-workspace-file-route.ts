@@ -8,8 +8,8 @@ import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { getExecutionHostIdForWorktree } from './workspace/ownership/worktree-runtime-owner'
-import { runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
-import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
+import { runtimeEnvironmentIdUnlessTwin } from './workspace/ownership/resolve-owner'
+import { resolveExplicitWorktreeOperationRouteResult } from './workspace/ownership/worktree-operation-catalog-route'
 import {
   selectFolderWorkspaces,
   selectWorktreesByRepo

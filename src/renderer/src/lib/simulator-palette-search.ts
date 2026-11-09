@@ -31,7 +31,7 @@ import {
   findDuplicateIds,
   getUnifiedTabPaletteExecutionHostId,
   isUnifiedTabOwnedByWorktree
-} from './unified-tab-host-ownership'
+} from './workspace/ownership/unified-tab-host-ownership'
 import type {
   BuildSearchableSimulatorTabsOptions,
   SearchableSimulatorTab,

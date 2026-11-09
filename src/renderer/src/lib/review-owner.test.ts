@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import { resolveReviewRepository } from './review-owner'
-import { resolveExactWorktreeRoute } from './worktree-owner-route'
+import { resolveExactWorktreeRoute } from './workspace/ownership/worktree-owner-route'
 import '../runtime/source-control/forge/forge-credential-target'
 import '../store/github/repositories/repository-routing'
 

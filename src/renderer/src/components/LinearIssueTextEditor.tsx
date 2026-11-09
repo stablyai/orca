@@ -23,7 +23,7 @@ import {
 } from './linear-issue-text-draft-state'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 type LinearIssueTextEditorProps = {
   issue: LinearIssue

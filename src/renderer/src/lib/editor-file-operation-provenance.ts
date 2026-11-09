@@ -3,14 +3,14 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
 import type { HostAuthority } from '../../../shared/host-authority'
-import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
-import { resolveOwner } from './resolve-owner'
+import { findFolderWorkspaceOwner } from './workspace/ownership/folder-workspace-runtime-owner'
+import { resolveOwner } from './workspace/ownership/resolve-owner'
 import { captureDirectSshMutationExpectation } from './ssh-mutation-expectation'
 import {
   assertWorktreeOperationGenerationSnapshotCurrent,
   captureWorktreeOperationGenerationSnapshot,
   type WorktreeOperationGenerationSnapshot
-} from './worktree-operation-generation'
+} from './workspace/ownership/worktree-operation-generation'
 import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRoute,
@@ -18,8 +18,8 @@ import {
   type WorktreeOperationRoute,
   type WorktreeOperationRouteResolution,
   type WorktreeOperationRouteState
-} from './worktree-operation-route'
-import { resolveExplicitWorktreeOperationRouteResult } from './worktree-operation-catalog-route'
+} from './workspace/ownership/worktree-operation-route'
+import { resolveExplicitWorktreeOperationRouteResult } from './workspace/ownership/worktree-operation-catalog-route'
 import { resolveQualifiedIndexedFolderWorkspace } from '@/store/folder-workspaces/folder-workspace-record-index'
 import {
   selectFolderWorkspaces,

@@ -8,7 +8,7 @@ import {
 } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 import type { AppState } from '@/store/types'
 import { isFrameDrawnServerWorkspace } from '@/runtime/web-session-tabs-sync/frame-drawn-server-workspace-set'
-import { runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from './workspace/ownership/resolve-owner'
 import { noteDesktopCreatedServerTab } from './desktop-created-server-tabs'
 
 export type SimulatorTabOpen = {

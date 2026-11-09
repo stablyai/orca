@@ -1,5 +1,5 @@
 import { agentLaunchRecoveryMessage, notifyAgentLaunchFailure } from '@/lib/agent-launch-failure'
-import type { ExecutionHostPlatformFact } from '@/lib/execution-host-facts'
+import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 import type { LaunchAgentInNewTabArgs } from './launch-agent-in-new-tab-args'
 import type { AgentTabLaunchOutcome } from './launch-agent-in-new-tab-host-agents'
 
