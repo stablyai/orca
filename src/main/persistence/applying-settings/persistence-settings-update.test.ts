@@ -98,6 +98,10 @@ describe('Store', () => {
       '/tmp/workspaces '
     )
     expect(store.updateSettings({ workspaceDir: ' ~notes' }).workspaceDir).toBe(' ~notes')
+    if (process.platform !== 'win32') {
+      // ~\\ is not a home path off Windows, so the value stays relative and exact.
+      expect(store.updateSettings({ workspaceDir: ' ~\\work' }).workspaceDir).toBe(' ~\\work')
+    }
   })
 
   it('updateSettings deep-merges and clamps notification custom sound volume', async () => {

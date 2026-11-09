@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { GlobalSettings } from '../../../../../shared/global-settings-types'
+import { createGlobalSettingsFixture } from '../../../../../shared/global-settings-test-fixture'
 import { WorkspaceDirectorySetting } from './WorkspaceDirectorySetting'
 
 vi.mock('../section-layout/SearchableSetting', () => ({
@@ -17,11 +17,11 @@ describe('WorkspaceDirectorySetting', () => {
     const updateSettings = vi.fn()
     render(
       <WorkspaceDirectorySetting
-        settings={{ workspaceDir: '/Users/me/dev' } as GlobalSettings}
+        settings={createGlobalSettingsFixture({ workspaceDir: '/Users/me/dev' })}
         updateSettings={updateSettings}
       />
     )
-    const input = screen.getByRole('textbox') as HTMLInputElement
+    const input = screen.getByRole<HTMLInputElement>('textbox')
 
     fireEvent.change(input, { target: { value: ' /Users/me/dev' } })
     fireEvent.blur(input)

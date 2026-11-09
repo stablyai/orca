@@ -22,7 +22,7 @@ export function normalizeWorkspaceDirSetting(
     ? {
         ...settings,
         workspaceDir: expandLeadingHomePath(
-          normalizeWorkspaceDirInput(settings.workspaceDir),
+          normalizeWorkspaceDirInput(settings.workspaceDir, process.platform === 'win32'),
           homedir()
         )
       }
@@ -39,7 +39,7 @@ export function normalizeLoadedWorkspaceDirSetting(
     return normalized
   }
   const history = buildWorkspaceDirHistoryForUpdate(
-    { ...defaults, ...settings } as GlobalSettings,
+    { ...defaults, ...settings },
     { workspaceDir: normalized.workspaceDir }
   )
   return history ? { ...normalized, workspaceDirHistory: history } : normalized
