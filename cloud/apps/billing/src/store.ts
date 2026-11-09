@@ -1,6 +1,6 @@
 // D1 access. Every multi-statement write goes through db.batch() (one transaction), and every
 // insert that can be retried is INSERT OR IGNORE on a caller-supplied key.
-import type { PlanId } from './plans'
+import type { BillingInterval, PlanId } from './plans'
 
 export type SubscriptionRow = {
   stripe_subscription_id: string
@@ -14,7 +14,11 @@ export type SubscriptionRow = {
   current_period_end: number
   cancel_at_period_end: number
   updated_at: number
+  billing_interval: BillingInterval
+  overage_item_id: string | null
 }
+
+export type AccountSettings = { overage_opt_in: number; spend_cap_cents: number | null }
 
 export type MeterReportRow = {
   usage_id: string
@@ -75,13 +79,15 @@ export async function upsertSubscription(db: D1Database, row: SubscriptionRow): 
   await db
     .prepare(
       `INSERT INTO subscriptions (stripe_subscription_id, account_id, stripe_customer_id, status, plan, seats,
-         overage_enabled, current_period_start, current_period_end, cancel_at_period_end, updated_at)
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+         overage_enabled, current_period_start, current_period_end, cancel_at_period_end, updated_at,
+         billing_interval, overage_item_id)
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
        ON CONFLICT (stripe_subscription_id) DO UPDATE SET
          status = excluded.status, plan = excluded.plan, seats = excluded.seats,
          overage_enabled = excluded.overage_enabled, current_period_start = excluded.current_period_start,
          current_period_end = excluded.current_period_end, cancel_at_period_end = excluded.cancel_at_period_end,
-         updated_at = excluded.updated_at`
+         updated_at = excluded.updated_at, billing_interval = excluded.billing_interval,
+         overage_item_id = excluded.overage_item_id`
     )
     .bind(
       row.stripe_subscription_id,
@@ -94,8 +100,30 @@ export async function upsertSubscription(db: D1Database, row: SubscriptionRow): 
       row.current_period_start,
       row.current_period_end,
       row.cancel_at_period_end,
-      row.updated_at
+      row.updated_at,
+      row.billing_interval,
+      row.overage_item_id
     )
+    .run()
+}
+
+export async function accountSettings(db: D1Database, accountId: string): Promise<AccountSettings> {
+  const row = await db
+    .prepare('SELECT overage_opt_in, spend_cap_cents FROM billing_accounts WHERE account_id = ?1')
+    .bind(accountId)
+    .first<AccountSettings>()
+  return row ?? { overage_opt_in: 0, spend_cap_cents: null }
+}
+
+export async function setOverageSettings(
+  db: D1Database,
+  accountId: string,
+  settings: { optIn: boolean; spendCapCents: number | null },
+  now: number
+): Promise<void> {
+  await db
+    .prepare('UPDATE billing_accounts SET overage_opt_in = ?2, spend_cap_cents = ?3, updated_at = ?4 WHERE account_id = ?1')
+    .bind(accountId, settings.optIn ? 1 : 0, settings.spendCapCents, now)
     .run()
 }
 
@@ -125,8 +153,10 @@ export type UsageInsert = {
   periodStart: number | null
   includedSeconds: number
   now: number
-  // Set when overage is billable: queues a meter report in the same transaction.
+  // Set when overage is billable: queues a meter report in the same transaction, for at most
+  // what is left of the window's spend cap (meterCapSeconds).
   meterCustomer: string | null
+  meterCapSeconds: number
 }
 
 /**
@@ -163,14 +193,33 @@ export async function insertUsage(db: D1Database, usage: UsageInsert): Promise<b
       db
         .prepare(
           `INSERT OR IGNORE INTO meter_reports (usage_id, stripe_customer_id, seconds, event_timestamp, status, created_at)
-           SELECT usage_id, ?2, overage_seconds, ended_at, 'pending', ?3
-           FROM usage_events WHERE usage_id = ?1 AND overage_seconds > 0`
+           SELECT usage_id, ?2, billable, ended_at, 'pending', ?3 FROM (
+             SELECT u.usage_id, u.ended_at,
+               MIN(u.overage_seconds, MAX(0, ?4 - (
+                 SELECT COALESCE(SUM(m.seconds), 0) FROM meter_reports m
+                 JOIN usage_events p ON p.usage_id = m.usage_id
+                 WHERE p.account_id = u.account_id AND p.period_start IS u.period_start))) AS billable
+             FROM usage_events u WHERE u.usage_id = ?1 AND u.overage_seconds > 0
+           ) WHERE billable > 0`
         )
-        .bind(usage.usageId, usage.meterCustomer, usage.now)
+        .bind(usage.usageId, usage.meterCustomer, usage.now, usage.meterCapSeconds)
     )
   }
   const [result] = await db.batch(statements)
   return (result?.meta.changes ?? 0) > 0
+}
+
+/** Overage seconds already metered (billed) in an allowance window. */
+export async function meteredSeconds(db: D1Database, accountId: string, windowStart: number): Promise<number> {
+  const row = await db
+    .prepare(
+      `SELECT COALESCE(SUM(m.seconds), 0) AS metered FROM meter_reports m
+       JOIN usage_events p ON p.usage_id = m.usage_id
+       WHERE p.account_id = ?1 AND p.period_start = ?2`
+    )
+    .bind(accountId, windowStart)
+    .first<{ metered: number }>()
+  return row?.metered ?? 0
 }
 
 export async function usageOverage(db: D1Database, usageId: string): Promise<number> {

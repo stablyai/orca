@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from 'vitest'
 vi.mock('electron', () => ({ app: { isPackaged: false } }))
 
 import { getBillingEndpoints } from './billing-config'
-import { billingCheckoutArgsFromUnknown } from '../ipc/profiles/orca-profile-billing-handlers'
+import {
+  billingCheckoutArgsFromUnknown,
+  billingOverageArgsFromUnknown
+} from '../ipc/profiles/orca-profile-billing-handlers'
 
 const authConfig = { apiBaseUrl: 'https://login.onorca.dev' }
 
@@ -29,20 +32,36 @@ describe('billing config', () => {
 })
 
 describe('billing IPC args', () => {
-  it('accepts known plans and Team seats only', () => {
-    expect(billingCheckoutArgsFromUnknown({ plan: 'pro', seats: 5 })).toEqual({
-      plan: 'pro'
-    })
-    expect(billingCheckoutArgsFromUnknown({ plan: 'team', seats: 5 })).toEqual({
+  it('accepts Team checkout with an interval and 1..500 seats', () => {
+    expect(billingCheckoutArgsFromUnknown({ plan: 'team', interval: 'year', seats: 5 })).toEqual({
       plan: 'team',
+      interval: 'year',
       seats: 5
     })
-    expect(() => billingCheckoutArgsFromUnknown({ plan: 'free' })).toThrow(
-      'invalid_orca_billing_plan'
-    )
-    expect(() => billingCheckoutArgsFromUnknown({ plan: 'team', seats: 0 })).toThrow(
-      'invalid_orca_billing_seats'
-    )
-    expect(() => billingCheckoutArgsFromUnknown(null)).toThrow('invalid_orca_billing_plan')
+    for (const bad of [
+      { plan: 'pro', interval: 'month', seats: 1 },
+      { plan: 'team', interval: 'week', seats: 1 },
+      { plan: 'team', interval: 'month', seats: 0 },
+      { plan: 'team', interval: 'month', seats: 501 },
+      { plan: 'team', interval: 'month', seats: 1, extra: true },
+      null
+    ]) {
+      expect(() => billingCheckoutArgsFromUnknown(bad)).toThrow('invalid_orca_billing_checkout')
+    }
+  })
+
+  it('accepts overage toggles with an optional whole-cent cap', () => {
+    expect(billingOverageArgsFromUnknown({ enabled: false })).toEqual({ enabled: false })
+    expect(billingOverageArgsFromUnknown({ enabled: true, spendCapCents: 5000 })).toEqual({
+      enabled: true,
+      spendCapCents: 5000
+    })
+    for (const bad of [
+      { enabled: 'yes' },
+      { enabled: true, spendCapCents: -1 },
+      { enabled: true, spendCapCents: 1.5 }
+    ]) {
+      expect(() => billingOverageArgsFromUnknown(bad)).toThrow('invalid_orca_billing_overage')
+    }
   })
 })

@@ -1,12 +1,22 @@
 // Sandbox usage ingestion (control plane -> billing) and the Stripe meter outbox.
-// Only overage reaches Stripe: included hours are tracked here (Team pools them across seats,
-// which tiered Stripe prices cannot express), and the overage price is a flat per-hour metered
-// price on a "standard seconds" meter with transform_quantity divide_by=3600.
+// Only overage reaches Stripe, and only for accounts that opted in, up to their monthly spend cap:
+// included hours are tracked here (pooled across seats, monthly even on annual plans, which tiered
+// Stripe prices cannot express); the overage price is a flat per-hour metered price on a
+// "standard seconds" meter with transform_quantity divide_by=3600.
 import { z } from 'zod'
 import type { Env } from './env'
-import { MACHINE_SIZE_WEIGHT, MACHINE_SIZES, includedSeconds, planCatalog } from './plans'
+import { MACHINE_SIZE_WEIGHT, MACHINE_SIZES, capSeconds, includedSeconds, planCatalog } from './plans'
+import { subscriptionWindow } from './entitlements'
 import type { StripeClient } from './stripe'
-import { currentSubscription, customerFor, insertUsage, markMeterReport, pendingMeterReports, usageOverage } from './store'
+import {
+  accountSettings,
+  currentSubscription,
+  customerFor,
+  insertUsage,
+  markMeterReport,
+  pendingMeterReports,
+  usageOverage
+} from './store'
 
 // One segment is at most a day: the control plane settles running sandboxes periodically.
 const MAX_SEGMENT_MS = 24 * 3600 * 1000
@@ -52,10 +62,16 @@ export async function recordUsage(
   now: number
 ): Promise<{ recorded: boolean; weightedSeconds: number; overageSeconds: number }> {
   const db = env.BILLING_DB
-  const subscription = await currentSubscription(db, report.accountId)
+  const team = planCatalog(env).team
+  const [subscription, settings] = await Promise.all([
+    currentSubscription(db, report.accountId),
+    accountSettings(db, report.accountId)
+  ])
   const wallSeconds = Math.ceil((report.endedAt - report.startedAt) / 1000)
   const weightedSeconds = wallSeconds * MACHINE_SIZE_WEIGHT[report.machineSize]
-  const billable = subscription !== null && subscription.overage_enabled === 1
+  // A segment counts in the allowance window it ended in.
+  const window = subscription ? subscriptionWindow(subscription, report.endedAt) : null
+  const billable = subscription !== null && settings.overage_opt_in === 1 && subscription.overage_item_id !== null
   const customer = billable ? await customerFor(db, report.accountId) : null
   const recorded = await insertUsage(db, {
     usageId: report.usageId,
@@ -65,10 +81,11 @@ export async function recordUsage(
     startedAt: report.startedAt,
     endedAt: report.endedAt,
     weightedSeconds,
-    periodStart: subscription?.current_period_start ?? null,
-    includedSeconds: subscription ? includedSeconds(planCatalog(env)[subscription.plan], subscription.seats) : 0,
+    periodStart: window?.start ?? null,
+    includedSeconds: subscription ? includedSeconds(team, subscription.seats) : 0,
     now,
-    meterCustomer: customer
+    meterCustomer: customer,
+    meterCapSeconds: capSeconds(team, settings.spend_cap_cents ?? team.defaultSpendCapCents)
   })
   return { recorded, weightedSeconds, overageSeconds: await usageOverage(db, report.usageId) }
 }

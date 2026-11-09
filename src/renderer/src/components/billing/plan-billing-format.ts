@@ -25,3 +25,9 @@ export function planBillingTone(entitlement: OrcaBillingEntitlement): PlanBillin
     ? 'warning'
     : 'ok'
 }
+
+/** "$0.75", "$25" — whole dollars drop the cents. */
+export function formatDollars(cents: number): string {
+  const dollars = Math.max(0, cents) / 100
+  return Number.isInteger(dollars) ? `$${dollars}` : `$${dollars.toFixed(2)}`
+}

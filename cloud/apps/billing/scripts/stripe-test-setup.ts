@@ -1,11 +1,13 @@
-// One-time TEST MODE catalog setup: products, flat plan prices, the sandbox-seconds meter and the
-// metered overage price. Refuses any key that is not sk_test_/rk_test_. Prints the ids to put in
-// the Worker vars; creates nothing else.
+// One-time TEST MODE catalog setup: the Team product with monthly + annual seat prices, the
+// sandbox-seconds meter with its metered overage price, and a Customer Portal configuration
+// (seat quantity changes, monthly <-> annual switch, cancel). Refuses any key that is not
+// sk_test_/rk_test_ and stops if Stripe ever reports a live-mode object. Prints the Worker vars.
 //
-//   STRIPE_SECRET_KEY=sk_test_... pnpm tsx scripts/stripe-test-setup.ts
+//   STRIPE_SECRET_KEY=sk_test_... BILLING_RETURN_URL=https://... tsx scripts/stripe-test-setup.ts
 //
-// Re-running is safe within 24h (idempotency keys); after that it would create duplicates, so
-// check the dashboard first.
+// Prices (cents) default to the agreed Team pricing; override with
+//   STRIPE_SETUP_PRICES='{"teamMonthly":5000,"teamAnnual":48000,"overagePerHour":75}'
+// Idempotency keys include the prices, so a re-run within 24h returns the same objects.
 import { encodeForm } from '../src/stripe'
 
 const key = process.env.STRIPE_SECRET_KEY ?? ''
@@ -13,8 +15,11 @@ if (!key.startsWith('sk_test_') && !key.startsWith('rk_test_')) {
   console.error('Refusing: STRIPE_SECRET_KEY must be a test-mode key (sk_test_ or rk_test_).')
   process.exit(1)
 }
+const returnUrl = process.env.BILLING_RETURN_URL ?? 'https://onorca.dev/billing/return'
 
-async function post<T>(path: string, params: Record<string, unknown>, idempotencyKey: string): Promise<T> {
+type StripeObject = { id: string; livemode?: boolean; error?: { message: string } }
+
+async function post<T extends StripeObject>(path: string, params: Record<string, unknown>, idempotencyKey: string): Promise<T> {
   const response = await fetch(`https://api.stripe.com${path}`, {
     method: 'POST',
     headers: {
@@ -25,7 +30,7 @@ async function post<T>(path: string, params: Record<string, unknown>, idempotenc
     },
     body: encodeForm(params as never)
   })
-  const json = (await response.json()) as T & { livemode?: boolean; error?: { message: string } }
+  const json = (await response.json()) as T
   if (!response.ok) {
     throw new Error(`${path}: ${json.error?.message}`)
   }
@@ -35,28 +40,36 @@ async function post<T>(path: string, params: Record<string, unknown>, idempotenc
   return json
 }
 
-// Monthly price in cents per plan (Team is per seat) and the overage price per standard hour.
-// Draft numbers; override with STRIPE_SETUP_PRICES='{"pro":2000,"max":10000,"team":5000,"overagePerHour":45}'.
-const prices = { pro: 2500, max: 10000, team: 6000, overagePerHour: 45, ...JSON.parse(process.env.STRIPE_SETUP_PRICES ?? '{}') }
-const plans = [
-  { id: 'pro', name: 'Orca Pro', cents: prices.pro },
-  { id: 'max', name: 'Orca Max', cents: prices.max },
-  { id: 'team', name: 'Orca Team (per seat)', cents: prices.team }
-] as const
-const suffix = `${prices.pro}-${prices.max}-${prices.team}-${prices.overagePerHour}`
+const prices = { teamMonthly: 5000, teamAnnual: 48000, overagePerHour: 75, ...JSON.parse(process.env.STRIPE_SETUP_PRICES ?? '{}') }
+const suffix = `${prices.teamMonthly}-${prices.teamAnnual}-${prices.overagePerHour}`
 
-const out: Record<string, string> = {}
-for (const plan of plans) {
-  const product = await post<{ id: string }>('/v1/products', { name: plan.name, metadata: { orca_plan: plan.id } }, `product:${plan.id}`)
-  const price = await post<{ id: string }>(
-    '/v1/prices',
-    { product: product.id, currency: 'usd', unit_amount: plan.cents, recurring: { interval: 'month' }, lookup_key: `orca_${plan.id}_monthly`, transfer_lookup_key: true },
-    `price:${plan.id}:${suffix}`
-  )
-  out[`STRIPE_PRICE_${plan.id.toUpperCase()}`] = price.id
-}
+const team = await post('/v1/products', { name: 'Orca Team', unit_label: 'seat', metadata: { orca_plan: 'team' } }, 'product:team')
+const monthly = await post(
+  '/v1/prices',
+  {
+    product: team.id,
+    currency: 'usd',
+    unit_amount: prices.teamMonthly,
+    recurring: { interval: 'month' },
+    lookup_key: 'orca_team_seat_monthly',
+    transfer_lookup_key: true
+  },
+  `price:team:month:${suffix}`
+)
+const annual = await post(
+  '/v1/prices',
+  {
+    product: team.id,
+    currency: 'usd',
+    unit_amount: prices.teamAnnual,
+    recurring: { interval: 'year' },
+    lookup_key: 'orca_team_seat_annual',
+    transfer_lookup_key: true
+  },
+  `price:team:year:${suffix}`
+)
 
-const meter = await post<{ id: string; event_name: string }>(
+const meter = await post<StripeObject & { event_name: string }>(
   '/v1/billing/meters',
   {
     display_name: 'Orca sandbox overage (standard seconds)',
@@ -67,9 +80,10 @@ const meter = await post<{ id: string; event_name: string }>(
   },
   'meter'
 )
-const overageProduct = await post<{ id: string }>('/v1/products', { name: 'Orca sandbox overage', unit_label: 'hour' }, 'product:overage')
-// Per standard hour; the meter counts seconds and Stripe divides by 3600 (rounding up) on the invoice.
-const overage = await post<{ id: string }>(
+const overageProduct = await post('/v1/products', { name: 'Orca sandbox overage', unit_label: 'std hour' }, 'product:overage')
+// Per Standard hour (Large burns 2x through the meter weight); the meter counts seconds and the
+// invoice divides by 3600, rounding up.
+const overage = await post(
   '/v1/prices',
   {
     product: overageProduct.id,
@@ -82,7 +96,40 @@ const overage = await post<{ id: string }>(
   },
   `price:overage:${suffix}`
 )
-out.STRIPE_PRICE_OVERAGE = overage.id
-out.STRIPE_METER_EVENT_NAME = meter.event_name
 
-console.log(JSON.stringify(out, null, 2))
+const portal = await post(
+  '/v1/billing_portal/configurations',
+  {
+    business_profile: { headline: 'Orca Team billing' },
+    default_return_url: returnUrl,
+    features: {
+      customer_update: { enabled: true, allowed_updates: ['email', 'address', 'tax_id', 'name'] },
+      invoice_history: { enabled: true },
+      payment_method_update: { enabled: true },
+      subscription_cancel: { enabled: true, mode: 'at_period_end', cancellation_reason: { enabled: true, options: ['too_expensive', 'missing_features', 'switched_service', 'unused', 'other'] } },
+      subscription_update: {
+        enabled: true,
+        default_allowed_updates: ['quantity', 'price'],
+        proration_behavior: 'create_prorations',
+        products: [{ product: team.id, prices: [monthly.id, annual.id] }]
+      }
+    }
+  },
+  `portal:${team.id}:${monthly.id}:${annual.id}`
+)
+
+console.log(
+  JSON.stringify(
+    {
+      STRIPE_PRICE_TEAM_MONTHLY: monthly.id,
+      STRIPE_PRICE_TEAM_ANNUAL: annual.id,
+      STRIPE_PRICE_OVERAGE: overage.id,
+      STRIPE_METER_EVENT_NAME: meter.event_name,
+      STRIPE_PORTAL_CONFIGURATION: portal.id,
+      products: { team: team.id, overage: overageProduct.id },
+      meter: meter.id
+    },
+    null,
+    2
+  )
+)

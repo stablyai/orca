@@ -28,6 +28,8 @@ import type {
 import type {
   OrcaBillingCheckoutArgs,
   OrcaBillingOpenResult,
+  OrcaBillingOverageArgs,
+  OrcaBillingOverageResult,
   OrcaBillingStatusResult
 } from '../../shared/orca-billing'
 
@@ -75,4 +77,6 @@ export type OrcaProfileApi = {
   billingOpenCheckout: (args: OrcaBillingCheckoutArgs) => Promise<OrcaBillingOpenResult>
   /** Opens the Stripe Customer Portal in the browser. */
   billingOpenPortal: () => Promise<OrcaBillingOpenResult>
+  /** Opt in/out of sandbox overage and set the monthly spend cap (org admins). */
+  billingSetOverage: (args: OrcaBillingOverageArgs) => Promise<OrcaBillingOverageResult>
 }

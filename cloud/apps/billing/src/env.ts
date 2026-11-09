@@ -15,16 +15,16 @@ export type Env = {
   // Overrides the Stripe API origin (tests and stripe-mock only).
   STRIPE_API_BASE?: string
 
-  // Price ids (price_...). Flat recurring prices per plan; Team is per seat (quantity).
-  STRIPE_PRICE_PRO: string
-  STRIPE_PRICE_MAX: string
-  STRIPE_PRICE_TEAM: string
-  // Metered price attached to the sandbox-seconds meter (overage only; see usage.ts).
+  // Team seat prices (price_...), quantity = seats.
+  STRIPE_PRICE_TEAM_MONTHLY: string
+  STRIPE_PRICE_TEAM_ANNUAL: string
+  // Monthly metered price on the sandbox-seconds meter, added to a subscription when an admin
+  // opts in to overage (see overage.ts, usage.ts).
   STRIPE_PRICE_OVERAGE: string
   // Billing meter event_name the overage price aggregates.
   STRIPE_METER_EVENT_NAME: string
-  // Optional card-required trial length for new subscriptions.
-  STRIPE_TRIAL_DAYS?: string
+  // Customer portal configuration (bpc_...) allowing seat changes, monthly<->annual and cancel.
+  STRIPE_PORTAL_CONFIGURATION?: string
   // 'true' turns on Stripe Tax in Checkout (automatic_tax + tax id collection). Requires Stripe Tax
   // to be activated with an origin address and registrations in the dashboard. Default off.
   STRIPE_AUTOMATIC_TAX?: string
@@ -42,6 +42,10 @@ export type Env = {
   BILLING_JWKS?: string
   BILLING_AUTH_ISSUER?: string
   BILLING_JWT_AUDIENCE: string
+  // 'dev' | 'prod'. Dev may also accept BILLING_DEV_JWKS (issuer 'orca-billing-dev-test', a secret
+  // operator key set for e2e runs before auth mints billing tokens); prod never does.
+  BILLING_ENV?: string
+  BILLING_DEV_JWKS?: string
 
   // Sandbox control plane -> billing (usage reports, start checks). Secret; >= 32 chars.
   // Comma-separated during rotation. Replace with a service binding once the control plane is a Worker.

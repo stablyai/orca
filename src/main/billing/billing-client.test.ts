@@ -64,7 +64,7 @@ describe('billing client', () => {
     const call = createCheckoutUrl(
       endpoints,
       'bt',
-      { plan: 'pro' },
+      { plan: 'team', interval: 'month', seats: 1 },
       fakeFetch({
         'https://billing.example.test/v1/billing/checkout': Response.json(
           { error: 'already_subscribed' },
@@ -79,12 +79,12 @@ describe('billing client', () => {
     await expect(call).rejects.toBeInstanceOf(BillingServiceError)
   })
 
-  it('sends seats only for Team and returns the hosted Checkout URL', async () => {
+  it('sends plan, interval and seats and returns the hosted Checkout URL', async () => {
     const seen: Seen[] = []
     const url = await createCheckoutUrl(
       endpoints,
       'bt',
-      { plan: 'team', seats: 3 },
+      { plan: 'team', interval: 'year', seats: 3 },
       fakeFetch(
         {
           'https://billing.example.test/v1/billing/checkout': Response.json({
@@ -97,6 +97,7 @@ describe('billing client', () => {
     expect(url).toBe('https://checkout.stripe.com/c/pay/cs_test_1')
     expect(JSON.parse(String(seen[0]?.init?.body))).toEqual({
       plan: 'team',
+      interval: 'year',
       seats: 3
     })
   })
@@ -127,49 +128,79 @@ describe('billing client', () => {
     await expect(portal).rejects.toThrow('invalid_billing_url')
   })
 
-  it('normalizes the entitlement and drops unknown fields', async () => {
-    const entitlement = await fetchEntitlement(
-      endpoints,
-      'bt',
+  it('normalizes the entitlement and drops unknown or unsafe fields', async () => {
+    const offers = {
+      team: {
+        label: 'Team',
+        monthlyPriceLabel: '$50/seat/mo',
+        annualPriceLabel: '$480/seat/yr',
+        includedHoursPerSeat: 60,
+        concurrentSandboxesPerSeat: 3,
+        idleSleepMinutes: 15,
+        overageCentsPerHour: 75,
+        defaultSpendCapCents: 2500
+      },
+      enterprise: {
+        label: 'Enterprise',
+        priceLabel: 'Custom',
+        contactUrl: 'https://onorca.dev/sales'
+      }
+    }
+    const response = (extra: Record<string, unknown>) =>
       fakeFetch({
         'https://billing.example.test/v1/billing/entitlements': Response.json({
-          plan: 'pro',
-          planLabel: 'Pro',
+          plan: 'team',
+          planLabel: 'Team',
           status: 'active',
-          seats: 1,
+          interval: 'year',
+          seats: 2,
           period: { start: 1, end: 2 },
-          includedSeconds: 180000,
+          usageWindow: { start: 1, end: 2 },
+          includedSeconds: 432000,
           usedSeconds: 36000,
-          remainingIncludedSeconds: 144000,
+          remainingIncludedSeconds: 396000,
+          usageWarningPercent: null,
           overageSeconds: 0,
-          overageEnabled: true,
-          overageCapSeconds: 360000,
+          overage: {
+            optedIn: true,
+            active: true,
+            spendCapCents: 2500,
+            spentCents: 75,
+            centsPerHour: 75
+          },
           canStartSandbox: true,
           reason: 'something_new',
           canManageBilling: true,
           accountId: 'org:o1',
-          plans: [
-            { plan: 'pro', label: 'Pro', priceLabel: '$25/mo', includedHours: 50, perSeat: false },
-            {
-              plan: 'enterprise',
-              label: 'Enterprise',
-              priceLabel: 'Talk to us',
-              includedHours: 0,
-              perSeat: true
-            }
-          ]
+          offers,
+          ...extra
         })
       })
-    )
+    const entitlement = await fetchEntitlement(endpoints, 'bt', response({}))
     expect(entitlement).toMatchObject({
-      plan: 'pro',
+      plan: 'team',
+      interval: 'year',
       usedSeconds: 36000,
       reason: null,
-      canManageBilling: true
+      canManageBilling: true,
+      overage: { optedIn: true, spentCents: 75 },
+      offers
     })
     expect(entitlement).not.toHaveProperty('accountId')
-    expect(entitlement.plans).toEqual([
-      { plan: 'pro', label: 'Pro', priceLabel: '$25/mo', includedHours: 50, perSeat: false }
-    ])
+    // A non-https contact link is never handed to the renderer.
+    const unsafe = await fetchEntitlement(
+      endpoints,
+      'bt',
+      response({
+        offers: {
+          ...offers,
+          enterprise: { ...offers.enterprise, contactUrl: 'javascript:alert(1)' }
+        }
+      })
+    )
+    expect(unsafe.offers).toBeNull()
+    expect(
+      (await fetchEntitlement(endpoints, 'bt', response({ plan: 'pro', offers: undefined }))).plan
+    ).toBeNull()
   })
 })

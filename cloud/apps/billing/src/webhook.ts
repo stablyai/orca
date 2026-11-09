@@ -69,25 +69,25 @@ export async function syncSubscription(env: Env, stripe: StripeClient, subscript
   if (!accountId) {
     throw new IgnoredSubscription('unknown_customer')
   }
-  let plan = null
+  let match: ReturnType<typeof planForPrice> = null
   let seats = 1
-  let overageEnabled = false
+  let overageItemId: string | null = null
   let periodStart = subscription.current_period_start
   let periodEnd = subscription.current_period_end
   for (const item of subscription.items.data) {
     if (item.price.id === env.STRIPE_PRICE_OVERAGE) {
-      overageEnabled = true
+      overageItemId = item.id
       continue
     }
     const itemPlan = planForPrice(env, item.price.id)
     if (itemPlan) {
-      plan = itemPlan
+      match = itemPlan
       seats = Math.max(1, item.quantity ?? 1)
       periodStart = item.current_period_start ?? periodStart
       periodEnd = item.current_period_end ?? periodEnd
     }
   }
-  if (!plan || !periodStart || !periodEnd) {
+  if (!match || !periodStart || !periodEnd) {
     throw new IgnoredSubscription('unrecognized_subscription_items')
   }
   await upsertSubscription(db, {
@@ -95,13 +95,15 @@ export async function syncSubscription(env: Env, stripe: StripeClient, subscript
     account_id: accountId,
     stripe_customer_id: customer,
     status: subscription.status,
-    plan,
+    plan: match.plan,
     seats,
-    overage_enabled: overageEnabled ? 1 : 0,
+    overage_enabled: overageItemId ? 1 : 0,
     current_period_start: periodStart * 1000,
     current_period_end: periodEnd * 1000,
     cancel_at_period_end: subscription.cancel_at_period_end ? 1 : 0,
-    updated_at: now
+    updated_at: now,
+    billing_interval: match.interval,
+    overage_item_id: overageItemId
   })
 }
 

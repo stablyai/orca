@@ -40,6 +40,23 @@ function keysFor(env: Env): JWTVerifyGetKey {
   return keys
 }
 
+export const DEV_ISSUER = 'orca-billing-dev-test'
+let devKeys: { source: string; keys: JWTVerifyGetKey } | null = null
+
+/** Dev operator keys; never honored when BILLING_ENV is 'prod'. */
+function devKeysFor(env: Env): JWTVerifyGetKey | null {
+  if (env.BILLING_ENV === 'prod' || !env.BILLING_DEV_JWKS) {
+    return null
+  }
+  if (devKeys?.source !== env.BILLING_DEV_JWKS) {
+    devKeys = {
+      source: env.BILLING_DEV_JWKS,
+      keys: createLocalJWKSet(JSON.parse(env.BILLING_DEV_JWKS) as JSONWebKeySet)
+    }
+  }
+  return devKeys.keys
+}
+
 export function readBearer(value: string | null): string | null {
   return /^Bearer ([^\s]+)$/.exec(value ?? '')?.[1] ?? null
 }
@@ -54,16 +71,28 @@ export async function authenticateDesktop(env: Env, request: Request): Promise<B
   if (!token) {
     return null
   }
-  try {
-    const { payload } = await jwtVerify(token, keysFor(env), {
+  const verify = (keys: JWTVerifyGetKey, issuer: string | undefined) =>
+    jwtVerify(token, keys, {
       audience: env.BILLING_JWT_AUDIENCE,
       algorithms: ['ES256'],
       // Billing tokens are minted per call; refuse anything long-lived.
       maxTokenAge: '15m',
       requiredClaims: ['exp', 'iat'],
-      ...(env.BILLING_AUTH_ISSUER ? { issuer: env.BILLING_AUTH_ISSUER } : {})
+      ...(issuer ? { issuer } : {})
     })
-    const claims = ClaimsSchema.parse(payload)
+  try {
+    let verified
+    try {
+      verified = await verify(keysFor(env), env.BILLING_AUTH_ISSUER)
+    } catch (error) {
+      // Dev only: an operator key set (its own issuer) until auth mints billing tokens.
+      const dev = devKeysFor(env)
+      if (!dev) {
+        throw error
+      }
+      verified = await verify(dev, DEV_ISSUER)
+    }
+    const claims = ClaimsSchema.parse(verified.payload)
     return {
       userId: claims.sub,
       accountId: accountIdFor(claims),

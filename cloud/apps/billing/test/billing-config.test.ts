@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { allowanceWindow, capSeconds, DEFAULT_PLANS } from '../src/plans'
 import { createHarness } from './harness'
-import { stripeEvent } from './stripe-fake'
 
 const HOUR = 3600
-const PERIOD_START = Math.floor(Date.now() / 1000) - 5 * 24 * HOUR
-const PERIOD_END = PERIOD_START + 30 * 24 * HOUR
 
 describe('config: tax and plan catalog', () => {
   it('leaves Stripe Tax off by default and turns it on with STRIPE_AUTOMATIC_TAX=true', async () => {
@@ -14,7 +12,7 @@ describe('config: tax and plan catalog', () => {
     ] as const) {
       const h = await createHarness(flag ? { STRIPE_AUTOMATIC_TAX: flag } : {})
       const token = await h.desktopToken({ sub: 'u1' })
-      await h.call('POST', '/v1/billing/checkout', { body: { plan: 'pro' }, headers: { authorization: `Bearer ${token}` } })
+      await h.call('POST', '/v1/billing/checkout', { body: { plan: 'team' }, headers: { authorization: `Bearer ${token}` } })
       const session = h.stripe.calls.find((call) => call.path === '/v1/checkout/sessions')!
       expect(session.form.get('automatic_tax[enabled]')).toBe(expected)
       expect(session.form.get('tax_id_collection[enabled]')).toBe(expected)
@@ -23,33 +21,38 @@ describe('config: tax and plan catalog', () => {
     }
   })
 
-  it('takes plan entitlements and price labels from BILLING_PLANS', async () => {
+  it('takes Team numbers and labels and the Enterprise contact from BILLING_PLANS', async () => {
     const h = await createHarness({
-      BILLING_PLANS: JSON.stringify({ pro: { includedHoursPerSeat: 40, priceLabel: '$20/mo' } })
+      BILLING_PLANS: JSON.stringify({
+        team: { includedHoursPerSeat: 40, monthlyPriceLabel: '$45/seat/mo', defaultSpendCapCents: 5000 },
+        enterprise: { contactUrl: 'https://example.test/sales' }
+      })
     })
-    const token = await h.desktopToken({ sub: 'u1', org: 'o1', orgRole: 'owner' })
-    await h.call('POST', '/v1/billing/checkout', { body: { plan: 'pro' }, headers: { authorization: `Bearer ${token}` } })
-    const customer = [...h.stripe.customers.keys()][0]!
-    const sub = h.stripe.putSubscription({
-      customer,
-      accountId: 'org:o1',
-      basePrice: 'price_pro',
-      overagePrice: 'price_overage',
-      periodStart: PERIOD_START,
-      periodEnd: PERIOD_END
-    })
-    await h.webhook(stripeEvent('customer.subscription.created', sub))
+    const token = await h.desktopToken({ sub: 'u1' })
     const entitlement = await h.call('GET', '/v1/billing/entitlements', { headers: { authorization: `Bearer ${token}` } })
-    expect(entitlement.body).toMatchObject({ includedSeconds: 40 * HOUR })
-    expect(entitlement.body.plans).toEqual([
-      { plan: 'pro', label: 'Pro', priceLabel: '$20/mo', includedHours: 40, perSeat: false },
-      { plan: 'max', label: 'Max', priceLabel: '$100/mo', includedHours: 300, perSeat: false },
-      { plan: 'team', label: 'Team', priceLabel: '$60/seat/mo', includedHours: 150, perSeat: true }
-    ])
+    expect(entitlement.body.offers).toEqual({
+      team: {
+        label: 'Team',
+        monthlyPriceLabel: '$45/seat/mo',
+        annualPriceLabel: '$480/seat/yr',
+        includedHoursPerSeat: 40,
+        concurrentSandboxesPerSeat: 3,
+        idleSleepMinutes: 15,
+        overageCentsPerHour: 75,
+        defaultSpendCapCents: 5000
+      },
+      enterprise: { label: 'Enterprise', priceLabel: 'Custom', contactUrl: 'https://example.test/sales' }
+    })
+    expect(entitlement.body.overage.spendCapCents).toBe(5000)
   })
 
   it('fails closed on a malformed catalog', async () => {
-    for (const bad of ['{"pro":{"includedHoursPerSeat":"lots"}}', '{"free":{}}', 'not json']) {
+    for (const bad of [
+      '{"team":{"includedHoursPerSeat":"lots"}}',
+      '{"pro":{}}',
+      '{"enterprise":{"contactUrl":"http://insecure.test"}}',
+      'not json'
+    ]) {
       const h = await createHarness({ BILLING_PLANS: bad })
       const token = await h.desktopToken({ sub: 'u1' })
       expect(await h.call('GET', '/v1/billing/entitlements', { headers: { authorization: `Bearer ${token}` } })).toEqual({
@@ -57,5 +60,24 @@ describe('config: tax and plan catalog', () => {
         body: { error: 'billing_misconfigured' }
       })
     }
+  })
+})
+
+describe('allowance windows and caps', () => {
+  const day = 24 * HOUR * 1000
+  it('uses the billing period for monthly plans', () => {
+    const period = { start: Date.UTC(2026, 0, 15), end: Date.UTC(2026, 1, 15) }
+    expect(allowanceWindow(period, Date.UTC(2026, 1, 1))).toEqual(period)
+  })
+
+  it('slices annual plans into monthly windows anchored on the start, clamping short months', () => {
+    const period = { start: Date.UTC(2026, 0, 31), end: Date.UTC(2027, 0, 31) }
+    expect(allowanceWindow(period, Date.UTC(2026, 1, 10))).toEqual({ start: Date.UTC(2026, 0, 31), end: Date.UTC(2026, 1, 28) })
+    expect(allowanceWindow(period, Date.UTC(2026, 2, 1))).toEqual({ start: Date.UTC(2026, 1, 28), end: Date.UTC(2026, 2, 31) })
+    expect(allowanceWindow(period, period.end - day)).toEqual({ start: Date.UTC(2026, 11, 31), end: period.end })
+  })
+
+  it('converts the $25 default cap to 33.3 overage hours at $0.75', () => {
+    expect(capSeconds(DEFAULT_PLANS.team, 2500)).toBe(Math.floor((2500 / 75) * HOUR))
   })
 })

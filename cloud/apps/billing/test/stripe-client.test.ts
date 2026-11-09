@@ -42,6 +42,6 @@ describe('stripe client', () => {
     const headers = new Headers(seen?.headers)
     expect(headers.get('stripe-version')).toBe('2025-09-30.clover')
     expect(headers.get('idempotency-key')).toBe('customer-create:org:o1')
-    expect(seen?.redirect).toBe('error')
+    expect(seen?.redirect).toBe('manual')
   })
 })

@@ -2,7 +2,8 @@
 //
 // Desktop (Orca Cloud billing JWT):
 //   GET  /v1/billing/entitlements          current plan, hours used/remaining, can-start
-//   POST /v1/billing/checkout {plan,seats}  -> { url } hosted Stripe Checkout
+//   POST /v1/billing/checkout {plan,interval,seats} -> { url } hosted Stripe Checkout
+//   POST /v1/billing/overage {enabled, spendCapCents?} opt in/out of overage, set the cap
 //   POST /v1/billing/portal                 -> { url } Stripe Customer Portal
 // Stripe:
 //   POST /v1/stripe/webhook                 signed events
@@ -14,7 +15,8 @@ import { authenticateControlPlane, authenticateDesktop } from './auth'
 import { CheckoutRequestSchema, createCheckout, createPortal } from './checkout'
 import { checkStart, computeEntitlement } from './entitlements'
 import type { Env } from './env'
-import { MACHINE_SIZES, PlanConfigError, planCatalog, publicPlans } from './plans'
+import { MACHINE_SIZES, PlanConfigError, planCatalog, publicOffers } from './plans'
+import { OverageRequestSchema, updateOverage } from './overage'
 import { LiveModeRefusedError, StripeError, createStripeClient, type StripeClient } from './stripe'
 import { UsageReportSchema, flushMeterReports, recordUsage, validateSegment } from './usage'
 import { handleStripeWebhook } from './webhook'
@@ -50,6 +52,15 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
   const route = `${request.method} ${url.pathname}`
   try {
     switch (route) {
+      case 'GET /return':
+        // Where Checkout and the Portal send the browser back. Static; reveals nothing.
+        return new Response(
+          '<!doctype html><meta charset="utf-8"><title>Orca</title>' +
+            '<body style="font:15px system-ui;margin:4rem auto;max-width:28rem;text-align:center">' +
+            '<p>You can close this tab and return to Orca.</p></body>',
+          { headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' } }
+        )
+
       case 'POST /v1/stripe/webhook':
         return await handleStripeWebhook(env, stripe, request, now)
 
@@ -58,8 +69,8 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         if (!caller) {
           return json({ error: 'unauthorized' }, 401)
         }
-        const entitlement = await computeEntitlement(env, caller.accountId)
-        return json({ ...entitlement, canManageBilling: caller.canManage, plans: publicPlans(planCatalog(env)) })
+        const entitlement = await computeEntitlement(env, caller.accountId, now)
+        return json({ ...entitlement, canManageBilling: caller.canManage, offers: publicOffers(planCatalog(env)) })
       }
 
       case 'POST /v1/billing/checkout': {
@@ -73,6 +84,23 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         }
         const outcome = await createCheckout(env, stripe, caller, body.data, now)
         return outcome.ok ? json({ url: outcome.url }) : json({ error: outcome.error }, outcome.status)
+      }
+
+      case 'POST /v1/billing/overage': {
+        const caller = await authenticateDesktop(env, request)
+        if (!caller) {
+          return json({ error: 'unauthorized' }, 401)
+        }
+        const body = OverageRequestSchema.safeParse(await readJson(request))
+        if (!body.success) {
+          return json({ error: 'invalid_request' }, 400)
+        }
+        const outcome = await updateOverage(env, stripe, caller, body.data, now)
+        if (!outcome.ok) {
+          return json({ error: outcome.error }, outcome.status)
+        }
+        const entitlement = await computeEntitlement(env, caller.accountId, now)
+        return json({ ...entitlement, canManageBilling: caller.canManage, offers: publicOffers(planCatalog(env)) })
       }
 
       case 'POST /v1/billing/portal': {
@@ -92,7 +120,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
         if (!body.success) {
           return json({ error: 'invalid_request' }, 400)
         }
-        const entitlement = await computeEntitlement(env, body.data.accountId)
+        const entitlement = await computeEntitlement(env, body.data.accountId, now)
         return json({ ...checkStart(entitlement, body.data), entitlement })
       }
 
@@ -113,7 +141,7 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
           // Best effort inline; the cron trigger retries whatever is still pending.
           ctx.waitUntil(flushMeterReports(env, stripe, now, { usageId: body.data.usageId }).catch(() => undefined))
         }
-        const entitlement = await computeEntitlement(env, body.data.accountId)
+        const entitlement = await computeEntitlement(env, body.data.accountId, now)
         return json({ ...result, canStartSandbox: entitlement.canStartSandbox, reason: entitlement.reason })
       }
 
@@ -128,8 +156,11 @@ export async function handleRequest(request: Request, env: Env, ctx: ExecutionCo
       return json({ error: 'billing_misconfigured' }, 503)
     }
     if (error instanceof StripeError) {
+      // Stripe's message never contains the key or card data.
+      console.error(JSON.stringify({ route, error: 'stripe', status: error.status, code: error.code, message: error.message }))
       return json({ error: 'stripe_unavailable' }, 502)
     }
+    console.error(JSON.stringify({ route, error: error instanceof Error ? error.name : 'unknown', message: error instanceof Error ? error.message.slice(0, 200) : '' }))
     return json({ error: 'internal_error' }, 500)
   }
 }

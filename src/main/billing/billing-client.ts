@@ -1,8 +1,12 @@
 // HTTP calls behind "Plan & billing": mint a short-lived billing token from Orca Cloud auth,
 // then call the billing service with it. Pure (fetch injected) so it is testable without Electron.
 import { z } from 'zod'
-import type { OrcaBillingCheckoutArgs, OrcaBillingEntitlement } from '../../shared/orca-billing'
-import { ORCA_BILLING_PLAN_IDS } from '../../shared/orca-billing'
+import type {
+  OrcaBillingCheckoutArgs,
+  OrcaBillingEntitlement,
+  OrcaBillingOverageArgs
+} from '../../shared/orca-billing'
+import { ORCA_BILLING_INTERVALS, ORCA_BILLING_PLAN_IDS } from '../../shared/orca-billing'
 import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
 
 const REQUEST_TIMEOUT_MS = 20_000
@@ -92,14 +96,29 @@ async function billingRequest(
 }
 
 const seconds = z.number().catch(0)
+const window = z.object({ start: z.number(), end: z.number() }).nullable().catch(null)
 
-const PlanOptionSchema = z.object({
-  plan: z.enum(ORCA_BILLING_PLAN_IDS),
-  label: z.string().max(40),
-  priceLabel: z.string().max(40),
-  includedHours: z.number().nonnegative(),
-  perSeat: z.boolean()
-})
+const OffersSchema = z
+  .object({
+    team: z.object({
+      label: z.string().max(40),
+      monthlyPriceLabel: z.string().max(40),
+      annualPriceLabel: z.string().max(40),
+      includedHoursPerSeat: z.number().nonnegative(),
+      concurrentSandboxesPerSeat: z.number().int().nonnegative(),
+      idleSleepMinutes: z.number().int().positive(),
+      overageCentsPerHour: z.number().int().positive(),
+      defaultSpendCapCents: z.number().int().nonnegative()
+    }),
+    enterprise: z.object({
+      label: z.string().max(40),
+      priceLabel: z.string().max(40),
+      // Opened in the browser: https only.
+      contactUrl: z.string().url().startsWith('https://')
+    })
+  })
+  .nullable()
+  .catch(null)
 
 // Lenient by design: an unknown plan/reason or a missing field degrades to "none"/0, never an error,
 // so a newer billing service cannot break an older desktop.
@@ -107,15 +126,25 @@ const EntitlementSchema = z.object({
   plan: z.enum(ORCA_BILLING_PLAN_IDS).nullable().catch(null),
   planLabel: z.string().nullable().catch(null),
   status: z.string().catch('none'),
+  interval: z.enum(ORCA_BILLING_INTERVALS).nullable().catch(null),
   seats: seconds,
-  period: z.object({ start: z.number(), end: z.number() }).nullable().catch(null),
+  period: window,
+  usageWindow: window,
   cancelAtPeriodEnd: z.boolean().catch(false),
   includedSeconds: seconds,
   usedSeconds: seconds,
   remainingIncludedSeconds: seconds,
+  usageWarningPercent: z.number().nullable().catch(null),
   overageSeconds: seconds,
-  overageEnabled: z.boolean().catch(false),
-  overageCapSeconds: seconds,
+  overage: z
+    .object({
+      optedIn: z.boolean().catch(false),
+      active: z.boolean().catch(false),
+      spendCapCents: seconds,
+      spentCents: seconds,
+      centsPerHour: seconds
+    })
+    .catch({ optedIn: false, active: false, spendCapCents: 0, spentCents: 0, centsPerHour: 0 }),
   canStartSandbox: z.boolean().catch(false),
   reason: z
     .enum([
@@ -128,16 +157,7 @@ const EntitlementSchema = z.object({
     .nullable()
     .catch(null),
   canManageBilling: z.boolean().catch(false),
-  // Unknown plans (a newer service) are dropped rather than failing the whole response.
-  plans: z
-    .array(z.unknown())
-    .catch([])
-    .transform((items) =>
-      items.flatMap((item) => {
-        const parsed = PlanOptionSchema.safeParse(item)
-        return parsed.success ? [parsed.data] : []
-      })
-    )
+  offers: OffersSchema.optional().transform((value) => value ?? null)
 })
 
 export function normalizeEntitlement(value: Record<string, unknown>): OrcaBillingEntitlement {
@@ -184,10 +204,7 @@ export async function createCheckoutUrl(
     token,
     'POST',
     'v1/billing/checkout',
-    {
-      plan: args.plan,
-      ...(args.plan === 'team' && args.seats ? { seats: args.seats } : {})
-    },
+    { plan: args.plan, interval: args.interval, seats: args.seats },
     fetchImpl
   )
   return assertStripeHostedUrl(UrlBody.safeParse(body).data?.url)
@@ -200,4 +217,24 @@ export async function createPortalUrl(
 ): Promise<string> {
   const body = await billingRequest(endpoints, token, 'POST', 'v1/billing/portal', {}, fetchImpl)
   return assertStripeHostedUrl(UrlBody.safeParse(body).data?.url)
+}
+
+export async function updateOverage(
+  endpoints: BillingEndpoints,
+  token: string,
+  args: OrcaBillingOverageArgs,
+  fetchImpl: typeof fetch = fetch
+): Promise<OrcaBillingEntitlement> {
+  return normalizeEntitlement(
+    await billingRequest(
+      endpoints,
+      token,
+      'POST',
+      'v1/billing/overage',
+      args.spendCapCents === undefined
+        ? { enabled: args.enabled }
+        : { enabled: args.enabled, spendCapCents: args.spendCapCents },
+      fetchImpl
+    )
+  )
 }

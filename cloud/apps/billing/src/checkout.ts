@@ -2,7 +2,7 @@
 import { z } from 'zod'
 import type { BillingCaller } from './auth'
 import type { Env } from './env'
-import { PLAN_IDS, priceForPlan, type PlanId } from './plans'
+import { BILLING_INTERVALS, PLAN_IDS, priceForPlan, type BillingInterval, type PlanId } from './plans'
 import type { StripeClient } from './stripe'
 import { currentSubscription, customerFor, ensureAccount, linkCustomer } from './store'
 
@@ -11,11 +11,12 @@ export const MAX_TEAM_SEATS = 500
 export const CheckoutRequestSchema = z
   .object({
     plan: z.enum(PLAN_IDS),
-    seats: z.number().int().min(1).max(MAX_TEAM_SEATS).optional()
+    interval: z.enum(BILLING_INTERVALS).default('month'),
+    seats: z.number().int().min(1).max(MAX_TEAM_SEATS).default(1)
   })
   .strict()
 
-const OPEN_STATUSES = new Set(['active', 'trialing', 'past_due', 'incomplete', 'unpaid', 'paused'])
+export const OPEN_STATUSES = new Set(['active', 'trialing', 'past_due', 'incomplete', 'unpaid', 'paused'])
 
 export type CheckoutOutcome = { ok: true; url: string } | { ok: false; status: number; error: string }
 
@@ -42,7 +43,7 @@ export async function createCheckout(
   env: Env,
   stripe: StripeClient,
   caller: BillingCaller,
-  request: { plan: PlanId; seats?: number },
+  request: { plan: PlanId; interval: BillingInterval; seats: number },
   now: number
 ): Promise<CheckoutOutcome> {
   if (!caller.canManage) {
@@ -50,33 +51,35 @@ export async function createCheckout(
   }
   const existing = await currentSubscription(env.BILLING_DB, caller.accountId)
   if (existing && OPEN_STATUSES.has(existing.status)) {
-    // Plan changes and seat changes go through the portal, which prorates; a second
-    // subscription would double-bill.
+    // Seat and interval changes go through the portal, which prorates; a second subscription
+    // would double-bill.
     return { ok: false, status: 409, error: 'already_subscribed' }
   }
-  const seats = request.plan === 'team' ? (request.seats ?? 1) : 1
   const customer = await ensureCustomer(env, stripe, caller, now)
-  const trialDays = Number(env.STRIPE_TRIAL_DAYS ?? '0')
+  const metadata = { account_id: caller.accountId, plan: request.plan, interval: request.interval }
   const session = await stripe.createCheckoutSession(
     {
       mode: 'subscription',
       customer,
       client_reference_id: caller.accountId,
-      line_items: [{ price: priceForPlan(env, request.plan), quantity: seats }, { price: env.STRIPE_PRICE_OVERAGE }],
-      // No free plan: a card is collected even for a trial.
+      // Seats only. Overage is opt-in later; its metered item is added then (overage.ts).
+      line_items: [
+        {
+          price: priceForPlan(env, request.interval),
+          quantity: request.seats,
+          adjustable_quantity: { enabled: true, minimum: 1, maximum: MAX_TEAM_SEATS }
+        }
+      ],
       payment_method_collection: 'always',
       allow_promotion_codes: true,
       customer_update: { address: 'auto', name: 'auto' },
       success_url: returnUrl(env, { checkout: 'success', session_id: 'CHECKOUT_SESSION_ID_PLACEHOLDER' }),
       cancel_url: returnUrl(env, { checkout: 'cancel' }),
-      metadata: { account_id: caller.accountId, plan: request.plan },
+      metadata,
       ...(env.STRIPE_AUTOMATIC_TAX === 'true'
         ? { automatic_tax: { enabled: true }, tax_id_collection: { enabled: true } }
         : {}),
-      subscription_data: {
-        metadata: { account_id: caller.accountId, plan: request.plan },
-        trial_period_days: Number.isInteger(trialDays) && trialDays > 0 ? trialDays : undefined
-      }
+      subscription_data: { metadata }
     },
     `checkout:${caller.accountId}:${crypto.randomUUID()}`
   )
@@ -92,7 +95,7 @@ export async function createPortal(env: Env, stripe: StripeClient, caller: Billi
     return { ok: false, status: 404, error: 'no_billing_account' }
   }
   const session = await stripe.createPortalSession(
-    { customer, returnUrl: returnUrl(env, { portal: 'return' }) },
+    { customer, returnUrl: returnUrl(env, { portal: 'return' }), configuration: env.STRIPE_PORTAL_CONFIGURATION },
     `portal:${caller.accountId}:${crypto.randomUUID()}`
   )
   return { ok: true, url: session.url }

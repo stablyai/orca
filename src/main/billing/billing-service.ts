@@ -5,6 +5,8 @@ import { app, shell } from 'electron'
 import type {
   OrcaBillingCheckoutArgs,
   OrcaBillingOpenResult,
+  OrcaBillingOverageArgs,
+  OrcaBillingOverageResult,
   OrcaBillingStatusResult
 } from '../../shared/orca-billing'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
@@ -16,6 +18,7 @@ import {
   createPortalUrl,
   fetchEntitlement,
   mintBillingToken,
+  updateOverage,
   type BillingEndpoints
 } from './billing-client'
 import { getBillingEndpoints } from './billing-config'
@@ -116,4 +119,31 @@ export function openOrcaBillingCheckout(
 
 export function openOrcaBillingPortal(userDataPath: string): Promise<OrcaBillingOpenResult> {
   return openHosted(userDataPath, (token, endpoints) => createPortalUrl(endpoints, token))
+}
+
+export async function setOrcaBillingOverage(
+  userDataPath: string,
+  args: OrcaBillingOverageArgs
+): Promise<OrcaBillingOverageResult> {
+  const ready = prepare(userDataPath)
+  if (!ready.ok) {
+    return { status: ready.status }
+  }
+  try {
+    const entitlement = await ready.run((token, endpoints) => updateOverage(endpoints, token, args))
+    return entitlement === 'signed-out' ? { status: 'signed-out' } : { status: 'ok', entitlement }
+  } catch (error) {
+    if (error instanceof BillingServiceError) {
+      if (error.statusCode === 403) {
+        return { status: 'forbidden' }
+      }
+      if (error.errorCode === 'no_subscription') {
+        return { status: 'no-subscription' }
+      }
+      if (error.errorCode === 'spend_cap_too_high') {
+        return { status: 'cap-too-high' }
+      }
+    }
+    return { status: 'failed', error: message(error) }
+  }
 }

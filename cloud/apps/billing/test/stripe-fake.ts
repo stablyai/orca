@@ -64,6 +64,21 @@ export function createFakeStripe() {
         ? Response.json(subscription)
         : Response.json({ error: { code: 'resource_missing', message: 'No such subscription' } }, { status: 404 })
     }
+    if (method === 'POST' && url.pathname === '/v1/subscription_items') {
+      const subscription = subscriptions.get(form.get('subscription') ?? '')
+      if (!subscription) {
+        return Response.json({ error: { code: 'resource_missing', message: 'No such subscription' } }, { status: 404 })
+      }
+      const base = subscription.items.data[0]!
+      const item = {
+        id: `si_test_${nextId++}`,
+        price: { id: form.get('price') ?? '' },
+        current_period_start: base.current_period_start,
+        current_period_end: base.current_period_end
+      }
+      subscription.items.data.push(item)
+      return respond(item)
+    }
     if (method === 'POST' && url.pathname === '/v1/billing/meter_events') {
       if (failMeterEvents > 0) {
         failMeterEvents--

@@ -94,7 +94,9 @@ export function createStripeClient(env: Env, fetchImpl: typeof fetch = fetch) {
       method,
       headers,
       body,
-      redirect: 'error',
+      // Never follow a redirect with the key attached. Workers reject redirect: 'error', so take
+      // the 3xx manually and fail it below (a 3xx is never ok).
+      redirect: 'manual',
       signal: AbortSignal.timeout(STRIPE_TIMEOUT_MS)
     })
     const json = (await response.json().catch(() => ({}))) as { error?: { code?: string; message?: string } }
@@ -118,12 +120,21 @@ export function createStripeClient(env: Env, fetchImpl: typeof fetch = fetch) {
     createCheckoutSession(params: FormRecord, idempotencyKey: string) {
       return request<{ id: string; url: string }>('POST', '/v1/checkout/sessions', params, idempotencyKey)
     },
-    createPortalSession(args: { customer: string; returnUrl: string }, idempotencyKey: string) {
+    createPortalSession(args: { customer: string; returnUrl: string; configuration?: string }, idempotencyKey: string) {
       return request<{ id: string; url: string }>(
         'POST',
         '/v1/billing_portal/sessions',
-        { customer: args.customer, return_url: args.returnUrl },
+        { customer: args.customer, return_url: args.returnUrl, configuration: args.configuration },
         idempotencyKey
+      )
+    },
+    addSubscriptionItem(args: { subscription: string; price: string }) {
+      return request<{ id: string }>(
+        'POST',
+        '/v1/subscription_items',
+        // Metered: nothing to prorate; usage is billed in arrears.
+        { subscription: args.subscription, price: args.price, proration_behavior: 'none' },
+        `overage-item:${args.subscription}:${args.price}`
       )
     },
     retrieveSubscription(id: string) {

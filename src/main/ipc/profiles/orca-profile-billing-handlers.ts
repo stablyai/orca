@@ -3,42 +3,53 @@ import { z } from 'zod'
 import type {
   OrcaBillingCheckoutArgs,
   OrcaBillingOpenResult,
+  OrcaBillingOverageArgs,
+  OrcaBillingOverageResult,
   OrcaBillingStatusResult
 } from '../../../shared/orca-billing'
-import { isOrcaBillingPlanId } from '../../../shared/orca-billing'
+import {
+  ORCA_BILLING_INTERVALS,
+  ORCA_BILLING_MAX_SEATS,
+  ORCA_BILLING_PLAN_IDS
+} from '../../../shared/orca-billing'
 import {
   getOrcaBillingStatus,
   openOrcaBillingCheckout,
-  openOrcaBillingPortal
+  openOrcaBillingPortal,
+  setOrcaBillingOverage
 } from '../../billing/billing-service'
 import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-paths'
 
-const MAX_TEAM_SEATS = 500
+const CheckoutArgs = z
+  .object({
+    plan: z.enum(ORCA_BILLING_PLAN_IDS),
+    interval: z.enum(ORCA_BILLING_INTERVALS),
+    seats: z.number().int().min(1).max(ORCA_BILLING_MAX_SEATS)
+  })
+  .strict()
 
-const CheckoutArgs = z.object({
-  plan: z.unknown(),
-  seats: z.unknown().optional()
-})
+// Cents; the billing service enforces the plan's maximum.
+const OverageArgs = z
+  .object({
+    enabled: z.boolean(),
+    spendCapCents: z.number().int().min(0).max(100_000_000).optional()
+  })
+  .strict()
 
 export function billingCheckoutArgsFromUnknown(args: unknown): OrcaBillingCheckoutArgs {
-  const record = CheckoutArgs.safeParse(args).data
-  const plan = record?.plan
-  if (!isOrcaBillingPlanId(plan)) {
-    throw new Error('invalid_orca_billing_plan')
+  const parsed = CheckoutArgs.safeParse(args)
+  if (!parsed.success) {
+    throw new Error('invalid_orca_billing_checkout')
   }
-  const seats = record?.seats
-  if (seats === undefined || plan !== 'team') {
-    return { plan }
+  return parsed.data
+}
+
+export function billingOverageArgsFromUnknown(args: unknown): OrcaBillingOverageArgs {
+  const parsed = OverageArgs.safeParse(args)
+  if (!parsed.success) {
+    throw new Error('invalid_orca_billing_overage')
   }
-  if (
-    typeof seats !== 'number' ||
-    !Number.isInteger(seats) ||
-    seats < 1 ||
-    seats > MAX_TEAM_SEATS
-  ) {
-    throw new Error('invalid_orca_billing_seats')
-  }
-  return { plan, seats }
+  return parsed.data
 }
 
 export function registerOrcaProfileBillingHandlers(): void {
@@ -49,6 +60,11 @@ export function registerOrcaProfileBillingHandlers(): void {
     'orcaProfiles:billingOpenCheckout',
     async (_event, rawArgs: unknown): Promise<OrcaBillingOpenResult> =>
       openOrcaBillingCheckout(getProfileUserDataPath(), billingCheckoutArgsFromUnknown(rawArgs))
+  )
+  ipcMain.handle(
+    'orcaProfiles:billingSetOverage',
+    async (_event, rawArgs: unknown): Promise<OrcaBillingOverageResult> =>
+      setOrcaBillingOverage(getProfileUserDataPath(), billingOverageArgsFromUnknown(rawArgs))
   )
   ipcMain.handle('orcaProfiles:billingOpenPortal', async (): Promise<OrcaBillingOpenResult> =>
     openOrcaBillingPortal(getProfileUserDataPath())
