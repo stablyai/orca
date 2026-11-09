@@ -49,6 +49,34 @@ export class PendingVmCheckoutRegistry {
   }
 }
 
+/**
+ * Calls `notify` with each repo whose pending checkouts changed, so paired phones re-read their
+ * host workspace lists instead of keeping rows from a fetch made before the change reached main.
+ */
+export function publishPendingVmCheckoutRepoChanges(
+  registry: PendingVmCheckoutRegistry,
+  notify: (repoId: string) => void
+): () => void {
+  const keyOf = (checkout: PendingVmCheckout): string => `${checkout.repoId}\0${checkout.path}`
+  let before = new Map(registry.list().map((checkout) => [keyOf(checkout), checkout.repoId]))
+  return registry.onChanged(() => {
+    const after = new Map(registry.list().map((checkout) => [keyOf(checkout), checkout.repoId]))
+    const changed = new Set<string>()
+    for (const [key, repoId] of before) {
+      if (!after.has(key)) {
+        changed.add(repoId)
+      }
+    }
+    for (const [key, repoId] of after) {
+      if (!before.has(key)) {
+        changed.add(repoId)
+      }
+    }
+    before = after
+    changed.forEach(notify)
+  })
+}
+
 function sameCheckouts(left: PendingVmCheckout[], right: PendingVmCheckout[]): boolean {
   return (
     left.length === right.length &&
