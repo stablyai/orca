@@ -9,38 +9,31 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { useAppStore } from '../../store'
-import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
-  isOwnedSshTargetId,
+  parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from '../../../../shared/execution-host'
-import { buildExecutionHostRegistry } from '../../../../shared/execution-host/execution-host-registry'
-import { pickerExecutionHosts } from '../../../../shared/execution-host/managed-orcad-execution-host'
-import {
-  isListedRemoteServer,
-  runtimePairingRepairRoute
-} from '../../../../shared/remote-runtime/host-catalog/runtime-environments'
+import { buildRemoteHostMenuInventory } from './remote-host-menu-inventory'
 import { RuntimeHostStatusRow } from './RuntimeHostStatusRow'
 import { connectedHostCountLabel, moreSshHostsLabel } from './ssh-status-segment-copy'
 import { SshHostFindPopover } from './SshHostFindPopover'
 import { splitSshStatusMenuRows } from './ssh-status-menu-rows'
-import { SshTargetStatusRow } from './SshTargetStatusRow'
+import {
+  SshTargetStatusRow,
+  connectSshTargetFromStatusMenu,
+  disconnectSshTargetFromStatusMenu
+} from './SshTargetStatusRow'
+import { useRemoteHostMenuState } from './use-remote-host-menu-state'
+import { isConnectingSshStatus } from '@/ssh/ssh-connection-recoverability'
 import { syncSshConfigTargetsPassively } from '../../lib/ssh-config-passive-sync'
 import { connectRuntimeHostAndReloadProjects } from './runtime-environment-explicit-connect'
 import {
-  runtimeHostBlockedCopy,
-  runtimeHostBlockedRecovery,
-  runtimeHostConnectionDetail,
-  runtimeHostStatusForOverall,
-  sshStatusForOverall,
+  ambiguousRemoteHostNames,
   type RuntimeHostBlockedRecovery
 } from './remote-host-connection-status'
-import { runtimeHostConnectionStateForEntry } from '@/runtime/hosts/connections/runtime-host-connection-state'
-import { isConnectedRuntimeHostState } from '../../../../shared/remote-runtime/host-status/runtime-host-connection-state'
 import { RuntimeRepairDialog } from '../runtime-access/RuntimeRepairDialog'
 
 export function SshStatusSegment({
@@ -71,85 +64,112 @@ export function SshStatusSegment({
     () => new Set(repos.flatMap((repo) => (repo.connectionId ? [repo.connectionId] : []))),
     [repos]
   )
-  const hostLabelOverrides = useMemo(() => getHostDisplayLabelOverrides(settings), [settings])
-  const userManagedEnvironments = runtimeEnvironments.filter(isListedRemoteServer)
-  // Why the registry: a managed server and its SSH host are one machine, shown on its active route.
-  const visibleHosts = new Map(
-    pickerExecutionHosts(
-      buildExecutionHostRegistry({
-        repos: [],
-        settings,
-        hostSource: 'configured-only',
-        sshTargetLabels,
-        sshConnectionStates,
-        runtimeEnvironments: userManagedEnvironments,
-        runtimeStatusByEnvironmentId,
-        hostLabelOverrides
-      })
-    ).map((host) => [host.id, host])
+  const {
+    targets,
+    runtimeHostRows,
+    connectedRuntimeHosts,
+    inactiveRuntimeHosts,
+    connectedHostCount,
+    hostCount
+  } = useMemo(
+    () =>
+      buildRemoteHostMenuInventory(
+        {
+          runtimeEnvironments,
+          settings,
+          sshTargetLabels,
+          sshConnectionStates,
+          runtimeStatusByEnvironmentId
+        },
+        t
+      ),
+    [
+      runtimeEnvironments,
+      settings,
+      sshTargetLabels,
+      sshConnectionStates,
+      runtimeStatusByEnvironmentId,
+      t
+    ]
   )
-  const targets = Array.from(sshTargetLabels.entries())
-    // Hide runtime-owned per-workspace SSH targets from the user-managed host list.
-    .filter(([id]) => !isOwnedSshTargetId(id) && visibleHosts.has(toSshExecutionHostId(id)))
-    .map(([id, label]) => {
-      const state = sshConnectionStates.get(id)
-      return {
-        id,
-        label: visibleHosts.get(toSshExecutionHostId(id))?.label || label,
-        status: state?.status ?? ('disconnected' satisfies SshConnectionStatus)
-      }
-    })
-  const runtimeHosts = userManagedEnvironments
-    .filter((environment) => visibleHosts.has(toRuntimeExecutionHostId(environment.id)))
-    .map((environment) => {
-      const statusEntry = runtimeStatusByEnvironmentId.get(environment.id)
-      const registryHost = visibleHosts.get(toRuntimeExecutionHostId(environment.id))
-      // Why the registry's verdict: it is the same blocked reason the sidebar and Settings show.
-      const blockedReason =
-        registryHost?.health === 'blocked' ? registryHost.blockedReason : undefined
-      const repairRoute = runtimePairingRepairRoute(environment)
-      return {
-        id: environment.id,
-        label: registryHost?.label || environment.name || environment.id,
-        blockedReason,
-        blocked: blockedReason
-          ? {
-              ...runtimeHostBlockedCopy(blockedReason, registryHost?.compatibility, repairRoute, t),
-              recovery: runtimeHostBlockedRecovery(blockedReason, repairRoute)
-            }
-          : null,
-        snapshot: statusEntry?.snapshot,
-        status: statusEntry?.status ?? null,
-        active: settings?.activeRuntimeEnvironmentId === environment.id,
-        remoteControl: statusEntry?.remoteControl ?? statusEntry?.status?.remoteControl ?? null
-      }
-    })
-  const runtimeHostRows = runtimeHosts.map((host) => ({
-    ...host,
-    state: runtimeHostConnectionStateForEntry(runtimeStatusByEnvironmentId.get(host.id))
-  }))
-  // Host health is independent of active runtime selection; available remote servers remain online.
-  const connectedRuntimeHosts = runtimeHostRows.filter((host) =>
-    isConnectedRuntimeHostState(host.state)
+  const hostExists = useCallback(
+    (id: string) => {
+      const host = parseExecutionHostId(id)
+      return host?.kind === 'ssh'
+        ? sshTargetLabels.has(host.targetId)
+        : host?.kind === 'runtime' &&
+            runtimeEnvironments.some((environment) => environment.id === host.environmentId)
+    },
+    [sshTargetLabels, runtimeEnvironments]
   )
-  const inactiveRuntimeHosts = runtimeHostRows.filter(
-    (host) => !isConnectedRuntimeHostState(host.state)
-  )
+  const menu = useRemoteHostMenuState(menuOpen, hostExists)
+  const { connect: trackConnect, cancel: cancelConnect } = menu
   const {
     connected: connectedTargets,
     inactive: disconnectedTargets,
     hiddenIdleCount
-  } = splitSshStatusMenuRows(targets, { projectHostIds })
+  } = useMemo(() => {
+    const pendingTargetIds = new Set<string>()
+    for (const id of menu.pending) {
+      const host = parseExecutionHostId(id)
+      if (host?.kind === 'ssh') {
+        pendingTargetIds.add(host.targetId)
+      }
+    }
+    return splitSshStatusMenuRows(targets, { projectHostIds, pendingTargetIds })
+  }, [targets, projectHostIds, menu.pending])
+  const displayedTargets = [...connectedTargets, ...disconnectedTargets]
+  const displayedHosts = [...connectedRuntimeHosts, ...inactiveRuntimeHosts]
+  menu.observe([
+    ...displayedHosts.map((host) => ({
+      id: toRuntimeExecutionHostId(host.id),
+      recovering:
+        (menu.pending.has(toRuntimeExecutionHostId(host.id)) &&
+          host.state !== 'connected' &&
+          host.state !== 'workspace-window-closed') ||
+        (!host.blocked && (host.state === 'checking' || host.state === 'reconnecting')),
+      attempt:
+        host.remoteControl?.state === 'reconnecting' ? host.remoteControl.reconnectAttempt : 0
+    })),
+    ...displayedTargets.map((target) => ({
+      id: toSshExecutionHostId(target.id),
+      recovering:
+        (menu.pending.has(toSshExecutionHostId(target.id)) && target.status !== 'connected') ||
+        isConnectingSshStatus(target.status),
+      attempt: target.status === 'reconnecting' ? (target.reconnectAttempt ?? 0) + 1 : 0
+    }))
+  ])
+  const ambiguousNames = ambiguousRemoteHostNames(displayedHosts, displayedTargets)
+  const runtimeKind = (label: string) =>
+    ambiguousNames.has(label)
+      ? t('auto.components.status.bar.RemoteHostStatusRow.server', 'Server')
+      : undefined
+  const sshKind = (label: string) =>
+    ambiguousNames.has(label)
+      ? t('auto.components.status.bar.RemoteHostStatusRow.ssh', 'SSH')
+      : undefined
+  const connectSshHost = (id: string) =>
+    trackConnect(toSshExecutionHostId(id), (signal) => connectSshTargetFromStatusMenu(id, signal))
+  const disconnectSshHost = async (id: string) => {
+    cancelConnect(toSshExecutionHostId(id))
+    await disconnectSshTargetFromStatusMenu(id)
+  }
   const connectRuntimeHost = useCallback(
     async (environmentId: string): Promise<void> => {
-      if (await connectRuntimeHostAndReloadProjects(environmentId)) {
-        recordFeatureInteraction('ssh')
-      }
+      await trackConnect(toRuntimeExecutionHostId(environmentId), async (signal) => {
+        if (
+          (await connectRuntimeHostAndReloadProjects(environmentId, undefined, signal)) &&
+          !signal.aborted
+        ) {
+          recordFeatureInteraction('ssh')
+        }
+      })
     },
-    [recordFeatureInteraction]
+    [trackConnect, recordFeatureInteraction]
   )
   const disconnectRuntimeHost = useCallback(
     async (environmentId: string): Promise<void> => {
+      cancelConnect(toRuntimeExecutionHostId(environmentId))
       try {
         await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
         await readRuntimeHostStatusSnapshots()
@@ -165,18 +185,13 @@ export function SshStatusSegment({
         )
       }
     },
-    [recordFeatureInteraction, readRuntimeHostStatusSnapshots]
+    [cancelConnect, recordFeatureInteraction, readRuntimeHostStatusSnapshots]
   )
 
-  if (targets.length === 0 && runtimeHosts.length === 0) {
+  if (hostCount === 0) {
     return null
   }
 
-  const statuses = [
-    ...targets.map((target) => sshStatusForOverall(target.status)),
-    ...runtimeHostRows.map((host) => runtimeHostStatusForOverall(host.state, host.blockedReason))
-  ]
-  const connectedHostCount = statuses.filter((status) => status === 'connected').length
   const openRecovery = (host: {
     id: string
     label: string
@@ -192,6 +207,37 @@ export function SshStatusSegment({
     }
     setRepairTarget({ id: host.id, label: host.label })
   }
+  const renderRuntimeHost = (host: (typeof runtimeHostRows)[number]) => (
+    <RuntimeHostStatusRow
+      key={host.id}
+      label={host.label}
+      kind={runtimeKind(host.label)}
+      pending={menu.pending.has(toRuntimeExecutionHostId(host.id))}
+      recovery={menu.observations.get(toRuntimeExecutionHostId(host.id))}
+      now={menu.now}
+      state={host.state}
+      diagnostics={host.remoteControl}
+      blocked={host.blocked}
+      onConnect={() => connectRuntimeHost(host.id)}
+      onDisconnect={() => disconnectRuntimeHost(host.id)}
+      onRecover={() => openRecovery(host)}
+    />
+  )
+  const renderSshTarget = (target: (typeof targets)[number]) => (
+    <SshTargetStatusRow
+      key={target.id}
+      targetId={target.id}
+      label={target.label}
+      kind={sshKind(target.label)}
+      error={target.error}
+      pending={menu.pending.has(toSshExecutionHostId(target.id))}
+      recovery={menu.observations.get(toSshExecutionHostId(target.id))}
+      now={menu.now}
+      onConnect={() => connectSshHost(target.id)}
+      onDisconnect={() => disconnectSshHost(target.id)}
+      status={target.status}
+    />
+  )
   return (
     <DropdownMenu
       open={menuOpen}
@@ -226,7 +272,7 @@ export function SshStatusSegment({
                     {connectedHostCountLabel(1, t)}
                   </span>
                   <span aria-hidden className="invisible col-start-1 row-start-1">
-                    {connectedHostCountLabel(Math.max(99, statuses.length), t)}
+                    {connectedHostCountLabel(Math.max(99, hostCount), t)}
                   </span>
                   <span className="col-start-1 row-start-1">
                     {connectedHostCountLabel(connectedHostCount, t)}
@@ -249,51 +295,13 @@ export function SshStatusSegment({
           }
         }}
       >
-        <div className="px-2 pt-1.5 pb-1 text-[10px] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-          {t('auto.components.status.bar.SshStatusSegment.6e8a9a4242', 'Remote Hosts')}
+        <div className="px-2 pt-1.5 pb-1 text-xs text-muted-foreground">
+          {t('auto.components.status.bar.SshStatusSegment.6e8a9a4242', 'Remote hosts')}
         </div>
-        {connectedRuntimeHosts.map((host) => (
-          <RuntimeHostStatusRow
-            key={host.id}
-            label={host.label}
-            state={host.state}
-            detail={runtimeHostConnectionDetail(host.remoteControl, t)}
-            diagnostics={host.remoteControl}
-            blocked={host.blocked}
-            onConnect={() => connectRuntimeHost(host.id)}
-            onDisconnect={() => disconnectRuntimeHost(host.id)}
-            onRecover={() => openRecovery(host)}
-          />
-        ))}
-        {connectedTargets.map((target) => (
-          <SshTargetStatusRow
-            key={target.id}
-            targetId={target.id}
-            label={target.label}
-            status={target.status}
-          />
-        ))}
-        {inactiveRuntimeHosts.map((host) => (
-          <RuntimeHostStatusRow
-            key={host.id}
-            label={host.label}
-            state={host.state}
-            detail={runtimeHostConnectionDetail(host.remoteControl, t)}
-            diagnostics={host.remoteControl}
-            blocked={host.blocked}
-            onConnect={() => connectRuntimeHost(host.id)}
-            onDisconnect={() => disconnectRuntimeHost(host.id)}
-            onRecover={() => openRecovery(host)}
-          />
-        ))}
-        {disconnectedTargets.map((target) => (
-          <SshTargetStatusRow
-            key={target.id}
-            targetId={target.id}
-            label={target.label}
-            status={target.status}
-          />
-        ))}
+        {connectedRuntimeHosts.map(renderRuntimeHost)}
+        {connectedTargets.map(renderSshTarget)}
+        {inactiveRuntimeHosts.map(renderRuntimeHost)}
+        {disconnectedTargets.map(renderSshTarget)}
         {hiddenIdleCount > 0 ? (
           // Why a search and not a Settings link: web clients connect hosts here but have no SSH pane.
           <DropdownMenuItem onSelect={() => setFindOpen(true)}>
@@ -308,7 +316,7 @@ export function SshStatusSegment({
             setActiveView('settings')
           }}
         >
-          {t('auto.components.status.bar.SshStatusSegment.3ad70e0365', 'Manage Remote Hosts…')}
+          {t('auto.components.status.bar.SshStatusSegment.3ad70e0365', 'Manage remote hosts…')}
         </DropdownMenuItem>
       </DropdownMenuContent>
       <SshHostFindPopover

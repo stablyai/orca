@@ -4452,7 +4452,6 @@
             "63f36455cc": "連線",
             "bf07aee59e": "中斷連線失敗",
             "2c29e2de68": "連線失敗",
-            "remote_server": "遠端伺服器",
             "runtime_checking": "檢查中",
             "runtime_online": "已連線",
             "runtime_unavailable_transport_up": "Orca 不可用",
@@ -4460,8 +4459,6 @@
             "runtime_connect_unavailable": "遠端主機不可達",
             "runtime_disconnect_failed": "中斷連線失敗",
             "runtime_reconnecting": "重新連線中",
-            "runtime_last_close_reason": "已關閉：{{value0}}",
-            "runtime_reconnect_attempt": "第 {{value0}} 次嘗試",
             "runtime_workspace_window_closed": "工作區視窗已關閉",
             "connectedHostCount_one": "{{count}} 個主機",
             "connectedHostCount_other": "{{count}} 個主機",
@@ -4735,9 +4732,6 @@
             "notYetUpdated": "尚未更新",
             "rateLimitResetsAvailable_other": "可重設速率限制 {{count}} 次"
           },
-          "SshTargetStatusRow": {
-            "sshHost": "SSH 主機"
-          },
           "usagePercentageLabel": {
             "used": "已用 {{value0}}%",
             "remaining": "剩餘 {{value0}}%",
@@ -4810,29 +4804,17 @@
             "offDescription": "允許正常的系統睡眠行為"
           },
           "RuntimeHostStatusRow": {
-            "previous_connection_closed": "之前的連線關閉了",
-            "workspace_window_closed": "工作區視窗已關閉",
-            "checking_host": "Orca 正在檢查該主機是否可達",
-            "restoring_connection": "Orca 正在嘗試恢復連線",
-            "host_unreachable": "在此主機上無法存取 Orca",
-            "runtime_unavailable": "SSH 傳輸已連線，但 Orca 執行環境不可用",
-            "runtime_unavailable_explanation": "遠端主機可能仍在運作；僅 Orca 執行環境連線不可用。",
             "contact_note": "主機可能仍在運作；僅 Orca 連線不可用。",
-            "last_connected": "最後連線 {{value0}}",
-            "reconnect_attempt": "第 {{value0}} 次嘗試",
             "access_revoked": "存取權已撤銷",
-            "access_revoked_summary": "此伺服器已撤銷這台電腦的存取權限",
-            "access_revoked_explanation": "使用伺服器提供的新配對連結重新配對，即可重新連線。",
-            "managed_access_revoked_explanation": "Orca 無法透過 SSH 與此伺服器重新配對。請連線以重試。",
-            "connect_access_revoked_explanation": "請連線以重試。",
             "update_required": "需要更新",
-            "update_required_summary": "Orca 版本不相容",
-            "update_required_explanation": "請更新這台電腦或伺服器上的 Orca，再重新連線。",
             "repair": "重新配對…",
             "open_settings": "開啟設定…",
             "server_replaced": "不同的伺服器",
-            "server_replaced_summary": "此主機目前執行的 Orca 伺服器與此電腦配對的伺服器不同",
-            "server_replaced_explanation": "Orca 正以其他 SSH 使用者連線至主機，或其伺服器已重新安裝。請在「設定」›「遠端 Orca 伺服器」中開啟此伺服器的 ⋯ 選單並選擇「忘記…」，然後連線至 SSH 主機以配對目前的伺服器。"
+            "access_revoked_explanation": "使用伺服器提供的新配對連結重新配對，即可重新連線。",
+            "managed_access_revoked_explanation": "Orca 無法透過 SSH 重新配對；請連線以重試。",
+            "connect_access_revoked_explanation": "請連線以重試。",
+            "server_replaced_explanation": "在「設定 › 遠端 Orca 伺服器」中，對此伺服器選擇「忘記…」，然後連線至 SSH 主機以與其目前的伺服器配對。",
+            "update_required_explanation": "請更新這台電腦或伺服器上的 Orca，再重新連線。"
           },
           "NativeChatResumeStatusSegment": {
             "tooltip": "開啟可恢復的中斷聊天",
@@ -4929,6 +4911,18 @@
             "accounts": "已儲存的 Antigravity 帳戶",
             "readAgo": "讀取於 {{time}}",
             "notRead": "用量未知：尚未讀取"
+          },
+          "RemoteHostStatusRow": {
+            "unreachable_since": "自 {{time}} 起無法連線至此主機。",
+            "copy_error": "複製錯誤",
+            "retry_now": "立即重試",
+            "stop_reconnecting": "停止重新連線",
+            "reconnecting_attempt": "正在重新連線（第 {{attempt}} 次嘗試）",
+            "stop": "停止",
+            "ssh_sign_in_failed": "無法登入此主機，請檢查其 SSH 憑證。",
+            "ssh_connect_failed": "無法連線至此主機，請檢查其 SSH 設定後重試。",
+            "server": "伺服器",
+            "ssh": "SSH"
           }
         }
       },

@@ -8,7 +8,8 @@ import { useAppStore } from '../../store'
 
 export async function connectRuntimeEnvironmentAndRecordStatus(
   environmentId: string,
-  timeoutMs: number
+  timeoutMs: number,
+  signal?: AbortSignal
 ): Promise<boolean> {
   const setStatus = useAppStore.getState().setRuntimeEnvironmentStatus
   try {
@@ -16,10 +17,16 @@ export async function connectRuntimeEnvironmentAndRecordStatus(
       selector: environmentId,
       timeoutMs
     })
+    if (signal?.aborted) {
+      return false
+    }
     const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
     setStatus(environmentId, { status, checkedAt: Date.now() })
     return true
   } catch {
+    if (signal?.aborted) {
+      return false
+    }
     setStatus(environmentId, { status: null, checkedAt: Date.now() })
     return false
   }
@@ -27,6 +34,7 @@ export async function connectRuntimeEnvironmentAndRecordStatus(
 
 export async function connectRuntimeHostForNavigation(args: {
   environmentId: string
+  signal?: AbortSignal
   refreshStatus: (environmentId: string, timeoutMs: number) => Promise<boolean>
   fetchRepos: (environmentId: string) => Promise<{ id: string }[]>
   fetchWorktrees: (
@@ -35,17 +43,37 @@ export async function connectRuntimeHostForNavigation(args: {
   ) => Promise<unknown>
   fetchLineage: (options: { executionHostId: ExecutionHostId }) => Promise<unknown>
 }): Promise<boolean> {
-  if (!(await args.refreshStatus(args.environmentId, 5_000))) {
-    return false
+  try {
+    if (!(await args.refreshStatus(args.environmentId, 5_000)) || args.signal?.aborted) {
+      return false
+    }
+    const repos = await args.fetchRepos(args.environmentId)
+    if (args.signal?.aborted) {
+      return false
+    }
+    await refreshRuntimeProjectWorktreesAndLineage(
+      args.environmentId,
+      repos,
+      async (repoId, options) => {
+        if (!args.signal?.aborted) {
+          return args.fetchWorktrees(repoId, options)
+        }
+        return undefined
+      },
+      async (options) => {
+        if (!args.signal?.aborted) {
+          return args.fetchLineage(options)
+        }
+        return undefined
+      }
+    )
+    return !args.signal?.aborted
+  } catch (error) {
+    if (args.signal?.aborted) {
+      return false
+    }
+    throw error
   }
-  const repos = await args.fetchRepos(args.environmentId)
-  await refreshRuntimeProjectWorktreesAndLineage(
-    args.environmentId,
-    repos,
-    args.fetchWorktrees,
-    args.fetchLineage
-  )
-  return true
 }
 
 /**
@@ -54,17 +82,20 @@ export async function connectRuntimeHostForNavigation(args: {
  */
 export async function connectRuntimeHostAndReloadProjects(
   environmentId: string,
-  failureMessage?: string
+  failureMessage?: string,
+  signal?: AbortSignal
 ): Promise<boolean> {
   const store = useAppStore.getState()
   const reachable = await connectRuntimeHostForNavigation({
     environmentId,
-    refreshStatus: connectRuntimeEnvironmentAndRecordStatus,
+    signal,
+    refreshStatus: (id, timeoutMs) =>
+      connectRuntimeEnvironmentAndRecordStatus(id, timeoutMs, signal),
     fetchRepos: store.fetchRuntimeEnvironmentRepos,
     fetchWorktrees: store.fetchWorktrees,
     fetchLineage: store.fetchWorktreeLineage
   })
-  if (!reachable) {
+  if (!reachable && !signal?.aborted) {
     toast.error(
       failureMessage ??
         translate(

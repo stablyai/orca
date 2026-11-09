@@ -4300,15 +4300,12 @@
             "63f36455cc": "Se connecter",
             "bf07aee59e": "Échec de la déconnexion",
             "2c29e2de68": "Échec de la connexion",
-            "remote_server": "Serveur distant",
             "runtime_checking": "Vérification",
             "runtime_online": "Connecté",
             "runtime_unavailable": "Déconnecté",
             "runtime_connect_unavailable": "Hôte distant injoignable",
             "runtime_disconnect_failed": "Échec de la déconnexion",
             "runtime_reconnecting": "Reconnexion",
-            "runtime_last_close_reason": "Fermé : {{value0}}",
-            "runtime_reconnect_attempt": "Tentative {{value0}}",
             "runtime_workspace_window_closed": "Fenêtre de l'espace de travail fermée",
             "connectedHostCount_one": "{{count}} hôte",
             "connectedHostCount_other": "{{count}} hôtes",
@@ -4591,9 +4588,6 @@
             "rateLimitResetsAvailable_other": "{{count}} réinitialisations de limite de débit disponibles",
             "rateLimitResetsAvailable_many": "{{count}} réinitialisations de limite de débit disponibles"
           },
-          "SshTargetStatusRow": {
-            "sshHost": "Hôte SSH"
-          },
           "usagePercentageLabel": {
             "used": "{{value0}} % utilisé",
             "remaining": "{{value0}} % restants",
@@ -4679,29 +4673,17 @@
             "offDescription": "Autoriser le comportement de veille normal du système"
           },
           "RuntimeHostStatusRow": {
-            "previous_connection_closed": "La connexion précédente a été fermée",
-            "workspace_window_closed": "La fenêtre de l'espace de travail est fermée",
-            "checking_host": "Orca vérifie si cet hôte est joignable",
-            "restoring_connection": "Orca essaie de rétablir la connexion",
-            "host_unreachable": "Orca n'est pas joignable sur cet hôte",
-            "runtime_unavailable": "Le transport SSH est connecté, mais le runtime Orca n'est pas disponible",
-            "runtime_unavailable_explanation": "L'hôte distant est peut-être toujours en cours d'exécution ; seule la connexion au runtime Orca est indisponible.",
             "contact_note": "L'hôte est peut-être toujours en cours d'exécution ; seule la connexion Orca est indisponible.",
-            "last_connected": "Dernière connexion {{value0}}",
-            "reconnect_attempt": "Tentative {{value0}}",
             "access_revoked": "Access revoked",
-            "access_revoked_summary": "Ce serveur a révoqué l'accès à cet ordinateur",
-            "access_revoked_explanation": "Ré-appairez avec un nouveau lien d'appairage du serveur pour vous reconnecter.",
-            "managed_access_revoked_explanation": "Orca n'a pas pu s'associer de nouveau à lui via SSH. Connectez-vous pour réessayer.",
-            "connect_access_revoked_explanation": "Connectez-vous pour réessayer.",
             "update_required": "Update required",
-            "update_required_summary": "Les versions d'Orca ne sont pas compatibles",
-            "update_required_explanation": "Mettez à jour Orca sur cet ordinateur ou sur le serveur, puis reconnectez-vous.",
             "repair": "Re-pair…",
             "open_settings": "Ouvrir les paramètres…",
             "server_replaced": "Serveur différent",
-            "server_replaced_summary": "Cet hôte exécute désormais un serveur Orca différent de celui auquel cet ordinateur était associé",
-            "server_replaced_explanation": "Orca se connecte à l’hôte avec un autre utilisateur SSH, ou son serveur a été réinstallé. Dans Paramètres › Serveurs Orca distants, ouvrez le menu ⋯ de ce serveur et choisissez Oublier…, puis connectez l’hôte SSH pour l’associer à son serveur actuel."
+            "access_revoked_explanation": "Ré-appairez avec un nouveau lien d'appairage du serveur pour vous reconnecter.",
+            "managed_access_revoked_explanation": "Orca n’a pas pu rétablir l’association via SSH ; connectez-vous pour réessayer.",
+            "connect_access_revoked_explanation": "Connectez-vous pour réessayer.",
+            "server_replaced_explanation": "Dans Paramètres › Serveurs Orca distants, choisissez Oublier… pour ce serveur, puis connectez l’hôte SSH pour l’associer à son serveur actuel.",
+            "update_required_explanation": "Mettez à jour Orca sur cet ordinateur ou sur le serveur, puis reconnectez-vous."
           },
           "NativeChatResumeStatusSegment": {
             "tooltip": "Ouvrir les discussions interrompues disponibles pour reprendre",
@@ -4835,6 +4817,18 @@
             "accounts": "Comptes Antigravity enregistrés",
             "readAgo": "Relevé {{time}}",
             "notRead": "Utilisation inconnue : pas encore relevée"
+          },
+          "RemoteHostStatusRow": {
+            "unreachable_since": "Cet hôte est inaccessible depuis {{time}}.",
+            "copy_error": "Copier l’erreur",
+            "retry_now": "Réessayer maintenant",
+            "stop_reconnecting": "Arrêter la reconnexion",
+            "reconnecting_attempt": "Reconnexion (tentative {{attempt}})",
+            "stop": "Arrêter",
+            "ssh_sign_in_failed": "Impossible de se connecter à cet hôte ; vérifiez ses identifiants SSH.",
+            "ssh_connect_failed": "Impossible de joindre cet hôte ; vérifiez ses paramètres SSH et réessayez.",
+            "server": "Serveur",
+            "ssh": "SSH"
           }
         }
       },

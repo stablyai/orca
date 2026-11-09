@@ -4513,7 +4513,6 @@
             "63f36455cc": "Bağlan",
             "bf07aee59e": "Bağlantı kesme başarısız oldu",
             "2c29e2de68": "Bağlantı başarısız oldu",
-            "remote_server": "Uzak Sunucu",
             "runtime_checking": "Kontrol ediliyor",
             "runtime_online": "Bağlı",
             "runtime_unavailable_transport_up": "Orca kullanılamıyor",
@@ -4521,8 +4520,6 @@
             "runtime_connect_unavailable": "Uzak ana bilgisayara ulaşılamıyor",
             "runtime_disconnect_failed": "Bağlantı kesme başarısız oldu",
             "runtime_reconnecting": "Yeniden bağlanılıyor",
-            "runtime_last_close_reason": "Kapatıldı: {{value0}}",
-            "runtime_reconnect_attempt": "Deneme {{value0}}",
             "runtime_workspace_window_closed": "Çalışma alanı penceresi kapatıldı",
             "connectedHostCount_one": "{{count}} ana bilgisayar",
             "connectedHostCount_other": "{{count}} ana bilgisayar",
@@ -4814,9 +4811,6 @@
             "rateLimitResetsAvailable_other": "{{count}} hız sınırı sıfırlama hakkı kullanılabilir",
             "rateLimitResetsAvailable_one": "{{count}} hız sınırı sıfırlama hakkı kullanılabilir"
           },
-          "SshTargetStatusRow": {
-            "sshHost": "SSH sunucusu"
-          },
           "usagePercentageLabel": {
             "used": "%{{value0}} kullanıldı",
             "remaining": "%{{value0}} kaldı",
@@ -4891,29 +4885,17 @@
             "offDescription": "Normal sistem uyku davranışına izin ver"
           },
           "RuntimeHostStatusRow": {
-            "previous_connection_closed": "Önceki bağlantı kapandı",
-            "workspace_window_closed": "Çalışma alanı penceresi kapalı",
-            "checking_host": "Orca, bu ana bilgisayara ulaşılıp ulaşılamadığını kontrol ediyor",
-            "restoring_connection": "Orca bağlantıyı geri yüklemeye çalışıyor",
-            "host_unreachable": "Bu ana bilgisayardaki Orca'ya ulaşılamıyor",
-            "runtime_unavailable": "SSH aktarımı bağlı ancak Orca çalışma zamanı kullanılamıyor",
-            "runtime_unavailable_explanation": "Uzak ana bilgisayar hâlâ çalışıyor olabilir; yalnızca Orca çalışma zamanı bağlantısı kullanılamıyor.",
             "contact_note": "Ana bilgisayar hâlâ çalışıyor olabilir; yalnızca Orca bağlantısı kullanılamıyor.",
-            "last_connected": "Son bağlantı: {{value0}}",
-            "reconnect_attempt": "Deneme {{value0}}",
             "access_revoked": "Erişim iptal edildi",
-            "access_revoked_summary": "Bu sunucu, bu bilgisayarın erişimini iptal etti",
-            "access_revoked_explanation": "Yeniden bağlanmak için sunucudan alacağınız yeni bir eşleştirme bağlantısıyla tekrar eşleştirin.",
-            "managed_access_revoked_explanation": "Orca, SSH üzerinden yeniden eşleştirme yapamadı. Tekrar denemek için bağlanın.",
-            "connect_access_revoked_explanation": "Tekrar denemek için bağlanın.",
             "update_required": "Güncelleme gerekiyor",
-            "update_required_summary": "Orca sürümleri uyumlu değil",
-            "update_required_explanation": "Bu bilgisayardaki veya sunucudaki Orca'yı güncelleyin, ardından yeniden bağlanın.",
             "repair": "Yeniden eşleştir…",
             "open_settings": "Ayarları aç…",
             "server_replaced": "Farklı sunucu",
-            "server_replaced_summary": "Bu ana makinede artık bu bilgisayarın eşleştiğinden farklı bir Orca sunucusu çalışıyor",
-            "server_replaced_explanation": "Orca ana makineye farklı bir SSH kullanıcısı olarak bağlanıyor veya sunucu yeniden yüklendi. Ayarlar › Uzak Orca Sunucuları bölümünde bu sunucunun ⋯ menüsünü açıp Unut… seçeneğini seçin, ardından mevcut sunucuyla eşleştirmek için SSH ana makinesine bağlanın."
+            "access_revoked_explanation": "Yeniden bağlanmak için sunucudan alacağınız yeni bir eşleştirme bağlantısıyla tekrar eşleştirin.",
+            "managed_access_revoked_explanation": "Orca SSH üzerinden yeniden eşleştiremedi; tekrar denemek için bağlanın.",
+            "connect_access_revoked_explanation": "Tekrar denemek için bağlanın.",
+            "server_replaced_explanation": "Ayarlar › Uzak Orca Sunucuları bölümünde bu sunucu için Unut… seçeneğini seçin, ardından mevcut sunucusuyla eşleştirmek için SSH ana bilgisayarına bağlanın.",
+            "update_required_explanation": "Bu bilgisayardaki veya sunucudaki Orca'yı güncelleyin, ardından yeniden bağlanın."
           },
           "NativeChatResumeStatusSegment": {
             "tooltip": "Devam edilebilecek yarım kalmış sohbetleri aç",
@@ -5028,6 +5010,18 @@
             "accounts": "Kayıtlı Antigravity Hesapları",
             "readAgo": "Okunma zamanı: {{time}}",
             "notRead": "Kullanım bilinmiyor: henüz okunmadı"
+          },
+          "RemoteHostStatusRow": {
+            "unreachable_since": "Bu ana makineye {{time}} itibarıyla ulaşılamıyor.",
+            "copy_error": "Hatayı kopyala",
+            "retry_now": "Şimdi yeniden dene",
+            "stop_reconnecting": "Yeniden bağlanmayı durdur",
+            "reconnecting_attempt": "Yeniden bağlanılıyor ({{attempt}}. deneme)",
+            "stop": "Durdur",
+            "ssh_sign_in_failed": "Bu ana makinede oturum açılamadı; SSH kimlik bilgilerini kontrol edin.",
+            "ssh_connect_failed": "Bu ana makineye bağlanılamadı; SSH ayarlarını kontrol edip yeniden deneyin.",
+            "server": "Sunucu",
+            "ssh": "SSH"
           }
         }
       },

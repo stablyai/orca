@@ -1,13 +1,11 @@
-import { useCallback, useState } from 'react'
-import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { toastSshConnectFailure } from '@/ssh/ssh-connect-failure-toast'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
-import { useMountedRef } from '@/hooks/useMountedRef'
+import { RemoteHostStatusRow } from './RemoteHostStatusRow'
+import type { HostRecoveryObservation } from './use-remote-host-menu-state'
 import { useAppStore } from '../../store'
-import { STATUS_LABELS, statusColor } from '../settings/ssh/targets/SshTargetCard'
-import { canConnectSshStatus } from '@/ssh/ssh-connection-recoverability'
+import { STATUS_LABELS } from '../settings/ssh/targets/SshTargetCard'
 import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import {
   beginSshConnect,
@@ -17,15 +15,23 @@ import {
 } from '@/ssh/ssh-connect-in-flight'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 
-export async function connectSshTargetFromStatusMenu(targetId: string): Promise<void> {
+export async function connectSshTargetFromStatusMenu(
+  targetId: string,
+  signal?: AbortSignal
+): Promise<void> {
   if (isSshConnectInFlight(targetId)) {
     return
   }
   beginSshConnect(targetId)
   try {
     await window.api.ssh.connect({ targetId })
-    useAppStore.getState().recordFeatureInteraction('ssh')
+    if (!signal?.aborted) {
+      useAppStore.getState().recordFeatureInteraction('ssh')
+    }
   } catch (err) {
+    if (signal?.aborted) {
+      return
+    }
     toastSshConnectFailure(
       targetId,
       err,
@@ -36,81 +42,100 @@ export async function connectSshTargetFromStatusMenu(targetId: string): Promise<
   }
 }
 
+export async function disconnectSshTargetFromStatusMenu(targetId: string): Promise<void> {
+  try {
+    await window.api.ssh.disconnect({ targetId })
+    useAppStore.getState().recordFeatureInteraction('ssh')
+  } catch (err) {
+    toast.error(
+      err instanceof Error
+        ? err.message
+        : translate('auto.components.status.bar.SshStatusSegment.bf07aee59e', 'Disconnect failed')
+    )
+  }
+}
+
 export function SshTargetStatusRow({
   targetId,
   label,
-  status
+  kind,
+  status,
+  error,
+  pending,
+  recovery,
+  now,
+  onConnect,
+  onDisconnect
 }: {
   targetId: string
   label: string
+  kind?: string
   status: SshConnectionStatus
+  error?: string | null
+  pending: boolean
+  recovery?: HostRecoveryObservation
+  now: number
+  onConnect: () => Promise<void>
+  onDisconnect: () => Promise<void>
 }): React.JSX.Element {
   const t = useTranslate()
-  const [busy, setBusy] = useState(false)
-  const mountedRef = useMountedRef()
-  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
-  // Share pending connects across surfaces until main broadcasts connecting, so duplicate attempts stay disabled.
+  pending = pending && status !== 'connected'
   const connectInFlight = useSshConnectInFlight(targetId)
-
-  const handleConnect = useCallback(async () => {
-    setBusy(true)
-    try {
-      await connectSshTargetFromStatusMenu(targetId)
-    } finally {
-      if (mountedRef.current) {
-        setBusy(false)
-      }
-    }
-  }, [mountedRef, targetId])
-
-  const handleDisconnect = useCallback(async () => {
-    setBusy(true)
-    try {
-      await window.api.ssh.disconnect({ targetId })
-      recordFeatureInteraction('ssh')
-    } catch (err) {
-      toast.error(
-        err instanceof Error
-          ? err.message
-          : translate('auto.components.status.bar.SshStatusSegment.bf07aee59e', 'Disconnect failed')
-      )
-    } finally {
-      if (mountedRef.current) {
-        setBusy(false)
-      }
-    }
-  }, [mountedRef, recordFeatureInteraction, targetId])
-
+  const transient =
+    pending || status === 'connecting' || status === 'deploying-relay' || status === 'reconnecting'
+  const failed = !transient && status !== 'connected' && status !== 'disconnected'
+  const tone = transient
+    ? 'busy'
+    : failed
+      ? 'error'
+      : status === 'connected'
+        ? 'connected'
+        : 'offline'
+  const stateWord =
+    transient && recovery?.attempt
+      ? t(
+          'auto.components.status.bar.RemoteHostStatusRow.reconnecting_attempt',
+          'Reconnecting (attempt {{attempt}})',
+          { attempt: String(recovery.attempt) }
+        )
+      : transient
+        ? t('auto.components.status.bar.SshStatusSegment.runtime_checking', 'Checking')
+        : STATUS_LABELS[status]
+  const actionKind = transient || status === 'connected' ? 'disconnect' : 'connect'
   return (
-    <div className="flex items-center gap-2.5 px-2 py-1.5">
-      <span className={`size-1.5 shrink-0 rounded-full ${statusColor(status)}`} />
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[12px] font-medium">{label}</div>
-        <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
-          <span>{t('auto.components.status.bar.SshTargetStatusRow.sshHost', 'SSH Host')}</span>
-          <span aria-hidden="true">·</span>
-          <span>{STATUS_LABELS[status]}</span>
-        </div>
-      </div>
-      {busy || connectInFlight ? (
-        <Loader2 className="size-3 shrink-0 animate-spin text-muted-foreground" />
-      ) : canConnectSshStatus(status) ? (
-        <button
-          type="button"
-          onClick={() => void handleConnect()}
-          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium text-foreground hover:bg-accent/70"
-        >
-          {sshConnectVerb(status, t)}
-        </button>
-      ) : status === 'connected' ? (
-        <button
-          type="button"
-          onClick={() => void handleDisconnect()}
-          className="shrink-0 rounded px-1.5 py-0.5 text-[10px] text-muted-foreground hover:bg-accent/70 hover:text-foreground"
-        >
-          {t('auto.components.status.bar.SshStatusSegment.59b553e2aa', 'Disconnect')}
-        </button>
-      ) : null}
-    </div>
+    <RemoteHostStatusRow
+      label={label}
+      kind={kind}
+      tone={tone}
+      status={stateWord}
+      actionKind={actionKind}
+      actionLabel={
+        transient
+          ? t('auto.components.status.bar.RemoteHostStatusRow.stop', 'Stop')
+          : status === 'connected'
+            ? t('auto.components.status.bar.SshStatusSegment.59b553e2aa', 'Disconnect')
+            : sshConnectVerb(status, t)
+      }
+      onAction={actionKind === 'disconnect' ? onDisconnect : onConnect}
+      disabled={actionKind === 'connect' && connectInFlight}
+      errorSentence={
+        failed
+          ? status === 'auth-failed'
+            ? t(
+                'auto.components.status.bar.RemoteHostStatusRow.ssh_sign_in_failed',
+                'Couldn’t sign in to this host; check its SSH credentials.'
+              )
+            : t(
+                'auto.components.status.bar.RemoteHostStatusRow.ssh_connect_failed',
+                'Couldn’t connect to this host; check its SSH settings and try again.'
+              )
+          : undefined
+      }
+      rawDetail={error ?? undefined}
+      recovery={recovery}
+      now={now}
+      onRetry={onConnect}
+      onDisconnect={onDisconnect}
+    />
   )
 }
