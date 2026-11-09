@@ -21,6 +21,8 @@ export type Env = {
   SANDBOX_JWKS?: string
   SANDBOX_AUTH_ISSUER?: string
   SANDBOX_JWT_AUDIENCE: string
+  /** Dev-only operator key set (issuer `orca-sandbox-dev-test`); ignored when SANDBOX_ENV=prod. */
+  SANDBOX_DEV_JWKS?: string
 
   // Billing Worker (entitlement checks + usage). CONTROL_PLANE_TOKEN is shared with it.
   BILLING_URL?: string
@@ -32,4 +34,6 @@ export type Env = {
   EGRESS_PROXY_URL?: string
   /** Shortened session deadline (ms) for staging rollover rehearsals; refused when SANDBOX_ENV=prod. */
   SESSION_DEADLINE_MS?: string
+  /** Dev-only: Authorization the egress proxy injects for api.github.com until the GitHub App minter exists. */
+  EGRESS_DEV_STATIC_AUTHORIZATION?: string
 }

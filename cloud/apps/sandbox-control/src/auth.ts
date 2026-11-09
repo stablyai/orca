@@ -47,6 +47,33 @@ export function accountIdFor(claims: { sub: string; org?: string }): string {
   return claims.org ? `org:${claims.org}` : `user:${claims.sub}`
 }
 
+/** Dev-only operator keys (issuer DEV_TEST_ISSUER) so live tests run before Orca auth mints sandbox tokens. */
+export const DEV_TEST_ISSUER = 'orca-sandbox-dev-test'
+let devKeys: { source: string; keys: JWTVerifyGetKey } | null = null
+
+async function verify(
+  token: string,
+  keys: JWTVerifyGetKey,
+  env: Env,
+  issuer: string | undefined,
+  now: number
+): Promise<SandboxCaller | null> {
+  try {
+    const { payload } = await jwtVerify(token, keys, {
+      audience: env.SANDBOX_JWT_AUDIENCE,
+      algorithms: ['ES256'],
+      maxTokenAge: '15m',
+      requiredClaims: ['exp', 'iat'],
+      currentDate: new Date(now),
+      ...(issuer ? { issuer } : {})
+    })
+    const claims = ClaimsSchema.parse(payload)
+    return { userId: claims.sub, accountId: accountIdFor(claims) }
+  } catch {
+    return null
+  }
+}
+
 export async function authenticateDesktop(
   env: Env,
   request: Request,
@@ -56,18 +83,17 @@ export async function authenticateDesktop(
   if (!token) {
     return null
   }
-  try {
-    const { payload } = await jwtVerify(token, keysFor(env), {
-      audience: env.SANDBOX_JWT_AUDIENCE,
-      algorithms: ['ES256'],
-      maxTokenAge: '15m',
-      requiredClaims: ['exp', 'iat'],
-      currentDate: new Date(now),
-      ...(env.SANDBOX_AUTH_ISSUER ? { issuer: env.SANDBOX_AUTH_ISSUER } : {})
-    })
-    const claims = ClaimsSchema.parse(payload)
-    return { userId: claims.sub, accountId: accountIdFor(claims) }
-  } catch {
-    return null
+  const caller = await verify(token, keysFor(env), env, env.SANDBOX_AUTH_ISSUER, now)
+  if (caller || !env.SANDBOX_DEV_JWKS || env.SANDBOX_ENV === 'prod') {
+    return caller
   }
+  if (devKeys?.source !== env.SANDBOX_DEV_JWKS) {
+    devKeys = {
+      source: env.SANDBOX_DEV_JWKS,
+      keys: createLocalJWKSet(JSON.parse(env.SANDBOX_DEV_JWKS) as JSONWebKeySet)
+    }
+  }
+  // Dev callers land in their own account namespace so they never touch a real user's sandboxes.
+  const dev = await verify(token, devKeys.keys, env, DEV_TEST_ISSUER, now)
+  return dev ? { userId: dev.userId, accountId: `dev:${dev.userId}` } : null
 }
