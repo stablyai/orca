@@ -52,7 +52,8 @@ function acpChatProgram(spec: AcpLaunchSpec): StructuredAgentChatProgram {
       ? {
           hostAlternative: async (shellEnv, settings) =>
             (await selectAcpHostAccountHome(spec, shellEnv, getProfileUserDataPath(), settings)) !==
-            null
+            null,
+          ...(managedRuntime ? { onlyHostAlternative: () => managedRuntime.pin() === null } : {})
         }
       : {})
   }

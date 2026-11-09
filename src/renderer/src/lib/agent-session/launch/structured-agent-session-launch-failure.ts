@@ -57,7 +57,7 @@ export function structuredChatUnavailableText(reason?: string): string {
       : reason === 'windows'
         ? translate(
             'components.native-chat.explicitChatWindows',
-            "This agent's chat isn't available on Windows yet. Open it in a terminal instead."
+            'On Windows, this chat runs on agy. Update agy and sign in with a personal Google account by running agy, then try again, or open it in a terminal instead.'
           )
         : translate(
             'components.native-chat.explicitChatUnavailable',

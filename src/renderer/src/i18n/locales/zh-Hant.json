@@ -814,7 +814,7 @@
       "defaultSurfaceSetAllChat": "全部設為聊天",
       "defaultSurfaceSetAllTerminal": "全部設為終端機",
       "sameAsChoice": "與 {{agent}} 相同 · {{choice}}",
-      "chatUnavailableOnWindows": "{{value0}} Chat 尚不支援 Windows，因此 {{value0}} 會在此主機的終端機中開啟。macOS 或 Linux 主機上的聊天仍可正常使用。",
+      "chatUnavailableOnWindows": "在 Windows 上，{{value0}} Chat 透過 agy 執行。請在這部電腦上將 agy 更新至最新版本，並執行 agy 以個人 Google 帳戶登入；在此之前，{{value0}} 會在終端機中開啟。",
       "undetectedCommandHint": "如果 {{agent}} CLI 安裝在 PATH 之外，請輸入其在此主機上的可執行檔完整路徑。"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -4189,7 +4189,7 @@
             "startChat": "開始與 {{value0}} 聊天",
             "cliTag": "(CLI)",
             "agentsLoading": "正在載入代理程式",
-            "chatNotOnWindows": "Windows 尚不支援聊天"
+            "chatNotOnWindows": "需要登入 agy"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "切換分頁",
@@ -19904,7 +19904,7 @@
         "turnWorking": "此聊天的代理正在工作。請在其回合結束後再切換分支。",
         "worktree": "工作樹"
       },
-      "explicitChatWindows": "此 Agent 的聊天尚不支援 Windows。請改為在終端機中開啟。",
+      "explicitChatWindows": "在 Windows 上，此聊天透過 agy 執行。請更新 agy，執行 agy 並以個人 Google 帳戶登入後再試一次，或改為在終端機中開啟。",
       "fork": {
         "action": "從此回覆建立分支",
         "pending": "正在從此聊天建立分支…",
