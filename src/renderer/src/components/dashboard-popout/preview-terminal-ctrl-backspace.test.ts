@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { resolveDashboardCardTerminalInput } from '../dashboard/dashboard-card-terminal-input'
 import { resolvePreviewShortcutAction } from './preview-terminal-shortcuts'
+import { getDefaultSettings } from '../../../../shared/constants'
 import type { DashboardCardTerminalInputState } from '../dashboard/dashboard-card-terminal-input'
 
 const WINDOWS_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Electron'
@@ -20,8 +21,9 @@ function previewCtrlBackspace(args: {
         { id: 'repo-1', path: 'C:\\repo', displayName: 'repo', badgeColor: '#000', addedAt: 0 }
       ],
       settings: {
-        terminalWindowsShell: args.defaultShell
-      } as DashboardCardTerminalInputState['settings'],
+        ...getDefaultSettings(process.cwd()),
+        terminalWindowsShell: args.defaultShell ?? 'powershell.exe'
+      },
       ...args.state
     },
     {
@@ -38,6 +40,7 @@ function previewCtrlBackspace(args: {
     }
   )
   const action = resolvePreviewShortcutAction(
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the policy reads only these key fields; Node has no KeyboardEvent.
     {
       key: 'Backspace',
       ctrlKey: true,
