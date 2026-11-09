@@ -9,6 +9,7 @@ import { parseLaunchRoute } from '../navigation/LaunchRoute';
 import { ShellRoute, shellRouterParams } from '../navigation/ShellRoute';
 import { getNumber, KEY_HOME_FONT_SCALE } from '../settings/SettingsStore';
 import { removeDesktop } from '../storage/HostRemoval';
+import { DeviceRowStore, HomeWorktreeCounts } from '../storage/DeviceRowStore';
 import { listHosts, HostMeta, updateHostMachine } from '../storage/HostStore';
 import { HostMachineDescriptor, hostMachineLine, readHostMachineDescriptor } from '../storage/HostMachine';
 import { SpikeRpcClient, RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
@@ -96,7 +97,8 @@ interface TabSpec {
 }
 interface HomeSectionHeading { title: string; aside: string; first: boolean; }
 
-interface AgentCatalog { worktrees: HomeWorktree[]; entries: HomeAgentEntry[]; at: number; }
+interface WorktreeCountProof { value: HomeWorktreeCounts; save: 'needed' | 'pending' | 'saved'; }
+interface AgentCatalog { counts: WorktreeCountProof; entries: HomeAgentEntry[] | null; at: number; }
 interface LiveDesktopMachine { pairedAt: number; endpoint: string; descriptor: HostMachineDescriptor; }
 
 interface HostRuntime {
@@ -286,17 +288,32 @@ struct Home {
     listHosts(context).then((hosts: HostMeta[]): void => {
       if (!this.visible || loadEpoch !== this.loadEpoch) { return; }
       this.hosts = hosts.slice().sort((left: HostMeta, right: HostMeta): number => right.lastConnected - left.lastConnected);
-      this.agentCatalogs.forEach((_catalog: AgentCatalog, id: string): void => {
-        if (!hosts.some((host: HostMeta): boolean => host.id === id)) { this.agentCatalogs.delete(id); }
+      this.agentCatalogs.forEach((catalog: AgentCatalog, id: string): void => {
+        if (!hosts.some((host: HostMeta): boolean => host.id === id && host.lastConnected === catalog.counts.value.pairedAt)) {
+          this.agentCatalogs.delete(id);
+        }
       });
       this.statsTotal = totalHomeStats(this.statsByHost, hosts.map((host: HostMeta): string => host.id));
       this.loaded = true;
       this.loadError = '';
-      if (!this.openPendingOnboarding(context)) { this.syncDesktops(); this.schedulePrewarm(); }
+      if (!this.openPendingOnboarding(context)) {
+        this.syncDesktops(); this.schedulePrewarm(); this.restoreWorktreeCounts(context, loadEpoch);
+      }
     }).catch((_e: Error) => {
       if (!this.visible || loadEpoch !== this.loadEpoch) { return; }
       this.loaded = true;
       this.loadError = '无法读取已配对桌面，请重试。';
+    });
+  }
+
+  private restoreWorktreeCounts(context: common.Context, loadEpoch: number): void {
+    this.hosts.forEach((host: HostMeta): void => {
+      if (this.agentCatalogs.has(host.id)) { return; }
+      new DeviceRowStore(context, host.id).readHomeCounts(host.lastConnected).then((counts: HomeWorktreeCounts | null): void => {
+        if (!counts || !this.visible || loadEpoch !== this.loadEpoch || this.agentCatalogs.has(host.id)) { return; }
+        this.agentCatalogs.set(host.id, { counts: { value: counts, save: 'saved' }, entries: null, at: 0 });
+        this.refreshSummaries();
+      }).catch(() => {});
     });
   }
 
@@ -747,10 +764,23 @@ struct Home {
   private finishCatalog(client: SpikeRpcClient, hostId: string, epoch: number, rt: HostRuntime, rows: HomeWorktree[] | null): void {
     if (epoch !== this.epoch || this.runtimes.get(hostId) !== rt || rt.client !== client) { return; }
     rt.catalogPending = null;
-    rt.catalogState = rows ? 'ready' : 'unavailable';
-    if (rows) {
+    let paired = rt.lease.connection.getPairedMeta();
+    rt.catalogState = rows && paired ? 'ready' : 'unavailable';
+    if (rows && paired) {
+      let value: HomeWorktreeCounts = { pairedAt: paired.lastConnected, totalWorktrees: rows.length,
+        activeCount: rows.filter((row: HomeWorktree): boolean => row.active).length };
+      let previous = this.agentCatalogs.get(hostId)?.counts;
+      let counts: WorktreeCountProof = previous && previous.value.pairedAt === value.pairedAt
+        && previous.value.totalWorktrees === value.totalWorktrees && previous.value.activeCount === value.activeCount
+        ? previous : { value: value, save: 'needed' };
       let entries = rows.flatMap((row: HomeWorktree): HomeAgentEntry[] => row.agents);
-      this.agentCatalogs.set(hostId, { worktrees: rows, entries: entries, at: Date.now() });
+      this.agentCatalogs.set(hostId, { counts: counts, entries: entries, at: Date.now() });
+      if (counts.save === 'needed') {
+        counts.save = 'pending';
+        new DeviceRowStore(getContext(this), hostId).writeHomeCounts(value).then((saved: boolean): void => {
+          counts.save = saved ? 'saved' : 'needed';
+        }).catch((): void => { counts.save = 'needed'; });
+      }
     }
     this.rebuildRows();
     if (!this.visible || !this.appInForeground) { return; }
@@ -772,9 +802,8 @@ struct Home {
         }
         return;
       }
-      let rows = catalog.worktrees;
-      let active = rows.filter((row: HomeWorktree): boolean => row.active).length;
-      next[host.id] = `${rows.length} 个工作区${active > 0 ? ` · ${active} 个活跃` : ''}`;
+      let value = catalog.counts.value;
+      next[host.id] = `${value.totalWorktrees} 个工作区${value.activeCount > 0 ? ` · ${value.activeCount} 个活跃` : ''}`;
     });
     this.summaries = next;
   }
@@ -786,7 +815,7 @@ struct Home {
       return {
         id: host.id, name: host.name, catalog: snapshot?.entries ?? null, seenAt: snapshot?.at ?? 0,
         connection: runtime?.online ? 'connected' : runtime?.connecting ? 'connecting' : 'disconnected',
-        live: runtime?.online === true && runtime.catalogState === 'ready',
+        live: runtime?.online === true && runtime.catalogState === 'ready' && !!snapshot?.entries,
         loading: runtime?.connecting === true || (runtime?.online === true && runtime.catalogState === 'initial'),
         pendingActivity: this.agentActivityWrites.snapshot(host.id)
       };
@@ -824,7 +853,7 @@ struct Home {
         message: uiText('重新连接后可打开此智能体。', this.uiLocale) }).catch(() => {});
       return;
     }
-    let latest = this.agentCatalogs.get(row.hostId)?.entries.find((entry: HomeAgentEntry): boolean =>
+    let latest = this.agentCatalogs.get(row.hostId)?.entries?.find((entry: HomeAgentEntry): boolean =>
       entry.agent['paneKey'] === row.entry.agent['paneKey'] && entry.worktreeId === row.entry.worktreeId
       && entry.executionHostId === row.entry.executionHostId && entry.workspaceIdentityKey === row.entry.workspaceIdentityKey);
     if (!latest || latest.ambiguousWorkspace) {
@@ -984,7 +1013,7 @@ struct Home {
       await removeDesktop(context, host.id, (): void => {
         this.loadEpoch++;
         this.hosts = this.hosts.filter((item: HostMeta): boolean => item.id !== host.id);
-          this.agentCatalogs.delete(host.id);
+        this.agentCatalogs.delete(host.id);
         this.releaseDesktop(host.id);
       });
     } catch (e) {

@@ -355,6 +355,28 @@ test('device rows survive reopening and remain scoped to their host and table', 
   )
 })
 
+test('Home restores proven counts only for the current pairing and keeps them private from pages', async (t) => {
+  const { DeviceRowStore, context, deleteDeviceRows } = deviceRows(t)
+  const store = new DeviceRowStore(context, hostId)
+  await store.writeHomeCounts({ pairedAt: 100, totalWorktrees: 3, activeCount: 1 })
+  const reopened = new DeviceRowStore(context, hostId)
+  assert.deepEqual(
+    { ...(await reopened.readHomeCounts(100)) },
+    {
+      pairedAt: 100,
+      totalWorktrees: 3,
+      activeCount: 1
+    }
+  )
+  assert.equal(await reopened.readHomeCounts(200), null)
+  assert.throws(
+    () => reopened.serve({ action: 'read', table: 'home', keys: ['worktree-counts:v1'] }),
+    /Invalid device store params/
+  )
+  await deleteDeviceRows(context, hostId)
+  assert.equal(await new DeviceRowStore(context, hostId).readHomeCounts(100), null)
+})
+
 test('a large pairing journal survives reopening and is inaccessible to page storage', async (t) => {
   const { DeviceRowStore, context, deleteDeviceRows } = deviceRows(t)
   const store = new DeviceRowStore(context, hostId)

@@ -9,10 +9,13 @@ import { naclRandomBytes, naclSecretbox, naclSecretboxOpen } from '../transport/
 interface RowResult { written?: boolean; refusal?: string; values?: Array<string | null>; deferred?: number[]; }
 interface RowFile { path: string; bytes: number; modified: number; }
 interface RowOp { key: string; value: string | null; }
+export interface HomeWorktreeCounts { pairedAt: number; totalWorktrees: number; activeCount: number; }
 const MAX_VALUE = 512 * 1024;
 const READ_BUDGET = 6 * 1024 * 1024;
 const PAIRING_TABLE = 'pairing';
 const PAIRING_KEY = 'journal';
+const HOME_TABLE = 'home';
+const HOME_COUNTS_KEY = 'worktree-counts:v1';
 const queues: Map<string, Promise<RowResult>> = new Map();
 
 export class DeviceRowStore {
@@ -25,7 +28,10 @@ export class DeviceRowStore {
   }
   private root(table: string): string {
     if (table === PAIRING_TABLE) { return `${this.context.filesDir}/orca-pairing-rows/${this.hostId}`; }
-    return `${table === 'cache' ? this.context.cacheDir : this.context.filesDir}/orca-rows/${this.hostId}/${table}`;
+    return `${this.tableRoot(table)}/${this.hostId}/${table}`;
+  }
+  private tableRoot(table: string): string {
+    return `${table === 'draft' ? this.context.filesDir : this.context.cacheDir}/orca-rows`;
   }
   private path(table: string, key: string): string {
     return `${this.root(table)}/${toHex(sha256(utf8Encode(key)))}.row`;
@@ -60,7 +66,8 @@ export class DeviceRowStore {
       return key;
     }
     let hasRows = pairing ? fs.accessSync(this.path(PAIRING_TABLE, PAIRING_KEY))
-      : this.files(this.root('draft')).length > 0 || this.files(this.root('cache')).length > 0;
+      : this.files(this.root('draft')).length > 0 || this.files(this.root('cache')).length > 0
+        || fs.accessSync(this.path(HOME_TABLE, HOME_COUNTS_KEY));
     if (hasRows) {
       throw new Error('Device store key unavailable');
     }
@@ -125,6 +132,31 @@ export class DeviceRowStore {
   }
   serve(params: ESObject): Promise<Object> {
     this.validate(params);
+    return this.enqueue(params);
+  }
+  // Only native Home can record that the authenticated catalog proved these counts.
+  async readHomeCounts(pairedAt: number): Promise<HomeWorktreeCounts | null> {
+    let result = await this.enqueue({ action: 'read', table: HOME_TABLE, keys: [HOME_COUNTS_KEY] });
+    let encoded = result.values?.[0];
+    if (!encoded) { return null; }
+    try {
+      let value = JSON.parse(encoded) as HomeWorktreeCounts;
+      if (value?.pairedAt === pairedAt && Number.isSafeInteger(value.totalWorktrees) && value.totalWorktrees >= 0
+        && Number.isSafeInteger(value.activeCount) && value.activeCount >= 0 && value.activeCount <= value.totalWorktrees) {
+        return { pairedAt: pairedAt, totalWorktrees: value.totalWorktrees, activeCount: value.activeCount };
+      }
+    } catch (e) { }
+    return null;
+  }
+  async writeHomeCounts(counts: HomeWorktreeCounts): Promise<boolean> {
+    let value: HomeWorktreeCounts = {
+      pairedAt: counts.pairedAt, totalWorktrees: counts.totalWorktrees, activeCount: counts.activeCount
+    };
+    let op: RowOp = { key: HOME_COUNTS_KEY, value: JSON.stringify(value) };
+    let result = await this.enqueue({ action: 'write', table: HOME_TABLE, ops: [op] });
+    return result.written === true;
+  }
+  private enqueue(params: ESObject): Promise<RowResult> {
     let previous = queues.get(this.hostId) ?? Promise.resolve<RowResult>({});
     let next = previous.catch((): RowResult => ({})).then((): Promise<RowResult> => this.perform(params));
     queues.set(this.hostId, next);
@@ -159,8 +191,11 @@ export class DeviceRowStore {
   private async perform(params: ESObject): Promise<RowResult> {
     let writing = params['action'] === 'write';
     try {
-      let key = await this.openKey();
       let table: string = params['table'];
+      if (!writing && table === HOME_TABLE && !fs.accessSync(this.path(HOME_TABLE, HOME_COUNTS_KEY))) {
+        return { values: [null] };
+      }
+      let key = await this.openKey();
       if (!writing) {
         let names: string[] = params['keys'];
         let values: Array<string | null> = []; let deferred: number[] = []; let filled = 0;
@@ -184,7 +219,7 @@ export class DeviceRowStore {
         let encoded = op.value === null ? null : this.encodeValue(table, op.key, op.value, key);
         changes.set(this.path(table, op.key), encoded);
       }
-      let root = `${table === 'cache' ? this.context.cacheDir : this.context.filesDir}/orca-rows`;
+      let root = this.tableRoot(table);
       let files = this.files(root); let total = 0;
       for (let i = 0; i < files.length; i++) {
         if (!changes.has(files[i].path)) { total += files[i].bytes; }
