@@ -18,6 +18,8 @@ type ExitEmitter = {
 }
 
 export function watchLaunchedDaemonExit(child: ExitEmitter, pid: number): void {
+  // A predecessor's exit (a planned restart, say) must not be blamed on this daemon's later death.
+  lastDaemonExit = null
   let seen = false
   try {
     child.on('exit', (code: number | null, signal: NodeJS.Signals | null) => {

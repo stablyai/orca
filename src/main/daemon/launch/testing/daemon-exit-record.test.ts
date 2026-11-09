@@ -43,4 +43,15 @@ describe('daemon exit record (#39166)', () => {
     stale.emit('exit', 0, null)
     expect(daemonDiedRespawnMessage(1_000_000 + 120_000)).toContain('exit status not observed')
   })
+
+  it('forgets a predecessor exit once a replacement daemon launches', () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const restarted = new EventEmitter()
+    watchLaunchedDaemonExit(restarted, 11)
+    restarted.emit('exit', null, 'SIGTERM')
+
+    watchLaunchedDaemonExit(new EventEmitter(), 12)
+
+    expect(daemonDiedRespawnMessage()).toContain('exit status not observed')
+  })
 })
