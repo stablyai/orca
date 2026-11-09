@@ -313,10 +313,13 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
           >
             <Button type="submit" size="sm" disabled={sending || valid.length === 0}>
               {sending ? <LoadingSpinner className="size-3.5" /> : <Send />}
-              {t('auto.components.billing.team.sendInvites', 'Send {{count}} invites', {
-                count: Math.max(1, valid.length),
-                defaultValue_one: 'Send {{count}} invite'
-              })}
+              {valid.length === 0
+                ? // Nothing to count yet: a plain verb, not "Send 1 invite".
+                  t('auto.components.billing.team.send', 'Send invite')
+                : t('auto.components.billing.team.sendInvites', 'Send {{count}} invites', {
+                    count: valid.length,
+                    defaultValue_one: 'Send {{count}} invite'
+                  })}
             </Button>
           </SettingsDisabledControlTooltip>
         </div>

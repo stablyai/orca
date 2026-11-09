@@ -13,6 +13,38 @@ import type {
 import { formatHours, includedUsagePercent } from './plan-billing-format'
 import { formatCents } from './plans/plans-pricing'
 
+/** "Resets and renews Dec 2" when both land the same day (monthly); separate parts otherwise. */
+function resetLine(
+  entitlement: OrcaBillingEntitlement,
+  date: (ms: number) => string,
+  t: ReturnType<typeof useTranslate>
+): string | null {
+  const resets = entitlement.usageWindow ? date(entitlement.usageWindow.end) : null
+  const ends = entitlement.period ? date(entitlement.period.end) : null
+  if (ends && entitlement.cancelAtPeriodEnd) {
+    return resets
+      ? t('auto.components.billing.resetsEnds', 'Hours reset {{value0}} · Plan ends {{value1}}', {
+          value0: resets,
+          value1: ends
+        })
+      : t('auto.components.billing.endsOn', 'Plan ends {{value0}}', { value0: ends })
+  }
+  if (resets && ends) {
+    return resets === ends
+      ? t('auto.components.billing.resetsAndRenews', 'Resets and renews {{value0}}', {
+          value0: ends
+        })
+      : t('auto.components.billing.resetsRenews', 'Hours reset {{value0}} · Renews {{value1}}', {
+          value0: resets,
+          value1: ends
+        })
+  }
+  if (resets) {
+    return t('auto.components.billing.resets', 'Hours reset {{value0}}', { value0: resets })
+  }
+  return ends ? t('auto.components.billing.renewsOn', 'Renews {{value0}}', { value0: ends }) : null
+}
+
 export function UsageSummary({
   entitlement
 }: {
@@ -27,8 +59,8 @@ export function UsageSummary({
       <div className="flex items-baseline justify-between gap-3 text-xs">
         <span className="font-medium">
           {t(
-            'auto.components.billing.hoursUsedMonth',
-            '{{value0}} of {{value1}} hours used this month',
+            'auto.components.billing.sandboxHoursUsedMonth',
+            '{{value0}} of {{value1}} sandbox hours used this month',
             {
               value0: formatHours(Math.min(entitlement.usedSeconds, entitlement.includedSeconds)),
               value1: formatHours(entitlement.includedSeconds)
@@ -80,24 +112,7 @@ export function UsageSummary({
               )}
         </p>
       ) : null}
-      <p className="text-xs text-muted-foreground">
-        {entitlement.usageWindow
-          ? t('auto.components.billing.resets', 'Hours reset {{value0}}', {
-              value0: date(entitlement.usageWindow.end)
-            })
-          : null}
-        {entitlement.period
-          ? ` · ${
-              entitlement.cancelAtPeriodEnd
-                ? t('auto.components.billing.endsOn', 'Plan ends {{value0}}', {
-                    value0: date(entitlement.period.end)
-                  })
-                : t('auto.components.billing.renewsOn', 'Renews {{value0}}', {
-                    value0: date(entitlement.period.end)
-                  })
-            }`
-          : null}
-      </p>
+      <p className="text-xs text-muted-foreground">{resetLine(entitlement, date, t)}</p>
     </div>
   )
 }

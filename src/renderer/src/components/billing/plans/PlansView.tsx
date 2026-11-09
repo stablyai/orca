@@ -117,8 +117,8 @@ function CurrentPlanStrip({
       <div className="flex flex-wrap justify-between gap-2 text-xs text-muted-foreground tabular-nums">
         <span>
           {t(
-            'auto.components.billing.hoursUsedMonth',
-            '{{value0}} of {{value1}} hours used this month',
+            'auto.components.billing.sandboxHoursUsedMonth',
+            '{{value0}} of {{value1}} sandbox hours used this month',
             {
               value0: formatHours(Math.min(entitlement.usedSeconds, entitlement.includedSeconds)),
               value1: formatHours(entitlement.includedSeconds)
