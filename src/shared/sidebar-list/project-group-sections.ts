@@ -19,6 +19,10 @@ import {
 import { appendWorktreeRows } from './row-builders'
 import { getFolderLaneSectionKey } from './folder-workspace-occurrences'
 import { compareRootProjectEntries } from '../root-project-order'
+import {
+  buildUmbrellaSubfolderHierarchy,
+  isUmbrellaBackedProjectGroup
+} from './umbrella-subfolder-groups'
 
 export function appendProjectGroupSections(
   ctx: SectionAppendContext,
@@ -106,6 +110,19 @@ export function appendProjectGroupSections(
   const appendProjectGroup = (projectGroup: ProjectGroup, depth: number): void => {
     const repoEntries = sortRepoEntriesWithinGroup(groupByProjectGroupId.get(projectGroup.id) ?? [])
     const childGroups = childGroupsByParentId.get(projectGroup.id) ?? []
+    const folderWorkspacePairs = folderWorkspacesByProjectGroupId.get(projectGroup.id) ?? []
+    if (
+      isUmbrellaBackedProjectGroup(
+        projectGroup,
+        repoEntries,
+        childGroups.length,
+        folderWorkspacePairs.length
+      )
+    ) {
+      appendOrderedGroups(ctx, withRepoSectionDisplayLabels(repoEntries), depth)
+      groupByProjectGroupId.delete(projectGroup.id)
+      return
+    }
     const key = getProjectGroupHeaderKey(projectGroup.id)
     result.push({
       type: 'header',
@@ -141,11 +158,28 @@ export function appendProjectGroupSections(
     // Keep repos visible while host project-group metadata is still loading.
     remainingRepoEntries.push(...entries)
   }
+  const labeledRemainingEntries = withRepoSectionDisplayLabels(
+    sortRepoEntriesWithinGroup(remainingRepoEntries)
+  )
+  const remainingUmbrellaHierarchy = buildUmbrellaSubfolderHierarchy(
+    labeledRemainingEntries,
+    ([key]) => key,
+    ([, group]) => group.repo
+  )
+  const collectSubtreeEntries = (root: OrderedGroupEntry): OrderedGroupEntry[] => {
+    const out: OrderedGroupEntry[] = []
+    const visit = (entry: OrderedGroupEntry): void => {
+      out.push(entry)
+      for (const child of remainingUmbrellaHierarchy.childrenByParentKey.get(entry[0]) ?? []) {
+        visit(child)
+      }
+    }
+    visit(root)
+    return out
+  }
   const rootEntries: ({ projectGroup: ProjectGroup } | { repoEntry: OrderedGroupEntry })[] = [
     ...(childGroupsByParentId.get(null) ?? []).map((projectGroup) => ({ projectGroup })),
-    ...withRepoSectionDisplayLabels(sortRepoEntriesWithinGroup(remainingRepoEntries)).map(
-      (repoEntry) => ({ repoEntry })
-    )
+    ...remainingUmbrellaHierarchy.rootEntries.map((repoEntry) => ({ repoEntry }))
   ]
   if (projectOrderBy === 'manual') {
     rootEntries.sort((left, right) => {
@@ -170,7 +204,7 @@ export function appendProjectGroupSections(
     if ('projectGroup' in entry) {
       appendProjectGroup(entry.projectGroup, 0)
     } else {
-      appendOrderedGroups(ctx, [entry.repoEntry], 0)
+      appendOrderedGroups(ctx, collectSubtreeEntries(entry.repoEntry), 0)
     }
   }
 }

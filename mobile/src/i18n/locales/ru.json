@@ -3853,7 +3853,6 @@
       "pages": "Страницы GitHub",
       "pullRequests": "Пул-реквесты",
       "queryingSource": "Запрос к {{source}}",
-      "repoDescription": "Выберите репозитории для поиска.",
       "repos": "Репозитории",
       "upstream": "Вышестоящий репозиторий"
     },

@@ -37,6 +37,10 @@ import {
   type ProjectSectionModel
 } from '../../../src/shared/project-section-grouping'
 import { withRepoSectionDisplayLabels } from '../../../src/shared/project-section-order'
+import {
+  isSectionHiddenByCollapsedUmbrella,
+  orderUmbrellaProjectSections
+} from '../../../src/shared/sidebar-list/umbrella-subfolder-groups'
 import type { ProjectOrderBy } from '../../../src/shared/ui-chrome-types'
 import {
   filterWorkspaceRows,
@@ -90,15 +94,9 @@ function makeSection(
   key: string,
   title: string,
   data: readonly Worktree[],
-  decoration: { icon?: 'pin'; repo?: SectionRepo } = {}
+  decoration: Partial<PlannedSection> = {}
 ): PlannedSection {
-  return {
-    key,
-    title,
-    ...(decoration.icon ? { icon: decoration.icon } : {}),
-    ...(decoration.repo ? { repo: decoration.repo } : {}),
-    data: [...data]
-  }
+  return { key, title, ...decoration, data: [...data] }
 }
 
 // Idle prompts have no recent output; live terminals or unread output still count as active.
@@ -114,11 +112,9 @@ export function isWorktreeActive(
 
 // Older hosts omit the main-worktree flag; use the legacy branch heuristic.
 function guessDefaultBranchWorkspace(w: Worktree): boolean {
-  if (w.isMainWorktree !== undefined) {
-    return w.isMainWorktree && w.branch.trim() !== ''
-  }
-  const branch = w.branch.replace(/^refs\/heads\//, '')
-  return branch === 'main' || branch === 'master'
+  return w.isMainWorktree !== undefined
+    ? w.isMainWorktree && w.branch.trim() !== ''
+    : /^refs\/heads\/(main|master)$|^(main|master)$/.test(w.branch)
 }
 
 function phoneRowFacts(
@@ -148,15 +144,11 @@ export function filterWorktrees(
 ): Worktree[] {
   const result = filterWorkspaceRows(worktrees, filters, phoneRowFacts(repoHostIdByRepoId))
   const q = search.trim().toLowerCase()
-  if (!q) {
-    return result
-  }
-  return result.filter(
-    (w) =>
-      w.displayName.toLowerCase().includes(q) ||
-      w.branch.toLowerCase().includes(q) ||
-      w.repo.toLowerCase().includes(q)
-  )
+  return !q
+    ? result
+    : result.filter((w) =>
+        [w.displayName, w.branch, w.repo].some((s) => s.toLowerCase().includes(q))
+      )
 }
 
 export function isWorktreePinned(w: Worktree, localPins: Set<string>): boolean {
@@ -215,16 +207,17 @@ export function buildMobileWorkspacePlan(
           )
         }
       } else if (groupMode === 'repo') {
-        const representedRepoIds = new Set(worktrees.map((w) => w.repoId))
-        const query = search.trim().toLowerCase()
+        const represented = new Set(worktrees.map((w) => w.repoId))
+        const q = search.trim().toLowerCase()
+        const filterSet = new Set(filters.filterRepoIds)
         const placeholderRepoIds = projectCatalog.repos
           .filter(
-            (repo) =>
-              !representedRepoIds.has(repo.id) &&
-              (filters.filterRepoIds.length === 0 || filters.filterRepoIds.includes(repo.id)) &&
-              (!query || repo.displayName.toLowerCase().includes(query))
+            (r) =>
+              !represented.has(r.id) &&
+              (filterSet.size === 0 || filterSet.has(r.id)) &&
+              (!q || r.displayName.toLowerCase().includes(q))
           )
-          .map((repo) => repo.id)
+          .map((r) => r.id)
         const projectSections = withRepoSectionDisplayLabels(
           buildProjectSections({
             items: canonicalGroupWorktrees,
@@ -238,11 +231,14 @@ export function buildMobileWorkspacePlan(
             projectOrderBy: projectCatalog.projectOrderBy
           })
         )
-        for (const [key, section] of projectSections) {
+        for (const { key, section, decoration } of orderUmbrellaProjectSections(projectSections)) {
           sections.push(
-            makeSection(key, section.label, orderMainWorktreeFirst(section.items, sortMode), {
-              repo: section.repo
-            })
+            makeSection(
+              key,
+              section.label,
+              orderMainWorktreeFirst(section.items, sortMode),
+              decoration
+            )
           )
         }
       } else if (groupMode === 'workspace-status') {
@@ -250,12 +246,7 @@ export function buildMobileWorkspacePlan(
         const byStatus = new Map<string, Worktree[]>()
         for (const w of canonicalGroupWorktrees) {
           const key = getWorkspaceStatus(w, renderableWorkspaceStatuses)
-          const list = byStatus.get(key)
-          if (list) {
-            list.push(w)
-          } else {
-            byStatus.set(key, [w])
-          }
+          byStatus.set(key, [...(byStatus.get(key) ?? []), w])
         }
         for (const status of renderableWorkspaceStatuses) {
           const items = byStatus.get(status.id)
@@ -263,7 +254,6 @@ export function buildMobileWorkspacePlan(
             sections.push(
               makeSection(
                 getWorkspaceStatusGroupKey(status.id),
-                // Status names are the host's (user-editable) labels, as on desktop.
                 status.label,
                 withFolderWorkspacesLast(items)
               )
@@ -274,12 +264,7 @@ export function buildMobileWorkspacePlan(
         const byGroup = new Map<string, Worktree[]>()
         for (const w of canonicalGroupWorktrees) {
           const key = prGroupOfPsLinkedPR(w.linkedPR)
-          const list = byGroup.get(key)
-          if (list) {
-            list.push(w)
-          } else {
-            byGroup.set(key, [w])
-          }
+          byGroup.set(key, [...(byGroup.get(key) ?? []), w])
         }
         for (const groupKey of PR_GROUP_ORDER) {
           const items = byGroup.get(groupKey)
@@ -307,13 +292,27 @@ export function buildMobileWorkspacePlan(
       collapsed: ReadonlySet<string>,
       hostContextOf: WorktreeHostContextOf = NO_WORKTREE_HOST_CONTEXT
     ): Section[] =>
-      occurrencePlan.sections.map((section) => ({
-        key: section.key,
-        title: section.title,
-        ...(section.icon ? { icon: section.icon } : {}),
-        ...(section.repo ? { repo: section.repo } : {}),
-        data: getMobileOccurrenceRows(occurrencePlan, section.key, collapsed, hostContextOf)
-      }))
+      occurrencePlan.sections
+        .filter(
+          (s) => !isSectionHiddenByCollapsedUmbrella(occurrencePlan.sections, s.key, collapsed)
+        )
+        .map(({ items: _items, placement: _placement, data: _data, ...section }) => {
+          const rows = getMobileOccurrenceRows(
+            occurrencePlan,
+            section.key,
+            collapsed,
+            hostContextOf
+          )
+          return {
+            ...section,
+            data: section.projectGroupDepth
+              ? rows.map((r) => ({
+                  ...r,
+                  view: { ...r.view, projectGroupDepth: section.projectGroupDepth }
+                }))
+              : rows
+          }
+        })
   }
 }
 

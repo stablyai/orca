@@ -10,6 +10,7 @@ type CatalogSource = {
   repos: AppState['repos']
   projection: ProjectHostSetupProjection
   projectOrderBy: AppState['projectOrderBy']
+  projectGroups?: AppState['projectGroups']
   catalog: MobileProjectSectionCatalog
 }
 
@@ -17,7 +18,8 @@ let cachedCatalogSource: CatalogSource | null = null
 
 /** What the sidebar groups Project headers by: state.repos in its order and the selector's projection. */
 export function getProjectSectionCatalogFromState(
-  state: Pick<AppState, 'repos' | 'projects' | 'projectHostSetups' | 'projectOrderBy'>
+  state: Pick<AppState, 'repos' | 'projects' | 'projectHostSetups' | 'projectOrderBy'> &
+    Partial<Pick<AppState, 'projectGroups'>>
 ): MobileProjectSectionCatalog | null {
   // Why: graph publication must not fail on a store slice that holds no repo catalog.
   if (!Array.isArray(state.repos)) {
@@ -29,15 +31,22 @@ export function getProjectSectionCatalogFromState(
     cached &&
     cached.repos === state.repos &&
     cached.projection === projection &&
-    cached.projectOrderBy === state.projectOrderBy
+    cached.projectOrderBy === state.projectOrderBy &&
+    cached.projectGroups === state.projectGroups
   ) {
     return cached.catalog
   }
-  const catalog = buildMobileProjectSectionCatalog(state.repos, projection, state.projectOrderBy)
+  const catalog = buildMobileProjectSectionCatalog(
+    state.repos,
+    projection,
+    state.projectOrderBy,
+    Array.isArray(state.projectGroups) ? state.projectGroups : undefined
+  )
   cachedCatalogSource = {
     repos: state.repos,
     projection,
     projectOrderBy: state.projectOrderBy,
+    projectGroups: state.projectGroups,
     catalog
   }
   return catalog

@@ -1,5 +1,7 @@
 import { isFolderRepo } from '../../../shared/repo-kind'
+import { getRepoExecutionHostId } from '../../../shared/execution-host'
 import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
+import { writeLocalIssueRepositoryOverride } from '../../github/sdlc-issue-repository'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeRepoSelector } from '../workspaces/catalog/runtime-repo-selector'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
@@ -35,6 +37,7 @@ type RepositoryUpdates = Partial<
     | 'badgeColor'
     | 'repoIcon'
     | 'upstream'
+    | 'issueRepository'
     | 'hookSettings'
     | 'editorFormatter'
     | 'worktreeBaseRef'
@@ -116,6 +119,9 @@ export class RuntimeRepositorySettingsController {
     if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
       sanitizedUpdates.sourceControlAi = null
     }
+    if ('issueRepository' in updates && updates.issueRepository === null) {
+      sanitizedUpdates.issueRepository = null
+    }
     const write = (proven: Pick<Repo, 'folderUpgradeGitRootPath'>): Repo | null => {
       assertWslMoveRepoWritable(store, repo)
       return store.updateRepo(repo, { ...sanitizedUpdates, ...proven })
@@ -130,6 +136,12 @@ export class RuntimeRepositorySettingsController {
     if ('worktreeBasePath' in updates) {
       await prepareLocalWorktreeRootForRepo(store, updated)
       invalidateAuthorizedRootsCache()
+    }
+    if ('issueRepository' in updates && getRepoExecutionHostId(updated) === 'local') {
+      await writeLocalIssueRepositoryOverride(
+        updated.path,
+        updated.issueRepository ?? null
+      ).catch(() => {})
     }
     this.deps.invalidateResolvedWorktrees()
     if ('worktreeBasePath' in updates) {

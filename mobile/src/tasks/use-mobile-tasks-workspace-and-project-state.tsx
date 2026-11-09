@@ -148,6 +148,8 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   const [projectMutating, setProjectMutating] = useState(false)
   const [projectRepoNotInOrca, setProjectRepoNotInOrca] =
     useState<ProjectRepoNotInOrcaPrompt | null>(null)
+  const [editingRepoMappingId, setEditingRepoMappingId] = useState<string | null>(null)
+  const [repoMappingDraft, setRepoMappingDraft] = useState('')
   const taskDetailHandoff = useBottomDrawerFollowUp(() => model.setActionItem(null))
   const projectRowHandoff = useBottomDrawerFollowUp(() => setProjectRowItem(null))
   const repoPickerHandoff = useBottomDrawerFollowUp(() => setWorkspaceRepoPickerItem(null))
@@ -325,7 +327,11 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
     projectMutating,
     setProjectMutating,
     projectRepoNotInOrca,
-    setProjectRepoNotInOrca
+    setProjectRepoNotInOrca,
+    editingRepoMappingId,
+    setEditingRepoMappingId,
+    repoMappingDraft,
+    setRepoMappingDraft
   })
 }
 

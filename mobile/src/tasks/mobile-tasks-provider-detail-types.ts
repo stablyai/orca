@@ -16,6 +16,7 @@ export type RepoSummary = {
   connectionId?: string | null
   executionHostId?: ExecutionHostId | null
   issueSourcePreference?: IssueSourcePreference
+  issueRepository?: { owner: string; repo: string; host?: string } | null
   upstream?: { owner: string; repo: string; host?: string } | null
 }
 

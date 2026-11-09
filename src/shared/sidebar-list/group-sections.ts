@@ -1,7 +1,7 @@
 import type { Repo } from '../repo-types'
 import type { WorktreeOccurrencePlan } from '../worktree-occurrence-plan'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
-import type { ExecutionHostId } from '../execution-host'
+import { getRepoExecutionHostIdOrDefault, type ExecutionHostId } from '../execution-host'
 import { getWorkspaceStatusFromGroupKey } from '../workspace-statuses'
 import type { PRGroupKey } from './group-keys'
 import type { NoticeHostContext } from './host-labels'
@@ -21,6 +21,10 @@ import {
   buildNewExternalWorktreesInboxRow,
   buildPendingCreationRow
 } from './row-builders'
+import {
+  buildUmbrellaSubfolderHierarchy,
+  getUmbrellaSubfoldersGroupKey
+} from './umbrella-subfolder-groups'
 import type {
   ImportedWorktreesCardCandidate,
   NewExternalWorktreesInboxCandidate,
@@ -101,20 +105,30 @@ export function appendOrderedGroups(
     mixedWorktreeHostContextLabels,
     occurrencePlan
   } = ctx
-  for (const [key, group] of groupsToAppend) {
+  const umbrellaHierarchy =
+    groupBy === 'repo'
+      ? buildUmbrellaSubfolderHierarchy(
+          groupsToAppend,
+          ([key]) => key,
+          ([, group]) => group.repo
+        )
+      : null
+
+  const emitGroupEntry = ([key, group]: OrderedGroupEntry, depth: number): void => {
     const isCollapsed = collapsedGroups.has(key)
     const repo = group.repo
     const folderPairs = group.folderWorkspaces ?? []
+    const childEntries = umbrellaHierarchy?.childrenByParentKey.get(key) ?? []
     const header =
       groupBy === 'repo'
         ? {
             type: 'header' as const,
             key,
             label: group.label,
-            count: group.items.length,
+            count: group.items.length > 0 ? group.items.length : childEntries.length,
             icon: { kind: 'project' as const },
             repo,
-            projectGroupDepth,
+            projectGroupDepth: depth,
             ...getProjectHeaderHostScope(ctx, group)
           }
         : groupBy === 'workspace-status'
@@ -214,12 +228,34 @@ export function appendOrderedGroups(
           : undefined
       appendWorktreeRows(result, repoOf, occurrencePlan, {
         collapsedGroups,
-        groupDepth: projectGroupDepth,
+        groupDepth: depth,
         sectionKey: key,
         hostContextLabelByRepoId,
         hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
         folderPairByIdentity: ctx.folderPairByIdentity
       })
+      if (childEntries.length > 0) {
+        const subfoldersKey = getUmbrellaSubfoldersGroupKey(key)
+        result.push({
+          type: 'header',
+          key: subfoldersKey,
+          label: `${group.label} / subfolders`,
+          count: childEntries.length,
+          icon: { kind: 'project' },
+          projectGroup: { id: null, name: 'Ungrouped', tabOrder: 0 },
+          projectGroupDepth: depth + 1,
+          ...(repo ? { hostId: getRepoExecutionHostIdOrDefault(repo, defaultHostId) } : {})
+        })
+        if (!collapsedGroups.has(subfoldersKey)) {
+          for (const childEntry of childEntries) {
+            emitGroupEntry(childEntry, depth + 2)
+          }
+        }
+      }
     }
+  }
+
+  for (const entry of umbrellaHierarchy ? umbrellaHierarchy.rootEntries : groupsToAppend) {
+    emitGroupEntry(entry, projectGroupDepth)
   }
 }

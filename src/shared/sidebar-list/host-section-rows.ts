@@ -60,7 +60,9 @@ function getRowHostId(row: Row, defaultHostId: ExecutionHostId): ExecutionHostId
     case 'folder-workspace':
       return getFolderWorkspaceHostId(row.folderWorkspace, row.projectGroup, defaultHostId)
     case 'header':
-      return row.repo ? getRepoExecutionHostIdOrDefault(row.repo, defaultHostId) : null
+      return row.repo
+        ? getRepoExecutionHostIdOrDefault(row.repo, defaultHostId)
+        : (row.hostId ?? null)
   }
 }
 
@@ -241,17 +243,10 @@ export function addHostSectionRows(args: {
 
   flushUnusedPendingRows(pendingRows)
 
-  const hostOrder: ExecutionHostId[] = []
-  for (const host of args.hostOptions) {
-    if (rowsByHostId.has(host.id)) {
-      hostOrder.push(host.id)
-    }
-  }
-  for (const hostId of rowsByHostId.keys()) {
-    if (!hostOptionsById.has(hostId)) {
-      hostOrder.push(hostId)
-    }
-  }
+  const hostOrder = [
+    ...args.hostOptions.filter((host) => rowsByHostId.has(host.id)).map((host) => host.id),
+    ...[...rowsByHostId.keys()].filter((hostId) => !hostOptionsById.has(hostId))
+  ]
 
   // Show host headers only for mixed hosts; registered empty hosts remain in the scope picker.
   if (rowsByHostId.size <= 1) {

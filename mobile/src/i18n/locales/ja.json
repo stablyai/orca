@@ -3663,7 +3663,6 @@
       "pages": "GitHub の結果ページ",
       "pullRequests": "PR",
       "queryingSource": "検索対象: {{source}}",
-      "repoDescription": "検索対象のリポジトリを選択してください。",
       "repos": "リポジトリ",
       "upstream": "upstream"
     },

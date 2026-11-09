@@ -10,6 +10,11 @@ import { ALL_GROUP_KEY, getPRLaneKey, getProjectGroupHeaderKey } from './group-k
 import { buildProjectGroupingIndex, getProjectGroupingForRepo } from '../project-section-grouping'
 import type { ProjectSectionModel } from '../project-section-grouping'
 import type { SidebarPRGroupReader, WorktreeGroupBy } from './row-types'
+import {
+  buildUmbrellaSubfolderHierarchy,
+  getUmbrellaSubfoldersGroupKey,
+  normalizeRepoFilesystemPath
+} from './umbrella-subfolder-groups'
 
 export function getGroupKeyForWorktree(
   groupBy: WorktreeGroupBy,
@@ -60,6 +65,28 @@ export function getGroupKeysForWorktree(
     return [groupKey]
   }
   const repo = repoMap.get(worktree.repoId)
+  const index = buildProjectGroupingIndex(projectGrouping)
+  const repoEntries = [...repoMap.values()].map((entryRepo) => ({
+    key: getProjectGroupingForRepo(entryRepo.id, repoMap, index).key,
+    repo: entryRepo
+  }))
+  const umbrellaHierarchy = buildUmbrellaSubfolderHierarchy(
+    repoEntries,
+    (entry) => entry.key,
+    (entry) => entry.repo
+  )
+  const umbrellaAncestorKeys: string[] = []
+  const seenUmbrella = new Set<string>()
+  let currentUmbrellaKey = umbrellaHierarchy.parentKeyByKey.get(groupKey)
+  while (currentUmbrellaKey && !seenUmbrella.has(currentUmbrellaKey)) {
+    seenUmbrella.add(currentUmbrellaKey)
+    umbrellaAncestorKeys.unshift(
+      currentUmbrellaKey,
+      getUmbrellaSubfoldersGroupKey(currentUmbrellaKey)
+    )
+    currentUmbrellaKey = umbrellaHierarchy.parentKeyByKey.get(currentUmbrellaKey)
+  }
+
   const groupIds: string[] = []
   const groupsById = new Map(projectGroups.map((group) => [group.id, group]))
   const visited = new Set<string>()
@@ -71,9 +98,20 @@ export function getGroupKeysForWorktree(
       break
     }
     visited.add(currentGroupId)
-    groupIds.unshift(currentGroupId)
+    const groupPath = normalizeRepoFilesystemPath(group.parentPath)
+    const hasMatchingUmbrellaRepo =
+      groupPath !== null &&
+      repoEntries.some(
+        (entry) =>
+          entry.repo.projectGroupId === group.id &&
+          normalizeRepoFilesystemPath(entry.repo.path) === groupPath
+      ) &&
+      repoEntries.filter((entry) => entry.repo.projectGroupId === group.id).length > 1
+    if (!hasMatchingUmbrellaRepo) {
+      groupIds.unshift(currentGroupId)
+    }
     const parentId = group.parentGroupId ?? null
     currentGroupId = parentId && groupsById.has(parentId) ? parentId : null
   }
-  return [...groupIds.map((id) => getProjectGroupHeaderKey(id)), groupKey]
+  return [...groupIds.map((id) => getProjectGroupHeaderKey(id)), ...umbrellaAncestorKeys, groupKey]
 }

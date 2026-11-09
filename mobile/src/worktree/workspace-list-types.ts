@@ -78,6 +78,8 @@ export type Section = {
   repo?: SectionRepo
   isProjectGroup?: boolean
   projectGroupDepth?: number
+  /** Parent umbrella repo section key when this repo is a nested subfolder repo. */
+  parentSectionKey?: string
   /** The header's own count from a feed-built list, which a collapsed section still shows. */
   count?: number
   pendingCreations?: SectionPendingCreation[]

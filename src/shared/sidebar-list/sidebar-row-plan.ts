@@ -26,6 +26,7 @@ import {
 } from '../worktree-occurrence-plan'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
 import type { OrderedGroupEntry, WorktreeGroupEntry } from './worktree-group-entry'
+import { buildUmbrellaRevealParent } from './umbrella-subfolder-groups'
 
 import {
   appendProjectGroupSections,
@@ -181,8 +182,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       }
       const sections = groups.map(([key, group]): SidebarOccurrenceSection => {
         const revealPath =
-          groupBy === 'repo' && key !== PINNED_GROUP_KEY && group.repo?.projectGroupId
-            ? projectGroupPaths.get(group.repo.projectGroupId)
+          groupBy === 'repo' && key !== PINNED_GROUP_KEY
+            ? buildUmbrellaRevealParent(groups, projectGroupPaths, key, group.repo?.projectGroupId)
             : undefined
         const items = (
           groupBy === 'repo' && key !== PINNED_GROUP_KEY
