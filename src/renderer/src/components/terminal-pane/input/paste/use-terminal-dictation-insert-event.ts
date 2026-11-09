@@ -29,11 +29,14 @@ export function useTerminalDictationInsertEvent({
             // A hidden tab's terminal must not take focus from where the user went.
             focusAfterPaste: () => isActiveRef.current
           }),
-        pressEnter: async (paneId) => {
+        pressEnter: async (paneId, stillQueued) => {
           // Like an agent prompt paste: the TUI must see the bracketed paste end before Enter.
           await new Promise((resolve) =>
             window.setTimeout(resolve, AGENT_PROMPT_POST_PASTE_SUBMIT_DELAY_MS)
           )
+          if (!stillQueued()) {
+            return
+          }
           managerRef.current
             ?.getPanes()
             .find((pane) => pane.id === paneId)

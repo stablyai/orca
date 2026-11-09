@@ -9,6 +9,8 @@ import type { DictationKeptRecording } from './dictation-kept-recording'
 
 export type DictationQueuedSendKind = 'chat' | 'terminal'
 
+type QueuedSend = (stillQueued: () => boolean) => void | Promise<void>
+
 type ComposerSendQueue = (root: HTMLElement, send: () => void) => boolean
 let composerSendQueue: ComposerSendQueue | null = null
 
@@ -45,11 +47,11 @@ export function useDictationQueuedSend(
   sessionRef: RefObject<DictationSession>,
   keptRef: RefObject<DictationKeptRecording | null>
 ) {
-  const queuedRef = useRef<{ run: number; send: () => void | Promise<void> } | null>(null)
+  const queuedRef = useRef<{ run: number; send: QueuedSend } | null>(null)
   const [queuedKind, setQueuedKind] = useState<DictationQueuedSendKind | null>(null)
 
   const queue = useCallback(
-    (kind: DictationQueuedSendKind, send: () => void | Promise<void>): boolean => {
+    (kind: DictationQueuedSendKind, send: QueuedSend): boolean => {
       const { phase, run, sessionId } = sessionRef.current
       if (sessionId === null || !(isDictationUnderway(phase) || phase === 'stopping')) {
         return false
@@ -82,7 +84,7 @@ export function useDictationQueuedSend(
         eventTarget instanceof HTMLElement &&
         eventTarget.classList.contains('xterm-helper-textarea') &&
         eventTarget.closest('.pane[data-pane-id]') === target.pane &&
-        queue('terminal', () => pressDictationTerminalEnter(target))
+        queue('terminal', (stillQueued) => pressDictationTerminalEnter(target, stillQueued))
       )
     },
     [keptRef, queue]
@@ -103,13 +105,14 @@ export function useDictationQueuedSend(
         return
       }
       const landed = await delivery.settled()
-      // A cancel while the words were landing already dropped the send.
-      if (sessionRef.current.run !== run) {
-        return
+      // A later session may have queued its own send meanwhile; leave that one alone.
+      if (queuedRef.current === queued) {
+        clear()
       }
-      clear()
-      if (landed) {
-        await queued.send()
+      // A cancel or failure while the words were landing drops the send.
+      const stillQueued = (): boolean => sessionRef.current.run === run
+      if (landed && stillQueued()) {
+        await queued.send(stillQueued)
       }
     },
     [keptRef, sessionRef, clear]

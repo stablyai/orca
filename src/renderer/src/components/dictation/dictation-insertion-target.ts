@@ -15,8 +15,8 @@ import { DICTATION_FOCUS_INPUT_EVENT } from './dictation-control-events'
 type ComposerInsert = (text: string) => boolean
 type TerminalInput = {
   insert: (text: string, paneId: number) => Promise<boolean>
-  /** Enter as if typed, once the pane has taken the dictated text. */
-  pressEnter: (paneId: number) => Promise<void>
+  /** Enter as if typed, once the pane has taken the dictated text and if the send still stands. */
+  pressEnter: (paneId: number, stillQueued: () => boolean) => Promise<void>
 }
 
 export type DictationInsertionTarget =
@@ -52,9 +52,10 @@ export function registerDictationTerminalTarget(tabId: string, input: TerminalIn
 }
 
 export async function pressDictationTerminalEnter(
-  target: Extract<DictationInsertionTarget, { kind: 'terminal' }>
+  target: Extract<DictationInsertionTarget, { kind: 'terminal' }>,
+  stillQueued: () => boolean
 ): Promise<void> {
-  await terminalTargets.get(target.tabId)?.pressEnter(target.paneId)
+  await terminalTargets.get(target.tabId)?.pressEnter(target.paneId, stillQueued)
 }
 
 export function captureInsertionTarget(): DictationInsertionTarget | null {
