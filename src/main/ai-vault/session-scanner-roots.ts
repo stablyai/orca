@@ -7,6 +7,12 @@ import { ompProfileSessionsDirs, resolveOmpSessionsDir } from './scanners/omp/om
 
 /** Where each transcript agent's session tree sits under a home dir (host or WSL guest). */
 export const AGENT_SESSION_HOME_SEGMENTS = {
+  antigravity: [
+    ['.gemini', 'antigravity-cli', 'brain'],
+    ['.gemini', 'antigravity-acp', 'brain'],
+    ['.gemini', 'antigravity', 'brain'],
+    ['.gemini', 'antigravity-ide', 'brain']
+  ],
   claude: [['.claude', 'projects']],
   // Orca's retired WSL CODEX_HOME first: Orca-launched sessions were filed there.
   codex: [

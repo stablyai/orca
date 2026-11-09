@@ -5,7 +5,7 @@ import {
   readString,
   toolUpdate
 } from '../tool-input-preview'
-import { readFirstString } from '../interactive-tool'
+import { deriveInteractivePrompt, readFirstString } from '../interactive-tool'
 import { readLastAssistantFromTranscript } from '../transcript-lines'
 import { isAntigravityStopStillBusy } from './antigravity-event-rules'
 
@@ -35,7 +35,11 @@ export function extractAntigravityToolFields(
       deriveToolInputPreview(toolName, toolCall.toolInputSource) ??
       deriveFallbackToolInputPreview(toolCall.toolInputSource)
     return toolUpdate(
-      { toolName, toolInput },
+      {
+        toolName,
+        toolInput,
+        interactivePrompt: deriveInteractivePrompt(toolName, toolCall.toolInputSource, eventName)
+      },
       { hasToolInputField: toolCall.toolInputSource !== undefined }
     )
   }

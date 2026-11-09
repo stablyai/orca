@@ -9,6 +9,11 @@ import {
   parseJsonObject,
   timestampMs
 } from '../ai-vault/session-scanner-values'
+import {
+  antigravityBaseRecordId,
+  isAntigravityCompactionSummary,
+  unwrapAntigravityUserText
+} from './transcript-line-decoders-antigravity'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 import {
   claudeInterruptedMessageId,
@@ -26,11 +31,61 @@ export function nativeChatTurnLifecycleDecoderForAgent(
   agent: AgentType
 ): NativeChatTurnLifecycleDecoder | null {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
+  if (transcriptAgent === 'antigravity') {
+    return decodeAntigravityTurnLifecycle
+  }
   if (transcriptAgent === 'codex') {
     return decodeCodexTurnLifecycle
   }
   if (transcriptAgent === 'claude') {
     return decodeClaudeTurnLifecycle
+  }
+  return null
+}
+
+export function decodeAntigravityTurnLifecycle(
+  line: string,
+  fallbackId: string
+): NativeChatTurnLifecycle | null {
+  const record = parseJsonObject(line)
+  if (!record) {
+    return null
+  }
+  const source = extractString(record.source)
+  const type = extractString(record.type)
+  const status = extractString(record.status)
+  const timestamp = lifecycleTimestamp(record.created_at ?? record.timestamp)
+  const turnId = antigravityBaseRecordId(record, fallbackId)
+
+  if (status === 'CANCELED' || status === 'CANCELLED') {
+    return { state: 'interrupted', turnId, timestamp }
+  }
+  if (
+    (source === 'USER_EXPLICIT' || source === 'USER' || source === null) &&
+    (type === 'USER_INPUT' || type === 'REQUEST' || type === null)
+  ) {
+    const rawContent = typeof record.content === 'string' ? record.content : ''
+    if (isAntigravityCompactionSummary(rawContent)) {
+      return null
+    }
+    const text = unwrapAntigravityUserText(rawContent)
+    const hasMedia = Array.isArray(record.media) && record.media.length > 0
+    return text || hasMedia ? { state: 'working', turnId, timestamp } : null
+  }
+  if ((source === 'MODEL' || source === null) && type === 'PLANNER_RESPONSE') {
+    const hasToolCalls = Array.isArray(record.tool_calls) && record.tool_calls.length > 0
+    if (hasToolCalls) {
+      return null
+    }
+    if (status === 'ERROR') {
+      return { state: 'completed', turnId, timestamp }
+    }
+    const hasContent =
+      (typeof record.content === 'string' && record.content.trim().length > 0) ||
+      (typeof record.thinking === 'string' && record.thinking.trim().length > 0)
+    if ((status === 'DONE' || status === null) && hasContent) {
+      return { state: 'completed', turnId, timestamp }
+    }
   }
   return null
 }

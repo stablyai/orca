@@ -228,4 +228,29 @@ describe('resolveSessionFilePath', () => {
     })
     expect(resolved).toBe(target)
   })
+
+  it('resolves Antigravity transcripts under brain/<sessionId> and prefers transcript_full.jsonl', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-agy-')
+    const brainDir = join(root, 'antigravity-cli', 'brain')
+    const sessionId = '11111111-2222-4333-8444-555555555555'
+    const logsDir = join(brainDir, sessionId, '.system_generated', 'logs')
+    await mkdir(logsDir, { recursive: true })
+    const compactFile = join(logsDir, 'transcript.jsonl')
+    const fullFile = join(logsDir, 'transcript_full.jsonl')
+    await writeFile(compactFile, '{}\n')
+    await writeFile(fullFile, '{}\n')
+
+    await expect(
+      resolveSessionFilePath('antigravity', sessionId, {
+        antigravityBrainDir: brainDir
+      })
+    ).resolves.toBe(fullFile)
+
+    await expect(
+      resolveSessionFilePath('antigravity', sessionId, {
+        antigravityBrainDir: brainDir,
+        transcriptPath: compactFile
+      })
+    ).resolves.toBe(fullFile)
+  })
 })

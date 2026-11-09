@@ -4,7 +4,18 @@ import type { NativeChatMessage } from '../../shared/native-chat/native-chat-typ
 import { transcriptFallbackId } from './transcript-fallback-id'
 import { inTranscriptFileOrder } from './transcript-file-order'
 
-type TranscriptDecoder = (line: string, fallbackId: string) => NativeChatMessage | null
+export type TranscriptDecoderResult = NativeChatMessage | readonly NativeChatMessage[] | null
+
+type TranscriptDecoder = (line: string, fallbackId: string) => TranscriptDecoderResult
+
+export function decodedTranscriptMessages(
+  decoded: TranscriptDecoderResult
+): readonly NativeChatMessage[] {
+  if (!decoded) {
+    return []
+  }
+  return 'id' in decoded ? [decoded] : decoded
+}
 
 export async function decodeTranscriptStream(
   stream: Readable,
@@ -36,8 +47,8 @@ export async function decodeTranscriptStream(
     if (!line) {
       return
     }
-    const message = decode(line, transcriptFallbackId(filePath, start + relativeOffset))
-    if (message) {
+    const decoded = decode(line, transcriptFallbackId(filePath, start + relativeOffset))
+    for (const message of decodedTranscriptMessages(decoded)) {
       const ordered = inTranscriptFileOrder(
         message,
         latest,

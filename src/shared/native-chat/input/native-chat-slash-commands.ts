@@ -120,7 +120,30 @@ const OMP_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'hotkeys', description: 'Show keyboard shortcuts in Terminal' }
 ]
 
+const ANTIGRAVITY_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'model', description: 'Choose the model for this session' },
+  { name: 'effort', description: 'Set reasoning effort (low, medium, high, xhigh, max)' },
+  { name: 'compact', description: 'Summarize and compact the conversation' },
+  { name: 'plan', description: 'Plan step by step before executing' },
+  { name: 'goal', description: 'Set a goal and run until it is achieved' },
+  { name: 'boost', description: 'Deep strategic planning and rigorous verification' },
+  { name: 'grill-me', description: 'Interactive interview to resolve design decisions' },
+  { name: 'teamwork', description: 'Coordinate a team of autonomous agents' },
+  { name: 'learn', description: 'Persist a learned workflow or preference' },
+  { name: 'browser', description: 'Browse or interact with web pages' },
+  { name: 'schedule', description: 'Run an instruction on a recurring schedule or timer' },
+  { name: 'clear', description: 'Clear conversation history' },
+  { name: 'new', description: 'Start a new conversation' },
+  { name: 'resume', description: 'Resume a previous conversation' },
+  { name: 'mcp', description: 'List configured MCP servers and tools' },
+  { name: 'skills', description: 'List available skills' },
+  { name: 'agents', description: 'List available subagents' },
+  { name: 'usage', description: 'Show session token usage' },
+  { name: 'help', description: 'Show available commands' }
+]
+
 const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
+  antigravity: ANTIGRAVITY_COMMANDS,
   claude: CLAUDE_COMMANDS,
   openclaude: OPENCLAUDE_COMMANDS,
   codex: CODEX_COMMANDS,

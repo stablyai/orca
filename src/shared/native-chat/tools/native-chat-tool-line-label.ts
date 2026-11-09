@@ -123,7 +123,10 @@ export function nativeChatToolLineLabel(
     target = filePath?.split(/[\\/]/).findLast((part) => part.length > 0) ?? target
   } else if (category === 'subAgentActivity') {
     verb = 'subagent'
-    target = nativeChatToolInputText(call.input, 'description') ?? target
+    target =
+      nativeChatToolInputText(call.input, 'description') ??
+      nativeChatToolInputText(call.input, 'Role') ??
+      target
     title = target
   } else if (category === 'search') {
     verb = phaseVerb(phase, { running: 'searching', completed: 'searched', failed: 'triedSearch' })

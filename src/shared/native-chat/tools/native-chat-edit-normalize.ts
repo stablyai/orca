@@ -11,7 +11,14 @@ import { editLinesFromUnifiedPatch, editLinesFromWholeFile } from './native-chat
 import type { NativeChatEditPatch } from '../native-chat-types'
 
 // NotebookEdit has only new cell text; diff cards would falsely mark unchanged cells added. Keep the generic view.
-const CLAUDE_EDIT_TOOLS = new Set(['Edit', 'MultiEdit', 'Write', 'str_replace'])
+const CLAUDE_EDIT_TOOLS = new Set([
+  'Edit',
+  'MultiEdit',
+  'Write',
+  'str_replace',
+  'edit_file',
+  'write_file'
+])
 /** Command tools can quote patches without applying them. */
 const COMMAND_PATCH_TOOLS = new Set(['exec', 'shell', 'local_shell'])
 /** Dedicated patch tools apply their envelope; general command tools must explicitly apply it. */
@@ -62,7 +69,8 @@ function linesFromEditPatch(patch: NativeChatEditPatch): NativeChatEditLine[] {
 }
 
 /** Whole-file writes do not prove creation. Require positive evidence; falsely calling an overwrite new misrepresents every existing line. */
-const CREATED_FILE_RESULT = /^\s*File created successfully/
+const CREATED_FILE_RESULT =
+  /^\s*(?:File created successfully|(?:Created At:[\s\S]*?)?Created file\.)/
 
 function wholeContentChangeKind(
   input: Record<string, unknown>,
@@ -115,13 +123,13 @@ function claudeEditFiles(
   input: Record<string, unknown>,
   output: string | undefined
 ): NativeChatEditFile[] | null {
-  const path = text(input.file_path) ?? text(input.path) ?? 'file'
+  const path = text(input.file_path) ?? text(input.path) ?? text(input.Path) ?? 'file'
   if (name === 'MultiEdit') {
     return multiEditFiles(input, path)
   }
-  const oldString = text(input.old_string) ?? text(input.oldString)
-  const newString = text(input.new_string) ?? text(input.newString)
-  const content = text(input.content) ?? text(input.file_text)
+  const oldString = text(input.old_string) ?? text(input.oldString) ?? text(input.Target)
+  const newString = text(input.new_string) ?? text(input.newString) ?? text(input.Replacement)
+  const content = text(input.content) ?? text(input.Content) ?? text(input.file_text)
   if (oldString === null && content !== null) {
     const whole = editLinesFromWholeFile(content, 'add')
     return [

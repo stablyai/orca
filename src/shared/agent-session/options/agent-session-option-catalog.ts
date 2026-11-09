@@ -79,7 +79,7 @@ export function mergeDiscoveredAuthoritativeModels(
     const seedMatch = seed.find((model) => model.id === disc.id)
     const { isDefault: _seeded, ...merged } = seedMatch
       ? { ...seedMatch, ...disc, options: seedMatch.options }
-      : { ...disc, options: inheritedOptions }
+      : { ...disc, options: disc.options.length > 0 ? disc.options : inheritedOptions }
     // Use the probe's current CLI default; a release-frozen seed mislabels changed account defaults.
     return disc.isDefault ? { ...merged, isDefault: true } : merged
   })
