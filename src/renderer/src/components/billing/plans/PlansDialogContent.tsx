@@ -23,6 +23,7 @@ export function PlansDialogContent(
         event.preventDefault()
         if (event.currentTarget instanceof HTMLElement) {
           const primary = event.currentTarget.querySelector<HTMLElement>('[data-plans-primary]')
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: focusVisible is a valid FocusOptions member newer than this TS lib.
           ;(primary ?? event.currentTarget).focus({ focusVisible: false } as FocusOptions)
         }
       }}

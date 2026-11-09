@@ -178,7 +178,7 @@ function PlansSkeleton(): React.JSX.Element {
     >
       <ValueProps />
       <div className="flex justify-center">
-        <SkeletonLine className="h-8 w-56 rounded-full" />
+        <Skeleton shape="circle" className="h-8 w-56" />
       </div>
       <div className="grid items-stretch gap-4 md:grid-cols-2">
         <SkeletonCard lines={5} />

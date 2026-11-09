@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { OrcaBillingOpenResult } from '../../../../../shared/orca-billing'
 import { getBillingGeneration, recordBillingStatusIfCurrent } from '../billing-summary-store'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import {
   CHECKOUT_POLL_MS,
   CHECKOUT_SLOW_POLL_MS,
@@ -108,10 +109,11 @@ export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void })
         })
     }
     const poll = (): void => check()
-    const timer = window.setInterval(
-      poll,
-      watching.kind === 'awaiting-payment' ? CHECKOUT_POLL_MS : CHECKOUT_SLOW_POLL_MS
-    )
+    // Paused while the window is hidden; becoming visible checks at once.
+    const stopPolling = installWindowVisibilityInterval({
+      run: poll,
+      intervalMs: watching.kind === 'awaiting-payment' ? CHECKOUT_POLL_MS : CHECKOUT_SLOW_POLL_MS
+    })
     const deadline =
       watching.kind === 'awaiting-payment'
         ? window.setTimeout(
@@ -119,7 +121,7 @@ export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void })
             Math.max(0, watching.since + CHECKOUT_WATCH_MS - Date.now())
           )
         : // Slow watch ends after a while; window focus and the return link still check.
-          window.setTimeout(() => window.clearInterval(timer), CHECKOUT_SLOW_WATCH_MS)
+          window.setTimeout(stopPolling, CHECKOUT_SLOW_WATCH_MS)
     window.addEventListener('focus', poll)
     const disposeReturn = window.api.orcaProfiles.onBillingReturn?.((event) => {
       // Any local app can open an orca:// link, so "canceled" is shown only after billing
@@ -130,7 +132,7 @@ export function useCheckoutFlow({ onPaid }: { onPaid: (seats: number) => void })
     })
     return () => {
       disposed = true
-      window.clearInterval(timer)
+      stopPolling()
       window.clearTimeout(deadline)
       window.removeEventListener('focus', poll)
       disposeReturn?.()

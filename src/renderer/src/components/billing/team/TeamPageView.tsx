@@ -67,7 +67,7 @@ function PlanSkeleton(): React.JSX.Element {
     <div aria-hidden className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-xs">
       <div className="flex items-center gap-2">
         <Skeleton className="h-4 w-12" />
-        <Skeleton className="h-5 w-14 rounded-full" />
+        <Skeleton shape="circle" className="h-5 w-14" />
       </div>
       <div className="grid grid-cols-3 gap-4">
         {[0, 1, 2].map((index) => (
@@ -92,7 +92,7 @@ function SkeletonRows(): React.JSX.Element {
     >
       {[0, 1, 2].map((index) => (
         <div key={index} className="flex min-h-12 items-center gap-3 bg-card px-3 py-2">
-          <Skeleton className="size-6 rounded-full" />
+          <Skeleton shape="circle" className="size-6" />
           <div className="flex-1 space-y-1.5">
             <Skeleton className="h-3 w-32" />
             <Skeleton className="h-2.5 w-44" />
