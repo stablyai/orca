@@ -16,7 +16,7 @@ pnpm dev
 
 `pnpm dev` in a linked Git worktree uses its own profile and ports, so instances in different worktrees run side by side.
 
-See [`docs/development.md`](../docs/development.md) for per-OS packages, Corepack and Windows notes, dev profiles and seeding, the pnpm global virtual store, cross-architecture and Linux (Docker) builds, and dev server options.
+See [`docs/development.md`](../docs/development.md) for per-OS packages, Corepack and Windows notes, dev profiles and seeding, cross-architecture and Linux (Docker) builds, and troubleshooting.
 
 ## Branch Naming
 
@@ -60,13 +60,13 @@ pnpm test:changed src/main/runtime --maxWorkers=2   # staged, unstaged, and untr
 pnpm test --changed=origin/main --maxWorkers=2      # also commits since the merge base
 ```
 
-Affected tests follow Vitest's static import graph, so run suites explicitly for dynamic imports, fixtures, or subprocess inputs. Local affected tests do not replace CI. If a file passes alone but fails after others, add `// @orca-isolated-worker` to it. More detail is in [`docs/development.md`](../docs/development.md#tests-and-dev-server-options).
+Affected tests follow Vitest's static import graph, so run suites explicitly for dynamic imports, fixtures, or subprocess inputs. Local affected tests do not replace CI. If a file passes alone but fails after others, add `// @orca-isolated-worker` to it.
 
 ## Pull Requests
 
 Fill in every section of [`.github/pull_request_template.md`](./pull_request_template.md): an ELI5, what changed and why, a linked issue (required for outside contributors), a before and after (screenshots or videos) for any UI or behavior change (only if there is truly no visual or interaction change, write exactly `N/A` and briefly say why), how you tested it, the risk, and under Review a short summary from your AI coding agent covering cross-platform, SSH/remote, agent and integration compatibility, performance, UI quality, and security. Keep each PR small and focused on one topic.
 
-Version bumps, tags, and releases are maintainer-managed. Do not include release version changes unless a maintainer asks. Maintainers: see [`docs/releasing.md`](../docs/releasing.md).
+Version bumps, tags, and releases are maintainer-managed. Do not include release version changes unless a maintainer asks. Maintainers cut releases with the [Cut Release](https://github.com/stablyai/orca/actions/workflows/release-cut.yml) workflow.
 
 ## Getting Help
 

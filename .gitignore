@@ -100,7 +100,6 @@ docs/**
 !docs/bug-reproductions/**
 !docs/STYLEGUIDE.md
 !docs/development.md
-!docs/releasing.md
 !docs/styleguide/
 !docs/styleguide/**
 !docs/agents-md-refs/
