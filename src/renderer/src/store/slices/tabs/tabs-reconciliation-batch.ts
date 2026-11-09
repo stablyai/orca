@@ -6,26 +6,16 @@ type ReconciledRecords = Pick<
   'unifiedTabsByWorktree' | 'groupsByWorktree' | 'activeGroupIdByWorktree' | 'layoutByWorktree'
 >
 
-/** The workspace records reconciliation rewrites, one entry per reconciled workspace. */
+/** Drafts of the workspace records reconciliation rewrites, one entry per reconciled workspace. */
 export type ReconciliationDrafts = {
-  unifiedTabsByWorktree: RecordDraft<AppState['unifiedTabsByWorktree'][string]>
-  groupsByWorktree: RecordDraft<AppState['groupsByWorktree'][string]>
+  unifiedTabs: RecordDraft<AppState['unifiedTabsByWorktree'][string]>
+  groups: RecordDraft<AppState['groupsByWorktree'][string]>
   // A workspace with no group stores an undefined active group, as the spread it replaced did.
-  activeGroupIdByWorktree: RecordDraft<AppState['activeGroupIdByWorktree'][string] | undefined>
-  layoutByWorktree: RecordDraft<AppState['layoutByWorktree'][string]>
+  activeGroups: RecordDraft<AppState['activeGroupIdByWorktree'][string] | undefined>
+  layout: RecordDraft<AppState['layoutByWorktree'][string]>
 }
 
 export type ReconciliationDraftField = keyof ReconciliationDrafts
-
-// Field names, not writes: the drafts every reconciliation writes, and the one a new leaf adds.
-export const SEAM_RECONCILED_ALWAYS_FIELDS = [
-  'unifiedTabsByWorktree',
-  'groupsByWorktree',
-  'activeGroupIdByWorktree'
-] as const satisfies readonly ReconciliationDraftField[]
-export const SEAM_RECONCILED_LAYOUT_FIELDS = [
-  'layoutByWorktree'
-] as const satisfies readonly ReconciliationDraftField[]
 
 /** One multi-workspace fold clones each shared map once and indexes read-only openFiles once, avoiding repeated map spreads and file scans per workspace. */
 export type WorktreeTabModelReconciliationBatch = {
@@ -40,10 +30,10 @@ export type WorktreeTabModelReconciliationBatch = {
 
 export function createReconciliationDrafts(state: ReconciledRecords): ReconciliationDrafts {
   return {
-    unifiedTabsByWorktree: tabBucketDraft(state.unifiedTabsByWorktree),
-    groupsByWorktree: recordDraft(state.groupsByWorktree),
-    activeGroupIdByWorktree: recordDraft<string | undefined>(state.activeGroupIdByWorktree),
-    layoutByWorktree: recordDraft(state.layoutByWorktree)
+    unifiedTabs: tabBucketDraft(state.unifiedTabsByWorktree),
+    groups: recordDraft(state.groupsByWorktree),
+    activeGroups: recordDraft<string | undefined>(state.activeGroupIdByWorktree),
+    layout: recordDraft(state.layoutByWorktree)
   }
 }
 
@@ -63,10 +53,16 @@ export function finishReconciliationDrafts(
   drafts: ReconciliationDrafts,
   written: ReadonlySet<ReconciliationDraftField>
 ): Partial<ReconciledRecords> {
-  const patch: Partial<Record<ReconciliationDraftField, unknown>> = {}
-  for (const field of written) {
-    patch[field] = drafts[field].finish()
+  return {
+    ...(written.has('unifiedTabs') ? { unifiedTabsByWorktree: drafts.unifiedTabs.finish() } : {}),
+    ...(written.has('groups') ? { groupsByWorktree: drafts.groups.finish() } : {}),
+    ...(written.has('activeGroups')
+      ? {
+          activeGroupIdByWorktree:
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: undefined entries were stored before too; readers treat them as absent.
+            drafts.activeGroups.finish() as AppState['activeGroupIdByWorktree']
+        }
+      : {}),
+    ...(written.has('layout') ? { layoutByWorktree: drafts.layout.finish() } : {})
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each field holds its own draft's finished record; undefined active groups were stored before too.
-  return patch as Partial<ReconciledRecords>
 }
