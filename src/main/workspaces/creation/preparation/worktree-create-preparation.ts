@@ -1,7 +1,8 @@
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import {
   discardPreparationEntry,
-  trackPreparationDiscard
+  trackPreparationDiscard,
+  releasePreparationObligation
 } from './worktree-preparation-discard-retry'
 import { worktreePreparationGit } from '../../../git/worktrees/creation/worktree-create-git-executor'
 import { mkdir } from 'node:fs/promises'
@@ -20,7 +21,6 @@ import type {
   AddWorktreeOptions,
   AddWorktreeResult
 } from '../../../git/worktrees/worktree-operation-options'
-import { WorktreePreparationLockOwnershipError } from '../../../git/worktrees/creation/worktree-preparation-lock'
 import {
   _resetPreparationPoolForTests,
   hasPendingPreparations,
@@ -38,7 +38,7 @@ import {
   type ReservedPreparation
 } from './worktree-create-preparation-reservation'
 import {
-  discardPreparedWorktree,
+  PreparedWorktreeFinalizationPendingError,
   finalizePreparedWorktree
 } from '../../../git/worktrees/creation/worktree-create-preparation'
 import {
@@ -283,10 +283,12 @@ async function attemptPreparedWorktreeCreate(
           args.baseBranch,
           args.refreshLocalBaseRef,
           options,
-          entry.lockReason
+          entry.lockReason,
+          entry.operation
         )
       }
     )
+    releasePreparationObligation(entry)
     const rearm = deferRearmPreparation(entry, reservation, args.baseBranch, claim.canonicalBase)
     return {
       status: 'hit',
@@ -298,15 +300,14 @@ async function attemptPreparedWorktreeCreate(
       rearm
     }
   } catch (error) {
-    // Another owner holds the preparation's lock, so it is not ours to remove.
-    if (!(error instanceof WorktreePreparationLockOwnershipError)) {
-      await timePhase(args, 'prepared_checkout_discard', () =>
-        discardPreparedWorktree(args.repoPath, entry.preparedPath, options, entry.lockReason)
-      ).catch(() => {})
-    }
+    trackPreparationDiscard(worktreePreparationGit.run(() => discardPreparationEntry(entry)))
     if (options.signal?.aborted) {
       releaseClaimAfterCreate(reservation)()
       options.signal.throwIfAborted()
+    }
+    if (error instanceof PreparedWorktreeFinalizationPendingError) {
+      releaseClaimAfterCreate(reservation)()
+      throw error.originalError
     }
     console.warn(
       '[worktree-create] prepared checkout could not be finalized; using normal add',

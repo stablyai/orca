@@ -15,7 +15,10 @@ import {
 } from '../worktree-operation-options'
 
 export class WorktreePreparationLockOwnershipError extends Error {
-  constructor(cause?: unknown) {
+  constructor(
+    cause?: unknown,
+    readonly replaced = false
+  ) {
     super('The prepared worktree lock owner changed', { cause })
   }
 }
@@ -106,10 +109,12 @@ export async function unlockWorktreePreparation(
 export async function unlockWorktreePreparationAtPath(
   lockPath: string,
   expectedLockReason: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  operation?: WorktreePreparationOperation
 ): Promise<void> {
   await verifyWorktreePreparationLockAtPath(lockPath, expectedLockReason, signal)
-  await unlink(lockPath).catch((error: unknown) => {
+  const writing = unlink(lockPath)
+  await (operation ? operation.trackWriter(writing) : writing).catch((error: unknown) => {
     throw new WorktreePreparationLockOwnershipError(error)
   })
 }
@@ -133,7 +138,7 @@ export async function verifyWorktreePreparationLockAtPath(
     throw new WorktreePreparationLockOwnershipError(error)
   })
   if (lockReason !== `${expectedLockReason}\n`) {
-    throw new WorktreePreparationLockOwnershipError()
+    throw new WorktreePreparationLockOwnershipError(undefined, true)
   }
   signal?.throwIfAborted()
 }

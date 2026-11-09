@@ -6,6 +6,8 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { RuntimeStore } from '../../../runtime/construction/runtime-store-contract'
 import type { AddWorktreeOptions } from '../../../git/worktrees/worktree-operation-options'
+import * as wslGate from '../../../wsl/filesystem/wsl-unc-access-gate'
+import { preparationCapacityUsed } from './worktree-preparation-discard-retry'
 import * as gitRunner from '../../../git/command-runner/git-exec-file'
 import { createRuntimeLocalGitWorktree } from '../../../runtime/workspaces/creation/runtime-local-git-worktree-create'
 import { createWorktreeCreateTimingRecorder } from '../worktree-create-timing'
@@ -203,7 +205,7 @@ it('propagates caller cancellation without falling back to a phantom worktree', 
   expect(await readFile(join(root, 'after-cancel', 'version.txt'), 'utf8')).toBe('original\n')
 })
 
-it('keeps a locked artifact after writer termination cannot be verified, even when proof arrives late', async () => {
+it('parks an unproven writer and autonomously removes its hidden checkout after late proof', async () => {
   const { root, arm, create } = await fixture()
   const failed = Promise.withResolvers<void>()
   const started = Promise.withResolvers<void>()
@@ -230,27 +232,32 @@ it('keeps a locked artifact after writer termination cannot be verified, even wh
   await creation
   await preparation
   await vi.advanceTimersByTimeAsync(30_000)
+  expect(existsSync(join(preparedPath, '.git'))).toBe(true)
+  // Repeated requests cannot revive or wait again on the same parked writer.
+  await arm()
+  await arm()
   terminated.resolve()
+  await vi.waitFor(() => expect(existsSync(preparedPath)).toBe(false))
   await create('after-writer')
   expect(await readFile(join(root, 'writer-fallback', 'version.txt'), 'utf8')).toBe('original\n')
-  expect(existsSync(join(preparedPath, '.git'))).toBe(true)
-  expect(existsSync(join(preparedPath, 'version.txt'))).toBe(false)
-  expect(git(preparedPath, 'worktree', 'list', '--porcelain')).toContain(
-    'locked orca-create-preparation:'
+  expect(git(root, '-C', join(root, 'repo'), 'worktree', 'list', '--porcelain')).not.toContain(
+    preparedPath
   )
 })
 
-it('never spawns a destructive remove queued beyond retirement abandonment', async () => {
+it('revokes an expired queued remove and admits fresh owned cleanup on its exact wake', async () => {
   const { repoPath, arm, create } = await fixture()
   const queued = Promise.withResolvers<void>()
   const admitted = Promise.withResolvers<void>()
   const attempted = Promise.withResolvers<void>()
+  let first = true
   vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
   await arm()
   const [entry] = listPreparations()
   const run = gitRunner.gitExecFileAsync
   vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
-    if (args.includes('remove')) {
+    if (args.includes('remove') && first) {
+      first = false
       queued.resolve()
       await admitted.promise
       try {
@@ -266,7 +273,198 @@ it('never spawns a destructive remove queued beyond retirement abandonment', asy
   await vi.advanceTimersByTimeAsync(30_000)
   admitted.resolve()
   await attempted.promise
+  await vi.waitFor(() => expect(existsSync(entry.preparedPath)).toBe(false))
   await create('after-abandoned-discard')
-  expect(await readFile(join(entry.preparedPath, 'version.txt'), 'utf8')).toBe('original\n')
-  expect(git(repoPath, 'worktree', 'list', '--porcelain')).toContain(entry.lockReason)
+  expect(git(repoPath, 'worktree', 'list', '--porcelain')).not.toContain(entry.lockReason)
+})
+
+it.each([3, 30])(
+  'bounds physical preparations under %i requests while cleanup is exhausted',
+  async (requests) => {
+    const owners = await Promise.all([fixture(), fixture(), fixture()])
+    for (const owner of owners) {
+      await owner.arm()
+    }
+    const entries = listPreparations()
+    const run = gitRunner.gitExecFileAsync
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+      if (args.includes('remove')) {
+        throw new Error('checkout temporarily locked')
+      }
+      return run(args, options)
+    })
+    for (const entry of entries) {
+      discardRepoPreparations(entry.repoPathKey)
+    }
+    const other = await fixture()
+    for (let index = 0; index < requests; index += 1) {
+      await other.arm()
+    }
+    expect(
+      entries.filter((entry) => existsSync(join(entry.preparedPath, 'version.txt')))
+    ).toHaveLength(3)
+    expect(listPreparations()).toHaveLength(0)
+    await other.create('normal-create')
+    expect(await readFile(join(other.root, 'normal-create', 'version.txt'), 'utf8')).toBe(
+      'original\n'
+    )
+  }
+)
+
+it('retries another repository before declining a full-pool request', async () => {
+  const owners = await Promise.all([fixture(), fixture(), fixture()])
+  for (const owner of owners) {
+    await owner.arm()
+  }
+  const entries = listPreparations()
+  const run = gitRunner.gitExecFileAsync
+  let fail = true
+  const failed = Promise.withResolvers<void>()
+  vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+    if (args.includes('remove') && fail) {
+      failed.resolve()
+      throw new Error('transient checkout lock')
+    }
+    return run(args, options)
+  })
+  discardRepoPreparations(entries[0].repoPathKey)
+  await failed.promise
+  await entries[0].operation.discard()
+  fail = false
+  const other = await fixture()
+  await other.arm()
+  expect(existsSync(entries[0].preparedPath)).toBe(false)
+  expect(listPreparations().some((entry) => entry.repoPath === other.repoPath)).toBe(true)
+})
+
+it.each(['hidden', 'moved', 'unproven-target'])(
+  'preserves finalization recovery for %s failure through the create consumer',
+  async (kind) => {
+    const { root, repoPath, arm, create } = await fixture()
+    await arm()
+    const [entry] = listPreparations()
+    if (kind === 'hidden') {
+      await writeFile(join(repoPath, 'version.txt'), 'requested\n')
+      git(repoPath, 'commit', '--quiet', '-am', 'new base')
+    }
+    const target = join(root, 'finalization-recovery')
+    const proof = Promise.withResolvers<void>()
+    const failed = Promise.withResolvers<void>()
+    const originalError = new Error('prepared finalization failed')
+    const run = gitRunner.gitExecFileAsync
+    let injected = false
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+      const selected =
+        kind === 'hidden'
+          ? args.includes('reset')
+          : kind === 'moved'
+            ? args.includes('checkout')
+            : args.includes('move')
+      if (selected && !injected) {
+        injected = true
+        if (kind !== 'moved') {
+          options.observeChildTermination?.(proof.promise, true)
+        }
+        if (kind !== 'hidden') {
+          await run(args, options)
+        }
+        failed.resolve()
+        throw originalError
+      }
+      return run(args, options)
+    })
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    const creating = create('finalization-recovery')
+    const outcome =
+      kind === 'unproven-target' ? expect(creating).rejects.toBe(originalError) : creating
+    await failed.promise
+    if (kind !== 'moved') {
+      await vi.advanceTimersByTimeAsync(30_000)
+    }
+    await outcome
+    if (kind === 'moved') {
+      expect(await readFile(join(target, 'version.txt'), 'utf8')).toBe('original\n')
+      expect(git(target, 'branch', '--show-current')).toBe('finalization-recovery')
+    } else {
+      if (kind === 'unproven-target') {
+        expect(git(repoPath, 'branch', '--list', 'finalization-recovery')).toBe('')
+      } else {
+        expect(await readFile(join(target, 'version.txt'), 'utf8')).toBe('requested\n')
+        expect(existsSync(entry.preparedPath)).toBe(true)
+      }
+      proof.resolve()
+      if (kind === 'hidden') {
+        await vi.waitFor(() => expect(existsSync(entry.preparedPath)).toBe(false))
+      } else {
+        await writeFile(join(target, 'user.txt'), 'preserve returned target\n')
+        await arm()
+        expect(await readFile(join(target, 'user.txt'), 'utf8')).toBe('preserve returned target\n')
+      }
+    }
+  }
+)
+
+it.each(['missing', 'foreign'])(
+  'retains unknown capacity but releases affirmative %s authority',
+  async (kind) => {
+    const { arm } = await fixture()
+    await arm()
+    const [entry] = listPreparations()
+    const lock = git(entry.preparedPath, 'rev-parse', '--git-path', 'locked')
+    await (kind === 'missing' ? rm(lock) : writeFile(lock, 'replacement owner\n'))
+    discardRepoPreparations(entry.repoPathKey)
+    await entry.operation.discard()
+    expect(existsSync(join(entry.preparedPath, 'version.txt'))).toBe(true)
+    expect(preparationCapacityUsed()).toBe(kind === 'missing' ? 1 : 0)
+  }
+)
+
+it('leaves stopped hosts untouched and retries only after the host becomes eligible', async () => {
+  const { arm } = await fixture()
+  await arm()
+  const [entry] = listPreparations()
+  const blocked = vi
+    .spyOn(wslGate, 'blockedWslDistroForPath')
+    .mockResolvedValue({ distro: 'stopped', state: 'stopped' })
+  discardRepoPreparations(entry.repoPathKey)
+  await entry.operation.discard()
+  expect(existsSync(join(entry.preparedPath, 'version.txt'))).toBe(true)
+  await arm()
+  expect(existsSync(entry.preparedPath)).toBe(true)
+  blocked.mockResolvedValue(null)
+  await arm()
+  expect(existsSync(entry.preparedPath)).toBe(false)
+})
+
+it('releases exhausted capacity when the final admitted removal completes late', async () => {
+  const { arm } = await fixture()
+  await arm()
+  const [entry] = listPreparations()
+  const run = gitRunner.gitExecFileAsync
+  const admitted = Promise.withResolvers<void>()
+  const proof = Promise.withResolvers<void>()
+  let failures = 0
+  vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+    if (args.includes('remove')) {
+      if (failures++ < 2) {
+        throw new Error('temporary file lock')
+      }
+      const result = await run(args, options)
+      options.observeChildTermination?.(proof.promise, true)
+      admitted.resolve()
+      return result
+    }
+    return run(args, options)
+  })
+  discardRepoPreparations(entry.repoPathKey)
+  await entry.operation.discard()
+  await entry.operation.discard()
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  const cleanup = entry.operation.discard()
+  await admitted.promise
+  await vi.advanceTimersByTimeAsync(30_000)
+  await cleanup
+  expect(preparationCapacityUsed()).toBe(1)
+  proof.resolve()
+  await vi.waitFor(() => expect(preparationCapacityUsed()).toBe(0))
 })

@@ -1,11 +1,14 @@
+import {
+  WorktreePreparationDisposal,
+  type SettledPreparationDiscard
+} from './worktree-preparation-disposal'
+import type { PreparationRemovalOutcome } from './worktree-preparation-discard'
 import { WorktreePreparationLockOwnershipError } from './worktree-preparation-lock'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
-import { sharedPromiseSettlementWaiters } from '../../../../shared/promise-settlement-waiters'
 import { GIT_READ_TIMEOUT_MS } from '../../../../shared/git/commands/git-command-timeout'
 import { getLocalRepoRefMaintenance } from '../../refs/maintenance/local-repo-ref-maintenance'
 import {
   resolveWorktreeAddTimeoutMs,
-  WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
   type GitWorktreeExecOptions
 } from '../worktree-operation-options'
 
@@ -21,7 +24,7 @@ export function preparationWorkBudget(options: GitWorktreeExecOptions, refresh: 
   )
 }
 
-export class WorktreePreparationOperation {
+export class WorktreePreparationOperation extends WorktreePreparationDisposal {
   readonly controller = new AbortController()
   readonly signal: AbortSignal
   private readonly transferred = Promise.withResolvers<void>()
@@ -31,15 +34,17 @@ export class WorktreePreparationOperation {
   private timer?: NodeJS.Timeout
   private workUntil?: number
   private claimed = false
-  private retirement?: Promise<boolean>
-  private discardAttempt?: Promise<void>
+  private retirement?: Promise<void>
+  private revoked: PreparationRemovalOutcome = 'revoked'
+  private authorityRevoked = false
   private maintenance?: { release: () => void; signal: AbortSignal; finished: boolean }
-  private discardCheckout?: (options: GitWorktreeExecOptions) => Promise<void>
+  private discardCheckout?: (options: GitWorktreeExecOptions) => Promise<PreparationRemovalOutcome>
 
   constructor(
     private readonly options: GitWorktreeExecOptions,
     private readonly expired: () => void = () => {}
   ) {
+    super()
     this.signal = options.signal
       ? AbortSignal.any([options.signal, this.controller.signal])
       : this.controller.signal
@@ -66,8 +71,12 @@ export class WorktreePreparationOperation {
     this.signal.removeEventListener('abort', this.onAbort)
   }
 
-  setDiscard(discard?: (options: GitWorktreeExecOptions) => Promise<void>): void {
-    this.discardCheckout = discard
+  setDiscard(
+    discard?: (options: GitWorktreeExecOptions) => Promise<PreparationRemovalOutcome>
+  ): void {
+    if (!this.authorityRevoked || !discard) {
+      this.discardCheckout = discard
+    }
   }
 
   get isClaimed(): boolean {
@@ -84,7 +93,7 @@ export class WorktreePreparationOperation {
     return {
       ...this.options,
       signal: this.signal,
-      canStart: () => !this.signal.aborted && this.options.canStart?.() !== false,
+      canStart: () => this.current() && !this.signal.aborted && this.options.canStart?.() !== false,
       observeChildTermination: (terminated, writes) => {
         this.options.observeChildTermination?.(terminated, writes)
         this.observeChildTermination(terminated, writes)
@@ -114,7 +123,10 @@ export class WorktreePreparationOperation {
     }
   }
 
-  async withMaintenancePaused<T>(run: () => Promise<T>, signal = this.signal): Promise<T> {
+  async withMaintenancePaused<T>(
+    run: () => Promise<T>,
+    signal: AbortSignal | undefined = this.signal
+  ): Promise<T> {
     const acquiring = getLocalRepoRefMaintenance().pause('worktree-prepare')
     const release = await waitForPromiseWithSignal(acquiring, signal).catch((error: unknown) => {
       void acquiring.then(
@@ -160,7 +172,9 @@ export class WorktreePreparationOperation {
         this.signal.throwIfAborted()
       } catch (error) {
         if (error instanceof WorktreePreparationLockOwnershipError) {
+          this.authorityRevoked = true
           this.setDiscard(undefined)
+          this.revoked = error.replaced ? 'ownership-lost' : 'revoked'
         }
         this.controller.abort(error)
         throw error
@@ -192,107 +206,103 @@ export class WorktreePreparationOperation {
     this.timer.unref()
   }
 
-  retire(): Promise<boolean> {
-    if (this.retirement) {
-      return this.retirement
+  supervise<T>(
+    options: GitWorktreeExecOptions,
+    work: (options: GitWorktreeExecOptions) => Promise<T>,
+    rollback = false
+  ): Promise<T> {
+    if (!rollback) {
+      this.signal.throwIfAborted()
     }
-    this.controller.abort()
-    const proof = this.raw
+    this.complete()
+    this.beginFinalization(rollback)
+    this.retirement = undefined
+    let eligible = true
+    const result = Promise.resolve()
+      .then(() =>
+        work({
+          ...options,
+          canStart: () => eligible && this.current() && options.canStart?.() !== false,
+          observeChildTermination: (terminated, writes) => {
+            options.observeChildTermination?.(terminated, writes)
+            this.observeChildTermination(terminated, writes)
+          }
+        })
+      )
+      .catch((error: unknown) => {
+        if (error instanceof WorktreePreparationLockOwnershipError) {
+          this.authorityRevoked = true
+          this.setDiscard(undefined)
+          this.revoked = error.replaced ? 'ownership-lost' : 'revoked'
+        }
+        throw error
+      })
+      .finally(() => {
+        eligible = false
+      })
+    this.raw = result.then(
+      () => {},
+      () => {}
+    )
+    return result
+  }
+
+  physicalSettlement(): Promise<void> {
+    return this.raw
       .catch(() => {})
       .then(async () => {
         await Promise.allSettled(this.writers)
       })
-    this.retirement = sharedPromiseSettlementWaiters(proof)
-      .wait({
-        timeoutMs: WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
-      })
-      .then(
-        () => true,
-        () => false
-      )
+  }
+
+  retire(): Promise<void> {
+    if (!this.retirement) {
+      this.controller.abort()
+      this.retirement = this.physicalSettlement()
+    }
     return this.retirement
   }
 
-  discard(): Promise<void> {
-    if (!this.discardAttempt) {
-      this.discardAttempt = this.discardOnce()
-      void this.discardAttempt.catch(() => {
-        this.discardAttempt = undefined
-      })
-    }
-    return this.discardAttempt
-  }
-
-  private async discardOnce(): Promise<void> {
-    if (!(await this.retire())) {
-      return
-    }
+  protected async physicalDiscard(
+    eligible: () => boolean,
+    before: () => Promise<boolean>
+  ): Promise<SettledPreparationDiscard> {
     const discard = this.discardCheckout
     if (!discard) {
-      return
+      return { status: this.revoked, attempted: false }
     }
-    let eligible = true
-    const cleanupController = new AbortController()
-    const cleanup = this.withMaintenancePaused(
-      () =>
-        discard({
-          ...this.options,
-          signal: undefined,
-          canStart: () => eligible,
-          observeChildTermination: this.observeChildTermination
-        }),
-      cleanupController.signal
-    )
-    // A rejection is not physical completion; retries also require all writer receipts.
-    const settled = cleanup
-      .then(
-        () => ({ error: undefined }),
-        (error: unknown) => ({ error })
-      )
-      .then(async (result) => {
-        await Promise.allSettled(this.writers)
-        return result
-      })
-    try {
-      const result = await sharedPromiseSettlementWaiters(settled).wait({
-        timeoutMs: WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
-        onAbandon: () => {
-          eligible = false
-          cleanupController.abort()
+    let attempted = false
+    const cleanup = this.withMaintenancePaused(async () => {
+      if (!eligible() || !(await before()) || !eligible()) {
+        return 'skipped' as const
+      }
+      return discard({
+        ...this.options,
+        admissionTier: 'background',
+        signal: undefined,
+        canStart: eligible,
+        observeChildTermination: (terminated, writes) => {
+          if (writes) {
+            attempted = true
+          }
+          this.observeChildTermination(terminated, writes)
         }
       })
-      if (result.error !== undefined) {
-        throw result.error
-      }
-    } catch (error) {
-      if (!eligible) {
-        this.retirement = Promise.resolve(false)
-        return
-      }
-      throw error
-    } finally {
-      eligible = false
-    }
-  }
-}
-
-export async function runStandalonePreparation<T>(
-  options: GitWorktreeExecOptions,
-  work: (operation: WorktreePreparationOperation) => Promise<T>
-): Promise<T> {
-  const operation = new WorktreePreparationOperation(options)
-  // A direct caller still owns its fetch barrier; only pool handoff supersedes it.
-  operation.claim(false)
-  let result!: T
-  try {
-    await operation.run(async () => {
-      result = await work(operation)
-    })
-    return result
-  } catch (error) {
-    await operation.discard().catch(() => {})
-    throw error
-  } finally {
-    operation.complete()
+    }, new AbortController().signal)
+    const result = await cleanup.then(
+      (status): SettledPreparationDiscard => ({ status, attempted }),
+      (error: unknown): SettledPreparationDiscard => ({
+        status:
+          error instanceof WorktreePreparationLockOwnershipError
+            ? error.replaced
+              ? 'ownership-lost'
+              : 'revoked'
+            : 'failed',
+        attempted: true,
+        error
+      })
+    )
+    await Promise.allSettled(this.writers)
+    return { ...result, attempted: result.attempted || attempted }
   }
 }

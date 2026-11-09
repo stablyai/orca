@@ -56,7 +56,7 @@ it('removes only the owned registration after external deletion of its checkout'
     ['rev-parse', '--git-path', 'locked', '--git-common-dir'],
     ['worktree', 'remove', '--force', '--force', prepared]
   ])
-  expect(spy.mock.calls[1]?.[1]).toEqual({
+  expect(spy.mock.calls[1]?.[1]).toMatchObject({
     cwd: repo,
     timeout: WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS
   })

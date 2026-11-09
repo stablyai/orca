@@ -1,3 +1,4 @@
+import { runStandalonePreparation } from './worktree-preparation-standalone'
 import { lstat } from 'node:fs/promises'
 import { isUnsupportedWorktreeAddLockReasonError } from '../../../../shared/git/worktrees/git-worktree-command-capabilities'
 import { resolveWorktreeHostPath } from '../../../../shared/git/metadata/git-metadata-path'
@@ -11,10 +12,7 @@ import {
   WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS,
   type GitWorktreeExecOptions
 } from '../worktree-operation-options'
-import {
-  runStandalonePreparation,
-  type WorktreePreparationOperation
-} from './worktree-preparation-operation'
+import type { WorktreePreparationOperation } from './worktree-preparation-operation'
 import { discardPreparedWorktree } from './worktree-preparation-discard'
 import {
   lockWorktreePreparation,
@@ -96,7 +94,7 @@ export async function addLockedWorktreePreparation(
             added = true
             const lockPath = await verifyWorktreePreparationLock(worktreePath, lockReason, options)
             operation.setDiscard((cleanupOptions) =>
-              discardPreparedWorktree(repoPath, worktreePath, cleanupOptions, lockReason)
+              discardPreparedWorktree(repoPath, worktreePath, cleanupOptions, lockReason, lockPath)
             )
             return lockPath
           } catch (error) {
@@ -108,7 +106,13 @@ export async function addLockedWorktreePreparation(
               !(error instanceof WorktreePreparationLockOwnershipError)
             ) {
               operation.setDiscard((cleanupOptions) =>
-                discardPreparedWorktree(repoPath, worktreePath, cleanupOptions, lockReason)
+                discardPreparedWorktree(
+                  repoPath,
+                  worktreePath,
+                  cleanupOptions,
+                  lockReason,
+                  initiallyAbsent ? null : undefined
+                )
               )
             }
             throw error
@@ -126,7 +130,7 @@ export async function addLockedWorktreePreparation(
               operation
             )
             operation.setDiscard((cleanupOptions) =>
-              discardPreparedWorktree(repoPath, worktreePath, cleanupOptions, lockReason)
+              discardPreparedWorktree(repoPath, worktreePath, cleanupOptions, lockReason, lockPath)
             )
             return lockPath
           } catch (error) {

@@ -560,7 +560,7 @@ describe('prepared worktree creation with real Git', () => {
     controller.abort()
     await expect(
       discardPreparedWorktree(repoPath, preparedPath, { signal: controller.signal }, lockReason)
-    ).resolves.toBeUndefined()
+    ).resolves.toBe('removed')
 
     expect(await listWorktrees(repoPath, { includeCreatePreparations: true })).toHaveLength(1)
   })
