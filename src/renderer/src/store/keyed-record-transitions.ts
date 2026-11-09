@@ -1,3 +1,5 @@
+import { isIndexKey, keepsKeyOrder, verifyNamedKeys } from './keyed-record-key-checks'
+
 // Accepted-write provenance for keyed store records: the writer's helper names what it replaced,
 // so readers update only those keys; anything it did not annotate reads as a full resync.
 
@@ -24,67 +26,120 @@ export type TabMapChanges =
     }
   | { kind: 'full-resync'; reason: FullResyncReason }
 
-type Link =
-  | {
-      previous: WeakRef<KeyedSnapshot>
-      keys: ReadonlySet<string>
-      tabIds?: ReadonlySet<string>
-      keySetChanged?: boolean
-    }
-  | { reason: FullResyncReason }
-
 /** Any keyed store record a writer replaces: tab buckets or a companion record. */
 export type KeyedSnapshot = Readonly<Record<string, unknown>>
+/** A Map-typed store field (for example runtime status by environment). */
+export type KeyedMapSnapshot = ReadonlyMap<string, unknown>
+type Keyed = KeyedSnapshot | KeyedMapSnapshot
 type KeyedRecord<V> = Readonly<Record<string, V>>
 type TabRow = { id: string }
 
-const links = new WeakMap<KeyedSnapshot, Link>()
+type Link =
+  | {
+      previous: WeakRef<Keyed>
+      /** Changed keys in write order. */
+      keys: readonly string[]
+      added: readonly string[]
+      deleted: readonly string[]
+      /** Records list integer-like keys first, ascending, as Object.keys does; Maps keep insertion order. */
+      integerKeysFirst: boolean
+      tabIds?: ReadonlySet<string>
+    }
+  | { reason: FullResyncReason }
+
+const links = new WeakMap<Keyed, Link>()
 // Readers that skipped intermediate states still get an exact union; deeper gaps resync.
 const MAX_CHAIN = 64
 
-function link(next: KeyedSnapshot, previous: KeyedSnapshot, keys: ReadonlySet<string>): void {
-  links.set(next, { previous: new WeakRef(previous), keys })
+function hasKey(record: Keyed, key: string): boolean {
+  return record instanceof Map ? record.has(key) : Object.hasOwn(record, key)
+}
+
+function link(next: Keyed, previous: Keyed, keys: Iterable<string>, tabIds?: Set<string>): void {
+  const ordered = [...keys]
+  links.set(next, {
+    previous: new WeakRef(previous),
+    keys: ordered,
+    added: ordered.filter((key) => !hasKey(previous, key) && hasKey(next, key)),
+    deleted: ordered.filter((key) => hasKey(previous, key) && !hasKey(next, key)),
+    integerKeysFirst: !(next instanceof Map),
+    ...(tabIds ? { tabIds } : {})
+  })
+}
+
+type Replacement<V> = readonly [key: string, value: V | null]
+
+// Deleting then re-adding a surviving key moves it to the end, which an addressed key set can't express.
+function replaceEntries<V>(
+  has: (key: string) => boolean,
+  get: (key: string) => V | undefined,
+  set: (key: string, value: V) => void,
+  remove: (key: string) => void,
+  replacements: Iterable<Replacement<V>>
+): { keys: Set<string>; reordered: boolean } {
+  const keys = new Set<string>()
+  const removed = new Set<string>()
+  let reordered = false
+  for (const [key, value] of replacements) {
+    if (value === null) {
+      if (has(key)) {
+        remove(key)
+        removed.add(key)
+        keys.add(key)
+      }
+    } else if (!has(key) || get(key) !== value) {
+      reordered ||= removed.has(key)
+      set(key, value)
+      keys.add(key)
+    }
+  }
+  return { keys, reordered }
 }
 
 /** The next record from `previous` plus replacements (null deletes); its changed keys are exact by construction. */
 export function replaceRecordEntries<V>(
   previous: KeyedRecord<V>,
-  replacements: Iterable<readonly [key: string, value: V | null]>
+  replacements: Iterable<Replacement<V>>
 ): Record<string, V> {
   const next: Record<string, V> = { ...previous }
-  const keys = new Set<string>()
-  for (const [key, value] of replacements) {
-    if (value === null) {
-      if (Object.hasOwn(next, key)) {
-        delete next[key]
-        keys.add(key)
-      }
-    } else if (!Object.hasOwn(next, key) || next[key] !== value) {
+  const { keys, reordered } = replaceEntries<V>(
+    (key) => Object.hasOwn(next, key),
+    (key) => next[key],
+    (key, value) => {
       next[key] = value
-      keys.add(key)
-    }
+    },
+    (key) => {
+      delete next[key]
+    },
+    replacements
+  )
+  if (reordered) {
+    links.set(next, { reason: 'reordered' })
+  } else {
+    link(next, previous, keys)
   }
-  link(next, previous, keys)
   return next
 }
 
-// Tests prove each builder's named keys cover every entry it changed; production trusts them.
-function verifyNamedKeys(
-  before: KeyedSnapshot,
-  after: KeyedSnapshot,
-  keys: ReadonlySet<string>
-): void {
-  if (import.meta.env.MODE !== 'test') {
-    return
+/** Map form of replaceRecordEntries, read with the same readRecordChanges protocol. */
+export function replaceMapEntries<V>(
+  previous: ReadonlyMap<string, V>,
+  replacements: Iterable<Replacement<V>>
+): Map<string, V> {
+  const next = new Map(previous)
+  const { keys, reordered } = replaceEntries<V>(
+    (key) => next.has(key),
+    (key) => next.get(key),
+    (key, value) => next.set(key, value),
+    (key) => next.delete(key),
+    replacements
+  )
+  if (reordered) {
+    links.set(next, { reason: 'reordered' })
+  } else {
+    link(next, previous, keys)
   }
-  for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
-    if (
-      !keys.has(key) &&
-      (Object.hasOwn(before, key) !== Object.hasOwn(after, key) || before[key] !== after[key])
-    ) {
-      throw new Error(`keyed record write changed unnamed key ${key}`)
-    }
-  }
+  return next
 }
 
 /** For builders that already produced `next`: names the keys it changed (verified under test). */
@@ -98,7 +153,11 @@ export function annotateRecordReplacement<R extends KeyedSnapshot>(
   }
   const named = new Set(keys)
   verifyNamedKeys(previous, next, named)
-  link(next, previous, named)
+  if (keepsKeyOrder(previous, next)) {
+    link(next, previous, named)
+  } else {
+    links.set(next, { reason: 'reordered' })
+  }
   return next
 }
 
@@ -130,15 +189,13 @@ function changedTabIds(
 function linkTabBuckets(
   previous: KeyedSnapshot,
   next: KeyedSnapshot,
-  keys: ReadonlySet<string>
+  keys: Iterable<string>
 ): void {
   const tabIds = new Set<string>()
-  let keySetChanged = false
   for (const workspaceId of keys) {
-    keySetChanged ||= Object.hasOwn(previous, workspaceId) !== Object.hasOwn(next, workspaceId)
     changedTabIds(tabRows(previous, workspaceId), tabRows(next, workspaceId), tabIds)
   }
-  links.set(next, { previous: new WeakRef(previous), keys, tabIds, keySetChanged })
+  link(next, previous, keys, tabIds)
 }
 
 /** Tab-bucket form; tab IDs come from diffing only the replaced buckets. */
@@ -148,7 +205,9 @@ export function replaceTabBuckets<T extends TabRow>(
 ): Record<string, T[]> {
   const next = replaceRecordEntries(previous, replacements)
   const recorded = links.get(next)
-  linkTabBuckets(previous, next, recorded && 'keys' in recorded ? recorded.keys : new Set())
+  if (recorded && 'keys' in recorded) {
+    linkTabBuckets(previous, next, recorded.keys)
+  }
   return next
 }
 
@@ -165,41 +224,32 @@ export function annotateTabBucketReplacement<R extends KeyedSnapshot>(
   if (keepsKeyOrder(previous, next)) {
     linkTabBuckets(previous, next, named)
   } else {
-    // Bucket order is ownership precedence, so a moved key cannot be expressed as addressed buckets.
+    // Key order is ownership precedence, so a moved key cannot be expressed as addressed keys.
     links.set(next, { reason: 'reordered' })
   }
   return next
 }
 
-// Addressed tab maps promise surviving keys keep their order and added keys follow them.
-function keepsKeyOrder(previous: KeyedSnapshot, next: KeyedSnapshot): boolean {
-  const nextKeys = Object.keys(next)
-  let index = 0
-  for (const key of Object.keys(previous)) {
-    if (Object.hasOwn(next, key)) {
-      if (nextKeys[index] !== key) {
-        return false
-      }
-      index++
-    }
-  }
-  return nextKeys.slice(index).every((key) => !Object.hasOwn(previous, key))
-}
-
 /** Named cold path: the whole record was rebuilt from a snapshot. */
-export function markFullResync<R extends KeyedSnapshot>(next: R, reason: FullResyncReason): R {
+export function markFullResync<R extends Keyed>(next: R, reason: FullResyncReason): R {
   links.set(next, { reason })
   return next
 }
 
-type Walked = { keys: Set<string>; tabIds: Set<string> | null; keySetChanged: boolean }
+type Walked = {
+  keys: Set<string>
+  tabIds: Set<string> | null
+  keySetChanged: boolean
+}
 
-function walk(next: KeyedSnapshot, previous: KeyedSnapshot): Walked | FullResyncReason {
-  const keys = new Set<string>()
-  let tabIds: Set<string> | null = new Set()
-  let keySetChanged = false
-  let current: KeyedSnapshot = next
-  for (let depth = 0; depth < MAX_CHAIN; depth++) {
+// Composes forward, oldest write first, so added keys come out in the order the source holds them.
+function walk(next: Keyed, previous: Keyed): Walked | FullResyncReason {
+  const steps: Exclude<Link, { reason: FullResyncReason }>[] = []
+  let current: Keyed = next
+  for (let depth = 0; ; depth++) {
+    if (depth === MAX_CHAIN) {
+      return 'unknown'
+    }
     const step = links.get(current)
     if (!step) {
       return 'unknown'
@@ -207,31 +257,48 @@ function walk(next: KeyedSnapshot, previous: KeyedSnapshot): Walked | FullResync
     if ('reason' in step) {
       return step.reason
     }
-    step.keys.forEach((key) => keys.add(key))
-    keySetChanged ||= step.keySetChanged === true
-    const stepTabIds = step.tabIds
-    if (stepTabIds && tabIds) {
-      stepTabIds.forEach((id) => tabIds?.add(id))
-    } else {
-      tabIds = null
-    }
+    steps.push(step)
     const before = step.previous.deref()
     if (!before) {
       return 'unknown'
     }
     if (before === previous) {
-      return { keys, tabIds, keySetChanged }
+      break
     }
     current = before
   }
-  return 'unknown'
+  const touched = new Set<string>()
+  const deleted = new Set<string>()
+  let tabIds: Set<string> | null = new Set()
+  let keySetChanged = false
+  for (const step of steps.toReversed()) {
+    for (const key of step.added) {
+      // A key deleted earlier in the chain and added back has moved; only a walk can place it.
+      if (deleted.has(key)) {
+        return 'reordered'
+      }
+    }
+    step.deleted.forEach((key) => deleted.add(key))
+    step.keys.forEach((key) => touched.add(key))
+    keySetChanged ||= step.added.length > 0 || step.deleted.length > 0
+    if (step.tabIds && tabIds) {
+      step.tabIds.forEach((id) => tabIds?.add(id))
+    } else {
+      tabIds = null
+    }
+  }
+  const ordered = steps[0]?.integerKeysFirst
+    ? [
+        ...[...touched].filter(isIndexKey).sort((a, b) => Number(a) - Number(b)),
+        ...[...touched].filter((key) => !isIndexKey(key))
+      ]
+    : [...touched]
+  return { keys: new Set(ordered), tabIds, keySetChanged }
 }
 
 /** null: same identity. Addressed only when every write from `previous` to `next` was annotated. */
-export function readRecordChanges(
-  next: KeyedSnapshot,
-  previous: KeyedSnapshot
-): RecordChanges | null {
+/** Changed keys come in source order: chronological additions, with integer keys first for records. */
+export function readRecordChanges(next: Keyed, previous: Keyed): RecordChanges | null {
   if (next === previous) {
     return null
   }
