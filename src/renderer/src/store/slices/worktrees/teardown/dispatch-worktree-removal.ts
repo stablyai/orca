@@ -92,7 +92,10 @@ async function requestWorktreeRemoval(
     {
       // Why (#19334): the host may run an archive hook before it decides anything, then waits for
       // Git's delete before it replies; outlast both when a hook can run.
-      timeoutMs: worktreeRemovalReplyTimeoutMs(!skipArchive),
+      timeoutMs: worktreeRemovalReplyTimeoutMs(
+        !skipArchive,
+        options?.approvedNestedWorktrees?.length
+      ),
       beforeSend
     }
   )

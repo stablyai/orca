@@ -39,7 +39,7 @@ export function createWebWorktreeRemovalCalls(): Pick<
           runHooks: skipArchive !== true
         },
         // Why: the host replies once Git has deleted the checkout, past the default 30 s budget.
-        worktreeRemovalReplyTimeoutMs(skipArchive !== true)
+        worktreeRemovalReplyTimeoutMs(skipArchive !== true, approvedNestedWorktrees?.length)
       )
     }
   }

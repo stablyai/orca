@@ -47,7 +47,9 @@ function NestedRefusalToast({ hostId }: { hostId: ExecutionHostId | null }): Rea
       worktreeName: 'react-use-effects',
       nestedRemovalTarget: { id: WORKTREE_ID, executionHostId: hostId }
     })
-    return () => toast.dismiss()
+    return () => {
+      toast.dismiss()
+    }
   }, [hostId])
   return (
     <>

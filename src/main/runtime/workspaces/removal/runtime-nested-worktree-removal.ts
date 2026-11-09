@@ -8,10 +8,12 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { isFolderRepo } from '../../../../shared/repo-kind'
+import { areWorktreePathsEqual } from '../../../git/worktrees/catalog/worktree-path-comparison'
 import { resolveWorktreeRemovalRepoOwner } from '../../../workspaces/removal/worktree-removal-repo-owner'
 import {
   resolveWorktreeRemovalHome,
-  resolveWorktreeRemovalRoute
+  resolveWorktreeRemovalRoute,
+  type WorktreeRemovalRoute
 } from '../../../workspaces/removal/worktree-removal-execution-host-route'
 import {
   assertNestedWorktreeRemovalApproval,
@@ -26,12 +28,11 @@ import type {
 import { OrcaRuntimeWithRemoveManagedWorktree } from './workspace-removal'
 import { listWorktreesOnRemovalRoute } from './worktree-removal-route-listing'
 
-/** Lists what deleting the target would take with it: nested worktrees deepest-first, then the target. */
-async function previewRuntimeNestedWorktreeRemoval(
+async function listRuntimeRemovalWorktrees(
   store: RuntimeStore,
   target: RuntimeWorktreeRemovalTarget,
   hostId: ExecutionHostId | undefined
-): Promise<GitWorktreeInfo[]> {
+): Promise<{ repoPath: string; route: WorktreeRemovalRoute; worktrees: GitWorktreeInfo[] }> {
   const owner = resolveWorktreeRemovalRepoOwner(store, target.repoId, hostId)
   if (owner.kind === 'ambiguous') {
     throw new Error(
@@ -46,12 +47,34 @@ async function previewRuntimeNestedWorktreeRemoval(
   }
   const route = resolveWorktreeRemovalRoute(hostId ?? getRepoExecutionHostId(owner.repo))
   const { registeredWorktrees } = await listWorktreesOnRemovalRoute(route, owner.repo, store)
+  return { repoPath: owner.repo.path, route, worktrees: registeredWorktrees }
+}
+
+/** Lists what deleting the target would take with it: nested worktrees deepest-first, then the target. */
+async function previewRuntimeNestedWorktreeRemoval(
+  store: RuntimeStore,
+  target: RuntimeWorktreeRemovalTarget,
+  hostId: ExecutionHostId | undefined
+): Promise<GitWorktreeInfo[]> {
+  const { repoPath, route, worktrees } = await listRuntimeRemovalWorktrees(store, target, hostId)
   return getNestedWorktreeRemovalPlan({
-    repoPath: owner.repo.path,
+    repoPath,
     worktreePath: target.path,
-    worktrees: registeredWorktrees,
+    worktrees,
     home: resolveWorktreeRemovalHome(route)
   })
+}
+
+// Earlier deletions take time; refuse if this checkout's branch or HEAD moved since review.
+async function assertRuntimeCheckoutUnchanged(
+  store: RuntimeStore,
+  target: RuntimeWorktreeRemovalTarget,
+  hostId: ExecutionHostId | undefined,
+  expected: GitWorktreeInfo
+): Promise<void> {
+  const { worktrees } = await listRuntimeRemovalWorktrees(store, target, hostId)
+  const current = worktrees.find((item) => areWorktreePathsEqual(item.path, expected.path))
+  assertNestedWorktreeRemovalApproval(current ? [current] : [], [expected])
 }
 
 /** Re-checks the reviewed plan, deletes nested children, then the target itself. */
@@ -69,10 +92,19 @@ async function removeRuntimeApprovedNestedWorktrees(args: {
   }
   const plan = await previewRuntimeNestedWorktreeRemoval(args.store, args.target, args.hostId)
   assertNestedWorktreeRemovalApproval(plan, args.approved)
-  const preserved = await removeNestedWorktreePlanChildren(args.target.repoId, plan, (id) =>
-    args.removeChild(id)
+  const preserved = await removeNestedWorktreePlanChildren(
+    args.target.repoId,
+    plan,
+    async (id, child) => {
+      await assertRuntimeCheckoutUnchanged(args.store, args.target, args.hostId, child)
+      return args.removeChild(id)
+    }
   )
   try {
+    const parentCheckout = plan.at(-1)
+    if (parentCheckout) {
+      await assertRuntimeCheckoutUnchanged(args.store, args.target, args.hostId, parentCheckout)
+    }
     const result = await args.removeTarget()
     return preserved.length > 0 ? { ...result, nestedPreservedBranches: preserved } : result
   } catch (error) {
