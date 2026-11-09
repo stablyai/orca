@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('../../sessions/browser-session-registry', () => ({
+vi.mock('../../sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: { getEnabledExtensionIds: () => [...mocks.enabled] }
 }))
 vi.mock('../installation/browser-extension-install-store', () => ({

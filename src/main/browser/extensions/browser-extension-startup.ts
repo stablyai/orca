@@ -10,7 +10,7 @@ import {
   isBrowserExtensionSupportEnabled,
   setBrowserExtensionSupportEnabled
 } from './browser-extension-support'
-import { browserSessionRegistry } from '../sessions/browser-session-registry'
+import { browserSessionRegistry } from '../sessions/profiles/browser-session-registry'
 import {
   attachBrowserExtensionsToProfileSession,
   detachBrowserExtensionsFromAllProfileSessions

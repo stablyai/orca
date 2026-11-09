@@ -53,7 +53,7 @@ import { preserveStateBeforeUpdateRestart } from '../updater/update-restart-pres
 import { resolveUpdateInstallMode } from '../updater/updater-service'
 import { scheduleAgentLaunchRecordWarmup } from './agent-launch-record-warmup'
 import { emitServeBrowserIdentityActionLine } from '../server/serve-stdout-boundary'
-import { getBrowserIdentityModeStatus } from '../browser/identity/browser-identity-mode-store'
+import { getBrowserIdentityModeStatus } from '../browser/identity/mode/browser-identity-mode-store'
 
 type RuntimeService = NonNullable<typeof state.runtime>
 
