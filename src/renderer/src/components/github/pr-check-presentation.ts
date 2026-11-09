@@ -42,6 +42,16 @@ export function getCheckStatusLabel(check: PRCheckDetail, t: Translate = transla
   return t('auto.components.editor.CheckRunDetailsPanel.3d9f2b8e14', 'Pending')
 }
 
+export function isGitLabAllowedFailureJob(check: PRCheckDetail, job: PRCheckJob): boolean {
+  return (
+    check.gitlabAllowedFailure === true &&
+    check.conclusion === 'neutral' &&
+    job.conclusion === 'neutral' &&
+    check.gitlabJobId !== undefined &&
+    job.id === check.gitlabJobId
+  )
+}
+
 export function getCheckDetailsKey(check: PRCheckDetail): string {
   return String(check.checkRunId ?? check.workflowRunId ?? check.url ?? check.name)
 }

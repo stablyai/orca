@@ -1,9 +1,21 @@
 import React from 'react'
-import { CheckCircle2, ChevronDown, CircleDashed, MinusCircle, XCircle } from 'lucide-react'
+import {
+  AlertTriangle,
+  CheckCircle2,
+  ChevronDown,
+  CircleDashed,
+  MinusCircle,
+  XCircle
+} from 'lucide-react'
+import { isGitLabAllowedFailureJob } from '@/components/github/pr-check-presentation'
 import { CheckJobLogTail } from '@/components/right-sidebar/checks-panel/logs/check-job-log-tail'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
-import type { PRCheckJob, PRCheckStep } from '../../../../../../shared/github/check-types'
+import type {
+  PRCheckDetail,
+  PRCheckJob,
+  PRCheckStep
+} from '../../../../../../shared/github/check-types'
 import {
   resolveStepOutcome,
   summarizeJobSteps,
@@ -105,10 +117,12 @@ function OtherJobSteps({
 }
 
 function JobCard({
+  check,
   job,
   identity,
   owner
 }: {
+  check: PRCheckDetail
   job: PRCheckJob
   identity: string
   owner?: CheckDetailsReadingOwner
@@ -149,7 +163,9 @@ function JobCard({
   return (
     <div className="px-3 py-3">
       <div className="flex min-w-0 items-center gap-2">
-        {jobFailed ? (
+        {isGitLabAllowedFailureJob(check, job) ? (
+          <AlertTriangle className="size-4 shrink-0 text-amber-500" />
+        ) : jobFailed ? (
           <XCircle className="size-4 shrink-0 text-destructive" />
         ) : (
           <CheckCircle2 className="size-4 shrink-0 text-status-success" />
@@ -202,10 +218,12 @@ function JobCard({
 }
 
 export function CheckRunJobs({
+  check,
   jobs,
   hasFailedJobs,
   positionOwner
 }: {
+  check: PRCheckDetail
   jobs: PRCheckJob[]
   hasFailedJobs: boolean
   positionOwner?: CheckDetailsReadingOwner
@@ -235,7 +253,13 @@ export function CheckRunJobs({
       </div>
       <div className="divide-y divide-border/50">
         {visible.map(({ job, identity }) => (
-          <JobCard key={identity} job={job} identity={identity} owner={positionOwner} />
+          <JobCard
+            key={identity}
+            check={check}
+            job={job}
+            identity={identity}
+            owner={positionOwner}
+          />
         ))}
       </div>
     </section>

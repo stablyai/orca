@@ -322,6 +322,7 @@ export function CheckRunDetailsPanel({
                 return hasJobs ? (
                   <CheckRunJobs
                     key="jobs"
+                    check={check}
                     jobs={jobs}
                     hasFailedJobs={failedJobs.length > 0}
                     positionOwner={positionOwner}
