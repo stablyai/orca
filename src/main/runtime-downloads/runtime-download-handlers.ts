@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, shell, type WebContents } from 'electron'
 import { open } from 'node:fs/promises'
+import { z } from 'zod'
 import { join } from 'node:path'
 import {
   RUNTIME_OPEN_LOCALLY_MAX_BYTES,
@@ -37,26 +38,29 @@ const MAX_ACTIVE_DOWNLOADS = 8
 
 const activeDownloads = new Map<string, AbortController>()
 
+const Text = z.string().max(4096)
+const RequiredText = Text.refine((value) => value.trim() !== '')
+const StartArgs = z.object({
+  downloadId: RequiredText,
+  environmentId: RequiredText,
+  worktree: RequiredText,
+  relativePath: Text,
+  name: RequiredText,
+  kind: z.enum(['file', 'folder']),
+  intent: z.enum(['save', 'open']),
+  excludeDefaultDirs: z.boolean().optional(),
+  expectedEnvironmentPairingRevision: z.number().int().optional()
+}) satisfies z.ZodType<RuntimeDownloadStartArgs>
+
 function validateArgs(args: unknown): RuntimeDownloadStartArgs {
-  const value = args as Partial<RuntimeDownloadStartArgs> | null
-  const isText = (field: unknown, allowEmpty = false): field is string =>
-    typeof field === 'string' && (allowEmpty || field.trim() !== '') && field.length <= 4096
-  if (
-    !value ||
-    !isText(value.downloadId) ||
-    !isText(value.environmentId) ||
-    !isText(value.worktree) ||
-    !isText(value.relativePath, true) ||
-    !isText(value.name) ||
-    (value.kind !== 'file' && value.kind !== 'folder') ||
-    (value.intent !== 'save' && value.intent !== 'open')
-  ) {
+  const parsed = StartArgs.safeParse(args)
+  if (!parsed.success) {
     throw new Error('Invalid runtime download request')
   }
-  if (value.intent === 'open' && value.kind !== 'file') {
+  if (parsed.data.intent === 'open' && parsed.data.kind !== 'file') {
     throw new Error('Only files can be opened locally')
   }
-  return value as RuntimeDownloadStartArgs
+  return parsed.data
 }
 
 function createCall(args: RuntimeDownloadStartArgs): RuntimeDownloadCall {
@@ -78,6 +82,7 @@ function createCall(args: RuntimeDownloadStartArgs): RuntimeDownloadCall {
     if (!response.ok) {
       throw runtimeDownloadErrorFromResponse(response.error)
     }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each caller names the result type of the host method it calls; the host's RPC contract defines that shape.
     return response.result as T
   }
 }

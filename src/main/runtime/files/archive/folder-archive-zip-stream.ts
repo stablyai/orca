@@ -223,7 +223,7 @@ export class FolderArchiveZipStream {
         }
         this.processedBytes += bytesRead
         // fflate may keep a reference until it deflates, so hand it a copy.
-        file.push(Uint8Array.prototype.slice.call(buffer, 0, bytesRead) as Uint8Array, false)
+        file.push(new Uint8Array(buffer.subarray(0, bytesRead)), false)
       }
     } finally {
       await handle.close().catch(() => {})

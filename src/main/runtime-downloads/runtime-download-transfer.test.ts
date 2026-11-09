@@ -1,7 +1,7 @@
 import { mkdtemp, open, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   RuntimeDownloadError,
   transferRuntimeFile,
@@ -10,6 +10,12 @@ import {
 } from './runtime-download-transfer'
 
 let dir: string
+
+/** A scripted host; the transfer code names each method's result type itself. */
+function fakeCall<P>(impl: (method: string, params: P) => Promise<unknown>): RuntimeDownloadCall {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each scripted reply matches the result type the transfer code expects for that method.
+  return impl as RuntimeDownloadCall
+}
 
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), 'orca-runtime-download-'))
@@ -20,19 +26,21 @@ afterEach(async () => {
 })
 
 function fileHost(content: Buffer, statSize = content.byteLength): RuntimeDownloadCall {
-  return (async (method: string, params: { offset: number; length: number }) => {
+  return fakeCall(async (method: string, params: { offset: number; length: number }) => {
     if (method === 'files.stat') {
       return { size: statSize, isDirectory: false }
     }
     const bytes = content.subarray(params.offset, params.offset + params.length)
     // Out-of-order replies: later pages may land first.
-    await new Promise((resolve) => setTimeout(resolve, params.offset % 3))
+    for (let turn = 0; turn < (params.offset / 7) % 3; turn += 1) {
+      await Promise.resolve()
+    }
     return {
       contentBase64: bytes.toString('base64'),
       bytesRead: bytes.byteLength,
       eof: params.offset + bytes.byteLength >= content.byteLength
     }
-  }) as RuntimeDownloadCall
+  })
 }
 
 async function runFile(call: RuntimeDownloadCall, extra: { maxBytes?: number } = {}) {
@@ -85,7 +93,7 @@ describe('transferRuntimeFolder', () => {
   it('releases the host archive when the download is canceled', async () => {
     const controller = new AbortController()
     const calls: string[] = []
-    const call = (async (method: string) => {
+    const call = fakeCall(async (method: string) => {
       calls.push(method)
       if (method === 'files.archiveStart') {
         return { archiveId: 'z1', totalBytes: 10, excludedDirCount: 0, fileCount: 1 }
@@ -101,7 +109,7 @@ describe('transferRuntimeFolder', () => {
         }
       }
       return { released: true }
-    }) as RuntimeDownloadCall
+    })
     const sink = await open(join(dir, 'out.zip'), 'w+')
     try {
       await expect(
@@ -125,7 +133,7 @@ describe('transferRuntimeFolder', () => {
     const controller = new AbortController()
     const calls: { method: string; params: unknown }[] = []
     let finishStart: (value: unknown) => void = () => {}
-    const call = (async (method: string, params: unknown) => {
+    const call = fakeCall(async (method: string, params: unknown) => {
       calls.push({ method, params })
       if (method === 'files.archiveStart') {
         return new Promise<unknown>((resolve) => {
@@ -133,7 +141,7 @@ describe('transferRuntimeFolder', () => {
         })
       }
       return { released: true }
-    }) as RuntimeDownloadCall
+    })
     const sink = await open(join(dir, 'late.zip'), 'w+')
     try {
       const transfer = transferRuntimeFolder({
@@ -149,7 +157,7 @@ describe('transferRuntimeFolder', () => {
       // Canceled at once, before the host has even finished walking.
       await expect(transfer).rejects.toEqual(new RuntimeDownloadError('canceled'))
       finishStart({ archiveId: 'late', totalBytes: 1, excludedDirCount: 0, fileCount: 1 })
-      await new Promise((resolve) => setTimeout(resolve, 0))
+      await vi.waitFor(() => expect(calls).toHaveLength(2))
     } finally {
       await sink.close()
     }

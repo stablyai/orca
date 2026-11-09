@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rename, rm, symlink, writeFile, chmod } from 'node:fs/p
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { unzipSync } from 'fflate'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FolderArchiveSessions } from './folder-archive-sessions'
 import {
   FolderArchiveLimitError,
@@ -181,8 +181,7 @@ describe('FolderArchiveSessions', () => {
     await expect(
       sessions.start({ folderPath: root, ownerKey: 'a', excludeDefaultDirs: true })
     ).rejects.toThrow('archive_busy')
-    await new Promise((resolve) => setTimeout(resolve, 60))
-    expect(sessions.activeCount()).toBe(0)
+    await vi.waitFor(() => expect(sessions.activeCount()).toBe(0))
     await expect(
       sessions.read({ archiveId: first.archiveId, ownerKey: 'a', maxBytes: 10 })
     ).rejects.toThrow('archive_not_found')
@@ -192,7 +191,8 @@ describe('FolderArchiveSessions', () => {
     await writeFile(join(root, 'big.png'), Buffer.alloc(4 * 1024 * 1024, 7))
     const plan = await planFolderArchive(root, 'r', { excludeDefaultDirs: true })
     const stream = new FolderArchiveZipStream(plan.entries, 512 * 1024)
-    await new Promise((resolve) => setTimeout(resolve, 50))
+    // The producer fills to the mark, then must stop until something is read.
+    await vi.waitFor(() => expect(stream.processedBytes).toBeGreaterThanOrEqual(512 * 1024))
     expect(stream.processedBytes).toBeLessThanOrEqual(1024 * 1024)
     let total = 0
     for (;;) {

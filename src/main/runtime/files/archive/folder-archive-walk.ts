@@ -197,7 +197,8 @@ async function isUnmovedDirectory(absolutePath: string): Promise<boolean> {
 }
 
 export function isVanishedOrDenied(error: unknown): boolean {
-  const code = (error as NodeJS.ErrnoException | null)?.code
+  const code =
+    typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
   return (
     code === 'ENOENT' ||
     code === 'ENOTDIR' ||

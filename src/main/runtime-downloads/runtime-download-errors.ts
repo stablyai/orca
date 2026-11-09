@@ -39,9 +39,8 @@ export function toRuntimeDownloadError(error: unknown, signal: AbortSignal): Run
     return error
   }
   const message = error instanceof Error ? error.message : String(error)
-  const code =
-    typeof (error as { code?: unknown } | null)?.code === 'string'
-      ? (error as { code: string }).code
-      : 'runtime_error'
+  const rawCode =
+    typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined
+  const code = typeof rawCode === 'string' ? rawCode : 'runtime_error'
   return runtimeDownloadErrorFromResponse({ code, message })
 }
