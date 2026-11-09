@@ -1,5 +1,5 @@
 import { dispatchClaudeCommand } from './claude-structured-command-dispatch'
-import { AgentSessionAcquisitionRootExitObservedError } from '../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
+import { isKillDeliveredExitReceipt } from './claude-kill-delivered-exit-receipt'
 import { claudeAcquireFailure } from '../claude-startup-failure'
 import { claudeStartPublication, openClaudeStart } from './claude-structured-start-ending'
 import { AgentSessionStartEndings } from '../../native-chat/agent-session-wire/startup/structured-agent-session-start-failure'
@@ -259,11 +259,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     try {
       const closed = await close()
       const receipt = this.settledExitErrors.get(sessionId)
-      if (
-        closed &&
-        receipt instanceof AgentSessionAcquisitionRootExitObservedError &&
-        receipt.deathEvidenceKind === 'kill-delivered'
-      ) {
+      if (closed && isKillDeliveredExitReceipt(receipt)) {
         throw receipt
       }
       return closed
@@ -290,13 +286,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     options
   ) =>
     this.releaseAcquisition({ sessionId, closeOptions: options }).finally(() => {
-      const receipt = this.settledExitErrors.get(sessionId)
-      if (
-        !(
-          receipt instanceof AgentSessionAcquisitionRootExitObservedError &&
-          receipt.deathEvidenceKind === 'kill-delivered'
-        )
-      ) {
+      if (!isKillDeliveredExitReceipt(this.settledExitErrors.get(sessionId))) {
         this.settledExitErrors.delete(sessionId)
       }
     })
