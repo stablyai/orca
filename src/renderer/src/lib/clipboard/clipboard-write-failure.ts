@@ -1,4 +1,4 @@
-import { isClipboardTextWriteTooLargeError } from '../../../shared/clipboard-text'
+import { isClipboardTextWriteTooLargeError } from '../../../../shared/clipboard-text'
 import { translate } from '@/i18n/i18n'
 
 /** Show only known safe reasons; native/platform details in unknown write failures remain in main-process logs. */

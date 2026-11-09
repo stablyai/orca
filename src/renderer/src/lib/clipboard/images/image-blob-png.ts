@@ -4,7 +4,7 @@ import {
   assertClipboardImageDimensionsWithinLimit,
   encodeClipboardImageWithinLimit,
   type ClipboardImageDimensions
-} from '../../../shared/clipboard-image'
+} from '../../../../../shared/clipboard-image'
 
 export function blobToBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {

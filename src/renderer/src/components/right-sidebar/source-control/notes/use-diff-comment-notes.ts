@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useTranslate } from '@/i18n/use-translate'
 import { formatDiffComments } from '@/lib/diff-comments-format'
-import { describeClipboardWriteFailure } from '@/lib/clipboard-write-failure'
+import { describeClipboardWriteFailure } from '@/lib/clipboard/clipboard-write-failure'
 import { useVisibleWorktreeDiffComments } from '../../../diff-comments/use-visible-worktree-diff-comments'
 import {
   countPendingDiffCommentsClear,

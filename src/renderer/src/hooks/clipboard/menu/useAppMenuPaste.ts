@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { handleAppMenuPasteRequest } from '@/lib/app-menu-paste'
+import { handleAppMenuPasteRequest } from '@/lib/clipboard/menu/app-menu-paste'
 
 export function useAppMenuPaste(): void {
   useEffect(() => {

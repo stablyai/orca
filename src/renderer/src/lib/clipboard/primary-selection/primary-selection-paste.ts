@@ -1,14 +1,16 @@
-import { yieldToEventLoop } from '../../../shared/event-loop-yield'
-import { getUtf8ChunkEndIndex } from '../../../shared/utf8-byte-limits'
+import { yieldToEventLoop } from '../../../../../shared/event-loop-yield'
+import { getUtf8ChunkEndIndex } from '../../../../../shared/utf8-byte-limits'
 import { isPrimarySelectionTextControl } from './primary-selection-capture'
 import {
   TEXT_CONTROL_PASTE_CHUNK_MAX_BYTES,
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
-  TEXT_CONTROL_PASTE_MAX_BYTES,
+  TEXT_CONTROL_PASTE_MAX_BYTES
+} from '../../text-input/paste/text-control-paste-model'
+import {
   measureTextControlPasteByteLength,
   measureTextControlPasteByteLengthWithYield,
   pasteTextIntoTextControl
-} from './text-control-paste'
+} from '../../text-input/paste/text-control-paste'
 
 export type EditablePrimarySelectionPasteTarget =
   | HTMLInputElement

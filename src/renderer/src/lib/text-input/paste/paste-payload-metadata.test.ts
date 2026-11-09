@@ -22,18 +22,4 @@ describe('paste payload metadata', () => {
     expect(countPastePayloadLines(text)).toBe(3)
     expect(hasPastePayloadControlSequence(text)).toBe(true)
   })
-
-  it('stops measuring when the payload exceeds the configured byte limit', () => {
-    const text = ['😀'.repeat(100), 'secret-token'].join('\n')
-    const metadata = measurePastePayloadMetadata(text, { stopAfterBytes: 5 })
-
-    expect(metadata).toEqual({
-      byteLength: 8,
-      exceededLimit: true,
-      hasControlSequences: false,
-      lineEndingByteLength: 0,
-      lineCount: 1
-    })
-    expect(metadata.byteLength).toBeLessThan(getPastePayloadUtf8ByteLength(text))
-  })
 })

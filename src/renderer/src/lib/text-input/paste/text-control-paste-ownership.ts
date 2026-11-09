@@ -1,9 +1,9 @@
-import { isPrimarySelectionTextControl } from './primary-selection-capture'
+import { isPrimarySelectionTextControl } from '../../clipboard/primary-selection/primary-selection-capture'
 import {
   TEXT_CONTROL_PASTE_DIRECT_MAX_BYTES,
-  TEXT_CONTROL_PASTE_MAX_BYTES,
-  measureTextControlPasteByteLength
-} from './text-control-paste'
+  TEXT_CONTROL_PASTE_MAX_BYTES
+} from './text-control-paste-model'
+import { measureTextControlPasteByteLength } from './text-control-paste'
 
 export type TextControlPastePayloadOwnership =
   | {

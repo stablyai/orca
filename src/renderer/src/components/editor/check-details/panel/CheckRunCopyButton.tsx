@@ -1,6 +1,6 @@
 import React from 'react'
 import { Check, Copy } from 'lucide-react'
-import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
+import { useClipboardTextCopyFeedback } from '@/hooks/clipboard/use-clipboard-text-copy-feedback'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'

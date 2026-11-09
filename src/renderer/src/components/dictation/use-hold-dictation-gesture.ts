@@ -1,5 +1,5 @@
 import { useEffect, useEffectEvent, useRef } from 'react'
-import { getShortcutPlatform } from '@/lib/shortcut-platform'
+import { getShortcutPlatform } from '@/lib/keyboard/shortcut-platform'
 import {
   keybindingMatchesAction,
   normalizeTerminalShortcutPolicy,
@@ -8,7 +8,7 @@ import {
 import { textInputOwnsComposition } from '../../../../shared/text-input-shortcut-policy'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { dictationShortcutMode } from '../../../../shared/dictation-shortcut-mode'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/keyboard/app-keyboard-router'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { getKeybindingContext } from '../terminal-workspace-model'
 

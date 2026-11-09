@@ -2,7 +2,7 @@ import { useEffect } from 'react'
 import {
   dispatchAppMenuSelectionAction,
   type AppMenuSelectionAction
-} from '@/lib/app-menu-selection-actions'
+} from '@/lib/app-commands/app-menu-selection-actions'
 
 export function useAppMenuSelectionActions(): void {
   useEffect(() => {
