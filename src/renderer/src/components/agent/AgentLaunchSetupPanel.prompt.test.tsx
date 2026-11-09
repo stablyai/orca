@@ -71,11 +71,7 @@ it.each(['claude', 'codex'] as const)(
     fireEvent.click(panel().querySelector('[cmdk-item]')!)
     fireEvent.click(getByRole(document.body, 'radio', { name: 'High' }))
     // A speed edit copies the current Arguments into the draft; later settings must still win.
-    fireEvent.click(
-      agent === 'claude'
-        ? getByRole(document.body, 'button', { name: 'Fast' })
-        : getByRole(document.body, 'radio', { name: 'Fast' })
-    )
+    fireEvent.click(getByRole(document.body, 'button', { name: 'Fast' }))
     changePrompt(
       panel().querySelector<HTMLElement>('[contenteditable]')!,
       'keep @/repo/exact-file.ts'
