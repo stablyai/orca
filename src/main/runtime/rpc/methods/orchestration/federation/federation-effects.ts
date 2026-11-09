@@ -19,7 +19,7 @@ export type FederationEffect = {
 export function appendFederationTerminalEffects(
   effects: FederationEffect[],
   terminals: { handle: string; title: string | null; tabId?: string; leafId?: string }[],
-  agentHandle: string,
+  agentHandle: string | undefined,
   setupHandle?: string
 ): void {
   for (const terminal of terminals) {

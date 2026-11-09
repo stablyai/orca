@@ -4,9 +4,46 @@ import { AGENT_DONE_QUIET_MS } from '../../../../../shared/agent-status/lifecycl
 import { chatWorkerDispatches } from './chat-worker-error-escalation'
 import {
   reportWorkerTurnStop,
+  workerTurnStopDispatchId,
+  type WorkerTurnStopDispatch,
   type WorkerTurnStopReason,
   type WorkerTurnStopReportDeps
 } from './worker-turn-stop-report'
+import type { OrchestrationDb } from '../../db/orchestration-db'
+import { resolveStructuredWorkerIdentityForSession } from '../../terminal-authority/structured-sessions/structured-worker-authority'
+
+/** The open Dispatches a chat works: its own here, or one a coordinator on another computer started here. */
+function chatWorkerTargets(
+  sessionId: string,
+  db: OrchestrationDb
+): { target: WorkerTurnStopDispatch; from: string; starting: boolean }[] {
+  const local = chatWorkerDispatches(sessionId, db).map(({ dispatch, from }) => ({
+    target: { kind: 'local' as const, dispatch },
+    from,
+    starting: db.getWorkerDispatch(dispatch.id)?.state === 'starting'
+  }))
+  if (local.length > 0) {
+    return local
+  }
+  // A paired server holds its remote workers as attachments; their Dispatch lives at the Run home.
+  const worker = resolveStructuredWorkerIdentityForSession(sessionId, db)
+  const attachment = worker && db.findActiveRemoteAttachmentForPane(worker.paneKey)
+  return worker &&
+    attachment &&
+    db.isRemoteAttachmentProcessCurrent({
+      dispatchId: attachment.dispatch_id,
+      paneKey: worker.paneKey,
+      processIncarnation: worker.processIncarnation
+    })
+    ? [
+        {
+          target: { kind: 'remote', attachment },
+          from: worker.handle,
+          starting: attachment.state === 'starting'
+        }
+      ]
+    : []
+}
 
 type ChatStop = {
   sessionId: string
@@ -67,7 +104,7 @@ export function chatWorkerTurnStopReporter(
       }
       // The Dispatch a stop belongs to is one open when it was seen.
       const seen = new Set(
-        chatWorkerDispatches(stop.sessionId, db).map(({ dispatch }) => dispatch.id)
+        chatWorkerTargets(stop.sessionId, db).map(({ target }) => workerTurnStopDispatchId(target))
       )
       const deliver = (): void => {
         try {
@@ -81,22 +118,17 @@ export function chatWorkerTurnStopReporter(
           ) {
             return
           }
-          const open = chatWorkerDispatches(stop.sessionId, current).filter(({ dispatch }) =>
-            seen.has(dispatch.id)
+          const open = chatWorkerTargets(stop.sessionId, current).filter(({ target }) =>
+            seen.has(workerTurnStopDispatchId(target))
           )
-          if (
-            stop.reason === 'finished' &&
-            open.some(
-              ({ dispatch }) => current.getWorkerDispatch(dispatch.id)?.state === 'starting'
-            )
-          ) {
+          if (stop.reason === 'finished' && open.some(({ starting }) => starting)) {
             setTimer(deliver, AGENT_DONE_QUIET_MS)
             return
           }
-          for (const { dispatch, from } of open) {
+          for (const { target, from } of open) {
             reportWorkerTurnStop(
               current,
-              { kind: 'local', dispatch },
+              target,
               {
                 from,
                 stopKey: stop.stopKey,

@@ -1,16 +1,14 @@
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
-import { waitForWorkerAgentReady } from '../../../../terminal/wait/launched-agent-composer-readiness'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
 import { buildDispatchPreamble } from '../../../../orchestration/workers/launch/worker-dispatch-preamble'
-import { sendAgentTurn } from '../../../../orchestration/turn-delivery/send-agent-turn'
-import { createWorkerBriefWriteGuard } from '../../../../terminal/wait/launched-agent-write-guard'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
 import { assertOrchestrationWorktreeCreationSupported } from '../worker/folder-worktree-placement'
-import type { FederationEffect } from './federation-effects'
+import { isFederationEffectUnknown, type FederationEffect } from './federation-effects'
 import { launchFederatedWorkerAgent } from './federated-worker-agent-launch'
-import type { WorkerSetupReceipt } from '../worker/worker-topology'
 import {
+  federatedSetupSource,
+  initialFederatedSetup,
   monitorFederatedSetup,
   persistFederatedReadinessStage,
   persistFederatedSetupSpawnFailure,
@@ -26,6 +24,18 @@ import {
 import { assertWorkerStartTaskSpecWithinPromptBudget } from '../worker/worker-start-prompt-budget'
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
 import { resolveRpcWorkspaceCreatorProvenance } from '../../../workspace-creator-context'
+import {
+  decideWorkerStartMode,
+  readWorkerStartModeSettings,
+  resolveWorkerStartModeOnHost
+} from '../structured-workers/orchestration-worker-start-mode'
+import { tearDownFailedWorkerStart } from '../worker/failed-worker-start-teardown'
+import {
+  awaitFederatedWorkerReady,
+  federatedWorkerAddress,
+  sendFederatedWorkerBrief,
+  type StructuredSession
+} from './federated-worker-brief'
 import { claimTerminalForRemoteAttach } from '../../../../orchestration/db/worker-dispatch/worker-terminal-claim'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
@@ -96,17 +106,14 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
       let worktree
       let terminalHandle = params.terminal
       let terminalCreation: RuntimeTerminalCreate | undefined
-      const setupSource = createsWorktree
-        ? (params.setupSource ?? (params.setup ? 'explicit_request' : 'orchestration_default'))
-        : 'existing_worktree'
-      let setup: WorkerSetupReceipt = {
-        requested: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
-        effective: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
-        source: setupSource,
-        hookFound: false,
-        startupPolicy: 'start-immediately',
-        state: createsWorktree ? 'not_configured' : 'not_applicable'
-      }
+      let structuredSession: StructuredSession | null = null
+      // This host decides chat or terminal from its own settings, as a local start does.
+      let mode = decideWorkerStartMode({
+        params: { agent, terminal: params.terminal, worktree: params.worktree },
+        settings: readWorkerStartModeSettings(runtime)
+      })
+      const setupSource = federatedSetupSource(params, createsWorktree)
+      let setup = initialFederatedSetup(params, createsWorktree, setupSource)
       try {
         const launchAgent = (existing?: { id: string }) =>
           launchFederatedWorkerAgent({
@@ -115,6 +122,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             params,
             agent,
             launchPreferences: launch.preferences,
+            mode,
             ...(existing
               ? { worktree: existing }
               : { creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context) }),
@@ -128,7 +136,8 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             }
           })
         if (createsWorktree) {
-          ;({ worktree, terminalHandle, terminalCreation } = await launchAgent())
+          ;({ worktree, terminalHandle, terminalCreation, structuredSession, mode } =
+            await launchAgent())
         } else {
           worktree = await runtime.showManagedTerminalWorkspace(params.worktree).catch(() => {
             throw new OrchestrationError(
@@ -162,7 +171,9 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             })
           } else {
             failedStage = 'terminal_create'
-            ;({ terminalHandle, terminalCreation } = await launchAgent(worktree))
+            mode = await resolveWorkerStartModeOnHost(runtime, mode, worktree.id, agent)
+            ;({ terminalHandle, terminalCreation, structuredSession, mode } =
+              await launchAgent(worktree))
           }
         }
         if (!worktree || !terminalHandle) {
@@ -182,14 +193,21 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
         }
         persistFederatedReadinessStage(setupStage)
         failedStage = 'agent_readiness'
-        const wait = await waitForWorkerAgentReady(runtime, terminalHandle, {
+        const wait = await awaitFederatedWorkerReady({
+          runtime,
+          structuredSession,
+          terminalHandle,
           agent,
           reusesTerminal: Boolean(params.terminal),
           creation: terminalCreation,
+          setup,
+          effects,
           timeoutMs: readinessTimeoutMs
         })
-        persistFederatedSetupWaitOutcome({ ...setupStage, wait })
-        if (!wait.satisfied) {
+        if (wait) {
+          persistFederatedSetupWaitOutcome({ ...setupStage, wait })
+        }
+        if (wait && !wait.satisfied) {
           if (setup.state === 'failed') {
             failedStage = 'setup_wait'
           }
@@ -207,33 +225,32 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           terminalHandle,
           setup,
           effects,
-          reusesTerminal: Boolean(params.terminal)
+          reusesTerminal: Boolean(params.terminal),
+          ...(structuredSession ? { identity: structuredSession.identity } : {})
         })
         failedStage = 'dispatch_input'
-        // A shell back at its prompt also reads as ready, so the brief needs the agent found in front.
-        const briefGuard = createWorkerBriefWriteGuard(runtime, agent, !params.terminal)
-        const prompt = await sendAgentTurn({
-          kind: 'terminal',
+        const preamble = buildDispatchPreamble({
+          taskId: params.taskId,
+          dispatchId: params.dispatchId,
+          taskSpec: params.taskSpec,
+          coordinatorHandle: 'Run home (relayed by Orca)',
+          workerHandle: federatedWorkerAddress(structuredSession, terminalHandle),
+          devMode: params.devMode,
+          // Enforce the execution host's nesting cap using its own setting.
+          canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
+          subWorkersInOwnRun: true,
+          cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+        })
+        const prompt = await sendFederatedWorkerBrief({
           runtime,
-          handle: terminalHandle,
-          ...(briefGuard ? { beforeWrite: briefGuard.beforeWrite } : {}),
-          turn: {
-            purpose: 'dispatch-preamble',
-            operationId: orchestrationMutation.requestId,
-            body: buildDispatchPreamble({
-              taskId: params.taskId,
-              dispatchId: params.dispatchId,
-              taskSpec: params.taskSpec,
-              coordinatorHandle: 'Run home (relayed by Orca)',
-              workerHandle: terminalHandle,
-              devMode: params.devMode,
-              // Enforce the execution host's nesting cap using its own setting.
-              canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
-              subWorkersInOwnRun: true,
-              cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
-            })
-          }
-        }).finally(() => briefGuard?.dispose())
+          structuredSession,
+          terminalHandle,
+          agent,
+          params,
+          operationId: orchestrationMutation.requestId,
+          preamble,
+          budgetMs: readinessTimeoutMs
+        })
         effects.push({
           kind: 'dispatch_input',
           role: 'agent',
@@ -251,11 +268,21 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
           terminalHandle,
           setup,
           launch: launch.receipt,
+          mode,
           effects,
-          ...(prompt.prompt ? { prompt: prompt.prompt } : {}),
+          ...(prompt?.prompt ? { prompt: prompt.prompt } : {}),
           residualResources: []
         }
       } catch (error) {
+        // A chat that may hold its brief stays for the worker to report; a refused start retires it.
+        if (structuredSession && !isFederationEffectUnknown(error, failedStage)) {
+          await tearDownFailedWorkerStart({
+            runtime,
+            structuredSession,
+            dispatchId: params.dispatchId,
+            error
+          })
+        }
         return failFederatedAttachmentWithReceipt({
           db,
           dispatchId: params.dispatchId,

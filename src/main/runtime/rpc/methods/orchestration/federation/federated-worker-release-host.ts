@@ -2,8 +2,7 @@ import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/
 import type { RemoteDispatchAttachmentRow } from '../../../../orchestration/db/orchestration-records'
 import type {
   WorkerTerminalArchiveRow,
-  WorkerTerminalResourceRow,
-  WorkerTerminalRetainedReason
+  WorkerTerminalResourceRow
 } from '../../../../orchestration/terminal-authority/release/worker-terminal-ownership'
 import {
   captureWorkerOutputArchive,
@@ -14,10 +13,14 @@ import {
 import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
 import { readRemoteAttachmentArchive } from './remote-attachment-archive-read'
 import { WorkerTerminalReleaseSingleFlight } from '../worker/worker-terminal-release-single-flight'
+import { remoteChatWorkerOf } from '../../../../orchestration/federation/remote-chat-worker'
+import { releaseRemoteChatWorker } from './remote-chat-worker-host'
 import { yieldAutoReleaseToWorkingAgent } from '../../../../orchestration/terminal-authority/release/worker-terminal-auto-release-working-yield'
 import { archiveSummary } from '../worker/worker-terminal-resource-presentation'
 import {
+  isStillReleasing,
   releaseUnknownRecovery,
+  retainedReason,
   type WorkerReleaseReceipt
 } from '../worker/worker-release-completion'
 import { orchestrationTimestampToMs } from '../worker/worker-output'
@@ -113,6 +116,10 @@ async function completeRemoteAttachmentRelease(
 ): Promise<RemoteReleaseReceipt> {
   const { runtime, attachment, observation } = args
   const db = runtime.getOrchestrationDb()
+  const chat = remoteChatWorkerOf(db, attachment)
+  if (chat?.exact) {
+    return releaseRemoteChatWorker(runtime, attachment, chat.identity, resource, storedArchive)
+  }
   if (!observation.exact || !observation.terminal) {
     if (
       args.mode === 'recovery' &&
@@ -280,16 +287,6 @@ function remoteAttachmentLeaseIsCurrent(
   )
 }
 
-function retainedReason(resource: WorkerTerminalResourceRow): WorkerTerminalRetainedReason {
-  if (resource.retained_reason) {
-    return resource.retained_reason as WorkerTerminalRetainedReason
-  }
-  if (resource.ownership_state === 'user_owned') {
-    return 'user_takeover'
-  }
-  return 'identity_unproven'
-}
-
 function projectArchivedOutputLiveness<
   T extends { status: { terminal: string; liveness: string } }
 >(output: T, liveness: 'live' | 'unverifiable' | 'exited'): T {
@@ -301,8 +298,4 @@ function projectArchivedOutputLiveness<
       liveness
     }
   }
-}
-
-function isStillReleasing(resource: WorkerTerminalResourceRow): boolean {
-  return resource.ownership_state === 'owned' && resource.release_state === 'releasing'
 }

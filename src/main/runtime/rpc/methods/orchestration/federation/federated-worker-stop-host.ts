@@ -3,6 +3,8 @@ import type { WorkerStopReceipt } from '../../../../../../shared/orchestration/w
 import { archiveWorkerOutputBeforeStop } from '../worker/worker-stop-archive'
 import { describeUnconfirmedAgentStop } from '../../../../../../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { inspectRemoteAttachment } from './federation-attachment-observation'
+import { remoteChatWorkerOf } from '../../../../orchestration/federation/remote-chat-worker'
+import { stopRemoteChatWorker } from './remote-chat-worker-host'
 
 /** Close the exact attached worker this host runs for its home. */
 export async function stopRemoteAttachment(
@@ -18,6 +20,10 @@ export async function stopRemoteAttachment(
       alreadySettled: true,
       processAction: 'none'
     }
+  }
+  const chat = remoteChatWorkerOf(db, begun)
+  if (chat) {
+    return stopRemoteChatWorker(runtime, params.dispatchId, chat)
   }
   const observation = await inspectRemoteAttachment(runtime, params.dispatchId)
   if (!observation.exact || !observation.terminal) {
