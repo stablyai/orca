@@ -186,6 +186,7 @@ it('uses the matching durable generation ownership when an earlier run receives 
     }
   })
   expect(await deferred.drained()).toEqual({ ok: true })
+  expect(journal.runningTurn()).toBeNull()
   const prior = journal
     .snapshot()
     .items.find(

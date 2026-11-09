@@ -27,7 +27,7 @@ import {
 } from './claude-background-task-memory'
 import {
   ClaudeBackgroundTaskRowWriter,
-  claudeBackgroundTaskTurnOpener
+  createClaudeBackgroundTaskTurnOpener
 } from './claude-background-task-row-writer'
 import { observeClaudeBackgroundTaskStart } from './claude-background-task-start'
 import { observeOwnedClaudeBackgroundTaskRoster } from './claude-background-task-roster'
@@ -54,6 +54,7 @@ export type ClaudeBackgroundTaskRowsDeps = {
 export class ClaudeBackgroundTaskRows {
   private readonly rows = new Map<string, ClaudeBackgroundTaskRow>()
   private readonly writer: ClaudeBackgroundTaskRowWriter
+  private readonly openTurn: ReturnType<typeof createClaudeBackgroundTaskTurnOpener>
   private readonly overflowTerminalRows: ClaudeOverflowTerminalRows
   private readonly ledgers = new ClaudeBackgroundTaskLedgers()
   private readonly ids = new ClaudeSubagentIds()
@@ -63,6 +64,7 @@ export class ClaudeBackgroundTaskRows {
   constructor(private readonly deps: ClaudeBackgroundTaskRowsDeps) {
     this.taskInvocations = deps.taskInvocations ?? new ClaudeTaskInvocations()
     this.now = deps.now ?? (() => Date.now())
+    this.openTurn = createClaudeBackgroundTaskTurnOpener(deps.openOutputTurn, this.taskInvocations)
     this.writer = new ClaudeBackgroundTaskRowWriter(
       deps.sink,
       deps.turnScope,
@@ -102,7 +104,8 @@ export class ClaudeBackgroundTaskRows {
       if (frameId) {
         this.wakeFrames.set(frameId, true)
       }
-      this.deps.openOutputTurn?.(message, observedAt)
+      const id = canonicalClaudeBackgroundTaskId(message, this.ids)
+      this.openTurn(this.journaling, true, id)()
     }
     try {
       return this.observeFrame(message)
@@ -323,11 +326,6 @@ export class ClaudeBackgroundTaskRows {
     lifecycle = false
   ): void {
     attributeClaudeBackgroundTaskRow(id, row)
-    this.writer.write(
-      id,
-      row,
-      claudeBackgroundTaskTurnOpener(this.journaling, openOutputTurn, this.deps.openOutputTurn),
-      lifecycle
-    )
+    this.writer.write(id, row, this.openTurn(this.journaling, openOutputTurn, id, row), lifecycle)
   }
 }
