@@ -12,12 +12,14 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { CodexManagedAccount } from '../../shared/managed-account-types'
-import type * as CodexAccountFs from './fs-utils'
+import type * as CodexAccountFs from '../filesystem/atomic-file-publication'
 
 const writeFailure = vi.hoisted(() => ({ failNextAuthWrite: false }))
 
-vi.mock('./fs-utils', async () => {
-  const actual = await vi.importActual<typeof CodexAccountFs>('./fs-utils')
+vi.mock('../filesystem/atomic-file-publication', async () => {
+  const actual = await vi.importActual<typeof CodexAccountFs>(
+    '../filesystem/atomic-file-publication'
+  )
   return {
     ...actual,
     writeFileAtomically: (targetPath: string, contents: string, options?: { mode?: number }) => {

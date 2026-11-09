@@ -110,7 +110,9 @@ export async function rewindStructuredAgentSession(
           if (ctx.journal.cursor().epoch !== params.expectedEpoch) {
             return rewindRefusal('stale-epoch')
           }
-          if (!isStructuredRewindTarget(ctx.journal, params.itemId)) {
+          if (
+            !isStructuredRewindTarget(ctx.journal, params.itemId, record.forkedFrom?.childBoundary)
+          ) {
             return rewindRefusal('invalid-target')
           }
           const head = agentSessionProviderHandleChainHead(record.providerHandleChain)?.handle

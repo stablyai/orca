@@ -14,6 +14,7 @@ import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { localizeSlashCommandDescription } from './native-chat-slash-command-descriptions'
+import { nativeChatPickerEmptyText } from './native-chat-picker-empty-text'
 
 export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   autocomplete,
@@ -48,7 +49,8 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   const showSkillsHeading = autocomplete.grouped && (skills.length > 0 || hasSkillStatus)
   const noMatches =
     autocomplete.skillStatus === 'ready' && commands.length === 0 && skills.length === 0
-  const emptyText = noMatches ? getPickerEmptyText(autocomplete, t) : null
+  const checkingSkills = noMatches && autocomplete.skillsChecking && autocomplete.skillsEnabled
+  const emptyText = noMatches ? nativeChatPickerEmptyText(autocomplete, t, checkingSkills) : null
   const collision = commands.find((item) => item.skillCollision)
   const duplicate = skills.find((item) => item.sources.length > 1)
   // One sentence for the line and the screen reader, so the two never disagree.
@@ -80,8 +82,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
       })}
       {showSkillsHeading ? <PickerGroupHeading kind="skills" /> : null}
       {autocomplete.skillStatus === 'loading' ? (
-        <PickerStatus>
-          <LoadingSpinner className="size-3.5" />
+        <PickerStatus busy>
           {t('components.native-chat.composer.loadingSkills', 'Loading skills...')}
         </PickerStatus>
       ) : null}
@@ -115,7 +116,7 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
           />
         )
       })}
-      {noMatches ? <PickerStatus>{emptyText}</PickerStatus> : null}
+      {noMatches ? <PickerStatus busy={checkingSkills}>{emptyText}</PickerStatus> : null}
       <div aria-live="polite" className="sr-only">
         {autocomplete.skillStatus === 'loading'
           ? t('components.native-chat.composer.loadingSkills', 'Loading skills...')
@@ -140,19 +141,6 @@ export const NativeChatPickerMenu = memo(function NativeChatPickerMenu({
   )
 })
 
-function getPickerEmptyText(
-  autocomplete: Extract<ComposerAutocomplete, { mode: 'slash' }>,
-  t: Translate = translate
-): string {
-  if (!autocomplete.commandsEnabled) {
-    return t('components.native-chat.composer.noSkills', 'No matching skills')
-  }
-  if (autocomplete.skillsEnabled) {
-    return t('components.native-chat.composer.noCommandsOrSkills', 'No matching commands or skills')
-  }
-  return t('components.native-chat.composer.noCommands', 'No matching commands')
-}
-
 function PickerGroupHeading({ kind }: { kind: 'commands' | 'skills' }): React.JSX.Element {
   const t = useTranslate()
   return (
@@ -164,9 +152,16 @@ function PickerGroupHeading({ kind }: { kind: 'commands' | 'skills' }): React.JS
   )
 }
 
-function PickerStatus({ children }: { children: React.ReactNode }): React.JSX.Element {
+function PickerStatus({
+  busy = false,
+  children
+}: {
+  busy?: boolean
+  children: React.ReactNode
+}): React.JSX.Element {
   return (
     <div className="flex items-center gap-2 px-2 py-1.5 text-xs text-muted-foreground">
+      {busy ? <LoadingSpinner className="size-3.5" /> : null}
       {children}
     </div>
   )

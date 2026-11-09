@@ -1,4 +1,5 @@
 import type { RepoCreateFailure } from '../../shared/repo-create-failure-copy'
+import type { CloneTargetArgs, CloneTargetCheck } from '../../shared/git/clone/clone-target-check'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { GhAccountBinding } from '../../shared/github/account-binding'
 import type {
@@ -80,7 +81,8 @@ export type RepositoryApi = {
   pickFolder: () => Promise<string | null>
   pickFolders: () => Promise<string[]>
   pickDirectory: () => Promise<string | null>
-  clone: (args: { url: string; destination: string }) => Promise<Repo>
+  clone: (args: CloneTargetArgs) => Promise<Repo>
+  checkCloneTarget: (args: CloneTargetArgs) => Promise<CloneTargetCheck>
   cloneAbort: () => Promise<void>
   create: (args: {
     parentPath: string

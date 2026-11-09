@@ -1,6 +1,6 @@
 import { runInNewContext } from 'node:vm'
 import { afterEach, describe, expect, it } from 'vitest'
-import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser-annotation-viewport-bridge'
+import { BROWSER_GRAB_SELECTED_ATTRIBUTE } from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 import { buildGuestOverlayScript } from './grab-guest-script'
 
 type Rect = { x: number; y: number; width: number; height: number }

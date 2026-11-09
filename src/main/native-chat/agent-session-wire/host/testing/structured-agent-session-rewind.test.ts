@@ -1,3 +1,10 @@
+import { AgentSessionJournal } from '../../../agent-session-journal/journal-store'
+import { recoverStructuredRewind } from '../../rewind/structured-rewind-recovery'
+import { persistRewindRecord } from '../../rewind/structured-rewind-record'
+import {
+  projectForkMarker,
+  readForkMarker
+} from '../../publication/history/agent-session-fork-marker'
 import { expectAtomicRewindCompletion } from './structured-agent-session-rewind-replay.test-fixture'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../shared/agent-session/journal/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -239,4 +246,128 @@ it('persists the live native predecessor before revert and retains it after a lo
     beforeTurnId: 'drop',
     keptTurnId: 'kept'
   })
+})
+
+it('refuses inherited rewind and rewinds the first own prompt to the fork point', async () => {
+  const inherited = await seed()
+  const ancestry = {
+    sessionId: 'original-chat',
+    itemId: 'codex:original-thread:tip:0',
+    childBoundary: {
+      kind: 'item' as const,
+      itemId: agentJournalItemKey({
+        provider: 'codex',
+        threadId: HOST_TEST_THREAD,
+        turnId: 'tip',
+        ordinal: 0
+      })
+    }
+  }
+  await store.commitOperationReceipt(
+    store.conversationReceipts.forkBoundary(HOST_TEST_SESSION, ancestry)
+  )
+  expect(await host.rewind(caller, await params(inherited))).toMatchObject({
+    ok: false,
+    refusal: {
+      code: 'agent_session_operation_invalid',
+      details: { rewindReason: 'invalid-target' }
+    }
+  })
+  sink.appendItem(
+    { provider: 'codex', threadId: HOST_TEST_THREAD, turnId: 'own', ordinal: 0 },
+    { ...hostTestMessage('first own prompt'), role: 'user' },
+    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  )
+  await host.flushStreamedEvents(HOST_TEST_SESSION)
+  adapter.prepareRewind = async () => ({
+    ok: true,
+    revert: { threadId: HOST_TEST_THREAD, beforeTurnId: 'own', keptTurnId: 'tip' }
+  })
+  const own = agentJournalItemKey({
+    provider: 'codex',
+    threadId: HOST_TEST_THREAD,
+    turnId: 'own',
+    ordinal: 0
+  })
+  expect(await host.rewind(caller, await params(own))).toMatchObject({ ok: true })
+  expect(store.getRecord(HOST_TEST_SESSION)?.forkedFrom).toEqual(ancestry)
+  expect(
+    (await host.journalSnapshot(HOST_TEST_SESSION)).items
+      .filter((item) => item.body.kind === 'message')
+      .map((item) => item.body.kind === 'message' && item.body.blocks)
+  ).toEqual([
+    [{ type: 'text', text: '0' }],
+    [{ type: 'text', text: '1' }],
+    [{ type: 'text', text: '2' }]
+  ])
+})
+
+it('completes an inherited rewind saved by the PR1 build with an atomic surviving divider after restart', async () => {
+  const target = await seed()
+  const fence = store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence
+  const journal = host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
+  await store.commitOperationReceipt(
+    store.conversationReceipts.forkBoundary(HOST_TEST_SESSION, {
+      sessionId: 'original-chat',
+      itemId: 'codex:original-thread:tip:0',
+      childBoundary: { kind: 'item', itemId: 'codex:019fd532-7c11-7a90-b6de-4e1a2c3d5f60:tip:0' }
+    })
+  )
+  await persistRewindRecord(store, HOST_TEST_SESSION, fence, {
+    operationId: hostTestOperationId(),
+    callerKey: 'desktop',
+    itemId: target,
+    expectedEpoch: journal.epoch,
+    phase: 'provider-succeeded',
+    providerRevert: {
+      threadId: '019fd532-7c11-7a90-b6de-4e1a2c3d5f60',
+      beforeTurnId: 'drop',
+      keptTurnId: 'kept'
+    }
+  })
+  await journal.close()
+  store = await openTestAgentSessionRecordStore(directory)
+  const reopened = new AgentSessionJournal({
+    identity: {
+      sessionId: HOST_TEST_SESSION,
+      workspaceId: 'workspace-1',
+      hostId: 'local',
+      agent: 'codex',
+      providerHandle: codexProviderHandle('019fd532-7c11-7a90-b6de-4e1a2c3d5f60')
+    },
+    database: openTestJournalHostDatabase(directory)
+  })
+  await reopened.open()
+  const replace = reopened.replaceEpochItems.bind(reopened)
+  vi.spyOn(reopened, 'replaceEpochItems').mockImplementationOnce(async (...args) => {
+    await replace(...args)
+    throw new Error('crash after atomic completion')
+  })
+  await expect(
+    recoverStructuredRewind(
+      { store, logger: createStructuredAgentSessionLogger() },
+      HOST_TEST_SESSION,
+      reopened,
+      fence
+    )
+  ).rejects.toThrow('crash after atomic completion')
+  await reopened.close()
+  store = await openTestAgentSessionRecordStore(directory)
+  await reopened.open()
+  await recoverStructuredRewind(
+    { store, logger: createStructuredAgentSessionLogger() },
+    HOST_TEST_SESSION,
+    reopened,
+    fence
+  )
+  expect(store.getRecord(HOST_TEST_SESSION)?.forkedFrom?.childBoundary).toEqual({
+    kind: 'item',
+    itemId: 'codex:019fd532-7c11-7a90-b6de-4e1a2c3d5f60:kept:0'
+  })
+  expect(
+    projectForkMarker(reopened.snapshot(), readForkMarker(store, HOST_TEST_SESSION)).items.map(
+      (item) => item.itemId
+    )
+  ).toEqual(['codex:019fd532-7c11-7a90-b6de-4e1a2c3d5f60:kept:0', 'orca:forked-from'])
+  await reopened.close()
 })

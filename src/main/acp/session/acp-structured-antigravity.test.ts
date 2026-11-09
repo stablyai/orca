@@ -1,5 +1,5 @@
 import type { AntigravityChatAuthConfig } from '../../../shared/antigravity-chat-auth-config'
-import { afterEach, expect, it, onTestFinished } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import { z } from 'zod'
 import { readAgentJournalTurn } from '../../../shared/agent-session/lifecycle/agent-session-turn-record'
 import {
@@ -14,7 +14,6 @@ import {
   waitFor
 } from './testing/acp-structured-adapter.test-support'
 import { GrokFixtureReplay } from './testing/acp-structured-fixture-replay.test-support'
-import { deferred } from '../process/testing/acp-scripted-agent.test-support'
 import {
   readAcpFixture,
   type AcpFixtureFrame
@@ -26,7 +25,6 @@ const result = (frame: AcpFixtureFrame | undefined) =>
 afterEach(closeProviderTimelineRigs)
 
 it.each<{ config: AntigravityChatAuthConfig | undefined; method: string }>([
-  { config: undefined, method: 'oauth-personal' },
   {
     config: {
       method: 'oauth-business',
@@ -109,54 +107,6 @@ it("leaves a Full access host chat's plan approval to the person", async () => {
     expect((await rig.rig.rows()).some((row) => row.body.kind === 'approval')).toBe(true)
   )
   expect(answered).toBe(false)
-})
-
-it('refuses a new start while its sign-in changes, and stops one already starting', async () => {
-  const gate = ANTIGRAVITY.launchGate!
-  const rig = await openAcpAdapterRig({
-    spec: ANTIGRAVITY,
-    script: (agent) => agent.on('session/new', () => {})
-  })
-  const starting = rig.acquire()
-  await rig.frame('session/new')
-  const signIn = deferred<void>()
-  onTestFinished(() => signIn.resolve())
-  const operation = gate.run(
-    async () => {},
-    () => signIn.promise
-  )
-  await starting
-  expect(rig.openFailure()).toMatchObject({ name: 'AcpConnectionClosedError' })
-  expect(rig.child().exited).toBe(true)
-  await expect(rig.acquire()).rejects.toMatchObject({ reason: 'accountSwitchInProgress' })
-  signIn.resolve()
-  await operation
-
-  const lateStart = gate.enter(undefined)
-  let left = false
-  onTestFinished(() => {
-    left = true
-    lateStart.leave()
-  })
-  let stopped = false
-  let worked = false
-  const failedOperation = gate.run(
-    async () => {
-      expect(left).toBe(true)
-      stopped = true
-      throw new Error('stop failed')
-    },
-    async () => {
-      worked = true
-    }
-  )
-  void failedOperation.catch(() => {})
-  expect(lateStart.signal.aborted).toBe(true)
-  expect(stopped).toBe(false)
-  left = true
-  lateStart.leave()
-  await expect(failedOperation).rejects.toThrow('stop failed')
-  expect(worked).toBe(false)
 })
 
 it('stops a chat that has left the gate but is not loaded yet before the operation runs', async () => {

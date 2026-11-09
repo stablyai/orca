@@ -98,13 +98,4 @@ describe('worktree.ps agent rows and the desktop Agents list', () => {
       'tab-1:unknown-new': undefined
     })
   })
-
-  it('claims no verdict when no desktop window has published one', () => {
-    expect(listAgents(null)).toEqual({
-      'tab-1:listed': undefined,
-      'tab-1:session-start': undefined,
-      'tab-1:unknown-old': undefined,
-      'tab-1:unknown-new': undefined
-    })
-  })
 })

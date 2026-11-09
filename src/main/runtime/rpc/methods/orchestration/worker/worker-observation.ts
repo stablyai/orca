@@ -5,7 +5,7 @@ import type { OrchestrationDb } from '../../../../orchestration/db/orchestration
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import { projectWorkerFleet } from './worker-list-projection'
-import { observeChatAssignee } from '../../../../orchestration/workers/lifecycle/chat-assignee'
+import { createSessionWorkerLivenessReader } from '../../../../orchestration/workers/lifecycle/session-worker-liveness'
 import { inspectSessionWorker } from './session-worker-observation'
 import type {
   DispatchContextRow,
@@ -214,13 +214,14 @@ export function projectFleetWorkerPage(
     return null
   }
   const now = Date.now()
+  const statuses = runtime.getOrchestrationFleetAgentStatusSnapshot()
   return projectWorkerFleet({
     rows,
     attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatchId], now),
-    statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(),
+    statuses,
     limit: 1,
     now,
-    observeChat: (sessionId) => observeChatAssignee(sessionId, db)
+    observeSession: createSessionWorkerLivenessReader(db, statuses)
   })
 }
 

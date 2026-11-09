@@ -12,6 +12,9 @@ import type { WorkerStartInput } from './worker-start-schema'
 
 type WorkerStartLaunch = ReturnType<typeof resolveWorkerLaunchPreferences>
 
+const TERMINAL_WITH_AGENT_REFUSAL =
+  '--terminal continues the agent already running there, in its current conversation. To start fresh, use --worktree or --agent without --terminal.'
+
 export function validateFederatedWorkerStartPlacement(
   params: WorkerStartInput,
   createsWorktree: boolean
@@ -35,10 +38,7 @@ export function validateFederatedWorkerStartPlacement(
     )
   }
   if (params.terminal && params.agent) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      '--terminal reuses an existing agent and cannot combine with --agent.'
-    )
+    throw new OrchestrationError('invalid_argument', TERMINAL_WITH_AGENT_REFUSAL)
   }
   if (!params.terminal && !params.agent) {
     throw new OrchestrationError(
@@ -57,10 +57,7 @@ export function prepareLocalWorkerStart(args: {
   const { params, createsWorktree, runtime } = args
   assertWorkerLaunchPreferencesCreateTerminal(params)
   if (params.terminal && params.agent) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      '--terminal reuses an existing agent and cannot combine with --agent.'
-    )
+    throw new OrchestrationError('invalid_argument', TERMINAL_WITH_AGENT_REFUSAL)
   }
   if (createsWorktree && params.terminal) {
     throw new OrchestrationError(
@@ -116,10 +113,7 @@ export function prepareFederationAttachmentWorkerStart(args: {
     )
   }
   if (params.terminal && params.agent) {
-    throw new OrchestrationError(
-      'invalid_argument',
-      '--terminal reuses an existing agent and cannot combine with --agent.'
-    )
+    throw new OrchestrationError('invalid_argument', TERMINAL_WITH_AGENT_REFUSAL)
   }
   return resolveWorkerStartAgent({
     runtime,

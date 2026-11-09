@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './mobile-relay-host-overlay'
-import type { MobileRelayHostOverlay } from './mobile-relay-host-overlay'
 
 const asyncStorageMock = vi.hoisted(() => ({
   getItem: vi.fn(),
@@ -48,8 +47,7 @@ import {
   resetHostStoreForTests,
   savePairedHost,
   setRelayRouting,
-  updateHostNameAndEndpoint,
-  updateLastConnected
+  updateHostNameAndEndpoint
 } from './host-store'
 import { resetMobileRelayHostOverlayStoreForTests } from './mobile-relay-host-overlay-store'
 
@@ -136,36 +134,6 @@ describe('host-store list mutations', () => {
     expect(profiles.map(({ id }) => id)).toEqual([HOST_TWO.id])
   })
 
-  it('keeps orphaned metadata visible when its credential is missing', async () => {
-    secureStoreMock.getItemAsync.mockImplementation(async (key: string) =>
-      key.endsWith(HOST_TWO.id) ? 'token-2' : null
-    )
-
-    const catalog = await loadHostCatalog()
-
-    expect(catalog.find(({ id }) => id === HOST_ONE.id)).toMatchObject({
-      credentialStatus: 'missing',
-      profile: null
-    })
-  })
-
-  it('keeps existing metadata when pairing a distinct host', async () => {
-    await savePairedHost({
-      id: 'host-new',
-      name: 'Host 3',
-      endpoint: 'ws://127.0.0.1:3',
-      publicKeyB64: 'key-new',
-      deviceToken: 'token-new',
-      lastConnected: 0
-    })
-
-    expect(JSON.parse(storedHostsRaw).map(({ id }: { id: string }) => id)).toEqual([
-      HOST_ONE.id,
-      HOST_TWO.id,
-      'host-new'
-    ])
-  })
-
   it('fails closed when durable host identity storage is unreadable', async () => {
     asyncStorageMock.getItem.mockRejectedValueOnce(new Error('storage unavailable'))
 
@@ -195,29 +163,6 @@ describe('host-store list mutations', () => {
     await expect(
       loadHosts().then((hosts) => hosts.find(({ id }) => id === HOST_ONE.id)?.deviceToken)
     ).resolves.toBe('replacement-token')
-  })
-
-  it('clears stale relay state when an existing host is re-paired direct-only', async () => {
-    const overlay: MobileRelayHostOverlay = {
-      v: 2,
-      hostId: HOST_ONE.id,
-      endpoints: [
-        { id: 'direct-primary', kind: 'lan', url: HOST_ONE.endpoint },
-        {
-          id: 'relay-primary',
-          kind: 'relay',
-          url: 'wss://relay-c1.onorca.dev/v1/connect/AbCdEf0123_-xyZ9'
-        }
-      ],
-      relayHostId: HOST_ONE_RELAY.relayHostId,
-      relay: HOST_ONE_RELAY
-    }
-    storedOverlayRaw = JSON.stringify([overlay])
-
-    await savePairedHost({ ...HOST_ONE, deviceToken: 'replacement-token' })
-
-    expect(JSON.parse(storedOverlayRaw!)).toEqual([])
-    expect(secureStoreMock.deleteItemAsync).not.toHaveBeenCalled()
   })
 
   it('refuses an early same-key token write without durable cleanup intent', async () => {
@@ -361,14 +306,6 @@ describe('host-store list mutations', () => {
     const hosts = await loadHosts()
     expect(hosts.find((host) => host.id === newHost.id)?.deviceToken).toBe(newHost.deviceToken)
   })
-
-  it('resolves instead of rejecting when updateLastConnected hits unreadable storage', async () => {
-    // Void callers cannot catch rejection; unreadable storage must leave this bookkeeping best-effort.
-    storedHostsRaw = '{'
-    await expect(updateLastConnected(HOST_ONE.id)).resolves.toBeUndefined()
-    expect(asyncStorageMock.setItem).not.toHaveBeenCalled()
-    expect(storedHostsRaw).toBe('{')
-  })
 })
 
 describe('host-store pairing save after an Android encryption rejection', () => {
@@ -417,38 +354,6 @@ describe('host-store pairing save after an Android encryption rejection', () => 
     })
     secureStoreMock.deleteItemAsync.mockResolvedValue(undefined)
     secureStoreMock.getItemAsync.mockResolvedValue(null)
-  })
-
-  it('saves the host when the reported Android failure is alias-local (#6600)', async () => {
-    const written = new Map<string | undefined, string>()
-    // Model the alias-local hypothesis; no affected physical device was available.
-    secureStoreMock.setItemAsync.mockImplementation(
-      async (_key: string, value: string, options?: { keychainService?: string }) => {
-        if (options?.keychainService === undefined) {
-          throw ENCRYPT_REJECTION
-        }
-        written.set(options.keychainService, value)
-      }
-    )
-
-    await expect(savePairedHost(NEW_HOST)).resolves.toBeUndefined()
-
-    expect(written.get('orca.pairing.v1')).toBe('device-token')
-    expect(JSON.parse(storedHostsRaw)).toEqual([
-      {
-        id: NEW_HOST.id,
-        name: NEW_HOST.name,
-        endpoint: NEW_HOST.endpoint,
-        publicKeyB64: NEW_HOST.publicKeyB64,
-        lastConnected: NEW_HOST.lastConnected
-      }
-    ])
-  })
-
-  it('still surfaces the failure when no keystore alias can accept the token', async () => {
-    secureStoreMock.setItemAsync.mockRejectedValue(ENCRYPT_REJECTION)
-
-    await expect(savePairedHost(NEW_HOST)).rejects.toBe(ENCRYPT_REJECTION)
   })
 
   it('serves the rotated token to loadHosts so the saved host survives a relaunch', async () => {

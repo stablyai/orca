@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils'
 import {
   getProviderRuntimeContextKey,
   isEnvironmentRuntimeContextKey
-} from '@/lib/provider-runtime-context'
+} from '@/runtime/hosts/observations/provider-runtime-context'
 import { preventOutsideDismissWhenDirty } from '@/lib/outside-dismiss-guard'
 import { useTranslate } from '@/i18n/use-translate'
 import { JiraConnectCredentialGuide } from './jira-connect-credential-guide'

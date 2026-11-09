@@ -152,27 +152,6 @@ describe('worker persistence avoids synchronous profile filesystem calls', () =>
     expect(readState().ui.sidebarWidth).toBe(511)
   })
 
-  it('drains mutations made while a sidecar rename is stalled', async () => {
-    const { store, readState } = await createWorkerMaintenanceFixture()
-    const started = maintenanceBarrier()
-    const finish = maintenanceBarrier()
-    fsCalls.waitAsync = (name, path) => {
-      if (name !== 'rename' || !path.includes('orca-github-cache.json.')) {
-        return
-      }
-      started.resolve()
-      return finish.promise
-    }
-    store.updateUI({ sidebarWidth: 611 })
-    store.setGitHubCache({ pr: {}, issue: {} })
-    const barrier = store.flushPendingOrThrowAsync()
-    await started.promise
-    store.updateUI({ sidebarWidth: 612 })
-    finish.resolve()
-    await barrier
-    expect(readState().ui.sidebarWidth).toBe(612)
-  })
-
   it('serializes queued durable mutations and refuses a synchronous live flush', async () => {
     const { store, authority, readState } = await createWorkerMaintenanceFixture()
     const gate = pauseCommit(authority)

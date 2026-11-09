@@ -30,6 +30,9 @@ type SearchIdentity = {
   revision: number
 }
 
+// One shared empty list, so "no hits" keeps the same identity across renders.
+const NO_HITS: readonly AiVaultSearchHit[] = Object.freeze([])
+
 type SearchPage = {
   identity: SearchIdentity
   hits: AiVaultSearchHit[]
@@ -69,11 +72,9 @@ export function useAiVaultSearch(
       started = true
       const revision = associations.getSnapshot()
       const isCurrent = () => !cancelled && revision === associations.getSnapshot()
-      // Only a rerun of the same request touches its page; a new request's page waits for its reply.
+      // Only a rerun of the same request touches its page, keeping its reply so its cursor survives revalidation.
       setPage((previous) =>
-        previous?.identity === identity
-          ? { ...previous, response: null, error: false, loading: true }
-          : previous
+        previous?.identity === identity ? { ...previous, error: false, loading: true } : previous
       )
       try {
         let response = await window.api.aiVault.searchSessions({ ...request, cursor }, scope)
@@ -103,7 +104,13 @@ export function useAiVaultSearch(
         }))
       } catch {
         if (isCurrent()) {
-          setPage({ identity, hits: [], response: null, error: true, loading: false })
+          setPage((previous) => ({
+            identity,
+            hits: previous?.identity === identity ? previous.hits : [],
+            response: previous?.identity === identity ? previous.response : null,
+            error: true,
+            loading: false
+          }))
         }
       } finally {
         pending = false
@@ -142,7 +149,7 @@ export function useAiVaultSearch(
   // Same-host hits stay visible while a newer request is debounced or in flight.
   const shown = current ?? (page?.identity.scope === scope ? page : null)
   return {
-    hits: shown?.hits ?? [],
+    hits: shown?.hits ?? NO_HITS,
     /** The hits answer this request; until then they are an older request's, or none. */
     answered: current !== null,
     /** Changes when hits for a different request land, never while one is pending. */

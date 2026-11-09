@@ -1,6 +1,6 @@
 import { ipcMain, webContents, type IpcMainInvokeEvent } from 'electron'
-import { browserManager } from '../../browser/browser-manager'
-import { browserSiteDisplayController } from '../../browser/site-settings/browser-site-display-controller'
+import { browserManager } from '../../browser/guest-lifecycle/manager/browser-manager'
+import { browserSiteDisplayController } from '../../browser/site-settings/display/browser-site-display-controller'
 import { isBrowserPageZoomDirection } from '../../../shared/browser-page-zoom'
 import { publishBrowserClientPageMetadata } from '../../browser/client-pages/renderer/browser-client-page-metadata-transport'
 import {
@@ -10,7 +10,7 @@ import {
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import type { BrowserViewportOverride } from '../../../shared/browser-workspace-types'
-import { isValidBrowserGrabRect } from '../../../shared/browser-annotation-viewport-report'
+import { isValidBrowserGrabRect } from '../../../shared/browser/annotations/browser-annotation-viewport-report'
 import {
   isBrowserSiteColorScheme,
   type BrowserPageSiteDisplay
@@ -19,7 +19,7 @@ import {
   isValidBrowserAnnotationViewportBridgeMarkers,
   isValidBrowserAnnotationViewportBridgeToken,
   type BrowserSetAnnotationViewportBridgeArgs
-} from '../../../shared/browser-annotation-viewport-bridge'
+} from '../../../shared/browser/annotations/browser-annotation-viewport-bridge'
 
 function isPagePoint(value: unknown): value is { x: number; y: number } {
   return (
@@ -30,6 +30,21 @@ function isPagePoint(value: unknown): value is { x: number; y: number } {
     Number.isFinite(value.x) &&
     Number.isFinite(value.y)
   )
+}
+
+// Page/session operations exclude document previews.
+const pageGuestId = (event: IpcMainInvokeEvent, browserPageId: unknown): number | null =>
+  isTrustedBrowserRenderer(event.sender) && typeof browserPageId === 'string'
+    ? browserManager.getGuestWebContentsId(browserPageId)
+    : null
+
+export function pageGuest(
+  event: IpcMainInvokeEvent,
+  browserPageId: unknown
+): Electron.WebContents | null {
+  const guestId = pageGuestId(event, browserPageId)
+  const guest = guestId === null ? undefined : webContents.fromId(guestId)
+  return guest && !guest.isDestroyed() ? guest : null
 }
 
 export function registerBrowserGuestViewHandlers(): void {
@@ -48,21 +63,6 @@ export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:zoomPage')
   ipcMain.removeHandler('browser:setPageSiteColorScheme')
   ipcMain.removeHandler('browser:setPageAudioMuted')
-
-  // Page/session operations exclude document previews.
-  const pageGuestId = (event: IpcMainInvokeEvent, browserPageId: unknown): number | null =>
-    isTrustedBrowserRenderer(event.sender) && typeof browserPageId === 'string'
-      ? browserManager.getGuestWebContentsId(browserPageId)
-      : null
-
-  const pageGuest = (
-    event: IpcMainInvokeEvent,
-    browserPageId: unknown
-  ): Electron.WebContents | null => {
-    const guestId = pageGuestId(event, browserPageId)
-    const guest = guestId === null ? undefined : webContents.fromId(guestId)
-    return guest && !guest.isDestroyed() ? guest : null
-  }
 
   ipcMain.handle(
     'browser:getPageSiteDisplay',

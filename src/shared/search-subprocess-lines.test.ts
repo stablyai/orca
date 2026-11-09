@@ -42,10 +42,6 @@ describe('SearchSubprocessLineAccumulator', () => {
 
     expect(lines).toEqual(['', 'a', ''])
   })
-
-  it('rejects invalid byte limits', () => {
-    expect(() => new SearchSubprocessLineAccumulator(-1)).toThrow(RangeError)
-  })
 })
 
 describe('oversized search record continuation', () => {

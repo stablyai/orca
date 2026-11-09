@@ -3,7 +3,7 @@ import {
   observeWslOrcadBridgeChannel,
   type WslOrcadBridgeChannelEvents
 } from './wsl-orcad-bridge-activity'
-import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTransport } from '../../managed-server/install/orcad-host-transport'
 import {
   ORCAD_STDIO_BRIDGE_DEPENDENCIES,
   startOrcadStdioBridge,

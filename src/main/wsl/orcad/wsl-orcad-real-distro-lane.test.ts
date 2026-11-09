@@ -13,13 +13,13 @@ import { setAppEnvironment } from '../../../shared/app-environment'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { buildWslExecArgs } from '../../../shared/wsl-login-shell-command'
 import {
   ORCAD_LAUNCHER_FILENAME,
   ORCAD_TEMPLATE_MANIFEST_FILENAME
 } from '../../../shared/orcad-artifacts'
-import { requestOrcadTerminalCensus } from '../../ssh/orcad-terminal-census-client'
+import { requestOrcadTerminalCensus } from '../../managed-server/lifecycle/orcad-terminal-census-client'
 import { execCommand } from '../../ssh/remote-exec/remote-exec-command'
 import { readConfirmedRunningWslDistros } from '../discovery/wsl-background-distro-gate'
 import { readWindowsProcessTableFresh } from '../../windows/windows-process-table'
@@ -30,10 +30,8 @@ import { listenWslOrcadStdioBridge } from './wsl-orcad-stdio-bridge'
 import { createWslDistroHolder } from '../discovery/wsl-distro-holder'
 import type { WslDistroHolder } from '../discovery/wsl-distro-holder-types'
 import { proveWslStructuredChat } from './__tests__/wsl-orcad-structured-chat-contract'
-import {
-  createLaneWslHost,
-  proveWslMidTurnStopAndContinue
-} from './__tests__/wsl-orcad-midturn-stop-lane'
+import { proveWslMidTurnStopAndContinue } from './__tests__/wsl-orcad-midturn-stop-lane'
+import { createLaneWslHost } from './__tests__/wsl-orcad-lane-host-fixture'
 import {
   reinstallWslGuestCli,
   WSL_CHAT_GUEST_BIN
@@ -211,14 +209,17 @@ function pairedConnection(connection: WslOrcadConnection) {
 }
 
 async function rpc<T>(connection: WslOrcadConnection, method: string, params?: unknown) {
-  const response = await sendRemoteRuntimeRequest<T>(
+  const response = await sendRemoteRuntimeRequestOnSocket<T>(
     pairedConnection(connection),
     method,
     params,
     30_000,
     undefined,
     undefined,
-    ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+    undefined,
+    ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+    undefined,
+    undefined
   )
   if (!response.ok) {
     throw new Error(`${method} failed: ${response.error.code}: ${response.error.message}`)
