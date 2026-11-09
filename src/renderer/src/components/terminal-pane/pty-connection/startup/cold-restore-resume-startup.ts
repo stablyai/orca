@@ -6,7 +6,10 @@ import { normalizeExecutionHostId } from '../../../../../../shared/execution-hos
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { useAppStore } from '@/store/index'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../../shared/non-secure-context-uuid'
-import { buildAgentResumeStartupPlan } from '../../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
+import {
+  INTERRUPTED_TURN_CONTINUE_PROMPT,
+  buildAgentResumeStartupPlan
+} from '../../../../../../shared/agent-launch/startup/tui-agent-resume-startup'
 import {
   resolveRuntimeHostReportedPlatform,
   resolveRuntimeHostTerminalWindowsShell,
@@ -30,6 +33,15 @@ import type { ColdRestoreAgentResumeStartup } from './fresh-spawn-types'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 
 export const NOT_REOPENED: HeldPaneReopenOutcome = { reopened: false, agentResumed: false }
+
+/** A cold-restored agent on a remote host whose last status was working lost its turn when the
+ *  host restarted; local panes are left alone (their PTYs outlive app restarts). */
+export function shouldContinueInterruptedTurn(
+  entry: { state: string } | null | undefined,
+  runtimeEnvironmentId: string | null
+): boolean {
+  return Boolean(runtimeEnvironmentId) && entry?.state === 'working'
+}
 
 type AppState = ReturnType<typeof useAppStore.getState>
 
@@ -117,7 +129,15 @@ export function bindBuildColdRestoreAgentResumeStartup(session: ConnectPanePtySe
       platform: resumeTarget.platform,
       agentHostPlatform: resumeTarget.agentHostPlatform,
       shell: resumeTarget.shell,
-      launchCwd: session.worktree?.path
+      launchCwd: session.worktree?.path,
+      // A remote host that restarted under a working agent (reboot, crash, VM rollover) killed it
+      // mid-turn; its last status still says working. Carry the turn on instead of waiting.
+      continuePrompt: shouldContinueInterruptedTurn(
+        entry,
+        session.transport.getRuntimeEnvironmentId?.() ?? null
+      )
+        ? INTERRUPTED_TURN_CONTINUE_PROMPT
+        : null
     })
     if (!startupPlan) {
       return null

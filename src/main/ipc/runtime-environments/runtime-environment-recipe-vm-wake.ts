@@ -111,11 +111,30 @@ export async function prepareRecipeVm(
     return { wokenPairingRevision: woken !== wakeBefore ? (woken?.pairingRevision ?? null) : null }
   }
   const state = waker.state(vm.workspaceId, vm.recordSuspended)
+  if (state === 'waking' && waker.awaitWake) {
+    // The wake is already underway (often just reconnecting): a terminal or panel opened in that
+    // window waits for it instead of failing and never retrying. Nothing here starts a wake.
+    const wakeBefore = latestRecipeVmWake(environment.id)
+    const outcome = await waker.awaitWake(
+      vm.workspaceId,
+      vm.recordSuspended,
+      Math.min(holdMs, RECIPE_VM_IN_FLIGHT_WAKE_HOLD_MS),
+      signal
+    )
+    if (outcome !== 'up') {
+      throw refusal(outcome)
+    }
+    const woken = latestRecipeVmWake(environment.id)
+    return { wokenPairingRevision: woken !== wakeBefore ? (woken?.pairingRevision ?? null) : null }
+  }
   if (state !== 'up') {
     throw refusal(state)
   }
   return UNCHANGED
 }
+
+/** How long a request that does not open the workspace waits for a wake already in flight. */
+export const RECIPE_VM_IN_FLIGHT_WAKE_HOLD_MS = 60_000
 
 /** The pairing revision a recipe VM wake this request waited for left its server on, if any. */
 export type RecipeVmPreparation = { wokenPairingRevision: number | null }

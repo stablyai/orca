@@ -166,6 +166,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     noteOpened: (workspaceId) => runtime.noteWorkspaceReopened(workspaceId),
     holdOpen: (workspaceId, suspended, timeoutMs, signal) =>
       runtime.holdWorkspaceVmOpen(workspaceId, suspended, timeoutMs, signal),
+    awaitWake: (workspaceId, suspended, timeoutMs, signal) =>
+      runtime.awaitWorkspaceVmWake(workspaceId, suspended, timeoutMs, signal),
     openEnvironment: (selector) => {
       const root = getRuntimeEnvironmentRegistryRoot()
       return openRecipeVmEnvironment(root, resolveEnvironment(root, selector))

@@ -112,14 +112,15 @@ describe('agent auto-resume after rollover', () => {
       if (method === 'agentSession.restartResumable') {
         return {
           sessions: [
-            { sessionId: 'old', recordedAt: 900 },
-            { sessionId: 'a', recordedAt: 1000 },
-            { sessionId: 'b', recordedAt: 1500 }
+            { sessionId: 'old', recordedAt: T0 - 10 * MIN },
+            // The host's clock runs 30 s behind this machine's: still this drain's offer.
+            { sessionId: 'a', recordedAt: T0 - 30_000 },
+            { sessionId: 'b', recordedAt: T0 + 500 }
           ]
         }
       }
       return { continued: [{ sessionId: 'a' }], skipped: ['b'] }
-    }, 1000)
+    }, T0)
     expect(calls).toEqual([
       { method: 'agentSession.restartResumable', params: undefined },
       { method: 'agentSession.restartContinue', params: { sessionIds: ['a', 'b'] } }

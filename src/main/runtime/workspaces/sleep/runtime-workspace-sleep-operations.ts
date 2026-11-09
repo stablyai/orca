@@ -161,6 +161,16 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
     return this.workspaceSleep.holdOpen(worktreeId, recordSuspended, timeoutMs, signal)
   }
 
+  /** Holds a request that does not open this workspace while its in-flight wake finishes. */
+  awaitWorkspaceVmWake(
+    worktreeId: string,
+    recordSuspended: boolean,
+    timeoutMs: number,
+    signal?: AbortSignal
+  ): Promise<RecipeVmOpening | 'asleep'> {
+    return this.workspaceSleep.awaitWake(worktreeId, recordSuspended, timeoutMs, signal)
+  }
+
   /** The window opened a slept pane; main resumes it and the window attaches. */
   resumeSleptPane(pane: RestoredPane, automatic?: boolean): Promise<boolean> {
     return this.workspaceSleep.resumePane(pane, automatic)

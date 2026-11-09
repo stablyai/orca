@@ -15,6 +15,14 @@ export type RecipeVmWaker = {
     timeoutMs: number,
     signal?: AbortSignal
   ) => Promise<RecipeVmOpening>
+  /** Holds a request that does not open the workspace while a wake already in flight finishes;
+   *  never starts one. */
+  awaitWake?: (
+    workspaceId: string,
+    recordSuspended: boolean,
+    timeoutMs: number,
+    signal?: AbortSignal
+  ) => Promise<RecipeVmOpening | 'asleep'>
   /** Holds an open of the workspace behind a saved environment (id or name) for the CLI. */
   openEnvironment: (selector: string) => Promise<RecipeVmOpening>
 }

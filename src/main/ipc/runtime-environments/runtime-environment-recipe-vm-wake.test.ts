@@ -131,6 +131,44 @@ describe('a request to a recipe VM environment', () => {
     }
   )
 
+  it('holds a request that does not open the workspace while an in-flight wake finishes', async () => {
+    recordVm('running')
+    ownerState = 'waking'
+    const awaitWake = vi.fn(async () => 'up' as const)
+    registerRecipeVmWaker({
+      state,
+      noteOpened: vi.fn(),
+      holdOpen,
+      awaitWake,
+      openEnvironment: async () => 'up'
+    })
+    noteRecipeVmWakePairing(VM_ENVIRONMENT.id, 7, true)
+    await expect(prepareRecipeVm(userDataPath, VM_ENVIRONMENT, 'none')).resolves.toEqual({
+      wokenPairingRevision: null
+    })
+    expect(awaitWake).toHaveBeenCalledWith('workspace-of-vm-1', false, 60_000, undefined)
+    // It never starts a wake of its own.
+    expect(holdOpen).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['waking', 'runtime_environment_waking'],
+    ['wake-failed', 'runtime_environment_wake_failed'],
+    ['slept', 'runtime_environment_asleep'],
+    ['asleep', 'runtime_environment_asleep']
+  ] as const)('refuses with %s when the in-flight wake ends that way', async (outcome, code) => {
+    recordVm('running')
+    ownerState = 'waking'
+    registerRecipeVmWaker({
+      state,
+      noteOpened: vi.fn(),
+      holdOpen,
+      awaitWake: async () => outcome,
+      openEnvironment: async () => 'up'
+    })
+    await expect(codeOf('none')).resolves.toBe(code)
+  })
+
   // A phone gives up after 30 seconds, so its open is held for less.
 
   // A Disconnect made before the open holds: no client's open wakes the VM behind that server.

@@ -1,4 +1,5 @@
 import {
+  awaitInFlightWake,
   holdOpenUntilUp,
   pendingVmWake,
   trackPendingVmOperation,
@@ -207,6 +208,20 @@ export class WorkspaceSleepCoordinator {
     } finally {
       sleep.stop()
     }
+  }
+
+  /** Holds a request that does not open the workspace while a wake already in flight finishes;
+   *  never starts a wake or counts as a reopening, so background traffic leaves a VM asleep. */
+  awaitWake(worktreeId: string, recordSuspended: boolean, timeoutMs: number, signal?: AbortSignal) {
+    const pending = this.pendingVmOperations.get(worktreeId) ?? []
+    return awaitInFlightWake(
+      pending,
+      recordSuspended,
+      this.sleepRequests,
+      worktreeId,
+      timeoutMs,
+      signal
+    )
   }
 
   private trackVmOperation<T>(worktreeId: string, operation: VmOperation, run: Promise<T>) {

@@ -24,6 +24,10 @@ const ContinueAnswer = z.looseObject({
   skipped: z.array(z.unknown()).optional()
 })
 
+/** `recordedAt` is the host's clock and `drainStartedAt` this machine's: tolerate skew between
+ *  them so an offer the drain just recorded is not mistaken for an older one. */
+export const CLOCK_SKEW_TOLERANCE_MS = 2 * 60_000
+
 function hasCode(error: unknown, code: string): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === code
 }
@@ -47,7 +51,9 @@ export async function autoResumeAgentsAfterRollover(
   }
   const ids = list.data.sessions.flatMap((row) => {
     const offer = Offer.safeParse(row)
-    return offer.success && offer.data.recordedAt >= drainStartedAt ? [offer.data.sessionId] : []
+    return offer.success && offer.data.recordedAt >= drainStartedAt - CLOCK_SKEW_TOLERANCE_MS
+      ? [offer.data.sessionId]
+      : []
   })
   const outcome = { offered: ids.length, continued: 0, skipped: 0, unsupported: false }
   for (let offset = 0; offset < ids.length; offset += MAX_RESTART_RESUME_SESSIONS) {
