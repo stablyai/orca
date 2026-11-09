@@ -144,7 +144,8 @@ it('replaces the discovery handler when the main window registers again', async 
     fixture({ platform: 'darwin' })
     const reopened = fixture({ platform: 'darwin' })
     await expect(reopened.ipc()).resolves.toMatchObject({
-      origin: 'probe',
+      success: true,
+      catalogOrigin: 'probe',
       models: [{ id: 'native-model' }]
     })
   } finally {
