@@ -143,11 +143,7 @@ export function SidebarAccountMenu(): React.JSX.Element {
           </TooltipContent>
         </Tooltip>
         <DropdownMenuContent side="top" align="start" sideOffset={8} className="w-60">
-          <DropdownMenuItem
-            onSelect={handleAccountHeaderSelect}
-            className="gap-2.5 py-1.5"
-            data-account-menu-header=""
-          >
+          <DropdownMenuItem onSelect={handleAccountHeaderSelect} data-account-menu-header="">
             <AccountAvatar identity={identity} className="size-7 text-xs" />
             <span className="flex min-w-0 flex-col">
               {identity.signedIn ? (

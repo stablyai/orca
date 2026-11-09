@@ -100,8 +100,8 @@
 1 src/renderer/src/components/sidebar/SetupGuideSidebarEntry.tsx
 1 src/renderer/src/components/sidebar/SetupScriptPromptCard.tsx
 1 src/renderer/src/components/sidebar/SidebarAgentsList.tsx
-1 src/renderer/src/components/sidebar/SidebarSettingsHelpMenu.tsx
 1 src/renderer/src/components/sidebar/SidebarTaskNavButton.tsx
+1 src/renderer/src/components/sidebar/account-menu/SidebarAccountMenu.tsx
 1 src/renderer/src/components/sidebar/linear-agent-skill-runtime.ts
 1 src/renderer/src/components/sidebar/project-admission/drop/sidebar-project-drop.ts
 2 src/renderer/src/components/sidebar/project-admission/drop/useSidebarProjectDrop.ts
