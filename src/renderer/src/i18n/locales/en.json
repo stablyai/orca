@@ -1156,7 +1156,8 @@
         "parakeetJa": "Japanese only. Trained on 35k+ hours of natural speech. Punctuation included.",
         "whisperTiny": "90+ languages. Lower accuracy than Parakeet but broadest language coverage.",
         "senseVoice": "Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.",
-        "gptTranscribe": "Cloud transcription with high accuracy. Requires an OpenAI API key."
+        "gptTranscribe": "Cloud transcription with high accuracy. Requires an OpenAI API key.",
+        "openAiCompatible": "Any service with an OpenAI-style transcription API, such as Groq, Mistral or a local server."
       }
     },
     "diagnostics": {
@@ -21380,6 +21381,24 @@
         "fillerWords": {
           "title": "Remove Filler Words",
           "description": "Drops sounds like “um” and “uh” from dictated text, in the dictation language."
+        },
+        "openAiCompatible": {
+          "updateFailed": "Could not update the provider",
+          "title": "OpenAI-compatible provider",
+          "description": "Audio goes to this service only while the OpenAI-compatible model is selected. It works with Groq, Mistral, OpenAI and local servers.",
+          "baseUrl": "Base URL",
+          "baseUrlPlaceholder": "https://api.groq.com/openai/v1",
+          "model": "Model",
+          "modelPlaceholder": "whisper-large-v3-turbo",
+          "apiKey": "API Key",
+          "keySaved": "Saved key kept",
+          "keyOptional": "Optional for local servers",
+          "save": "Save",
+          "rowConfigured": "Base URL and model saved for the OpenAI-compatible model.",
+          "rowMissing": "Add a base URL and model before selecting the OpenAI-compatible model.",
+          "edit": "Edit",
+          "removeLabel": "Remove OpenAI-compatible provider",
+          "setUp": "Set up"
         }
       },
       "repositoryHooks": {

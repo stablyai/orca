@@ -52,6 +52,11 @@ const DESCRIPTIONS: Record<string, () => string> = {
       'settings.voice.modelDescriptions.senseVoice',
       'Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.'
     ),
+  'openai-compatible': () =>
+    translate(
+      'settings.voice.modelDescriptions.openAiCompatible',
+      'Any service with an OpenAI-style transcription API, such as Groq, Mistral or a local server.'
+    ),
   'openai-gpt-transcribe': () =>
     translate(
       'settings.voice.modelDescriptions.gptTranscribe',

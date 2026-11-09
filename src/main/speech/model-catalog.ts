@@ -143,6 +143,18 @@ export const SPEECH_MODEL_CATALOG: SpeechModelManifest[] = [
     streaming: false
   },
   {
+    id: 'openai-compatible',
+    label: 'OpenAI-compatible',
+    description:
+      'Any service with an OpenAI-style transcription API, such as Groq, Mistral or a local server.',
+    type: 'openai',
+    provider: 'openai-compatible',
+    language: 'multilingual',
+    dictationLanguages: DICTATION_LANGUAGES,
+    sampleRate: 16000,
+    streaming: false
+  },
+  {
     id: 'openai-gpt-4o-mini-transcribe',
     label: 'GPT-4o mini Transcribe',
     description:

@@ -43,14 +43,18 @@ export class RuntimeMobileSpeechCatalog {
     const runnable = SPEECH_MODEL_CATALOG.filter(
       (manifest) =>
         isOfferedSpeechModel(manifest) &&
-        (!isLocalSpeechModel(manifest) || hasLocalSpeechRecognizer(manifest))
+        (!isLocalSpeechModel(manifest) || hasLocalSpeechRecognizer(manifest)) &&
+        // Phones offer an unready cloud row as "add an OpenAI key", which can't set this one up.
+        (manifest.provider !== 'openai-compatible' ||
+          stateById.get(manifest.id)?.status === 'ready')
     )
     const models: RuntimeSpeechModelSummary[] = runnable.map((manifest) => {
       const state = stateById.get(manifest.id)
       return {
         id: manifest.id,
         label: manifest.label,
-        provider: manifest.provider === 'openai' ? 'openai' : 'local',
+        // Older phones know only these two; both cloud providers transcribe on this host.
+        provider: isLocalSpeechModel(manifest) ? 'local' : 'openai',
         sizeBytes: manifest.sizeBytes ?? null,
         recommended: manifest.recommended === true,
         status: state?.status ?? 'not-downloaded',
