@@ -4,13 +4,14 @@ import type {
   SetupTrustMismatch
 } from '../../../../shared/worktree/create-types'
 import type { Repo } from '../../../../shared/repo-types'
-import { getEffectiveHooks, loadHooks, runHook } from '../../../workspace-hooks/hooks'
+import { loadHooks, runHook } from '../../../workspace-hooks/hooks'
 import {
   createSetupRunnerScript,
   resolveSetupRunnerShell
 } from '../../../workspace-hooks/worktree-runner-script'
 import {
   getDefaultTabsLaunch,
+  getEffectiveHooksFromConfig,
   shouldRunSetupForCreate
 } from '../../../workspace-hooks/effective-hook-config'
 import {
@@ -58,7 +59,8 @@ export async function prepareRuntimeLocalWorktreeSetup(args: {
   let warning = args.warning
   let setup: CreateWorktreeResult['setup']
   const yamlHooks = scopeHooksToRepoKind(repo, loadHooks(worktreePath))
-  const hooks = getEffectiveHooks(repo, worktreePath)
+  // One parse feeds both the trust check and the runner, so approved bytes are the bytes that run.
+  const hooks = getEffectiveHooksFromConfig(repo, yamlHooks)
   const effectiveDecision = resolveRuntimeSetupDecision(request)
   const setupTrustMismatch = checkCreatedWorktreeSetupTrust(
     repo,

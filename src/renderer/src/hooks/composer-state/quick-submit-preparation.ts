@@ -15,6 +15,7 @@ import {
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { resolveComposerBranchNameOverrideForCreate } from '../composer-branch-selection'
+import { resolveFolderSetupSupported } from '@/lib/use-folder-setup-supported'
 import { resolveWorktreeCreateBaseBranch } from '@/runtime/source-control/worktree-creation/worktree-create-base'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
@@ -41,7 +42,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
     setAdvancedOpen,
     settings,
     setupConfig,
-    setupSupported,
+    setupSupport,
     setupDecision,
     setupPolicy,
     smartNameMode
@@ -77,11 +78,23 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
 
       let submitResolvedSetupDecision = resolvedSetupDecision
 
+      // Create waits for the host's answer so an unanswered probe can't drop an ask-policy prompt.
+      const supportSettlement = await settleComposerSubmit(
+        setupSupport === 'pending'
+          ? resolveFolderSetupSupported(selectedRepo)
+          : Promise.resolve(setupSupport === 'supported'),
+        isSubmissionCancelled
+      )
+      if (supportSettlement.status === 'cancelled') {
+        return null
+      }
+      const submitSetupSupported = supportSettlement.value
+
       if (
-        setupSupported &&
-        setupPolicy === 'ask' &&
+        submitSetupSupported &&
+        (setupSupport === 'pending' || setupPolicy === 'ask') &&
         selectedRepoHookContextKey &&
-        checkedHooksContextKey !== selectedRepoHookContextKey
+        (setupSupport === 'pending' || checkedHooksContextKey !== selectedRepoHookContextKey)
       ) {
         const outcome = await readWorkspaceSetupInspection(
           () => loadHookCheckForRepo(repoId),
@@ -105,10 +118,8 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
         return null
       }
 
-      // A folder host that predates folder setup keeps the old explicit skip.
-      const effectiveSetupDecision: SetupDecision = setupSupported
-        ? (submitResolvedSetupDecision ?? 'inherit')
-        : 'skip'
+      // Hosts that predate folder setup ignore the decision for folders.
+      const effectiveSetupDecision: SetupDecision = submitResolvedSetupDecision ?? 'inherit'
       const submitLinkedWorkItemProvider = submitLinkedWorkItem
         ? getLinkedWorkItemProvider(submitLinkedWorkItem)
         : null
@@ -223,7 +234,7 @@ export function useQuickSubmitPreparation(input: QuickSubmitPreparationInput) {
       setAdvancedOpen,
       settings,
       setupConfig,
-      setupSupported,
+      setupSupport,
       setupDecision,
       setupPolicy,
       smartNameMode,

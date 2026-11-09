@@ -87,7 +87,7 @@ export function useComposerSubmitOrchestration(
     setAdvancedOpen: target.asyncComposerState.setAdvancedOpen,
     settings: target.composerTargetStore.settings,
     setupConfig: target.derivedComposerState.setupConfig,
-    setupSupported: target.derivedComposerState.setupSupported,
+    setupSupport: target.derivedComposerState.setupSupport,
     setupDecision: target.asyncComposerState.setupDecision,
     setupPolicy: target.derivedComposerState.setupPolicy,
     smartNameMode: target.workspaceIdentityState.smartNameMode

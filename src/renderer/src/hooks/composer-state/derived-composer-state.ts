@@ -1,4 +1,4 @@
-import { useFolderSetupSupported } from '@/lib/use-folder-setup-supported'
+import { useFolderSetupSupport } from '@/lib/use-folder-setup-supported'
 import type { DerivedComposerStateInput } from './composer-target-input-contracts'
 
 import { useMemo } from 'react'
@@ -120,16 +120,18 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
 
   const currentYamlHooks = checkedHooksContextKey === selectedRepoHookContextKey ? yamlHooks : null
 
-  const setupSupported = useFolderSetupSupported(selectedRepo)
+  const setupSupport = useFolderSetupSupport(selectedRepo)
+  const setupSupported = setupSupport === 'supported'
   const setupConfig = useMemo(
     () => (selectedRepo && setupSupported ? getSetupConfig(selectedRepo, currentYamlHooks) : null),
     [currentYamlHooks, selectedRepo, setupSupported]
   )
   const isSetupCheckPending =
-    setupSupported &&
-    Boolean(selectedRepo) &&
-    Boolean(selectedRepoHookContextKey) &&
-    checkedHooksContextKey !== selectedRepoHookContextKey
+    setupSupport === 'pending' ||
+    (setupSupported &&
+      Boolean(selectedRepo) &&
+      Boolean(selectedRepoHookContextKey) &&
+      checkedHooksContextKey !== selectedRepoHookContextKey)
   const {
     setupPolicy,
     requiresExplicitSetupChoice,
@@ -139,7 +141,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     selectedRepo,
     setupConfig,
     setupDecision,
-    setupSupported,
+    setupSupport !== 'unsupported',
     isSetupCheckPending
   )
   const linkedWorkItemProvider = linkedWorkItem ? getLinkedWorkItemProvider(linkedWorkItem) : null
@@ -242,7 +244,7 @@ export function useDerivedComposerState(input: DerivedComposerStateInput) {
     effectiveLinkedPR,
     currentYamlHooks,
     setupConfig,
-    setupSupported,
+    setupSupport,
     setupPolicy,
     linkedWorkItemProvider,
     requiresExplicitSetupChoice,
