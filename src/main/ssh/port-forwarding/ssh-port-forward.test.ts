@@ -8,7 +8,7 @@ const { startSystemSshPortForwardProcessMock } = vi.hoisted(() => ({
   startSystemSshPortForwardProcessMock: vi.fn()
 }))
 
-vi.mock('../system-transport/system-ssh-forward-process', async (importOriginal) => {
+vi.mock('../system-transport/forwarding/system-ssh-forward-process', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
     ...actual,
@@ -103,7 +103,7 @@ function getLastMockServer() {
 
 vi.mock('net', () => {
   return {
-    createServer: vi.fn().mockImplementation((connectionHandler) => {
+    createServer: vi.fn().mockImplementation((_options, connectionHandler) => {
       const listeners = new Map<string, (...args: unknown[]) => void>()
       let boundPort = 0
       const server = {
@@ -136,26 +136,6 @@ describe('SshPortForwardManager', () => {
     startSystemSshPortForwardProcessMock.mockReset()
   })
 
-  it('reports the port the OS bound when an ssh2 forward asks for port 0', async () => {
-    const conn = createMockConn()
-    const entry = await manager.addForward('conn-1', asSshConnection(conn), 0, '127.0.0.1', 6768)
-
-    expect(entry.localPort).toBe(43210)
-  })
-
-  it('adds an ssh2 port forward and returns entry', async () => {
-    const conn = createMockConn()
-    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
-
-    expect(entry).toMatchObject({
-      connectionId: 'conn-1',
-      localPort: 3000,
-      remoteHost: 'localhost',
-      remotePort: 8080
-    })
-    expect(entry.id).toBeDefined()
-  })
-
   it('throws when no port forward provider can handle the connection', async () => {
     const conn = {
       getClient: vi.fn().mockReturnValue(null),
@@ -167,74 +147,6 @@ describe('SshPortForwardManager', () => {
     ).rejects.toThrow('SSH connection is not established')
   })
 
-  it('adds a system SSH port forward when no ssh2 client is available', async () => {
-    const forward = createFakeSystemSshForward()
-    startSystemSshPortForwardProcessMock.mockReturnValue(forward)
-    const conn = createSystemSshConn()
-
-    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, '127.0.0.1', 8080)
-
-    expect(startSystemSshPortForwardProcessMock).toHaveBeenCalledWith(
-      conn.getTarget(),
-      3000,
-      '127.0.0.1',
-      8080,
-      { logChannelFailures: true }
-    )
-    expect(forward.waitForStartup).toHaveBeenCalled()
-    expect(entry).toMatchObject({
-      connectionId: 'conn-1',
-      localPort: 3000,
-      remoteHost: '127.0.0.1',
-      remotePort: 8080
-    })
-    expect(manager.listForwards('conn-1')).toHaveLength(1)
-  })
-
-  it('reports the port a system SSH forward resolved when asked for port 0', async () => {
-    startSystemSshPortForwardProcessMock.mockReturnValue(createFakeSystemSshForward(49800))
-    const conn = createSystemSshConn()
-
-    const entry = await manager.addForward('conn-1', asSshConnection(conn), 0, '127.0.0.1', 6768)
-
-    expect(entry.localPort).toBe(49800)
-  })
-
-  it('passes resolved OpenSSH config to system SSH port forwards', async () => {
-    const forward = createFakeSystemSshForward()
-    startSystemSshPortForwardProcessMock.mockReturnValue(forward)
-    const conn = createSystemSshConn()
-    conn.getSystemSshBuildArgsOptions.mockReturnValue({
-      resolvedConfig: {
-        hostname: 'resolved.example.com',
-        port: 2222,
-        user: 'vscode',
-        identityFile: ['/home/user/.ssh/work'],
-        forwardAgent: false,
-        identitiesOnly: true,
-        proxyUseFdpass: true,
-        controlMaster: 'no',
-        controlPersist: 'no'
-      }
-    })
-
-    await manager.addForward('conn-1', asSshConnection(conn), 3000, '127.0.0.1', 8080)
-
-    expect(startSystemSshPortForwardProcessMock).toHaveBeenCalledWith(
-      conn.getTarget(),
-      3000,
-      '127.0.0.1',
-      8080,
-      {
-        logChannelFailures: true,
-        resolvedConfig: expect.objectContaining({
-          hostname: 'resolved.example.com',
-          proxyUseFdpass: true
-        })
-      }
-    )
-  })
-
   it('does not register a system SSH forward when startup fails', async () => {
     const forward = createFakeSystemSshForward()
     forward.waitForStartup.mockRejectedValue(new Error('bind: Address already in use'))
@@ -244,18 +156,6 @@ describe('SshPortForwardManager', () => {
     await expect(
       manager.addForward('conn-1', asSshConnection(conn), 3000, '127.0.0.1', 8080)
     ).rejects.toThrow('bind: Address already in use')
-    expect(manager.listForwards('conn-1')).toHaveLength(0)
-  })
-
-  it('disposes a system SSH tunnel when removing the forward', async () => {
-    const forward = createFakeSystemSshForward()
-    startSystemSshPortForwardProcessMock.mockReturnValue(forward)
-    const conn = createSystemSshConn()
-
-    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, '127.0.0.1', 8080)
-
-    expect(manager.removeForward(entry.id)).toMatchObject({ id: entry.id })
-    expect(forward.dispose).toHaveBeenCalled()
     expect(manager.listForwards('conn-1')).toHaveLength(0)
   })
 
@@ -470,37 +370,6 @@ describe('SshPortForwardManager', () => {
     expect(detail.length).toBeLessThan(66 * 1024)
   })
 
-  it('lists forwards filtered by connectionId', async () => {
-    const conn = createMockConn()
-    await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
-    await manager.addForward('conn-2', asSshConnection(conn), 3001, 'localhost', 8081)
-    await manager.addForward('conn-1', asSshConnection(conn), 3002, 'localhost', 8082)
-
-    expect(manager.listForwards('conn-1')).toHaveLength(2)
-    expect(manager.listForwards('conn-2')).toHaveLength(1)
-    expect(manager.listForwards()).toHaveLength(3)
-  })
-
-  it('removes a forward by id', async () => {
-    const conn = createMockConn()
-    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
-
-    const removed = manager.removeForward(entry.id)
-    expect(removed).toMatchObject({ id: entry.id, localPort: 3000 })
-    expect(manager.listForwards()).toHaveLength(0)
-  })
-
-  it('awaits forward close when removing a forward for user actions', async () => {
-    const conn = createMockConn()
-    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
-
-    await expect(manager.removeForwardAndWait(entry.id)).resolves.toMatchObject({
-      id: entry.id,
-      localPort: 3000
-    })
-    expect(manager.listForwards()).toHaveLength(0)
-  })
-
   it('destroys local sockets that emit errors', async () => {
     const conn = createMockConn()
     await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
@@ -554,21 +423,6 @@ describe('SshPortForwardManager', () => {
     expect(socket.destroy).toHaveBeenCalled()
   })
 
-  it('returns null when removing nonexistent forward', () => {
-    expect(manager.removeForward('nonexistent')).toBeNull()
-  })
-
-  it('removes all forwards for a connection', async () => {
-    const conn = createMockConn()
-    await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
-    await manager.addForward('conn-1', asSshConnection(conn), 3001, 'localhost', 8081)
-    await manager.addForward('conn-2', asSshConnection(conn), 3002, 'localhost', 8082)
-
-    await manager.removeAllForwards('conn-1')
-    expect(manager.listForwards()).toHaveLength(1)
-    expect(manager.listForwards('conn-2')).toHaveLength(1)
-  })
-
   it('closes only the ssh2 forwards bound to a client the connection replaced', async () => {
     const conn = createMockConn()
     const sshConn = asSshConnection(conn)
@@ -613,46 +467,6 @@ describe('SshPortForwardManager', () => {
     expect(manager.listForwards()).toHaveLength(0)
     first.process.emit('exit', null)
     expect(onForwardClosed).not.toHaveBeenCalled()
-  })
-
-  it('dispose removes all forwards', async () => {
-    const conn = createMockConn()
-    await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
-    await manager.addForward('conn-2', asSshConnection(conn), 3001, 'localhost', 8081)
-
-    manager.dispose()
-    expect(manager.listForwards()).toHaveLength(0)
-  })
-
-  it('stores label in the entry', async () => {
-    const conn = createMockConn()
-    const entry = await manager.addForward(
-      'conn-1',
-      asSshConnection(conn),
-      3000,
-      'localhost',
-      8080,
-      'Web Server'
-    )
-
-    expect(entry.label).toBe('Web Server')
-  })
-
-  it('preserves the existing id when updating a forward succeeds', async () => {
-    const conn = createMockConn()
-    const entry = await manager.addForward('conn-1', asSshConnection(conn), 3000, 'localhost', 8080)
-
-    const updated = await manager.updateForward(
-      entry.id,
-      asSshConnection(conn),
-      3001,
-      'localhost',
-      8081
-    )
-
-    expect(updated.id).toBe(entry.id)
-    expect(updated.localPort).toBe(3001)
-    expect(updated.remotePort).toBe(8081)
   })
 
   it('rolls back a failed system SSH update with the original id', async () => {

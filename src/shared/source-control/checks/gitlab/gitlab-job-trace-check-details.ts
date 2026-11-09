@@ -11,7 +11,11 @@ export function gitLabJobCanHaveTrace(check: PRCheckDetail): boolean {
   if (check.status === 'queued') {
     return false
   }
-  return check.conclusion !== 'neutral' && check.conclusion !== 'skipped'
+  return (
+    (check.conclusion !== 'neutral' ||
+      (check.gitlabAllowedFailure === true && check.status === 'completed')) &&
+    check.conclusion !== 'skipped'
+  )
 }
 
 /** Adapt GitLab’s flat trace into one job logTail in the existing provider-neutral check-details shape. */

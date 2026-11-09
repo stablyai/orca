@@ -55,19 +55,35 @@ export function watchRuntimeEnvironmentPreference(
   }
   // Reconcile changes made while the native watch was being installed.
   const initialCheck = setImmediate(repairPreference)
-  // Watch the file: macOS directory watches recursively stream Orca's own userData writes.
-  const registryWatch = watchFileAcrossReplacement(
-    getEnvironmentStorePath(userDataPath),
+  const stopRegistryWatch = watchRuntimeEnvironmentRegistry(
+    userDataPath,
     () => {
       repairPreference()
       onRegistryChanged()
     },
-    (error) => console.warn('[runtime-environments] Active Server preference watch failed:', error)
+    'Active Server preference'
+  )
+  return () => {
+    clearImmediate(initialCheck)
+    stopRegistryWatch()
+  }
+}
+
+/** Calls `onChanged` after any write to the saved-server registry, in-app or by the CLI. */
+export function watchRuntimeEnvironmentRegistry(
+  userDataPath: string,
+  onChanged: () => void,
+  owner: string
+): () => void {
+  // Watch the file: macOS directory watches recursively stream Orca's own userData writes.
+  const registryWatch = watchFileAcrossReplacement(
+    getEnvironmentStorePath(userDataPath),
+    onChanged,
+    (error) => console.warn(`[runtime-environments] ${owner} watch failed:`, error)
   )
   const sweep = setInterval(() => void registryWatch.refresh(), REGISTRY_REBIND_SWEEP_MS)
   sweep.unref?.()
   return () => {
-    clearImmediate(initialCheck)
     clearInterval(sweep)
     void registryWatch.close()
   }

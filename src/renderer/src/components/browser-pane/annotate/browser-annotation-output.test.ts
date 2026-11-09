@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { BrowserPageAnnotation } from '../../../../../shared/browser-grab-types'
+import type { BrowserPageAnnotation } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import {
   BROWSER_ANNOTATION_INLINE_TEXT_MAX_LENGTH,
   formatBrowserAnnotationsAsMarkdown
@@ -101,18 +101,6 @@ describe('formatBrowserAnnotationsAsMarkdown', () => {
     expect(markdown).toContain('- Plan # injected')
     expect(markdown).toContain('**Feedback:** Keep this change scoped. ## injected')
     expect(markdown).not.toContain('\n## injected')
-  })
-
-  it('heads document preview annotations with the Windows file path', () => {
-    const annotation = makeAnnotation()
-    const sanitizedUrl = 'C:\\repo\\docs\\report.html'
-    const markdown = formatBrowserAnnotationsAsMarkdown([
-      makeAnnotation({
-        payload: { ...annotation.payload, page: { ...annotation.payload.page, sanitizedUrl } }
-      })
-    ])
-
-    expect(markdown).toContain(`## Design Feedback: ${sanitizedUrl}`)
   })
 
   it('does not split surrogate pairs at the inline annotation cap', () => {

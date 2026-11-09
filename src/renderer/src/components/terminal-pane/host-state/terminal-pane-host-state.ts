@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import { sshConnectFailureText } from '@/ssh/ssh-host-server-status-copy'
-import { getConnectionIdFromState } from '@/lib/connection-owner-resolution'
+import { getConnectionIdFromState } from '@/lib/workspace/ownership/connection-owner-resolution'
 import {
   resolveWorktreeHostConnection,
   type WorktreeHostConnection
@@ -10,7 +10,7 @@ import {
   selectRuntimeAwareSshError,
   selectRuntimeAwareSshTargetLabel,
   selectRuntimeAwareSshTargetRemoved
-} from '@/store/slices/runtime-environment-ssh-selectors'
+} from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 
 export type TerminalPaneHostState = {
   nativeChatTranscriptIsLocalReadable: boolean

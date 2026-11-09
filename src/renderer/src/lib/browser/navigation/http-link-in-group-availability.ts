@@ -7,7 +7,7 @@ import { getWorkspaceClientCreationActionPolicy } from '../../client-creation-ac
 import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRoute
-} from '../../worktree-operation-route'
+} from '../../workspace/ownership/worktree-operation-route'
 import {
   isExpectedRuntimeBrowserRoute,
   isSshDeploymentClientBrowserRoute,

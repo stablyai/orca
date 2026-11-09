@@ -1,6 +1,6 @@
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { RuntimeStore } from '../../runtime-store-contract'
+import type { RuntimeStore } from '../../construction/runtime-store-contract'
 import {
   releaseStartupRemovalFence,
   type BackgroundWorktreeRemovalJob

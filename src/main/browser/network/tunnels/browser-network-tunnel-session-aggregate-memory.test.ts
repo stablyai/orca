@@ -4,7 +4,7 @@ import {
   BrowserNetworkTunnelOpcode,
   encodeBrowserNetworkTunnelFrame,
   encodeBrowserNetworkTunnelOpen
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { BrowserNetworkTunnelOutboundMemoryBudgetRegistry } from './browser-network-tunnel-outbound-memory-budget'
 import { BrowserNetworkTunnelSession } from './browser-network-tunnel-session'
 import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'

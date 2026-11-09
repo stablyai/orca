@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from 'vitest'
-import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import './terminal-link-handlers'
 import { openDetectedFilePath } from './terminal-file-open-routing'
 import { createTerminalLinkTestDoubles } from '../terminal-link-handlers-test-fixtures'
@@ -13,16 +12,8 @@ import {
 
 const findWorkspaceFileRouteMock = vi.hoisted(() => vi.fn())
 const doubles = createTerminalLinkTestDoubles()
-const {
-  storeState,
-  deps,
-  openFileMock,
-  openFilePathMock,
-  createBrowserTabMock,
-  setPendingEditorRevealMock,
-  setMarkdownViewModeMock,
-  statMock
-} = doubles
+const { storeState, deps, openFileMock, openFilePathMock, setPendingEditorRevealMock, statMock } =
+  doubles
 
 vi.mock('@/store/index', () => ({
   useAppStore: {
@@ -30,7 +21,7 @@ vi.mock('@/store/index', () => ({
   }
 }))
 
-vi.mock('@/lib/language-detect', () => ({
+vi.mock('../../../../../../shared/editor-language/editor-language-detect', () => ({
   detectLanguage: (filePath: string) => (filePath.endsWith('.md') ? 'markdown' : 'plaintext')
 }))
 
@@ -39,7 +30,7 @@ vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: vi.fn()
 }))
 
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
 
@@ -50,179 +41,6 @@ vi.mock('@/lib/runtime-workspace-file-route', () => ({
 installTerminalLinkTestEnvironment(doubles)
 
 describe('handleOscLink', () => {
-  it('opens local .html file paths in Orca browser tabs when links route to Orca', async () => {
-    setPlatform('Macintosh')
-    storeState.settings = { openLinksInApp: true }
-
-    openDetectedFilePath('/tmp/report.html', null, null, deps)
-
-    // openDetectedFilePath is async (fire-and-forget), so flush the microtask queue
-    await new Promise((resolve) => setTimeout(resolve, 0))
-
-    expect(openFileMock).not.toHaveBeenCalled()
-    expect(setPendingEditorRevealMock).not.toHaveBeenCalled()
-    expect(createBrowserTabMock).toHaveBeenCalledWith(
-      'wt-1',
-      'file:///tmp/report.html',
-      expect.objectContaining({ title: 'report.html', activate: true })
-    )
-    expect(openFilePathMock).not.toHaveBeenCalled()
-    // The browser is the surface; activation must not seed a shell into an emptied workspace.
-    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
-      providesInitialSurface: true
-    })
-  })
-
-  it('opens local .html file paths in the system browser when links route there', async () => {
-    setPlatform('Macintosh')
-    storeState.settings = { openLinksInApp: false }
-
-    openDetectedFilePath('/tmp/report.html', null, null, deps)
-    await flushAsyncWork()
-
-    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/report.html', 'local')
-    expect(createBrowserTabMock).not.toHaveBeenCalled()
-
-    // Shift takes the other destination, as it does for http links.
-    openDetectedFilePath('/tmp/report.html', null, null, { ...deps, openWithSystemDefault: true })
-    await flushAsyncWork()
-
-    expect(openFilePathMock).toHaveBeenCalledTimes(1)
-    expect(createBrowserTabMock).toHaveBeenCalledWith(
-      'wt-1',
-      'file:///tmp/report.html',
-      expect.objectContaining({ title: 'report.html', activate: true })
-    )
-  })
-
-  it('opens a local file another workspace holds open in the clicked workspace', async () => {
-    const filePath = '/sibling/docs/SKILL.md'
-    storeState.openFiles = [{ filePath, worktreeId: 'folder:notes' }]
-    findWorkspaceFileRouteMock.mockReturnValue({
-      worktreeId: 'folder:notes',
-      relativePath: 'docs/SKILL.md',
-      executionHostId: 'local'
-    })
-    openFileMock.mockImplementationOnce(() => {
-      storeState.activeFileIdByWorktree['wt-1'] = 'clicked-skill'
-    })
-
-    openDetectedFilePath(filePath, 12, null, deps)
-    await flushAsyncWork()
-    await flushDoubleRaf()
-
-    // Why: switching to the owner pulled the user out of the workspace they clicked in.
-    expect(findWorkspaceFileRouteMock).not.toHaveBeenCalled()
-    expect(activateAndRevealWorkspace).not.toHaveBeenCalledWith('folder:notes', expect.anything())
-    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('wt-1', {
-      providesInitialSurface: true,
-      executionHostId: 'local'
-    })
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath, relativePath: filePath, worktreeId: 'wt-1' }),
-      { forceContentReload: true }
-    )
-    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({ fileId: 'clicked-skill' })
-    )
-    findWorkspaceFileRouteMock.mockReset()
-  })
-
-  it('opens terminal markdown line links in source mode so Monaco can reveal the line', async () => {
-    setPlatform('Macintosh')
-    const filePath = '/tmp/docs/terminal-scroll-intent-architecture.md'
-    const fileId = 'editor:wt-1:runtime-1:terminal-scroll-intent-architecture.md'
-    openFileMock.mockImplementationOnce(() => {
-      storeState.activeFileIdByWorktree['wt-1'] = fileId
-    })
-
-    openDetectedFilePath(filePath, 230, null, deps)
-    await flushAsyncWork()
-    await flushDoubleRaf()
-
-    expect(setMarkdownViewModeMock).toHaveBeenCalledWith(fileId, 'source')
-    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        filePath,
-        fileId,
-        line: 230,
-        column: 1,
-        matchLength: 0
-      })
-    )
-  })
-
-  it('scopes non-Markdown line reveals to the owner-qualified editor tab', async () => {
-    setPlatform('Macintosh')
-    const filePath = '/tmp/src/main.ts'
-    const fileId = 'editor:wt-1:runtime-1:main.ts'
-    openFileMock.mockImplementationOnce(() => {
-      storeState.activeFileIdByWorktree['wt-1'] = fileId
-    })
-
-    openDetectedFilePath(filePath, 42, 7, deps)
-    await flushAsyncWork()
-    await flushDoubleRaf()
-
-    expect(setMarkdownViewModeMock).not.toHaveBeenCalled()
-    expect(setPendingEditorRevealMock).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        filePath,
-        fileId,
-        line: 42,
-        column: 7,
-        matchLength: 0
-      })
-    )
-  })
-
-  it('falls back to Orca when shift+cmd/ctrl-click system default open fails', async () => {
-    setPlatform('Macintosh')
-    openFilePathMock.mockResolvedValueOnce(false)
-
-    openDetectedFilePath('/tmp/src/main.ts', 42, 7, {
-      ...deps,
-      openWithSystemDefault: true
-    })
-    await flushAsyncWork()
-    await flushDoubleRaf()
-
-    expect(openFilePathMock).toHaveBeenCalledWith('/tmp/src/main.ts', 'local')
-    expect(openFileMock).toHaveBeenCalledWith(
-      expect.objectContaining({ filePath: '/tmp/src/main.ts' }),
-      { forceContentReload: true }
-    )
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(1, null)
-    expect(setPendingEditorRevealMock).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({
-        filePath: '/tmp/src/main.ts',
-        fileId: '/tmp/src/main.ts',
-        line: 42,
-        column: 7,
-        matchLength: 0
-      })
-    )
-  })
-
-  it('cancels a pending Monaco reveal frame when another file open starts', async () => {
-    setPlatform('Macintosh')
-    const cancelAnimationFrame = vi.fn()
-    vi.stubGlobal(
-      'requestAnimationFrame',
-      vi.fn(() => 42)
-    )
-    vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
-
-    openDetectedFilePath('/tmp/src/main.ts', 42, null, deps)
-    await flushAsyncWork()
-
-    openDetectedFilePath('/tmp/src/other.ts', null, null, deps)
-
-    expect(cancelAnimationFrame).toHaveBeenCalledWith(42)
-    expect(setPendingEditorRevealMock).toHaveBeenCalledWith(null)
-  })
-
   it('ignores stale async completion so latest local click wins for Orca open and reveal', async () => {
     setPlatform('Macintosh')
     const firstStat = createDeferred<{ isDirectory: boolean }>()

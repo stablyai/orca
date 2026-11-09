@@ -25,7 +25,7 @@ import { withRemoteRuntimeTailscaleHint } from '../../../../../../shared/remote-
 import type { PtyTransportRecoveryState } from '../pty-transport-types'
 import './recovery/remote-runtime-pty-recovery-state'
 import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './recovery/remote-runtime-pty-recovery-limits'
-import { stubRuntimeEnvironmentBridge } from '../../../../runtime/runtime-environment-bridge-fixture'
+import { stubRuntimeEnvironmentBridge } from '../../../../runtime/rpc/testing/runtime-environment-bridge-fixture'
 
 const ELECTRON_IPC_PREFIX = "Error invoking remote method 'runtimeEnvironments:call': "
 
@@ -162,8 +162,10 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
 
   beforeEach(() => {
     vi.resetModules()
-    vi.doUnmock('../../../../runtime/remote-runtime-terminal-multiplexer')
-    vi.doMock('@/runtime/web-runtime-session-snapshot', () => ({
+    vi.doUnmock(
+      '../../../../runtime/hosted-terminals/streams/registry/remote-runtime-terminal-multiplexer-registry'
+    )
+    vi.doMock('@/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot', () => ({
       refreshWebRuntimeSessionTabsSnapshot: refreshSessionTabsSnapshot
     }))
     vi.clearAllMocks()

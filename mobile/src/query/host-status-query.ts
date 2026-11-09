@@ -1,8 +1,16 @@
-import { hostStatusProbe, readProbedHostStatus } from '../transport/host-status-probe-operations'
-import type { HostStatusReply } from '../transport/host-status-reply-schema'
-import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
-import type { RpcResponse } from '../transport/types'
-import type { UnvalidatedRpcRequestPort } from '../transport/unvalidated-rpc-request-port'
+import {
+  hostStatusProbe,
+  readProbedHostStatus
+} from '../transport/connection/host-status-probe-operations'
+import type { HostStatusReply } from '../transport/hosts/host-status-reply-schema'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import type {
+  SendRequestOptions,
+  UnvalidatedRpcRequestPort
+} from '../transport/rpc/unvalidated-rpc-request-port'
+import type { RpcResponse } from '../transport/rpc/rpc-wire-types'
+
+import { readViewBase } from './host-read-client'
 
 export type HostStatusClient = UnvalidatedRpcRequestPort &
   Partial<Pick<RpcClient, 'getState' | 'getGeneration' | 'getLastConnectedAt' | 'requestRoute'>>
@@ -13,8 +21,9 @@ type ConnectionStatus = { epoch: string; landed?: LandedStatus; pending?: Promis
 // Keyed by client, so each JS world (native heap, each page document) holds its own.
 const statuses = new WeakMap<object, ConnectionStatus>()
 
-export const hostConnectionEpoch = (client: HostStatusClient) =>
-  `${client.getGeneration?.()}:${client.getLastConnectedAt?.()}`
+export const hostConnectionEpoch = (
+  client: Pick<HostStatusClient, 'getGeneration' | 'getLastConnectedAt'>
+) => `${client.getGeneration?.()}:${client.getLastConnectedAt?.()}`
 
 // Why: a routed view answers status.get from a server behind the desktop, which can restart or reconnect while
 // this connection stays up, and a client with no connect time has no epoch to hold an answer to.
@@ -46,8 +55,10 @@ function sendStatusGet(client: HostStatusClient, options: SendRequestOptions | u
 // The live direct connection that answers this client's status.get, or null when none may hold an answer.
 // status.get carries no params, so a view that routes by params sends it where its base client would.
 function statusConnection(
-  client: HostStatusClient
+  view: HostStatusClient
 ): { connection: HostStatusClient; epoch: string } | null {
+  // A query's read view shares its connection's status; it still sends through the view.
+  const client = readViewBase(view)
   const route = client.requestRoute?.(undefined)
   if (route) {
     return route.intermediary || route.client === client ? null : statusConnection(route.client)

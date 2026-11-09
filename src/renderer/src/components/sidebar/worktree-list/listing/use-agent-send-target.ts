@@ -1,7 +1,8 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import { deriveRunningAgentSendTargets } from '@/lib/running-agent-targets'
+import { deriveRunningAgentSendTargets } from '@/lib/agent-session/messaging/running-agent-targets'
+import { recomputeOn } from '@/lib/recompute-on'
 
 // Why: selectors that opt out of a slice must return one stable reference, or every store tick looks like a change.
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
@@ -36,34 +37,37 @@ export function useAgentSendTargetWorktreeId(): string | null {
   const agentTargetRuntimePaneTitlesByTabId = useAppStore((s) =>
     agentSendPopoverTargetMode ? s.runtimePaneTitlesByTabId : EMPTY_RUNTIME_PANE_TITLES_BY_TAB_ID
   )
-  return useMemo(() => {
-    void agentTargetStatusEpoch
-    if (!agentSendPopoverTargetMode) {
-      return null
-    }
-    const targets = deriveRunningAgentSendTargets(
-      {
-        agentStatusByPaneKey: agentTargetStatusByPaneKey,
-        tabsByWorktree: agentTargetTabsByWorktree,
-        unifiedTabsByWorktree: agentTargetUnifiedTabsByWorktree,
-        terminalLayoutsByTabId: agentTargetTerminalLayoutsByTabId,
-        ptyIdsByTabId: agentTargetPtyIdsByTabId,
-        runtimePaneTitlesByTabId: agentTargetRuntimePaneTitlesByTabId
-      },
-      agentSendPopoverTargetMode.worktreeId
-    )
-    return targets.some((target) => target.status === 'eligible')
-      ? agentSendPopoverTargetMode.worktreeId
-      : null
-  }, [
-    // Why: eligibility can flip when the stale-boundary scheduler bumps this epoch without replacing the status map.
-    agentTargetStatusEpoch,
-    agentSendPopoverTargetMode,
-    agentTargetStatusByPaneKey,
-    agentTargetTabsByWorktree,
-    agentTargetUnifiedTabsByWorktree,
-    agentTargetTerminalLayoutsByTabId,
-    agentTargetPtyIdsByTabId,
-    agentTargetRuntimePaneTitlesByTabId
-  ])
+  return useMemo(
+    () =>
+      recomputeOn([agentTargetStatusEpoch], () => {
+        if (!agentSendPopoverTargetMode) {
+          return null
+        }
+        const targets = deriveRunningAgentSendTargets(
+          {
+            agentStatusByPaneKey: agentTargetStatusByPaneKey,
+            tabsByWorktree: agentTargetTabsByWorktree,
+            unifiedTabsByWorktree: agentTargetUnifiedTabsByWorktree,
+            terminalLayoutsByTabId: agentTargetTerminalLayoutsByTabId,
+            ptyIdsByTabId: agentTargetPtyIdsByTabId,
+            runtimePaneTitlesByTabId: agentTargetRuntimePaneTitlesByTabId
+          },
+          agentSendPopoverTargetMode.worktreeId
+        )
+        return targets.some((target) => target.status === 'eligible')
+          ? agentSendPopoverTargetMode.worktreeId
+          : null
+      }),
+    [
+      // Why: eligibility can flip when the stale-boundary scheduler bumps this epoch without replacing the status map.
+      agentTargetStatusEpoch,
+      agentSendPopoverTargetMode,
+      agentTargetStatusByPaneKey,
+      agentTargetTabsByWorktree,
+      agentTargetUnifiedTabsByWorktree,
+      agentTargetTerminalLayoutsByTabId,
+      agentTargetPtyIdsByTabId,
+      agentTargetRuntimePaneTitlesByTabId
+    ]
+  )
 }

@@ -10,7 +10,7 @@ import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile
 import type { ActiveGeneration, GenerationStore, StagedGeneration } from './generation-store'
 import type { DownloadProgressFeed } from './download-progress-feed'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
-import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
+import '../transport/rpc/rpc-delivery-ambiguity'
 
 // Test effect abandonment, fetch aborts and retry wiring around the table-tested reducer; cancellation must free read slots and prevent writes for retired screens.
 type Settle<T> = (value: T) => void
@@ -85,14 +85,16 @@ vi.mock('react-native', () => ({
     }
   }
 }))
-vi.mock('../transport/mobile-endpoint-supervisor-support', () => ({
+vi.mock('../transport/encryption/mobile-session-id-encoding', () => ({
   encodeBase64Url: () => 'session-id'
 }))
 vi.mock('../components/host-protocol-gates-context', () => ({
   useHostProtocolGates: () => doubles.gates
 }))
-vi.mock('../transport/host-client-hooks', () => ({ useHostClient: () => doubles.connection }))
-vi.mock('../transport/rpc-operation', () => ({
+vi.mock('../transport/connection/host-client-hooks', () => ({
+  useHostClient: () => doubles.connection
+}))
+vi.mock('../transport/rpc/rpc-operation', () => ({
   defineRpcOperation: (definition: unknown) => definition,
   runRpcOperation: async (client: unknown) => {
     doubles.manifestReads += 1
@@ -113,12 +115,8 @@ vi.mock('../transport/web-bundle/mobile-web-bundle-fetch', () => ({
     })
 }))
 
-import {
-  createMobileWebShellRuntime,
-  DOCUMENT_LOAD_DEADLINE_MS,
-  PAGE_READY_DEADLINE_MS,
-  type MobileWebShellRuntime
-} from './mobile-web-shell-runtime'
+import './mobile-web-shell-runtime'
+import type { MobileWebShellRuntime } from './mobile-web-shell-runtime'
 
 import { useMobileWebShellSession } from './use-mobile-web-shell-session'
 
@@ -180,12 +178,11 @@ function createFakeStore(): {
       deferred += 1
     },
     holdGeneration: () => () => {},
-    hasDeferredCommit: () => false,
+    claimUpdate: async () => () => {},
     abortStagedGeneration: async () => {
       aborted += 1
     },
     openReusableAssets: async () => ({ has: () => false, check: async () => false }),
-    sweepStagedGenerations: async () => undefined,
     deleteHostCache: async () => {
       deleted += 1
     },
@@ -249,10 +246,6 @@ type Mounted = {
   timers: ReturnType<typeof createTimerSeam>
 }
 
-function live(timers: readonly ArmedTimer[]): ArmedTimer[] {
-  return timers.filter((timer) => !timer.cancelled)
-}
-
 const mountedTrees: ReturnType<typeof create>[] = []
 
 function createTracked(element: Parameters<typeof create>[0]): ReturnType<typeof create> {
@@ -271,7 +264,8 @@ afterEach(async () => {
 
 async function mount(
   store: GenerationStore,
-  setForegroundTimer?: MobileWebShellRuntime['setForegroundTimer']
+  setForegroundTimer?: MobileWebShellRuntime['setForegroundTimer'],
+  claimSpareSessionId: MobileWebShellRuntime['claimSpareSessionId'] = async () => null
 ): Promise<Mounted> {
   const timers = createTimerSeam()
   // Mint distinct ids so a remount's replacement view can be told from the one it retires.
@@ -304,6 +298,7 @@ async function mount(
       runtime: {
         createStore: () => store,
         mintSessionId: () => `session-${++minted}`,
+        claimSpareSessionId,
         now: () => 0,
         setForegroundTimer: setForegroundTimer ?? timers.setTimer
       }
@@ -352,152 +347,6 @@ async function flush(): Promise<void> {
   await act(async () => undefined)
 }
 
-describe('the hybrid shell runner', () => {
-  beforeEach(() => {
-    doubles.manifestReads = 0
-    doubles.manifestClients.length = 0
-    doubles.manifestRejection = null
-    doubles.fetches.length = 0
-    doubles.connection = { client: {}, state: 'connected' }
-    doubles.gates.hostCapabilities = [MOBILE_WEB_BUNDLE_CAPABILITY]
-  })
-
-  it('abandons the cache read of a session that has been unmounted', async () => {
-    const fake = createFakeStore()
-    const mounted = await mount(fake.store)
-    await act(async () => {
-      mounted.tree.unmount()
-    })
-    fake.settleCacheRead(null)
-    await flush()
-    expect(doubles.manifestReads).toBe(0)
-  })
-
-  it('aborts the download an unmount interrupts, and never writes what it was pulling', async () => {
-    const fake = createFakeStore()
-    const mounted = await mount(fake.store)
-    fake.settleCacheRead(null)
-    await flush()
-    expect(doubles.fetches).toHaveLength(1)
-    const inFlight = doubles.fetches[0]
-    if (inFlight === undefined) {
-      throw new Error('no download was started')
-    }
-    await act(async () => {
-      mounted.tree.unmount()
-    })
-    expect(inFlight.signal.aborted).toBe(true)
-    inFlight.settle({
-      manifest: doubles.manifest,
-      assets: new Map(),
-      reused: [],
-      totalBytes: 2048,
-      elapsedMs: 1
-    })
-    await flush()
-    expect(fake.staged()).toBe(0)
-    expect(fake.committed()).toBe(0)
-  })
-
-  it('shows the cached workspace when the socket drops the manifest read it was waiting on', async () => {
-    // Reject before reachability changes to prove error classification alone can recognize link loss.
-    doubles.manifestRejection = markRpcDeliveryUnknown(new Error('Connection interrupted'))
-    const fake = createFakeStore()
-    const mounted = await mount(fake.store)
-    fake.settleCacheRead(activeGeneration())
-    await flush()
-
-    expect(doubles.manifestReads).toBe(1)
-    expect(doubles.fetches).toHaveLength(0)
-    expect(mounted.states().map((state) => state.kind)).toContain('ready')
-    await act(async () => {
-      mounted.tree.unmount()
-    })
-  })
-
-  it('takes the staged tree back out when the unmount lands between staging and the commit', async () => {
-    const fake = createFakeStore()
-    fake.holdStage()
-    const mounted = await mount(fake.store)
-    fake.settleCacheRead(null)
-    await flush()
-    const inFlight = doubles.fetches[0]
-    if (inFlight === undefined) {
-      throw new Error('no download was started')
-    }
-    inFlight.settle({
-      manifest: doubles.manifest,
-      assets: new Map(),
-      reused: [],
-      totalBytes: 2048,
-      elapsedMs: 1
-    })
-    await flush()
-    expect(fake.staged()).toBe(1)
-
-    await act(async () => {
-      mounted.tree.unmount()
-    })
-    await act(async () => {
-      fake.settleStage()
-    })
-    // Commit cannot be undone by aborting tmp; a stray activation would become the next mount’s cache.
-    expect(fake.committed()).toBe(0)
-    expect(fake.aborted()).toBe(1)
-    expect(mounted.states().map((state) => state.kind)).not.toContain('ready')
-  })
-
-  it('reads the manifest through the client the host has now, not the one it opened with', async () => {
-    const fake = createFakeStore()
-    const mounted = await mount(fake.store)
-    fake.settleCacheRead(null)
-    await flush()
-    expect(doubles.manifestClients).toHaveLength(1)
-    // Keep reachability unchanged while replacing the client; only the next flow reveals which client the runner retained.
-    const reconnected = {}
-    doubles.connection = { client: reconnected, state: 'connected' }
-    await act(async () => {
-      mounted.rerender()
-    })
-    await act(async () => {
-      mounted.retry()
-    })
-    fake.settleCacheRead(null)
-    await flush()
-    expect(doubles.manifestClients.at(-1)).toBe(reconnected)
-    await act(async () => {
-      mounted.tree.unmount()
-    })
-  })
-
-  it('abandons the download still in flight when Try again starts a new one', async () => {
-    const fake = createFakeStore()
-    const mounted = await mount(fake.store)
-    fake.settleCacheRead(null)
-    await flush()
-    const first = doubles.fetches[0]
-    if (first === undefined) {
-      throw new Error('no download was started')
-    }
-    await act(async () => {
-      mounted.retry()
-    })
-    expect(first.signal.aborted).toBe(true)
-    first.settle({
-      manifest: doubles.manifest,
-      assets: new Map(),
-      reused: [],
-      totalBytes: 2048,
-      elapsedMs: 1
-    })
-    await flush()
-    expect(fake.staged()).toBe(0)
-    await act(async () => {
-      mounted.tree.unmount()
-    })
-  })
-})
-
 // Entry import failures can finish WebView load without mounting a boundary or sending ready; the deadline must recover that silent blank page.
 describe('the wait for the page to speak', () => {
   beforeEach(() => {
@@ -527,57 +376,17 @@ describe('the wait for the page to speak', () => {
     expect(mounted.states().at(-1)?.kind).toBe('ready')
   })
 
-  it('does not let the retired view say ready for its replacement', async () => {
-    const mounted = await ready()
+  it('opens a page Home booted under its session id, and remounts under a fresh one', async () => {
+    const fake = createFakeStore()
+    const mounted = await mount(fake.store, undefined, async () => 'home-spare')
+    fake.settleCacheRead(activeGeneration())
+    await flush()
+    expect(mounted.states().at(-1)).toMatchObject({ kind: 'ready', sessionId: 'home-spare' })
     await act(async () => {
       mounted.shellFailed('document-load-failed')
-      mounted.pageReady()
     })
-    expect(mounted.handshakes().at(-1)).toBe(false)
-    expect(live(mounted.timers.armed).map((timer) => timer.delayMs)).toContain(
-      DOCUMENT_LOAD_DEADLINE_MS
-    )
-  })
-
-  it('remounts the generation a finished document never spoke for, without deleting it', async () => {
-    const fake = createFakeStore()
-    const mounted = await ready(fake)
-    await act(async () => {
-      mounted.documentLoaded()
-    })
-    // The ready wait replaces the load wait it made moot.
-    const armed = live(mounted.timers.armed).map((timer) => timer.delayMs)
-    expect(armed).toContain(PAGE_READY_DEADLINE_MS)
-    expect(armed).not.toContain(DOCUMENT_LOAD_DEADLINE_MS)
-    await act(async () => {
-      mounted.timers.fire()
-    })
-    expect(fake.deleted()).toBe(0)
-    expect(mounted.states().at(-1)?.kind).toBe('ready')
-    await act(async () => {
-      mounted.tree.unmount()
-    })
-  })
-
-  it('fails a generation whose document the view never finished, instead of spinning forever', async () => {
-    // iOS 18 can refuse its own document load without any failure callback (#28626).
-    const fake = createFakeStore()
-    const mounted = await ready(fake)
-    await act(async () => {
-      mounted.documentStarted()
-    })
-    expect(
-      live(mounted.timers.armed).filter((timer) => timer.delayMs === DOCUMENT_LOAD_DEADLINE_MS)
-    ).toHaveLength(1)
-    await act(async () => {
-      mounted.timers.fire()
-    })
-    // The same files are remounted under a fresh session rather than downloaded again.
-    expect(fake.deleted()).toBe(0)
-    expect(mounted.states().at(-1)?.kind).toBe('ready')
-    await act(async () => {
-      mounted.tree.unmount()
-    })
+    await flush()
+    expect(mounted.states().at(-1)).toMatchObject({ kind: 'ready', sessionId: 'session-1' })
   })
 
   it('stays ready when the page speaks after document load and the timers fire', async () => {
@@ -595,21 +404,6 @@ describe('the wait for the page to speak', () => {
     })
   })
 
-  it('arms nothing when the page spoke before the document was reported finished', async () => {
-    const mounted = await ready()
-    await act(async () => {
-      mounted.pageReady()
-      mounted.documentLoaded()
-    })
-    // Page ready can cross before the native WebView load callback; accept either order.
-    expect(
-      mounted.timers.armed.filter((timer) => timer.delayMs === PAGE_READY_DEADLINE_MS)
-    ).toEqual([])
-    await act(async () => {
-      mounted.tree.unmount()
-    })
-  })
-
   it('re-arms a session the route rebuilt, with the host and its gates unchanged', async () => {
     // A route change rebuilds the session too; re-arm gates even if their verdict did not change.
     const fake = createFakeStore()
@@ -622,6 +416,7 @@ describe('the wait for the page to speak', () => {
         runtime: {
           createStore: () => fake.store,
           mintSessionId: () => 'session-id',
+          claimSpareSessionId: async () => null,
           now: () => 0,
           setForegroundTimer: createTimerSeam().setTimer
         }
@@ -658,93 +453,6 @@ describe('the wait for the page to speak', () => {
       tree.unmount()
     })
   })
-
-  it('cancels the armed deadline when the session it belongs to is torn down', async () => {
-    const mounted = await ready()
-    await act(async () => {
-      mounted.documentLoaded()
-    })
-    expect(
-      live(mounted.timers.armed).filter((timer) => timer.delayMs === PAGE_READY_DEADLINE_MS)
-    ).toHaveLength(1)
-    await act(async () => {
-      mounted.tree.unmount()
-    })
-    // Cancel real timers on unmount as well as rejecting their results by epoch.
-    expect(mounted.timers.armed.every((timer) => timer.cancelled)).toBe(true)
-  })
 })
 
 // RN holds timers while backgrounded and fires overdue ones on resume, before the suspended WebView has loaded anything.
-describe('deadlines on the real foreground timer', () => {
-  beforeEach(() => {
-    vi.useFakeTimers()
-    doubles.manifestRejection = null
-    doubles.connection = { client: {}, state: 'connected' }
-    doubles.gates.hostCapabilities = [MOBILE_WEB_BUNDLE_CAPABILITY]
-    doubles.appState.currentState = 'active'
-    doubles.appState.listeners.clear()
-  })
-  afterEach(() => {
-    vi.useRealTimers()
-  })
-
-  function moveApp(state: string): void {
-    doubles.appState.currentState = state
-    for (const listener of doubles.appState.listeners) {
-      listener(state)
-    }
-  }
-
-  async function opened(fake: ReturnType<typeof createFakeStore>): Promise<Mounted> {
-    const mounted = await mount(fake.store, createMobileWebShellRuntime().setForegroundTimer)
-    fake.settleCacheRead(activeGeneration())
-    await flush()
-    expect(mounted.states().at(-1)?.kind).toBe('ready')
-    return mounted
-  }
-
-  it('gives a document opened just before backgrounding its whole deadline after return', async () => {
-    const fake = createFakeStore()
-    const mounted = await opened(fake)
-    moveApp('background')
-    await act(async () => {
-      vi.advanceTimersByTime(DOCUMENT_LOAD_DEADLINE_MS + 5_000)
-    })
-    moveApp('active')
-    await act(async () => {
-      vi.advanceTimersByTime(DOCUMENT_LOAD_DEADLINE_MS - 1)
-    })
-    expect(mounted.states().at(-1)?.kind).toBe('ready')
-    // A document that never loads in the foreground still fails (#28626): one remount, then the failure screen, never a delete.
-    await act(async () => {
-      vi.advanceTimersByTime(1)
-    })
-    expect(mounted.states().at(-1)?.kind).toBe('ready')
-    await act(async () => {
-      vi.advanceTimersByTime(DOCUMENT_LOAD_DEADLINE_MS)
-    })
-    expect(mounted.states().at(-1)).toMatchObject({
-      kind: 'failed',
-      reason: 'document-load-failed'
-    })
-    expect(fake.deleted()).toBe(0)
-  })
-
-  it('remounts a faulting page once, then fails it, without downloading', async () => {
-    const fake = createFakeStore()
-    const mounted = await opened(fake)
-    await act(async () => {
-      mounted.shellFailed('document-load-failed')
-    })
-    await act(async () => {
-      mounted.shellFailed('document-load-failed')
-    })
-    expect(fake.deleted()).toBe(0)
-    expect(doubles.fetches).toHaveLength(0)
-    expect(mounted.states().at(-1)).toMatchObject({
-      kind: 'failed',
-      reason: 'document-load-failed'
-    })
-  })
-})

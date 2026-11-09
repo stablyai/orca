@@ -2,7 +2,7 @@ import { expect, it } from 'vitest'
 
 import type { AppState } from '../../types'
 import './agent-status'
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 import { buildMirroredAgentStatusPatch } from '../../../runtime/web-session-tabs-sync/agent-status-patch'
 import type { WebSessionTabsSyncState } from '../../../runtime/web-session-tabs-sync/state'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'

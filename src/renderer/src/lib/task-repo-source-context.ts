@@ -3,7 +3,7 @@ import type { GitLabProjectRef } from '../../../shared/gitlab-types'
 import {
   normalizeTaskSourceContext,
   type TaskSourceContext
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import { getRepoExecutionHostId } from '../../../shared/execution-host'
 export function getTaskPageRepoSourceContext(

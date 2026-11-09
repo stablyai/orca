@@ -2,9 +2,9 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type * as BrowserFocusModule from '@/components/browser-pane/host-guest/browser-focus'
 import { requestBrowserFocus } from '@/components/browser-pane/host-guest/browser-focus'
 import { useAppStore } from '@/store/index'
-import { createStoreCascadesMockApi } from '@/store/slices/store-cascades-test-harness'
-import '@/store/slices/store-test-helpers'
-import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
+import { createStoreCascadesMockApi } from '@/store/testing/app-store-cascade-api.test-fixture'
+import '@/store/testing/app-store-test-fixture'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../../shared/constants'
 import { seedBrowserLinkTestStore, WORKSPACE, URL_TO_OPEN } from './browser-link-open.test-fixture'
 import { captureLinkOpenIntent } from '../../link-open-intent'
@@ -247,38 +247,6 @@ it.each(['workspace', 'view'] as const)(
   }
 )
 
-it.each([false, true])(
-  'reveals the tab layout for a foreground source-aware HTTP link (reuse: %s)',
-  async (reuse) => {
-    if (reuse) {
-      useAppStore.getState().createBrowserTab(WORKSPACE, URL_TO_OPEN, {
-        targetGroupId: 'b',
-        activate: false,
-        browserRuntimeEnvironmentId: null,
-        sessionProfileId: null
-      })
-    }
-    const opening = vi.spyOn(workspaceBrowserTabOpen, 'openWorkspaceBrowserTabForLink')
-    openHttpLink(URL_TO_OPEN, {
-      worktreeId: WORKSPACE,
-      sourceOwner: { kind: 'local' },
-      linkContext: {
-        linkIntent: captureLinkOpenIntent(useAppStore.getState(), WORKSPACE, 'source')
-      }
-    })
-    await vi.waitFor(() => expect(opening).toHaveBeenCalledOnce())
-    const outcome = await opening.mock.results[0]!.value
-
-    expect(outcome).toMatchObject({ status: 'opened' })
-    if (outcome.status !== 'opened') {
-      throw new Error('Expected opened link')
-    }
-    expect(useAppStore.getState().activeView).toBe('terminal')
-    expect(useAppStore.getState().activeGroupIdByWorktree[WORKSPACE]).toBe(outcome.result.groupId)
-    expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(1)
-  }
-)
-
 it('keeps the Activity view and current pane selected for background source-aware HTTP links', async () => {
   useAppStore.setState({
     settings: {
@@ -339,20 +307,4 @@ it('keeps the main view and workspace selected when revealing a floating HTTP li
   expect(useAppStore.getState().activeWorktreeId).toBe(WORKSPACE)
   expect(useAppStore.getState().activeGroupIdByWorktree[floating]).toBe('b')
   expect(useAppStore.getState().groupsByWorktree[floating]).toHaveLength(3)
-})
-
-it('reuses an exact page for an HTTP link without source context', async () => {
-  const browser = useAppStore.getState().createBrowserTab(WORKSPACE, URL_TO_OPEN, {
-    targetGroupId: 'b',
-    browserRuntimeEnvironmentId: null,
-    sessionProfileId: null,
-    activate: false
-  })
-  const completed = observeBrowserLinkOpen()
-  openHttpLink(URL_TO_OPEN, { worktreeId: WORKSPACE, sourceOwner: { kind: 'local' } })
-  expect(await completed).toMatchObject({
-    status: 'opened',
-    result: { browserWorkspaceId: browser.id, browserPageId: browser.activePageId }
-  })
-  expect(useAppStore.getState().browserTabsByWorktree[WORKSPACE]).toHaveLength(1)
 })

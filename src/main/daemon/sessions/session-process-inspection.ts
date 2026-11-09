@@ -6,7 +6,13 @@ export class SessionProcessInspection {
   /** Main's launch note for this process; Session feeds it the output that can retire it. */
   readonly launchNote = new SessionLaunchNote()
 
-  constructor(protected readonly subprocess: SubprocessHandle) {}
+  readonly processNameIsSpawnFile: boolean
+  readonly shellIsRootChild: boolean
+
+  constructor(protected readonly subprocess: SubprocessHandle) {
+    this.processNameIsSpawnFile = subprocess.processNameIsSpawnFile === true
+    this.shellIsRootChild = subprocess.shellIsRootChild === true
+  }
 
   inspectChildProcesses(fresh?: boolean, ignoreDetached?: boolean): ChildProcessVerdictRead {
     return this.subprocess.inspectChildProcesses?.(fresh, ignoreDetached) ?? 'unverifiable'

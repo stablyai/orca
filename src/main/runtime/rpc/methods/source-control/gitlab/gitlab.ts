@@ -208,7 +208,8 @@ export const GITLAB_METHODS = [
         params.iid,
         params.type,
         params.projectRef,
-        params.includeReviewDetails
+        params.includeReviewDetails,
+        params.markViewerComments
       )
   }),
   defineMethod({

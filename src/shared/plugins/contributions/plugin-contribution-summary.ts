@@ -83,6 +83,7 @@ export function pluginContributionSummary(
     ...named('themes', c.themes, (theme) => theme.title),
     ...named('terminalThemes', c.terminalThemes, (theme) => theme.title),
     ...named('iconThemes', c.iconThemes, (theme) => theme.title),
+    ...named('fonts', c.fonts, (font) => font.family),
     ...named('syntaxes', c.syntaxes, (syntax) => syntax.title, fileMatchDetail),
     ...named('customEditors', c.customEditors, (editor) => editor.title, fileMatchDetail),
     ...named(

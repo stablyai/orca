@@ -1,7 +1,7 @@
 import { toast } from 'sonner'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { commitFileExplorerOp } from '@/components/right-sidebar/file-explorer/mutations/fileExplorerUndoRedo'
-import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
+import { executeOpenEditorPathMove } from '@/lib/editor/file-operations/execute-open-editor-path-move'
 import {
   captureFileExplorerOperationGuard,
   getFileExplorerOperationOwner

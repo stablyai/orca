@@ -7,7 +7,7 @@ import {
   type DirEntry
 } from './remote-file-browser-entry-actions'
 import type { FetchListing } from './use-remote-file-browser-listing'
-import type { FilesystemPathFlavor } from '../../../../../shared/filesystem-entry-types'
+import type { FilesystemPathFlavor } from '../../../../../shared/file-access/filesystem-path-flavor'
 
 export type PreviewState = {
   resolvedPath: string

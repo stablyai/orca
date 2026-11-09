@@ -64,6 +64,7 @@ function delay(ms) {
 }
 
 // Strip VT escapes interleaved by ConPTY so executed-marker matching sees plain output.
+// oxlint-disable-next-line no-control-regex -- matching ESC-introduced VT sequences is the point
 const ANSI_ESCAPE = /\[[0-9;?]*[ -/]*[@-~]|\][^]*?|[@-Z\\-_]/g
 
 function stripAnsi(text) {

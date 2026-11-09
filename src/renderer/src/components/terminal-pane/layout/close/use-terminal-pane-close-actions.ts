@@ -4,7 +4,7 @@ import { onActiveTerminalPaneCloseRequest } from './request-active-terminal-pane
 import { useAppStore } from '../../../../store/index'
 import { retireUnboundRuntimeTerminalPane } from './retire-unbound-runtime-terminal-pane'
 import { makePaneKey } from '../../../../../../shared/workspace-layout/stable-pane-id'
-import { closeWebRuntimeTerminal } from '@/runtime/web-runtime-terminal-actions'
+import { closeWebRuntimeTerminal } from '@/runtime/hosted-terminals/actions/web-runtime-terminal-close'
 import { resolveLeafCloseCopyKind } from '../../../terminal/terminal-close-copy-kind'
 import { RUNNING_CLOSE_PROBE_TIMEOUT_MS } from '../../../terminal/running-terminal-close-guard'
 import { probePtyRunningWork } from '../../../terminal/pty-running-work-probe'

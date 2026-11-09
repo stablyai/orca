@@ -11,6 +11,8 @@ import {
 } from '../../../../../shared/orcad-peer-desktops-contract'
 import { RegisterDeviceKeyParamsSchema } from '../../../../../shared/remote-runtime/pairing/device-key-registration-contract'
 import { REGISTER_DEVICE_KEY_METHOD } from '../../../../../shared/remote-runtime/pairing/device-key-capability'
+import { EXCHANGE_PAIRING_TICKET_METHOD } from '../../../../../shared/remote-runtime/pairing/ticket-exchange-capability'
+import { ExchangePairingTicketParamsSchema } from '../../../../../shared/remote-runtime/pairing/ticket-exchange-contract'
 import {
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
@@ -64,6 +66,17 @@ export const PAIRING_METHODS = [
         throw new Error('device_key_registration_unavailable')
       }
       return ctx.deviceSelf.registerDeviceKey(params)
+    }
+  }),
+  defineMethod({
+    name: EXCHANGE_PAIRING_TICKET_METHOD,
+    permission: 'device-self',
+    params: ExchangePairingTicketParamsSchema,
+    handler: (params, ctx) => {
+      if (!ctx.deviceSelf) {
+        throw new Error('pairing_ticket_exchange_unavailable')
+      }
+      return ctx.deviceSelf.exchangePairingTicket(params)
     }
   }),
   defineMethod({

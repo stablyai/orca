@@ -1,19 +1,19 @@
-import { useAppStateView, useAppStateViewActive } from '@/store/app-state-view'
+import { useAppStateView, useAppStateViewActive } from '@/store/retained-views/app-state-view'
 import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
+import { selectWorkspaceByHostTarget } from '@/store/workspaces/selection/workspace-host-target'
 import {
-  selectWorkspaceByHostTarget,
   selectWorktreesByRepo,
   selectFolderWorkspaces
-} from '@/store/workspace-record-selectors'
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { readHostAgentLaunchDefaults } from '../../runtime/agent-launch-settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { readHostStructuredAgentsForRuntime } from '@/runtime/host-structured-agents'
+import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { readHostStructuredAgentsForRuntime } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session/options/agent-session-option-catalog'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
@@ -228,14 +228,14 @@ export function useAgentLaunchPickerInventorySource(
                     }))
                   : undefined
               },
-        catalog: async (entry) =>
-          await callStructuredAgentSession<AgentSessionModelCatalogResult>(
+        catalog: (entry, waitForListing) =>
+          callStructuredAgentSession<AgentSessionModelCatalogResult>(
             target,
             'agentSession.modelCatalog',
             {
               ...(selector ? { worktree: selector } : {}),
               agent: entry.agent,
-              waitForListing: true
+              ...(waitForListing ? { waitForListing } : {})
             }
           ),
         support: async (entry) => {

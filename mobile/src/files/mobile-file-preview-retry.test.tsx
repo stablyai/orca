@@ -49,13 +49,14 @@ vi.mock('./MobileFileMarkdownPreview', () => ({
 vi.mock('../components/MobileSourceCopyButton', () => ({ MobileSourceCopyButton: () => null }))
 vi.mock('./MobileFilePreviewSourceText', () => ({ MobileFilePreviewSourceText: () => null }))
 // No shell client initially: the screen must settle on waiting.
-vi.mock('../transport/host-client-hooks', () => ({
+vi.mock('../transport/connection/host-client-hooks', () => ({
   useForceReconnect: () => transport.forceReconnect,
   useHostClient: () => ({ ...transport.connection, clientId: null })
 }))
 
 import { MobileFilePreviewScreen } from './MobileFilePreviewScreen'
 import { WorkspaceExecutionHostContext } from '../navigation/workspace-execution-host'
+import { resetDocumentEditDraftsForTests } from '../drafts/document-edit-draft-rows'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 
 let tree: ReactTestRenderer | null = null
@@ -63,6 +64,8 @@ let tree: ReactTestRenderer | null = null
 afterEach(() => {
   act(() => tree?.unmount())
   tree = null
+  // A page keeps unsaved edits for its whole life; each test is a fresh page.
+  resetDocumentEditDraftsForTests()
   transport.connection = { client: null, state: 'reconnecting' }
 })
 

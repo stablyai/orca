@@ -25,14 +25,14 @@ const mocks = vi.hoisted(() => {
 })
 
 // Staged host answers: its capabilities arrive over IPC at boot, and the platform from preload.
-vi.mock('@/runtime/local-runtime-capabilities', async (importOriginal) => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readLocalRuntimeCapabilitiesOrUnknown: () => [
     STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
     STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
   ]
 }))
-vi.mock('@/runtime/host-structured-agents', async (importOriginal) => ({
+vi.mock('@/runtime/native-chat/agent-catalogs/host-structured-agents', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readHostStructuredAgents: () =>
     ['claude', 'codex', 'grok', 'omp', 'opencode', 'pi'].map((agent) => ({

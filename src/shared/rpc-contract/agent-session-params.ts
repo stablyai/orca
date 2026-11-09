@@ -12,7 +12,7 @@ import {
   type RuntimeEnsureAgentSessionRequest
 } from '../agent-session/agent-session-host-authority'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
-import { RESTORE_SPAWN_INTENTS } from '../host-spawn-admission'
+import { RESTORE_SPAWN_INTENTS } from '../terminal/pty/admission/spawn-admission-contract'
 import { AgentLaunchAccountEnv } from '../agent-launch/startup/agent-launch-account-env'
 
 export const MAX_WORKTREE_SELECTOR_LENGTH = 32_768

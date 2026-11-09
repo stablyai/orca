@@ -1,9 +1,9 @@
-import type { TabSplitTarget } from '../slices/tabs'
+import type { TabSplitTarget } from '../slices/tabs/tabs-slice-contract'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
-import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
+import { resolveWorktreeOperationRouteResult } from '@/lib/workspace/ownership/worktree-operation-route'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { workspaceEditorFiles } from '../slices/editor/tabs/workspace-editor-files'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
@@ -57,7 +57,7 @@ export async function openNewTerminalTabInWorkspace(
     }
     try {
       const { createWebRuntimeSessionTerminal } =
-        await import('@/runtime/web-runtime-terminal-creation')
+        await import('@/runtime/hosted-terminals/creation/web-runtime-terminal-creation')
       await createWebRuntimeSessionTerminal(
         {
           worktreeId,

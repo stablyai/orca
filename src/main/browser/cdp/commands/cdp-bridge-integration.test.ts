@@ -1,6 +1,5 @@
 import type * as WorktreeScanCacheModule from '../../../git/worktrees/catalog/worktree-scan-cache'
 import type * as WorktreeListingModule from '../../../git/worktrees/catalog/worktree-listing'
-import '../../../runtime/desktop-browser-bridge/desktop-browser-bridge-allowlist.spec'
 import { mkdtempSync } from 'node:fs'
 import { RuntimeBrowserCommands } from '../../../runtime/browser/commands/browser-commands'
 import { setRuntimeBrowserCommandsFactory } from '../../../runtime/browser/installation/runtime-browser-commands-factory'
@@ -8,6 +7,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createConnection } from 'node:net'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { BrowserManager } from '../../guest-lifecycle/manager/browser-manager'
+import { CdpBridge } from './cdp-bridge'
+import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
+import { OrcaRuntimeRpcServer } from '../../../runtime/rpc/server/runtime-rpc'
+import { readRuntimeMetadata } from '../../../runtime/rpc/server/runtime-metadata'
 
 const { webContentsFromIdMock } = vi.hoisted(() => ({
   webContentsFromIdMock: vi.fn()
@@ -44,12 +48,6 @@ const { getWorktreeListingMocks } = vi.hoisted(() => {
   let listings: ReturnType<typeof createWorktreeListingMocks> | undefined
   return { getWorktreeListingMocks: () => (listings ??= createWorktreeListingMocks()) }
 })
-
-import { BrowserManager } from '../../browser-manager'
-import { CdpBridge } from './cdp-bridge'
-import { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../../runtime/rpc/server/runtime-rpc'
-import { readRuntimeMetadata } from '../../../runtime/rpc/server/runtime-metadata'
 
 type AXNode = {
   nodeId: string

@@ -15,7 +15,7 @@ import {
 import { useAgentPaneThreads } from './use-agent-pane-threads'
 
 vi.mock('@/store', async () => {
-  const { createTestStore } = await import('@/store/slices/store-test-helpers')
+  const { createTestStore } = await import('@/store/testing/app-store-test-fixture')
   return { useAppStore: createTestStore() }
 })
 
@@ -68,16 +68,75 @@ function options(query: string): Parameters<typeof useAgentPaneThreads>[0] {
 }
 
 describe('Activity search query in the real hook', () => {
-  it('excludes acknowledged rows from an unread search', () => {
+  it('keeps live rows but excludes acknowledged finished rows from an unread search', () => {
     const panes = installThreads(12)
+    const entries = useAppStore.getState().agentStatusByPaneKey
     useAppStore.setState({
+      agentStatusByPaneKey: Object.fromEntries(
+        panes.map((paneKey, index) => [
+          paneKey,
+          index === 0 ? entries[paneKey] : { ...entries[paneKey], state: 'done' as const }
+        ])
+      ),
       acknowledgedAgentsByPaneKey: Object.fromEntries(panes.map((paneKey) => [paneKey, 100_000]))
     })
     const activity = renderHook(() =>
       useAgentPaneThreads({ ...options(' PROJECT ☃ '), readFilter: 'unread' })
     )
     expect(activity.result.current.allThreads).toHaveLength(12)
-    expect(activity.result.current.visibleThreads).toEqual([])
+    expect(activity.result.current.visibleThreads.map((thread) => thread.paneKey)).toEqual([
+      panes[0]
+    ])
+  })
+
+  it('hides acknowledged unavailable rows unless selected in the unread filter', () => {
+    const [livePane, unavailablePane] = installThreads(2)
+    const entries = useAppStore.getState().agentStatusByPaneKey
+    useAppStore.setState({
+      agentStatusByPaneKey: { [livePane]: entries[livePane] },
+      migrationUnsupportedByPtyId: {
+        'pty-tab-1': {
+          ptyId: 'pty-tab-1',
+          paneKey: unavailablePane,
+          reason: 'legacy-numeric-pane-key',
+          source: 'local',
+          updatedAt: 99_000
+        }
+      },
+      acknowledgedAgentsByPaneKey: { [livePane]: 100_000, [unavailablePane]: 100_000 }
+    })
+    const activity = renderHook<ReturnType<typeof useAgentPaneThreads>, string | null>(
+      (selectedPaneKey: string | null) =>
+        useAgentPaneThreads({ ...options(''), readFilter: 'unread', selectedPaneKey }),
+      { initialProps: null }
+    )
+    expect(activity.result.current.visibleThreads.map((thread) => thread.paneKey)).toEqual([
+      'tab-0:11111111-1111-4111-8111-111111111111'
+    ])
+    activity.rerender(unavailablePane)
+    expect(
+      activity.result.current.visibleThreads.map((thread) => thread.paneKey).toSorted()
+    ).toEqual([
+      'tab-0:11111111-1111-4111-8111-111111111111',
+      'tab-1:11111111-1111-4111-8111-111111111111'
+    ])
+    act(() => useAppStore.setState({ activityClearedAtByPaneKey: { [unavailablePane]: 99_000 } }))
+    activity.rerender(null)
+    expect(activity.result.current.visibleThreads.map((thread) => thread.paneKey)).toEqual([
+      'tab-0:11111111-1111-4111-8111-111111111111'
+    ])
+    act(() =>
+      useAppStore.setState({
+        activityClearedAtByPaneKey: {},
+        acknowledgedAgentsByPaneKey: { [livePane]: 100_000 }
+      })
+    )
+    expect(
+      activity.result.current.visibleThreads.map((thread) => thread.paneKey).toSorted()
+    ).toEqual([
+      'tab-0:11111111-1111-4111-8111-111111111111',
+      'tab-1:11111111-1111-4111-8111-111111111111'
+    ])
   })
 
   it('keeps selection, child classification and scoped row order', () => {

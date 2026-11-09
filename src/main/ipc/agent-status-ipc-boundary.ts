@@ -3,7 +3,7 @@ import {
   mintFleetAgentStatusEvidence,
   type FleetAgentStatusEvidence,
   type FleetEvidenceBinding
-} from '../../shared/orchestration-fleet-agent-status-evidence'
+} from '../../shared/orchestration/fleet/orchestration-fleet-agent-status-evidence'
 import { isValidTerminalTabId } from '../../shared/workspace-layout/terminal-tab-id'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 

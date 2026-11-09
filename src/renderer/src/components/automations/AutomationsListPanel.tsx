@@ -1,12 +1,13 @@
-import type { RuntimeEnvironmentSshBucket } from '../../store/slices/runtime-environment-ssh'
+import type { SetupTrustMismatch } from '../../../../shared/worktree/create-types'
+import type { RuntimeEnvironmentSshBucket } from '../../store/slices/ssh/runtime-environment-ssh'
 import React, { useRef } from 'react'
 import { cn } from '@/lib/utils'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type {
-  AutomationRun,
   ExternalAutomationAction,
   ExternalAutomationJob,
   ExternalAutomationManager
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/external/external-automation'
 
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
@@ -33,7 +34,7 @@ import {
 import {
   type AutomationHostFilter,
   automationHostFilterStableKey
-} from '../../../../shared/automation-host-filter'
+} from '../../../../shared/automations/ownership/automation-host-filter'
 import type { AutomationTemplate } from './automation-templates'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import type { ExternalAutomationScope } from './external-automation-scope-client'
@@ -48,7 +49,7 @@ import type { AutomationHostRecoveryAction } from './automation-host-status-desc
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import { useAutomationListFocusRecovery } from './use-automation-list-focus-recovery'
 import { LIST_TABLE_CONTAINER_CLASS } from '@/lib/list-table-layout'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { AutomationTemplateEmptyState } from './AutomationTemplateEmptyState'
 import { AutomationListTableHeader } from './AutomationListTableHeader'
 import { AutomationListToolbar } from './AutomationListToolbar'
@@ -91,6 +92,7 @@ export type AutomationsListPanelProps = {
   hostTargetFor: (row: AutomationListRow) => AutomationHostTarget | null
   hostLabelById?: ReadonlyMap<string, string>
   isActionEnabled: (row: AutomationListRow, action: AutomationRowAction) => boolean
+  needsMigration?: (row: AutomationListRow) => boolean
   externalActionKey: string | null
   selectAutomationRow: (rowKey: string | null) => void
   selectExternalKey: (externalKey: string | null) => void
@@ -98,6 +100,7 @@ export type AutomationsListPanelProps = {
   runNow: (row: AutomationListRow) => void
   openEditDialog: (row: AutomationListRow) => void
   toggleAutomation: (row: AutomationListRow) => void
+  reviewSkippedSetup?: (row: AutomationListRow, content: SetupTrustMismatch) => void
   requestDeleteAutomation: (row: AutomationListRow) => void
   requestExternalAction: (
     manager: ExternalAutomationManager,
@@ -114,6 +117,7 @@ export type AutomationsListPanelProps = {
 }
 
 export function AutomationsListPanel(props: AutomationsListPanelProps): React.JSX.Element {
+  const t = useTranslate()
   const {
     hasListItems,
     hasFilteredListItems,
@@ -144,6 +148,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     hostTargetFor,
     hostLabelById,
     isActionEnabled,
+    needsMigration,
     externalActionKey,
     selectAutomationRow,
     selectExternalKey,
@@ -151,6 +156,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     runNow,
     openEditDialog,
     toggleAutomation,
+    reviewSkippedSetup,
     requestDeleteAutomation,
     requestExternalAction,
     openCreateDialog,
@@ -249,13 +255,13 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
       : legacyScopeStableKey === null
         ? null
         : (hostCatalog.resolution.entry?.label ??
-          translate('auto.components.automations.hostPicker.loadingHost', 'Loading host…'))
+          t('auto.components.automations.hostPicker.loadingHost', 'Loading host…'))
   const emptyStateInput = {
     resolution: hostCatalog.resolution,
     ...searchCounts,
     filterActive: listFilterActive
   }
-  const emptyState = resolveAutomationListEmptyState(emptyStateInput)
+  const emptyState = resolveAutomationListEmptyState(emptyStateInput, t)
   const rowProps = {
     capturedOwners: hostCatalog.rows.capturedOwners,
     selectedRowKey,
@@ -273,6 +279,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     hostTargetFor,
     hostLabelById,
     isActionEnabled,
+    needsMigration,
     onSelect: (rowKey: string) => {
       selectExternalKey(null)
       selectAutomationRow(rowKey)
@@ -281,7 +288,8 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     onRunNow: runNow,
     onEdit: openEditDialog,
     onToggle: toggleAutomation,
-    onDelete: requestDeleteAutomation
+    onDelete: requestDeleteAutomation,
+    onReviewSetup: reviewSkippedSetup
   }
 
   return (

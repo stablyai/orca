@@ -11,66 +11,70 @@ import { FloatingTerminalOrchestrationDialog } from './FloatingTerminalOrchestra
 import { FloatingTerminalResizeHandles } from './FloatingTerminalResizeHandles'
 import { FloatingTerminalWindowControls } from './FloatingTerminalWindowControls'
 import type { useFloatingTerminalPanelController } from './use-floating-terminal-panel-controller'
+import type { Translate } from '@/i18n/use-translate'
 
 const NO_ACTIVITY_TERMINAL_PORTALS: [] = []
 
-export function renderFloatingTerminalPanelSurface({
-  open,
-  onOpenChange,
-  bounds,
-  maximized,
-  stagedBoundsRef,
-  setPanelNode,
-  commitUserBounds,
-  reportFloatingFocusFromTarget,
-  handleShortcutSurfaceKeyDown,
-  handleDragStart,
-  handleDragMove,
-  handleDragEnd,
-  handleTitlebarDoubleClick,
-  surface,
-  model,
-  terminalItems,
-  activeGroup,
-  activeTerminalId,
-  activeEditorUnifiedId,
-  activeBrowserId,
-  activeTab,
-  activeTabType,
-  expandedPaneByTabId,
-  closeFloatingItemConfirmed,
-  closeOthers,
-  closeToRight,
-  closeToLeft,
-  createFloatingTerminalTab,
-  createFloatingBrowserTab,
-  createFloatingMarkdownTab,
-  openFloatingMarkdownTab,
-  setTabCustomTitle,
-  setTabColor,
-  setTabPaneExpanded,
-  createBrowserTab,
-  closeAllFiles,
-  makePreviewFilePermanent,
-  pinFile,
-  toggleMaximized,
-  hasVisibleFloatingTabs,
-  managedBrowserCreationEnabled,
-  cwd,
-  panelViewportSettled,
-  focusPanelForShortcuts,
-  newTerminalShortcut,
-  newBrowserShortcut,
-  newMarkdownShortcut,
-  openMarkdownShortcut,
-  closeShortcut,
-  showOrchestrationSetup,
-  dismissOrchestrationSetup,
-  setOrchestrationDialogOpen,
-  previewUserBounds,
-  orchestrationDialogOpen,
-  refreshOrchestrationSetupVisibility
-}: ReturnType<typeof useFloatingTerminalPanelController>): React.JSX.Element {
+export function renderFloatingTerminalPanelSurface(
+  {
+    open,
+    onOpenChange,
+    bounds,
+    maximized,
+    stagedBoundsRef,
+    setPanelNode,
+    commitUserBounds,
+    reportFloatingFocusFromTarget,
+    handleShortcutSurfaceKeyDown,
+    handleDragStart,
+    handleDragMove,
+    handleDragEnd,
+    handleTitlebarDoubleClick,
+    surface,
+    model,
+    terminalItems,
+    activeGroup,
+    activeTerminalId,
+    activeEditorUnifiedId,
+    activeBrowserId,
+    activeTab,
+    activeTabType,
+    expandedPaneByTabId,
+    closeFloatingItemConfirmed,
+    closeOthers,
+    closeToRight,
+    closeToLeft,
+    createFloatingTerminalTab,
+    createFloatingBrowserTab,
+    createFloatingMarkdownTab,
+    openFloatingMarkdownTab,
+    setTabCustomTitle,
+    setTabColor,
+    setTabPaneExpanded,
+    createBrowserTab,
+    closeAllFiles,
+    makePreviewFilePermanent,
+    pinFile,
+    toggleMaximized,
+    hasVisibleFloatingTabs,
+    managedBrowserCreationEnabled,
+    cwd,
+    panelViewportSettled,
+    focusPanelForShortcuts,
+    newTerminalShortcut,
+    newBrowserShortcut,
+    newMarkdownShortcut,
+    openMarkdownShortcut,
+    closeShortcut,
+    showOrchestrationSetup,
+    dismissOrchestrationSetup,
+    setOrchestrationDialogOpen,
+    previewUserBounds,
+    orchestrationDialogOpen,
+    refreshOrchestrationSetupVisibility
+  }: ReturnType<typeof useFloatingTerminalPanelController>,
+  t?: Translate
+): React.JSX.Element {
   return (
     // Stay above notifications but below modals; separate shadow and border shells to keep rounded corners clean.
     <div
@@ -254,11 +258,14 @@ export function renderFloatingTerminalPanelSurface({
           </div>
         )}
       </WorkspaceTabDragLayer>
-      {renderFloatingTerminalOrchestrationCard({
-        visible: showOrchestrationSetup && activeTabType === 'terminal',
-        onDismiss: dismissOrchestrationSetup,
-        onEnable: () => setOrchestrationDialogOpen(true)
-      })}
+      {renderFloatingTerminalOrchestrationCard(
+        {
+          visible: showOrchestrationSetup && activeTabType === 'terminal',
+          onDismiss: dismissOrchestrationSetup,
+          onEnable: () => setOrchestrationDialogOpen(true)
+        },
+        t
+      )}
       {!maximized && (
         <FloatingTerminalResizeHandles
           bounds={bounds}

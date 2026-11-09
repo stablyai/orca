@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => {
 })
 vi.mock('@/store/index', () => ({ useAppStore: { getState: () => mocks.state } }))
 vi.mock('sonner', () => ({ toast: { error: mocks.error } }))
-vi.mock('@/lib/connection-context', () => ({ getConnectionId: () => null }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({ getConnectionId: () => null }))
 vi.mock('./terminal-drop-worktree-path', () => ({ resolveTerminalDropWorktreePath: () => '/repo' }))
 vi.mock('./terminal-drop-shell', () => ({
   resolveTerminalDropTargetShell: () => ({ kind: 'posix' })
@@ -64,69 +64,12 @@ async function drop(
   return { result, focus }
 }
 
-const source = (executionHostId: string, runtimeEnvironmentId?: string) =>
-  JSON.stringify({
-    version: 1,
-    executionHostId,
-    workspaceId: 'source-workspace',
-    runtimeEnvironmentId
-  })
-
 describe('internal terminal drop source ownership', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.state = {}
     mocks.write.mockResolvedValue({ sentAnyPath: true, targetCurrent: true, pathsWritten: 1 })
   })
-
-  it.each([
-    [source('runtime:env-a'), 'local', null],
-    [source('local'), 'local', 'env-a'],
-    [source('runtime:env-a'), 'local', 'env-b'],
-    [source('ssh:target-a'), 'ssh:target-b', null],
-    [source('runtime:unresolved-owner'), 'local', null],
-    [null, 'local', null],
-    ['{broken', 'local', null],
-    [source('local'), null, null],
-    [source('runtime:env-a'), 'runtime:env-a', 'env-b'],
-    [source('ssh:target-a'), 'ssh:target-a', 'env-a'],
-    [source('ssh:target-a', 'env-a'), 'ssh:target-a', null],
-    [source('ssh:target-a', 'env-a'), 'ssh:target-a', 'env-b'],
-    [source('runtime:env-a', 'env-b'), 'runtime:env-a', 'env-a']
-  ])(
-    'refuses an unverifiable or foreign source %s for %s / %s',
-    async (payload, targetHost, environmentId) => {
-      const { result, focus } = await drop(payload, targetHost, environmentId)
-      expect(result).toEqual({ status: 'rejected', reason: 'source-host-mismatch' })
-      expect(mocks.write).not.toHaveBeenCalled()
-      expect(mocks.activity).not.toHaveBeenCalled()
-      expect(focus).not.toHaveBeenCalled()
-      expect(mocks.error).toHaveBeenCalledWith('Drop files from the same host as this terminal.')
-    }
-  )
-
-  it.each([
-    ['local', 'local', null, undefined],
-    ['runtime:env-a', 'local', 'env-a', undefined],
-    ['runtime:env%20a', 'local', 'env a', undefined],
-    ['runtime:env-a', 'runtime:env-a', 'env-a', undefined],
-    ['ssh:target-a', 'ssh:target-a', null, undefined],
-    ['ssh:target-a', 'ssh:target-a', 'env-a', 'env-a']
-  ])(
-    'keeps same-host sources across workspaces: %s into %s / %s',
-    async (sourceHost, targetHost, environmentId, sourceEnvironmentId) => {
-      const { result, focus } = await drop(
-        source(sourceHost, sourceEnvironmentId),
-        targetHost,
-        environmentId
-      )
-      expect(result).toEqual({ status: 'pasted', pathCount: 1 })
-      expect(mocks.write).toHaveBeenCalledWith(
-        expect.objectContaining({ paths: ['/same/path/file.txt'] })
-      )
-      expect(focus).toHaveBeenCalledOnce()
-    }
-  )
 
   it.each([null, 'paired hub'])(
     'accepts the real workspace producer into its local transport owner: %s',

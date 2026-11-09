@@ -1,14 +1,14 @@
 import { useAppStore } from '@/store/index'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { normalizeAbsolutePath } from '../../../../../../shared/file-links/file-link-path-normalization'
-import { resolveExactWorktreeRoute } from '@/lib/worktree-owner-route'
+import { resolveExactWorktreeRoute } from '@/lib/workspace/ownership/worktree-owner-route'
 import {
   getFloatingWorkspaceOperationRoute,
   resolveWorktreeOperationRouteResult,
   type WorktreeOperationRoute,
   type WorktreeOperationRouteState
-} from '@/lib/worktree-operation-route'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+} from '@/lib/workspace/ownership/worktree-operation-route'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import {
   toRuntimeExecutionHostId,
   toSshExecutionHostId,

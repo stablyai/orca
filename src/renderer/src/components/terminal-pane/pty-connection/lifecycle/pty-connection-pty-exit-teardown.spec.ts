@@ -33,6 +33,7 @@ import { createInitialStoreState } from '../test-fixtures/pty-connection-test-st
 import type { StoreState } from '../test-fixtures/pty-connection-test-store-state'
 import {
   installTerminalTestGlobals,
+  loadFreshTerminalModules,
   restoreTerminalTestGlobals
 } from '../test-fixtures/pty-connection-test-environment'
 
@@ -80,7 +81,6 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -117,8 +117,9 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
     it('keeps a fresh split pane mounted when its newborn PTY exits before output or input', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks5 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(2, 2)
@@ -169,8 +170,9 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
     it('closes a hidden split pane whose PTY exits before output instead of keeping a ghost', async () => {
       // Hidden delivery withholds bytes, so no output cannot justify retaining an exited ghost pane.
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(2, 2)
@@ -204,8 +206,9 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
     it('keeps a worktree sole terminal mounted when its freshly-spawned PTY exits before input (direnv failure)', async () => {
       // Keep an unused shell mounted after startup failure so direnv errors do not close the tab and return to Landing.
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -236,8 +239,9 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
     it('keeps a worktree sole terminal mounted when only a captured shortcut preceded the exit', async () => {
       // Shortcut-driven redraw activity is not typed input; Shift+Enter must not turn startup failure into tab closure.
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -265,8 +269,9 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
     it('forwards a synthetic host-loss exit code to the tab-level handler', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks9 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -293,8 +298,9 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
     it('keeps a mounted split pane binding across a synthetic host-loss exit', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks10 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks10 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
@@ -324,8 +330,9 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
     it('tears down the sole terminal when a freshly-spawned PTY exits after the user typed input', async () => {
       // Why: an explicit `exit` (or any typed input) is a deliberate close, not a failed-startup shell, so the worktree should deactivate as before.
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks11 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks11 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const pane = createPane(1)
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
@@ -356,8 +363,9 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
     it('tears down a failed local terminal after user input', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks12 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks12 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const pane = createPane(1)
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
@@ -383,8 +391,9 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
     it('does not claim a capacity overlay for a failed local split pane', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks13 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks13 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
@@ -408,9 +417,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks14 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks14 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const callbacks: ConnectCallbacks[] = []
       const transport = createMockTransport('resume-pty')
       transport.connect.mockImplementation(async (options: { callbacks: ConnectCallbacks }) => {
@@ -459,9 +470,11 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
       restoreUserAgent = temporarilySetNavigatorUserAgent(
         'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
       )
+      await loadFreshTerminalModules()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks15 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks15 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const callbacks: ConnectCallbacks[] = []
       let currentPtyId = 'lost-pty'
       const transport = createMockTransport(currentPtyId)
@@ -514,8 +527,9 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
     it('tears down the sole terminal when a reattached (not freshly spawned) PTY exits', async () => {
       // Reattach skips onPtySpawn; the unused-new-shell guard must not retain a dead previously-live session.
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks16 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks16 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
       const manager = createManager(1)
@@ -540,8 +554,9 @@ export function registerPtyConnectionPtyExitTeardownTests(): void {
 
     it('rebinds a provider replacement without granting fresh-spawn exit protection', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks17 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks17 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       let transportPtyId = 'terminal-old'
       const transport = createMockTransport(transportPtyId)
       transport.getPtyId = vi.fn(() => transportPtyId)
@@ -595,7 +610,6 @@ export function registerPtyConnectionEstablishedPtyExitTests(): void {
   }
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -622,8 +636,9 @@ export function registerPtyConnectionEstablishedPtyExitTests(): void {
 
     it('closes a split pane when an established PTY exits after output', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks21 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks21 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
       const transport = createMockTransport('pty-pane-2')
       transport.connect.mockImplementation(
@@ -662,8 +677,9 @@ export function registerPtyConnectionEstablishedPtyExitTests(): void {
 
     it('removes the agent row when an established PTY exits through EOF (#12907)', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks22 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks22 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
       const manager = createManager(2)
@@ -689,8 +705,9 @@ export function registerPtyConnectionEstablishedPtyExitTests(): void {
 
     it('closes a split pane when an established PTY exits after terminal input', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks23 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks23 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const pane = createPane(2)
       const transport = createMockTransport('pty-pane-2')
       transportFactoryQueue.push(transport)
@@ -727,8 +744,9 @@ export function registerPtyConnectionEstablishedPtyExitTests(): void {
 
     it('ignores a late exit from a transport that no longer owns the pane', async () => {
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const oldTransport = createMockTransport('old-pty')
       const replacementTransport = createMockTransport('new-pty')
       transportFactoryQueue.push(oldTransport)

@@ -1,6 +1,6 @@
 import { parseJiraIssueUrl } from '../jira/jira-issue-url'
 import { getWorkspaceSourceProvider } from '../new-workspace/workspace-source'
-import type { TaskSourceContext } from '../task-source-context'
+import type { TaskSourceContext } from '../work-items/task-source-context'
 import type { WorkspaceLinkedItem } from '../worktree/types'
 
 function resolveLinkedItemProvider(

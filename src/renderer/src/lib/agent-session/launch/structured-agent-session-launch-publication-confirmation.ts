@@ -1,4 +1,4 @@
-import { settleStructuredAgentSessionSendsFromJournal } from '@/components/native-chat/structured-agent-session-message-sender'
+import { settleStructuredAgentSessionSendsFromJournal } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
 import { recoverPublishedSessionReceipt } from './structured-agent-session-launch-recovery'
 import { publishStructuredLaunchCreateOptions } from './structured-agent-session-launch-create-message'
 import { trackLaunchSettlement } from './structured-agent-session-launch-outcome-tracking'
@@ -46,5 +46,5 @@ export function confirmStructuredLaunchFirstMessagePublication(
     })
   trackLaunchSettlement(state, state.promise)
   trackStructuredLaunchConfirmationDeadline(state, state.promise)
-  notifyStructuredLaunchListeners()
+  notifyStructuredLaunchListeners(state.intent.sessionId)
 }

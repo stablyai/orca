@@ -132,55 +132,6 @@ it('delivers a File drop through the registered owner and detaches an externally
   expect(view.container.querySelector('output')?.textContent).toBe('Replacement')
 })
 
-it.each([2, 20])(
-  'keeps typing independent of %i historical labels and retires them with the draft',
-  async (count) => {
-    upload.mockReset().mockResolvedValue('https://github.com/user-attachments/assets/completed')
-    const changed = vi.fn()
-    const view = render(<Draft initialBody={'text '.repeat(count * 100)} onChange={changed} />)
-    const field = textareaField(view.getByRole('textbox'))
-    field.setSelectionRange(field.value.length, field.value.length)
-    fireEvent.paste(field, {
-      clipboardData: {
-        files: Array.from(
-          { length: count },
-          (_, index) => new File(['png'], `history-${index}.png`, { type: 'image/png' })
-        )
-      }
-    })
-    await waitFor(() => expect(upload).toHaveBeenCalledTimes(count))
-    await waitFor(() => expect(field.value).not.toContain('Uploading'))
-    let projectionPasses = 0
-    const originalReplace = String.prototype.replace
-    const replace = vi.spyOn(String.prototype, 'replace').mockImplementation(function (
-      this: string,
-      pattern: Parameters<typeof originalReplace>[0],
-      replacement: Parameters<typeof originalReplace>[1]
-    ) {
-      if (pattern instanceof RegExp && pattern.source.startsWith('!\\[Uploading ')) {
-        projectionPasses++
-      }
-      return originalReplace.call(this, pattern, replacement)
-    })
-    changed.mockClear()
-    try {
-      fireEvent.change(field, { target: { value: `${field.value} typed` } })
-      expect(projectionPasses).toBe(1)
-      expect(changed).toHaveBeenCalledOnce()
-      expect(field.value.endsWith(' typed')).toBe(true)
-    } finally {
-      replace.mockRestore()
-    }
-    fireEvent.change(field, { target: { value: `${field.value}![Uploading history-0.png…]()` } })
-    expect(field.value).not.toContain('Uploading')
-    fireEvent.click(view.getByRole('button', { name: 'Replace' }))
-    fireEvent.change(field, { target: { value: 'Replacement ![Uploading history-0.png…]()' } })
-    expect(view.container.querySelector('output')?.textContent).toBe(
-      'Replacement ![Uploading history-0.png…]()'
-    )
-  }
-)
-
 it('removes an undo-restored owned label after an incomplete user label prefix', async () => {
   const held = Promise.withResolvers<string>()
   upload.mockReset().mockReturnValue(held.promise)

@@ -10,6 +10,7 @@ import { useComposerAsyncState } from './async-composer-state'
 import { useComposerProviderRuntimeSync } from './provider-runtime-sync'
 import { useDerivedComposerState } from './derived-composer-state'
 import { useDraftTargetSync } from './draft-target-sync'
+import { needsVisibleRunTargetHost } from '@/lib/run-target-host-visibility'
 
 export function useComposerTargetState(
   options: ComposerStateInput,
@@ -66,6 +67,7 @@ export function useComposerTargetState(
     initialLinkedWorkItem: composerTargetStore.initialLinkedWorkItem,
     initialName: composerTargetStore.initialName,
     initialPrompt: composerTargetStore.initialPrompt,
+    initialNote: composerTargetStore.initialNote,
     initialTaskSourceContext: composerTargetStore.initialTaskSourceContext,
     isProjectGroupTarget: runtimeTargetSelection.isProjectGroupTarget,
     newWorkspaceDraft: composerTargetStore.newWorkspaceDraft,
@@ -193,7 +195,17 @@ export function useComposerTargetState(
   return {
     composerTargetStore,
     initialTargetState,
-    runtimeTargetSelection,
+    runtimeTargetSelection: {
+      ...runtimeTargetSelection,
+      // Keep the active project selected; Create waits for a visible host (#38669).
+      selectedTargetNeedsVisibleHost:
+        !runtimeTargetSelection.isProjectGroupTarget &&
+        needsVisibleRunTargetHost(
+          runtimeTargetSelection.selectedWorkspaceTarget,
+          composerTargetStore.hostOptions,
+          runtimeTargetSelection.selectedEphemeralVmRecipeId
+        )
+    },
     sourceContextState,
     workspaceIdentityState,
     asyncComposerState,

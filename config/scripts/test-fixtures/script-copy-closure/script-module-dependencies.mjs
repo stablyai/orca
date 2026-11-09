@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, readFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs'
 import { dirname, join, relative } from 'node:path'
 
 // Walk/copy relative modules instead of maintaining fixture list: omitted dependencies hide target failures behind resolution errors.
@@ -22,7 +22,9 @@ function collectScriptModules(scriptPath, seen = new Set()) {
     /(?:\bfrom|\brequire\s*\(|\bimport\s*\(|\bimport)\s*'(\.\.?\/[^']+)'/g
   )
   for (const [, specifier] of specifiers) {
-    collectScriptModules(join(dirname(scriptPath), specifier), seen)
+    const modulePath = join(dirname(scriptPath), specifier)
+    const resolved = [modulePath, `${modulePath}.ts`].find((file) => existsSync(file)) ?? modulePath
+    collectScriptModules(resolved, seen)
   }
   return seen
 }

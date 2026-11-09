@@ -1,17 +1,23 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useEffect } from 'react'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
-import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import {
+  chatProviderAgents,
+  useHostStructuredAgentsVersion
+} from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
+import { recomputeOn } from '@/lib/recompute-on'
 import { readChatProgram, resolveChatProgramContext } from '@/lib/host-chat-program'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { useAppStore } from '@/store/index'
-import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
+import { readNativeDetectedAgents } from '@/store/slices/agent-inventory/local-detected-agent-store-state'
 import { Card, CardContent } from '../../ui/card'
 import { AgentOpensAsControl } from '../../agent/launch-settings/AgentChatChoiceControls'
 import { buildAgentOpensAs } from '../../../lib/agent-session/launch/native-chat-provider-choice'
 import { SettingsSubsectionHeader } from '../form-controls/SettingsFormControls'
 import { getChatLaunchEntriesByKey } from './chat-launch-search'
+import { useTranslate } from '@/i18n/use-translate'
 
 const WORKSPACE = { kind: 'floating' } as const
 
@@ -22,7 +28,8 @@ export function ChatAgentLaunchSettings({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }): React.JSX.Element {
-  useHostStructuredAgentsVersion()
+  const t = useTranslate()
+  const hostAgentsVersion = useHostStructuredAgentsVersion()
   useChatProgramFacts(WORKSPACE)
   useEffect(() => {
     void useAppStore.getState().ensureNativeDetectedAgents()
@@ -39,7 +46,7 @@ export function ChatAgentLaunchSettings({
       .join(' ')
   })
   const chatOnly = new Set(chatOnlyKey.split(' '))
-  const entry = getChatLaunchEntriesByKey().agents
+  const entry = getChatLaunchEntriesByKey(t).agents
   return (
     <section className="space-y-3">
       <SettingsSubsectionHeader title={entry.title} description={entry.description} />
@@ -47,13 +54,15 @@ export function ChatAgentLaunchSettings({
         <CardContent>
           <div className="divide-y divide-border">
             {getAgentCatalog().map((agent) => {
-              const opensAs = buildAgentOpensAs({
-                agent: agent.id,
-                cliDetected: detected === null ? null : detected.includes(agent.id),
-                chatProgramHere: chatOnly.has(agent.id),
-                settings,
-                updateSettings
-              })
+              const opensAs = recomputeOn([hostAgentsVersion], () =>
+                buildAgentOpensAs({
+                  agent: agent.id,
+                  cliDetected: detected === null ? null : detected.includes(agent.id),
+                  chatProgramHere: chatOnly.has(agent.id),
+                  settings,
+                  updateSettings
+                })
+              )
               return opensAs ? (
                 <div key={agent.id} className="flex items-center justify-between gap-4 py-3">
                   <div className="flex min-w-0 items-center gap-3">

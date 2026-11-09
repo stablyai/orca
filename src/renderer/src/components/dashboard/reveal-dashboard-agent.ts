@@ -4,7 +4,7 @@ import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structure
 import {
   structuredAgentSessionOwnerForTab,
   structuredAgentSessionTargetForTab
-} from '@/runtime/structured-agent-session-owner'
+} from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import { useAppStore } from '@/store'
 import type { DashboardRevealAgentArgs } from '../../../../shared/dashboard-snapshot'
 

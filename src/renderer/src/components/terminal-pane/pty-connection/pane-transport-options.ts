@@ -149,6 +149,9 @@ export function buildPaneTransportOptions(session: ConnectPanePtySession): IpcPt
       : session.paneStartup?.draftPrompt
         ? { agentPromptDelivery: 'draft' as const }
         : {}),
+    ...(session.paneStartup?.freshAgentLaunch
+      ? { freshAgentLaunch: session.paneStartup.freshAgentLaunch }
+      : {}),
     ...(session.paneStartup?.agentArgsOverride !== undefined
       ? { agentArgsOverride: session.paneStartup.agentArgsOverride }
       : {}),

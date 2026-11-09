@@ -4,6 +4,10 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { useAppStore } from '@/store'
+import {
+  notifyAgentLaunchFailure,
+  agentLaunchRecoveryMessage
+} from './agent-session/launch/failure/agent-launch-failure'
 import { resolveAgentLaunchExecutionContext } from '@/lib/agent-session/launch/new-tab/launch-agent-execution-context'
 import {
   planAgentSessionLaunch,
@@ -55,7 +59,11 @@ export async function resolveDismissedOnboardingFolderAgentLaunch(args: {
     return { agent, plan }
   }
   const context = resolveAgentLaunchExecutionContext(args.store, { worktreeId: args.worktreeId })
-  if (!context) {
+  if ('unavailable' in context) {
+    // A host still connecting is a wait, not a failure, so it gets no message.
+    if (!context.unavailable.pending) {
+      notifyAgentLaunchFailure(agent, agentLaunchRecoveryMessage(context.unavailable.recovery))
+    }
     return { agent, plan }
   }
   let preferences: AgentLaunchPreferences

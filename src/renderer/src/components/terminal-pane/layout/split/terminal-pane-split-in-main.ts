@@ -1,12 +1,12 @@
 // Main writes/starts splits under the window pane ID; frame reconciliation draws and attaches its terminal.
 import type { TerminalPaneSplitSource } from '../../../../../../shared/feature-education-telemetry'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { mintStablePaneId } from '@/lib/pane-manager/mint-stable-pane-id'
-import { refusalActsAsToday } from '@/runtime/layout-apply-send'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { serverLayoutApplyRoute } from '@/runtime/server-layout-apply-routes'
+import { refusalActsAsToday } from '@/runtime/workspace-layout/commands/layout-apply-send'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { serverLayoutApplyRoute } from '@/runtime/workspace-layout/server/server-layout-apply-routes'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { expectPaneToMountUnfocused } from '@/runtime/layout-owner-pane-intents'
+import { expectPaneToMountUnfocused } from '@/runtime/workspace-layout/intents/layout-owner-pane-intents'
 import { useAppStore } from '@/store/index'
 import { recordCreatedTerminalPaneSplit } from './terminal-pane-split-completion'
 

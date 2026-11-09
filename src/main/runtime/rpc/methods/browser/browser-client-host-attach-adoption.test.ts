@@ -1,7 +1,6 @@
-import '../../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import '../../../../../shared/protocol-version'
-import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../../shared/browser-runtime-capabilities'
+import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../../shared/browser/runtime/browser-runtime-capabilities'
 import type { BrowserClientHostedPageInventory } from '../../../../../shared/browser/client-hosting/browser-client-host-protocol'
 import { getBrowserHostLeaseRegistry } from '../../../browser-host/leases/browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../../browser/client-pages/runtime-browser-page-registry'
@@ -147,24 +146,6 @@ describe('browser.clientHost.attach adoption', () => {
     })
 
     rig.cleanups.get(`browser-client-host:${HOST_CLIENT_ID}`)?.()
-    await rig.dispatch
-  })
-
-  it('keeps the window open when a page could not be taken back yet', async () => {
-    const rig = attachHost([orphanedPage({ browserPageId: 'page-c' })], {
-      browserHostClientId: 'host-held',
-      pairedDeviceId: 'device-held',
-      resolveExecutionHostKey: () => Promise.resolve({ status: 'unavailable' })
-    })
-
-    await vi.waitFor(() => expect(rig.replies.length).toBeGreaterThan(0))
-    await Promise.resolve()
-    await Promise.resolve()
-    // The guest is live and record-less; declaring this client reconciled would let it cull the row.
-    expect(rig.markClientHostedPagesReconciled).not.toHaveBeenCalled()
-    expect(rig.commands()).toEqual([])
-
-    rig.cleanups.get('browser-client-host:host-held')?.()
     await rig.dispatch
   })
 

@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { readAgentLaunchSupport, type AgentLaunchSupport } from './agent-launch-request'
-import type { RpcClient } from '../transport/rpc-client'
-import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
+import '../transport/connection/stable-logical-rpc-client'
+import { isLogicalClientCutoverError } from '../transport/connection/logical-client-cutover-error'
+import { readMobileRuntimeHostPlatform } from '../transport/connection/mobile-runtime-host-platform'
 import { worktreeCreateCapabilityRead } from './mobile-workspace-create-operations'
 import { MOBILE_TASKS_CAPABILITY } from './mobile-tasks-capability'
 import {

@@ -34,10 +34,8 @@ import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-ag
 import { resolveTerminalInputHostPlatform } from '../terminal-input-host-platform'
 import { isTerminalPaneLocalWindowsConpty } from '../../host-state/terminal-pane-local-windows-conpty'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
-import {
-  isEditableTarget,
-  resolveTerminalKeyboardShortcutAction
-} from './terminal-keyboard-shortcut-matching'
+import { isEditableTarget } from './terminal-keyboard-shortcut-matching'
+import { resolveTerminalShortcutAction as resolveTerminalKeyboardShortcutAction } from './terminal-shortcut-policy'
 import { createTerminalNativeOnlyShortcutTracker } from './terminal-native-only-shortcut'
 
 type RuntimeOptions = {

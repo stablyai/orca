@@ -6,6 +6,7 @@ import {
   claudeFrame,
   identityFor,
   recordingJournalSink,
+  USER_MESSAGE,
   PROVIDER_SESSION_ID
 } from './claude-structured-session-test-support'
 import { claudeOpened } from './claude-structured-startup-settled-test-support'
@@ -113,6 +114,28 @@ describe('Claude host-awaited open', () => {
     } finally {
       answerSettings({})
     }
+  })
+
+  it('opens a healthy Claude session whose initialize takes longer than a minute', async () => {
+    const claude = fakeClaude({ initDelayMs: 75_000 })
+    const { adapter } = adapterFor(claude)
+    await adapter.acquire(ACQUIRE)
+    const opened = expect(claudeOpened(adapter, 'session-1')).resolves.toMatchObject({
+      reportedOptions: expect.any(Object)
+    })
+    await vi.advanceTimersByTimeAsync(75_000)
+    await opened
+    await expect(
+      adapter.dispatch({
+        sessionId: 'session-1',
+        fence: 7,
+        clientMessageId: 'slow-start',
+        body: USER_MESSAGE
+      })
+    ).resolves.toMatchObject({ state: 'admitted' })
+    expect(claude.connections[0].sent).toMatchObject([
+      { message: { content: [{ type: 'text', text: 'ship it' }] } }
+    ])
   })
 
   it('lets the host abort a silent initialize wait and close the owned process', async () => {

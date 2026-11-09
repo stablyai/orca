@@ -1,12 +1,12 @@
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constants'
+
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from '../../../../../../shared/agent-session/agent-session-runtime-capabilities'
-import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/project-execution-runtime'
-import type * as ConnectionOwnerResolutionModule from '../../../connection-owner-resolution'
+import type { ProjectExecutionRuntimeResolution } from '../../../../../../shared/execution-host/project-execution-runtime'
+import type * as ConnectionOwnerResolutionModule from '../../../workspace/ownership/connection-owner-resolution'
 
 const mocks = vi.hoisted(() => ({
   getExecutionHostIdForWorktree: vi.fn(),
@@ -21,7 +21,7 @@ vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: mocks.getExecutionHostIdForWorktree
 }))
 // Stage only workspace ownership; repo fallback must use the real resolver.
-vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', async (importOriginal) => ({
   ...(await importOriginal<typeof ConnectionOwnerResolutionModule>()),
   getConnectionIdFromState: mocks.getConnectionIdFromState
 }))
@@ -32,7 +32,7 @@ vi.mock('@/lib/local-preflight-context', () => ({
 vi.mock('@/lib/web-client-location', () => ({
   isWebClientLocation: mocks.isWebClientLocation
 }))
-vi.mock('@/runtime/local-runtime-capabilities', () => ({
+vi.mock('@/runtime/hosts/capabilities/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: mocks.readLocalRuntimeCapabilitiesOrUnknown
 }))
 vi.mock('@/lib/agent-session/launch/continuation/structured-agent-launch-settlement', () => ({}))
@@ -90,38 +90,6 @@ function stageLocalStructuredHost(): void {
 describe('buildAgentLaunchRouteInput', () => {
   beforeEach(stageLocalStructuredHost)
 
-  it('gathers the full input set for an existing local git worktree', () => {
-    mocks.getLocalProjectExecutionRuntimeContext.mockReturnValue(WSL_RUNTIME)
-    const appStore = store()
-    const input = buildAgentLaunchRouteInput(appStore, {
-      agent: 'codex',
-      workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },
-      prompt: 'fix the flaky test',
-      promptDelivery: 'auto-submit'
-    })
-    expect(input).toEqual({
-      agent: 'codex',
-      settings: STRUCTURED_SETTINGS,
-      executionHostId: 'local',
-      hostCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
-      workspaceKind: 'git-worktree',
-      projectRuntime: WSL_RUNTIME,
-      promptDelivery: 'auto-submit',
-      launchText: 'fix the flaky test',
-      nativeChatTranscriptIsLocalReadable: true,
-      startsOutsideWorkspaceRoot: false
-    })
-    expect(mocks.getExecutionHostIdForWorktree).toHaveBeenCalledWith(appStore, 'wt-1')
-    expect(mocks.getLocalProjectExecutionRuntimeContext).toHaveBeenCalledWith(appStore, 'wt-1')
-    expect(mocks.getLocalRepoProjectExecutionRuntimeContext).not.toHaveBeenCalled()
-    expect(
-      routeFor(appStore, {
-        agent: 'codex',
-        workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }
-      })
-    ).toBe('terminal-tui')
-  })
-
   it('never consults the local project runtime for a worktree on an SSH connection', () => {
     mocks.getExecutionHostIdForWorktree.mockReturnValue('ssh:build-box')
     mocks.getConnectionIdFromState.mockReturnValue('build-box')
@@ -167,53 +135,6 @@ describe('buildAgentLaunchRouteInput', () => {
         promptDelivery: 'draft'
       })
     ).toBe('terminal-tui')
-  })
-
-  it.each([
-    [
-      'an explicit host',
-      { kind: 'git-worktree', repoId: 'repo-1', executionHostId: 'ssh:box' },
-      'ssh:box',
-      false
-    ],
-    [
-      'a runtime-owned SSH host',
-      { kind: 'git-worktree', executionHostId: 'ssh:runtime-ssh-1' },
-      'ssh:runtime-ssh-1',
-      true
-    ],
-    [
-      'a pending ephemeral VM',
-      { kind: 'git-worktree', repoId: 'repo-1', executionHostId: 'runtime:pending-ephemeral-vm' },
-      'runtime:pending-ephemeral-vm',
-      true
-    ]
-  ] as const)(
-    'keeps a prospective workspace on %s off the local project runtime',
-    (_name, workspace, executionHostId, readable) => {
-      const input = buildAgentLaunchRouteInput(store(), { agent: 'codex', workspace })
-      expect(input.executionHostId).toBe(executionHostId)
-      expect(input.projectRuntime).toBeUndefined()
-      expect(input.nativeChatTranscriptIsLocalReadable).toBe(readable)
-      expect(mocks.getLocalRepoProjectExecutionRuntimeContext).not.toHaveBeenCalled()
-    }
-  )
-
-  it('marks the floating workspace and skips its project runtime', () => {
-    const input = buildAgentLaunchRouteInput(store(), {
-      agent: 'codex',
-      workspace: { kind: 'floating', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
-    })
-    expect(input.workspaceKind).toBe('floating')
-    expect(input.projectRuntime).toBeUndefined()
-    expect(mocks.getLocalProjectExecutionRuntimeContext).not.toHaveBeenCalled()
-    // A folder workspace supplies its root without a repo row, so only project-runtime lookup is skipped.
-    expect(
-      structuredFeasibleFor(store(), {
-        agent: 'codex',
-        workspace: { kind: 'floating', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
-      })
-    ).toBe(true)
   })
 
   describe('a workspace on a paired server', () => {

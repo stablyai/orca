@@ -143,7 +143,6 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
 
   describe('connectPanePty', () => {
     beforeEach(async () => {
-      vi.resetModules()
       vi.clearAllMocks()
       transportFactoryQueue = []
       createdTransportOptions = []
@@ -175,7 +174,9 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       seedSleepingPane(null)
       const { transport, binding, isVisibleRef } = connectHiddenPane(
         null,
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
       )
       await flushAsyncTicks(10)
 
@@ -199,7 +200,9 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       setHostLiveness(false)
       const { transport, binding, isVisibleRef } = connectHiddenPane(
         DEAD_SESSION_ID,
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
       )
       await flushAsyncTicks(10)
 
@@ -228,7 +231,9 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       setHostLiveness(isLive)
       const { transport } = connectHiddenPane(
         DEAD_SESSION_ID,
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
       )
       await flushAsyncTicks(10)
 
@@ -242,7 +247,9 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       requestSleepingAgentWakeOnMount('wt-1', ['tab-1'])
       const { transport } = connectHiddenPane(
         null,
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
       )
       await flushAsyncTicks(10)
 
@@ -262,7 +269,9 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       requestSleepingAgentWakeOnMount('wt-1', ['tab-1'])
       connectHiddenPane(
         null,
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
       )
       await flushAsyncTicks(20)
       expect(resumeSleptPane).toHaveBeenCalledWith(
@@ -276,7 +285,9 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       setHostLiveness(false)
       const { transport, binding } = connectHiddenPane(
         DEAD_SESSION_ID,
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
       )
       await flushAsyncTicks(10)
       expect(transport.connect).not.toHaveBeenCalled()
@@ -295,7 +306,9 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       const { isPaneSpawnDeferred } = await import('@/lib/pane-spawn-deferral-registry')
       const { binding, isVisibleRef } = connectHiddenPane(
         null,
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
       )
       await flushAsyncTicks(10)
       expect(isPaneSpawnDeferred(PANE_KEY)).toBe(true)
@@ -321,7 +334,9 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
           restoredPtyIdByLeafId: { [LEAF_2]: DEAD_SESSION_ID },
           isVisibleRef: { current: false }
         }),
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
       )
       await flushAsyncTicks(20)
 
@@ -339,7 +354,9 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       const spawn = createDeferred<string>()
       const { transport, binding, isVisibleRef } = connectHiddenPane(
         null,
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
       )
       transport.connect.mockImplementation(() =>
         spawn.promise.then((ptyId) => {
@@ -373,7 +390,9 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
           consumeSuppressedPtyExit: vi.fn(() => true),
           isVisibleRef
         }),
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
       )
       await flushAsyncTicks(10)
       isVisibleRef.current = true
@@ -409,7 +428,9 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       seedSleepingPane(null)
       const { transport, binding, isVisibleRef } = connectHiddenPane(
         null,
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
       )
       await flushAsyncTicks(10)
       const held = mockStoreState.sleepingAgentSessionsByPaneKey[PANE_KEY]!
@@ -430,7 +451,9 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       seedSleepingPane(null)
       const { transport, binding, isVisibleRef } = connectHiddenPane(
         null,
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
       )
       await flushAsyncTicks(10)
       const held = mockStoreState.sleepingAgentSessionsByPaneKey[PANE_KEY]!
@@ -452,7 +475,9 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       const { isPaneSpawnDeferred } = await import('@/lib/pane-spawn-deferral-registry')
       const { transport, binding, isVisibleRef } = connectHiddenPane(
         DEAD_SESSION_ID,
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
       )
       await flushAsyncTicks(10)
       const fallback = createDeferred<string>()
@@ -480,7 +505,9 @@ export function registerPtyConnectionHiddenSleepingResumeTests(): void {
       const { isPaneSpawnDeferred } = await import('@/lib/pane-spawn-deferral-registry')
       connectHiddenPane(
         null,
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
       )
       await flushAsyncTicks(10)
       const onPtyExit = createdTransportOptions[0]?.onPtyExit

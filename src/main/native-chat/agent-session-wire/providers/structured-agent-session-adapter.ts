@@ -1,5 +1,8 @@
+import type { PrepareStructuredRewind } from './structured-agent-session-rewind-contract'
+import type { ProviderProcessCloseOptions } from '../../../provider-process/provider-process-close'
+import type { NativeCopyCoverage } from '../../agent-session-journal/context-epochs/journal-history-origin'
 import type { StructuredAgentSessionConversationCopyInput } from './structured-agent-session-conversation-copy-input'
-import type { CodexAccountUsageRead } from '../../../rate-limits/codex-rpc-rate-limit-mapper'
+import type { CodexAccountUsageRead } from '../../../rate-limits/providers/codex/codex-rpc-rate-limit-mapper'
 import type { ClaudeAccountRecipe } from '../../../../shared/agent-session/lifecycle/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from '../delivery/structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../../shared/ai-vault/resume/ai-vault-resume-preparation'
@@ -35,11 +38,6 @@ import type {
 /** `unknown` (no timely, correlated answer) skips this idle stop and asks again later. */
 export type AgentSessionIdleConfirmation = 'idle' | 'busy' | 'unknown'
 
-export type { AgentSessionCancelOutcome } from './structured-agent-session-adapter-stop'
-export type {
-  StructuredAgentSessionChildEndCause,
-  StructuredAgentSessionStopCause
-} from '../termination/structured-agent-session-stop-cause'
 import type { AgentJournalDispatchRejection } from '../../../../shared/agent-session/failures/agent-session-failure-words'
 import type { AgentSessionExecutionOptions } from '../../../../shared/agent-session/options/agent-session-execution-options'
 import type { AgentSessionPromptResponse } from '../../../../shared/agent-session/agent-session-question-answer'
@@ -58,23 +56,6 @@ import type {
   StructuredAgentSessionLiveOptions,
   StructuredAgentSessionOptionProjection
 } from '../options/structured-agent-session-option-models'
-export type { StructuredAgentSessionLiveOptions } from '../options/structured-agent-session-option-models'
-
-export {
-  AgentSessionAcquisitionRefusal,
-  AgentSessionPreSpawnError,
-  AgentSessionPromptAnswerRejectedError,
-  AgentSessionPromptUnavailableError,
-  isAgentSessionPreSpawnError,
-  launchPreparationFailure
-} from './structured-agent-session-adapter-errors'
-export type { AgentSessionPreSpawnReason } from './structured-agent-session-adapter-errors'
-
-export {
-  AgentSessionAcquisitionExitProvenError,
-  AgentSessionAcquisitionExitUnprovenError,
-  AgentSessionAcquisitionRootExitObservedError
-} from '../acquisition/structured-agent-session-acquisition-errors'
 
 export type AgentSessionAcquisition = {
   accountRecipe?: ClaudeAccountRecipe
@@ -129,6 +110,8 @@ export type StructuredAgentSessionEndedEvent = {
   /** Absent means provider exit without extra detail; host faults retain their own classification. */
   failure?: SubmissionRejectionFact
   cause: 'unexpected-exit' | 'requested-close'
+  /** An unexpected exit Orca caused by stopping the agent after its own failure; log only. */
+  closedByOrca?: true
   deathEvidenceKind?: 'kill-delivered'
   /** Execution-host observations from a requested provider close, when available. */
   processExit?: {
@@ -235,6 +218,7 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   }): Promise<AgentSessionDispatchOutcome>
   /** Narrow declared rewind per session; agent supplies the resting-session answer. */
   rewindSupport?(sessionId: string, agent?: string): AgentSessionRewindSupport
+  prepareRewind?: PrepareStructuredRewind
   /** Observe lost-reply rewind effects without repeating; keptTurnId null means no turns retained. */
   recoverRewind?(input: {
     sessionId: string
@@ -242,6 +226,7 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     signal?: AbortSignal
     beforeTurnId: string
     keptTurnId: string | null
+    threadId?: string
   }): Promise<{ ok: true } | { ok: false; reason: AgentSessionRewindReason }>
   rewind?(input: {
     sessionId: string
@@ -346,7 +331,7 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   /** Copy the provider conversation without changing the chat’s ID; omit for CLI-based forks. */
   copyConversation?(
     input: StructuredAgentSessionConversationCopyInput
-  ): Promise<AiVaultConversationCopy>
+  ): Promise<AiVaultConversationCopy & { resumeCursor?: string; coverage?: NativeCopyCoverage }>
   /** Give the agent's own conversation the user's chat name, as the agent's own rename would:
    *  through the live child holding that conversation, otherwise at rest. Best effort. */
   renameProviderSession?(input: {
@@ -362,12 +347,24 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     inheritance?: boolean
   }): Promise<void> | undefined
   stopProviderNaming?(): void
+  captureConversationTitleOwner?(record: AgentSessionRecord): {
+    isCurrent: (record: AgentSessionRecord) => boolean
+    generate: (firstPrompt: string, shouldExecute: () => boolean) => Promise<unknown>
+  } | null
   /** True proves child exit; root/processless verdicts throw only after finalization (stopAgentSessionProviderRoot). */
-  closeSession?(sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean>
+  closeSession?(
+    sessionId: string,
+    observeClose?: AgentSessionCloseObserver,
+    options?: ProviderProcessCloseOptions
+  ): Promise<boolean>
   /** Sink-failure shutdown leaves exit recovery unexpected. */
   forceCloseSession?(sessionId: string): Promise<boolean>
   /** Teardown without requiring a future-resume cursor. */
-  disposeSession?(sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean>
+  disposeSession?(
+    sessionId: string,
+    observeClose?: AgentSessionCloseObserver,
+    options?: ProviderProcessCloseOptions
+  ): Promise<boolean>
   /** Acknowledge only after dead-child, lease and journal ownership release. */
   acknowledgeSessionRelease?(sessionId: string, acquisition?: AcquisitionReceipt): void
 }

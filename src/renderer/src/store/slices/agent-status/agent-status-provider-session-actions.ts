@@ -12,7 +12,7 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { getAgentResumeArgv } from '../../../../../shared/agent-launch/startup/agent-resume-argv'
-import { resolveAgentPaneAuthorityKey } from '../agent-pane-authority'
+import { resolveAgentPaneAuthorityKey } from './agent-pane-authority'
 import {
   findAgentPaneWorktreeId,
   getTabIdFromPaneKey,

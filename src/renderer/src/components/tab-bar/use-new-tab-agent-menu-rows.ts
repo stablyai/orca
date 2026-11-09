@@ -1,46 +1,45 @@
 import {
+  createAgentMenuTerminalPendingSelector,
+  readAgentMenuLaunchFacts
+} from './agent-menu-launch-facts'
+import {
   useAppViewExternalStore,
   useAppStateView,
   useAppStateViewActive,
   useAppStateValue
-} from '@/store/app-state-view'
+} from '@/store/retained-views/app-state-view'
 import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
 export type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
+import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/remote-runtime/host-status/runtime-host-status'
-import {
-  isRuntimeHostContactRevokedVerdict,
-  runtimeHostContactForEntry
-} from '../../../../shared/remote-runtime/host-status/runtime-host-contact'
 import { isTuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent-config'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
 import { buildAgentLaunchRouteInput } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
-import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
-import { useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
+import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
+import { useHostStructuredAgentsVersion } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
 import {
   readHostStructuredAgents,
   hostStructuredAgentsCatalogUnlearned as catalogUnlearned
-} from '@/runtime/host-structured-agents'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
-import { useHostStructuredAgentAvailability } from '@/runtime/use-host-structured-agent-availability'
+} from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
+import { useHostStructuredAgentAvailability } from '@/runtime/native-chat/agent-catalogs/use-host-structured-agent-availability'
 import {
   buildNewTabAgentMenuRows,
   type HostChatAnswer
 } from '../../../../shared/agent-launch/picker/agent-launch-picker-rows'
-import { hostChatAnswer } from '@/lib/new-tab-agent-menu-rows'
+import { hostChatAnswer } from '@/lib/agent-session/launch/routing/new-tab-agent-menu-rows'
 import {
   readLocalRuntimeCapabilityObservation,
   subscribeLocalRuntimeCapabilityObservation
-} from '@/runtime/local-runtime-capabilities'
+} from '@/runtime/hosts/capabilities/local-runtime-capabilities'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
-import { readDetectedAgentsForTarget } from '@/lib/agent-detection-target-inventory'
+import { readDetectedAgentsForTarget } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { readChatProgram } from '@/lib/host-chat-program'
-import { resolveAgentMenuSelection } from '@/lib/agent-menu-selection'
+import { resolveAgentMenuSelection } from '@/lib/agent-session/launch/routing/agent-menu-selection'
 import { useHostAgentMenuSettings } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { AgentLaunchSurface } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
@@ -98,28 +97,16 @@ export function useAgentMenuObservation(
     typeof target === 'string'
       ? { kind: workspaceKindForWorktreeId(target), worktreeId: target }
       : (target?.workspace ?? { kind: 'floating' as const })
-  const facts = useAppStateValue(
-    useShallow((state) => {
-      const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
-      const host = parseExecutionHostId(input.executionHostId)
-      const status =
-        host?.kind === 'runtime'
-          ? state.runtimeStatusByEnvironmentId.get(host.environmentId)
-          : undefined
-      const contact = runtimeHostContactForEntry(status)
-      return {
-        executionHostId: input.executionHostId,
-        runtimeId: host?.kind === 'runtime' ? lastVerifiedRuntimeStatus(status)?.runtimeId : null,
-        pairingRevision:
-          host?.kind === 'runtime' ? getRuntimeEnvironmentRevision(host.environmentId) : undefined,
-        contact: `${status?.connectionGeneration}:${status?.hostContactEpoch}:${isRuntimeHostContactRevokedVerdict(contact)}`,
-        checking:
-          contact.verdict === 'unverifiable' &&
-          ['checking', 'transport-connecting'].includes(contact.reason),
-        capabilities: input.hostCapabilities?.join(',')
-      }
-    })
+  const facts = useAppStateValue(useShallow((state) => readAgentMenuLaunchFacts(state, workspace)))
+  const prospective = typeof target === 'string' ? undefined : target?.workspace
+  const repoId = prospective?.repoId
+  const repoHostId = prospective?.executionHostId
+  const terminalPendingSelector = useMemo(
+    () =>
+      createAgentMenuTerminalPendingSelector({ worktreeId, repoId, executionHostId: repoHostId }),
+    [worktreeId, repoId, repoHostId]
   )
+  const terminalPending = useAppStateValue(terminalPendingSelector)
   const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
   const { settings, pending: preferencesPending } = useHostAgentMenuSettings(
     unresolvedTarget ? null : facts,
@@ -258,6 +245,7 @@ export function useAgentMenuObservation(
         rows,
         detection,
         defaultTuiAgent: settings?.defaultTuiAgent,
+        terminalPending,
         pickerContext: {
           workspace,
           launchCwd,
@@ -284,7 +272,7 @@ export function useAgentMenuObservation(
       const chatRow = rows.some((row) => row.kind === 'chat' && row.agent === agent)
       const cliMissing =
         target !== null && !inventoryFailed && !!agent && !detection.detectedIds?.includes(agent)
-      return resolveAgentMenuSelection({
+      const selection = resolveAgentMenuSelection({
         agent,
         surface,
         preferredSurface,
@@ -310,6 +298,9 @@ export function useAgentMenuObservation(
           (capabilityPending || availability?.state === 'pending' || hostCatalogPending),
         plain
       })
+      const terminalWaiting =
+        selection.ready && terminalPending && selection.choice?.route === 'terminal-tui'
+      return { ...selection, ready: selection.ready && !terminalWaiting, terminalWaiting }
     }
   }
 }

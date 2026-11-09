@@ -115,11 +115,15 @@ export function resolveCommand(
     command === 'git'
       ? `${GIT_OUTPUT_LOCALE_SHELL_PREFIX} ${wslGitObjectStorePrefix(options.env)}`
       : ''
+  const editorPrefix =
+    command === 'git' && options.env?.GIT_EDITOR !== undefined
+      ? `GIT_EDITOR=${quotePosixShell(options.env.GIT_EDITOR)} `
+      : ''
   const escapedCommand = options.wslShellCommand ?? quotePosixShell(command)
   // Quote each argument against shell splitting and expansion.
   const escapedArgs = translatedArgs.map(quotePosixShell)
   const linuxCwd = cwdWsl?.linuxPath ?? (cwd && wslDistroOverride ? translateArgForWsl(cwd) : null)
-  const invocation = `${localePrefix}${escapedCommand} ${escapedArgs.join(' ')}`
+  const invocation = `${localePrefix}${editorPrefix}${escapedCommand} ${escapedArgs.join(' ')}`
   const enterCwd = linuxCwd
     ? options.cwdFailureExitCode === undefined
       ? `cd ${quotePosixShell(linuxCwd)} && `
@@ -140,6 +144,9 @@ export function resolveCommand(
           `PATH=${options.wslGitReadEnvironment.path}`,
           `HOME=${options.wslGitReadEnvironment.home}`,
           ...GIT_OUTPUT_LOCALE_ENV_ARGS,
+          ...(options.env?.GIT_EDITOR !== undefined
+            ? [`GIT_EDITOR=${options.env.GIT_EDITOR}`]
+            : []),
           ...(optionalLocks !== undefined ? [`GIT_OPTIONAL_LOCKS=${optionalLocks}`] : []),
           options.wslGitReadEnvironment.gitPath,
           ...(linuxCwd ? ['-C', linuxCwd] : []),

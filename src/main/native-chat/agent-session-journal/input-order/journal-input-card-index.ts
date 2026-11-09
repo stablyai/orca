@@ -1,313 +1,138 @@
 import type { AgentJournalCursor } from '../../../../shared/agent-session/journal/agent-session-journal-identity'
-import type { JournalSubmissionRow } from '../durable-rows/journal-row-schema'
-import { isQueuedAgentJournalSubmission } from '../../../../shared/agent-session/requests/agent-session-queued-submission'
 import type { JournalReducerState } from '../projection/journal-reducer'
-import { journalInputOrder } from './journal-input-order'
 import type { QueuedMessageRow } from '../queued-messages/queued-message-table'
-import {
-  queuePauseHolding,
-  journalQueueStopHolds,
-  failedQueueTurnSequence,
-  type DerivedQueuePause
-} from '../queued-messages/queued-message-pause'
-import {
-  JournalInputPlaceIndex,
-  mergeInputPlaces,
-  type InputPlaceQuery
-} from './journal-input-place-index'
-import type { JournalInputLineageOwner } from './journal-input-lineage'
 import { isLiveJournalQueueCard } from '../queued-messages/journal-queue-retention'
-import { JournalInputDomainIndex, type JournalIndexedInputCard } from './journal-input-domain-index'
-import { JournalInputCandidates } from './journal-input-candidates'
-import { JournalInputReleasedPositions } from './journal-input-released-positions'
 import {
-  readJournalInputAdmission as readAdmission,
-  queryJournalInputCurrent as queryCurrentPlace,
-  journalInputCardPrecedes,
-  gateJournalInputPlaces as gatePlaces,
-  sameJournalInputCardPlace,
-  type JournalInputPlace
-} from './journal-input-order-state'
+  createQueuePauseContext,
+  queuePauseHoldingInContext,
+  type QueuePauseContext
+} from '../queued-messages/queued-message-pause'
+import { journalManualStop } from '../queued-messages/queued-message-pause-marks'
+import { journalInputOrder } from './journal-input-order'
 
+import { JournalQueuedRowIndex } from './journal-queued-row-index'
+
+/** Current rows are the entire runtime order; dispatched slots stay reserved until withdrawal. */
 export class JournalInputCardIndex {
-  private index: JournalInputPlaceIndex | undefined
-  private currentCoordinates: JournalInputPlaceIndex | undefined
-  private domains = new JournalInputDomainIndex()
-  private readonly released = new JournalInputReleasedPositions()
-  private history = true
-  private readonly current = new Map<string, QueuedMessageRow>()
-  private readonly positions = new JournalInputPlaceIndex('')
-  private currentRevision = 0
-  private readonly indexed = new Map<string, JournalIndexedInputCard>()
-  readonly candidates = new JournalInputCandidates()
-  // Derived current membership only; the prepared transition owns introduction values.
-  private readonly unintroduced = new Set<string>()
+  private initialized = false
+  private readonly current = new JournalQueuedRowIndex()
+  private firstPosition = 0
+  private lastPosition = 0
   private overlayRows: readonly QueuedMessageRow[] = []
   private overlays = new Map<string, QueuedMessageRow>()
+  private revision = 0
+  private ordered: { revision: number; rows: readonly QueuedMessageRow[] } | undefined
+  private floor: AgentJournalCursor | null = null
+  private pauseKey = ''
+  private pauseContext: QueuePauseContext | undefined
+  private clearIds: readonly string[] | undefined
+  private clearMembers: ReadonlySet<string> = new Set()
+  private failed = false
+
   overlay(state: JournalReducerState, rows: readonly QueuedMessageRow[]): void {
-    if (rows === this.overlayRows || (rows.length === 0 && this.overlays.size === 0)) {
+    if (rows === this.overlayRows) {
       return
     }
     this.ensure(state)
-    const next = new Map(rows.map((card) => [card.messageId, card]))
+    const next = new Map(rows.map((row) => [row.messageId, row]))
     for (const card of this.overlays.values()) {
       if (!next.has(card.messageId) && !state.queue.cards.has(card.messageId)) {
         this.indexCard(state, { ...card, state: 'withdrawn' })
-        this.positions.delete(card.messageId)
-        this.unintroduced.delete(card.messageId)
       }
     }
     this.overlayRows = rows
     this.overlays = next
     for (const card of rows) {
       if (!state.queue.cards.has(card.messageId)) {
-        if (!this.lineage.cards.has(card.messageId)) {
-          this.unintroduced.add(card.messageId)
-        }
         this.indexCard(state, card)
       }
     }
   }
-  introduceOverlays(change: (card: QueuedMessageRow) => void): void {
-    for (const id of this.unintroduced) {
-      change(this.overlays.get(id)!)
-    }
-    this.unintroduced.clear()
-  }
-  private pauseKey: readonly unknown[] = []
-  private floor: { epoch: string; sequence: number } | null = null
-  private pauses: readonly DerivedQueuePause[] = []
-  private cleared = new Set<string>()
-  // A failure holds every waiting card alike, so it gates reads instead of the cached flags.
-  private failed = false
-  constructor(private readonly lineage: JournalInputLineageOwner) {}
   hasOverlay(id: string): boolean {
     return this.overlays.has(id)
   }
-  /** Whether a failed turn holds waiting input, as of the last ensure. */
-  failureHolds(): boolean {
-    return this.failed
-  }
-  command(): QueuedMessageRow | undefined {
-    return this.failed ? undefined : this.currentCoordinates?.allPlaces().command
-  }
-  releaseHistory(): void {
-    this.history = false
-    this.domains = new JournalInputDomainIndex()
-    for (const card of this.current.values()) {
-      const prior = this.indexed.get(card.messageId)
-      if (!this.lineage.cards.has(card.messageId) && prior?.source.baseline) {
-        this.domains.set(card, prior.source, prior.actionable, prior.handoff)
-      }
-    }
-  }
-  head(): QueuedMessageRow | undefined {
-    return this.index?.allPlaces().head
-  }
-  paused(card: QueuedMessageRow): boolean {
-    return (
-      card.state === 'waiting' &&
-      card.holdReason === null &&
-      (this.failed ||
-        this.cleared.has(card.messageId) ||
-        Boolean(queuePauseHolding(this.pauses, card)))
-    )
-  }
-  admission(
-    state: JournalReducerState,
-    row: JournalSubmissionRow,
-    originalAcceptance?: (id: string) => AgentJournalCursor | undefined
-  ): JournalInputPlace {
-    this.ensure(state)
-    return readAdmission(row, this, this.lineage.at(row.seq), originalAcceptance)
-  }
-
-  queryCurrent(place: JournalInputPlace): InputPlaceQuery {
-    return gatePlaces(queryCurrentPlace(place, this.currentCoordinates!), this.failed)
-  }
-
-  query(place: JournalInputPlace): InputPlaceQuery {
-    const current =
-      place.context.basis === 'observed'
-        ? this.index!.query('introduction', place.context.cut)
-        : this.domains.query(place.context, place.original)
-    return gatePlaces(mergeInputPlaces(current, this.released.query(place)), this.failed)
-  }
-
-  ensure(state: JournalReducerState, floor?: { epoch: string; sequence: number } | null): void {
+  ensure(state: JournalReducerState, floor?: AgentJournalCursor | null): void {
     if (floor !== undefined) {
       this.floor = floor
     }
-    const marks = state.queuePauseMarks
-    this.failed =
-      failedQueueTurnSequence(
-        journalInputOrder(state).newestTurn.failure(),
-        marks.resumedSequence
-      ) > 0
-    const lifted = Math.max(state.latestAcceptedTurnSequence, marks.resumedSequence)
-    const reopened = Math.max(
-      marks.reopenedSequence,
-      this.floor?.epoch === state.epoch ? this.floor.sequence : 0
-    )
-    const pauseInputs = [
-      journalQueueStopHolds(marks, state.latestAcceptedTurnSequence) ? marks.latestStop : null,
-      reopened > lifted ? reopened : 0,
-      marks.cleared && !marks.cleared.lifted && marks.cleared.sequence > lifted
-        ? marks.cleared
-        : null
-    ]
-    const first = !this.index
-    if (first || pauseInputs.some((value, i) => value !== this.pauseKey[i])) {
-      this.pauseKey = pauseInputs
-      this.cleared = new Set(pauseInputs[2] ? marks.cleared?.messageIds : [])
-      this.pauses = [
-        ...(pauseInputs[0] && marks.latestStop
-          ? [
-              {
-                reason: 'stopped' as const,
-                since: { epoch: state.epoch, sequence: marks.latestStop.sequence }
-              }
-            ]
-          : []),
-        ...(pauseInputs[1]
-          ? [{ reason: 'restarted' as const, since: { epoch: state.epoch, sequence: reopened } }]
-          : [])
-      ]
-      if (first) {
-        this.index = new JournalInputPlaceIndex('introduction')
-        this.currentCoordinates = new JournalInputPlaceIndex(state.epoch)
-        for (const card of this.overlays.values()) {
-          if (!state.queue.cards.has(card.messageId)) {
-            this.indexCard(state, card)
-          }
-        }
-        for (const card of state.queue.cards.values()) {
-          this.indexCard(state, card)
-        }
-      } else {
-        this.currentRevision++
-        this.released.pause(this.lineage.at(state.lastSequence))
-        for (const card of this.current.values()) {
-          this.indexCard(state, card)
-        }
+    if (!this.initialized) {
+      this.initialized = true
+      for (const card of state.queue.cards.values()) {
+        this.indexCard(state, card)
       }
     }
+    const marks = state.queuePauseMarks
+    const failedAt = journalInputOrder(state).newestTurn.failure()
+    const key = [
+      state.latestAcceptedTurnSequence,
+      journalInputOrder(state).latestPersonAcceptedSequence(),
+      journalManualStop(marks)?.sequence,
+      marks.resumedSequence,
+      marks.reopenedSequence,
+      marks.cleared?.sequence,
+      marks.cleared?.lifted,
+      failedAt,
+      this.floor?.epoch,
+      this.floor?.sequence
+    ].join(':')
+    const membershipChanged = marks.cleared?.messageIds !== this.clearIds
+    if (membershipChanged) {
+      this.clearIds = marks.cleared?.messageIds
+      this.clearMembers = new Set(this.clearIds)
+    }
+    if (key !== this.pauseKey || membershipChanged) {
+      this.pauseKey = key
+      this.pauseContext = createQueuePauseContext(
+        {
+          epoch: state.epoch,
+          marks,
+          latestAcceptedTurnSequence: state.latestAcceptedTurnSequence,
+          latestPersonAcceptedTurnSequence: journalInputOrder(state).latestPersonAcceptedSequence(),
+          failedAt,
+          reopenFloor: this.floor
+        },
+        this.clearMembers
+      )
+      this.failed = this.pauseContext.pauses.some((pause) => pause.reason === 'failed')
+    }
   }
-
+  failureHolds(): boolean {
+    return this.failed
+  }
+  paused(card: QueuedMessageRow): boolean {
+    return (
+      this.pauseContext !== undefined &&
+      queuePauseHoldingInContext(this.pauseContext, card) !== undefined
+    )
+  }
+  head(): QueuedMessageRow | undefined {
+    return this.current.head()
+  }
   version(): number {
-    return this.currentRevision
+    return this.revision
   }
-  live(): Iterable<QueuedMessageRow> {
-    return this.current.values()
+  live(after?: QueuedMessageRow): Iterable<QueuedMessageRow> {
+    return this.current.values(after)
+  }
+  list(): readonly QueuedMessageRow[] {
+    if (this.ordered?.revision !== this.revision) {
+      this.ordered = {
+        revision: this.revision,
+        rows: [...this.current.values()]
+      }
+    }
+    return this.ordered.rows
   }
   bounds(): { first: number; last: number } {
-    return {
-      first: Math.min(0, this.positions.firstPosition()),
-      last: Math.max(0, this.positions.allPlaces().position)
-    }
+    return { first: this.firstPosition, last: this.lastPosition }
   }
-
-  queueChanged(
-    state: JournalReducerState,
-    prior: QueuedMessageRow | undefined,
-    card: QueuedMessageRow,
-    keepHistory: boolean
-  ): void {
-    this.ensure(state)
-    this.history = keepHistory
-    this.refreshCurrent(state, card)
-    if (prior && sameJournalInputCardPlace(prior, card)) {
-      return
-    }
-    this.lineage.change(card.messageId, card.queuedAt, state.lastSequence)
-    this.indexCard(state, card)
-  }
-
-  private refreshCurrent(state: JournalReducerState, card: QueuedMessageRow): void {
-    if (isLiveJournalQueueCard(card, state.submissions)) {
-      if (this.current.get(card.messageId) !== card) {
-        this.current.set(card.messageId, card)
-        this.currentRevision++
-      }
-    } else if (this.current.delete(card.messageId)) {
-      this.currentRevision++
-    }
-  }
-
   indexCard(state: JournalReducerState, card: QueuedMessageRow): void {
-    const prior = this.indexed.get(card.messageId)
-    if (prior) {
-      if (prior.released) {
-        this.released.delete(prior)
-      } else {
-        this.domains.delete(prior.card, prior.source)
-      }
+    if (this.current.set(card, isLiveJournalQueueCard(card, state.submissions))) {
+      this.revision++
     }
-    this.refreshCurrent(state, card)
-    this.positions.setPosition(card.messageId, card.position)
-    const attempt = card.consumedAs ? state.submissions.get(card.consumedAs) : undefined
-    const cleared = this.cleared.has(card.messageId)
-    const actionable =
-      !cleared &&
-      card.state === 'waiting' &&
-      card.holdReason === null &&
-      !queuePauseHolding(this.pauses, card)
-    const handoff = attempt !== undefined && isQueuedAgentJournalSubmission(attempt)
-    const known = this.lineage.cards.get(card.messageId)
-    const lineage = known ?? {
-      introduced: this.lineage.at(state.lastSequence),
-      baseline: { coordinate: card.queuedAt }
+    if (card.state !== 'withdrawn') {
+      this.firstPosition = Math.min(this.firstPosition, card.position)
+      this.lastPosition = Math.max(this.lastPosition, card.position)
     }
-    const released = !known && !this.current.has(card.messageId)
-    this.candidates.set(
-      card,
-      (card.state === 'waiting' && card.holdReason === null) || card.state === 'returned'
-    )
-    this.currentCoordinates!.set(card, actionable, handoff)
-    if (released) {
-      this.index!.delete(card.messageId)
-      this.released.add(card, lineage)
-    } else {
-      this.index!.set(card, actionable, handoff, {
-        epoch: 'introduction',
-        sequence: lineage.introduced
-      })
-      if (lineage.baseline && (this.history || !known)) {
-        this.domains.set(card, lineage, actionable, handoff)
-      }
-    }
-    if (card.state === 'withdrawn') {
-      this.indexed.delete(card.messageId)
-      return
-    }
-    this.indexed.set(card.messageId, {
-      card,
-      actionable,
-      handoff,
-      source: lineage,
-      released
-    })
-  }
-
-  releaseCard(id: string, sequence: number): void {
-    const prior = this.indexed.get(id)
-    if (!prior || prior.released) {
-      return
-    }
-    this.index!.delete(id)
-    this.domains.delete(prior.card, prior.source)
-    const source = {
-      introduced: prior.source.introduced,
-      baseline: { coordinate: prior.card.queuedAt }
-    }
-    const releasedAt = this.lineage.at(sequence)
-    this.released.add(prior.card, source, releasedAt)
-    this.indexed.set(id, { ...prior, source, released: true, releasedAt })
-  }
-
-  relation(card: QueuedMessageRow, place: JournalInputPlace): boolean {
-    const lineage =
-      this.lineage.cards.get(card.messageId) ?? this.indexed.get(card.messageId)?.source
-    return journalInputCardPrecedes(lineage, place)
   }
 }

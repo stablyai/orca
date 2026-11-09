@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
-import { agentHookServer } from '../agent-hooks/server'
-import { setMigrationUnsupportedPtyListener } from '../agent-hooks/migration-unsupported-pty-state'
+import { agentHookServer } from '../agent-hooks/server/agent-hook-server'
+import { setMigrationUnsupportedPtyListener } from '../agent-hooks/observations/migration-unsupported-pty-state'
 import { getDashboardPopoutWindow } from '../window/dashboard-popout-window'
 import { stopSyntheticTitleSpinnerTimer } from './synthetic-title-runtime'
 import { mainProcessState as state } from './main-process-state'

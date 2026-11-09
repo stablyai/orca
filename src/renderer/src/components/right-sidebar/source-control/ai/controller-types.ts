@@ -1,5 +1,5 @@
-import type { AppState } from '@/store'
-import type { WorktreeAgentInventoryState } from '@/lib/agent-detection-target-inventory'
+import type { AppState } from '@/store/types'
+import type { WorktreeAgentInventoryState } from '@/lib/agent-session/launch/inventory/agent-detection-target-inventory'
 import type {
   GitConflictOperation,
   GitStatusEntry

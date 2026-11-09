@@ -14,6 +14,7 @@ export type ProcessRunResult = {
   exitCode: number | null
   signal: NodeJS.Signals | null
   aborted?: true
+  timedOut?: true
 }
 
 export function quoteShellToken(value: string): string {
@@ -34,6 +35,10 @@ export async function runRecipeCommand(args: {
   env?: NodeJS.ProcessEnv
   maxCaptureBytes?: number
   signal?: AbortSignal
+  /** Wall-clock limit; on expiry the process tree is stopped like a cancel and the result has timedOut. */
+  timeoutMs?: number
+  /** Called once the OS reports the process started (never when spawning fails or is skipped). */
+  onSpawn?: () => void
   onStdout?: (chunk: string) => void
   onStderr?: (chunk: string) => void
   spawnCommand?: typeof spawn
@@ -41,6 +46,10 @@ export async function runRecipeCommand(args: {
   const maxBytes = clampRecipeCaptureBytes(args.maxCaptureBytes)
   const spawnCommand = args.spawnCommand ?? spawn
 
+  if (args.signal?.aborted) {
+    // Why: a step cancelled before it starts must not launch anything.
+    return { stdout: '', stderr: '', exitCode: null, signal: null, aborted: true }
+  }
   return new Promise((resolve, reject) => {
     let child: ChildProcessWithoutNullStreams
     try {
@@ -59,43 +68,50 @@ export async function runRecipeCommand(args: {
     const stdout = new GrowingByteBuffer()
     const stderr = new GrowingByteBuffer()
     let settled = false
-    let aborted = false
+    // First reason wins so a cancel racing the deadline is reported as whichever stopped it.
+    let stopReason: 'aborted' | 'timedOut' | undefined
     let forceKillTimer: ReturnType<typeof setTimeout> | undefined
+    let deadlineTimer: ReturnType<typeof setTimeout> | undefined
+    const stopFlag = (): Pick<ProcessRunResult, 'aborted' | 'timedOut'> =>
+      stopReason === 'aborted'
+        ? { aborted: true }
+        : stopReason === 'timedOut'
+          ? { timedOut: true }
+          : {}
+    const settle = (): void => {
+      settled = true
+      clearTimeout(forceKillTimer)
+      clearTimeout(deadlineTimer)
+      args.signal?.removeEventListener('abort', abort)
+    }
     const finish = (result: Omit<ProcessRunResult, 'stdout' | 'stderr'>): void => {
       if (settled) {
         return
       }
-      settled = true
-      if (forceKillTimer) {
-        clearTimeout(forceKillTimer)
-      }
-      args.signal?.removeEventListener('abort', abort)
+      settle()
       resolve({ stdout: takeRetainedTail(stdout), stderr: takeRetainedTail(stderr), ...result })
     }
     const fail = (error: Error): void => {
       if (settled) {
         return
       }
-      settled = true
-      if (forceKillTimer) {
-        clearTimeout(forceKillTimer)
-      }
-      args.signal?.removeEventListener('abort', abort)
+      settle()
       stdout.clear()
       stderr.clear()
       reject(error)
     }
-    const abort = (): void => {
-      if (settled) {
+    const stop = (reason: 'aborted' | 'timedOut'): void => {
+      if (settled || stopReason) {
         return
       }
-      aborted = true
+      stopReason = reason
+      clearTimeout(deadlineTimer)
       forceKillTimer = setTimeout(() => {
         if (settled) {
           return
         }
         killRecipeProcess(child, true)
-        finish({ exitCode: null, signal: null, aborted: true })
+        finish({ exitCode: null, signal: null, ...stopFlag() })
         child.stdin.destroy()
         child.stdout.destroy()
         child.stderr.destroy()
@@ -104,6 +120,7 @@ export async function runRecipeCommand(args: {
       forceKillTimer.unref()
       killRecipeProcess(child)
     }
+    const abort = (): void => stop('aborted')
 
     // Keep retained output as raw bytes; StringDecoder matches setEncoding’s per-stream callback character boundaries.
     const stdoutDecoder = new StringDecoder('utf8')
@@ -130,17 +147,24 @@ export async function runRecipeCommand(args: {
     // setEncoding flushes its decoder at end-of-stream; keep that final replacement character.
     child.stdout.on('end', () => flushDecoder(stdoutDecoder, args.onStdout))
     child.stderr.on('end', () => flushDecoder(stderrDecoder, args.onStderr))
+    if (args.onSpawn) {
+      child.once('spawn', args.onSpawn)
+    }
     child.on('error', (error) => {
       fail(error)
     })
     child.on('close', (exitCode, signal) => {
-      finish({ exitCode, signal, ...(aborted ? { aborted: true } : {}) })
+      finish({ exitCode, signal, ...stopFlag() })
     })
 
     if (args.signal?.aborted) {
       abort()
     } else {
       args.signal?.addEventListener('abort', abort, { once: true })
+      if (args.timeoutMs !== undefined && args.timeoutMs > 0) {
+        deadlineTimer = setTimeout(() => stop('timedOut'), args.timeoutMs)
+        deadlineTimer.unref()
+      }
     }
 
     if (args.stdin) {

@@ -1,4 +1,4 @@
-import type { AgentPaneChange } from '../../../../agent-hooks/agent-transition-detector'
+import type { AgentPaneChange } from '../../../../agent-hooks/observations/agent-transition-detector'
 import type { AgentPhase } from '../../../../../shared/agent-status/lifecycle/agent-transitions'
 import type { AgentSessionStatusSummary } from '../../../../../shared/agent-session/agent-session-wire'
 import { resolveStructuredWorkerIdentityForSession } from '../structured-sessions/structured-worker-authority'

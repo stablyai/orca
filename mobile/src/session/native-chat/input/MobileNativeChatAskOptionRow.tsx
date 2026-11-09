@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View, type LayoutChangeEvent } from 'react-native'
 import { Check } from 'lucide-react-native'
 import {
   colors,
@@ -14,6 +14,8 @@ import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 export function MobileNativeChatAskOptionRow({
   label,
   description,
+  preview,
+  onPreviewLayout,
   selected,
   multi,
   disabled,
@@ -21,13 +23,17 @@ export function MobileNativeChatAskOptionRow({
 }: {
   label: string
   description?: string
+  /** Shown under the row while it is selected, as the agent wrote it. */
+  preview?: string
+  /** The preview's edges in the card's scroll content; the row renders as its direct children. */
+  onPreviewLayout?: (top: number, bottom: number) => void
   selected: boolean
   multi?: boolean
   disabled: boolean
   onPress: () => void
 }): React.JSX.Element {
   useMobileColorScheme()
-  return (
+  const row = (
     <Pressable
       accessibilityRole={multi ? 'checkbox' : 'radio'}
       accessibilityState={{ checked: selected, disabled }}
@@ -58,6 +64,30 @@ export function MobileNativeChatAskOptionRow({
         ) : null}
       </View>
     </Pressable>
+  )
+  // One root shape whether or not the preview shows, so selecting never remounts the row.
+  return (
+    <>
+      {row}
+      {preview && selected ? (
+        <View
+          style={styles.preview}
+          onLayout={(event: LayoutChangeEvent) => {
+            const { y, height } = event.nativeEvent.layout
+            onPreviewLayout?.(y, y + height)
+          }}
+        >
+          <ScrollView nestedScrollEnabled showsVerticalScrollIndicator>
+            {/* Mockups are drawn in columns, so they scroll sideways instead of wrapping at phone width. */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <Text selectable style={styles.previewText}>
+                {preview}
+              </Text>
+            </ScrollView>
+          </ScrollView>
+        </View>
+      ) : null}
+    </>
   )
 }
 
@@ -105,6 +135,20 @@ const styles = themedStyleSheet(() => ({
   },
   optionDescription: {
     color: colors.textSecondary,
+    fontSize: typography.metaSize
+  },
+  preview: {
+    backgroundColor: colors.bgPanel,
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    borderRadius: concentricRadius(radii.surface, spacing.xs),
+    padding: spacing.sm,
+    marginBottom: spacing.xs,
+    maxHeight: 220
+  },
+  previewText: {
+    color: colors.textPrimary,
+    fontFamily: typography.monoFamily,
     fontSize: typography.metaSize
   }
 }))

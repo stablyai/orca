@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { requireGitOwnerTarget } from './worktree-git-owner-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { sourceControlConnectionId, useSourceControlScope } from '../panel/worktree-scope'
-import { getRuntimeGitHistory } from '@/runtime/runtime-git-status-client'
+import { getRuntimeGitHistory } from '@/runtime/source-control/git/runtime-git-status-client'
 import type { GitHistoryPanelState } from './git-history-panel'
-import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
+import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace/activation/workspace-switch-user-act'
 
 const EMPTY_GIT_HISTORY_STATE: GitHistoryPanelState = { status: 'idle' }
 

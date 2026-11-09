@@ -4,14 +4,17 @@ import { parseExecutionHostId } from '../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AppState } from '@/store/types'
 import { resolveOwnerOrLocal } from './workspace/ownership/worktree-runtime-owner'
-import { namedHostForOwnerRef, runtimeEnvironmentIdUnlessTwin } from './resolve-owner'
+import {
+  namedHostForOwnerRef,
+  runtimeEnvironmentIdUnlessTwin
+} from './workspace/ownership/resolve-owner'
 import type { WorktreeRuntimeOwnerState } from './workspace/ownership/worktree-runtime-owner-state'
 import {
   resolveWorktreeOperationRouteResultForHost,
   resolveWorktreeOperationRouteResult,
   type WorktreeOperationRouteResolution
-} from './worktree-operation-route'
-import { getSingleFocusedRuntimeEnvironmentId } from './single-runtime-legacy-owner'
+} from './workspace/ownership/worktree-operation-route'
+import { getSingleFocusedRuntimeEnvironmentId } from './workspace/ownership/single-runtime-legacy-owner'
 import {
   hasIndexedDetectedWorktree,
   resolveIndexedWorktreeOwner

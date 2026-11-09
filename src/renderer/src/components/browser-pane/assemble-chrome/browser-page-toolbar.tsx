@@ -1,6 +1,6 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
@@ -31,8 +31,9 @@ import {
   advanceAcrossBrowserPageConversion,
   returnAcrossBrowserPageConversion
 } from '@/lib/browser/history/browser-page-conversion-history'
-import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
-import type { GrabIntent } from '../describe-page/browser-page-types'
+import '@/lib/browser/documents/file-preview'
+import { convertBrowserPageToWorkspaceDoc } from '@/lib/browser/documents/file-preview-page-conversion'
+import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
 
 /** Binds the shared browser chrome to a browsing page: an editable address bar and session tools. */
 export function BrowserPageToolbar({
@@ -116,6 +117,7 @@ export function BrowserPageToolbar({
   currentBrowserUrl: string
   externalUrl: string | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const annotateElementShortcut = useShortcutLabel('browser.annotateElement')
   const browserTourStep = useAppStore((state) =>
     state.activeContextualTourId === 'browser' ? state.activeContextualTourStepIndex : null
@@ -246,10 +248,7 @@ export function BrowserPageToolbar({
       }
       viewSource={{
         onSelect: () => void window.api.browser.openDevTools({ browserPageId }),
-        label: translate(
-          'auto.components.browser.pane.BrowserPane.ec75d0c412',
-          'Open browser devtools'
-        )
+        label: t('auto.components.browser.pane.BrowserPane.ec75d0c412', 'Open browser devtools')
       }}
       openExternal={{
         onSelect: () => {
@@ -258,10 +257,7 @@ export function BrowserPageToolbar({
           }
           void window.api.shell.openUrl(externalUrl)
         },
-        label: translate(
-          'auto.components.browser.pane.BrowserPane.0f41bf80c7',
-          'Open in default browser'
-        ),
+        label: t('auto.components.browser.pane.BrowserPane.0f41bf80c7', 'Open in default browser'),
         disabled: !externalUrl
       }}
       overflowMenu={(overflow) => (

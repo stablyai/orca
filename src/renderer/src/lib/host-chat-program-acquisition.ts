@@ -2,7 +2,7 @@ import {
   useAppViewExternalStore,
   useAppStateViewActive,
   useAppStateValue
-} from '@/store/app-state-view'
+} from '@/store/retained-views/app-state-view'
 import { useEffect, useMemo } from 'react'
 import { useAppStore } from '@/store'
 import type { ProspectiveWorkspace } from './agent-session/launch/routing/agent-launch-route-input'
@@ -12,13 +12,13 @@ import {
   subscribeChatProgramFacts,
   readChatProgramFactsVersion
 } from './host-chat-program'
-import { ensureLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
-import { loadHostStructuredAgents } from '@/runtime/host-structured-agents'
+import { ensureLocalRuntimeCapabilities } from '@/runtime/hosts/capabilities/local-runtime-capabilities'
+import { loadHostStructuredAgents } from '@/runtime/native-chat/agent-catalogs/host-structured-agents'
 import {
   acquireHostStructuredAgentAvailability,
   firstHostStructuredAgentAvailability
-} from '@/runtime/host-structured-agent-availability'
-import { onRuntimeEnvironmentsRetired } from '@/runtime/runtime-environment-revision'
+} from '@/runtime/native-chat/agent-catalogs/host-structured-agent-availability'
+import { onRuntimeEnvironmentsRetired } from '@/runtime/rpc/environment-revisions/runtime-environment-revision'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import type { TuiAgent } from '../../../shared/agent-launch/catalog/tui-agent'
 import type { AppState } from '@/store/types'
@@ -26,7 +26,7 @@ import { isTuiAgent } from '../../../shared/agent-launch/catalog/tui-agent-confi
 import {
   getDetectionTargetIdentityForWorktree,
   readAgentInventoryForWorktree
-} from './agent-detection-target-inventory'
+} from './agent-session/launch/inventory/agent-detection-target-inventory'
 
 export const useChatProgramFactsVersion = (): number =>
   useAppViewExternalStore(

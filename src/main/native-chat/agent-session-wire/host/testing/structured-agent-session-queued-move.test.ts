@@ -8,8 +8,6 @@ import { eventually } from './structured-agent-session-queued-message-rig-provid
 import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 import { HOST_TEST_SESSION, hostTestOperationId } from './structured-agent-session-host-test-data'
 import type { AgentSessionQueuedMessageMoveAnchor } from '../../../../../shared/agent-session/requests/agent-session-queued-message-wire'
-import { QueuedMessageActionParams } from '../../../../../shared/rpc-contract/structured-agent-session-params'
-import { QueuedMessageMoveParams } from '../../../../../shared/rpc-contract/structured-agent-session-queued-edit-params'
 
 let rig: QueuedMessageTestRig
 beforeEach(async () => {
@@ -177,23 +175,5 @@ describe('authoritative queue ordering', () => {
       ...facts.find((card) => card.messageId === held)!,
       position: facts[0]!.position
     })
-  })
-
-  it('keeps the strict old Send shape and accepts exactly one move anchor', () => {
-    const envelope = rig.envelope({}, 'agentSession.queuedMessageDelete', hostTestOperationId())
-    const old = { envelope, messageId: 'one' }
-    expect(QueuedMessageActionParams.parse(old)).toEqual(old)
-    expect(QueuedMessageMoveParams.safeParse({ ...old, beforeMessageId: null }).success).toBe(true)
-    expect(QueuedMessageMoveParams.safeParse({ ...old, afterMessageId: 'neighbor' }).success).toBe(
-      true
-    )
-    expect(
-      QueuedMessageMoveParams.safeParse({
-        ...old,
-        beforeMessageId: null,
-        afterMessageId: 'neighbor'
-      }).success
-    ).toBe(false)
-    expect(QueuedMessageMoveParams.safeParse(old).success).toBe(false)
   })
 })

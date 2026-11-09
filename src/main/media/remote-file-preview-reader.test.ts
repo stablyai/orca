@@ -7,9 +7,7 @@ vi.mock('../ipc/runtime-environments/runtime-environment-transport-routing', () 
 vi.mock('../ipc/runtime-environments/runtime-environment-registry-root', () => ({
   getRuntimeEnvironmentRegistryRoot: () => '/user-data'
 }))
-
 import {
-  assertRemoteChunkReadsSupported,
   readRemotePreviewRange,
   readRemotePreviewChunk,
   renewRemotePreviewGrant
@@ -40,53 +38,7 @@ describe('remote file preview reader', () => {
     await expect(readRemotePreviewChunk(address, 0, 4, signal)).rejects.toThrow('corrupted')
   })
 
-  it('proves chunk reads with one byte once per pairing, and re-proves after a re-pair', async () => {
-    callRuntimeEnvironment.mockResolvedValue(
-      ok({ contentBase64: 'AA==', bytesRead: 1, eof: false })
-    )
-    const pinned = { ...address, environmentId: 'env-probe' }
-    await assertRemoteChunkReadsSupported(pinned, signal)
-    await assertRemoteChunkReadsSupported(pinned, signal)
-    expect(callRuntimeEnvironment).toHaveBeenCalledTimes(1)
-    expect(callRuntimeEnvironment).toHaveBeenCalledWith(
-      '/user-data',
-      'env-probe',
-      'files.readChunk',
-      expect.objectContaining({ offset: 0, length: 1 }),
-      20_000,
-      7,
-      undefined,
-      { signal }
-    )
-    await assertRemoteChunkReadsSupported(
-      { ...pinned, expectedEnvironmentPairingRevision: 8 },
-      signal
-    )
-    expect(callRuntimeEnvironment).toHaveBeenCalledTimes(2)
-  })
-
   // Why: a host can answer files.readChunk yet lack the grant's paging method.
-  it('pages a granted file through its grant, proven apart from workspace reads', async () => {
-    callRuntimeEnvironment.mockResolvedValue(
-      ok({ contentBase64: 'AA==', bytesRead: 1, eof: false })
-    )
-    const workspace = { ...address, environmentId: 'env-kinds' }
-    const { relativePath: _relativePath, ...base } = workspace
-    const granted = { ...base, grantId: 'g-1', absolutePath: '/tmp/clip.mp4' }
-    await assertRemoteChunkReadsSupported(workspace, signal)
-    await assertRemoteChunkReadsSupported(granted, signal)
-    expect(callRuntimeEnvironment).toHaveBeenLastCalledWith(
-      '/user-data',
-      'env-kinds',
-      'files.readTerminalArtifactChunk',
-      { worktree: 'id:wt-1', grantId: 'g-1', absolutePath: '/tmp/clip.mp4', offset: 0, length: 1 },
-      20_000,
-      7,
-      undefined,
-      { signal }
-    )
-    expect(callRuntimeEnvironment).toHaveBeenCalledTimes(2)
-  })
 
   it('renews a granted file only at the path its first grant named', async () => {
     const { relativePath: _relativePath, ...base } = address

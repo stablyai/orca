@@ -64,6 +64,40 @@ afterEach(() => {
 })
 
 describe('recordProcessGoneCrash', () => {
+  it('reports no crash when the speech process dies, since dictation already shows the error', async () => {
+    const record = vi.fn().mockResolvedValue({ id: 'report-1' })
+    const utility = (name: string, reason: string, exitCode: number) =>
+      event({
+        source: 'child',
+        processType: 'Utility',
+        reason,
+        exitCode,
+        details: { name, serviceName: 'node.mojom.NodeService', type: 'Utility' }
+      })
+
+    for (const [reason, exitCode] of [
+      ['killed', 9],
+      ['crashed', 11],
+      ['oom', 1]
+    ] as const) {
+      recordProcessGoneCrash(
+        { record, attachDetails } as never,
+        utility('Orca Speech', reason, exitCode),
+        new ProcessGoneDedupe(),
+        noMinidump
+      )
+    }
+    recordProcessGoneCrash(
+      { record, attachDetails } as never,
+      utility('Some Other Service', 'crashed', 11),
+      new ProcessGoneDedupe(),
+      noMinidump
+    )
+
+    await vi.waitFor(() => expect(record).toHaveBeenCalledOnce())
+    expect(record.mock.calls[0][0].details).toMatchObject({ name: 'Some Other Service' })
+  })
+
   it('still persists the report when the forced trace flush fails', async () => {
     const record = vi.fn().mockResolvedValue({ id: 'report-1' })
     sink.flushMock.mockImplementation(() => {

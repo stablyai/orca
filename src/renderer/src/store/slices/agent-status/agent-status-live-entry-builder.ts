@@ -1,4 +1,4 @@
-import { canonicalOrchestrationForRow } from '@/runtime/visible-agent-orchestration'
+import { canonicalOrchestrationForRow } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import { resolveAgentSessionStartedAt } from '../../../../../shared/agent-session/lifecycle/agent-session-start-time'
 import { sameAgentStatusTerminalOwner } from '../../../../../shared/agent-status/identity/agent-status-terminal-owner'
 import type { AppState } from '../../types'

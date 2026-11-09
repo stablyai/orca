@@ -13,8 +13,10 @@ const mocks = vi.hoisted(() => ({
   addressBarValue: { current: 'about:blank' }
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  runtimeEnvironmentSupportsCapability: vi.fn(async () => false),
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
+  runtimeEnvironmentSupportsCapability: vi.fn(async () => false)
+}))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: vi.fn(async () => ({}))
 }))
 

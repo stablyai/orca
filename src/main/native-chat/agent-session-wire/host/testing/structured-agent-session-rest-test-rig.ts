@@ -29,7 +29,7 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { STRUCTURED_AGENT_SESSION_IDLE_MS } from '../../termination/structured-agent-session-idle-sweep'
+
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase
@@ -38,7 +38,7 @@ import { createStructuredAgentSessionLogger } from '../structured-agent-session-
 import { codexProviderHandle } from '../../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
 
 export const REST_TEST_CALLER = { callerKey: 'client-1' }
-export const IDLE_MS = STRUCTURED_AGENT_SESSION_IDLE_MS
+
 export const SWEEP_INTERVAL_MS = 5
 
 export type RestTestAdapter = {

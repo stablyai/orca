@@ -7,7 +7,7 @@ import type {
   ShellOpenLocalPathResult
 } from '../../shared/shell/opening/shell-open-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
-import type { ShellPathExistence } from '../../shared/path-existence-batch'
+import type { ShellPathExistence } from '../../shared/file-access/path-existence-batch'
 import type { PreloadApi } from '../api-types'
 
 export const shellApi = {

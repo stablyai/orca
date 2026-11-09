@@ -1,6 +1,5 @@
-import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
-import type { createTestStore } from '../../src/renderer/src/store/slices/store-test-helpers'
+import type { createTestStore } from '../../src/renderer/src/store/testing/app-store-test-fixture'
 import type { RuntimeClientTarget } from '../../src/shared/runtime-client-target'
 
 const bridge = vi.hoisted(() => {
@@ -22,13 +21,15 @@ vi.mock('@/store', () => ({
     }
   }
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (target: RuntimeClientTarget, method: string, params: unknown) => {
     if (!bridge.current.call) {
       throw new Error('transport fixture not bound')
     }
     return bridge.current.call(target, method, params)
-  },
+  }
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: async () => true
 }))
 vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
@@ -41,8 +42,8 @@ vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
 }))
 
 import { CHAT, SURVIVOR, createReopenRig } from './helpers/automation-chat-reopen-test-harness'
-import { createTabsSliceMockApi } from '../../src/renderer/src/store/slices/tabs-slice-test-harness'
-import { resetWebSessionTabsSyncTestState } from '../../src/renderer/src/runtime/web-session-tabs-sync-test-harness'
+import { createTabsSliceMockApi } from '../../src/renderer/src/store/slices/tabs/tabs-slice-test-harness'
+import { resetWebSessionTabsSyncTestState } from '../../src/renderer/src/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import { resetLocalStructuredSessionVersionForTests } from '../../src/renderer/src/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
 
 createTabsSliceMockApi()

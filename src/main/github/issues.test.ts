@@ -216,6 +216,56 @@ describe('issue source operations', () => {
     )
   })
 
+  it('keeps the accepted issue body representation through a compound metadata edit', async () => {
+    const body =
+      '![new](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+    getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+    ghExecFileAsyncMock
+      .mockResolvedValueOnce({
+        stdout: JSON.stringify({
+          body,
+          body_html:
+            '<img src="https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST">'
+        })
+      })
+      .mockResolvedValueOnce({ stdout: '' })
+    await expect(updateIssue('/repo-root', 924, { body, title: 'Updated' })).resolves.toEqual({
+      ok: true,
+      bodyImageUrls: {
+        'https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488':
+          'https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST'
+      }
+    })
+    expect(ghExecFileAsyncMock.mock.calls[0][0]).toContain(
+      'Accept: application/vnd.github.full+json'
+    )
+    expect(ghExecFileAsyncMock.mock.calls[0][1].stdin).toBe(JSON.stringify({ body }))
+  })
+
+  it.each([
+    '',
+    'not JSON',
+    JSON.stringify({
+      body: 'different ![new](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)',
+      body_html:
+        '<img src="https://private-user-images.githubusercontent.com/1/ce11040a-fb66-4289-927f-547b16dfc488.png?jwt=TEST">'
+    })
+  ])(
+    'keeps an accepted issue edit successful without a usable paired response (%s)',
+    async (stdout) => {
+      getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
+      ghExecFileAsyncMock.mockResolvedValueOnce({ stdout })
+      await expect(
+        updateIssue('/repo-root', 924, {
+          body: '![new](https://github.com/user-attachments/assets/ce11040a-fb66-4289-927f-547b16dfc488)'
+        })
+      ).resolves.toEqual({
+        ok: true,
+        bodyImageUrls: undefined
+      })
+    }
+  )
+
   it('reports a failed close whose gh error mentions "already"', async () => {
     getIssueOwnerRepoMock.mockResolvedValueOnce({ owner: 'stablyai', repo: 'orca' })
     ghExecFileAsyncMock.mockRejectedValueOnce(

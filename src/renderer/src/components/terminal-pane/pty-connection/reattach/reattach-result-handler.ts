@@ -4,7 +4,7 @@ import {
   type TerminalLaunchContext
 } from '../startup/terminal-launch-result-policy'
 import { isRemoteRuntimePtyId } from '../../../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
+import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import type { PtyBufferSnapshot, PtyConnectResult } from '../../pty-transport/pty-transport-types'
 import { warnTerminalLifecycleAnomaly } from '../../layout/reconciliation/terminal-lifecycle-diagnostics'
 // Inspect stale-account state only after a concrete PTY attaches.

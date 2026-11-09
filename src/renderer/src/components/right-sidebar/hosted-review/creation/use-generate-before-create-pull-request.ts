@@ -1,11 +1,11 @@
 import { useCallback, useLayoutEffect } from 'react'
 import { useAppStore } from '@/store/index'
-import {
-  recordPullRequestGenerationEdits,
-  type PullRequestFieldRevisions,
-  type PullRequestGenerationFields
-} from '@/store/slices/pull-request-generation'
-import type { PullRequestGenerationOptions } from '@/store/slices/pull-request-generation-auto-submit'
+import { recordPullRequestGenerationEdits } from '@/store/slices/hosted-review/generation/pull-request-generation'
+import type {
+  PullRequestFieldRevisions,
+  PullRequestGenerationFields
+} from '@/store/slices/hosted-review/generation/pull-request-generation-state'
+import type { PullRequestGenerationOptions } from '@/store/slices/hosted-review/generation/pull-request-generation-auto-submit'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { PullRequestGenerationOutcome } from './create-pull-request-dialog-field-model'
 import { hasConfiguredSourceControlTextGenerationDefaults } from '../../source-control/ai/text-generation-defaults'
