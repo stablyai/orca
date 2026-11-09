@@ -5,7 +5,7 @@ import { useStore } from 'zustand'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { createSetRenamingWorktreeId } from '@/store/slices/worktrees/session/worktree-slice-lookups'
-import { createUIStore } from '@/store/slices/ui-slice-test-harness'
+import { createUIStore } from '@/store/slices/ui/ui-slice-test-harness'
 import type { AppState } from '@/store/types'
 
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
@@ -29,7 +29,7 @@ vi.mock('@/store', async () => {
     })
   }
 })
-vi.mock('@/lib/worktree-activation', () => ({
+vi.mock('@/lib/workspace/activation/worktree-activation', () => ({
   activateAndRevealWorktree: activate,
   activateAndRevealFolderWorkspace: folderActivate
 }))

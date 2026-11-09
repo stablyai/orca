@@ -1,0 +1,237 @@
+// @vitest-environment happy-dom
+
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  summarizeContextUsage,
+  type NativeChatContextUsageSummary
+} from '../../../../../shared/native-chat/native-chat-context-usage-summary'
+
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+vi.mock('@/i18n/i18n', () => ({
+  translate: (_key: string, fallback: string, values?: Record<string, string>) =>
+    fallback.replace(/\{\{(\w+)\}\}/g, (_match, name: string) => values?.[name] ?? '')
+}))
+
+const USAGE: NativeChatContextUsageSummary = {
+  usedTokens: 42_000,
+  windowTokens: 200_000,
+  percentage: 21,
+  estimated: false,
+  rows: [
+    { name: 'Messages', tokens: 30_000, percentage: 15 },
+    { name: 'System tools', tokens: 12_000, percentage: 6 }
+  ]
+}
+
+let container: HTMLDivElement
+let root: Root
+let composer: HTMLTextAreaElement
+
+beforeEach(() => {
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  composer = document.createElement('textarea')
+  document.body.appendChild(composer)
+  composer.focus()
+  root = createRoot(container)
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+})
+
+afterEach(() => {
+  act(() => root.unmount())
+  container.remove()
+  document.body.innerHTML = ''
+  vi.restoreAllMocks()
+  vi.useRealTimers()
+})
+
+async function renderRing(usage = USAGE): Promise<HTMLButtonElement> {
+  const { NativeChatContextUsageRing } = await import('./NativeChatContextUsageRing')
+  await act(async () => root.render(<NativeChatContextUsageRing usage={usage} />))
+  const trigger = document.querySelector<HTMLButtonElement>(
+    'button[data-native-chat-context-usage]'
+  )
+  if (!trigger) {
+    throw new Error('Missing context usage ring')
+  }
+  return trigger
+}
+
+function card(): HTMLElement | null {
+  return document.querySelector('[data-slot="popover-content"]')
+}
+
+async function dispatch(target: EventTarget, event: Event): Promise<void> {
+  await act(async () => target.dispatchEvent(event))
+}
+
+async function advance(ms: number): Promise<void> {
+  await act(async () => vi.advanceTimersByTime(ms))
+}
+
+// Radix restores focus a task after the card unmounts.
+
+async function pressEscape(): Promise<void> {
+  await dispatch(
+    document,
+    new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+  )
+}
+
+/** Returns the mousedown so a test can check the browser was told not to move focus. */
+async function click(trigger: HTMLElement): Promise<MouseEvent> {
+  const press = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
+  await dispatch(trigger, press)
+  await dispatch(trigger, new MouseEvent('click', { bubbles: true, cancelable: true }))
+  return press
+}
+
+function pointer(type: 'pointerover' | 'pointerout', pointerType: string): PointerEvent {
+  return new PointerEvent(type, {
+    bubbles: true,
+    pointerType,
+    relatedTarget: type === 'pointerout' ? document.body : null
+  })
+}
+
+describe('NativeChatContextUsageRing', () => {
+  it('lists deferred rows apart from the used total, in tokens rather than a share of the window', async () => {
+    const usage = summarizeContextUsage({
+      usedTokens: 607_700,
+      windowTokens: 1_000_000,
+      percentage: 61,
+      estimated: false,
+      categories: [
+        { name: 'Messages', tokens: 589_000 },
+        { name: 'MCP tools (deferred)', tokens: 542_000, deferred: true },
+        { name: 'System prompt', tokens: 18_700 }
+      ]
+    })
+    await click(await renderRing(usage))
+
+    const groups = [...card()!.querySelectorAll('ul')].map((list) =>
+      [...list.querySelectorAll('li')].map((row) => row.textContent)
+    )
+    expect(groups).toEqual([['Messages58.9%', 'System prompt1.9%'], ['MCP tools (deferred)542k']])
+  })
+
+  it('stays open while the pointer crosses the gap from the ring into the card', async () => {
+    const trigger = await renderRing()
+    const hoverTarget = trigger.parentElement!
+    await dispatch(hoverTarget, pointer('pointerover', 'mouse'))
+    await advance(150)
+
+    await dispatch(hoverTarget, pointer('pointerout', 'mouse'))
+    await advance(50)
+    await dispatch(card()!, pointer('pointerover', 'mouse'))
+    await advance(500)
+
+    expect(card()?.textContent).toContain('Messages')
+  })
+
+  it('never opens for a pointer that crosses the ring faster than the hover delay', async () => {
+    const trigger = await renderRing()
+    const hoverTarget = trigger.parentElement!
+
+    await dispatch(hoverTarget, pointer('pointerover', 'mouse'))
+    expect(card()).toBeNull()
+    await advance(100)
+    await dispatch(hoverTarget, pointer('pointerout', 'mouse'))
+    await advance(500)
+
+    expect(trigger.getAttribute('aria-expanded')).toBe('false')
+    expect(card()).toBeNull()
+  })
+
+  it('dismisses the hover card and cancels pending hover when a context menu opens', async () => {
+    const trigger = await renderRing()
+    const contextMenu = () =>
+      dispatch(trigger, new MouseEvent('contextmenu', { bubbles: true, button: 2 }))
+
+    await dispatch(trigger.parentElement!, pointer('pointerover', 'mouse'))
+    await contextMenu()
+    await advance(500)
+    expect(card()).toBeNull()
+
+    await dispatch(trigger.parentElement!, pointer('pointerout', 'mouse'))
+    await dispatch(trigger.parentElement!, pointer('pointerover', 'mouse'))
+    await advance(150)
+    expect(card()).not.toBeNull()
+    await contextMenu()
+    expect(card()).toBeNull()
+  })
+  it('does not reopen a card dismissed with Escape once a stale hover would have fired', async () => {
+    const trigger = await renderRing()
+
+    await dispatch(trigger.parentElement!, pointer('pointerover', 'mouse'))
+    await click(trigger)
+    await pressEscape()
+    await advance(500)
+
+    expect(card()).toBeNull()
+  })
+
+  it('drops a pending hover when the ring unmounts', async () => {
+    const removeListener = vi.spyOn(document, 'removeEventListener')
+    const trigger = await renderRing()
+
+    await dispatch(trigger.parentElement!, pointer('pointerover', 'mouse'))
+    expect(vi.getTimerCount()).toBe(1)
+    await act(async () => root.render(null))
+
+    expect(vi.getTimerCount()).toBe(0)
+    expect(removeListener).toHaveBeenCalledWith('keydown', expect.any(Function), true)
+  })
+
+  it('spends an Escape typed in the composer on closing the card, not on stopping the agent', async () => {
+    const { NativeChatContextUsageRing } = await import('./NativeChatContextUsageRing')
+    const { useNativeChatComposerKeyDown } =
+      await import('@/components/native-chat/composer/editor/use-native-chat-composer-keydown')
+    const interrupt = vi.fn()
+    function ComposerWithRing(): React.JSX.Element {
+      const onKeyDown = useNativeChatComposerKeyDown({
+        autocomplete: { mode: 'none' },
+        mentionFiles: { files: [], loading: false, failed: false },
+        completeMention: vi.fn(),
+        activeSuggestion: 0,
+        draft: '',
+        isComposing: () => false,
+        completePickerItem: vi.fn(),
+        dispatchPickerCommand: vi.fn(),
+        dismissPicker: vi.fn(),
+        interrupt,
+        send: vi.fn(),
+        setActiveSuggestion: vi.fn(),
+        setDraft: vi.fn(),
+        setCaret: vi.fn()
+      })
+      return (
+        <>
+          <textarea data-testid="composer" onKeyDown={onKeyDown} />
+          <NativeChatContextUsageRing usage={USAGE} />
+        </>
+      )
+    }
+    await act(async () => root.render(<ComposerWithRing />))
+    const field = document.querySelector<HTMLTextAreaElement>('[data-testid="composer"]')!
+    field.focus()
+    await click(
+      document.querySelector<HTMLButtonElement>('button[data-native-chat-context-usage]')!
+    )
+    const escape = () =>
+      dispatch(
+        field,
+        new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+      )
+
+    await escape()
+    expect(card()).toBeNull()
+    expect(interrupt).not.toHaveBeenCalled()
+
+    await escape()
+    expect(interrupt).toHaveBeenCalledOnce()
+  })
+})

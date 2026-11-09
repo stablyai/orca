@@ -6,7 +6,7 @@ import {
 } from '../../speech/speech-runtime-service'
 import { MOBILE_DICTATION_RECONNECT_GRACE_MS } from '../../../shared/rpc-contract/speech-params'
 import { RuntimeMobileDictationController } from './runtime-mobile-dictation-controller'
-import type { RuntimeStore } from '../runtime-store-contract'
+import type { RuntimeStore } from '../construction/runtime-store-contract'
 
 type Sink = (event: { type: string; text?: string }) => void
 
@@ -54,17 +54,45 @@ async function startPhoneDictation(): Promise<RuntimeMobileDictationController> 
 }
 
 const chunk = { dictationId: 'd-1', audioBase64: 'AAAA', sampleRate: 16_000, clientId: 'phone-a' }
+const textSoFar = {
+  text: 'before the drop',
+  revision: 1,
+  committed: 'before the drop',
+  tentative: ''
+}
+
+describe('mobile dictation text so far', () => {
+  it('numbers each change and keeps committed text apart from text the engine may still revise', async () => {
+    const controller = await startPhoneDictation()
+    sink({ type: 'partial', text: 'and then' })
+    expect(controller.feed(chunk)).toEqual({
+      dictationId: 'd-1',
+      text: 'before the drop and then',
+      revision: 2,
+      committed: 'before the drop',
+      tentative: 'and then'
+    })
+    sink({ type: 'final', text: 'and then some' })
+    expect(controller.feed(chunk)).toEqual({
+      dictationId: 'd-1',
+      text: 'before the drop and then some',
+      revision: 3,
+      committed: 'before the drop and then some',
+      tentative: ''
+    })
+  })
+})
 
 describe('mobile dictation across a phone reconnect', () => {
   it('keeps the session while the phone keeps reaching it, whatever connection it uses', async () => {
     const controller = await startPhoneDictation()
 
     await vi.advanceTimersByTimeAsync(MOBILE_DICTATION_RECONNECT_GRACE_MS - 1)
-    expect(controller.feed(chunk)).toEqual({ dictationId: 'd-1', text: 'before the drop' })
+    expect(controller.feed(chunk)).toEqual({ dictationId: 'd-1', ...textSoFar })
     expect(controller.feed(chunk)).toEqual({ dictationId: 'd-1' })
     // A reply carrying the text may be lost at a drop, so it is sent again a second later.
     await vi.advanceTimersByTimeAsync(1000)
-    expect(controller.feed(chunk)).toEqual({ dictationId: 'd-1', text: 'before the drop' })
+    expect(controller.feed(chunk)).toEqual({ dictationId: 'd-1', ...textSoFar })
     await vi.advanceTimersByTimeAsync(MOBILE_DICTATION_RECONNECT_GRACE_MS - 1)
     sink({ type: 'final', text: 'after it' })
 
@@ -113,5 +141,35 @@ describe('mobile dictation cancel', () => {
     await expect(
       controller.start({ dictationId: 'd-2', modelId: 'test-model', clientId: 'phone-a' })
     ).resolves.toEqual({ dictationId: 'd-2', modelId: 'test-model', dedupesResentChunks: true })
+  })
+})
+
+describe('mobile dictation on several phones', () => {
+  it('keeps each phone in its own dictation at the same time', async () => {
+    const controller = await startPhoneDictation()
+
+    await controller.start({ dictationId: 'd-1', modelId: 'test-model', clientId: 'phone-b' })
+    sink({ type: 'final', text: 'from phone b' })
+
+    await expect(controller.finish({ dictationId: 'd-1', clientId: 'phone-b' })).resolves.toEqual({
+      dictationId: 'd-1',
+      text: 'from phone b'
+    })
+    await expect(controller.finish({ dictationId: 'd-1', clientId: 'phone-a' })).resolves.toEqual({
+      dictationId: 'd-1',
+      text: 'before the drop'
+    })
+  })
+})
+
+describe('mobile dictation at the cloud length cap', () => {
+  it('tells the phone on every reply after the speech session filled up', async () => {
+    const controller = await startPhoneDictation()
+    controller.feed(chunk)
+    feedAudio.mockReturnValueOnce(true)
+
+    // The second reply is inside the one-second text throttle, so it carries no text.
+    expect(controller.feed(chunk)).toEqual({ dictationId: 'd-1', audioLimitReached: true })
+    expect(controller.feed(chunk)).toEqual({ dictationId: 'd-1', audioLimitReached: true })
   })
 })

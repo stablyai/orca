@@ -32,3 +32,19 @@ describe.each([
     }
   )
 })
+
+it('delivers non-UTF8 image bytes unchanged through the termination barrier', async () => {
+  const result = await execFileCaptureToTermination(
+    process.execPath,
+    [
+      '-e',
+      'const chunks = []; process.stdin.on("data", c => chunks.push(c)); process.stdin.on("end", () => process.stdout.write(Buffer.concat(chunks).toString("hex")))'
+    ],
+    {
+      encoding: 'utf8',
+      timeout: 3_000,
+      stdin: new Uint8Array([0, 128, 255])
+    }
+  )
+  expect(result).toEqual({ stdout: '0080ff', stderr: '' })
+})

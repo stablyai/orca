@@ -2,11 +2,13 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { translate } from '@/i18n/i18n'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
+import { imageCopyFailedMessage } from '@/lib/clipboard-image-copy'
 import {
   isBrowserAnnotationPageFull,
   type BrowserAnnotationIntent,
-  type BrowserGrabPayload
-} from '../../../../../shared/browser-grab-types'
+  type BrowserGrabPayload,
+  type GrabIntent
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import { browserAnnotationLimitMessage } from './browser-annotation-limit-message'
 import {
@@ -16,11 +18,11 @@ import {
 } from '../describe-page/browser-annotation-geometry'
 import { useBrowserPageAnnotationViewportTracking } from './use-browser-page-annotation-viewport-tracking'
 import { runBrowserGrabActionShortcut } from './browser-page-grab-action'
+import { useGrabScreenshotCopy } from './use-grab-screenshot-copy'
 import type {
   BrowserPageGrabAnnotations,
   BrowserPageGrabAnnotationsOptions,
-  BrowserPageGrabToastState,
-  GrabIntent
+  BrowserPageGrabToastState
 } from '../describe-page/browser-page-types'
 
 const copiedGrabToastMessage = (): string =>
@@ -79,8 +81,10 @@ export function useBrowserPageGrabAnnotations({
   const addBrowserPageAnnotation = useAppStore((s) => s.addBrowserPageAnnotation)
 
   useEffect(() => () => clearTimeout(grabToastTimerRef.current), [])
+  const { claimGrabToast, copyGrabScreenshot } = useGrabScreenshotCopy()
 
   const dismissGrabToast = useCallback(() => {
+    claimGrabToast()
     clearTimeout(grabToastTimerRef.current)
     setGrabToast(null)
     // Why: only rearm while 'confirming'; if a C/S shortcut already rearmed (state 'armed'), skip to avoid a double-rearm race.
@@ -90,7 +94,7 @@ export function useBrowserPageGrabAnnotations({
     ) {
       grabRef.current.rearm()
     }
-  }, [])
+  }, [claimGrabToast])
 
   const showGrabToast = useCallback(
     (message: string, type: 'success' | 'error', payload?: BrowserGrabPayload | null) => {
@@ -117,11 +121,20 @@ export function useBrowserPageGrabAnnotations({
         x = containerRect.width / 2
         y = containerRect.height / 2
       }
+      claimGrabToast()
       clearTimeout(grabToastTimerRef.current)
       setGrabToast({ message, type, x, y, below, payload: payload ?? null })
       grabToastTimerRef.current = setTimeout(() => dismissGrabToast(), 2000)
     },
-    [containerRef, dismissGrabToast, mountedRef, webviewRef]
+    [claimGrabToast, containerRef, dismissGrabToast, mountedRef, webviewRef]
+  )
+
+  const showGrabScreenshotToast = useCallback(
+    (copied: boolean, payload: BrowserGrabPayload): void =>
+      copied
+        ? showGrabToast(screenshottedGrabToastMessage(), 'success', payload)
+        : showGrabToast(imageCopyFailedMessage(), 'error', payload),
+    [showGrabToast]
   )
 
   // The picker supports clipboard copying and independently dismissible annotation drafts.
@@ -203,10 +216,19 @@ export function useBrowserPageGrabAnnotations({
         grabPayloadRef,
         toolTargetIdRef,
         recordFeatureInteraction,
-        showGrabToast
+        showGrabToast,
+        copyGrabScreenshot: (dataUrl, payload) =>
+          copyGrabScreenshot(dataUrl, (copied) => showGrabScreenshotToast(copied, payload))
       })
     },
-    [grab, grabIntent, recordFeatureInteraction, showGrabToast]
+    [
+      copyGrabScreenshot,
+      grab,
+      grabIntent,
+      recordFeatureInteraction,
+      showGrabScreenshotToast,
+      showGrabToast
+    ]
   )
 
   const handleGrabCopy = useCallback(() => {
@@ -232,11 +254,10 @@ export function useBrowserPageGrabAnnotations({
     if (!dataUrl?.startsWith('data:image/png;base64,')) {
       return
     }
-    void window.api.ui.writeClipboardImage(dataUrl)
     recordFeatureInteraction('browser-grab')
-    showGrabToast(screenshottedGrabToastMessage(), 'success', payload)
+    copyGrabScreenshot(dataUrl, (copied) => showGrabScreenshotToast(copied, payload))
     grab.rearm()
-  }, [grab, recordFeatureInteraction, showGrabToast])
+  }, [copyGrabScreenshot, grab, recordFeatureInteraction, showGrabScreenshotToast])
 
   const handleAddBrowserAnnotation = useCallback(
     (comment: string, intent: BrowserAnnotationIntent, imagePaths: string[] = []): void => {
@@ -272,13 +293,14 @@ export function useBrowserPageGrabAnnotations({
   }, [grab, grabIntent])
 
   const cancelPendingBrowserCapture = useCallback((): void => {
+    claimGrabToast()
     grabRef.current.cancel()
     pendingAnnotationPayloadRef.current = null
     grabPayloadRef.current = null
     setPendingAnnotationPayload(null)
     clearTimeout(grabToastTimerRef.current)
     setGrabToast(null)
-  }, [])
+  }, [claimGrabToast])
 
   return {
     grabIntent,
@@ -289,6 +311,7 @@ export function useBrowserPageGrabAnnotations({
     setGrabToast,
     grabToastTimerRef,
     dismissGrabToast,
+    copyGrabScreenshot,
     handleGrabCopy,
     handleGrabCopyScreenshot,
     grabMenuActionTakenRef,

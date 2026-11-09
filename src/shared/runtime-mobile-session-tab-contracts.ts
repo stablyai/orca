@@ -98,6 +98,8 @@ export type RuntimeMobileSessionBrowserTab = {
   loading: boolean
   canGoBack: boolean
   canGoForward: boolean
+  /** From `remoteTabFaviconUrl`; null clears it. Old hosts omit it, so clients keep what they have. */
+  faviconUrl?: string | null
   loadError?: BrowserLoadError | null
   certificateFailure?: BrowserCertificateFailure | null
   color?: string | null

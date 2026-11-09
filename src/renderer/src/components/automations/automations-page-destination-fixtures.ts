@@ -1,7 +1,7 @@
 import { mocks, RUNTIME_ID } from './automations-page-test-harness'
 import { CHAT_CAPABILITIES } from './automations-page-actions-test-harness'
 import type { Repo } from '../../../../shared/repo-types'
-import { hostStableKey } from '../../../../shared/automation-owner-key'
+import { hostStableKey } from '../../../../shared/automations/ownership/automation-owner-key'
 
 export function observeRuntimeChat(capabilities: string[] | null): void {
   mocks.state.runtimeStatusByEnvironmentId = new Map(

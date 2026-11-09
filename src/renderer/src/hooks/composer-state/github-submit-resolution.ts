@@ -31,10 +31,10 @@ type GitHubSubmitResolutionInput = Pick<
 >
 
 import { useCallback } from 'react'
-import { resolveGitHubWorkItemIdentity } from '@/lib/github-work-item-identity'
+import { resolveGitHubWorkItemIdentity } from '../../../../shared/new-workspace/github-work-item-identity'
 import { getLinkedWorkItemProvider } from '@/lib/new-workspace'
 import { resolveGitHubPrStartPointForRepo } from '@/lib/github-pr-start-point'
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   getSmartGitHubSubmitResolution,
@@ -43,11 +43,11 @@ import {
 } from '@/lib/smart-github-submit'
 import { getForkPushWarning } from '../fork-push-warning'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
-import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
+import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
 import {
   lookupGitHubWorkItemForSource,
   lookupGitHubWorkItemByOwnerRepoForSource
-} from '@/lib/github-work-item-source-lookup'
+} from '@/lib/work-items/github/github-work-item-source-lookup'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
 import { getGitHubLinkedWorkItemIdentity } from './source-selection-decisions'

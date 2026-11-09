@@ -35,3 +35,32 @@ export function isFinalAgentSessionReadRefusal(
       refusal.details?.reason === 'journalWrittenByNewerOrca')
   )
 }
+
+// Raw stream failures carry code/message; String(object) would hide the failure as [object Object].
+export function agentSessionReadFailureText(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message || 'Something went wrong.'
+  }
+  if (typeof error === 'string') {
+    return error || 'Something went wrong.'
+  }
+  if (typeof error === 'object' && error !== null) {
+    if ('message' in error && typeof error.message === 'string' && error.message.length > 0) {
+      return error.message
+    }
+    if ('code' in error && typeof error.code === 'string' && error.code.length > 0) {
+      return error.code
+    }
+  }
+  return 'Something went wrong.'
+}
+
+/** The host's params schema refused the request, as strict params on an older build do. */
+export function agentSessionReadInvalidArgument(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    error.code === 'invalid_argument'
+  )
+}

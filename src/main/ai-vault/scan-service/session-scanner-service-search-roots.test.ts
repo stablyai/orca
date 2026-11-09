@@ -32,7 +32,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  subject.close()
+  await subject.close()
   vi.restoreAllMocks()
   resetTranscriptConsumersForTests()
   resetSessionParseCacheForTests()

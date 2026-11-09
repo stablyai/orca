@@ -36,7 +36,7 @@ const grants = vi.hoisted(() => {
   return { mintedLocation, requestLocation: mintedLocation, shareControlCalls }
 })
 
-vi.mock('@/lib/doc-preview-grants', () => ({
+vi.mock('@/lib/browser/documents/doc-preview-grants', () => ({
   buildDocPreviewGrantRequest: () => grants.requestLocation,
   // The real cache keeps the first mint's handle for the tab, whatever a later request says.
   ensureDocPreviewGrant: () =>
@@ -66,7 +66,7 @@ vi.mock('@/components/browser-pane/host-guest/webview-registry', async (importOr
   moveFocusToRendererBeforeWebviewDetach: () => undefined
 }))
 
-vi.mock('@/lib/execution-host-display-label', () => ({
+vi.mock('@/runtime/hosts/display/execution-host-display-label', () => ({
   selectWorktreeHostDisplayLabel: () => 'Studio Mac mini'
 }))
 
@@ -78,18 +78,18 @@ const store = vi.hoisted(() => ({
 }))
 
 // The document lives only on its workspace’s SSH host.
-vi.mock('@/lib/connection-context', () => ({
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
   getConnectionId: () => 'ssh-1',
   getConnectionIdForFile: () => 'ssh-1',
   getConnectionIdFromState: () => 'ssh-1'
 }))
 
-vi.mock('@/lib/connection-owner-resolution', () => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', () => ({
   getConnectionIdForFileFromState: () => 'ssh-1',
   getConnectionIdFromState: () => 'ssh-1'
 }))
 
-vi.mock('@/components/terminal-pane/terminal-remote-file-download-open', () => ({
+vi.mock('@/components/terminal-pane/links/files/terminal-remote-file-download-open', () => ({
   downloadAndOpenRemoteTerminalFile: (_context: unknown, filePath: string) => {
     store.downloads.push(filePath)
     return Promise.resolve()
@@ -233,7 +233,8 @@ describe('HtmlDocPreview browser chrome', () => {
     const { hasLiveBrowserGuest, webviewRegistry } = await import('../host-guest/webview-registry')
     const { worktreeHoldsLiveBrowserGuests, selectBrowserGuestEvictionWorktreeIds } =
       await import('../host-guest/browser-guest-worktree-retention')
-    const { destroyWorktreeBrowserGuests } = await import('@/store/slices/browser-webview-cleanup')
+    const { destroyWorktreeBrowserGuests } =
+      await import('@/store/slices/browser/cleanup/browser-webview-cleanup')
     const guest = await renderPreview(container, root)
     expect(hasLiveBrowserGuest('preview-1')).toBe(true)
     expect(await renderPreview(container, root, { isActive: false })).toBe(guest)

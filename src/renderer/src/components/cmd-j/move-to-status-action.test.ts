@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { CmdJQuickActionContext } from './quick-action-context'
 import { buildCmdJActionResults, rankCmdJMiddleResults } from './palette-results'
 import { getCmdJQuickActions } from './quick-actions'
-import { makeWorktree } from '@/store/slices/store-test-helpers'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
 
 const action = getCmdJQuickActions().find((item) => item.id === 'move-to-status')!
 

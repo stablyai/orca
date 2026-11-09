@@ -1,4 +1,5 @@
 import type { AgentSessionAccountKind } from '../../../../shared/agent-session/agent-session-availability'
+import { codexLaunchedAccountHome } from '../launch/codex-structured-launch-resolution'
 import {
   CODEX_STRUCTURED_HANDLE_NAMESPACE,
   isAgentSessionProviderHandleInNamespace
@@ -6,8 +7,8 @@ import {
 import type {
   AgentSessionAcquisition,
   StructuredAgentSessionAcquireInput
-} from '../../../native-chat/agent-session-wire/structured-agent-session-adapter'
-import { launchPreparationFailure } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-errors'
+} from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { launchPreparationFailure } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter-errors'
 import {
   closeFailedCodexAcquisition,
   stopSupersededCodexAcquisition
@@ -27,7 +28,7 @@ import {
   providerDiagnosticOf
 } from '../../../../shared/agent-session/failures/agent-session-failure'
 import { providerSpawnAbsent } from '../../../provider-process/provider-executable-missing'
-import { providerStartupFailureFact } from '../../../native-chat/agent-session-wire/structured-agent-session-failure-text'
+import { providerStartupFailureFact } from '../../../native-chat/agent-session-wire/startup/structured-agent-session-failure-text'
 import {
   assertCodexConnectionOpen,
   mintCodexAcquisitionGeneration,
@@ -279,11 +280,11 @@ export async function acquireCodexStructuredSession(input: {
         },
         openInput
       )
-    return { process, acquisitionGeneration }
+    return { process, acquisitionGeneration, ...codexLaunchedAccountHome(launch) }
   } catch (error) {
     acquisitions.endings.retire(sessionId, acquisitionGeneration)
     if (sessions.get(sessionId)?.connection !== acquisition.connection) {
-      return closeFailedCodexAcquisition({
+      return await closeFailedCodexAcquisition({
         sessionId,
         registry: acquisitions,
         attempt,

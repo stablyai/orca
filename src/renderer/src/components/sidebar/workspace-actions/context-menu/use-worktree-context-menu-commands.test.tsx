@@ -6,7 +6,8 @@ import type { Repo } from '../../../../../../shared/repo-types'
 import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { useAppStore } from '@/store'
-import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { makeWorktree } from '@/store/slices/worktrees/worktree.test-fixture'
+import { TEST_REPO } from '@/store/repos/repo.test-fixture'
 import { useWorktreeContextMenuCommands } from './use-worktree-context-menu-commands'
 
 afterEach(() => {

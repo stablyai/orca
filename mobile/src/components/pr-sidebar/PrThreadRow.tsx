@@ -20,7 +20,7 @@ import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { openExternalLink } from '../../platform/external-link'
-import { canEditComment, isResolvableComment } from '../../session/pr-comment-actions'
+import { canEditComment, isResolvableComment } from '../../source-control/review/pr-comment-actions'
 import { ConfirmModal } from '../ConfirmModal'
 import { PullDownMenu } from '../nav-bar/PullDownMenu'
 import type { ActionSheetAction } from '../ActionSheetModal'
@@ -44,6 +44,8 @@ export type PrThreadActions = {
   isResolveBusy: (threadId: string) => boolean
   isEditBusy: (commentId: number) => boolean
   isDeleteBusy: (commentId: number) => boolean
+  // Where a reply to a comment waits until it is posted.
+  draftKey: (replyTo: number) => string | null
   // Repo slug for the slug-addressed edit/delete RPCs; gates the affordances when absent.
   prRepo: PRCommentRepoSlug | null
 }

@@ -189,16 +189,17 @@ export class RepoLifecycleOperations {
         | 'symlinkPaths'
         | 'issueSourcePreference'
         | 'forkSyncMode'
+        | 'agentWorkspaceTrust'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
         | 'customWorktreeVisibilitySources'
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
-        | 'projectGroupOrder'
         | 'projectHostSetupMethod'
       >
     > & {
+      projectGroupOrder?: number | null
       externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
       agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null

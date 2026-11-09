@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import type { SkillInstallProgress } from '../../../../shared/skill-sharing-contract'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 export function useSkillInstallProgress(): {
   activeOperationId: string | null
@@ -8,6 +8,7 @@ export function useSkillInstallProgress(): {
   begin: (operationId: string) => void
   finish: () => void
 } {
+  const t = useTranslate()
   const [activeOperationId, setActiveOperationId] = useState<string | null>(null)
   const activeOperationIdRef = useRef<string | null>(null)
   const [progress, setProgress] = useState<SkillInstallProgress | null>(null)
@@ -25,7 +26,7 @@ export function useSkillInstallProgress(): {
   return {
     activeOperationId,
     phaseLabel: progress?.currentSkill
-      ? translate(
+      ? t(
           'auto.components.skills.skill-install-progress-state.currentSkill',
           'Installing {{value0}} of {{value1}}: {{value2}}…',
           {
@@ -36,8 +37,8 @@ export function useSkillInstallProgress(): {
         )
       : progress
         ? progress.phase === 'authorizing'
-          ? translate('auto.components.skills.install.authorizing', 'Authorizing package access…')
-          : translate(
+          ? t('auto.components.skills.install.authorizing', 'Authorizing package access…')
+          : t(
               'auto.components.skills.install.installing',
               'Downloading, verifying, and installing…'
             )

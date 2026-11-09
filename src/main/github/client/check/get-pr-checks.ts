@@ -7,7 +7,7 @@ import {
 import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
 import { githubReadExecutionScope } from '../../github-read-execution-scope'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
-import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
+import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-item-ssh-error'
 import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
 import { extractExecError } from '../../../git/exec-error'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'

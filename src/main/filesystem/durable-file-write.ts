@@ -3,7 +3,7 @@
 import { closeSync, fsyncSync, openSync, rmSync, writeFileSync } from 'node:fs'
 import { open, readdir, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { publishFileWithoutOverwrite } from '../codex-accounts/fs-utils'
+import { publishFileWithoutOverwrite } from './atomic-file-publication'
 import {
   renameFileWithWindowsRetry,
   renameFileWithWindowsRetryAsync

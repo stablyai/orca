@@ -1,13 +1,38 @@
+import { MobileNativeChatComposerMenuReservation } from './MobileNativeChatComposerAllocation'
+import type { RefObject } from 'react'
+import { MobileNativeChatComposerMenuLayer } from './MobileNativeChatComposerMenuLayer'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { FileText, Package, Terminal } from 'lucide-react-native'
 import type { NativeChatPickerItem } from '../../../../../src/shared/native-chat/input/native-chat-picker-items'
 import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
+import { COMPOSER_MENU_MAX_HEIGHT } from './mobile-native-chat-composer-menu-size'
 
 export type ComposerMenuRow = NativeChatPickerItem | { kind: 'file'; id: string; path: string }
 
 const HEADINGS = { command: 'Commands', skill: 'Skills', file: 'Files' } as const
+
+export function MobileNativeChatComposerSuggestions({
+  anchorRef,
+  ...props
+}: {
+  anchorRef: RefObject<View | null>
+  rows: readonly ComposerMenuRow[]
+  onPick: (row: ComposerMenuRow) => void
+  nestedScrollEnabled?: boolean
+}) {
+  return (
+    <>
+      <MobileNativeChatComposerMenuReservation />
+      {props.rows.length > 0 ? (
+        <MobileNativeChatComposerMenuLayer anchorRef={anchorRef}>
+          <MobileNativeChatComposerMenu {...props} />
+        </MobileNativeChatComposerMenuLayer>
+      ) : null}
+    </>
+  )
+}
 
 export function MobileNativeChatComposerMenu({
   rows,
@@ -20,7 +45,7 @@ export function MobileNativeChatComposerMenu({
 }): React.JSX.Element {
   useMobileColorScheme()
   return (
-    <View style={styles.card}>
+    <View testID="native-chat-composer-menu-card" style={styles.card}>
       <ScrollView
         keyboardShouldPersistTaps="always"
         nestedScrollEnabled={nestedScrollEnabled}
@@ -89,6 +114,7 @@ function MenuRow({
 
 const styles = themedStyleSheet(() => ({
   card: {
+    flexShrink: 1,
     marginHorizontal: 10,
     marginBottom: spacing.sm,
     paddingVertical: 6,
@@ -99,7 +125,7 @@ const styles = themedStyleSheet(() => ({
     overflow: 'hidden'
   },
   scroll: {
-    maxHeight: 300
+    maxHeight: COMPOSER_MENU_MAX_HEIGHT
   },
   heading: {
     color: colors.textMuted,

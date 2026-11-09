@@ -11,15 +11,15 @@ import {
 import {
   selectRuntimeAwareSshStatus,
   type RuntimeAwareSshStatusState
-} from '@/store/slices/runtime-environment-ssh-selectors'
+} from '@/store/slices/ssh/runtime-environment-ssh-selectors'
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import {
   canRunNativeChatSplitTarget,
   resolveActiveNativeChatSplitTarget,
   runActiveNativeChatSplit
-} from '@/components/native-chat/native-chat-layout-actions'
-import type { NativeChatSplitDirection } from '@/components/native-chat/native-chat-pane-shortcut'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+} from '@/components/native-chat/pane/routing/native-chat-layout-actions'
+import type { NativeChatSplitDirection } from '@/components/native-chat/pane/routing/native-chat-pane-shortcut'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 import type { TabSplitDirection } from '@/store/slices/tabs/tabs-slice-contract'
 
 export type CmdJUnavailableReason =

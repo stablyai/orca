@@ -2,7 +2,7 @@ import { agentSessionFailureWords } from '../../shared/agent-session/failures/ag
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionCommandRun
-} from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+} from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import type { ProviderTimelineEvent } from '../native-chat/agent-session-timeline/provider-timeline-event'
 import type { JsonlRpcRecord } from '../jsonl-rpc/peer'
 import type { JsonlRpcRequestOptions } from '../jsonl-rpc/peer-oversized-record'

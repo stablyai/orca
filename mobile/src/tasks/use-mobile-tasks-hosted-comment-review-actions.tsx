@@ -15,15 +15,21 @@ import {
   gitlabMergeRequestCommentWrite
 } from './mobile-task-item-comment-operations'
 import { githubReviewerRequest } from './mobile-task-item-state-operations'
+import {
+  isCommentSendUnconfirmed,
+  useMobileTaskCommentSendOutcome
+} from './use-mobile-task-comment-send-outcome'
 
 export type HostedCommentReviewActionsInput = Pick<
   HostedMetadataActionsModel,
+  | 'actionItem'
   | 'claimPublication'
   | 'client'
   | 'copiedLinkResetTimerRef'
   | 'detailPayload'
   | 'itemCommentDraft'
   | 'itemReviewersDraft'
+  | 'requestDetailRefresh'
   | 'tryBeginMutation'
   | 'setActionItem'
   | 'setCopiedLinkKey'
@@ -55,6 +61,8 @@ export function useMobileTasksHostedCommentReviewActions<
     setItemReviewersDraft,
     setItems
   } = model
+  const { commentSendNotice, beginCommentSend, holdUnconfirmedCommentSend, noteCommentNotSent } =
+    useMobileTaskCommentSendOutcome(model)
   const addHostedItemComment = useCallback(
     async (
       item: Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }>
@@ -71,7 +79,10 @@ export function useMobileTasksHostedCommentReviewActions<
         return
       }
       setError('')
+      const send = beginCommentSend(item)
       const isCurrent = claimPublication(item)
+      const clearDraft = () =>
+        setItemCommentDraft((current) => (current.trim() === body ? '' : current))
       try {
         const written =
           item.provider === 'github'
@@ -116,6 +127,7 @@ export function useMobileTasksHostedCommentReviewActions<
         if (written.ok === false) {
           throw new Error(written.error ?? 'Failed to add comment')
         }
+        clearDraft()
         if (!isCurrent()) {
           return
         }
@@ -125,7 +137,6 @@ export function useMobileTasksHostedCommentReviewActions<
           createdAt: new Date().toISOString(),
           author: 'You'
         }
-        setItemCommentDraft('')
         setDetailPayload((current) =>
           current &&
           ((item.provider === 'github' &&
@@ -136,6 +147,11 @@ export function useMobileTasksHostedCommentReviewActions<
             : current
         )
       } catch (err) {
+        if (isCommentSendUnconfirmed(err)) {
+          holdUnconfirmedCommentSend(send, 'comment', body, clearDraft)
+        } else if (!isCurrent()) {
+          noteCommentNotSent(send, 'comment')
+        }
         if (!isCurrent()) {
           return
         }
@@ -144,7 +160,7 @@ export function useMobileTasksHostedCommentReviewActions<
         finish()
       }
     },
-    [claimPublication, client, itemCommentDraft, tryBeginMutation]
+    [claimPublication, client, itemCommentDraft, setItemCommentDraft, tryBeginMutation]
   )
 
   const copyTaskLink = useCallback(
@@ -267,6 +283,7 @@ export function useMobileTasksHostedCommentReviewActions<
   )
 
   return Object.assign(model, {
+    commentSendNotice,
     addHostedItemComment,
     copyTaskLink,
     copyTextToClipboard,

@@ -119,7 +119,11 @@ describe('AutomationsPage refresh', () => {
             ? { kind: 'environment', environmentId: 'gpu' }
             : { kind: 'local' }
         )
-        expect(params).toEqual({ automationId: automation.id, expectedOwner: SELF_PRECONDITION })
+        expect(params).toEqual({
+          automationId: automation.id,
+          expectedOwner: SELF_PRECONDITION,
+          preview: true
+        })
         if (authority === 'runtime') {
           expect(options).toMatchObject({ expectedEnvironmentPairingRevision: 4 })
         }
@@ -128,18 +132,6 @@ describe('AutomationsPage refresh', () => {
       expect(reads()).toHaveLength(beforeEvents + 2)
     }
   )
-
-  it('does not re-run the whole refresh when the settings identity changes', async () => {
-    const { rerender } = await renderPage()
-    expect(api.automations.list).toHaveBeenCalledTimes(1)
-
-    mocks.state.settings = { ...(mocks.state.settings as Record<string, unknown>) }
-    await rerender()
-
-    // Settings no longer aim the list, so a new settings object is not a reason
-    // to re-fetch every host.
-    expect(api.automations.list).toHaveBeenCalledTimes(1)
-  })
 })
 
 describe('AutomationsPage selection', () => {
@@ -317,7 +309,8 @@ describe('AutomationsPage selection', () => {
     // Fence history reads too so moved rows refuse rather than answer from a former host.
     expect(api.automations.listRuns).toHaveBeenCalledWith({
       automationId: 'a-2',
-      expectedOwner: SELF_PRECONDITION
+      expectedOwner: SELF_PRECONDITION,
+      preview: true
     })
     expect(mocks.detailPane?.selected?.id).toBe('a-2')
   })

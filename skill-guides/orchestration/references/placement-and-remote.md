@@ -1,7 +1,9 @@
 # Placement and remote execution
 
-Folder workspaces are valid. `new-child` and `new-top-level` make Git worktrees
-and do not apply to folders; never `git init` a user's folder.
+Folder workspaces are valid. `new-child` and `new-top-level` make Git worktrees,
+never in a folder project; never `git init` a user's folder. From a multi-repo
+folder workspace, `new-child` nests under the folder and needs `--repo` naming
+the Git repo to create the worktree in.
 
 Local `current`, `new-child` and `new-top-level` stay in the caller's project;
 `new-child` also uses the caller's workspace as its parent. Omit `--repo` for
@@ -15,11 +17,11 @@ when requesting a child of the current workspace.
 # Child of the current worktree.
 ORCA orchestration worker-start --task <task_id> --worktree new-child --agent codex --setup run
 
-# On a connected server; the Run stays on yours.
-ORCA orchestration worker-start --task <task_id> --on <environment> --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run
+# On a connected server, nested under your workspace; the Run stays on yours.
+ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-child --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run
 
-# On a connected server, nested under your workspace in the sidebar.
-ORCA orchestration worker-start --task <task_id> --on <environment> --worktree new-child --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run
+# On a connected server, with no parent.
+ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run
 ```
 
 With `--on`, both `new-child` and `new-top-level` need `--repo` naming a

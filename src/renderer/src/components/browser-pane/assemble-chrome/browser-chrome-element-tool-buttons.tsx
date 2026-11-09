@@ -1,9 +1,9 @@
 import { Crosshair, MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
-import type { GrabIntent } from '../describe-page/browser-page-types'
+import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
 
 /** The in-guest element picker, driving both Grab (copy) and Annotate (comment). */
 export type BrowserChromeElementTools = {
@@ -28,6 +28,7 @@ export function BrowserChromeElementToolButtons({
   showAnnotate: boolean
   showTourAnchors: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <>
       {showGrab ? (
@@ -44,7 +45,7 @@ export function BrowserChromeElementToolButtons({
                 )}
                 onClick={() => tools.onStartIntent('copy')}
                 disabled={tools.disabled}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.browser.pane.BrowserPane.fdfc7fe0ef',
                   'Grab page element'
                 )}
@@ -57,7 +58,7 @@ export function BrowserChromeElementToolButtons({
             </span>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>
-            {translate(
+            {t(
               'auto.components.browser.pane.BrowserPane.acbe79fd01',
               'Grab page element ({{value0}})',
               { value0: tools.grabShortcutLabel }
@@ -81,7 +82,7 @@ export function BrowserChromeElementToolButtons({
                 )}
                 onClick={() => tools.onStartIntent('annotate')}
                 disabled={tools.disabled}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.browser.pane.BrowserPane.fc9be38f6f',
                   'Annotate page element'
                 )}
@@ -100,15 +101,12 @@ export function BrowserChromeElementToolButtons({
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={4}>
             {tools.annotateShortcutLabel
-              ? translate(
+              ? t(
                   'auto.components.browser.pane.BrowserPane.cc4a071d3a',
                   'Annotate page element ({{value0}})',
                   { value0: tools.annotateShortcutLabel }
                 )
-              : translate(
-                  'auto.components.browser.pane.BrowserPane.fc9be38f6f',
-                  'Annotate page element'
-                )}
+              : t('auto.components.browser.pane.BrowserPane.fc9be38f6f', 'Annotate page element')}
           </TooltipContent>
         </Tooltip>
       ) : null}

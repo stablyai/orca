@@ -1,6 +1,6 @@
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { Repo as SharedRepo } from '../../../src/shared/repo-types'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { SetupHookTrust } from '../tasks/setup-hook-trust'
 import { resolveRepoBadgeColor } from '../../../src/shared/repo-badge-color'
 

@@ -1,8 +1,8 @@
-import type { UISlice } from '../../store/slices/ui'
+import type { UISlice } from '../../store/slices/ui/ui-slice-contract'
 import type { RepoUpdate } from '../../store/repos/repo-state'
 import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
 export type ComposerStoreActions = {
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void

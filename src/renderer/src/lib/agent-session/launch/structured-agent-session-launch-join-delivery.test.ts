@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
-import {
-  readNativeChatComposerDraft,
-  structuredAgentSessionDraftScopeKey
-} from '@/components/native-chat/native-chat-composer-draft-store'
+// @vitest-environment happy-dom
+import { readNativeChatComposerDraft } from '@/components/native-chat/drafts/native-chat-composer-draft-store'
+// @vitest-environment happy-dom
+import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/drafts/native-chat-draft-scope'
 
 import type * as LaunchErrors from '@/lib/agent-session/launch/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -60,12 +60,14 @@ vi.mock('@/runtime/local-structured-session-tabs-sync/inventory-refresh', () => 
   refreshLocalStructuredSessionTabs: vi.fn()
 }))
 
-vi.mock('@/runtime/structured-agent-session-client', () => ({
+vi.mock('../../../runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.callStructuredAgentSession
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.callRuntimeRpc,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   ensureRuntimeEnvironmentCompatible: vi.fn(async () => undefined)
 }))
 
@@ -89,7 +91,7 @@ vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
 }))
 
-vi.mock('@/lib/agent-catalog', () => ({
+vi.mock('@/lib/agent-catalog/agent-catalog', () => ({
   getAgentLabel: () => 'Codex',
   getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }]
 }))

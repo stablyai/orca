@@ -1,17 +1,21 @@
-import { z } from 'zod'
-import {
-  MobileWebBundleManifestReadSchema,
-  type MobileWebBundleManifestRead
-} from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
+import type { MobileWebBundleManifestRead } from '../transport/web-bundle/mobile-web-bundle-reply-schemas'
 import type {
   MobileWebBundleFetchResult,
   MobileWebBundleReusableAssets
 } from '../transport/web-bundle/mobile-web-bundle-fetch'
 import { joinUri } from './generation-cache-uri'
+import { createGenerationHostOrder, withHostLast } from './generation-host-order'
+import { createDeferredCommits } from './generation-deferred-commits'
 import { MANIFEST_FILE_NAME } from './generation-asset-path'
+import { parseGenerationManifest, readWaitingStage } from './generation-manifest-read'
 import { reusableAssetsOf, reusableAssetsOfHosts } from './generation-reuse'
 import { stagingAssetsOf } from './generation-staging-assets'
-import type { GenerationDirectoryEntry, GenerationFileSystem } from './generation-store-file-system'
+import type { GenerationFileSystem } from './generation-store-file-system'
+import {
+  GENERATIONS_DIRECTORY_NAME,
+  listActivatedGenerationHosts,
+  listGenerationHostDirectories
+} from './generation-host-directories'
 import { isHostCacheKey } from './host-cache-key'
 import type { MobileWebShellUpdateFailure } from './mobile-web-shell-update-failure'
 import {
@@ -20,9 +24,7 @@ import {
   recordUpdateFailureIn
 } from './mobile-web-shell-update-failure-log'
 
-const GENERATIONS_DIRECTORY_NAME = 'generations'
 const STAGING_DIRECTORY_NAME = 'tmp'
-const HOST_INDEX_FILE_NAME = 'hosts.json'
 
 export const MAX_CACHED_HOSTS = 6
 
@@ -50,8 +52,13 @@ export type GenerationStore = {
     reusable?: MobileWebBundleReusableAssets
   ): Promise<StagedGeneration>
   commitGeneration(staged: StagedGeneration): Promise<ActiveGeneration>
+  // Commit later: the next readActiveGeneration for this host with no readers commits it, because commit deletes the old build.
+  deferCommit(staged: StagedGeneration): void
+  // A mounted page reading this host's active build; release when it stops reading it.
+  holdGeneration(hostKey: string): () => void
+  // A release once this page may fetch the build for a deferred commit, after any page already fetching it; null when it already waits.
+  claimUpdate(hostKey: string, buildId: string): Promise<(() => void) | null>
   abortStagedGeneration(staged: StagedGeneration): Promise<void>
-  sweepStagedGenerations(): Promise<void>
   deleteHostCache(hostKey: string): Promise<void>
   // Best-effort Troubleshoot evidence; must never reject.
   recordUpdateFailure(failure: MobileWebShellUpdateFailure): Promise<void>
@@ -61,13 +68,13 @@ export type GenerationStore = {
   forgetHostUpdateFailures(hostId: string): Promise<void>
 }
 
-// Recency only: unreadable or legacy timestamp indexes count as empty, making unlisted hosts first to evict.
-const HostOrderSchema = z.array(z.string())
-
 export function createGenerationStore(options: {
   fileSystem: GenerationFileSystem
+  // Runs before a host's built files are deleted, so nothing still reading them outlives them.
+  beforeHostFilesDeleted?: (hostKey: string) => Promise<void>
 }): GenerationStore {
   const fs = options.fileSystem
+  const hostOrder = createGenerationHostOrder(fs)
   // Accept only handles minted here; structural lookalikes must not authorize renaming or deleting caller-selected directories.
   const issuedHandles = new WeakSet<StagedGeneration>()
   const reuseSources = new WeakMap<
@@ -75,57 +82,26 @@ export function createGenerationStore(options: {
     ReturnType<typeof reusableAssetsOf>
   >()
 
+  const deferred = createDeferredCommits()
+  // Only this store writes the tree, so a read answer stays true until it changes it.
+  const activeMemo = new Map<string, ActiveGeneration>()
+  let swept = false
+
   const hostRoot = (hostKey: string): string => joinUri(fs.rootUri, requireHostKey(hostKey))
   const generationsRoot = (hostKey: string): string =>
     joinUri(hostRoot(hostKey), GENERATIONS_DIRECTORY_NAME)
   const stagingRoot = (hostKey: string): string =>
     joinUri(hostRoot(hostKey), STAGING_DIRECTORY_NAME)
 
-  async function readHostOrder(): Promise<readonly string[]> {
-    // Index read failures lose eviction order only; the next activation rewrites it.
-    const text = await fs.readText(joinUri(fs.rootUri, HOST_INDEX_FILE_NAME)).catch(() => null)
-    const parsed = text === null ? null : HostOrderSchema.safeParse(parseJson(text))
-    return parsed?.success === true ? parsed.data : []
-  }
-
-  async function writeHostOrder(order: readonly string[]): Promise<void> {
-    // Index write failures must not reject an activation already on disk; the next activation rewrites it.
-    await fs
-      .writeText(joinUri(fs.rootUri, HOST_INDEX_FILE_NAME), JSON.stringify(order))
-      .catch(() => undefined)
-  }
-
-  // No eviction pass: touching recency does not add a host.
-  async function touchHost(hostKey: string): Promise<void> {
-    const order = await readHostOrder()
-    if (order.at(-1) !== hostKey) {
-      await writeHostOrder(withHostLast(order, hostKey))
-    }
-  }
-
-  async function listHostDirectories(): Promise<readonly GenerationDirectoryEntry[]> {
-    const entries = await fs.list(fs.rootUri)
-    return entries.filter((entry) => entry.isDirectory && isHostCacheKey(entry.name))
-  }
-
-  // Count/evict only hosts with generations; evicting staged-only hosts would delete a tree awaiting commit. Sweeps still visit them.
-  async function listActivatedHosts(): Promise<readonly string[]> {
-    const activated: string[] = []
-    for (const host of await listHostDirectories()) {
-      const generations = await fs.list(joinUri(fs.rootUri, host.name, GENERATIONS_DIRECTORY_NAME))
-      if (generations.some((entry) => entry.isDirectory)) {
-        activated.push(host.name)
-      }
-    }
-    return activated
-  }
-
   async function dropHostTree(hostKey: string): Promise<void> {
+    activeMemo.delete(hostKey)
+    deferred.drop(hostKey)
+    await options.beforeHostFilesDeleted?.(hostKey)
     await fs.delete(hostRoot(hostKey))
   }
 
   async function enforceHostLimit(order: readonly string[]): Promise<void> {
-    const hosts = await listActivatedHosts()
+    const hosts = await listActivatedGenerationHosts(fs)
     // Unlisted hosts sort first after index loss; keep the just-activated host last so it survives eviction.
     const evicted = new Set(
       [...hosts]
@@ -135,7 +111,7 @@ export function createGenerationStore(options: {
     for (const host of evicted) {
       await dropHostTree(host)
     }
-    await writeHostOrder(order.filter((key) => hosts.includes(key) && !evicted.has(key)))
+    await hostOrder.write(order.filter((key) => hosts.includes(key) && !evicted.has(key)))
   }
 
   async function readActive(
@@ -159,7 +135,7 @@ export function createGenerationStore(options: {
         // Unreadable is not corrupt: preserve verified cache through transient I/O and let the caller redownload.
         return null
       }
-      const manifest = text === null ? null : parseManifest(text)
+      const manifest = text === null ? null : parseGenerationManifest(text)
       if (manifest !== null && manifest.buildId === only.name) {
         return { buildId: manifest.buildId, directory, manifest }
       }
@@ -223,6 +199,12 @@ export function createGenerationStore(options: {
 
   async function commit(staged: StagedGeneration): Promise<ActiveGeneration> {
     requireIssuedHandle(staged)
+    // Any other stage waiting for this host is older than the build committed now.
+    const waiting = deferred.drop(staged.hostKey)
+    if (waiting !== null && waiting.directory !== staged.directory) {
+      await fs.delete(waiting.directory).catch(() => undefined)
+    }
+    activeMemo.delete(staged.hostKey)
     const generations = generationsRoot(staged.hostKey)
     const target = joinUri(generations, staged.buildId)
     const active: ActiveGeneration = {
@@ -238,7 +220,7 @@ export function createGenerationStore(options: {
       (await fs.fileExists(joinUri(target, MANIFEST_FILE_NAME)))
     ) {
       // A same-build redownload still updates recency, or an active host could be evicted first.
-      await touchHost(staged.hostKey)
+      await hostOrder.touch(staged.hostKey)
       await fs.delete(staged.directory)
       return active
     }
@@ -246,6 +228,7 @@ export function createGenerationStore(options: {
     if (!(await fs.fileExists(joinUri(staged.directory, MANIFEST_FILE_NAME)))) {
       throw new Error(`staged generation ${staged.buildId} is no longer on disk`)
     }
+    await options.beforeHostFilesDeleted?.(staged.hostKey)
     // Delete old generations before rename: a crash then leaves no activation, whereas renaming first can leave two with no way to choose.
     for (const entry of entries) {
       await fs.delete(joinUri(generations, entry.name))
@@ -257,15 +240,26 @@ export function createGenerationStore(options: {
       await fs.delete(target)
       throw new Error(`generation ${staged.buildId} did not carry its manifest through the rename`)
     }
-    await enforceHostLimit(withHostLast(await readHostOrder(), staged.hostKey))
+    await enforceHostLimit(withHostLast(await hostOrder.read(), staged.hostKey))
     return active
   }
 
+  async function commitDeferred(hostKey: string): Promise<void> {
+    const waiting = deferred.takeUnread(hostKey)
+    if (waiting === null) {
+      return
+    }
+    // A stage that cannot commit is only a missed update; the active build stays and the next entry downloads again.
+    await commit(waiting).catch(() => fs.delete(waiting.directory).catch(() => undefined))
+  }
+
   async function openActive(hostKey: string): Promise<ActiveGeneration | null> {
-    const active = await readActive(hostKey)
+    await commitDeferred(hostKey)
+    const active = activeMemo.get(hostKey) ?? (await readActive(hostKey))
     // Opening counts as use even if the host’s bundle was downloaded long ago.
     if (active !== null) {
-      await touchHost(hostKey)
+      activeMemo.set(hostKey, active)
+      await hostOrder.touch(hostKey)
     }
     return active
   }
@@ -273,7 +267,9 @@ export function createGenerationStore(options: {
   async function openReusable(hostKey: string): Promise<MobileWebBundleReusableAssets> {
     const hosts = [
       hostKey,
-      ...(await listHostDirectories()).map((host) => host.name).filter((key) => key !== hostKey)
+      ...(await listGenerationHostDirectories(fs))
+        .map((host) => host.name)
+        .filter((key) => key !== hostKey)
     ]
     // Reuse discovery must not clean up another shell's active or staged files.
     const reusable = await reusableAssetsOfHosts(fs, hosts, (key) => readActive(key, false))
@@ -281,18 +277,33 @@ export function createGenerationStore(options: {
     return reusable
   }
 
+  // Once per launch, before the first read so every reader sees a stage an earlier launch left; a later sweep would delete stages waiting to commit.
   async function sweep(): Promise<void> {
-    // Sweep every host’s tmp tree; interrupted downloads may belong to a host this launch never opens.
-    for (const host of await listHostDirectories()) {
-      await fs.delete(joinUri(fs.rootUri, host.name, STAGING_DIRECTORY_NAME))
+    if (swept) {
+      return
     }
+    // Interrupted downloads may belong to a host this launch never opens, so visit every host's tmp tree.
+    for (const host of await listGenerationHostDirectories(fs)) {
+      // Unreadable (undefined) is not corrupt: leave that tree for a later launch rather than fail every read.
+      const waiting = await readWaitingStage(fs, host.name, stagingRoot(host.name)).catch(
+        () => undefined
+      )
+      if (waiting === null) {
+        await fs.delete(stagingRoot(host.name))
+      } else if (waiting !== undefined) {
+        // Deferred commits live in memory and a page is often open when the app dies, so the next open commits the stage instead.
+        issuedHandles.add(waiting)
+        deferred.defer(waiting)
+      }
+    }
+    swept = true
   }
 
   async function deleteHost(hostKey: string): Promise<void> {
     await dropHostTree(hostKey)
-    const order = await readHostOrder()
+    const order = await hostOrder.read()
     if (order.includes(hostKey)) {
-      await writeHostOrder(order.filter((key) => key !== hostKey))
+      await hostOrder.write(order.filter((key) => key !== hostKey))
     }
   }
 
@@ -305,38 +316,27 @@ export function createGenerationStore(options: {
   }
 
   return {
-    readActiveGeneration: (hostKey) => serialize(() => openActive(hostKey)),
+    readActiveGeneration: (hostKey) => serialize(() => sweep().then(() => openActive(hostKey))),
     openReusableAssets: (hostKey) => serialize(() => openReusable(hostKey)),
     stageGeneration: (hostKey, result, signal, reusable) =>
       serialize(() => stage(hostKey, result, signal, reusable)),
     commitGeneration: (staged) => serialize(() => commit(staged)),
+    deferCommit: (staged) => {
+      const replaced = deferred.defer(requireIssuedHandle(staged))
+      if (replaced !== null) {
+        void serialize(() => fs.delete(replaced.directory)).catch(() => undefined)
+      }
+    },
+    holdGeneration: deferred.hold,
+    claimUpdate: deferred.claim,
     abortStagedGeneration: (staged) =>
       serialize(() => fs.delete(requireIssuedHandle(staged).directory)),
-    sweepStagedGenerations: () => serialize(sweep),
     deleteHostCache: (hostKey) => serialize(() => deleteHost(hostKey)),
     recordUpdateFailure: (failure) =>
       serialize(() => recordUpdateFailureIn(fs, failure)).catch(() => undefined),
     readUpdateFailures: () => serialize(() => readUpdateFailureLog(fs)),
     forgetHostUpdateFailures: (hostId) =>
       serialize(() => forgetHostUpdateFailuresIn(fs, hostId)).catch(() => undefined)
-  }
-}
-
-function withHostLast(order: readonly string[], hostKey: string): string[] {
-  return [...order.filter((key) => key !== hostKey), hostKey]
-}
-
-// Use the forward-compatible reader on disk too; newer desktop fields must not force redownload every launch.
-function parseManifest(text: string): MobileWebBundleManifestRead | null {
-  const parsed = MobileWebBundleManifestReadSchema.safeParse(parseJson(text))
-  return parsed.success ? parsed.data : null
-}
-
-function parseJson(text: string): unknown {
-  try {
-    return JSON.parse(text)
-  } catch {
-    return null
   }
 }
 

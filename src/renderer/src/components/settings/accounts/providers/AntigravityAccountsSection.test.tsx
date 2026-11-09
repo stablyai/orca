@@ -5,17 +5,21 @@ import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AntigravityAccountsSection } from './AntigravityAccountsSection'
-import { callAntigravityAccounts } from '@/runtime/runtime-antigravity-accounts-client'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { callAntigravityAccounts } from '@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import type { AntigravityAccountState } from '../../../../../../shared/antigravity-account-types'
 
-vi.mock('@/runtime/runtime-antigravity-accounts-client', () => ({
+vi.mock('@/runtime/provider-accounts/sign-in/runtime-antigravity-accounts-client', () => ({
   callAntigravityAccounts: vi.fn(),
   callAntigravityChatSignIn: vi.fn(),
   subscribeAntigravityChatSignIn: vi.fn()
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: vi.fn() }))
-vi.mock('@/lib/agent-catalog', () => ({ AgentIcon: () => null }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: vi.fn()
+}))
+vi.mock('@/components/agent/icons/AgentIcon', () => ({
+  AgentIcon: () => null
+}))
 
 const state: AntigravityAccountState = {
   accounts: [

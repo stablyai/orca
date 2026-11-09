@@ -25,8 +25,8 @@ import { BrowserClientFileChannelTransport } from '../file-transfers/browser-cli
 import { registerBrowserClientHostEnvironmentRoutes } from './browser-client-host-environment-routes'
 import { BrowserClientPageCommandExecutor } from '../../client-pages/execution/browser-client-page-command-executor'
 import { createBrowserClientPageGuestBinding } from '../../client-pages/lifecycle/browser-client-page-guest-binding'
-import { browserManager } from '../../browser-manager'
-import { browserSessionRegistry } from '../../sessions/browser-session-registry'
+import { browserManager } from '../../guest-lifecycle/manager/browser-manager'
+import { browserSessionRegistry } from '../../sessions/profiles/browser-session-registry'
 import { BrowserClientUploadStaging } from '../file-transfers/browser-client-upload-staging'
 import {
   executeBrowserClientPageAutomation,

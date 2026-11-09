@@ -1,4 +1,4 @@
-import type { AppState } from '@/store'
+import type { AppState } from '@/store/types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
@@ -19,12 +19,15 @@ import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 import { getLocalProjectExecutionRuntimeContext } from './local-preflight-context'
 import { getRendererAppPlatform } from './renderer-app-platform'
-import { wslHostDistroForTarget } from './wsl-host-account-owner'
+import { wslHostDistroForTarget } from '../runtime/provider-accounts/ownership/wsl-host-account-owner'
 import {
   getCachedWindowsTerminalCapabilities,
   hasCachedWindowsTerminalCapabilities
 } from './windows-terminal-capabilities'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 
 type CodexPaneLaneState = Pick<
   AppState,

@@ -1,4 +1,4 @@
-import { AcpAtRestCommandCatalog } from '../../../acp/acp-at-rest-commands'
+import { AcpAtRestCommandCatalog } from '../../../acp/discovery/acp-at-rest-commands'
 import { resolveNativeChatVisualsSkillLocation } from '../../../native-chat/native-chat-visuals-skill-location'
 import { withSupportedCodexCli } from '../../../codex/structured/launch/codex-cli-installation-error'
 import { codexStructuredLaunchPart } from '../../../codex/structured/launch/codex-structured-launch-resolution'
@@ -11,14 +11,15 @@ import { CODEX_STRUCTURED_AGENT } from '../../../codex/structured/launch/codex-s
 import { CLAUDE_STRUCTURED_AGENT } from '../../../claude/structured/claude-structured-agent-definition'
 import { agentModelCatalogStore } from '../../../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { agentSessionAttachmentStoreRoot } from '../../../native-chat/agent-session-attachments/agent-session-attachment-references'
-import { restoreJournal } from '../../../native-chat/agent-session-journal/journal-open'
+import { restoreJournal } from '../../../native-chat/agent-session-journal/replay/journal-open'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
-import { acpListingNeedsChatFolder, type AcpLaunchSpec } from '../../../acp/acp-launch-specs'
-import { acpStructuredAgentDefinition } from '../../../acp/acp-structured-agent-definitions'
-import { createAcpAgentConnection } from '../../../acp/acp-agent-connection'
+import { acpListingNeedsChatFolder } from '../../../acp/discovery/acp-model-discovery-policy'
+import type { AcpLaunchSpec } from '../../../acp/launch/acp-launch-contract'
+import { acpStructuredAgentDefinition } from '../../../acp/session/acp-structured-agent-definitions'
+import { createAcpAgentConnection } from '../../../acp/process/acp-agent-connection'
 import { createOpenCodeAcpConnection } from '../../../opencode/opencode-acp-connection'
-import { acpStructuredLaunchPart } from '../../../acp/acp-structured-launch-resolution'
-import { AcpStructuredSessionAdapter } from '../../../acp/acp-structured-session-adapter'
+import { acpStructuredLaunchPart } from '../../../acp/launch/acp-structured-launch-resolution'
+import { AcpStructuredSessionAdapter } from '../../../acp/session/acp-structured-session-adapter'
 import { PI_RPC_RUNTIME_REGISTRATION } from '../../../pi/rpc-runtime-registration'
 import {
   claudeLaunchEnvOverlay,
@@ -63,6 +64,9 @@ function createCodexAdapter(context: StructuredAgentAdapterContext): StructuredA
         structuredAgentLaunchSources(context),
         codexStructuredLaunchPart({
           resolveLaunchArgs: () => deps.resolveLaunchArgs('codex'),
+          ...(deps.prepareLaunchAccountHome
+            ? { prepareLaunchAccountHome: deps.prepareLaunchAccountHome }
+            : {}),
           ...(deps.resolveCodexCommand ? { resolveCommand: deps.resolveCodexCommand } : {})
         })
       ),

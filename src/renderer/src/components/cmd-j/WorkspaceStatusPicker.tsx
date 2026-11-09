@@ -15,8 +15,8 @@ import { useModalReturnFocus } from '@/hooks/useModalReturnFocus'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
-import { selectWorkspaceStatusesForHost } from '@/store/host-workspace-status-columns'
-import { useActiveWorktree } from '@/store/selectors'
+import { selectWorkspaceStatusesForHost } from '@/store/workspaces/status/host-workspace-status-columns'
+import { useActiveWorktree } from '@/store/workspaces/selection/use-selected-worktree'
 import { getWorkspaceStatus } from '../../../../shared/workspace-statuses'
 
 const CLOSE_LINGER_MS = 300

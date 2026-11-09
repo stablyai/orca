@@ -5,7 +5,7 @@ import { resolveUserDataPath } from './orcad-app-paths'
 import { prepareOrcadCliLauncher } from './orcad-cli-launcher'
 import { installOrcadHostAdapters, runOrcadQuitHandlers } from './orcad-host-adapters'
 import { prepareOrcadSecretStoreAndMigrate } from './orcad-secret-store-startup'
-import { describeOrcadBindExposure, resolveOrcadBindHost } from './orcad-bind-address'
+import { describeOrcadBindExposure, resolveOrcadBindHost } from '../../shared/orcad-bind-address'
 import {
   flushOrcadProfileStoreForShutdown,
   startOrcadWithHost,
@@ -28,6 +28,8 @@ import { createOrcadStartupTiming } from './orcad-startup-timing'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { restoreOrcadTerminalAuthority } from './orcad-restored-terminal-authority'
 import { installOrcadFeatureReadiness } from '../runtime/rpc/orcad-feature-readiness'
+import { ORCA_SERVE_SUPERVISED_ENV } from '../../shared/serve-supervised-terminal-durability'
+import { startOrcadEventLoopWatchdog } from './orcad-event-loop-watchdog'
 import { isAgentStatusHooksEnabled } from '../../shared/agent-hook-listener/configuration/agent-status-hooks-setting'
 
 let closeOrcadObservability = (): Promise<void> => Promise.resolve()
@@ -63,6 +65,11 @@ async function startOrcadRuntime(
   registerCleanup: (cleanup: OrcadRuntimeCleanup) => void
 ): Promise<Pick<OrcadHandle, 'readiness'>> {
   const { time: timed, report: reportStartupTiming } = createOrcadStartupTiming()
+  // Read before startOrcadDaemon consumes the supervised flag; only a supervised server exits on a long stall.
+  const eventLoopWatchdog = startOrcadEventLoopWatchdog({
+    supervised: process.env[ORCA_SERVE_SUPERVISED_ENV] === '1'
+  })
+  registerCleanup(() => eventLoopWatchdog?.stop())
   // Overlap login-shell probing with imports and store startup.
   const loginEnvironment = adoptWslHostLoginEnvironmentLogged()
   const { startOrcadDaemon, stopOrcadDaemon } = await import('./orcad-daemon-supervision')
@@ -90,15 +97,15 @@ async function startOrcadRuntime(
   const { resolveDaemonSessionScrollbackRows } =
     await import('../daemon/sessions/daemon-session-scrollback-window')
   const { collectOrcadHealth } = await import('./orcad-health')
-  const { agentHookServer } = await import('../agent-hooks/server')
-  await import('../agent-hooks/managed-agent-hook-controls')
-  const { agentHookRuntimeDeps } = await import('../agent-hooks/agent-hook-runtime-deps')
+  const { agentHookServer } = await import('../agent-hooks/server/agent-hook-server')
+  await import('../agent-hooks/installation/managed-agent-hook-controls')
+  const { agentHookRuntimeDeps } = await import('../agent-hooks/runtime/agent-hook-runtime-deps')
   const { installHookStatusSessionTabsRepublish } =
-    await import('../agent-hooks/hook-status-session-tabs-republish')
+    await import('../agent-hooks/runtime/hook-status-session-tabs-republish')
   const { startOrcadAgentHookServer, startOrcadManagedAgentHooks } =
     await import('./orcad-managed-agent-hooks')
   const { AgentStatusObservedPaneIdentities, AgentStatusObservedPaneIdentityCapture } =
-    await import('../runtime/agent-status-observed-pane-identity')
+    await import('../runtime/terminal/identity/agent-status-observed-pane-identity')
 
   const { disposeWatcherProcessAndWait } =
     await import('../ipc/filesystem/watcher-process/parcel-watcher-process')
@@ -240,8 +247,12 @@ async function startOrcadRuntime(
   startAgentStateRulesLiveUpdates(profileStore, (rules) =>
     console.info(`[orcad] agent state rules ${rules.version} (${rules.source})`)
   )
+  // Paired phones dictate through this host; keep its model loaded the same way the desktop does.
+  const { startSpeechModelWarmup } = await import('../speech/speech-model-warmup')
+  startSpeechModelWarmup(profileStore)
   if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    const { repairDuplicatePtyPanesOnStart } = await import('../runtime/moved-pane-owner-rekey')
+    const { repairDuplicatePtyPanesOnStart } =
+      await import('../runtime/terminal/identity/moved-pane-owner-rekey')
     // Wait behind earlier writes and persist repair before reconciliation/RPC admission.
     await repairDuplicatePtyPanesOnStart(profileStore, runtime)
   }
@@ -282,7 +293,8 @@ async function startOrcadRuntime(
   observedStatusCapture.attach(runtime)
   agentHookServer.setCliWriterExecutionMatcher(observedPaneIdentities, runtime)
   // First RPC clients must see a fully published graph.
-  const { publishHeadlessRuntimeGraph } = await import('../runtime/headless-runtime-graph')
+  const { publishHeadlessRuntimeGraph } =
+    await import('../runtime/session-graph/headless-runtime-graph')
   publishHeadlessRuntimeGraph(runtime)
   // Only the runtime can identify running shells and install deferred migrated history.
   void runtime.installPendingOrcadMigrationShellHistory().catch((error: unknown) => {
@@ -297,6 +309,11 @@ async function startOrcadRuntime(
     enableWebSocket: true,
     // Pin operator exposure across restarts; pairing must not silently widen a loopback bind.
     pinnedBindHost: bindHost,
+    serveNetworkSources: {
+      allowPublic: options.allowPublic === true,
+      refusePublic: options.refusePublic === true,
+      pairingAddress: options.pairingAddress ?? null
+    },
     webClientRoot: resolveOrcadWebClientRoot(options.webClientRoot),
     ...orcadWsPortOptions(options.port)
   })
@@ -305,6 +322,8 @@ async function startOrcadRuntime(
   // Stop RPC before cleanup can tear down writers and runtime state.
   registerCleanup(() => rpc.stop())
   await timed('rpc', () => rpc.start())
+  // The daemon has no window to wait for; its CI-line watches start with the runtime.
+  runtime.startPullRequestWatches()
   startOrcadAutomations(runtime, profileStore, registerCleanup)
   const pushService = DesktopPushService.create({
     runtime,

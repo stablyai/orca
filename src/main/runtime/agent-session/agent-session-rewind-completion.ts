@@ -47,7 +47,8 @@ export function commitAgentSessionRewindCompletion(
   fence: number,
   rewind: AgentSessionRewindRecord,
   cursor: AgentJournalCursor,
-  cancel?: UsageLimitContinueIdentity
+  cancel?: UsageLimitContinueIdentity,
+  childBoundary?: NonNullable<AgentSessionRecord['forkedFrom']>['childBoundary']
 ): void {
   const record = draft.records.get(sessionId)
   if (
@@ -59,9 +60,21 @@ export function commitAgentSessionRewindCompletion(
   ) {
     throw new Error('agent_session_rewind:stale-context')
   }
-  const { retained: _retained, hydrationVerified: _hydrationVerified, ...current } = rewind
+  const {
+    retained: _retained,
+    hydrationVerified: _hydrationVerified,
+    providerRevert: _providerRevert,
+    ...current
+  } = rewind
+  if (current.providerFork) {
+    const { coverage: _coverage, ...fork } = current.providerFork
+    current.providerFork = fork
+  }
   draft.records.set(sessionId, {
     ...(cancel ? cancelAgentSessionUsageLimitContinue(record, cancel) : record),
+    ...(childBoundary && record.forkedFrom
+      ? { forkedFrom: { ...record.forkedFrom, childBoundary } }
+      : {}),
     providerHandleChain: rewindProviderChain(record, rewind, fence),
     rewind: {
       ...current,

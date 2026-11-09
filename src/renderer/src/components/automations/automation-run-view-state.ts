@@ -1,4 +1,5 @@
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import { translate } from '@/i18n/i18n'
 
 export type AutomationRunViewAvailability =

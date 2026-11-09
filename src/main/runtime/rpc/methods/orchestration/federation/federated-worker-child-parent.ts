@@ -1,11 +1,11 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
-import type { OrchestrationSessionCaller } from '../../../../orchestration/orchestration-caller-identity'
+import type { OrchestrationSessionCaller } from '../../../../orchestration/addressing/orchestration-caller-identity'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { readCallerStoreInstallationId } from '../../../../hosts/platform-probe/host-descriptor'
 import { getCanonicalUserDataPath } from '../../../../../persistence/loading-store/user-data-path'
 import type { CrossStoreParentRef } from '../../../../../../shared/worktree/lineage-types'
 import { supportsCrossStoreLineage } from '../../../../../../shared/worktree-runtime-capabilities'
-import { resolveDispatchCallerWorktreeId } from '../../orchestration-caller-workspace'
+import { resolveDispatchCallerWorktreeId } from '../orchestration-caller-workspace'
 
 /**
  * `--on <server> --worktree new-child`: the server's new worktree nests under the coordinator's
@@ -25,7 +25,10 @@ export async function resolveFederatedChildParent(args: {
   callerSession: OrchestrationSessionCaller | undefined
   serverCapabilities: readonly string[] | undefined
   serverName: string
-}): Promise<{ crossStoreParent: CrossStoreParentRef } | { warning: string }> {
+}): Promise<
+  | { crossStoreParent: CrossStoreParentRef; crossStoreParentInferredFrom: 'orchestration-context' }
+  | { warning: string }
+> {
   const { runtime } = args
   // Orchestration's caller authority picks the workspace; the shared builder verifies and names it.
   const callerId = await resolveDispatchCallerWorktreeId(runtime, args.from, args.callerSession)
@@ -48,5 +51,8 @@ export async function resolveFederatedChildParent(args: {
       `--worktree new-child can't nest under this workspace: ${resolved.reason} Use --worktree new-top-level.`
     )
   }
-  return { crossStoreParent: resolved.parent }
+  return {
+    crossStoreParent: resolved.parent,
+    crossStoreParentInferredFrom: 'orchestration-context'
+  }
 }

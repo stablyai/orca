@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
   grokUsage: vi.fn<() => unknown>(() => null)
 }))
 
-vi.mock('@/lib/agent-catalog', () => ({
+vi.mock('@/components/agent/icons/AgentIcon', () => ({
   AgentIcon: () => React.createElement('span', { 'data-testid': 'grok-icon' })
 }))
 
