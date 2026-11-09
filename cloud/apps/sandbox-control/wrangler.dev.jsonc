@@ -32,7 +32,7 @@
     "VERCEL_REGION": "iad1",
     "BILLING_URL": "https://orca-billing-dev.lovecast.workers.dev",
     // Golden image from image/build-golden-image.ts; lifecycle routes answer 503 without one.
-    "GOLDEN_SNAPSHOT_ID": "snap_0fYmcpIUlc4OUC9viFN0Y4dVCDuD",
+    "GOLDEN_SNAPSHOT_ID": "snap_vpcmcCAgTtISiTZgsCosOlThQbFd",
     "GITHUB_APP_SLUG": "orca-cloud-dev",
     "EGRESS_PROXY_URL": "https://orca-sandbox-control-dev.lovecast.workers.dev/v1/egress/proxy"
   }
