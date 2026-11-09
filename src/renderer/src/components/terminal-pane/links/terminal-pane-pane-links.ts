@@ -18,7 +18,8 @@ import { createTerminalHandleLinkProvider } from './handles/terminal-handle-link
 import { installTerminalLinkifierClickPriming } from './gestures/terminal-linkifier-click-priming'
 import { installTerminalLinkPointerGesture } from './gestures/terminal-link-pointer-gesture'
 import { installHttpLinkClickFallback } from './http/terminal-url-link-hit-testing'
-import { handleOscLink } from './terminal-osc-link-routing'
+import { handleOscLink, isCorruptedOscLinkText } from './terminal-osc-link-routing'
+import { installCorruptedOscLinkFilter } from './terminal-osc-link-cells'
 import { copyTerminalSelection } from '../clipboard/terminal-selection-copy'
 import { readTerminalClipboardSelection } from '../clipboard/terminal-clipboard-selection-text'
 import { installTerminalNativeCopyGutterTrim } from '../clipboard/terminal-native-copy-gutter'
@@ -76,6 +77,7 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
   } = context
   const linkPointerGesture = installTerminalLinkPointerGesture(pane.terminal)
   refs.linkPointerGesturesRef.current.set(pane.id, linkPointerGesture)
+  installCorruptedOscLinkFilter(pane.terminal)
   refs.linkProviderDisposablesRef.current.set(
     pane.id,
     pane.terminal.registerLinkProvider(
@@ -191,6 +193,9 @@ export function installTerminalPaneLinkHandling(context: PaneLinkContext): void 
       }
     },
     hover: (_event, text) => {
+      if (isCorruptedOscLinkText(text)) {
+        return
+      }
       oscTooltipHoverToken += 1
       const hoverToken = oscTooltipHoverToken
       const hint = getUrlOpenLinkHint(pane.id)

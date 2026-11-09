@@ -20,6 +20,10 @@ function hasNoRegisteredOscLinks(service: { _dataByLinkId?: { size?: number } })
   return service._dataByLinkId?.size === 0
 }
 
+function isCorruptedOscLinkUri(uri: string): boolean {
+  return /[\u0080-\u009f\ufffd]|[\u00c2-\u00f4][\u0080-\u00bf]+|[\u00c2-\u00f4]$/.test(uri)
+}
+
 export function collectHeadlessOscLinkRanges(
   terminal: Terminal,
   scrollbackRows: number | undefined,
@@ -74,7 +78,7 @@ function collectOscLinkRangesInRows(
       }
       if (currentUrlId && currentStart >= 0) {
         const uri = service.getLinkData(currentUrlId)?.uri
-        if (uri) {
+        if (uri && !isCorruptedOscLinkUri(uri)) {
           ranges.push({ row: row - startRow, startCol: currentStart, endCol: col, uri })
         }
       }
@@ -83,7 +87,7 @@ function collectOscLinkRangesInRows(
     }
   }
   for (const link of restoredLinks) {
-    if (link.row < startRow || link.row >= endRow) {
+    if (link.row < startRow || link.row >= endRow || isCorruptedOscLinkUri(link.uri)) {
       continue
     }
     const startCol = Math.max(0, Math.min(terminal.cols, link.startCol))

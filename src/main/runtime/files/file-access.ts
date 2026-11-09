@@ -1,3 +1,4 @@
+import { isAbsolute, resolve } from 'node:path'
 import type {
   RuntimeFileOpenPosition,
   RuntimeFileOpenResult
@@ -9,6 +10,8 @@ import {
   type PathExistenceResult
 } from '../../../shared/file-access/path-existence-batch'
 import { readRuntimeFilePathExistence } from './file-path-existence'
+import { extraRootsForPersistedOpenFile } from './chat-scratch-file-root'
+import type { ResolveAuthorizedPathOptions } from '../../ipc/filesystem/filesystem-auth'
 import {
   isMobileBinaryPath,
   isMobileMarkdownPath,
@@ -44,20 +47,27 @@ export class RuntimeFileAccess {
   ): Promise<RuntimeFileOpenResult> {
     const target = await this.host.resolveRuntimeFileTarget(worktreeSelector)
     const { worktree } = target
-    if (!isSafeMobileRelativePath(relativePath)) {
+    const isAbs = isAbsolute(relativePath)
+    if (!isAbs && !isSafeMobileRelativePath(relativePath)) {
       throw new Error('invalid_relative_path')
     }
-    const kind = isMobilePreviewableImagePath(relativePath)
+    const filePath = isAbs
+      ? resolve(relativePath)
+      : joinWorktreeRelativePath(worktree.path, relativePath)
+    const extraRoots = isAbs ? extraRootsForPersistedOpenFile(filePath) : undefined
+    if (isAbs && (!extraRoots || extraRoots.length === 0)) {
+      throw new Error('invalid_relative_path')
+    }
+    const kind = isMobilePreviewableImagePath(filePath)
       ? 'image'
-      : isMobileBinaryPath(relativePath)
+      : isMobileBinaryPath(filePath)
         ? 'binary'
-        : isMobileMarkdownPath(relativePath)
+        : isMobileMarkdownPath(filePath)
           ? 'markdown'
           : 'text'
     // File kind does not limit the desktop editor: binaries such as PDFs can open too.
-    const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
     // Reject missing paths/directories before clients treat opened:true as success.
-    await this.assertOpenTargetIsFile(filePath, target)
+    await this.assertOpenTargetIsFile(filePath, target, extraRoots ? { extraRoots } : undefined)
     await this.host.openFile(
       worktree.id,
       filePath,
@@ -71,11 +81,12 @@ export class RuntimeFileAccess {
 
   private async assertOpenTargetIsFile(
     filePath: string,
-    target: { executionHostId: ExecutionHostId }
+    target: { executionHostId: ExecutionHostId },
+    authOptions?: ResolveAuthorizedPathOptions
   ): Promise<void> {
     let stats: FileStat
     try {
-      stats = await requireRuntimeFileProvider(target, this.host).stat(filePath)
+      stats = await requireRuntimeFileProvider(target, this.host, authOptions).stat(filePath)
     } catch (error) {
       if (isENOENT(error)) {
         throw new Error(`ENOENT: no such file or directory, open '${filePath}'`)

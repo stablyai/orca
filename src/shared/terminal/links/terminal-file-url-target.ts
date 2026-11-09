@@ -12,13 +12,18 @@ export type TerminalFileUrlTargetOptions = {
 
 function parseFileUrlLineHash(hash: string): { line: number; column: number | null } | null {
   const trimmed = hash.startsWith('#') ? hash.slice(1) : hash
-  const match = /^L(\d+)(?:C(\d+))?$/i.exec(trimmed)
+  const match = /^(?:L|line-?)(\d+)(?:C(\d+))?(?:-(?:L|line-?)?\d+(?:C\d+)?)?$/i.exec(trimmed)
   if (!match) {
     return null
   }
+  const line = Number(match[1])
+  const column = match[2] ? Number(match[2]) : null
+  if (line < 1 || (column !== null && column < 1)) {
+    return null
+  }
   return {
-    line: Number(match[1]),
-    column: match[2] ? Number(match[2]) : null
+    line,
+    column
   }
 }
 

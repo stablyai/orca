@@ -56,6 +56,31 @@ export type FileLinkTarget = {
 
 export type FileLinkPathExistence = ReturnType<typeof createTerminalPathExistenceBatch>
 
+function normalizeWindowsShellCwd(
+  cwd: string | null,
+  worktreePath: string,
+  hasWslDistro: boolean
+): string | null {
+  if (!cwd || hasWslDistro || !/^[A-Za-z]:[\\/]/.test(worktreePath)) {
+    return cwd
+  }
+  const msysDriveMatch = /^\/([A-Za-z])(?=[\\/]|$)(.*)$/.exec(cwd)
+  if (msysDriveMatch) {
+    const suffix = msysDriveMatch[2]?.replace(/^[\\/]+/, '') ?? ''
+    return suffix
+      ? `${msysDriveMatch[1]!.toUpperCase()}:/${suffix}`
+      : `${msysDriveMatch[1]!.toUpperCase()}:/`
+  }
+  const uncDriveMatch = /^(?:\\\\|\/\/)[^\\/]+[\\/]([A-Za-z])(?=[\\/]|$)(.*)$/.exec(cwd)
+  if (uncDriveMatch && uncDriveMatch[1]!.toUpperCase() === worktreePath[0]?.toUpperCase()) {
+    const suffix = uncDriveMatch[2]?.replace(/^[\\/]+/, '') ?? ''
+    return suffix
+      ? `${uncDriveMatch[1]!.toUpperCase()}:/${suffix}`
+      : `${uncDriveMatch[1]!.toUpperCase()}:/`
+  }
+  return cwd
+}
+
 /** Without the pane's own HOME, a paired server's home beats a guess from the cwd, which can name another user's file. WSL and SSH homes stay client-expanded: the server knows neither. */
 function hostExpandsTilde(
   pathText: string,
@@ -70,6 +95,26 @@ function hostExpandsTilde(
     !connectionId &&
     !parseWslUncPath(host.worktreePath)
   )
+}
+
+/** Git Bash `/c/...` and UNC drive cwds, plus a leading slash on a native Windows path. */
+function normalizeWindowsShellLink(
+  parsed: ParsedTerminalFileLink,
+  host: FileLinkHost
+): { parsed: ParsedTerminalFileLink; cwd: string | null } {
+  const hasWslDistro = Boolean(
+    terminalPathWslDistro(
+      host.worktreePath,
+      terminalLinkWslDistro(host.wslDistro, host.runtimeEnvironmentId)
+    )
+  )
+  const cwd = normalizeWindowsShellCwd(host.cwd, host.worktreePath, hasWslDistro)
+  const isNativeWindowsCwd = Boolean(cwd && /^[A-Za-z]:[\\/]/.test(cwd)) && !hasWslDistro
+  const normalizedParsed =
+    isNativeWindowsCwd && /^\/(?![\\/]|[A-Za-z]:)/.test(parsed.pathText)
+      ? { ...parsed, pathText: parsed.pathText.slice(1) }
+      : parsed
+  return { parsed: normalizedParsed, cwd }
 }
 
 /** Detected path text to the path to check; a paired terminal's `~` stays for its host to expand. */
@@ -87,7 +132,8 @@ export function resolveFileLinkPath(
     const homeRelative = parsed.pathText.replace(/^(~[\\/])[\\/]+/, '$1')
     return { absolutePath: homeRelative, line: parsed.line, column: parsed.column }
   }
-  return host.cwd ? resolveTerminalFileLink(parsed, host.cwd, host.homePath) : null
+  const windows = normalizeWindowsShellLink(parsed, host)
+  return windows.cwd ? resolveTerminalFileLink(windows.parsed, windows.cwd, host.homePath) : null
 }
 
 /** Detected path text to the host path it names; null when it cannot be a link. */
