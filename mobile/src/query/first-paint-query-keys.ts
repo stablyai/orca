@@ -2,7 +2,6 @@ import { normalizeExecutionHostId } from '../../../src/shared/execution-host'
 import {
   HOST_LIST_TARGET,
   hostRepoCatalogQuery,
-  hostRepoLabelsKey,
   hostRepoLabelsQuery,
   hostServerWorkspacesInput,
   hostServerWorkspacesQuery,
@@ -59,7 +58,10 @@ export function firstPaintQueryKeys(hostId: string, route: URL): PersistedHostQu
             hostRepoCatalogQuery,
             hostQueryKey(hostId, hostRepoCatalogQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
           ),
-          persistedHostQueryKey(hostRepoLabelsQuery, hostRepoLabelsKey(hostId)),
+          persistedHostQueryKey(
+            hostRepoLabelsQuery,
+            hostQueryKey(hostId, hostRepoLabelsQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
+          ),
           persistedHostQueryKey(
             hostProjectSectionsQuery,
             hostQueryKey(

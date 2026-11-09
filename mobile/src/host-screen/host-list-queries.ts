@@ -23,7 +23,11 @@ import {
 } from '../worktree/worktree-catalog-snapshot-client'
 import type { Worktree } from '../worktree/workspace-list-types'
 import { getCachedWorktrees } from '../cache/worktree-cache'
-import { hostRepoCatalogRepos, type HostRepoCatalogRow } from './host-screen-reply-schema'
+import {
+  hostRepoCatalogRepos,
+  hostSshTargetSummarySchema,
+  type HostRepoCatalogRow
+} from './host-screen-reply-schema'
 import { hostPlatformRead, hostRepoCatalogSnapshotRead } from './host-screen-operations'
 import { NODE_PLATFORM_NAMES } from '../transport/connection/mobile-runtime-host-platform'
 import {
@@ -205,18 +209,13 @@ export function catalogNeedsHostLabels(catalog: readonly HostRepoCatalogRow[]): 
   return hostIds.size > 1 || [...hostIds].some((id) => parseExecutionHostId(id)?.kind === 'ssh')
 }
 
-type SshTargetSummary = Awaited<
-  ReturnType<typeof readHostSshTargetLabels>
->['sshTargetSummaries'][number]
-
 export type HostRepoLabels = {
-  sshTargetSummaries: SshTargetSummary[]
+  sshTargetSummaries: z.output<typeof hostSshTargetSummarySchema>[]
   // Entries rather than a Map, so the record can be stored.
   hostLabels: [ExecutionHostId, string][]
   platform: NodeJS.Platform | null
 }
 
-const storedSshTargetSchema = z.looseObject({ id: z.string(), label: z.string() })
 const storedHostLabelSchema = z.tuple([
   z.custom<ExecutionHostId>((id) => typeof id === 'string' && parseExecutionHostId(id) !== null),
   z.string()
@@ -243,17 +242,12 @@ export const hostRepoLabelsQuery = defineHostQuery<typeof NO_HOST_LIST_INPUT, Ho
   persist: {
     version: 1,
     dataSchema: z.object({
-      sshTargetSummaries: z.array(
-        z.custom<SshTargetSummary>((target) => storedSshTargetSchema.safeParse(target).success)
-      ),
+      sshTargetSummaries: z.array(hostSshTargetSummarySchema),
       hostLabels: z.array(storedHostLabelSchema),
       platform: z.enum(NODE_PLATFORM_NAMES).nullable()
     })
   }
 })
-
-export const hostRepoLabelsKey = (hostId: string) =>
-  hostQueryKey(hostId, hostRepoLabelsQuery.family, HOST_LIST_TARGET, NO_HOST_LIST_INPUT)
 
 // The host list's own reads, which pull to refresh repeats; project.sections lives with its hook.
 const HOST_LIST_FAMILIES: readonly unknown[] = [
