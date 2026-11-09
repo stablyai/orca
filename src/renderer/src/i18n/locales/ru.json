@@ -20045,6 +20045,7 @@
         "orcaStopCanContinue": "Вы можете продолжить этот разговор.",
         "orcaStopUnnamedServer": "удалённом сервере",
         "permissionDenied": "{{agent}} отказал в разрешении. Подробнее.",
+        "safetyReviewApproved": "{{agent}} одобрил это действие. Подробнее.",
         "safetyReview": "{{agent}} сообщил о предупреждении проверки безопасности. Подробнее.",
         "truncatedResponse": "Ответ поставщика обрезан (исходный размер: {{bytes}} байт).",
         "modelFallback": "Claude переключил модель: {{from}} → {{to}}.",
