@@ -1,51 +1,51 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../../../types'
-import type { WorktreeSlice } from '../../worktree-helpers'
-import { applyWorktreeUpdates } from '../../worktree-helpers'
-import { branchName } from '@/lib/git-utils'
+import type { WorktreeSlice } from '../worktree-slice-contract'
+import {
+  clearCopyReviewLinks,
+  deleteCopyTombstones,
+  dropCopyTombstone,
+  moveCopyTombstones,
+  reviewClearTombstoneKey,
+  type WorktreeCopyClear,
+  worktreeCopyOwnerKey
+} from './worktree-copy-review-clear'
 import type { Worktree } from '../../../../../../shared/worktree/types'
-import type { Repo } from '../../../../../../shared/repo-types'
-import { getLinkedGitHubPRRepository } from '../../../github/linked-pr-repository'
+import {
+  hostedReviewLinksAreCleared,
+  type HostedReviewLinkClear
+} from './hosted-review-branch-switch-clear'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments/workspace-attachments'
 import { applyDetectedWorktreeUpdates } from '../listing/detected-worktree-meta'
 import type {
   HostedReviewLinkKey,
   RuntimeWorktreeMetaUpdates
 } from '../listing/worktree-slice-types'
+import {
+  CLEARED_HOSTED_REVIEW_LINK_UPDATES,
+  HOSTED_REVIEW_LINK_KEYS,
+  canonicalHostedReviewBranchIdentity
+} from '../../../../../../shared/worktree/hosted-review-links'
 
-export const HOSTED_REVIEW_LINK_KEYS: readonly HostedReviewLinkKey[] = [
-  'linkedPR',
-  'linkedGitLabMR',
-  'linkedBitbucketPR',
-  'linkedAzureDevOpsPR',
-  'linkedGiteaPR'
-]
-
-export const CLEARED_HOSTED_REVIEW_LINK_UPDATES: Pick<
-  WorktreeMeta,
-  HostedReviewLinkKey | 'pushTarget'
-> = {
-  linkedPR: null,
-  linkedGitLabMR: null,
-  linkedBitbucketPR: null,
-  linkedAzureDevOpsPR: null,
-  linkedGiteaPR: null,
-  pushTarget: undefined
+export {
+  CLEARED_HOSTED_REVIEW_LINK_UPDATES,
+  HOSTED_REVIEW_LINK_KEYS,
+  canonicalHostedReviewBranchIdentity
 }
 
-/** What one branch-switch clear wrote; replayed by re-clears, persistence and tombstones. */
-export type HostedReviewLinkClear = Partial<Pick<WorktreeMeta, HostedReviewLinkKey | 'pushTarget'>>
-
-const CLEARED_PUSH_TARGET_UPDATES: HostedReviewLinkClear = { pushTarget: undefined }
-
 export const hostedReviewLinkMutationGenerationByWorktreeId = new Map<string, number>()
-export const hostedReviewLinkClearTombstonesByWorktreeId = new Map<
+export const hostedReviewLinkClearTombstonesByCopy = new Map<
   string,
   {
     branch: string
     branchIdentity: string
     generation: number
     head?: string
+    /** The guarded copy's stamped {@link worktreeCopyOwnerKey}; part of the map key too. */
+    owner: string
+    /** Its key before a listing stamped it; a relink of the unstamped row still matches. */
+    rowOwner: string
     cleared: HostedReviewLinkClear
   }
 >()
@@ -53,22 +53,6 @@ export const hostedReviewLinkWorktreeIdAliases = new Map<string, string>()
 
 export function hasHostedReviewLinks(worktree: Worktree): boolean {
   return HOSTED_REVIEW_LINK_KEYS.some((key) => worktree[key] != null)
-}
-
-/** What a branch switch clears; a PR linked from another repository names no branch of this worktree. */
-export function getBranchSwitchHostedReviewClear(
-  worktree: Worktree,
-  repo?: Repo
-): HostedReviewLinkClear | null {
-  const hasPushTarget = worktree.pushTarget !== undefined
-  if (getLinkedGitHubPRRepository(worktree, repo)) {
-    return hasPushTarget ? CLEARED_PUSH_TARGET_UPDATES : null
-  }
-  return hasHostedReviewLinks(worktree) || hasPushTarget ? CLEARED_HOSTED_REVIEW_LINK_UPDATES : null
-}
-
-export function hasBranchScopedHostedReviewContext(worktree: Worktree, repo?: Repo): boolean {
-  return getBranchSwitchHostedReviewClear(worktree, repo) !== null
 }
 
 export function hasHostedReviewLinkUpdates(updates: Partial<WorktreeMeta>): boolean {
@@ -86,19 +70,34 @@ export function getHostedReviewLinkMutationGeneration(worktreeId: string): numbe
   return hostedReviewLinkMutationGenerationByWorktreeId.get(worktreeId) ?? 0
 }
 
-export function bumpHostedReviewLinkMutationGeneration(worktreeId: string): void {
-  hostedReviewLinkMutationGenerationByWorktreeId.set(
+/** A manual relink; naming the relinked copy keeps a same-path twin's own clear guard. */
+export function bumpHostedReviewLinkMutationGeneration(
+  worktreeId: string,
+  relinkedCopy?: Partial<Pick<Worktree, 'hostId' | 'runtimeOwnerEnvironmentId'>>
+): void {
+  const generation = getHostedReviewLinkMutationGeneration(worktreeId) + 1
+  hostedReviewLinkMutationGenerationByWorktreeId.set(worktreeId, generation)
+  const owner = relinkedCopy ? worktreeCopyOwnerKey(relinkedCopy) : undefined
+  if (owner === undefined) {
+    deleteCopyTombstones(hostedReviewLinkClearTombstonesByCopy, worktreeId)
+    pruneHostedReviewLinkWorktreeAliasesForId(worktreeId)
+    return
+  }
+  const siblingGuarded = dropCopyTombstone(
+    hostedReviewLinkClearTombstonesByCopy,
     worktreeId,
-    getHostedReviewLinkMutationGeneration(worktreeId) + 1
+    owner,
+    generation
   )
-  hostedReviewLinkClearTombstonesByWorktreeId.delete(worktreeId)
-  pruneHostedReviewLinkWorktreeAliasesForId(worktreeId)
+  if (!siblingGuarded) {
+    pruneHostedReviewLinkWorktreeAliasesForId(worktreeId)
+  }
 }
 
 export function pruneHostedReviewLinkMutationGenerations(worktreeIds: Iterable<string>): void {
   for (const worktreeId of worktreeIds) {
     hostedReviewLinkMutationGenerationByWorktreeId.delete(worktreeId)
-    hostedReviewLinkClearTombstonesByWorktreeId.delete(worktreeId)
+    deleteCopyTombstones(hostedReviewLinkClearTombstonesByCopy, worktreeId)
     hostedReviewLinkWorktreeIdAliases.delete(worktreeId)
     for (const [oldWorktreeId, newWorktreeId] of hostedReviewLinkWorktreeIdAliases) {
       if (newWorktreeId === worktreeId) {
@@ -138,10 +137,14 @@ export function migrateHostedReviewLinkMutationGeneration(
   oldWorktreeId: string,
   newWorktreeId: string
 ): void {
-  const tombstone = hostedReviewLinkClearTombstonesByWorktreeId.get(oldWorktreeId)
+  const hasTombstone = moveCopyTombstones(
+    hostedReviewLinkClearTombstonesByCopy,
+    oldWorktreeId,
+    newWorktreeId
+  )
   for (const [alias, target] of hostedReviewLinkWorktreeIdAliases) {
     if (target === oldWorktreeId) {
-      if (tombstone) {
+      if (hasTombstone) {
         hostedReviewLinkWorktreeIdAliases.set(alias, newWorktreeId)
       } else {
         hostedReviewLinkWorktreeIdAliases.delete(alias)
@@ -149,7 +152,7 @@ export function migrateHostedReviewLinkMutationGeneration(
     }
   }
   const hasGeneration = hostedReviewLinkMutationGenerationByWorktreeId.has(oldWorktreeId)
-  if (tombstone) {
+  if (hasTombstone) {
     hostedReviewLinkWorktreeIdAliases.set(oldWorktreeId, newWorktreeId)
   }
   if (hasGeneration) {
@@ -158,10 +161,6 @@ export function migrateHostedReviewLinkMutationGeneration(
       getHostedReviewLinkMutationGeneration(oldWorktreeId)
     )
     hostedReviewLinkMutationGenerationByWorktreeId.delete(oldWorktreeId)
-  }
-  if (tombstone) {
-    hostedReviewLinkClearTombstonesByWorktreeId.set(newWorktreeId, tombstone)
-    hostedReviewLinkClearTombstonesByWorktreeId.delete(oldWorktreeId)
   }
 }
 
@@ -175,18 +174,8 @@ export function getHostedReviewLinkWorktreeAliasCountForTests(): number {
 
 export function resetHostedReviewLinkMutationGenerationForTests(): void {
   hostedReviewLinkMutationGenerationByWorktreeId.clear()
-  hostedReviewLinkClearTombstonesByWorktreeId.clear()
+  hostedReviewLinkClearTombstonesByCopy.clear()
   hostedReviewLinkWorktreeIdAliases.clear()
-}
-
-export function hostedReviewLinksAreCleared(
-  worktree: Partial<Pick<Worktree, HostedReviewLinkKey | 'pushTarget'>>,
-  cleared: HostedReviewLinkClear = CLEARED_HOSTED_REVIEW_LINK_UPDATES
-): boolean {
-  return (
-    HOSTED_REVIEW_LINK_KEYS.every((key) => !(key in cleared) || worktree[key] == null) &&
-    !worktree.pushTarget
-  )
 }
 
 export function getHostedReviewLinkUpdates(
@@ -202,32 +191,44 @@ export function getHostedReviewLinkUpdates(
   }
 }
 
-export function canonicalHostedReviewBranchIdentity(branch: string): string {
-  return branchName(branch).trim()
-}
-
 export function rememberHostedReviewLinkClear(
   worktreeId: string,
   branch: string,
   generation: number,
-  head?: string,
+  head: string | undefined,
+  copy: Pick<WorktreeCopyClear, 'owner' | 'rowOwner'>,
   cleared: HostedReviewLinkClear = CLEARED_HOSTED_REVIEW_LINK_UPDATES
 ): void {
-  hostedReviewLinkClearTombstonesByWorktreeId.set(worktreeId, {
+  hostedReviewLinkClearTombstonesByCopy.set(reviewClearTombstoneKey(worktreeId, copy.owner), {
     branch,
     branchIdentity: canonicalHostedReviewBranchIdentity(branch),
     generation,
     head,
+    owner: copy.owner,
+    rowOwner: copy.rowOwner,
     cleared
   })
 }
 
 export function sanitizeHostedReviewLinksForBranchClear<
   T extends Pick<Worktree, 'id' | 'branch'> &
-    Partial<Pick<Worktree, HostedReviewLinkKey | 'pushTarget' | 'head'>>
+    Partial<
+      Pick<
+        Worktree,
+        | HostedReviewLinkKey
+        | 'pushTarget'
+        | 'head'
+        | 'linkedItems'
+        | 'hostId'
+        | 'runtimeOwnerEnvironmentId'
+      >
+    >
 >(worktree: T, currentWorktrees?: readonly T[]): T {
   const hostedReviewWorktreeId = resolveHostedReviewLinkWorktreeId(worktree.id)
-  const tombstone = hostedReviewLinkClearTombstonesByWorktreeId.get(hostedReviewWorktreeId)
+  // Why the copy key only: a bare-id guard would also rewrite a same-path twin that arrives later.
+  const tombstone = hostedReviewLinkClearTombstonesByCopy.get(
+    reviewClearTombstoneKey(hostedReviewWorktreeId, worktreeCopyOwnerKey(worktree))
+  )
   if (
     !tombstone ||
     tombstone.generation !== getHostedReviewLinkMutationGeneration(hostedReviewWorktreeId) ||
@@ -237,8 +238,9 @@ export function sanitizeHostedReviewLinksForBranchClear<
   }
   const current = currentWorktrees?.find(
     (entry) =>
-      entry.id === worktree.id ||
-      resolveHostedReviewLinkWorktreeId(entry.id) === hostedReviewWorktreeId
+      worktreeCopyOwnerKey(entry) === tombstone.owner &&
+      (entry.id === worktree.id ||
+        resolveHostedReviewLinkWorktreeId(entry.id) === hostedReviewWorktreeId)
   )
   const currentClean =
     current && hostedReviewLinksAreCleared(current, tombstone.cleared) ? current : null
@@ -248,13 +250,13 @@ export function sanitizeHostedReviewLinksForBranchClear<
     ...worktree,
     branch: guardBranch,
     ...(guardHead !== undefined ? { head: guardHead } : {}),
-    ...tombstone.cleared
+    ...normalizeWorkspaceAttachmentUpdate(worktree, tombstone.cleared)
   }
 }
 
 export function sanitizeHostedReviewLinksForBranchClears<
   T extends Pick<Worktree, 'id' | 'branch'> &
-    Partial<Pick<Worktree, HostedReviewLinkKey | 'pushTarget' | 'head'>>
+    Partial<Pick<Worktree, HostedReviewLinkKey | 'pushTarget' | 'head' | 'linkedItems'>>
 >(worktrees: readonly T[], currentWorktrees?: readonly T[]): T[] {
   let changed = false
   const sanitized = worktrees.map((worktree) => {
@@ -270,23 +272,23 @@ export function sanitizeHostedReviewLinksForBranchClears<
 export function applyHostedReviewLinkClear(
   set: Parameters<StateCreator<AppState, [], [], WorktreeSlice>>[0],
   worktreeId: string,
+  copy: WorktreeCopyClear,
   cleared: HostedReviewLinkClear = CLEARED_HOSTED_REVIEW_LINK_UPDATES
 ): void {
   set((s) => {
-    const nextWorktrees = applyWorktreeUpdates(s.worktreesByRepo, worktreeId, cleared)
+    const byRepo = s.worktreesByRepo
+    const nextWorktrees = clearCopyReviewLinks(byRepo, worktreeId, copy, cleared)
     const nextDetectedWorktrees = applyDetectedWorktreeUpdates(
       s.detectedWorktreesByRepo,
       worktreeId,
-      cleared
+      cleared,
+      copy.hostId
     )
-    if (
-      nextWorktrees === s.worktreesByRepo &&
-      nextDetectedWorktrees === s.detectedWorktreesByRepo
-    ) {
+    if (nextWorktrees === byRepo && nextDetectedWorktrees === s.detectedWorktreesByRepo) {
       return s
     }
     return {
-      ...(nextWorktrees !== s.worktreesByRepo
+      ...(nextWorktrees !== byRepo
         ? { worktreesByRepo: nextWorktrees, sortEpoch: s.sortEpoch + 1 }
         : {}),
       ...(nextDetectedWorktrees !== s.detectedWorktreesByRepo

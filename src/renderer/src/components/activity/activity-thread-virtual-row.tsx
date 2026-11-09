@@ -1,5 +1,5 @@
 import type React from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { clearActivityThread, isClearableActivityThread } from './activity-clear-completed'
 import { ActivityStatusGroupHeader } from './activity-thread-controls'
 import { ActivityThreadContextMenu } from './activity-thread-context-menu'
@@ -46,11 +46,12 @@ export function ActivityThreadVirtualRow({
   compactMode: boolean
   showJumpAction: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   if (item.type === 'header') {
     return (
       <div
         role="group"
-        aria-label={translate(
+        aria-label={t(
           'auto.components.activity.ActivityPrototypePage.a2b4437bfb',
           '{{value0}} activity',
           { value0: item.group.label }
@@ -81,8 +82,7 @@ export function ActivityThreadVirtualRow({
       onMarkManyUnread={onMarkThreadsUnread}
     >
       {(menuOpen) => (
-        // Why the menu wraps this wrapper, not the row: the row is already the hover-card
-        // trigger, and stacking two Radix triggers on one node composes their refs.
+        // Wrap the row: stacking two Radix triggers on its hover target would compose their refs.
         <div className="pb-0.5">
           <ActivityThreadRow
             thread={item.thread}

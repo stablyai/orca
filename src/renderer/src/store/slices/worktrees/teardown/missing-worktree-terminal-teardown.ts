@@ -1,11 +1,9 @@
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
 import { isRuntimeMethodNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 
-// Why: teardown cannot ride the scan's coalescing (each caller has its own known-id
-// snapshot), so dedupe on the request it actually produces — identical fan-out
-// requests share one host sweep instead of re-scanning per caller.
+// Scan coalescing cannot share caller-specific purge snapshots; deduplicate identical teardown requests instead (#10562).
 const missingWorktreeTeardownsInFlight = new Map<string, Promise<void>>()
 
 export async function teardownMissingWorktreeTerminalsBestEffort(

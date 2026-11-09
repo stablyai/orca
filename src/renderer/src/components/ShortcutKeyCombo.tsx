@@ -1,8 +1,14 @@
 import React from 'react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
-function KeyCap({ label, className }: { label: string; className?: string }): React.JSX.Element {
+function KeyCap({
+  label,
+  className
+}: {
+  label: React.ReactNode
+  className?: string
+}): React.JSX.Element {
   return (
     <span
       className={cn(
@@ -21,9 +27,8 @@ type ShortcutKeyComboProps = {
   separatorClassName?: string
   // Override cap colors when chips sit on a non-default surface (e.g. a filled primary card).
   keyCapClassName?: string
-  // When true the chips render a double-tap gesture: no "+" separator (reads
-  // "Shift Shift"), with a title clarifying the gesture. Note: the title uses
-  // the displayed label, so on Mac it reads as the glyph (e.g. 'Double-tap ⇧').
+  renderKey?: (key: string) => React.ReactNode
+  // Double taps use repeated labels/glyphs with a space instead of +.
   doubleTap?: boolean
 }
 
@@ -32,8 +37,10 @@ export function ShortcutKeyCombo({
   className,
   separatorClassName,
   keyCapClassName,
+  renderKey,
   doubleTap = false
 }: ShortcutKeyComboProps): React.JSX.Element {
+  const t = useTranslate()
   const isMac = navigator.userAgent.includes('Mac')
 
   return (
@@ -41,7 +48,7 @@ export function ShortcutKeyCombo({
       className={cn('inline-flex items-center gap-1', className)}
       title={
         doubleTap && keys.length > 0
-          ? translate('auto.components.ShortcutKeyCombo.07eb4985a1', 'Double-tap {{value0}}', {
+          ? t('auto.components.ShortcutKeyCombo.07eb4985a1', 'Double-tap {{value0}}', {
               value0: keys[0]
             })
           : undefined
@@ -49,10 +56,8 @@ export function ShortcutKeyCombo({
     >
       {keys.map((key, index) => (
         <React.Fragment key={`${key}-${index}`}>
-          <KeyCap label={key} className={keyCapClassName} />
-          {/* Why: Orca renders Mac shortcuts as adjacent glyphs, but Windows/Linux
-              shortcuts read more naturally with explicit "+" separators. A
-              double-tap reads as the same key twice, so it gets a space, not "+". */}
+          <KeyCap label={renderKey ? renderKey(key) : key} className={keyCapClassName} />
+          {/* Mac uses adjacent glyphs; Windows/Linux use +. Double taps use a space. */}
           {!isMac && !doubleTap && index < keys.length - 1 ? (
             <span className={separatorClassName ?? 'mx-0.5 text-xs text-muted-foreground'}>+</span>
           ) : null}

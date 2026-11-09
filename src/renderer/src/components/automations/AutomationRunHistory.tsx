@@ -2,7 +2,7 @@ import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from '
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
-import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   formatAutomationDateTime,
@@ -24,21 +24,18 @@ import {
   isAutomationRunHistoryArrowKey,
   shouldHandleAutomationRunHistoryKey
 } from './automation-run-history-keyboard-navigation'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
-// Date line + workspace detail line inside the row padding; the occurrence line
-// is the only optional one, so the estimate can be exact without measuring.
+// Base height covers date/workspace/padding; only folded occurrence text adds a line.
 const RUN_ROW_HEIGHT_PX = 57
 const RUN_ROW_OCCURRENCE_LINE_PX = 20
 const RUN_ROW_OVERSCAN = 10
-// happy-dom and the first paint both report a zero-height scroll element; without
-// a starting viewport the first render would mount no rows at all.
+// Seed viewport geometry because first paint and happy-dom report zero height, which would mount no rows.
 const RUNS_VIEWPORT_INITIAL_RECT = { width: 1024, height: 600 }
 
 const RUN_ROW_GRID_CLASS =
   'grid w-full grid-cols-[minmax(9rem,1fr)_minmax(10rem,1.1fr)_minmax(5rem,.55fr)_minmax(5rem,.55fr)_minmax(6rem,auto)] gap-3'
-// Sticky inside the scroller so the header shares the rows' content width when a
-// classic scrollbar takes gutter space; opaque so scrolled rows don't bleed through.
+// Share scroller width with rows, including scrollbar gutter; opaque sticky headers hide scrolled content.
 const RUN_ROW_HEADER_SURFACE_CLASS =
   '[background:color-mix(in_srgb,var(--muted)_20%,var(--background))]'
 
@@ -60,13 +57,13 @@ export function AutomationRunHistory({
   onRecoverHistory,
   onOpenRun
 }: AutomationRunHistoryProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const containerRef = React.useRef<HTMLDivElement>(null)
   const scrollRef = useRef<HTMLDivElement>(null)
   const headerRef = useRef<HTMLDivElement>(null)
   const rowsRef = useRef<HTMLDivElement>(null)
-  // The sticky header sits above the virtual rows in the same scroller, so every
-  // item is offset by the header height; without scrollMargin the virtualizer's
-  // coordinates (and scrollToIndex) are short by that offset.
+  // Offset virtual coordinates/scrollToIndex by the sticky header height.
   const [scrollMargin, setScrollMargin] = useState(0)
   const [selectedRunState, setSelectedRunState] = useState<{
     automationId: string
@@ -77,22 +74,23 @@ export function AutomationRunHistory({
   }))
   const runCountLabel = useMemo(() => {
     const completed = runs.filter((run) => run.status === 'completed').length
-    return `${runs.length} ${runs.length === 1 ? 'run' : 'runs'} · ${completed} completed`
-  }, [runs])
+    return t(
+      'auto.components.automations.runHistory.runCountSummary',
+      '{{count}} runs · {{completed}} completed',
+      { count: runs.length, completed, defaultValue_one: '{{count}} run · {{completed}} completed' }
+    )
+  }, [runs, t])
 
   const selectedRunId =
     selectedRunState.automationId === automationId ? selectedRunState.runId : null
   const selectedIndex = selectedRunId ? runs.findIndex((run) => run.id === selectedRunId) : -1
   const selectedRun = (selectedIndex >= 0 ? runs[selectedIndex] : undefined) ?? runs[0] ?? null
 
-  // Both options must be stable across renders: virtual-core memoizes its
-  // measurements on measuringOptions, which closes over getItemKey, and an inline
-  // estimateSize re-walks every uncached index (up to the whole history) per render.
+  // Keep both callbacks stable: virtual-core memoizes measurements via getItemKey, and inline estimates rewalk uncached history each render.
   const estimateRunRowSize = useCallback(
     (index: number): number => {
       const run = runs[index]
-      // The predicate, not the label: estimateSize is asked for unmounted indexes too,
-      // and building the label there would translate and format a date per run.
+      // Check folding without formatting labels/dates for every unmounted run.
       return run && isAutomationRunFolded(run)
         ? RUN_ROW_HEIGHT_PX + RUN_ROW_OCCURRENCE_LINE_PX
         : RUN_ROW_HEIGHT_PX
@@ -112,13 +110,11 @@ export function AutomationRunHistory({
     initialRect: RUNS_VIEWPORT_INITIAL_RECT,
     getItemKey: getRunRowKey,
     scrollMargin,
-    // The sticky header covers the top of the scrollport, so a row aligned to the
-    // top must land below it; scrollPaddingStart is that viewport inset.
+    // Inset top-aligned rows below the sticky header.
     scrollPaddingStart: scrollMargin
   })
 
-  // Measure the rows container's offset inside the scroller (its top equals the
-  // header height) and keep it current across zoom/font changes.
+  // Track the rows’ header offset across zoom/font changes.
   useLayoutEffect(() => {
     const rows = rowsRef.current
     const scrollElement = scrollRef.current
@@ -137,8 +133,7 @@ export function AutomationRunHistory({
     if (typeof ResizeObserver === 'undefined' || !headerRef.current) {
       return
     }
-    // Only the header can shift the rows container's offset; observing the rows
-    // container too would fire on every row mount for no offset change.
+    // Only header resizing shifts the offset; observing rows would fire on every mount without a geometry change.
     const observer = new ResizeObserver(measure)
     observer.observe(headerRef.current)
     return () => observer.disconnect()
@@ -151,16 +146,14 @@ export function AutomationRunHistory({
     []
   )
 
-  // The window listener reads the latest runs and selection through this ref so it
-  // subscribes once, instead of on every render the page above it causes.
+  // Keep one window listener; refs supply current runs/selection across page renders.
   const keyboardInputRef = useRef({ runs, selectedRun, automationId, notice, onOpenRun })
   React.useEffect(() => {
     keyboardInputRef.current = { runs, selectedRun, automationId, notice, onOpenRun }
   })
   const pendingFocusRunIdRef = useRef<string | null>(null)
 
-  // A refresh can drop the row a keyboard move was waiting to focus; without this
-  // the stale id would steal focus if that run ever reappeared.
+  // Drop pending focus for removed runs so their later reappearance cannot steal focus.
   React.useEffect(() => {
     const pendingRunId = pendingFocusRunIdRef.current
     if (pendingRunId && !runs.some((run) => run.id === pendingRunId)) {
@@ -192,9 +185,7 @@ export function AutomationRunHistory({
         if (targetRun) {
           event.preventDefault()
           setSelectedRunState({ automationId: input.automationId, runId: targetRun.id })
-          // Enter is left to the focused control, so focus has to follow the selection —
-          // but the target row may still be outside the virtual window, so focus waits
-          // for the scroll below to mount it.
+          // Enter follows focused controls; defer focus until scrolling mounts the selected row.
           pendingFocusRunIdRef.current = targetRun.id
         }
       }
@@ -210,8 +201,7 @@ export function AutomationRunHistory({
     }
   }, [selectedIndex, virtualizer])
 
-  // Unconditional: the row a keyboard move selected can take an extra scroll-driven
-  // render to mount, and only then can it take focus.
+  // Check every render because scrolling may mount the pending focus target on a later pass.
   React.useEffect(() => {
     const pendingRunId = pendingFocusRunIdRef.current
     if (!pendingRunId) {
@@ -231,7 +221,7 @@ export function AutomationRunHistory({
     >
       <div className="flex shrink-0 items-center justify-between border-b border-border/50 px-3 py-2">
         <div className="text-sm font-medium">
-          {translate('auto.components.automations.AutomationRunHistory.53fc5f07ab', 'Run history')}
+          {t('auto.components.automations.AutomationRunHistory.53fc5f07ab', 'Run history')}
         </div>
         {/* A failed read knows no counts; "0 runs" would answer a question nobody asked the host. */}
         {notice ? null : <div className="text-xs text-muted-foreground">{runCountLabel}</div>}
@@ -246,24 +236,13 @@ export function AutomationRunHistory({
               'sticky top-0 z-10 border-b border-border/50 px-3 py-1.5 text-[11px] font-medium uppercase text-muted-foreground'
             )}
           >
+            <div>{t('auto.components.automations.AutomationRunHistory.8faaa00726', 'Run')}</div>
             <div>
-              {translate('auto.components.automations.AutomationRunHistory.8faaa00726', 'Run')}
+              {t('auto.components.automations.AutomationRunHistory.149c0b49c7', 'Workspace')}
             </div>
-            <div>
-              {translate(
-                'auto.components.automations.AutomationRunHistory.149c0b49c7',
-                'Workspace'
-              )}
-            </div>
-            <div>
-              {translate('auto.components.automations.AutomationRunHistory.86a248187e', 'Spend')}
-            </div>
-            <div>
-              {translate('auto.components.automations.AutomationRunHistory.13988187b3', 'Tokens')}
-            </div>
-            <div>
-              {translate('auto.components.automations.AutomationRunHistory.9974a2b429', 'Status')}
-            </div>
+            <div>{t('auto.components.automations.AutomationRunHistory.86a248187e', 'Spend')}</div>
+            <div>{t('auto.components.automations.AutomationRunHistory.13988187b3', 'Tokens')}</div>
+            <div>{t('auto.components.automations.AutomationRunHistory.9974a2b429', 'Status')}</div>
           </div>
           <div
             ref={rowsRef}
@@ -275,15 +254,16 @@ export function AutomationRunHistory({
               if (!run) {
                 return null
               }
-              const runWorktree = run.workspaceId
-                ? (worktreeMap.get(run.workspaceId) ?? null)
-                : null
-              const workspaceLabel = getAutomationRunWorkspaceDisplay({
-                run,
-                worktree: runWorktree
-              })
-              const usageLabel = getAutomationUsageStatusLabel(run.usage)
-              const occurrenceLabel = automationRunOccurrenceLabel(run)
+              const runWorktree = run.workspaceId ? (worktreeMap.get(run.id) ?? null) : null
+              const workspaceLabel = getAutomationRunWorkspaceDisplay(
+                {
+                  run,
+                  worktree: runWorktree
+                },
+                t
+              )
+              const usageLabel = getAutomationUsageStatusLabel(run.usage, t, intlLocale)
+              const occurrenceLabel = automationRunOccurrenceLabel(run, t, intlLocale)
               return (
                 <div
                   key={virtualRow.key}
@@ -308,7 +288,7 @@ export function AutomationRunHistory({
                     }}
                   >
                     <div className="min-w-0">
-                      <div>{formatAutomationDateTime(run.scheduledFor)}</div>
+                      <div>{formatAutomationDateTime(run.scheduledFor, t, intlLocale)}</div>
                       {/* The row's own date is the first occurrence; only this line says it recurred. */}
                       {occurrenceLabel ? (
                         <div
@@ -340,7 +320,7 @@ export function AutomationRunHistory({
                       }
                       title={usageLabel}
                     >
-                      {formatAutomationCost(run.usage?.estimatedCostUsd)}
+                      {formatAutomationCost(run.usage?.estimatedCostUsd, t)}
                     </div>
                     <div
                       className={
@@ -351,15 +331,12 @@ export function AutomationRunHistory({
                       title={usageLabel}
                     >
                       {run.usage?.status === 'known'
-                        ? formatAutomationTokens(run.usage.totalTokens)
-                        : translate(
-                            'auto.components.automations.AutomationRunHistory.a00e38d1a3',
-                            'n/a'
-                          )}
+                        ? formatAutomationTokens(run.usage.totalTokens, intlLocale)
+                        : t('auto.components.automations.AutomationRunHistory.a00e38d1a3', 'n/a')}
                     </div>
                     <div className="flex justify-start">
                       <Badge variant={getAutomationRunStatusVariant(run.status)}>
-                        {getAutomationRunStatusLabel(run.status)}
+                        {getAutomationRunStatusLabel(run.status, t)}
                       </Badge>
                     </div>
                   </button>
@@ -370,7 +347,7 @@ export function AutomationRunHistory({
           {notice ? (
             <div className="grid gap-2 px-3 py-6" data-testid="automation-run-history-failure">
               <p className="text-center text-sm text-foreground">
-                {translate(
+                {t(
                   'auto.components.automations.AutomationRunHistory.historyUnavailable',
                   'Run history is unavailable from this host. This does not mean the automation failed or has no runs.'
                 )}
@@ -379,10 +356,7 @@ export function AutomationRunHistory({
             </div>
           ) : runs.length === 0 ? (
             <div className="px-3 py-6 text-center text-sm text-muted-foreground">
-              {translate(
-                'auto.components.automations.AutomationRunHistory.402651bfb6',
-                'No runs yet.'
-              )}
+              {t('auto.components.automations.AutomationRunHistory.402651bfb6', 'No runs yet.')}
             </div>
           ) : null}
         </div>

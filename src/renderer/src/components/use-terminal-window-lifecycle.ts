@@ -3,13 +3,27 @@ import { useAppStore } from '../store'
 import { isIntentionalAppRestartInProgress } from '@/lib/updater-beforeunload'
 import { preventUnloadAndScheduleShutdownCheckpointReset } from '@/lib/shutdown-checkpoint-guard'
 import { setWindowCloseRequestHandler } from './window-close-request-coordinator'
+import { runAfterEditorFramesFlush } from './editor/save/flush/editor-pending-flush'
 import {
   collectBrowserWebviewIds,
   destroyWebviewsRemovedFromStore
-} from '../store/slices/browser-webview-cleanup'
+} from '../store/slices/browser/cleanup/browser-webview-cleanup'
 import type { TerminalActivationController } from './use-terminal-activation-actions'
 
-export function useTerminalWindowLifecycle(controller: TerminalActivationController): void {
+export function useTerminalWindowLifecycle(
+  controller: Pick<
+    TerminalActivationController,
+    | 'activeBrowserTabId'
+    | 'activeTabType'
+    | 'activeWorktreeBrowserTabIdsKey'
+    | 'proceedToNativeWindowClose'
+    | 'queueEditorCloseRequests'
+    | 'renderedActiveWorktreeId'
+    | 'setActiveBrowserTab'
+    | 'setActiveTabType'
+    | 'windowCloseAfterDirtyRef'
+  >
+): void {
   const {
     activeBrowserTabId,
     activeTabType,
@@ -44,22 +58,35 @@ export function useTerminalWindowLifecycle(controller: TerminalActivationControl
       if (windowCloseAfterDirtyRef.current) {
         return
       }
-      const dirtyFiles = useAppStore.getState().openFiles.filter((file) => file.isDirty)
-      if (dirtyFiles.length > 0) {
-        queueEditorCloseRequests(
-          dirtyFiles.map((file) => file.id),
-          { isQuitting }
-        )
-        return
-      }
-      proceedToNativeWindowClose(isQuitting)
+      const state = useAppStore.getState()
+      // Claimed before the flush so repeat requests are ignored; a cancel clears it and voids this one.
+      const pendingClose = { isQuitting }
+      windowCloseAfterDirtyRef.current = pendingClose
+      // Why: a custom editor frame may still hold debounced edits the dirty check must see.
+      runAfterEditorFramesFlush(
+        state,
+        state.openFiles.map((file) => file.id),
+        () => {
+          if (windowCloseAfterDirtyRef.current !== pendingClose) {
+            return
+          }
+          const dirtyFiles = useAppStore.getState().openFiles.filter((file) => file.isDirty)
+          if (dirtyFiles.length > 0) {
+            queueEditorCloseRequests(
+              dirtyFiles.map((file) => file.id),
+              pendingClose
+            )
+            return
+          }
+          windowCloseAfterDirtyRef.current = null
+          proceedToNativeWindowClose(isQuitting)
+        }
+      )
     })
     return () => setWindowCloseRequestHandler(null)
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- controller refs preserve their original stable identities.
-  }, [proceedToNativeWindowClose, queueEditorCloseRequests])
+  }, [proceedToNativeWindowClose, queueEditorCloseRequests, windowCloseAfterDirtyRef])
 
-  // Why lazy: a `useRef(expr)` argument re-runs on every render and is thrown away, and this
-  // walks every browser page and tab across all worktrees on a component that renders constantly.
+  // Initialize lazily: eager useRef arguments walk every browser page/tab again on every render.
   const prevBrowserWebviewIdsRef = useRef<Set<string>>(undefined!)
   prevBrowserWebviewIdsRef.current ??= collectBrowserWebviewIds(
     useAppStore.getState().browserTabsByWorktree,

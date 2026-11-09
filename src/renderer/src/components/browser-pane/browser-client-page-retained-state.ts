@@ -1,4 +1,4 @@
-import type { BrowserClientPageRendererIdentity } from '../../../../shared/browser-client-page-renderer-protocol'
+import type { BrowserClientPageRendererIdentity } from '../../../../shared/browser/client-hosting/browser-client-page-renderer-protocol'
 
 export type BrowserClientRetainedRendererPage = {
   key: string
@@ -18,5 +18,7 @@ export type BrowserClientRetainedRendererPage = {
   onReady: EventListener
   onDestroyed: EventListener
   onRendererGone: EventListener
+  onLoadCommit: (event: Electron.LoadCommitEvent) => void
   releaseDragPassthroughSurface: () => void
+  releasePaintRetention: () => void
 }

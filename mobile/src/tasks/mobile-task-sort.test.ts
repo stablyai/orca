@@ -37,7 +37,10 @@ describe('mobile task sorting', () => {
     const getRepo = vi.spyOn(repos, 'get')
     const localeCompare = vi.spyOn(String.prototype, 'localeCompare')
     try {
-      sortMobileTaskItems(items, sort, repos)
+      const before = [...items]
+      const actual = sortMobileTaskItems(items, sort, repos)
+      expect(actual.map((item) => item.key)).toEqual(['b', 'd', 'e', 'a', 'c', 'f'])
+      expect(items).toEqual(before)
       expect(parse).toHaveBeenCalledTimes(items.length)
       expect(getRepo).toHaveBeenCalledTimes(sort === 'repository' ? 3 : 0)
       expect(localeCompare).not.toHaveBeenCalled()

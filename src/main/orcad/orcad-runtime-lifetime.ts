@@ -1,11 +1,6 @@
 export type OrcadRuntimeCleanup = (state: { failed: boolean }) => void | Promise<void>
 
-/**
- * Stops runtime resources in reverse acquisition order, then releases profile ownership.
- *
- * Every cleanup runs even after an earlier one fails, but a failed teardown never releases:
- * a writer that may still be running cannot hand the data root to a second orcad.
- */
+/** Failed teardown retains profile ownership: surviving writers cannot share a root with a new host. */
 export class OrcadRuntimeLifetime {
   private readonly cleanups: OrcadRuntimeCleanup[] = []
   private stopping?: Promise<void>

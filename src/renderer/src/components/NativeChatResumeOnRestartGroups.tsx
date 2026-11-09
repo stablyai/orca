@@ -1,13 +1,11 @@
-import { useContext, useMemo } from 'react'
+import { useMemo } from 'react'
 import { Folder, FolderTree, GitBranch, Monitor } from 'lucide-react'
 import { RepoIconGlyph } from '@/components/repo/repo-icon'
-import { WorktreeHostContextBadge } from '@/components/sidebar/WorktreeHostContextBadge'
-import { useSidebarHostScopeOptions } from '@/components/sidebar/use-sidebar-host-scope-options'
-import { translate } from '@/i18n/i18n'
-import {
-  resolveWorktreeBranchLabel,
-  resolveWorktreeDisplayName
-} from '@/lib/worktree-default-display-name'
+import { ProjectOptionDetail } from '@/components/new-workspace/ProjectComboboxRow'
+import { WorktreeHostContextBadge } from '@/components/sidebar/workspace-card/host/WorktreeHostContextBadge'
+import { useSidebarHostScopeOptions } from '@/components/sidebar/worktree-list/controls/use-sidebar-host-scope-options'
+import { useTranslate } from '@/i18n/use-translate'
+import { resolveWorktreeBranchLabel } from '@/lib/worktree-default-display-name'
 import { getHostContextLabel } from '../../../shared/worktree/host-context-labels'
 import {
   LOCAL_EXECUTION_HOST_ID,
@@ -15,13 +13,14 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { useAppStore } from '../store'
+import * as workspaceDisplay from './native-chat-resume-workspace-display'
 import {
   useLineageAncestors,
   useRepoIdByWorkspace,
   useWorkspaceWorktree
 } from './native-chat-resume-workspace-lookups'
 import { ResumeCandidateRow } from './NativeChatResumeOnRestartAgentRow'
-import { ResumeTreeCount, ResumeTreeRow } from './NativeChatResumeTreeRow'
+import { ResumeGroupNode as GroupNode } from './NativeChatResumeGroupNode'
 import {
   chatState,
   coveredKeys,
@@ -37,10 +36,8 @@ import {
   groupResumeWorkspacesByRepo,
   nestResumeWorkspaces,
   resolveResumeGroupHeader,
-  resumeSelectionState,
   resumeWorkspaceKind,
   resumeWorkspaceCandidates,
-  toggleResumeSelection,
   type ResumeCandidate,
   type ResumeWorkspaceGroup,
   type ResumeWorkspaceNode
@@ -48,93 +45,40 @@ import {
 
 export type { ResumeCandidate } from './native-chat-resume-on-restart-grouping'
 
-/**
- * The offered chats as a tree: machine, then project, then workspace (a child workspace is a node
- * inside its parent, after the parent's chats), then the chats.
- *
- * Every node's checkbox sits in one column at the left edge and covers every selectable chat under
- * it; levels read apart by icon and weight, nesting by indent and the disclosure arrows. The machine
- * level shows only when the machine is not obvious (a remote host, or chats on more than one), and
- * then it is what names the host, so no workspace repeats it.
- *
- * A workspace the store does not know yet (host connecting, or deleted) is named by its id.
- */
-
-/** A group node: its row, then (while open) what is under it. */
-function GroupNode({
-  nodeKey,
-  depth,
-  name,
-  checkboxLabel,
-  covered,
-  tree,
-  label,
-  children
-}: {
-  nodeKey: string
-  depth: number
-  name: string
-  checkboxLabel: string
-  /** Every selectable chat under this node. */
-  covered: readonly string[]
-  tree: TreeProps
-  label: React.ReactNode
-  children: React.ReactNode
-}): React.JSX.Element {
-  const selection = resumeSelectionState(covered, tree.selected)
-  const expanded = tree.isExpanded(nodeKey)
-  const selecting = useContext(ResumeTreeSelectingContext)
-  return (
-    <>
-      <ResumeTreeRow
-        depth={depth}
-        expanded={expanded}
-        onExpandedChange={(next) => tree.setExpanded(nodeKey, next)}
-        name={name}
-        checked={selection.checked}
-        disabled={tree.busy || selection.total === 0}
-        onCheckedChange={() => toggleResumeSelection(covered, selection, tree.onToggle)}
-        checkboxLabel={checkboxLabel}
-      >
-        {label}
-        {selecting && (
-          <ResumeTreeCount selectedCount={selection.selectedCount} total={selection.total} />
-        )}
-      </ResumeTreeRow>
-      {/* Collapsing unmounts the rows only; their selection lives with the dialog. */}
-      {expanded && children}
-    </>
-  )
-}
+/** Group by machine/project/workspace/chat, nesting child workspaces after parent chats. Show machine nodes for remote/multiple hosts; name unknown workspaces by their encoded folder. */
 
 function WorkspaceNode({
   node,
   hostId,
   depth,
-  tree
+  tree,
+  fallbackDisplays
 }: {
   node: ResumeWorkspaceNode
   hostId: ExecutionHostId
   depth: number
   tree: TreeProps
+  fallbackDisplays?: workspaceDisplay.WorkspaceFallbacks
 }): React.JSX.Element {
+  const t = useTranslate()
   const { group } = node
   const first = group.candidates[0]
   const worktree = useWorkspaceWorktree(group.workspaceId, first?.executionHostId)
   const kind = first ? resumeWorkspaceKind(first) : 'git-worktree'
   // Kind comes from the host's record, never from a name.
   const KindGlyph = kind === 'folder' ? Folder : GitBranch
-  const name = (worktree && resolveWorktreeDisplayName(worktree)) || group.workspaceId
+  const fallback = fallbackDisplays?.get(group)
+  const { name, controlName } = workspaceDisplay.resolveNames(worktree, fallback, group.workspaceId)
   const branch = worktree && kind === 'git-worktree' ? resolveWorktreeBranchLabel(worktree) : ''
   return (
     <GroupNode
       nodeKey={`workspace:${hostId}:${group.workspaceId}`}
       depth={depth}
-      name={name}
-      checkboxLabel={translate(
+      name={controlName}
+      checkboxLabel={t(
         'auto.components.NativeChatResumeOnRestartModal.selectWorkspace',
         'Select all chats in {{value0}}',
-        { value0: name }
+        { value0: controlName }
       )}
       covered={coveredKeys(resumeWorkspaceCandidates(node), tree)}
       tree={tree}
@@ -147,6 +91,12 @@ function WorkspaceNode({
               {branch}
             </span>
           )}
+          {!worktree && fallback?.parentPath && (
+            <ProjectOptionDetail
+              detail={fallback.parentPath}
+              className="shrink-2 text-[11px] text-muted-foreground"
+            />
+          )}
         </>
       }
     >
@@ -157,7 +107,7 @@ function WorkspaceNode({
             <ResumeCandidateRow
               key={chat.key}
               candidate={candidate}
-              workspaceName={name}
+              workspaceName={controlName}
               listedAt={tree.listedAt}
               checked={chat.checked}
               disabled={tree.busy}
@@ -176,20 +126,14 @@ function WorkspaceNode({
           hostId={hostId}
           depth={depth + 1}
           tree={tree}
+          fallbackDisplays={fallbackDisplays}
         />
       ))}
     </GroupNode>
   )
 }
 
-/**
- * A git repo, or the project group a folder workspace belongs to.
- *
- * A folder workspace's synthetic worktree carries `repoId` of `folder-workspace:<projectGroupId>` —
- * never null — so "no repo" cannot be detected by testing for absence. `projectGroupIdFromRepoId`
- * is the only thing that separates the two, and the sidebar likewise titles these with the project
- * group's name.
- */
+/** Folder workspaces have synthetic folder-workspace:<projectGroupId> repo IDs. Decode with projectGroupIdFromRepoId; absence alone cannot distinguish them from Git repos. */
 function ProjectNode({
   repoId,
   hostId,
@@ -203,6 +147,7 @@ function ProjectNode({
   depth: number
   tree: TreeProps
 }): React.JSX.Element {
+  const t = useTranslate()
   const repos = useAppStore((store) => store.repos)
   const projectGroups = useAppStore((store) => store.projectGroups)
   const header = resolveResumeGroupHeader(repoId, repos, projectGroups)
@@ -211,7 +156,7 @@ function ProjectNode({
       nodeKey={`project:${hostId}:${repoId}`}
       depth={depth}
       name={header.name}
-      checkboxLabel={translate(
+      checkboxLabel={t(
         'auto.components.NativeChatResumeOnRestartModal.selectProject',
         'Select all chats in {{value0}}',
         { value0: header.name }
@@ -220,8 +165,7 @@ function ProjectNode({
       tree={tree}
       label={
         <>
-          {/* A repo shows its own configured glyph; a project group uses the FolderTree the
-              sidebar's own PROJECT_GROUP_META uses. */}
+          {/* Match the sidebar’s configured repo glyph or project-group FolderTree. */}
           {header.kind === 'project' ? (
             <FolderTree className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
           ) : (
@@ -272,6 +216,7 @@ function MachineContents({
     <>
       {groupResumeWorkspacesByRepo(workspaces, lookup(tree.repoIdOf, null)).map((repoGroup) => {
         const nodes = nestResumeWorkspaces(repoGroup.workspaces, ancestorsOf)
+        const fallbackDisplays = workspaceDisplay.deriveFallbacks(repoGroup)
         // A group the store cannot place has no project to name or select; Select all covers it.
         return repoGroup.repoId === null ? (
           nodes.map((node) => (
@@ -281,6 +226,7 @@ function MachineContents({
               hostId={hostId}
               depth={depth}
               tree={tree}
+              fallbackDisplays={fallbackDisplays}
             />
           ))
         ) : (
@@ -311,13 +257,14 @@ function MachineNode({
   hostLabelById: ReadonlyMap<ExecutionHostId, string>
   tree: TreeProps
 }): React.JSX.Element {
+  const t = useTranslate()
   const name = getHostContextLabel(hostId, { hostLabelById })
   return (
     <GroupNode
       nodeKey={`machine:${hostId}`}
       depth={0}
       name={name}
-      checkboxLabel={translate(
+      checkboxLabel={t(
         'auto.components.NativeChatResumeOnRestartModal.selectMachine',
         'Select all chats on {{value0}}',
         { value0: name }
@@ -330,7 +277,7 @@ function MachineNode({
           <span className="min-w-0 truncate text-[13px] font-bold">{name}</span>
           {parseExecutionHostId(hostId)?.kind === 'ssh' && (
             <WorktreeHostContextBadge
-              label={translate('auto.components.NativeChatResumeOnRestartModal.sshHost', 'SSH')}
+              label={t('auto.components.NativeChatResumeOnRestartModal.sshHost', 'SSH')}
             />
           )}
         </>
@@ -391,7 +338,7 @@ export function ResumeOnRestartGroups({
     renderStatus,
     selectableIds
   }
-  // Why: the machine is worth a level only when it is not obvious.
+  // Only remote/multiple hosts need an explicit machine level.
   const showMachines =
     machines.length > 1 || machines.some((machine) => machine.hostId !== LOCAL_EXECUTION_HOST_ID)
   return (

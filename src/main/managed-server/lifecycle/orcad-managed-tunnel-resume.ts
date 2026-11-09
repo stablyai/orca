@@ -1,9 +1,9 @@
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import {
   getPreferredPairedRuntimeConnection,
   type KnownRuntimeEnvironment,
   type RuntimeSshTunnelLink
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshConnection } from '../../ssh/connection/ssh-connection'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { OrcadManagedServing } from './orcad-managed-serving'
@@ -50,7 +50,7 @@ type ResumeRecoveryDependencies = {
   ownershipGenerations: Map<string, number>
   probeTunnel?: OrcadManagedTunnelProbe
   targeting: OrcadManagedTunnelTargeting
-  /** Never rebuilds: a server restarted on a new port drops this forward for the next ensure. */
+  /** Drop moved-port forwards for the next ensure; never rebuild recursively. */
   checkServing?: (environment: KnownRuntimeEnvironment) => Promise<unknown>
 }
 
@@ -202,19 +202,22 @@ export class OrcadManagedTunnelResumeRecovery {
       target,
       connection: active.connection
     })
+    const stillCurrent = (): boolean =>
+      active.connection.getConnectGeneration() === transportGeneration &&
+      this.stillOwned(environment.id, active, ownershipGeneration, managerGeneration) &&
+      this.resolveEnvironment(environment.id, active, options) !== null
     const forward = await forwardToVerifiedOrcad({
       targetId: active.targetId,
       connection: active.connection,
       forwards: this.dependencies.forwards,
       localPort: deployment.localPort,
-      label: `Managed Orca server: ${current.environment.name}`,
+      label: `Orca on ${current.environment.name}`,
       ...checks,
-      stillCurrent: () =>
-        active.connection.getConnectGeneration() === transportGeneration &&
-        this.stillOwned(environment.id, active, ownershipGeneration, managerGeneration) &&
-        this.resolveEnvironment(environment.id, active, options) !== null
+      stillCurrent
     })
-    if (!forward) {
+    // Teardown may occur between the build's last check and recording its forward.
+    if (!forward || !stillCurrent()) {
+      await (forward && this.dependencies.forwards.removeForwardAndWait(forward.id))
       return
     }
     recordActiveOrcadTunnel(this.dependencies.active, environment.id, forward, {
@@ -224,7 +227,7 @@ export class OrcadManagedTunnelResumeRecovery {
       targetId: active.targetId,
       transportGeneration
     })
-    // A server that idled out while this client slept is started here, not reported as lost.
+    // Wake idle-stopped servers after resume instead of reporting them lost.
     await this.dependencies.checkServing?.(current.environment)
   }
 
@@ -268,11 +271,17 @@ export async function probeManagedOrcadTunnel(
   timeoutMs: number
 ): Promise<boolean> {
   try {
-    await sendRemoteRuntimeRequest(
+    await sendRemoteRuntimeRequestOnSocket(
       getPreferredPairedRuntimeConnection(environment),
       'status.get',
       undefined,
-      timeoutMs
+      timeoutMs,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined
     )
     return true
   } catch {

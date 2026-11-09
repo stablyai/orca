@@ -39,7 +39,10 @@ export async function purgeOrphanedRuntimeSshProjects(
   )
   for (const repo of orphanedRepos) {
     try {
-      await get().removeProject(repo.id, { hostId: getRepoExecutionHostId(repo) })
+      await get().removeProject(repo.id, {
+        hostId: getRepoExecutionHostId(repo),
+        automaticCleanup: true
+      })
     } catch (error) {
       console.error('Failed to purge orphaned per-workspace-env repo:', error)
     }

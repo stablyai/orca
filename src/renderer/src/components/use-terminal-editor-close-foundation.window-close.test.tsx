@@ -1,11 +1,6 @@
 // @vitest-environment happy-dom
 
-/**
- * Wiring for the window-close/quit running-work warning. The policy in
- * `terminal/window-close-running-work.ts` is inert unless `proceedToNativeWindowClose` actually
- * consults it, so pin that it does — and that a warning stops the native close rather than
- * confirming it.
- */
+/** Exercise close-policy wiring: native close must consult running-work assessment and stop when it warns. */
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -87,8 +82,7 @@ describe('proceedToNativeWindowClose', () => {
     expect(confirmWindowCloseMock).not.toHaveBeenCalled()
   })
 
-  // Why: a thrown assessment is not evidence either way, and a close that silently does nothing
-  // leaves SIGKILL as the user's only exit.
+  // Assessment exceptions must not leave SIGKILL as the only way to close.
   it('falls through to the close when the assessment throws', async () => {
     assessWindowCloseRunningWorkMock.mockRejectedValue(new Error('store blew up'))
     const { result } = mountFoundation()

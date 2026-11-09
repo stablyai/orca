@@ -13,7 +13,6 @@ const file = (filePath: string): LayoutEditorFile => ({
 
 const DIFF_A = 'wt::diff::unstaged::a.ts'
 
-/** Editor tabs for a.ts and b.ts, a diff of a.ts, and a terminal. */
 function setup() {
   return build(testContext(), [
     { type: 'createTerminalTab', workspace: WS },
@@ -136,5 +135,101 @@ describe('editor tabs follow a file renamed on disk', () => {
       result.ok && result.model.workspaces[WS]!.tabs.some((tab) => tab.id === '/repo/c.ts')
     ).toBe(true)
     expect(result.ok && result.result.renamedTabIds).toEqual({ '/repo/a.ts': '/repo/c.ts' })
+  })
+
+  it("gives a renamed view tab its file's new path, and leaves other views alone", () => {
+    const model = setup()
+    const diffTab = model.workspaces[WS]!.tabs.find((tab) => tab.entityId === DIFF_A)!
+    const oldView = { view: { mode: 'diff' as const }, file: file('/repo/a.ts') }
+    const withView: WorkspaceLayoutModel = {
+      ...model,
+      workspaces: {
+        [WS]: { ...model.workspaces[WS]!, editorViews: { [diffTab.id]: oldView } }
+      }
+    }
+    const newDiff = 'wt::diff::unstaged::src/a.ts'
+    const newView = { view: { mode: 'diff' as const }, file: file('/repo/src/a.ts') }
+
+    const result = rename(withView, [{ fileId: DIFF_A, newFileId: newDiff, view: newView }])
+
+    expect(result.ok && result.model.workspaces[WS]!.editorViews).toEqual({
+      [diffTab.id]: newView
+    })
+    const untouched = rename(withView, [edit('/repo/b.ts', '/repo/c.ts')])
+    expect(untouched.ok && untouched.model.workspaces[WS]!.editorViews).toEqual({
+      [diffTab.id]: oldView
+    })
+  })
+})
+
+describe("one disk move's renames across workspaces", () => {
+  const OTHER = 'other-ws'
+
+  /** a.ts open in WS and in a second workspace of the same partition. */
+  function twoWorkspaces(): WorkspaceLayoutModel {
+    return build(
+      testContext(),
+      [
+        {
+          type: 'openEditorTab',
+          workspace: OTHER,
+          tabId: 'other-a',
+          fileId: '/repo/a.ts',
+          contentType: 'editor',
+          file: file('/repo/a.ts')
+        },
+        {
+          type: 'openEditorTab',
+          workspace: OTHER,
+          tabId: 'other-c',
+          fileId: '/repo/c.ts',
+          contentType: 'editor',
+          file: file('/repo/c.ts')
+        }
+      ],
+      setup()
+    ).model
+  }
+
+  const both = (otherRenames: EditorFileRename[]) => ({
+    type: 'renameEditorFiles' as const,
+    workspace: WS,
+    renames: [edit('/repo/a.ts', '/repo/src/a.ts')],
+    alsoIn: [{ workspace: OTHER, renames: otherRenames }]
+  })
+
+  it('renames both workspaces in one change', () => {
+    const model = twoWorkspaces()
+    const result = applyLayoutCommand(
+      model,
+      both([edit('/repo/a.ts', '/repo/src/a.ts')]),
+      testContext()
+    )
+    if (!result.ok) {
+      throw new Error(result.code)
+    }
+    expect(checkWorkspaceLayoutModelRules([result.model], [model])).toEqual([])
+    for (const key of [WS, OTHER]) {
+      expect(result.model.workspaces[key]?.tabs.map((tab) => tab.entityId)).toContain(
+        '/repo/src/a.ts'
+      )
+    }
+  })
+
+  it('changes neither when one workspace refuses', () => {
+    // OTHER would take c.ts's id, which an open file holds.
+    expect(
+      applyLayoutCommand(twoWorkspaces(), both([edit('/repo/a.ts', '/repo/c.ts')]), testContext())
+    ).toEqual({ ok: false, code: 'invalid_params' })
+    expect(
+      applyLayoutCommand(
+        twoWorkspaces(),
+        {
+          ...both([]),
+          alsoIn: [{ workspace: 'missing', renames: [edit('/repo/a.ts', '/repo/b.ts')] }]
+        },
+        testContext()
+      )
+    ).toEqual({ ok: false, code: 'workspace_not_found' })
   })
 })

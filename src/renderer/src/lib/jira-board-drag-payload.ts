@@ -1,4 +1,4 @@
-import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
+import { measureUtf8ByteLength } from '../../../shared/utf8-byte-limits'
 
 export const JIRA_BOARD_DRAG_ISSUE_MIME = 'application/x-orca-jira-issue-ref'
 export const JIRA_BOARD_DRAG_ISSUE_REF_MAX_BYTES = 1024
@@ -37,8 +37,7 @@ export function readJiraBoardIssueDragData(
   const hasTypedPayload = Array.from(dataTransfer.types).includes(JIRA_BOARD_DRAG_ISSUE_MIME)
   const payload = dataTransfer.getData(JIRA_BOARD_DRAG_ISSUE_MIME)
   if (!payload) {
-    // Why: Electron hides getData during dragover, so an empty read with the
-    // typed MIME present means "payload exists but is not readable yet".
+    // Electron hides getData during dragover; a present MIME with empty data is pending readability, not absent payload.
     return hasTypedPayload ? { status: 'hidden' } : { status: 'missing' }
   }
   if (isJiraBoardIssueRefTooLarge(payload)) {
@@ -69,7 +68,7 @@ export function readJiraBoardIssueDragData(
 function isJiraBoardIssueRefTooLarge(payload: string): boolean {
   return (
     payload.length > JIRA_BOARD_DRAG_ISSUE_REF_MAX_BYTES ||
-    measureClipboardTextByteLength(payload, {
+    measureUtf8ByteLength(payload, {
       stopAfterBytes: JIRA_BOARD_DRAG_ISSUE_REF_MAX_BYTES
     }).exceededLimit
   )

@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import type { ColdRestoreDetection } from '../../daemon/history-reader'
+import type { ColdRestoreDetection } from '../../daemon/history/restoration/terminal-history-cold-restore-info'
 import { captureWslMoveRestoreHints } from './wsl-move-restore-hints'
 
-const restored = (cwd: string, hasUnreadableRecovery = false): ColdRestoreDetection => ({
+const restored = (
+  cwd: string,
+  hasUnreadableRecovery = false,
+  cwdFromSpawn = false
+): ColdRestoreDetection => ({
   status: 'restored',
   sessionId: 's',
   hasUnreadableRecovery,
+  ...(cwdFromSpawn ? { cwdFromSpawn: true as const } : {}),
   restoreInfo: {
     snapshotAnsi: '',
     scrollbackAnsi: '',
@@ -23,42 +28,18 @@ const restored = (cwd: string, hasUnreadableRecovery = false): ColdRestoreDetect
 })
 
 describe('captureWslMoveRestoreHints', () => {
-  it('keeps each pane its last folder in the Linux form the host opens', async () => {
-    const answers: Record<string, ColdRestoreDetection> = {
-      'wt@@a': restored('\\\\wsl.localhost\\Ubuntu\\home\\dev\\app\\src'),
-      'wt@@b': restored('/home/dev/app/test'),
-      'wt@@c': restored('\\\\wsl.localhost\\Debian\\home\\dev'),
-      'wt@@d': restored('C:\\Users\\dev'),
-      'wt@@e': { status: 'none' },
-      'wt@@f': { status: 'unreadable', sessionId: 'wt@@f' },
-      'wt@@g': restored('\\\\wsl$\\ubuntu\\home\\dev\\app\\docs'),
-      'wt@@h': restored('//wsl.localhost/Ubuntu/home/dev/app/bin', true)
-    }
-    const seen: unknown[] = []
+  // Bash on the bridge reports no folder, so an open pane's checkpoint kept its
+  // spawn folder and `cd deep/er` reopened at the project root.
+  it('prefers the folder the shell was in before Sleep over the spawn folder', async () => {
     const capture = await captureWslMoveRestoreHints(
       {
-        detectColdRestoreState: async (sessionId, opts) => {
-          seen.push(opts)
-          return answers[sessionId] ?? { status: 'none' }
-        }
+        detectColdRestoreState: async () =>
+          restored('\\\\wsl.localhost\\Ubuntu\\home\\dev\\app', false, true)
       },
-      ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'].map((leaf) => ({
-        paneKey: `t:${leaf}`,
-        sessionId: `wt@@${leaf}`
-      })),
+      [{ paneKey: 't:a', sessionId: 'wt@@a', shellCwd: '/home/dev/app/deep/er' }],
       'Ubuntu'
     )
-    expect(capture).toEqual({
-      hints: [
-        { paneKey: 't:a', cwd: '/home/dev/app/src' },
-        { paneKey: 't:b', cwd: '/home/dev/app/test' },
-        { paneKey: 't:g', cwd: '/home/dev/app/docs' },
-        { paneKey: 't:h', cwd: '/home/dev/app/bin' }
-      ],
-      unreadablePaneKeys: ['t:f'],
-      staleCwdPaneKeys: ['t:h']
-    })
-    // A sleep ends sessions cleanly; the read must not skip them for it.
-    expect(seen[0]).toEqual({ ignoreCleanEnd: true, wslDistro: 'Ubuntu' })
+    expect(capture.hints).toEqual([{ paneKey: 't:a', cwd: '/home/dev/app/deep/er' }])
+    expect(capture.staleCwdPaneKeys).toEqual([])
   })
 })

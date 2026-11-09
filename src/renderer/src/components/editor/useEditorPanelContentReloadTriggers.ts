@@ -1,13 +1,12 @@
 import { useEffect, useMemo, type MutableRefObject } from 'react'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { useAppStore } from '@/store'
-import type { DiffContent } from './editor-panel-content-types'
+import type { DiffContent, EditorPanelFileContentLoader } from './editor-panel-content-types'
 import {
   isReloadableSingleFileDiffTab,
   shouldReloadDiffOnGitStatusChange
 } from './editor-panel-diff-reload'
 import type { EditorPanelDiffContentLoader } from './useEditorPanelDiffContentLoader'
-import type { EditorPanelFileContentLoader } from './useEditorPanelFileContentLoader'
 
 type GitStatusByWorktree = ReturnType<typeof useAppStore.getState>['gitStatusByWorktree']
 
@@ -51,6 +50,7 @@ export function useEditorPanelContentReloadTriggers({
       activeFileGitStatusEntries.map((entry) => ({
         area: entry.area,
         status: entry.status,
+        oldPath: entry.oldPath,
         conflictStatus: entry.conflictStatus
       }))
     )
@@ -77,8 +77,7 @@ export function useEditorPanelContentReloadTriggers({
       invalidateDiffContent([current.id])
       return
     }
-    // Why: the lazy-load effect already fetches on first open and on a retained
-    // stale entry; forcing here races a duplicate git-diff RPC for the same tab.
+    // Lazy loading already covers first-open/stale diffs; forcing here would duplicate the same RPC.
     const cachedDiff = diffContentsRef.current[current.id]
     if (!cachedDiff || cachedDiff.isStale === true) {
       return

@@ -83,12 +83,9 @@ export async function readJsonObjectIfExists(
     const parsed: unknown = JSON.parse(await wslGatedReadFile(filePath, 'utf-8', 'scan', signal))
     return asRecord(parsed)
   } catch (error) {
-    // A cancel is not "no file": null here would be cached as the enrichment.
+    // Propagate cancellation so it cannot be cached as absent enrichment.
     throwIfAiVaultScanCancelled(signal)
-    // A missing or malformed file is genuinely "no enrichment", but a gate
-    // refusal must reach `parseSessionCandidate` as an issue — degrading it to
-    // null caches the un-enriched session under an unchanged mtime, and the
-    // non-resumable agents that use this never re-read it.
+    // Propagate WSL refusal as an issue; caching null can prevent retries for unchanged files.
     if (error instanceof WslTranscriptFsError) {
       throw error
     }
@@ -143,8 +140,7 @@ export function findOpenCodeStorageRoot(filePath: string): string | null {
   return dirname(sessionRoot)
 }
 
-// Pi and OMP (a Pi fork) both store transcripts under
-// <home>/<agentHomeDirName>/agent/sessions; accept any prefix of that path.
+// Accept Pi/OMP home, agent, or sessions paths.
 export function normalizeAgentSessionsDir(
   rawValue: string,
   agentHomeDirName: '.pi' | '.omp'
@@ -171,27 +167,20 @@ function defaultPrimeAgentSessionsDir(): string {
   return join(homedir(), '.prime', 'agent', 'sessions')
 }
 
-// Why: the Pi/Prime CLIs expand a leading `~` themselves, so a value set outside a
-// shell (config file, plist, quoted assignment) still resolves against the home dir.
-// That expansion is per-CLI and deliberately not in the shared absolute check — Grok,
-// for one, creates a literal `~` directory instead.
+// Pi/Prime expand leading ~ themselves; other CLIs such as Grok treat it literally.
 function absoluteConfiguredDir(rawValue: string): string | null {
   const expanded = rawValue === '~' ? homedir() : rawValue.replace(/^~(?=[\\/])/, homedir())
   const normalized = expanded.replace(/[\\/]+$/, '')
   return resolveAbsoluteDirOverride(normalized, '') || null
 }
 
-// Prime Agent takes PRIME_AGENT_CODING_AGENT_DIR verbatim as its agent config dir
-// (no `/agent` suffixing) and always writes transcripts to `<agentDir>/sessions` —
-// unconditionally, so a root that is itself named `sessions` still nests one deeper.
+// Prime always appends sessions, even when the configured agent directory is named sessions.
 export function normalizePrimeAgentSessionsDir(rawAgentDir: string): string {
   const agentDir = absoluteConfiguredDir(rawAgentDir.trim())
   return agentDir ? join(agentDir, 'sessions') : defaultPrimeAgentSessionsDir()
 }
 
-// PRIME_AGENT_SESSION_DIR (and its legacy PRIME_AGENT_CODING_AGENT_SESSION_DIR alias)
-// point straight at the transcripts root and outrank the agent dir upstream, so they
-// are used verbatim with no `sessions` child.
+// Explicit session-root overrides outrank the agent directory and are used verbatim.
 export function primeAgentSessionsDirFromEnv(env: NodeJS.ProcessEnv = process.env): string {
   const sessionDir =
     env.PRIME_AGENT_SESSION_DIR?.trim() || env.PRIME_AGENT_CODING_AGENT_SESSION_DIR?.trim()

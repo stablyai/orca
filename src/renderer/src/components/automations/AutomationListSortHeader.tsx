@@ -1,7 +1,7 @@
 import React from 'react'
 import { ArrowDown, ArrowUp } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { AutomationListSort, AutomationListSortField } from './automation-list-view'
 
 export function AutomationListSortHeader({
@@ -15,19 +15,19 @@ export function AutomationListSortHeader({
   sort: AutomationListSort | null
   onSort: (field: AutomationListSortField) => void
 }): React.JSX.Element {
+  const t = useTranslate()
   const active = sort?.field === field
   const direction = active ? sort.direction : null
-  // Why: one interpolated key per direction — word order and punctuation around
-  // the column name differ per language.
+  // Translate whole direction labels because column placement/punctuation varies by language.
   const sortedLabel =
     direction === 'asc'
-      ? translate(
+      ? t(
           'auto.components.automations.AutomationListSortHeader.sortedAscending',
           '{{value0}}, sorted ascending',
           { value0: label }
         )
       : direction === 'desc'
-        ? translate(
+        ? t(
             'auto.components.automations.AutomationListSortHeader.sortedDescending',
             '{{value0}}, sorted descending',
             { value0: label }

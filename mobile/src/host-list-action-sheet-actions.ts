@@ -1,14 +1,13 @@
 import { Activity, Edit3, PowerOff, RefreshCw } from 'lucide-react-native'
 import type { ActionSheetAction } from './components/ActionSheetModal'
-import type { ConnectionState, HostProfile } from './transport/types'
+import type { ConnectionState } from './transport/connection/connection-state'
+import type { HostProfile } from './transport/hosts/host-profile'
+import { translate } from './i18n/mobile-i18n'
 
-/** Builds the home-screen host long-press menu. Navigation and second drawers
- *  defer until this sheet's native Modal has unmounted —
- *  presenting into a live one freezes the whole screen on iOS (issue #8791). */
+// Defer navigation and new drawers until this native Modal unmounts; presenting into a live one freezes iOS (#8791).
 export function getHostListActionSheetActions(args: {
   host: HostProfile | null
   state: ConnectionState
-  /** Label "Connect" (not "Reconnect") when never connected this session, so the verb matches the action. */
   hasEverConnected: boolean
   onDismiss: () => void
   onReconnect: (hostId: string) => void
@@ -29,7 +28,11 @@ export function getHostListActionSheetActions(args: {
 
   return [
     {
-      label: args.hasEverConnected && isLive ? 'Reconnect' : 'Connect',
+      id: 'connect',
+      label:
+        args.hasEverConnected && isLive
+          ? translate('hostScreen.hostListActionSheetActions.reconnect', 'Reconnect')
+          : translate('hostScreen.hostListActionSheetActions.connect', 'Connect'),
       icon: RefreshCw,
       onPress: () => {
         args.onDismiss()
@@ -39,7 +42,8 @@ export function getHostListActionSheetActions(args: {
     ...(isLive
       ? [
           {
-            label: 'Disconnect',
+            id: 'disconnect',
+            label: translate('hostScreen.hostListActionSheetActions.disconnect', 'Disconnect'),
             icon: PowerOff,
             onPress: () => {
               args.onDismiss()
@@ -48,25 +52,14 @@ export function getHostListActionSheetActions(args: {
           }
         ]
       : []),
+    hostDiagnosticsAction(() => args.onDiagnostics(host.id)),
+    hostEditAction(() => {
+      args.onDismiss()
+      args.onEdit(host.id)
+    }),
     {
-      label: 'Network diagnostics',
-      icon: Activity,
-      closeBeforePress: true,
-      onPress: () => {
-        args.onDiagnostics(host.id)
-      }
-    },
-    {
-      label: 'Edit host',
-      icon: Edit3,
-      closeBeforePress: true,
-      onPress: () => {
-        args.onDismiss()
-        args.onEdit(host.id)
-      }
-    },
-    {
-      label: 'Remove',
+      id: 'remove',
+      label: translate('common.remove', 'Remove'),
       destructive: true,
       closeBeforePress: true,
       onPress: () => {
@@ -74,4 +67,28 @@ export function getHostListActionSheetActions(args: {
       }
     }
   ]
+}
+
+// Shared with the host screen's ⋯ menu; each runs once the sheet or menu it sits in has closed.
+export function hostDiagnosticsAction(onPress: () => void): ActionSheetAction {
+  return {
+    id: 'networkDiagnostics',
+    label: translate(
+      'hostScreen.hostListActionSheetActions.networkDiagnostics',
+      'Network diagnostics'
+    ),
+    icon: Activity,
+    closeBeforePress: true,
+    onPress
+  }
+}
+
+export function hostEditAction(onPress: () => void): ActionSheetAction {
+  return {
+    id: 'editHost',
+    label: translate('hostScreen.hostListActionSheetActions.editHost', 'Edit host'),
+    icon: Edit3,
+    closeBeforePress: true,
+    onPress
+  }
 }

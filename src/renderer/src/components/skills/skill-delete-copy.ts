@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import { compareBaseSensitivityLocaleText } from '../../../../shared/locale-text-collators'
 import type {
   SkillDeleteBlockReason,
@@ -6,34 +7,37 @@ import type {
   SkillDeleteResultEntry
 } from '../../../../shared/skill-delete-contract'
 
-export function skillDeleteBlockReasonLabel(reason: SkillDeleteBlockReason): string {
+export function skillDeleteBlockReasonLabel(
+  reason: SkillDeleteBlockReason,
+  t: Translate = translate
+): string {
   switch (reason) {
     case 'bundled': {
-      return translate(
+      return t(
         'auto.components.skills.SkillDelete.reasonBundled',
         'Bundled with Orca — it would be restored'
       )
     }
     case 'plugin': {
-      return translate(
+      return t(
         'auto.components.skills.SkillDelete.reasonPlugin',
         'Installed by a plugin — remove the plugin instead'
       )
     }
     case 'unowned': {
-      return translate(
+      return t(
         'auto.components.skills.SkillDelete.reasonUnowned',
         'This skill lives outside Orca’s skill folders — delete it where it is stored'
       )
     }
     case 'missing': {
-      return translate(
+      return t(
         'auto.components.skills.SkillDelete.reasonMissing',
         'This skill is no longer on disk'
       )
     }
     case 'stale': {
-      return translate(
+      return t(
         'auto.components.skills.SkillDelete.reasonStale',
         'This skill changed since the list was loaded — refresh and try again'
       )
@@ -41,28 +45,28 @@ export function skillDeleteBlockReasonLabel(reason: SkillDeleteBlockReason): str
   }
 }
 
-export function skillDeleteActionLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.deleteOne', 'Delete {{count}} skill', { count })
-    : translate('auto.components.skills.count.deleteOther', 'Delete {{count}} skills', { count })
+export function skillDeleteActionLabel(count: number, t: Translate = translate): string {
+  return t('auto.components.skills.count.delete', 'Delete {{count}} skills', {
+    count,
+    defaultValue_one: 'Delete {{count}} skill'
+  })
 }
 
 function foldersLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.deleteFolderOne', '{{count}} folder', { count })
-    : translate('auto.components.skills.count.deleteFolderOther', '{{count}} folders', { count })
+  return translate('auto.components.skills.count.deleteFolder', '{{count}} folders', {
+    count,
+    defaultValue_one: '{{count}} folder'
+  })
 }
 
 function linksLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.deleteLinkOne', '{{count}} link', { count })
-    : translate('auto.components.skills.count.deleteLinkOther', '{{count}} links', { count })
+  return translate('auto.components.skills.count.deleteLink', '{{count}} links', {
+    count,
+    defaultValue_one: '{{count}} link'
+  })
 }
 
-/** "Removes 12 folders and 5 links across Claude, Codex, Agent Skills."
- *  Null when the plan removes nothing, so the caller states that instead of
- *  rendering "0 folders and 0 links across " with an empty tail. Zero-valued
- *  halves are dropped: a link-only delete must not read "0 folders and 1 links". */
+/** Summarize folders/links by provider, omitting zero counts; return null when nothing is removable. */
 export function skillDeletePlacementSummary(plan: SkillDeletePlan): string | null {
   const placements = plan.skills.flatMap((skill) => skill.placements)
   if (placements.length === 0) {
@@ -87,11 +91,7 @@ export function skillDeletePlacementSummary(plan: SkillDeletePlan): string | nul
   )
 }
 
-/**
- * Not `node:path`: the renderer may be showing a Windows host's paths from macOS,
- * so `dirname` would pick the wrong separator. Both separators are honoured, and
- * a root keeps its trailing one — `/SKILL.md` is `/`, `C:\SKILL.md` is `C:\`.
- */
+/** Honor both separators and retain roots because a renderer can display paths from a different host OS. */
 function parentDirectory(path: string): string {
   const index = Math.max(path.lastIndexOf('/'), path.lastIndexOf('\\'))
   if (index < 0) {
@@ -101,11 +101,7 @@ function parentDirectory(path: string): string {
   return index === 0 || isDriveRoot ? path.slice(0, index + 1) : path.slice(0, index)
 }
 
-/**
- * A skill whose content lives outside every Orca root is removed by its links
- * only. Saying so is the difference between "deleted" and "gone" — the content
- * survives at its source, and the user has to be told which one happened.
- */
+/** Link-only removal preserves external content; name that source so deletion cannot imply the bytes are gone. */
 export function skillDeleteRetainedSourceLines(plan: SkillDeletePlan): string[] {
   return plan.skills
     .filter(
@@ -129,14 +125,13 @@ export function skillDeleteNothingToDoLabel(count: number): string {
         'That skill cannot be deleted from here.'
       )
     : translate(
-        'auto.components.skills.SkillDelete.nothingOther',
+        'auto.components.skills.SkillDelete.nothing',
         'None of the {{count}} selected skills can be deleted from here.',
-        { count }
+        { count, defaultValue_one: 'The {{count}} selected skill cannot be deleted from here.' }
       )
 }
 
-/** One line per skip reason rather than one merged "skipped" line: the plan
- *  already carries a typed reason per skill, so the dialog groups by it. */
+/** Group skipped skills by typed reason instead of merging unrelated causes into one count. */
 export function skillDeleteBlockedLines(plan: SkillDeletePlan): string[] {
   const counts = new Map<SkillDeleteBlockReason, number>()
   for (const skill of plan.skills) {
@@ -154,10 +149,10 @@ export function skillDeleteBlockedLines(plan: SkillDeletePlan): string[] {
 
 export type SkillDeleteResultLine = { key: string; label: string }
 
-/** A toast disappears before a user can act on "3 failed", so anything that is
- *  not `deleted` gets a persistent, per-reason line instead. */
+/** Keep non-deleted results as persistent reason lines so users can act after a toast would disappear. */
 export function skillDeleteResultLines(
-  skills: readonly SkillDeleteResultEntry[]
+  skills: readonly SkillDeleteResultEntry[],
+  t: Translate = translate
 ): SkillDeleteResultLine[] {
   const grouped = new Map<string, { count: number; label: string }>()
   for (const skill of skills) {
@@ -169,45 +164,42 @@ export function skillDeleteResultLines(
     const existing = grouped.get(key)
     grouped.set(key, {
       count: (existing?.count ?? 0) + 1,
-      label: existing?.label ?? statusLabel(skill)
+      label: existing?.label ?? statusLabel(skill, t)
     })
   }
   return [...grouped].map(([key, value]) => ({
     key,
-    label: translate('auto.components.skills.SkillDelete.resultLine', '{{count}} × {{label}}', {
+    label: t('auto.components.skills.SkillDelete.resultLine', '{{count}} × {{label}}', {
       count: value.count,
       label: value.label
     })
   }))
 }
 
-function statusLabel(skill: SkillDeleteResultEntry): string {
+function statusLabel(skill: SkillDeleteResultEntry, t: Translate = translate): string {
   switch (skill.status) {
     case 'skipped': {
       return skill.blocked
-        ? skillDeleteBlockReasonLabel(skill.blocked)
-        : translate('auto.components.skills.SkillDelete.statusSkipped', 'Skipped')
+        ? skillDeleteBlockReasonLabel(skill.blocked, t)
+        : t('auto.components.skills.SkillDelete.statusSkipped', 'Skipped')
     }
     case 'busy': {
-      return translate(
+      return t(
         'auto.components.skills.SkillDelete.statusBusy',
         'Busy — another skill operation is in progress'
       )
     }
     case 'partial': {
-      return translate(
+      return t(
         'auto.components.skills.SkillDelete.statusPartial',
         'Partly removed — some files are still on disk under a hidden name'
       )
     }
     case 'failed': {
-      return translate(
-        'auto.components.skills.SkillDelete.statusFailed',
-        'Failed — nothing changed'
-      )
+      return t('auto.components.skills.SkillDelete.statusFailed', 'Failed — nothing changed')
     }
     case 'deleted': {
-      return translate('auto.components.skills.SkillDelete.statusDeleted', 'Deleted')
+      return t('auto.components.skills.SkillDelete.statusDeleted', 'Deleted')
     }
   }
 }

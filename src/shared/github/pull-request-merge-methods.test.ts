@@ -8,12 +8,7 @@ describe('GitHub PR merge methods', () => {
   it('keeps the historical squash-first fallback when repository metadata is missing', () => {
     expect(resolveGitHubPRMergeMethods()).toEqual({
       defaultMethod: 'squash',
-      defaultLabel: 'Squash and merge',
-      methods: [
-        { method: 'squash', label: 'Squash and merge' },
-        { method: 'merge', label: 'Create merge commit' },
-        { method: 'rebase', label: 'Rebase and merge' }
-      ]
+      methods: ['squash', 'merge', 'rebase']
     })
   })
 
@@ -27,11 +22,7 @@ describe('GitHub PR merge methods', () => {
 
     expect(resolveGitHubPRMergeMethods(settings)).toEqual({
       defaultMethod: 'rebase',
-      defaultLabel: 'Rebase and merge',
-      methods: [
-        { method: 'rebase', label: 'Rebase and merge' },
-        { method: 'squash', label: 'Squash and merge' }
-      ]
+      methods: ['rebase', 'squash']
     })
   })
 
@@ -44,8 +35,6 @@ describe('GitHub PR merge methods', () => {
     })
 
     expect(settings?.defaultMethod).toBe('merge')
-    expect(resolveGitHubPRMergeMethods(settings).methods).toEqual([
-      { method: 'merge', label: 'Create merge commit' }
-    ])
+    expect(resolveGitHubPRMergeMethods(settings).methods).toEqual(['merge'])
   })
 })

@@ -1,19 +1,21 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { cn } from '@/lib/utils'
-import { findLinearIssueWorkspaceAttachmentInIndex } from '@/lib/linear-issue-workspace-attachment'
+import { findLinearIssueWorkspaceAttachmentInIndex } from '@/lib/work-items/linear/linear-issue-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
 import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { FolderOpen, ArrowRight, ExternalLink } from 'lucide-react'
-import { LinearStateCell } from '../../task-page-linear-issue-model'
-import { formatRelativeTime } from '../../task-page-source-context'
+import { LinearStateCell } from './task-page-linear-issue-model'
+import { formatRelativeTime } from '../task-page-source-context'
+import { openAppHttpLink } from '@/lib/browser/navigation/app-http-link-open'
 export function TaskPageLinearIssueBoardColumns({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     selectedLinearWorkspaceId,
     linearTaskSourceContext,
@@ -124,14 +126,14 @@ export function TaskPageLinearIssueBoardColumns({
                             }}
                             aria-label={
                               attachedWorkspace
-                                ? translate(
+                                ? t(
                                     'auto.components.TaskPage.linearOpenAttachedWorkspace',
                                     'Open workspace attached to {{value0}}',
                                     {
                                       value0: issue.identifier
                                     }
                                   )
-                                : translate(
+                                : t(
                                     'auto.components.TaskPage.ff90d0abc7',
                                     'Start workspace from {{value0}}',
                                     {
@@ -149,8 +151,8 @@ export function TaskPageLinearIssueBoardColumns({
                         </TooltipTrigger>
                         <TooltipContent side="bottom" sideOffset={6}>
                           {attachedWorkspace
-                            ? translate('auto.components.TaskPage.606a85c774', 'Open')
-                            : translate('auto.components.TaskPage.7d08e8be0f', 'Start')}
+                            ? t('auto.components.TaskPage.606a85c774', 'Open')
+                            : t('auto.components.TaskPage.7d08e8be0f', 'Start')}
                         </TooltipContent>
                       </Tooltip>
                       <Button
@@ -158,9 +160,9 @@ export function TaskPageLinearIssueBoardColumns({
                         size="icon-xs"
                         onClick={(event) => {
                           event.stopPropagation()
-                          window.api.shell.openUrl(issue.url)
+                          openAppHttpLink(issue.url, { event })
                         }}
-                        aria-label={translate(
+                        aria-label={t(
                           'auto.components.TaskPage.246bd64aed',
                           'Open {{value0}} in Linear',
                           {
@@ -183,7 +185,7 @@ export function TaskPageLinearIssueBoardColumns({
                     {effectiveLinearDisplayProperties.has('assignee') ? (
                       <span>
                         {issue.assignee?.displayName ??
-                          translate('auto.components.TaskPage.42a9160321', 'Unassigned')}
+                          t('auto.components.TaskPage.42a9160321', 'Unassigned')}
                       </span>
                     ) : null}
                     {effectiveLinearDisplayProperties.has('team') ? (

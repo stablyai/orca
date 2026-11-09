@@ -6,6 +6,10 @@ import type { PreloadApi } from '../api-types'
 export const reposApi = {
   list: () => ipcRenderer.invoke('repos:list'),
 
+  listWslMoved: () => ipcRenderer.invoke('repos:listWslMoved'),
+
+  listHostCatalogSnapshots: () => ipcRenderer.invoke('repos:listHostCatalogSnapshots'),
+
   add: (args) => ipcRenderer.invoke('repos:add', args),
 
   create: (args) => ipcRenderer.invoke('repos:create', args),
@@ -31,6 +35,8 @@ export const reposApi = {
 
   clone: (args) => ipcRenderer.invoke('repos:clone', args),
 
+  checkCloneTarget: (args) => ipcRenderer.invoke('repos:checkCloneTarget', args),
+
   cloneAbort: () => ipcRenderer.invoke('repos:cloneAbort'),
 
   onCloneProgress: (callback: (data: { phase: string; percent: number }) => void): (() => void) => {
@@ -41,9 +47,6 @@ export const reposApi = {
     ipcRenderer.on('repos:clone-progress', listener)
     return () => ipcRenderer.removeListener('repos:clone-progress', listener)
   },
-
-  getGitUsername: (args: { repoId: string }): Promise<string> =>
-    ipcRenderer.invoke('repos:getGitUsername', args),
 
   getBaseRefDefault: (args: {
     repoId: string

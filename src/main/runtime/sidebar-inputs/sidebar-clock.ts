@@ -1,7 +1,4 @@
-/**
- * The one timer behind every sidebar deadline: settling, retention expiry, create grace and
- * agent freshness each hold at most one deadline here, and only the earliest arms a timeout.
- */
+/** Share one timer for sidebar settling, retention, create grace and freshness; each key holds one deadline and only the earliest arms a timeout. */
 export class SidebarClock {
   private readonly deadlines = new Map<string, { at: number; fire: () => void }>()
   private timer: ReturnType<typeof setTimeout> | null = null

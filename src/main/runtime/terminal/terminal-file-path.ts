@@ -3,7 +3,8 @@ import {
   isWindowsAbsolutePathLike,
   resolveRuntimePath
 } from '../../../shared/cross-platform-path'
-import { parseWslPath, toWindowsWslPath } from '../../wsl'
+import { parseWslPath } from '../../wsl/filesystem/unc-path-access'
+import { toWindowsWslPath } from '../../../shared/wsl-paths'
 
 export function resolveTerminalAbsolutePath(args: {
   base: string
@@ -53,10 +54,6 @@ export function normalizeTerminalFileUriAuthorityPath(
   }
   // Why: without a verified host match, stripping the file-URI authority could open a same-path artifact on the wrong machine.
   return pathText
-}
-
-export function provenancePathCandidate(pathText: string, absolutePath: string): string {
-  return pathText.startsWith('//') ? pathText : absolutePath
 }
 
 export function isLoopbackFileUriHostname(hostname: string): boolean {

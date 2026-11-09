@@ -1,28 +1,25 @@
-import { selectAgentSessionCurrentRequests } from '../../../src/shared/agent-session-current-requests'
-import type { AgentSessionCancelResult } from '../../../src/shared/agent-session-wire'
-import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
+import { useCallback, useRef } from 'react'
+import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
+import type { AgentSessionCancelResult } from '../../../src/shared/agent-session/agent-session-wire'
+import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
+import { runningStructuredAgentSessionTurnId } from '../../../src/shared/agent-session/view/structured-agent-session-live-turn'
 import {
-  isActionableStructuredAgentSessionPrompt,
-  runningStructuredAgentSessionTurnId
-} from '../../../src/shared/structured-agent-session-live-turn'
-import type { RpcClient } from '../transport/rpc-client'
+  joinStructuredAgentSessionStop,
+  structuredAgentSessionStopIsJoinable
+} from '../../../src/shared/agent-session/requests/structured-agent-session-stop-join'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   requestStructuredAgentSessionMutation,
   type StructuredAgentSessionMutationCallResult
 } from './mobile-structured-agent-session-rpc'
+import { actionableStructuredPrompts } from './mobile-structured-actionable-prompt'
 
 type PromptIdentity = { itemId: string; expectedRevision: number }
 
-/** The prompt a Stop cancels: one the host says still waits on the person, when it says. */
 export function pendingStructuredPromptIdentity(
   state: Pick<StructuredAgentSessionState, 'items' | 'currentRequests' | 'actionablePromptIds'>
 ): PromptIdentity | undefined {
-  const prompt = selectAgentSessionCurrentRequests(state).find((item) =>
-    item.body.kind === 'approval' || item.body.kind === 'question'
-      ? item.body.resolution.state === 'pending' &&
-        isActionableStructuredAgentSessionPrompt(item.itemId, state.actionablePromptIds)
-      : false
-  )
+  const [prompt] = actionableStructuredPrompts(state)
   return prompt ? { itemId: prompt.itemId, expectedRevision: prompt.revision } : undefined
 }
 
@@ -37,8 +34,7 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
   hostAnswersRepeatedStops: boolean | null
   /** Whether the host takes a Stop naming no turn; null until the status probe answers. */
   hostStopsConversation: boolean | null
-  /** Stops still on their way, by what they stop; against a host that does not answer a repeat
-   *  quietly, a press for the same one joins it here. */
+  // Join in-flight repeats only on legacy hosts that cannot quietly answer repeated Stop.
   inFlight: Map<string, Promise<boolean>>
   onSendError: (message: string) => void
 }): Promise<boolean> {
@@ -47,35 +43,35 @@ export async function requestMobileStructuredAgentSessionCancel(args: {
   const turnId = runningStructuredAgentSessionTurnId(current)
   // Check the capability before fields enter the fingerprint.
   const prompt = args.prompt && args.promptCancelSupported === true ? args.prompt : undefined
-  // Such a host stops whatever the chat has in flight, a send the agent has not echoed included;
-  // a card's Cancel names the turn that raised it, prompt identity sent or not.
+  // Conversation Stop also covers un-echoed sends; card Cancel must still name its originating turn.
   const unnamed = args.hostStopsConversation === true && !args.prompt
-  if (!client || !sessionId || !enabled || current.fence === null || (!turnId && !unnamed)) {
+  // A card with no running turn names only itself; the host routes it.
+  if (
+    !client ||
+    !sessionId ||
+    !enabled ||
+    current.fence === null ||
+    (!turnId && !unnamed && !prompt)
+  ) {
     onSendError('Stop not sent')
     return false
   }
-  const fields = unnamed ? {} : { turnId, ...(prompt ? { prompt } : {}) }
-  // Every press is its own Stop: a kept id would be answered from the last one and stop nothing.
+  const fields = unnamed ? {} : { ...(turnId ? { turnId } : {}), ...(prompt ? { prompt } : {}) }
+  // Mint an id for each Stop so the ledger cannot replay an earlier press instead of stopping work.
   const fence = current.fence
   const stop = () => sendStop({ client, sessionId, fence, fields, onSendError })
-  if (args.hostAnswersRepeatedStops === true) {
+  if (
+    args.hostAnswersRepeatedStops === true ||
+    !structuredAgentSessionStopIsJoinable('agentSession.cancel', fields)
+  ) {
     return stop()
   }
-  // Temporary, for a host that predates the quiet repeated Stop: remove once none is supported.
-  const key = `${sessionId}:agentSession.cancel:${JSON.stringify(fields)}`
-  const joined = inFlight.get(key)
-  if (joined) {
-    return joined
-  }
-  const stopping = stop()
-  inFlight.set(key, stopping)
-  // Gone once it settles, so the next press is a new Stop.
-  void stopping.finally(() => {
-    if (inFlight.get(key) === stopping) {
-      inFlight.delete(key)
-    }
-  })
-  return stopping
+  // Legacy hosts need client-side joining until they support quiet repeated Stop.
+  return joinStructuredAgentSessionStop(
+    inFlight,
+    `${sessionId}:agentSession.cancel:${JSON.stringify(fields)}`,
+    stop
+  )
 }
 
 async function sendStop(input: {
@@ -105,4 +101,46 @@ async function sendStop(input: {
     input.onSendError(result.message)
   }
   return false
+}
+
+/** The chat's Stop and prompt cancel, with the host's Stop facts read from its capabilities. */
+export function useMobileStructuredRequestCancel(args: {
+  client: RpcClient | null
+  sessionId: string | null
+  enabled: boolean
+  hostSupport: StructuredAgentSessionHostSupport | null
+  stateRef: { readonly current: StructuredAgentSessionState }
+  onSendError: (message: string) => void
+}): (prompt?: PromptIdentity) => Promise<boolean> {
+  const { client, enabled, hostSupport, onSendError, sessionId, stateRef } = args
+  const promptCancelSupported = hostSupport?.promptCancel ?? null
+  const hostAnswersRepeatedStops = hostSupport?.quietRepeatedStop ?? null
+  const hostStopsConversation = hostSupport?.conversationStop ?? null
+  // Legacy hosts must join repeated Stop while the first turn cancel remains pending.
+  const inFlightStopsRef = useRef(new Map<string, Promise<boolean>>())
+  return useCallback(
+    (prompt?: PromptIdentity): Promise<boolean> =>
+      requestMobileStructuredAgentSessionCancel({
+        client,
+        enabled,
+        hostAnswersRepeatedStops,
+        hostStopsConversation,
+        inFlight: inFlightStopsRef.current,
+        onSendError,
+        prompt,
+        promptCancelSupported,
+        sessionId,
+        stateRef
+      }),
+    [
+      client,
+      enabled,
+      hostAnswersRepeatedStops,
+      hostStopsConversation,
+      onSendError,
+      promptCancelSupported,
+      sessionId,
+      stateRef
+    ]
+  )
 }

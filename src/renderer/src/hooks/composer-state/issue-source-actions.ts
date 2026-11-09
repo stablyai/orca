@@ -33,12 +33,18 @@ type IssueSourceActionsInput = Pick<
 
 import { useCallback, useMemo } from 'react'
 import type { LinearIssue } from '../../../../shared/linear/issue-types'
-import type { JiraIssue } from '../../../../shared/jira-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
+import '@/components/sidebar/workspace-creation/folder/folder-workspace-source-repos'
 import {
-  toLinearLinkedWorkItem,
+  buildLinearWorkspaceSource as toLinearLinkedWorkItem,
+  buildJiraWorkspaceSource,
+  buildWorkspaceSourceSelection,
+  shouldApplyWorkspaceSourceAutoName
+} from '../../../../shared/new-workspace/workspace-source'
+import {
   getLinkedItemDisplayName,
   getSmartNameSelection as getFolderSmartNameSelection
-} from '@/components/sidebar/folder-workspace-composer-helpers'
+} from '@/components/sidebar/workspace-creation/folder/folder-workspace-source-selection'
 import {
   buildLinearIssueLinkedWorkItem,
   getLinearLinkedWorkItemBranchName
@@ -50,13 +56,8 @@ import {
   getLinkedWorkItemWorkspaceName,
   type LinkedWorkItemSummary
 } from '@/lib/new-workspace'
-import {
-  buildJiraWorkspaceSource,
-  buildWorkspaceSourceSelection,
-  shouldApplyWorkspaceSourceAutoName
-} from '../../../../shared/new-workspace/workspace-source'
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 
 export function useIssueSourceActions(input: IssueSourceActionsInput) {
   const {
@@ -123,7 +124,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       const linkedLinearIssue = buildLinearIssueLinkedWorkItem(issue)
       setLinkedWorkItem(linkedLinearIssue)
       const suggestedName = getLinearIssueWorkspaceName(issue)
-      // Why: same lookup-text rule as applyLinkedWorkItem, plus the typed Linear identifier ("STA-123") that matched this issue.
+      // Treat typed Linear identifiers as lookup text too, rather than user-owned names.
       if (
         shouldApplyWorkspaceSourceAutoName({
           currentName: name,
@@ -140,7 +141,7 @@ export function useIssueSourceActions(input: IssueSourceActionsInput) {
       setBranchNameOverridePreservesNameEdits(Boolean(linearBranchName))
       setForkPushWarning(null)
       branchAutoNameRef.current = linearBranchName ?? ''
-      // Why: don't prefill the note for a Linear pick — that would turn a source selection into user-authored instructions (matches the GitHub flow).
+      // Source selection must not inject user instructions through note prefill; match GitHub behavior.
     },
     [
       isProjectGroupTarget,

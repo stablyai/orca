@@ -1,7 +1,10 @@
 import { normalizeCompatibleLifecycleEvent } from './providers/compatible-lifecycle-events'
 import { normalizeQoderEvent } from './providers/qoder-events'
-import type { AgentMainAgentStatus, ParsedAgentStatusPayload } from '../agent-status-types'
-import type { AgentHookSource } from '../agent-hook-relay'
+import type { AgentMainAgentStatus } from '../agent-status/lifecycle/main-agent-status'
+import type { ParsedAgentStatusPayload } from '../agent-status/contracts/agent-status-types'
+import type { AgentHookSource } from './transport/agent-hook-relay'
+import { readHostTurnSignals } from './state/agent-hook-turn-end-timing'
+import type { AgentHookEventPayload } from './listener-event'
 import { readLastCommandCodeUserPromptEntryFromTranscript } from './command-code-transcript'
 import { readGrokHomeEnvelope } from './grok-result-discovery'
 import { readFirstString } from './interactive-tool'
@@ -14,6 +17,7 @@ import { normalizeAntigravityEvent } from './providers/antigravity-events'
 import { normalizeAmpEvent } from './providers/amp-events'
 import { normalizeClaudeEvent } from './providers/claude-events'
 import { codexHookEventForEndedTurn, normalizeCodexEvent } from './providers/codex-events'
+import { codexHookEventForEphemeralThread } from './providers/codex-ephemeral-threads'
 import { normalizeGeminiEvent } from './providers/gemini-events'
 import { normalizeOpenCodeFamilyEvent } from './providers/opencode-family-events'
 import { normalizeCursorEvent } from './providers/cursor-events'
@@ -38,6 +42,9 @@ export type ProviderDispatchResult = {
   hasTranscriptPromptEvidence: boolean
   /** The event the payload was normalized as, which a provider may restate (Codex ended turns). */
   eventName: unknown
+  hostTurnSignals: Pick<AgentHookEventPayload, 'stopHookActive' | 'nativeTurnKey'>
+  /** Full reply text this hook carried, outside the cached tool snapshot; refreshes carry none. */
+  replyCandidate: string | undefined
 }
 
 /** Exhaustive provider routing with provider-specific transcript locality and attribution. */
@@ -53,14 +60,22 @@ export function normalizeProviderEvent(input: {
   previousOpenCodeMainAgent?: AgentMainAgentStatus
 }): ProviderDispatchResult {
   const { state, source, promptText, paneKey, hookPayload, envelope, extractedPrompt } = input
-  const eventName =
+  // Ephemeral side chats share the pane but must not replace its recorded main turn.
+  const codexEventName =
     source === 'codex'
-      ? codexHookEventForEndedTurn(state, paneKey, input.eventName, hookPayload)
-      : input.eventName
+      ? codexHookEventForEphemeralThread(state, paneKey, input.eventName, hookPayload)
+      : undefined
+  const eventName =
+    source !== 'codex'
+      ? input.eventName
+      : codexEventName === undefined
+        ? undefined
+        : codexHookEventForEndedTurn(state, paneKey, codexEventName, hookPayload)
   let resolvedPromptText = promptText
   let promptInteractionKey: string | undefined
   let hasTranscriptPromptEvidence = false
   let payload: ParsedAgentStatusPayload | null
+  state.eventReplyCandidate = undefined
 
   switch (source) {
     case 'codebuddy':
@@ -217,12 +232,16 @@ export function normalizeProviderEvent(input: {
     case 'kiro':
       payload = normalizeKiroEvent(state, eventName, promptText, paneKey, hookPayload)
   }
+  const replyCandidate = state.eventReplyCandidate
+  state.eventReplyCandidate = undefined
 
   return {
     payload,
     resolvedPromptText,
     promptInteractionKey,
     hasTranscriptPromptEvidence,
-    eventName
+    eventName,
+    hostTurnSignals: readHostTurnSignals(source, hookPayload, promptInteractionKey),
+    replyCandidate
   }
 }

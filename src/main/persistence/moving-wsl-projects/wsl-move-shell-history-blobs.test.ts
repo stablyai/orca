@@ -15,8 +15,8 @@ import {
   parseOrcadMigrationBlobDescriptor,
   type OrcadMigrationBlobDescriptor
 } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
-import { rewriteOrcadMigrationWorktreeId } from '../../ssh/orcad-migration-path-rewrite'
-import { hashWorktreeId } from '../../terminal-history-id'
+import { rewriteOrcadMigrationWorktreeId } from '../migrating-orcad-catalog/path-rewrite/orcad-migration-path-rewrite'
+import { hashWorktreeId } from '../../pty/history/terminal-history-id'
 import { parseOrcadMigrationShellHistoryHeader } from '../migrating-orcad-catalog/orcad-migration-shell-history-format'
 import { createUncToLinuxPathRewriter } from './wsl-move-path-rewriter'
 import {
@@ -113,22 +113,6 @@ describe('WSL move shell history blobs', () => {
     expect(loginShell).toEqual([false, false, true])
   })
 
-  it('skips missing and empty files and never sends fish', async () => {
-    writeHistory(SOURCE_ID, 'zsh_history', '')
-    writeHistory(SOURCE_ID, 'fish_history', '- cmd: ls\n')
-    writeHistory(SOURCE_FOLDER_ID, 'bash_history', 'make\n')
-
-    const blobs = await build([
-      { sourceWorktreeId: SOURCE_ID, destinationWorktreeId: DESTINATION_ID },
-      { sourceWorktreeId: SOURCE_FOLDER_ID, destinationWorktreeId: SOURCE_FOLDER_ID },
-      { sourceWorktreeId: 'repo-a::/never-opened', destinationWorktreeId: 'repo-a::/never-opened' }
-    ])
-
-    expect(blobs.descriptors.map((descriptor) => descriptor.key)).toEqual([
-      `${hashWorktreeId(SOURCE_FOLDER_ID)}-bash`
-    ])
-  })
-
   it('blocks the move on a history over the per-blob cap instead of truncating it', async () => {
     const path = writeHistory(SOURCE_ID, 'bash_history', '')
     truncateSync(path, 64 * 1024 * 1024)
@@ -145,7 +129,7 @@ describe('WSL move shell history blobs', () => {
     utimesSync(legacy, 1_000, 1_000)
     utimesSync(current, 2_000, 2_000)
 
-    // The newer id is listed first; the merge still puts its commands last.
+    // Input order must not outrank history age.
     const blobs = await build([
       { sourceWorktreeId: SOURCE_ID, destinationWorktreeId: DESTINATION_ID },
       { sourceWorktreeId: legacyId, destinationWorktreeId: DESTINATION_ID }

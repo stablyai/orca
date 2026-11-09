@@ -1,11 +1,4 @@
-/**
- * Host-local view of the browser pages a paired CLIENT desktop renders for one of this host's
- * workspaces. The page itself never exists on the host, so the host UI has no store tab for it —
- * these rows are the whole model, pushed over local IPC and held only in renderer memory.
- *
- * Nothing here crosses the runtime wire: paired clients learn about the same pages through the
- * session-tabs snapshot, which is a separate, already-negotiated payload.
- */
+/** Host-local IPC/memory rows represent pages rendered on paired clients, absent from host store tabs. Runtime clients receive separate negotiated session-tabs snapshots. */
 export type ClientHostedBrowserRow = {
   browserPageId: string
   worktreeId: string

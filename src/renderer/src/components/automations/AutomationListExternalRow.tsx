@@ -20,7 +20,7 @@ import type {
   ExternalAutomationAction,
   ExternalAutomationJob,
   ExternalAutomationManager
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/external/external-automation'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import type { ExternalAutomationScope } from './external-automation-scope-client'
@@ -41,7 +41,7 @@ import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-inter
 import { getExternalAutomationLastRunSnapshot } from './automation-list-last-run'
 import { AutomationListLastRunCell } from './AutomationListLastRunCell'
 import { AutomationListStatusCell } from './AutomationListStatusCell'
-import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 
 export type AutomationListExternalRowProps = {
   entry: ExternalAutomationListEntry
@@ -67,28 +67,37 @@ export function AutomationListExternalRow({
   onSelect,
   onRequestAction
 }: AutomationListExternalRowProps): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const providerLabel = getExternalProviderLabel(entry.manager)
-  const targetKindLabel = getExternalTargetKindLabel(entry.manager)
   const isSelected = selectedExternalKey === entry.key
   const sshStatus =
     entry.manager.target.type === 'ssh'
       ? sshConnectionStates.get(entry.manager.target.connectionId)?.status
       : undefined
-  const disabledMessage = getExternalAutomationActionDisabledMessage({
-    manager: entry.manager,
-    providerLabel,
-    targetKindLabel,
-    sshStatus,
-    actionInProgress: externalActionKey !== null
-  })
+  const disabledMessage = getExternalAutomationActionDisabledMessage(
+    {
+      manager: entry.manager,
+      providerLabel,
+      sshStatus,
+      actionInProgress: externalActionKey !== null
+    },
+    t
+  )
   const actionDisabled = disabledMessage !== null
-  const scheduleLabel = getExternalAutomationScheduleDisplay(entry.manager, entry.job).label
-  const hostLabel = entry.manager.targetLabel || entry.manager.label || 'Local'
+  const scheduleLabel = getExternalAutomationScheduleDisplay(
+    entry.manager,
+    entry.job,
+    t,
+    intlLocale
+  ).label
+  const hostLabel =
+    entry.manager.targetLabel || entry.manager.label || getExternalTargetKindLabel(entry.manager, t)
   const projectLabel = entry.job.workdir ?? providerLabel
   const nextRunLabel = entry.job.enabled
-    ? formatExternalDate(entry.job.nextRunAt, relativeNow)
-    : translate('auto.components.automations.AutomationsPage.paused', 'Paused')
-  const lastRunSnapshot = getExternalAutomationLastRunSnapshot(entry.job)
+    ? formatExternalDate(entry.job.nextRunAt, relativeNow, t, intlLocale)
+    : t('auto.components.automations.AutomationsPage.paused', 'Paused')
+  const lastRunSnapshot = getExternalAutomationLastRunSnapshot(entry.job, t)
 
   return (
     <ContextMenu>
@@ -98,8 +107,7 @@ export function AutomationListExternalRow({
           tabIndex={0}
           data-current={isSelected ? 'true' : undefined}
           onClick={(event) => {
-            // Why: Radix portals menus out of the row DOM, but React still
-            // bubbles those clicks here — ignore so menu actions don't open detail.
+            // React bubbles portaled menu clicks through this row; ignore them to avoid opening detail.
             if (isPortaledRowMenuClick(event)) {
               return
             }
@@ -145,7 +153,7 @@ export function AutomationListExternalRow({
                 variant="ghost"
                 size="icon-xs"
                 className="size-7 text-muted-foreground"
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.automations.AutomationsPage.rowActions',
                   'Automation actions'
                 )}
@@ -162,7 +170,7 @@ export function AutomationListExternalRow({
                 <Play className="size-3.5" />
                 <span className="min-w-0 truncate">
                   {disabledMessage ??
-                    translate('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')}
+                    t('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')}
                 </span>
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -178,8 +186,8 @@ export function AutomationListExternalRow({
               >
                 {entry.job.enabled ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
                 {entry.job.enabled
-                  ? translate('auto.components.automations.AutomationsPage.b457436d6a', 'Pause')
-                  : translate('auto.components.automations.AutomationsPage.376631ef2b', 'Resume')}
+                  ? t('auto.components.automations.AutomationsPage.b457436d6a', 'Pause')
+                  : t('auto.components.automations.AutomationsPage.376631ef2b', 'Resume')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -188,7 +196,7 @@ export function AutomationListExternalRow({
                 onSelect={() => onRequestAction(entry.manager, entry.job, 'delete', entry.scope)}
               >
                 <Trash2 className="size-3.5" />
-                {translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
+                {t('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -202,7 +210,7 @@ export function AutomationListExternalRow({
           <Play className="size-3.5" />
           <span className="min-w-0 truncate">
             {disabledMessage ??
-              translate('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')}
+              t('auto.components.automations.AutomationsPage.2faecab10b', 'Run Now')}
           </span>
         </ContextMenuItem>
         <ContextMenuItem
@@ -218,8 +226,8 @@ export function AutomationListExternalRow({
         >
           {entry.job.enabled ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
           {entry.job.enabled
-            ? translate('auto.components.automations.AutomationsPage.b457436d6a', 'Pause')
-            : translate('auto.components.automations.AutomationsPage.376631ef2b', 'Resume')}
+            ? t('auto.components.automations.AutomationsPage.b457436d6a', 'Pause')
+            : t('auto.components.automations.AutomationsPage.376631ef2b', 'Resume')}
         </ContextMenuItem>
         <ContextMenuSeparator />
         <ContextMenuItem
@@ -228,7 +236,7 @@ export function AutomationListExternalRow({
           onSelect={() => onRequestAction(entry.manager, entry.job, 'delete', entry.scope)}
         >
           <Trash2 className="size-3.5" />
-          {translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
+          {t('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}
         </ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>

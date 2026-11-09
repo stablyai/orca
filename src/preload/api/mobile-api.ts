@@ -1,7 +1,7 @@
-import type { MobileRelayStatusDetail } from '../../shared/mobile-relay-status'
-import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import type { MobileRelayStatusDetail } from '../../shared/remote-runtime/relay/mobile-relay-status'
+import type { MobilePairingConnectionMode } from '../../shared/remote-runtime/pairing/mobile-pairing-connection-mode'
 import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
-import type { MobileRelayMintFailure } from '../../shared/mobile-relay-mint-failure'
+import type { MobileRelayMintFailure } from '../../shared/remote-runtime/relay/mobile-relay-mint-failure'
 import type { RuntimeAccessGrant } from '../../shared/runtime-access-grants'
 
 export type MobileApi = {
@@ -29,8 +29,9 @@ export type MobileApi = {
         /** Null when no direct address was advertised — the QR pairs over Relay alone. */
         endpoint: string | null
         deviceId: string
-        /** Mode the QR actually encodes. */
         connectionMode: MobilePairingConnectionMode
+        /** Null when the code stays valid until scanned. */
+        expiresAt: number | null
       }
   >
   getWindowsFirewallStatus: (args?: { address?: string }) => Promise<
@@ -65,6 +66,7 @@ export type MobileApi = {
         webClientUrl: string | null
         endpoint: string
         deviceId: string
+        expiresAt: number | null
       }
   >
   listDevices: () => Promise<{
@@ -73,15 +75,15 @@ export type MobileApi = {
       name: string
       pairedAt: number
       lastSeenAt: number
+      usesLegacyEncryption?: boolean
+      olderPairingMethod?: true
     }[]
   }>
   revokeDevice: (args: { deviceId: string }) => Promise<{ revoked: boolean }>
   listRuntimeAccessGrants: () => Promise<{ grants: RuntimeAccessGrant[] }>
   revokeRuntimeAccess: (args: { deviceId: string }) => Promise<{ revoked: boolean }>
-  isWebSocketReady: () => Promise<{ ready: boolean; endpoint: string | null }>
   getRelayStatus: () => Promise<MobileRelayStatusDetail>
   onRelayStatusChanged: (callback: (detail: MobileRelayStatusDetail) => void) => () => void
-  /** Consumes an auth-failure notification that arrived before the renderer listener mounted. */
   consumePendingUnpairedDeviceAuthFailure?: () => Promise<boolean>
   /** Fires (throttled, once per session) when an unpaired phone repeatedly fails direct-transport auth. */
   onUnpairedDeviceAuthFailure?: (callback: () => void) => () => void

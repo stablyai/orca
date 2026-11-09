@@ -4,20 +4,33 @@
   "family": "aiVault.history",
   "namedDeltas": [],
   "values": {
-    "053ddb72973f": {
+    "111e9a5009ba": {
+      "name": "streams-registered-at-teardown",
+      "ordinal": 4,
+      "value": [
+        {
+          "cancelled": false,
+          "method": "agentSession.subscribeStatus",
+          "payload": "agentSession.subscribeStatus#1"
+        }
+      ]
+    },
+    "213a998b248c": {
       "activeWorktreePath": "/repo/feature",
-      "hostStatusResult": {
-        "capabilities": ["mobile.tasks.v1"]
-      },
       "refreshing": false,
       "scope": "workspace",
       "screenState": {
         "kind": "unsupported"
       }
     },
-    "a3b75b607f63": {
+    "44a27dbf05e2": {
       "name": "status.get#1",
-      "ordinal": 1,
+      "ordinal": 3,
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "c2c3c4a599ef": {
+      "name": "status.get#1",
+      "ordinal": 2,
       "args": [
         {
           "name": "method",
@@ -26,13 +39,13 @@
         {
           "name": "params",
           "value": {
-            "$rpc": "absent"
+            "$rpc": "undefined"
           }
         },
         {
           "name": "options",
           "value": {
-            "$rpc": "absent"
+            "failWhenDisconnected": true
           }
         }
       ],
@@ -41,7 +54,7 @@
         "startedAt": 0,
         "settledAt": 0,
         "value": {
-          "id": "frame-1",
+          "id": "frame-2",
           "ok": true,
           "result": {
             "capabilities": ["mobile.tasks.v1"]
@@ -49,10 +62,10 @@
         }
       }
     },
-    "d08f74d65ee6": {
-      "name": "status.get#1",
-      "ordinal": 2,
-      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    "e28c488ce6b2": {
+      "name": "agentSession.subscribeStatus#1",
+      "ordinal": 1,
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.subscribeStatus\",\"params\":{}}"
     },
     "eb79a9b3682a": {
       "status": "fulfilled",
@@ -69,13 +82,25 @@
       {
         "id": "unsupported",
         "observation": {
-          "sender": ["a3b75b607f63"],
-          "payloads": ["d08f74d65ee6"],
+          "sender": ["c2c3c4a599ef"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2"],
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "053ddb72973f",
+          "state": "213a998b248c",
           "effects": []
+        }
+      },
+      {
+        "id": "cleanup",
+        "observation": {
+          "sender": ["c2c3c4a599ef"],
+          "payloads": ["e28c488ce6b2", "44a27dbf05e2"],
+          "settlements": {
+            "mount": "eb79a9b3682a"
+          },
+          "state": "213a998b248c",
+          "effects": ["111e9a5009ba"]
         }
       }
     ]

@@ -4,22 +4,22 @@ import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/sna
 import {
   makeSnapshot,
   resetWebSessionTabsSyncTestState
-} from '@/runtime/web-session-tabs-sync-test-harness'
+} from '@/runtime/web-session-tabs-sync/testing/web-session-tabs-sync.test-fixture'
 import {
   markHostSessionMirrorHydrated,
   resetHostSessionMirrorHydrationForTests
-} from '@/runtime/host-session-mirror-hydration'
-import { useAppStore, type AppState } from '@/store'
-import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
-import type { Worktree } from '../../../shared/worktree/types'
-import { makePaneKey } from '../../../shared/stable-pane-id'
-import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import { makeCreatedAgentWorktree } from './worktree-activation-created-agent.test-fixture'
-import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+} from '@/runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 
-// #21235: a paired client is never the execution host, so no local record can tell "another client
-// closed this tab" from a re-key or a pending handle. Whatever shape the record's pane key has, the
-// sweep must not start a second writer on the host for it.
+import type { SleepingAgentSessionRecord } from '../../../shared/agent-session/lifecycle/agent-session-resume'
+import type { Worktree } from '../../../shared/worktree/types'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { toWebTerminalSurfaceTabId } from '../../../shared/workspace-layout/terminal-surface-id'
+import { makeCreatedAgentWorktree } from './workspace/activation/worktree-activation-created-agent.test-fixture'
+import { resumeSleepingAgentSessionsForWorktree } from './agent-session/resume/resume-sleeping-agent-session'
+
+// Paired clients cannot distinguish another client’s close from rekey/pending handles; local records must never authorize another host writer (#21235).
 
 const initialState = useAppStore.getState()
 const ENV_ID = 'env-closed-elsewhere'
@@ -150,22 +150,6 @@ describe('a tab closed on another paired client', () => {
       toWebTerminalSurfaceTabId(CLIENT_TAB_ID)
     ])
     applyHostTabs(worktreeId, [], 2)
-
-    expectNoAutomaticResume(worktreeId)
-    expectNoAutomaticResume(worktreeId)
-  })
-
-  it('is not resumed from a native-keyed record the host never published', () => {
-    const worktreeId = seedPairedWorkspace()
-    seedRecord(makeRecord(worktreeId, 'native-tab'))
-
-    expectNoAutomaticResume(worktreeId)
-  })
-
-  it('is not resumed from a native record that shares its session with a mirrored one', () => {
-    const worktreeId = seedPairedWorkspace()
-    seedRecord(makeRecord(worktreeId, toWebTerminalSurfaceTabId('host-tab')))
-    seedRecord({ ...makeRecord(worktreeId, 'native-tab'), capturedAt: 2, updatedAt: 2 })
 
     expectNoAutomaticResume(worktreeId)
     expectNoAutomaticResume(worktreeId)

@@ -4,6 +4,7 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogFooter } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   SKILL_SHARE_NAME_TAKEN_ERROR,
   type SkillSharePreview,
@@ -58,10 +59,10 @@ export function SkillShareDialog({
   open,
   onOpenChange
 }: SkillShareDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const selectedSkills = useMemo(() => skills ?? (skill ? [skill] : []), [skill, skills])
   const [preview, setPreview] = useState<SkillSharePreview | null>(null)
-  // Why: the dialog never shows who is publishing — it only needs to know that a
-  // Cloud account exists, since publishing fails without one.
+  // Publishing requires a Cloud account; this dialog needs presence, not publisher identity.
   const [hasCloudAccount, setHasCloudAccount] = useState(false)
   const [releaseNotes, setReleaseNotes] = useState('')
   const [progress, setProgress] = useState<SkillShareProgress | null>(null)
@@ -103,6 +104,8 @@ export function SkillShareDialog({
       }
       const nextPreview = await window.api.skills.prepareShare({
         skillIds: selectedSkills.map((skill) => skill.id),
+        // Only these folders' roots may start a stopped WSL distro.
+        skillDirectories: selectedSkills.map((skill) => skill.directoryPath),
         bundleName,
         ...(managedInstall ? { packageId: managedInstall.packageId } : {})
       })
@@ -171,8 +174,7 @@ export function SkillShareDialog({
     })
   }, [preview])
 
-  // Why: nothing has to be typed to publish, so the primary action takes focus
-  // as soon as there is something to publish — Enter then completes the flow.
+  // Focus the primary action once preview loads so Enter can publish without filling another field.
   useEffect(() => {
     if (preview && !shareUrl) {
       publishButtonRef.current?.focus()
@@ -218,11 +220,11 @@ export function SkillShareDialog({
       console.warn('[skills] publish failed:', cause)
       setError(
         cancellationRequested.current
-          ? translate(
+          ? t(
               'auto.components.skills.SkillShareDialog.publishCancelled',
               'Upload cancelled. The prepared copy is still available to retry.'
             )
-          : translate(
+          : t(
               'auto.components.skills.SkillShareDialog.publishFailed',
               'Could not publish this skill. The prepared copy is still available to retry.'
             )
@@ -246,7 +248,7 @@ export function SkillShareDialog({
       cancellationRequested.current = false
       setCancelling(false)
       setError(
-        translate(
+        t(
           'auto.components.skills.SkillShareDialog.cancelRequestFailed',
           'Orca could not send the cancellation request. The upload may still finish.'
         )
@@ -259,13 +261,12 @@ export function SkillShareDialog({
       return
     }
     await window.api.ui.writeClipboardText(shareUrl)
-    toast.success(translate('auto.components.skills.SkillShareDialog.copied', 'Share link copied'))
+    toast.success(t('auto.components.skills.SkillShareDialog.copied', 'Share link copied'))
   }
 
   return (
     <Dialog open={open} onOpenChange={(next) => !next && !publishing && void close()}>
-      {/* Why: the review scrolls on its own so progress, errors, and the primary
-          action stay visible on a short window instead of below the fold. */}
+      {/* Scroll review independently so progress, errors and publishing controls stay visible in short windows. */}
       <DialogContent
         className="grid max-h-[calc(100vh-3rem)] grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden sm:max-w-xl [&>*]:min-w-0"
         {...(skillShareDialogHasDescription(Boolean(shareUrl), publishingNewVersion)
@@ -282,7 +283,7 @@ export function SkillShareDialog({
           {preparing ? (
             <div className="flex min-h-40 items-center justify-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="size-4 animate-spin" />
-              {translate('auto.components.skills.SkillShareDialog.preparing', 'Preparing preview…')}
+              {t('auto.components.skills.SkillShareDialog.preparing', 'Preparing preview…')}
             </div>
           ) : preview && !shareUrl ? (
             <SkillSharePreparationReview
@@ -324,8 +325,8 @@ export function SkillShareDialog({
               disabled={publishing}
             >
               {shareUrl
-                ? translate('auto.components.skills.SkillShareDialog.3af85f6add', 'Done')
-                : translate('auto.components.skills.SkillShareDialog.30985d4fc0', 'Cancel')}
+                ? t('auto.components.skills.SkillShareDialog.3af85f6add', 'Done')
+                : t('auto.components.skills.SkillShareDialog.30985d4fc0', 'Cancel')}
             </Button>
             {!shareUrl ? (
               publishing ? (
@@ -336,11 +337,8 @@ export function SkillShareDialog({
                   onClick={() => void cancelPublish()}
                 >
                   {cancelling
-                    ? translate('auto.components.skills.SkillShareDialog.e9d652ae3d', 'Cancelling…')
-                    : translate(
-                        'auto.components.skills.SkillShareDialog.3a51d0f34f',
-                        'Cancel upload'
-                      )}
+                    ? t('auto.components.skills.SkillShareDialog.e9d652ae3d', 'Cancelling…')
+                    : t('auto.components.skills.SkillShareDialog.3a51d0f34f', 'Cancel upload')}
                 </Button>
               ) : (
                 <Button
@@ -351,19 +349,10 @@ export function SkillShareDialog({
                 >
                   <Share2 className="size-4" />
                   {publishingNewVersion
-                    ? translate(
-                        'auto.components.skills.SkillShareDialog.7aa4ba0dba',
-                        'Publish new version'
-                      )
+                    ? t('auto.components.skills.SkillShareDialog.7aa4ba0dba', 'Publish new version')
                     : selectedSkills.length > 1
-                      ? translate(
-                          'auto.components.skills.SkillShareDialog.publishBundle',
-                          'Publish bundle'
-                        )
-                      : translate(
-                          'auto.components.skills.SkillShareDialog.0f07fa2a79',
-                          'Publish skill'
-                        )}
+                      ? t('auto.components.skills.SkillShareDialog.publishBundle', 'Publish bundle')
+                      : t('auto.components.skills.SkillShareDialog.0f07fa2a79', 'Publish skill')}
                 </Button>
               )
             ) : null}

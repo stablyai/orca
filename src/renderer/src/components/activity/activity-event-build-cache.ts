@@ -1,11 +1,11 @@
-import { entryWithRuntimeOrchestration } from '../sidebar/worktree-agent-row-orchestration'
+import { entryWithRuntimeOrchestration } from '../sidebar/workspace-card/activity/worktree-agent-row-orchestration'
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext,
   AgentType
-} from '../../../../shared/agent-status-types'
+} from '../../../../shared/agent-status/contracts/agent-status-types'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type {
   ActivityEvent,
@@ -110,7 +110,8 @@ export function resolvePaneBuild(
           repo: request.repo,
           entry: rowEntry,
           tab: request.tab,
-          agentType: request.agentType
+          agentType: request.agentType,
+          migrationUnsupportedPtyId: request.migrationUnsupportedPtyId
         }
 
   cache?.panes.set(request.cacheKey, {

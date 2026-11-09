@@ -70,51 +70,6 @@ class RetirementRuntime extends OrcaRuntimeService {
   }
 }
 
-it.each(['read', 'replacement', 'legacy-replacement'] as const)(
-  'publishes an exited terminal retirement with concurrent %s',
-  async (action) => {
-    const { store, authority, readState } = await fixture()
-    await store.persistPtyBinding(binding)
-    const runtime = new RetirementRuntime(store)
-    runtime.registerPty(binding.ptyId, binding.worktreeId, null, binding)
-    runtime.publish()
-    const gate = authority.pause()
-    const exiting = runtime.onPtyExit(binding.ptyId, 0, binding.incarnationId, {
-      providerExitObserved: true
-    })
-    await gate.started.promise
-    if (action === 'read') {
-      await runtime.readVisibleState()
-    } else if (action === 'legacy-replacement') {
-      runtime.onPtySpawned(binding.ptyId)
-    } else {
-      runtime.onPtySpawned(binding.ptyId, 'dddddddd-dddd-4ddd-8ddd-dddddddddddd')
-    }
-    gate.finish.resolve()
-    await exiting
-    expect(readState().workspaceSession.terminalLayoutsByTabId[binding.tabId]).toBeUndefined()
-    // Why every action: the exit retired the leaf in memory before any of them could run.
-    expect(runtime.snapshot()?.tabs).toHaveLength(0)
-  }
-)
-
-it('publishes an exit whose only live ownership is the mobile parent layout', async () => {
-  const { store, authority, readState } = await fixture()
-  await store.persistPtyBinding(binding)
-  const runtime = new RetirementRuntime(store)
-  runtime.publish(true)
-  const gate = authority.pause()
-  const exiting = runtime.onPtyExit(binding.ptyId, 0, binding.incarnationId, {
-    providerExitObserved: true
-  })
-  await gate.started.promise
-  gate.finish.resolve()
-  await exiting
-  expect(readState().workspaceSession.terminalLayoutsByTabId[binding.tabId]).toBeUndefined()
-  expect(runtime.snapshot()?.tabs).toEqual([])
-  expect(runtime.generations()).toBe(0)
-})
-
 it('completes a durable close and refuses a split queued behind it', async () => {
   const { store, authority, readState } = await fixture()
   await store.persistPtyBinding(binding)

@@ -13,7 +13,7 @@ import type {
   GitHubProjectFieldMutationValue,
   GitHubProjectRow as GitHubProjectRowType
 } from '../../../../shared/github/project-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 const PROJECT_FROZEN_COLUMN_SURFACE_CLASS =
   '[background:color-mix(in_srgb,var(--muted)_50%,var(--background))]'
@@ -55,10 +55,9 @@ export default function ProjectRow({
   sourceHost,
   sourceTarget
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const disabled = row.itemType === 'REDACTED'
-  // Why: design doc §Row actions — draft-issue rows have no URL or number, so
-  // the title is non-interactive. Surface the draft body in a hover card so
-  // the user can still read context without round-tripping to GitHub.
+  // Drafts lack a navigable URL/number; expose their body on hover without fetching GitHub details.
   const draftBody =
     row.itemType === 'DRAFT_ISSUE' && row.content.body && row.content.body.trim().length > 0
       ? row.content.body
@@ -125,7 +124,7 @@ export default function ProjectRow({
               <button
                 type="button"
                 onClick={onOpenInBrowser}
-                aria-label={translate(
+                aria-label={t(
                   'auto.components.github.project.ProjectRow.e12be8b4d4',
                   'Open in GitHub'
                 )}
@@ -135,7 +134,7 @@ export default function ProjectRow({
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              {translate('auto.components.github.project.ProjectRow.e12be8b4d4', 'Open in GitHub')}
+              {t('auto.components.github.project.ProjectRow.e12be8b4d4', 'Open in GitHub')}
             </TooltipContent>
           </Tooltip>
         ) : null}
@@ -145,17 +144,14 @@ export default function ProjectRow({
               <button
                 type="button"
                 onClick={onStartWork}
-                aria-label={translate(
-                  'auto.components.github.project.ProjectRow.75b5d816e3',
-                  'Start work'
-                )}
+                aria-label={t('auto.components.github.project.ProjectRow.75b5d816e3', 'Start work')}
                 className="rounded p-1 hover:bg-muted"
               >
                 <Play className="size-3.5" />
               </button>
             </TooltipTrigger>
             <TooltipContent>
-              {translate('auto.components.github.project.ProjectRow.75b5d816e3', 'Start work')}
+              {t('auto.components.github.project.ProjectRow.75b5d816e3', 'Start work')}
             </TooltipContent>
           </Tooltip>
         ) : null}

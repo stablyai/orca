@@ -1,7 +1,7 @@
 import {
   isDurableMutation,
   isTerminalPromptMutation
-} from '../../../shared/orchestration-rpc-contract'
+} from '../../../shared/orchestration/orchestration-rpc-contract'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import type { OrcaSessionId } from '../../../shared/orca-session-address'
 import { OrchestrationError } from '../orchestration/orchestration-error'
@@ -57,7 +57,12 @@ export class OrchestrationMutationExecutor {
     }
     const callerFingerprint =
       callerFingerprintOverride ?? this.getLocalAuthenticatedCallerFingerprint()
-    const stableParams = replayStableCallerParams(this.runtime, params, callerOrcaSessionId)
+    const stableParams = replayStableCallerParams(
+      this.runtime,
+      params,
+      callerOrcaSessionId,
+      request.method
+    )
     const basePayloadHash = hashCanonical({ method: request.method, params: stableParams })
     const key = `${callerFingerprint}:${requestId}`
     const db = this.runtime.getOrchestrationDb()
@@ -78,8 +83,7 @@ export class OrchestrationMutationExecutor {
     const recordedPromptBindingHash = existingPromptReceipt
       ? readPromptBindingPayloadHash(existingPromptReceipt.payload_hash)
       : null
-    // The recorded observation is only true while the prompt's terminal incarnation survives, so
-    // every replay re-checks the binding rather than only the --wait-submit ones.
+    // Recheck binding on every replay, not just wait-submit: observations apply only to the original terminal incarnation.
     const promptBindingChanged =
       recordedPromptBindingHash !== null &&
       recordedPromptBindingHash !==
@@ -95,8 +99,7 @@ export class OrchestrationMutationExecutor {
     const atomicWorkerAcceptance =
       request.method === 'orchestration.workerStart' ||
       request.method === 'orchestration.federationAttachStart'
-    // Worker starts perform asynchronous topology validation before their durable
-    // acceptance claim. Join an identical in-process attempt before that boundary.
+    // Worker topology validation precedes durable acceptance; join identical in-process attempts before that boundary.
     if (atomicWorkerAcceptance) {
       const active = this.inFlight.get(key)
       if (active) {
@@ -170,8 +173,7 @@ export class OrchestrationMutationExecutor {
         db.completeMutationReceipt({ ...identity, receipt: JSON.stringify(replayed) })
         return replayed
       } catch {
-        // The original mutation is already durable; an observation-only replay
-        // must not turn a completed request into a retry or resend opportunity.
+        // Observation-only replay cannot reopen an already-durable mutation for retry or resend.
         return attachMutationReceipt(receipt, requestId, true)
       } finally {
         this.inFlight.delete(key)
@@ -250,7 +252,7 @@ export class OrchestrationMutationExecutor {
     }
   }
 
-  // A replayed prompt may name a terminal that is gone; an unreadable binding is a changed one.
+  // Gone or unreadable prompt terminals count as changed bindings.
   private readTerminalPromptBindingHash(handle: string): string | null {
     try {
       return hashCanonical(this.runtime.getTerminalPromptRequestBinding(handle))

@@ -8,7 +8,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { skillCountLabel } from './skill-display-labels'
 import { SKILLS_PAGE_COLUMN } from './skills-page-column'
 import { SkillsSourcesPopover } from './SkillsSourcesPopover'
@@ -34,9 +34,7 @@ export function SkillsPageHeader({
   hostLabel: string | null
   onClose: () => void
   onStartShare: () => void
-  /** False while the target is unresolved or the host predates the delete
-   *  capability, so the entry disables with a reason rather than routing a
-   *  request nothing on that host answers. */
+  /** Disable deletion with a reason until the target and host capability are known. */
   deleteSupported: boolean
   deleteUnsupportedReason: string | null
   onStartDelete: () => void
@@ -44,6 +42,7 @@ export function SkillsPageHeader({
   onManageInstalls: () => void
   onOpenSharedLinks: () => void
 }): React.JSX.Element {
+  const t = useTranslate()
   return (
     <header className="shrink-0 border-b border-border">
       <div className={cn(SKILLS_PAGE_COLUMN, 'flex items-center gap-2 py-3')}>
@@ -54,26 +53,23 @@ export function SkillsPageHeader({
               size="icon"
               className="size-7 shrink-0 rounded-full"
               onClick={onClose}
-              aria-label={translate(
-                'auto.components.skills.SkillsPage.closeSkills',
-                'Close skills'
-              )}
+              aria-label={t('auto.components.skills.SkillsPage.closeSkills', 'Close skills')}
             >
               <X className="size-4" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate('auto.components.skills.SkillsPage.closeTooltip', 'Close · Esc')}
+            {t('auto.components.skills.SkillsPage.closeTooltip', 'Close · Esc')}
           </TooltipContent>
         </Tooltip>
         <div className="mx-1 h-5 w-px bg-border/50" aria-hidden />
         <BookOpen className="size-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-sm font-semibold">
-            {translate('auto.components.skills.SkillsPage.f43ad6edf3', 'Skills')}
+            {t('auto.components.skills.SkillsPage.f43ad6edf3', 'Skills')}
           </h1>
           <div className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="shrink-0">{skillCountLabel(skillCount)}</span>
+            <span className="shrink-0">{skillCountLabel(skillCount, t)}</span>
             {sourceEntries.length > 0 ? (
               <>
                 <span aria-hidden>·</span>
@@ -90,14 +86,11 @@ export function SkillsPageHeader({
         </div>
         <Button type="button" size="sm" onClick={onStartShare}>
           <Share2 className="size-3.5" />
-          {translate(
-            'auto.components.skills.SkillShareSelectionControls.01c5a15e02',
-            'Share skills'
-          )}
+          {t('auto.components.skills.SkillShareSelectionControls.01c5a15e02', 'Share skills')}
         </Button>
         <Button type="button" variant="outline" size="sm" onClick={onInstallFromLink}>
           <Download className="size-3.5" />
-          {translate('auto.components.skills.SkillsPage.aee7b99cc6', 'Install from link')}
+          {t('auto.components.skills.SkillsPage.aee7b99cc6', 'Install from link')}
         </Button>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -105,10 +98,7 @@ export function SkillsPageHeader({
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label={translate(
-                'auto.components.skills.SkillsPage.moreActions',
-                'More actions'
-              )}
+              aria-label={t('auto.components.skills.SkillsPage.moreActions', 'More actions')}
             >
               <MoreHorizontal />
             </Button>
@@ -116,11 +106,11 @@ export function SkillsPageHeader({
           <DropdownMenuContent align="end">
             <DropdownMenuItem onSelect={onManageInstalls}>
               <History />
-              {translate('auto.components.skills.SkillsPage.c13b82793c', 'Manage installs')}
+              {t('auto.components.skills.SkillsPage.c13b82793c', 'Manage installs')}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={onOpenSharedLinks}>
               <Link2 />
-              {translate('auto.components.skills.SkillsPage.sharedLinks', 'Shared links')}
+              {t('auto.components.skills.SkillsPage.sharedLinks', 'Shared links')}
             </DropdownMenuItem>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -131,7 +121,7 @@ export function SkillsPageHeader({
                     onSelect={onStartDelete}
                   >
                     <Trash2 />
-                    {translate('auto.components.skills.SkillsPage.deleteSkills', 'Delete skills…')}
+                    {t('auto.components.skills.SkillsPage.deleteSkills', 'Delete skills…')}
                   </DropdownMenuItem>
                 </span>
               </TooltipTrigger>

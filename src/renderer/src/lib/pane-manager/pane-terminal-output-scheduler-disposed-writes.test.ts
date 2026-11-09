@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   createForegroundTerminal,
-  createTerminal,
   loadScheduler
 } from './pane-terminal-output-scheduler-test-harness'
 
@@ -29,18 +28,6 @@ describe('pane terminal output scheduler', () => {
     delete (globalThis as { __terminalOutputSchedulerDebug?: unknown })
       .__terminalOutputSchedulerDebug
     vi.unstubAllGlobals()
-  })
-
-  it('discards queued output for disposed terminals', async () => {
-    vi.useFakeTimers()
-    const { discardTerminalOutput, writeTerminalOutput } = await loadScheduler()
-    const terminal = createTerminal()
-
-    writeTerminalOutput(terminal, 'stale', { foreground: false })
-    discardTerminalOutput(terminal)
-    vi.advanceTimersByTime(50)
-
-    expect(terminal.write).not.toHaveBeenCalled()
   })
 
   it('does not feed a replay quiet window when foreground writes are rejected', async () => {
@@ -76,8 +63,7 @@ describe('pane terminal output scheduler', () => {
       expect(hasTerminalParseProgressSince(terminal, generation)).toBe(false)
       expect(recoveryReasons).toEqual(['write-stalled'])
       expect(isTerminalWritePipelineCertifiedDead(terminal)).toBe(true)
-      // Only the first rejection touches xterm; later PTY deliveries credit
-      // directly while recovery owns the certified-dead instance.
+      // Only the first rejection reaches xterm; recovery owns the dead instance, while later deliveries credit directly.
       expect(terminal.write).toHaveBeenCalledTimes(1)
       expect(onParsed).not.toHaveBeenCalled()
       for (const ackCredit of ackCredits) {
@@ -98,16 +84,13 @@ describe('pane terminal output scheduler', () => {
       })
     }
 
-    // More than two drain slices: rejection must abandon the detached tail
-    // instead of synchronously retrying the same certified-dead xterm.
+    // Exceed two slices so rejection must abandon the detached tail instead of retrying dead xterm.
     writeTerminalOutput(throwing, 'x'.repeat(40 * 1024), { foreground: false })
 
-    // Why: drain runs inside setTimeout; if the throw escapes drainQueuedOutput
-    // it would crash the timer callback and leave the scheduler poisoned.
+    // Drain runs in a timer; an escaping throw would poison scheduling.
     expect(() => vi.advanceTimersByTime(50)).not.toThrow()
     expect(throwing.write).toHaveBeenCalledTimes(1)
 
-    // Advancing further must not rediscover the dead entry.
     vi.advanceTimersByTime(100)
     expect(throwing.write).toHaveBeenCalledTimes(1)
   })

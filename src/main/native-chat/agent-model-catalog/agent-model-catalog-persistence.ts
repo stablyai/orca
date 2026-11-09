@@ -1,31 +1,38 @@
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
+import {
+  KeyedJsonRowCache,
+  parseKeyedJsonRows,
+  type KeyedJsonRow
+} from '../../sqlite/row-cache/keyed-json-row-cache'
+import { nextRetryDelayMs } from '../../sqlite/row-cache/row-cache-failure'
 import type {
   AgentSessionModelOption,
   AgentSessionOptionChoice
-} from '../../../shared/agent-session-wire'
+} from '../../../shared/agent-session/agent-session-wire'
 import {
   agentModelCatalogEntry,
+  serializedAgentModelCatalogListing,
   type AgentModelCatalogEntry,
   type AgentModelCatalogListing
 } from './agent-model-catalog-entry'
-import { isStructuredAgentId } from '../../../shared/agent-session-provider-handle-encoding'
+import { isStructuredAgentId } from '../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { isRecord } from '../../../shared/agent-status/child-work/agent-status-child-work-value-guards'
 
-// 3: Codex models carry `serviceTiers`; an older file would offer Fast with no tier to send.
+// Older catalogs lack serviceTiers and cannot safely construct Fast requests.
 const SCHEMA_VERSION = 3
 const SAVE_COALESCE_MS = 500
+const MAX_RETRY_DELAY_MS = 60_000
 
 export type AgentModelCatalogPersistence = {
   load: () => Promise<AgentModelCatalogEntry[]>
-  /** Fire-and-forget, coalesced; a failed write never surfaces to a caller. */
-  save: (entries: readonly AgentModelCatalogEntry[]) => void
-  /** Writes a coalesced save now; the delay timer is unref'd, so quit must not rely on it. */
+  /** Coalesce saves; failures leave the in-memory store authoritative. */
+  save: (snapshot: () => readonly AgentModelCatalogEntry[]) => void
+  /** Flush at quit because the delayed-save timer is unref'd. */
   flush: () => Promise<void>
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a non-null `typeof === 'object'` value is indexable by string key.
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
+  return isRecord(value) ? value : null
 }
 
 function text(value: unknown): string | null {
@@ -61,9 +68,12 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     : undefined
   const description = text(row.description)
   const defaultEffort = text(row.defaultEffort)
+  const resolvedModel = text(row.resolvedModel)
   return {
     id,
     label,
+    ...(resolvedModel ? { resolvedModel } : {}),
+    ...(row.effortsKnown === false ? { effortsKnown: false as const } : {}),
     ...(description ? { description } : {}),
     isDefault: row.isDefault === true,
     ...(defaultEffort ? { defaultEffort } : {}),
@@ -74,7 +84,14 @@ function parseModel(value: unknown): AgentSessionModelOption | null {
     ...(typeof row.supportsAutoMode === 'boolean'
       ? { supportsAutoMode: row.supportsAutoMode }
       : {}),
-    ...(serviceTiers ? { serviceTiers } : {})
+    ...(serviceTiers ? { serviceTiers } : {}),
+    ...(Array.isArray(row.chatEfforts)
+      ? {
+          chatEfforts: row.chatEfforts
+            .map(parseChoice)
+            .filter((choice): choice is AgentSessionOptionChoice => choice !== null)
+        }
+      : {})
   }
 }
 
@@ -107,16 +124,20 @@ function parseListing(value: unknown): AgentModelCatalogListing | null {
         }
       : {}),
     origin: row.origin,
-    at: row.at
+    at: row.at,
+    ...(row.complete === true ? { complete: true } : {})
   }
 }
 
-/** Checked reconstruction rather than trust: a field a future schema drops or
- *  reshapes loads as "no entry", never as a corrupt catalog. */
+/** Reject incompatible rows rather than trusting persisted schema shapes. */
 function parseEntry(value: unknown): AgentModelCatalogEntry | null {
   const row = asRecord(value)
   if (!row || !isStructuredAgentId(row.agent) || typeof row.fingerprint !== 'string') {
     return null
+  }
+  if (row.agent === 'claude' || row.agent === 'codex') {
+    const display = parseListing(row.discovered) ?? parseListing(row.live)
+    return agentModelCatalogEntry(row.agent, row.fingerprint, display, null, null)
   }
   const configured = asRecord(row.configured)
   const configuredModelId = text(configured?.modelId)
@@ -140,78 +161,104 @@ function parseEntry(value: unknown): AgentModelCatalogEntry | null {
   )
 }
 
-/** Only the two listings and the configured default are written; the merged view is derived again on load. */
+// Persist source listings/default facts; derive the merged view on load.
 function persistedEntry(entry: AgentModelCatalogEntry): unknown {
   return {
     agent: entry.agent,
     fingerprint: entry.fingerprint,
-    discovered: entry.discovered,
-    live: entry.live,
+    discovered: serializedAgentModelCatalogListing(entry.discovered),
+    live: serializedAgentModelCatalogListing(entry.live),
     ...(entry.configured ? { configured: entry.configured } : {})
   }
 }
 
-/** One JSON file of last-good entries. Success-only by construction: failures
- *  are never handed to `save`, and a malformed file loads as empty. */
+function parseEntries(values: readonly unknown[]): AgentModelCatalogEntry[] {
+  return values.map(parseEntry).filter((entry): entry is AgentModelCatalogEntry => entry !== null)
+}
+
+function catalogRow(entry: AgentModelCatalogEntry): KeyedJsonRow {
+  return {
+    key: `${entry.agent}\u0000${entry.fingerprint}`,
+    json: JSON.stringify(persistedEntry(entry))
+  }
+}
+
+/** Entries of an older build's file; bytes it cannot use (corrupt, other version) reject it. */
+function legacyEntries(text: string): AgentModelCatalogEntry[] | null {
+  const root = asRecord(JSON.parse(text))
+  if (!root || root.version !== SCHEMA_VERSION || !Array.isArray(root.entries)) {
+    return null
+  }
+  return parseEntries(root.entries)
+}
+
+/** One row per catalog entry, so a save writes only the entries whose listing changed. */
 export function createAgentModelCatalogFilePersistence(
   directory: string
 ): AgentModelCatalogPersistence {
-  const filePath = join(directory, 'agent-model-catalog.json')
-  let pending: readonly AgentModelCatalogEntry[] | null = null
+  // Stored state or an older build's file could not be read: this session saves nothing,
+  // leaving both for the next start. Rediscovery refills memory meanwhile.
+  let cold = false
+  const cache = new KeyedJsonRowCache(join(directory, 'agent-model-catalog.db'), {
+    schemaVersion: SCHEMA_VERSION,
+    // Earlier builds rewrote this whole file (megabytes) per change; it is imported once, then removed.
+    legacyPath: join(directory, 'agent-model-catalog.json')
+  })
+  let pending: (() => readonly AgentModelCatalogEntry[]) | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
-  let writing = Promise.resolve()
+  let retryDelayMs = SAVE_COALESCE_MS
+
+  const schedule = (delayMs: number): void => {
+    timer ??= setTimeout(flush, delayMs)
+    timer.unref?.()
+  }
 
   const flush = (): Promise<void> => {
     if (timer !== null) {
       clearTimeout(timer)
       timer = null
     }
-    const entries = pending
+    const snapshot = pending
     pending = null
-    if (!entries) {
-      return writing
-    }
-    writing = writing.then(async () => {
+    if (snapshot && !cold) {
       try {
-        await mkdir(dirname(filePath), { recursive: true })
-        const tmpPath = `${filePath}.tmp`
-        await writeFile(
-          tmpPath,
-          JSON.stringify({
-            version: SCHEMA_VERSION,
-            entries: entries.map(persistedEntry)
-          }),
-          'utf8'
-        )
-        await rename(tmpPath, filePath)
+        cache.write(snapshot().map(catalogRow))
+        retryDelayMs = SAVE_COALESCE_MS
       } catch {
-        // Bookkeeping only; the in-memory store stays authoritative this run.
+        // Optional bookkeeping (a lock elsewhere, a full disk): memory stays authoritative and
+        // the latest snapshot is retried later unless a newer save replaces it.
+        pending ??= snapshot
+        retryDelayMs = nextRetryDelayMs(retryDelayMs, {
+          minMs: SAVE_COALESCE_MS,
+          maxMs: MAX_RETRY_DELAY_MS
+        })
+        schedule(retryDelayMs)
       }
-    })
-    return writing
+    }
+    return Promise.resolve()
   }
 
   return {
     async load() {
+      const loaded = cache.load(legacyEntries)
+      if (loaded.kind === 'unavailable') {
+        cold = true
+        return loaded.legacy ?? []
+      }
+      if (loaded.kind === 'rows') {
+        return parseEntries(parseKeyedJsonRows(loaded.rows).map(({ value }) => value))
+      }
       try {
-        const parsed: unknown = JSON.parse(await readFile(filePath, 'utf8'))
-        const root = asRecord(parsed)
-        if (!root || root.version !== SCHEMA_VERSION || !Array.isArray(root.entries)) {
-          return []
-        }
-        return root.entries
-          .map(parseEntry)
-          .filter((entry): entry is AgentModelCatalogEntry => entry !== null)
+        // An older build's file is newer than the rows: save it now, which removes the file.
+        cache.write(loaded.value.map(catalogRow), { importReceipt: loaded.receipt })
       } catch {
-        return []
+        cold = true
       }
+      return loaded.value
     },
-    save(entries) {
-      pending = [...entries]
-      if (timer === null) {
-        timer = setTimeout(flush, SAVE_COALESCE_MS)
-        timer.unref?.()
-      }
+    save(snapshot) {
+      pending = snapshot
+      schedule(SAVE_COALESCE_MS)
     },
     flush
   }

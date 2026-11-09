@@ -1,5 +1,5 @@
-import { isLocalSessionTabCloseOwned } from '@/runtime/local-session-tab-close-owner'
-import { closeMobileSessionTabInStore } from '@/runtime/mobile-session-tab-close'
+import { isLocalSessionTabCloseOwned } from '@/runtime/web-session-tabs-sync/closing/local-session-tab-close-owner'
+import { closeMobileSessionTabInStore } from '@/runtime/web-session-tabs-sync/closing/mobile-session-tab-close'
 import {
   SESSION_TAB_CLOSE_CANCELED_ERROR,
   SESSION_TAB_CLOSE_FAILED_ERROR,
@@ -10,16 +10,17 @@ import {
   guardPinnedTabClose,
   isUnifiedTabPinned,
   resolvePinnedTabLabel
-} from '../../store/pinned-tab-close-guard'
+} from '../../store/slices/tabs/closing/pinned-tab-close-guard'
 import { useAppStore } from '../../store'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type { RuntimeMobileSessionTabMove } from '../../../../shared/runtime-types'
+import type { RuntimeMobileSessionTabMove } from '../../../../shared/runtime-session-contracts'
 import {
   dropTabThroughLayoutOwner,
   type TabDrop
 } from '@/components/tab-group/tab-group-layout-owner-commands'
 import { resolveBrowserSessionTabTarget } from './browser-session-tab-target'
 import { resolveWindowTabIdForHostTab } from './host-session-tab-target'
+import { moveTerminalPaneToNewTabForClient } from '@/components/terminal-pane/layout/detach/terminal-pane-move-request-routing'
 
 export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
@@ -118,8 +119,7 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onMoveSessionTab((move) => {
       const { tabId, targetGroupId } = move
-      // Switch point: main moves the tab first, as for a tab-bar drag. A reorder names a whole
-      // order, so it goes the reorder path below, which records it as main's moves.
+      // Main owns moves; whole-order changes use the reorder path that records equivalent main moves.
       if (
         ORCA_LAYOUT_OWNER_IS_MAIN &&
         move.kind !== 'reorder' &&
@@ -141,6 +141,25 @@ export function registerSessionTabIpcBridge(unsubs: (() => void)[]): void {
         ...(move.kind === 'move-to-group' ? { index: move.index } : {}),
         ...(move.kind === 'split' ? { splitDirection: move.splitDirection } : {})
       })
+    })
+  )
+
+  registerTerminalPaneMoveRequests(unsubs)
+}
+
+/** Moves a client's pane in this window, which owns the layout, and answers main with the result. */
+function registerTerminalPaneMoveRequests(unsubs: (() => void)[]): void {
+  const { onTerminalPaneMoveToNewTabRequest, replyTerminalPaneMoveToNewTab } = window.api.ui
+  // Why: during an in-place renderer reload an older preload can linger; keep this listener additive at that seam.
+  if (!onTerminalPaneMoveToNewTabRequest || !replyTerminalPaneMoveToNewTab) {
+    return
+  }
+  unsubs.push(
+    onTerminalPaneMoveToNewTabRequest(({ requestId, ...move }) => {
+      void moveTerminalPaneToNewTabForClient({
+        ...move,
+        sourceTabId: resolveWindowTabIdForHostTab(move.worktreeId, move.sourceTabId)
+      }).then((result) => replyTerminalPaneMoveToNewTab({ requestId, result }))
     })
   )
 }

@@ -42,7 +42,7 @@ function parsePRFlag(
   return { number }
 }
 
-// Why: only `set` may clear a link, so `create` parses the same flags non-nullable.
+// Only set may clear a link; create uses non-nullable flags.
 export function getReviewTargetLinkFlags(
   flags: Map<string, string | boolean>,
   options: { nullable?: boolean } = {}

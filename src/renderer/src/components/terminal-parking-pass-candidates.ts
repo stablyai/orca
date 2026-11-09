@@ -1,12 +1,13 @@
-import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../shared/workspace-layout/terminal-tab-types'
 import {
   TERMINAL_WORKTREE_COLD_PARK_DELAY_MS,
   canParkTerminalWorktreeRenderers,
   selectColdParkedTerminalWorktrees,
   type TerminalWorktreeColdParkCandidate
-} from './terminal-pane/terminal-hidden-view-parking'
-import { getTerminalParkingPolicyOverrides } from './terminal-pane/terminal-parking-e2e-overrides'
-import { canWatcherCoverParkedTerminalTab } from './terminal-pane/terminal-parked-tab-watchers'
+} from './terminal-pane/parking/retention/terminal-hidden-view-parking'
+import { getTerminalParkingPolicyOverrides } from './terminal-pane/parking/instrumentation/terminal-parking-e2e-overrides'
+import { canWatcherCoverParkedTerminalTab } from './terminal-pane/parking/output-watchers/terminal-parked-tab-watchers'
+import { getHeldTerminalPrewarmWorktrees } from './terminal/terminal-worktree-prewarm'
 import type { TerminalParkingFoundation } from './use-terminal-parking-foundation'
 
 export type TerminalParkingPassCandidates = ReturnType<typeof collectTerminalParkingPassCandidates>
@@ -113,8 +114,13 @@ export function collectTerminalParkingPassCandidates(controller: TerminalParking
       watcherCoverageByTabId.set(tab.id, covered)
       return covered
     })
+  // Leased prewarm worktrees (hover, keyboard neighbors) stay mounted; the retention budget still applies.
+  const keepWarmWorktreeIds = getHeldTerminalPrewarmWorktrees()
   for (const worktreeId of Array.from(nextParkedTerminalWorktreeIds)) {
-    if (!worktreeTabsAreWatcherCovered(worktreeId, tabsByWorktree[worktreeId] ?? [])) {
+    if (
+      keepWarmWorktreeIds.has(worktreeId) ||
+      !worktreeTabsAreWatcherCovered(worktreeId, tabsByWorktree[worktreeId] ?? [])
+    ) {
       nextParkedTerminalWorktreeIds.delete(worktreeId)
     }
   }

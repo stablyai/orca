@@ -1,7 +1,7 @@
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { runtimeTargetForWorkspaceOwner, resolveOwner } from './resolve-owner'
-import type { WorktreeOperationRouteState } from './worktree-operation-route'
+import { runtimeTargetForWorkspaceOwner, resolveOwner } from './workspace/ownership/resolve-owner'
+import type { WorktreeOperationRouteState } from './workspace/ownership/worktree-operation-route'
 
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 
@@ -23,15 +23,11 @@ export function getRuntimeTargetForWorktreeOwner(
   if (target) {
     return target
   }
-  // Why local for a missing row: tabs and drops stamp a server owner when one exists, so a
-  // workspace with no row yet is this app's — the same answer the read had before focus routing.
+  // Missing unstamped workspace rows retain app-local routing; tabs/drops explicitly stamp server owners when present.
   return resolveOwner(state, { workspaceId: worktreeId }).kind === 'missing' ? LOCAL_TARGET : null
 }
 
-/**
- * Transport to an open file's owner: the owner stamped on its tab (`null` is this app), else its
- * worktree's owner. Never the focused server, which can change after the tab opened.
- */
+/** Prefer the tab’s stamped owner (null means this app), then workspace owner; focused server can change after opening. */
 export function getRuntimeTargetForFileOwner(
   state: WorktreeOperationRouteState,
   worktreeId: string | null | undefined,

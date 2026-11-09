@@ -2,7 +2,7 @@ import React, { useRef } from 'react'
 import { Search, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import {
   isAutomationListArrowKey,
@@ -30,10 +30,11 @@ export function AutomationListSearchField({
   onEnter,
   className
 }: AutomationListSearchFieldProps): React.JSX.Element {
+  const t = useTranslate()
   const inputRef = useRef<HTMLInputElement>(null)
   const hasText = query !== ''
   const tooLargeMessage = isTooLarge
-    ? translate(
+    ? t(
         'auto.components.automations.AutomationListSearchField.tooLong',
         'Search text is too long — list is unfiltered'
       )
@@ -47,18 +48,17 @@ export function AutomationListSearchField({
         type="text"
         autoFocus
         value={query}
-        aria-label={translate(
+        aria-label={t(
           'auto.components.automations.AutomationListSearchField.label',
           'Search automations'
         )}
-        placeholder={translate(
+        placeholder={t(
           'auto.components.automations.AutomationListSearchField.placeholder',
           'Search...'
         )}
         aria-invalid={isTooLarge || undefined}
         aria-describedby={isTooLarge ? 'automations-list-search-too-large' : undefined}
-        // Why: the page-level capture Escape handler blurs inputs; this opts out
-        // so the first Escape clears the query without also losing focus.
+        // Let the first Escape clear search without the page’s capture handler also blurring it.
         data-escape-clears-value={hasText ? 'true' : undefined}
         className={cn(
           // Flat list search: no elevation/halo; soft focus border only.
@@ -100,17 +100,14 @@ export function AutomationListSearchField({
               title={tooLargeMessage ?? undefined}
               className="text-[10px] text-destructive"
             >
-              {translate(
-                'auto.components.automations.AutomationListSearchField.tooLongShort',
-                'Too long'
-              )}
+              {t('auto.components.automations.AutomationListSearchField.tooLongShort', 'Too long')}
             </span>
           ) : null}
           <Button
             type="button"
             variant="ghost"
             size="icon-xs"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.automations.AutomationListSearchField.clear',
               'Clear search'
             )}

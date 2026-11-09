@@ -1,11 +1,11 @@
-import type { WorktreeSlice } from '../../worktree-helpers'
+import type { WorktreeSlice } from '../worktree-slice-contract'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import {
   getHostedReviewPushTargetLookup,
   hostedReviewPushTargetLookupsInFlight
 } from './hosted-review-push-target'
-import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
-import { findWorktreeRepo } from '../../../github/linked-pr-repository'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
+import { resolveReviewRepository } from '@/lib/review-owner'
 
 export function createEnsureHostedReviewPushTarget(
   _set: WorktreeSliceSet,
@@ -16,7 +16,7 @@ export function createEnsureHostedReviewPushTarget(
     if (!worktree || worktree.pushTarget) {
       return
     }
-    const repo = findWorktreeRepo(get().repos, worktree)
+    const repo = resolveReviewRepository(get().repos, worktree) ?? undefined
     const lookup = getHostedReviewPushTargetLookup(worktree, repo)
     if (!lookup || hostedReviewPushTargetLookupsInFlight.has(lookup.key)) {
       return

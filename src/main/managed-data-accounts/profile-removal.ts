@@ -2,12 +2,12 @@ import { existsSync, lstatSync, mkdirSync, readFileSync, renameSync, rmSync } fr
 import { readdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { z } from 'zod'
-import { removeHostTree } from '../host-tree-removal'
+import { removeHostTree } from '../filesystem/host-tree-removal'
 import type {
   ManagedDataAccountProvider,
   ManagedDataAccountsState
 } from '../../shared/managed-account-types'
-import { writeSecureFile } from '../../shared/secure-file'
+import { writeSecureFile } from '../../shared/secure-storage/secure-file'
 
 export class ManagedDataAccountProfileRemoval {
   constructor(
@@ -77,7 +77,7 @@ export class ManagedDataAccountProfileRemoval {
     }
     this.discardBackup(rollbackPath)
     changed()
-    // Cleanup can partially delete a tree, so it must never roll back a committed removal.
+    // Partial filesystem cleanup cannot safely roll back a committed registry removal.
     await this.cleanup(pendingDirectory)
     return next
   }
@@ -170,7 +170,7 @@ export class ManagedDataAccountProfileRemoval {
     }
     try {
       this.assertOwned(providerRoot)
-      // UUID case variants may name the same directory.
+      // UUID case variants can identify the same directory.
       const registeredIds = new Set([...registered].map((id) => id.toLowerCase()))
       await this.retryBackups(providerRoot, registeredIds)
       const pendingRoot = join(providerRoot, '.pending-delete')

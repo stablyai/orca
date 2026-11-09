@@ -1,9 +1,9 @@
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import type {
   WorkspaceCleanupFailure,
   WorkspaceCleanupRemoveOptions,
   WorkspaceCleanupRemoveResult
-} from '@/store/slices/workspace-cleanup'
+} from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import {
   getSkippedAncestorMessage,
   isStrictWorkspaceCleanupDescendant,
@@ -20,7 +20,7 @@ import { reclassifySkippedWorkspaceCleanupAncestors } from './workspace-cleanup-
 import {
   getWorkspaceCleanupCandidateHostId,
   getWorkspaceCleanupCandidateIdentity
-} from '../../../../shared/workspace-cleanup-host-identity'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 
 type WorkspaceCleanupRemoveCandidates = (
   worktreeIds: readonly string[],
@@ -63,8 +63,7 @@ export function createPostBatchLateSettlementReporter({
   removalSettlementGraceMs: number
   reportResult: PostBatchLateSettlementResultReporter
 }): PostBatchLateSettlementReporterSelector {
-  // Why: detached IPC promises can outlive the dialog; retain only unresolved
-  // blockers and provisional skips, not the completed batch's result arrays.
+  // Detached IPC may outlive the dialog; retain unresolved blockers/skips, never completed result arrays.
   const retainedSkippedAncestors = skippedAncestors
     .filter((entry) => entry.provisional)
     .map((entry) => ({ ...entry, failure: { ...entry.failure } }))
@@ -89,8 +88,7 @@ export function createPostBatchLateSettlementReporter({
   }
   let reconcileChain: Promise<void> = Promise.resolve()
   const reportLateSettlement: WorkspaceCleanupLateSettlementReporter = (candidate, result) => {
-    // Why: queue reconciliation before reporting so a presentation-layer error
-    // cannot suppress ancestor retries; the report still runs synchronously.
+    // Queue reconciliation before synchronous reporting so presentation errors cannot suppress ancestor retries.
     reconcileChain = reconcileChain
       .then(async () => {
         const reconciled = await reconcilePostBatchLateSettlement(
@@ -163,8 +161,7 @@ async function reconcilePostBatchLateSettlement(
   })
   lateFailures.push(...updatedFailures)
 
-  // Why: deepest descendants first so a failed parent re-blocks its ancestors
-  // before those ancestors are retried.
+  // Retry deepest descendants first so failed parents block ancestors before their retries.
   unblocked.sort((a, b) => b.path.length - a.path.length)
   for (const ancestor of unblocked) {
     const blockers = findBlockingDescendants(ancestor)
@@ -256,8 +253,7 @@ function releaseSettledPostBatchState(state: PostBatchLateSettlementState): void
   if (state.skippedAncestors.some((entry) => entry.provisional)) {
     return
   }
-  // Why: once no provisional ancestor can change, remaining late settlements
-  // only report themselves and must not pin removal or candidate state.
+  // Once ancestor state cannot change, remaining settlements report independently without retaining batch/candidate state.
   state.skippedAncestors.length = 0
   state.failedCandidates.length = 0
   state.failures.length = 0

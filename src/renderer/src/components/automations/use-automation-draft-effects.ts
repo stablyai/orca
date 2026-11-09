@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import type { AutomationTemplate } from './automation-templates'
 import { getDefaultWorktree } from './automation-draft-model'
+import { hasModernAutomationLaunchSetup } from '../../../../shared/automations/launch/automation-launch-setup'
 import type { AutomationsPageDestinationState } from './use-automations-page-destination-state'
 import type { AutomationsPageDestinationFormState } from './use-automations-page-destination-form'
 import type { AutomationsPageLocalState } from './use-automations-page-local-state'
@@ -26,6 +27,7 @@ export function useAutomationDraftEffects({
     setDraft,
     createOpen,
     editingAutomationId,
+    targetEdited,
     setupDecisionPolicyDefaultRef,
     setupDecisionDefaultSignatureRef,
     setupDecisionTouchedRef
@@ -53,19 +55,34 @@ export function useAutomationDraftEffects({
     }
   }, [draft.projectId, editingAutomationId, getDefaultTarget, setDraft])
   useEffect(() => {
-    if (!draft.projectId) {
+    if (
+      !draft.projectId ||
+      draft.workspaceMode !== 'existing' ||
+      (editingAutomationId !== null && !targetEdited)
+    ) {
       return
     }
     const defaultWorktree = getDefaultWorktree(dialogWorktrees)
     if (!draft.workspaceId && defaultWorktree) {
       setDraft((current) => ({ ...current, workspaceId: defaultWorktree.id }))
     }
-  }, [dialogWorktrees, draft.projectId, draft.workspaceId, setDraft])
+  }, [
+    dialogWorktrees,
+    draft.projectId,
+    draft.workspaceId,
+    draft.workspaceMode,
+    editingAutomationId,
+    targetEdited,
+    setDraft
+  ])
   useEffect(() => {
     if (!createOpen || draft.workspaceMode !== 'new_per_run' || !draft.projectId) {
       return
     }
-    void loadAutomationYamlHooksForRepo(draft.projectId, createDestinationHostId)
+    // Opening the create dialog is no act on the repo's WSL distro (E9); save re-checks in the foreground.
+    void loadAutomationYamlHooksForRepo(draft.projectId, createDestinationHostId, {
+      background: true
+    })
   }, [
     createOpen,
     createDestinationHostId,
@@ -74,7 +91,7 @@ export function useAutomationDraftEffects({
     loadAutomationYamlHooksForRepo
   ])
   useEffect(() => {
-    if (!createOpen) {
+    if (!createOpen || editingAutomationId !== null) {
       setupDecisionPolicyDefaultRef.current = undefined
       setupDecisionDefaultSignatureRef.current = null
       setupDecisionTouchedRef.current = false
@@ -99,6 +116,7 @@ export function useAutomationDraftEffects({
     setDraft((current) => ({ ...current, setupDecision: nextDefault }))
   }, [
     createOpen,
+    editingAutomationId,
     draft,
     getDraftSetupDecisionDefault,
     getDraftSetupDecisionDefaultSignature,
@@ -119,6 +137,18 @@ export function useAutomationDraftEffects({
         dayOfWeek: template.dayOfWeek ?? current.dayOfWeek,
         customSchedule: '',
         agentId: template.agentId ?? current.agentId,
+        ...(template.agentId && template.agentId !== current.agentId
+          ? {
+              launchPreferences: undefined,
+              agentArgs: undefined,
+              launchSetupPatch:
+                hasModernAutomationLaunchSetup(current) || current.launchSetupPatch?.copy
+                  ? { copy: { surface: current.surface } }
+                  : { arguments: { kind: 'legacy-extras' as const, value: '' } },
+              launchArgumentsInput: undefined,
+              extraAgentArgs: ''
+            }
+          : {}),
         missedRunGraceMinutes: template.missedRunGraceMinutes ?? current.missedRunGraceMinutes,
         scheduleWarning: null
       }))

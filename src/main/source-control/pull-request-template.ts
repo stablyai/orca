@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import type { HostedReviewProvider } from '../../shared/hosted-review'
+import type { HostedReviewProvider } from '../../shared/source-control/hosted-review/hosted-review-contracts'
 
 const PULL_REQUEST_TEMPLATE_CANDIDATES = [
   '.github/pull_request_template.md',
@@ -64,7 +64,6 @@ export async function resolveHostedReviewBodyForGeneration(args: {
   if (!args.useTemplate || args.body.trim()) {
     return args.body
   }
-  // Why: generated non-empty bodies bypass provider-side template fallback, so
-  // preload the template into the AI context when the user asked to use it.
+  // Generated bodies bypass provider template fallback; include the requested template in AI context first.
   return readHostedReviewTemplate(args.repoPath, args.connectionId, args.provider)
 }

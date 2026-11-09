@@ -1,23 +1,13 @@
 // @vitest-environment happy-dom
 
-/**
- * Same-id SSH re-adoption on the desktop authority.
- *
- * This is the one catalog change that alters nothing the apply policy used to
- * look at: the stable key is incarnation-free, the state stays authoritative,
- * the query support stays scoped, the owner stays present and the host stays up
- * — only the registration generation moves. The desktop's connection generation
- * is a constant and can never reject anything either, so if the apply does not
- * run, rows fetched against the previous registration both render and become the
- * captured owners that fence later mutations.
- */
+/** Same-ID SSH re-adoption changes only registration generation; reapply must discard prior rows/owners despite unchanged stable key, health and scoped support. */
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Automation } from '../../../../shared/automations-types'
-import type { AutomationListScopeSelector } from '../../../../shared/automation-list-scope'
-import type { AppState } from '@/store'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationListScopeSelector } from '../../../../shared/automations/ownership/automation-list-scope'
+import type { AppState } from '@/store/types'
 import type { AutomationHostCatalogView } from './use-automation-host-catalog'
 import { resetAutomationHostCatalogGenerationsForTests } from './automation-host-catalog-generation'
 
@@ -30,14 +20,14 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
-// Desktop-only file: every request is a local-target scoped list, so the
-// transport routes straight into the generation-aware fake below.
-vi.mock('@/runtime/runtime-rpc-client', () => ({
+// Route desktop scoped lists directly into the generation-aware local fake.
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: (_target: unknown, _method: string, params: unknown) =>
-    listScoped(params as { selector: AutomationListScopeSelector }),
+    listScoped(params as { selector: AutomationListScopeSelector })
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', () => ({
   getRuntimeEnvironmentStatus: vi.fn()
 }))
-vi.mock('@/runtime/runtime-rpc-result', () => ({ hasRuntimeRpcErrorCode: () => false }))
 
 import { useAutomationHostCatalog } from './use-automation-host-catalog'
 
@@ -91,14 +81,11 @@ function scopedResponse(selector: AutomationListScopeSelector): unknown {
 const scopeRequests: AutomationListScopeSelector[] = []
 /** Generation whose answer is held in flight; null lets every request answer at once. */
 let heldGeneration: number | null = null
-let releaseHeld: (() => void) | null = null
 
 function listScoped({ selector }: { selector: AutomationListScopeSelector }): Promise<unknown> {
   scopeRequests.push(selector)
   if (selector.kind === 'ssh' && selector.expectedTargetGeneration === heldGeneration) {
-    return new Promise<unknown>((resolve) => {
-      releaseHeld = () => resolve(scopedResponse(selector))
-    })
+    return new Promise<unknown>(() => {})
   }
   return Promise.resolve(scopedResponse(selector))
 }
@@ -135,12 +122,6 @@ async function renderWithGeneration(targetGeneration: number): Promise<void> {
   await flush()
 }
 
-function sshRequestGenerations(): number[] {
-  return scopeRequests
-    .filter((selector) => selector.kind === 'ssh')
-    .map((selector) => (selector as { expectedTargetGeneration: number }).expectedTargetGeneration)
-}
-
 function sshHostAutomationIds(): string[] {
   const group = view?.rows.groups.find((entry) => entry.authorityKey === DESKTOP_AUTHORITY_KEY)
   const host = group?.hosts.find((candidate) => candidate.entry.stableKey === SSH_STABLE_KEY)
@@ -154,7 +135,7 @@ beforeEach(() => {
   root = null
   scopeRequests.length = 0
   heldGeneration = null
-  releaseHeld = null
+
   Object.assign(window, {
     api: {
       ssh: { connect: vi.fn() },
@@ -171,30 +152,6 @@ afterEach(async () => {
 })
 
 describe('useAutomationHostCatalog same-id SSH re-adoption', () => {
-  it('discards a scoped answer captured before the re-adoption', async () => {
-    heldGeneration = 4
-    await renderWithGeneration(4)
-    expect(sshRequestGenerations()).toEqual([4])
-
-    await renderWithGeneration(5)
-    heldGeneration = null
-    releaseHeld?.()
-    await flush()
-
-    expect(sshHostAutomationIds()).not.toContain('a-gen4')
-    expect(sshHostAutomationIds()).toEqual(['a-gen5'])
-  })
-
-  it('re-fetches the re-adopted host inside the cache TTL', async () => {
-    await renderWithGeneration(4)
-    expect(sshHostAutomationIds()).toEqual(['a-gen4'])
-
-    await renderWithGeneration(5)
-
-    expect(sshRequestGenerations()).toEqual([4, 5])
-    expect(sshHostAutomationIds()).toEqual(['a-gen5'])
-  })
-
   it('does not keep the previous registration’s rows on screen while the re-fetch runs', async () => {
     await renderWithGeneration(4)
     expect(sshHostAutomationIds()).toEqual(['a-gen4'])

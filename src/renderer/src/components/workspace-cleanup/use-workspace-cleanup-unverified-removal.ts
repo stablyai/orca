@@ -1,20 +1,19 @@
 import { useCallback, type Dispatch, type SetStateAction } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup/workspace-cleanup'
 import {
   getWorkspaceCleanupCandidateIdentity,
   getWorkspaceCleanupHostIdentity,
   resolveWorkspaceCleanupRemovalHostId
-} from '../../../../shared/workspace-cleanup-host-identity'
+} from '../../../../shared/workspace-cleanup/workspace-cleanup-host-identity'
 import type {
   WorkspaceCleanupFailure,
   WorkspaceCleanupRemoveResult
-} from '@/store/slices/workspace-cleanup'
+} from '@/store/slices/workspace-cleanup/workspace-cleanup-removal'
 import { startWorkspaceCleanupBackgroundRemoval } from './workspace-cleanup-background-removal'
 import type { WorkspaceCleanupDeletionPhase } from './workspace-cleanup-candidate-row'
 import { createWorkspaceCleanupSnapshotPruneBatch } from './workspace-cleanup-snapshot-prune-batch'
-import { withWorkspaceCleanupFocusAfterDelete } from './workspace-cleanup-focus-after-delete'
 
 type UnverifiedRemovalArgs = {
   setRowFailures: Dispatch<SetStateAction<Record<string, WorkspaceCleanupFailure>>>
@@ -52,7 +51,7 @@ export function useWorkspaceCleanupUnverifiedRemoval({
       markQueued([hostId ? { id: candidate.worktreeId, hostId } : candidate.worktreeId])
       startWorkspaceCleanupBackgroundRemoval({
         candidates: [candidate],
-        removeCandidates: withWorkspaceCleanupFocusAfterDelete(removeCandidates, [candidate]),
+        removeCandidates,
         snapshotPruneBatch: createWorkspaceCleanupSnapshotPruneBatch(),
         getRemoveOptions: () => ({
           unverifiedRemovalConsent: { identity, attemptId }
@@ -64,8 +63,7 @@ export function useWorkspaceCleanupUnverifiedRemoval({
         },
         onRowFailed: (failure) => {
           clearQueuedDeleteState(failure.worktreeId, failure.executionHostId)
-          // A preflight/timeout failure can arrive before the background
-          // batch settles; drop the optimistic deleting overlay immediately.
+          // Clear optimistic deleting immediately on preflight/timeout failure, before batch settlement.
           if (mountedRef.current) {
             setDeletionPhaseByIdentity((current) => withoutIdentity(current, identity))
           }

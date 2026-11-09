@@ -1,21 +1,28 @@
 import { useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
+import { Pressable } from 'react-native'
+import { X } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
-import { isSubmittableCommentBody } from '../../session/pr-comment-actions'
-import { prCommentComposerStyles as styles } from './pr-comment-composer-styles'
+import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../../i18n/use-mobile-translation'
+import { isSubmittableCommentBody } from '../../source-control/review/pr-comment-actions'
+import { MessageBox } from '../composer-input/MessageBox'
+import { composerInputStyles } from '../composer-input/composer-input-styles'
+import { useDurableDraftField } from '../../drafts/durable-draft-fields'
 
 type Props = {
-  // Plain-text composer shared by the reply affordance, the root-comment box, and
-  // the inline edit editor.
+  // Share plain-text composer across root comment, reply and edit.
   placeholder: string
   submitLabel: string
   submitting: boolean
   // Seeds the field for the edit case; the reply/add cases leave it empty.
   initialBody?: string
+  // Where a new comment or reply waits until it is posted, through closing and the app being killed.
+  draftKey?: string | null
   // Resolves to true on success; the composer clears + collapses (caller-driven via key remount or onSubmitted).
   onSubmit: (body: string) => Promise<boolean>
   onCancel?: () => void
   autoFocus?: boolean
+  inline?: boolean
 }
 
 export function PRCommentComposer({
@@ -23,13 +30,18 @@ export function PRCommentComposer({
   submitLabel,
   submitting,
   initialBody,
+  draftKey = null,
   onSubmit,
   onCancel,
-  autoFocus
+  autoFocus,
+  inline
 }: Props) {
-  const [body, setBody] = useState(initialBody ?? '')
-  // Why: parent `submitting` flips async; a fast double-tap can fire onSubmit
-  // twice before it flips, so guard locally in the same synchronous tick.
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const [edited, setEdited] = useState(initialBody ?? '')
+  const [kept, setKept] = useDurableDraftField(draftKey, 'body')
+  const [body, setBody] = draftKey === null ? [edited, setEdited] : [kept, setKept]
+  // Guard synchronously against double-submit before parent’s async submitting state rerenders.
   const inFlightRef = useRef(false)
   const canSubmit = isSubmittableCommentBody(body) && !submitting
 
@@ -39,9 +51,11 @@ export function PRCommentComposer({
     }
     inFlightRef.current = true
     try {
-      const ok = await onSubmit(body.trim())
+      const posted = body.trim()
+      const ok = await onSubmit(posted)
+      // A reopened composer shares the draft; text typed there since stays.
       if (ok) {
-        setBody('')
+        setBody((current) => (current.trim() === posted ? '' : current))
       }
     } finally {
       inFlightRef.current = false
@@ -49,47 +63,33 @@ export function PRCommentComposer({
   }
 
   return (
-    <View style={styles.container}>
-      <TextInput
-        style={styles.input}
-        value={body}
-        onChangeText={setBody}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        multiline
-        editable={!submitting}
-        autoFocus={autoFocus}
-      />
-      <View style={styles.actions}>
-        {onCancel ? (
+    <MessageBox
+      value={body}
+      onChangeText={setBody}
+      placeholder={placeholder}
+      editable={!submitting}
+      autoFocus={autoFocus}
+      inline={inline}
+      onSend={() => void submit()}
+      canSend={isSubmittableCommentBody(body)}
+      sending={submitting}
+      sendAccessibilityLabel={submitLabel}
+      leading={
+        onCancel ? (
           <Pressable
-            style={({ pressed }) => [styles.cancel, pressed && styles.pressed]}
+            style={({ pressed }) => [
+              composerInputStyles.ghostButton,
+              pressed && composerInputStyles.pressed
+            ]}
             onPress={onCancel}
             disabled={submitting}
             accessibilityRole="button"
-            accessibilityLabel="Cancel"
+            accessibilityLabel={t('common.cancel', 'Cancel')}
           >
-            <Text style={styles.cancelText}>Cancel</Text>
+            <X size={19} color={colors.textSecondary} strokeWidth={2} />
           </Pressable>
-        ) : null}
-        <Pressable
-          style={({ pressed }) => [
-            styles.submit,
-            !canSubmit && styles.submitDisabled,
-            pressed && styles.pressed
-          ]}
-          onPress={() => void submit()}
-          disabled={!canSubmit}
-          accessibilityRole="button"
-          accessibilityLabel={submitLabel}
-        >
-          {submitting ? (
-            <ActivityIndicator size="small" color={colors.bgBase} />
-          ) : (
-            <Text style={styles.submitText}>{submitLabel}</Text>
-          )}
-        </Pressable>
-      </View>
-    </View>
+        ) : undefined
+      }
+    />
   )
 }

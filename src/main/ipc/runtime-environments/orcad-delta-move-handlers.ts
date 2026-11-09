@@ -4,13 +4,20 @@ import type {
   OrcadDeltaMovePreview,
   OrcadDeltaMoveResult
 } from '../../../shared/orcad-managed-runtime'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { requireManagedOrcadInfrastructure } from '../../managed-server/lifecycle/orcad-managed-runtime-context'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
-import { keepOrcadServerVersion, runOrcadDeltaMove } from '../../ssh/orcad-migration-delta-move'
-import { planOrcadDeltaMove } from '../../ssh/orcad-migration-delta-plan'
-import { censusHostRelayTerminalsFor } from '../../ssh/legacy-relay/ssh-host-relay-census-for-target'
-import { orcadMigrationDestinationFor } from '../../managed-server/lifecycle/orcad-runtime-conversion-wiring'
+import {
+  keepOrcadServerVersion,
+  runOrcadDeltaMove
+} from '../../managed-server/migration/cutover/orcad-migration-delta-move'
+import { planOrcadDeltaMove } from '../../managed-server/migration/cutover/orcad-migration-delta-plan'
+import { censusHostRelayTerminalsFor } from '../../ssh/legacy-relay/endpoints/ssh-host-relay-census-for-target'
+import {
+  orcadMigrationDestinationFor,
+  orcadServerAutomationEnablerFor
+} from '../../managed-server/lifecycle/orcad-runtime-conversion-wiring'
+import { enableMovedOrcadAutomationsForTarget } from '../../persistence/migrating-orcad-catalog/orcad-migration-moved-automations'
 import { requiredString } from './orcad-runtime-lifecycle-handlers'
 import { publishResolvedChangedHostStatus } from './runtime-environment-managed-tunnel'
 import { runTargetLifecycle } from '../ssh/ssh-target-lifecycle-queue'
@@ -34,7 +41,7 @@ export function registerOrcadDeltaMoveHandlers(getUserDataPath: () => string): v
         (entry) => entry.id === target.orcadFence?.environmentId
       )
       if (!environment) {
-        throw new Error('The managed Orca server for this host is no longer registered.')
+        throw new Error('This host’s Orca server is no longer registered.')
       }
       const result = await runOrcadDeltaMove({
         userDataPath,
@@ -42,15 +49,25 @@ export function registerOrcadDeltaMoveHandlers(getUserDataPath: () => string): v
         claims,
         target,
         environment,
-        destination: orcadMigrationDestinationFor(environment),
+        connectDestination: async () =>
+          orcadMigrationDestinationFor(
+            await ensureOrcadManagedTunnel(userDataPath, environment.id)
+          ),
         censusHost: censusHostRelayTerminalsFor(target),
-        ensureTunnel: async () => {
-          await ensureOrcadManagedTunnel(userDataPath, environment.id)
-        },
         runTargetLifecycle
       })
       if (result.outcome === 'moved') {
-        publishResolvedChangedHostStatus(target, environment.id)
+        // Tunnel repair may have re-paired the server; read its current credentials.
+        const paired = listEnvironments(userDataPath).find((entry) => entry.id === environment.id)
+        const automationsLeftDisabled = await enableMovedOrcadAutomationsForTarget(
+          userDataPath,
+          target.id,
+          orcadServerAutomationEnablerFor(paired ?? environment)
+        ).catch((error: unknown) => {
+          console.warn('[ssh] Could not re-enable moved automations:', error)
+          return 0
+        })
+        publishResolvedChangedHostStatus(target, environment.id, automationsLeftDisabled)
       }
       return result
     }

@@ -1,12 +1,10 @@
 import {
-  assertClipboardImageDimensionsWithinLimit,
   clipboardImageThumbnailSize,
   type ClipboardImageDimensions,
   type ClipboardImageThumbnail
 } from '../../shared/clipboard-image'
 
-/** The slice of Electron's NativeImage this module needs, so the decision logic
- *  is testable without an Electron runtime. */
+/** Minimal NativeImage surface for tests without an Electron runtime. */
 export type ClipboardImageLike = {
   isEmpty: () => boolean
   getSize: () => ClipboardImageDimensions
@@ -16,12 +14,7 @@ export type ClipboardImageLike = {
   toDataURL: () => string
 }
 
-/**
- * In-memory preview of whatever image the clipboard holds. Writing the image to
- * disk (or uploading it over SFTP) takes long enough that a composer with no
- * feedback reads as a dropped paste, so this answers "is there an image, and
- * what does it look like" without touching the filesystem.
- */
+/** Preview in memory before slower disk/SFTP saving so composer paste gets immediate feedback. */
 export function buildClipboardImageThumbnail(
   image: ClipboardImageLike
 ): ClipboardImageThumbnail | null {
@@ -29,11 +22,8 @@ export function buildClipboardImageThumbnail(
     return null
   }
   const size = image.getSize()
-  try {
-    assertClipboardImageDimensionsWithinLimit(size)
-  } catch {
-    // Oversized images still report through the save call; the probe only
-    // decides whether to show a placeholder, so degrade to "no preview".
+  // Already decoded, and the save downscales oversized images, so only reject degenerate sizes.
+  if (!(size.width > 0 && size.height > 0)) {
     return null
   }
   const thumbnailSize = clipboardImageThumbnailSize(size)

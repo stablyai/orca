@@ -1,11 +1,13 @@
 // @vitest-environment happy-dom
 import { expect, it, vi } from 'vitest'
-import { createEditorStore } from '@/store/slices/editor-slice-test-harness'
-import { createEditorSaveQueue } from '../editor-save-queue'
-import { canAutoSaveOpenFile } from '../editor-autosave'
+import { createEditorStore } from '@/store/slices/editor/editor-slice-test-harness'
+import { createEditorSaveQueue } from '../save/queue/editor-save-queue'
+import { canAutoSaveOpenFile } from '../autosave/editor-autosave'
 
 const { writeFile } = vi.hoisted(() => ({ writeFile: vi.fn() }))
-vi.mock('@/runtime/runtime-file-mutation-client', () => ({ writeRuntimeFile: writeFile }))
+vi.mock('@/runtime/files/mutations/runtime-file-mutation-client', () => ({
+  writeRuntimeFile: writeFile
+}))
 
 it('blocks drafts, dirty state, autosave and explicit writes for paged previews', async () => {
   const store = createEditorStore()

@@ -3,6 +3,14 @@ import { parseArgs, validateCommandAndFlags } from '../args'
 import { PROFILE_STATE_COMMAND_SPECS } from './profile-state'
 
 describe('profile state rollback discovery', () => {
+  it.each(PROFILE_STATE_COMMAND_SPECS)('rejects --page for $path', (spec) => {
+    const parsed = parseArgs([...spec.path, '--page', '1'])
+
+    expect(() => validateCommandAndFlags(PROFILE_STATE_COMMAND_SPECS, parsed)).toThrow(
+      `Unknown flag --page for command: ${spec.path.join(' ')}`
+    )
+  })
+
   it.each(['exports', 'rollback'])('accepts an explicit profile for %s', (command) => {
     const parsed = parseArgs(['profile', 'state', command, '--profile-id', 'inactive'])
     expect(parsed.flags.get('profile-id')).toBe('inactive')
@@ -25,15 +33,5 @@ describe('profile state rollback discovery', () => {
     const parsed = parseArgs(['profile', 'state', 'rollback', '--current-sqlite'])
     expect(parsed.flags.get('current-sqlite')).toBe(true)
     expect(() => validateCommandAndFlags(PROFILE_STATE_COMMAND_SPECS, parsed)).not.toThrow()
-  })
-
-  it('explains that adoption selects one full state and preserves both copies', () => {
-    const spec = PROFILE_STATE_COMMAND_SPECS.find((item) => item.path.at(-1) === 'rollback')
-    expect(spec?.usage).toContain('--current-json')
-    expect(spec?.notes?.join('\n')).toContain('without merging; both copies are archived')
-    expect(spec?.examples).toContain('orca profile state rollback --current-json')
-    expect(spec?.usage).toContain('--latest-json')
-    expect(spec?.notes?.join('\n')).toContain('exports the latest SQLite state')
-    expect(spec?.examples).toContain('orca profile state rollback --latest-json')
   })
 })

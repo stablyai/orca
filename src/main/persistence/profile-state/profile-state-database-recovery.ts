@@ -1,9 +1,12 @@
 import { profileStateDatabaseFiles } from './profile-state-storage-classification'
 import { existsSync, lstatSync, mkdirSync, rmSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { durableWriteTempPath, renameDurableSync } from '../../durable-file-write'
+import { durableWriteTempPath, renameDurableSync } from '../../filesystem/durable-file-write'
 import { hardenSqliteDatabaseFiles } from '../../sqlite/harden-database-files'
-import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../../shared/secure-file'
+import {
+  bestEffortFsyncDirectorySync,
+  fsyncFileSync
+} from '../../../shared/secure-storage/secure-file'
 import { openProfileStateDatabaseReadOnly } from './profile-state-database'
 import { validateProfileStateSnapshot } from './profile-state-documents'
 import { copyProfileStateRecoveryFile } from './profile-state-recovery-copy'
@@ -40,7 +43,7 @@ export type ProfileStateDatabaseRecovery = {
   removedDatabaseFiles: readonly string[]
 }
 
-/** Replace the database family only while startup and offline access are excluded. */
+/** Require maintenance ownership to exclude startup and offline access during replacement. */
 export function restoreProfileStateDatabaseBackup(
   options: ProfileStateDatabaseRecoveryOptions
 ): ProfileStateDatabaseRecovery {
@@ -81,9 +84,7 @@ export function restoreProfileStateDatabaseBackup(
     options.beforeRestore?.()
     ensureProfileStateAuthorityMarker(options.databasePath)
 
-    // JSON exports are revisioned for the legacy authority. Remove them after
-    // archiving so a later SQLite revision can publish a fresh export at the
-    // same number without colliding with an older divergent payload.
+    // Archive then remove legacy exports so reused revisions cannot collide with divergent old payloads.
     const retainedJsonExports = profileStateJsonExportPaths(options.dataFile)
     for (const exportPath of retainedJsonExports) {
       rmSync(exportPath)

@@ -1,20 +1,20 @@
 import type { WorkspaceAttachment } from '../shared/worktree/types'
 import type { RuntimeStatus, RuntimeWorktreeRecord } from '../shared/runtime-types'
-import type { JiraIssue } from '../shared/jira-types'
+import type { JiraIssue } from '../shared/jira/jira-types'
 import {
   isResolvedJiraIssueMatch,
   JIRA_ISSUE_KEY_PATTERN,
   parseJiraIssueUrl
-} from '../shared/jira-issue-url'
-import { WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY } from '../shared/workspace-attachment-capabilities'
+} from '../shared/jira/jira-issue-url'
+import { WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY } from '../shared/workspace-attachments/workspace-attachment-capabilities'
 import {
   getWorkspaceReferenceIdentity,
   parseWorkspaceReferenceUrl
-} from '../shared/workspace-reference-identity'
-import type { RuntimeClient } from './runtime-client'
+} from '../shared/workspace-attachments/workspace-reference-identity'
+
 import type { HandlerContext } from './dispatch'
-import { getWorkspaceAttachments } from '../shared/workspace-attachments'
-import { RuntimeClientError } from './runtime-client'
+import { getWorkspaceAttachments } from '../shared/workspace-attachments/workspace-attachments'
+import { type RuntimeClient, RuntimeClientError } from './runtime-client'
 import { getOptionalStringFlag, getRepeatedStringFlag } from './flags'
 import { resolveJiraTarget } from './jira-target'
 

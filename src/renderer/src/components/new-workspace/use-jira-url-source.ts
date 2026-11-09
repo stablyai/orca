@@ -1,22 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { getJiraAccountLabel } from '@/lib/jira-account-label'
-import { assertRuntimeEnvironmentCapability } from '@/runtime/runtime-rpc-client'
+import { assertRuntimeEnvironmentCapability } from '@/runtime/rpc/compatibility/runtime-capability-proof'
 import {
   getMatchingJiraSites,
   isResolvedJiraIssueMatch,
   parseJiraIssueUrl,
   type ParsedJiraIssueUrl
-} from '../../../../shared/jira-issue-url'
-import { getJiraSummaryLookupErrorCode } from '../../../../shared/jira-summary-lookup'
+} from '../../../../shared/jira/jira-issue-url'
+import { getJiraSummaryLookupErrorCode } from '../../../../shared/jira/jira-summary-lookup'
 import {
   getTaskSourceCacheScope,
   normalizeTaskSourceContext,
   type TaskSourceContext
-} from '../../../../shared/task-source-context'
+} from '../../../../shared/work-items/task-source-context'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
+import type { JiraIssue, JiraSite } from '../../../../shared/jira/jira-types'
 import { canReuseLoadedJiraStatus, type JiraSourceConnection } from './use-jira-source-connection'
 
 const LOOKUP_DEBOUNCE_MS = 200

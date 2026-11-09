@@ -11,12 +11,10 @@ import {
   PROVIDER_STDIN_END_GRACE_MS,
   PROVIDER_SUPERVISOR_MAX_STOP_MS
 } from '../provider-process/provider-process-supervisor'
-import { proveClaudeChildExit } from './claude-agent-sdk-exit-proof'
+import { createClaudeChildTreeReaper, proveClaudeChildExit } from './claude-agent-sdk-exit-proof'
 import { createClaudeCodeProcessSpawn } from './claude-agent-sdk-process-spawn'
 
-// Stands in for Claude mid-turn: stdin end does not stop it, the way EOF lets the real CLI finish
-// its turn. Its tool leads its own group, as the CLI's Bash tool shells do, and only Claude's own
-// SIGTERM handler reaps it. The daemon double-forks out of the tree before anything looks.
+// EOF leaves the turn running; SIGTERM reaps a detached tool but preserves a double-forked daemon.
 const FAKE_CLAUDE = String.raw`
   const { spawn } = require('node:child_process')
   const { writeFileSync } = require('node:fs')
@@ -45,7 +43,7 @@ const FAKE_CLAUDE = String.raw`
   setInterval(() => {}, 60000)
 `
 
-// Stands in for Orca's main: starts exactly the spec Claude's spawner built, then can be SIGKILLed.
+// A killable stand-in for Orca's main launches the production spawn spec.
 const OWNER = String.raw`
   const { spawn } = require('node:child_process')
   const spec = JSON.parse(process.env.ORCA_TEST_SPAWN_SPEC)
@@ -134,7 +132,6 @@ function sdkOptions(env: Record<string, string>): SdkSpawnOptions {
   }
 }
 
-/** Claude spawned through Orca's own spawner and stopped by Orca's own close ladder. */
 async function spawnClaude(env: Record<string, string> = {}) {
   const spawner = createClaudeCodeProcessSpawn(spawnProcess)
   const options = sdkOptions(env)
@@ -174,7 +171,6 @@ describe.runIf(process.platform !== 'win32')('Claude under the POSIX provider su
     expect(managed.lastCloseResult).toEqual({ root: 'exited', tree: 'exited' })
     await expect(close()).resolves.toBe(true)
 
-    // Claude's own SIGTERM reap ran at once, not after the supervisor's stdin-end grace.
     expect(Date.now() - startedAt).toBeLessThan(PROVIDER_STDIN_END_GRACE_MS)
     expect(existsSync(marker)).toBe(true)
     await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM', processless: false })
@@ -195,9 +191,29 @@ describe.runIf(process.platform !== 'win32')('Claude under the POSIX provider su
     const elapsed = Date.now() - startedAt
     expect(elapsed).toBeGreaterThanOrEqual(PROVIDER_SIGTERM_GRACE_MS)
     expect(elapsed).toBeLessThan(PROVIDER_SUPERVISOR_MAX_STOP_MS + 1_000)
-    // The supervisor's own SIGTERM stop finished the job; nothing forced the supervisor itself.
     await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM', processless: false })
     expect(alive(pids.claude)).toBe(false)
+  })
+
+  it('forces a Claude that ignores SIGTERM soon after a brief close, with its exit proven', async () => {
+    const { managed, exit, pids } = await spawnClaude({ ORCA_TEST_CLAUDE_IGNORES_SIGTERM: '1' })
+    const tree = createClaudeChildTreeReaper(managed.child, {
+      site: 'claude-structured-child-close',
+      exited: () => managed.rootVerdict === 'exited'
+    })
+
+    // ast-grep-ignore: test-no-wall-clock -- the brief grace is the behaviour under test
+    const startedAt = Date.now()
+    await expect(managed.close(tree, { grace: 'brief' })).resolves.toEqual({
+      root: 'exited',
+      tree: 'exited'
+    })
+
+    // ast-grep-ignore: test-no-wall-clock -- the full SIGTERM grace is 3 s; a brief close must not wait it out
+    expect(Date.now() - startedAt).toBeLessThan(2_500)
+    await expect(exit).resolves.toEqual({ code: null, signal: 'SIGTERM', processless: false })
+    expect(alive(pids.claude)).toBe(false)
+    expect(alive(pids.tool)).toBe(false)
   })
 
   it("stops Claude and its tool when Orca's main dies, and leaves a daemon that left its tree alone", async () => {
@@ -217,9 +233,9 @@ describe.runIf(process.platform !== 'win32')('Claude under the POSIX provider su
 
     expect(await waitFor(() => !alive(pids.claude), PROVIDER_SUPERVISOR_MAX_STOP_MS)).toBe(true)
     expect(await waitFor(() => !alive(pids.root), PROVIDER_SUPERVISOR_MAX_STOP_MS)).toBe(true)
-    // In its own group, so only Claude's SIGTERM handler could have reaped it.
+    // The tool's separate group requires Claude's SIGTERM handler to reap it.
     expect(alive(pids.tool)).toBe(false)
-    // Not the conversation's writer: nothing proves it orphaned, so the stop never reaches it.
+    // A daemon that left the tree has no proven ownership.
     expect(alive(pids.daemon)).toBe(true)
   })
 })

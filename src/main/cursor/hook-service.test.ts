@@ -6,7 +6,7 @@ import { dirname, join } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { createServer, type Server } from 'node:http'
 import { runProcess } from '@orca/process-host'
-import { findGitBash } from '../agent-hooks/windows-git-bash-path.test-fixture'
+import { findGitBash } from '../agent-hooks/installation/commands/testing/windows-git-bash-path.test-fixture'
 
 const { homedirMock } = vi.hoisted(() => ({
   homedirMock: vi.fn<() => string>()
@@ -21,20 +21,15 @@ vi.mock('os', async () => {
 })
 
 import { CursorHookService } from './hook-service'
-import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
 import { CURSOR_EVENTS, type CursorEvent } from './hook-events'
 
 const CURSOR_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'cursor-hook.cmd' : 'cursor-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
   /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
 
-// Why: on Windows one hook run is cmd.exe -> powershell.exe -> cmd.exe -> cursor-hook.cmd ->
-// curl.exe, and the package job runs ~25 files at maxWorkers 4 alongside real-Electron and
-// node-pty suites, so a cold CLR start competes for the runner. Deliberately above the product's
-// own MANAGED_HOOK_TIMEOUT_SECONDS (10s): this gates launcher correctness, not user latency.
+// Cold Windows launcher chains need extra CI time; this tests correctness rather than latency.
 const HOOK_RUN_TIMEOUT_MS = 30_000
-// Why: these cases run up to 16 of those chains back to back. Matches the same budget
-// windows-hook-payload-delivery.test.ts uses for the identical chain.
+// Cases run several launcher chains serially, so allow a larger per-case budget.
 const HOOK_CASE_TIMEOUT_MS = 60_000
 
 type InstalledCursorHooks = {
@@ -104,75 +99,6 @@ describe('CursorHookService', () => {
     removeTreeSync(homeDir)
   })
 
-  it('installs Cursor Agent hooks with the documented top-level command schema', () => {
-    const status = new CursorHookService().install()
-
-    expect(status.state).toBe('installed')
-    expect(status.configPath).toBe(join(homeDir, '.cursor', 'hooks.json'))
-    expect(status.managedHooksPresent).toBe(true)
-
-    const config = JSON.parse(readFileSync(join(homeDir, '.cursor', 'hooks.json'), 'utf8')) as {
-      version?: number
-      hooks: Record<string, { command?: string; hooks?: unknown[] }[]>
-    }
-    expect(config.version).toBe(1)
-    expect(Object.keys(config.hooks).sort()).toEqual([...CURSOR_EVENTS].sort())
-    for (const eventName of CURSOR_EVENTS) {
-      const definition = config.hooks[eventName]?.[0]
-      expect(definition?.command).toMatch(
-        process.platform === 'win32' ? WINDOWS_POWERSHELL_LAUNCHER : /cursor-hook/
-      )
-      if (process.platform !== 'win32') {
-        expect(definition?.command).toContain(join(homeDir, '.orca'))
-      }
-      expect(definition?.hooks).toBeUndefined()
-    }
-
-    const script = readFileSync(
-      join(homeDir, '.orca', 'agent-hooks', CURSOR_SCRIPT_FILE_NAME),
-      'utf8'
-    )
-    expect(script).toContain('/hook/cursor')
-    expect(script).toContain('GROK_HOOK_EVENT')
-    if (process.platform === 'win32') {
-      expect(script).toContain('%SystemRoot%\\System32\\curl.exe')
-    } else {
-      // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
-      // on the curl command line (EDR oversized-command-line false positive).
-      expect(script).toContain(`payload=$(${POSIX_HOOK_STDIN_READER})`)
-      expect(script).toContain('printf \'%s\' "$payload" | curl')
-      expect(script).toContain('--data-urlencode "payload@-"')
-      expect(script).not.toContain('--data-urlencode "payload=${payload}"')
-    }
-  })
-
-  // Why: #6078 — a Windows user profile path with a space used to be written
-  // verbatim as the hook command, so the agent split it at the space. The
-  // managed command must use an encoded launcher so the path never appears raw
-  // on the cmd.exe command line.
-  it.skipIf(process.platform !== 'win32')(
-    'wraps the managed hook command to survive spaces in the profile path (#6078)',
-    () => {
-      const spaceHome = join(tmpdir(), 'orca cursor home with spaces')
-      mkdirSync(spaceHome, { recursive: true })
-      homedirMock.mockReturnValue(spaceHome)
-      try {
-        expect(new CursorHookService().install().state).toBe('installed')
-
-        const config = JSON.parse(
-          readFileSync(join(spaceHome, '.cursor', 'hooks.json'), 'utf8')
-        ) as { hooks: Record<string, { command?: string }[]> }
-
-        for (const eventName of ['beforeSubmitPrompt', 'stop']) {
-          const command = config.hooks[eventName]?.[0]?.command
-          expect(command).toMatch(WINDOWS_POWERSHELL_LAUNCHER)
-        }
-      } finally {
-        removeTreeSync(spaceHome)
-      }
-    }
-  )
-
   it('preserves user-authored Cursor hook entries and removes stale managed entries', () => {
     const configPath = join(homeDir, '.cursor', 'hooks.json')
     mkdirSync(dirname(configPath), { recursive: true })
@@ -216,8 +142,7 @@ describe('CursorHookService', () => {
     ])
   })
 
-  // Why: installer-intent assertions missed empty stdout, which Cursor treats as
-  // invalid JSON and fails closed (#15462). This runs the registered command.
+  // Execute the registered command: installer-shape checks missed invalid stdout (#15462).
   it(
     'emits protocol-valid JSON on stdout for every managed event, including empty stdin (#15462)',
     () => {

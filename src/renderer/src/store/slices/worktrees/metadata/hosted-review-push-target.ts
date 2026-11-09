@@ -1,6 +1,6 @@
-import { callRuntimeRpc } from '../../../../runtime/runtime-rpc-client'
+import { callRuntimeRpc } from '../../../../runtime/rpc/calls/runtime-rpc-call'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
+import { isPositiveHostedReviewNumber } from '../../../../../../shared/source-control/hosted-review/hosted-review-contracts'
 import type {
   GitHubPrStartPoint,
   GitPushTarget,
@@ -8,7 +8,8 @@ import type {
 } from '../../../../../../shared/worktree/types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
 import type { Repo } from '../../../../../../shared/repo-types'
-import { findWorktreeRepo, getLinkedGitHubPRRepository } from '../../../github/linked-pr-repository'
+import { resolveReviewRepository } from '@/lib/review-owner'
+import { getLinkedGitHubPRRepository } from '../../../github/pull-requests/linked-pr-repository'
 
 export const hostedReviewPushTargetLookupsInFlight = new Set<string>()
 
@@ -89,7 +90,10 @@ export function pushTargetPR(
     return null
   }
   return worktree &&
-    isLinkedFromOtherRepository({ ...worktree, ...updates }, findWorktreeRepo(repos, worktree))
+    isLinkedFromOtherRepository(
+      { ...worktree, ...updates },
+      resolveReviewRepository(repos, worktree) ?? undefined
+    )
     ? null
     : linkedPR
 }
@@ -100,7 +104,7 @@ export function isHostedReviewPushTargetStale(
   updates: Partial<WorktreeMeta>,
   repos: readonly Repo[]
 ): boolean {
-  const repo = findWorktreeRepo(repos, worktree)
+  const repo = resolveReviewRepository(repos, worktree) ?? undefined
   const existing = getHostedReviewPushTargetLookup(worktree, repo)
   return (
     existing !== null &&

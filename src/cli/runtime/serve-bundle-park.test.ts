@@ -11,7 +11,7 @@ import {
   supervisorsDir,
   type ServeParkRecord
 } from '../../shared/serve-bundle-coordination'
-import { openServeBundlePark } from './serve-bundle-park'
+import { openServeBundlePark } from '../../shared/serve-bundle-park'
 import { superviseServeService } from './serve-supervised-service'
 import { createSupervisedParkWatch } from './serve-supervised-park-watch'
 
@@ -125,7 +125,6 @@ describe('openServeBundlePark', () => {
         return 0
       }
     })
-    // While parked the loop holds; release it so the next attempt runs.
     await vi.waitFor(async () => expect(await readdir(acksDir(dir))).toHaveLength(1))
     await writeRecord({ phase: 'unpark' })
     await expect(result).resolves.toBe(0)

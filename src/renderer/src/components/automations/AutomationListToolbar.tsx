@@ -2,7 +2,7 @@ import React from 'react'
 import { History, Plus, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationListArrowKey } from './automation-list-keyboard-navigation'
@@ -46,6 +46,7 @@ export function AutomationListToolbar({
   openCreateDialog,
   canCreateAutomation
 }: AutomationListToolbarProps): React.JSX.Element {
+  const t = useTranslate()
   return (
     <div className="flex shrink-0 items-end justify-between gap-3 pb-4">
       <div ref={toolbarRef} className="flex min-w-0 flex-1 items-end gap-2">
@@ -71,7 +72,7 @@ export function AutomationListToolbar({
               type="button"
               variant="ghost"
               size="icon-sm"
-              aria-label={translate(
+              aria-label={t(
                 'auto.components.automations.AutomationsPage.19a6e30eae',
                 'Refresh automations'
               )}
@@ -83,10 +84,7 @@ export function AutomationListToolbar({
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom" sideOffset={6}>
-            {translate(
-              'auto.components.automations.AutomationsPage.19a6e30eae',
-              'Refresh automations'
-            )}
+            {t('auto.components.automations.AutomationsPage.19a6e30eae', 'Refresh automations')}
           </TooltipContent>
         </Tooltip>
       </div>
@@ -99,7 +97,7 @@ export function AutomationListToolbar({
           data-contextual-tour-target="automations-runs"
         >
           <History className="size-4" />
-          {translate('auto.components.automations.AutomationListToolbar.runs', 'Runs')}
+          {t('auto.components.automations.AutomationListToolbar.runs', 'Runs')}
         </Button>
         <Button
           type="button"
@@ -110,7 +108,7 @@ export function AutomationListToolbar({
           data-contextual-tour-target="automations-create"
         >
           <Plus className="size-4" />
-          {translate('auto.components.automations.AutomationsPage.newAutomation', 'New Automation')}
+          {t('auto.components.automations.AutomationsPage.newAutomation', 'New Automation')}
         </Button>
       </div>
     </div>

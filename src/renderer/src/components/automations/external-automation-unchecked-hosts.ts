@@ -1,19 +1,15 @@
-/**
- * Hosts whose external managers a probe never answered for.
- *
- * A probe that failed is not a host with nothing on it. Without this line the
- * list would render an unreachable host exactly like a clean one, which is the
- * one claim the page has no evidence for.
- */
+/** Name hosts whose probes failed; no answer cannot be presented as an empty external-manager inventory. */
 
 import { translate } from '@/i18n/i18n'
-import { ownerKey } from '../../../../shared/automation-owner-key'
+import type { Translate } from '@/i18n/use-translate'
+import { ownerKey } from '../../../../shared/automations/ownership/automation-owner-key'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { ScopedExternalAutomationFailure } from './external-automation-scope-client'
 
 export function externalAutomationUncheckedHostLabels(
   failures: readonly ScopedExternalAutomationFailure[],
-  entries: readonly AutomationHostCatalogEntry[]
+  entries: readonly AutomationHostCatalogEntry[],
+  t: Translate = translate
 ): string[] {
   const labelByOwnerKey = new Map<string, string>()
   for (const entry of entries) {
@@ -32,7 +28,7 @@ export function externalAutomationUncheckedHostLabels(
     seen.add(key)
     labels.push(
       labelByOwnerKey.get(key) ??
-        translate('auto.components.automations.emptyState.unknownHost', 'this host')
+        t('auto.components.automations.emptyState.unknownHost', 'this host')
     )
   }
   return labels
@@ -41,22 +37,26 @@ export function externalAutomationUncheckedHostLabels(
 /** Distinct from the empty state on purpose: unchecked is not the same as clean. */
 export function externalAutomationUncheckedNotice(
   failures: readonly ScopedExternalAutomationFailure[],
-  entries: readonly AutomationHostCatalogEntry[]
+  entries: readonly AutomationHostCatalogEntry[],
+  t: Translate = translate
 ): string | null {
-  const labels = externalAutomationUncheckedHostLabels(failures, entries)
+  const labels = externalAutomationUncheckedHostLabels(failures, entries, t)
   if (labels.length === 0) {
     return null
   }
   if (labels.length === 1) {
-    return translate(
+    return t(
       'auto.components.automations.externalScope.uncheckedHost',
       'External automation managers on {{hostLabel}} could not be checked.',
       { hostLabel: labels[0] }
     )
   }
-  return translate(
-    'auto.components.automations.externalScope.uncheckedHosts',
+  return t(
+    'auto.components.automations.externalScope.uncheckedHostCount',
     'External automation managers on {{count}} hosts could not be checked.',
-    { count: labels.length }
+    {
+      count: labels.length,
+      defaultValue_one: 'External automation managers on {{count}} host could not be checked.'
+    }
   )
 }

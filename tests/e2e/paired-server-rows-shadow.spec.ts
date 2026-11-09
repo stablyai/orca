@@ -1,7 +1,4 @@
-/**
- * A desktop paired to an `orca serve` host: main keeps the server's workspace rows itself, from the
- * server's change events and with no phone asking, and they match the rows the window fetched.
- */
+// Without phone requests, desktop main must retain server rows from change events and agree with its window’s catalog.
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'

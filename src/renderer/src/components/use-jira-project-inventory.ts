@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import type { JiraProject } from '../../../shared/jira-types'
+import type { JiraProject } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { taskSourceRuntimeTarget } from '@/lib/task-source-runtime-target'
 import {
   jiraListProjectsForTarget,
   jiraStatusForTarget
-} from '@/runtime/runtime-jira-project-client'
+} from '@/runtime/jira/runtime-jira-project-client'
 
 type JiraProjectInventorySource = RuntimeClientTarget | TaskSourceContext
 

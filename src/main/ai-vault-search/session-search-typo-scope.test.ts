@@ -5,13 +5,6 @@ import {
   type SessionSearchHarness
 } from './session-search-engine-test-fixture'
 
-// Typo repair used to read `messages_vocab` and probe `messages_fts` with no
-// column filter, so tool output decided whether a conversation-scoped query was
-// repaired — in both directions. A tool row carrying the misspelling made the
-// query look correctly spelled and suppressed the repair; a tool row carrying a
-// rare word offered it as the suggestion, naming in `repairedTerms` a string
-// from a column the scope will never show.
-
 let harness: SessionSearchHarness | null = null
 let control: SessionSearchHarness | null = null
 
@@ -22,31 +15,29 @@ afterEach(async () => {
   control = null
 })
 
-it('repairs a conversation query the same way with or without a tool row', async () => {
+it('repairs whole identifiers despite visible fragments and tool spellings', async () => {
   harness = await openSessionSearchHarness('ss-typo-scope-suppress')
   addSyntheticSession(harness.db, { id: 1, text: 'we changed resolveTerminalPath today', rows: 2 })
-  // A second session whose tool output happens to contain the misspelling.
   addSyntheticSession(harness.db, {
     id: 2,
-    text: 'ran the linter',
+    text: 'terminal',
     toolText: 'warning: unknown symbol resolveterminalpth in build log',
     rows: 2,
     role: 'assistant'
   })
 
-  // The same index without that one tool row.
   control = await openSessionSearchHarness('ss-typo-scope-control')
   addSyntheticSession(control.db, { id: 1, text: 'we changed resolveTerminalPath today', rows: 2 })
-  addSyntheticSession(control.db, { id: 2, text: 'ran the linter' })
+  addSyntheticSession(control.db, { id: 2, text: 'terminal' })
 
-  const request = { query: 'resolveterminalpth', scope: 'conversation' } as const
-  const withTool = harness.engine.search(request)
-  const clean = control.engine.search(request)
-
-  expect(clean.planner.repairedTerms).toEqual(['resolveterminalpath'])
-  expect(clean.hits.map((hit) => hit.sessionId)).toEqual(['1'])
-  expect(withTool.planner.repairedTerms).toEqual(clean.planner.repairedTerms)
-  expect(withTool.hits.map((hit) => hit.sessionId)).toEqual(clean.hits.map((hit) => hit.sessionId))
+  for (const query of ['resolveterminalpth', 'resolveTerminalPth']) {
+    const withTool = harness.engine.search({ query, scope: 'conversation' })
+    const clean = control.engine.search({ query, scope: 'all' })
+    for (const result of [withTool, clean]) {
+      expect(result.planner.repairedTerms).toEqual(['resolveterminalpath'])
+      expect(result.hits.map((hit) => hit.sessionId)).toEqual(['1'])
+    }
+  }
 })
 
 it('never repairs a conversation query onto a word only tool output holds', async () => {
@@ -63,9 +54,28 @@ it('never repairs a conversation query onto a word only tool output holds', asyn
   const narrowed = harness.engine.search({ query: 'quicksilverfx', scope: 'conversation' })
   expect(narrowed.planner.repairedTerms).toBeUndefined()
   expect(narrowed.hits).toEqual([])
-  // The same query over the whole corpus still finds it, which is the scope
-  // doing its job rather than the repair being broken.
   const wide = harness.engine.search({ query: 'quicksilverfx', scope: 'all' })
   expect(wide.planner.repairedTerms).toEqual(['quicksilverfox'])
   expect(wide.hits.map((hit) => hit.sessionId)).toEqual(['1'])
+})
+
+it('excludes tool-only spellings before typo visibility and candidate selection in all scope', async () => {
+  harness = await openSessionSearchHarness('ss-typo-tool-exclusion')
+  addSyntheticSession(harness.db, { id: 1, text: 'quicksilverfox', rows: 2 })
+  addSyntheticSession(harness.db, { id: 2, role: 'tool', text: 'quicksilverfx', rows: 10 })
+  const page = harness.engine.search({ query: 'quicksilverfx', scope: 'all' })
+  expect(page.planner.repairedTerms).toEqual(['quicksilverfox'])
+  expect(page.hits.map((hit) => hit.sessionId)).toEqual(['1'])
+})
+
+it('keeps an exact spelling in a tool-heavy vocabulary', async () => {
+  harness = await openSessionSearchHarness('ss-typo-exhausted-exact')
+  addSyntheticSession(harness.db, { id: 1, role: 'tool', text: 'coalesces', rows: 1023 })
+  addSyntheticSession(harness.db, { id: 2, text: 'coalesces', rows: 2 })
+  addSyntheticSession(harness.db, { id: 3, text: 'coalesce', rows: 2 })
+  for (const scope of ['all', 'conversation'] as const) {
+    const page = harness.engine.search({ query: 'coalesces', scope })
+    expect(page.planner.repairedTerms).toBeUndefined()
+    expect(page.hits.map((hit) => hit.sessionId)).toEqual(['2'])
+  }
 })

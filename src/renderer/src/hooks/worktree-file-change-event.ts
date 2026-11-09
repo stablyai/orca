@@ -1,4 +1,4 @@
-import type { FsChangedPayload } from '../../../shared/filesystem-entry-types'
+import type { FsChangedPayload } from '../../../shared/file-watch/filesystem-change-event'
 
 export const ORCA_WORKTREE_FILE_CHANGE_EVENT = 'orca:worktree-file-change'
 
@@ -12,4 +12,16 @@ declare global {
   interface WindowEventMap {
     'orca:worktree-file-change': CustomEvent<WorktreeFileChangeEventDetail>
   }
+}
+
+// Why: a switch-back catch-up is synthesized in the renderer, so consumers on the raw IPC bus never see it.
+const catchUpPayloads = new WeakSet<FsChangedPayload>()
+
+export function markWorktreeCatchUpPayload(payload: FsChangedPayload): FsChangedPayload {
+  catchUpPayloads.add(payload)
+  return payload
+}
+
+export function isWorktreeCatchUpPayload(payload: FsChangedPayload): boolean {
+  return catchUpPayloads.has(payload)
 }

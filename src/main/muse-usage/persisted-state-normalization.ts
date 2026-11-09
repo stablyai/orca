@@ -19,7 +19,7 @@ export function getDefaultMuseUsageState(): MuseUsagePersistedState {
 }
 
 export function normalizeMuseUsageState(state: MuseUsagePersistedState): MuseUsagePersistedState {
-  // Why: a cache from another schema cannot be trusted; rescan but keep the opt-in.
+  // Rescan incompatible caches while preserving the user's opt-in.
   if (state.schemaVersion !== MUSE_USAGE_SCHEMA_VERSION) {
     const defaults = getDefaultMuseUsageState()
     return {

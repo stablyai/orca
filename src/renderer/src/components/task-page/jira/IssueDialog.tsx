@@ -1,4 +1,4 @@
-import type { TaskPageComposerActionsModel } from '../../use-task-page-composer-actions'
+import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import {
   Dialog,
   DialogContent,
@@ -8,7 +8,7 @@ import {
   DialogFooter
 } from '@/components/ui/dialog'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { getJiraProjectPickerDisplayLabel as getJiraProjectDisplayLabel } from '@/components/jira-project-picker-filter'
@@ -21,7 +21,7 @@ import {
   CommandEmpty,
   CommandItem
 } from '@/components/ui/command'
-import { getJiraProjectSelectionKey } from '@/components/task-page-jira-project-selection'
+import { getJiraProjectSelectionKey } from '@/components/task-page/jira/task-page-jira-project-selection'
 import { cn } from '@/lib/utils'
 import {
   Select,
@@ -31,13 +31,18 @@ import {
   SelectItem
 } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
-import { getJiraCreateAllowedValueLabel } from '@/components/task-page-jira-create-fields'
+import {
+  getJiraCreateAllowedValueLabel,
+  isJiraScalarUserCreateField
+} from '@/components/task-page/jira/task-page-jira-create-fields'
 import { TaskPageJiraIssueAssigneeField } from './IssueAssigneeField'
+import { TaskPageJiraIssueUserField } from './IssueUserField'
 export function TaskPageJiraIssueDialog({
   model
 }: {
   model: TaskPageComposerActionsModel
 }): React.JSX.Element | null {
+  const t = useTranslate()
   const {
     submitShortcutLabel,
     newJiraIssueOpen,
@@ -92,19 +97,13 @@ export function TaskPageJiraIssueDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>
-            {translate('auto.components.TaskPage.0c11ca0b6d', 'New Jira issue')}
-          </DialogTitle>
+          <DialogTitle>{t('auto.components.TaskPage.0c11ca0b6d', 'New Jira issue')}</DialogTitle>
           <DialogDescription>
             {newJiraIssueTargetProject
-              ? translate(
-                  'auto.components.TaskPage.0f7b0d964a',
-                  'Creates a new issue in {{value0}}.',
-                  {
-                    value0: newJiraIssueTargetProject.key
-                  }
-                )
-              : translate(
+              ? t('auto.components.TaskPage.0f7b0d964a', 'Creates a new issue in {{value0}}.', {
+                  value0: newJiraIssueTargetProject.key
+                })
+              : t(
                   'auto.components.TaskPage.e178c0a953',
                   'Choose a Jira project before creating the issue.'
                 )}
@@ -114,7 +113,7 @@ export function TaskPageJiraIssueDialog({
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-muted-foreground">
-                {translate('auto.components.TaskPage.00022ec0ba', 'Project')}
+                {t('auto.components.TaskPage.00022ec0ba', 'Project')}
               </label>
               <Popover
                 open={newJiraIssueProjectComboboxOpen}
@@ -139,7 +138,7 @@ export function TaskPageJiraIssueDialog({
                       </span>
                     ) : (
                       <span className="min-w-0 truncate text-muted-foreground">
-                        {translate('auto.components.TaskPage.00022ec0ba', 'Project')}
+                        {t('auto.components.TaskPage.00022ec0ba', 'Project')}
                       </span>
                     )}
                     <ChevronDown className="size-3.5 shrink-0 opacity-50" />
@@ -157,16 +156,13 @@ export function TaskPageJiraIssueDialog({
                   >
                     <CommandInput
                       ref={newJiraIssueProjectSearchInputRef}
-                      placeholder={translate(
-                        'auto.components.TaskPage.cfb56a7868',
-                        'Search projects...'
-                      )}
+                      placeholder={t('auto.components.TaskPage.cfb56a7868', 'Search projects...')}
                       value={newJiraIssueProjectQuery}
                       onValueChange={setNewJiraIssueProjectQuery}
                     />
                     <CommandList className="max-h-56">
                       <CommandEmpty>
-                        {translate('auto.components.TaskPage.93c57f15e5', 'No projects found.')}
+                        {t('auto.components.TaskPage.93c57f15e5', 'No projects found.')}
                       </CommandEmpty>
                       {filteredNewJiraIssueProjects.map((project) => {
                         const selectionKey = getJiraProjectSelectionKey(project)
@@ -200,7 +196,7 @@ export function TaskPageJiraIssueDialog({
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[11px] font-medium text-muted-foreground">
-                {translate('auto.components.TaskPage.ae592fee62', 'Issue type')}
+                {t('auto.components.TaskPage.ae592fee62', 'Issue type')}
               </label>
               <Select
                 value={newJiraIssueTypeId ?? newJiraIssueTargetType?.id ?? undefined}
@@ -215,8 +211,8 @@ export function TaskPageJiraIssueDialog({
                   <SelectValue
                     placeholder={
                       jiraIssueTypesLoading
-                        ? translate('auto.components.TaskPage.7d63e2626e', 'Loading...')
-                        : translate('auto.components.TaskPage.ae592fee62', 'Issue type')
+                        ? t('auto.components.TaskPage.7d63e2626e', 'Loading...')
+                        : t('auto.components.TaskPage.ae592fee62', 'Issue type')
                     }
                   />
                 </SelectTrigger>
@@ -233,12 +229,12 @@ export function TaskPageJiraIssueDialog({
           <TaskPageJiraIssueTitleField model={model} />
           <div className="flex flex-col gap-1">
             <label className="text-[11px] font-medium text-muted-foreground">
-              {translate('auto.components.TaskPage.f161bf9ede', 'Description (optional)')}
+              {t('auto.components.TaskPage.f161bf9ede', 'Description (optional)')}
             </label>
             <textarea
               value={newJiraIssueBody}
               onChange={(e) => setNewJiraIssueBody(e.target.value)}
-              placeholder={translate('auto.components.TaskPage.34d97ca682', "What's going on?")}
+              placeholder={t('auto.components.TaskPage.34d97ca682', "What's going on?")}
               rows={6}
               disabled={newJiraIssueSubmitting}
               className="w-full min-w-0 rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 resize-none max-h-60 overflow-y-auto scrollbar-sleek"
@@ -248,7 +244,7 @@ export function TaskPageJiraIssueDialog({
           {jiraCreateFieldsLoading ? (
             <div className="flex items-center gap-2 rounded-md border border-border/50 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
               <LoaderCircle className="size-3.5 animate-spin" />
-              {translate('auto.components.TaskPage.cbcdcbe244', 'Loading required Jira fields…')}
+              {t('auto.components.TaskPage.cbcdcbe244', 'Loading required Jira fields…')}
             </div>
           ) : null}
           {jiraCreateFieldsError ? (
@@ -265,7 +261,28 @@ export function TaskPageJiraIssueDialog({
                     <label className="text-[11px] font-medium text-muted-foreground">
                       {field.name}
                     </label>
-                    {field.allowedValues?.length && field.schema?.type !== 'array' ? (
+                    {isJiraScalarUserCreateField(field) && !field.allowedValues?.length ? (
+                      model.jiraTaskSourceContext ? (
+                        <TaskPageJiraIssueUserField
+                          key={JSON.stringify([
+                            model.providerRuntimeContextKey,
+                            newJiraIssueTargetProjectSelectionKey,
+                            newJiraIssueTargetType?.id
+                          ])}
+                          providerSettings={model.jiraTaskSourceContext}
+                          siteId={newJiraIssueTargetProject?.siteId}
+                          value={fieldValue}
+                          onChange={(id) =>
+                            setNewJiraIssueCustomFieldValues((prev) => ({
+                              ...prev,
+                              [field.key]: id
+                            }))
+                          }
+                          disabled={newJiraIssueSubmitting}
+                          label={field.name}
+                        />
+                      ) : null
+                    ) : field.allowedValues?.length && field.schema?.type !== 'array' ? (
                       <Select
                         value={fieldValue}
                         onValueChange={(value) =>
@@ -278,7 +295,7 @@ export function TaskPageJiraIssueDialog({
                       >
                         <SelectTrigger>
                           <SelectValue
-                            placeholder={translate(
+                            placeholder={t(
                               'auto.components.TaskPage.1f0fce91e3',
                               'Select {{value0}}',
                               {
@@ -310,11 +327,8 @@ export function TaskPageJiraIssueDialog({
                         type={field.schema?.type === 'number' ? 'number' : 'text'}
                         placeholder={
                           field.schema?.type === 'array'
-                            ? translate(
-                                'auto.components.TaskPage.56cdb413a2',
-                                'Comma-separated values'
-                              )
-                            : translate('auto.components.TaskPage.919a20dd5b', 'Enter {{value0}}', {
+                            ? t('auto.components.TaskPage.56cdb413a2', 'Comma-separated values')
+                            : t('auto.components.TaskPage.919a20dd5b', 'Enter {{value0}}', {
                                 value0: field.name
                               })
                         }
@@ -327,7 +341,9 @@ export function TaskPageJiraIssueDialog({
             </div>
           ) : null}
           <p className="text-[10px] text-muted-foreground">
-            {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
+            {t('auto.components.TaskPage.shortcutToSubmit', '{{shortcut}} to submit.', {
+              shortcut: submitShortcutLabel
+            })}
           </p>
         </div>
         <DialogFooter>
@@ -336,7 +352,7 @@ export function TaskPageJiraIssueDialog({
             onClick={() => setNewJiraIssueOpen(false)}
             disabled={newJiraIssueSubmitting}
           >
-            {translate('auto.components.TaskPage.ff69a30681', 'Cancel')}
+            {t('auto.components.TaskPage.ff69a30681', 'Cancel')}
           </Button>
           <Button
             onClick={() => void handleCreateNewJiraIssue()}
@@ -352,10 +368,10 @@ export function TaskPageJiraIssueDialog({
             {newJiraIssueSubmitting ? (
               <>
                 <LoaderCircle className="size-4 animate-spin" />
-                {translate('auto.components.TaskPage.8ff6fdc368', 'Creating…')}
+                {t('auto.components.TaskPage.8ff6fdc368', 'Creating…')}
               </>
             ) : (
-              translate('auto.components.TaskPage.e15ba2d2eb', 'Create issue')
+              t('auto.components.TaskPage.e15ba2d2eb', 'Create issue')
             )}
           </Button>
         </DialogFooter>

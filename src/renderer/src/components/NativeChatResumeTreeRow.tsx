@@ -1,6 +1,6 @@
 import { useContext } from 'react'
 import { ChevronRight } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { Checkbox } from './ui/checkbox'
 import { ResumeTreeSelectingContext } from './native-chat-resume-tree-state'
 
@@ -13,14 +13,7 @@ const RESUME_TREE_CHECKBOX_COLUMN_PX = 28
 /** Where a row's body starts after the checkbox column: the arrow slot (size-4.5) and the body's pl-1. */
 const RESUME_TREE_BODY_OFFSET_PX = 18 + 4
 
-/**
- * One row of the resume tree: the checkbox in the list's single left column, the indent for its
- * depth, a disclosure arrow (an empty slot on a leaf, so icons line up), then the caller's body.
- * With nothing left to select there is no checkbox column, and a leaf's status takes its arrow slot.
- *
- * The row is a flat `treeitem` carrying its own `aria-level`, so the tree's keyboard handling can
- * find a row's disclosure without walking nested groups.
- */
+/** Keep checkboxes in one column across flat aria-level treeitems so keyboard handling finds disclosures directly. Reserve leaf arrow slots for alignment/status, and omit checkbox columns for results. */
 export function ResumeTreeRow({
   depth,
   expanded,
@@ -56,6 +49,7 @@ export function ResumeTreeRow({
   below?: React.ReactNode
   children: React.ReactNode
 }): React.JSX.Element {
+  const t = useTranslate()
   const selecting = useContext(ResumeTreeSelectingContext)
   const indent = depth * RESUME_TREE_INDENT_PX
   const column = selecting ? RESUME_TREE_CHECKBOX_COLUMN_PX : 0
@@ -99,12 +93,12 @@ export function ResumeTreeRow({
             aria-expanded={expanded}
             aria-label={
               expanded
-                ? translate(
+                ? t(
                     'auto.components.NativeChatResumeOnRestartModal.collapseNode',
                     'Collapse {{value0}}',
                     { value0: name }
                   )
-                : translate(
+                : t(
                     'auto.components.NativeChatResumeOnRestartModal.expandNode',
                     'Expand {{value0}}',
                     { value0: name }
@@ -116,8 +110,7 @@ export function ResumeTreeRow({
                 event.currentTarget.focus()
                 return
               }
-              // A pointer press focuses the arrow, where no tree key works; hand focus to the
-              // row's checkbox, or to the tree when that is disabled.
+              // After disclosure clicks, return focus to the row checkbox or tree so keyboard navigation remains available.
               const row = event.currentTarget.closest('[role="treeitem"]')
               const box = row?.querySelector<HTMLElement>('[role="checkbox"]:not(:disabled)')
               const next = box ?? row?.closest<HTMLElement>('[role="tree"]')
@@ -151,12 +144,13 @@ export function ResumeTreeCount({
   selectedCount: number
   total: number
 }): React.JSX.Element | null {
+  const t = useTranslate()
   if (total === 0) {
     return null
   }
   return (
     <span className="ml-auto shrink-0 pl-2 text-[11px] tabular-nums text-muted-foreground">
-      {translate(
+      {t(
         'auto.components.NativeChatResumeOnRestartModal.workspaceSelectedCount',
         '{{value0}} of {{value1}}',
         { value0: selectedCount, value1: total }

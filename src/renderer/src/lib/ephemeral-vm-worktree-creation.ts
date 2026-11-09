@@ -1,17 +1,21 @@
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { prepareEphemeralVmWorkspaceTarget } from '@/lib/ephemeral-vm-workspace-target'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import { getProjectIdentityKey } from '../../../shared/project-host-setup-projection'
 import type { Repo } from '../../../shared/repo-types'
 import { translate } from '@/i18n/i18n'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
+import { gateVmCreateOnEnvironmentCheck } from '@/lib/ephemeral-vm-environment-check'
+import {
+  hideVmCreateCheckout,
+  settleVmCreateCheckoutAfterCleanup
+} from '@/lib/vm-create-hidden-checkouts'
 import {
   appendProvisioningLog,
   appendProvisioningWarnings
 } from '@/lib/pending-creation-provisioning-log'
 
-/** Provisions whatever remote target the request still needs before the worktree is created. */
 export async function prepareRequestForCreate(
   creationId: string,
   request: WorktreeCreationRequest
@@ -60,7 +64,14 @@ async function prepareEphemeralVmRecipeRequest(
           }
         : {}),
       provisionId: creationId,
-      setupExistingFolder: store.setupProjectExistingFolder
+      setupExistingFolder: async (args) => {
+        const setup = await store.setupProjectExistingFolder(args)
+        if (setup) {
+          // Why: until the create adopts it, the VM's primary checkout is not a workspace; the pending row stands for it.
+          hideVmCreateCheckout(creationId, { repoId: setup.repo.id, path: setup.repo.path })
+        }
+        return setup
+      }
     })
   } finally {
     unsubscribeProvisionEvents?.()
@@ -110,8 +121,16 @@ async function prepareEphemeralVmRecipeRequest(
       path: preparedTarget.setup.repo.path
     }
   }
-  if (!useAppStore.getState().pendingWorktreeCreations[creationId]) {
-    await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest)
+  const proceed =
+    Boolean(useAppStore.getState().pendingWorktreeCreations[creationId]) &&
+    (!preparedTarget.environmentId ||
+      (await gateVmCreateOnEnvironmentCheck(
+        creationId,
+        preparedTarget.environmentId,
+        preparedTarget.setup.repo.path
+      )))
+  if (!proceed) {
+    await cleanupEphemeralVmRuntimeForFailedCreate(preparedRequest, creationId)
     return null
   }
   useAppStore.getState().updatePendingWorktreeCreation(creationId, {
@@ -139,10 +158,7 @@ function getEphemeralVmPortableBaseSelection(
       ...(request.compareBaseRef ? { compareBaseRef: request.compareBaseRef } : {})
     }
   }
-  // Why: VM recipes switch from the source checkout to a freshly provisioned
-  // checkout. Source-repo default/pinned local branches may not exist there, so
-  // let the remote repo resolve its own default unless the user selected a
-  // provider-backed start point above.
+  // A fresh VM checkout may lack source local/pinned branches; use its default unless the user chose a provider-backed start point.
   return { baseBranch: undefined, compareBaseRef: undefined }
 }
 
@@ -172,19 +188,19 @@ function resolvePortableEphemeralVmProjectId(repo: Repo | undefined): string | n
   if (!repo) {
     return null
   }
-  // Why: reuse the shared GitHub-identity projection so the portable project id
-  // can't drift from the canonical `github:<owner>/<repo>` key. Gate on the
-  // `github:` prefix to preserve the previous null-for-non-GitHub behavior
-  // (the shared key also returns `git:`/`repo:` fallbacks we don't want here).
+  // Reuse canonical github: identity but reject git:/repo: fallbacks to retain non-GitHub null behavior.
   const key = getProjectIdentityKey(repo)
   return key.startsWith('github:') ? key : null
 }
 
+/** A VM cleaned up stays out of the sidebar; one that could not be is shown again so the user can remove it. */
 export async function cleanupEphemeralVmRuntimeForFailedCreate(
-  request: WorktreeCreationRequest
+  request: WorktreeCreationRequest,
+  creationId: string
 ): Promise<void> {
-  await cleanupFailedEphemeralVmWorkspace(request, {
-    deleteProjectHostSetup: (setupId) => useAppStore.getState().deleteProjectHostSetup({ setupId }),
+  const cleanedUp = await cleanupFailedEphemeralVmWorkspace(request, {
+    deleteProjectHostSetup: (setupId, hostId) =>
+      useAppStore.getState().deleteProjectHostSetup({ setupId, hostId }),
     cleanupRuntime: (runtimeId) => window.api.ephemeralVm.cleanup({ runtimeId }),
     reportSetupError: (error) =>
       console.error('Failed to remove provisioned-root project setup:', error),
@@ -194,6 +210,7 @@ export async function cleanupEphemeralVmRuntimeForFailedCreate(
         error
       )
   })
+  settleVmCreateCheckoutAfterCleanup(creationId, cleanedUp)
 }
 
 export function getProvisionedRootSparseCheckoutError(): string {

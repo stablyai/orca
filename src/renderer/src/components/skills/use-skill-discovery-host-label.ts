@@ -1,13 +1,10 @@
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { useAppStore } from '@/store'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
-/**
- * Names the machine whose skill folders were scanned, so a remote or WSL user
- * can tell at a glance why sharing is unavailable without reading a per-row
- * sentence. Returns null while the owning runtime is still unknown.
- */
+/** Name the scanned owner for the page-wide sharing restriction; return null while ownership is unresolved. */
 export function useSkillDiscoveryHostLabel(target: RuntimeClientTarget | null): string | null {
+  const t = useTranslate()
   const environmentName = useAppStore((state) =>
     target?.kind === 'environment'
       ? (state.runtimeEnvironments.find((environment) => environment.id === target.environmentId)
@@ -18,7 +15,7 @@ export function useSkillDiscoveryHostLabel(target: RuntimeClientTarget | null): 
     return null
   }
   if (target.kind === 'local') {
-    return translate('auto.components.skills.host.local', 'This machine')
+    return t('auto.components.skills.host.local', 'This machine')
   }
-  return environmentName ?? translate('auto.components.skills.host.remote', 'Connected runtime')
+  return environmentName ?? t('auto.components.skills.host.remote', 'Connected runtime')
 }

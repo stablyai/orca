@@ -1,5 +1,5 @@
-import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
-import type { Automation } from '../../../../shared/automations-types'
+import { getAutomationRunRepoId } from '../../../../shared/automations/history/automation-run-identity'
+import type { Automation } from '../../../../shared/automations/automation-definition'
 import type { Repo } from '../../../../shared/repo-types'
 import type { AutomationListRow } from './automation-list-row-identity'
 import { getAgentLabel } from './automation-draft-model'
@@ -61,8 +61,7 @@ export function buildAutomationSearchFields(
     }),
     workspace: buildAutomationWorkspaceSearchText(automation, context.worktreeMap),
     agent: getAgentLabel(automation.agentId),
-    // The row's own host: a lookup by automation id would give two hosts' rows
-    // one label, so a search for host B could only ever match host A's row.
+    // Use the row’s own host; bare-ID lookup would give colliding authorities the same search label.
     host: row.hostLabel,
     prompt: automation.prompt
   }

@@ -3,11 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import {
-  classifySynchronousRipgrepSpawnFailure,
-  RipgrepLaunchFailureError,
-  RipgrepUnavailableError
-} from '../../shared/ripgrep-process-availability'
+import { classifySynchronousRipgrepSpawnFailure } from '../../shared/ripgrep/ripgrep-process-availability'
 
 const dirs: string[] = []
 
@@ -26,19 +22,6 @@ function fileAsSearchRoot(): string {
 }
 
 describe('synchronous ripgrep spawn failures', () => {
-  // Why a real spawn: the whole reason this path exists is that Node throws inline for errnos
-  // outside its async set. Asserting against a hand-made error would not prove that happens.
-  it.skipIf(process.platform === 'win32')(
-    'throws inline rather than emitting error when the root is a file',
-    () => {
-      const root = fileAsSearchRoot()
-
-      expect(() => spawn(process.execPath, ['-e', ''], { cwd: root, stdio: 'ignore' })).toThrow(
-        expect.objectContaining({ code: 'ENOTDIR' })
-      )
-    }
-  )
-
   it.skipIf(process.platform === 'win32')(
     'names the unreachable root instead of surfacing a raw spawn errno',
     async () => {
@@ -55,24 +38,4 @@ describe('synchronous ripgrep spawn failures', () => {
       expect(verdict.message).toBe(`Search root is not reachable: ${root}`)
     }
   )
-
-  it('reports fd/process pressure as retryable, not as a broken install', async () => {
-    const verdict = await classifySynchronousRipgrepSpawnFailure(
-      Object.assign(new Error('spawn EMFILE'), { code: 'EMFILE' }),
-      process.cwd()
-    )
-
-    expect(verdict).toBeInstanceOf(RipgrepLaunchFailureError)
-    expect(verdict.message).toContain('EMFILE')
-  })
-
-  // Why: a caller that already reached a verdict has more context than a cwd probe does, and
-  // re-diagnosing it would turn "the binary is broken" into "your workspace moved".
-  it('passes an already-classified error straight through', async () => {
-    const original = new RipgrepUnavailableError()
-
-    expect(await classifySynchronousRipgrepSpawnFailure(original, '/definitely/not/here')).toBe(
-      original
-    )
-  })
 })

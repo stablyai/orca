@@ -8,9 +8,9 @@ import {
   retainedSkillSelection,
   type SkillSelectionPolicy
 } from './skill-selection'
+import type { Translate } from '../../i18n/use-translate'
 
-/** No collision key: two rows named `foo` from different roots are two distinct
- *  skills, and both must be independently selectable and reportable. */
+/** Do not collapse names: same-name files in different roots are independently deletable. */
 const DELETE_SELECTION_POLICY: SkillSelectionPolicy = {
   isEligible: (skill) => skillDeletionEligibility(skill).deletable,
   collisionKey: () => null,
@@ -21,11 +21,10 @@ export function isSkillDeleteEligible(skill: DiscoveredSkill): boolean {
   return DELETE_SELECTION_POLICY.isEligible(skill)
 }
 
-/** Advisory client-side reason. The host re-derives the verdict from the
- *  placement set and can refuse a row this reports as deletable. */
-export function skillDeleteEligibilityReason(skill: DiscoveredSkill): string | null {
+/** Client eligibility is advisory; the host rechecks placements and may refuse deletion. */
+export function skillDeleteEligibilityReason(skill: DiscoveredSkill, t?: Translate): string | null {
   const eligibility = skillDeletionEligibility(skill)
-  return eligibility.deletable ? null : skillDeleteBlockReasonLabel(eligibility.reason)
+  return eligibility.deletable ? null : skillDeleteBlockReasonLabel(eligibility.reason, t)
 }
 
 export function eligibleDeleteSkillCount(results: readonly DiscoveredSkill[]): number {

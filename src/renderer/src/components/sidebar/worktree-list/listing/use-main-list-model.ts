@@ -8,15 +8,22 @@ import {
   subscribeSidebarPendingLayer
 } from '@/lib/sidebar-pending-layer'
 import { useSidebarListSession } from '@/lib/sidebar-list-session'
-import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspace-execution-host'
-import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import { readEndedCreations, subscribeEndedCreations } from '@/lib/sidebar-ended-creations'
+import {
+  readHiddenVmCheckouts,
+  subscribeHiddenVmCheckouts,
+  withoutHiddenVmCheckouts
+} from '@/lib/vm-create-hidden-checkouts'
+import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
 import {
   getLocalExecutionHostLabel,
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
-import type { SidebarFeedDomains } from '../../../../../../shared/sidebar-list/sidebar-feed-domains'
+import { EMPTY_SIDEBAR_FEED_DOMAINS } from '../../../../../../shared/sidebar-feed-client/sidebar-feed-snapshot'
 import {
   planSidebarFeedRows,
   renderSidebarFeedRows,
@@ -34,46 +41,19 @@ import { mergeDraggedHostSectionOrder } from '../../../../../../shared/sidebar-l
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
-import { sidebarWorkspaceRowFilters } from '../../sidebar-filter-actions'
+import { sidebarWorkspaceRowFilters } from '../controls/sidebar-filter-actions'
 import type { SidebarListModel, SidebarListModelArgs } from './sidebar-list-model'
+import { withWindowCreations } from './window-worktree-creations'
+export { withWindowCreations } from './window-worktree-creations'
 import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
 import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import { useSidebarExternalWorktreeCards } from './use-external-worktree-cards'
-import { useOrderHeldWhileEngaged } from './use-order-hold'
+import { useOrderHeldWhileEngaged, useProjectRecencyHeldWhileEngaged } from './use-order-hold'
 import { useReusedArrayIdentity } from './use-reused-array-identity'
 
-const NO_FEED: SidebarFeedDomains = {
-  workspaces: new Map(),
-  activity: new Map(),
-  review: new Map(),
-  creations: new Map(),
-  pairedServerHosts: new Map(),
-  pairedServerRows: new Map(),
-  repoIcons: new Map(),
-  desktop: null,
-  retention: null
-}
 // The window renders its own collapse, so planning never re-runs on a toggle.
 const PLANNED_UNCOLLAPSED: ReadonlySet<string> = new Set()
-
-/** The window's own creations main does not list: preflight, a paired server's, and the window's
- *  work after main's reply (as the window's own list shows them). */
-function withWindowCreations(
-  domains: SidebarFeedDomains,
-  pendingCreationKeys: readonly string[]
-): SidebarFeedDomains {
-  let creations: Map<string, { repoId: string }> | null = null
-  for (const key of pendingCreationKeys) {
-    const separator = key.indexOf(' ')
-    const creationId = key.slice(0, separator)
-    if (!domains.creations.has(creationId)) {
-      creations ??= new Map(domains.creations)
-      creations.set(creationId, { repoId: key.slice(separator + 1) })
-    }
-  }
-  return creations ? { ...domains, creations } : domains
-}
 
 function folderRecordKey(id: string, hostId: string | null | undefined): string {
   return `${parseExecutionHostId(hostId)?.id ?? ''}\0${id}`
@@ -91,32 +71,46 @@ function windowFolderRecordOf(
   return records.get(folderRecordKey(folder.id, folder.executionHostId)) ?? folder
 }
 
-/**
- * Switch point. The list built from main's inputs, by the builder the phone runs: the window adds
- * only screen state (hover hold, collapse, host drag, agent-send reveal), its desktop-only cards,
- * its own view settings and host order, and its row writes main has not shown yet. Cards render
- * the window's own records for the rows main lists.
- */
+/** Use the phone’s builder over main’s domains, adding desktop state and pending writes; cards read window records. */
 export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarListModel {
   const { filterState, sortBy, groupBy, repos, defaultHostId, settings } = args
   useSidebarListSession()
   const feed = useDesktopSidebarFeed()
   const pending = useSyncExternalStore(subscribeSidebarPendingLayer, readSidebarPendingLayer)
+  const endedCreationIds = useSyncExternalStore(subscribeEndedCreations, readEndedCreations)
+  const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
   const pendingCreationKeys = useAppStore(
     useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations))
+  )
+  const hiddenCreationKeys = useAppStore(
+    useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations, 'hidden'))
   )
   const workspaceHostOrder = useAppStore((s) => s.workspaceHostOrder)
   const setWorkspaceHostOrder = useAppStore((s) => s.setWorkspaceHostOrder)
   const domains = useMemo(
     () =>
       withWindowCreations(
-        overlaySidebarPendingLayer(feed?.domains ?? NO_FEED, pending, {
-          repos,
-          lineageById: args.worktreeLineageById
-        }),
-        pendingCreationKeys
+        withoutHiddenVmCheckouts(
+          overlaySidebarPendingLayer(feed?.domains ?? EMPTY_SIDEBAR_FEED_DOMAINS, pending, {
+            repos,
+            lineageById: args.worktreeLineageById
+          }),
+          hiddenVmCheckouts
+        ),
+        pendingCreationKeys,
+        endedCreationIds,
+        hiddenCreationKeys
       ),
-    [feed, pending, pendingCreationKeys, repos, args.worktreeLineageById]
+    [
+      feed,
+      pending,
+      pendingCreationKeys,
+      endedCreationIds,
+      hiddenCreationKeys,
+      hiddenVmCheckouts,
+      repos,
+      args.worktreeLineageById
+    ]
   )
   const catalog = useMemo(
     () => ({ repos, projectGroups: args.projectGroups, projectGrouping: args.projectGrouping }),
@@ -150,9 +144,10 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       workspaceHostOrder
     ]
   )
-  const index = useMemo(() => indexSidebarFeed(domains, repos), [domains, repos])
-  const ranked = useMemo(() => rankSidebarFeedWorktrees(index, sortBy), [index, sortBy])
+  const liveIndex = useMemo(() => indexSidebarFeed(domains, repos), [domains, repos])
+  const ranked = useMemo(() => rankSidebarFeedWorktrees(liveIndex, sortBy), [liveIndex, sortBy])
   const rankedIds = useOrderHeldWhileEngaged(useReusedArrayIdentity(ranked), sortBy)
+  const index = useProjectRecencyHeldWhileEngaged(liveIndex, args.projectOrderBy)
 
   const visibleReposForRows = useMemo(
     () =>
@@ -292,6 +287,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     externalWorktreeCards,
     rowModel: {
       occurrencePlan: planned.plan.occurrencePlan,
+      hostOptions: planned.orderedHostOptions,
       effectiveCollapsedGroups,
       rows: rendered.rows,
       sectionRows,

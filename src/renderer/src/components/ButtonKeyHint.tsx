@@ -1,8 +1,7 @@
 import React from 'react'
 import { CornerDownLeft } from 'lucide-react'
 
-/** The Enter-key badge that trails a filled primary button's label ("Create worktree ⌘↵").
- *  Decorative: the button's name is its label, not the glyphs. */
+/** Decorative submit-key badge; keep glyphs out of the button’s accessible name. */
 export function ButtonKeyHint({
   modifierLabel
 }: {

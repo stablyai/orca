@@ -5,8 +5,8 @@ import { Client, Server as Ssh2Server, utils, type Connection, type SFTPWrapper 
 import { expect, it, vi } from 'vitest'
 import type { SshTarget } from '../../../shared/ssh-types'
 import { SshConnection } from './ssh-connection'
-import type { SftpNamespacePathMapping } from '../sftp-namespace-resolution'
-import { getRemoteHostPlatform } from '../ssh-remote-platform'
+import type { SftpNamespacePathMapping } from '../file-transfer/sftp/sftp-namespace-resolution'
+import { getRemoteHostPlatform } from '../remote-host/ssh-remote-platform'
 
 const SHELL_HOME = '/var/services/homes/alice'
 const SFTP_HOME = '/homes/alice'
@@ -357,7 +357,6 @@ it('writes a mapped file through a verified split namespace over a real ssh2 SFT
     expect(fixture.operations).toContain(`LSTAT:${SFTP_RELAY_DIR}/${MARKER_PATH}`)
     expect(fixture.operations).toContain(`OPEN:${SFTP_RELAY_DIR}/package.json`)
     expect(fixture.operations).toEqual(expect.arrayContaining(['WRITE', 'CLOSE']))
-    // Shell-namespace path must never be opened for a confirmed split write.
     expect(fixture.operations).not.toContain(`OPEN:${shellFilePath}`)
   })
 }, 15_000)

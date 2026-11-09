@@ -1,4 +1,4 @@
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
 
 type LocalPreflightContextKeyInput =
   | {
@@ -25,9 +25,13 @@ export function localPreflightContextKey(context: LocalPreflightContextKeyInput)
 }
 
 /** Native agent detection uses process PATH, independent of the project's directory. */
-export function localAgentInventoryContextKey(context: LocalPreflightContextKeyInput): string {
-  return context?.projectRuntime?.status === 'resolved' &&
-    context.projectRuntime.runtime.kind !== 'wsl'
-    ? 'host'
-    : localPreflightContextKey(context)
+export function localAgentInventoryContextKey(
+  context: LocalPreflightContextKeyInput,
+  includeDisabled = false
+): string {
+  const key =
+    context?.projectRuntime?.status === 'resolved' && context.projectRuntime.runtime.kind !== 'wsl'
+      ? 'host'
+      : localPreflightContextKey(context)
+  return includeDisabled ? `${key}\u0000all-agents` : key
 }

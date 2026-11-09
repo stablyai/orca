@@ -1,9 +1,13 @@
-import { hostStableKey, parseHostStableKey } from '../../../../shared/automation-owner-key'
+import {
+  hostStableKey,
+  parseHostStableKey
+} from '../../../../shared/automations/ownership/automation-owner-key'
+import { translate } from '@/i18n/i18n'
 import type {
   AutomationOwnerRef,
   StableAutomationAuthorityRef,
   StableAutomationCatalogRef
-} from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
 import { isOwnedSshTargetId } from '../../../../shared/execution-host'
 import {
   automationAuthorityCatalogKey,
@@ -19,16 +23,14 @@ import {
 import { resolveSelfExecutionHealth, resolveSshExecutionHealth } from './automation-host-health'
 import { orderAutomationHostCatalogEntries } from './automation-host-catalog-order'
 
-/**
- * Purely projective host catalog for the Automations page.
- *
- * It reads state that is already mirrored on this client and returns entries.
- * It never connects to a runtime, lists targets, or opens an SSH session —
- * rendering the picker must cost nothing. Capability support and authority
- * health are *inputs*, not probes.
- */
+/** Project mirrored state without connecting or probing; authority health/capabilities are inputs, so rendering the picker adds no network traffic. */
 
-export const AUTOMATION_ORPHAN_ENTRY_LABEL = 'Unassigned legacy automations'
+export function automationOrphanEntryLabel(): string {
+  return translate(
+    'auto.components.automations.hostCatalog.orphanEntryLabel',
+    'Unassigned legacy automations'
+  )
+}
 
 type ReferencedAuthorityScope = { targetIds: Set<string>; orphan: boolean }
 
@@ -42,6 +44,8 @@ type AuthorityProjectionContext = {
   ssh: AutomationCatalogSshMirrorInput
   referenced: ReferencedAuthorityScope
   orphanCount: number | undefined
+  /** Desktop SSH target id to the self entry of the managed Orca server that serves it. */
+  servedBy?: ReadonlyMap<string, string>
 }
 
 const EMPTY_SCOPE: ReferencedAuthorityScope = { targetIds: new Set(), orphan: false }
@@ -101,6 +105,10 @@ function withScopeGap(scopeGap: AutomationHostScopeGap | undefined): {
   return scopeGap === undefined ? {} : { scopeGap }
 }
 
+function withServedBy(servedBy: string | undefined): { servedBy?: string } {
+  return servedBy === undefined ? {} : { servedBy }
+}
+
 /** The authority's own contract; the only gap an entry with no target can have. */
 function authorityScopeGap(
   querySupport: AutomationHostQuerySupport
@@ -133,16 +141,11 @@ function resolveSshCatalogState(
   if (isLive) {
     return targetsHydrated ? 'authoritative' : 'unhydrated'
   }
-  // Why: a tombstone is positive evidence recorded by the owning authority; a
-  // bare absence only counts once that authority's target list actually loaded.
+  // Authority tombstones prove removal; bare absence needs a hydrated target list.
   return isTombstoned || targetsHydrated ? 'removed' : 'unhydrated'
 }
 
-/**
- * A missing generation has four unrelated causes and only one of them is the
- * server's contract. Reading them all as "old server" is exactly what
- * `automation-host-catalog-generation.ts` warns callers against.
- */
+/** Separate all four causes of missing generation; a target disconnect must not masquerade as old-server support. */
 function resolveSshScopeGap(
   querySupport: AutomationHostQuerySupport,
   catalogState: AutomationHostCatalogState,
@@ -208,7 +211,8 @@ function projectSshEntries(ctx: AuthorityProjectionContext): AutomationHostCatal
           // Why: without a registration generation the entry keys on target id alone, so it stays view-only.
           querySupport:
             ctx.querySupport === 'scoped' && !scoped ? 'legacy-unscoped' : ctx.querySupport,
-          ...withScopeGap(resolveSshScopeGap(ctx.querySupport, catalogState, generation))
+          ...withScopeGap(resolveSshScopeGap(ctx.querySupport, catalogState, generation)),
+          ...withServedBy(ctx.servedBy?.get(targetId))
         }
       )
     )
@@ -226,7 +230,7 @@ function projectOrphanEntry(ctx: AuthorityProjectionContext): AutomationHostCata
     { authority: ctx.authority, selector: { kind: 'orphan' } },
     {
       owner: null,
-      label: AUTOMATION_ORPHAN_ENTRY_LABEL,
+      label: automationOrphanEntryLabel(),
       authorityLabel: ctx.authorityLabel,
       kind: 'orphan',
       catalogState: settled ? 'authoritative' : 'unhydrated',
@@ -248,17 +252,38 @@ export function buildAutomationHostCatalog(
 ): AutomationHostCatalog {
   const referenced = groupReferencedKeys(input.referencedStableKeys)
   const desktopAuthority: StableAutomationAuthorityRef = { kind: 'desktop' }
+  // Only a saved runtime can absorb the desktop authority; an unknown id leaves it projected.
+  const desktopAlias = input.runtimes.find(
+    (runtime) => runtime.environmentId === input.desktopAliasEnvironmentId
+  )
+  const desktopAliasEnvironmentId = desktopAlias?.environmentId
+  const desktopContext: AuthorityProjectionContext = {
+    authority: desktopAuthority,
+    authorityLabel: input.desktop.label,
+    authorityHealth: input.desktop.authorityHealth ?? 'fresh',
+    querySupport: 'scoped',
+    pairingRevision: null,
+    ssh: input.desktop.ssh,
+    referenced: referenced.get(automationAuthorityCatalogKey(desktopAuthority)) ?? EMPTY_SCOPE,
+    orphanCount: input.desktop.orphanCount,
+    servedBy: new Map(
+      input.runtimes.flatMap((runtime) =>
+        runtime.managedSshTargetId
+          ? [
+              [
+                runtime.managedSshTargetId,
+                hostStableKey({
+                  authority: { kind: 'runtime', environmentId: runtime.environmentId },
+                  selector: { kind: 'self' }
+                })
+              ] as const
+            ]
+          : []
+      )
+    )
+  }
   const contexts: AuthorityProjectionContext[] = [
-    {
-      authority: desktopAuthority,
-      authorityLabel: input.desktop.label,
-      authorityHealth: input.desktop.authorityHealth ?? 'fresh',
-      querySupport: 'scoped',
-      pairingRevision: null,
-      ssh: input.desktop.ssh,
-      referenced: referenced.get(automationAuthorityCatalogKey(desktopAuthority)) ?? EMPTY_SCOPE,
-      orphanCount: input.desktop.orphanCount
-    },
+    ...(desktopAliasEnvironmentId === undefined ? [desktopContext] : []),
     ...input.runtimes.map((runtime): AuthorityProjectionContext => {
       const authority: StableAutomationAuthorityRef = {
         kind: 'runtime',
@@ -283,7 +308,8 @@ export function buildAutomationHostCatalog(
     byStableKey,
     hydration: {
       runtimeCatalogSettled: input.runtimeCatalogSettled,
-      desktopSshHydrated: input.desktop.ssh.targetsHydrated,
+      // A folded desktop's SSH targets are the runtime it folded into.
+      desktopSshHydrated: (desktopAlias?.ssh ?? input.desktop.ssh).targetsHydrated,
       runtimeSshHydratedByEnvironmentId: new Map(
         input.runtimes.map((runtime) => [runtime.environmentId, runtime.ssh.targetsHydrated])
       ),

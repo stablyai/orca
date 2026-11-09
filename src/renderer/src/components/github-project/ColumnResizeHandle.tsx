@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { MIN_COLUMN_WIDTH } from './column-widths'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type Props = {
   fieldId: string
@@ -10,13 +10,7 @@ type Props = {
   onResize: (fieldId: string, width: number, nextFieldId: string, nextWidth: number) => void
 }
 
-// Why: stored widths are `fr` weights, not pixels — that's what keeps the
-// grid fitting its container exactly. Drag math has to happen in pixels (the
-// mouse moves in pixels), so we measure the rendered widths of the two
-// adjacent cells at drag start, compute the new pixel split, then convert
-// back to fr weights with the pair's total weight held constant. Net effect:
-// dragging redistributes width between the pair without changing the grid's
-// total — the table never grows.
+// Redistribute the pair’s stored width total using its measured pixel split; the first two columns use pixels, later columns use fr.
 export default function ColumnResizeHandle({
   fieldId,
   nextFieldId,
@@ -24,6 +18,7 @@ export default function ColumnResizeHandle({
   nextWidth,
   onResize
 }: Props): React.JSX.Element {
+  const t = useTranslate()
   const [dragging, setDragging] = useState(false)
   const handleRef = useRef<HTMLDivElement | null>(null)
   const dragRef = useRef<{
@@ -75,7 +70,7 @@ export default function ColumnResizeHandle({
       ref={handleRef}
       role="separator"
       aria-orientation="vertical"
-      aria-label={translate(
+      aria-label={t(
         'auto.components.github.project.ColumnResizeHandle.1304289353',
         'Resize column'
       )}

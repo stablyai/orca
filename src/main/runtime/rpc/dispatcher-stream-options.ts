@@ -1,6 +1,6 @@
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { captureStructuredAgentCliSource } from '../../native-chat/structured-agent-cli-source'
-import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
+import type { OrchestrationSessionCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import { isRegistrationFencedUnsubscribe, type RpcContext, type RpcRequest } from './core'
 import { resolveRpcCallerIdentity } from './rpc-caller-identity'
 import type { RpcCallerScope } from './rpc-caller-scope'
@@ -16,10 +16,13 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'caller'
   | 'clientKind'
   | 'clientCapabilities'
+  | 'capabilitySource'
   | 'updateClientCapabilities'
   | 'pairing'
+  | 'pairingOffers'
   | 'deviceSelf'
   | 'mobileRelayHosts'
+  | 'peerDesktops'
   | 'delegatedMobileDevices'
   | 'sendBinary'
   | 'registerBinaryStreamHandler'
@@ -27,13 +30,19 @@ export type RpcDispatchStreamingOptions = Pick<
 > & {
   /** What the transport proved the caller may do; absent means this host's owner. */
   callerScope?: RpcCallerScope
+  /** Aborts when the caller's connection closes; only for the dispatcher's own waits, never handlers. */
+  connectionSignal?: AbortSignal
+  /** In-process callers: runs after admission and feature waits, just before the handler; a throw
+   *  refuses the call (a plugin revoked while its call waited). */
+  beforeInvoke?: () => void
 }
 
 export function rpcContextFromTransport(
   runtime: OrcaRuntimeService,
   request: RpcRequest,
   options: RpcDispatchStreamingOptions | undefined,
-  orchestrationCaller: OrchestrationSessionCaller | undefined
+  orchestrationCaller: OrchestrationSessionCaller | undefined,
+  params?: unknown
 ): RpcContext {
   return {
     runtime,
@@ -47,7 +56,11 @@ export function rpcContextFromTransport(
       : undefined,
     structuredAgentCliSourceEvidence:
       request.method === 'agentSession.create'
-        ? captureStructuredAgentCliSource(() => runtime.getAgentProviderSessionRows())
+        ? captureStructuredAgentCliSource(
+            () => runtime.getAgentProviderSessionRows(),
+            cliSourceCoordinates(params),
+            (source) => runtime.getStructuredAgentCliSourceRoute(source)
+          )
         : undefined,
     clientId: options?.clientId,
     pairedDeviceId: options?.pairedDeviceId,
@@ -55,15 +68,37 @@ export function rpcContextFromTransport(
     caller: resolveRpcCallerIdentity(options),
     clientKind: options?.clientKind,
     clientCapabilities: options?.clientCapabilities,
+    capabilitySource: options?.capabilitySource,
     updateClientCapabilities: options?.updateClientCapabilities,
     authenticatedCallerFingerprint: options?.authenticatedCallerFingerprint,
     pairing: options?.pairing,
+    pairingOffers: options?.pairingOffers,
     deviceSelf: options?.deviceSelf,
     mobileRelayHosts: options?.mobileRelayHosts,
+    peerDesktops: options?.peerDesktops,
     delegatedMobileDevices: options?.delegatedMobileDevices,
     sendBinary: options?.sendBinary,
     registerBinaryStreamHandler: options?.registerBinaryStreamHandler,
     registerBinaryMessageHandler: options?.registerBinaryMessageHandler,
     orchestrationCaller
   }
+}
+
+function cliSourceCoordinates(params: unknown) {
+  if (!params || typeof params !== 'object' || !('resumeFrom' in params)) {
+    return undefined
+  }
+  const resume = params.resumeFrom
+  if (!resume || typeof resume !== 'object' || !('cliSource' in resume)) {
+    return undefined
+  }
+  const source = resume.cliSource
+  return source &&
+    typeof source === 'object' &&
+    'workspaceId' in source &&
+    typeof source.workspaceId === 'string' &&
+    'paneKey' in source &&
+    typeof source.paneKey === 'string'
+    ? { workspaceId: source.workspaceId, paneKey: source.paneKey }
+    : undefined
 }

@@ -2,15 +2,9 @@ import { getOptionalStringFlag } from '../../flags'
 import type { RuntimeClient } from '../../runtime-client'
 import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 
-/** Which Run `worker-list` enumerated, and why. Additive: old readers ignore it. */
 export type WorkerListRunScope = { run?: string; source: 'flag' | 'bound' | 'all' }
 
-/**
- * Unscoped `worker-list` returned every Dispatch the database has ever held. The bound Run is
- * the same Run `check` reads from the calling terminal, so it is the default and `--run`
- * overrides it. With no binding to read, listing everything stays the answer and the receipt
- * says which of the three it was.
- */
+// Default to the caller's bound Run; an explicit --run overrides it and unbound callers see all Runs.
 export async function resolveWorkerListRunScope(
   flags: Map<string, string | boolean>,
   cwd: string,
@@ -27,8 +21,7 @@ export async function resolveWorkerListRunScope(
     })
     return current.result.run ? { run: current.result.run.id, source: 'bound' } : { source: 'all' }
   } catch {
-    // No live terminal, no stable pane, or a runtime that predates runCurrent: the caller asked
-    // for an inventory, so answer with the whole one rather than failing the enumeration.
+    // A missing caller binding or older runtime must not prevent a full inventory.
     return { source: 'all' }
   }
 }

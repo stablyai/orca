@@ -66,6 +66,7 @@ export function useComposerSubmitOrchestration(
     pushTarget: target.workspaceIdentityState.pushTarget
   })
   const quickSubmitPreparation = useQuickSubmitPreparation({
+    branchIntent: target.workspaceIdentityState.branchIntent,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
     branchNameOverridePreservesNameEdits:
       target.workspaceIdentityState.branchNameOverridePreservesNameEdits,
@@ -127,6 +128,7 @@ export function useComposerSubmitOrchestration(
     isProjectGroupTarget: target.runtimeTargetSelection.isProjectGroupTarget,
     isSubmissionCancelled: target.composerTargetStore.isSubmissionCancelled,
     linkedPR: target.workspaceIdentityState.linkedPR,
+    linkedWorkItem: target.sourceContextState.linkedWorkItem,
     name: target.sourceContextState.name,
     onCreated: target.composerTargetStore.onCreated,
     parsedLinkedIssueNumber: target.derivedComposerState.parsedLinkedIssueNumber,
@@ -136,6 +138,7 @@ export function useComposerSubmitOrchestration(
       external.githubSubmitResolution.resolvePendingSmartGitHubSubmit,
     selectedRepo: target.runtimeTargetSelection.selectedRepo,
     selectedRepoRequiresConnection: target.runtimeTargetSelection.selectedRepoRequiresConnection,
+    selectedTargetNeedsVisibleHost: target.runtimeTargetSelection.selectedTargetNeedsVisibleHost,
     selectedWorkspaceTarget: target.runtimeTargetSelection.selectedWorkspaceTarget,
     setCreateError: target.asyncComposerState.setCreateError,
     setCreating: target.asyncComposerState.setCreating,
@@ -143,7 +146,9 @@ export function useComposerSubmitOrchestration(
     showProjectRequiredError: source.branchStartPointActions.showProjectRequiredError,
     sourceIntentBlocksCreate: target.workspaceIdentityState.sourceIntentBlocksCreate,
     sparseError: target.derivedComposerState.sparseError,
-    submitFolderTarget: folderSubmitOrchestration.submitFolderTarget
+    submitFolderTarget: folderSubmitOrchestration.submitFolderTarget,
+    taskSourceContext: target.sourceContextState.taskSourceContext,
+    telemetrySource: target.composerTargetStore.telemetrySource
   })
   return {
     folderSubmitOrchestration,

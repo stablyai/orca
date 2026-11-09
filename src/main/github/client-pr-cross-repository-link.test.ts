@@ -101,6 +101,17 @@ describe('URL-linked PRs from another repository', () => {
     expect(reposQueried()).not.toContain('relayto/relayto-docker')
   })
 
+  it('still flags the PR when a CI-line watch already narrowed the lookup to its repository', async () => {
+    servePRFrom('relayto/relayto-frontend', frontendPR('OPEN'))
+
+    const outcome = await getPRForBranchOutcome('/docker', 'main', 2383, null, null, {
+      linkedPRRepository: FRONTEND,
+      exactRepository: FRONTEND
+    })
+
+    expect(outcome.kind === 'found' && outcome.pr.linkedFromOtherRepository).toBe(true)
+  })
+
   it('never reports another repository’s merged PR as diverged from the worktree head', async () => {
     servePRFrom('relayto/relayto-frontend', frontendPR('MERGED'))
 

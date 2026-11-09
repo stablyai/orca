@@ -1,23 +1,12 @@
-// Why: presence-based driver state for the mobile-presence lock. Mirrors
-// the runtime's `currentDriver` map. Keyed by ptyId. Updated by an IPC
-// listener (onTerminalDriverChanged) wired from main.
-//
-// While `getDriverForPty(ptyId).kind === 'mobile'` the renderer:
-//   - drops xterm.onData (input lock)
-//   - drops xterm.onResize (resize lock)
-//   - mounts the lock banner with the "Take back" affordance
-//
-// See docs/mobile-presence-lock.md.
+// Mirror runtime PTY driver presence from IPC: mobile ownership locks xterm input/resize and shows Take back (mobile-presence-lock.md).
 
-import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-types'
+import type { RuntimeTerminalDriverState } from '../../../../shared/runtime-session-contracts'
 
-export type DriverState = RuntimeTerminalDriverState
-
-const driverByPtyId = new Map<string, DriverState>()
+const driverByPtyId = new Map<string, RuntimeTerminalDriverState>()
 
 type DriverChangeEvent = {
   ptyId: string
-  driver: DriverState
+  driver: RuntimeTerminalDriverState
 }
 type DriverChangeListener = (event: DriverChangeEvent) => void
 const changeListeners = new Set<DriverChangeListener>()
@@ -33,7 +22,7 @@ function notifyChange(event: DriverChangeEvent): void {
   }
 }
 
-export function setDriverForPty(ptyId: string, driver: DriverState): void {
+export function setDriverForPty(ptyId: string, driver: RuntimeTerminalDriverState): void {
   if (driver.kind === 'idle') {
     driverByPtyId.delete(ptyId)
   } else {
@@ -47,19 +36,18 @@ export function replaceDriverPtyId(replacedPtyId: string, ptyId: string): void {
   if (!replaced) {
     return
   }
-  // Why: keep the presence lock conservative across handle rotation while
-  // removing the obsolete key that repeated reconnects would otherwise retain.
+  // Preserve conservative locks across handle rotation without retaining every obsolete handle key.
   if (!driverByPtyId.has(ptyId)) {
     setDriverForPty(ptyId, replaced)
   }
   setDriverForPty(replacedPtyId, { kind: 'idle' })
 }
 
-export function getDriverForPty(ptyId: string): DriverState {
+export function getDriverForPty(ptyId: string): RuntimeTerminalDriverState {
   return driverByPtyId.get(ptyId) ?? { kind: 'idle' }
 }
 
-export function getAllDrivers(): Map<string, DriverState> {
+export function getAllDrivers(): Map<string, RuntimeTerminalDriverState> {
   return new Map(driverByPtyId)
 }
 
@@ -67,7 +55,9 @@ export function isPtyLocked(ptyId: string): boolean {
   return driverByPtyId.get(ptyId)?.kind === 'mobile'
 }
 
-export function hydrateDrivers(drivers: { ptyId: string; driver: DriverState }[]): void {
+export function hydrateDrivers(
+  drivers: { ptyId: string; driver: RuntimeTerminalDriverState }[]
+): void {
   const affectedPtyIds = new Set(driverByPtyId.keys())
   driverByPtyId.clear()
 
@@ -78,8 +68,7 @@ export function hydrateDrivers(drivers: { ptyId: string; driver: DriverState }[]
     }
   }
 
-  // Why: startup hydration can arrive after TerminalPane has mounted. Notify
-  // all affected PTYs so the pane-local overlay cannot miss an active lock.
+  // Notify all affected PTYs after hydration so already-mounted overlays cannot miss active mobile locks.
   for (const ptyId of affectedPtyIds) {
     notifyChange({ ptyId, driver: getDriverForPty(ptyId) })
   }

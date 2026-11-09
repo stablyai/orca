@@ -13,6 +13,9 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { DiscoveredSkill, SkillProvider } from '../../../../shared/skills'
 import { sourceKindLabel } from './skill-display-labels'
 import {
@@ -20,6 +23,7 @@ import {
   SkillRowDropdownActions,
   type SkillRowAction
 } from './SkillRowActions'
+import { uiDateTimeFormat } from '@/i18n/ui-intl-formatters'
 
 const providerLabels: Record<SkillProvider, string> = {
   codex: 'Codex',
@@ -27,15 +31,19 @@ const providerLabels: Record<SkillProvider, string> = {
   'agent-skills': 'Agent Skills'
 }
 
-const dateFormatter = new Intl.DateTimeFormat(undefined, {
+const DATE_OPTIONS: Intl.DateTimeFormatOptions = {
   month: 'short',
   day: 'numeric'
-})
+}
 
-function formatUpdatedAt(value: number | null): string {
+function formatUpdatedAt(
+  value: number | null,
+  t: Translate = translate,
+  intlLocale?: string
+): string {
   return value
-    ? dateFormatter.format(new Date(value))
-    : translate('auto.components.skills.SkillRow.updatedUnknown', 'No date')
+    ? uiDateTimeFormat(DATE_OPTIONS, intlLocale).format(new Date(value))
+    : t('auto.components.skills.SkillRow.updatedUnknown', 'No date')
 }
 
 export function SkillRow({
@@ -54,6 +62,7 @@ export function SkillRow({
   onShare,
   onDelete,
   onReveal,
+  ownerHostId,
   onFocus,
   onKeyDown
 }: {
@@ -65,11 +74,9 @@ export function SkillRow({
   deletable: boolean
   /** Shown on the `Delete…` item itself, so it reads outside selection mode too. */
   deleteDisabledReason: string | null
-  /** Mode-dependent: a delete-ineligible row and a share-ineligible row need
-   *  different copy in the same visual slot. */
+  /** Use mode-specific copy for delete versus share ineligibility. */
   disabledLabel: string
-  /** Row-specific explanation only; page-wide causes are stated once above the
-   *  list instead of once per row. */
+  /** Show only row-specific causes; page-wide restrictions belong above the list. */
   disabledReason: string | null
   focusable: boolean
   onOpenDetail: () => void
@@ -77,50 +84,55 @@ export function SkillRow({
   onShare: () => void
   onDelete: () => void
   onReveal: () => void
+  /** Host the skill file lives on. */
+  ownerHostId: ExecutionHostId
   onFocus: () => void
   onKeyDown: (event: React.KeyboardEvent<HTMLDivElement>) => void
 }): React.JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const reasonId = useId()
-  // Why: Radix's checkbox callback carries no event, so the modifier has to be
-  // captured from the pointer press that produced it.
+  // Capture the pointer modifier because Radix’s checkbox callback provides no event.
   const rangeRef = useRef(false)
   const selectionBlocked = selectionMode && !selectable
   const showReason = selectionBlocked && disabledReason !== null
 
   const copyPath = async (): Promise<void> => {
-    await window.api.ui.writeClipboardText(skill.skillFilePath)
-    toast.success(translate('auto.components.skills.SkillRow.pathCopied', 'Path copied'))
+    await window.api.ui.writeClipboardText(
+      formatClipboardFilePath(skill.skillFilePath, ownerHostId)
+    )
+    toast.success(t('auto.components.skills.SkillRow.pathCopied', 'Path copied'))
   }
 
   const actions: SkillRowAction[] = [
     {
       key: 'details',
-      label: translate('auto.components.skills.SkillRow.viewDetails', 'View details'),
+      label: t('auto.components.skills.SkillRow.viewDetails', 'View details'),
       icon: <Info />,
       onSelect: onOpenDetail
     },
     {
       key: 'share',
-      label: translate('auto.components.skills.SkillCard.d25a1b8ae6', 'Share skill'),
+      label: t('auto.components.skills.SkillCard.d25a1b8ae6', 'Share skill'),
       icon: <Share2 />,
       disabled: !shareable,
       onSelect: onShare
     },
     {
       key: 'reveal',
-      label: translate('auto.components.skills.SkillsPage.dc4c3328ee', 'Reveal file'),
+      label: t('auto.components.skills.SkillsPage.dc4c3328ee', 'Reveal file'),
       icon: <FolderOpen />,
       onSelect: onReveal
     },
     {
       key: 'copy-path',
-      label: translate('auto.components.skills.SkillRow.copyPath', 'Copy path'),
+      label: t('auto.components.skills.SkillRow.copyPath', 'Copy path'),
       icon: <ClipboardCopy />,
       onSelect: () => void copyPath()
     },
     {
       key: 'delete',
-      label: translate('auto.components.skills.SkillRow.deleteSkill', 'Delete…'),
+      label: t('auto.components.skills.SkillRow.deleteSkill', 'Delete…'),
       icon: <Trash2 />,
       disabled: !deletable,
       destructive: true,
@@ -176,17 +188,14 @@ export function SkillRow({
                 checked={selected}
                 disabled={selectionBlocked}
                 aria-describedby={showReason ? reasonId : undefined}
-                aria-label={translate(
-                  'auto.components.skills.SkillCard.01c5a16e01',
-                  'Select {{value0}}',
-                  { value0: skill.name }
-                )}
+                aria-label={t('auto.components.skills.SkillCard.01c5a16e01', 'Select {{value0}}', {
+                  value0: skill.name
+                })}
                 onCheckedChange={(value) => onSelectionChange(value === true, rangeRef.current)}
               />
             </span>
           ) : null}
-          {/* Why: metadata is its own grid column, so the description truncates
-              where that column starts instead of at the window edge. */}
+          {/* Reserve a metadata column so descriptions truncate before metadata rather than at the window edge. */}
           <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto] items-baseline gap-x-3">
             <div className="flex min-w-0 items-baseline gap-2">
               <span className="min-w-0 truncate text-sm font-medium" data-skill-name>
@@ -194,7 +203,7 @@ export function SkillRow({
               </span>
               {!skill.installed ? (
                 <Badge variant="outline" className="h-4 shrink-0 px-1 text-[10px]">
-                  {translate('auto.components.skills.SkillsPage.35b9a724a0', 'Available')}
+                  {t('auto.components.skills.SkillsPage.35b9a724a0', 'Available')}
                 </Badge>
               ) : null}
               {showReason ? (
@@ -211,7 +220,7 @@ export function SkillRow({
               ) : null}
             </div>
             <span className="flex shrink-0 items-center gap-2 text-[11px] text-muted-foreground">
-              <span>{sourceKindLabel(skill.sourceKind)}</span>
+              <span>{sourceKindLabel(skill.sourceKind, t)}</span>
               <span className="hidden sm:inline" aria-hidden>
                 ·
               </span>
@@ -219,11 +228,13 @@ export function SkillRow({
                 {skill.providers.map((provider) => providerLabels[provider]).join(', ')}
               </span>
               <span aria-hidden>·</span>
-              <span className="tabular-nums">{formatUpdatedAt(skill.updatedAt)}</span>
+              <span className="tabular-nums">
+                {formatUpdatedAt(skill.updatedAt, t, intlLocale)}
+              </span>
             </span>
             <p className="col-start-1 min-w-0 truncate text-xs leading-5 text-muted-foreground">
               {skill.description ??
-                translate('auto.components.skills.SkillsPage.9963dff6d3', 'No description found.')}
+                t('auto.components.skills.SkillsPage.9963dff6d3', 'No description found.')}
             </p>
             {showReason ? (
               <span id={reasonId} className="sr-only">
@@ -241,7 +252,7 @@ export function SkillRow({
                   type="button"
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={translate(
+                  aria-label={t(
                     'auto.components.skills.SkillRow.skillActions',
                     'Actions for {{value0}}',
                     { value0: skill.name }

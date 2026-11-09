@@ -1,8 +1,4 @@
-/**
- * Serializes async operations per key. The stored queue tail never rejects, so
- * callers may await it (e.g. read-after-write barriers) without inheriting an
- * unrelated operation's failure; rejections still propagate to the enqueuer.
- */
+/** Queue tails never reject; operation failures propagate only to their enqueuer. */
 export function runKeyedSerializedOperation<T>(
   queues: Map<string, Promise<void>>,
   key: string,

@@ -1,15 +1,17 @@
 import type { AppState } from '../../../types'
 import {
   LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
   toRuntimeExecutionHostId,
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../../../../../shared/worktree/id'
-import type { WorktreePurgeTarget } from '../../worktree-purge-target'
-import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspace-execution-host'
-import { getProjectGroupHostId } from '../../project-group-owner-routing'
+import type { WorktreePurgeTarget } from './worktree-purge-target'
+import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
+import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
+import { getProjectGroupHostId } from '../../../project-groups/project-group-owner-routing'
 import {
   collectRemovedHostTwinState,
   removedHostCanonicalizer,
@@ -17,9 +19,9 @@ import {
 } from '../../../repos/repo-removal-host-twin-attribution'
 import { removeWorktreeLayout } from '../../tabs/worktree-layout-lifecycle'
 import { buildActiveSurfacePatch } from '../../tabs/tabs-surface'
-import { worktreeHostMatchOptions, worktreeMatchesHost } from '../listing/worktree-host-ownership'
+import { getRepoHostSummaries } from '../listing/worktree-host-ownership'
 import { collectSurfacePurgeDoomedIds } from './worktree-purge-doomed-ids'
-import { collectPtyIdsForTab } from '../../terminal-tab-retirement'
+import { collectPtyIdsForTab } from '../../../terminals/terminal-tab-retirement'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 import { omitSleepingAgentSessionsForWorktrees } from './sleeping-agent-session-omission'
 import {
@@ -27,18 +29,51 @@ import {
   retirePurgedTabLaunches
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
+import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
+import { selectFolderWorkspaces } from '../../../workspaces/catalog/workspace-record-fields'
 
-type PublisherRow = {
-  id: string
-  hostId?: ExecutionHostId
-  runtimeOwnerEnvironmentId?: string
+import {
+  worktreePurgePublishers,
+  type PurgePublisher
+} from '../../../repos/repo-removal-publisher-index'
+
+function purgedPublisherMatcher(
+  s: AppState,
+  repoId: string,
+  purgedHosts: ReadonlySet<ExecutionHostId>
+) {
+  const positions = new Map([...purgedHosts].map((hostId, index) => [hostId, index]))
+  const runtimeHostsByEnvironment = new Map<string, ExecutionHostId>()
+  for (const hostId of purgedHosts) {
+    const parsed = parseExecutionHostId(hostId)
+    if (parsed?.kind === 'runtime' && !runtimeHostsByEnvironment.has(parsed.environmentId)) {
+      runtimeHostsByEnvironment.set(parsed.environmentId, hostId)
+    }
+  }
+  return (row: PurgePublisher): ExecutionHostId | undefined => {
+    if (row.runtimeOwnerEnvironmentId) {
+      return runtimeHostsByEnvironment.get(row.runtimeOwnerEnvironmentId)
+    }
+    if (row.hostId) {
+      return purgedHosts.has(row.hostId) ? row.hostId : undefined
+    }
+    const localPosition = positions.get(LOCAL_EXECUTION_HOST_ID)
+    if (localPosition === 0 || purgedHosts.size === 0) {
+      return localPosition === 0 ? LOCAL_EXECUTION_HOST_ID : undefined
+    }
+    // Only legacy unhosted rows can need the sole-repo-owner fallback.
+    const soleOwner = getRepoHostSummaries(s.repos).get(repoId)?.onlyHostId
+    const ownerPosition = soleOwner ? positions.get(soleOwner) : undefined
+    return ownerPosition !== undefined &&
+      (localPosition === undefined || ownerPosition < localPosition)
+      ? soleOwner
+      : localPosition !== undefined
+        ? LOCAL_EXECUTION_HOST_ID
+        : undefined
+  }
 }
 
-/**
- * For one targeted id: hosts outside the purge that still publish it, and the host each purged
- * target's state is attributed to. Rows match by the listing's host matching, so an unstamped
- * legacy row or a paired runtime's SSH row counts as the purged copy, not a twin.
- */
+/** Resolve surviving publishers and purged attribution with listing rules; legacy unstamped and runtime-proxied SSH rows may be the purged copy, not twins. */
 function resolvePurgedPublishers(
   s: AppState,
   workspaceId: string,
@@ -48,7 +83,7 @@ function resolvePurgedPublishers(
   const attributedHostIds = new Map([...purgedHosts].map((hostId) => [hostId, hostId]))
   if (scope?.type === 'folder') {
     const groups = s.projectGroups ?? []
-    const hosts = (s.folderWorkspaces ?? [])
+    const hosts = (selectFolderWorkspaces(s) ?? [])
       .filter((folder) => folder.id === scope.folderWorkspaceId)
       .flatMap((folder) => {
         const groupHosts = groups
@@ -66,15 +101,11 @@ function resolvePurgedPublishers(
   }
   const worktreeId = scope?.type === 'worktree' ? scope.worktreeId : workspaceId
   const repoId = getRepoIdFromWorktreeId(worktreeId)
-  const rows: PublisherRow[] = [
-    ...(s.worktreesByRepo[repoId] ?? []),
-    ...(s.detectedWorktreesByRepo[repoId]?.worktrees ?? [])
-  ].filter((row) => row.id === worktreeId)
+  const rows = worktreePurgePublishers(s, worktreeId).rows()
+  const matchPurgedHost = purgedPublisherMatcher(s, repoId, purgedHosts)
   const survivors = new Set<ExecutionHostId>()
   for (const row of rows) {
-    const purgedHost = [...purgedHosts].find((hostId) =>
-      worktreeMatchesHost(row, hostId, worktreeHostMatchOptions(s, repoId, hostId))
-    )
+    const purgedHost = matchPurgedHost(row)
     if (purgedHost) {
       // Why: a copy reached through a paired runtime stamps its tabs with its own SSH host.
       if (row.hostId && !purgedHosts.has(row.hostId)) {
@@ -137,7 +168,8 @@ export function collectHostTwinPurgeScopes(
 export function buildHostTwinPurgeState(
   s: AppState,
   hostId: ExecutionHostId,
-  twinHostIds: ReadonlyMap<string, readonly ExecutionHostId[]>
+  twinHostIds: ReadonlyMap<string, readonly ExecutionHostId[]>,
+  changedPaneKeys?: Set<string>
 ): Partial<AppState> {
   const twinIds = new Set(twinHostIds.keys())
   const removed = collectRemovedHostTwinState(s, twinIds, hostId, twinHostIds)
@@ -195,6 +227,7 @@ export function buildHostTwinPurgeState(
       }
     }
   }
+  const editorBufferKeepRequest = noticeRemovedUnsavedFiles(s, doomed.removedFileIds)
   const omitters = createWorktreePurgeOmitters(s, new Set(), doomed)
   const tabPrefixedSleeping = {
     sleepingAgentSessionsByPaneKey: omitters.omitByPaneKeyTabPrefix(
@@ -234,13 +267,20 @@ export function buildHostTwinPurgeState(
         (group, index) => group.activeTabId !== s.groupsByWorktree[active]?.[index]?.activeTabId
       ))
   return {
+    editorBufferKeepRequest,
     ...layout,
     // Why: a group may now show a surviving tab of another kind, so selection is derived again.
     ...(selectionRemoved ? buildActiveSurfacePatch({ ...s, ...layout }, active) : {}),
-    ...buildWorktreePurgeSurfacePatch(s, omitters, doomed.doomedTabIds, {
-      ...tabPrefixedSleeping,
-      ...omitSleepingAgentSessionsForWorktrees(tabPrefixedSleeping, new Set(), sshRecordPaneKeys)
-    }),
+    ...buildWorktreePurgeSurfacePatch(
+      s,
+      omitters,
+      doomed.doomedTabIds,
+      {
+        ...tabPrefixedSleeping,
+        ...omitSleepingAgentSessionsForWorktrees(tabPrefixedSleeping, new Set(), sshRecordPaneKeys)
+      },
+      changedPaneKeys
+    ),
     ...twinSelectionPatch(s, twinHostIds, hostId)
   }
 }

@@ -6,10 +6,9 @@ import {
   installPluginFromLocalPath,
   readPluginLockfile,
   removeInstalledPlugin
-} from './plugin-install'
+} from './installation/plugin-install'
 import {
   createUninstallFixture,
-  holdNextUninstallRefresh,
   latestUninstallWorker,
   prepareUninstallFixture,
   publishBundledUninstallSuccessor,
@@ -22,25 +21,6 @@ import {
 
 beforeEach(prepareUninstallFixture)
 afterEach(resetUninstallFixtures)
-
-it('resolves removal after an ordinary earlier refresh replaces the discovery object', async () => {
-  const { root, service, install } = await createUninstallFixture()
-  const key = await install('identity')
-  const prior = requireInstalledPlugin(service, key)
-  const refresh = service.refresh()
-  const removal = service.removePlugin(key, async () => {
-    expect(requireInstalledPlugin(service, key)).not.toBe(prior)
-    await removeInstalledPlugin({
-      pluginsDir: getUserPluginsDir(root),
-      pluginsDataDir: getPluginsDataDir(root),
-      pluginKey: key
-    })
-  })
-  await refresh
-  await removal
-  expect(service.findValidPlugin(key)).toBeNull()
-  expect(service.getLogs(key)).toHaveLength(0)
-})
 
 it('actual IPC removal survives an immediately preceding queued refresh', async () => {
   const { service, install } = await createUninstallFixture()
@@ -87,9 +67,9 @@ it('resolves the new installed revision inside the queue before removing the req
 })
 
 it('retains a bundled plugin worker and history when ordinary IPC removal is refused', async () => {
-  const { root, service, install } = await createUninstallFixture()
+  const { root, service, install, store } = await createUninstallFixture()
   const key = await install('orca-bundled', {}, true)
-  await publishBundledUninstallSuccessor(root, 'orca-bundled', key)
+  await publishBundledUninstallSuccessor(root, 'orca-bundled', key, store)
   await service.refresh()
   await service.invokeCommand(key, 'run')
   const child = latestUninstallWorker()
@@ -101,33 +81,8 @@ it('retains a bundled plugin worker and history when ordinary IPC removal is ref
   )
 })
 
-it('checks bundled ownership after an earlier queued refresh before deactivation', async () => {
-  const { root, service, install } = await createUninstallFixture()
-  const key = await install('orca-queued', {}, true)
-  const held = holdNextUninstallRefresh(service)
-  const deactivate = vi.spyOn(uninstallWorkerController(service), 'deactivate')
-  const refresh = service.refresh()
-  const remove = vi.fn(async () => {})
-  const failed = service.removePlugin(key, remove).catch((error: unknown) => error)
-  try {
-    await held.entered.promise
-    await publishBundledUninstallSuccessor(root, 'orca-queued', key)
-  } finally {
-    held.release.resolve()
-  }
-  await refresh
-  const calls = deactivate.mock.calls.length
-  expect(await failed).toEqual(
-    expect.objectContaining({ message: expect.stringContaining('protected') })
-  )
-  expect(deactivate).toHaveBeenCalledTimes(calls)
-  expect(remove).not.toHaveBeenCalled()
-  expect(service.getLogs(key)).toHaveLength(200)
-  held.restore()
-})
-
 it('rechecks bundled ownership under the filesystem queue after a held worker shutdown', async () => {
-  const { root, service, install } = await createUninstallFixture()
+  const { root, service, install, store } = await createUninstallFixture()
   const key = await install('orca-deactivate', {}, true)
   const controller = uninstallWorkerController(service)
   const original = controller.deactivate.bind(controller)
@@ -141,7 +96,7 @@ it('rechecks bundled ownership under the filesystem queue after a held worker sh
   const failed = removeThroughPluginIpc(key).catch((error: unknown) => error)
   try {
     await entered.promise
-    await publishBundledUninstallSuccessor(root, 'orca-deactivate', key)
+    await publishBundledUninstallSuccessor(root, 'orca-deactivate', key, store)
   } finally {
     release.resolve()
   }

@@ -3,28 +3,29 @@ import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
 import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { reconcileCatalogRows } from '../../../../shared/catalog-row-reconcile'
-import { retainValidFilterRepoIds } from '../slices/repo-filter-selection'
-import {
-  mergeSshRepoReadoptions,
-  reconcileReadoptedSshRepoRows
-} from '../slices/superseded-ssh-repo-rows'
-import { getRepoHostIdentity } from '../slices/repo-host-identity'
-import { runtimeTargetForOwnerEnvironment } from '../../runtime/runtime-client-target'
+import { retainValidFilterRepoIds } from './repo-filter-selection'
+import { mergeSshRepoReadoptions, reconcileReadoptedSshRepoRows } from './superseded-ssh-repo-rows'
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+import { runtimeTargetForOwnerEnvironment } from '../../runtime/rpc/targets/runtime-client-target'
 import { filterSetupScriptPromptDismissalsToValidRepos } from '@/lib/setup-script-prompt'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import { isRemovedRuntimeHostId } from '../slices/stale-runtime-host-rows'
+import { isRemovedRuntimeHostId } from '../host-catalog/removed-runtime-host-rows'
 import type { LocalRepoCatalogFetchOutcome } from './repo-catalog-fencing'
 import type { RepoSlice } from './repo-state'
-import { arrayElementsUnchanged } from '../catalog-identity'
+import { arrayElementsUnchanged } from '../../lib/catalog-reconciliation/catalog-identity'
 import {
   awaitLatestLocalRepoCatalogFetch,
   startLocalRepoCatalogFetch
 } from './repo-catalog-fencing'
-import { claimHostCatalogFence, isHostCatalogFenceCurrent } from '../host-catalog-fencing'
+import {
+  claimHostCatalogFence,
+  isHostCatalogFenceCurrent
+} from '../host-catalog/host-catalog-fence'
 import {
   fetchRepoCatalogForTarget,
   filterSetupsForPrunedRepoRows,
   mergeFetchedRepoCatalog,
+  reconcileFetchedCatalogWorktreeState,
   reconcileReadoptedSshWorktreeState,
   reconcileSupersededSshRepos
 } from './repo-catalog-merge'
@@ -35,6 +36,10 @@ import {
 } from '../../../../shared/project-compatibility-merge'
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
 import { scheduleSafeAutoForkSync } from './safe-auto-fork-sync'
+import {
+  withWslMovedRepoIds,
+  withWslMovedSetupScriptDismissals
+} from './wsl-moved-repo-ui-retention'
 
 export function createRepoCatalogActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -53,7 +58,11 @@ export function createRepoCatalogActions(
         )
         const reconciliation = reconcileReadoptedSshRepoRows(s.repos, pendingSshRepoReadoptions)
         const repos = reconciliation.repos
-        const worktreeState = reconcileReadoptedSshWorktreeState(s, pendingSshRepoReadoptions)
+        const worktreeState = reconcileReadoptedSshWorktreeState(
+          s,
+          pendingSshRepoReadoptions,
+          reconciliation.pendingReadoptions
+        )
         const remainingSetups = filterSetupsForPrunedRepoRows(s.projectHostSetups, s.repos, repos)
         const compatibility = mergeProjectHostSetupCompatibility(
           projectCompatibilityFromRepos(repos),
@@ -62,11 +71,7 @@ export function createRepoCatalogActions(
             setups: remainingSetups
           }
         )
-        // Why: mergeProjectHostSetupCompatibility always allocates; a no-op readoption
-        // must not churn catalog identity. This write is all-repos, not host-scoped,
-        // so it cannot go through mergeFetchedHostProjectCatalog. Reconcile
-        // hands the store arrays straight back when nothing moved, so writing them
-        // unconditionally still leaves identity-keyed selectors untouched.
+        // All-repos readoption cannot use host-scoped merge. Reconcile always-allocating compat results to preserve unchanged catalog arrays and avoid selector churn.
         const projects = reconcileCatalogRows(
           s.projects,
           compatibility.projects,
@@ -95,7 +100,11 @@ export function createRepoCatalogActions(
       set((s) => ({ reposFetchGeneration: s.reposFetchGeneration + 1 }))
       const fence = claimHostCatalogFence(get, 'repos', target)
       try {
-        const catalog = await fetchRepoCatalogForTarget(target)
+        const catalog = await fetchRepoCatalogForTarget(
+          target,
+          get().repos,
+          get().githubSourceCollections
+        )
         // A newer same-host fetch or a replaced connection superseded us — drop this stale result.
         if (!isHostCatalogFenceCurrent(get, fence)) {
           return
@@ -131,17 +140,29 @@ export function createRepoCatalogActions(
           return {
             repos: prunedRepos,
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
-            ...reconcileReadoptedSshWorktreeState(s, s.pendingSshRepoReadoptions),
+            ...reconcileFetchedCatalogWorktreeState(
+              s,
+              catalog,
+              prunedRepos,
+              reconciliation.pendingReadoptions
+            ),
             ...mergedProjectCompatibility,
             ...(arrayElementsUnchanged(prunedRepos, s.repos)
               ? {}
               : { folderWorkspacePathStatuses: {} }),
             activeRepoId:
               s.activeRepoId && validRepoIds.has(s.activeRepoId) ? s.activeRepoId : null,
-            filterRepoIds: retainValidFilterRepoIds(s.filterRepoIds, validRepoIds),
-            setupScriptPromptDismissedRepoIds: filterSetupScriptPromptDismissalsToValidRepos(
+            filterRepoIds: retainValidFilterRepoIds(
+              s.filterRepoIds,
+              withWslMovedRepoIds(validRepoIds, s.wslMovedProjects)
+            ),
+            setupScriptPromptDismissedRepoIds: withWslMovedSetupScriptDismissals(
               s.setupScriptPromptDismissedRepoIds,
-              validRepoHostIdentities
+              filterSetupScriptPromptDismissalsToValidRepos(
+                s.setupScriptPromptDismissedRepoIds,
+                validRepoHostIdentities
+              ),
+              s.wslMovedProjects
             )
           }
         })

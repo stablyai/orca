@@ -1,5 +1,5 @@
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 
 /** Restore per-worktree active tab; validate ids when the map exists, else derive for legacy sessions. */
 export function restoreActiveTabIdByWorktree({
@@ -26,8 +26,7 @@ export function restoreActiveTabIdByWorktree({
       if (!validWorktreeIds.has(wId) || !tabId) {
         continue
       }
-      // Why: a subsumed row's canonical twin holds the same PTY, so follow the pointer there
-      // instead of forgetting which terminal the workspace last focused.
+      // Follow subsumed rows to the canonical twin holding their PTY so workspace focus survives.
       const restored = validTabIds.has(tabId) ? tabId : canonicalTabIdBySubsumedTabId.get(tabId)
       if (restored && validTabIds.has(restored)) {
         activeTabIdByWorktree[wId] = restored

@@ -1,16 +1,18 @@
-import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
-import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
+import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
+import '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
 import {
   restorePtyDataHandlersAfterFailedShutdown,
   unregisterPtyDataHandlers
-} from '@/components/terminal-pane/pty-dispatcher'
-import { shutdownBufferCaptures } from '@/components/terminal-pane/shutdown-buffer-captures'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+} from '@/components/terminal-pane/pty-transport/shutdown/pty-shutdown-data-suspension'
+import { shutdownBufferCaptures } from '@/components/terminal-pane/snapshots/shutdown-buffer-captures'
+import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
+import { toRuntimeWorktreeSelector } from '@/runtime/rpc/targets/runtime-worktree-selector'
+import '../slices/agent-status/agent-status'
 import {
   collectHibernatedCompletionEvidenceForWorktree,
   collectSleepingAgentSessionRecordsForWorktree
-} from '../slices/agent-status'
+} from '../slices/agent-status/agent-status-recovery-collection'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 import { equalStringSets, sortedUniquePtyIds } from './terminal-pty-identities'
 import { resolveTerminalPtyOwner } from '@/lib/terminal-worktree-route'
@@ -34,8 +36,7 @@ export function createTerminalPaneHibernationActions(
       const state = get()
       const worktreeOwner = resolveTerminalPtyOwner(state, worktreeId)
       const teardownOwner = resolveTerminalTeardownOwner(worktreeOwner, [opts.ptyId])
-      // Why: a twin-published worktree must route by the PTY's own owner; a remote PTY with no
-      // host stop to run would otherwise lose its binding while the agent keeps running.
+      // Use PTY owner for twins; losing bindings without an attributable host stop leaves unseen running agents.
       if (
         teardownOwner.kind === 'refused' ||
         (worktreeOwner.kind === 'ambiguous' &&

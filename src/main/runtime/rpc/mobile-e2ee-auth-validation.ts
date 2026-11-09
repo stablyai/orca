@@ -1,7 +1,10 @@
 import type { DesktopMobileE2EEV2Session } from './mobile-e2ee-v2-desktop-session'
-import { publicKeyFromBase64 } from '../../../shared/e2ee-crypto'
-import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime-request-frames'
-import { isDeviceProofB64, verifyDeviceProof } from '../../../shared/device-key-proof'
+import { publicKeyFromBase64 } from '../../../shared/remote-runtime/e2ee/node/e2ee-crypto'
+import { parseRemoteRuntimeJsonText } from '../../../shared/remote-runtime/requests/remote-runtime-request-frames'
+import {
+  isDeviceProofB64,
+  verifyDeviceProof
+} from '../../../shared/remote-runtime/pairing/device-key-proof'
 
 export type ClassifiedE2EEAuth =
   | { kind: 'token'; deviceToken: string; clientCapabilities?: unknown }
@@ -14,7 +17,9 @@ const V2_DEVICE_KEY_KEYS = new Set(['clientCapabilities', 'deviceId', 'devicePro
 /** The one parser for e2ee_auth: every accepted shape, nothing mixed. */
 export function classifyE2EEAuth(
   plaintext: string,
-  v2Session: DesktopMobileE2EEV2Session | null
+  v2Session: DesktopMobileE2EEV2Session | null,
+  // Direct sockets only: Relay token auth stays the exact mobile shape.
+  v2TokenCapabilities = false
 ): ClassifiedE2EEAuth {
   let auth: Record<string, unknown>
   try {
@@ -48,13 +53,16 @@ export function classifyE2EEAuth(
     return { kind: 'invalid' }
   }
   const keys = Object.keys(auth).sort()
-  // Why: mobile v2 token auth stays exact-key; capabilities ride only on key auth.
-  if (
-    keys.join(',') === V2_TOKEN_KEYS &&
-    typeof auth.deviceToken === 'string' &&
-    auth.deviceToken
-  ) {
-    return { kind: 'token', deviceToken: auth.deviceToken }
+  // Why: runtime clients (desktop, CLI, web) carry capabilities on v2 token auth as on legacy.
+  const tokenKeys = keys
+    .filter((key) => !(v2TokenCapabilities && key === 'clientCapabilities'))
+    .join(',')
+  if (tokenKeys === V2_TOKEN_KEYS && typeof auth.deviceToken === 'string' && auth.deviceToken) {
+    return {
+      kind: 'token',
+      deviceToken: auth.deviceToken,
+      ...('clientCapabilities' in auth ? { clientCapabilities: auth.clientCapabilities } : {})
+    }
   }
   const rest = keys.filter((key) => key !== 'type' && key !== 'v' && key !== 'transcriptHashB64')
   if (
@@ -92,13 +100,14 @@ export type DeviceKeyResolution<TDevice> =
 export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>(args: {
   plaintext: string
   v2Session: DesktopMobileE2EEV2Session | null
+  v2TokenCapabilities?: boolean
   resolveDevice: (token: string) => TDevice | null
   // Absent on a host that does not accept device keys: key auth is then bad_auth, as before.
   resolveDeviceKey?: (deviceId: string) => DeviceKeyResolution<TDevice>
 }):
   | { ok: true; device: TDevice; clientCapabilities: unknown }
   | { ok: false; code: MobileE2EEAuthFailureCode; deviceId?: string } {
-  const auth = classifyE2EEAuth(args.plaintext, args.v2Session)
+  const auth = classifyE2EEAuth(args.plaintext, args.v2Session, args.v2TokenCapabilities)
   if (auth.kind === 'token') {
     const device = args.resolveDevice(auth.deviceToken)
     // Why: a keyed row has no token, so presenting one can never match it.
@@ -133,8 +142,7 @@ export function authenticateMobileE2EE<TDevice extends { deviceToken?: string }>
     : { ok: false, code: 'bad_proof' }
 }
 
-// Why: sealed, so only the pinned host can tell a client its key is revoked (it then deletes it);
-// 'Unauthorized' marks an unpaired device for the re-pair prompt, storage trouble is not one.
+// Seal revocation so only the pinned host can make clients delete keys; storage failures must not become Unauthorized re-pair prompts.
 export function describeMobileE2EEAuthFailure(failure: {
   code: MobileE2EEAuthFailureCode
   deviceId?: string

@@ -3,7 +3,6 @@ import {
   useIpcEventsForCloseRouting,
   type RequestTabCloseListener,
   type CloseActiveTabListener,
-  type CloseTerminalListener,
   type CloseSessionTabListener,
   type TerminalTabCloseRequestListener
 } from './ipc-events-close-routing-test-harness'
@@ -16,12 +15,22 @@ vi.mock('@/components/terminal/terminal-tab-actions', () => ({
   closeTerminalTab: closeTerminalTabMock
 }))
 
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (original) =>
+  (
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
+  ).runtimeRpcClientWithLayoutApply(await original())
+)
+vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (original) =>
+  (
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
+  ).runtimeLayoutClientWithTestFrames(await original())
+)
+
 describe('useIpcEvents browser tab close routing', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.unstubAllGlobals()
-    // Undo a partial mock of this module leaked by an earlier describe so the real
-    // resolveFloatingWorkspaceBrowserWorkspaceId (source validation) is used here.
+    // Clear leaked partial mocks so floating browser source validation uses the real resolver.
     vi.doUnmock('@/lib/floating-workspace-terminal-actions')
     closeTerminalTabMock.mockReset()
   })
@@ -30,73 +39,30 @@ describe('useIpcEvents browser tab close routing', () => {
     const closeSessionTabListenerRef: { current: CloseSessionTabListener | null } = {
       current: null
     }
-    const closeFile = vi.fn()
-    const closeUnifiedTab = vi.fn()
+    const { createEditorTabsStore } =
+      await import('../store/slices/editor/editor-slice-test-harness')
+    const store = createEditorTabsStore()
 
     await useIpcEventsForCloseRouting({
       closeSessionTabListenerRef,
-      getState: () => ({
-        recordClientHostedBrowserCloseIntents: vi.fn(),
-        closeFile,
-        closeUnifiedTab,
-        browserTabsByWorktree: {},
-        unifiedTabsByWorktree: {
-          'wt-1': [{ id: 'host-tab-1', entityId: 'file-1', contentType: 'editor', isPinned: false }]
-        }
-      })
+      getState: store.getState
     })
 
-    closeSessionTabListenerRef.current?.({ tabId: 'host-tab-1', worktreeId: 'wt-1' })
-
-    // Why: closeUnifiedTab alone would leave the file in openFiles, which the host
-    // republishes — so the editor close must go through closeFile.
-    expect(closeFile).toHaveBeenCalledWith('file-1')
-    expect(closeUnifiedTab).not.toHaveBeenCalled()
-  })
-
-  it('keeps closeUnifiedTab for a non-editor session tab closed by a companion', async () => {
-    const closeSessionTabListenerRef: { current: CloseSessionTabListener | null } = {
-      current: null
-    }
-    const closeFile = vi.fn()
-    const closeUnifiedTab = vi.fn()
-
-    await useIpcEventsForCloseRouting({
-      closeSessionTabListenerRef,
-      getState: () => ({
-        recordClientHostedBrowserCloseIntents: vi.fn(),
-        closeFile,
-        closeUnifiedTab,
-        browserTabsByWorktree: {},
-        unifiedTabsByWorktree: {
-          'wt-1': [
-            { id: 'sim-tab-1', entityId: 'sim-1', contentType: 'simulator', isPinned: false }
-          ]
-        }
-      })
+    const fileId = store.getState().openFile({
+      filePath: '/repo/file.ts',
+      relativePath: 'file.ts',
+      worktreeId: 'wt-1',
+      language: 'typescript',
+      mode: 'edit'
     })
+    const tab = store.getState().unifiedTabsByWorktree['wt-1']?.find((t) => t.entityId === fileId)
+    expect(tab).toBeDefined()
 
-    closeSessionTabListenerRef.current?.({ tabId: 'sim-tab-1', worktreeId: 'wt-1' })
+    closeSessionTabListenerRef.current?.({ tabId: tab!.id, worktreeId: 'wt-1' })
 
-    // Why: only editor tabs need the closeFile (openFiles) path; other content types
-    // must keep closeUnifiedTab so the editor-only routing stays scoped.
-    expect(closeUnifiedTab).toHaveBeenCalledWith('sim-tab-1')
-    expect(closeFile).not.toHaveBeenCalled()
-  })
-
-  it('delegates terminal close IPC without a pane id to the shared terminal close flow', async () => {
-    const closeTerminalListenerRef: { current: CloseTerminalListener | null } = { current: null }
-
-    await useIpcEventsForCloseRouting({
-      closeTerminalListenerRef,
-      getState: () => ({})
-    })
-
-    closeTerminalListenerRef.current?.({ kind: 'tab', tabId: 'terminal-1' })
-
-    // The CLI/RPC caller is answered immediately, so this close must never raise a modal.
-    expect(closeTerminalTabMock).toHaveBeenCalledWith('terminal-1', {
-      skipRunningProcessConfirm: true
+    await vi.waitFor(() => {
+      expect(store.getState().unifiedTabsByWorktree['wt-1']).toEqual([])
+      expect(store.getState().openFiles).toEqual([])
     })
   })
 

@@ -5,19 +5,10 @@ import { keybindingMatchesAction } from '../../../../../shared/keybindings'
 import { browserChromeShortcutOwnsEvent } from '../describe-page/browser-overlay-shortcut-target'
 import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
 import { isEditableKeyboardTarget } from './browser-keyboard'
-import {
-  addBrowserPageZoomEventListener,
-  applyBrowserPageZoom,
-  rememberExplicitBrowserPageZoomLevel,
-  type BrowserPageZoomCommand,
-  type BrowserPageZoomDirection
-} from './browser-page-zoom'
+import { addBrowserPageZoomEventListener, type BrowserPageZoomCommand } from './browser-page-zoom'
+import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
-/**
- * History, reload and zoom chords for a <webview>-backed pane — local and client-hosted alike.
- * Each one is handled twice: once for chrome focus, where the chord never leaves the renderer,
- * and once for the IPC main forwards when the guest (its own Chromium process) holds focus.
- */
+/** Handle chrome chords in the renderer and guest chords through main’s IPC; focused guests own a separate WebContents. */
 export function useBrowserPageWebviewShortcuts({
   browserTabId,
   workspaceId,
@@ -25,8 +16,6 @@ export function useBrowserPageWebviewShortcuts({
   chromeShortcutScope,
   isActiveRef,
   webviewRef,
-  paneZoomLevelRef,
-  setBrowserDefaultZoomLevel,
   showBrowserZoomFeedback,
   reloadWebviewOrRecoverGuest
 }: {
@@ -36,15 +25,12 @@ export function useBrowserPageWebviewShortcuts({
   chromeShortcutScope: BrowserChromeShortcutScope
   isActiveRef: MutableRefObject<boolean>
   webviewRef: MutableRefObject<Electron.WebviewTag | null>
-  paneZoomLevelRef: MutableRefObject<number>
-  setBrowserDefaultZoomLevel: (level: number) => void
   showBrowserZoomFeedback: (level: number) => void
   reloadWebviewOrRecoverGuest: (ignoreCache: boolean) => void
 }): void {
   const keybindings = useAppStore((state) => state.keybindings)
 
-  // Browser history shortcuts (renderer path: focus on browser chrome)
-  // Why: macOS can't deliver Logitech side-buttons to Electron; Logi Options+ remaps them to history chords, handled here when chrome is focused.
+  // Logi Options+ remaps macOS side-buttons to history chords that chrome must handle here.
   useEffect(() => {
     if (chromeShortcutScope === 'inactive') {
       return
@@ -65,19 +51,16 @@ export function useBrowserPageWebviewShortcuts({
       e.preventDefault()
       // Why: stop other window capture listeners (workspace, embedded editors) from also acting.
       e.stopImmediatePropagation()
-      // Why: Logitech Options+ side-button remaps arrive as these chords on macOS; route through the same nav path as the toolbar.
       if (direction === 'back') {
         webviewRef.current?.goBack()
       } else {
         webviewRef.current?.goForward()
       }
     }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [chromeShortcutScope, keybindings, webviewRef, workspaceId])
 
-  // Browser history shortcuts (IPC path: focus inside webview guest)
-  // Why: a focused webview is a separate WebContents, so main forwards the chords back here.
   useEffect(() => {
     if (!isActive) {
       return
@@ -86,7 +69,6 @@ export function useBrowserPageWebviewShortcuts({
       if (browserPageId !== browserTabId) {
         return
       }
-      // Why: Logitech Options+ side-button remaps arrive as these chords on macOS; route through the same nav path as the toolbar.
       if (direction === 'back') {
         webviewRef.current?.goBack()
       } else {
@@ -95,8 +77,6 @@ export function useBrowserPageWebviewShortcuts({
     })
   }, [browserTabId, isActive, webviewRef])
 
-  // Cmd/Ctrl+R — reload (renderer path: focus on browser chrome, not in guest)
-  // Why: guest shortcut forwarding never fires when focus is on browser chrome, so handle the chord directly here.
   useEffect(() => {
     if (chromeShortcutScope === 'inactive') {
       return
@@ -123,12 +103,10 @@ export function useBrowserPageWebviewShortcuts({
       e.stopImmediatePropagation()
       reloadWebviewOrRecoverGuest(isHardReload)
     }
-    window.addEventListener('keydown', handleKeyDown, true)
-    return () => window.removeEventListener('keydown', handleKeyDown, true)
+    addAppKeyListener('keydown', handleKeyDown)
+    return () => removeAppKeyListener('keydown', handleKeyDown)
   }, [chromeShortcutScope, keybindings, reloadWebviewOrRecoverGuest, workspaceId])
 
-  // Cmd/Ctrl+R — reload (IPC path: focus inside webview guest)
-  // Why: a focused guest is a separate Chromium process, so main forwards the chord back here.
   useEffect(() => {
     if (!isActive) {
       return
@@ -155,23 +133,16 @@ export function useBrowserPageWebviewShortcuts({
     if (!isActive) {
       return
     }
-    const applyActivePageZoom = (direction: BrowserPageZoomDirection): void => {
-      if (!isActiveRef.current) {
+    // Why main: zoom belongs to the page's site in its browser profile, which main remembers.
+    const handleZoom = ({ browserPageId, direction }: BrowserPageZoomCommand): void => {
+      if (browserPageId !== browserTabId || !isActiveRef.current) {
         return
       }
-      // Why: reset targets 100% like Chromium; the configured default is a new-tab seed, not a reset target.
-      const nextLevel = applyBrowserPageZoom(webviewRef.current, direction)
-      if (nextLevel !== null) {
-        paneZoomLevelRef.current = nextLevel
-        rememberExplicitBrowserPageZoomLevel(browserTabId, nextLevel)
-        setBrowserDefaultZoomLevel(nextLevel)
-        showBrowserZoomFeedback(nextLevel)
-      }
-    }
-    const handleZoom = ({ browserPageId, direction }: BrowserPageZoomCommand): void => {
-      if (browserPageId === browserTabId) {
-        applyActivePageZoom(direction)
-      }
+      void window.api.browser.zoomPage({ browserPageId, direction }).then((display) => {
+        if (display?.site) {
+          showBrowserZoomFeedback(display.zoomLevel)
+        }
+      })
     }
     const removeGuestListener = window.api.ui.onZoomBrowserPage(handleZoom)
     const removeLocalListener = addBrowserPageZoomEventListener(handleZoom)
@@ -179,13 +150,5 @@ export function useBrowserPageWebviewShortcuts({
       removeGuestListener()
       removeLocalListener()
     }
-  }, [
-    browserTabId,
-    isActive,
-    isActiveRef,
-    paneZoomLevelRef,
-    setBrowserDefaultZoomLevel,
-    showBrowserZoomFeedback,
-    webviewRef
-  ])
+  }, [browserTabId, isActive, isActiveRef, showBrowserZoomFeedback])
 }

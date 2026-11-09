@@ -1,10 +1,13 @@
 import { useAppStore } from '../../store'
-import { isWebRuntimeInitialTerminalBootstrapInFlight } from '../web-runtime-initial-terminal-bootstrap'
-import { dispatchWebRuntimeInitialTerminalBootstrap } from '../web-runtime-initial-terminal-bootstrap-dispatch'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspace-set'
+import { isWebRuntimeInitialTerminalBootstrapInFlight } from './initial-terminal/web-runtime-initial-terminal-bootstrap'
+import { dispatchWebRuntimeInitialTerminalBootstrap } from './initial-terminal/web-runtime-initial-terminal-bootstrap-dispatch'
 import { shouldApplyRecoveredWebSessionTabsSnapshot } from './tracking'
 import { shouldBootstrapInitialWebRuntimeTerminal } from './tracking-decisions'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type { SessionTabsStreamEvent } from './state'
+import { hasSplitLandingGroup } from '../../store/slices/tabs/split-landing-groups'
 
 type SessionTabsFrame = RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' }
 
@@ -26,7 +29,6 @@ export type InitialTerminalSeeder = {
   dispose: () => void
 }
 
-/** One worktree stream's first-terminal seeding, including a verdict that arrived while unselected. */
 export function createInitialTerminalSeeder(
   environmentId: string,
   worktreeId: string
@@ -36,15 +38,16 @@ export function createInitialTerminalSeeder(
   let disposed = false
 
   const decide = (event: SessionTabsStreamEvent, firstHostAnswer: boolean): boolean => {
+    // Switch point: ORCA_LAYOUT_OWNER_IS_MAIN && — a frame-drawn workspace's tabs are not the mirror's to create.
+    // Interim (ledger L240): seeding stays only for servers without `layout.intents.v1`, until Phase 2.
+    if (ORCA_LAYOUT_OWNER_IS_MAIN && isFrameDrawnServerWorkspace(environmentId, worktreeId)) {
+      return false
+    }
     const state = useAppStore.getState()
     return shouldBootstrapInitialWebRuntimeTerminal({
       event,
       activeWorktreeId: worktreeId,
-      // Why both: the closure flag records that this subscription already owned a create, so the
-      // same closure never seeds twice even once the shared latch is released; a create that threw
-      // never set it, so a later frame may retry. The shared latch is what survives the effect
-      // re-runs a workspace switch triggers — without it a second closure seeds a second terminal
-      // while the first create is still in flight (STA-6173).
+      // Closure guard prevents reseeding after its successful create; failed creates leave it retryable. Shared latch survives effect reinstall so fresh closures cannot duplicate pending creates (STA-6173).
       requestedInitialTerminal:
         requestedInitialTerminal ||
         isWebRuntimeInitialTerminalBootstrapInFlight(environmentId, worktreeId),
@@ -56,7 +59,10 @@ export function createInitialTerminalSeeder(
   }
 
   const seed = async (): Promise<void> => {
-    // Latch claim, create, and row-conditional release live in the dispatch helper.
+    // Rechecked after the mirror applied: a waiting split chooser is the surface the user left.
+    if (hasSplitLandingGroup(useAppStore.getState(), worktreeId)) {
+      return
+    }
     if (await dispatchWebRuntimeInitialTerminalBootstrap(environmentId, worktreeId)) {
       requestedInitialTerminal = true
     }

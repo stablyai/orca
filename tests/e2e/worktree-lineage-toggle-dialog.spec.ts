@@ -31,7 +31,11 @@ test('locally controlled project-group modal keeps child-toggle input', async ({
     if (!group) {
       throw new Error('Missing project group')
     }
-    await store.getState().moveProjectToGroup(parent.repoId, group.id)
+    const parentRepo = store.getState().repos.find((repo) => repo.id === parent.repoId)
+    if (!parentRepo) {
+      throw new Error('Missing parent repo')
+    }
+    await store.getState().moveProjectToGroup(parentRepo, group.id)
     store.getState().setGroupBy('repo')
     await store.getState().setKeybindingOverride('sidebar.childWorkspaces.toggle', ['Mod+Alt+H'])
     window.addEventListener('keydown', (event) => {

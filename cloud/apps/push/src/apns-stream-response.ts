@@ -4,8 +4,7 @@ import { constants } from 'node:http2'
 
 export type ApnsResponse = { status: number; body: string; retryAfterMs?: number }
 
-// The subset of ClientHttp2Stream this module drives, so a fake emitter can
-// stand in for a real APNs stream in tests.
+// Stream subset permits fake emitters in APNs tests.
 export type ApnsResponseStream = EventEmitter & {
   setTimeout(ms: number, callback: () => void): void
   destroy(error?: Error): void
@@ -45,8 +44,7 @@ export function readApnsStreamResponse(
         })
       )
     )
-    // A peer reset with NGHTTP2_NO_ERROR emits neither 'end' nor 'error', which
-    // would leave the worker's delivery pending for the life of the process.
+    // NGHTTP2_NO_ERROR resets emit neither end nor error; close must settle or delivery hangs for the process lifetime.
     stream.on('close', () => settle(() => reject(new Error('apns_stream_closed'))))
     stream.end(body)
   })

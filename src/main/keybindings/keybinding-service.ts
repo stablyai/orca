@@ -1,4 +1,5 @@
 import {
+  getLegacySearchBindings,
   LEGACY_TAB_SWITCH_BINDINGS,
   type KeybindingActionId,
   type KeybindingFileSnapshot,
@@ -9,7 +10,6 @@ import {
   getUserKeybindingsPath,
   migrateLegacyKeybindings,
   readKeybindingFile,
-  seedLegacyTabSwitchBindings,
   writeKeybindingOverride
 } from './keybinding-file'
 
@@ -17,42 +17,30 @@ export type KeybindingServiceOptions = {
   homePath: string
   platform?: NodeJS.Platform
   getLegacyOverrides?: () => KeybindingOverrides | undefined
-  /** Cohort seed for the tab-switch convention swap. `isPending` is true only
-   *  for pre-existing installs on the first launch after the swap; `markSeeded`
-   *  freezes the one-shot so it never runs again. */
-  legacyTabSwitchSeed?: {
-    isPending: () => boolean
-    markSeeded: () => void
-  }
+  legacyTabSwitchDefaults?: boolean
+  legacySearchDefaults?: boolean
 }
 
 export class KeybindingService {
   private readonly configPath: string
   private readonly platform: NodeJS.Platform
+  private readonly defaultOverrides: KeybindingOverrides
+  private fallbackOverrides: KeybindingOverrides = {}
   private snapshot: KeybindingFileSnapshot | null = null
 
   constructor(options: KeybindingServiceOptions) {
     this.configPath = getUserKeybindingsPath(options.homePath)
     this.platform = options.platform ?? process.platform
-    // Why: older builds persisted custom shortcuts inside global settings.
-    // Once a keybindings file exists, it is the sole source of truth.
-    migrateLegacyKeybindings(this.configPath, this.platform, options.getLegacyOverrides?.())
-    // Why: pre-existing installs keep the old tab-switch chords. Only mark the
-    // one-shot done on success so a transient IO failure retries next launch
-    // instead of silently dropping the pin.
-    if (options.legacyTabSwitchSeed?.isPending()) {
-      try {
-        // Why: the seed already read the file to build its snapshot — prime the
-        // lazy cache with it instead of re-reading on the first getSnapshot().
-        this.snapshot = seedLegacyTabSwitchBindings(
-          this.configPath,
-          this.platform,
-          LEGACY_TAB_SWITCH_BINDINGS
-        ).snapshot
-        options.legacyTabSwitchSeed.markSeeded()
-      } catch (error) {
-        console.error('Failed to seed legacy tab-switch keybindings:', error)
-      }
+    this.defaultOverrides = {
+      ...(options.legacyTabSwitchDefaults ? LEGACY_TAB_SWITCH_BINDINGS : {}),
+      ...(options.legacySearchDefaults ? getLegacySearchBindings(this.platform) : {})
+    }
+    const legacyOverrides = options.getLegacyOverrides?.()
+    try {
+      migrateLegacyKeybindings(this.configPath, this.platform, legacyOverrides)
+    } catch (error) {
+      this.fallbackOverrides = { ...legacyOverrides }
+      console.error('Failed to import legacy keybindings:', error)
     }
   }
 
@@ -62,13 +50,18 @@ export class KeybindingService {
 
   getSnapshot(): KeybindingFileSnapshot {
     if (!this.snapshot) {
-      this.snapshot = readKeybindingFile(this.configPath, this.platform)
+      return this.reload()
     }
     return this.snapshot
   }
 
   reload(): KeybindingFileSnapshot {
-    this.snapshot = readKeybindingFile(this.configPath, this.platform)
+    this.snapshot = readKeybindingFile(
+      this.configPath,
+      this.platform,
+      this.defaultOverrides,
+      this.fallbackOverrides
+    )
     return this.snapshot
   }
 
@@ -85,7 +78,15 @@ export class KeybindingService {
     actionId: KeybindingActionId,
     bindings: string[] | null
   ): KeybindingFileSnapshot {
-    this.snapshot = writeKeybindingOverride(this.configPath, this.platform, actionId, bindings)
+    this.snapshot = writeKeybindingOverride(
+      this.configPath,
+      this.platform,
+      actionId,
+      bindings,
+      this.defaultOverrides,
+      this.fallbackOverrides
+    )
+    this.fallbackOverrides = {}
     return this.snapshot
   }
 }

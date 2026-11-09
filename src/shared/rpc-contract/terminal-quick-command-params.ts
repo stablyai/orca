@@ -6,8 +6,8 @@ import {
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH,
   normalizeTerminalQuickCommands,
   supportsTerminalAgentQuickCommand
-} from '../terminal-quick-commands'
-import type { TerminalQuickCommand } from '../terminal-quick-command-types'
+} from '../terminal/quick-commands/terminal-quick-commands'
+import type { TerminalQuickCommand } from '../terminal/quick-commands/terminal-quick-command-types'
 
 export const TerminalQuickCommandScopeUpdate = z.discriminatedUnion('type', [
   z.object({ type: z.literal('global') }).strict(),
@@ -47,8 +47,7 @@ export const TerminalQuickCommandUpdateItem = z.union([
 
 export const TerminalQuickCommandsUpdate = z
   .object({
-    // Why: a single host-side mutation preserves unrelated desktop/mobile edits
-    // and avoids retransmitting the full, multi-megabyte list for every small change.
+    // Mutate host-side to preserve unrelated desktop/mobile edits and avoid resending multi-megabyte lists.
     mutation: z.union([
       z
         .object({

@@ -3,7 +3,6 @@ import { _resetGitLabRateLimitCache } from './client'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
 import { _resetKnownHostsCache } from './gitlab-known-host-probe'
 
-/** The hoisted gl-utils / git-runner mocks every GitLab MR test file installs. */
 export type GitLabMrMocks = {
   glabExecFileAsyncMock: Mock
   glabApiWithHeadersMock: Mock
@@ -15,7 +14,6 @@ export type GitLabMrMocks = {
   gitExecFileAsyncMock: Mock
 }
 
-/** Answer the real default-branch resolver probes (#9171 guard). */
 export function primeGitDefaultBranch(
   gitExecFileAsyncMock: Mock,
   defaultRef = 'refs/remotes/origin/main'
@@ -28,7 +26,6 @@ export function primeGitDefaultBranch(
   })
 }
 
-/** Shared per-test reset: mocks, module caches, and the default host/source stubs. */
 export function resetGitLabMrMocks(mocks: GitLabMrMocks): void {
   mocks.glabExecFileAsyncMock.mockReset()
   mocks.glabApiWithHeadersMock.mockReset()

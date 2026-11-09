@@ -5,11 +5,12 @@ import {
   MessageSquarePlus,
   PenTool,
   Share2,
-  SquareCode
+  SquareCode,
+  X
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import {
   BrowserNavigationControlRow,
   type BrowserNavigationControls
@@ -28,6 +29,7 @@ import {
   BrowserChromeElementToolButtons,
   type BrowserChromeElementTools
 } from './browser-chrome-element-tool-buttons'
+import { useFloatingSplitBrowserClose } from './use-floating-split-browser-close'
 
 export type { BrowserChromeElementTools } from './browser-chrome-element-tool-buttons'
 
@@ -35,12 +37,7 @@ export type BrowserChromeMarkupTool = {
   active: boolean
   disabled: boolean
   onToggle: () => void
-  /**
-   * Whether this surface may spend the draw tool's one-per-install discovery popover. False on a
-   * hidden pane (a portaled layer would anchor to a zero-size trigger) and false on any surface
-   * that does not own the nudge — a preview consuming it would burn the single view on a reader
-   * who came for a document, before the browsing pane ever offered it.
-   */
+  /** Only the owning visible browser pane may consume the discovery hint; hidden panes misplace it and previews would spend it prematurely. */
   canShowDiscoveryHint: boolean
 }
 
@@ -80,26 +77,22 @@ function BrowserChromeActionButton({
   )
 }
 
-/**
- * The whole browser chrome bar — history, identity, tools — for every surface that renders guest
- * content: the browsing pane and the workspace document preview.
- *
- * Why one component and not a shared row plus two tool clusters: a tool added here has to appear
- * on both surfaces to stay honest, and a per-surface cluster is exactly how they drift apart. A
- * surface omits a tool only by passing null, and each null below says why that tool cannot apply.
- */
+/** Use one toolbar for browsing and document previews so tools cannot drift; each surface explicitly omits inapplicable tools. */
 export function BrowserChromeToolbar({
   controls,
   addressSlot,
   reloadControl,
   reloadLabel,
   importControl,
+  extensionActions,
+  passwordControl,
   elementTools,
   markup,
   shareControl,
   viewSource,
   openExternal,
   overflowMenu,
+  closeTabOwner,
   showTourAnchors = false,
   pinnedStage
 }: {
@@ -109,17 +102,31 @@ export function BrowserChromeToolbar({
   reloadLabel?: string
   /** Cookie import — a browsing session concept; null where there is no session to import into. */
   importControl?: ((compact: boolean) => React.ReactNode) | null
+  /**
+   * Extension buttons; null where the page's session runs no extensions (doc preview, route and
+   * SSH pages). `compact` folds the pinned buttons, leaving the extensions menu.
+   */
+  extensionActions?: ((compact: boolean) => React.ReactNode) | null
+  /** Saved-password offer beside the address bar; never folded, it only shows after a login. */
+  passwordControl?: React.ReactNode
   elementTools: BrowserChromeElementTools | null
   markup: BrowserChromeMarkupTool
   shareControl?: (control: BrowserChromeShareControl) => React.ReactNode
   viewSource: BrowserChromeToolAction | null
   openExternal: BrowserChromeToolAction | null
   overflowMenu: (props: BrowserChromeOverflowMenuProps) => React.ReactNode
+  /** The page whose tab the toolbar X closes in a floating split, where the panel's one tab row may be showing another split. */
+  closeTabOwner: { worktreeId: string; browserPageId: string }
   /** Only the browsing pane anchors the contextual tour; a second anchor would steal its steps. */
   showTourAnchors?: boolean
   /** Keeps the active contextual-tour control measurable while the remaining tools still fold. */
   pinnedStage?: BrowserChromeFoldStage
 }): React.JSX.Element {
+  const t = useTranslate()
+  const closeTab = useFloatingSplitBrowserClose(
+    closeTabOwner.worktreeId,
+    closeTabOwner.browserPageId
+  )
   const rowRef = useRef<HTMLDivElement>(null)
   const overflowTriggerRef = useRef<HTMLButtonElement>(null)
   const present: Record<BrowserChromeFoldStage, boolean> = {
@@ -128,6 +135,7 @@ export function BrowserChromeToolbar({
     external: openExternal !== null,
     devtools: viewSource !== null,
     share: shareControl != null,
+    extensions: extensionActions != null,
     draw: true,
     grab: elementTools !== null,
     annotate: elementTools !== null
@@ -144,7 +152,7 @@ export function BrowserChromeToolbar({
   if (elementTools && folded.has('grab')) {
     foldedTools.push({
       stage: 'grab',
-      label: translate('auto.components.browser.pane.BrowserPane.fdfc7fe0ef', 'Grab page element'),
+      label: t('auto.components.browser.pane.BrowserPane.fdfc7fe0ef', 'Grab page element'),
       icon: Crosshair,
       onSelect: () => elementTools.onStartIntent('copy'),
       disabled: elementTools.disabled,
@@ -155,10 +163,7 @@ export function BrowserChromeToolbar({
   if (elementTools && folded.has('annotate')) {
     foldedTools.push({
       stage: 'annotate',
-      label: translate(
-        'auto.components.browser.pane.BrowserPane.fc9be38f6f',
-        'Annotate page element'
-      ),
+      label: t('auto.components.browser.pane.BrowserPane.fc9be38f6f', 'Annotate page element'),
       icon: MessageSquarePlus,
       onSelect: () => elementTools.onStartIntent('annotate'),
       disabled: elementTools.disabled,
@@ -170,7 +175,7 @@ export function BrowserChromeToolbar({
   if (folded.has('draw')) {
     foldedTools.push({
       stage: 'draw',
-      label: translate('auto.components.browser-pane.markup.drawButton', 'Draw on screenshot'),
+      label: t('auto.components.browser-pane.markup.drawButton', 'Draw on screenshot'),
       icon: PenTool,
       onSelect: markup.onToggle,
       disabled: markup.disabled,
@@ -180,10 +185,7 @@ export function BrowserChromeToolbar({
   if (shareControl && folded.has('share')) {
     foldedTools.push({
       stage: 'share',
-      label: translate(
-        'auto.components.artifacts.ArtifactPublishButton.a4a49da6af',
-        'Share as artifact'
-      ),
+      label: t('auto.components.artifacts.ArtifactPublishButton.a4a49da6af', 'Share as artifact'),
       icon: Share2,
       onSelect: () => setSharePopoverOpen(true),
       deferUntilMenuClose: true
@@ -219,6 +221,7 @@ export function BrowserChromeToolbar({
       reloadLabel={reloadLabel}
       showTourAnchors={showTourAnchors}
     >
+      {passwordControl}
       {folded.has('import') ? null : importControl?.(folded.has('import-label'))}
 
       {elementTools ? (
@@ -253,6 +256,8 @@ export function BrowserChromeToolbar({
         <BrowserChromeActionButton action={openExternal} icon={ExternalLink} />
       ) : null}
 
+      {extensionActions?.(folded.has('extensions'))}
+
       <span className="relative inline-flex">
         {overflowMenu({
           triggerRef: overflowTriggerRef,
@@ -265,6 +270,8 @@ export function BrowserChromeToolbar({
           <span className="pointer-events-none absolute top-1 right-1 size-1.5 rounded-full bg-primary ring-2 ring-background" />
         ) : null}
       </span>
+
+      {closeTab ? <BrowserChromeActionButton action={closeTab} icon={X} /> : null}
     </BrowserNavigationControlRow>
   )
 }

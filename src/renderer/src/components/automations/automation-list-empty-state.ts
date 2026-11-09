@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type {
   AutomationHostFilterResolution,
@@ -9,13 +10,7 @@ import {
   type AutomationHostRecoveryAction
 } from './automation-host-status-descriptors'
 
-/**
- * Picks which empty/partial/failure state the list is actually in.
- *
- * The load-bearing rule: a host that is disconnected, unreachable, or not yet
- * hydrated is never described as empty. "No automations" is a claim about
- * storage, and none of those states have looked at storage.
- */
+/** Describe disconnected, unreachable or unhydrated hosts as unknown, never empty; no storage read established that claim. */
 
 export type AutomationListEmptyStateKind =
   /** Rows exist; render the list, not a state. */
@@ -46,10 +41,10 @@ export type AutomationListEmptyStateInput = {
   filterActive?: boolean
 }
 
-function hostLabel(input: AutomationListEmptyStateInput): string {
+function hostLabel(input: AutomationListEmptyStateInput, t: Translate = translate): string {
   return (
     input.resolution.entry?.label ??
-    translate('auto.components.automations.emptyState.unknownHost', 'this host')
+    t('auto.components.automations.emptyState.unknownHost', 'this host')
   )
 }
 
@@ -63,16 +58,19 @@ function state(
   return { kind, title, detail, recovery }
 }
 
-function resolveSelectedHostState(input: AutomationListEmptyStateInput): AutomationListEmptyState {
-  const label = hostLabel(input)
+function resolveSelectedHostState(
+  input: AutomationListEmptyStateInput,
+  t: Translate = translate
+): AutomationListEmptyState {
+  const label = hostLabel(input, t)
   const entry = input.resolution.entry
   const recovery = entry ? automationHostRecoveryActions(entry) : null
 
   if (input.resolution.status === 'loading' || entry?.catalogState === 'unhydrated') {
     return state(
       'host-loading',
-      translate('auto.components.automations.emptyState.hostLoading', 'Loading host…'),
-      translate(
+      t('auto.components.automations.emptyState.hostLoading', 'Loading host…'),
+      t(
         'auto.components.automations.emptyState.hostLoadingDetail',
         'Waiting for {{hostLabel}} to report its automations.',
         { hostLabel: label }
@@ -83,12 +81,12 @@ function resolveSelectedHostState(input: AutomationListEmptyStateInput): Automat
   if (input.resolution.status === 'unavailable' || entry?.authorityHealth === 'unavailable') {
     return state(
       'host-unavailable',
-      translate(
+      t(
         'auto.components.automations.emptyState.hostError',
         'Automations could not be loaded from {{hostLabel}}',
         { hostLabel: label }
       ),
-      translate(
+      t(
         'auto.components.automations.emptyState.hostUnavailableDetail',
         'The host could not be reached, so its automations are unknown.'
       ),
@@ -99,17 +97,17 @@ function resolveSelectedHostState(input: AutomationListEmptyStateInput): Automat
   if (entry?.authorityHealth === 'stale-error' || entry?.authorityHealth === 'incompatible') {
     return state(
       'host-error',
-      translate(
+      t(
         'auto.components.automations.emptyState.hostError',
         'Automations could not be loaded from {{hostLabel}}',
         { hostLabel: label }
       ),
       entry.authorityHealth === 'incompatible'
-        ? translate(
+        ? t(
             'auto.components.automations.emptyState.hostIncompatibleDetail',
             'This server is too old to scope automations by host.'
           )
-        : translate(
+        : t(
             'auto.components.automations.emptyState.hostStaleDetail',
             'The most recent refresh did not complete.'
           ),
@@ -121,12 +119,12 @@ function resolveSelectedHostState(input: AutomationListEmptyStateInput): Automat
     // Why: an unconnected target has told us nothing about storage, so "no automations" would overclaim.
     return state(
       'host-not-connected',
-      translate(
+      t(
         'auto.components.automations.emptyState.hostNotConnected',
         '{{hostLabel}} is not connected',
         { hostLabel: label }
       ),
-      translate(
+      t(
         'auto.components.automations.emptyState.hostNotConnectedDetail',
         'Connect to this host to see the automations stored for it.'
       ),
@@ -136,11 +134,9 @@ function resolveSelectedHostState(input: AutomationListEmptyStateInput): Automat
   }
   return state(
     'host-empty',
-    translate(
-      'auto.components.automations.emptyState.hostEmpty',
-      'No automations on {{hostLabel}}',
-      { hostLabel: label }
-    ),
+    t('auto.components.automations.emptyState.hostEmpty', 'No automations on {{hostLabel}}', {
+      hostLabel: label
+    }),
     null,
     input
   )
@@ -158,28 +154,29 @@ function groupHostStatus(entry: AutomationHostCatalogEntry): AutomationHostFilte
   return entry.authorityHealth === 'unavailable' ? 'unavailable' : 'ready'
 }
 
-/**
- * The All-hosts group asks the same question about one host that the single-host
- * view asks, so it asks it here. A second set of branches would drift, and the
- * drift is what lets a host nobody could reach be described as empty.
- */
+/** Reuse the single-host resolver for All-hosts groups so unreachable cannot drift into empty. */
 export function resolveAutomationHostGroupEmptyState(
-  input: AutomationListHostGroupEmptyStateInput
+  input: AutomationListHostGroupEmptyStateInput,
+  t?: Translate
 ): AutomationListEmptyState {
   const { entry, ...counts } = input
-  return resolveAutomationListEmptyState({
-    ...counts,
-    resolution: {
-      effective: { kind: 'host', host: entry.stableRef },
-      entry,
-      status: groupHostStatus(entry),
-      announceFallback: false
-    }
-  })
+  return resolveAutomationListEmptyState(
+    {
+      ...counts,
+      resolution: {
+        effective: { kind: 'host', host: entry.stableRef },
+        entry,
+        status: groupHostStatus(entry),
+        announceFallback: false
+      }
+    },
+    t
+  )
 }
 
 export function resolveAutomationListEmptyState(
-  input: AutomationListEmptyStateInput
+  input: AutomationListEmptyStateInput,
+  t: Translate = translate
 ): AutomationListEmptyState {
   if (input.visibleRowCount > 0) {
     return { kind: 'rows', title: '', detail: null, recovery: null }
@@ -189,11 +186,11 @@ export function resolveAutomationListEmptyState(
     return state(
       'search-no-match',
       input.searchActive
-        ? translate(
+        ? t(
             'auto.components.automations.emptyState.searchNoMatch',
             'No automations match your search'
           )
-        : translate(
+        : t(
             'auto.components.automations.emptyState.filtersNoMatch',
             'No automations match your filters'
           ),
@@ -204,7 +201,7 @@ export function resolveAutomationListEmptyState(
   if (input.resolution.effective.kind === 'all') {
     return state(
       'all-hosts-empty',
-      translate(
+      t(
         'auto.components.automations.emptyState.allHostsEmpty',
         'No automations across loaded hosts'
       ),
@@ -212,5 +209,5 @@ export function resolveAutomationListEmptyState(
       input
     )
   }
-  return resolveSelectedHostState(input)
+  return resolveSelectedHostState(input, t)
 }

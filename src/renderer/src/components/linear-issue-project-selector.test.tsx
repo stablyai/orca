@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type { LinearProjectSummary } from '../../../shared/linear/project-types'
-import { normalizeTaskSourceContext } from '../../../shared/task-source-context'
+import { normalizeTaskSourceContext } from '../../../shared/work-items/task-source-context'
 import { LinearIssueProjectSelector } from './linear-issue-project-selector'
 
 const runtimeMocks = vi.hoisted(() => ({
@@ -20,10 +20,10 @@ const storeMocks = vi.hoisted(() => ({
   }
 }))
 
-vi.mock('@/runtime/runtime-linear-project-client', () => ({
+vi.mock('@/runtime/linear/runtime-linear-project-client', () => ({
   linearListProjects: runtimeMocks.linearListProjects
 }))
-vi.mock('@/runtime/runtime-linear-issue-mutations', () => ({
+vi.mock('@/runtime/linear/runtime-linear-issue-client', () => ({
   linearUpdateIssue: runtimeMocks.linearUpdateIssue
 }))
 vi.mock('@/store', () => ({
@@ -90,18 +90,13 @@ describe('LinearIssueProjectSelector', () => {
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise)
     runtimeMocks.linearUpdateIssue.mockResolvedValue({ ok: true })
-    const onProjectChanged = vi.fn()
     const container = document.createElement('div')
     document.body.appendChild(container)
     const root = createRoot(container)
     roots.push(root)
     act(() => {
       root.render(
-        <LinearIssueProjectSelector
-          issue={selectedIssue}
-          onProjectChanged={onProjectChanged}
-          sourceContext={sourceContext}
-        />
+        <LinearIssueProjectSelector issue={selectedIssue} sourceContext={sourceContext} />
       )
     })
     act(() => {
@@ -153,8 +148,7 @@ describe('LinearIssueProjectSelector', () => {
     expect(storeMocks.state.patchLinearIssue).toHaveBeenCalledWith(
       'issue-1',
       { project: currentProject },
-      { sourceContext }
+      { scope: expect.objectContaining({ settings: sourceContext }) }
     )
-    expect(onProjectChanged).toHaveBeenCalledWith(currentProject)
   })
 })

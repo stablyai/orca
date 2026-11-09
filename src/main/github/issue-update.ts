@@ -7,8 +7,10 @@ import {
   type GitHubApiRepository
 } from './github-api-repository'
 import { acquire, classifyGhError, ghExecFileAsync, release } from './gh-utils'
+import { codeHostFailure, combinedClassifiedFailure } from '../../shared/code-host-failure-copy'
+import type { ClassifiedError } from '../../shared/classified-error'
+import { githubBodyImageUrls, githubBodyMediaHeaders } from './body-image-urls'
 
-// Use the selected source for issue-number edits.
 export async function updateIssue(
   repoPath: string,
   issueNumber: number,
@@ -17,7 +19,7 @@ export async function updateIssue(
   localGitOptions: LocalGitExecOptions = {},
   preference?: IssueSourcePreference,
   ownerRepoOverride?: GitHubApiRepository | null
-): Promise<{ ok: true } | { ok: false; error: string }> {
+): Promise<{ ok: true; bodyImageUrls?: Record<string, string> } | { ok: false; error: string }> {
   const { ownerRepo, ghOptions } = await resolveGitHubRepoExecution(
     repoPath,
     ownerRepoOverride ??
@@ -34,13 +36,13 @@ export async function updateIssue(
     localGitOptions
   )
   if (!ownerRepo) {
-    return { ok: false, error: 'Could not resolve GitHub owner/repo for this repository' }
+    return codeHostFailure('github.repoUnresolved')
   }
 
   const repo = `${ownerRepo.owner}/${ownerRepo.repo}`
-  const errors: string[] = []
+  const errors: ClassifiedError[] = []
+  let bodyImageUrls: Record<string, string> | undefined
 
-  // State change requires a separate command
   if (updates.state) {
     await acquire()
     try {
@@ -58,11 +60,9 @@ export async function updateIssue(
         await ghExecFileAsync(['issue', 'reopen', String(issueNumber), '--repo', repo], ghOptions)
       }
     } catch (err) {
+      // Why: gh exits 0 when the issue is already in the target state, so any failure is real.
       const stderr = err instanceof Error ? err.message : String(err)
-      // Treat "already closed/open" as a no-op
-      if (!stderr.toLowerCase().includes('already')) {
-        errors.push(classifyGhError(stderr).message)
-      }
+      errors.push(classifyGhError(stderr))
     } finally {
       release()
     }
@@ -71,26 +71,34 @@ export async function updateIssue(
   if (updates.body !== undefined) {
     await acquire()
     try {
-      await ghExecFileAsync(
+      const { stdout } = await ghExecFileAsync(
         [
           'api',
           '-X',
           'PATCH',
           `repos/${ownerRepo.owner}/${ownerRepo.repo}/issues/${issueNumber}`,
-          '--raw-field',
-          `body=${updates.body}`
+          ...githubBodyMediaHeaders(updates.body),
+          '--input',
+          '-'
         ],
-        ghOptions
+        { ...ghOptions, stdin: JSON.stringify({ body: updates.body }) }
       )
+      try {
+        const response: { body?: string; body_html?: string } = JSON.parse(stdout)
+        if (response?.body === updates.body) {
+          bodyImageUrls = githubBodyImageUrls(response.body, response.body_html)
+        }
+      } catch {
+        // Optional display data cannot turn an accepted edit into a failed write.
+      }
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
-      errors.push(classifyGhError(stderr).message)
+      errors.push(classifyGhError(stderr))
     } finally {
       release()
     }
   }
 
-  // Field edits (labels, assignees, title) via gh issue edit
   const editArgs: string[] = ['issue', 'edit', String(issueNumber), '--repo', repo]
   let hasEditArgs = false
 
@@ -121,14 +129,14 @@ export async function updateIssue(
       await ghExecFileAsync(editArgs, ghOptions)
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
-      errors.push(classifyGhError(stderr).message)
+      errors.push(classifyGhError(stderr))
     } finally {
       release()
     }
   }
 
   if (errors.length > 0) {
-    return { ok: false, error: errors.join('; ') }
+    return combinedClassifiedFailure(errors)
   }
-  return { ok: true }
+  return { ok: true, bodyImageUrls }
 }

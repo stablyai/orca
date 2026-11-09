@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  createTestStore,
-  makeTab,
-  makeWorktree,
-  seedStore
-} from '../../store/slices/store-test-helpers'
-import { createStoreSessionMockApi } from '../../store/slices/store-session-test-harness'
+import { createTestStore, seedStore } from '../../store/testing/app-store-test-fixture'
+import { makeTab } from '../../store/terminals/terminal-tab.test-fixture'
+import { makeWorktree } from '../../store/slices/worktrees/worktree.test-fixture'
+import { createStoreSessionMockApi } from '../../store/testing/app-store-session-api.test-fixture'
 
 const mocks = vi.hoisted(() => {
   const store: { current: ReturnType<typeof createTestStore> | null } = { current: null }
@@ -21,7 +18,9 @@ function testStore(): ReturnType<typeof createTestStore> {
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
 vi.mock('../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: mocks.callRuntimeRpc }))
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 vi.mock('../../store', () => ({
   useAppStore: {
     getState: () => testStore().getState(),
@@ -40,7 +39,6 @@ const LEAF = '11111111-1111-4111-8111-111111111111'
 
 type Listener = (payload: Record<string, unknown>) => void
 
-/** A CLI-created terminal: main wrote its tab; its layout frame drew it before the reveal or not. */
 function setup(frameDrewTab = true) {
   const listeners = new Map<string, Listener>()
   const replyTerminalCreate = vi.fn()
@@ -99,8 +97,7 @@ beforeEach(() => {
   mocks.callRuntimeRpc.mockClear()
 })
 
-// Main writes a CLI or phone terminal's tab before revealing it, so in a layout-owner build its
-// frame can draw the tab first; the reveal must reuse it under main's id, never add a second.
+// Main’s frame may precede reveal; reuse its ID rather than adding a second terminal tab.
 describe('revealing a terminal main created, in a layout-owner build', () => {
   it('shows the tab its frame drew, bound to main’s terminal, instead of a second one', () => {
     const { store, reveal, replyTerminalCreate } = setup()
@@ -133,7 +130,6 @@ describe('revealing a terminal main created, in a layout-owner build', () => {
 
   it('reuses the frame-drawn tab even when stale records leave the terminal’s owner unclear', () => {
     const { store, reveal, replyTerminalCreate } = setup()
-    // Two other rows still record the same terminal: today's lookup calls that ambiguous.
     store.setState({
       tabsByWorktree: {
         [WORKTREE]: [

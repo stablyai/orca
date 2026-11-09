@@ -7,6 +7,7 @@ type ComposerSourceContextStateInput = Pick<
   | 'initialLinkedWorkItem'
   | 'initialName'
   | 'initialPrompt'
+  | 'initialNote'
   | 'initialTaskSourceContext'
   | 'isProjectGroupTarget'
   | 'newWorkspaceDraft'
@@ -31,8 +32,8 @@ import {
   type TaskSourceContext,
   buildTaskSourceContextFromRepo,
   normalizeTaskSourceContext
-} from '../../../../shared/task-source-context'
-import { resolveJiraSourceHostId } from '@/lib/jira-source-host'
+} from '../../../../shared/work-items/task-source-context'
+import { resolveJiraSourceHostId } from '../../../../shared/jira/jira-source-host'
 import {
   normalizeGitHubLinkedWorkItem,
   getGitHubLinkedWorkItemIdentity
@@ -45,6 +46,7 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
     initialLinkedWorkItem,
     initialName,
     initialPrompt,
+    initialNote,
     initialTaskSourceContext,
     isProjectGroupTarget,
     newWorkspaceDraft,
@@ -82,7 +84,9 @@ export function useComposerSourceContextState(input: ComposerSourceContextStateI
     persistDraft ? (newWorkspaceDraft?.prompt ?? initialPrompt) : initialPrompt
   )
 
-  const [note, setNote] = useState<string>(persistDraft ? (newWorkspaceDraft?.note ?? '') : '')
+  const [note, setNote] = useState<string>(
+    persistDraft ? (newWorkspaceDraft?.note ?? initialNote ?? '') : (initialNote ?? '')
+  )
 
   const [attachmentPaths, setAttachmentPaths] = useState<string[]>(
     persistDraft ? (newWorkspaceDraft?.attachments ?? []) : []

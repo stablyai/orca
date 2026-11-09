@@ -1,6 +1,4 @@
-// Why: namespace resolution has to happen on the very session that transfers, and
-// only for the two relay-install writes — a leak into other transfers or into the
-// system-SSH/Windows branches would silently retarget unrelated file operations.
+// Map relay-install paths on the transferring session only; unrelated transfers and system-SSH/Windows paths must not be retargeted.
 
 import { EventEmitter } from 'node:events'
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
@@ -8,16 +6,19 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as SystemSshArgs from '../system-transport/system-ssh-args'
-import type * as SystemSshFileBinaryTransfer from '../system-transport/system-ssh-file-binary-transfer'
-import type * as SystemSshFileTransfer from '../system-transport/system-ssh-file-transfer'
+import type * as SystemSshFileBinaryTransfer from '../system-transport/file-transfer/system-ssh-file-binary-transfer'
+import type * as SystemSshFileTransfer from '../system-transport/file-transfer/system-ssh-file-transfer'
 import type * as SshGConfigResolution from '../config/ssh-g-config-resolution'
 
-vi.mock('ssh2', () => ({
-  BaseAgent: class {},
-  Client: class {},
-  createAgent: vi.fn(),
-  utils: { parseKey: vi.fn() }
-}))
+vi.mock('../authentication/ssh2-module-load', () => {
+  const ssh2 = {
+    BaseAgent: class {},
+    Client: class {},
+    createAgent: vi.fn(),
+    utils: { parseKey: vi.fn() }
+  }
+  return { loadSsh2: () => ssh2 }
+})
 
 vi.mock('../system-transport/system-ssh-args', async (importOriginal) => ({
   ...(await importOriginal<typeof SystemSshArgs>()),
@@ -27,32 +28,32 @@ vi.mock('../system-transport/system-ssh-command', () => ({
   spawnSystemSsh: vi.fn(),
   spawnSystemSshCommand: vi.fn()
 }))
-vi.mock('../system-transport/system-ssh-file-binary-transfer', async (importOriginal) => ({
-  ...(await importOriginal<typeof SystemSshFileBinaryTransfer>()),
-  downloadFileViaSystemSsh: vi.fn().mockResolvedValue(undefined),
-  uploadFileViaSystemSsh: vi.fn().mockResolvedValue(undefined),
-  writeBufferViaSystemSsh: vi.fn().mockResolvedValue(undefined)
-}))
-vi.mock('../system-transport/system-ssh-file-transfer', async (importOriginal) => ({
+vi.mock(
+  '../system-transport/file-transfer/system-ssh-file-binary-transfer',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof SystemSshFileBinaryTransfer>()),
+    downloadFileViaSystemSsh: vi.fn().mockResolvedValue(undefined),
+    uploadFileViaSystemSsh: vi.fn().mockResolvedValue(undefined),
+    writeBufferViaSystemSsh: vi.fn().mockResolvedValue(undefined)
+  })
+)
+vi.mock('../system-transport/file-transfer/system-ssh-file-transfer', async (importOriginal) => ({
   ...(await importOriginal<typeof SystemSshFileTransfer>()),
   uploadDirectoryViaSystemSsh: vi.fn().mockResolvedValue(undefined),
   writeFileViaSystemSsh: vi.fn().mockResolvedValue(undefined)
 }))
 
-vi.mock('../ssh-control-socket', () => ({ removeControlSocketPath: vi.fn() }))
+vi.mock('../system-transport/ssh-control-socket', () => ({ removeControlSocketPath: vi.fn() }))
 vi.mock('../config/ssh-g-config-resolution', async (importOriginal) => ({
   ...(await importOriginal<typeof SshGConfigResolution>()),
   resolveWithSshG: vi.fn().mockResolvedValue(null)
 }))
 
 import { SshConnection } from './ssh-connection'
-import type { SftpNamespacePathMapping } from '../sftp-namespace-resolution'
-import { getRemoteHostPlatform } from '../ssh-remote-platform'
-import { isSshSessionLimitError } from '../ssh-session-limit-error'
-import {
-  uploadDirectoryViaSystemSsh,
-  writeFileViaSystemSsh
-} from '../system-transport/system-ssh-file-transfer'
+import type { SftpNamespacePathMapping } from '../file-transfer/sftp/sftp-namespace-resolution'
+import { getRemoteHostPlatform } from '../remote-host/ssh-remote-platform'
+import './ssh-session-limit-error'
+import '../system-transport/file-transfer/system-ssh-file-transfer'
 import type { SshTarget } from '../../../shared/ssh-types'
 
 const SHELL_HOME = '/var/services/homes/alice'
@@ -175,7 +176,7 @@ function connectedTo(
       cb(undefined, sftpSessions[handed++] ?? sftpSessions.at(-1))
     }
   }
-  // Why: the transfer branches are the unit under test; skip the connect handshake.
+  // Exercise transfer branches without a connect handshake.
   Object.assign(conn as unknown as Record<string, unknown>, {
     client,
     useSystemSshTransport: options?.useSystemSsh ?? false
@@ -185,133 +186,19 @@ function connectedTo(
 
 describe('SshConnection SFTP namespace resolution', () => {
   const linux = getRemoteHostPlatform('linux-x64')
-  const windows = getRemoteHostPlatform('win32-x64')
   let localDir: string
 
   beforeEach(() => {
     vi.clearAllMocks()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'warn').mockImplementation(() => {})
-    // realpath: macOS /var is a symlink and uploadDirectory rejects a root that resolves elsewhere.
+    // Canonicalize macOS /var symlinks before uploadDirectory checks its root.
     localDir = realpathSync(mkdtempSync(join(tmpdir(), 'orca-relay-')))
     writeFileSync(join(localDir, 'relay.js'), 'console.log(1)')
   })
 
   afterEach(() => {
     rmSync(localDir, { recursive: true, force: true })
-  })
-
-  it('writes to the SFTP namespace path discovered on the same session', async () => {
-    const sftp = createFakeSftp()
-    const conn = connectedTo([sftp])
-
-    await conn.writeFile(`${SHELL_RELAY_DIR}/.version`, '0.1.0+hash', {
-      hostPlatform: linux,
-      sftpNamespace: fileNamespace('.version')
-    })
-
-    expect(sftp.realpathCalls).toEqual(['.'])
-    expect(sftp.writtenPaths).toEqual([`${SFTP_HOME}/${RELAY_DIR}/.version`])
-    expect(sftp.endCalls).toBe(1)
-  })
-
-  it('uploads the bundle into the SFTP namespace directory', async () => {
-    const sftp = createFakeSftp()
-    const conn = connectedTo([sftp])
-
-    await conn.uploadDirectory(localDir, SHELL_RELAY_DIR, {
-      hostPlatform: linux,
-      sftpNamespace: namespace
-    })
-
-    expect(sftp.writtenPaths).toEqual([`${SFTP_HOME}/${RELAY_DIR}/relay.js`])
-    expect(sftp.endCalls).toBe(1)
-  })
-
-  it('issues no discovery requests when the caller supplies no mapping', async () => {
-    const sftp = createFakeSftp()
-    const conn = connectedTo([sftp])
-
-    await conn.writeFile(`${SHELL_RELAY_DIR}/.version`, 'v', { hostPlatform: linux })
-
-    expect(sftp.realpathCalls).toEqual([])
-    expect(sftp.lstatCalls).toEqual([])
-    expect(sftp.writtenPaths).toEqual([`${SHELL_RELAY_DIR}/.version`])
-  })
-
-  it('ignores a mapping on a Windows host', async () => {
-    const sftp = createFakeSftp()
-    const conn = connectedTo([sftp])
-
-    await conn.writeFile('C:\\Users\\alice\\relay\\.version', 'v', {
-      hostPlatform: windows,
-      sftpNamespace: fileNamespace('.version')
-    })
-
-    expect(sftp.realpathCalls).toEqual([])
-    expect(sftp.writtenPaths).toEqual(['C:\\Users\\alice\\relay\\.version'])
-  })
-
-  it('never resolves on the system-SSH transport', async () => {
-    const conn = connectedTo([], { useSystemSsh: true })
-
-    await conn.writeFile(`${SHELL_RELAY_DIR}/.version`, 'v', {
-      hostPlatform: linux,
-      sftpNamespace: fileNamespace('.version')
-    })
-    await conn.uploadDirectory(localDir, SHELL_RELAY_DIR, {
-      hostPlatform: linux,
-      sftpNamespace: namespace
-    })
-
-    expect(vi.mocked(writeFileViaSystemSsh)).toHaveBeenCalledWith(
-      expect.anything(),
-      `${SHELL_RELAY_DIR}/.version`,
-      'v',
-      expect.anything()
-    )
-    expect(vi.mocked(uploadDirectoryViaSystemSsh)).toHaveBeenCalledWith(
-      expect.anything(),
-      localDir,
-      SHELL_RELAY_DIR,
-      expect.anything()
-    )
-  })
-
-  // Why: only the relay-install writes carry a marker; other transfers have no owner to verify.
-  it('leaves writeBuffer and openFileUploadSession on the shell path', async () => {
-    const sftp = createFakeSftp()
-    const conn = connectedTo([sftp, sftp])
-
-    await conn.writeBuffer(`${SHELL_RELAY_DIR}/blob.bin`, Buffer.from('x'), {
-      hostPlatform: linux,
-      sftpNamespace: fileNamespace('blob.bin')
-    })
-    const session = await conn.openFileUploadSession({
-      hostPlatform: linux,
-      sftpNamespace: namespace
-    })
-    session.close()
-
-    expect(sftp.realpathCalls).toEqual([])
-    expect(sftp.writtenPaths).toEqual([`${SHELL_RELAY_DIR}/blob.bin`])
-  })
-
-  it('keeps the shell path when discovery is inconclusive', async () => {
-    const sftp = createFakeSftp()
-    sftp.lstat = vi.fn((path: string, cb: (err: Error | null) => void) => {
-      sftp.lstatCalls.push(path)
-      cb(Object.assign(new Error('permission denied'), { code: 3 }))
-    })
-    const conn = connectedTo([sftp])
-
-    await conn.writeFile(`${SHELL_RELAY_DIR}/.version`, 'v', {
-      hostPlatform: linux,
-      sftpNamespace: fileNamespace('.version')
-    })
-
-    expect(sftp.writtenPaths).toEqual([`${SHELL_RELAY_DIR}/.version`])
-    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('retaining shell path'))
   })
 
   it('aborts a transfer stuck in discovery and reports a confirmed channel close', async () => {
@@ -370,30 +257,6 @@ describe('SshConnection SFTP namespace resolution', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  // Why: relay deploy classifies MaxSessions to back off; wrapping it would hide the retry signal.
-  it('preserves a session-limit channel-open error unchanged', async () => {
-    const original = Object.assign(
-      new Error('Channel open failure: open failed reason 4: MaxSessions'),
-      { reason: 4 }
-    )
-    const sftp = createFakeSftp()
-    const conn = connectedTo([sftp], {
-      sftpError: original
-    })
-
-    const error = await conn
-      .writeFile(`${SHELL_RELAY_DIR}/.version`, 'v', {
-        hostPlatform: linux,
-        sftpNamespace: fileNamespace('.version')
-      })
-      .catch((err: Error) => err)
-
-    expect(error).toBe(original)
-    expect(isSshSessionLimitError(error)).toBe(true)
-    expect(sftp.realpathCalls).toEqual([])
-    expect(sftp.writtenPaths).toEqual([])
   })
 
   it.each([

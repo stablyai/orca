@@ -13,13 +13,12 @@ import {
   mergeRetiredNameRegistries,
   type RetiredNameRegistry
 } from '../../../shared/worktree/retired-name-registry'
-import { recordRetirementNamespaceRegistry } from '../../worktree-retirement-namespace'
+import { recordRetirementNamespaceRegistry } from '../../workspaces/removal/retirement/worktree-retirement-namespace'
 import {
   applyPreparedOrcadMigrationWorkspaceSession,
+  prepareOrcadMigrationWorkspaceSession,
   type PreparedOrcadMigrationWorkspaceSession
 } from './orcad-destination-workspace-session'
-import { prepareOrcadMigrationSessionWithDrafts } from './orcad-destination-editor-drafts'
-import type { OrcadMigrationEditorDraft } from '../../../shared/orcad-migration/orcad-migration-editor-drafts'
 import {
   applyPreparedOrcadMigrationAutomationState,
   prepareOrcadMigrationAutomationState,
@@ -30,6 +29,11 @@ import {
   prepareOrcadMigrationClientState,
   type PreparedOrcadMigrationClientState
 } from './orcad-destination-client-state'
+import {
+  applyImportedLineage,
+  reconcileImportedLineage,
+  type PreparedChildLineage
+} from './orcad-dormant-lineage-reconciliation'
 
 type KeyedRow<T> = { key: string; value: T }
 type RegistryUpdate = { key: string; value: RetiredNameRegistry }
@@ -37,8 +41,7 @@ type RegistryUpdate = { key: string; value: RetiredNameRegistry }
 export type PreparedOrcadMigrationDormantState = {
   payload: OrcadMigrationDormantStatePayload | undefined
   newWorktreeMeta: KeyedRow<WorktreeMeta>[]
-  newWorktreeLineage: KeyedRow<WorktreeLineage>[]
-  newWorkspaceLineage: KeyedRow<WorkspaceLineage>[]
+  lineage: PreparedChildLineage[]
   newSparsePresets: SparsePreset[]
   retiredNameUpdates: RegistryUpdate[]
   retirementNamespaceUpdates: RegistryUpdate[]
@@ -47,11 +50,9 @@ export type PreparedOrcadMigrationDormantState = {
   clientState: PreparedOrcadMigrationClientState
 }
 
-/** `editorDrafts`: the verified declared drafts at commit; absent while staging. */
 export function prepareOrcadMigrationDormantState(
   manifest: OrcadMigrationManifest,
-  state: PersistedState,
-  editorDrafts?: readonly OrcadMigrationEditorDraft[]
+  state: PersistedState
 ): PreparedOrcadMigrationDormantState {
   const payload = manifest.payload.dormantState
   if (!payload) {
@@ -91,16 +92,7 @@ export function prepareOrcadMigrationDormantState(
       'worktree_meta',
       omitDefaultWorktreeMetaFields
     ),
-    newWorktreeLineage: selectNewKeyedRows(
-      worktreeLineage,
-      state.worktreeLineageById,
-      'worktree_lineage'
-    ),
-    newWorkspaceLineage: selectNewKeyedRows(
-      workspaceLineage,
-      state.workspaceLineageByChildKey,
-      'workspace_lineage'
-    ),
+    lineage: prepareImportedLineage(state, worktreeLineage, workspaceLineage),
     newSparsePresets,
     retiredNameUpdates: payload.retiredWorktreeNames.map((entry) => ({
       key: entry.repoId,
@@ -119,7 +111,7 @@ export function prepareOrcadMigrationDormantState(
         entry.registry
       )
     })),
-    workspaceSession: prepareOrcadMigrationSessionWithDrafts(payload, state, editorDrafts),
+    workspaceSession: prepareOrcadMigrationWorkspaceSession(payload.workspaceSession, state),
     automationState: prepareOrcadMigrationAutomationState(
       payload.automations,
       payload.automationRuns,
@@ -136,12 +128,7 @@ export function applyPreparedOrcadMigrationDormantState(
   for (const entry of prepared.newWorktreeMeta) {
     state.worktreeMeta[entry.key] = entry.value
   }
-  for (const entry of prepared.newWorktreeLineage) {
-    state.worktreeLineageById[entry.key] = entry.value
-  }
-  for (const entry of prepared.newWorkspaceLineage) {
-    state.workspaceLineageByChildKey[entry.key] = entry.value
-  }
+  applyImportedLineage(prepared.lineage, state)
   for (const preset of prepared.newSparsePresets) {
     state.sparsePresetsByRepo[preset.repoId] = [
       ...(state.sparsePresetsByRepo[preset.repoId] ?? []),
@@ -169,6 +156,17 @@ export function applyPreparedOrcadMigrationDormantState(
   applyPreparedOrcadMigrationClientState(prepared.clientState, state)
 }
 
+/** Same-key mismatches refuse first, as for every dormant row; then each child gets one parent. */
+function prepareImportedLineage(
+  state: PersistedState,
+  worktreeLineage: KeyedRow<WorktreeLineage>[],
+  workspaceLineage: KeyedRow<WorkspaceLineage>[]
+): PreparedChildLineage[] {
+  selectNewKeyedRows(worktreeLineage, state.worktreeLineageById, 'worktree_lineage')
+  selectNewKeyedRows(workspaceLineage, state.workspaceLineageByChildKey, 'workspace_lineage')
+  return reconcileImportedLineage(state, { worktreeLineage, workspaceLineage })
+}
+
 function selectNewKeyedRows<T>(
   incoming: KeyedRow<T>[],
   existing: Record<string, T>,
@@ -192,8 +190,7 @@ function emptyPreparedDormantState(): PreparedOrcadMigrationDormantState {
   return {
     payload: undefined,
     newWorktreeMeta: [],
-    newWorktreeLineage: [],
-    newWorkspaceLineage: [],
+    lineage: [],
     newSparsePresets: [],
     retiredNameUpdates: [],
     retirementNamespaceUpdates: [],

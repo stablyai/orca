@@ -1,9 +1,4 @@
-/**
- * One list off an enrichment read in the resume sheet's metadata load.
- *
- * Optional-chained on purpose: main tolerated both a refusal and a null result here, so folding
- * the member read into the operation's own reader would have started throwing on the latter.
- */
+// Keep optional member read at caller: resume enrichment tolerates refusal/null; moving read into operation would make null throw.
 export function readAcceptedResumeList<T>(
   accepted: { accepted: false } | { accepted: true; value: unknown } | null,
   key: string

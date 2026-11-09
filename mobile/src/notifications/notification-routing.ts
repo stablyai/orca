@@ -1,7 +1,7 @@
 import { parseExecutionHostId } from '../../../src/shared/execution-host'
 import type { HostStackRouteTarget } from '../navigation/host-stack-navigation'
 import { mobileSessionRouteTarget } from '../session/mobile-session-route'
-import type { HostCredentialStatus } from '../transport/types'
+import type { HostCredentialStatus } from '../transport/hosts/host-profile'
 
 export type NotificationNavigationOptions = {
   knownHostIds?: ReadonlySet<string>
@@ -12,8 +12,7 @@ function readNonEmptyString(value: unknown): string | null {
   return typeof value === 'string' && value.trim().length > 0 ? value : null
 }
 
-/** Where a tap should land. `sessionTarget` is null for a host-only notification, whose
- *  `/h/<id>` push is shallow enough to need no host-stack coordination. */
+// Host-only taps need no stack coordination; sessionTarget identifies deep workspace destinations.
 export type NotificationNavigationTarget = Readonly<{
   hostId: string
   sessionTarget: HostStackRouteTarget | null
@@ -47,7 +46,7 @@ export function getNotificationNavigationTarget(
   }
 
   const worktreeId = readNonEmptyString(record.worktreeId)
-  // Only a server the desktop relays to; anything else opens the desktop's own workspace, as before.
+  // Accept only relayed servers; unknown execution hosts retain the paired desktop route.
   const executionHost = parseExecutionHostId(readNonEmptyString(record.executionHost))
   const credentialStatus = options.credentialStatusByHostId?.get(hostId)
   return {

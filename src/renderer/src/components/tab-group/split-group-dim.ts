@@ -1,0 +1,1 @@
+export const UNFOCUSED_SPLIT_GROUP_OPACITY = 0.95

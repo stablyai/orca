@@ -1,13 +1,7 @@
 import type { SmartWorkspaceNameSelection } from '@/components/new-workspace/smart-workspace-name-field-model'
 import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
 
-/**
- * Whether the composer offers a base ref for the worktree it is about to create.
- *
- * The name field's tabs pick how the workspace is NAMED; the base ref is a separate
- * decision, so the picker stays available for every naming source — except those that
- * already carry a base of their own.
- */
+/** Naming source and base ref are independent, except PR/MR/branch selections already carry their own base. */
 export function shouldShowComposerBaseRefPicker(args: {
   selectedRepoIsGit: boolean
   branchesEnabled: boolean
@@ -20,8 +14,7 @@ export function shouldShowComposerBaseRefPicker(args: {
   if (args.smartNameMode === 'branches') {
     return false
   }
-  // Why: these already carry a base — a PR/MR pins its own head, and a branch pick IS the base,
-  // where overriding would silently turn a checkout of it into a new branch off something else.
+  // PR/MR heads and branch picks define the checkout; overriding would silently create a different branch.
   return (
     args.smartNameSelectionKind !== 'github-pr' &&
     args.smartNameSelectionKind !== 'gitlab-mr' &&

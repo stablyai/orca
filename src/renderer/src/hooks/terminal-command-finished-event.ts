@@ -6,8 +6,7 @@ export type TerminalCommandFinishedEventDetail = {
   exitCode: number | null
 }
 
-// Why: the OSC 133;D handler lives in a per-pane closure; a window event lets
-// decoupled consumers react without reaching into terminal internals.
+// Window events let decoupled consumers observe per-pane OSC completion without accessing terminal internals.
 export function dispatchTerminalCommandFinishedEvent(
   worktreeId: string,
   exitCode: number | null

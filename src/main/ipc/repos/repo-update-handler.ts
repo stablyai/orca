@@ -1,6 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import { ipcMain } from 'electron'
-import type { Store } from '../../persistence'
+import type { Store } from '../../persistence/loading-store/store'
 import type { Repo } from '../../../shared/repo-types'
 import type { RepoHostTarget } from '../../../shared/repo-host-identity'
 import { isFolderRepo } from '../../../shared/repo-kind'
@@ -10,14 +10,14 @@ import { normalizeRepoBadgeColor } from '../../../shared/repo-badge-color'
 import { sanitizeRepoIcon } from '../../../shared/repo-icon'
 import { normalizeGhAccountBinding } from '../../../shared/github/account-binding'
 import type { GhAccountBinding } from '../../../shared/github/account-binding'
-import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control-ai'
+import { normalizeRepoSourceControlAiOverrides } from '../../../shared/source-control/ai/settings/source-control-ai-repo-settings'
 import {
   normalizeCustomWorktreeVisibilitySources,
   normalizeWorktreeVisibilitySourcePreferences
 } from '../../../shared/worktree/visibility-sources'
-import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
-import { commitProvenRepoKindChange } from '../../folder-repo-git-conversion'
-import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { prepareLocalWorktreeRootForRepo } from '../../workspaces/creation/worktree-root-preparation'
+import { commitProvenRepoKindChange } from '../../workspaces/catalog/folder-repo-git-conversion'
+import { invalidateAuthorizedRootsCache } from '../worktrees/removal/registered-worktree-roots-cache'
 import { notifyReposChanged } from './repos-changed-notification'
 import {
   assertWslMoveProjectWritable,
@@ -40,21 +40,23 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
             | 'repoIcon'
             | 'upstream'
             | 'hookSettings'
+            | 'editorFormatter'
             | 'worktreeBaseRef'
             | 'worktreeBasePath'
             | 'kind'
             | 'symlinkPaths'
             | 'issueSourcePreference'
             | 'forkSyncMode'
+            | 'agentWorkspaceTrust'
             | 'externalWorktreeVisibilityPromptDismissedAt'
             | 'externalWorktreeInboxBaselinePaths'
             | 'importedExternalWorktreePaths'
             | 'customWorktreeVisibilitySources'
             | 'worktreeVisibilitySourcePreferences'
             | 'projectGroupId'
-            | 'projectGroupOrder'
           >
         > & {
+          projectGroupOrder?: number | null
           externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
           agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
           sourceControlAi?: Repo['sourceControlAi'] | null
@@ -68,7 +70,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
       if (isWslMoveSourceHost(args.hostId)) {
         assertWslMoveProjectWritable(store, { repoId: args.repoId })
       }
-      // Why: TS is erased at runtime, so a garbage preference would silently collapse to 'auto' in resolveIssueSource; strip it, keeping other fields.
+      // Invalid preferences would silently resolve to auto; discard only the malformed field.
       const updates = { ...args.updates }
       if (
         'issueSourcePreference' in updates &&
@@ -88,7 +90,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
       ) {
         delete updates.forkSyncMode
       }
-      // Why: null is the transport sentinel for clearing the binding; malformed shapes are dropped, never coerced.
+      // Null clears the binding; malformed values must not become account selections.
       if ('ghAccount' in updates) {
         if (updates.ghAccount == null) {
           updates.ghAccount = null
@@ -101,7 +103,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           }
         }
       }
-      // Why: worktree materialization calls .trim() per entry, so strip non-string[] at the boundary to avoid a silent throw later.
+      // Worktree materialization trims each path; reject malformed arrays at the IPC boundary.
       if ('symlinkPaths' in updates && updates.symlinkPaths !== undefined) {
         const v = updates.symlinkPaths as unknown
         if (!Array.isArray(v) || !v.every((e) => typeof e === 'string')) {
@@ -179,7 +181,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
       ) {
         delete updates.externalWorktreeVisibilityPromptDismissedAt
       }
-      // Why: null is the transport sentinel for clearing discovery suppression.
+      // Null clears discovery suppression across the transport.
       if (
         'externalWorktreeDiscoverySuppressedAt' in updates &&
         updates.externalWorktreeDiscoverySuppressedAt === null
@@ -211,7 +213,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
           delete updates.importedExternalWorktreePaths
         }
       }
-      // Why: null is the transport sentinel for clearing Source Control AI, so flow it through as undefined instead of deleting.
+      // Null clears Source Control AI; retain the field as undefined for the store update.
       if ('sourceControlAi' in updates && updates.sourceControlAi === null) {
         updates.sourceControlAi = undefined
       } else if ('sourceControlAi' in updates && updates.sourceControlAi !== undefined) {
@@ -228,7 +230,7 @@ export function registerRepoUpdateHandler(mainWindow: BrowserWindow, store: Stor
       if (args.hostId && !hostId) {
         return null
       }
-      // Why: some renderer callers send only the id; they keep the first row with it, as before.
+      // ID-only callers retain legacy first-match behavior.
       const target: RepoHostTarget | undefined = hostId
         ? { id: args.repoId, executionHostId: hostId }
         : store.getRepo(args.repoId)

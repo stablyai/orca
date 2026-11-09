@@ -1,87 +1,138 @@
-import { openTranscriptAfterHold } from './mobile-structured-transcript-subscription'
-import { startMobileStructuredTranscriptRead } from './mobile-structured-transcript-read'
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
-import type { AgentJournalCursor } from '../../../src/shared/agent-session-journal-types'
-import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
+import { isRootAgentJournalItem } from '../../../src/shared/agent-session/journal/agent-session-journal-producer'
 import type {
-  AgentSessionHistoryPage,
-  AgentSessionHistoryResult,
-  AgentSessionSubscribeEvent
-} from '../../../src/shared/agent-session-wire'
-import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../src/shared/agent-session-wire'
-import { structuredAgentSessionHolderId } from '../../../src/shared/structured-agent-session-holder'
+  AgentSessionQueuedMessage,
+  AgentSessionQueuePause
+} from '../../../src/shared/agent-session/requests/agent-session-queued-message-wire'
+import {
+  type AgentSessionHistoryResult,
+  AGENT_SESSION_HISTORY_MAX_LIMIT
+} from '../../../src/shared/agent-session/agent-session-wire'
+import { structuredAgentSessionHolderId } from '../../../src/shared/agent-session/view/structured-agent-session-holder'
+import { startStructuredAgentSessionLiveRead } from '../../../src/shared/agent-session/structured-agent-session-live-read'
+import {
+  type AgentSessionTextAppendCapabilities,
+  agentSessionTextAppendRequest
+} from '../../../src/shared/agent-session/agent-session-text-append'
+import { isFinalAgentSessionReadRefusal } from '../../../src/shared/agent-session/failures/structured-agent-session-read-refusal'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   oldestStructuredAgentSessionCursor,
-  reduceStructuredAgentSession,
   type StructuredAgentSessionAction,
   type StructuredAgentSessionState
-} from '../../../src/shared/structured-agent-session-reducer'
-import type { RpcClient } from '../transport/rpc-client'
+} from '../../../src/shared/agent-session/structured-agent-session-reducer'
+import { subscribeConnectionRevival } from '../diagnostics/connection/connection-revival-signal'
+import {
+  readRuntimeStatusProbe,
+  recordRuntimeStatusProbe
+} from '../transport/connection/runtime-status-probe'
+import { decodeHostStatusReply, readHostStatusReply } from '../query/host-status-query'
+import { hostStatusSchema } from '../transport/hosts/host-status-reply-schema'
+import {
+  AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY
+} from '../../../src/shared/agent-session/agent-session-runtime-capabilities'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   agentSessionReadFailureRefusal,
-  agentSessionReadFailureText,
+  agentSessionReadRefusalText,
   callAgentSession
 } from './mobile-structured-agent-session-rpc'
+import { subscribeTranscriptAfterHold } from './mobile-structured-transcript-subscription'
+import { useMobileOlderPageLoader, type OlderPagePhase } from './use-mobile-older-page-loader'
+import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
 import {
-  reduceMobileQueuePause,
-  reduceMobileQueuedMessageFeed,
-  type MobileQueuedMessageFeed,
-  type MobileQueuePause
-} from './mobile-structured-queued-message-feed'
-
-type QueuedFeed = {
-  messages: MobileQueuedMessageFeed
-  pause: MobileQueuePause
-}
-const NO_QUEUED_FEED: QueuedFeed = { messages: null, pause: null }
+  reduceStructuredChatState,
+  noteChatTranscript,
+  storedStructuredSessionState,
+  storedStructuredCopy,
+  unconfirmedStructuredStateSavedAt
+} from './native-chat/mobile-native-chat-transcript-writer'
+import { useStoredChatTranscript } from './native-chat/use-stored-chat-transcript'
 
 const MAX_RETAINED_SESSION_STATES = 32
-/** Bounded so a busy stream cannot turn one Load-earlier tap into an endless read chain. */
-const OLDER_PAGE_ANCHOR_ATTEMPTS = 3
-/** Bounds the pages one Load-earlier reads past that hold only subagent rows. */
-const OLDER_PAGES_PER_LOAD = 8
+
+/** The host already batches streamed text, so phones merge only within about a frame; desktop keeps the shared window. */
+const STREAMED_TEXT_COALESCE_MS = 16
+
+// Read alongside the hold, so the stream's first open knows whether to ask for appends: this
+// connection's probe, else the status the shell proved (direct hosts only), else the connection's status read.
+async function hostTextAppends(
+  client: RpcClient
+): Promise<AgentSessionTextAppendCapabilities | null> {
+  let status = readRuntimeStatusProbe(client)
+  const shell =
+    status === undefined ? hostStatusSchema.safeParse(client.getShellHostStatus?.()) : null
+  if (shell?.success) {
+    status = shell.data
+  } else if (status === undefined) {
+    const reply = await readHostStatusReply(client, {
+      timeoutMs: 15_000,
+      failWhenDisconnected: true
+    }).catch(() => null)
+    const landed = reply ? decodeHostStatusReply(reply) : null
+    if (landed) {
+      recordRuntimeStatusProbe(client, landed.status)
+    }
+    status = landed?.status
+  }
+  const advertised = status?.capabilities ?? []
+  return agentSessionTextAppendRequest({
+    textAppend: advertised.includes(AGENT_SESSION_TEXT_APPEND_RUNTIME_CAPABILITY),
+    toolOutputAppend: advertised.includes(AGENT_SESSION_TOOL_OUTPUT_APPEND_RUNTIME_CAPABILITY)
+  })
+}
 
 export function useMobileStructuredAgentState(args: {
+  onCommandsChanged?: () => void
   client: RpcClient | null
   sessionId: string | null
   sessionKey: string | null
   enabled: boolean
-  /** Live transport only. The hold dies with the connection and has to be retaken,
-   *  but the transcript must survive the outage rather than blank out with it. */
+  // Reacquire holds after transport loss while keeping the transcript visible through the outage.
   connected: boolean
 }): {
   state: StructuredAgentSessionState
   stateRef: { readonly current: StructuredAgentSessionState }
-  /** Host-held queued drafts from the live stream; null until the host claims any. */
-  queuedMessages: MobileQueuedMessageFeed
-  /** The whole queue's pause, published with the drafts. */
-  queuePause: MobileQueuePause
-  loadingOlder: boolean
+  /** Null until the host publishes a queue (older hosts never do). */
+  queuedMessages: AgentSessionQueuedMessage[] | null
+  queuePause: AgentSessionQueuePause | null
+  olderPages: OlderPagePhase
   loadEarlier: () => void
+  /** When the transcript on screen was saved, while it is an earlier launch's copy no read has confirmed. */
+  savedAt: number | null
 } {
   const { client, connected, enabled, sessionId, sessionKey } = args
-  // Keep a bounded cache so offline tab switches select the right transcript
-  // synchronously without growing for the lifetime of the app.
+  const commandsChanged = useRef(args.onCommandsChanged)
+  useLayoutEffect(() => {
+    commandsChanged.current = args.onCommandsChanged
+  }, [args.onCommandsChanged])
+  // Bound synchronous per-session retention so offline tab switches cannot grow memory indefinitely.
   const [sessionStates, setSessionStates] = useState<Map<string, StructuredAgentSessionState>>(
     () => new Map()
   )
-  const [queuedBySession, setQueuedBySession] = useState<Map<string, QueuedFeed>>(() => new Map())
-  const state =
-    enabled && sessionKey
-      ? (sessionStates.get(sessionKey) ?? EMPTY_STRUCTURED_AGENT_SESSION)
-      : EMPTY_STRUCTURED_AGENT_SESSION
-  const queued =
-    (enabled && sessionKey ? queuedBySession.get(sessionKey) : undefined) ?? NO_QUEUED_FEED
-  const queuedMessages = queued.messages
-  const [loadingOlder, setLoadingOlder] = useState(false)
+  const retained = enabled && sessionKey ? sessionStates.get(sessionKey) : undefined
+  const stored =
+    enabled && sessionKey && !retained ? storedStructuredSessionState(sessionKey) : null
+  const state = retained ?? stored ?? EMPTY_STRUCTURED_AGENT_SESSION
+  // The phone's copy is written when a turn settles, on hidden and when the chat closes; never per frame.
+  const liveRead = enabled && sessionKey !== null && state.status === 'ready'
+  useEffect(() => {
+    if (liveRead && sessionKey) {
+      const isLive = () => client?.getState() === 'connected'
+      noteChatTranscript(sessionKey, state, isLive, (at) => storedStructuredCopy(state, at))
+    }
+  }, [client, liveRead, sessionKey, state])
+  const readingStore = useStoredChatTranscript({
+    identity: enabled && sessionId ? sessionKey : null,
+    read: !retained,
+    turnSettled: liveRead && !mobileStructuredAgentSessionWorking(state)
+  })
+  const { phase: olderPages, load: loadOlderPages, supersede } = useMobileOlderPageLoader()
   const stateRef = useRef(state)
-  const sessionKeyRef = useRef(sessionKey)
-  const streamGenerationRef = useRef(0)
   useLayoutEffect(() => {
     stateRef.current = state
-    sessionKeyRef.current = sessionKey
-  }, [sessionKey, state])
+  }, [state])
 
   const apply = useCallback(
     (action: StructuredAgentSessionAction) => {
@@ -89,8 +140,11 @@ export function useMobileStructuredAgentState(args: {
         return
       }
       setSessionStates((current) => {
-        const previous = current.get(sessionKey) ?? EMPTY_STRUCTURED_AGENT_SESSION
-        const next = reduceStructuredAgentSession(previous, action, Date.now())
+        const previous =
+          current.get(sessionKey) ??
+          storedStructuredSessionState(sessionKey) ??
+          EMPTY_STRUCTURED_AGENT_SESSION
+        const next = reduceStructuredChatState(previous, action, Date.now())
         if (next === previous) {
           return current
         }
@@ -109,77 +163,53 @@ export function useMobileStructuredAgentState(args: {
     },
     [sessionKey]
   )
-  // The refusal rides beside its words, so the view can tell a failure no retry gets past.
-  const applyReadFailure = useCallback(
-    (failure: unknown) => {
-      const refusal = agentSessionReadFailureRefusal(failure)
-      apply({
-        type: 'error',
-        message: agentSessionReadFailureText(failure),
-        ...(refusal ? { refusal } : {})
-      })
-    },
-    [apply]
-  )
-
-  const applyQueued = useCallback(
-    (event: AgentSessionSubscribeEvent) => {
-      if (!sessionKey) {
-        return
-      }
-      setQueuedBySession((current) => {
-        const previous = current.get(sessionKey) ?? NO_QUEUED_FEED
-        const messages = reduceMobileQueuedMessageFeed(previous.messages, event)
-        const pause = reduceMobileQueuePause(previous.pause, event)
-        if (messages === previous.messages && pause === previous.pause) {
-          return current
-        }
-        const updated = new Map(current)
-        updated.delete(sessionKey)
-        updated.set(sessionKey, { messages, pause })
-        while (updated.size > MAX_RETAINED_SESSION_STATES) {
-          const oldest = updated.keys().next().value
-          if (oldest === undefined) {
-            break
-          }
-          updated.delete(oldest)
-        }
-        return updated
-      })
-    },
-    [sessionKey]
-  )
-
   useEffect(() => {
-    streamGenerationRef.current += 1
-    sessionKeyRef.current = sessionKey
-    setLoadingOlder(false)
+    supersede()
     if (!client || !sessionId || !enabled) {
       return
     }
-    if (!connected) {
-      // The cleanup above drops the dead hold and stream; keyed state keeps this
-      // session's transcript visible while another tab can be selected.
+    if (!connected || readingStore) {
       return
     }
     apply({ type: 'loading' })
-    const generation = streamGenerationRef.current
     const holderId = structuredAgentSessionHolderId('mobile-chat')
     const held = callAgentSession(client, 'agentSession.hold', {
       sessionId,
       holderId
     })
-    const endStream = startMobileStructuredTranscriptRead({
+    let ended = false
+    const read = startStructuredAgentSessionLiveRead({
+      applyRequests: apply,
+      applyEvent: (event, options) => {
+        apply({ type: 'event', event, ...options })
+        if (event.type !== 'end' && event.commandsChanged) {
+          commandsChanged.current?.()
+        }
+      },
+      applyError: (message, refusal) => {
+        if (stateRef.current.epoch !== null && refusal === undefined) {
+          return
+        }
+        apply(
+          refusal
+            ? { type: 'error', message: agentSessionReadRefusalText(refusal), refusal }
+            : { type: 'error', message }
+        )
+      },
+      getCursor: () => stateRef.current.cursor,
+      onContactLost: () => {},
+      onHistoryReadInvalidated: supersede,
+      readCurrentRequests: (request) =>
+        callAgentSession(client, 'agentSession.currentRequests', request),
       sessionId,
-      open: (onFrame) => openTranscriptAfterHold(client, sessionId, held, onFrame),
-      read: (request) => callAgentSession(client, 'agentSession.currentRequests', request),
-      apply,
-      applyQueued,
-      error: applyReadFailure,
-      isCurrent: () => generation === streamGenerationRef.current
+      subscribe: subscribeTranscriptAfterHold(client, held, () => ended),
+      coalesceMs: STREAMED_TEXT_COALESCE_MS,
+      textAppend: hostTextAppends(client),
+      subscribeRetryNow: subscribeConnectionRevival
     })
     return () => {
-      endStream()
+      ended = true
+      read.dispose()
       void held
         .then(() =>
           callAgentSession(
@@ -195,102 +225,91 @@ export function useMobileStructuredAgentState(args: {
         )
         .catch(() => undefined)
     }
-  }, [apply, applyQueued, applyReadFailure, client, connected, enabled, sessionId, sessionKey])
+  }, [apply, client, connected, enabled, readingStore, sessionId, sessionKey, supersede])
 
   const loadEarlier = useCallback(() => {
-    const current = stateRef.current
-    if (!client || !sessionId || !sessionKey || loadingOlder || !current.hasOlder) {
+    const start = oldestStructuredAgentSessionCursor(stateRef.current)
+    if (!client || !sessionId || !sessionKey || !stateRef.current.hasOlder || !start) {
       return
     }
-    if (!oldestStructuredAgentSessionCursor(current)) {
-      return
+    let cursor = start
+    // Track all heads produced during this tap while refs lag commits; any other head proves live trimming and restarts paging from the new boundary.
+    let heads = new Set([start.sequence])
+    const intact = (): boolean => {
+      const head = oldestStructuredAgentSessionCursor(stateRef.current)
+      return head?.epoch === cursor.epoch && heads.has(head.sequence)
     }
-    const requestSessionKey = sessionKey
-    const requestGeneration = streamGenerationRef.current
-    const isCurrentRead = (): boolean =>
-      sessionKeyRef.current === requestSessionKey &&
-      streamGenerationRef.current === requestGeneration
-    setLoadingOlder(true)
-    void (async () => {
-      // A live batch can head-trim past the anchor mid-read, and the reducer drops that
-      // page rather than leave a hole in the transcript. Re-anchor and retry.
-      for (let attempt = 0; attempt < OLDER_PAGE_ANCHOR_ATTEMPTS; attempt += 1) {
-        const cursor = oldestStructuredAgentSessionCursor(stateRef.current)
-        if (!cursor || !isCurrentRead()) {
-          return
+    loadOlderPages(async ({ timeoutMs, isCurrent }) => {
+      if (!intact()) {
+        const head = oldestStructuredAgentSessionCursor(stateRef.current)
+        if (!head) {
+          return 'end'
         }
-        // Mobile draws only the session's own rows, so a page of a subagent's rows alone
-        // would land as nothing; read on until a page adds a row the reader can see. Older
-        // hosts send one for any burst; current ones when the page's byte bound cuts it short.
-        const pages: {
-          requestedCursor: AgentJournalCursor
-          page: AgentSessionHistoryPage
-        }[] = []
-        let requestedCursor = cursor
-        while (pages.length < OLDER_PAGES_PER_LOAD) {
-          const result = await callAgentSession<AgentSessionHistoryResult>(
-            client,
-            'agentSession.history',
-            {
-              sessionId,
-              direction: 'before',
-              cursor: requestedCursor,
-              limit: AGENT_SESSION_HISTORY_MAX_LIMIT
-            }
-          )
-          if (!result.ok || !isCurrentRead()) {
-            break
-          }
-          pages.push({ requestedCursor, page: result.page })
-          if (
-            !result.page.hasOlder ||
-            result.page.items.length === 0 ||
-            result.page.items.some(isRootAgentJournalItem)
-          ) {
-            break
-          }
-          requestedCursor = result.page.window.nextCursor
-        }
-        if (pages.length === 0 || !isCurrentRead()) {
-          return
-        }
-        // The reducer drops a page whose anchor slid, so only an intact anchor lands;
-        // each later page abuts the one before it.
-        if (oldestStructuredAgentSessionCursor(stateRef.current)?.sequence === cursor.sequence) {
-          for (const { requestedCursor: pageCursor, page } of pages) {
-            apply({ type: 'older-page', requestedCursor: pageCursor, page })
-          }
-          return
-        }
+        cursor = head
+        heads = new Set([head.sequence])
       }
-    })()
-      .catch((error: unknown) => {
-        if (isCurrentRead()) {
-          applyReadFailure(error)
-        }
-      })
-      .finally(() => {
-        if (isCurrentRead()) {
-          setLoadingOlder(false)
-        }
-      })
-  }, [apply, applyReadFailure, client, loadingOlder, sessionId, sessionKey])
+      let result: AgentSessionHistoryResult
+      try {
+        result = await callAgentSession<AgentSessionHistoryResult>(
+          client,
+          'agentSession.history',
+          { sessionId, direction: 'before', cursor, limit: AGENT_SESSION_HISTORY_MAX_LIMIT },
+          timeoutMs
+        )
+      } catch (error) {
+        return isFinalAgentSessionReadRefusal(agentSessionReadFailureRefusal(error))
+          ? 'unavailable'
+          : 'failed'
+      }
+      if (!isCurrent()) {
+        return 'end'
+      }
+      if (!result.ok) {
+        return 'end'
+      }
+      if (!intact()) {
+        return 'drew-nothing'
+      }
+      const { page } = result
+      apply({ type: 'older-page', requestedCursor: cursor, page })
+      const oldest = page.items[0]
+      if (!page.hasOlder || !oldest) {
+        return 'end'
+      }
+      heads.add(oldest.sequence)
+      cursor = page.window.nextCursor
+      // Subagent-only pages add no visible rows; keep paging until the reader has content or history ends.
+      return page.items.some(isRootAgentJournalItem) ? 'drew' : 'drew-nothing'
+    })
+  }, [apply, client, loadOlderPages, sessionId, sessionKey])
 
-  // A window of only a subagent's rows draws nothing, and an empty list cannot be scrolled
-  // to ask for more, so it reads back once from each such head. A first page can be one: an
-  // older host's for any burst, a current host's when a burst fills its byte bound.
+  // Auto-page once per invisible head: subagent-only windows cannot scroll to request earlier history, including byte-capped first pages.
   const drawsNothingFrom =
     state.status === 'ready' && state.hasOlder && !state.items.some(isRootAgentJournalItem)
       ? `${sessionKey}:${state.epoch}:${state.items[0]?.sequence}`
       : null
   const readBackFromRef = useRef<string | null>(null)
+  const loadingEarlier = olderPages === 'loading'
   useEffect(() => {
-    if (drawsNothingFrom === null || loadingOlder || readBackFromRef.current === drawsNothingFrom) {
+    if (
+      drawsNothingFrom === null ||
+      loadingEarlier ||
+      readBackFromRef.current === drawsNothingFrom
+    ) {
       return
     }
     readBackFromRef.current = drawsNothingFrom
     loadEarlier()
-  }, [drawsNothingFrom, loadEarlier, loadingOlder])
+  }, [drawsNothingFrom, loadEarlier, loadingEarlier])
 
-  return { state, stateRef, queuedMessages, queuePause: queued.pause, loadingOlder, loadEarlier }
+  return {
+    state,
+    stateRef,
+    // A published null is an empty queue; only an absent list is no claim.
+    queuedMessages: state.queuedMessages === undefined ? null : (state.queuedMessages ?? []),
+    queuePause: state.queuePause ?? null,
+    olderPages,
+    loadEarlier,
+    savedAt: unconfirmedStructuredStateSavedAt(state)
+  }
 }

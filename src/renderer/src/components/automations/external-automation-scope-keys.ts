@@ -1,19 +1,11 @@
-/**
- * Keys for external manager rows, jobs, and in-flight actions.
- *
- * A provider's manager ID is unique only inside one host, so a key built from it
- * alone collides the moment two hosts run the same provider — the selected row,
- * and the disabled action button would all follow the wrong
- * host. Every key is therefore prefixed with its kind, the captured owner, and
- * the provider.
- */
+/** Qualify external row/job/action keys by kind, captured owner and provider; manager IDs alone collide across hosts. */
 
-import { ownerKey } from '../../../../shared/automation-owner-key'
-import type { AutomationOwnerRef } from '../../../../shared/automation-owner-ref'
+import { ownerKey } from '../../../../shared/automations/ownership/automation-owner-key'
+import type { AutomationOwnerRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import type {
   ExternalAutomationAction,
   ExternalAutomationProvider
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/external/external-automation'
 
 const SEPARATOR = '|'
 

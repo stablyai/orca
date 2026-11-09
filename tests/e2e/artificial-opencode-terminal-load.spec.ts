@@ -120,33 +120,18 @@ const DEFAULT_HIDDEN_PRESSURE_PANES = 17
 const HIDDEN_PRESSURE_START_DELAY_MS = 1200
 const DEFAULT_FRAME_COUNT = 180
 const DEFAULT_FRAME_INTERVAL_MS = 6
-const TIMER_SAMPLE_MS = 16
 const MAIN_RENDERER_PRESSURE_TARGET_CHARS = 2 * 1024 * 1024
-// Why: these are regression budgets, not observed baselines. Repeated local
-// 100-pane OpenCode-scale runs are below 50ms worst-key latency; keep enough
-// CI headroom while still failing changes that make typing visibly sluggish.
+// Gate visible typing regressions with CI headroom above repeated local sub-50ms echo measurements.
 const MAX_MEDIAN_KEY_LATENCY_MS = 75
 const MAX_WORST_KEY_LATENCY_MS = 300
-// Why: under injected multi-pane load, the worst *single* key echo lands behind
-// whichever synthetic flush it collides with, so on a CPU-starved OSS shard it
-// is environment-dominated (seen at ~3.1s) even when typing stays instant. The
-// median (75ms) is the real responsiveness guard; keep worst-under-load only as
-// a catastrophic-hang detector. Leave CI headroom above the observed ~3.1s
-// scheduler overrun while still surfacing multi-second renderer stalls.
+// Keep median latency strict; worst loaded echo can hit a ~3.1s runner stall and serves only as a hang detector.
 const MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS = 3_500
-// Why: the post-revisit printf is sampled while the background panes are still
-// ACK-gate-held and through a whole-buffer serialize poll, so it inherits the
-// same environment-dominated worst-case as typing under load; the unloaded
-// 300ms budget has no margin for this switch-and-focus moment.
+// Revisit printf runs under background pressure plus whole-buffer polling, so it needs the loaded budget.
 const MAX_REVISIT_LATENCY_UNDER_LOAD_MS = 3_000
-// Why: GitHub's two-worker Electron shards can briefly starve renderer timers
-// without visible typing lag. Keep this as a smoke gate, not a CPU lottery.
+// Why: bounds the longest renderer task while typing and the scroll probe's interval drift; a
+// smoke gate for main-thread stalls, not a CPU lottery.
 const MAX_TIMER_DRIFT_MS = 250
-// Why: under injected multi-pane redraw load the renderer event loop is
-// environment-dominated (seen at ~3.1s on a CPU-starved OSS shard) even when
-// typing stays responsive, mirroring MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS. Keep
-// this only as a catastrophic-starvation gate; the unloaded 250ms budget guards
-// the real baseline.
+// Loaded timer drift may share ~3.1s runner starvation with worst echo; keep the strict unloaded baseline.
 const MAX_TIMER_DRIFT_UNDER_LOAD_MS = 3_500
 const MAX_SCROLL_LATENCY_MS = 150
 // Why: byte-level peaks vary by drain quantum; the coarse guard matches the main-pressure scenario.
@@ -231,8 +216,7 @@ process.stdin.on('data', (chunk) => {
 }
 
 function writeInteractivePromptScript(scriptPath: string, runId: string): void {
-  // Why: long scale runs can outlive temporary repo cleanup races in the test
-  // harness; the prompt script only needs a writable directory, not git state.
+  // Use any writable directory: scale-run prompt scripts need no git state and can outlive fixture-repo cleanup.
   mkdirSync(path.dirname(scriptPath), { recursive: true })
   writeFileSync(scriptPath, interactivePromptScript(runId))
 }
@@ -252,29 +236,34 @@ async function measureTypingDuringLoad(
   await waitForTerminalOutputForPtyId(page, ptyId, `OPENCODE_TYPING_READY_${runId}`, 10_000)
   await focusActiveTerminalInput(page)
 
-  const eventLoop = await page.evaluateHandle((sampleMs) => {
-    let maxTimerDriftMs = 0
-    let lastTick = performance.now()
-    const timer = window.setInterval(() => {
-      const now = performance.now()
-      maxTimerDriftMs = Math.max(maxTimerDriftMs, now - lastTick - sampleMs)
-      lastTick = now
-    }, sampleMs)
-    return {
-      stop: () => {
-        window.clearInterval(timer)
-        return maxTimerDriftMs
+  // Hidden-renderer intervals can drift while echo stays fast; use long tasks to measure actual main-thread blocking.
+  const eventLoop = await page.evaluateHandle(() => {
+    if (!PerformanceObserver.supportedEntryTypes.includes('longtask')) {
+      throw new Error('Long-task timing is unavailable in this renderer')
+    }
+    let longestTaskMs = 0
+    const record = (entries: PerformanceEntryList): void => {
+      for (const entry of entries) {
+        longestTaskMs = Math.max(longestTaskMs, entry.duration)
       }
     }
-  }, TIMER_SAMPLE_MS)
+    const observer = new PerformanceObserver((list) => record(list.getEntries()))
+    observer.observe({ type: 'longtask' })
+    return {
+      stop: () => {
+        record(observer.takeRecords())
+        observer.disconnect()
+        return longestTaskMs
+      }
+    }
+  })
 
   const latencies: number[] = []
   for (const [index, char] of [...KEY_LATENCY_SAMPLES].entries()) {
     const marker = `OPENCODE_TYPING_KEY_${runId}_${index + 1}`
     const start = performance.now()
     await page.keyboard.type(char)
-    // Why: wait up to the under-load budget so a slow echo is measured and
-    // asserted per-scenario, not thrown as a confusing "did not contain".
+    // Allow the loaded echo budget so slow input becomes a latency failure rather than a missing-output error.
     await waitForMarkerLatency(page, marker, MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS)
     latencies.push(performance.now() - start)
   }
@@ -486,7 +475,8 @@ async function runConfiguredMainPressureScenario({
     testRepoPath,
     maxMedianKeyLatencyMs: MAX_MEDIAN_KEY_LATENCY_MS,
     maxScrollLatencyMs: MAX_SCROLL_LATENCY_MS,
-    maxTimerDriftMs: MAX_TIMER_DRIFT_MS,
+    // Background pressure makes drift runner-dependent; the 75ms median remains the responsiveness gate.
+    maxTimerDriftMs: MAX_TIMER_DRIFT_UNDER_LOAD_MS,
     maxWorstKeyLatencyMs: MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS,
     deps: terminalLoadScenarioDeps
   })
@@ -620,10 +610,7 @@ test.describe('Artificial OpenCode terminal load', () => {
       maxMedianKeyLatencyMs: MAX_MEDIAN_KEY_LATENCY_MS,
       maxRendererSchedulerQueuedChars: MAX_RENDERER_SCHEDULER_QUEUED_CHARS,
       maxRevisitLatencyMs: MAX_REVISIT_LATENCY_UNDER_LOAD_MS,
-      // Why: the printf is sampled while background panes are ACK-gate-held, so
-      // worst-key and timer drift are environment-dominated here (worst seen ~2s)
-      // like the other under-load scenarios; keep the strict budgets for the
-      // unloaded baseline test only.
+      // Use loaded worst-echo/drift budgets under background pressure; strict budgets belong to the unloaded baseline.
       maxTimerDriftMs: MAX_TIMER_DRIFT_UNDER_LOAD_MS,
       maxWorstKeyLatencyMs: MAX_WORST_KEY_LATENCY_UNDER_LOAD_MS,
       orcaPage,
@@ -723,8 +710,6 @@ test.describe('Artificial OpenCode terminal load', () => {
       hiddenPaneCount,
       pressureOutputChars: PRESSURE_OUTPUT_CHARS,
       pressureOutputMode,
-      // Why: the 10s codex startup renderer-query window is deleted — every
-      // pressure mode measures steady-state model restore with one delay.
       pressureStartDelayMs: HIDDEN_PRESSURE_START_DELAY_MS,
       testInfo,
       deps: terminalLoadScenarioDeps
@@ -736,8 +721,7 @@ test.describe('Artificial OpenCode terminal load', () => {
     mode?: HiddenPressureOutputMode
   }[] = [
     { title: 'keeps typing responsive while hidden real PTYs are ACK-backpressured' },
-    // Why: "withholds renderer delivery" — hidden bytes are dropped in main by
-    // the delivery gate; the renderer no longer skip-scans chunks (Phase 6).
+    // Assert hidden delivery is withheld in main; renderer skip-scanning was removed.
     {
       title: 'withholds renderer delivery for plain hidden PTY output while preserving restore',
       suffix: '-plain',

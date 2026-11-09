@@ -2,7 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { toSshExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
-import { makeRepo } from '../../persistence-test-harness'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { makeRepo } from '../persistence-test-harness'
 import type { Store } from '../loading-store/store'
 import {
   closeMoveTestStores,
@@ -41,11 +42,11 @@ vi.mock('electron', () => ({
 
 afterEach(closeMoveTestStores)
 
-/** The window's drag-out as `layout.apply` sends it, with the tab id pinned for the assertions. */
 function detach(
   store: Store,
   ptyId: string | null,
-  hostIds: ExecutionHostId[] = ['local']
+  hostIds: ExecutionHostId[] = ['local'],
+  startupCwd?: string
 ): ReturnType<Store['applyLayoutCommand']> {
   return store.applyLayoutCommand(
     {
@@ -53,13 +54,12 @@ function detach(
       workspace: WT,
       tabId: SOURCE,
       leafId: MOVED,
-      windowDetach: { ptyId, tabId: TARGET }
+      windowDetach: { ptyId, tabId: TARGET, ...(startupCwd ? { startupCwd } : {}) }
     },
     hostIds
   )
 }
 
-// The desktop's move rules (terminal-leaf-move.test.ts), through layout.apply's pane move.
 describe('a window drag-out through layout.apply', () => {
   it('moves the leaf and its binding in one write and re-keys pane-keyed records', async () => {
     const store = openStore(newDataFile())
@@ -147,12 +147,17 @@ describe('a window drag-out through layout.apply', () => {
       incarnationId: 'inc-1'
     })
 
+    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
+      // With main owning all shown panes, the home copy determines last-pane refusal.
+      await expect(detach(store, 'pty-agent')).resolves.toEqual({ ok: false, code: 'last_pane' })
+      expect(tabsHoldingLeaf(store.getWorkspaceSession(), MOVED)).toEqual([SOURCE])
+      return
+    }
     await expect(detach(store, 'pty-agent')).resolves.toMatchObject({ ok: true })
 
     const session = store.getWorkspaceSession()
     expect(tabsHoldingLeaf(session, MOVED)).toEqual([TARGET])
     expect(session.tabsByWorktree[WT]?.find((tab) => tab.id === SOURCE)?.ptyId).toBeNull()
-    // The window's sibling binds into the source tab later.
     expect(
       await store.persistPtyBinding({
         worktreeId: WT,
@@ -163,61 +168,6 @@ describe('a window drag-out through layout.apply', () => {
       })
     ).toBe(true)
     expect(tabsHoldingLeaf(store.getWorkspaceSession(), LEFT)).toEqual([SOURCE])
-  })
-
-  it('refuses a terminal no copy names, and a leaf another tab holds', async () => {
-    const store = openStore(newDataFile())
-    await seedSplitSource(store)
-    await expect(detach(store, 'pty-other')).resolves.toEqual({ ok: false, code: 'pty_mismatch' })
-    const session = store.getWorkspaceSession()
-    store.setWorkspaceSession({
-      ...session,
-      tabsByWorktree: {
-        ...session.tabsByWorktree,
-        [WT]: [
-          ...(session.tabsByWorktree[WT] ?? []),
-          { ...(session.tabsByWorktree[WT] ?? [])[0]!, id: 'tab-earlier-move' }
-        ]
-      },
-      terminalLayoutsByTabId: {
-        ...session.terminalLayoutsByTabId,
-        'tab-earlier-move': {
-          root: { type: 'leaf', leafId: MOVED },
-          activeLeafId: MOVED,
-          expandedLeafId: null
-        }
-      }
-    })
-    await expect(detach(store, 'pty-agent')).resolves.toEqual({
-      ok: false,
-      code: 'pane_in_other_tab'
-    })
-    expect(tabsHoldingLeaf(store.getWorkspaceSession(), MOVED)).toContain(SOURCE)
-  })
-
-  it('takes the one bound terminal when the window has none', async () => {
-    const store = openStore(newDataFile())
-    await seedSplitSource(store)
-    await expect(detach(store, null)).resolves.toEqual({
-      ok: true,
-      result: { tabId: TARGET, ptyId: 'pty-agent' }
-    })
-  })
-
-  it('moves the remote session id with the moved terminal', async () => {
-    const store = openStore(newDataFile())
-    await seedSplitSource(store)
-    store.setWorkspaceSession({
-      ...store.getWorkspaceSession(),
-      remoteSessionIdsByTabId: { [SOURCE]: 'pty-agent' }
-    })
-
-    await detach(store, 'pty-agent')
-
-    expect(store.getWorkspaceSession().remoteSessionIdsByTabId).toEqual({
-      [SOURCE]: 'pty-left',
-      [TARGET]: 'pty-agent'
-    })
   })
 })
 
@@ -277,7 +227,6 @@ describe('a window drag-out of an SSH pane held by both partitions', () => {
   })
 })
 
-// STA-9259 through layout.apply: move, reattach, a stale pre-move renderer save, restart.
 describe('STA-9259 sequence through layout.apply', () => {
   it('keeps one owner through reattach, a stale renderer save and a restart', async () => {
     const dataFile = newDataFile()

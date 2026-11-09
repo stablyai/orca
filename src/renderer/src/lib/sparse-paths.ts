@@ -22,10 +22,7 @@ export function forEachSparseDirectoryInputLine(
   }
 }
 
-/** Normalize the user's free-form textarea input into a clean directory list:
- *  trim whitespace, convert backslashes to forward slashes, strip leading and
- *  trailing slashes, drop empty lines, dedupe. Order preserved so the
- *  textarea round-trips with the user's typing intent intact. */
+/** Normalize/deduplicate sparse directories while preserving input order for textarea round-tripping. */
 export function normalizeSparseDirectoryLines(value: string): string[] {
   const seen = new Set<string>()
   const directories: string[] = []
@@ -57,9 +54,7 @@ export function hasSparseDirectoryParentSegment(entry: string): boolean {
   return false
 }
 
-/** Order-independent set comparison so "shared/ui\npackages/web" matches
- *  "packages/web\nshared/ui" — used by the composer to decide whether the
- *  current textarea content matches a saved preset. */
+/** Compare directory sets independent of order so reordered textarea lines still match saved presets. */
 export function sparseDirectoriesMatch(left: string[], right: string[]): boolean {
   if (left.length !== right.length) {
     return false

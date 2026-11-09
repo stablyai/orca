@@ -3,8 +3,8 @@ import {
   NATIVE_FILE_DROP_MAX_PATH_BYTES,
   NATIVE_FILE_DROP_MAX_PATHS,
   validateNativeFileDropPaths
-} from '../../../shared/native-file-drop'
-import { measureClipboardTextByteLength } from '../../../shared/clipboard-text'
+} from '../../../shared/file-import/native-file-drop'
+import { measureUtf8ByteLength } from '../../../shared/utf8-byte-limits'
 import {
   isUnresolvedOwnerHostId,
   normalizeExecutionHostId,
@@ -90,7 +90,7 @@ export function readWorkspaceFileDragSource(
     return null
   }
   if (
-    measureClipboardTextByteLength(data, {
+    measureUtf8ByteLength(data, {
       stopAfterBytes: WORKSPACE_FILE_DRAG_SOURCE_MAX_BYTES
     }).exceededLimit
   ) {
@@ -206,8 +206,7 @@ function getUniqueWorkspaceFilePathEntries(
 function getTopLevelWorkspaceFilePaths(paths: readonly string[]): string[] {
   const uniquePaths = getUniqueWorkspaceFilePathEntries(paths)
 
-  // Why: moving a selected folder already moves its descendants; issuing
-  // extra moves for selected children races against paths that no longer exist.
+  // Moving a selected folder includes descendants; extra child moves race paths already removed.
   return uniquePaths
     .filter(
       (pathEntry) =>
@@ -228,6 +227,7 @@ export function readWorkspaceFileDragPaths(
   options: {
     maxPathBytes?: number
     maxPaths?: number
+    collapseDescendantsForMove?: boolean
   } = {}
 ): WorkspaceFileDragPathsReadResult {
   const maxPathBytes = options.maxPathBytes ?? NATIVE_FILE_DROP_MAX_PATH_BYTES
@@ -238,7 +238,7 @@ export function readWorkspaceFileDragPaths(
     return { byteLength: 0, pathCount: 0, paths: [], status: 'accepted' }
   }
 
-  const rawMeasurement = measureClipboardTextByteLength(data, { stopAfterBytes: maxPathBytes })
+  const rawMeasurement = measureUtf8ByteLength(data, { stopAfterBytes: maxPathBytes })
   if (rawMeasurement.exceededLimit) {
     return {
       byteLength: rawMeasurement.byteLength,
@@ -269,7 +269,10 @@ export function readWorkspaceFileDragPaths(
     }
   }
 
-  const paths = getTopLevelWorkspaceFilePaths(decodedPaths)
+  const paths =
+    options.collapseDescendantsForMove === false
+      ? getUniqueWorkspaceFilePathEntries(decodedPaths).map((entry) => entry.path)
+      : getTopLevelWorkspaceFilePaths(decodedPaths)
   return {
     byteLength: validation.byteLength,
     pathCount: paths.length,

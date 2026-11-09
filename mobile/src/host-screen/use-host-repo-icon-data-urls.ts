@@ -1,15 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { MAX_REPO_ICON_IDS_PER_READ } from '../../../src/shared/sidebar-list/repo-icon-data-urls-contract'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { readHostMethodReply, sidebarRepoIconsRead } from './host-sidebar-feed-operations'
 
 const NO_DATA_URLS: ReadonlyMap<string, string | null> = new Map()
 
-/**
- * The data URL behind each icon id the feed names, read once per id and client. Null: the host has
- * no image within its caps, and the phone draws its own badge. Ids are content hashes, so a changed
- * icon arrives as a new id.
- */
+// Read icons once per content-hash id and client; null falls back to the phone’s badge, and changed images arrive under new ids.
 export function useHostRepoIconDataUrls(
   client: RpcClient | null,
   ids: readonly string[]

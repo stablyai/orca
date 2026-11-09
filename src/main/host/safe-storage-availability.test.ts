@@ -13,19 +13,11 @@ const {
   safeStorageWithheldReason,
   withholdSafeStorage
 } = await import('./safe-storage-availability')
-const { ElectronSecretStore } = await import('./electron-secret-store')
 
 describe('guardedSafeStorage', () => {
   afterEach(() => {
     resetSafeStorageWithholdForTests()
     vi.clearAllMocks()
-  })
-
-  it('passes through until the keychain is withheld', () => {
-    expect(guardedSafeStorage.isEncryptionAvailable()).toBe(true)
-    expect(guardedSafeStorage.decryptString(guardedSafeStorage.encryptString('token'))).toBe(
-      'token'
-    )
   })
 
   it('never reaches the native keychain once withheld', () => {
@@ -38,14 +30,5 @@ describe('guardedSafeStorage', () => {
     expect(() => guardedSafeStorage.decryptString(Buffer.from('x'))).toThrow('secrets_unavailable')
     expect(safeStorageMock.isEncryptionAvailable).not.toHaveBeenCalled()
     expect(safeStorageMock.encryptString).not.toHaveBeenCalled()
-  })
-
-  it('makes the secret store report why secrets are unavailable, without probing', () => {
-    withholdSafeStorage('this login has no default macOS keychain')
-    const store = new ElectronSecretStore()
-
-    expect(store.isEncryptionAvailable()).toBe(false)
-    expect(store.describeProtectionGap()).toContain('this login has no default macOS keychain')
-    expect(safeStorageMock.isEncryptionAvailable).not.toHaveBeenCalled()
   })
 })

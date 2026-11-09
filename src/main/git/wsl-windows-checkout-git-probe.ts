@@ -1,13 +1,13 @@
 import { stat } from 'node:fs/promises'
 import { win32 } from 'node:path'
 import { runProcess } from '@orca/process-host'
-import { resolveSelectedLocalCommand } from '../ipc/command-path-resolver'
-import { runWslProcess, type WslResult, type WslSpec } from '../wsl/wsl-runner'
+import { resolveSelectedLocalCommand } from '../ipc/command-path/command-path-resolver'
+import { runWslProcess, type WslResult, type WslSpec } from '../wsl/execution/wsl-runner'
 import { translateArgForWsl } from './command-runner/wsl-path-translation'
 import { acquireGitAdmission } from './command-runner/git-subprocess-admission'
 import { nonInteractiveGitEnv } from './command-runner/git-process-env'
 import type { GitAdmissionTier } from './command-runner/git-exec-options'
-import { isWslDirectGitReadCommand } from './wsl-direct-git-read-commands'
+import { isWslDirectGitReadCommand } from '../../shared/git/commands/git-command-classification'
 import {
   classifyLineEndingSample,
   forgetLineEndingSample,
@@ -30,8 +30,7 @@ const SAMPLE_PROBE_TIMEOUT_MS = 15_000
 const RETRY_BASE_MS = 30_000
 const RETRY_MAX_MS = 10 * 60_000
 const HOST_CONFIG_ARGS = ['config', '--show-origin', '--get-regexp', '^core\\.(autocrlf|eol)$']
-// Exit 3 carries rev-parse's own diagnostic. The first head bounds what git reads even when grep
-// matches nothing; the second bounds the sample.
+// Exit 3 preserves rev-parse failure; cap scanned entries even when no sample lines match.
 export const SAMPLE_SCRIPT = [
   'git -C "$1" rev-parse --is-inside-work-tree >/dev/null || exit 3',
   "tab=$(printf '\\t')",
@@ -104,7 +103,7 @@ async function admitted<T>(
   request: { args: string[]; cwd: string; wslDistro?: string; tier?: GitAdmissionTier },
   work: () => Promise<T>
 ): Promise<T> {
-  // Why: hundreds of cold worktrees must queue behind the git scheduler, not spawn at once.
+  // Queue cold probes behind Git admission rather than spawning every checkout at once.
   const grant = await (deps.admit ?? acquireGitAdmission)(request)
   try {
     return await work()
@@ -134,7 +133,7 @@ async function probeHost(
     }
   }
   if (answer === null) {
-    // Why: no host git, dubious ownership, or a timeout is "unknown", never "not Windows".
+    // Missing host Git, dubious ownership and timeouts leave ownership unknown.
     rememberFailure(`host\0${key}`, now())
     return
   }
@@ -216,7 +215,7 @@ function waitUnlessAborted(
   if (!work || !signal) {
     return work ?? Promise.resolve()
   }
-  // Why: an aborted command stops waiting; the shared probe keeps running for the next caller.
+  // Aborting a command stops only its wait; shared probes serve later callers.
   return new Promise<void>((resolve) => {
     const done = (): void => {
       signal.removeEventListener('abort', done)
@@ -254,7 +253,7 @@ async function settle(
     return
   }
   if (isRead) {
-    // Reads are already correct with the flags; the sample only has to catch up for later writes.
+    // Reads need no sample wait; refresh evidence for later writes in the background.
     if (!isFresh(state.sample, now())) {
       void runStage('sample', key, options, deps)
     }
@@ -274,10 +273,7 @@ async function settle(
   }
 }
 
-/**
- * Settles what a WSL git command on a Windows drive needs to know about its checkout, or null when
- * the command is not one. Never rejects; an unknown answer runs the command unflagged.
- */
+/** Never rejects; unresolved ownership falls back to conservative config, null means no applicable command. */
 export function pendingWslWindowsCheckoutGitConfig(
   args: readonly string[],
   options: {
