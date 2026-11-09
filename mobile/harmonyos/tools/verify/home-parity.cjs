@@ -123,6 +123,13 @@ test('usage follows the selected WSL account without assigning its quota to anot
       }
     })
   )
+  assert.deepEqual(
+    Array.from(cards, (card) => [card.key, card.active]),
+    [
+      ['codex:wsl', true],
+      ['codex:host', false]
+    ]
+  )
   assert.equal(cards.find((card) => card.key === 'codex:wsl').windows[0].usedPercent, 35)
   assert.equal(cards.find((card) => card.key === 'codex:host').windows[0].usedPercent, 10)
   assert.equal(readHomeUsage('{"result":{"type":"error"}}'), null)
