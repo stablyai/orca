@@ -6,6 +6,7 @@ import { TERMINAL_ORDERED_INPUT_CAPABILITY } from '../../../../src/shared/termin
 import { useRouteCapability } from '../../worktree/use-workspace-client'
 import { pendingSelectionWantsHandle } from '../../session/tabs/pending-session-selection'
 import { useEffect, useCallback, useRef } from 'react'
+import { useSyncMobileViewerColorQueryReplies } from '../resolve-mobile-terminal-theme'
 import type { TerminalWebViewHandle } from '../terminal-webview-contract'
 import type { TerminalFrame } from '../terminal-webview-messages'
 import type { MobileSessionTabSwitchingModel } from '../../session/tabs/use-mobile-session-tab-switching'
@@ -51,6 +52,7 @@ export function useMobileSessionTerminalWebview(scope: MobileSessionTabSwitching
     notifyTerminalFrameWidth
   } = scope
   const orderedInputSupported = useRouteCapability(TERMINAL_ORDERED_INPUT_CAPABILITY)
+  useSyncMobileViewerColorQueryReplies(client, connState)
   const inputSender = useRef(new MobileTerminalInputSender()).current
   useEffect(() => {
     const unsubscribe = client?.onStateChange((state) => {

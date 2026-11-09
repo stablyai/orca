@@ -30,7 +30,15 @@ export const TERMINAL_DOCUMENT_ELEMENT_STYLE = `  #terminal-container {
     transform-origin: top left;
     display: inline-block;
   }
-  .xterm { -webkit-user-select: none; user-select: none; font-variant-emoji: text; }
+  .xterm {
+    -webkit-user-select: none;
+    user-select: none;
+    font-variant-emoji: text;
+    background-color: transparent !important;
+  }
+  .xterm:not(.allow-transparency) .xterm-viewport {
+    background-color: transparent !important;
+  }
   .xterm .xterm-viewport {
     overflow-y: hidden !important;
     scrollbar-width: none !important;

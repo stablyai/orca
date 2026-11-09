@@ -1,7 +1,7 @@
-import { StyleSheet } from 'react-native'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const TERMINAL_WEBVIEW_FRAME_STYLES = StyleSheet.create({
+export const TERMINAL_WEBVIEW_FRAME_STYLES = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.terminalBg
@@ -10,4 +10,4 @@ export const TERMINAL_WEBVIEW_FRAME_STYLES = StyleSheet.create({
     flex: 1,
     backgroundColor: colors.terminalBg
   }
-})
+}))

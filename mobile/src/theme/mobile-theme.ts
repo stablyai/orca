@@ -138,7 +138,7 @@ const lightColors: MobilePalette = {
   syntaxVariable: '#001188',
   syntaxMeta: '#af00db',
 
-  terminalBg: '#1a1b26'
+  terminalBg: '#ffffff'
 }
 
 const palettes: Record<MobileColorScheme, MobilePalette> = { dark: darkColors, light: lightColors }

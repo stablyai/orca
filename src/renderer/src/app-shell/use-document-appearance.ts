@@ -109,10 +109,8 @@ export function useDocumentAppearance(): void {
 
   // Why `dark` too: a system theme repaints when the OS flips, before the slot paint below.
   useEffect(() => {
-    if (theme) {
-      // Why the painted mode: Match Terminal may show a terminal theme of the other mode.
-      applyDocumentTheme(dark ? 'dark' : 'light')
-    }
+    // Apply immediately even before settings hydrate so system light mode does not flash dark chrome.
+    applyDocumentTheme(dark ? 'dark' : 'light')
     if (theme === 'system') {
       // System theme changes don't mutate the store, so mobile terminal colors need an explicit graph republish.
       scheduleRuntimeGraphSync()

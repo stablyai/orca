@@ -11,12 +11,14 @@ import type { RuntimeMobileSessionCreateTerminalResult } from '../../../../share
 import type { RuntimeTerminalPresentation } from '../../../../shared/runtime-terminal-contracts'
 import type { SpawnIntent } from '../../../../shared/terminal/pty/admission/spawn-admission-contract'
 import type { AgentLaunchRuntime } from '../../../../shared/agent-launch/startup/agent-launch-runtime'
+import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 import {
   type RuntimeNavigationTarget,
   navigationTargetsHost
 } from '../../../../shared/runtime-navigation'
 
 import { seedResumeLaunchIdentity } from '../../../ipc/pty/pane/resume-launch-identity'
+import { admitPairedCreateColors } from '../view/terminal-view-attribute-store'
 // Allow lost-response reconnect retries for one minute; later intentional resumes fork fresh.
 const MOBILE_TERMINAL_CREATE_RESULT_TTL_MS = 60_000
 
@@ -38,6 +40,7 @@ export type MobileTerminalCreateOptions = {
   launchAgent?: TuiAgent
   trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
+  terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   activate?: boolean
   clientNavigationId?: string
   clientMutationId?: string
@@ -59,6 +62,7 @@ export type OwnedMobileTerminalCreateOptions = {
   launchAgent?: TuiAgent
   trustWorktreeId?: string
   viewMode?: 'terminal' | 'chat'
+  terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   targetGroupId?: string
   afterDesktopTabId?: string
   presentation?: RuntimeTerminalPresentation
@@ -114,6 +118,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       trustWorktreeId?: string
       terminalImageViewerSupported?: boolean
       viewMode?: 'terminal' | 'chat'
+      terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
       activate?: boolean
       select?: boolean
       clientNavigationId?: string
@@ -125,6 +130,7 @@ export abstract class OrcaRuntimeWithCreateMobileSessionTerminal extends OrcaRun
       signal?: AbortSignal
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
+    admitPairedCreateColors(opts.terminalColorQueryReplies)
     const navigation = opts.navigation ?? 'all'
     const select = opts.select ?? opts.activate !== false
     const runOpts = {

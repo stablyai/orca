@@ -1,4 +1,6 @@
 import type { MobileQuickCommandLaunch } from '../quick-commands'
+import { getMobileViewerColorQueryReplies } from '../resolve-mobile-terminal-theme'
+import { getMobileColorScheme } from '../../theme/mobile-theme'
 import type { RpcClient } from '../../transport/rpc/rpc-client-contract'
 import type { MobileNewTabAgentOption } from '../../session/agent-launch/mobile-new-tab-agent-options'
 import { sessionTabCreateTerminal } from '../../session/tabs/mobile-session-tab-write-operations'
@@ -32,6 +34,7 @@ export function requestMobileSessionTerminalCreate(args: {
     ...(options?.agentPrompt ? { agentPrompt: options.agentPrompt } : {}),
     ...(agent ? { agent } : {}),
     ...(sourceChatFork ? { sourceChatFork } : {}),
+    terminalColorQueryReplies: getMobileViewerColorQueryReplies(getMobileColorScheme()),
     activate: false,
     select: true,
     navigation: 'caller' as const

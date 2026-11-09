@@ -31,8 +31,9 @@
   overflow-y: scroll;
 }
 
-/* Override xterm.css’s black viewport layer, which leaks 1px lines on light terminals at fractional positions.
+/* Override xterm.css’s black root and viewport layers, which flash #000 on mount or leak 1px lines on light terminals.
    Reuse the themed xterm background and main.css scrollbar rules, including outside the pane manager. */
+.xterm,
 .xterm:not(.allow-transparency) .xterm-viewport {
   background-color: transparent;
 }

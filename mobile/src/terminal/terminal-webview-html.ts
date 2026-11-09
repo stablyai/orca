@@ -17,11 +17,26 @@ export const XTERM_HTML = [
   TERMINAL_HTML_DOCUMENT_CLOSE
 ].join('')
 
-// Seed scale/visibility in page source before document startup can read them.
-export function xtermWebViewSource(start: { textScale: number; shown: boolean }) {
+// Seed scale/visibility/background in page source before document startup can read them.
+export function xtermWebViewSource(start: {
+  textScale: number
+  shown: boolean
+  backgroundColor?: string
+  foregroundColor?: string
+}) {
+  const initialBgScript = start.backgroundColor
+    ? `window.__orcaTerminalInitialBg = ${JSON.stringify(start.backgroundColor)};\n` +
+      `document.documentElement.style.background = ${JSON.stringify(start.backgroundColor)};\n` +
+      `document.body.style.background = ${JSON.stringify(start.backgroundColor)};\n`
+    : ''
+  const initialFgScript = start.foregroundColor
+    ? `window.__orcaTerminalInitialFg = ${JSON.stringify(start.foregroundColor)};\n`
+    : ''
   const startValues =
     `window.__orcaTerminalTextScale = ${JSON.stringify(start.textScale)};\n` +
-    `window.__orcaTerminalShown = ${JSON.stringify(start.shown)};\n`
+    `window.__orcaTerminalShown = ${JSON.stringify(start.shown)};\n` +
+    initialBgScript +
+    initialFgScript
   return {
     html: [
       TERMINAL_HTML_DOCUMENT_SHELL,

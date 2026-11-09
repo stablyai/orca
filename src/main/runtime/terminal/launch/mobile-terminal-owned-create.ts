@@ -122,6 +122,9 @@ export abstract class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal ext
         ...(opts.trustWorktreeId ? { trustWorktreeId: opts.trustWorktreeId } : {}),
         ...(opts.launchRuntime ? { launchRuntime: opts.launchRuntime } : {}),
         ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+        ...(opts.terminalColorQueryReplies
+          ? { terminalColorQueryReplies: opts.terminalColorQueryReplies }
+          : {}),
         ...(opts.targetGroupId ? { targetGroupId: opts.targetGroupId } : {}),
         startupCommandDelivery: opts.startupCommandDelivery,
         ...(opts.identity

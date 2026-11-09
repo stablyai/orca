@@ -293,5 +293,25 @@ export function createTerminalDocumentScope(
   host: TerminalDocumentHost = {}
 ): TerminalDocumentScope {
   const named = Object.fromEntries(Object.entries(host).filter(([, hook]) => hook !== undefined))
-  return { ...createTerminalDocumentState(), ...createTerminalDocumentHostSeams(), ...named }
+  const seams = { ...createTerminalDocumentHostSeams(), ...named }
+  const initialStart = seams.start()
+  const seededTheme: TerminalDocumentTheme = initialStart.backgroundColor
+    ? {
+        ...DEFAULT_TERMINAL_THEME,
+        background: initialStart.backgroundColor,
+        ...(initialStart.foregroundColor
+          ? {
+              foreground: initialStart.foregroundColor,
+              cursor: initialStart.foregroundColor,
+              cursorAccent: initialStart.backgroundColor
+            }
+          : {})
+      }
+    : DEFAULT_TERMINAL_THEME
+  return {
+    ...createTerminalDocumentState(),
+    defaultTheme: seededTheme,
+    terminalTheme: seededTheme,
+    ...seams
+  }
 }
