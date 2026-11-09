@@ -28,7 +28,7 @@ describe('tab-map seam guard', () => {
     ])
   })
 
-  it('follows a raw record through a local binding unless a seam helper annotates it', () => {
+  it('follows a raw record through a local binding unless it is marked full resync', () => {
     const text = [
       'function raw(state) {',
       '  const next = { ...state.unifiedTabsByWorktree, [id]: tabs }',
@@ -36,12 +36,12 @@ describe('tab-map seam guard', () => {
       '}',
       'function annotated(state) {',
       '  const next = { ...state.unifiedTabsByWorktree, [id]: tabs }',
-      '  annotateTabBucketReplacement(state.unifiedTabsByWorktree, next, [id])',
+      '  markFullResync(next, "hydration")',
       '  set({ unifiedTabsByWorktree: next })',
       '}'
     ].join('\n')
     expect(writerViolations('writer.ts', text)).toEqual([
-      'writer.ts:3 raw unifiedTabsByWorktree record; build it with replaceTabBuckets/replaceRecordEntries or annotate it'
+      'writer.ts:3 raw unifiedTabsByWorktree record; build it with a replace helper or draft, or mark it full resync'
     ])
   })
 
@@ -60,7 +60,7 @@ describe('tab-map seam guard', () => {
 
   it('follows aliased raw records and requires annotation before publication', () => {
     const raw =
-      'raw unifiedTabsByWorktree record; build it with replaceTabBuckets/replaceRecordEntries or annotate it'
+      'raw unifiedTabsByWorktree record; build it with a replace helper or draft, or mark it full resync'
     const text = [
       'function aliased(state) {',
       '  const next = { ...state.unifiedTabsByWorktree, [id]: tabs }',
@@ -70,12 +70,12 @@ describe('tab-map seam guard', () => {
       'function late(state) {',
       '  const next = { ...state.unifiedTabsByWorktree, [id]: tabs }',
       '  set({ unifiedTabsByWorktree: next })',
-      '  annotateTabBucketReplacement(state.unifiedTabsByWorktree, next, [id])',
+      '  markFullResync(next, "hydration")',
       '}',
       'function early(state) {',
       '  const next = { ...state.unifiedTabsByWorktree, [id]: tabs }',
       '  const alias = next',
-      '  annotateTabBucketReplacement(state.unifiedTabsByWorktree, alias, [id])',
+      '  markFullResync(alias, "hydration")',
       '  set({ unifiedTabsByWorktree: alias })',
       '}'
     ].join('\n')

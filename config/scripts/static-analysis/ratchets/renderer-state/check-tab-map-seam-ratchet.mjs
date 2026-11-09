@@ -237,10 +237,8 @@ function isRawRecord(expression) {
   )
 }
 
-// Which argument a seam helper annotates in place (a replace* helper's first argument is only read).
+// Only an explicit cold-path mark certifies a record built outside a construction helper or draft.
 const ANNOTATED_ARGUMENT = {
-  annotateTabBucketReplacement: 1,
-  annotateRecordReplacement: 1,
   markFullResync: 0
 }
 
@@ -338,7 +336,7 @@ export function writerViolations(file, text) {
       rawValue(node)
     ) {
       violations.push(
-        `${file}:${line(source, node)} raw ${node.name.text} record; build it with replaceTabBuckets/replaceRecordEntries or annotate it`
+        `${file}:${line(source, node)} raw ${node.name.text} record; build it with a replace helper or draft, or mark it full resync`
       )
     }
     ts.forEachChild(node, visit)
