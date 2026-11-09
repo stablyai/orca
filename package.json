@@ -232,7 +232,7 @@
     "check:import-boundaries": "bun config/scripts/static-analysis/process-boundaries/check-import-boundaries.mjs"
   },
   "dependencies": {
-    "@anthropic-ai/claude-agent-sdk": "0.3.284",
+    "@anthropic-ai/claude-agent-sdk": "0.3.318",
     "@floating-ui/dom": "1.8.0",
     "@linear/sdk": "^97.0.0",
     "@orca/process-host": "workspace:*",
