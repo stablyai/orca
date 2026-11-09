@@ -91,9 +91,37 @@ export const pastDueMember = defineFixture({
           usedSeconds: 100 * HOUR,
           remainingIncludedSeconds: 20 * HOUR,
           usageWarningPercent: 80,
+          payment: {
+            pastDueSince: Date.UTC(2026, 10, 8, 9),
+            graceEndsAt: Date.UTC(2026, 10, 12, 9),
+            suspendRunning: false
+          },
           canStartSandbox: false,
           reason: 'payment_past_due',
           canManageBilling: false
+        }
+      }}
+    />
+  )
+})
+
+export const suspendedAdmin = defineFixture({
+  width: 600,
+  render: () => (
+    <PlanBillingView
+      {...handlers}
+      result={{
+        status: 'ok',
+        entitlement: {
+          ...sampleTeam,
+          status: 'past_due',
+          payment: {
+            pastDueSince: Date.UTC(2026, 10, 3, 9),
+            graceEndsAt: Date.UTC(2026, 10, 7, 9),
+            suspendRunning: true
+          },
+          canStartSandbox: false,
+          reason: 'payment_grace_expired'
         }
       }}
     />

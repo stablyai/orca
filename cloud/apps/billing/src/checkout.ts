@@ -5,6 +5,7 @@ import type { Env } from './env'
 import { BILLING_INTERVALS, PLAN_IDS, priceForPlan, type BillingInterval, type PlanId } from './plans'
 import type { StripeClient } from './stripe'
 import { currentSubscription, customerFor, ensureAccount, linkCustomer } from './store'
+import { orgIdOf, type MembershipSource } from './membership'
 
 export const MAX_TEAM_SEATS = 500
 
@@ -44,7 +45,8 @@ export async function createCheckout(
   stripe: StripeClient,
   caller: BillingCaller,
   request: { plan: PlanId; interval: BillingInterval; seats: number },
-  now: number
+  now: number,
+  membership: MembershipSource
 ): Promise<CheckoutOutcome> {
   if (!caller.canManage) {
     return { ok: false, status: 403, error: 'billing_admin_required' }
@@ -55,6 +57,11 @@ export async function createCheckout(
     // would double-bill.
     return { ok: false, status: 409, error: 'already_subscribed' }
   }
+  // Seats = org members from auth when it is reachable; never fewer than 1. Throws (-> 503) if
+  // auth is configured but unavailable rather than guessing a seat count.
+  const orgId = orgIdOf(caller.accountId)
+  const live = orgId ? await membership(orgId) : null
+  const seats = Math.max(1, live ?? request.seats)
   const customer = await ensureCustomer(env, stripe, caller, now)
   const metadata = { account_id: caller.accountId, plan: request.plan, interval: request.interval }
   const session = await stripe.createCheckoutSession(
@@ -64,11 +71,8 @@ export async function createCheckout(
       client_reference_id: caller.accountId,
       // Seats only. Overage is opt-in later; its metered item is added then (overage.ts).
       line_items: [
-        {
-          price: priceForPlan(env, request.interval),
-          quantity: request.seats,
-          adjustable_quantity: { enabled: true, minimum: 1, maximum: MAX_TEAM_SEATS }
-        }
+        // Seats then follow org membership automatically (seats.ts); not editable on the page.
+        { price: priceForPlan(env, request.interval), quantity: seats }
       ],
       payment_method_collection: 'always',
       allow_promotion_codes: true,

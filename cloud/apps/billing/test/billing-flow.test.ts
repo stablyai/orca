@@ -54,7 +54,7 @@ describe('checkout and portal', () => {
     expect(annual!.form.get('line_items[0][price]')).toBe('price_team_year')
     expect(monthly!.form.get('line_items[0][price]')).toBe('price_team_month')
     expect(annual!.form.get('line_items[0][quantity]')).toBe('4')
-    expect(annual!.form.get('line_items[0][adjustable_quantity][enabled]')).toBe('true')
+    expect(annual!.form.has('line_items[0][adjustable_quantity][enabled]')).toBe(false)
     expect(annual!.form.has('line_items[1][price]')).toBe(false)
     expect(annual!.form.get('subscription_data[metadata][account_id]')).toBe('org:o1')
     expect(annual!.form.has('subscription_data[trial_period_days]')).toBe(false)

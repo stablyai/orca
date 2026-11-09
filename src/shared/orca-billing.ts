@@ -12,6 +12,7 @@ export type OrcaBillingDenyReason =
   | 'no_subscription'
   | 'subscription_inactive'
   | 'payment_past_due'
+  | 'payment_grace_expired'
   | 'included_hours_exhausted'
   | 'overage_cap_reached'
 
@@ -54,6 +55,8 @@ export type OrcaBillingEntitlement = {
     spentCents: number
     centsPerHour: number
   }
+  /** Failed payment: new starts stop at once; running sandboxes suspend after `graceEndsAt`. */
+  payment: { pastDueSince: number | null; graceEndsAt: number | null; suspendRunning: boolean }
   canStartSandbox: boolean
   reason: OrcaBillingDenyReason | null
   canManageBilling: boolean

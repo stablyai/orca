@@ -64,6 +64,17 @@ export function createFakeStripe() {
         ? Response.json(subscription)
         : Response.json({ error: { code: 'resource_missing', message: 'No such subscription' } }, { status: 404 })
     }
+    if (method === 'POST' && url.pathname.startsWith('/v1/subscription_items/')) {
+      const itemId = decodeURIComponent(url.pathname.slice('/v1/subscription_items/'.length))
+      for (const subscription of subscriptions.values()) {
+        const item = subscription.items.data.find((entry) => entry.id === itemId)
+        if (item) {
+          item.quantity = Number(form.get('quantity'))
+          return respond({ id: item.id, quantity: item.quantity })
+        }
+      }
+      return Response.json({ error: { code: 'resource_missing', message: 'No such item' } }, { status: 404 })
+    }
     if (method === 'POST' && url.pathname === '/v1/subscription_items') {
       const subscription = subscriptions.get(form.get('subscription') ?? '')
       if (!subscription) {

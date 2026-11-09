@@ -32,7 +32,9 @@ const TeamSchema = z
     defaultSpendCapCents: z.number().int().nonnegative(),
     maxSpendCapCents: z.number().int().positive(),
     // Included-hours usage levels (percent) the desktop warns at.
-    warnAtPercent: z.array(z.number().int().min(1).max(100)).max(4)
+    warnAtPercent: z.array(z.number().int().min(1).max(100)).max(4),
+    // After a failed payment: new starts stop at once; running sandboxes are suspended after this.
+    paymentGraceHours: z.number().nonnegative()
   })
   .strict()
 
@@ -60,7 +62,8 @@ export const DEFAULT_PLANS: PlanCatalog = {
     overageCentsPerHour: 75,
     defaultSpendCapCents: 2500,
     maxSpendCapCents: 500_000,
-    warnAtPercent: [80, 100]
+    warnAtPercent: [80, 100],
+    paymentGraceHours: 96
   },
   enterprise: {
     label: 'Enterprise',

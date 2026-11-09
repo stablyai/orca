@@ -36,6 +36,7 @@ export const sampleTeam: OrcaBillingEntitlement = {
   usageWarningPercent: null,
   overageSeconds: 0,
   overage: { optedIn: false, active: false, spendCapCents: 2500, spentCents: 0, centsPerHour: 75 },
+  payment: { pastDueSince: null, graceEndsAt: null, suspendRunning: false },
   canStartSandbox: true,
   reason: null,
   canManageBilling: true,

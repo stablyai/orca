@@ -1,6 +1,6 @@
 // One-time TEST MODE catalog setup: the Team product with monthly + annual seat prices, the
 // sandbox-seconds meter with its metered overage price, and a Customer Portal configuration
-// (seat quantity changes, monthly <-> annual switch, cancel). Refuses any key that is not
+// (monthly <-> annual switch, cancel; seats follow membership). Refuses any key that is not
 // sk_test_/rk_test_ and stops if Stripe ever reports a live-mode object. Prints the Worker vars.
 //
 //   STRIPE_SECRET_KEY=sk_test_... BILLING_RETURN_URL=https://... tsx scripts/stripe-test-setup.ts
@@ -109,7 +109,8 @@ const portal = await post(
       subscription_cancel: { enabled: true, mode: 'at_period_end', cancellation_reason: { enabled: true, options: ['too_expensive', 'missing_features', 'switched_service', 'unused', 'other'] } },
       subscription_update: {
         enabled: true,
-        default_allowed_updates: ['quantity', 'price'],
+        // Seats follow org membership (seats.ts); the portal only switches monthly <-> annual.
+        default_allowed_updates: ['price'],
         proration_behavior: 'create_prorations',
         products: [{ product: team.id, prices: [monthly.id, annual.id] }]
       }

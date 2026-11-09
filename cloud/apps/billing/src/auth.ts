@@ -66,7 +66,16 @@ export function accountIdFor(claims: { sub: string; org?: string }): string {
   return claims.org ? `org:${claims.org}` : `user:${claims.sub}`
 }
 
-export async function authenticateDesktop(env: Env, request: Request): Promise<BillingCaller | null> {
+// Billing tokens re-resolve org and role from auth's org_memberships rows when minted and live 5
+// minutes. Actions that spend money or change billing take only tokens minted in the last few
+// minutes, so a demotion or removal stops them within that window (auth backdates iat by 30 s).
+export const ADMIN_ACTION_MAX_TOKEN_AGE = '6m'
+
+export async function authenticateDesktop(
+  env: Env,
+  request: Request,
+  options: { maxTokenAge?: string } = {}
+): Promise<BillingCaller | null> {
   const token = readBearer(request.headers.get('authorization'))
   if (!token) {
     return null
@@ -76,7 +85,7 @@ export async function authenticateDesktop(env: Env, request: Request): Promise<B
       audience: env.BILLING_JWT_AUDIENCE,
       algorithms: ['ES256'],
       // Billing tokens are minted per call; refuse anything long-lived.
-      maxTokenAge: '15m',
+      maxTokenAge: options.maxTokenAge ?? '15m',
       requiredClaims: ['exp', 'iat'],
       ...(issuer ? { issuer } : {})
     })
@@ -109,9 +118,18 @@ async function digest(value: string): Promise<string> {
   return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
-export async function authenticateControlPlane(env: Env, request: Request): Promise<boolean> {
+export function authenticateControlPlane(env: Env, request: Request): Promise<boolean> {
+  return authenticateSharedSecret(env.CONTROL_PLANE_TOKEN, request)
+}
+
+/** Orca Cloud auth -> billing membership pushes; a separate secret from the control plane's. */
+export function authenticateMembershipSync(env: Env, request: Request): Promise<boolean> {
+  return authenticateSharedSecret(env.MEMBERSHIP_SYNC_TOKEN, request)
+}
+
+async function authenticateSharedSecret(secret: string | undefined, request: Request): Promise<boolean> {
   const token = readBearer(request.headers.get('authorization'))
-  const accepted = (env.CONTROL_PLANE_TOKEN ?? '')
+  const accepted = (secret ?? '')
     .split(',')
     .map((value) => value.trim())
     .filter((value) => value.length >= 32)

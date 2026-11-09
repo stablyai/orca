@@ -50,4 +50,11 @@ export type Env = {
   // Sandbox control plane -> billing (usage reports, start checks). Secret; >= 32 chars.
   // Comma-separated during rotation. Replace with a service binding once the control plane is a Worker.
   CONTROL_PLANE_TOKEN: string
+  // Shared secret between Orca Cloud auth and billing for membership: auth pushes member counts to
+  // POST /v1/internal/seats, billing pulls them from AUTH_INTERNAL_URL. >= 32 chars; comma-separated
+  // during rotation (billing sends the first).
+  MEMBERSHIP_SYNC_TOKEN?: string
+  // Auth origin serving POST /v1/internal/billing/org-members. Unset: seats come from pushes and the
+  // Checkout request only (local dev).
+  AUTH_INTERNAL_URL?: string
 }

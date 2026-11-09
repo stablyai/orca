@@ -10,6 +10,7 @@ import { useAppStore } from '@/store/index'
 import { OrcaProfileSignOutConfirmDialog } from '../../../orca-profiles/OrcaProfileSignOutConfirmDialog'
 import { OrcaSignInButton, OrcaSignInWaitNotice } from '../../../OrcaSignInProgress'
 import { PlanBillingSection } from '../../../billing/PlanBillingSection'
+import { TeamMembersSection } from '../../../billing/team/TeamMembersSection'
 
 function accountStatusCopy(
   state: 'local' | 'unconfigured' | 'connected' | 'reconnect-required' | undefined,
@@ -130,6 +131,12 @@ export function OrcaAccountSettingsPane(): React.JSX.Element {
         </div>
 
         {connected ? <PlanBillingSection /> : null}
+        {connected && authStatus?.cloud?.activeOrgId ? (
+          <TeamMembersSection
+            orgId={authStatus.cloud.activeOrgId}
+            viewerUserId={authStatus.cloud.userId}
+          />
+        ) : null}
 
         <div className="space-y-4 border-t border-border/60 pt-5">
           <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">

@@ -233,6 +233,33 @@ const meteredTotal = summaries.data.reduce((sum, row) => sum + row.aggregated_va
 check('Stripe meter received exactly the capped overage seconds', meteredTotal === Math.floor((2500 / 75) * HOUR), { meteredTotal })
 
 // ---- 5. Portal ------------------------------------------------------------------------------
+// ---- 5a. Seats follow membership (auth pushes member counts) ------------------------------------
+const membershipToken = process.env.E2E_MEMBERSHIP_TOKEN
+if (membershipToken) {
+  const push = async (members: number) => {
+    const response = await fetch(`${BILLING_URL}/v1/internal/seats`, {
+      method: 'POST',
+      headers: { authorization: `Bearer ${membershipToken}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ accountId: accountA, members })
+    })
+    return (await response.json()) as Record<string, any>
+  }
+  const seatItem = async () =>
+    (await stripe<{ items: { data: Array<{ quantity: number; price: { id: string } }> } }>('GET', `/v1/subscriptions/${ids.checkoutSubscription}`))
+      .items.data.find((item) => item.price.id === catalog.STRIPE_PRICE_TEAM_MONTHLY)?.quantity
+  const added = await push(3)
+  const invoices = await stripe<{ data: Array<{ billing_reason: string; status: string; amount_due: number }> }>('GET', '/v1/invoices', {
+    subscription: ids.checkoutSubscription, limit: 1
+  })
+  check('member added -> 3 seats, prorated invoice charged now', added.status === 'updated' && (await seatItem()) === 3 &&
+    invoices.data[0]?.billing_reason === 'subscription_update' && invoices.data[0]?.status === 'paid', { added, invoice: invoices.data[0] })
+  const removed = await push(2)
+  const afterRemove = await entitlement(orgA)
+  check('member removed -> 2 seats (credit on next invoice), 120 h included', removed.status === 'updated' && (await seatItem()) === 2 &&
+    afterRemove.seats === 2 && afterRemove.includedSeconds === 120 * HOUR, { removed, seats: afterRemove.seats })
+  check('pending invites do not change seats (same member count is a no-op)', (await push(2)).status === 'unchanged')
+}
+
 const portal = await billing('POST', '/v1/billing/portal', orgA)
 check('customer portal session (seats, monthly<->annual, cancel config)', /^https:\/\/billing\.stripe\.com\//.test(portal.body.url ?? ''), portal.body)
 
@@ -278,6 +305,23 @@ await stripe('POST', `/v1/customers/${customerC.id}`, { invoice_settings: { defa
 await advanceClock(clock.id, renewed.period.end / 1000 + HOUR)
 const pastDue = await until('past_due synced', () => entitlement(orgC), (e) => e.status === 'past_due', 120_000)
 check('invoice.payment_failed -> past_due -> starts blocked', pastDue.status === 'past_due' && pastDue.reason === 'payment_past_due', pastDue.status)
+const graceSeconds = Number(process.env.E2E_GRACE_SECONDS ?? 4 * 24 * HOUR)
+check('grace window recorded (suspend running after the grace)', pastDue.payment?.suspendRunning === false &&
+  pastDue.payment?.graceEndsAt - pastDue.payment?.pastDueSince === graceSeconds * 1000, pastDue.payment)
+if (graceSeconds <= 120) {
+  // Short grace configured for this run (BILLING_PLANS team.paymentGraceHours): watch it expire.
+  const suspended = await until('grace expiry', () => startCheck(`org:${orgC}`), (c) => c.suspendRunning === true, (graceSeconds + 60) * 1000)
+  check('grace expired -> suspendRunning, reason payment_grace_expired', suspended.suspendRunning === true && suspended.reason === 'payment_grace_expired', suspended)
+  const listed = await billing('GET', '/v1/internal/suspensions', null).then((r) => r.body)
+  check('/v1/internal/suspensions lists the account', listed.accounts?.some((a: any) => a.accountId === `org:${orgC}`), listed)
+  // Pay the open invoice with a good card -> active -> resume allowed.
+  const goodCard = await stripe<{ id: string }>('POST', '/v1/payment_methods/pm_card_visa/attach', { customer: customerC.id })
+  await stripe('POST', `/v1/customers/${customerC.id}`, { invoice_settings: { default_payment_method: goodCard.id } })
+  const live = await stripe<{ latest_invoice: string }>('GET', `/v1/subscriptions/${clockSub.id}`)
+  await stripe('POST', `/v1/invoices/${live.latest_invoice}/pay`, { payment_method: goodCard.id })
+  const resumed = await until('paid', () => startCheck(`org:${orgC}`), (c) => c.allow === true, 120_000)
+  check('paid -> resume allowed, suspendRunning cleared', resumed.allow === true && resumed.suspendRunning === false, resumed)
+}
 
 // ---- 8. Cancel -------------------------------------------------------------------------------
 await stripe('DELETE', `/v1/subscriptions/${ids.checkoutSubscription}`)

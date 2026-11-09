@@ -12,6 +12,7 @@ import type {
   OrcaBillingStatusResult
 } from '../../../../shared/orca-billing'
 import { EnterpriseOffer, TeamOffer } from './PlanBillingOffers'
+import { PaymentIssueNotice } from './PaymentIssueNotice'
 import { OverageControls, UsageSummary } from './PlanBillingUsage'
 import {
   denyReasonCopy,
@@ -181,7 +182,9 @@ export function PlanBillingView({
         </div>
       ) : null}
 
-      {entitlement.reason ? (
+      <PaymentIssueNotice entitlement={entitlement} busy={busy} onUpdatePayment={onPortal} />
+
+      {entitlement.reason && entitlement.payment.pastDueSince === null ? (
         <p className="text-xs text-muted-foreground">{denyReasonCopy(entitlement.reason, t)}</p>
       ) : null}
 
@@ -196,7 +199,7 @@ export function PlanBillingView({
 
       {hasPlan && entitlement.canManageBilling ? (
         <Button type="button" variant="outline" size="sm" disabled={busy} onClick={onPortal}>
-          {t('auto.components.billing.manageSeats', 'Manage seats & billing')}
+          {t('auto.components.billing.manageBilling', 'Manage billing')}
           <ExternalLink />
         </Button>
       ) : null}
