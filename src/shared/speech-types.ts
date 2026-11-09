@@ -73,7 +73,8 @@ export type UserModelConfig = {
   sampleRate?: number
 }
 
-export type DictationMode = 'toggle' | 'hold'
+// Auto: holding the shortcut records until release, a tap toggles.
+export type DictationMode = 'auto' | 'hold' | 'toggle'
 
 export type VoiceSettings = {
   enabled: boolean
