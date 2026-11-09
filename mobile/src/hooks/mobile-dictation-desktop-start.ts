@@ -15,7 +15,7 @@ import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 type StartMobileDictationDesktopSessionOptions = {
   client: RpcClient
   dictationId: string
-  worktreeId: string | undefined
+  worktreeId?: string
   generation: number
   getCurrentGeneration: () => number
   getEnabled: () => boolean

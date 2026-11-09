@@ -1,5 +1,5 @@
 import { useAppStore } from '@/store'
-import { findRepoForHost } from '@/store/repos/repo-host-identity'
+import { selectRepoByIdForActiveWorkspace } from '@/store/repos/active-workspace-repository'
 import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { DictationContext } from '../../../../shared/speech-types'
 
@@ -10,9 +10,6 @@ export function captureDictationContext(): DictationContext {
   if (!worktreeId) {
     return {}
   }
-  const repo = findRepoForHost(state.repos, getRepoIdFromWorktreeId(worktreeId), {
-    hostId: state.activeWorkspaceExecutionHostId,
-    settings: state.settings
-  })
+  const repo = selectRepoByIdForActiveWorkspace(state, getRepoIdFromWorktreeId(worktreeId))
   return { worktreeId, ...(repo?.dictationTerms ? { repoTerms: repo.dictationTerms } : {}) }
 }

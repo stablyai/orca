@@ -55,9 +55,12 @@ export const DictationHandle = z.object({
   dictationId: requiredString('Missing dictation ID')
 })
 
-export const SpeechSetupRead = z.object({
-  worktreeId: OptionalString
-})
+// Nullable: older phones and every read without a worktree send null.
+export const SpeechSetupRead = z
+  .object({
+    worktreeId: OptionalString
+  })
+  .nullable()
 
 export const SpeechModelAction = z.object({
   modelId: requiredString('Missing model ID')

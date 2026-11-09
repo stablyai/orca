@@ -35,6 +35,13 @@ describe('createDictationDictionary', () => {
     )
   })
 
+  it('keeps a term with symbols whole when the model already wrote it', () => {
+    const terms = [{ term: 'C#' }, { term: '.NET' }]
+    expect(spell(terms, 'Port the C# app to .NET, not plan C.')).toBe(
+      'Port the C# app to .NET, not plan C.'
+    )
+  })
+
   it('leaves longer words and words split by a sentence end alone', () => {
     const terms = [{ term: 'React' }, { term: 'onChange' }]
     expect(spell(terms, 'Reactive state. Turn it on. Change it.')).toBe(

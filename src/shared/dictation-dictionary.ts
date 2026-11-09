@@ -4,9 +4,12 @@ export type DictationTerm = { term: string; heardAs?: string }
 export const MAX_DICTATION_TERMS = 500
 export const MAX_DICTATION_TERM_LENGTH = 100
 
-const WORD_RE = /[\p{L}\p{M}\p{N}]+/gu
+// Symbols that belong to a name ("C#", "C++", "@orca") count as part of a word, so a term never doubles them.
+const WORD_RE = /[\p{L}\p{M}\p{N}#+@$&]+/gu
 // Spaces, or one joiner as in "on-change" or "stt-worker.ts": what may sit between the words of one term.
 const JOINING_GAP_RE = /^(?:\s+|[-_./])$/u
+// A term's own leading or trailing joiners, as in ".NET", taken along when the text already has them.
+const EDGE_JOINERS_RE = /^([-_./]*)[\s\S]*?([-_./]*)$/u
 // Scripts written without spaces, where a phrase can only be found inside a longer run of letters.
 const UNSPACED_SCRIPT_RE =
   /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Thai}\p{Script=Lao}\p{Script=Khmer}\p{Script=Myanmar}]/u
@@ -106,8 +109,17 @@ function replaceWordRuns(text: string, byKey: Map<string, string>, longestKey: n
       start++
       continue
     }
-    out += text.slice(cursor, words[start].index) + match.term
-    cursor = words[match.end].index + words[match.end][0].length
+    const [, lead, trail] = EDGE_JOINERS_RE.exec(match.term) ?? ['', '', '']
+    let from = words[start].index
+    let to = words[match.end].index + words[match.end][0].length
+    if (lead && from - lead.length >= cursor && text.slice(from - lead.length, from) === lead) {
+      from -= lead.length
+    }
+    if (trail && text.startsWith(trail, to)) {
+      to += trail.length
+    }
+    out += text.slice(cursor, from) + match.term
+    cursor = to
     start = match.end + 1
   }
   return out + text.slice(cursor)

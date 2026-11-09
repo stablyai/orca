@@ -14,7 +14,7 @@ export const SPEECH_METHODS = [
     name: 'speech.models.list',
     permission: 'workspace',
     params: SpeechSetupRead,
-    handler: async (params, { runtime }) => runtime.listMobileSpeechModels(params.worktreeId)
+    handler: async (params, { runtime }) => runtime.listMobileSpeechModels(params?.worktreeId)
   }),
   defineMethod({
     name: 'speech.models.download',
