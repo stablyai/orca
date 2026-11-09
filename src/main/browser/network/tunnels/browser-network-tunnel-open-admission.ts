@@ -1,7 +1,7 @@
 import {
   decodeBrowserNetworkTunnelOpen,
   type BrowserNetworkTunnelFrame
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import type { BrowserNetworkTunnelResourceBudget } from './browser-network-tunnel-resource-budget'
 import { createBrowserNetworkTunnelStream } from './browser-network-tunnel-stream-lifecycle'
 import { browserTunnelDestinationFailureCode } from './browser-network-tunnel-destination-policy'

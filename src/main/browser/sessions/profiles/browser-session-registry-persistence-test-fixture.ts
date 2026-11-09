@@ -182,8 +182,7 @@ export function installModuleMocks(
     ...(await importOriginal<Record<string, unknown>>()),
     renameFileWithWindowsRetry: renameFileWithWindowsRetryMock
   }))
-  vi.doMock('../../../codex-accounts/fs-utils', () => ({
-    renameFileWithWindowsRetry: renameFileWithWindowsRetryMock,
+  vi.doMock('../../../filesystem/atomic-file-publication', () => ({
     writeFileAtomically: vi.fn((pathValue: string, data: string) => {
       const key = fsKey(pathValue)
       fsState.files.set(key, data)

@@ -1,4 +1,4 @@
-import type { BrowserDevToolsDockBounds } from '../../../shared/browser-devtools-dock'
+import type { BrowserDevToolsDockBounds } from '../../../shared/browser/devtools/browser-devtools-dock'
 import { ipcRenderer } from 'electron'
 import type { BrowserViewportOverride } from '../../../shared/browser-workspace-types'
 import type {
@@ -14,7 +14,7 @@ import type {
   BrowserPagePromptRequest,
   BrowserPagePromptResponse,
   BrowserPagePromptResult
-} from '../../../shared/browser-page-prompt'
+} from '../../../shared/browser/prompts/browser-page-prompt'
 import { readBrowserClientHostIdArgument } from '../../../shared/browser/client-hosting/browser-client-host-id-argument'
 import { browserClientPageRendererRequests } from '../../preload-runtime-support'
 import type { PreloadApi } from '../../api-types'

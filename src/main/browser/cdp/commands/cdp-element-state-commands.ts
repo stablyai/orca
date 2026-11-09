@@ -2,7 +2,7 @@ import type {
   BrowserCheckResult,
   BrowserSelectResult,
   BrowserUploadResult
-} from '../../../../shared/runtime-browser-contracts'
+} from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import type { CdpBridgeState } from './cdp-bridge-state'
 import type { CdpDebuggerLifecycle } from '../debugger/cdp-debugger-lifecycle'
 import type { CdpRefResolution } from './cdp-ref-resolution'

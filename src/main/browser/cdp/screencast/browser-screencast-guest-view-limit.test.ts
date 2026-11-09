@@ -1,7 +1,7 @@
 import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
 
-import { decodeBrowserScreencastFrame } from '../../../../shared/browser-screencast-protocol'
+import { decodeBrowserScreencastFrame } from '../../../../shared/browser/screencast/browser-screencast-protocol'
 
 import { startBrowserScreencast } from './browser-screencast-stream'
 import { createMockScreencastWebContents } from './browser-screencast-web-contents-test-double'

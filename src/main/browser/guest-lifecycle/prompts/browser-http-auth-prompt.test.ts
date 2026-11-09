@@ -11,7 +11,7 @@ vi.mock('../manager/browser-manager', () => ({
   }
 }))
 
-import type { BrowserPagePromptRequest } from '../../../../shared/browser-page-prompt'
+import type { BrowserPagePromptRequest } from '../../../../shared/browser/prompts/browser-page-prompt'
 import { handleBrowserGuestLogin } from './browser-http-auth-prompt'
 import { BROWSER_PAGE_PROMPT_TIMEOUT_MS, respondToBrowserPagePrompt } from './browser-page-prompts'
 

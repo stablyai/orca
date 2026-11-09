@@ -1,4 +1,4 @@
-import type { BrowserExternalAppPrompt } from './browser-external-app'
+import type { BrowserExternalAppPrompt } from '../../browser-external-app'
 import type { BrowserHttpAuthCredentials, BrowserHttpAuthPrompt } from './browser-http-auth'
 import type {
   BrowserJavaScriptDialogAnswer,
@@ -7,7 +7,7 @@ import type {
 import type {
   BrowserSitePermissionDecision,
   BrowserSitePermissionPrompt
-} from './browser-site-permission'
+} from '../../browser-site-permission'
 
 /** Every prompt a page in the built-in browser can raise: what it shows, and an answer. */
 export type BrowserPagePromptKinds = {

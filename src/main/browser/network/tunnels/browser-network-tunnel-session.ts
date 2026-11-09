@@ -2,7 +2,7 @@ import {
   BrowserNetworkTunnelOpcode,
   encodeBrowserNetworkTunnelWindowUpdate,
   type BrowserNetworkTunnelFrame
-} from '../../../../shared/browser-network-tunnel-protocol'
+} from '../../../../shared/browser/network/tunnels/browser-network-tunnel-protocol'
 import { admitBrowserNetworkTunnelOpen } from './browser-network-tunnel-open-admission'
 import { browserTunnelDestinationFailureCode } from './browser-network-tunnel-destination-policy'
 import {

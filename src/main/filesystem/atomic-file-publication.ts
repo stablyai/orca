@@ -2,15 +2,9 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, linkSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl } from '../windows/windows-directory-acl'
-import { isPermissionError } from '../filesystem/permission-errors'
+import { isPermissionError } from './permission-errors'
 import { nodeFileContentsEqualSync } from '../../shared/file-content/node-file-content-equality'
-import {
-  copyFileWithWindowsRetry,
-  renameFileWithWindowsRetry,
-  renameFileWithWindowsRetryAsync
-} from '../../shared/windows-retry-file-operations'
-
-export { copyFileWithWindowsRetry, renameFileWithWindowsRetry, renameFileWithWindowsRetryAsync }
+import { renameFileWithWindowsRetry } from '../../shared/windows-retry-file-operations'
 
 export function writeFileAtomically(
   targetPath: string,

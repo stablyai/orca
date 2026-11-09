@@ -12,8 +12,6 @@ import { hasSpawnObserver, notifySpawnObserver } from './spawn-observer'
 import { createOutputSink } from './bounded-output-sink'
 import { createChildTerminationReporter } from './child-termination-reporter'
 
-export { WindowsCmdLineBreakError } from './windows-command-line'
-
 import type { PipedProcessSpec, ProcessSpec, ProcessResult } from './process-spec'
 import { DEFAULT_PROCESS_TIMEOUT_MS, DEFAULT_MAX_OUTPUT_BYTES } from './process-spec'
 // Bound waits for children that ignore termination and never emit close.

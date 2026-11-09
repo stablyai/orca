@@ -3,7 +3,7 @@ import type {
   BrowserGrabPayload,
   BrowserGrabRejectReason,
   BrowserGrabScreenshot
-} from '../../../../../shared/browser-grab-types'
+} from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 import { isEditableKeyboardTarget } from '../host-guest/browser-keyboard'

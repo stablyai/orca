@@ -1,11 +1,11 @@
 import { useCallback, useRef, useState, type ReactElement } from 'react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { BrowserDriverState } from '@/lib/pane-manager/browser-mobile-driver-state'
+import type { RuntimeTerminalDriverState } from '../../../../../shared/runtime-session-contracts'
 import { useTranslate } from '@/i18n/use-translate'
 
 type Props = {
-  driver: BrowserDriverState
+  driver: RuntimeTerminalDriverState
   onTakeBack: () => void | Promise<void>
 }
 
