@@ -13844,6 +13844,10 @@
                     "title": "Repositorio archivado",
                     "body": "Este repositorio está archivado, por lo que Orca no está actualizando el estado de {{reviewLabel}}."
                   },
+                  "host_off": {
+                    "title": "El host WSL está apagado",
+                    "body": "Orca actualiza el estado de {{reviewLabel}} a través del host WSL de este proyecto, que está apagado. Vuelve a conectarlo para actualizar."
+                  },
                   "not_git": {
                     "title": "No es un repositorio Git",
                     "body": "Orca no pudo tratar esta carpeta como un repositorio Git para el estado de {{reviewLabel}}."

@@ -13971,6 +13971,10 @@
                     "title": "存放庫已封存",
                     "body": "此存放庫已封存，Orca 不會重新整理 {{reviewLabel}} 狀態。"
                   },
+                  "host_off": {
+                    "title": "WSL 主機已關閉",
+                    "body": "Orca 透過此專案的 WSL 主機重新整理 {{reviewLabel}} 狀態，但主機已關閉。請重新連線以更新狀態。"
+                  },
                   "not_git": {
                     "title": "不是 Git 存放庫",
                     "body": "Orca 無法將此資料夾作為 Git 存放庫來取得 {{reviewLabel}} 狀態。"

@@ -13503,6 +13503,10 @@
                     "title": "仓库已归档",
                     "body": "此仓库已归档，Orca 不会刷新 {{reviewLabel}} 状态。"
                   },
+                  "host_off": {
+                    "title": "WSL 主机已关闭",
+                    "body": "Orca 通过此项目的 WSL 主机刷新 {{reviewLabel}} 状态，但主机已关闭。请重新连接以刷新状态。"
+                  },
                   "not_git": {
                     "title": "不是 Git 仓库",
                     "body": "Orca 无法将此文件夹作为 Git 仓库来获取 {{reviewLabel}} 状态。"

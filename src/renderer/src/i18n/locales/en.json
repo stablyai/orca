@@ -14698,6 +14698,10 @@
                     "title": "Repository archived",
                     "body": "This repository is archived, so Orca is not refreshing {{reviewLabel}} status."
                   },
+                  "host_off": {
+                    "title": "WSL host is off",
+                    "body": "Orca refreshes {{reviewLabel}} status through this project’s WSL host, which is off. Reconnect it to refresh."
+                  },
                   "not_git": {
                     "title": "Not a Git repository",
                     "body": "Orca could not treat this folder as a Git repository for {{reviewLabel}} status."

@@ -14087,6 +14087,10 @@
                     "title": "Dépôt archivé",
                     "body": "Ce dépôt est archivé ; Orca n'actualise donc pas le statut de la {{reviewLabel}}."
                   },
+                  "host_off": {
+                    "title": "L’hôte WSL est éteint",
+                    "body": "Orca actualise l’état de {{reviewLabel}} via l’hôte WSL de ce projet, qui est éteint. Reconnectez-le pour actualiser."
+                  },
                   "not_git": {
                     "title": "N'est pas un dépôt Git",
                     "body": "Orca n'a pas pu traiter ce dossier comme un dépôt Git pour le statut de {{reviewLabel}}."

@@ -13503,6 +13503,10 @@
                     "title": "리포지토리가 보관됨",
                     "body": "이 리포지토리가 보관되어 있으므로 Orca가 {{reviewLabel}} 상태를 새로고치지 않습니다."
                   },
+                  "host_off": {
+                    "title": "WSL 호스트가 꺼져 있습니다",
+                    "body": "Orca는 이 프로젝트의 WSL 호스트를 통해 {{reviewLabel}} 상태를 새로고침하지만 호스트가 꺼져 있습니다. 새로고침하려면 다시 연결하세요."
+                  },
                   "not_git": {
                     "title": "Git 리포지토리가 아님",
                     "body": "Orca는 {{reviewLabel}} 상태용으로 이 폴더를 Git 리포지토리로 처리할 수 없었습니다."

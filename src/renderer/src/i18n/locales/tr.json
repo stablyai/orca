@@ -14149,6 +14149,10 @@
                     "title": "Repository arşivlendi",
                     "body": "Bu repository arşivlendiği için Orca {{reviewLabel}} durumunu yenilemiyor."
                   },
+                  "host_off": {
+                    "title": "WSL ana makinesi kapalı",
+                    "body": "Orca, {{reviewLabel}} durumunu bu projenin kapalı olan WSL ana makinesi üzerinden yeniler. Yenilemek için yeniden bağlayın."
+                  },
                   "not_git": {
                     "title": "Git repository'si değil",
                     "body": "Orca bu klasörü {{reviewLabel}} durumu için bir Git repository'si olarak ele alamadı."
