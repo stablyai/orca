@@ -3,7 +3,9 @@ import { translateMain } from '../i18n/main-i18n'
 
 export type GpuFallbackRestartDecision = 'restart' | 'continue'
 
-export function gpuFallbackRestartOptions(): MessageBoxOptions {
+export function gpuFallbackRestartOptions(
+  platform: NodeJS.Platform = process.platform
+): MessageBoxOptions {
   return {
     type: 'warning',
     buttons: [
@@ -19,7 +21,10 @@ export function gpuFallbackRestartOptions(): MessageBoxOptions {
     ),
     detail: translateMain(
       'gpuFallback.restartPrompt.detail',
-      'Safe graphics mode disables hardware acceleration and WebGL for this Orca version. Terminals and 3D content may render more slowly. Keep Running leaves graphics settings unchanged.'
+      // Linux keeps software rasterization, so software-backed WebGL can remain; only Windows removes it.
+      platform === 'linux'
+        ? 'Safe graphics mode disables hardware acceleration for this Orca version. Software rendering may keep WebGL available. Terminals and 3D content may render more slowly. Keep Running leaves graphics settings unchanged.'
+        : 'Safe graphics mode disables hardware acceleration and WebGL for this Orca version. Terminals and 3D content may render more slowly. Keep Running leaves graphics settings unchanged.'
     )
   }
 }
