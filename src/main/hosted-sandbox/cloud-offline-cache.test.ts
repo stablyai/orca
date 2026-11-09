@@ -49,7 +49,7 @@ describe('cloud offline cache', () => {
     const { cache, tick } = setup({ maxEntriesPerEnvironment: 3, maxEntryBytes: 200 })
     for (let i = 0; i < 5; i++) {
       tick()
-      cache.record('env', 'terminal.read', { terminal: `t${i}` }, ok({ tail: ['x'] }))
+      cache.record('env', 'terminal.read', { terminal: `t${i}` }, ok({ terminal: { tail: ['x'] } }))
     }
     expect(
       cache
@@ -97,7 +97,7 @@ describe('offline snapshot', () => {
       'env',
       'terminal.read',
       { terminal: 'h1', limit: 400 },
-      ok({ handle: 'h1', tail: ['\u001b[32mready\u001b[0m on :3000'] })
+      ok({ terminal: { handle: 'h1', tail: ['\u001b[32mready\u001b[0m on :3000'] } })
     )
     cache.record(
       'env',

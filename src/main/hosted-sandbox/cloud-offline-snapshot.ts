@@ -13,10 +13,14 @@ const MAX_MESSAGES = 200
 const MAX_TERMINAL_LINES = 400
 const MAX_CHANGES = 300
 
-// CSI/OSC/other escape sequences; the asleep view is plain text.
-// oxlint-disable-next-line no-control-regex -- matching terminal escape bytes is the point.
-const ANSI =
-  /\u001b\[[0-?]*[ -/]*[@-~]|\u001b\][^\u0007\u001b]*(?:\u0007|\u001b\\)|\u001b[@-Z\\-_]/g
+// CSI/OSC/other escape sequences; the asleep view is plain text. Built from char codes because
+// the escape (27) and bell (7) bytes are the point.
+const ESC = String.fromCharCode(27)
+const BEL = String.fromCharCode(7)
+const ANSI = new RegExp(
+  `${ESC}\\[[0-?]*[ -/]*[@-~]|${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)|${ESC}[@-Z\\\\-_]`,
+  'g'
+)
 
 export function stripAnsi(text: string): string {
   return text.replace(ANSI, '').replace(/\r(?!\n)/g, '')
@@ -82,19 +86,27 @@ function chatsOf(entries: OfflineCacheEntry[]): CloudOfflineChat[] {
 }
 
 function terminalsOf(cache: CloudOfflineCache, environmentId: string): CloudOfflineTerminal[] {
-  const list = cache.entries(environmentId, 'terminal.list')[0]
+  // Every listing contributes titles (a filtered listing can be empty); newest first wins.
   const titles = new Map<string, string | null>()
-  for (const terminal of (
-    list?.result as {
-      terminals?: { handle: string; title: string | null; paneTitle?: string }[]
-    } | null
-  )?.terminals ?? []) {
-    titles.set(terminal.handle, terminal.paneTitle ?? terminal.title ?? null)
+  for (const list of cache.entries(environmentId, 'terminal.list')) {
+    const listed =
+      (
+        list.result as {
+          terminals?: { handle: string; title: string | null; paneTitle?: string }[]
+        } | null
+      )?.terminals ?? []
+    for (const terminal of listed) {
+      if (!titles.has(terminal.handle)) {
+        titles.set(terminal.handle, terminal.paneTitle ?? terminal.title ?? null)
+      }
+    }
   }
   const seen = new Set<string>()
   const terminals: CloudOfflineTerminal[] = []
   for (const entry of cache.entries(environmentId, 'terminal.read')) {
-    const result = entry.result as { handle?: string; tail?: string[] } | null
+    // `terminal.read` answers `{terminal: RuntimeTerminalRead}`.
+    const wrapped = entry.result as { terminal?: { handle?: string; tail?: string[] } } | null
+    const result = wrapped?.terminal
     const handle = result?.handle ?? (entry.params as { terminal?: string } | null)?.terminal
     if (!handle || seen.has(handle) || !Array.isArray(result?.tail)) {
       continue
@@ -128,7 +140,7 @@ function gitOf(cache: CloudOfflineCache, environmentId: string): CloudOfflineGit
   const statusResult = (status?.result ?? {}) as StatusResult
   const entries = statusResult.entries ?? []
   return {
-    branch: statusResult.branch ?? null,
+    branch: statusResult.branch?.replace(/^refs\/heads\//, '') ?? null,
     head: statusResult.head ?? null,
     changes: entries
       .slice(0, MAX_CHANGES)
