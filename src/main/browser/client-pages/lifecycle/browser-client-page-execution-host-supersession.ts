@@ -1,4 +1,4 @@
-import type { BrowserClientPageNetworkRoute } from './browser-client-page-cleanup'
+import type { BrowserClientPageNetworkRoute } from '../../network/client-routes/browser-client-page-network-route'
 import type { BrowserClientRetainedPage } from './browser-client-page-retained-state'
 
 type SupersedingRoute = Pick<BrowserClientPageNetworkRoute, 'key' | 'executionHostIdentity'>

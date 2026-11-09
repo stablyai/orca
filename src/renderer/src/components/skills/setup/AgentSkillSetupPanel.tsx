@@ -1,6 +1,6 @@
 import { bundledSkillSetupActionLabel } from './bundled-skill-setup-copy'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
-import { buildAgentFeatureSkillInstallCommand } from '@/lib/agent-feature-install-commands'
+import { buildAgentFeatureSkillInstallCommand } from '@/lib/skills/installation/agent-feature-install-commands'
 import { buildSkillCommandForRuntime } from '../../../lib/skill-runtime-command'
 import { WslAgentSkillSetupPanel } from './WslAgentSkillSetupPanel'
 import { useCallback } from 'react'

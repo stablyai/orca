@@ -55,7 +55,7 @@ function input(
     worktreeInfo: Object.fromEntries(
       Object.entries(hosts).map(([id, host]) => [
         id,
-        { hostId: id, totalWorktrees: 1, activeCount: 0, lastActiveWorktree: null, ...host.info }
+        { hostId: id, totalWorktrees: 1, activeCount: 0, ...host.info }
       ])
     ),
     now: NOW

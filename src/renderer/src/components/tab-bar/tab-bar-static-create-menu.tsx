@@ -2,7 +2,6 @@ import React from 'react'
 import { FilePlus, FileText, Globe, Smartphone, TerminalSquare } from 'lucide-react'
 import { useTranslate } from '@/i18n/use-translate'
 import { DropdownMenuItem, DropdownMenuShortcut } from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { MobileEmulatorTabIntroCallout } from '../emulator-pane/MobileEmulatorTabIntroCallout'
 import { ShellIcon } from './shell-icons'
 import { useAppStore } from '@/store'
@@ -120,21 +119,14 @@ export function TabBarStaticCreateMenu({
   const newSimulatorMenuItem =
     !terminalOnly && mobileEmulatorEnabled && mobileEmulatorCreationEnabled && onNewSimulatorTab ? (
       workspaceHasSimulatorTab ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <DropdownMenuItem
-              onSelect={onNewSimulatorTab}
-              className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-            >
-              <Smartphone className="size-4 text-muted-foreground" />
-              {t('auto.components.tab.bar.TabBar.b426bb2615', 'Go to Mobile Emulator')}
-              <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          </TooltipTrigger>
-          <TooltipContent side="right" sideOffset={8} className="z-[80]">
-            {t('auto.components.tab.bar.TabBar.aea43b5748', 'Open the existing emulator tab.')}
-          </TooltipContent>
-        </Tooltip>
+        <DropdownMenuItem
+          onSelect={onNewSimulatorTab}
+          className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+        >
+          <Smartphone className="size-4 text-muted-foreground" />
+          {t('auto.components.tab.bar.TabBar.b426bb2615', 'Go to Mobile Emulator')}
+          <DropdownMenuShortcut>{newSimulatorShortcut}</DropdownMenuShortcut>
+        </DropdownMenuItem>
       ) : (
         <DropdownMenuItem
           onSelect={onNewSimulatorTab}

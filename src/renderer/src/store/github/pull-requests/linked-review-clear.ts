@@ -9,7 +9,7 @@ import {
 } from '../../../../../shared/github/linked-pr-staleness'
 import { getHostedReviewLinkMutationGeneration } from '../../slices/worktrees/metadata/hosted-review-link-mutation'
 import { tryRuntimeTargetForWorktreeOwner } from '../../slices/worktrees/listing/worktree-owner-target'
-import { hasUniqueIndexedRepositoryHost } from '@/lib/repository-owner-index'
+import { hasUniqueIndexedRepositoryHost } from '@/lib/workspace/ownership/repository-owner-index'
 import { resolveReviewRepository } from '@/lib/review-owner'
 import { findWorktreeById, getWorktreeLookupIndex } from '../refresh/worktree-refresh'
 

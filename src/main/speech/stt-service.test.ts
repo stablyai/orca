@@ -89,10 +89,7 @@ const {
     static instances: HoistedMockOpenAiTranscriptionSession[] = []
     feedCalls: { samples: Float32Array; sampleRate: number }[] = []
 
-    constructor(
-      readonly modelId: string,
-      readonly readApiKey: () => string
-    ) {
+    constructor(readonly readTarget: () => { model: string; apiKey: string }) {
       HoistedMockOpenAiTranscriptionSession.instances.push(this)
     }
 
@@ -101,7 +98,8 @@ const {
     }
 
     finish(): Promise<string> {
-      return Promise.resolve(`${this.modelId}:${this.readApiKey()}`)
+      const target = this.readTarget()
+      return Promise.resolve(`${target.model}:${target.apiKey}`)
     }
   }
 
@@ -159,6 +157,7 @@ vi.mock('./model-catalog', () => ({
           id,
           type: 'openai',
           provider: 'openai',
+          language: 'multilingual',
           streaming: false,
           sampleRate: 16000
         }
@@ -167,6 +166,7 @@ vi.mock('./model-catalog', () => ({
             id,
             type: 'whisper',
             provider: 'local',
+            language: 'multilingual',
             streaming: false,
             sampleRate: 16000,
             files: ['encoder.onnx', 'decoder.onnx', 'tokens.txt'],
@@ -176,14 +176,18 @@ vi.mock('./model-catalog', () => ({
             id: 'model-a',
             type: 'transducer',
             provider: 'local',
+            language: 'en',
             streaming: true,
             sampleRate: 16000,
             files: ['encoder.onnx', 'decoder.onnx', 'joiner.onnx', 'tokens.txt']
           }
 }))
 
-vi.mock('./openai-api-key-store', () => ({
-  readOpenAiSpeechApiKey: readOpenAiSpeechApiKeyMock
+vi.mock('./cloud-transcription-target', () => ({
+  resolveCloudTranscriptionTarget: (modelId: string) => ({
+    model: modelId,
+    apiKey: readOpenAiSpeechApiKeyMock()
+  })
 }))
 
 vi.mock('./openai-transcription-client', () => ({
@@ -231,6 +235,38 @@ describe('SttService', () => {
       [{ type: 'partial', text: 'from the desk' }]
     ])
     expect(worker.messages.at(-1)).toMatchObject({ type: 'feed', streamId: desktopStream })
+  })
+
+  it('removes filler words from the text every host route reads, unless they are turned off', async () => {
+    const service = new SttService(readyModels(), spawnMockWorker)
+    const cleaned = vi.fn<SttEventSink>()
+    const raw = vi.fn<SttEventSink>()
+
+    await service.startDictation('model-a', cleaned, undefined, 'desktop', {
+      removeFillerWords: true
+    })
+    await service.startDictation('model-a', raw, undefined, 'mobile:phone-a:1', {
+      removeFillerWords: false
+    })
+    service.feedAudio(new Float32Array([1]), 16000, 'desktop')
+    service.feedAudio(new Float32Array([2]), 16000, 'mobile:phone-a:1')
+    const worker = getLastWorker()!
+    const [cleanedStream, rawStream] = worker.messages
+      .filter((message) => message.type === 'feed')
+      .map((message) => message.streamId)
+    for (const streamId of [cleanedStream, rawStream]) {
+      worker.emit('message', { type: 'partial', streamId, text: 'Um, ship' })
+      worker.emit('message', { type: 'final', streamId, text: 'Um, ship it, uh, today.' })
+    }
+
+    expect(cleaned.mock.calls.slice(1)).toEqual([
+      [{ type: 'partial', text: 'Ship' }],
+      [{ type: 'final', text: 'Ship it today.' }]
+    ])
+    expect(raw.mock.calls.slice(1)).toEqual([
+      [{ type: 'partial', text: 'Um, ship' }],
+      [{ type: 'final', text: 'Um, ship it, uh, today.' }]
+    ])
   })
 
   it("hands a renderer's audio port only to its own on-device stream", async () => {
@@ -294,9 +330,13 @@ describe('SttService', () => {
       spawnMockWorker
     )
 
-    await service.startDictation('whisper-model', vi.fn(), undefined, 'desktop', 'ko')
+    await service.startDictation('whisper-model', vi.fn(), undefined, 'desktop', {
+      dictationLanguage: 'ko'
+    })
     await service.stopDictation('desktop')
-    await service.startDictation('whisper-model', vi.fn(), undefined, 'desktop', 'ja')
+    await service.startDictation('whisper-model', vi.fn(), undefined, 'desktop', {
+      dictationLanguage: 'ja'
+    })
 
     expect(getCreatedWorkerCount()).toBe(2)
     expect(getLastWorker()!.messages.find((message) => message.type === 'init')).toMatchObject({
@@ -314,6 +354,24 @@ describe('SttService', () => {
     await service.startDictation('model-a', vi.fn(), undefined, 'mobile:2')
 
     expect(getCreatedWorkerCount()).toBe(1)
+  })
+
+  it('keeps a recognizer marked for unload until its dictation ends, then unloads it', async () => {
+    const service = new SttService(readyModels(), spawnMockWorker)
+
+    await service.startDictation('model-a', vi.fn(), undefined, 'desktop')
+    const worker = getLastWorker()!
+    let unloaded = false
+    const unload = service.unloadModelWhenIdle().then(() => {
+      unloaded = true
+    })
+    await Promise.resolve()
+    expect(worker.terminated).toBe(false)
+    expect(unloaded).toBe(false)
+
+    await service.stopDictation('desktop')
+    await unload
+    expect(worker.terminated).toBe(true)
   })
 
   it('kills a worker stuck in a decode instead of making a cancel wait for it', async () => {

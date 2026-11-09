@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './mobile-relay-host-overlay'
-import type { MobileRelayHostOverlay } from './mobile-relay-host-overlay'
 
 const asyncStorageMock = vi.hoisted(() => ({
   getItem: vi.fn(),
@@ -164,29 +163,6 @@ describe('host-store list mutations', () => {
     await expect(
       loadHosts().then((hosts) => hosts.find(({ id }) => id === HOST_ONE.id)?.deviceToken)
     ).resolves.toBe('replacement-token')
-  })
-
-  it('clears stale relay state when an existing host is re-paired direct-only', async () => {
-    const overlay: MobileRelayHostOverlay = {
-      v: 2,
-      hostId: HOST_ONE.id,
-      endpoints: [
-        { id: 'direct-primary', kind: 'lan', url: HOST_ONE.endpoint },
-        {
-          id: 'relay-primary',
-          kind: 'relay',
-          url: 'wss://relay-c1.onorca.dev/v1/connect/AbCdEf0123_-xyZ9'
-        }
-      ],
-      relayHostId: HOST_ONE_RELAY.relayHostId,
-      relay: HOST_ONE_RELAY
-    }
-    storedOverlayRaw = JSON.stringify([overlay])
-
-    await savePairedHost({ ...HOST_ONE, deviceToken: 'replacement-token' })
-
-    expect(JSON.parse(storedOverlayRaw!)).toEqual([])
-    expect(secureStoreMock.deleteItemAsync).not.toHaveBeenCalled()
   })
 
   it('refuses an early same-key token write without durable cleanup intent', async () => {

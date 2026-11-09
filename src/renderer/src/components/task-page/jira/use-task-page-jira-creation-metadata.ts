@@ -3,7 +3,7 @@ import { useEffect } from 'react'
 import { jiraListIssueTypes, jiraListCreateFields } from '@/runtime/jira/runtime-jira-client'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 export function useTaskPageJiraCreationMetadata(model: TaskPageJiraCreationStateModel) {
   const {
     settings,

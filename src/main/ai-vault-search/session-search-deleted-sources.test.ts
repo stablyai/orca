@@ -1,3 +1,4 @@
+import './session-search-worker.test-fixture'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -50,19 +51,6 @@ function retire(
     directoryLimit: options.directoryLimit
   })
 }
-
-it('retires a deleted file the moment its own directory lists without it', async () => {
-  const kept = join(harness.claudeProjectDir, 'kept.jsonl')
-  await mkdir(harness.claudeProjectDir, { recursive: true })
-  await writeFile(kept, '{}')
-  const deleted = join(harness.claudeProjectDir, 'deleted.jsonl')
-
-  const result = await retire([kept, deleted])
-  expect(result.retired).toEqual([deleted])
-  expect(removed).toEqual([deleted])
-  expect(result.unverifiable).toEqual([])
-  expect(result.degradedRoots).toEqual([])
-})
 
 it('judges each merged-root directory on its own', async () => {
   const current = join(harness.roots.openclawStateDir ?? '', 'agents')

@@ -9,6 +9,8 @@ export const EPHEMERAL_VM_FAILURE_COPY = {
   runtimeNotFound: 'Unknown ephemeral VM runtime: {{runtimeId}}',
   runtimeRepoMissing: 'Ephemeral VM runtime has no repo id: {{runtimeId}}',
   provisionCancelled: 'Provisioning cancelled.',
+  provisionInterrupted:
+    'Orca stopped while this VM was being created. Destroy it to release any provider resources.',
   startRefUnresolved: 'Could not resolve provisioned-root start ref: {{ref}}',
   defaultStartRefUnresolved: 'Could not resolve a default provisioned-root start ref.',
   recipeExited: 'Recipe exited with code {{exitCode}}.',
@@ -133,6 +135,23 @@ export function toCleanupLastErrorFields(failure: EphemeralVmFailure | null): {
     cleanupLastError: failure?.error,
     cleanupLastErrorCode: failure?.errorCode,
     cleanupLastErrorParams: failure?.errorParams
+  }
+}
+
+/** Suspend/resume record fields; undefined writes nothing, null clears all three. */
+export function toLifecycleLastErrorFields(failure: EphemeralVmFailure | null | undefined): {
+  lifecycleLastError?: string
+  lifecycleLastErrorCode?: string
+  lifecycleLastErrorParams?: Record<string, string | number>
+} {
+  if (failure === undefined) {
+    return {}
+  }
+  return {
+    // The record rejects an empty string; a bare `new Error()` must still record the failure.
+    lifecycleLastError: failure ? failure.error || 'Unknown error.' : undefined,
+    lifecycleLastErrorCode: failure?.errorCode,
+    lifecycleLastErrorParams: failure?.errorParams
   }
 }
 

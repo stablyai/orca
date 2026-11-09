@@ -37,6 +37,8 @@ export async function runRecipeCommand(args: {
   signal?: AbortSignal
   /** Wall-clock limit; on expiry the process tree is stopped like a cancel and the result has timedOut. */
   timeoutMs?: number
+  /** Called once the OS reports the process started (never when spawning fails or is skipped). */
+  onSpawn?: () => void
   onStdout?: (chunk: string) => void
   onStderr?: (chunk: string) => void
   spawnCommand?: typeof spawn
@@ -44,6 +46,10 @@ export async function runRecipeCommand(args: {
   const maxBytes = clampRecipeCaptureBytes(args.maxCaptureBytes)
   const spawnCommand = args.spawnCommand ?? spawn
 
+  if (args.signal?.aborted) {
+    // Why: a step cancelled before it starts must not launch anything.
+    return { stdout: '', stderr: '', exitCode: null, signal: null, aborted: true }
+  }
   return new Promise((resolve, reject) => {
     let child: ChildProcessWithoutNullStreams
     try {
@@ -141,6 +147,9 @@ export async function runRecipeCommand(args: {
     // setEncoding flushes its decoder at end-of-stream; keep that final replacement character.
     child.stdout.on('end', () => flushDecoder(stdoutDecoder, args.onStdout))
     child.stderr.on('end', () => flushDecoder(stderrDecoder, args.onStderr))
+    if (args.onSpawn) {
+      child.once('spawn', args.onSpawn)
+    }
     child.on('error', (error) => {
       fail(error)
     })

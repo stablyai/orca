@@ -4,7 +4,8 @@ import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import '../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { normalizeBrowserGuestSrc } from '../../../../../shared/browser/extensions/browser-extension-url'
 import {
   applyBrowserPageViewportLayout,

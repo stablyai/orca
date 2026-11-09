@@ -304,6 +304,12 @@ timeoutSeconds:
 A timed-out `create` may still have started a VM, so make `create` idempotent per
 `ORCA_VM_INSTANCE_ID` or have it record the resource before slow work starts.
 
+Orca records each VM before `create` runs. If `create` started but never returned a result (it
+failed, timed out, or Orca quit), Settings keeps the VM listed so the user can clean it up; if it
+was cancelled or rejected before starting, nothing is kept. That destroy
+payload has `instanceId` but no `recipeResult`, so `destroy` should find the resource from the
+instance id (for example, a name built from `ORCA_VM_INSTANCE_ID`) or exit non-zero if it can't.
+
 The base result, which is what Orca-server mode prints:
 
 ```json
@@ -367,6 +373,12 @@ returned JSON, then `destroy`. Nothing is left running as long as `destroy` work
 Run it as a loop: read the `provisionTranscript` in the failed result, fix the script, re-run, until
 `ok` is `true`. Do not wait for the user to paste errors. How to read the transcript is in
 `references/failure-modes.md`.
+
+Once a workspace runs on the environment, check the environment itself from a terminal inside it:
+`ORCA vm env doctor --json` reports required CLIs (git plus what the repo manifests imply), agent
+CLIs and their sign-in, Git fetch and a dry-run push, the `orca.yaml` setup script, and free disk.
+Add `--run-setup` to re-run `scripts.setup` and gate on its exit code. Loop on it the same way: fix
+`orca.yaml` or the image, re-run, until no check fails and every `warn` is resolved or explained.
 
 The self-test sees only what the scripts print, so confirm separately that state holds an
 **authenticated** `snapshotId` and that `destroy` is implemented and tested. With `destroy: none`

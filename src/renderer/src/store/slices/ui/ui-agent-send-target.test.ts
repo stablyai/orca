@@ -20,12 +20,14 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn()
 }))
 
-vi.mock('@/lib/active-agent-note-send', () => ({
+vi.mock('@/lib/agent-session/messaging/terminal/active-agent-note-send', () => ({
+  sendNotesToActiveAgentSession: mocks.sendNotesToActiveAgentSession
+}))
+vi.mock('@/lib/agent-session/messaging/terminal/active-agent-note-send-result', () => ({
   activeAgentNotesSendFailureMessage: (
     status: string,
     options: { explicitTarget?: boolean } = {}
-  ) => (options.explicitTarget ? `selected:${status}` : status),
-  sendNotesToActiveAgentSession: mocks.sendNotesToActiveAgentSession
+  ) => (options.explicitTarget ? `selected:${status}` : status)
 }))
 
 vi.mock(

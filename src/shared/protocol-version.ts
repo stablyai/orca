@@ -11,7 +11,7 @@ import {
   AUTOMATION_RUNTIME_CAPABILITIES,
   AUTOMATION_RUNTIME_CLIENT_CAPABILITIES
 } from './automations/automation-runtime-capabilities'
-import { BROWSER_RUNTIME_CAPABILITIES } from './browser-runtime-capabilities'
+import { BROWSER_RUNTIME_CAPABILITIES } from './browser/runtime/browser-runtime-capabilities'
 import {
   DEVICE_KEY_RUNTIME_CAPABILITIES,
   E2EE_V2_TOKEN_CAPABILITIES_RUNTIME_CAPABILITY
@@ -49,8 +49,6 @@ export const MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION = 2
 export const MIN_COMPATIBLE_RUNTIME_SERVER_VERSION = 2
 
 // Why stars: importers keep reading every capability from here while each area owns its module.
-
-export * from './browser-runtime-capabilities'
 
 export * from './host-runtime-capabilities'
 

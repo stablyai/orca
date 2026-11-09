@@ -20,7 +20,7 @@ import {
 import {
   type LiveTerminalSurfaceOwnerIndex,
   readWorktreeLiveTerminalSurfaceOwners
-} from '../../worktree-live-terminal-surface-owners'
+} from '../ownership/worktree-live-terminal-surface-owners'
 import { isStructuredAgentSyntheticSleepingRecord } from '../../agent-session/resume/structured-agent-synthetic-sleeping-record'
 import {
   readWorktreeStructuredActivationInventory,

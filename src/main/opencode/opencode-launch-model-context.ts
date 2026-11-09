@@ -10,7 +10,7 @@ import { withTimeout } from '../../shared/promise-timeout-fallback'
 import { createOutputSink } from '@orca/process-host/bounded-output-sink'
 import { readFetchResponseJsonWithinLimit } from '../../shared/fetch-response-body'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
-import type { ChildProcessHandle } from '@orca/process-host/process-spec'
+import type { ChildProcess } from 'node:child_process'
 import { createProviderSpawnSpec } from '../provider-process/provider-process-supervisor'
 import { stopSupervisedChildProcess } from '../provider-process/supervised-child-process-stop'
 import { guardSupervisedProviderGroup } from '../provider-process/provider-group-orphan-guard'
@@ -172,7 +172,7 @@ export async function probeOpenCodeLaunchModelContext(options: {
 /** Only the supervisor’s normal stop/relayed exit proves its detached server group is gone.
  * Forced supervisor teardown and failed group reap (exit 1) prove nothing. */
 async function stopSupervisedPreflight(
-  child: ChildProcessHandle,
+  child: ChildProcess,
   closed: Promise<boolean>
 ): Promise<boolean> {
   if (!child.pid) {

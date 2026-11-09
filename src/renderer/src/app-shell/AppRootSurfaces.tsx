@@ -57,7 +57,7 @@ const ProjectAddedDialog = lazy(
   () => import('../components/sidebar/project-admission/completion/ProjectAddedDialog')
 )
 const NodeDistMirrorDialog = lazy(
-  () => import('../components/settings/advanced/network/NodeDistMirrorDialog')
+  () => import('../components/ssh-host-recovery/NodeDistMirrorDialog')
 )
 const AiVaultSessionHistoryDialog = lazy(
   () => import('../components/right-sidebar/ai-vault/session-list/AiVaultSessionHistoryDialog')

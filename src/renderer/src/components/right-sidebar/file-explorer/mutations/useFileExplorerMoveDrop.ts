@@ -1,7 +1,7 @@
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { basename, dirname, joinPath } from '@/lib/path'
-import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
+import { executeOpenEditorPathMove } from '@/lib/editor/file-operations/execute-open-editor-path-move'
 import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 import type { FileExplorerOperationOwner } from '../tree/file-explorer-types'
 import { captureFileExplorerOperationGuard } from '../navigation/file-explorer-operation-owner'

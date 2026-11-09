@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import { workspaceTabs } from '@/lib/structured-chat-tab-index'
-import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
+import { selectExecutionHostDisplayLabel } from '@/runtime/hosts/display/execution-host-display-label'
 import { findIndexedRepoOwnerForHost } from '@/lib/workspace/ownership/repo-owner-index'
 import { getWslDistroFromPath } from '@/lib/local-preflight-context'
 import { selectWslHostDistro } from '@/components/wsl-host-mark/WslHostMark'

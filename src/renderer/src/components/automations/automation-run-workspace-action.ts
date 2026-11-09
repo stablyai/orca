@@ -6,12 +6,12 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
   activateAndRevealWorktree,
-  activateAndRevealFolderWorkspace,
-  type ActivateAndRevealResult
+  activateAndRevealFolderWorkspace
 } from '@/lib/workspace/activation/worktree-activation'
-import { activateWslMovedWorkspace } from '@/lib/wsl-moved-chat-activation'
+import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
+import { activateWslMovedWorkspace } from '@/lib/workspace/activation/wsl-moved-chat-activation'
 import { useAppStore } from '@/store'
-import { activateTerminalTabOnOwner } from '@/lib/terminal-tab-owner-activation'
+import { activateTerminalTabOnOwner } from '@/lib/workspace/tabs/terminal-tab-owner-activation'
 import { activateWebRuntimeSessionTab } from '@/runtime/web-session-tabs-sync/actions/web-runtime-session-tab-lifecycle'
 import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-tabs-sync/navigation/web-session-focus-intent'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'

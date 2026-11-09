@@ -33,14 +33,14 @@ vi.mock('../ssh/config/ssh-config-parser', () => ({
   sshConfigHostsToTargets: () => []
 }))
 vi.mock('../ghostty/index', () => ({ previewGhosttyImport: vi.fn() }))
-vi.mock('../warp-themes', () => ({ previewWarpThemeImport: vi.fn() }))
+vi.mock('../warp-themes/index', () => ({ previewWarpThemeImport: vi.fn() }))
 vi.mock('../network/proxy-settings', () => ({
   applyElectronProxySettings: applyElectronProxySettingsMock
 }))
-vi.mock('../browser/sessions/browser-session-proxy', () => ({
+vi.mock('../browser/sessions/proxy/browser-session-proxy', () => ({
   applyBrowserSessionProxies: vi.fn().mockResolvedValue(undefined)
 }))
-vi.mock('../browser/sessions/browser-session-registry', () => ({
+vi.mock('../browser/sessions/profiles/browser-session-registry', () => ({
   browserSessionRegistry: { listProfiles: vi.fn(() => []) }
 }))
 vi.mock('../window/desktop-integration/app-icon', () => ({ applyAppIcon: vi.fn() }))
