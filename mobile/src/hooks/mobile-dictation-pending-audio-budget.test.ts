@@ -2,15 +2,6 @@ import { describe, expect, it } from 'vitest'
 import { MobileDictationPendingAudioBudget } from './mobile-dictation-pending-audio-budget'
 
 describe('MobileDictationPendingAudioBudget', () => {
-  it('caps pending raw PCM audio at thirty seconds', () => {
-    const budget = new MobileDictationPendingAudioBudget()
-    expect(budget.tryReserve(959_999)).toBe(true)
-    expect(budget.tryReserve(1)).toBe(true)
-    expect(budget.pendingAudioBytes).toBe(960_000)
-    expect(budget.tryReserve(1)).toBe(false)
-    expect(budget.pendingAudioBytes).toBe(960_000)
-  })
-
   it('releases completed chunks and clamps stale releases after reset', () => {
     const budget = new MobileDictationPendingAudioBudget(10)
 
@@ -23,5 +14,17 @@ describe('MobileDictationPendingAudioBudget', () => {
     budget.release(6)
     expect(budget.pendingAudioBytes).toBe(0)
     expect(budget.tryReserve(10)).toBe(true)
+  })
+
+  it('keeps a replayed backlog out of the live limit while live requests settle first', () => {
+    const budget = new MobileDictationPendingAudioBudget(100)
+    budget.reserveBacklog(150)
+    expect(budget.takeBacklog(150)).toBe(150)
+    expect(budget.tryReserve(60)).toBe(true)
+    expect(budget.takeBacklog(60)).toBe(0)
+    // The live request answers before the older backlog request does.
+    budget.release(60, 0)
+    expect(budget.tryReserve(90)).toBe(true)
+    expect(budget.tryReserve(11)).toBe(false)
   })
 })

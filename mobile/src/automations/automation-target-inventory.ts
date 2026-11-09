@@ -1,25 +1,26 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import { AutomationDraftValidationError } from './automation-error'
 import { getRepoMainWorktreeId } from '../../../src/shared/worktree/id'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
 import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost
-} from '../../../src/shared/worktree-execution-host-resolution'
-import type { AutomationDestination } from '../../../src/shared/automation-owner-precondition'
-import { buildWorkspaceRunContext } from '../../../src/shared/task-source-context'
+} from '../../../src/shared/execution-host/worktree-execution-host-resolution'
+import type { AutomationDestination } from '../../../src/shared/automations/ownership/automation-owner-precondition'
+import { buildWorkspaceRunContext } from '../../../src/shared/work-items/task-source-context'
 import {
   PREFLIGHT_HOST_QUALIFIED_RUNTIME_CAPABILITY,
   PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY
 } from '../../../src/shared/preflight-runtime-capabilities'
-import { hostStatusProbe } from '../transport/host-status-probe-operations'
+import { hostStatusProbe } from '../transport/connection/host-status-probe-operations'
+import { readHostStatusReply } from '../query/host-status-query'
+import { newTabRepoListRead } from '../session/agent-launch/mobile-runtime-repo-operations'
 import {
-  newTabRepoListRead,
   preflightDetectAgentsRead,
   preflightRefreshAgentsRead
-} from '../session/mobile-session-read-operations'
-import { buildMobileNewTabAgentOptions } from '../session/mobile-new-tab-agent-options'
-import type { RpcClient } from '../transport/rpc-client'
+} from '../session/agent-launch/mobile-agent-detection-operations'
+import { buildMobileNewTabAgentOptions } from '../session/agent-launch/mobile-new-tab-agent-options'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   automationAgentSettingsRead,
   automationWorkspacesRead,
@@ -57,8 +58,17 @@ export async function loadAutomationTargets(client: RpcClient, limit = 200) {
   })
   const repoLookup = createRepoRowExecutionHostLookup(repoRows)
   const projectRows = automationProjectsRead.interpret(projects).projects
+  const sshTargets = automationSshTargetsRead.interpret(ssh).targets
   return {
     setups: automationSetupsRead.interpret(setups).setups.flatMap((setup) => {
+      // A managed SSH host's automations live on its Orca server; pick that host instead.
+      const host = parseExecutionHostId(setup.hostId)
+      if (
+        host?.kind === 'ssh' &&
+        sshTargets.some((target) => target.id === host.targetId && target.managedServer)
+      ) {
+        return []
+      }
       const repo = repoRows.find(
         (repo) =>
           repo.id === setup.repoId &&
@@ -94,7 +104,7 @@ export async function loadAutomationTargets(client: RpcClient, limit = 200) {
       truncated: workspaceReply.truncated,
       hostScope: workspaceReply.hostScope
     },
-    sshTargets: automationSshTargetsRead.interpret(ssh).targets
+    sshTargets
   }
 }
 export type AutomationTargets = Awaited<ReturnType<typeof loadAutomationTargets>>
@@ -153,7 +163,7 @@ export async function loadAutomationAgents(
     }
   }
   try {
-    const status = hostStatusProbe.interpret(await hostStatusProbe.request(client))
+    const status = hostStatusProbe.interpret(await readHostStatusReply(client))
     requireCurrent()
     const capabilities = status.accepted ? (status.value.capabilities ?? []) : []
     const worktreeId = workspaceId ?? getRepoMainWorktreeId({ id: setup.repoId, path: setup.path })

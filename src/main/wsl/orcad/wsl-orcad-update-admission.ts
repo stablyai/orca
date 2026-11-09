@@ -4,7 +4,7 @@ import {
   ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE,
   type WslHostDeferredUpdate
 } from '../../../shared/wsl-host-types'
-import { refuseOrcadHostDowngrade } from '../../ssh/orcad-host-version-admission'
+import { refuseOrcadHostDowngrade } from '../../managed-server/activation/orcad-host-version-admission'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import type { OrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record'
 import { readOrcadActivationRecord } from '../../managed-server/activation/orcad-activation-record-store'
@@ -22,10 +22,10 @@ import {
   type OrcadUpdateFailure,
   type OrcadUpdateFailureHost
 } from '../../managed-server/lifecycle/orcad-managed-update-failure-memory'
-import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../../ssh/orcad-installed-activation'
-import type { OrcadSlotOptions } from '../../ssh/orcad-recovery-slot'
-import { adoptRunningOrcadVersion } from '../../ssh/orcad-running-version-adoption'
-import type { WslOrcadLaunch } from './wsl-orcad-deploy'
+import { ORCAD_ACTIVATION_POLICY_REFUSED_CODE } from '../../managed-server/activation/orcad-installed-activation'
+import type { OrcadSlotOptions } from '../../managed-server/activation/orcad-recovery-slot'
+import { adoptRunningOrcadVersion } from '../../managed-server/activation/orcad-running-version-adoption'
+import type { WslOrcadLaunch } from './wsl-orcad-launch-contract'
 
 type WslOrcadReadyLaunch = Extract<WslOrcadLaunch, { outcome: 'ready' }>
 

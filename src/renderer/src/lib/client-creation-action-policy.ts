@@ -1,9 +1,10 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+import '../../../shared/protocol-version'
+import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/browser/runtime/browser-runtime-capabilities'
+import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
 import type { AppState } from '@/store/types'
 import { isPairedWebClientWindow } from './desktop-window-chrome'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from './workspace/ownership/worktree-runtime-owner'
 import { expectsBrowserClientHosting } from '../../../shared/browser/client-hosting/browser-client-hosting-eligibility'
 import {
   getOrcadSshDeployment,

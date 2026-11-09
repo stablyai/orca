@@ -1,5 +1,5 @@
 import type { SshTarget } from '../../../shared/ssh-types'
-import { getControlSocketPath, type SystemSshResolvedConfig } from '../ssh-control-socket'
+import { getControlSocketPath, type SystemSshResolvedConfig } from './ssh-control-socket'
 
 export type SystemSshBuildArgsOptions = {
   configFile?: string

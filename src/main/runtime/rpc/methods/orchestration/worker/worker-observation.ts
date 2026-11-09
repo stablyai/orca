@@ -1,17 +1,17 @@
-import { parseWorkerTerminalHostScope } from '../../../../../../shared/worker-terminal-host-scope'
-import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/runtime-types'
-import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import { parseWorkerTerminalHostScope } from '../../../../../../shared/orchestration/workers/worker-terminal-host-scope'
+import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/runtime-terminal-contracts'
+import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/terminal-authority/release/worker-terminal-release-runtime'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
+import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration/fleet/orchestration-fleet-projection'
 import { projectWorkerFleet } from './worker-list-projection'
-import { observeChatAssignee } from '../../../../orchestration/chat-assignee'
+import { createSessionWorkerLivenessReader } from '../../../../orchestration/workers/lifecycle/session-worker-liveness'
 import { inspectSessionWorker } from './session-worker-observation'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
   WorkerDispatchRow
-} from '../../../../orchestration/types'
+} from '../../../../orchestration/db/orchestration-records'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
 import { exposeDispatchContext } from './dispatch-context-exposure'
 
@@ -214,13 +214,14 @@ export function projectFleetWorkerPage(
     return null
   }
   const now = Date.now()
+  const statuses = runtime.getOrchestrationFleetAgentStatusSnapshot()
   return projectWorkerFleet({
     rows,
     attentionFacts: db.getWorkerAttentionFactsForDispatches([dispatchId], now),
-    statuses: runtime.getOrchestrationFleetAgentStatusSnapshot(),
+    statuses,
     limit: 1,
     now,
-    observeChat: (sessionId) => observeChatAssignee(sessionId, db)
+    observeSession: createSessionWorkerLivenessReader(db, statuses)
   })
 }
 

@@ -1,12 +1,12 @@
 // Resolve tab conversations through Session History so both surfaces share switch eligibility.
 
 import type { AppState } from '@/store/types'
-import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import {
   collectAgentPaneConversations,
   resolvePaneAgentConversation,
   resolvePaneLastAgentConversation
-} from '@/lib/ai-vault-tab-title-requests'
+} from '@/lib/agent-session/history/title-sync/ai-vault-tab-title-requests'
 import {
   isAiVaultSessionResumableContent,
   type AiVaultListArgs,
@@ -38,14 +38,17 @@ import {
 } from '../right-sidebar/ai-vault/scanning/ai-vault-session-list-request'
 import { resolveAiVaultPanelSessionListRequest } from '../right-sidebar/ai-vault/scanning/ai-vault-panel-session-list-request'
 import { resolveAiVaultHostScopeDefaults } from '../right-sidebar/ai-vault/scope/ai-vault-host-scope'
-import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/ai-vault-resume-target'
+import { getAiVaultResumeWorkspaceExecutionHostId } from '@/lib/agent-session/resume/history/ai-vault-resume-target'
 import '../right-sidebar/ai-vault/scanning/ai-vault-session-refresh'
 import { claimAiVaultForcedRescan } from '../right-sidebar/ai-vault/scanning/ai-vault-forced-rescan-budget'
-import { structuredAgentSessionLaunchFeasible } from '@/lib/agent-session-launch-plan'
-import { resolveHostCapabilities } from '@/lib/agent-launch-route-input'
+import { structuredAgentSessionLaunchFeasible } from '@/lib/agent-session/launch/routing/agent-session-launch-plan'
+import { resolveHostCapabilities } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
-import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
+import { workspaceKindForWorktreeId } from '../../../../shared/agent-launch/contracts/workspace-launch-kind'
 
 /** Find native chats by Orca session ID and terminal tabs by their provider conversation. */
 export type TabSessionHistorySubject = {

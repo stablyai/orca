@@ -2,7 +2,7 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session/journal/a
 import { describe, expect, it } from 'vitest'
 import type { AgentJournalItemBody } from '../../shared/agent-session/journal/agent-session-journal-types'
 import type { AgentJournalItemIdentity } from '../../shared/agent-session/journal/agent-session-journal-identity'
-import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { StructuredAgentSessionAppendOptions } from '../native-chat/agent-session-wire/journal-ingress/structured-agent-session-event-sink'
 import { ClaudeProvisionalRowCorrections } from './claude-provisional-row-corrections'
 import type { ClaudeSubagentLinkageVerdict } from './claude-subagent-linkage'
 

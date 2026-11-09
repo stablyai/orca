@@ -1,4 +1,7 @@
-import { usePluginTerminalThemeStore, usePluginThemeStore } from '@/store/plugin-themes'
+import {
+  usePluginTerminalThemeStore,
+  usePluginThemeStore
+} from '@/store/plugins/appearance/plugin-themes'
 import type { PluginThemeRegistration } from '../../../../shared/plugins/artifacts/plugin-theme-artifact'
 import type { PluginTerminalThemeRegistration } from '../../../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
 

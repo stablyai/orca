@@ -1,9 +1,9 @@
 import type { StructuredAgentLaunchReceipt as LaunchReceipt } from './structured-agent-session-launch-recovery'
 import { StructuredAgentSessionCreateRefusalError } from './structured-agent-session-launch-errors'
 import { agentSessionThrownFailure } from '../../../../../shared/agent-session/failures/agent-session-write-failure'
-import { sendStructuredAgentSessionMessage } from '@/components/native-chat/structured-agent-session-message-sender'
-import { noteStructuredAgentSessionFence } from '@/components/native-chat/structured-agent-session-send-attempt'
-import { publishStructuredAgentSessionSends } from '@/components/native-chat/structured-agent-session-pending-sends'
+import { sendStructuredAgentSessionMessage } from '@/components/native-chat/session/structured/delivery/structured-agent-session-message-sender'
+import { noteStructuredAgentSessionFence } from '@/components/native-chat/session/structured/delivery/structured-agent-session-send-attempt'
+import { publishStructuredAgentSessionSends } from '@/components/native-chat/session/structured/delivery/structured-agent-session-pending-sends'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import {
   unstageStructuredLaunchPrompt,

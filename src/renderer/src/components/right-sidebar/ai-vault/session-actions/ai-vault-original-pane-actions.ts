@@ -1,12 +1,13 @@
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { toast } from 'sonner'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
-import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
-import { findFolderWorkspaceOwner } from '@/lib/folder-workspace-runtime-owner'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
+import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
+import { findFolderWorkspaceOwner } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 import { useAppStore } from '@/store/index'
-import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
+import { openDesktopStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { findStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
+import { flashFocusedPaneRim } from '@/components/terminal-pane/input/focus/focused-pane-rim-flash'
 import type { AgentDotState } from '@/components/AgentStateDot'
 import type { AiVaultSession } from '../../../../../../shared/ai-vault/contracts/ai-vault-types'
 import { translate } from '@/i18n/i18n'
@@ -74,7 +75,24 @@ export function useAiVaultOriginalPaneActions(): {
   const jumpToOriginalPane = useCallback(
     async (session: AiVaultSession): Promise<boolean> => {
       if (session.structuredSession && isStructuredSessionOpen(session)) {
-        return activateAiVaultStructuredSession(session)
+        const result = await openDesktopStructuredSession({
+          kind: 'history',
+          structuredSession: session.structuredSession,
+          agent: session.agent
+        })
+        if (result.kind !== 'opened') {
+          return false
+        }
+        // Wait for workspace activation to reveal the retained chat pane.
+        requestAnimationFrame(() => {
+          const pane = document.querySelector<HTMLElement>(
+            `[data-structured-agent-session-overlay-tab-id="${CSS.escape(result.tab.id)}"]`
+          )
+          if (pane) {
+            flashFocusedPaneRim(pane)
+          }
+        })
+        return true
       }
       const target = findOriginalAiVaultSessionPane(useAppStore.getState(), session)
       if (!target) {

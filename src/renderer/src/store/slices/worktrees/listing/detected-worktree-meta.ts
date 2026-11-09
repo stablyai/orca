@@ -16,16 +16,19 @@ import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceId
 } from '../../../../../../shared/floating-workspace-worktree'
-import { findIndexedDetectedWorktrees } from '@/lib/worktree-runtime-owner-index'
-import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../worktree-helpers'
+import { findIndexedDetectedWorktrees } from '@/lib/workspace/ownership/worktree-runtime-owner-index'
+import { findFirstIndexedWorktree } from '../../../../lib/workspace/ownership/worktree-runtime-owner-index'
+import { withoutErasedRequiredWorktreeFields } from '../metadata/worktree-meta-update-application'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
   type WorkspaceRecordState,
-  resolveQualifiedIndexedFolderWorkspace,
+  selectWorkspaceByHostTarget
+} from '../../../workspaces/selection/workspace-host-target'
+import { resolveQualifiedIndexedFolderWorkspace } from '../../../folder-workspaces/folder-workspace-record-index'
+import {
   selectFolderWorkspaces,
-  selectWorkspaceByHostTarget,
   selectWorktreesByRepo
-} from '../../../workspace-record-selectors'
+} from '../../../workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../../../shared/folder-workspaces/folder-workspace-worktree'
 
 // Why a one-slot cache: the floating workspace is a singleton; retained selectors only need the
@@ -106,19 +109,20 @@ export function findKnownWorktreeById(
       return getFolderWorkspaceWorktree(result.value.workspace, result.value)
     }
     // Preserve unqualified path access for narrow snapshots.
-    const rows = selectFolderWorkspaces(state).filter(
-      (workspace) => workspace.id === workspaceScope.folderWorkspaceId
-    )
-    return !executionHostId && (!state.projectGroups || !state.repos) && rows.length === 1
-      ? getFolderWorkspaceWorktree(rows[0])
-      : undefined
+    if (!executionHostId && (!state.projectGroups || !state.repos)) {
+      const rows = selectFolderWorkspaces(state).filter(
+        (workspace) => workspace.id === workspaceScope.folderWorkspaceId
+      )
+      return rows.length === 1 ? getFolderWorkspaceWorktree(rows[0]) : undefined
+    }
+    return undefined
   }
   const visible = executionHostId
     ? selectWorkspaceByHostTarget(
         state,
         hostWorktreeTarget({ id: worktreeId, hostId: executionHostId })
       )
-    : findWorktreeById(selectWorktreesByRepo(state), worktreeId)
+    : findFirstIndexedWorktree(selectWorktreesByRepo(state), worktreeId)
   if (visible) {
     return visible
   }

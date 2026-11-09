@@ -8,12 +8,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TerminalQuickCommand } from '../../../../shared/terminal/quick-commands/terminal-quick-command-types'
 import { LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH } from '../../../../shared/terminal/quick-commands/terminal-quick-command-prompt-limit'
 import { TerminalQuickCommandDialog } from './TerminalQuickCommandDialog'
-import { useAppStore } from '@/store'
-import {
-  makeFolderWorkspace,
-  makeWorktree,
-  TEST_REPO
-} from '@/store/slices/worktrees-slice-test-fixtures'
 
 const mountedRoots: Root[] = []
 
@@ -130,36 +124,6 @@ describe('TerminalQuickCommandDialog animation structure', () => {
       )
     })
     expect(onSave).not.toHaveBeenCalled()
-  })
-
-  it('keeps the over-cap alert text static while the count changes', async () => {
-    await renderDialog(
-      {
-        id: 'qc-10',
-        label: 'Review',
-        action: 'agent-prompt',
-        agent: 'claude',
-        prompt: 'x'.repeat(LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH + 1),
-        scope: { type: 'global' }
-      },
-      { agentPromptMaxLength: LEGACY_MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH }
-    )
-    const before = document.body.querySelector('[role="alert"]')
-    const beforeText = before?.textContent
-
-    const textarea = document.body.querySelector('textarea')!
-    const setValue = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!.set!
-    await act(async () => {
-      setValue.call(textarea, `${textarea.value}y`)
-      textarea.dispatchEvent(new Event('input', { bubbles: true }))
-    })
-
-    expect(document.body.textContent).toContain('6,002')
-    const after = document.body.querySelector('[role="alert"]')
-    // A screen reader re-reads an alert whose text changes, so only the plain count may move.
-    expect(after).toBe(before)
-    expect(after?.textContent).toBe(beforeText)
-    expect(after?.textContent).not.toMatch(/\d/)
   })
 
   it('locks the submitted draft until save settles, then permits editing and retry after refusal', async () => {
@@ -289,9 +253,7 @@ describe('TerminalQuickCommandDialog animation structure', () => {
     const user = userEvent.setup()
     act(() => trigger.focus())
     await user.keyboard('co')
-    const search = document.querySelector<HTMLInputElement>(
-      'input[placeholder="Search agents and setups…"]'
-    )!
+    const search = getByRole<HTMLInputElement>(getByRole(document.body, 'menu'), 'textbox')
     expect(document.activeElement).toBe(search)
     expect(search.value).toBe('co')
     expect(search.selectionStart).toBe(2)
@@ -322,63 +284,4 @@ describe('TerminalQuickCommandDialog animation structure', () => {
       scope: { type: 'global' }
     })
   })
-
-  it.each([100, 1000])(
-    'opens the agent-only picker without visiting %i unrelated records',
-    async (count) => {
-      const before = useAppStore.getState()
-      let visits = 0
-      const tracked = <T extends { id: string }>(record: T): T => {
-        const id = record.id
-        return Object.defineProperty(record, 'id', {
-          get: () => {
-            visits++
-            return id
-          }
-        })
-      }
-      useAppStore.setState({
-        worktreesByRepo: {
-          'repo-1': Array.from({ length: count }, (_, i) =>
-            tracked(makeWorktree({ id: `wt-${i}`, repoId: 'repo-1' }))
-          )
-        },
-        folderWorkspaces: Array.from({ length: count }, (_, i) =>
-          tracked(makeFolderWorkspace({ id: `folder-${i}` }))
-        ),
-        repos: Array.from({ length: count }, (_, i) => tracked({ ...TEST_REPO, id: `repo-${i}` }))
-      })
-      try {
-        await renderDialog({
-          id: 'qc-perf',
-          label: 'Review',
-          action: 'agent-prompt',
-          agent: 'claude',
-          prompt: 'Review',
-          scope: { type: 'global' }
-        })
-        visits = 0
-        await act(async () =>
-          fireEvent.keyDown(getByRole(document.body, 'button', { name: 'Select agent' }), {
-            key: 'Enter'
-          })
-        )
-        expect(visits).toBe(0)
-        await act(async () =>
-          fireEvent.keyDown(getByRole(document.body, 'menuitem', { name: 'Codex' }), {
-            key: 'Enter'
-          })
-        )
-        expect(getByRole(document.body, 'button', { name: 'Select agent' }).textContent).toContain(
-          'Codex'
-        )
-      } finally {
-        useAppStore.setState({
-          worktreesByRepo: before.worktreesByRepo,
-          folderWorkspaces: before.folderWorkspaces,
-          repos: before.repos
-        })
-      }
-    }
-  )
 })

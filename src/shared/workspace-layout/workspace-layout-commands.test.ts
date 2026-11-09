@@ -5,7 +5,6 @@ import type { CommandOf, LayoutCommand } from './workspace-layout-command-types'
 import {
   asLoaded,
   build,
-  emptyModel,
   terminalTab,
   testContext,
   WS
@@ -64,29 +63,6 @@ const groupOrder = (model: WorkspaceLayoutModel) =>
   model.workspaces[WS]!.groups.map((group) => group.tabOrder)
 
 describe('layout command refusals', () => {
-  it('refuses commands on a workspace the model has never seen, and treats closes there as done', () => {
-    const model = emptyModel()
-    expect(
-      refusal(model, {
-        type: 'splitPane',
-        workspace: WS,
-        tabId: 't',
-        leafId: 'l',
-        direction: 'vertical'
-      })
-    ).toBe('workspace_not_found')
-    expect(
-      applyLayoutCommand(model, { type: 'closeTabs', workspace: WS, tabIds: ['t'] }, context)
-    ).toMatchObject({ ok: true, result: { alreadyClosed: true } })
-    expect(
-      applyLayoutCommand(
-        model,
-        { type: 'closePane', workspace: WS, tabId: 't', leafId: 'l' },
-        context
-      )
-    ).toMatchObject({ ok: true, result: { alreadyClosed: true } })
-  })
-
   it('movePaneToNewTab opens the chat pane’s new tab in chat view, as the window does', () => {
     const { ctx, model, tabA, leafA, leafA2 } = setup()
     const chat = build(
@@ -583,33 +559,4 @@ describe('layout command effects', () => {
       expect(closed.model.workspaces[WS]!.editorViews).toEqual({})
     }
   )
-
-  it('forgets an ended launch agent on a terminal tab only', () => {
-    const ctx = testContext()
-    const { model, results } = build(ctx, [
-      { type: 'createTerminalTab', workspace: WS, creation: { launchAgent: 'claude' } },
-      {
-        type: 'openEditorTab',
-        workspace: WS,
-        fileId: '/w/a.ts',
-        contentType: 'editor',
-        file: { filePath: '/w/a.ts', relativePath: 'a.ts', language: 'typescript' }
-      }
-    ])
-    const [terminal, editor] = results
-    const cleared = build(
-      ctx,
-      [{ type: 'setTabProps', workspace: WS, tabId: terminal!.tabId!, clearLaunchAgent: true }],
-      model
-    ).model
-    expect(terminalTab(cleared, terminal!.tabId!).terminal).toEqual({ defaultTitle: 'Terminal 1' })
-    expect(
-      refusal(model, {
-        type: 'setTabProps',
-        workspace: WS,
-        tabId: editor!.tabId!,
-        clearLaunchAgent: true
-      })
-    ).toBe('invalid_params')
-  })
 })

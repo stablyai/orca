@@ -1,6 +1,6 @@
 import { StringDecoder } from 'node:string_decoder'
 import { FlexAssembler, objectRule, arrayRule } from 'stream-json/core/utils/flex-assembler.js'
-import { createJsonTokenReader } from '../../shared/json-token-reader'
+import { createJsonTokenReader } from '../../shared/json-stream/json-token-reader'
 
 const MAX_CATALOG_BYTES = 64 * 1024 * 1024
 const MODEL_FIELDS = new Set([

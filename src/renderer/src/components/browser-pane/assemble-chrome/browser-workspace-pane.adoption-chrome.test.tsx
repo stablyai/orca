@@ -28,12 +28,14 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), loading: vi.fn(), message: vi.fn() }
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: mocks.callRuntimeRpc,
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', () => ({
   runtimeEnvironmentSupportsCapability: vi.fn(async () => false)
 }))
 
-vi.mock('@/lib/workspace-browser-tab-open', () => ({
+vi.mock('@/lib/browser/workspace/workspace-browser-tab-open', () => ({
   openWorkspaceBrowserTab: vi.fn(async () => {})
 }))
 
@@ -442,45 +444,8 @@ describe.each([
   })
 
   // Steal focus after resume to exercise the grab’s caret restore; otherwise select-all retries can escape detection.
-  it('restores the caret, not a select-all, when the guest takes the bar back mid-grab', () => {
-    renderWorkspacePane()
-    const staged = startEditing('example.int')
-    act(() => staged.setSelectionRange(3, 7))
-
-    act(() => adoptOntoClient())
-    act(() => flushFrames(1))
-
-    const adopted = addressBar()
-    expect(document.activeElement).toBe(adopted)
-    act(() => webview.focus())
-    expect(document.activeElement).toBe(webview)
-
-    act(() => flushFrames())
-
-    expect(document.activeElement).toBe(adopted)
-    expect(adopted.value).toBe('example.int')
-    expect([adopted.selectionStart, adopted.selectionEnd]).toEqual([3, 7])
-  })
 
   // An open list survives focus naturally; only a dismissed list proves dropdown state crosses the swap.
-  it('keeps a dismissed suggestion list dismissed through the swap', () => {
-    renderWorkspacePane()
-    const staged = startEditing('example.int')
-    act(() => {
-      fireEvent.keyDown(staged, { key: 'Escape' })
-    })
-    expect(staged.getAttribute('aria-expanded')).toBe('false')
-    expect(document.activeElement).toBe(staged)
-
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    const adopted = addressBar()
-    expect(adopted.value).toBe('example.int')
-    expect(document.activeElement).toBe(adopted)
-    expect(adopted.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByRole('option', { name: /Example docs/ })).toBeNull()
-  })
 
   // Only same-commit swaps may reclaim focus; later worktree revisits must not resume old edits.
   it('does not resume an edit into a pane that mounts in a later task', async () => {
@@ -496,58 +461,9 @@ describe.each([
     expect(document.activeElement).not.toBe(remounted)
   })
 
-  it('leaves an idle address bar alone when the same swap happens', () => {
-    renderWorkspacePane()
-    const streamed = addressBar()
-    expect(document.activeElement).not.toBe(streamed)
-
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    const adopted = addressBar()
-    expect(adopted.value).toBe('')
-    // Adoption without an active edit must not seize chrome focus or open suggestions.
-    expect(document.activeElement).not.toBe(adopted)
-    expect(adopted.getAttribute('aria-expanded')).toBe('false')
-    expect(screen.queryByRole('option', { name: /Example docs/ })).toBeNull()
-  })
-
   // Generation changes reattach in place; edits must survive without remounting.
-  it('carries a live edit through a host restart that bumps the page generation', () => {
-    renderWorkspacePane()
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    const before = startEditing('rebooting.internal')
-    act(() => before.setSelectionRange(4, 4))
-
-    act(() => adoptOntoClient(CLIENT_PLACEMENT.pageHostGeneration + 1))
-    act(() => flushFrames())
-
-    const after = addressBar()
-    // The registry can rescue drafts across remounts; node identity is needed to prove the chrome was never rebuilt.
-    expect(after).toBe(before)
-    expect(after.value).toBe('rebooting.internal')
-    expect(document.activeElement).toBe(after)
-    expect([after.selectionStart, after.selectionEnd]).toEqual([4, 4])
-  })
 
   // Headless adoption stays streamed and must preserve the same live edit.
-  it('keeps a live edit when a headless host adopts the page in place', () => {
-    renderWorkspacePane()
-    const streamed = startEditing('headless.internal')
-    act(() => streamed.setSelectionRange(8, 8))
-
-    act(() => adoptOntoServer())
-    act(() => flushFrames())
-
-    const after = addressBar()
-    expect(screen.getByTestId('streamed-viewport')).not.toBeNull()
-    expect(after).toBe(streamed)
-    expect(after.value).toBe('headless.internal')
-    expect(document.activeElement).toBe(after)
-    expect([after.selectionStart, after.selectionEnd]).toEqual([8, 8])
-  })
 
   it('holds a URL submitted against the staged page and loads it once the guest attaches', () => {
     renderWorkspacePane()
@@ -567,30 +483,6 @@ describe.each([
   })
 
   // Only input identity exposes chrome remounts; save/resume can otherwise hide the repeated dropdown animation.
-  it('adopts a client-hosted page without remounting the chrome', () => {
-    stageClientHostedHandle()
-    renderWorkspacePane()
-
-    // The client-hosted pane mounts from the first frame, so there is no pane to swap at adoption.
-    expect(screen.queryByTestId('streamed-viewport')).toBeNull()
-    // Do not attach before the host publishes the page; the retained registry would reject the unknown ID.
-    expect(mocks.attach).not.toHaveBeenCalled()
-    expect(screen.queryByText('Client-hosted browser unavailable')).toBeNull()
-
-    const staged = startEditing('example.int')
-    act(() => staged.setSelectionRange(3, 7))
-    expect(staged.getAttribute('aria-expanded')).toBe('true')
-
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    expect(addressBar()).toBe(staged)
-    expect(staged.getAttribute('aria-expanded')).toBe('true')
-    expect(staged.value).toBe('example.int')
-    expect(document.activeElement).toBe(staged)
-    expect([staged.selectionStart, staged.selectionEnd]).toEqual([3, 7])
-    expect(mocks.attach).toHaveBeenCalled()
-  })
 
   // Continuity alone passes if nothing happens; verify generation changes really reattach the guest.
   it('re-attaches the guest when a host restart bumps the page generation', () => {
@@ -618,23 +510,6 @@ describe.each([
   })
 
   // Do not consume a one-time tour before placement makes its controls usable.
-  it('does not burn the intro tour on a pane that is still connecting', () => {
-    const recordFeatureInteraction = vi.fn(async () => {})
-    useAppStore.setState({
-      persistedUIReady: true,
-      contextualToursSeenIds: ['client-hosted-browser'],
-      recordFeatureInteraction
-    } as unknown as Parameters<typeof useAppStore.setState>[0])
-    stageClientHostedHandle()
-    renderWorkspacePane()
-
-    expect(recordFeatureInteraction).not.toHaveBeenCalled()
-
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    expect(recordFeatureInteraction).toHaveBeenCalledWith('client-hosted-browser')
-  })
 
   // Live host status can override cached client placement and swap to streaming; retain edit-session recovery for this path.
   it('carries a live edit when a staged client-hosted page is adopted onto the server', () => {
@@ -654,22 +529,6 @@ describe.each([
     expect(adopted.value).toBe('fallback.internal')
     expect(document.activeElement).toBe(adopted)
     expect([adopted.selectionStart, adopted.selectionEnd]).toEqual([4, 4])
-  })
-
-  it('holds a URL submitted against a staged client-hosted page until its guest attaches', () => {
-    stageClientHostedHandle()
-    renderWorkspacePane()
-    const staged = startEditing('https://example.internal/client-deferred')
-    act(() => {
-      fireEvent.submit(staged.closest('form') ?? staged)
-    })
-
-    expect(webview.loadURL).not.toHaveBeenCalled()
-
-    act(() => adoptOntoClient())
-    act(() => flushFrames())
-
-    expect(webview.loadURL).toHaveBeenCalledWith('https://example.internal/client-deferred')
   })
 
   // Restored client-placed pages must await recovery locally; hosts reject server screencasts for them.

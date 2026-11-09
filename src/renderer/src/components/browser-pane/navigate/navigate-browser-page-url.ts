@@ -1,17 +1,18 @@
-import { detectLanguage } from '@/lib/language-detect'
-import { getConnectionId } from '@/lib/connection-context'
+import { detectLanguage } from '../../../../../shared/editor-language/editor-language-detect'
+import { getConnectionId } from '@/lib/workspace/ownership/connection-context'
 import {
   isPathInsideWorktree,
   toWorktreeRelativePath
 } from '../../../../../shared/terminal/links/terminal-links'
 import { useAppStore } from '@/store'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import {
   normalizeBrowserNavigationUrl,
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
 import type { BrowserLoadError } from '../../../../../shared/browser-workspace-types'
-import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import '../../../../../shared/constants'
+import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/browser/browser-blank-page'
 import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-guest-recovery'
 import {
   getBrowserDisplayTitle,

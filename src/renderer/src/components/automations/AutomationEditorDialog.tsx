@@ -1,7 +1,7 @@
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type { AutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import React from 'react'
 import { useAppStore } from '@/store'
-import { selectAgentLaunchRouteView } from '@/lib/agent-launch-route-input'
+import { selectAgentLaunchRouteView } from '@/lib/agent-session/launch/routing/agent-launch-route-input'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import {
   automationChatSupport,
@@ -9,14 +9,16 @@ import {
   automationLaunchWorkspace
 } from './automation-launch-surface'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { filterEnabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
 import type {
   AutomationLaunchPreferences,
-  AutomationLaunchSetupPatch,
+  AutomationLaunchSetupPatch
+} from '../../../../shared/automations/launch/automation-launch-types'
+import type {
   AutomationSchedulePreset,
   AutomationWorkspaceMode
-} from '../../../../shared/automations-types'
+} from '../../../../shared/automations/automation-definition'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
@@ -38,12 +40,6 @@ import { getAutomationTemplates, type AutomationTemplate } from './automation-te
 
 export const AUTOMATION_EDITOR_PICKER_TRIGGER_CLASS =
   'border-input bg-input/30 shadow-xs hover:bg-accent/60 dark:bg-input/30 dark:hover:bg-input/50'
-
-export const AUTOMATION_EDITOR_SEGMENTED_GROUP_CLASS =
-  'grid w-full grid-cols-2 rounded-md bg-muted p-0.5'
-
-export const AUTOMATION_EDITOR_SEGMENTED_ITEM_CLASS =
-  'h-7 rounded-sm border-0 bg-transparent shadow-none hover:bg-card/70 data-[state=on]:bg-card data-[state=on]:text-card-foreground data-[state=on]:shadow-xs'
 
 export type AutomationDraft = {
   name: string
@@ -215,8 +211,6 @@ export function AutomationEditorDialog({
             draft={draft}
             visibleAgents={visibleAgents}
             pickerTriggerClassName={AUTOMATION_EDITOR_PICKER_TRIGGER_CLASS}
-            segmentedGroupClassName={AUTOMATION_EDITOR_SEGMENTED_GROUP_CLASS}
-            segmentedItemClassName={AUTOMATION_EDITOR_SEGMENTED_ITEM_CLASS}
             onProjectChange={onProjectChange}
             getRepoHostLabel={getRepoHostLabel}
             allowAddProject={allowAddProject}

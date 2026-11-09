@@ -1,12 +1,12 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import type { RuntimeClientTarget } from '../../../../../shared/runtime-client-target'
 import { AGENT_SESSION_USAGE_LIMIT_AUTO_CONTINUE_RUNTIME_CAPABILITY } from '../../../../../shared/agent-session/agent-session-create-capabilities'
 import {
   useChatSettingsOwnPermissions,
   useStructuredAgentSessionHostCapabilityState,
   useStructuredAgentSessionHostQueuesMessages
-} from '@/runtime/structured-agent-session-host-capability'
+} from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-capability'
 import { useAppStore } from '../../../store/index'
 import { Card, CardContent } from '../../ui/card'
 import { ChatPermissionSetting } from './ChatPermissionSetting'
@@ -34,6 +34,7 @@ export function ChatBehaviorSetting({
   updateSettings,
   forceVisible = false
 }: ChatBehaviorSettingProps): React.JSX.Element | null {
+  const t = useTranslate()
   const typedPermissions = useChatSettingsOwnPermissions()
   const query = useAppStore((state) => state.settingsSearchQuery)
   // A host without the capability ignores the preference; the choice would do nothing.
@@ -66,7 +67,7 @@ export function ChatBehaviorSetting({
   const linkPreviewsEnabled = settings.nativeChatLinkPreviews !== false
   return (
     <section id="chat-behavior" className="space-y-3">
-      <SettingsSubsectionHeader title={getChatBehaviorTitle()} />
+      <SettingsSubsectionHeader title={getChatBehaviorTitle(t)} />
       <Card>
         <CardContent>
           <div className="divide-y divide-border/40">
@@ -85,7 +86,7 @@ export function ChatBehaviorSetting({
                 label={entries.resumeOnRestart.title}
                 description={entries.resumeOnRestart.description}
                 checked={resumeOnRestartEnabled}
-                ariaLabel={translate(
+                ariaLabel={t(
                   'auto.components.settings.ExperimentalPane.nativeChat.resumeToggleLabel',
                   'Toggle automatic resume after a restart'
                 )}
@@ -119,7 +120,7 @@ export function ChatBehaviorSetting({
                   description={entries.autoContinueAfterUsageLimit.description}
                   checked={autoContinueEnabled}
                   disabled={settings.nativeChatAutoContinueAfterUsageLimit === undefined}
-                  ariaLabel={translate(
+                  ariaLabel={t(
                     'components.settings.nativeChat.usageLimitContinueToggleLabel',
                     'Toggle continuing chats when a usage limit resets'
                   )}
@@ -171,7 +172,7 @@ export function ChatBehaviorSetting({
                 label={entries.linkPreviews.title}
                 description={entries.linkPreviews.description}
                 checked={linkPreviewsEnabled}
-                ariaLabel={translate(
+                ariaLabel={t(
                   'components.settings.nativeChat.linkPreviewsToggleLabel',
                   'Toggle link previews'
                 )}

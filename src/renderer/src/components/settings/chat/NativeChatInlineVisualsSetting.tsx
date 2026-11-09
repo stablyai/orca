@@ -1,5 +1,5 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { SettingsSwitchRow } from '../form-controls/SettingsFormControls'
 import { Card, CardContent } from '../../ui/card'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
@@ -16,6 +16,7 @@ export function NativeChatInlineVisualsSetting({
   updateSettings,
   forceVisible = false
 }: NativeChatInlineVisualsSettingProps): React.JSX.Element {
+  const t = useTranslate()
   const enabled = settings.nativeChatInlineVisuals !== false
   const entry = getChatInlineVisualsSearchEntry()
   return (
@@ -31,7 +32,7 @@ export function NativeChatInlineVisualsSetting({
             label={entry.title}
             description={entry.description}
             checked={enabled}
-            ariaLabel={translate(
+            ariaLabel={t(
               'components.settings.nativeChat.inlineVisualsToggleLabel',
               'Toggle inline visuals'
             )}

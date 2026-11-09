@@ -52,25 +52,25 @@ export function mobileWebAppBundleBudgetBytes(manifest) {
 }
 
 // Measure sorted route prefixes with routes.slice(0,n), excluding locale catalogs: distinct importer sets determine chunks, not route count.
-// Re-measure table when routes change; it is envelope’s only input, and pins must fail rather than permit arbitrary ceiling bumps.
+// Re-measure table with measure-mobile-web-app-chunk-sweep.mjs when routes change; it is envelope’s only input, and pins must fail rather than permit arbitrary ceiling bumps.
 export const MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP = [
   ['./_layout.tsx', 4],
-  ['./h/[hostId]/[...page].tsx', 8],
-  ['./h/[hostId]/accounts.tsx', 12],
-  ['./h/[hostId]/agent-history/[worktreeId].tsx', 17],
-  ['./h/[hostId]/automations.tsx', 23],
-  ['./h/[hostId]/edit.tsx', 25],
-  ['./h/[hostId]/files/[worktreeId].tsx', 30],
-  ['./h/[hostId]/files/preview/[worktreeId].tsx', 40],
-  ['./h/[hostId]/history/[worktreeId].tsx', 43],
-  ['./h/[hostId]/index.tsx', 52],
-  ['./h/[hostId]/new-workspace.tsx', 65],
-  ['./h/[hostId]/pr/[worktreeId].tsx', 66],
-  ['./h/[hostId]/review/[worktreeId].tsx', 78],
-  ['./h/[hostId]/session/[worktreeId].tsx', 94],
-  ['./h/[hostId]/source-control/[worktreeId].tsx', 103],
-  ['./h/[hostId]/tasks.tsx', 114],
-  ['./h/_layout.tsx', 118]
+  ['./h/[hostId]/[...page].tsx', 6],
+  ['./h/[hostId]/accounts.tsx', 7],
+  ['./h/[hostId]/agent-history/[worktreeId].tsx', 9],
+  ['./h/[hostId]/automations.tsx', 13],
+  ['./h/[hostId]/edit.tsx', 14],
+  ['./h/[hostId]/files/[worktreeId].tsx', 19],
+  ['./h/[hostId]/files/preview/[worktreeId].tsx', 27],
+  ['./h/[hostId]/history/[worktreeId].tsx', 28],
+  ['./h/[hostId]/index.tsx', 32],
+  ['./h/[hostId]/new-workspace.tsx', 40],
+  ['./h/[hostId]/pr/[worktreeId].tsx', 41],
+  ['./h/[hostId]/review/[worktreeId].tsx', 48],
+  ['./h/[hostId]/session/[worktreeId].tsx', 60],
+  ['./h/[hostId]/source-control/[worktreeId].tsx', 66],
+  ['./h/[hostId]/tasks.tsx', 73],
+  ['./h/_layout.tsx', 75]
 ]
 
 const sweptScripts = MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP.map(([, scripts]) => scripts)
@@ -210,7 +210,8 @@ export async function verifyMobileWebAppBundle({ bundleDir = defaultBundleDir } 
   if (first.chunkCount > maxChunks) {
     fail(
       `bundle is cut into ${String(first.chunkCount)} chunks, over the Phase C budget of ` +
-        `${String(maxChunks)} for ${String(first.routeKeys.length)} route(s)`
+        `${String(maxChunks)} for ${String(first.routeKeys.length)} route(s); ` +
+        'measure-mobile-web-app-chunk-sweep.mjs re-measures MOBILE_WEB_APP_BUNDLE_SCRIPT_SWEEP'
     )
   }
   if (first.entryStaticBytes > MOBILE_WEB_APP_BUNDLE_MAX_ENTRY_BYTES) {

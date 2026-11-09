@@ -1,4 +1,4 @@
-import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import { makePaneKey, parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import {
   parseRemoteRuntimePtyId,
@@ -16,17 +16,20 @@ import {
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import type { AutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
+import type { AutomationAuthorityRef } from '../../../../shared/automations/ownership/automation-owner-ref'
 import type { AppState } from '@/store/types'
-import { selectFolderWorkspaces, selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import {
+  selectFolderWorkspaces,
+  selectWorktreesByRepo
+} from '@/store/workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { resolveExactWorktreeRoute } from '@/lib/worktree-owner-route'
+import { resolveExactWorktreeRoute } from '@/lib/workspace/ownership/worktree-owner-route'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getAutomationRunViewState } from './automation-run-view-state'
-import { resolveOwner } from '@/lib/resolve-owner'
-import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
+import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import { resolveQualifiedFolderWorkspaceResult } from '../../../../shared/folder-workspaces/folder-workspace-execution-host'
-import { getRuntimeEnvironmentIdForFolderWorkspace } from '@/lib/folder-workspace-runtime-owner'
+import { getRuntimeEnvironmentIdForFolderWorkspace } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 
 export type AutomationRunPaneTarget = {
   tabId: string

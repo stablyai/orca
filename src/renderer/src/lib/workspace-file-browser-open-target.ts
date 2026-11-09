@@ -1,8 +1,8 @@
 import { absolutePathToFileUri } from '@/components/editor/markdown/link-routing/markdown-internal-links'
-import { getConnectionIdForFile } from '@/lib/connection-context'
+import { getConnectionIdForFile } from '@/lib/workspace/ownership/connection-context'
 import { basename } from '@/lib/path'
-import { isTwinWorkspace } from '@/lib/resolve-owner'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/worktree-runtime-owner'
+import { isTwinWorkspace } from '@/lib/workspace/ownership/resolve-owner'
+import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { useAppStore } from '@/store'
 
 /** Still the answer for flows that need a real `file://` URL (e.g. dropping a file on a browser pane). */

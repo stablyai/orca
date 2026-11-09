@@ -1,17 +1,20 @@
+import { editorTabWorkspace } from '@/store/slices/editor/tabs/workspace-editor-files'
 import type { EditorFileTabProps } from './editor-file-tab-props'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks, Smartphone } from 'lucide-react'
+import { Eye, ShieldAlert, Pin } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import { basename } from '@/lib/path'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { renameFileOnDisk } from '@/lib/rename-file'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../shared/editor-language/editor-language-detect'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
-import { useRepoById, useWorktreeById } from '@/store/selectors'
+import { useWorktreeById } from '@/store/workspaces/selection/use-selected-worktree'
+import { getOpenFileExecutionHostId } from '@/lib/workspace/ownership/unified-tab-host-ownership'
+import { resolveReviewRepository } from '@/lib/review-owner'
 import { useAppStore } from '@/store'
 import { STATUS_COLORS } from '../../lib/git-path-decoration'
 import { STATUS_LABELS } from '../../../../shared/git/status/git-status-labels'
@@ -28,14 +31,15 @@ import {
 } from './drop-indicator'
 import { canOpenMarkdownPreview } from '@/components/editor/view-mode/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
-import { translate } from '@/i18n/i18n'
+import { getEditorFileTabModeIcon } from './editor-file-tab-mode-icon'
+import { useTranslate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
 import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
-import { useTabCustomEditor } from '@/store/plugin-custom-editors'
+import { useTabCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
 import { PluginContributionIcon } from '../plugins/PluginContributionIcon'
 
 export default function EditorFileTab({
@@ -59,8 +63,16 @@ export default function EditorFileTab({
   dropIndicator,
   includeTopTabBorder = true
 }: EditorFileTabProps): React.JSX.Element {
-  const worktree = useWorktreeById(file.worktreeId)
-  const repo = useRepoById(worktree?.repoId ?? null)
+  const t = useTranslate()
+  const placedElsewhere = useAppStore((state) =>
+    file.tabId
+      ? editorTabWorkspace(state.unifiedTabsByWorktree, file.tabId) !== file.worktreeId
+      : false
+  )
+  const worktree = useWorktreeById(file.worktreeId, getOpenFileExecutionHostId(file))
+  const repo = useAppStore((state) =>
+    worktree ? resolveReviewRepository(state.repos, worktree) : null
+  )
   // Keep dragged tabs anchored; only the insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
     // Split copies share a file entity; unified tab IDs keep each copy independently draggable.
@@ -68,23 +80,11 @@ export default function EditorFileTab({
     data: dragData
   })
 
-  const isDiff = file.mode === 'diff'
   const isConflictReview = file.mode === 'conflict-review'
-  const isCheckDetails = file.mode === 'check-details'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
   const customEditor = useTabCustomEditor(file)
   // Why: simulator tabs reuse this chrome with a synthetic path an icon theme would map to its file icon.
-  const ModeIcon = isConflictReview
-    ? ShieldAlert
-    : isCheckDetails
-      ? ListChecks
-      : isDiff
-        ? GitCompareArrows
-        : isMarkdownPreviewTab
-          ? Eye
-          : file.language === 'simulator'
-            ? Smartphone
-            : null
+  const ModeIcon = getEditorFileTabModeIcon(file)
   const tabIcon = (className: string): React.ReactNode => (
     <PluginContributionIcon
       url={customEditor?.iconUrl}
@@ -269,7 +269,7 @@ export default function EditorFileTab({
             ref={setRenameInputElement}
             density="compact"
             data-tab-rename-input="true"
-            aria-label={translate(
+            aria-label={t(
               'auto.components.tab.bar.EditorFileTab.3da7445c84',
               'Rename file {{value0}}',
               { value0: basename(file.filePath) }
@@ -317,7 +317,8 @@ export default function EditorFileTab({
               openRenameInput()
             }}
           >
-            {getEditorDisplayLabel(file)}
+            {getEditorDisplayLabel(file, undefined, t)}
+            {placedElsewhere && repo ? ` · ${repo.displayName}` : ''}
           </span>
         )}
         {isMissingFileMutation && !isRenaming && (
@@ -364,8 +365,8 @@ export default function EditorFileTab({
             tabRoot
           ) : (
             <TabHoverCard
-              title={getEditorDisplayLabel(file)}
-              programName={customEditor?.title ?? translate('tabHoverCard.editor', 'Editor')}
+              title={`${getEditorDisplayLabel(file, undefined, t)}${placedElsewhere && repo ? ` · ${repo.displayName}` : ''}`}
+              programName={customEditor?.title ?? t('tabHoverCard.editor', 'Editor')}
               icon={tabIcon('size-4')}
               description={file.relativePath}
             >

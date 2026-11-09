@@ -60,8 +60,8 @@ Or directly: `node tests/tools/win-update-e2e/run.mjs --from ... --to ... --expe
 
 - **`cold-restore`** — **today's** behavior and the baseline that must keep
   passing against current `main`. The installer's path sweep kills the in-dir
-  daemon, so: old daemon PID is **dead**, a **fresh** daemon exists, scrollback
-  is cold-restored (best-effort), a new terminal is interactive, and **zero**
+  daemon, so: old daemon PID is **dead**, a **fresh** daemon exists, a new
+  terminal is interactive, and **zero**
   unexpected console/terminal windows appear.
 - **`survival`** — the Phase 1 target. Daemon PID **unchanged** across the
   update, marker process **still alive**, the pre-update session still
@@ -210,10 +210,6 @@ powershell -File tests/tools/win-update-e2e/window-enum.ps1
 
 ## Known limitations
 
-- **Scrollback fidelity is best-effort.** A production build renders the
-  terminal with WebGL, so xterm text is not reliably in the DOM and the e2e
-  `SerializeAddon` is not exposed. When text cannot be read the check reports
-  `INFO` (unknown), never a false `FAIL`.
 - **Daemon file log** does not exist yet in packaged builds (the fork's stdio is
   suppressed). The "daemon log free of ERROR lines" assertion is `INFO` until
   Phase 0 daemon logging lands, then it reads `<userData>/logs/daemon.log`.

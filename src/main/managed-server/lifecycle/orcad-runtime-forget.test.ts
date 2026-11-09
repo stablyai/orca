@@ -5,10 +5,13 @@ import { listEnvironments } from '../../../shared/remote-runtime/host-store/runt
 import {
   listOrcadMigrationSourceCutovers,
   writeOrcadMigrationSourceCutover
-} from '../../ssh/orcad-migration-cutover-journal'
-import { orcadMigrationCutoverFixture } from '../../ssh/orcad-migration-cutover-fixture'
+} from '../../persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
+import { orcadMigrationCutoverFixture } from '../migration/cutover/testing/orcad-migration-cutover-fixture'
 import { createManagedLifecycleHarness } from './orcad-managed-lifecycle-test-fixture'
-import { isManagedOrcadSshTarget } from '../../ssh/connection/ssh-connection-store'
+import { isManagedOrcadSshTarget } from '../../ssh/targets/ssh-target-runtime-ownership'
+import { addManagedOrcadEnvironment } from '../../../shared/remote-runtime/host-store/runtime-environment-managed-orcad-store'
+import { encodePairingOffer } from '../../../shared/remote-runtime/pairing/pairing'
+import { PAIRING_OFFER_VERSION } from '../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 
 const mocks = vi.hoisted(() => {
   const state: { store: unknown } = { store: null }
@@ -34,8 +37,11 @@ vi.mock('./orcad-managed-tunnel', () => ({
   ensureOrcadManagedTunnel: vi.fn()
 }))
 
-const { forgetManagedOrcadEnvironment, stopManagedOrcadEnvironment } =
-  await import('./orcad-runtime-decommission')
+const {
+  forgetManagedOrcadEnvironment,
+  forgetRedundantManagedOrcadEnvironment,
+  stopManagedOrcadEnvironment
+} = await import('./orcad-runtime-decommission')
 
 let harness: ReturnType<typeof createManagedLifecycleHarness>
 
@@ -101,5 +107,52 @@ describe('a managed server whose host is gone (P1-E)', () => {
     expect(mocks.retire).not.toHaveBeenCalled()
     expect(mocks.closeTunnel).not.toHaveBeenCalled()
     expect(mocks.releaseHost).not.toHaveBeenCalled()
+  })
+})
+
+describe('a managed server saved under a second SSH alias', () => {
+  // Same host key in its padded spelling, reached through its own SSH target.
+  const addTwin = () =>
+    addManagedOrcadEnvironment(harness.userDataPath, {
+      id: 'environment-2',
+      name: 'Managed alias',
+      pairingCode: encodePairingOffer({
+        v: PAIRING_OFFER_VERSION,
+        endpoint: 'ws://127.0.0.1:46769/',
+        deviceToken: 'alias-device-token',
+        publicKeyB64: 'public-key='
+      }),
+      orcadDeployment: {
+        sshTargetId: 'ssh-2',
+        sshTargetGeneration: 1,
+        localPort: 46_769,
+        remotePort: 6_768
+      }
+    })
+
+  it('forgets the redundant entry and leaves the other one managing the server', async () => {
+    addTwin()
+    await expect(
+      forgetRedundantManagedOrcadEnvironment(
+        harness.userDataPath,
+        { selector: 'Managed' },
+        policy()
+      )
+    ).resolves.toMatchObject({ outcome: 'forgotten', environmentId: 'environment-1' })
+    expect(mocks.connect).not.toHaveBeenCalled()
+    expect(listEnvironments(harness.userDataPath).map(({ id }) => id)).toEqual(['environment-2'])
+  })
+
+  it('refuses when the other entry is gone by the time the removal runs', async () => {
+    await expect(
+      forgetRedundantManagedOrcadEnvironment(
+        harness.userDataPath,
+        { selector: 'Managed' },
+        policy()
+      )
+    ).resolves.toMatchObject({ outcome: 'refused', code: 'orcad_forget_no_managed_twin' })
+    expect(listEnvironments(harness.userDataPath)).toHaveLength(1)
+    expect(getManagedOrcadFenceEnvironmentId(harness.current())).toBe('environment-1')
+    expect(mocks.closeTunnel).not.toHaveBeenCalled()
   })
 })

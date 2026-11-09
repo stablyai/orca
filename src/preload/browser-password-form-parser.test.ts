@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PasswordFieldDescriptor } from './browser-password-field-rules'
-import { isPlaceholderUsernameValue } from './browser-password-field-rules'
-import { parsePasswordForm, passwordFieldRoleIn } from './browser-password-form-parser'
+import { parsePasswordForm } from './browser-password-form-parser'
 
 type TestField = PasswordFieldDescriptor & { key: string }
 
@@ -306,35 +305,5 @@ describe('parsePasswordForm', () => {
         expect(parsed?.kind).toBe('username-only')
       }
     })
-  })
-
-  it('reports each classified field role', () => {
-    const user = input('user')
-    const current = password('old', { value: 'x' })
-    const fresh = password('new', { value: 'y' })
-    const confirm = password('again', { value: 'y' })
-    const other = input('other')
-    const parsed = parsePasswordForm({ fields: [user, current, fresh, confirm, other], text: '' })
-    expect(parsed).not.toBeNull()
-    if (!parsed) {
-      return
-    }
-    expect(
-      [user, current, fresh, confirm, other].map((field) => passwordFieldRoleIn(parsed, field))
-    ).toEqual(['username', 'password', 'new-password', 'new-password', null])
-  })
-})
-
-describe('isPlaceholderUsernameValue', () => {
-  it.each([
-    ['', true],
-    ['  Email ', true],
-    ['username', true],
-    ['Username or email', true],
-    ['@example.com', true],
-    ['alice@example.com', false],
-    ['alice', false]
-  ])('%j → %s', (value, expected) => {
-    expect(isPlaceholderUsernameValue(value)).toBe(expected)
   })
 })

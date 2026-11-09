@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useAppStore } from '@/store'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
-import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
-import { firstFrameOptionState } from '@/components/native-chat/structured-agent-session-option-first-frame'
+import { callStructuredAgentSession } from '@/runtime/native-chat/requests/structured-agent-session-call'
+import { structuredAgentSessionTargetForHost } from '@/runtime/native-chat/session-ownership/structured-agent-session-owner'
+import { firstFrameOptionState } from '@/components/native-chat/session/options/structured/structured-agent-session-option-first-frame'
 import { structuredAgentSessionSeedCatalog } from '../../../../shared/agent-session/options/structured-agent-session-seed-catalog'
 import {
   applyStructuredAgentSessionModelCatalog,
@@ -14,7 +14,7 @@ import {
 } from '../../../../shared/agent-session/options/structured-agent-session-option-view'
 import { encodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
 import type { AgentSessionModelCatalogResult } from '../../../../shared/agent-session/agent-session-wire'
-import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
+import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
 
 export function usePendingNativeChatOptions(

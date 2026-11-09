@@ -30,12 +30,12 @@ import { useEffect, useCallback } from 'react'
 import {
   readWorkspaceSetupInspection,
   getComposerSetupInspectionCommit
-} from '@/lib/workspace-setup-preparation'
+} from '@/lib/workspace/creation/setup/workspace-setup-preparation'
 import {
   filterEnabledTuiAgents,
   isTuiAgentEnabled
 } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
-import { getAgentCatalog } from '@/lib/agent-catalog'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { useAppStore } from '@/store'
 import { isSshConnectInProgress } from '@/lib/new-workspace-ssh-gate'
 import {

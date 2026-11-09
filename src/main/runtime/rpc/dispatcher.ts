@@ -11,12 +11,11 @@ import {
 } from './core'
 
 import { successResponse } from './errors'
-import { ALL_RPC_METHODS } from './methods'
-import { withoutMethodsThisHostDoesNotServe } from './methods/session-terminal-scrollback'
+import { withoutMethodsThisHostDoesNotServe } from './methods/terminal/session-terminal-scrollback'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
-import { isDurableMutation } from '../../../shared/orchestration-rpc-contract'
-import type { OrchestrationSessionCaller } from '../orchestration/orchestration-caller-identity'
+import { isDurableMutation } from '../../../shared/orchestration/orchestration-rpc-contract'
+import type { OrchestrationSessionCaller } from '../orchestration/addressing/orchestration-caller-identity'
 import {
   getOrchestrationMutationExecutor,
   type DurableMutationInvocation,
@@ -37,7 +36,7 @@ import { resolveOrcadFeatureRequirement, rpcMethodFeatureWait } from './orcad-fe
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
-  methods?: readonly RpcAnyMethodDeclaration[]
+  methods: readonly RpcAnyMethodDeclaration[]
   /** Pins every call to this scope, for in-process bridges that relay a non-owner caller. */
   callerScope?: RpcCallerScope
 }
@@ -56,7 +55,7 @@ export class RpcDispatcher {
   private readonly legacyOrchestration: OrchestrationLegacyCompatibility
   private readonly pinnedCallerScope: RpcCallerScope | undefined
 
-  constructor({ runtime, methods = ALL_RPC_METHODS, callerScope }: DispatcherOptions) {
+  constructor({ runtime, methods, callerScope }: DispatcherOptions) {
     this.runtime = runtime
     this.pinnedCallerScope = callerScope
     this.registry = buildRegistry(withoutMethodsThisHostDoesNotServe(methods))

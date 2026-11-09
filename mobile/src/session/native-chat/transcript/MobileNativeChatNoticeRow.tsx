@@ -43,9 +43,9 @@ import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from '../../../../../sr
 import { MONO_SIZE, TEXT_SIZE, scaledType } from './mobile-native-chat-message-styles'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { toolStyles } from './mobile-native-chat-tool-styles'
-import { styles as chatViewStyles } from '../mobile-native-chat-view-styles'
 import { MobileNativeChatUsageLimitStatus } from './MobileNativeChatUsageLimitStatus'
 import { MobileNativeChatNoticeDisclosure } from './MobileNativeChatNoticeDisclosure'
+import { sheetPrimaryButtonStyles } from '../../../components/SheetPrimaryButton'
 
 function toneColor(tone: NativeChatNoticeTone): string {
   return { warning: colors.statusAmber, error: colors.statusRed, notice: colors.textMuted }[tone]
@@ -157,17 +157,21 @@ export function MobileNativeChatNoticeRow({
     case 'settled-permission': {
       const agent = names.agentName ?? look.agent
       const summary =
-        look.decision === 'denied'
-          ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
+        look.decision === 'approved'
+          ? t('chat.notice.safetyReviewApproved', '{{agent}} approved this action. View details.', {
               agent
             })
-          : t(
-              'chat.notice.safetyReview',
-              '{{agent}} reported a safety review warning. View details.',
-              {
+          : look.decision === 'denied'
+            ? t('chat.notice.permissionDenied', '{{agent}} denied permission. View details.', {
                 agent
-              }
-            )
+              })
+            : t(
+                'chat.notice.safetyReview',
+                '{{agent}} reported a safety review warning. View details.',
+                {
+                  agent
+                }
+              )
       return (
         <View>
           <MobileNativeChatNoticeDisclosure
@@ -290,12 +294,12 @@ export function MobileNativeChatNoticeRow({
               )}
               onPress={() => runInTerminal(signInCommand)}
               style={({ pressed }) => [
-                chatViewStyles.retryPill,
+                sheetPrimaryButtonStyles.button,
                 styles.action,
-                pressed && chatViewStyles.retryPillPressed
+                pressed && sheetPrimaryButtonStyles.pressed
               ]}
             >
-              <Text style={chatViewStyles.retryPillLabel}>
+              <Text style={sheetPrimaryButtonStyles.label}>
                 {t('chat.notice.signIn', 'Sign in')}
               </Text>
             </Pressable>

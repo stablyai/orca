@@ -1,4 +1,4 @@
-import { ipcOrRuntimeTargetForHostId } from '@/runtime/runtime-client-target'
+import { ipcOrRuntimeTargetForHostId } from '@/runtime/rpc/targets/runtime-client-target'
 import type { ComposerRuntimeTargetSelectionInput } from './composer-target-input-contracts'
 
 import { useEffect, useMemo, useRef } from 'react'
@@ -15,14 +15,14 @@ import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import {
   resolveExecutionHostAgentStartupShell,
-  resolveRepoExecutionHostPlatform,
-  type ExecutionHostPlatformFact
-} from '@/lib/execution-host-facts'
+  resolveRepoExecutionHostPlatform
+} from '@/runtime/hosts/platform/execution-host-facts'
+import type { ExecutionHostPlatformFact } from '@/runtime/hosts/platform/execution-host-platform-fact'
 import { useAppStore } from '@/store'
 import { repoIsRemote } from '../../../../shared/agent-launch/startup/agent-launch-remote'
 import { buildProjectHostSetupOptions } from '@/lib/project-host-setup-options'
 import { buildNewWorkspaceCreateTargetOptions } from '@/lib/new-workspace-project-options'
-import { getRuntimeEnvironmentIdForRepo } from '@/lib/repo-runtime-owner'
+import { getRuntimeEnvironmentIdForRepo } from '@/lib/workspace/ownership/repo-runtime-owner'
 import { useEphemeralVmRecipeOptions } from '@/hooks/useEphemeralVmRecipeOptions'
 
 export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSelectionInput) {
@@ -157,7 +157,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
   // Quote for the repo execution host’s OS, not the client’s (#22204).
   const selectedRepoAgentLaunchFact = useMemo((): ExecutionHostPlatformFact => {
     if (!selectedRepo) {
-      return { kind: 'withheld', reason: 'Select a project first.' }
+      return { kind: 'withheld', reason: 'Select a project first.', recovery: 'refreshProjects' }
     }
     return resolveRepoExecutionHostPlatform(
       { sshConnectionStates, sshStateByEnvironment, runtimeStatusByEnvironmentId },

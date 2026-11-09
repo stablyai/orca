@@ -41,6 +41,15 @@ import { RELAY_MAX_CELL_CAPACITY_REQUESTS, type RelayConfig } from './config.js'
 import type { RelayCredentialStore } from './credentials/credential-store.js'
 import { isRelayDatabaseTransientError } from './database/database.js'
 import {
+  EDGE_CELL_ID,
+  EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS,
+  EdgeMoveDeferredError,
+  EdgeMoveBusyError,
+  inEdgeCohort,
+  mapEpochFloor,
+  type EdgeAssignments
+} from './edge-relay.js'
+import {
   DRAIN_RETURN_MIN_RETRY_AFTER_SECONDS,
   RelayDrainReturnAdmission
 } from './assignment/public-admission/drain-return-admission.js'
@@ -128,6 +137,8 @@ export function createRelayApp(
     cellFlags?: () => AppliedControlFlags<CellFlags>
     // Step 5 on directors; absent keeps today's path for every request.
     reservePlacement?: ReserveAssignment
+    // Relay edge on directors; absent (no edge URL) keeps today's path for every request.
+    edgeAssignments?: EdgeAssignments
     cellReserve?: (request: ReserveRequest) => ReserveOutcome[]
     cellDemote?: (request: DemoteRequest) => string
     cellReserverPoll?: () => void
@@ -442,7 +453,17 @@ export function createRelayApp(
         selectedRegion: assignment.region,
         fallback: placed && assignment.region !== targetRegion
       })
-    const signAssignment = async (assignment: RelayAssignment) =>
+    // Set when this ask took the host's data back from the relay edge: the first answer elsewhere
+    // fences the edge (its phones then get WRONG_CELL).
+    let leftEdge = false
+    const signAssignment = async (assignment: RelayAssignment) => {
+      if (leftEdge && assignment.cellId !== EDGE_CELL_ID) {
+        leftEdge = false
+        await operations.edgeAssignments?.fenceAway(identity, assignment.cellId, assignment.assignmentEpoch)
+      }
+      return await signLease(assignment)
+    }
+    const signLease = async (assignment: RelayAssignment) =>
       await new SignJWT({
         purpose: 'cell-assignment',
         cellId: assignment.cellId,
@@ -457,6 +478,75 @@ export function createRelayApp(
         .setIssuedAt()
         .setExpirationTime('5m')
         .sign(config.assignmentSigningKey)
+    // Relay edge: a host in the cohort is moved (or kept) there before any other lane, since the
+    // sticky and reserve lanes would read the edge row as not live and re-place the host.
+    const edge = operations.edgeAssignments
+    const toEdge =
+      edge?.ready === true &&
+      body.data.regionCorrection?.action !== 'report' &&
+      inEdgeCohort(edge.config, claims.relayHostId, requestedRegion, claims.sub)
+    if (edge?.pushes && !toEdge) {
+      // Any lane below may re-place a host whose row is on the edge; its devices come back first.
+      try {
+        leftEdge = await edge.leaveEdge(identity)
+      } catch (error) {
+        if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) {
+          throw error
+        }
+        logAssignmentRejection({
+          route: 'assign',
+          lane: 'none',
+          hinted: Boolean(body.data.reconnect),
+          relayHostId: claims.relayHostId,
+          reason: operationError(error)
+        })
+        context.header('Retry-After', String(EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS))
+        return context.json({ error: 'assignment_temporarily_unavailable' }, 503)
+      }
+    }
+    if (edge && toEdge) {
+      let moved: RelayAssignment | null
+      try {
+        moved = await edge.moveToEdge(
+          identity,
+          Math.max(
+            mapEpochFloor(operations.shadowSeats, identity, Date.now()),
+            operations.reservePlacement?.rowEpochFloor(identity) ?? 0
+          ),
+          requestedRegion
+        )
+      } catch (error) {
+        if (error instanceof EdgeMoveDeferredError) {
+          // Nothing moved (old-cell units still held, or the edge did not take the push): today's
+          // path below keeps the host where it is, and a later ask moves it. Never a 503 loop.
+          console.warn(JSON.stringify({ event: 'orca_relay_edge_move_deferred', reason: error.message }))
+          moved = null
+        } else {
+          if (!(error instanceof EdgeMoveBusyError) && !isRelayDatabaseTransientError(error)) {
+            throw error
+          }
+          logAssignmentRejection({
+            route: 'assign',
+            lane: 'none',
+            hinted: Boolean(body.data.reconnect),
+            relayHostId: claims.relayHostId,
+            reason: operationError(error)
+          })
+          context.header('Retry-After', String(EDGE_MOVE_BUSY_RETRY_AFTER_SECONDS))
+          return context.json({ error: 'assignment_temporarily_unavailable' }, 503)
+        }
+      }
+      if (moved) {
+        // Any later re-placement off the edge (rollback) mints above the edge epoch.
+        operations.reservePlacement?.raiseEpochFloor(identity, moved.assignmentEpoch)
+        return context.json({
+          v: 1,
+          cellUrl: moved.cellUrl,
+          assignmentEpoch: moved.assignmentEpoch,
+          lease: await signAssignment(moved)
+        })
+      }
+    }
     // Step 5: switched-on cells answer from the map; anything else keeps today's path below.
     let step5: Pick<AssignOptions, 'epochFloor' | 'placeFresh' | 'regionReserve' | 'reserveSpill'> = {}
     if (operations.reservePlacement && body.data.regionCorrection?.action !== 'report') {
@@ -728,6 +818,16 @@ export function createRelayApp(
       const identity = {
         userId: resolved.userId,
         relayHostId: body.data.relayHostId
+      }
+      // A host on the relay edge: the liveness rule below would read its row as no answer.
+      const onEdge = await operations.edgeAssignments?.edgeAssignment(identity)
+      if (onEdge) {
+        return context.json({
+          v: 1,
+          cellUrl: onEdge.cellUrl,
+          assignmentEpoch: onEdge.assignmentEpoch,
+          leaseExpiresAt: onEdge.leaseExpiresAt
+        })
       }
       // This also migrates credentials created by the staging-only combined service.
       const resolvedAssignment = await operations.assignments.resolve(identity)

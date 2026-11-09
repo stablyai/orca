@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand'
-import type { ManagedBrowserProfileOwner } from '../../../../../shared/browser-profile-scope'
+import type { ManagedBrowserProfileOwner } from '../../../../../shared/browser/profiles/browser-profile-scope'
 
 /** What a new tab opens on; a partition only when it must not be derived from the profile. */
 export type NewBrowserTabProfile = { sessionProfileId: string | null; sessionPartition?: string }
@@ -18,17 +18,17 @@ import type {
 } from '../../../../../shared/browser-workspace-types'
 import type { WorkspaceSessionState } from '../../../../../shared/workspace-session/workspace-session-state-types'
 import type { WorkspaceDocHistoryEntry } from '../../../../../shared/workspace-session/workspace-doc-history'
-import type { BrowserPageAnnotation } from '../../../../../shared/browser-grab-types'
+import type { BrowserPageAnnotation } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import type {
   BrowserPageConversionLeg,
   BrowserPageConversionTarget
-} from '../browser-page-conversion'
-import type { RecentlyClosedTabPosition } from '../recently-closed-tabs'
+} from './pages/browser-page-conversion'
+import type { RecentlyClosedTabPosition } from '../tabs/recently-closed-tab-position'
 import type {
   ClientHostedBrowserCloseIntentsByEnvironment,
   PendingClientHostedBrowserClose
-} from '@/runtime/client-hosted-browser-close-intents'
-import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace-session-hydration-keys'
+} from '@/runtime/browser/closing/client-hosted-browser-close-intents'
+import type { WorkspaceSessionHydrationOptions } from '@/lib/workspace/persistence/workspace-session-hydration-keys'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
 import type { TabSplitDirection, TabSplitTarget } from '../tabs/tabs-slice-contract'
 import type { RuntimeBrowserPlacement } from '../../../../../shared/runtime-browser-placement'
@@ -303,5 +303,3 @@ export type BrowserSlice = {
 type BrowserStateCreator = StateCreator<AppState, [], [], BrowserSlice>
 export type BrowserSliceSet = Parameters<BrowserStateCreator>[0]
 export type BrowserSliceGet = Parameters<BrowserStateCreator>[1]
-
-export type { BrowserPageConversionLeg, BrowserPageConversionTarget, BrowserSessionProfile }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Repo } from '../../../../shared/repo-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 export function useComposerSourceScope<T>(

@@ -1,7 +1,7 @@
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
+import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { runtimeTargetForWorkspaceOwner, resolveOwner } from './resolve-owner'
-import type { WorktreeOperationRouteState } from './worktree-operation-route'
+import { runtimeTargetForWorkspaceOwner, resolveOwner } from './workspace/ownership/resolve-owner'
+import type { WorktreeOperationRouteState } from './workspace/ownership/worktree-operation-route'
 
 const LOCAL_TARGET: RuntimeClientTarget = { kind: 'local' }
 

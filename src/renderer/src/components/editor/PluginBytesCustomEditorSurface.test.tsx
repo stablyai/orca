@@ -3,8 +3,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { ActivePluginCustomEditor } from '@/store/plugin-custom-editors'
-import type { OpenFile } from '@/store/slices/editor'
+import type { ActivePluginCustomEditor } from '@/store/plugins/file-editors/plugin-custom-editors'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import type { FileContent } from './editor-panel-content-types'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -14,7 +14,7 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 const readRuntimeFileBytes = vi.fn()
-vi.mock('@/runtime/runtime-paged-file-read', () => ({
+vi.mock('@/runtime/files/reads/runtime-paged-file-read', () => ({
   readRuntimeFileBytes: (...args: unknown[]) => readRuntimeFileBytes(...args)
 }))
 

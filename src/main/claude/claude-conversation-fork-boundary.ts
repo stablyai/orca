@@ -1,6 +1,6 @@
 import type { SessionStoreEntry } from '@anthropic-ai/claude-agent-sdk'
 import { AgentConversationCopyError } from '../native-chat/agent-conversation-copy-error'
-import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
+import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { decodeClaudeTranscriptLine } from '../native-chat/transcript-line-decoders-claude'
 import { isLocalCommandCaveatRow } from './claude-rewind-fork'
 import { claudeSourceBlockId } from './claude-streamed-block-identity'
@@ -16,6 +16,20 @@ import { claudeTranscriptPrompt } from './claude-transcript-prompt'
 export type ClaudeForkCheckpoint = NonNullable<
   Parameters<NonNullable<StructuredAgentSessionAdapter['copyConversation']>>[0]['checkpoint']
 >
+
+export function isClaudeConversationEntry(
+  row: Record<string, unknown>
+): row is Record<string, unknown> & { uuid: string } {
+  return (
+    typeof row.uuid === 'string' &&
+    row.isSidechain !== true &&
+    row.parent_tool_use_id == null &&
+    (row.type === 'user' ||
+      row.type === 'assistant' ||
+      row.type === 'attachment' ||
+      (row.type === 'system' && typeof row.parentUuid === 'string'))
+  )
+}
 
 /** Full native traversal belongs in the worker, independently of catch-up's suffix budget. */
 export function claudeConversationForkBoundary(

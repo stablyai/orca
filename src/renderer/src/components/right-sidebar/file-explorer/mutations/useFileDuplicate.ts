@@ -2,8 +2,8 @@ import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { basename, dirname, joinPath } from '@/lib/path'
 import type { TreeNode } from '../tree/file-explorer-types'
-import { copyRuntimePath } from '@/runtime/runtime-file-mutation-client'
-import { runtimePathExists } from '@/runtime/runtime-file-metadata-client'
+import { copyRuntimePath } from '@/runtime/files/mutations/runtime-file-mutation-client'
+import { runtimePathExists } from '@/runtime/files/metadata/runtime-file-metadata-client'
 import { captureFileExplorerOperationGuard } from '../navigation/file-explorer-operation-owner'
 
 /** Strip Electron invoke error wrappers before showing the underlying message. */

@@ -1,4 +1,4 @@
-import type { OrchestrationDb } from '../../../../orchestration/db'
+import type { OrchestrationDb } from '../../../../orchestration/db/orchestration-db'
 import {
   applyWaitForSetupOutcome,
   type WorkerEffect,

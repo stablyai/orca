@@ -1,4 +1,4 @@
-import type { BrowserScreencastResult } from '../../../../shared/runtime-browser-contracts'
+import type { BrowserScreencastResult } from '../../../../shared/browser/runtime/runtime-browser-contracts'
 import { BrowserError } from '../../../browser/browser-error'
 import { randomUUID } from 'node:crypto'
 import { startBrowserScreencast } from '../../../browser/cdp/screencast/browser-screencast-stream'
@@ -6,8 +6,13 @@ import { rendererPublicationThrottle } from '../../../window/renderer-publicatio
 import { mintBrowserScreencastSubscriptionId } from './browser-screencast-subscription-id'
 import {
   cancelScreencastSubscriberFrameRetry,
-  deliverScreencastSubscriberFrame
+  deliverScreencastSubscriberFrame,
+  flushCreditedScreencastFrame
 } from './browser-screencast-subscriber-frame-delivery'
+import {
+  createBrowserScreencastFrameCredit,
+  registerBrowserScreencastFrameCredit
+} from './browser-screencast-frame-credit'
 import {
   INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY,
   screencastSubscriberIsGhost
@@ -151,7 +156,7 @@ export class RuntimeBrowserScreencasts {
         })
         .catch(() => {})
     }
-    active.subscribers.set(subscriptionId, {
+    const subscriber: ActiveBrowserScreencastSubscriber = {
       sendBinary: stream.sendBinary,
       emit: stream.emit,
       done: subscriberDone,
@@ -161,8 +166,19 @@ export class RuntimeBrowserScreencasts {
       pendingFrame: null,
       pendingFrameRetry: null,
       pairedDeviceId: stream.pairedDeviceId,
-      delivery: INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY
-    })
+      delivery: INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY,
+      frameCredit: null
+    }
+    if (params.frameAck === 1) {
+      const credit = createBrowserScreencastFrameCredit({
+        onCreditAvailable: () => flushCreditedScreencastFrame(subscriber)
+      })
+      subscriber.frameCredit = {
+        credit,
+        release: registerBrowserScreencastFrameCredit(subscriptionId, stream.pairedDeviceId, credit)
+      }
+    }
+    active.subscribers.set(subscriptionId, subscriber)
     // A sizeless viewport owner would clear emulation for every viewer.
     if (hasScreencastViewportSize(viewport)) {
       active.viewportOwnerSubscriptionId = subscriptionId
@@ -172,6 +188,7 @@ export class RuntimeBrowserScreencasts {
       session = await active.started
     } catch (error) {
       active.subscribers.delete(subscriptionId)
+      cancelScreencastSubscriberFrameRetry(subscriber)
       resolveSubscriberDone()
       throw error
     }
@@ -219,7 +236,8 @@ export class RuntimeBrowserScreencasts {
         subscriptionId,
         browserPageId,
         format: active.format,
-        tab: this.catalog.describeBrowserTab(browserPageId, target.worktreeId)
+        tab: this.catalog.describeBrowserTab(browserPageId, target.worktreeId),
+        ...(subscriber.frameCredit ? { frameAck: true as const } : {})
       }
     }
   }
