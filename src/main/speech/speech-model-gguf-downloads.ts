@@ -31,6 +31,13 @@ const GGUF_DOWNLOADS = {
     45_981_088,
     '325b9c7997cd1eff81ef709d55766565e71be696130cc3a3d444713798706834'
   ],
+  'whisper-large-v3-turbo': [
+    'handy-computer/whisper-large-v3-turbo-gguf',
+    '5eaf945c7978e564bae5b28a5b1639dd93c2bfb1',
+    'whisper-large-v3-turbo-Q8_0.gguf',
+    886_381_760,
+    'b2e30cc286bc9f3aba4db9099fc7403543497c05ce7100d0d83091ddfd25a183'
+  ],
   'sense-voice-zh-en-ja-ko-yue': [
     'handy-computer/SenseVoiceSmall-gguf',
     '4a08b8e900b38a977e32eb08d5d0697d6e72ba04',

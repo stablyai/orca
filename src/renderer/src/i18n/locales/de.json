@@ -961,10 +961,11 @@
         "zipformerStreamingEnRetired": "Wird nicht mehr angeboten: Es verschluckt den Anfang von Sätzen. Löschen Sie es, um Speicherplatz freizugeben.",
         "whisperTiny": "Über 90 Sprachen. Geringere Genauigkeit als Parakeet, aber die größte Sprachabdeckung.",
         "senseVoice": "Chinesisch, Englisch, Japanisch, Koreanisch und Kantonesisch mit automatischer Erkennung der gesprochenen Sprache.",
+        "whisperLargeV3Turbo": "Beste Genauigkeit für Japanisch, Koreanisch und Chinesisch sowie über 90 Sprachen. Langsamer als Parakeet.",
         "gpt4oMiniTranscribe": "Cloud-Transkription mit hoher Genauigkeit und geringen Kosten. Benötigt einen OpenAI-API-Schlüssel.",
         "gpt4oTranscribe": "Cloud-Transkription mit höherer Genauigkeit. Benötigt einen OpenAI-API-Schlüssel.",
         "retiredForEngine": "Nicht mehr verfügbar: Die Spracherkennung kann dieses Modell nicht mehr ausführen. Löschen Sie es, um Speicherplatz freizugeben.",
-        "nemotron": "Koreanisch, Chinesisch, Japanisch und viele weitere Sprachen, mit automatischer Spracherkennung."
+        "nemotron": "Englisch, Spanisch, Deutsch und viele weitere Sprachen, mit automatischer Spracherkennung."
       }
     },
     "diagnostics": {
