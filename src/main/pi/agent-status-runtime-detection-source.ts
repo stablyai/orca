@@ -54,6 +54,10 @@ export function getPiAgentStatusRuntimeDetectionSourceLines(
     'function resolveHookPath(ompRuntime: boolean): string {',
     '  // Bare-shell OMP may run inside a configured Pi pane.',
     "  if (ompRuntime) return '/hook/omp'",
+    // Pi and OmO can share one agent dir, so the launcher marker picks the route, not the last installer.
+    "  if (CONFIGURED_HOOK_PATH === '/hook/pi' || CONFIGURED_HOOK_PATH === '/hook/omo') {",
+    "    return process.env.OMO_NATIVE === '1' ? '/hook/omo' : '/hook/pi'",
+    '  }',
     '  return CONFIGURED_HOOK_PATH',
     '}'
   ]

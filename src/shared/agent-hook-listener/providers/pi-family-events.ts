@@ -54,7 +54,7 @@ export function normalizePiCompatibleEvent(
   // Use this event's tool_name so a cached question cannot reopen its wait.
   const toolName = readString(hookPayload, 'tool_name')
   const isPiCompatibleAsk =
-    ((agentType === 'pi' && isAskUserQuestionTool(toolName)) ||
+    (((agentType === 'pi' || agentType === 'omo') && isAskUserQuestionTool(toolName)) ||
       (agentType === 'omp' && toolName === 'ask')) &&
     (eventName === 'tool_call' || eventName === 'tool_execution_start')
   // OMP emits approvals only after policy chooses a human prompt; ambient approval_mode (even yolo) cannot override that verdict.
@@ -66,7 +66,8 @@ export function normalizePiCompatibleEvent(
     agentType === 'pi' && (eventName === 'ui_prompt_start' || hookPayload.ui_prompt_active === true)
   const isPiUiPromptEnd = agentType === 'pi' && eventName === 'ui_prompt_end'
   // Why: Pi posts this only for a compaction between a finished reply and its settle.
-  const isPiCompactionStart = agentType === 'pi' && eventName === 'compaction_start'
+  const isPiCompactionStart =
+    (agentType === 'pi' || agentType === 'omo') && eventName === 'compaction_start'
 
   let stateName =
     isPiCompatibleAsk || isOmpApprovalRequest || isOmpPlanReview

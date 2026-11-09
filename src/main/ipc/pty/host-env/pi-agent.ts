@@ -30,11 +30,28 @@ export function resolvePiAgentSourceDir(
     return sourceDir
   }
 
-  if (kind === 'prime-agent' || kind === 'omo') {
+  if (kind === 'prime-agent') {
     return (
       readEnvWithProcessFallback(baseEnv, primaryKey) ??
       readSessionShellStartupEnvVar(primaryKey, baseEnv)
     )
+  }
+
+  if (kind === 'omo') {
+    // Match OmO's launcher order; an inherited Pi/OMP overlay is not the user's home.
+    for (const key of ['OMO_CODING_AGENT_DIR', 'SENPI_CODING_AGENT_DIR', 'PI_CODING_AGENT_DIR']) {
+      const dir =
+        readEnvWithProcessFallback(baseEnv, key) ?? readSessionShellStartupEnvVar(key, baseEnv)
+      if (
+        dir &&
+        (key !== 'PI_CODING_AGENT_DIR' ||
+          (dir !== readEnvWithProcessFallback(baseEnv, 'ORCA_PI_CODING_AGENT_DIR') &&
+            dir !== readEnvWithProcessFallback(baseEnv, 'ORCA_OMP_CODING_AGENT_DIR')))
+      ) {
+        return dir
+      }
+    }
+    return undefined
   }
 
   const overlayKey = kind === 'omp' ? 'ORCA_OMP_CODING_AGENT_DIR' : 'ORCA_PI_CODING_AGENT_DIR'

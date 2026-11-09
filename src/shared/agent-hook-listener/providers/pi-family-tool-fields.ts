@@ -30,7 +30,7 @@ function isPiCompatibleAskTool(
 ): boolean {
   return agentKind === 'omp'
     ? toolName === 'ask'
-    : agentKind === 'pi' && isAskUserQuestionTool(toolName)
+    : (agentKind === 'pi' || agentKind === 'omo') && isAskUserQuestionTool(toolName)
 }
 
 export function extractPiToolFields(
