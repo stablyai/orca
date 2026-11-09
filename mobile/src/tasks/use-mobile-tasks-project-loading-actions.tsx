@@ -18,6 +18,7 @@ import {
   githubProjectViewTableRead
 } from './mobile-task-project-board-operations'
 
+/** Provides GitHub Project list, view, table loading, and selection actions for mobile Tasks. */
 export function useMobileTasksProjectLoadingActions(model: TaskPaginationActionsModel) {
   const {
     activeGitHubProject,
@@ -152,20 +153,29 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
     ]
   )
 
+  /** Strips extra picker fields so persisted settings conform to the strict GitHubProjectRef schema. */
+  const toGitHubProjectRef = (project: GitHubProjectRef): GitHubProjectRef => ({
+    owner: project.owner,
+    ownerType: project.ownerType,
+    number: project.number,
+    host: githubProjectHost(project.host)
+  })
+
   const commitGitHubProjectView = useCallback(
     (project: GitHubProjectRef, viewId: string): void => {
-      const projectKey = githubProjectKey(project)
+      const cleanProject = toGitHubProjectRef(project)
+      const projectKey = githubProjectKey(cleanProject)
       const nextSettings: GitHubProjectSettings = {
         ...githubProjectSettings,
         recent: [
-          { ...project, lastOpenedAt: new Date().toISOString() },
+          { ...cleanProject, lastOpenedAt: new Date().toISOString() },
           ...githubProjectSettings.recent.filter((entry) => githubProjectKey(entry) !== projectKey)
         ].slice(0, 10),
         lastViewByProject: {
           ...githubProjectSettings.lastViewByProject,
           [projectKey]: { viewId }
         },
-        activeProject: project
+        activeProject: cleanProject
       }
       persistGitHubProjectSettings(nextSettings)
       setAppliedGithubProjectSearch(undefined)
@@ -180,12 +190,16 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
       if (!tasksSupported || !taskStateHydrated) {
         return
       }
+      const cleanProject = toGitHubProjectRef(project)
       setGithubProjectLoading(true)
       setGithubProjectError('')
       try {
-        const views = await loadGitHubProjectViews(project)
-        const projectKey = githubProjectKey(project)
+        const views = await loadGitHubProjectViews(cleanProject)
+        const projectKey = githubProjectKey(cleanProject)
         const rememberedView = githubProjectSettings.lastViewByProject[projectKey]?.viewId
+        const rememberedTableView = rememberedView
+          ? views.find((view) => view.id === rememberedView && view.layout === 'TABLE_LAYOUT')
+          : undefined
         const explicitView =
           typeof options.viewNumber === 'number'
             ? views.find((view) => view.number === options.viewNumber)
@@ -196,31 +210,32 @@ export function useMobileTasksProjectLoadingActions(model: TaskPaginationActions
           if (supportedViews.length === 0) {
             throw new Error('This project has no supported views.')
           }
-          setPendingGitHubProjectViewSelection(project)
+          setPendingGitHubProjectViewSelection(cleanProject)
           setShowGitHubProjectViewPicker(true)
           return
         }
         if (explicitView && explicitView.layout !== 'TABLE_LAYOUT') {
           throw new Error("Orca doesn't support this GitHub Project layout yet.")
         }
-        if (!explicitView && !rememberedView) {
+        if (!explicitView && !rememberedTableView) {
           // Ask for the first Project view; do not silently choose the first table.
           const supportedViews = views.filter((view) => view.layout === 'TABLE_LAYOUT')
           if (supportedViews.length === 0) {
             throw new Error('This project has no supported views.')
           }
-          setPendingGitHubProjectViewSelection(project)
+          if (supportedViews.length === 1) {
+            commitGitHubProjectView(cleanProject, supportedViews[0]!.id)
+            return
+          }
+          setPendingGitHubProjectViewSelection(cleanProject)
           setShowGitHubProjectViewPicker(true)
           return
         }
-        const selectedView =
-          explicitView ??
-          views.find((view) => view.id === rememberedView && view.layout === 'TABLE_LAYOUT') ??
-          undefined
+        const selectedView = explicitView ?? rememberedTableView
         if (!selectedView) {
           throw new Error('This project has no supported views.')
         }
-        commitGitHubProjectView(project, selectedView.id)
+        commitGitHubProjectView(cleanProject, selectedView.id)
       } catch (err) {
         setGithubProjectError(err instanceof Error ? err.message : 'Failed to select project')
       } finally {

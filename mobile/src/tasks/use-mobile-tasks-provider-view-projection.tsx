@@ -20,6 +20,7 @@ import {
   groupSortedLinearIssues
 } from './mobile-tasks-legacy-foundation'
 
+/** Derives provider filter labels, Linear board/list sections, and GitHub Project picker lists. */
 export function useMobileTasksProviderViewProjection(model: PickerProjectionModel) {
   const t = useMobileTranslation()
   const colorScheme = useMobileColorScheme()
@@ -182,11 +183,19 @@ export function useMobileTasksProviderViewProjection(model: PickerProjectionMode
       : githubKind === 'prs'
         ? t('tasks.providerViewProjection.pullRequests', 'PRs')
         : t('tasks.providerViewProjection.issues', 'Issues')
-  const activeProjectLabel = githubProjectTable
-    ? githubProjectTable.project.title
-    : activeGitHubProject
-      ? `${activeGitHubProject.owner} #${activeGitHubProject.number}`
-      : t('tasks.providerViewProjection.chooseProject', 'Choose project')
+  const displayedGitHubProject =
+    model.pendingGitHubProjectViewSelection ?? activeGitHubProject
+  const activeProjectLabel =
+    githubProjectTable &&
+    !model.pendingGitHubProjectViewSelection &&
+    (!displayedGitHubProject ||
+      githubProjectTable.project.number === displayedGitHubProject.number)
+      ? githubProjectTable.project.title
+      : displayedGitHubProject
+        ? (githubProjects.find(
+            (project) => githubProjectKey(project) === githubProjectKey(displayedGitHubProject)
+          )?.title ?? `${displayedGitHubProject.owner} #${displayedGitHubProject.number}`)
+        : t('tasks.providerViewProjection.chooseProject', 'Choose project')
   const selectedGitHubProjectViewUrl = githubProjectTable
     ? `${githubProjectTable.project.url}/views/${githubProjectTable.selectedView.number}`
     : null
