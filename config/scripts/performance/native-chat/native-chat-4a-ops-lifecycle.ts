@@ -23,7 +23,7 @@ import {
   mutate,
   openChatTab,
   send,
-  userItemIds,
+  messageItemIds,
   waitForControls,
   waitForDurable,
   waitForIdle
@@ -292,7 +292,7 @@ export async function rewindRows(ctx: RunContext): Promise<void> {
       sessionId: largeSessionId,
       worktreeId: workspace.worktreeIds[0]
     })
-    const [tip] = (await userItemIds(page(ctx), largeSessionId, 1)).slice(-1)
+    const [tip] = (await messageItemIds(page(ctx), largeSessionId, 'user', 1)).slice(-1)
     return rewindOnce(tip!, marker)
   })
   const cut = ctx.workload.rewind.deepCutTurns
@@ -304,7 +304,7 @@ export async function rewindRows(ctx: RunContext): Promise<void> {
     endToEndOnly
   })
   await sampled(ctx, deep, ctx.workload.rewind.deepSamples, async () => {
-    const ids = await userItemIds(page(ctx), largeSessionId, cut + 1)
+    const ids = await messageItemIds(page(ctx), largeSessionId, 'user', cut + 1)
     const tail = JSON.stringify(
       (await history(page(ctx), largeSessionId, 'tail', 3)).page.items
     ).match(/4A-TAIL-[\w-]+/)?.[0]

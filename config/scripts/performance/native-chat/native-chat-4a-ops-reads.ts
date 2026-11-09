@@ -11,7 +11,7 @@ import {
   tagFor,
   type RunContext
 } from './native-chat-4a-run-context'
-import { createChat, history, mutate, userItemIds, waitForIdle } from './native-chat-4a-session'
+import { createChat, history, messageItemIds, mutate, waitForIdle } from './native-chat-4a-session'
 
 const bytesOf = (value: unknown): number => Buffer.byteLength(JSON.stringify(value))
 
@@ -111,7 +111,7 @@ export async function outlineAndForkRows(ctx: RunContext): Promise<void> {
     read(ctx, 'agentSession.conversationOutline', { sessionId })
   )
 
-  const [tip] = (await userItemIds(page(ctx), sessionId, 1)).slice(-1)
+  const [tip] = (await messageItemIds(page(ctx), sessionId, 'assistant', 1)).slice(-1)
   const fork = addRow(ctx, {
     family: 'outline',
     operation: 'tip fork (create forkFrom)',
@@ -120,7 +120,7 @@ export async function outlineAndForkRows(ctx: RunContext): Promise<void> {
     endToEndOnly: 'local validation and provider copy are one host span'
   })
   if (!tip) {
-    fork.skipped = 'no user item on the large chat'
+    fork.skipped = 'no response on the large chat'
     return
   }
   await sampled(ctx, fork, Math.min(ctx.workload.samples, 10), () =>
