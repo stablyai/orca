@@ -38,16 +38,22 @@ export function VoiceVocabularySetting({
   const updateRepo = useAppStore((s) => s.updateRepo)
   const [chosenScope, setScope] = useState<VocabularyScope>('personal')
   // A repo write is a round trip (RPC for a remote host); the next edit builds on it, not on the stored list.
-  const [pending, setPending] = useState<{ repoId: string; terms: DictationTerm[] } | null>(null)
+  const [pending, setPending] = useState<{
+    repoId: string
+    hostId: ExecutionHostId
+    terms: DictationTerm[]
+  } | null>(null)
   const pendingRef = useRef(pending)
   const scope = repo ? chosenScope : 'personal'
   const personalTerms = voiceSettings.dictationTerms ?? NO_TERMS
   const repoTerms =
-    pending && pending.repoId === repo?.id ? pending.terms : (repo?.dictationTerms ?? NO_TERMS)
+    pending && repo && pending.repoId === repo.id && pending.hostId === getRepoExecutionHostId(repo)
+      ? pending.terms
+      : (repo?.dictationTerms ?? NO_TERMS)
   const terms = scope === 'repo' ? repoTerms : personalTerms
 
   const saveRepoTerms = async (repoId: string, hostId: ExecutionHostId, next: DictationTerm[]) => {
-    const write = { repoId, terms: next }
+    const write = { repoId, hostId, terms: next }
     pendingRef.current = write
     setPending(write)
     const saved = await updateRepo(repoId, { dictationTerms: next }, { hostId })
