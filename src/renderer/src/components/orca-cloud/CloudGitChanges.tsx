@@ -24,12 +24,13 @@ export type CloudGitChangesData = {
 }
 
 const KIND_TONE: Record<ChangeKind, string> = {
-  modified: 'text-amber-600 dark:text-amber-400',
-  added: 'text-emerald-600 dark:text-emerald-400',
-  untracked: 'text-emerald-600 dark:text-emerald-400',
-  deleted: 'text-red-600 dark:text-red-400',
-  renamed: 'text-sky-600 dark:text-sky-400',
-  copied: 'text-sky-600 dark:text-sky-400',
+  // The theme's git decoration colors: tuned for contrast in light and dark.
+  modified: 'text-[var(--git-decoration-modified)]',
+  added: 'text-[var(--git-decoration-added)]',
+  untracked: 'text-[var(--git-decoration-untracked)]',
+  deleted: 'text-[var(--git-decoration-deleted)]',
+  renamed: 'text-[var(--git-decoration-renamed)]',
+  copied: 'text-[var(--git-decoration-copied)]',
   unknown: 'text-muted-foreground'
 }
 
@@ -70,26 +71,30 @@ export function CloudGitChanges({
   const stat = parseDiffStat(data.diffStat)
   const totalChanges = Math.max(data.changeCount ?? 0, data.changes.length)
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border p-3" data-cloud-git-changes="">
+    <div
+      className="flex flex-col gap-3 rounded-lg border border-border p-3"
+      data-cloud-git-changes=""
+    >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
         <GitBranch className="size-3.5 text-muted-foreground" aria-hidden="true" />
         <span className="font-medium text-foreground">
           {data.branch ?? t('orcaCloudWorkspace.archived.detached', 'Detached HEAD')}
         </span>
-        {data.upstream && (data.ahead || data.behind) ? (
+        {data.ahead ? (
           <span className="tabular-nums text-muted-foreground">
-            {t('orcaCloudWorkspace.archived.aheadBehind', '↑{{ahead}} ↓{{behind}} vs {{upstream}}', {
-              ahead: data.ahead ?? 0,
-              behind: data.behind ?? 0,
-              upstream: data.upstream
-            })}
+            {t('orcaCloudWorkspace.archived.ahead', '{{count}} ahead', { count: data.ahead })}
+          </span>
+        ) : null}
+        {data.behind ? (
+          <span className="tabular-nums text-muted-foreground">
+            {t('orcaCloudWorkspace.archived.behind', '{{count}} behind', { count: data.behind })}
           </span>
         ) : null}
         {stat ? (
           <span className="tabular-nums text-muted-foreground">
             {t('orcaCloudWorkspace.archived.files', '{{count}} files', { count: stat.files })}{' '}
-            <span className="text-emerald-600 dark:text-emerald-400">+{stat.insertions}</span>{' '}
-            <span className="text-red-600 dark:text-red-400">−{stat.deletions}</span>
+            <span className="text-[var(--git-decoration-added)]">+{stat.insertions}</span>{' '}
+            <span className="text-[var(--git-decoration-deleted)]">−{stat.deletions}</span>
           </span>
         ) : null}
       </div>

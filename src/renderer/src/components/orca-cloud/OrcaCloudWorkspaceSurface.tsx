@@ -3,6 +3,8 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
 import { usePrefersReducedMotion } from '@/hooks/usePrefersReducedMotion'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { returnFocusToWorkspace } from './cloud-focus-return'
 import { useNow } from '@/hooks/use-now'
 import { useTranslate } from '@/i18n/use-translate'
 import {
@@ -75,7 +77,10 @@ function useArchiveLoad(workspaceId: string, enabled: boolean): [ArchiveLoad, ()
       })
       .catch((error: unknown) => {
         if (!cancelled) {
-          setLoad({ status: 'error', message: error instanceof Error ? error.message : String(error) })
+          setLoad({
+            status: 'error',
+            message: error instanceof Error ? error.message : String(error)
+          })
         }
       })
     return () => {
@@ -158,6 +163,34 @@ function coveredPaneHadFocus(cover: HTMLElement | null): boolean {
   return !active || active === document.body || Boolean(pane && pane.contains(active))
 }
 
+// Shared across covers: an element stays inert while any cover still holds it, and an element
+// that was inert before any cover arrived (some other owner) is never released by us.
+const inertHolds = new Map<HTMLElement, number>()
+
+function holdInert(element: HTMLElement): void {
+  const holds = inertHolds.get(element)
+  if (holds === undefined) {
+    if (element.inert) {
+      return
+    }
+    element.inert = true
+  }
+  inertHolds.set(element, (holds ?? 0) + 1)
+}
+
+function releaseInert(element: HTMLElement): void {
+  const holds = inertHolds.get(element)
+  if (holds === undefined) {
+    return
+  }
+  if (holds <= 1) {
+    inertHolds.delete(element)
+    element.inert = false
+  } else {
+    inertHolds.set(element, holds - 1)
+  }
+}
+
 /** Marks every sibling of the cover (the panes it hides) inert while it is shown. */
 function useInertSiblings(cover: React.RefObject<HTMLElement | null>, active: boolean): void {
   useLayoutEffect(() => {
@@ -166,23 +199,18 @@ function useInertSiblings(cover: React.RefObject<HTMLElement | null>, active: bo
     if (!active || !element || !parent) {
       return
     }
-    const changed: HTMLElement[] = []
+    const held: HTMLElement[] = []
     for (const child of Array.from(parent.children)) {
       if (
         child !== element &&
         child instanceof HTMLElement &&
-        !child.hasAttribute('data-cloud-surface') &&
-        !child.inert
+        !child.hasAttribute('data-cloud-surface')
       ) {
-        child.inert = true
-        changed.push(child)
+        holdInert(child)
+        held.push(child)
       }
     }
-    return () => {
-      for (const child of changed) {
-        child.inert = false
-      }
-    }
+    return () => held.forEach(releaseInert)
   }, [cover, active])
 }
 
@@ -226,6 +254,24 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
       headingRef.current?.focus()
     }
   }, [takeFocus, layer])
+  const hadLayer = useRef(false)
+  useEffect(() => {
+    if (layer) {
+      hadLayer.current = true
+      return
+    }
+    if (!hadLayer.current) {
+      return
+    }
+    hadLayer.current = false
+    // The cover unmounted (wake ready, Dismiss, Unarchive); focus it held fell to <body>.
+    const frame = requestAnimationFrame(() =>
+      returnFocusToWorkspace(useAppStore.getState().activeTabId, (tabId) =>
+        focusTerminalTabSurface(tabId, null, { onlyIfFocusUnclaimed: true })
+      )
+    )
+    return () => cancelAnimationFrame(frame)
+  }, [layer])
 
   const restart = useCallback(() => void runRestartCloudWorkspace(workspaceId), [workspaceId])
   const wake = useCallback(() => {
@@ -233,16 +279,22 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
     void wakeCloudWorkspace(workspaceId)
   }, [workspaceId])
 
-  // One persistent, initially empty live region for this surface: phase changes only.
+  // One persistent, initially empty live region for this surface: phase changes only. A failed
+  // wake is announced by its own alert card, so not here too.
+  const label = name || t('orcaCloudWorkspace.thisWorkspaceTitle', 'This workspace')
   const announcement =
-    layer === 'waking' && overlay.wake
-      ? overlay.wake.phase === 'failed'
-        ? t('orcaCloudWorkspace.announce.failed', 'Couldn’t wake {{name}}.', { name: name ?? '' })
-        : t('orcaCloudWorkspace.announce.waking', 'Waking {{name}}.', { name: name ?? '' })
+    layer === 'waking' && overlay.wake && overlay.wake.phase !== 'failed'
+      ? overlay.wake.source === 'restart'
+        ? t('orcaCloudWorkspace.announce.restarting', 'Restarting {{name}}.', { name: label })
+        : overlay.wake.source === 'unarchive'
+          ? t('orcaCloudWorkspace.announce.unarchiving', 'Restoring {{name}} from archive.', {
+              name: label
+            })
+          : t('orcaCloudWorkspace.announce.waking', 'Waking {{name}}.', { name: label })
       : layer === 'archived'
-        ? t('orcaCloudWorkspace.announce.archived', '{{name}} is archived.', { name: name ?? '' })
+        ? t('orcaCloudWorkspace.announce.archived', '{{name}} is archived.', { name: label })
         : layer === 'asleep'
-          ? t('orcaCloudWorkspace.announce.asleep', '{{name}} is asleep.', { name: name ?? '' })
+          ? t('orcaCloudWorkspace.announce.asleep', '{{name}} is asleep.', { name: label })
           : ''
 
   const notices: React.ReactNode[] = []
@@ -324,7 +376,9 @@ function CloudSurface({ workspaceId }: { workspaceId: string }): React.JSX.Eleme
                   return true
                 }}
                 onCancel={(id) =>
-                  void window.api.orcaCloudOffline.cancelQueuedPrompt({ id }).then(() => offline.refresh())
+                  void window.api.orcaCloudOffline
+                    .cancelQueuedPrompt({ id })
+                    .then(() => offline.refresh())
                 }
                 onEdit={async (id, text) => {
                   const saved = await window.api.orcaCloudOffline.editQueuedPrompt({ id, text })

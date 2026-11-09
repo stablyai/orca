@@ -1,5 +1,7 @@
 // Window side of Orca Cloud's session lifecycle: cap warnings and idle sleep requests from main.
+import { createElement } from 'react'
 import { toast } from 'sonner'
+import { CloudStateDot } from '@/components/orca-cloud/CloudStateDot'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { findWorktreeById } from '@/store/github/refresh/worktree-refresh'
@@ -65,18 +67,30 @@ export function showOrcaCloudPlanUpsell(message: string): void {
   })
 }
 
-/** "<name> slept after 20 min idle · Wake": the quiet receipt for an automatic sleep. */
-export function showIdleSleepNotice(workspaceId: string, name: string, idleMs: number | null): void {
+/** "<name> slept after 20 minutes idle · Wake": the quiet receipt for an automatic sleep. */
+export function showIdleSleepNotice(
+  workspaceId: string,
+  name: string,
+  idleMs: number | null
+): void {
   const minutes = idleMs ? Math.max(1, Math.round(idleMs / 60_000)) : null
   toast(
     minutes
-      ? translate('orcaCloudWorkspace.idleSlept', '{{name}} slept after {{minutes}} min idle', {
-          name,
-          minutes
-        })
-      : translate('orcaCloudWorkspace.idleSleptNoTime', '{{name}} went to sleep while idle', { name }),
+      ? translate(
+          'orcaCloudWorkspace.idleSleptMinutes',
+          '{{name}} slept after {{count}} minutes idle',
+          {
+            name,
+            count: minutes
+          }
+        )
+      : translate('orcaCloudWorkspace.idleSleptNoTime', '{{name}} went to sleep while idle', {
+          name
+        }),
     {
       id: `orca-cloud-idle-sleep:${workspaceId}`,
+      // The same hollow "asleep" dot the sidebar shows for this workspace.
+      icon: createElement(CloudStateDot, { state: 'sleeping', size: 'md' }),
       duration: 8_000,
       description: translate(
         'orcaCloudWorkspace.idleSleptDetail',

@@ -26,14 +26,15 @@ export function CloudWorkspaceNotice({
   const victim = isOom ? notice.oom.victim : null
   const title = isOom
     ? victim
-      ? t('orcaCloudWorkspace.oom.titleNamed', '{{name}} ran out of memory and was stopped', {
-          name: victim
-        })
-      : t('orcaCloudWorkspace.oom.title', 'A process ran out of memory and was stopped')
-    : t('orcaCloudWorkspace.unresponsive.title', 'This workspace isn’t responding')
+      ? t('orcaCloudWorkspace.oom.titleRan', '{{name}} ran out of memory', { name: victim })
+      : t('orcaCloudWorkspace.oom.titleProcess', 'A process ran out of memory')
+    : t('orcaCloudWorkspace.unresponsive.sandboxTitle', 'This sandbox isn’t responding')
   const detail = isOom
-    ? t('orcaCloudWorkspace.oom.detail', 'Restart to recover.')
-    : t('orcaCloudWorkspace.unresponsive.detail', 'Restart keeps your files.')
+    ? t(
+        'orcaCloudWorkspace.oom.stopped',
+        'It was stopped so the sandbox stays up. Restart to recover.'
+      )
+    : t('orcaCloudWorkspace.detail.restartKeeps', 'Restart keeps your files; agents resume.')
   const Icon = isOom ? MemoryStick : Unplug
   return (
     <div
@@ -41,7 +42,7 @@ export function CloudWorkspaceNotice({
       data-cloud-notice={notice.kind}
       className="pointer-events-auto flex w-[22rem] max-w-[calc(100%-1.5rem)] items-start gap-3 rounded-lg border border-border bg-card p-3 text-card-foreground shadow-[0_8px_24px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.4)] motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-top-1"
     >
-      <Icon className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden="true" />
+      <Icon className="mt-0.5 size-4 shrink-0 text-status-warning-text" aria-hidden="true" />
       <div className="min-w-0 flex-1 space-y-2">
         <div className="space-y-0.5">
           <div className="text-sm font-medium leading-5">{title}</div>

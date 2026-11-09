@@ -11,7 +11,7 @@ import {
   formatBytes,
   formatCents,
   formatDuration,
-  formatHours,
+  formatSandboxHours,
   formatShortDate,
   percentOf,
   showUpdatedAgo,
@@ -158,6 +158,12 @@ export function CloudWorkspaceStatusPanel({
       ? t('orcaCloudWorkspace.detail.restarting', 'Orca resumes your agents after the restart.')
       : cloudStateDetail(state, t)
   const showMeters = Boolean(metrics) && (state === 'running' || state === 'unresponsive')
+  // Overage is what's billed beyond the plan; the status call doesn't carry it yet, so this stays 0
+  // (no dollars shown) until billing reports it.
+  const overageCents = 0
+  const showAgo = Boolean(entry?.fetchedAt && showUpdatedAgo(entry.fetchedAt, now))
+  const hasActions = canArchive || canRestart || restarting || state === 'archived'
+  const showFooter = showAgo || hasActions
 
   return (
     <div
@@ -169,7 +175,7 @@ export function CloudWorkspaceStatusPanel({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 whitespace-nowrap">
             <span className="font-medium text-foreground">
-              {t('orcaCloudWorkspace.title', 'Orca Cloud')}
+              {t('orcaCloudWorkspace.sandboxTitle', 'Sandbox')}
             </span>
             <span className="text-muted-foreground" aria-hidden="true">
               ·
@@ -197,7 +203,11 @@ export function CloudWorkspaceStatusPanel({
           className="text-xs"
         />
       ) : firstLoad ? (
-        <div aria-busy="true" aria-label={t('orcaCloudWorkspace.loading', 'Loading status')}>
+        <div
+          role="status"
+          aria-busy="true"
+          aria-label={t('orcaCloudWorkspace.loading', 'Loading status')}
+        >
           <MeterSkeleton />
         </div>
       ) : status ? (
@@ -215,13 +225,19 @@ export function CloudWorkspaceStatusPanel({
               />
               <Meter
                 label={t('orcaCloudWorkspace.memory', 'Memory')}
-                value={`${formatBytes(metrics.memUsedBytes)} / ${formatBytes(metrics.memTotalBytes)}`}
+                value={t('orcaCloudWorkspace.usedOfTotal', '{{used}} / {{total}}', {
+                  used: formatBytes(metrics.memUsedBytes),
+                  total: formatBytes(metrics.memTotalBytes)
+                })}
                 percent={memPercent}
                 warn={memPercent >= 90}
               />
               <Meter
                 label={t('orcaCloudWorkspace.disk', 'Disk')}
-                value={`${formatBytes(metrics.diskUsedBytes)} / ${formatBytes(metrics.diskTotalBytes)}`}
+                value={t('orcaCloudWorkspace.usedOfTotal', '{{used}} / {{total}}', {
+                  used: formatBytes(metrics.diskUsedBytes),
+                  total: formatBytes(metrics.diskTotalBytes)
+                })}
                 percent={diskPercent}
                 warn={diskPercent >= 90}
               />
@@ -235,16 +251,17 @@ export function CloudWorkspaceStatusPanel({
               />
             ) : null}
             <Fact
-              label={t('orcaCloudWorkspace.usedSinceCreatedLabel', 'Used since created')}
-              value={t('orcaCloudWorkspace.sandboxHours', '{{hours}} sandbox time', {
-                hours: formatHours(status.usage.totalMs)
-              })}
+              label={t('orcaCloudWorkspace.usedLabel', 'Used')}
+              value={formatSandboxHours(status.usage.totalMs)}
             />
-            <Fact
-              muted
-              label={t('orcaCloudWorkspace.estimatedCost', 'Est. cost if over plan')}
-              value={formatCents(status.usage.costCents)}
-            />
+            {/* Dollars only once the plan's included hours are used up (overage). */}
+            {overageCents > 0 ? (
+              <Fact
+                muted
+                label={t('orcaCloudWorkspace.overage', 'Overage so far')}
+                value={formatCents(overageCents)}
+              />
+            ) : null}
             {status.archive?.expiresAt ? (
               <Fact
                 label={t('orcaCloudWorkspace.keptUntil', 'Kept until')}
@@ -255,57 +272,62 @@ export function CloudWorkspaceStatusPanel({
         </>
       ) : null}
 
-      <div className="flex min-h-6 items-center justify-between gap-2 whitespace-nowrap">
-        {/* Not a live region: a ticking "ago" would announce itself every few seconds. */}
-        <span className="truncate text-[11px] text-muted-foreground">
-          {entry?.fetchedAt && showUpdatedAgo(entry.fetchedAt, now)
-            ? entry.error
-              ? t('orcaCloudWorkspace.staleSince', 'Last known · {{ago}} ago', {
+      {showFooter ? (
+        <div className="flex min-h-6 items-center justify-between gap-2 whitespace-nowrap">
+          {/* Not a live region: a ticking "ago" would announce itself every few seconds. */}
+          <span className="truncate text-[11px] text-muted-foreground">
+            {showAgo && entry?.fetchedAt
+              ? t('orcaCloudWorkspace.ago', '{{ago}} ago', {
                   ago: formatElapsedTime(now - entry.fetchedAt)
                 })
-              : t('orcaCloudWorkspace.updatedAgo', 'Updated {{ago}} ago', {
-                  ago: formatElapsedTime(now - entry.fetchedAt)
-                })
-            : null}
-        </span>
-        <div className="flex shrink-0 items-center gap-1">
-          {canArchive && !restarting ? (
-            <Button
-              size="xs"
-              variant="ghost"
-              className="text-muted-foreground"
-              {...busyProps(pending === 'archive', anyBusy, actions.onArchive)}
-            >
-              {pending === 'archive' ? <Loader2 className="animate-spin" /> : <Archive />}
-              {t('orcaCloudWorkspace.archive', 'Archive')}
-            </Button>
-          ) : null}
-          {state === 'archived' ? (
-            <Button size="xs" {...busyProps(pending === 'unarchive', anyBusy, actions.onUnarchive)}>
-              {pending === 'unarchive' ? <Loader2 className="animate-spin" /> : <ArchiveRestore />}
-              {t('orcaCloudWorkspace.unarchive', 'Unarchive')}
-            </Button>
-          ) : null}
-          {state === 'sleeping' ? (
-            <Button size="xs" {...busyProps(false, anyBusy, actions.onWake)}>
-              <Play />
-              {t('orcaCloudWorkspace.wake', 'Wake')}
-            </Button>
-          ) : null}
-          {canRestart || restarting ? (
-            <Button
-              size="xs"
-              variant={restartPrimary || restarting ? 'default' : 'ghost'}
-              {...busyProps(restarting, anyBusy, actions.onRestart)}
-            >
-              {restarting ? <Loader2 className="animate-spin" /> : <RotateCw />}
-              {restarting
-                ? t('orcaCloudWorkspace.restarting', 'Restarting…')
-                : t('orcaCloudWorkspace.restart', 'Restart')}
-            </Button>
-          ) : null}
+              : null}
+          </span>
+          <div className="flex shrink-0 items-center gap-1">
+            {canArchive && !restarting ? (
+              <Button
+                size="xs"
+                variant="ghost"
+                className="text-muted-foreground"
+                {...busyProps(pending === 'archive', anyBusy, actions.onArchive)}
+              >
+                {pending === 'archive' ? <Loader2 className="animate-spin" /> : <Archive />}
+                {t('orcaCloudWorkspace.archive', 'Archive')}
+              </Button>
+            ) : null}
+            {state === 'archived' ? (
+              <Button
+                size="xs"
+                {...busyProps(pending === 'unarchive', anyBusy, actions.onUnarchive)}
+              >
+                {pending === 'unarchive' ? (
+                  <Loader2 className="animate-spin" />
+                ) : (
+                  <ArchiveRestore />
+                )}
+                {t('orcaCloudWorkspace.unarchive', 'Unarchive')}
+              </Button>
+            ) : null}
+            {state === 'sleeping' ? (
+              <Button size="xs" {...busyProps(false, anyBusy, actions.onWake)}>
+                <Play />
+                {t('orcaCloudWorkspace.wake', 'Wake')}
+              </Button>
+            ) : null}
+            {canRestart || restarting ? (
+              <Button
+                size="xs"
+                variant={restartPrimary || restarting ? 'default' : 'ghost'}
+                {...busyProps(restarting, anyBusy, actions.onRestart)}
+              >
+                {restarting ? <Loader2 className="animate-spin" /> : <RotateCw />}
+                {restarting
+                  ? t('orcaCloudWorkspace.restarting', 'Restarting…')
+                  : t('orcaCloudWorkspace.restart', 'Restart')}
+              </Button>
+            ) : null}
+          </div>
         </div>
-      </div>
+      ) : null}
     </div>
   )
 }

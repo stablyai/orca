@@ -34,10 +34,10 @@ export type ArchiveLoad =
   | { status: 'ready'; archive: CloudArchiveInfo | null }
 
 const PR_TONE: Record<HostedArchivePullRequest['state'], string> = {
-  open: 'text-emerald-600 dark:text-emerald-400',
+  open: 'text-status-success',
   draft: 'text-muted-foreground',
-  merged: 'text-violet-600 dark:text-violet-400',
-  closed: 'text-red-600 dark:text-red-400'
+  merged: 'text-[var(--callout-important)]',
+  closed: 'text-destructive'
 }
 
 function prStateLabel(state: HostedArchivePullRequest['state'], t: Translate): string {
@@ -244,15 +244,13 @@ export function CloudArchivedWorkspaceView({
               'orcaCloudWorkspace.archived.loadFailed',
               'Couldn’t load the archive details.'
             )}
+            detail={load.message}
             retryLabel={t('orcaCloudWorkspace.retry', 'Retry')}
             onRetry={onRetry}
           />
         ) : nothing ? (
           <p className="max-w-[60ch] text-sm text-muted-foreground">
-            {t(
-              'orcaCloudWorkspace.archived.nothing',
-              'Nothing was captured for this workspace. Unarchive to open it.'
-            )}
+            {t('orcaCloudWorkspace.archived.nothing', 'Nothing was captured.')}
           </p>
         ) : (
           <>
@@ -261,7 +259,7 @@ export function CloudArchivedWorkspaceView({
                 title={t('orcaCloudWorkspace.archived.pullRequests', 'Pull requests')}
                 count={prs.length}
               >
-                <ul className="flex flex-col gap-1">
+                <ul className="flex flex-col gap-0.5 rounded-lg border border-border p-1">
                   {prs.map((pr) => (
                     <li key={pr.url}>
                       <button

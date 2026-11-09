@@ -25,7 +25,9 @@ afterEach(() => {
 })
 
 const noop = (): void => {}
-const actions = (over: Partial<Record<'onWake' | 'onRestart' | 'onArchive' | 'onUnarchive', () => void>> = {}) => ({
+const actions = (
+  over: Partial<Record<'onWake' | 'onRestart' | 'onArchive' | 'onUnarchive', () => void>> = {}
+) => ({
   onWake: noop,
   onRestart: noop,
   onArchive: noop,
@@ -44,25 +46,43 @@ describe('Orca Cloud surfaces', () => {
     rerender(<CloudWorkspaceMarkSlot workspaceId="ws" fallback={<span data-testid="server" />} />)
     expect(container.querySelector('[data-testid="server"]')).toBeNull()
     const mark = container.querySelector('[data-cloud-workspace-mark]')
-    expect(mark?.getAttribute('aria-label')).toBe('Orca Cloud: Checking…')
+    expect(mark?.getAttribute('aria-label')).toBe('Sandbox: Checking…')
   })
 
   it('the panel: Restart primary only when not responding, Wake when asleep, Unarchive when archived', () => {
     const onRestart = vi.fn()
     const { getByRole, queryByRole, rerender } = render(
-      <CloudWorkspaceStatusPanel workspaceId="ws" state="unresponsive" entry={empty} pending={undefined} actions={actions({ onRestart })} />
+      <CloudWorkspaceStatusPanel
+        workspaceId="ws"
+        state="unresponsive"
+        entry={empty}
+        pending={undefined}
+        actions={actions({ onRestart })}
+      />
     )
     fireEvent.click(getByRole('button', { name: /Restart/ }))
     expect(onRestart).toHaveBeenCalledTimes(1)
     const onWake = vi.fn()
     rerender(
-      <CloudWorkspaceStatusPanel workspaceId="ws" state="sleeping" entry={empty} pending={undefined} actions={actions({ onWake })} />
+      <CloudWorkspaceStatusPanel
+        workspaceId="ws"
+        state="sleeping"
+        entry={empty}
+        pending={undefined}
+        actions={actions({ onWake })}
+      />
     )
     expect(queryByRole('button', { name: /Restart/ })).toBeNull()
     fireEvent.click(getByRole('button', { name: /Wake/ }))
     expect(onWake).toHaveBeenCalled()
     rerender(
-      <CloudWorkspaceStatusPanel workspaceId="ws" state="archived" entry={empty} pending={undefined} actions={actions()} />
+      <CloudWorkspaceStatusPanel
+        workspaceId="ws"
+        state="archived"
+        entry={empty}
+        pending={undefined}
+        actions={actions()}
+      />
     )
     expect(getByRole('button', { name: /Unarchive/ })).not.toBeNull()
   })
@@ -105,9 +125,23 @@ describe('Orca Cloud surfaces', () => {
   it('the waking overlay: counts seconds, says when slow, offers recovery when stuck', () => {
     vi.useFakeTimers()
     vi.setSystemTime(T0)
-    const wake = { workspaceId: 'ws', phase: 'waking' as const, source: 'open' as const, startedAt: T0 - 3_200, at: T0 }
-    const props = { workspaceName: 'w', autoFocus: false, onRetry: noop, onRestart: noop, onDismiss: noop }
-    const { container, queryByRole, rerender } = render(<CloudWakingOverlay wake={wake} {...props} />)
+    const wake = {
+      workspaceId: 'ws',
+      phase: 'waking' as const,
+      source: 'open' as const,
+      startedAt: T0 - 3_200,
+      at: T0
+    }
+    const props = {
+      workspaceName: 'w',
+      autoFocus: false,
+      onRetry: noop,
+      onRestart: noop,
+      onDismiss: noop
+    }
+    const { container, queryByRole, rerender } = render(
+      <CloudWakingOverlay wake={wake} {...props} />
+    )
     expect(container.textContent).toMatch(/Waking…\s*3s/)
     expect(queryByRole('button', { name: 'Try again' })).toBeNull()
     rerender(<CloudWakingOverlay wake={{ ...wake, startedAt: T0 - 25_000 }} {...props} />)
@@ -146,7 +180,8 @@ describe('Orca Cloud surfaces', () => {
         onDismiss={onDismiss}
       />
     )
-    expect(getByRole('alert').textContent).toContain('node ran out of memory and was stopped')
+    expect(getByRole('alert').textContent).toContain('node ran out of memory')
+    expect(getByRole('alert').textContent).toContain('It was stopped')
     fireEvent.click(getByRole('button', { name: 'Dismiss' }))
     expect(onDismiss).toHaveBeenCalled()
   })

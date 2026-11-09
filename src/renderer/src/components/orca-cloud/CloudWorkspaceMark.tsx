@@ -70,7 +70,7 @@ function CloudWorkspaceMarkInner({
   useCloudStatusPolling(workspaceId, PANEL_POLL_MS, open !== null)
   const close = useCallback(() => setOpen(null), [])
   const actions = useCloudPanelActions(workspaceId, close)
-  const label = t('orcaCloudWorkspace.markLabel', 'Orca Cloud: {{state}}', {
+  const label = t('orcaCloudWorkspace.sandboxMarkLabel', 'Sandbox: {{state}}', {
     state: cloudStateLabel(view.state, t)
   })
   return (
@@ -121,7 +121,7 @@ function CloudWorkspaceMarkInner({
         side="right"
         align="start"
         sideOffset={10}
-        className="w-72 p-3 outline-none"
+        className={cn('w-72 p-3', FOCUS_RING)}
         aria-label={label}
         tabIndex={-1}
         onPointerEnter={() => clearTimer()}

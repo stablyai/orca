@@ -11,7 +11,7 @@ import type {
   OrcaCloudWorkspaceApi
 } from '../../../../shared/hosted-sandbox/cloud-workspace-api'
 import type { HostedWorkspaceStatus } from '../../../../shared/hosted-sandbox/hosted-sandbox-wire'
-import { WAKE_FAILED_STALE_MS } from './orca-cloud-workspace-state'
+import { WAKE_FAILED_STALE_MS, WAKE_STALE_MS } from './orca-cloud-workspace-state'
 
 export type CloudStatusEntry = {
   status: HostedWorkspaceStatus | null
@@ -153,7 +153,10 @@ export async function isCloudWorkspaceArchivedFresh(
   return isCloudWorkspaceArchived(workspaceId)
 }
 
-function applyStatus(workspaceId: string, result: CloudWorkspaceResult<HostedWorkspaceStatus>): void {
+function applyStatus(
+  workspaceId: string,
+  result: CloudWorkspaceResult<HostedWorkspaceStatus>
+): void {
   updateCloudWorkspaceSnapshot((s) => {
     const previous = s.status[workspaceId]
     if (!result.ok && result.code === 'not_cloud') {
@@ -182,7 +185,11 @@ function applyStatus(workspaceId: string, result: CloudWorkspaceResult<HostedWor
 const STARTUP_STATUS_CONCURRENCY = 4
 
 /** Runs `work` over `items` with at most `limit` in flight. */
-async function eachLimited<T>(items: readonly T[], limit: number, work: (item: T) => Promise<void>) {
+async function eachLimited<T>(
+  items: readonly T[],
+  limit: number,
+  work: (item: T) => Promise<void>
+) {
   let next = 0
   const lane = async (): Promise<void> => {
     while (next < items.length) {
@@ -220,7 +227,9 @@ export function dismissCloudOom(workspaceId: string): void {
   if (kills === undefined) {
     return
   }
-  updateCloudWorkspaceSnapshot((s) => ({ oomDismissed: { ...s.oomDismissed, [workspaceId]: kills } }))
+  updateCloudWorkspaceSnapshot((s) => ({
+    oomDismissed: { ...s.oomDismissed, [workspaceId]: kills }
+  }))
 }
 
 function dropWake(workspaceId: string, only?: CloudWakeProgressEvent): void {
@@ -258,6 +267,10 @@ export function noteCloudWakeProgress(event: CloudWakeProgressEvent): void {
   } else if (event.phase === 'failed') {
     void refreshCloudWorkspaceStatus(event.workspaceId)
     setTimeout(() => dropWake(event.workspaceId, next), WAKE_FAILED_STALE_MS)
+  } else {
+    // A wake that never reports again shows as failed once stale; drop it after that card's own
+    // stale window so nothing lingers.
+    setTimeout(() => dropWake(event.workspaceId, next), WAKE_STALE_MS + WAKE_FAILED_STALE_MS)
   }
 }
 

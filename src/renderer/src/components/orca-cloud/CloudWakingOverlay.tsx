@@ -106,7 +106,9 @@ export function CloudWakingOverlay({
       ? t('orcaCloudWorkspace.overlay.slow', 'Taking longer than usual…')
       : wake.source === 'message'
         ? t('orcaCloudWorkspace.overlay.messageQueued', 'Your message sends as soon as it’s up.')
-        : t('orcaCloudWorkspace.overlay.usually', 'Usually about 5 seconds.')
+        : null
+  // Announced once each (the text changes only when crossing 20 s and 60 s).
+  const slowAnnouncement = stuck ? hint : slow ? hint : ''
   return (
     <div
       ref={rootRef}
@@ -118,11 +120,15 @@ export function CloudWakingOverlay({
         leaving ? 'pointer-events-none opacity-0' : 'opacity-100'
       )}
       data-cloud-waking-overlay={wake.phase}
+      role="group"
       aria-label={
         failed ? undefined : t('orcaCloudWorkspace.overlay.label', '{{name}} is waking', { name })
       }
     >
       <TerminalSkeleton still={failed} />
+      <div role="status" className="sr-only">
+        {failed ? '' : slowAnnouncement}
+      </div>
       <div className="absolute inset-0 flex items-center justify-center p-4">
         {failed ? (
           <div
@@ -165,18 +171,29 @@ export function CloudWakingOverlay({
             </div>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-2">
-            <div className="flex items-center gap-2.5 rounded-full border border-border bg-card/95 py-1.5 pr-3.5 pl-2.5 text-sm text-card-foreground shadow-xs backdrop-blur">
+          <div
+            className={cn(
+              'flex flex-col items-center text-card-foreground',
+              hint && 'w-full max-w-xs gap-2 rounded-lg border border-border bg-card p-3 shadow-xs'
+            )}
+          >
+            <div
+              className={cn(
+                'flex items-center gap-2.5 text-sm',
+                !hint &&
+                  'rounded-full border border-border bg-card/95 py-1.5 pr-3.5 pl-2.5 shadow-xs backdrop-blur'
+              )}
+            >
               <span className="flex size-5 items-center justify-center rounded-full bg-muted text-muted-foreground">
                 <Cloud className="size-3" aria-hidden="true" />
               </span>
               <span className="font-medium">{title}</span>
-              {/* Ticks every second; the surface's status region announces phases, not ticks. */}
+              {/* Ticks every second; only phase changes and the slow/stuck hints are announced. */}
               <span className="tabular-nums text-muted-foreground" aria-hidden="true">
                 {formatElapsedTime(seconds * 1000)}
               </span>
             </div>
-            <p className="text-xs text-muted-foreground">{hint}</p>
+            {hint ? <p className="text-center text-xs text-muted-foreground">{hint}</p> : null}
             {stuck ? (
               <div className="flex gap-2">
                 <Button size="xs" variant="ghost" onClick={onRestart}>

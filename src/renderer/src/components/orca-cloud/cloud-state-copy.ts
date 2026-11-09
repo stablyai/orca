@@ -25,13 +25,19 @@ export function cloudStateLabel(state: CloudDotState, t: Translate = translate):
 export function cloudStateDetail(state: CloudDotState, t: Translate = translate): string | null {
   switch (state) {
     case 'sleeping':
-      return t('orcaCloudWorkspace.detail.asleep', 'Files and chats are saved. Opening it wakes it.')
+      return t(
+        'orcaCloudWorkspace.detail.asleep',
+        'Files and chats are saved. Opening it wakes it.'
+      )
     case 'waking':
       return t('orcaCloudWorkspace.detail.starting', 'Starting…')
     case 'unresponsive':
-      return t('orcaCloudWorkspace.detail.notResponding', 'Not responding. Restart keeps your files.')
+      return t('orcaCloudWorkspace.detail.restartKeeps', 'Restart keeps your files; agents resume.')
     case 'archived':
-      return t('orcaCloudWorkspace.detail.archived', 'Kept as a snapshot. Unarchive to work in it again.')
+      return t(
+        'orcaCloudWorkspace.detail.archived',
+        'Kept as a snapshot. Unarchive to work in it again.'
+      )
     case 'failed':
       return t('orcaCloudWorkspace.detail.failed', 'The last start failed. Your files are saved.')
     case 'running':

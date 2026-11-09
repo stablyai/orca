@@ -24863,13 +24863,14 @@
       "readOnly": "A read-only snapshot. Unarchive to open terminals and agents again.",
       "unarchiving": "Unarchiving…",
       "loadFailed": "Couldn’t load the archive details.",
-      "nothing": "Nothing was captured for this workspace. Unarchive to open it.",
+      "nothing": "Nothing was captured.",
       "pullRequests": "Pull requests",
       "lastChanges": "Last changes",
       "filesTitle": "Files",
       "moreFiles": "{{count}} more files not shown",
       "detached": "Detached HEAD",
-      "aheadBehind": "↑{{ahead}} ↓{{behind}} vs {{upstream}}",
+      "ahead": "{{count}} ahead",
+      "behind": "{{count}} behind",
       "files": "{{count}} files",
       "uncommitted": "Uncommitted changes",
       "moreChanges": "{{count}} more",
@@ -24904,7 +24905,6 @@
       "stuck": "This is taking much longer than usual.",
       "slow": "Taking longer than usual…",
       "messageQueued": "Your message sends as soon as it’s up.",
-      "usually": "Usually about 5 seconds.",
       "label": "{{name}} is waking",
       "failedTitle": "Couldn’t wake {{name}}",
       "failedDetail": "Your files and chats are saved.",
@@ -24913,45 +24913,45 @@
     },
     "dismiss": "Dismiss",
     "restartSandbox": "Restart sandbox",
-    "markLabel": "Orca Cloud: {{state}}",
+    "sandboxMarkLabel": "Sandbox: {{state}}",
     "archive": "Archive",
     "oom": {
-      "titleNamed": "{{name}} ran out of memory and was stopped",
-      "title": "A process ran out of memory and was stopped",
-      "detail": "Restart to recover."
+      "titleRan": "{{name}} ran out of memory",
+      "titleProcess": "A process ran out of memory",
+      "stopped": "It was stopped so the sandbox stays up. Restart to recover."
     },
     "unresponsive": {
-      "title": "This workspace isn’t responding",
-      "detail": "Restart keeps your files."
+      "sandboxTitle": "This sandbox isn’t responding"
     },
-    "restarting": "Restarting…",
-    "restart": "Restart",
     "detail": {
+      "restartKeeps": "Restart keeps your files; agents resume.",
       "restarting": "Orca resumes your agents after the restart.",
       "asleep": "Files and chats are saved. Opening it wakes it.",
       "starting": "Starting…",
-      "notResponding": "Not responding. Restart keeps your files.",
       "archived": "Kept as a snapshot. Unarchive to work in it again.",
       "failed": "The last start failed. Your files are saved."
     },
-    "title": "Orca Cloud",
+    "restarting": "Restarting…",
+    "restart": "Restart",
+    "sandboxTitle": "Sandbox",
     "statusUnavailable": "Status unavailable",
     "statusUnavailableDetail": "Orca Cloud didn’t answer.",
     "loading": "Loading status",
     "cpu": "CPU",
     "cpuValue": "{{percent}}% of {{cpus}} vCPU",
     "memory": "Memory",
+    "usedOfTotal": "{{used}} / {{total}}",
     "disk": "Disk",
     "uptime": "Up for",
-    "usedSinceCreatedLabel": "Used since created",
-    "sandboxHours": "{{hours}} sandbox time",
-    "estimatedCost": "Est. cost if over plan",
+    "usedLabel": "Used",
+    "overage": "Overage so far",
     "keptUntil": "Kept until",
-    "staleSince": "Last known · {{ago}} ago",
-    "updatedAgo": "Updated {{ago}} ago",
+    "ago": "{{ago}} ago",
     "wake": "Wake",
+    "thisWorkspaceTitle": "This workspace",
     "announce": {
-      "failed": "Couldn’t wake {{name}}.",
+      "restarting": "Restarting {{name}}.",
+      "unarchiving": "Restoring {{name}} from archive.",
       "waking": "Waking {{name}}.",
       "archived": "{{name}} is archived.",
       "asleep": "{{name}} is asleep."
@@ -24979,7 +24979,6 @@
       "copyFrom": "Asleep · copy from {{when}}",
       "readOnly": "Read-only copy kept on this computer."
     },
-    "thisWorkspaceTitle": "This workspace",
     "bytes": {
       "gb": "{{value}} GB",
       "mb": "{{value}} MB"
@@ -24991,7 +24990,8 @@
       "daysHours": "{{d}}d {{h}}h",
       "hours": "{{value}} h"
     },
-    "idleSlept": "{{name}} slept after {{minutes}} min idle",
+    "sandboxHoursValue": "{{value}} sandbox hours",
+    "idleSleptMinutes": "{{name}} slept after {{count}} minutes idle",
     "idleSleptNoTime": "{{name}} went to sleep while idle",
     "idleSleptDetail": "Files and chats are saved. It uses no sandbox hours until you open it."
   }

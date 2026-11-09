@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { Loader2, Pencil, X } from 'lucide-react'
 import type {
   CloudOfflineChat,
@@ -112,8 +112,20 @@ function QueuedPromptRow({
 function QueueAnnouncer({ prompts }: { prompts: CloudQueuedPrompt[] }): React.JSX.Element {
   const t = useTranslate()
   const latest = [...prompts].sort((a, b) => b.updatedAt - a.updatedAt)[0]
-  const message = latest
-    ? {
+  const key = latest ? `${latest.id}:${latest.state}` : null
+  // Only a change is news: opening the view with prompts already queued announces nothing.
+  const seen = useRef(key)
+  const changed = key !== null && key !== seen.current
+  useEffect(() => {
+    seen.current = key
+  }, [key])
+  const [message, setMessage] = useState('')
+  useEffect(() => {
+    if (!changed || !latest) {
+      return
+    }
+    setMessage(
+      {
         queued: t(
           'components.orcaCloud.offline.announceQueued',
           'Message queued. It sends when the workspace wakes.'
@@ -122,7 +134,9 @@ function QueueAnnouncer({ prompts }: { prompts: CloudQueuedPrompt[] }): React.JS
         delivered: t('components.orcaCloud.offline.announceDelivered', 'Message delivered.'),
         failed: t('components.orcaCloud.offline.announceFailed', 'Message not delivered.')
       }[latest.state]
-    : ''
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
   return (
     <div role="status" className="sr-only">
       {message}
@@ -222,10 +236,16 @@ export function ChatPanel({
           }}
           placeholder={t('components.orcaCloud.offline.composerPlaceholder', 'Message the agent')}
           aria-label={t('components.orcaCloud.offline.composerLabel', 'Message to queue')}
-          className="min-h-14 resize-none border-0 bg-transparent p-1 text-sm shadow-none focus-visible:ring-0"
+          className="min-h-14 resize-none border-0 bg-transparent p-1 text-sm shadow-none focus-visible:ring-0 dark:bg-transparent"
         />
         <div className="flex items-center justify-end gap-2">
-          <Button size="xs" disabled={!draft.trim() || busy} onClick={send}>
+          <Button
+            size="xs"
+            aria-disabled={!draft.trim() || busy || undefined}
+            aria-busy={busy || undefined}
+            className="aria-disabled:opacity-50"
+            onClick={send}
+          >
             {busy ? <Loader2 className="motion-safe:animate-spin" /> : null}
             {t('components.orcaCloud.offline.sendAndWake', 'Send and wake')}
           </Button>

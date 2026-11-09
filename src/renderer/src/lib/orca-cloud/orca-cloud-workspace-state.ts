@@ -23,7 +23,9 @@ export const WAKE_FAILED_STALE_MS = 10 * 60_000
 
 export function isWakeActive(wake: CloudWakeProgressEvent | undefined, now: number): boolean {
   return Boolean(
-    wake && (wake.phase === 'waking' || wake.phase === 'connecting') && now - wake.at < WAKE_STALE_MS
+    wake &&
+    (wake.phase === 'waking' || wake.phase === 'connecting') &&
+    now - wake.at < WAKE_STALE_MS
   )
 }
 
@@ -230,9 +232,20 @@ export const CHANGE_LETTER: Record<ChangeKind, string> = {
   unknown: '?'
 }
 
-/** "Updated Ns ago" hides while it would read as "just now". */
+/** "Ns ago" hides under a minute, where it would read as noise. */
 export function showUpdatedAgo(fetchedAt: number | null, now: number): boolean {
-  return fetchedAt !== null && now - fetchedAt >= 10_000
+  return fetchedAt !== null && now - fetchedAt >= 60_000
+}
+
+/** "14.6 sandbox hours" (one product noun, per the glossary). */
+export function formatSandboxHours(ms: number): string {
+  const h = ms / 3_600_000
+  const digits = h >= 100 ? 0 : 1
+  const value = new Intl.NumberFormat(getIntlLocale(), {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits
+  }).format(h)
+  return translate('orcaCloudWorkspace.sandboxHoursValue', '{{value}} sandbox hours', { value })
 }
 
 export function percentOf(used: number, total: number): number {
