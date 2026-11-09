@@ -127,9 +127,8 @@ export function MobileFolderSourceControlPanel({
         )}
       />
     ) : (
-      // One card per attached worktree, as desktop's cards and the phone's option sheets show them.
+      // One card per attached worktree, as desktop shows them.
       <ScrollView
-        style={styles.surface}
         contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + spacing.lg }]}
       >
         {worktrees.map((worktree) => (
@@ -159,7 +158,8 @@ export function MobileFolderSourceControlPanel({
           {header}
         </SafeAreaView>
       )}
-      {body}
+      {/* Every state shares the sheet surface the cards sit on, as the phone's option sheets do. */}
+      <View style={styles.body}>{body}</View>
     </View>
   )
   return (
@@ -194,7 +194,8 @@ export function MobileFolderSourceControlPanel({
 }
 
 const styles = themedStyleSheet(() => ({
-  surface: {
+  body: {
+    flex: 1,
     backgroundColor: colors.sheetSurface
   },
   list: {
