@@ -1,3 +1,4 @@
+import type * as FilePromises from 'node:fs/promises'
 import * as fsPromises from 'node:fs/promises'
 import * as gitReadCache from '../../../git/source-control/git-read-cache-invalidation'
 import * as gitAdmin from '../../../../shared/git/metadata/git-common-directory'
@@ -21,6 +22,22 @@ import {
   listPreparations,
   startPreparation
 } from './worktree-create-preparation-pool'
+
+const rootMkdirFailure = vi.hoisted((): { path?: string } => ({}))
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof FilePromises>()
+  return {
+    ...actual,
+    mkdir: (...args: Parameters<typeof actual.mkdir>) => {
+      if (String(args[0]) === rootMkdirFailure.path) {
+        return Promise.reject(
+          Object.assign(new Error('read-only workspace root'), { code: 'EACCES' })
+        )
+      }
+      return actual.mkdir(...args)
+    }
+  }
+})
 
 const roots: string[] = []
 function git(cwd: string, ...args: string[]): string {
@@ -107,6 +124,7 @@ async function fixture() {
 afterEach(async () => {
   vi.useRealTimers()
   vi.restoreAllMocks()
+  rootMkdirFailure.path = undefined
   vi.unstubAllEnvs()
   await _resetWorktreeCreatePreparationsForTests()
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
@@ -750,8 +768,7 @@ it.each([750, 7500])(
       await writeFile(join(admin, 'HEAD'), `${head}\n`)
     }
     const blockedRoot = join(owner.root, 'read-only-root')
-    await fsPromises.mkdir(blockedRoot)
-    await writeFile(join(blockedRoot, '.orca-preparing'), 'obstruct directory creation\n')
+    rootMkdirFailure.path = join(blockedRoot, '.orca-preparing')
     const read = gitAdmin.readGitAdminFile
     let unrelatedReads = 0
     vi.spyOn(gitAdmin, 'readGitAdminFile').mockImplementation((path, signal) => {
@@ -771,7 +788,7 @@ it.each([750, 7500])(
           canonicalBase: 'refs/heads/main',
           options: {}
         })
-      ).rejects.toMatchObject({ code: 'EEXIST' })
+      ).rejects.toMatchObject({ code: 'EACCES' })
       await vi.waitFor(() => expect(preparationCapacityUsed()).toBe(0))
     }
     expect(unrelatedReads).toBe(0)
