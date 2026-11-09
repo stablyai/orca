@@ -108,6 +108,8 @@ export async function stopStructuredWorker(
 export async function readStructuredWorkerOutput(args: {
   db: OrchestrationDb
   dispatchId: string
+  /** The worker when no local Dispatch names it: one a coordinator on another computer runs here. */
+  identity?: StructuredWorkerIdentity
   workerState: string
   /** What the caller's observation actually proved; never inferred from being able to read. */
   liveness: StructuredWorkerObservation['status']
@@ -115,7 +117,7 @@ export async function readStructuredWorkerOutput(args: {
   cursor?: string | number
   limit?: number
 }): Promise<OrchestrationWorkerReadTranscriptResult | null> {
-  const identity = resolveStructuredWorkerForDispatch(args.db, args.dispatchId)
+  const identity = args.identity ?? resolveStructuredWorkerForDispatch(args.db, args.dispatchId)
   const journal = identity
     ? { source: identity, agent: structuredWorkerAgent(identity) }
     : chatAssigneeJournal(args.db, args.dispatchId)

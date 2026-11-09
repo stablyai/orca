@@ -9,6 +9,7 @@ import {
   holdStructuredWorker,
   observeStructuredSession
 } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-authority'
+import type { StructuredWorkerIdentity } from '../../../../orchestration/terminal-authority/structured-sessions/structured-worker-identity'
 import { resolveStructuredWorkerForDispatch } from '../structured-workers/orchestration-structured-worker-lifecycle'
 
 export type SessionWorkerObservation = {
@@ -52,13 +53,7 @@ export async function inspectSessionWorker(
     paneKey: structured.paneKey,
     processIncarnation: structured.processIncarnation
   })
-  // One lineage walk, so status and `addressable` judge the same session even mid-`/clear`.
-  const hold = holdStructuredWorker(structured, db)
-  const observation =
-    hold.kind === 'unverifiable'
-      ? { status: 'unverifiable' as const, reason: hold.reason }
-      : observeStructuredSession(hold.running.sessionId)
-  const addressable = hold.kind === 'unverifiable' ? null : hold.kind === 'held'
+  const { addressable, ...observation } = observeStructuredWorkerHold(structured, db)
   return {
     terminal: null,
     exact,
@@ -67,6 +62,18 @@ export async function inspectSessionWorker(
     ...(exact && addressable !== null ? { addressable } : {}),
     terminalHandle: null
   }
+}
+
+/** One lineage walk, so status and `addressable` judge the same session even mid-`/clear`. */
+export function observeStructuredWorkerHold(
+  structured: StructuredWorkerIdentity,
+  db: OrchestrationDb
+): { status: 'live' | 'exited' | 'unverifiable'; reason?: string; addressable: boolean | null } {
+  const hold = holdStructuredWorker(structured, db)
+  if (hold.kind === 'unverifiable') {
+    return { status: 'unverifiable', reason: hold.reason, addressable: null }
+  }
+  return { ...observeStructuredSession(hold.running.sessionId), addressable: hold.kind === 'held' }
 }
 
 /** Session verdicts read records that a restart leaves uninstalled until something asks. */
