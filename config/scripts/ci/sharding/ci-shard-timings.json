@@ -7298,7 +7298,6 @@
       "src/shared/agent-status/transport/agent-status-osc-pending-retention.test.ts": 154,
       "src/shared/agent-status/transport/agent-status-osc.test.ts": 104,
       "src/shared/agent-status/store/agent-status-store-reopen.test.ts": 199,
-      "src/shared/agent-status/contracts/agent-status-subject.test.ts": 171,
       "src/shared/agent-status/title/agent-status-tracker-program-activity.test.ts": 77,
       "src/shared/agent-launch/startup/agent-tui-input-clear.test.ts": 57,
       "src/shared/ai-vault/resume/ai-vault-resume-command.test.ts": 70,
