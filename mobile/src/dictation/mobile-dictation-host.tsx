@@ -4,7 +4,7 @@ import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session
 import { useRouteHandoff } from '../navigation/route-handoff'
 import { triggerError } from '../platform/haptics'
 import { useClipboardWriter } from '../platform/clipboard'
-import { dictationFailureMessage } from './mobile-dictation-setup'
+import { dictationFailureMessage, isDictationSetupRequiredError } from './mobile-dictation-setup'
 import { useMobileDictationHaptics } from './use-mobile-dictation-haptics'
 import { useMobileDictationSilenceStop } from './use-mobile-dictation-silence-stop'
 import { insertMobileDictationAway } from './mobile-dictation-away-insert'
@@ -98,7 +98,10 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
     const screen = screenFor(screensRef.current, ownerRef.current, false)
     if (screen?.shown()) {
       screen.reportFailure(err)
-      speak(dictationFailureMessage(err.message))
+      // A setup refusal opens the setup sheet, which is read on its own.
+      if (!isDictationSetupRequiredError(err.message)) {
+        speak(dictationFailureMessage(err.message))
+      }
       return
     }
     triggerError()
