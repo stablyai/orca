@@ -32,6 +32,21 @@ function isPagePoint(value: unknown): value is { x: number; y: number } {
   )
 }
 
+// Page/session operations exclude document previews.
+const pageGuestId = (event: IpcMainInvokeEvent, browserPageId: unknown): number | null =>
+  isTrustedBrowserRenderer(event.sender) && typeof browserPageId === 'string'
+    ? browserManager.getGuestWebContentsId(browserPageId)
+    : null
+
+export function pageGuest(
+  event: IpcMainInvokeEvent,
+  browserPageId: unknown
+): Electron.WebContents | null {
+  const guestId = pageGuestId(event, browserPageId)
+  const guest = guestId === null ? undefined : webContents.fromId(guestId)
+  return guest && !guest.isDestroyed() ? guest : null
+}
+
 export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:openDevTools')
   ipcMain.removeHandler('browser:closeDevTools')
@@ -48,21 +63,6 @@ export function registerBrowserGuestViewHandlers(): void {
   ipcMain.removeHandler('browser:zoomPage')
   ipcMain.removeHandler('browser:setPageSiteColorScheme')
   ipcMain.removeHandler('browser:setPageAudioMuted')
-
-  // Page/session operations exclude document previews.
-  const pageGuestId = (event: IpcMainInvokeEvent, browserPageId: unknown): number | null =>
-    isTrustedBrowserRenderer(event.sender) && typeof browserPageId === 'string'
-      ? browserManager.getGuestWebContentsId(browserPageId)
-      : null
-
-  const pageGuest = (
-    event: IpcMainInvokeEvent,
-    browserPageId: unknown
-  ): Electron.WebContents | null => {
-    const guestId = pageGuestId(event, browserPageId)
-    const guest = guestId === null ? undefined : webContents.fromId(guestId)
-    return guest && !guest.isDestroyed() ? guest : null
-  }
 
   ipcMain.handle(
     'browser:getPageSiteDisplay',

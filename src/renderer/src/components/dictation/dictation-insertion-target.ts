@@ -9,6 +9,7 @@ import {
   pasteTextIntoTextControl
 } from '@/lib/text-control-paste'
 import { dictationSeparators } from '../../../../shared/dictation-transcript-spacing'
+import { focusedBrowserPageId } from '@/hooks/resolve-zoom-target'
 import { DICTATION_FOCUS_INPUT_EVENT } from './dictation-control-events'
 
 /** Each returns whether the text landed. */
@@ -18,6 +19,7 @@ type TerminalInsert = (text: string, paneId: number) => Promise<boolean>
 export type DictationInsertionTarget =
   | { kind: 'composer'; insert: ComposerInsert; root: HTMLElement }
   | { kind: 'terminal'; tabId: string; paneId: number; pane: HTMLElement }
+  | { kind: 'browser'; browserPageId: string }
   | { kind: 'text'; element: HTMLInputElement | HTMLTextAreaElement }
   | { kind: 'contentEditable'; element: HTMLElement }
 
@@ -81,6 +83,15 @@ function readFocusedInsertionTarget(): DictationInsertionTarget | null {
     return null
   }
 
+  if (activeElement.tagName === 'WEBVIEW') {
+    const browserPageId =
+      focusedBrowserPageId(activeElement) ??
+      activeElement
+        .closest('[data-browser-client-page-id]')
+        ?.getAttribute('data-browser-client-page-id')
+    return browserPageId ? { kind: 'browser', browserPageId } : null
+  }
+
   if (activeElement instanceof HTMLInputElement || activeElement instanceof HTMLTextAreaElement) {
     return { kind: 'text', element: activeElement }
   }
@@ -142,6 +153,13 @@ export async function insertText(
   if (target.kind === 'terminal') {
     const insert = terminalTargets.get(target.tabId)
     return insert ? insert(spaced(text, previousText, ''), target.paneId) : false
+  }
+  if (target.kind === 'browser') {
+    // The page spaces the text from its own field.
+    return (
+      window.api.browser?.insertDictationText({ browserPageId: target.browserPageId, text }) ??
+      false
+    )
   }
   if (target.kind === 'text') {
     const element = target.element

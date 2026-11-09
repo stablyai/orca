@@ -130,6 +130,8 @@ export type BrowserApi = {
     browserPageId: string
     point: { x: number; y: number }
   }) => Promise<boolean>
+  /** Types dictated text into the page's focused field; false when no field is focused. */
+  insertDictationText: (args: { browserPageId: string; text: string }) => Promise<boolean>
   setViewportOverride: (args: {
     browserPageId: string
     override: BrowserViewportOverride | null

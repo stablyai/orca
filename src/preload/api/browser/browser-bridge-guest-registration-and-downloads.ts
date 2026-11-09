@@ -102,6 +102,8 @@ export const browserGuestRegistrationAndDownloadsApi = {
     browserPageId: string
     point: { x: number; y: number }
   }): Promise<boolean> => ipcRenderer.invoke('browser:copyImageAt', args),
+  insertDictationText: (args: { browserPageId: string; text: string }): Promise<boolean> =>
+    ipcRenderer.invoke('browser:insertDictationText', args),
   setViewportOverride: (args: {
     browserPageId: string
     override: BrowserViewportOverride | null
