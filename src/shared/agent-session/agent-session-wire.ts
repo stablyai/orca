@@ -29,6 +29,12 @@ import type { AgentSessionRecord } from './lifecycle/agent-session-record'
 import type { AgentProviderSessionMetadata } from './lifecycle/agent-session-resume'
 import type { NativeChatSubagentEntry } from '../native-chat/native-chat-types'
 import type { StructuredAgentSessionProjectedStatus } from './view/structured-agent-session-projection'
+import type { AgentSessionModelOption } from './agent-session-model-option-wire'
+
+export type {
+  AgentSessionModelOption,
+  AgentSessionOptionChoice
+} from './agent-session-model-option-wire'
 
 export type AgentSessionTurnActivity = {
   turnId: string
@@ -216,9 +222,10 @@ export type AgentSessionStatusSummary = {
   /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
   permissionMode?: string
   runtimePermission?: { fence: number; mode: string | null } | null
-  /** The chat's saved effort, Fast and speed picks, encoded; another device's pick moves them so a
-   *  client re-reads options. Absent from older hosts. */
+  /** The chat's saved effort, Ultracode, Fast and speed picks, encoded; another device's pick moves
+   *  them so a client re-reads options. Absent from older hosts. */
   effort?: string
+  ultracode?: string
   fastMode?: string
   serviceTier?: string
   /** Saved next-turn intent; moves clients' option stamps without a turn or model change. */
@@ -354,33 +361,6 @@ export type AgentSessionOptionResult = {
   value: string
   /** Full effective next-turn values when the provider reconciled related options. */
   options?: Record<string, string>
-}
-
-export type AgentSessionOptionChoice = {
-  value: string
-  label: string
-  description?: string
-}
-
-export type AgentSessionModelOption = {
-  resolvedModel?: string | null
-  effortsKnown?: false
-  id: string
-  label: string
-  description?: string
-  isDefault: boolean
-  defaultEffort?: string
-  /** Transient display declaration; null is observed unknown, absence supplies no evidence. */
-  declaredDefaultEffort?: string | null
-  efforts: AgentSessionOptionChoice[]
-  /** Additional structured-chat choices; never CLI effort arguments. Older hosts omit this. */
-  chatEfforts?: AgentSessionOptionChoice[]
-  /** Provider catalog fact. Absent means the host could not determine support. */
-  supportsFastMode?: boolean
-  /** Whether the model runs Approve for me; absent is unknown, which neither offers nor launches it. */
-  supportsAutoMode?: boolean
-  /** Provider tier IDs beyond standard; capable clients replace Fast with one speed choice including default. Absence means unknown. */
-  serviceTiers?: AgentSessionOptionChoice[]
 }
 
 export type AgentSessionFastModeState = 'off' | 'cooldown' | 'on'

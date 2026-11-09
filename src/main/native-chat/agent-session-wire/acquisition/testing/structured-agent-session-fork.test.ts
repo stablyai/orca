@@ -28,6 +28,12 @@ afterEach(async () => {
 
 const source = (agent: 'claude' | 'codex' = 'codex') => forkTestSource(rig, agent)
 
+it('forks a Claude chat at its chosen effort with Ultracode off', async () => {
+  const test = source('claude')
+  test.record.options = { effort: 'low', ultracode: 'true' }
+  expect((await test.prepare()).options).toEqual({ effort: 'low', permissionMode: 'accept-edits' })
+})
+
 it('rejects a tip-only copy if a same-head send is admitted during capture', async () => {
   const test = source()
   test.tip()

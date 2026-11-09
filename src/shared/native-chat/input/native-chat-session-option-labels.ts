@@ -96,6 +96,8 @@ export function nativeChatSessionOptionLabel(
       return say('effort')
     case 'fastMode':
       return say('fastMode')
+    case 'ultracode':
+      return say('ultracode')
     case 'serviceTier':
       return say('speed')
     case 'thinking':

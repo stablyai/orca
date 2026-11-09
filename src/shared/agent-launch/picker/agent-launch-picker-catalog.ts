@@ -86,7 +86,8 @@ export function agentPickerEntryOptions(
       options = options.filter((option) => option.id !== 'serviceTier' && option.id !== 'fastMode')
     }
     for (const option of dynamic) {
-      if (!options.some((existing) => existing.id === option.id)) {
+      // Ultracode belongs to an open chat; a new chat always starts with it off.
+      if (option.id !== 'ultracode' && !options.some((existing) => existing.id === option.id)) {
         const mapping = getAgentSessionOptionLaunchCatalog(entry.agent)?.unknownModelOptions?.find(
           (seed) => seed.id === option.id
         )

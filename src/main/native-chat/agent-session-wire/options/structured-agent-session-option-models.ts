@@ -84,7 +84,11 @@ export function confirmedCurrentOptions(
   confirmed = reported.confirmed
 ): AgentSessionOptionsResult['current']['confirmed'] {
   return confirmed?.filter((key) =>
-    key === 'model' || key === 'effort' || key === 'fastMode' || key === 'serviceTier'
+    key === 'model' ||
+    key === 'effort' ||
+    key === 'ultracode' ||
+    key === 'fastMode' ||
+    key === 'serviceTier'
       ? current[key] === reported[key]
       : false
   )

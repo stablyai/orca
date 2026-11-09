@@ -127,11 +127,14 @@ export type ClaudeSession = {
     reportedModel?: string
     model?: string
     effort?: string
+    ultracode?: boolean
     fastMode?: boolean
     reportedPermissionMode?: string | null
   }
   /** CLI-resolved env/settings for the next request; lower priority than held options and turn reports. */
   appliedOptions?: { model?: string; effort?: string; ultracode?: boolean }
+  legacyUltracodePreset?: boolean
+  ultracodeControlIntent?: boolean
   /** CLI settings resolved before a turn changed them, when no launch override hid that value. */
   configuredDefaults?: { model?: string; effort?: string }
   fastModeState?: AgentSessionFastModeState

@@ -52,6 +52,15 @@ export function claudeStructuredSpawnOptions(input: {
     options.set('effort', effort)
     sdkOptions = { ...withoutConfiguredFlag(sdkOptions, 'effort'), effort: numericEffort }
   }
+  const ultracode = saved.get('ultracode')
+  // Never a launch flag: the first message's control applies a restored switch.
+  if (
+    ultracode !== undefined &&
+    typeof decodeStructuredAgentSessionOptionValue('ultracode', ultracode) === 'boolean' &&
+    input.flagSettingsControl !== 'unsupported'
+  ) {
+    options.set('ultracode', ultracode)
+  }
   const fastMode = saved.get('fastMode')
   if (fastMode !== undefined) {
     const decoded = decodeStructuredAgentSessionOptionValue('fastMode', fastMode)

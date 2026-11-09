@@ -24,8 +24,9 @@ function wireClaudeModel(entry: ListedModel): WireClaudeModel {
     ...(entry.description ? { description: entry.description } : {}),
     isDefault: entry.isDefault,
     efforts: entry.efforts,
+    // Older clients offer Ultracode as an effort; current ones show the switch instead.
     ...(entry.efforts.some(({ value }) => value === 'xhigh')
-      ? { chatEfforts: [{ value: 'ultracode', label: 'Ultracode' }] }
+      ? { chatEfforts: [{ value: 'ultracode', label: 'Ultracode' }], supportsUltracode: true }
       : {}),
     ...(entry.declaredDefaultEffort !== undefined
       ? { declaredDefaultEffort: entry.declaredDefaultEffort }

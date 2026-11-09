@@ -34,6 +34,7 @@ export function structuredStatusSummariesEqual(
     a.runtimePermission?.mode === b.runtimePermission?.mode &&
     (a.runtimePermission === undefined) === (b.runtimePermission === undefined) &&
     a.effort === b.effort &&
+    a.ultracode === b.ultracode &&
     a.fastMode === b.fastMode &&
     a.serviceTier === b.serviceTier &&
     a.interactionMode === b.interactionMode &&

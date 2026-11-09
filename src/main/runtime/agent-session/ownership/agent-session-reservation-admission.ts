@@ -1,7 +1,11 @@
 /** Evaluate reservation identity/replay/CAS without I/O; commit applies the winning record and operation row in one store transaction. */
 
 import { agentSessionRefusalError } from '../../../../shared/agent-session/failures/agent-session-wire-refusals'
-import type { AgentSessionAdmissionModels } from '../records/agent-session-record-options'
+import {
+  closedAgentSessionRecord,
+  restoredAgentSessionRecord,
+  type AgentSessionAdmissionModels
+} from '../records/agent-session-record-options'
 import { chatAgentsShareConversations } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import {
   agentSessionOperationKey,
@@ -47,7 +51,7 @@ import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
 } from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
-import { assertReservedTabUnheld } from '../agent-session-tab-table'
+import { assertReservedTabUnheld, effectiveAgentSessionTabs } from '../agent-session-tab-table'
 
 export type AgentSessionReserveRequest = {
   forkedFrom?: AgentSessionRecord['forkedFrom']
@@ -205,8 +209,11 @@ export function applyAgentSessionReservation(
     throw agentSessionRefusalError('agent_session_conflict', { reason: 'sessionExists' })
   }
   assertReservedTabUnheld(state, request, legacyIds)
+  const resumed = effectiveAgentSessionTabs(state, legacyIds).tabIdFor(existing.sessionId)
+    ? restoredAgentSessionRecord(existing)
+    : closedAgentSessionRecord(existing)
   const pinned = {
-    ...existing,
+    ...resumed,
     ...(!existing.launchArgs && request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),
     ...(!existing.launchArgs && request.launchArgs ? { updatedAt: request.now } : {})
   }

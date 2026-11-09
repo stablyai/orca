@@ -28,7 +28,8 @@ import {
   observeClaudeSettingsApplied,
   readClaudeSettingsApplied,
   readClaudeFastModeFacts,
-  observeClaudeSettingsEffort
+  observeClaudeSettingsEffort,
+  observeClaudeSettingsUltracode
 } from './launch/claude-structured-session-options'
 import { claudeExecutionObservations } from './claude-structured-execution-observations'
 import {
@@ -174,6 +175,7 @@ function applyClaudeSettingsFacts(
   }
   observeClaudeSettingsApplied(session, settings)
   observeClaudeSettingsEffort(session, settings)
+  observeClaudeSettingsUltracode(session, settings)
   const agrees = (key: string, reported: string): boolean =>
     !session.options.has(key) || session.options.get(key) === reported
   if (published.fastMode !== null) {

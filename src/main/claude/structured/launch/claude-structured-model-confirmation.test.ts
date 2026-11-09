@@ -43,7 +43,11 @@ describe('Claude model confirmation', () => {
     await adapter.setOption({ sessionId: 'session-1', key: 'effort', value: 'high', fence: 7 })
     await vi.waitFor(async () => {
       expect(await adapter.readOptions({ sessionId: 'session-1', fence: 7 })).toMatchObject({
-        current: { model: 'claude-sonnet-5', effort: 'high', confirmed: ['model', 'effort'] }
+        current: {
+          model: 'claude-sonnet-5',
+          effort: 'high',
+          confirmed: expect.arrayContaining(['model', 'effort'])
+        }
       })
     })
 

@@ -15,6 +15,7 @@ import {
 } from './agent-session-reservation-admission'
 import type { AgentSessionStoreState } from '../records/agent-session-store-state'
 import { claudeProviderHandle } from '../../../../shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
+import { AgentSessionTabTable } from '../agent-session-tab-table'
 
 const NOW = 1_800_000_000_000
 const LEASE_TTL_MS = 60_000
@@ -68,6 +69,35 @@ function storeState(records: readonly AgentSessionRecord[] = []): AgentSessionSt
     sessionTabs: null
   }
 }
+
+it.each([
+  [true, { effort: 'xhigh', ultracode: 'true' }],
+  [false, { effort: 'xhigh' }]
+] as const)('reacquires an open tab (%s) with options %o', (visible, expected) => {
+  const saved = {
+    ...agentSessionRecordFixture(
+      agentSessionLeaseFixture({
+        ownerProcess: null,
+        reservedSpawnToken: null,
+        claimStatus: 'released',
+        deathEvidence: { kind: 'exit-observed', detail: 'closed', observedAt: 1 }
+      })
+    ),
+    options: { effort: 'ultracode' }
+  }
+  const state = storeState([saved])
+  state.sessionTabs = new AgentSessionTabTable(visible ? [['tab-open', saved.sessionId]] : [])
+  const { record } = applyAgentSessionReservation(
+    state,
+    reserveRequest({
+      sessionId: saved.sessionId,
+      accountHome: saved.accountHome,
+      expectedFence: 7
+    }),
+    LEASE_TTL_MS
+  )
+  expect(record.options).toEqual(expected)
+})
 
 describe('adopted conversation ownership', () => {
   it('refuses when another record already holds the same conversation root', () => {

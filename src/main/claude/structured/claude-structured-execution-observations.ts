@@ -1,4 +1,3 @@
-import { claudeObservedEffort } from './launch/claude-structured-session-options'
 import { claudeRecord, claudeText } from './journal/claude-structured-item-translation'
 import { claudeMatchingInitModel } from '../context-usage/claude-context-usage'
 import { isRootClaudeFrame } from './turns/claude-turn-opening'
@@ -11,10 +10,7 @@ export function claudeExecutionObservations(session: ClaudeSession): Record<stri
     session.reportedModelMutation === session.optionMutationSequence
       ? (session.reportedOptions.model ?? session.appliedOptions?.model)
       : session.appliedOptions?.model
-  const effort = claudeObservedEffort(
-    session.appliedOptions?.effort,
-    session.appliedOptions?.ultracode
-  )
+  const effort = session.appliedOptions?.effort
   return {
     ...(model ? { model } : {}),
     ...(effort ? { effort } : {})
@@ -35,6 +31,10 @@ export function beginClaudeOptionMutation(session: ClaudeSession, key: string): 
     }
     if (key === 'effort' && session.appliedOptions) {
       const { effort: _old, ...applied } = session.appliedOptions
+      session.appliedOptions = applied
+    }
+    if (key === 'ultracode' && session.appliedOptions) {
+      const { ultracode: _old, ...applied } = session.appliedOptions
       session.appliedOptions = applied
     }
   }

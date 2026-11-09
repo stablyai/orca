@@ -9,11 +9,17 @@ import type {
   AgentSessionModelOption
 } from '../agent-session-wire'
 
+export const AGENT_SESSION_ACCEPTED_INPUT_KEYS = [
+  'model',
+  'effort',
+  'ultracode',
+  'fastMode',
+  'serviceTier',
+  'interactionMode'
+] as const
+
 export type AgentSessionAcceptedInputSources = Partial<
-  Record<
-    'model' | 'effort' | 'fastMode' | 'serviceTier' | 'interactionMode',
-    'saved' | 'seeded' | 'policy'
-  >
+  Record<(typeof AGENT_SESSION_ACCEPTED_INPUT_KEYS)[number], 'saved' | 'seeded' | 'policy'>
 >
 
 /** Provider-reported choices and effective next-turn values. Additive read-only
@@ -57,6 +63,8 @@ export type AgentSessionOptionsResult = {
     effort?: string
     /** Child-scoped actual for display only; effort remains accepted raw input. */
     reportedEffort?: string
+    /** Claude's Ultracode switch beside any effort: the chat's pick, else what Claude reports. */
+    ultracode?: boolean
     /** Canonical preference for the next turn. Explicit false is meaningful. */
     fastMode?: boolean
     /** Next-turn service tier id where the model lists `serviceTiers`; `default` is standard. */

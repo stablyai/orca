@@ -7,7 +7,10 @@ import { usesModelSpecificAcpEfforts } from './agent-model-catalog-ownership'
 export function structuredModelEfforts(
   model: AgentSessionOptionsResult['models'][number]
 ): AgentSessionOptionChoice[] {
-  return [...model.efforts, ...(model.chatEfforts ?? [])]
+  // A host with the Ultracode switch still lists it as an effort for older clients.
+  return model.supportsUltracode === true
+    ? model.efforts
+    : [...model.efforts, ...(model.chatEfforts ?? [])]
 }
 
 function effortOption(
@@ -29,6 +32,16 @@ function effortOption(
       ...(model.defaultEffort ? { defaultIsCliDefault: true as const } : {})
     },
     apply: { midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` } }
+  }
+}
+
+function ultracodeOption(): CatalogOption {
+  return {
+    id: 'ultracode',
+    label: 'Ultracode',
+    category: 'mode',
+    kind: { type: 'boolean', defaultValue: false },
+    apply: {}
   }
 }
 
@@ -86,6 +99,7 @@ export function discoveredModel(
     ...(model.supportsAutoMode !== undefined ? { supportsAutoMode: model.supportsAutoMode } : {}),
     options: [
       ...(effort ? [effort] : []),
+      ...(model.supportsUltracode === true ? [ultracodeOption()] : []),
       ...(serviceTier
         ? [serviceTier]
         : sessionSupportsFastMode && model.supportsFastMode === true

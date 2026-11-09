@@ -2,6 +2,10 @@ import { agentSessionRefusalError } from '../../../../shared/agent-session/failu
 import type { AgentSessionOptionsReplacement } from '../../../../shared/agent-session/options/agent-session-options-replacement'
 import type { AgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 import type { AgentSessionModelOption } from '../../../../shared/agent-session/agent-session-wire'
+import {
+  withLegacyUltracodeEffortLifted,
+  withoutChatUltracode
+} from '../../../../shared/agent-session/options/claude-ultracode-saved-options'
 
 export function replaceAgentSessionRecordOptions(
   record: AgentSessionRecord,
@@ -16,6 +20,23 @@ export function replaceAgentSessionRecordOptions(
   return 'options' in replacement
     ? { ...record, options: { ...replacement.options }, updatedAt: replacement.now }
     : { ...record, permissionMode: replacement.permissionMode, updatedAt: replacement.now }
+}
+
+/** Closing a chat's tab ends what lasts only while it is open, so its reopen starts Ultracode off. */
+export function closedAgentSessionRecord(record: AgentSessionRecord): AgentSessionRecord {
+  const options =
+    record.provider === 'claude' && record.options
+      ? withoutChatUltracode(record.options)
+      : record.options
+  return options === record.options ? record : { ...record, options }
+}
+
+export function restoredAgentSessionRecord(record: AgentSessionRecord): AgentSessionRecord {
+  const options =
+    record.provider === 'claude' && record.options
+      ? withLegacyUltracodeEffortLifted(record.options)
+      : record.options
+  return options === record.options ? record : { ...record, options }
 }
 
 /** Saved catalog only; missing model evidence permits options without starting discovery. */
@@ -34,9 +55,17 @@ export function pickAgentSessionOption(
   record: AgentSessionRecord,
   { key, value, models: _models, ...at }: AgentSessionOptionPick
 ): AgentSessionRecord {
+  const saved =
+    record.provider === 'claude' &&
+    key === 'effort' &&
+    (value === 'ultracode' || record.options?.effort === 'ultracode')
+      ? withoutChatUltracode(record.options ?? {})
+      : record.provider === 'claude' && key === 'ultracode'
+        ? withLegacyUltracodeEffortLifted(record.options ?? {})
+        : record.options
   return replaceAgentSessionRecordOptions(record, {
     ...at,
-    options: { ...record.options, [key]: value }
+    options: { ...saved, [key]: value }
   })
 }
 

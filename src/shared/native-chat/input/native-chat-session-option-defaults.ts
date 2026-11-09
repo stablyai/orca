@@ -37,7 +37,11 @@ export function resolveNativeChatSessionOptionDefaults(
   const storedValues = entry?.valuesByModel?.[modelId]
   if (storedValues && typeof storedValues === 'object') {
     for (const [id, value] of Object.entries(storedValues)) {
-      if (sessionOptionValueIsValid(value)) {
+      if (
+        sessionOptionValueIsValid(value) &&
+        id !== 'ultracode' &&
+        !(agent === 'claude' && id === 'effort' && value === 'ultracode')
+      ) {
         values[id] = value
       }
     }
@@ -54,9 +58,11 @@ export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = [
   'serviceTier'
 ] as const
 
-/** What a launch may hold and a create may seed; the permission mode never rewrites the selection. */
+/** What a launch may hold and a create may seed; the permission mode never rewrites the selection.
+ *  Ultracode is held for its chat only, so no seed remembers it. */
 export const STRUCTURED_LAUNCH_OPTION_IDS = [
   ...STRUCTURED_LAUNCH_SEED_OPTION_IDS,
+  'ultracode',
   'interactionMode',
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID
 ] as const
@@ -94,10 +100,12 @@ export function parseStructuredLaunchSeedOptions(
   const parsed: Record<string, string> = {}
   for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
     const encoded = entries.get(id)
+    // Ultracode was once saved as an effort; a new chat now starts it off at the model default.
     if (
       typeof encoded === 'string' &&
       encoded.trim() &&
-      decodeStructuredAgentSessionOptionValue(id, encoded) !== null
+      decodeStructuredAgentSessionOptionValue(id, encoded) !== null &&
+      !(id === 'effort' && encoded === 'ultracode')
     ) {
       parsed[id] = encoded
     }

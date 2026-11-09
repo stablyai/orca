@@ -7,6 +7,7 @@ import {
   hasAgentSessionConversation,
   type AgentSessionStoreState
 } from './records/agent-session-store-state'
+import { closedAgentSessionRecord } from './records/agent-session-record-options'
 
 /** Tab membership defines visibility; tab and session ids form a one-to-one mapping. */
 export class AgentSessionTabTable {
@@ -141,6 +142,13 @@ export function setAgentSessionTabVisibility(
     legacyIds,
     visible && tabId !== undefined ? sessionId : undefined
   )
+  if (!visible || state.sessionTabs.tabIdFor(sessionId) === undefined) {
+    const record = state.records.get(sessionId)
+    const closed = record && closedAgentSessionRecord(record)
+    if (closed && closed !== record) {
+      state.records.set(sessionId, closed)
+    }
+  }
   if (visible) {
     state.sessionTabs.show(sessionId, tabId)
   } else {

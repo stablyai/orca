@@ -6,10 +6,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../../../shared/agent-session/lifecycle/agent-session-lease-adjudication'
 import type { AgentSessionExecutionLocation } from '../../../../shared/agent-session/lifecycle/agent-session-record'
 
+import { agentSessionRecordFixture } from '../../../../shared/agent-session/lifecycle/agent-session-record.test-fixture'
 import type { AgentSessionRecordStore } from './agent-session-record-store'
+import { pickAgentSessionOption } from './agent-session-record-options'
 import {
   openTestAgentSessionRecordStore,
-  readPersistedTestAgentSessionStore
+  readPersistedTestAgentSessionStore,
+  seedTestAgentSessionRecordStore
 } from './agent-session-record-store-test-harness'
 import type { AgentSessionReserveRequest } from '../ownership/agent-session-reservation-admission'
 
@@ -104,5 +107,79 @@ describe('chat tab table', () => {
     )
     await store.setSessionTabVisibility('session-beta', true, 'tab-alpha')
     expect(store.getSessionTabId('session-beta')).toBe('tab-alpha')
+  })
+})
+
+describe('Ultracode across a restart and a closed tab', () => {
+  it('turns a legacy saved preset off, and accepts the preset again from an older client', async () => {
+    const record = { ...agentSessionRecordFixture(), options: { effort: 'ultracode' } }
+    await seedTestAgentSessionRecordStore(directory, {
+      records: [record],
+      sessionTabs: [{ tabId: 'tab-alpha', sessionId: record.sessionId }]
+    })
+    const store = await open()
+    const picked = { sessionId: record.sessionId, fence: 7, models: undefined, now: NOW }
+    await store.reviseSessionOptions(pickAgentSessionOption, {
+      ...picked,
+      key: 'ultracode',
+      value: 'false'
+    })
+    expect(store.getRecord(record.sessionId)?.options).toEqual({
+      effort: 'xhigh',
+      ultracode: 'false'
+    })
+    await store.reviseSessionOptions(pickAgentSessionOption, {
+      ...picked,
+      key: 'effort',
+      value: 'ultracode'
+    })
+    expect(store.getRecord(record.sessionId)?.options).toEqual({
+      effort: 'ultracode'
+    })
+    await store.reviseSessionOptions(pickAgentSessionOption, {
+      ...picked,
+      key: 'effort',
+      value: 'xhigh'
+    })
+    expect(store.getRecord(record.sessionId)?.options).toEqual({ effort: 'xhigh' })
+  })
+
+  it.each([
+    [
+      { model: 'opus', effort: 'high', ultracode: 'true' },
+      { model: 'opus', effort: 'high' }
+    ],
+    [
+      { model: 'opus', effort: 'ultracode' },
+      { model: 'opus', effort: 'xhigh' }
+    ]
+  ])('keeps %o while its tab stays open, and closing the tab leaves %o', async (saved, closed) => {
+    const record = { ...agentSessionRecordFixture(), options: saved }
+    await seedTestAgentSessionRecordStore(directory, {
+      records: [record],
+      sessionTabs: [{ tabId: 'tab-alpha', sessionId: record.sessionId }]
+    })
+    const restarted = await open()
+    expect(restarted.isSessionTabVisible(record.sessionId)).toBe(true)
+    expect(restarted.getRecord(record.sessionId)?.options).toEqual(saved)
+
+    await restarted.setSessionTabVisibility(record.sessionId, false)
+    expect(restarted.getRecord(record.sessionId)?.options).toEqual(closed)
+    expect(
+      (await readPersistedTestAgentSessionStore(directory)).records[record.sessionId]?.options
+    ).toEqual(closed)
+    await restarted.setSessionTabVisibility(record.sessionId, true)
+    expect(restarted.getRecord(record.sessionId)?.options).toEqual(closed)
+  })
+
+  it('reopens a chat closed by an older build without its saved Ultracode preset', async () => {
+    const record = {
+      ...agentSessionRecordFixture(),
+      options: { model: 'opus', effort: 'ultracode' }
+    }
+    await seedTestAgentSessionRecordStore(directory, { records: [record], sessionTabs: [] })
+    const store = await open()
+    await store.setSessionTabVisibility(record.sessionId, true)
+    expect(store.getRecord(record.sessionId)?.options).toEqual({ model: 'opus', effort: 'xhigh' })
   })
 })

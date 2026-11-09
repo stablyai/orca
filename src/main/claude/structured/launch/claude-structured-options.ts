@@ -6,11 +6,13 @@ import {
 import {
   observeClaudeSettingsApplied,
   observeClaudeSettingsEffort,
+  observeClaudeSettingsUltracode,
   readClaudeSettingsFastMode
 } from './claude-structured-session-options'
 import type { ClaudeSession } from '../claude-structured-session-state'
 import type { StructuredAgentSessionAdapter } from '../../../native-chat/agent-session-wire/providers/structured-agent-session-adapter'
 import { decodeStructuredAgentSessionOptionValue } from '../../../../shared/agent-session/options/structured-agent-session-option-codec'
+import { withLegacyUltracodeEffortLifted } from '../../../../shared/agent-session/options/claude-ultracode-saved-options'
 
 import { beginClaudeOptionMutation } from '../claude-structured-execution-observations'
 import {
@@ -24,7 +26,31 @@ export function claudeEffortLevel(value: string) {
   return value === 'ultracode' ? 'xhigh' : EFFORT_LEVELS.find((level) => level === value)
 }
 
-const OPTION_ORDER = ['model', 'effort', 'fastMode'] as const
+const OPTION_ORDER = ['model', 'effort', 'ultracode', 'fastMode'] as const
+
+/** An effort write without the switch leaves Ultracode: keep the chat's pick, else Claude's report. */
+function claudeKeepsUltracode(session: ClaudeSession): boolean {
+  const held = session.options.get('ultracode')
+  if (held !== undefined) {
+    return held === 'true'
+  }
+  if (session.legacyUltracodePreset) {
+    return false
+  }
+  return (
+    (session.ultracodeControlIntent ??
+      session.reportedOptions.ultracode ??
+      session.appliedOptions?.ultracode) === true
+  )
+}
+
+/** Older clients pick Ultracode as an effort, which runs XHigh with the switch on. */
+export function claudeAppliedEffort(session: ClaudeSession, value: string): boolean {
+  return value === 'ultracode'
+    ? session.appliedInputOptions.get('effort') === 'xhigh' &&
+        session.appliedInputOptions.get('ultracode') === 'true'
+    : !session.legacyUltracodePreset && session.appliedInputOptions.get('effort') === value
+}
 
 /** A fallback approval mode is dropped only by reopening for a newly picked model (only an approved plan
  *  changes the live mode). Compares with what Orca itself launched, so the reopened child never matches again. */
@@ -51,15 +77,22 @@ export function claudeModelTransitionRestart(
 export function restoredClaudeStructuredSessionOptions(
   options: Readonly<Record<string, string>> | undefined
 ): Map<string, string> {
+  const restored = options && withLegacyUltracodeEffortLifted(options)
   return new Map(
     OPTION_ORDER.flatMap((key) => {
-      const value = options?.[key]
+      const value = restored?.[key]
       return value ? [[key, value] as const] : []
     })
   )
 }
 
-const CLAUDE_STRUCTURED_OPTION_KEYS = new Set(['model', 'effort', 'fastMode', 'interactionMode'])
+const CLAUDE_STRUCTURED_OPTION_KEYS = new Set([
+  'model',
+  'effort',
+  'ultracode',
+  'fastMode',
+  'interactionMode'
+])
 
 export function isClaudeStructuredOptionKey(key: string): boolean {
   return CLAUDE_STRUCTURED_OPTION_KEYS.has(key)
@@ -68,11 +101,9 @@ export function isClaudeStructuredOptionKey(key: string): boolean {
 /** Native writers can replace more than their named input; uncertain writes retire that proof. */
 export function beginClaudeInputWrite(session: ClaudeSession, key: string, value?: string): number {
   const affected =
-    key === 'model'
-      ? ['model', 'effort', 'fastMode']
-      : key === 'fastMode' && value === 'true'
-        ? ['model', 'effort', 'fastMode']
-        : [key]
+    key === 'model' || (key === 'fastMode' && value === 'true')
+      ? ['model', 'effort', 'ultracode', 'fastMode']
+      : [key]
   for (const input of affected) {
     session.appliedInputOptions.delete(input)
     session.confirmedOptions.delete(input)
@@ -120,34 +151,46 @@ export async function setClaudeStructuredOption(
     input.key === 'fastMode'
       ? decodeStructuredAgentSessionOptionValue('fastMode', input.value)
       : null
+  const ultracode =
+    input.key === 'ultracode'
+      ? decodeStructuredAgentSessionOptionValue('ultracode', input.value)
+      : null
   const effort = claudeEffortLevel(input.value)
-  const ultracode = input.value === 'ultracode'
-  const leavesUltracode =
-    session.options.get('effort') === 'ultracode' ||
-    session.appliedInputOptions.get('effort') === 'ultracode'
   if (input.key === 'effort' && effort === undefined) {
     throw new ClaudeEffortValidationError()
   }
   if (
-    (input.key === 'effort' || input.key === 'fastMode') &&
+    (input.key === 'effort' || input.key === 'fastMode' || input.key === 'ultracode') &&
     !(await claudeTakesFlagSettings(session))
   ) {
     throw new AgentSessionOptionRejectedError(
-      'this Claude Code version cannot change effort or Fast mode in a running chat; update Claude Code'
+      'this Claude Code version cannot change effort, Ultracode or Fast mode in a running chat; update Claude Code'
     )
   }
+  const keepsUltracode =
+    input.key === 'effort' && (input.value === 'ultracode' || claudeKeepsUltracode(session))
+  const effortUltracode = keepsUltracode
+    ? true
+    : input.key === 'effort' && session.legacyUltracodePreset
+      ? false
+      : undefined
   const apply =
     input.key === 'model'
       ? () => session.connection.setModel(input.value, { timeoutMs })
       : input.key === 'effort' && effort !== undefined
         ? () =>
             session.connection.applyFlagSettings(
-              { effortLevel: effort, ...(ultracode || leavesUltracode ? { ultracode } : {}) },
+              {
+                effortLevel: effort,
+                ...(effortUltracode !== undefined ? { ultracode: effortUltracode } : {})
+              },
               { timeoutMs }
             )
         : input.key === 'fastMode' && typeof fastMode === 'boolean'
           ? () => session.connection.applyFlagSettings({ fastMode }, { timeoutMs })
-          : null
+          : input.key === 'ultracode' && typeof ultracode === 'boolean'
+            ? () => session.connection.applyFlagSettings({ ultracode }, { timeoutMs })
+            : null
   if (!apply) {
     throw new AgentSessionOptionRejectedError(
       `claude stream-json has no session option named ${input.key}`
@@ -161,14 +204,28 @@ export async function setClaudeStructuredOption(
   const mutationSequence = beginClaudeInputWrite(session, input.key, input.value)
   // Read with the fence bump, so a write that lands after an earlier one's bookkeeping compares against it.
   const held = session.options.get(input.key)
-  if (input.key === 'effort' && ultracode) {
-    // A lost acknowledgement can leave our enable running; retain intent until an exit acknowledges.
-    session.options.set('effort', input.value)
+  // Effort holds its level, never the Ultracode name older clients pick.
+  const value = input.key === 'effort' && effort !== undefined ? effort : input.value
+  // A lost acknowledgement can leave the enable running until a later write replaces its intent.
+  if (input.key === 'ultracode') {
+    session.options.set('ultracode', input.value)
+    delete session.legacyUltracodePreset
+    delete session.ultracodeControlIntent
+  } else if (effortUltracode !== undefined) {
+    session.appliedInputOptions.delete('ultracode')
+    session.confirmedOptions.delete('ultracode')
+    session.ultracodeControlIntent = effortUltracode
+    if (input.value === 'ultracode') {
+      session.options.delete('ultracode')
+    }
   }
   try {
     await apply()
     if (mutationSequence === session.optionMutationSequence) {
-      session.appliedInputOptions.set(input.key, input.value)
+      session.appliedInputOptions.set(input.key, value)
+      if (effortUltracode !== undefined) {
+        session.appliedInputOptions.set('ultracode', String(effortUltracode))
+      }
     }
     // Notify the translator even if a newer write superseded this applied control.
     if (input.key === 'model' && input.value !== held) {
@@ -186,13 +243,22 @@ export async function setClaudeStructuredOption(
     finishClaudeInputWrite(session, mutationSequence)
   }
   if (mutationSequence === session.optionMutationSequence) {
-    session.options.set(input.key, input.value)
+    session.options.set(input.key, value)
+    if (input.key === 'effort' && input.value === 'ultracode') {
+      session.legacyUltracodePreset = true
+      delete session.ultracodeControlIntent
+    } else if (input.key === 'effort') {
+      delete session.legacyUltracodePreset
+    }
     session.confirmedOptions.delete(input.key)
     if (input.key === 'model') {
       session.confirmedOptions.delete('effort')
       session.confirmedOptions.delete('fastMode')
+      session.confirmedOptions.delete('ultracode')
     }
-    void confirmClaudeOption(session, input, mutationSequence, timeoutMs).catch(() => {})
+    void confirmClaudeOption(session, { ...input, value }, mutationSequence, timeoutMs).catch(
+      () => {}
+    )
   }
   return Object.fromEntries(session.options)
 }
@@ -206,7 +272,9 @@ async function confirmClaudeOption(
   const token = { pending: false }
   session.settingsObservation = token
   const settings =
-    (input.key === 'effort' && input.value !== 'max') || input.key === 'fastMode'
+    (input.key === 'effort' && input.value !== 'max') ||
+    input.key === 'fastMode' ||
+    input.key === 'ultracode'
       ? await session.connection.getSettings({ timeoutMs }).catch(() => null)
       : null
   if (
@@ -218,6 +286,9 @@ async function confirmClaudeOption(
     return
   }
   observeClaudeSettingsApplied(session, settings)
+  if (input.key === 'effort' || input.key === 'ultracode') {
+    observeClaudeSettingsUltracode(session, settings)
+  }
   if (input.key === 'effort') {
     observeClaudeSettingsEffort(session, settings)
   } else if (input.key === 'fastMode') {
