@@ -68,6 +68,7 @@ export async function startOrcad(
   const env: Record<string, string> = {
     ...READY_VIA_FILE_ENV,
     ORCA_SANDBOX_ID: inputs.sandboxId,
+    ORCA_ENV_GENERATION: String(Date.now()),
     ORCA_PUBLIC_WSS: route.url.replace(/^https:/, 'wss:')
   }
   if (inputs.repo) {
@@ -135,11 +136,13 @@ export async function runningOrcad(provider: SandboxProviderApi, sessionId: stri
 export async function refreshSessionEnv(
   provider: SandboxProviderApi,
   sessionId: string,
-  secretEnv: Record<string, string>
+  secretEnv: Record<string, string>,
+  /** Monotonic (ms): the VM ignores a write older than the one it already has. */
+  generation: number
 ): Promise<boolean> {
   const result = await provider.runCommand(sessionId, {
     command: ENV_COMMAND,
-    env: { ORCA_SECRET_ENV: encodeSecretEnv(secretEnv) },
+    env: { ORCA_SECRET_ENV: encodeSecretEnv(secretEnv), ORCA_ENV_GENERATION: String(generation) },
     timeoutMs: ENV_TIMEOUT_MS
   })
   return result.exitCode === 0

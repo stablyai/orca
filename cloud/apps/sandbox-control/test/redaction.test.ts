@@ -109,7 +109,7 @@ describe('Vercel files API', () => {
 describe('secret env refresh', () => {
   it('passes values only as command env, never args', async () => {
     const runCommand = vi.fn(async () => ({ exitCode: 0, stdout: '{"names":1}\n', stderr: '' }))
-    await refreshSessionEnv({ runCommand } as unknown as SandboxProviderApi, 'sess', { ANTHROPIC_API_KEY: SECRET })
+    await refreshSessionEnv({ runCommand } as unknown as SandboxProviderApi, 'sess', { ANTHROPIC_API_KEY: SECRET }, 1)
     const params = (runCommand.mock.calls[0] as unknown as [string, { args?: string[]; env: Record<string, string> }])[1]
     expect(JSON.stringify(params.args ?? [])).not.toContain(SECRET)
     expect(params.env.ORCA_SECRET_ENV).toBeDefined()

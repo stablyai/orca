@@ -100,6 +100,10 @@ export function checkValue(name: string, value: string): void {
     throw new SecretError(400, 'invalid_request', 'value_too_large')
   }
   const trimmed = value.trim()
+  if ((BASE_URL_NAMES.has(name) || name.endsWith('_MODEL')) && !/^[\x21-\x7e]+$/.test(value)) {
+    // URLs and model ids land in client config (Codex TOML, Claude Code): no spaces or control characters.
+    throw new SecretError(400, 'invalid_request', BASE_URL_NAMES.has(name) ? 'invalid_base_url' : 'invalid_value')
+  }
   if (BASE_URL_NAMES.has(name) && !baseUrlHost(trimmed)) {
     // The VM's egress allowlist opens this host, so only public https endpoints are accepted.
     throw new SecretError(400, 'invalid_request', 'invalid_base_url')

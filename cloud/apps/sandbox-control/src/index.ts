@@ -53,7 +53,8 @@ import { reconcile } from './reconcile'
 import { egressSecretHosts, secretPlaceholder } from './secret-egress'
 import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
-import { resolvedProviderEnv } from './session-env'
+import { cachedProviderEnv } from './session-env'
+import { credentialTargets } from './provider-env'
 import type { Keyring } from './secrets-crypto'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { VmCommandError } from './sandbox-vm-commands'
@@ -82,28 +83,6 @@ export type Deps = {
   waitUntil?: (work: Promise<unknown>) => void
 }
 
-// Decrypted model keys for the egress proxy, per sandbox session, for a minute: one D1 read and
-// a decrypt per session-minute instead of per model request. Isolate memory only.
-const SECRET_CACHE_MS = 60_000
-const secretCache = new Map<string, { at: number; env: Promise<Record<string, string>> }>()
-
-function sessionSecretEnv(db: D1Database, keyring: Keyring, row: SandboxRow, now: number): Promise<Record<string, string>> {
-  const key = `${row.id}:${row.session_id ?? ''}`
-  const hit = secretCache.get(key)
-  if (hit && now - hit.at < SECRET_CACHE_MS) {
-    return hit.env
-  }
-  for (const [cached, entry] of secretCache) {
-    if (now - entry.at >= SECRET_CACHE_MS) {
-      secretCache.delete(cached)
-    }
-  }
-  const env = resolvedProviderEnv(db, keyring, row)
-  secretCache.set(key, { at: now, env })
-  env.catch(() => secretCache.delete(key))
-  return env
-}
-
 function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => ProxiedRoute[] {
   const broker = deps.credentials ?? egressCredentials(env)
   return (row, host) => {
@@ -120,8 +99,14 @@ function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => 
         header,
         placeholders: [format(secretPlaceholder(row, entry.secret))],
         credential: async () => {
-          const value = (await sessionSecretEnv(env.SANDBOX_DB, await keyring, row, (deps.now ?? Date.now)()))[entry.secret]
-          return value ? format(value) : null
+          const current = await cachedProviderEnv(env.SANDBOX_DB, await keyring, row, (deps.now ?? Date.now)())
+          // The key must still be meant for this host now (not only at boot): a later edit may
+          // have moved it (e.g. a gateway-derived OPENAI_API_KEY replaced by a real OpenAI key).
+          const stillHere = credentialTargets(current.env, current.scopes).some(
+            (target) => target.secret === entry.secret && target.host === host
+          )
+          const value = current.env[entry.secret]
+          return stillHere && value ? format(value) : null
         }
       }))
     )

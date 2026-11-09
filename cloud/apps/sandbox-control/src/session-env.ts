@@ -18,13 +18,48 @@ export type SessionSecrets = {
 
 const EMPTY: SessionSecrets = { env: {}, egressSecretHosts: null, egressAllowHosts: null }
 
-/** Real values (presets derived), for the egress proxy's swap. Never sent to the VM with placeholders on. */
+export type ProviderEnv = { env: Record<string, string>; scopes: Record<string, string> }
+
+/** Real values (presets derived) and their scopes, for the egress proxy's swap. Never sent to the VM with placeholders on. */
 export async function resolvedProviderEnv(
   db: D1Database,
   keyring: Keyring,
   row: Pick<SandboxRow, 'id' | 'account_id' | 'user_id' | 'repo_url'>
-): Promise<Record<string, string>> {
-  return deriveProviderEnv((await resolveSandboxSecrets(db, keyring, row)).env)
+): Promise<ProviderEnv> {
+  const { env: stored, scopes } = await resolveSandboxSecrets(db, keyring, row)
+  const env = deriveProviderEnv(stored)
+  return { env, scopes: deriveProviderScopes(stored, env, scopes) }
+}
+
+// Decrypted model keys for the egress proxy, per sandbox session, for a minute: one D1 read and a
+// decrypt per session-minute instead of per model request. Isolate memory only; a secret edit
+// drops the sandbox's entry (in this isolate) so a rotated or deleted key stops being sent.
+const PROVIDER_ENV_CACHE_MS = 60_000
+const providerEnvCache = new Map<string, { at: number; value: Promise<ProviderEnv> }>()
+
+export function cachedProviderEnv(db: D1Database, keyring: Keyring, row: SandboxRow, now: number): Promise<ProviderEnv> {
+  const key = `${row.id}:${row.session_id ?? ''}`
+  const hit = providerEnvCache.get(key)
+  if (hit && now - hit.at < PROVIDER_ENV_CACHE_MS) {
+    return hit.value
+  }
+  for (const [cached, entry] of providerEnvCache) {
+    if (now - entry.at >= PROVIDER_ENV_CACHE_MS) {
+      providerEnvCache.delete(cached)
+    }
+  }
+  const value = resolvedProviderEnv(db, keyring, row)
+  providerEnvCache.set(key, { at: now, value })
+  value.catch(() => providerEnvCache.delete(key))
+  return value
+}
+
+export function forgetProviderEnv(sandboxId: string): void {
+  for (const key of providerEnvCache.keys()) {
+    if (key.startsWith(`${sandboxId}:`)) {
+      providerEnvCache.delete(key)
+    }
+  }
 }
 
 export async function sessionSecretEnv(

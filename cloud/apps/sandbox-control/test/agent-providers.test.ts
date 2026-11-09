@@ -257,6 +257,32 @@ describe('session env: presets, managed hosts, live refresh', () => {
     expect(await res.text()).toContain('message_stop')
     expect(upstream.at(-1)!.url).toBe('https://ai-gateway.vercel.sh/v1/messages')
     expect(upstream.at(-1)!.headers.get('authorization')).toBe(`Bearer ${GATEWAY_KEY}`)
+
+    // A real OpenAI key replaces the gateway-derived one. Even if the row still names the old
+    // route (a refresh that lost a race), the proxy never sends the new key to the gateway.
+    const stale = (await h.env.SANDBOX_DB.prepare('SELECT egress_secret_hosts FROM sandboxes WHERE id = ?').bind(id).first<{ egress_secret_hosts: string }>())!
+    await put('personal', 'OPENAI_API_KEY', 'sk-proj-REAL-openai-fake-4444-eeee', mia)
+    await h.env.SANDBOX_DB.prepare('UPDATE sandboxes SET egress_secret_hosts = ? WHERE id = ?').bind(stale.egress_secret_hosts, id).run()
+    const sent = upstream.length
+    const moved = await h.send(
+      new Request(`${PROXY_URL}/v1/responses`, {
+        method: 'POST',
+        body: '{}',
+        headers: {
+          'vercel-forwarded-host': 'ai-gateway.vercel.sh',
+          'vercel-forwarded-scheme': 'https',
+          'vercel-forwarded-port': '443',
+          'vercel-forwarded-path': '/v1/responses',
+          'vercel-sandbox-oidc-token': oidc,
+          authorization: `Bearer orca-ph-openai-api-key-${id}`
+        }
+      })
+    )
+    expect(moved.status).toBe(403)
+    expect(upstream).toHaveLength(sent)
+    // The VM was told the newer env (ordered writes).
+    const refreshes = h.vercel.commands.filter((c) => c.command === ENV_COMMAND)
+    expect(Number(refreshes.at(-1)!.env.ORCA_ENV_GENERATION)).toBeGreaterThan(0)
   })
 })
 

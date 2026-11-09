@@ -7,7 +7,7 @@ import { egressPolicy, refreshGitCredentials, type LifecycleDeps } from './lifec
 import { ProviderError } from './sandbox-provider'
 import { refreshSessionEnv } from './sandbox-vm-commands'
 import { normalizeRepo, type SecretChange } from './secrets'
-import { sessionSecretEnv } from './session-env'
+import { forgetProviderEnv, sessionSecretEnv } from './session-env'
 import { transition, type SandboxRow } from './store'
 
 /** Running sandboxes whose sessions read secrets of this owner. */
@@ -44,33 +44,34 @@ export async function refreshSandboxEnv(deps: LifecycleDeps, row: SandboxRow): P
   if (row.status !== 'running' || !row.session_id || !deps.secrets) {
     return false
   }
+  // Ordered by when the env was resolved: a slower, older refresh never overwrites a newer one.
+  const generation = deps.now()
   const secrets = await sessionSecretEnv(deps, row)
+  forgetProviderEnv(row.id)
   let current = row
   if (secrets.egressSecretHosts !== row.egress_secret_hosts || secrets.egressAllowHosts !== row.egress_allow_hosts) {
-    const routed: SandboxRow = { ...row, egress_secret_hosts: secrets.egressSecretHosts, egress_allow_hosts: secrets.egressAllowHosts }
-    // A policy write replaces the whole policy, so the git route is re-minted alongside.
-    const git = await refreshGitCredentials(deps, routed, row.session_id)
-    if (!git) {
-      await deps.provider.updateNetworkPolicy(row.session_id, egressPolicy(deps, routed))
-    }
+    // Claim the row first: if a lifecycle transition won, that boot resolves the env itself and the
+    // policy is left alone (never a policy that disagrees with the row).
     const next = await transition(
       deps.db,
       row,
-      {
-        egress_secret_hosts: routed.egress_secret_hosts,
-        egress_allow_hosts: routed.egress_allow_hosts,
-        ...(git ? { github_token_expires_at: git.expiresAt } : {})
-      },
+      { egress_secret_hosts: secrets.egressSecretHosts, egress_allow_hosts: secrets.egressAllowHosts },
       deps.now()
     )
     if (!next) {
-      // Raced with a lifecycle transition: that boot resolves the env itself.
       return false
     }
     current = next
+    // A policy write replaces the whole policy, so the git route is re-minted alongside.
+    const git = await refreshGitCredentials(deps, current, row.session_id)
+    if (!git) {
+      await deps.provider.updateNetworkPolicy(row.session_id, egressPolicy(deps, current))
+    } else {
+      current = (await transition(deps.db, current, { github_token_expires_at: git.expiresAt }, deps.now())) ?? current
+    }
   }
   try {
-    const applied = await refreshSessionEnv(deps.provider, current.session_id!, secrets.env)
+    const applied = await refreshSessionEnv(deps.provider, current.session_id!, secrets.env, generation)
     // Counts only.
     console.log(JSON.stringify({ event: 'session_env_refreshed', sandboxId: row.id, applied, names: Object.keys(secrets.env).length }))
     return applied
@@ -83,16 +84,20 @@ export async function refreshSandboxEnv(deps: LifecycleDeps, row: SandboxRow): P
   }
 }
 
-/** After a secret write: refresh every running session that reads that owner's secrets. */
+const REFRESH_CONCURRENCY = 8
+
+/** After a secret write: refresh every running session that reads that owner's secrets (8 at a time). */
 export async function refreshAfterSecretChange(deps: LifecycleDeps, changes: readonly SecretChange[]): Promise<number> {
-  const seen = new Set<string>()
-  let refreshed = 0
+  const rows = new Map<string, SandboxRow>()
   for (const change of changes) {
     for (const row of await sandboxesForSecretOwner(deps.db, change)) {
-      if (seen.has(row.id)) {
-        continue
-      }
-      seen.add(row.id)
+      rows.set(row.id, row)
+    }
+  }
+  const queue = [...rows.values()]
+  let refreshed = 0
+  const worker = async () => {
+    for (let row = queue.shift(); row; row = queue.shift()) {
       try {
         if (await refreshSandboxEnv(deps, row)) {
           refreshed++
@@ -102,5 +107,6 @@ export async function refreshAfterSecretChange(deps: LifecycleDeps, changes: rea
       }
     }
   }
+  await Promise.all(Array.from({ length: Math.min(REFRESH_CONCURRENCY, queue.length) }, worker))
   return refreshed
 }

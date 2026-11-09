@@ -7,6 +7,7 @@
 # does not read that variable: a managed block in ~/.codex/config.toml naming only the env var.
 set -euo pipefail
 umask 077
+HOME="${HOME:-$(getent passwd "$(id -u)" | cut -d: -f6)}"
 dir="/dev/shm/orca-env-$(id -u)"
 if [ "$(stat -f -c %T /dev/shm 2>/dev/null || true)" != tmpfs ]; then
   # No memory-only place to keep it: refuse rather than write secrets to disk.
@@ -15,6 +16,15 @@ if [ "$(stat -f -c %T /dev/shm 2>/dev/null || true)" != tmpfs ]; then
 fi
 mkdir -p "$dir"
 chmod 700 "$dir"
+# Writes are ordered by the control plane's resolve time: an older refresh that lost a race is dropped.
+generation="${ORCA_ENV_GENERATION:-0}"
+case "$generation" in '' | *[!0-9]*) generation=0 ;; esac
+current="$(cat "$dir/generation" 2>/dev/null || echo 0)"
+case "$current" in '' | *[!0-9]*) current=0 ;; esac
+if [ "$generation" -lt "$current" ]; then
+  printf '{"stale":true}\n'
+  exit 0
+fi
 tmp="$(mktemp "$dir/.session.env.XXXXXX")"
 count=0
 openai_base_url=''
@@ -31,6 +41,7 @@ while IFS= read -r line; do
   esac
 done < <(printf '%s\n' "${ORCA_SECRET_ENV:-}")
 mv -f "$tmp" "$dir/session.env"
+printf '%s' "$generation" >"$dir/generation"
 
 # ---- Codex provider block (no secret values: env_key names the variable) ----
 codex_config="$HOME/.codex/config.toml"
@@ -46,7 +57,9 @@ if [ -n "$openai_base_url" ] || grep -q '^# >>> orca-cloud managed' "$codex_conf
   user_part="$(mktemp "$HOME/.codex/.config.XXXXXX")"
   if [ -f "$codex_config" ]; then strip_managed "$codex_config" >"$user_part"; fi
   next="$(mktemp "$HOME/.codex/.config.XXXXXX")"
-  if [ -n "$openai_base_url" ] && [ "${openai_base_url#https://api.openai.com}" = "$openai_base_url" ]; then
+  openai_host="${openai_base_url#https://}"
+  openai_host="${openai_host%%/*}"
+  if [ -n "$openai_base_url" ] && [ "$openai_host" != api.openai.com ]; then
     # Top-level keys must precede every table; skip ours if the user already chose a provider/model.
     head_keys="$(awk '/^\[/{exit} {print}' "$user_part")"
     {
