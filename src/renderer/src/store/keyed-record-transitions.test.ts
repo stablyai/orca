@@ -72,10 +72,14 @@ describe('keyed record transitions', () => {
       addedWorkspaceIds: ['c'],
       deletedWorkspaceIds: new Set(['b'])
     })
-    const moved = recordDraft({ early: 1, later: 2 })
+    const ordered = { early: 1, later: 2 }
+    const moved = recordDraft(ordered)
     moved.delete('early')
     moved.set('early', 1)
-    expect(readRecordChanges(moved.finish(), { early: 1, later: 2 })?.kind).toBe('full-resync')
+    expect(readRecordChanges(moved.finish(), ordered)).toEqual({
+      kind: 'full-resync',
+      reason: 'reordered'
+    })
     const untouched = recordDraft(start)
     untouched.set('a', start.a)
     expect(untouched.finish()).toBe(start)
@@ -161,5 +165,22 @@ describe('keyed record transitions', () => {
       added: [],
       deleted: new Set(['t1'])
     })
+  })
+
+  it('keeps a __proto__ key as an own entry in records and drafts', () => {
+    const start = { t1: 'pty-1' }
+    const replaced = replaceRecordEntries(start, [['__proto__', 'pty-2']])
+    const draft = recordDraft(start)
+    draft.set('__proto__', 'pty-2')
+    for (const next of [replaced, draft.finish()]) {
+      expect(Object.hasOwn(next, '__proto__')).toBe(true)
+      expect(JSON.stringify(next)).toBe('{"t1":"pty-1","__proto__":"pty-2"}')
+      expect(readRecordChanges(next, start)).toEqual({
+        kind: 'addressed',
+        keys: new Set(['__proto__']),
+        added: ['__proto__'],
+        deleted: new Set()
+      })
+    }
   })
 })

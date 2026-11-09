@@ -78,6 +78,16 @@ function link(next: Keyed, previous: Keyed, keys: Iterable<string>, tabIds?: Set
   })
 }
 
+// An own data property even for `__proto__`, as a computed-key literal or spread would make.
+function defineEntry<V>(record: Record<string, V>, key: string, value: V): void {
+  Object.defineProperty(record, key, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true
+  })
+}
+
 type Replacement<V> = readonly [key: string, value: V | null]
 
 // Deleting then re-adding a surviving key moves it to the end, which an addressed key set can't express.
@@ -117,7 +127,7 @@ export function replaceRecordEntries<V>(
     (key) => Object.hasOwn(next, key),
     (key) => next[key],
     (key, value) => {
-      next[key] = value
+      defineEntry(next, key, value)
     },
     (key) => {
       delete next[key]
@@ -181,7 +191,7 @@ function createDraft<V>(
         return
       }
       reordered ||= removed.has(key)
-      writable()[key] = value
+      defineEntry(writable(), key, value)
       keys.add(key)
     },
     delete: (key) => {
