@@ -1345,6 +1345,7 @@
       "movedTo": "このスマートフォンでの文字起こしが止まりました。{{computer}} で続けます。",
       "movedToComputer": "このスマートフォンでの文字起こしが止まりました。コンピュータで続けます。",
       "stoppedKept": "音声入力が停止しました。{{reason}}。録音は保持されています。",
+      "stoppedKeptGeneric": "音声入力が停止しました。録音は保持されています。",
       "stillListening": "聞き取りを続けています。"
     },
     "pill": {

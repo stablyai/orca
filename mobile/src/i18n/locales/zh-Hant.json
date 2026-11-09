@@ -1345,6 +1345,7 @@
       "movedTo": "此手機已停止轉寫。在 {{computer}} 上繼續。",
       "movedToComputer": "此手機已停止轉寫。在電腦上繼續。",
       "stoppedKept": "聽寫已停止。{{reason}}。錄音已保留。",
+      "stoppedKeptGeneric": "聽寫已停止。錄音已保留。",
       "stillListening": "仍在聽。"
     },
     "pill": {
