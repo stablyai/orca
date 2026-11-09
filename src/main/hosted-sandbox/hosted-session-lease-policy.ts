@@ -1,9 +1,7 @@
 // What to do next with a session-capped, no-memory-pause environment (Vercel: stop = reboot, 24h cap).
 // Idle stop, the opportunistic refresh and the forced cap rollover are one decision so they never race.
-import type {
-  EnvironmentProviderCapabilities,
-  EnvironmentSessionInfo
-} from '../environment-providers/environment-provider-driver'
+import type { EnvironmentProviderCapabilities } from '../environment-providers/environment-provider-driver'
+import type { HostedSessionInfo } from './hosted-environment-provider'
 
 export type HostedActivitySample = {
   /** orcad's idle probes: clients, terminals, agents, automations. Unverifiable counts as busy. */
@@ -36,7 +34,7 @@ export const HOSTED_LEASE_POLICY = {
 export function decideHostedLeaseAction(input: {
   now: number
   capabilities: EnvironmentProviderCapabilities
-  session: EnvironmentSessionInfo
+  session: HostedSessionInfo
   activity: HostedActivitySample
   warned: ReadonlySet<HostedLeaseWarning>
 }): HostedLeaseAction {
@@ -67,11 +65,10 @@ export function decideHostedLeaseAction(input: {
       return { kind: 'rollover', reason: 'opportunistic' }
     }
   }
-  const leaseExpiresAt = session.leaseExpiresAt ?? null
   if (
-    leaseExpiresAt !== null &&
-    leaseExpiresAt - now <= HOSTED_LEASE_POLICY.renewWhenRemainingMs &&
-    (deadlineAt === null || leaseExpiresAt < deadlineAt)
+    session.leaseExpiresAt !== null &&
+    session.leaseExpiresAt - now <= HOSTED_LEASE_POLICY.renewWhenRemainingMs &&
+    (deadlineAt === null || session.leaseExpiresAt < deadlineAt)
   ) {
     return { kind: 'renew', extendMs: HOSTED_LEASE_POLICY.renewByMs }
   }

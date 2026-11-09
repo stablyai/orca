@@ -11,15 +11,13 @@ import {
   type RecipeStepProviderResult
 } from '../../shared/ephemeral-vm-recipe-step-providers'
 import { getRemoteUrl } from '../git/repo'
+import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
+import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import {
-  isEnvironmentProviderError,
-  type EnvironmentProviderDriver,
-  type EnvironmentReady
-} from '../environment-providers/environment-provider-driver'
-import {
-  environmentHandleFromRecipeResult,
-  environmentReadyToRecipeResult
-} from '../environment-providers/environment-provider-recipe-adapter'
+  isHostedEntitlementDenied,
+  type HostedEnvironmentProviderDriver,
+  type HostedEnvironmentReady
+} from './hosted-environment-provider'
 import { createHostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { createHostedSandboxDriver, HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
 import type { HostedSandboxConfig } from './hosted-sandbox-config'
@@ -43,7 +41,7 @@ const LifecyclePayload = z.looseObject({ recipeResult: EphemeralVmRecipeResultSc
 
 export function createHostedSandboxRecipeDriver(
   config: HostedSandboxConfig
-): EnvironmentProviderDriver {
+): HostedEnvironmentProviderDriver {
   return createHostedSandboxDriver(
     createHostedSandboxControlPlaneClient({
       baseUrl: config.controlPlaneUrl,
@@ -66,7 +64,7 @@ function ok(stdout: string): RecipeStepProviderResult {
 function failed(error: unknown): RecipeStepProviderResult {
   const base = { stdout: '', exitCode: 1, signal: null }
   if (
-    isEnvironmentProviderError(error, 'entitlement_denied') &&
+    isHostedEntitlementDenied(error) &&
     (error.reason === 'concurrency_limit' || error.reason === 'member_concurrency_limit')
   ) {
     return {
@@ -75,7 +73,7 @@ function failed(error: unknown): RecipeStepProviderResult {
       failure: ephemeralVmFailure('cloudConcurrencyLimit')
     }
   }
-  if (isEnvironmentProviderError(error, 'entitlement_denied')) {
+  if (isHostedEntitlementDenied(error)) {
     return {
       ...base,
       stderr: `Orca Cloud: ${error.reason ?? 'no plan'}\n`,
@@ -99,9 +97,9 @@ function failed(error: unknown): RecipeStepProviderResult {
 }
 
 export function createHostedSandboxStepProvider(
-  driver: EnvironmentProviderDriver,
+  driver: HostedEnvironmentProviderDriver,
   hooks: {
-    onReady?: (ready: EnvironmentReady) => void
+    onReady?: (ready: HostedEnvironmentReady) => void
     onStopped?: (environmentId: string) => void
   } = {}
 ): RecipeStepProvider {
@@ -125,7 +123,7 @@ export function createHostedSandboxStepProvider(
           ctx
         )
         hooks.onReady?.(ready)
-        return ok(JSON.stringify(environmentReadyToRecipeResult(ready, 'orca-worktree')))
+        return ok(JSON.stringify(ready.result))
       }
       const payload = LifecyclePayload.parse(JSON.parse(stdin ?? '{}'))
       const handle = payload.recipeResult
@@ -137,7 +135,7 @@ export function createHostedSandboxStepProvider(
       if (mode === 'resume') {
         const ready = await driver.resume(handle, ctx)
         hooks.onReady?.(ready)
-        return ok(JSON.stringify(environmentReadyToRecipeResult(ready, 'orca-worktree')))
+        return ok(JSON.stringify(ready.result))
       }
       await (mode === 'suspend' ? driver.suspend(handle, ctx) : driver.destroy(handle, ctx))
       hooks.onStopped?.(handle.environmentId)
@@ -149,7 +147,7 @@ export function createHostedSandboxStepProvider(
 }
 
 export function registerHostedSandboxRecipe(
-  driver: EnvironmentProviderDriver,
+  driver: HostedEnvironmentProviderDriver,
   hooks: Parameters<typeof createHostedSandboxStepProvider>[1] = {}
 ): () => void {
   return registerEphemeralVmRecipeStepProvider(

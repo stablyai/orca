@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { EnvironmentReady } from '../environment-providers/environment-provider-driver'
+import type { HostedEnvironmentReady } from './hosted-environment-provider'
 import { autoResumeAgentsAfterRollover } from './hosted-agent-auto-resume'
 import { createHostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { createHostedSandboxDriver, HOSTED_SANDBOX_CAPABILITIES } from './hosted-sandbox-driver'
@@ -76,7 +76,7 @@ describe('hosted session lease scheduler', () => {
       })
     )
     const created = await driver.create({ workspaceId: 'ws-1' })
-    const reconnect = vi.fn(async (_ready: EnvironmentReady) => {})
+    const reconnect = vi.fn(async (_ready: HostedEnvironmentReady) => {})
     const resumeAgents = vi.fn(async () => ({
       offered: 2,
       continued: 2,

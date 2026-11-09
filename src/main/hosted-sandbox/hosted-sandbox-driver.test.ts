@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { parseEphemeralVmRecipeResult } from '../../shared/ephemeral-vm-recipes'
+import {
+  getEphemeralVmRecipeResultConnection,
+  parseEphemeralVmRecipeResult
+} from '../../shared/ephemeral-vm-recipes'
 import { isEnvironmentProviderError } from '../environment-providers/environment-provider-driver'
 import { runEnvironmentProviderDriverContract } from '../environment-providers/environment-provider-driver-contract.test-support'
 import {
   environmentHandleFromRecipeResult,
-  environmentReadyToRecipeResult
+  environmentRecipeResult
 } from '../environment-providers/environment-provider-recipe-adapter'
+import { isHostedEntitlementDenied } from './hosted-environment-provider'
 import { createHostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { createHostedSandboxDriver, HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
 import { createFakeHostedControlPlane } from './fake-hosted-control-plane.test-support'
@@ -31,9 +35,9 @@ runEnvironmentProviderDriverContract('HostedSandboxDriver', async () => {
   const { plane, client, driver } = setup()
   return {
     driver,
-    reopenDriver: () => createHostedSandboxDriver(client),
     liveEnvironmentIds: async () =>
-      [...plane.sandboxes.values()].filter((s) => s.status !== 'destroyed').map((s) => s.id)
+      [...plane.sandboxes.values()].filter((s) => s.status !== 'destroyed').map((s) => s.id),
+    reopenDriver: () => createHostedSandboxDriver(client)
   }
 })
 
@@ -42,7 +46,7 @@ describe('HostedSandboxDriver', () => {
     const { plane, driver } = setup()
     plane.denyNextStart('included_hours_exhausted')
     const error = await rejection(driver.create({ workspaceId: 'ws-1' }))
-    expect(isEnvironmentProviderError(error, 'entitlement_denied')).toBe(true)
+    expect(isHostedEntitlementDenied(error)).toBe(true)
     expect(isEnvironmentProviderError(error) && error.reason).toBe('included_hours_exhausted')
   })
 
@@ -84,7 +88,14 @@ describe('HostedSandboxDriver', () => {
   it('round-trips through the recipe result the runtime record stores', async () => {
     const { driver } = setup()
     const ready = await driver.create({ workspaceId: 'ws-1' })
-    const recipeResult = environmentReadyToRecipeResult(ready, 'provisioned-root')
+    expect(ready.result).toEqual(
+      environmentRecipeResult(ready.handle, readyConnection(ready), 'orca-worktree')
+    )
+    const recipeResult = environmentRecipeResult(
+      ready.handle,
+      readyConnection(ready),
+      'provisioned-root'
+    )
     const parsed = parseEphemeralVmRecipeResult(JSON.stringify(recipeResult))
     expect(parsed.ok).toBe(true)
     if (!parsed.ok) {
@@ -98,4 +109,30 @@ describe('HostedSandboxDriver', () => {
       ready.handle.environmentId
     )
   })
+
+  it('keeps a capped session alive and rolls it over onto the same disk', async () => {
+    const { driver } = setup()
+    const created = await driver.create({ workspaceId: 'ws-rollover' })
+    const renewed = await driver.renewLease(created.handle, 10 * 60_000)
+    expect(renewed.status).toBe('running')
+    expect(renewed.session!.leaseExpiresAt!).toBeLessThanOrEqual(renewed.session!.deadlineAt!)
+
+    const rolled = await driver.rollover(created.handle)
+    expect(rolled.handle.environmentId).toBe(created.handle.environmentId)
+    expect(rolled.session.startedAt).toBeGreaterThan(created.session.startedAt)
+    expect(rolled.session.deadlineAt! - rolled.session.startedAt).toBeLessThanOrEqual(
+      driver.capabilities.maxSessionMs!
+    )
+    await driver.destroy(created.handle)
+  })
 })
+
+function readyConnection(ready: {
+  result: Parameters<typeof getEphemeralVmRecipeResultConnection>[0]
+}) {
+  const connection = getEphemeralVmRecipeResultConnection(ready.result)
+  if (connection.type !== 'orca-server') {
+    throw new Error('expected an orca-server connection')
+  }
+  return connection
+}

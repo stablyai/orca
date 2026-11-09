@@ -7,7 +7,7 @@ import {
   type JsonValue
 } from '../../shared/ephemeral-vm-recipes'
 import type { EphemeralVmCheckoutMode } from '../../shared/orca-yaml-hook-types'
-import type { EnvironmentHandle, EnvironmentReady } from './environment-provider-driver'
+import type { EnvironmentHandle } from './environment-provider-driver'
 
 const USER_DATA_KEY = 'environmentDriver'
 
@@ -19,18 +19,23 @@ const HandleSchema = z
   })
   .strict()
 
-export function environmentReadyToRecipeResult(
-  ready: EnvironmentReady,
+export function environmentRecipeResult(
+  handle: EnvironmentHandle,
+  orcaServer: { pairingCode: string; projectRoot: string },
   checkoutMode: EphemeralVmCheckoutMode
 ): EphemeralVmRecipeResult {
   const userData: Record<string, JsonValue> = {
     [USER_DATA_KEY]: {
-      driverId: ready.handle.driverId,
-      environmentId: ready.handle.environmentId,
-      driverState: ready.handle.driverState
+      driverId: handle.driverId,
+      environmentId: handle.environmentId,
+      driverState: handle.driverState
     }
   }
-  const connection = getEphemeralVmRecipeResultConnection(ready.result)
+  const connection = {
+    type: 'orca-server' as const,
+    pairingCode: orcaServer.pairingCode,
+    projectRoot: orcaServer.projectRoot
+  }
   return checkoutMode === 'provisioned-root'
     ? { schemaVersion: 2, checkoutMode: 'provisioned-root', connection, userData }
     : { schemaVersion: 1, connection, userData }
