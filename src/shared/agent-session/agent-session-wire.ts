@@ -194,6 +194,8 @@ export type AgentSessionStatusSummary = {
     turnItemId: string
     resetsAt: number
     state: 'scheduled' | 'cancelled' | 'failed' | 'off'
+    /** When the account's own usage says the limit lasts past `resetsAt`; the send waits for it. */
+    continueAt?: number
   }
   rewindBlockedReason?: AgentSessionRewindReason
   sessionId: string
