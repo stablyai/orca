@@ -69,13 +69,17 @@ const OWNER_ROOTS = [
     name: 'acceptTransition',
     inputs: ['previous', 'next']
   },
-  { rel: 'lib/worktree-tab-bucket-projection.ts', name: 'project', inputs: ['source'] }
+  {
+    rel: 'lib/workspace/tabs/worktree-tab-bucket-projection.ts',
+    name: 'project',
+    inputs: ['source']
+  }
 ]
 const KEY_DIFFS = new Set([
   `${RENDERER}store/terminals/terminal-parking-input-owner.ts#diffUnknownParkingRecordKeys`,
   `${RENDERER}store/terminals/terminal-tab-owner-index.ts#diffUnknownTabOwnerKeys`,
   `${RENDERER}store/terminals/sleeping-agent-record-index.ts#diffUnknownSleepingRecordKeys`,
-  `${RENDERER}lib/worktree-tab-bucket-projection.ts#diffUnknownProjectionKeys`
+  `${RENDERER}lib/workspace/tabs/worktree-tab-bucket-projection.ts#diffUnknownProjectionKeys`
 ])
 const COLD_RESYNCS = new Set([
   `${RENDERER}store/terminals/terminal-parking-input-owner.ts#resyncTerminalParkingWorkspaceIds`,
