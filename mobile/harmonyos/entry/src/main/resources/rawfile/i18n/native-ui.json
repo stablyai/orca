@@ -5603,5 +5603,132 @@
     "en": "Could not save the default session view. Try again.",
     "zh": "无法保存默认会话视图。请重试。",
     "zh-Hant": "無法儲存預設工作階段檢視。請重試。"
+  },
+  "settings.appearance.title": {
+    "de": "Darstellung",
+    "en": "Appearance",
+    "es": "Apariencia",
+    "fr": "Apparence",
+    "ja": "外観",
+    "ko": "모양",
+    "pt": "Aparência",
+    "ru": "Внешний вид",
+    "tr": "Görünüm",
+    "zh-Hant": "外觀",
+    "zh": "外观"
+  },
+  "settings.appearance.theme.system": {
+    "de": "System",
+    "en": "System",
+    "es": "Sistema",
+    "fr": "Système",
+    "ja": "システム",
+    "ko": "시스템",
+    "pt": "Sistema",
+    "ru": "Системная",
+    "tr": "Sistem",
+    "zh-Hant": "系統",
+    "zh": "系统"
+  },
+  "settings.appearance.theme.light": {
+    "de": "Hell",
+    "en": "Light",
+    "es": "Claro",
+    "fr": "Clair",
+    "ja": "ライト",
+    "ko": "라이트",
+    "pt": "Claro",
+    "ru": "Светлая",
+    "tr": "Açık",
+    "zh-Hant": "淺色",
+    "zh": "浅色"
+  },
+  "settings.appearance.theme.dark": {
+    "de": "Dunkel",
+    "en": "Dark",
+    "es": "Oscuro",
+    "fr": "Sombre",
+    "ja": "ダーク",
+    "ko": "다크",
+    "pt": "Escuro",
+    "ru": "Тёмная",
+    "tr": "Koyu",
+    "zh-Hant": "深色",
+    "zh": "深色"
+  },
+  "settings.appearance.theme.heading": {
+    "de": "DESIGN",
+    "en": "THEME",
+    "es": "TEMA",
+    "fr": "THÈME",
+    "ja": "テーマ",
+    "ko": "테마",
+    "pt": "TEMA",
+    "ru": "ТЕМА",
+    "tr": "TEMA",
+    "zh-Hant": "主題",
+    "zh": "主题"
+  },
+  "settings.appearance.theme.description": {
+    "de": "„System“ übernimmt den hellen oder dunklen Modus des Geräts.",
+    "en": "System follows this device’s light or dark setting.",
+    "es": "La opción Sistema usa el modo claro u oscuro de este dispositivo.",
+    "fr": "L'option Système utilise le thème clair ou sombre de cet appareil.",
+    "ja": "「システム」はこのデバイスのライト／ダーク設定に従います。",
+    "ko": "시스템을 선택하면 이 기기의 라이트 또는 다크 모드 설정을 따릅니다.",
+    "pt": "A opção Sistema segue a configuração de tema claro ou escuro deste dispositivo.",
+    "ru": "При выборе «Системная» используется светлая или тёмная тема устройства.",
+    "tr": "Sistem seçeneği bu cihazın açık veya koyu tema ayarını kullanır.",
+    "zh-Hant": "「系統」會使用此裝置的淺色或深色設定。",
+    "zh": "选择“系统”时，将跟随此设备的浅色或深色设置。"
+  },
+  "settings.appearance.language.systemWithCurrent": {
+    "de": "System ({{language}})",
+    "en": "System ({{language}})",
+    "es": "Sistema ({{language}})",
+    "fr": "Système ({{language}})",
+    "ja": "システム（{{language}}）",
+    "ko": "시스템 ({{language}})",
+    "pt": "Sistema ({{language}})",
+    "ru": "Как в системе ({{language}})",
+    "tr": "Sistem ({{language}})",
+    "zh-Hant": "系統（{{language}}）",
+    "zh": "系统（{{language}}）"
+  },
+  "settings.appearance.language.heading": {
+    "de": "SPRACHE",
+    "en": "LANGUAGE",
+    "es": "IDIOMA",
+    "fr": "LANGUE",
+    "ja": "言語",
+    "ko": "언어",
+    "pt": "IDIOMA",
+    "ru": "ЯЗЫК",
+    "tr": "DİL",
+    "zh-Hant": "語言",
+    "zh": "语言"
+  },
+  "settings.appearance.language.description": {
+    "de": "„System“ übernimmt die Gerätesprache. Berechtigungsabfragen verwenden immer die Gerätesprache.",
+    "en": "System follows this device’s language. Permission prompts always use the device language.",
+    "es": "La opción Sistema usa el idioma de este dispositivo. Las solicitudes de permiso siempre usan el idioma del dispositivo.",
+    "fr": "L'option Système utilise la langue de cet appareil. Les demandes d'autorisation utilisent toujours la langue de l'appareil.",
+    "ja": "「システム」はこのデバイスの言語に従います。権限の確認画面には常にデバイスの言語が使われます。",
+    "ko": "시스템을 선택하면 이 기기의 언어를 따릅니다. 권한 요청은 항상 기기 언어로 표시됩니다.",
+    "pt": "A opção Sistema segue o idioma deste dispositivo. As solicitações de permissão sempre usam o idioma do dispositivo.",
+    "ru": "При выборе «Как в системе» используется язык устройства. Запросы разрешений всегда отображаются на языке устройства.",
+    "tr": "Sistem seçeneği bu cihazın dilini kullanır. İzin istekleri her zaman cihazın dilinde gösterilir.",
+    "zh-Hant": "「系統」會使用此裝置的語言。權限提示一律使用裝置語言。",
+    "zh": "选择“系统”时，将跟随此设备的语言。权限提示始终使用设备语言。"
+  },
+  "settings.appearance.theme.saveFailed": {
+    "en": "Could not save the theme. Try again.",
+    "zh": "无法保存主题。请重试。",
+    "zh-Hant": "無法儲存主題。請重試。"
+  },
+  "settings.appearance.language.saveFailed": {
+    "en": "Could not save the language. Try again.",
+    "zh": "无法保存语言。请重试。",
+    "zh-Hant": "無法儲存語言。請重試。"
   }
 }

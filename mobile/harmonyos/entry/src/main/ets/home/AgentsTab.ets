@@ -18,7 +18,6 @@ const SECTION_LABELS = new Map<string, string>([['needs-you', '需要处理'], [
 export struct AgentsTab {
   @Prop @Watch('refreshList') desktops: AgentDesktop[] = [];
   @Prop loaded: boolean = false;
-  @Prop fontScale: number = 1;
   @Prop now: number = 0;
   @StorageProp('uiLocale') locale: string = 'en';
   @StorageProp('themeText') text: string = '#fafafa';
@@ -212,7 +211,7 @@ export struct AgentsTab {
     Column({ space: 8 }) {
       if (this.sectionTitle(section)) {
         Row({ space: 6 }) {
-          Text(this.sectionTitle(section)).fontFamily('Geist').fontSize(15 * this.fontScale)
+          Text(this.sectionTitle(section)).fontFamily('Geist').fontSize(15)
             .fontWeight(FontWeight.Medium).fontColor(this.text).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
           if (!['workspace', 'project'].includes(section.kind) && section.rows.length > 0) {
             Text(String(section.rows.length)).fontFamily('Geist').fontSize(13).fontColor(this.muted)
@@ -234,7 +233,7 @@ export struct AgentsTab {
       if (section.rows.length > 0 || (section.idleRows?.length ?? 0) > 0) {
         AgentListRows({ rows: section.rows, idleRows: section.idleRows ?? [], desktops: this.desktops,
           nameDesktop: section.nameDesktop, footer: section.footer, idleKey: `idle:${this.view.groupBy}`,
-          expanded: this.expanded, fontScale: this.fontScale, now: this.now, onToggle: (key: string): void => this.toggle(key),
+          expanded: this.expanded, now: this.now, onToggle: (key: string): void => this.toggle(key),
           onOpen: this.onOpen, onActions: this.onActions, onRead: this.onRead, onClear: this.onClear })
       }
     }.width('100%').alignItems(HorizontalAlign.Start)

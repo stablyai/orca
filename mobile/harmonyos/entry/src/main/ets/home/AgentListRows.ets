@@ -24,7 +24,6 @@ export struct AgentListRows {
   @Prop footer: string = 'workspace';
   @Prop idleKey: string = 'status';
   @Prop expanded: string[] = [];
-  @Prop fontScale: number = 1;
   @Prop now: number = 0;
   @StorageProp('uiLocale') locale: string = 'en';
   @StorageProp('themeScheme') scheme: string = 'dark';
@@ -164,7 +163,7 @@ export struct AgentListRows {
       this.statusGlyph(row)
       Column({ space: 3 }) {
         Row({ space: 8 }) {
-          Text(row.title).fontFamily('Geist').fontSize(15 * this.fontScale)
+          Text(row.title).fontFamily('Geist').fontSize(15)
             .fontWeight(row.unread ? FontWeight.Medium : FontWeight.Normal).fontColor(this.text)
             .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
           if (row.timeAt > 0) {
@@ -178,7 +177,7 @@ export struct AgentListRows {
               if (preview) { Span(' · ') }
             }
             Span(preview)
-          }.fontFamily('Geist').fontSize(14 * this.fontScale).lineHeight(19 * this.fontScale)
+          }.fontFamily('Geist').fontSize(14).lineHeight(19)
             .fontColor(this.secondary).maxLines(2).textOverflow({ overflow: TextOverflow.Ellipsis }).width('100%')
         }
         Row({ space: 6 }) {

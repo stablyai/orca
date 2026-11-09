@@ -5,9 +5,9 @@ import { getString, setString } from './SettingsStore';
 
 export interface UiLanguageChoice { value: string; label: string; }
 export const UI_LANGUAGE_CHOICES: UiLanguageChoice[] = [
-  { value: 'system', label: 'System' }, { value: 'en', label: 'English' }, { value: 'zh', label: '简体中文' },
-  { value: 'zh-Hant', label: '繁體中文' }, { value: 'ko', label: '한국어' }, { value: 'ja', label: '日本語' },
-  { value: 'es', label: 'Español' }, { value: 'fr', label: 'Français' }, { value: 'pt', label: 'Português' },
+  { value: 'system', label: 'System' }, { value: 'en', label: 'English' }, { value: 'zh', label: '中文（简体）' },
+  { value: 'zh-Hant', label: '繁體中文（台灣）' }, { value: 'ko', label: '한국어' }, { value: 'ja', label: '日本語' },
+  { value: 'es', label: 'Español' }, { value: 'fr', label: 'Français' }, { value: 'pt', label: 'Português (Brasil)' },
   { value: 'ru', label: 'Русский' }, { value: 'tr', label: 'Türkçe' }, { value: 'de', label: 'Deutsch' }
 ];
 let labels: Record<string, Record<string, string>> = {};
@@ -20,18 +20,25 @@ export function uiText(text: string, locale: string): string {
 }
 
 export function resolveUiLocale(preference: string, system: string): string {
-  let tag = (preference === 'system' ? system : preference).replace(/_/g, '-');
-  let parts = tag.split('-'); let language = parts[0].toLowerCase();
+  const tag = (preference === 'system' ? system : preference).trim().replace(/_/g, '-').toLowerCase();
+  const parts = tag.split('-');
+  const language = parts[0];
   if (language === 'zh') {
-    let normalized = tag.toLowerCase();
-    return normalized.includes('hant') || /-(tw|hk|mo)(?:-|$)/.test(normalized) ? 'zh-Hant' : 'zh';
+    const script = parts[1] ?? '';
+    if (/^[a-z]{4}$/.test(script)) {
+      return script === 'hans' ? 'zh' : script === 'hant' ? 'zh-Hant' : 'en';
+    }
+    return ['tw', 'hk', 'mo'].includes(parts[1] ?? '') ? 'zh-Hant' : 'zh';
   }
   return UI_LANGUAGE_CHOICES.some((choice: UiLanguageChoice): boolean => choice.value === language && language !== 'system') ? language : 'en';
 }
 
 export function applyUiLanguage(): void {
-  let preference = AppStorage.get<string>('uiLanguagePreference') ?? 'system';
-  AppStorage.setOrCreate('uiLocale', resolveUiLocale(preference, i18n.System.getSystemLanguage()));
+  const preference = AppStorage.get<string>('uiLanguagePreference') ?? 'system';
+  const system = i18n.System.getSystemLanguage();
+  const systemLocale = resolveUiLocale('system', system);
+  AppStorage.setOrCreate('systemUiLocale', systemLocale);
+  AppStorage.setOrCreate('uiLocale', preference === 'system' ? systemLocale : resolveUiLocale(preference, system));
   if (localeListener) { localeListener(); }
 }
 

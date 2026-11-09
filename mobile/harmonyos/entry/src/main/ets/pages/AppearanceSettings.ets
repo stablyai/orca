@@ -1,238 +1,140 @@
-import { uiText, UI_LANGUAGE_CHOICES, UiLanguageChoice, setUiLanguage } from '../settings/NativeUi';
 import { applyThemeMode } from '../settings/Appearance';
-import { router } from '@kit.ArkUI';
-import {
-  getString,
-  getNumber,
-  setString,
-  setNumber,
-  KEY_THEME_MODE,
-  KEY_HOME_FONT_SCALE,
-  THEME_MODE_OPTIONS,
-  THEME_MODE_SYSTEM,
-  OptionEntry
-} from '../settings/SettingsStore';
+import { lucideColorFilter } from '../settings/LucideColor';
+import { setUiLanguage, UI_LANGUAGE_CHOICES, UiLanguageChoice, uiText } from '../settings/NativeUi';
+import { SettingsNavBar } from '../settings/SettingsNavBar';
+import { KEY_THEME_MODE, OptionEntry, setString, THEME_MODE_OPTIONS, THEME_MODE_SYSTEM } from '../settings/SettingsStore';
+
+const APPEARANCE_KEYS = 'settings.appearance.';
 
 @Entry
 @Component
 struct AppearanceSettings {
   @StorageProp('uiLocale') uiLocale: string = 'en';
   @StorageProp('uiLanguagePreference') language: string = 'system';
-  @State languageSaving: boolean = false;
+  @StorageProp('systemUiLocale') systemLocale: string = 'en';
+  @StorageProp('themeMode') themeMode: string = THEME_MODE_SYSTEM;
   @StorageProp('themeBg') themeBg: string = '#0a0a0a';
   @StorageProp('themeSurface') themeSurface: string = '#171717';
   @StorageProp('themeBorder') themeBorder: string = 'rgba(255, 255, 255, 0.07)';
   @StorageProp('themeText') themeText: string = '#fafafa';
-  @StorageProp('themeMuted') themeMuted: string = '#898989';
   @StorageProp('themeSecondary') themeSecondary: string = '#acacac';
-  @StorageProp('themeAccent') themeAccent: string = '#3276f2';
-  @StorageProp('themeLink') themeLink: string = '#3276f2';
-  @StorageProp('themeWarning') themeWarning: string = '#eab308';
+  @StorageProp('themeStatusRed') themeStatusRed: string = '#ff6568';
+  @State saving: boolean = false;
   @State error: string = '';
-  @State themeMode: string = THEME_MODE_SYSTEM;
-  @State homeScale: number = 1;
 
-  aboutToAppear(): void {
-    let ctx = getContext(this);
-    getString(ctx, KEY_THEME_MODE).then((v: string) => {
-      this.themeMode = v;
-    }).catch((e: Error) => {
-      // 读取失败保持默认（跟随系统）
-    });
-    getNumber(ctx, KEY_HOME_FONT_SCALE).then((v: number) => {
-      this.homeScale = v;
-    }).catch((e: Error) => {
-      // 读取失败保持默认 100%
-    });
+  private t(key: string): string {
+    return uiText(APPEARANCE_KEYS + key, this.uiLocale);
   }
 
-  async selectTheme(value: string): Promise<void> {
+  private languageLabel(choice: UiLanguageChoice): string {
+    if (choice.value !== 'system') { return choice.label; }
+    const language = UI_LANGUAGE_CHOICES.find((item: UiLanguageChoice): boolean => item.value === this.systemLocale);
+    return this.t('language.systemWithCurrent').replace('{{language}}', language?.label ?? 'English');
+  }
+
+  private optionLabel(value: string, choice: UiLanguageChoice | null): string {
+    return choice ? this.languageLabel(choice) : this.t('theme.' + value);
+  }
+
+  private optionSelected(value: string, choice: UiLanguageChoice | null): boolean {
+    return value === (choice ? this.language : this.themeMode);
+  }
+
+  private async selectTheme(value: string): Promise<void> {
+    if (this.saving) { return; }
+    this.saving = true;
+    this.error = '';
     try {
       await setString(getContext(this), KEY_THEME_MODE, value);
-      this.themeMode = value; applyThemeMode(value); this.error = '';
-    } catch (e) { this.error = '无法保存主题，请重试'; }
+      applyThemeMode(value);
+    } catch (e) {
+      this.error = 'theme.saveFailed';
+    } finally {
+      this.saving = false;
+    }
   }
 
-  async persistHomeScale(value: number): Promise<void> {
-    let snapped = Math.max(0.8, Math.min(1.5, Math.round(value * 20) / 20));
-    try { await setNumber(getContext(this), KEY_HOME_FONT_SCALE, snapped); this.homeScale = snapped; this.error = ''; }
-    catch (e) { this.error = '无法保存字号，请重试'; this.homeScale = await getNumber(getContext(this), KEY_HOME_FONT_SCALE); }
+  private async selectLanguage(value: string): Promise<void> {
+    if (this.saving) { return; }
+    this.saving = true;
+    this.error = '';
+    try {
+      await setUiLanguage(getContext(this), value);
+    } catch (e) {
+      this.error = 'language.saveFailed';
+    } finally {
+      this.saving = false;
+    }
   }
 
-  private async chooseLanguage(value: string): Promise<void> {
-    if (this.languageSaving) { return; } this.languageSaving = true;
-    try { await setUiLanguage(getContext(this), value); this.error = ''; }
-    catch (e) { this.error = '无法保存语言，请重试'; }
-    finally { this.languageSaving = false; }
+  @Builder
+  private sectionHeading(label: string) {
+    Text(label).fontFamily('Geist').fontSize(13).fontWeight(FontWeight.Medium)
+      .fontColor(this.themeSecondary).width('100%').padding({ left: 16, right: 16, bottom: 6 })
   }
 
-  scalePercent(): string {
-    return `${Math.round(this.homeScale * 100)}%`;
+  @Builder
+  private note(label: string, color: string) {
+    Text(label).fontFamily('Geist').fontSize(13).lineHeight(18)
+      .fontColor(color).width('100%').padding({ left: 16, right: 16, top: 8 })
+  }
+
+  @Builder
+  private option(value: string, choice: UiLanguageChoice | null, onPress: () => void) {
+    Button({ type: ButtonType.Normal }) {
+      Row({ space: 12 }) {
+        Text(this.optionLabel(value, choice)).fontFamily('Geist').fontSize(15)
+          .fontColor(this.themeText).layoutWeight(1)
+        if (this.optionSelected(value, choice)) {
+          Image($r('app.media.lucide_check')).supportSvg2(true).width(17).height(17)
+            .colorFilter(lucideColorFilter(this.themeText))
+        } else {
+          Row().width(17)
+        }
+      }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 8 })
+    }.width('100%').constraintSize({ minHeight: 48 }).backgroundColor(Color.Transparent)
+      .accessibilityText(this.optionLabel(value, choice)).accessibilityRole(AccessibilityRoleType.RADIO)
+      .accessibilitySelected(this.optionSelected(value, choice)).enabled(!this.saving).onClick(onPress)
+  }
+
+  @Builder
+  private separator() {
+    Divider().strokeWidth(0.5).color(this.themeBorder).margin({ left: 16 })
   }
 
   build() {
-    Column({ space: 10 }) {
-      Row({ space: 10 }) {
-        Text('‹')
-          .fontFamily('Geist').fontSize(22)
-          .fontColor(this.themeAccent)
-          .width(32)
-          .height(32)
-          .textAlign(TextAlign.Center)
-          .onClick(() => {
-            router.back();
-          })
-        Text(uiText('外观', this.uiLocale))
-          .fontFamily('Geist').fontSize(20)
-          .fontWeight(FontWeight.Bold)
-          .fontColor(this.themeText)
-          .layoutWeight(1)
-      }
-      .width('100%')
-      .padding({ left: 10, right: 14, top: 10 })
-
-      if (this.error.length > 0) { Text(this.error).fontFamily('Geist').fontSize(13).fontColor(this.themeText).padding(12) }
-      List({ space: 14 }) {
-        // 主题模式
-        ListItem() {
-          Column({ space: 8 }) {
-            Text(uiText('主题模式', this.uiLocale))
-              .fontFamily('Geist').fontSize(12)
-              .fontColor(this.themeMuted)
-              .width('100%')
-              .padding({ left: 4 })
+    Column() {
+      SettingsNavBar({ title: this.t('title') })
+      Scroll() {
+        Column({ space: 16 }) {
+          Column() {
+            this.sectionHeading(this.t('theme.heading'))
             Column() {
-              ForEach(THEME_MODE_OPTIONS, (opt: OptionEntry, index: number) => {
-                Column() {
-                  Row({ space: 10 }) {
-                    Column({ space: 3 }) {
-                      Text(uiText(opt.label, this.uiLocale))
-                        .fontFamily('Geist').fontSize(15)
-                        .fontColor(this.themeMode === opt.value ? this.themeAccent : this.themeText)
-                      Text(uiText(opt.desc, this.uiLocale))
-                        .fontFamily('Geist').fontSize(11)
-                        .fontColor(this.themeMuted)
-                    }
-                    .alignItems(HorizontalAlign.Start)
-                    .layoutWeight(1)
-
-                    Text(this.themeMode === opt.value ? '✓' : '')
-                      .fontFamily('Geist').fontSize(16)
-                      .fontWeight(FontWeight.Bold)
-                      .fontColor(this.themeAccent)
-                      .width(24)
-                      .textAlign(TextAlign.Center)
-                  }
-                  .width('100%')
-                  .padding({ top: 12, bottom: 12, left: 14, right: 14 })
-                  .onClick(() => {
-                    this.selectTheme(opt.value);
-                  })
-
-                  if (index < THEME_MODE_OPTIONS.length - 1) {
-                    Divider()
-                      .color(this.themeBorder)
-                      .strokeWidth(1)
-                      .margin({ left: 14 })
-                  }
-                }
-              }, (opt: OptionEntry, index: number) => `${index}-${opt.value}`)
-            }
-            .width('100%')
-            .borderRadius(12)
-            .backgroundColor(this.themeSurface)
-            .border({ width: 1, color: this.themeBorder })
-            .clip(true)
-
-            Text(uiText('主题立即生效，并在下次启动时保留。', this.uiLocale))
-              .fontFamily('Geist').fontSize(11)
-              .fontColor(this.themeMuted)
-              .width('100%')
-              .padding({ left: 4 })
-          }
-          .width('100%')
-        }
-
-        ListItem() {
-          Column({ space: 8 }) {
-            Text(uiText('语言', this.uiLocale)).fontFamily('Geist').fontSize(12).fontColor(this.themeMuted).width('100%')
-            ForEach(UI_LANGUAGE_CHOICES, (choice: UiLanguageChoice) => {
-              Row() {
-                Text(choice.value === 'system' ? uiText('跟随系统', this.uiLocale) : choice.label)
-                  .fontFamily('Geist').fontSize(15).fontColor(this.themeText).layoutWeight(1)
-                Text(this.language === choice.value ? '✓' : '').fontFamily('Geist').fontSize(16).fontColor(this.themeAccent)
-              }.width('100%').padding(12).enabled(!this.languageSaving).onClick(() => { this.chooseLanguage(choice.value); })
-            }, (choice: UiLanguageChoice): string => choice.value)
-          }.padding(14).width('100%').backgroundColor(this.themeSurface).borderRadius(12)
-        }
-        // 主页字号缩放
-        ListItem() {
-          Column({ space: 8 }) {
-            Text(uiText('主页字号缩放', this.uiLocale))
-              .fontFamily('Geist').fontSize(12)
-              .fontColor(this.themeMuted)
-              .width('100%')
-              .padding({ left: 4 })
-            Column({ space: 12 }) {
-              Row({ space: 10 }) {
-                Text(uiText('缩放比例', this.uiLocale))
-                  .fontFamily('Geist').fontSize(15)
-                  .fontColor(this.themeText)
-                  .layoutWeight(1)
-                Text(this.scalePercent())
-                  .fontFamily('Geist').fontSize(14)
-                  .fontColor(this.themeLink)
-              }
-              .width('100%')
-
-              Slider({ value: this.homeScale, min: 0.8, max: 1.5, step: 0.05 })
-                .width('100%')
-                .selectedColor(this.themeAccent)
-                .blockColor(this.themeAccent)
-                .onChange((value: number, mode: SliderChangeMode) => {
-                  this.homeScale = value;
-                  if (mode === SliderChangeMode.End) {
-                    this.persistHomeScale(value);
-                  }
+              ForEach(THEME_MODE_OPTIONS, (mode: OptionEntry, index: number) => {
+                if (index > 0) { this.separator() }
+                this.option(mode.value, null, (): void => {
+                  this.selectTheme(mode.value).catch(() => {});
                 })
-
-              Column({ space: 4 }) {
-                Text(uiText('预览 · 会话列表', this.uiLocale))
-                  .fontFamily('Geist').fontSize(Math.round(16 * this.homeScale))
-                  .fontWeight(FontWeight.Medium)
-                  .fontColor(this.themeText)
-                Text(uiText('桌面连接正常 · 终端会话进行中', this.uiLocale))
-                  .fontFamily('Geist').fontSize(Math.round(12 * this.homeScale))
-                  .fontColor(this.themeSecondary)
-              }
-              .width('100%')
-              .padding(12)
-              .borderRadius(8)
-              .backgroundColor(this.themeBg)
-              .border({ width: 1, color: this.themeBorder })
-              .alignItems(HorizontalAlign.Start)
-            }
-            .width('100%')
-            .padding(14)
-            .borderRadius(12)
-            .backgroundColor(this.themeSurface)
-            .border({ width: 1, color: this.themeBorder })
-
-            Text(uiText('主页列表字号按此比例缩放；终端字号在「终端显示」中单独设置。', this.uiLocale))
-              .fontFamily('Geist').fontSize(11)
-              .fontColor(this.themeMuted)
-              .width('100%')
-              .padding({ left: 4 })
-          }
-          .width('100%')
-        }
-      }
-      .layoutWeight(1)
-      .width('100%')
-      .padding({ left: 12, right: 12 })
-    }
-    .width('100%')
-    .height('100%')
-    .backgroundColor(this.themeBg)
+              }, (mode: OptionEntry): string => mode.value)
+            }.width('100%').borderRadius(16).backgroundColor(this.themeSurface).clip(true)
+            this.note(this.t('theme.description'), this.themeSecondary)
+            if (this.error === 'theme.saveFailed') { this.note(this.t(this.error), this.themeStatusRed) }
+          }.width('100%')
+          Column() {
+            this.sectionHeading(this.t('language.heading'))
+            Column() {
+              ForEach(UI_LANGUAGE_CHOICES, (choice: UiLanguageChoice, index: number) => {
+                if (index > 0) { this.separator() }
+                this.option(choice.value, choice, (): void => {
+                  this.selectLanguage(choice.value).catch(() => {});
+                })
+              }, (choice: UiLanguageChoice): string => choice.value)
+            }.width('100%').borderRadius(16).backgroundColor(this.themeSurface).clip(true)
+            this.note(this.t('language.description'), this.themeSecondary)
+            if (this.error === 'language.saveFailed') { this.note(this.t(this.error), this.themeStatusRed) }
+          }.width('100%')
+        }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 24 })
+      }.width('100%').layoutWeight(1).scrollBar(BarState.Off).align(Alignment.Top)
+    }.width('100%').height('100%').backgroundColor(this.themeBg)
   }
 }

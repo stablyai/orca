@@ -7,7 +7,6 @@ import { common } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { parseLaunchRoute } from '../navigation/LaunchRoute';
 import { ShellRoute, shellRouterParams } from '../navigation/ShellRoute';
-import { getNumber, KEY_HOME_FONT_SCALE } from '../settings/SettingsStore';
 import { removeDesktop } from '../storage/HostRemoval';
 import { DeviceRowStore, HomeWorktreeCounts } from '../storage/DeviceRowStore';
 import { listHosts, HostMeta, updateHostMachine } from '../storage/HostStore';
@@ -152,7 +151,6 @@ struct Home {
   @State activeTab: string = 'feed';
   @State hosts: HostMeta[] = [];
   @State loaded: boolean = false;
-  @State fontScale: number = 1;
   @State online: Record<string, boolean> = {};
   @State hostPhases: Record<string, string> = {};
   @State hostActionTarget: HostMeta | null = null;
@@ -251,9 +249,6 @@ struct Home {
     }
     this.reload();
     this.recoverPairings();
-    getNumber(getContext(this) as common.Context, KEY_HOME_FONT_SCALE).then((v: number): void => {
-      this.fontScale = Math.max(0.8, Math.min(1.5, v));
-    }).catch(() => {});
   }
 
   onPageHide(): void {
@@ -1075,7 +1070,7 @@ struct Home {
   sectionHeading(heading: HomeSectionHeading) {
     Row() {
       Text(heading.title)
-        .fontFamily('Geist').fontSize(15 * this.fontScale)
+        .fontFamily('Geist').fontSize(15)
         .fontWeight(FontWeight.Medium)
         .fontColor(this.pal().textPrimary)
         .maxLines(1)
@@ -1118,7 +1113,7 @@ struct Home {
 
       Column() {
         Text($$.host.name)
-          .fontFamily('Geist').fontSize(16 * this.fontScale)
+          .fontFamily('Geist').fontSize(16)
           .fontColor(this.pal().textPrimary)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -1256,7 +1251,7 @@ struct Home {
           Column() {
             if (this.agentRows.length > 0) {
               Row({ space: 6 }) {
-                Text(uiText('需要处理', this.uiLocale)).fontFamily('Geist').fontSize(15 * this.fontScale)
+                Text(uiText('需要处理', this.uiLocale)).fontFamily('Geist').fontSize(15)
                   .fontWeight(FontWeight.Medium).fontColor(this.pal().textPrimary)
                 Text(String(this.agentRows.length)).fontFamily('Geist').fontSize(13).fontColor(this.pal().textMuted)
                 Blank()
@@ -1266,7 +1261,7 @@ struct Home {
               }.width('100%').padding({ left: 4, right: 4 })
               ForEach([this.agentRows.slice(0, 3)], (rows: AgentListRow[]) => {
                 AgentListRows({ rows: rows, desktops: this.agentDesktops,
-                  nameDesktop: this.hosts.length > 1, fontScale: this.fontScale, now: this.homeNow,
+                  nameDesktop: this.hosts.length > 1, now: this.homeNow,
                   onOpen: (row: AgentListRow): void => this.openAgent(row),
                   onActions: (row: AgentListRow): void => this.agentActions(row),
                   onRead: (items: AgentListRow[], read: boolean): void => { this.changeAgentActivity(items, read).catch(() => {}); },
@@ -1291,7 +1286,7 @@ struct Home {
                 Row({ space: 10 }) {
                   Image($r('app.media.lucide_plus')).supportSvg2(true).width(18).height(18)
                     .colorFilter(lucideColorFilter(this.pal().accentBlue))
-                  Text(uiText('配对一台桌面', this.uiLocale)).fontFamily('Geist').fontSize(16 * this.fontScale)
+                  Text(uiText('配对一台桌面', this.uiLocale)).fontFamily('Geist').fontSize(16)
                     .fontColor(this.pal().accentBlue)
                 }.width('100%').padding({ left: 16, right: 16 })
               }.width('100%').constraintSize({ minHeight: 44 }).backgroundColor(Color.Transparent)
@@ -1351,7 +1346,7 @@ struct Home {
         .textAlign(TextAlign.Center)
       Column({ space: 2 }) {
         Text(uiText(title, this.uiLocale))
-          .fontFamily('Geist').fontSize(17 * this.fontScale)
+          .fontFamily('Geist').fontSize(17)
           .fontColor(this.pal().textPrimary)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
@@ -1378,7 +1373,7 @@ struct Home {
             .colorFilter(lucideColorFilter(this.pal().textPrimary))
             .accessibilityLevel('no')
           Text(uiText('连接桌面', this.uiLocale))
-            .fontFamily('Geist').fontSize(28 * this.fontScale)
+            .fontFamily('Geist').fontSize(28)
             .fontWeight(FontWeight.Bold)
             .fontColor(this.pal().textPrimary)
             .textAlign(TextAlign.Center)
@@ -1837,7 +1832,7 @@ struct Home {
               .width(18).height(18)
               .colorFilter(lucideColorFilter(this.pal().textSecondary))
             Text(uiText(row.label, this.uiLocale))
-              .fontFamily('Geist').fontSize(16 * this.fontScale)
+              .fontFamily('Geist').fontSize(16)
               .fontColor(this.pal().textPrimary)
               .maxLines(1)
               .layoutWeight(1)
@@ -1991,7 +1986,7 @@ struct Home {
             Column() { this.feedTab() }.width('100%').height('100%')
               .visibility(this.activeTab === 'feed' ? Visibility.Visible : Visibility.Hidden)
             Column() {
-              AgentsTab({ desktops: this.agentDesktops, loaded: this.loaded, fontScale: this.fontScale, now: this.homeNow,
+              AgentsTab({ desktops: this.agentDesktops, loaded: this.loaded, now: this.homeNow,
                 onOpen: (row: AgentListRow): void => this.openAgent(row),
                 onActions: (row: AgentListRow): void => this.agentActions(row),
                 onRead: (rows: AgentListRow[], read: boolean): void => { this.changeAgentActivity(rows, read).catch(() => {}); },

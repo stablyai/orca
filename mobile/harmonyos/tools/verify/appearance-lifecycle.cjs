@@ -2,6 +2,28 @@ const test = require('node:test')
 const assert = require('node:assert/strict')
 const { loadArkts } = require('./arkts-source.cjs')
 
+test('system language follows the explicit Chinese script while a chosen app language stays active', () => {
+  const values = new Map([['uiLanguagePreference', 'de']])
+  let systemLanguage = 'zh-Hans-HK'
+  const { applyUiLanguage } = loadArkts('settings/NativeUi.ets', ['applyUiLanguage'], {
+    AppStorage: {
+      get: (key) => values.get(key),
+      setOrCreate: (key, value) => values.set(key, value)
+    },
+    i18n: { System: { getSystemLanguage: () => systemLanguage } }
+  })
+
+  applyUiLanguage()
+  assert.equal(values.get('systemUiLocale'), 'zh')
+  assert.equal(values.get('uiLocale'), 'de')
+
+  systemLanguage = 'zh-Hant-CN'
+  values.set('uiLanguagePreference', 'system')
+  applyUiLanguage()
+  assert.equal(values.get('systemUiLocale'), 'zh-Hant')
+  assert.equal(values.get('uiLocale'), 'zh-Hant')
+})
+
 test('synchronous system theme callbacks do not reenter appearance configuration during startup', async () => {
   const values = new Map()
   const AppStorage = {

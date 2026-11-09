@@ -11,7 +11,6 @@ const PREFS_NAME = 'orca_settings';
 
 // ---------- 键名 ----------
 export const KEY_THEME_MODE = 'appearance.themeMode';
-export const KEY_HOME_FONT_SCALE = 'appearance.homeFontScale';
 export const KEY_TERMINAL_FONT_SCALE = 'terminal.fontScale';
 export const KEY_TERMINAL_TEXT_SCALE = 'orca:terminalTextScale';
 export const KEY_DEFAULT_SESSION_VIEW = 'orca:defaultSessionView';
@@ -100,7 +99,6 @@ const STRING_DEFAULTS: StringDefault[] = [
 ];
 
 const NUMBER_DEFAULTS: NumberDefault[] = [
-  { key: KEY_HOME_FONT_SCALE, value: 1 },
   { key: KEY_TERMINAL_TEXT_SCALE, value: 1 },
   { key: KEY_TERMINAL_FONT_SCALE, value: 14 }
 ];
@@ -179,7 +177,6 @@ export async function getNumber(context: common.Context, key: string): Promise<n
     let prefs = await loadPrefs(context);
     let value: preferences.ValueType = await prefs.get(key, fallback);
     if (key === KEY_TERMINAL_TEXT_SCALE) { return typeof value === 'string' && TERMINAL_TEXT_SCALES.includes(Number(value)) ? Number(value) : fallback; }
-    if (key === KEY_HOME_FONT_SCALE && typeof value === 'number') { return Number.isFinite(value) && value >= 0.8 && value <= 1.5 ? value : fallback; }
     return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
   } catch (e) {
     return fallback;
@@ -215,7 +212,6 @@ export async function setString(context: common.Context, key: string, value: str
 }
 
 export async function setNumber(context: common.Context, key: string, value: number): Promise<void> {
-  if (key === KEY_HOME_FONT_SCALE && (value < 0.8 || value > 1.5)) { throw new Error('Invalid home scale'); }
   if (!Number.isFinite(value)) { throw new Error('Invalid preference number'); }
   if (key === KEY_TERMINAL_TEXT_SCALE) {
     await writePagePreference(context, key, String(value));
