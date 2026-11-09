@@ -133,9 +133,17 @@ export function useTeamActions({
 
   const invite = async (emails: string[], role: OrcaOrgRole): Promise<InviteBatchOutcome> => {
     const now = Date.now()
+    // A revoke still in its Undo window is simply cancelled: the invite was never removed at
+    // auth, so re-inviting it would only produce an "already invited" error.
+    const restored = new Set<string>()
     for (const email of emails) {
-      pendingRevokes.current.get(email.toLowerCase())?.()
+      const cancelRevoke = pendingRevokes.current.get(email.toLowerCase())
+      if (cancelRevoke) {
+        cancelRevoke()
+        restored.add(email.toLowerCase())
+      }
     }
+    emails = emails.filter((email) => !restored.has(email.toLowerCase()))
     const failed: InviteBatchOutcome['failed'] = []
     // Sequential: auth rate-limits member changes per actor, and order keeps errors readable.
     for (const email of emails) {
@@ -198,6 +206,7 @@ export function useTeamActions({
     let sent = false
     const cancel = (): void => {
       window.clearTimeout(timer)
+      toast.dismiss(toastId)
       pendingRevokes.current.delete(email.toLowerCase())
       setOverlays((list) => list.filter((entry) => entry.id !== id))
     }
