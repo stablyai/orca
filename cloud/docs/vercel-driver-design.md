@@ -215,7 +215,7 @@ Product decision: "API-key injection" in the Conductor parity matrix (form 2 = t
 - **API** (desktop JWT): `GET /v1/secrets?scope=org|personal|repo[&repo=owner/name]`, `PUT /v1/secrets/:scope/:NAME`
   `{value}`, `DELETE …`. Write-only values: responses carry name, scope, kind, updatedAt, updatedBy and a last-4 hint
   for values ≥16 chars. Owners: org = the org account (`org:<id>`), personal = `user:<sub>`, repo =
-  `<account>#github.com/<owner>/<repo>`. Org secrets and an org account's repo secrets need `org_role` owner/admin on
+  `<account>#github.com/<owner>/<repo>`. Org secrets and an org account's repo secrets need `orgRole` owner/admin on
   the token (any member lists names); personal secrets are the user's alone; dev tokens stay under `dev:`.
 - **Validation**: `^[A-Z_][A-Z0-9_]*$` ≤128; reserved names (PATH, HOME, NODE_OPTIONS, proxy/CA vars, GIT_SSH*,
   GH_TOKEN/GITHUB_TOKEN, …) and prefixes (LD_, DYLD_, ORCA_, VERCEL_, BASH_FUNC_, GIT_CONFIG). Values ≤8 KiB, no NUL;
@@ -237,7 +237,7 @@ Product decision: "API-key injection" in the Conductor parity matrix (form 2 = t
   because (1) SSE model streams through Vercel forwardURL → Worker are not yet tested live, and (2) with a key routed,
   api.anthropic.com denies everything else, including a subscription OAuth Bearer or a plain `ANTHROPIC_AUTH_TOKEN`
   in the same VM. Enable on dev after a live streaming test with the rebuilt image.
-- Needs: golden image rebuild (new `orca-sandbox-start`), and Orca Cloud auth minting `org_role` on sandbox tokens.
+- Needs: golden image rebuild (new `orca-sandbox-start`), and Orca Cloud auth minting `orgRole` on sandbox tokens (stablyai/orca-cloud#695).
 
 ## GitHub installation binding, guardrails, retention (2026-11-09)
 
