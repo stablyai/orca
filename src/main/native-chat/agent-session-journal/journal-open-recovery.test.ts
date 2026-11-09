@@ -106,9 +106,20 @@ it('marks a working subagent as unverifiable when another handle opens its saved
     },
     options: { fence: 1, turnScope: { kind: 'thread' } }
   })
-  await f.run({ kind: 'open' })
+  const opened = await f.run({ kind: 'open' })
+  expect(opened.value).toEqual({ epoch: 'epoch', sequence: 1 })
   expect(f.item('orca:roster')).toMatchObject({
     recovered: true,
     body: { blocks: [{ agents: [{ id: 'a', state: 'unverifiable' }] }] }
   })
+  const recovered = f.item('orca:roster')!
+  expect(recovered).toMatchObject({ sequence: 1, revision: 2 })
+  expect(recovered.body.kind === 'message' && recovered.body.blocks[0]).toEqual({
+    type: 'subagent-group',
+    groupId: 'group',
+    agents: [{ id: 'a', label: 'read', state: 'unverifiable', startedAt: 10 }]
+  })
+  f.reopen()
+  await f.run({ kind: 'open' })
+  expect(f.item('orca:roster')).toEqual(recovered)
 })

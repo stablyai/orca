@@ -67,7 +67,7 @@ export function registerJournalSubagentItemTests(): void {
       })
       await live.close()
 
-      const reopened = await open({ recover: { fence: 0 } })
+      const reopened = await open()
       const row = (await readTestJournalItems(reopened)).at(-1)!
       expect(row.recovered).toBe(true)
       expect(row.body).toMatchObject({
