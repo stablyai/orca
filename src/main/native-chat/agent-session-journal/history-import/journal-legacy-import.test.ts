@@ -75,24 +75,57 @@ it.each([true, false])(
 )
 
 it.each([
-  { tail: '', sourceEmpty: true },
-  { tail: '{"type":"future-metadata"}', sourceEmpty: true },
-  { tail: '{"message":{"role":"user","content":"existing prompt"}}', sourceEmpty: false },
+  { tail: '', sourceEmpty: true, items: 0 },
+  { tail: '{"type":"future-metadata"}', sourceEmpty: true, items: 0 },
+  { tail: '{"message":{"role":"user","content":"existing prompt"}}', sourceEmpty: false, items: 0 },
   {
     tail: '{"type":"future-turn","message":{"role":"user","content":"existing prompt"}}',
-    sourceEmpty: false
+    sourceEmpty: false,
+    items: 0
   },
-  { tail: '{"type":"summary","message":null}', sourceEmpty: false },
-  { tail: '{"type":"user","uuid":"u1"}', sourceEmpty: false },
-  { tail: '{"type":7}', sourceEmpty: false },
-  { tail: '{"type":""}', sourceEmpty: false },
-  { tail: '{}', sourceEmpty: false },
-  { tail: 'null', sourceEmpty: false },
-  { tail: '[]', sourceEmpty: false },
-  { tail: '{"type":"user","message":{"role":"us', sourceEmpty: false }
+  { tail: '{"type":"summary","message":null}', sourceEmpty: false, items: 0 },
+  { tail: '{"type":"user","uuid":"u1"}', sourceEmpty: false, items: 0 },
+  { tail: '{"type":7}', sourceEmpty: false, items: 0 },
+  { tail: '{"type":""}', sourceEmpty: false, items: 0 },
+  { tail: '{}', sourceEmpty: false, items: 0 },
+  { tail: 'null', sourceEmpty: false, items: 0 },
+  { tail: '[]', sourceEmpty: false, items: 0 },
+  { tail: '{"type":"user","message":{"role":"us', sourceEmpty: false, items: 0 },
+  {
+    tail: '{"type":"user","isMeta":true,"message":{"role":"user","content":"<local-command-caveat>Local command</local-command-caveat>"}}',
+    sourceEmpty: true,
+    items: 0
+  },
+  {
+    tail: '{"type":"user","isMeta":true,"message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"saved output"}]}}',
+    sourceEmpty: false,
+    items: 1,
+    shows: 'saved output'
+  },
+  {
+    tail: '{"type":"user","message":{"role":"user","content":"<command-name>/rename</command-name>"}}',
+    sourceEmpty: false,
+    items: 1,
+    shows: '<command-name>/rename</command-name>'
+  },
+  {
+    tail: '{"type":"user","message":{"role":"user","content":[{"type":"future-content","text":"existing prompt"}]}}',
+    sourceEmpty: false,
+    items: 0
+  }
 ])(
   'reads a Claude file nothing was sent in as empty, unlike one with a turn it cannot decode: %j',
-  async ({ tail, sourceEmpty }) => {
+  async ({
+    tail,
+    sourceEmpty,
+    items,
+    shows
+  }: {
+    tail: string
+    sourceEmpty: boolean
+    items: number
+    shows?: string
+  }) => {
     const filePath = join(root, 'claude-unused.jsonl')
     const metadata = [
       { type: 'file-history-snapshot', messageId: 'm1', snapshot: { trackedFileBackups: {} } },
@@ -113,7 +146,10 @@ it.each([
       options: { filePath, source }
     })
     expect(prepared.ok).toBe(true)
-    expect(prepared.ok && prepared.items).toEqual([])
+    expect(prepared.ok && prepared.items.length).toBe(items)
+    if (shows) {
+      expect(JSON.stringify(prepared.ok && prepared.items)).toContain(shows)
+    }
     expect(prepared.ok && prepared.sourceEmpty).toBe(sourceEmpty)
   }
 )

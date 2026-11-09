@@ -210,8 +210,8 @@ function parseTimestamp(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-/** Anything but a typed record with no message may be a turn: what a transcript nothing was sent
- *  in lacks. */
+/** Anything but a typed record with no message, or a user record Claude flags as meta, may be a
+ *  turn: what a transcript nothing was sent in lacks. */
 export function mayBeClaudeConversationRecord(line: string): boolean {
   let record: unknown
   try {
@@ -219,7 +219,14 @@ export function mayBeClaudeConversationRecord(line: string): boolean {
   } catch {
     return true
   }
-  if (!record || typeof record !== 'object' || Array.isArray(record) || 'message' in record) {
+  if (!record || typeof record !== 'object' || Array.isArray(record)) {
+    return true
+  }
+  // A local command's caveat or output; the decoder still keeps any meta record it can show.
+  if ('isMeta' in record && record.isMeta === true && 'type' in record && record.type === 'user') {
+    return false
+  }
+  if ('message' in record) {
     return true
   }
   const type = 'type' in record ? record.type : undefined
