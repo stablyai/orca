@@ -161,7 +161,7 @@ describe('startup exit evidence incarnation', () => {
   it('uses only the rejected incarnation, even when another exit overwrote the bounded verdict', () => {
     const { runtime } = createInventoryRuntime(async () => [])
     const claim = runtime.beginPtyRegistration(PTY)
-    runtime.onPtyExit(PTY, 256, PREDECESSOR, {
+    void runtime.onPtyExit(PTY, 256, PREDECESSOR, {
       providerExitObserved: true,
       cause: { kind: 'exited', exitCode: 256, initialOutputDiagnostic: 'git-bash-console-capacity' }
     })
@@ -180,7 +180,7 @@ describe('startup exit evidence incarnation', () => {
         incarnationId: PREDECESSOR
       })
     }
-    runtime.onPtyExit(PTY, 1, 'other-incarnation', {
+    void runtime.onPtyExit(PTY, 1, 'other-incarnation', {
       providerExitObserved: true,
       cause: { kind: 'exited', exitCode: 1 }
     })

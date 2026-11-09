@@ -28,7 +28,7 @@ describe('usePairingOfferExpiry', () => {
     renderHook(() => usePairingOfferExpiry(EXPIRES_AT, onDue))
     // Sleep moves the wall clock without running timers.
     vi.setSystemTime(EXPIRES_AT + 60 * 60_000)
-    act(() => vi.advanceTimersByTime(15_000))
+    void act(() => vi.advanceTimersByTime(15_000))
     expect(onDue).toHaveBeenCalledOnce()
   })
 })

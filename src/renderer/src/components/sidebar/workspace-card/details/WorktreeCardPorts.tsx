@@ -47,7 +47,7 @@ export function WorktreeCardPortsTrigger({
       })}
       onClick={(event) => {
         event.stopPropagation()
-        recordFeatureInteraction('ports')
+        void recordFeatureInteraction('ports')
       }}
     >
       <Plug className="size-3.5" />
@@ -125,7 +125,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
   const handleOpen = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
-      recordFeatureInteraction('ports')
+      void recordFeatureInteraction('ports')
       const openInOrcaBrowser = resolvePortOpenInOrcaBrowser({
         settings,
         // Only pointer clicks carry system-browser modifier intent; keyboard activation has detail zero.
@@ -165,7 +165,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
   const handleCopy = useCallback(
     (event: React.MouseEvent<HTMLButtonElement>) => {
       event.stopPropagation()
-      recordFeatureInteraction('ports')
+      void recordFeatureInteraction('ports')
       const address = addressForPort(port)
       void window.api.ui.writeClipboardText(address)
       toast.success(
@@ -183,7 +183,7 @@ function WorktreePortRow({ port }: { port: WorkspacePort }): React.JSX.Element {
       if (!canStopWorkspacePort(port)) {
         return
       }
-      recordFeatureInteraction('ports')
+      void recordFeatureInteraction('ports')
       const run = async (): Promise<void> => {
         const result = await killWorkspacePortForTarget(runtimeTarget, {
           repoId: port.owner.repoId,

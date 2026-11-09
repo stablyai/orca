@@ -320,7 +320,7 @@ it('retains re-picked rich identity after unknown proof and saves the whole repl
   expect(item).toBeDefined()
   act(() => picker.completeItem(item!))
   const input = promptEditor(screen.getByRole('textbox', { name: 'Inline' }))
-  act(() => input.commands.insertContentAt(input.state.doc.content.size - 1, 'suffix'))
+  void act(() => input.commands.insertContentAt(input.state.doc.content.size - 1, 'suffix'))
   const paste = 'b851d135-98ac-44d1-b122-caf190002345'
   act(() =>
     updateNativeChatComposerDraft(
@@ -496,7 +496,7 @@ it.each(['mounted', 'success', 'unmounted', 'ime', 'cancel'] as const)(
     }
     if (mode === 'mounted' || mode === 'success') {
       const bottom = promptEditor(screen.getByRole('textbox', { name: 'Bottom' }))
-      act(() => bottom.commands.setTextSelection(bottom.state.doc.content.size - 1))
+      void act(() => bottom.commands.setTextSelection(bottom.state.doc.content.size - 1))
     }
     act(() => void insertText('echo', captured))
     if (mode === 'ime') {
@@ -584,7 +584,7 @@ it('returns the complete rebased rich replacement once, excluding exact accepted
       : undefined
   act(() => picker.completeItem(row!))
   const editor = promptEditor(screen.getByRole('textbox', { name: 'Inline' }))
-  act(() => editor.commands.insertContentAt(editor.state.doc.content.size - 1, 'newer'))
+  void act(() => editor.commands.insertContentAt(editor.state.doc.content.size - 1, 'newer'))
   view.rerender(
     <>
       <Bottom />

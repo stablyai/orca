@@ -131,23 +131,23 @@ describe('restored client-hosted recovery window', () => {
     seedStore({ restored: true, environment: 'absent' })
     renderPane()
 
-    act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS * 2))
+    void act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS * 2))
     expect(noticeShown()).toBe(false)
 
     act(() => {
       useAppStore.setState({ runtimeStatusByEnvironmentId: runtimeStatusMap('reachable') })
     })
 
-    act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS - 1))
+    void act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS - 1))
     expect(noticeShown()).toBe(false)
-    act(() => vi.advanceTimersByTime(1))
+    void act(() => vi.advanceTimersByTime(1))
     expect(noticeShown()).toBe(true)
   })
 
   it('waits again when a recovered page loses its placement', () => {
     seedStore({ restored: true, environment: 'reachable' })
     const view = renderPane()
-    act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS))
+    void act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS))
     act(() => {
       useAppStore.setState({
         remoteBrowserPageHandlesByPageId: {
@@ -172,9 +172,9 @@ describe('restored client-hosted recovery window', () => {
     })
 
     expect(noticeShown()).toBe(false)
-    act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS - 1))
+    void act(() => vi.advanceTimersByTime(RESTORED_CLIENT_HOSTED_RECOVERY_WINDOW_MS - 1))
     expect(noticeShown()).toBe(false)
-    act(() => vi.advanceTimersByTime(1))
+    void act(() => vi.advanceTimersByTime(1))
     expect(noticeShown()).toBe(true)
   })
 })

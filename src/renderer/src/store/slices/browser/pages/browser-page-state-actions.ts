@@ -177,7 +177,7 @@ export function createBrowserPageStateActions(
       if (nextUrl !== 'about:blank' && nextUrl !== ORCA_BROWSER_BLANK_URL) {
         const currentPage = findPage(get().browserPagesByWorkspace, pageId)
         if (currentPage) {
-          get().recordFeatureInteraction?.('browser')
+          void get().recordFeatureInteraction?.('browser')
         }
       }
       set((s) => {

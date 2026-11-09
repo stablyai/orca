@@ -230,7 +230,7 @@ export function usePersistCurrentStep({
           })
         }
         if (currentStepId === 'notifications') {
-          useAppStore.getState().recordFeatureInteraction('notifications')
+          void useAppStore.getState().recordFeatureInteraction('notifications')
         }
         return { ok: true }
       }

@@ -65,7 +65,7 @@ describe('remote runtime PTY stream end verdict', () => {
       expect(subscribedTerminalHandles()).toEqual(['terminal-1', 'terminal-1'])
     )
     expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('retires the tab after an owning-host exit verdict', async () => {

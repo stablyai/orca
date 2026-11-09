@@ -99,7 +99,7 @@ for (const host of ['no window', 'a window'] as const) {
         incarnationId: 'inc-b',
         worktreeId: TEST_WORKTREE_ID
       })
-      harness.runtime.onPtyExit('pty-b', 0, 'inc-b')
+      void harness.runtime.onPtyExit('pty-b', 0, 'inc-b')
 
       expect(harness.reconciled).toContain(PANE_B)
       expect(harness.store.getSession().closedTerminalPanesByPaneKey?.[PANE_B]).toBeUndefined()
@@ -109,7 +109,7 @@ for (const host of ['no window', 'a window'] as const) {
     it(`exit then close retires them too: ${route}, with ${host}`, async () => {
       const harness = closingHost(host)
 
-      harness.runtime.onPtyExit('pty-b', 0, 'inc-b')
+      void harness.runtime.onPtyExit('pty-b', 0, 'inc-b')
       await close(harness.runtime).catch(() => {})
 
       expect(harness.reconciled).toContain(PANE_B)
@@ -143,7 +143,7 @@ for (const host of ['no window', 'a window'] as const) {
       const reconciled: string[] = []
       watchReconciled(relaunched, reconciled)
 
-      relaunched.onPtyExit('pty-b', 0, 'inc-b')
+      void relaunched.onPtyExit('pty-b', 0, 'inc-b')
 
       expect(reconciled).toContain(PANE_B)
       expect(harness.store.getSession().closedTerminalPanesByPaneKey?.[PANE_B]).toBeUndefined()
@@ -157,7 +157,7 @@ for (const host of ['no window', 'a window'] as const) {
         'inc-later'
       )
 
-      harness.runtime.onPtyExit('pty-b', 0, 'inc-later')
+      void harness.runtime.onPtyExit('pty-b', 0, 'inc-later')
 
       expect(harness.reconciled).not.toContain(PANE_B)
       expect(harness.store.getSession().closedTerminalPanesByPaneKey?.[PANE_B]).toBeDefined()

@@ -139,7 +139,7 @@ describe('legacy opening action prerequisites through real launch orchestration'
       }
     )
     const obsolete = holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'B')!
-    holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'C')
+    void holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'C')
     const newest = holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'B')!
     await expect(obsolete).resolves.toEqual({ kind: 'superseded' })
     await vi.waitFor(() => expect(createParams()).toBeDefined())
@@ -290,8 +290,8 @@ describe('legacy opening action prerequisites through real launch orchestration'
       key === 'model' ? waiting.promise : Promise.resolve(acceptedOption(key, value))
     )
     const state = getStructuredLaunchStateBySessionId(launch.sessionId)!
-    holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'action-model')
-    holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', 'high')
+    void holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'action-model')
+    void holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', 'high')
     const owner = structuredLaunchSelectionController(state)
     let subscriptions = 0
     const subscribe = owner.subscribe
@@ -329,7 +329,7 @@ describe('legacy opening action prerequisites through real launch orchestration'
       const raw = deferred<unknown>()
       const { launch, create } = legacyAction({ model: 'action-model' }, () => raw.promise)
       if (held) {
-        holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'B')
+        void holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'B')
       }
       await vi.waitFor(() => expect(createParams()).toBeDefined())
       create.resolve(created())

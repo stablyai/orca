@@ -183,7 +183,7 @@ async function settle(): Promise<void> {
 }
 
 async function settleGlobalMirrorResumeStarts(): Promise<void> {
-  act(() => vi.advanceTimersByTime(WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS))
+  void act(() => vi.advanceTimersByTime(WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS))
   await act(settle)
 }
 

@@ -104,6 +104,7 @@ export class WriteFlushBarrierOperations {
         ])
         await flushCurrentStateAsync(this, { final: true })
       })
+      // oxlint-disable-next-line typescript/no-misused-promises -- Promise#finally awaits a returned promise and propagates its rejection
       .finally(async () => {
         if (runtime.profileStateAuthority?.asynchronous) {
           runtime.writesFrozen = true

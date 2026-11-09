@@ -40,7 +40,7 @@ describe('accepted spawn followed by failed startup readiness', () => {
       const exit = () => {
         // A stop's cleanup can report the exit again after the buffer is gone.
         for (let report = context === 'repeated-exit' ? 2 : 1; report > 0; report -= 1) {
-          runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 1, 'inc-1', {
+          void runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 1, 'inc-1', {
             providerExitObserved: true,
             cause: { kind: 'exited', exitCode: 1 }
           })
@@ -93,7 +93,7 @@ describe('accepted spawn followed by failed startup readiness', () => {
           }
         })
       if (exitBeforeWait) {
-        exit()
+        void exit()
       }
       const result = waitForWorkerAgentReady(runtime, handle, {
         agent,
@@ -102,7 +102,7 @@ describe('accepted spawn followed by failed startup readiness', () => {
         timeoutMs: 50
       }).catch((error: unknown) => error)
       if (!exitBeforeWait) {
-        exit()
+        void exit()
       }
       await vi.advanceTimersByTimeAsync(100)
       expect(await result).toMatchObject({
@@ -132,7 +132,7 @@ describe('accepted spawn followed by failed startup readiness', () => {
               ...(context === 'adopted' ? { agentSessionDisposition: 'adopted' as const } : {}),
               ...(context === 'wrong-incarnation' ? { incarnationId: 'replacement' } : {})
             }
-      runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 256, 'inc-1', {
+      void runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 256, 'inc-1', {
         providerExitObserved: true,
         cause: {
           kind: 'exited',

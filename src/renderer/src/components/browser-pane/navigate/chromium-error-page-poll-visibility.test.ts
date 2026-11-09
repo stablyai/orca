@@ -64,7 +64,7 @@ describe('chromium error page poll visibility gate', () => {
 
     // Visible and still loading: the fallback poll is armed.
     expect(vi.getTimerCount()).toBe(1)
-    act(() => vi.advanceTimersByTime(1_000))
+    void act(() => vi.advanceTimersByTime(1_000))
     expect(updates).toHaveLength(0)
 
     setDocumentVisibility('hidden')
@@ -72,7 +72,7 @@ describe('chromium error page poll visibility gate', () => {
 
     // The guest lands on a chrome-error page while nobody can see the surface.
     guestUrl = CHROMIUM_ERROR_URL
-    act(() => vi.advanceTimersByTime(10_000))
+    void act(() => vi.advanceTimersByTime(10_000))
     expect(updates).toHaveLength(0)
 
     // Returning re-reads the durable guest URL, so the loadError is not lost.

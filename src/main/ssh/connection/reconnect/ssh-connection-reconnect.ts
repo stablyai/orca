@@ -120,12 +120,12 @@ export class SshConnectionReconnector {
     console.warn(
       `[ssh] Reconnecting to ${this.host.label} in ${decision.delayMs}ms (delay step ${decision.attemptIndex + 1}/${RECONNECT_BACKOFF_MS.length}, failed handshakes ${this.reconnectLadder.failedAttemptStreak}/${RECONNECT_BACKOFF_MS.length})`
     )
-    this.reconnectTimer = setTimeout(async () => {
+    this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = null
       if (!this.mayRedial()) {
         return
       }
-      await this.runReconnectAttempt()
+      void this.runReconnectAttempt()
     }, decision.delayMs)
   }
 

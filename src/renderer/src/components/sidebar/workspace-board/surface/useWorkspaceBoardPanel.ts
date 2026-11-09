@@ -61,7 +61,7 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
     workspaceBoardOpenRef.current = true
     workspaceBoardDragPreviewOpenRef.current = false
     // Record the opening action here rather than in a post-render drawer effect.
-    useAppStore.getState().recordFeatureInteraction('workspace-board')
+    void useAppStore.getState().recordFeatureInteraction('workspace-board')
     setWorkspaceBoardOpen(true)
     setWorkspaceBoardDragPreviewOpen(false)
   }, [])
@@ -111,7 +111,7 @@ export function useWorkspaceBoardPanel(): WorkspaceBoardPanelState {
     }
     workspaceBoardOpenRef.current = true
     workspaceBoardDragPreviewOpenRef.current = false
-    useAppStore.getState().recordFeatureInteraction('workspace-board')
+    void useAppStore.getState().recordFeatureInteraction('workspace-board')
     setWorkspaceBoardOpen(true)
     setWorkspaceBoardDragPreviewOpen(false)
   }, [])

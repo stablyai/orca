@@ -115,6 +115,7 @@ export function useFileSearchRunner({
       }
 
       updateActiveSearchState({ loading: true })
+      // oxlint-disable-next-line typescript/no-misused-promises -- body catches search failures
       searchTimerRef.current = setTimeout(async () => {
         searchTimerRef.current = null
         // Results outlive navigation; clicks must retain the route that produced them.

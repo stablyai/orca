@@ -127,7 +127,8 @@ export function runLocalPlanForAgent(input: {
     const execution = start()
     return Promise.resolve(execution).then((execution) =>
       input.shouldExecute
-        ? execution.result.finally(() => execution.processClosed)
+        ? // oxlint-disable-next-line typescript/no-misused-promises -- Promise#finally waits for process close on purpose
+          execution.result.finally(() => execution.processClosed)
         : execution.result
     )
   }
@@ -193,6 +194,7 @@ function runCodexLocalPlanUnderHomeLock(
       }
     })
     .finally(() => clearLocalGenerationCancelToken(laneKey, queuedCancel))
+  // oxlint-disable-next-line typescript/no-misused-promises -- Promise#finally waits for settlement on purpose
   return awaitSettlement ? result.finally(() => operationSettled) : result
 }
 

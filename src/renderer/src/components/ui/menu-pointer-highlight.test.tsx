@@ -134,7 +134,7 @@ it('preserves prevented pointer movement across further wheel events and queued 
   const { menu, a, b } = render()
   a.focus()
   wheelAt(menu, 10, 40)
-  act(() => menu.dispatchEvent(new Event('scroll')))
+  void act(() => menu.dispatchEvent(new Event('scroll')))
   const preventMove = (event: Event) => event.preventDefault()
   b.addEventListener('pointermove', preventMove)
   act(() => {
@@ -221,7 +221,7 @@ it.each([false, true])(
     hit = b
     scroll(menu)
     expect(document.activeElement).toBe(b)
-    act(() => menu.dispatchEvent(new Event('scroll')))
+    void act(() => menu.dispatchEvent(new Event('scroll')))
     await act(async () => root!.render(<Menu open={false} forceMount={forceMount} />))
     await act(async () => root!.render(<Menu forceMount={forceMount} />))
 
@@ -263,7 +263,7 @@ it.each([false, true])(
     wheelAt(menu, 10, 40)
     hit = b
     if (queuedFrame) {
-      act(() => menu.dispatchEvent(new Event('scroll')))
+      void act(() => menu.dispatchEvent(new Event('scroll')))
       expect(frames).toHaveLength(1)
     }
     act(() => {
@@ -294,7 +294,7 @@ it('does not let a queued wheel frame override subsequent keyboard navigation', 
   const { menu, a, b } = render()
   wheelAt(menu, 10, 40)
   hit = b
-  act(() => menu.dispatchEvent(new Event('scroll')))
+  void act(() => menu.dispatchEvent(new Event('scroll')))
   expect(frames).toHaveLength(1)
   act(() => {
     a.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }))

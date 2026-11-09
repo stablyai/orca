@@ -64,7 +64,7 @@ describe('TerminalSessionTeardown plain-shell teardown', () => {
           terminateDescendants?: (value: DescendantSnapshot) => Promise<unknown>
         }
       ) => {
-        deps.terminateDescendants?.(snapshot)
+        void deps.terminateDescendants?.(snapshot)
         killRoot()
       }
     )

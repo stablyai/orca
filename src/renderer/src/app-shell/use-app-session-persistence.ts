@@ -140,7 +140,7 @@ export function useAppSessionPersistence(): void {
 
   // App remains mounted on Landing, where File→Exit/Ctrl+Q still need a listener (#5144).
   useEffect(() => {
-    return window.api.ui.onWindowCloseRequested(dispatchWindowCloseRequest)
+    return window.api.ui.onWindowCloseRequested((data) => void dispatchWindowCloseRequest(data))
   }, [])
 
   // Periodic scrollback serialization stalled main for seconds (#461); daemon history replaces it (#729). Non-daemon unexpected exits still lose in-session scrollback.

@@ -149,7 +149,7 @@ export async function requestPRReviewers({
       )
     }
     setReviewerInput('')
-    useAppStore.getState().recordFeatureInteraction('github-tasks')
+    void useAppStore.getState().recordFeatureInteraction('github-tasks')
     toast.success(
       logins.length === 1
         ? translate('auto.components.GitHubItemDialog.ea985e657f', 'Reviewer requested')
@@ -265,7 +265,7 @@ export async function removePRReviewers({
       )
     }
     setReviewerInput('')
-    useAppStore.getState().recordFeatureInteraction('github-tasks')
+    void useAppStore.getState().recordFeatureInteraction('github-tasks')
     toast.success(
       logins.length === 1
         ? translate('auto.components.GitHubItemDialog.69515bff81', 'Reviewer removed')

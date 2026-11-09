@@ -138,7 +138,7 @@ describe('Escape during pointer dragging', () => {
     t.args.drag.frameId = 12
     t.result.current.pointerAutoscrollFrameIdRef.current = 13
     const escape = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true })
-    act(() => window.dispatchEvent(escape))
+    void act(() => window.dispatchEvent(escape))
     expect(escape.defaultPrevented).toBe(true)
     expect(t.result.current.worktreePointerDragRef.current).toBeNull()
     expect(t.args.drag.preview?.isConnected).toBe(false)

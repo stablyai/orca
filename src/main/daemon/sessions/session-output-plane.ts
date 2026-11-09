@@ -127,7 +127,7 @@ export class SessionOutputPlane {
     if (this.disposed) {
       return
     }
-    this.emulator.write(ground)
+    void this.emulator.write(ground)
     this.record({ kind: 'output', data: ground })
   }
 
@@ -202,7 +202,7 @@ export class SessionOutputPlane {
     // Count raw input even when thinning drops bytes so snapshots and renderer tail deduplication align.
     this._outputSequence += rawLength
     if (data.length > 0) {
-      this.emulator.write(data)
+      void this.emulator.write(data)
       data = this.deviceAttributesQueryFilter?.accept(data) ?? data
     }
     if (data.length > 0) {

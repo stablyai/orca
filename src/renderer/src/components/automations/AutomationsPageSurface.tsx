@@ -84,9 +84,9 @@ export function AutomationsPageSurface({
       return worktree ? [[run.id, worktree] as const] : []
     })
   )
-  const runSelectedRowAction = (action: (row: AutomationListRow) => void): void => {
+  const runSelectedRowAction = (action: (row: AutomationListRow) => unknown): void => {
     if (selectedRow) {
-      action(selectedRow)
+      void action(selectedRow)
     }
   }
   const recoverOwnerAction = (

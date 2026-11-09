@@ -209,7 +209,7 @@ export function AccountsPane({
       return
     }
     recordedOpenCodeSettingEditsRef.current.add(field)
-    recordFeatureInteraction('usage-tracking')
+    void recordFeatureInteraction('usage-tracking')
   }
   // Usage credentials belong beside the selected host’s poller.
   const usageCredentialHost = { owner: accountOwner, label: remoteServerLabel }
@@ -262,6 +262,7 @@ export function AccountsPane({
     setCodexAccountsLoaded,
     setCodexAction,
     fetchSettings,
+    // oxlint-disable-next-line typescript/no-misused-promises -- recordFeatureInteraction catches its own persist failure
     recordFeatureInteraction
   })
   const runClaudeAccountAction = createClaudeAccountActionRunner({
@@ -273,6 +274,7 @@ export function AccountsPane({
     setClaudeAccounts,
     setClaudeAction,
     fetchSettings,
+    // oxlint-disable-next-line typescript/no-misused-promises -- recordFeatureInteraction catches its own persist failure
     recordFeatureInteraction
   })
   const model: AccountsPaneSectionModel = {
@@ -282,6 +284,7 @@ export function AccountsPane({
     updateSettingsOrThrow,
     onAccountLocationChange,
     searchQuery,
+    // oxlint-disable-next-line typescript/no-misused-promises -- recordFeatureInteraction catches its own persist failure
     recordFeatureInteraction,
     wslSupportedPlatform,
     wslAvailable,

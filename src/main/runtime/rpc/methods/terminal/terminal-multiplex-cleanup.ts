@@ -40,7 +40,7 @@ export function installMultiplexCleanup(state: TerminalMultiplexConnection): voi
       stream.client?.id
     ) {
       // Release width floors only this stream took; passive streams cannot release peers' floors.
-      runtime.unregisterRemoteDesktopViewer(stream.ptyId, stream.remoteDesktopSubscriptionKey)
+      void runtime.unregisterRemoteDesktopViewer(stream.ptyId, stream.remoteDesktopSubscriptionKey)
     }
     if (endVerdict) {
       emit({ type: 'end', streamId, verdict: endVerdict })

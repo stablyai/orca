@@ -51,7 +51,7 @@ export async function signInCodexAccount(
       // Activate a newly signed-in account only if selection remains empty; main preserves an existing selection.
       activateIfSelectionWasEmpty: true
     })
-    recordFeatureInteraction('codex-account-switching')
+    void recordFeatureInteraction('codex-account-switching')
     if (mountedRef.current) {
       setAccounts(next)
     }

@@ -90,7 +90,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       await vi.advanceTimersByTimeAsync(60_000)
       expect(hostListCalls).toBe(callsAtDeadline)
       expect(subscribedTerminalHandles()).toEqual(['terminal-stable'])
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       warn.mockRestore()
       vi.useRealTimers()
@@ -149,7 +149,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       emitSnapshot(latestSubscribePayload().streamId, 'paced reattach')
       expect(transport.isConnected()).toBe(true)
       expect(transport.getRecoveryState?.().phase).toBe('connected')
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }

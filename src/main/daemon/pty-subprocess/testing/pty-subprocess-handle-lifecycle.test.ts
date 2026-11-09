@@ -229,7 +229,7 @@ describe('createPtySubprocess', () => {
       try {
         const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
         handle.kill()
-        handle.forceKill()
+        void handle.forceKill()
         handle.dispose()
 
         expect(proc.kill).toHaveBeenCalledOnce()
@@ -257,7 +257,7 @@ describe('createPtySubprocess', () => {
       try {
         const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
         handle.kill()
-        handle.forceKill()
+        void handle.forceKill()
 
         expect(terminateJob).toHaveBeenCalledWith(11, 123456)
         expect(proc.kill).toHaveBeenCalledOnce()
@@ -281,7 +281,7 @@ describe('createPtySubprocess', () => {
       Object.defineProperty(process, 'platform', { value: 'win32' })
       try {
         const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
-        handle.forceKill()
+        void handle.forceKill()
         handle.dispose()
         // An unverified PID can be reused; the per-PTY job/native handle owns this process tree.
         expect(killSpy).not.toHaveBeenCalled()
@@ -304,7 +304,7 @@ describe('createPtySubprocess', () => {
       const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
       const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
       proc._simulateExit(0)
-      handle.forceKill()
+      void handle.forceKill()
       expect(killSpy).not.toHaveBeenCalled()
       killSpy.mockRestore()
     })

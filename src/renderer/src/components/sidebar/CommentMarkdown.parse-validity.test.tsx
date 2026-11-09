@@ -54,7 +54,7 @@ it('keeps selected fade nodes and their clocks through a declined tail and compl
   range.selectNodeContents(word)
   document.getSelection()?.addRange(range)
   document.dispatchEvent(new Event('selectionchange'))
-  act(() => vi.advanceTimersByTime(150))
+  void act(() => vi.advanceTimersByTime(150))
   const content = `${prefix}\n\nselected words\n\n${directive()}\n\nnew words`
   view.rerender(
     <CommentMarkdown
@@ -68,7 +68,7 @@ it('keeps selected fade nodes and their clocks through a declined tail and compl
   )
   expect(view.container.querySelector('pre')).toBe(fence)
   expect(word.isConnected).toBe(true)
-  act(() => vi.advanceTimersByTime(150))
+  void act(() => vi.advanceTimersByTime(150))
   expect(word.isConnected).toBe(true)
   expect(
     [...view.container.querySelectorAll('[data-word]')].some((node) => node.textContent === 'new')
@@ -85,6 +85,6 @@ it('keeps selected fade nodes and their clocks through a declined tail and compl
   expect(document.getSelection()?.toString()).toBe('selected')
   document.getSelection()?.removeAllRanges()
   document.dispatchEvent(new Event('selectionchange'))
-  act(() => vi.advanceTimersByTime(1))
+  void act(() => vi.advanceTimersByTime(1))
   expect(word.isConnected).toBe(false)
 })

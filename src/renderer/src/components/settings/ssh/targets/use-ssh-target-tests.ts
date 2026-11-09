@@ -44,7 +44,7 @@ export function useSshTargetTests(): {
     setTesting([targetId], true)
     try {
       const result = await window.api.ssh.testConnection({ targetId })
-      recordFeatureInteraction('ssh')
+      void recordFeatureInteraction('ssh')
       return result.success
         ? { ok: true }
         : {

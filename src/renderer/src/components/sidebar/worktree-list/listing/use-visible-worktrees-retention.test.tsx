@@ -99,9 +99,9 @@ describe('useVisibleSidebarWorktrees sleeping retention', () => {
     suspend = false
     rendered.rerender(view())
     expect(rendered.getByText(worktree.id)).toBeDefined()
-    act(() => vi.advanceTimersByTime(SLEEPING_SWEEP_SETTLE_MS - 1))
+    void act(() => vi.advanceTimersByTime(SLEEPING_SWEEP_SETTLE_MS - 1))
     expect(rendered.getByText(worktree.id)).toBeDefined()
-    act(() => vi.advanceTimersByTime(1))
+    void act(() => vi.advanceTimersByTime(1))
     expect(rendered.queryByText(worktree.id)).toBeNull()
   })
 
@@ -141,7 +141,7 @@ describe('useVisibleSidebarWorktrees sleeping retention', () => {
     rendered.rerender(view(false))
     setPtyBound(false)
     expect(rendered.getByText(worktree.id)).toBeDefined()
-    act(() => vi.advanceTimersByTime(SLEEPING_SWEEP_SETTLE_MS))
+    void act(() => vi.advanceTimersByTime(SLEEPING_SWEEP_SETTLE_MS))
     expect(rendered.queryByText(worktree.id)).toBeNull()
   })
 

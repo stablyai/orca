@@ -130,7 +130,7 @@ export async function runObservedExitControl(control: ObservedExitControl) {
     },
     getForegroundProcess: async () => null,
     stopAndWait: async () => {
-      runtime.onPtyExit(CONTROL_PTY_ID, control === 'unverified' ? -1 : 0, original)
+      void runtime.onPtyExit(CONTROL_PTY_ID, control === 'unverified' ? -1 : 0, original)
       if (control === 'replacement') {
         runtime.registerPty(CONTROL_PTY_ID, WORKTREE_ID, null, {
           ...BINDING,
@@ -152,6 +152,10 @@ export async function runObservedExitControl(control: ObservedExitControl) {
       verdict: runtime.getPtyLivenessVerdict(CONTROL_PTY_ID)
     }
   } finally {
-    runtime.onPtyExit(CONTROL_PTY_ID, 0, control === 'replacement' ? NEXT_INCARNATION : original)
+    void runtime.onPtyExit(
+      CONTROL_PTY_ID,
+      0,
+      control === 'replacement' ? NEXT_INCARNATION : original
+    )
   }
 }

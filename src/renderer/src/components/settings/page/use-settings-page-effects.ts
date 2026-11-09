@@ -58,8 +58,8 @@ export function useSettingsPageEffects(
   } = interactions
 
   useEffect(() => {
-    fetchSettings()
-    fetchKeybindings()
+    void fetchSettings()
+    void fetchKeybindings()
   }, [fetchKeybindings, fetchSettings])
 
   useEffect(() => {

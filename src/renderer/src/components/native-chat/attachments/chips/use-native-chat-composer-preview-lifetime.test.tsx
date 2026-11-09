@@ -105,7 +105,7 @@ describe('composer preview lifetime', () => {
   it('releases pending previews without turning them into saved attachments', async () => {
     const revoke = vi.spyOn(URL, 'revokeObjectURL')
     const composer = await mount('pending-scope')
-    act(() => begin(composer.api(), 'blob:pending-preview'))
+    void act(() => begin(composer.api(), 'blob:pending-preview'))
     composer.unmount()
     expect(revoke).toHaveBeenCalledExactlyOnceWith('blob:pending-preview')
     expect(readNativeChatAttachmentCache('pending-scope')).toEqual([])

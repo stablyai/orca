@@ -192,7 +192,7 @@ export function ComputerUsePane(): React.JSX.Element {
   }, [refresh])
 
   const openPermission = async (id: ComputerUsePermissionId): Promise<void> => {
-    useAppStore.getState().recordFeatureInteraction('computer-use-setup')
+    void useAppStore.getState().recordFeatureInteraction('computer-use-setup')
     setPendingId(id)
     try {
       const result = await window.api.computerUsePermissions.openSetup({ id })

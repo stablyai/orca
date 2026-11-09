@@ -84,7 +84,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
 
   useEffect(() => {
     let cancelled = false
-    refreshModelStates()
+    void refreshModelStates()
     void window.api.speech
       .getCatalog()
       .then((nextCatalog) => {
@@ -102,7 +102,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
         setOpenAiKeyProtection(status.protection)
         if (status.configured !== voiceSettings.openAiApiKeyConfigured) {
           updateVoiceSettings({ openAiApiKeyConfigured: status.configured })
-          refreshModelStates()
+          void refreshModelStates()
         }
       })
       .catch(() => {})
@@ -113,7 +113,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
 
   useEffect(() => {
     const cleanup = window.api.speech.onDownloadProgress(() => {
-      refreshModelStates()
+      void refreshModelStates()
     })
     return cleanup
   }, [refreshModelStates])
@@ -162,7 +162,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       updateVoiceSettings({ sttModel: pendingCloudModelId })
     }
     setPendingCloudModelId(null)
-    refreshModelStates()
+    void refreshModelStates()
   }
 
   const removeCompatibleProvider = async (): Promise<void> => {
@@ -171,7 +171,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       if (selectedModel?.provider === 'openai-compatible') {
         updateVoiceSettings({ sttModel: '' })
       }
-      refreshModelStates()
+      void refreshModelStates()
     } catch (err) {
       toast.error(
         readIpcErrorMessage(err) ??
@@ -272,8 +272,12 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
             selectedState={selectedState}
             permissionPending={permissionPending}
             onToggleVoiceDictation={() => void toggleVoiceDictation()}
-            onDownloadModel={(modelId) => startSpeechModelDownload(modelId, refreshModelStates)}
-            onCancelDownload={(modelId) => cancelSpeechModelDownload(modelId, refreshModelStates)}
+            onDownloadModel={(modelId) =>
+              startSpeechModelDownload(modelId, () => void refreshModelStates())
+            }
+            onCancelDownload={(modelId) =>
+              cancelSpeechModelDownload(modelId, () => void refreshModelStates())
+            }
             onShowMicrophone={() =>
               document
                 .getElementById(VOICE_MICROPHONE_ROW_ID)

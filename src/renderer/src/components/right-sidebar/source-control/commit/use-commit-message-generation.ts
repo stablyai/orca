@@ -185,7 +185,7 @@ export function useSourceControlCommitMessageGeneration({
         updateCommitDraft((current) =>
           !succeeded || current.length > 0 ? current : result.message
         )
-        useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
+        void useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
         operationStore.setState({ generateError: null })
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Failed to generate commit message'

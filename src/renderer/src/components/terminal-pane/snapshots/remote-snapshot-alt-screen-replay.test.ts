@@ -141,7 +141,7 @@ describe('remote snapshot replay onto a live alt screen', () => {
     transportFactoryQueue = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
-    installTerminalTestGlobals()
+    void installTerminalTestGlobals()
   })
 
   afterEach(async () => {

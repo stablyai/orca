@@ -99,8 +99,8 @@ describe('the first message owned by create', () => {
     const create = deferred<unknown>()
     mocks.call.mockReturnValue(create.promise)
     const launch = start()
-    holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'picked-model')
-    holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', 'high')
+    void holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'picked-model')
+    void holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', 'high')
     await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     const params = createParams()
     expect(params.firstMessage?.body.blocks).toEqual([{ type: 'text', text: 'opening text' }])
@@ -268,7 +268,7 @@ describe('the first message owned by create', () => {
         : { permissionMode: 'full-access' }
     })
     if (picked) {
-      holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', picked)
+      void holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', picked)
     }
     await launch.launchResult
     expect(createParams().optionsMode).toBe(optionsMode)
@@ -322,7 +322,7 @@ describe('the first message owned by create', () => {
       'serviceTier',
       'priority'
     )
-    holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', 'high')
+    void holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', 'high')
     // The account's default moves before create goes out: Fast runs as Standard under it.
     recordHostModelCatalogSnapshot(target, 'codex', null, list('m2'))
     await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
@@ -340,7 +340,7 @@ describe('the first message owned by create', () => {
     const retried = CreateIntentParams.parse(mocks.call.mock.calls[1]?.[2])
     expect(retried.options).toEqual({ effort: 'high', serviceTier: 'priority' })
     // A pick made while create is out is newer than what it carries, so it applies after.
-    holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', 'medium')
+    void holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', 'medium')
     create.resolve(created())
     await expect(tierPick).resolves.toEqual({
       kind: 'accepted',
@@ -595,8 +595,8 @@ describe('the first message owned by create', () => {
     )
     const launch = start()
     await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
-    holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'sonnet')
-    holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', 'high')
+    void holdStructuredAgentSessionLaunchOption(launch.sessionId, 'model', 'sonnet')
+    void holdStructuredAgentSessionLaunchOption(launch.sessionId, 'effort', 'high')
     create.resolve(created())
     let published = false
     void launch.launchResult.then(() => {

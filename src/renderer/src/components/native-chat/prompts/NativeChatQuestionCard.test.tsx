@@ -116,7 +116,7 @@ describe('NativeChatQuestionCard', () => {
     act(() => rows[0]!.focus())
     pressKey({ key: '2' }, rows[0]!)
     act(() => rows[1]!.click())
-    act(() => vi.runAllTimers())
+    void act(() => vi.runAllTimers())
     expect(container.querySelector('pre')?.textContent).toBe('| nav |\n| main |')
     expect(document.activeElement).toBe(rows[1])
     expect(onAnswer).not.toHaveBeenCalled()

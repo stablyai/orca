@@ -72,7 +72,7 @@ async function hoverChatTab(): Promise<void> {
   )
   await act(async () => {})
   fireEvent.pointerMove(screen.getByRole('button', { name: 'chat tab' }), { pointerType: 'mouse' })
-  act(() => vi.advanceTimersByTime(TAB_TOOLTIP_DELAY_MS))
+  void act(() => vi.advanceTimersByTime(TAB_TOOLTIP_DELAY_MS))
 }
 
 describe('chat tab naming failure', () => {
@@ -136,7 +136,7 @@ describe('chat tab naming failure', () => {
         fireEvent.pointerMove(screen.getByRole('button', { name: 'chat tab' }), {
           pointerType: 'mouse'
         })
-        act(() => vi.advanceTimersByTime(TAB_TOOLTIP_DELAY_MS))
+        void act(() => vi.advanceTimersByTime(TAB_TOOLTIP_DELAY_MS))
         expect(screen.getAllByText("Couldn't name this chat").length).toBeGreaterThan(0)
       }
     }

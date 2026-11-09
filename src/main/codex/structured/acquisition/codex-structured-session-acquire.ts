@@ -77,7 +77,7 @@ export async function acquireCodexStructuredSession(input: {
   const dispatchEchoes = createCodexDispatchEchoes(
     () => deps.onHeldSendsChanged?.({ sessionId }),
     (clientMessageId, providerIdentity) =>
-      deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity })
+      void deps.onDispatchSettledLate?.({ sessionId, clientMessageId, providerIdentity })
   )
   let account: AgentSessionAccountKind | undefined
   // Frame row identities include this generation.

@@ -140,7 +140,9 @@ describe('composer image chips', () => {
     act(() => composer.api().removeImageAttachment(removed))
     await waitFor(() => expect(composer.chips()).toEqual(['Image #1']))
 
-    act(() => promptEditor(composer.textbox()).commands.setContent({ type: 'doc', content: [] }))
+    void act(() =>
+      promptEditor(composer.textbox()).commands.setContent({ type: 'doc', content: [] })
+    )
     expect(composer.api().imageAttachments.map(({ id }) => id)).toEqual([kept])
   })
 
@@ -192,7 +194,7 @@ describe('composer image chips', () => {
     )
     const composer = renderComposer('tab-1:pane')
     const upload = begin(composer, 'shot.png')
-    act(() => composer.api().resolvePendingImageAttachment(upload, '/up/shot.png'))
+    void act(() => composer.api().resolvePendingImageAttachment(upload, '/up/shot.png'))
 
     expect(composer.api().imageAttachments).toMatchObject([{ id: 'missing', path: '/up/shot.png' }])
     await waitFor(() => expect(composer.chips()).toEqual(['Image #1']))
@@ -220,7 +222,7 @@ describe('composer image chips', () => {
     const fromA = composer.api()
     composer.show('chat-b')
 
-    act(() => fromA.resolvePendingImageAttachment(upload, '/up/a.png'))
+    void act(() => fromA.resolvePendingImageAttachment(upload, '/up/a.png'))
 
     expect(readNativeChatComposerDraft('chat-a')).toMatchObject({
       text: `${chip(upload)} `,

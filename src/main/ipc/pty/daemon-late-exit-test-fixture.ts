@@ -217,7 +217,7 @@ export async function startLateExitHarness() {
         clearTimeout(pending.cleanupTimer)
       }
       session.syntheticKillExitPtyIds.clear()
-      runtime.onPtyExit(PTY_ID, 0, runtime.captureState().incarnationId ?? undefined)
+      void runtime.onPtyExit(PTY_ID, 0, runtime.captureState().incarnationId ?? undefined)
       unbindLocalProviderListeners()
       harness.adapter.dispose()
       await harness.server.shutdown()

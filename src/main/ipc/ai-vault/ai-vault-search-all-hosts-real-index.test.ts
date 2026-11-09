@@ -61,13 +61,13 @@ beforeEach(async () => {
       }
     })
     // Build each host index alone: transcript reads publish to every live consumer in one process.
-    instance.apply({ enabled: true, historyDays: null })
+    void instance.apply({ enabled: true, historyDays: null })
     await instance.settled()
-    instance.close()
+    await instance.close()
     hosts.push({ executionHostId, harness, instance, sessionIds })
   }
   for (const host of hosts) {
-    host.instance.apply({ enabled: true, historyDays: null })
+    void host.instance.apply({ enabled: true, historyDays: null })
     await host.instance.settled()
     const own = resultsOf(await host.instance.search({ query: 'needle', limit: 100 }))
     expect(own.hits.map((hit) => hit.sessionId).sort()).toEqual([...host.sessionIds].sort())
@@ -76,7 +76,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   for (const host of hosts) {
-    host.instance.close()
+    await host.instance.close()
     await host.harness.cleanup()
   }
   resetTranscriptConsumersForTests()

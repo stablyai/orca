@@ -72,7 +72,7 @@ describe('Claude dialog screen observation fences', () => {
   it('discards a dialog snapshot after the owning terminal exits', async () => {
     const pane = await pendingScreen()
     const wait = pane.runtime.getTerminalInteractiveWait(pane.handle)
-    pane.runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
+    void pane.runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 0)
     pane.release()
     await expect(wait).resolves.toBeUndefined()
   })

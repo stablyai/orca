@@ -94,7 +94,7 @@ export function runNativeChatSplitTarget(
       .getState()
       .createEmptySplitGroup(source.worktreeId, target.groupId, direction, { landing: true })
   }
-  useAppStore.getState().recordFeatureInteraction('tab-splits')
+  void useAppStore.getState().recordFeatureInteraction('tab-splits')
   return true
 }
 

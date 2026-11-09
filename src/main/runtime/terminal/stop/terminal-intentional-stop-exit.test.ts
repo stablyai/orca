@@ -108,7 +108,7 @@ function createHarness(opts: { lateProviderExit?: boolean; folder?: boolean } = 
       if (opts.lateProviderExit) {
         return false
       }
-      runtime.onPtyExit(id, 0, INCARNATION_ID, { providerExitObserved: true })
+      void runtime.onPtyExit(id, 0, INCARNATION_ID, { providerExitObserved: true })
       session.sendPtyExitToRenderer({ id, code: 0, incarnationId: INCARNATION_ID })
       return true
     },
@@ -255,7 +255,7 @@ describe('intentional stops keep the pane through the exit', () => {
       write: () => true,
       kill: () => true,
       stopAndWait: async (ptyId) => {
-        harness.runtime.onPtyExit(ptyId, -1, INCARNATION_ID, { providerExitObserved: true })
+        void harness.runtime.onPtyExit(ptyId, -1, INCARNATION_ID, { providerExitObserved: true })
         return true
       },
       getForegroundProcess: async () => null,

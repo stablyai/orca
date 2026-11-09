@@ -64,7 +64,7 @@ export function createWorktreeJumpPaletteWorktreeHandler({
         typeof data.initialRepoId === 'string' ? data.initialRepoId : undefined
       )
       closeModal()
-      recordFeatureInteraction('cmd-j-create-workspace')
+      void recordFeatureInteraction('cmd-j-create-workspace')
       queueMicrotask(() =>
         openModal('new-workspace-composer', { ...data, telemetrySource: 'command_palette' })
       )
@@ -110,7 +110,7 @@ export function createWorktreeJumpPaletteWorktreeHandler({
               typeof data.initialRepoId === 'string' ? data.initialRepoId : undefined
             )
             closeModal()
-            recordFeatureInteraction('cmd-j-create-workspace')
+            void recordFeatureInteraction('cmd-j-create-workspace')
             openModal('new-workspace-composer', { ...data, telemetrySource: 'command_palette' })
             return true
           })
@@ -209,7 +209,7 @@ export function createWorktreeJumpPaletteWorktreeHandler({
         if (!queueWorkspaceActivationTerminalFocus(activeMatch.id, activation)) {
           focusFallbackSurface()
         }
-        recordFeatureInteraction('cmd-j-workspace-open')
+        void recordFeatureInteraction('cmd-j-workspace-open')
         return
       }
       const repo =
@@ -228,7 +228,7 @@ export function createWorktreeJumpPaletteWorktreeHandler({
       const token = createLookupGuard.start()
       preserveCreateLookupOnCloseRef.current = true
       skipRestoreFocusRef.current = true
-      recordFeatureInteraction('cmd-j-create-workspace')
+      void recordFeatureInteraction('cmd-j-create-workspace')
       closeModal()
       void lookupGitHubWorkItemForSource({
         repoPath: repo.path,

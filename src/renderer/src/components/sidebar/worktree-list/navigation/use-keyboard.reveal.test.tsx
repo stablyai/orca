@@ -232,7 +232,7 @@ function Probe() {
 }
 
 function press(repeat: boolean) {
-  act(() =>
+  void act(() =>
     list.dispatchEvent(
       new KeyboardEvent('keydown', {
         key: 'ArrowDown',

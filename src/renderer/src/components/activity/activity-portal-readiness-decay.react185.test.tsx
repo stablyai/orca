@@ -104,7 +104,7 @@ describe('Activity portal readiness latch decay', () => {
     await controls.flushFrame()
     expect(status).toBe('unavailable')
 
-    act(() => vi.advanceTimersByTime(ACTIVITY_PORTAL_READINESS_BURST_WINDOW_MS))
+    void act(() => vi.advanceTimersByTime(ACTIVITY_PORTAL_READINESS_BURST_WINDOW_MS))
     await controls.flushFrame()
     expect(status).toBe('loading')
   })

@@ -64,7 +64,7 @@ export function MuseUsagePane(): React.JSX.Element {
   }, [fetchMuseUsage])
 
   const handleSetEnabled = (enabled: boolean): void => {
-    recordFeatureInteraction('usage-tracking')
+    void recordFeatureInteraction('usage-tracking')
     void setMuseUsageEnabled(enabled)
   }
 

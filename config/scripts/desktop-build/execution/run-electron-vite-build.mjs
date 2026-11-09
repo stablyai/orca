@@ -25,6 +25,7 @@ const child = spawn(process.execPath, [electronViteCli, 'build', ...process.argv
   }
 })
 
+// oxlint-disable-next-line typescript/no-misused-promises -- every path ends in process.exit; a stray rejection still fails the build
 child.on('exit', async (code, signal) => {
   if (signal) {
     process.kill(process.pid, signal)

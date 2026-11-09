@@ -180,7 +180,7 @@ export function UsageOverviewPane(): React.JSX.Element {
                 <Button
                   size="sm"
                   onClick={() => {
-                    recordFeatureInteraction('usage-tracking')
+                    void recordFeatureInteraction('usage-tracking')
                     void enableClaudeUsage()
                   }}
                 >
@@ -190,7 +190,7 @@ export function UsageOverviewPane(): React.JSX.Element {
                   variant="secondary"
                   size="sm"
                   onClick={() => {
-                    recordFeatureInteraction('usage-tracking')
+                    void recordFeatureInteraction('usage-tracking')
                     void enableCodexUsage()
                   }}
                 >
@@ -200,7 +200,7 @@ export function UsageOverviewPane(): React.JSX.Element {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    recordFeatureInteraction('usage-tracking')
+                    void recordFeatureInteraction('usage-tracking')
                     void enableOpenCodeUsage()
                   }}
                 >
@@ -210,7 +210,7 @@ export function UsageOverviewPane(): React.JSX.Element {
                   variant="outline"
                   size="sm"
                   onClick={() => {
-                    recordFeatureInteraction('usage-tracking')
+                    void recordFeatureInteraction('usage-tracking')
                     void enableMuseUsage()
                   }}
                 >
@@ -291,7 +291,7 @@ export function UsageOverviewPane(): React.JSX.Element {
               provider={provider}
               totalTokens={overview.totalTokens}
               onEnable={() => {
-                recordFeatureInteraction('usage-tracking')
+                void recordFeatureInteraction('usage-tracking')
                 if (provider.id === 'claude') {
                   void enableClaudeUsage()
                 } else if (provider.id === 'codex') {

@@ -121,7 +121,7 @@ export function installDocPreviewProtocolHandler(): void {
   previewSession.webRequest.onBeforeRequest((details, callback) => {
     callback({ cancel: !isAllowedDocPreviewRequestUrl(details.url) })
   })
-  installBrowserSessionPartitionPolicies(
+  void installBrowserSessionPartitionPolicies(
     {
       id: DOC_PREVIEW_PARTITION,
       scope: 'isolated',
@@ -131,5 +131,7 @@ export function installDocPreviewProtocolHandler(): void {
     },
     // Previews have no browsing-page download flow or ambient device permissions.
     { downloads: 'deny', permissions: 'deny' }
-  )
+  ).catch(() => {
+    console.warn('[proxy] Failed to apply proxy to browser partition', DOC_PREVIEW_PARTITION)
+  })
 }

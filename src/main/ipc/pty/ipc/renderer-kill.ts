@@ -187,7 +187,7 @@ async function stopFencedRendererPty(
           args.expectedIncarnationId
         )
       )
-      deps.runtime?.onPtyExit(args.id, -1, args.expectedIncarnationId)
+      void deps.runtime?.onPtyExit(args.id, -1, args.expectedIncarnationId)
       deps.rememberSyntheticKillExit(args.id, args.expectedIncarnationId)
       deps.sendPtyExitToRenderer({
         id: args.id,

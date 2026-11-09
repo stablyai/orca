@@ -111,7 +111,7 @@ export function createProjectMovePauseFollower(
     },
     follow: (notice) => {
       if (notice.phase === 'failed') {
-        followWorkspaceSleep(notice)
+        void followWorkspaceSleep(notice)
         return
       }
       const pause = notice.projectMovePauseId ? pauses.get(notice.projectMovePauseId) : undefined

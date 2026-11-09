@@ -30,7 +30,7 @@ function createPiRpcAdapter(context: StructuredAgentAdapterContext): StructuredA
       if (outcome.state === 'admitted') {
         return
       }
-      context.followUps.onDispatchSettledLate({
+      void context.followUps.onDispatchSettledLate({
         sessionId,
         clientMessageId,
         ...(outcome.state === 'accepted' ? { providerIdentity: outcome.providerIdentity } : outcome)

@@ -231,7 +231,7 @@ describe.each(['pane-issued', 'preallocated'] as const)('a %s handle across a re
     await vi.advanceTimersByTimeAsync(0)
     expect(outcome).toBeNull()
 
-    runtime.onPtyExit(RENDERER_PTY_ID, 0)
+    void runtime.onPtyExit(RENDERER_PTY_ID, 0)
     await wait
     expect(outcome).toMatchObject({ handle, condition: 'exit', satisfied: true })
   })

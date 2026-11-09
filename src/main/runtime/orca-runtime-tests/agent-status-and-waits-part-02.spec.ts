@@ -63,7 +63,7 @@ describe('OrcaRuntimeService', () => {
 
     const status = runtime.getTerminalAgentStatus(handle)
     await vi.waitFor(() => expect(confirmForegroundProcess).toHaveBeenCalledWith('pty-1'))
-    runtime.onPtyExit('pty-1', 0)
+    void runtime.onPtyExit('pty-1', 0)
     confirmation.resolve('codex')
 
     await expect(status).rejects.toThrow('terminal_exited')

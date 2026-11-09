@@ -76,7 +76,7 @@ export class WorktreePreparationOperation {
 
   readonly observeChildTermination = (terminated: Promise<void>, writes: boolean): void => {
     if (writes) {
-      this.trackWriter(terminated)
+      void this.trackWriter(terminated)
     }
   }
 

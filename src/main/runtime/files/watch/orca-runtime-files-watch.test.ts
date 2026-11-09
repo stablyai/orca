@@ -224,7 +224,7 @@ describe('RuntimeFileWatches', () => {
     const { commands } = createRuntimeFileWatches('/repo')
 
     const unsubscribe = await commands.watchFileExplorer('id:wt-1', vi.fn())
-    unsubscribe()
+    void unsubscribe()
 
     let drained = false
     const drainPromise = awaitRuntimeFileWatcherUnsubscribes().then(() => {

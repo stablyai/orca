@@ -70,7 +70,7 @@ describe('display surfaces after the stale-working title clear', () => {
       await vi.advanceTimersByTimeAsync(3_000)
       expect(await psStatus(runtime)).toBe('active')
       // An abnormal relay exit keeps the record for the reconnect grace; the relay reattaches.
-      runtime.onPtyExit(sshPtyId, -1)
+      void runtime.onPtyExit(sshPtyId, -1)
       register()
       await vi.advanceTimersByTimeAsync(60_000)
       expect(await psStatus(runtime)).toBe('active')

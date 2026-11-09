@@ -135,7 +135,7 @@ describe('terminal close and handle incarnation continuity', () => {
       harness.removeVictimFromInventory()
       harness.syncCanaryGraph()
       order.push('idempotent-graph-removal')
-      harness.runtime.onPtyExit(stoppingPtyId, 0, INCARNATION_ID)
+      void harness.runtime.onPtyExit(stoppingPtyId, 0, INCARNATION_ID)
       order.push('idempotent-session-retirement')
     })
     const terminals = (await harness.runtime.listTerminals(`id:${WORKTREE_ID}`)).terminals

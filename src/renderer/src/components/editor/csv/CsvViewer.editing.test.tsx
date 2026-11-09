@@ -153,7 +153,7 @@ describe('editable CSV table', () => {
     const source = screen.getByTestId('source').textContent
     const input = edit('A', 'new pending cell')
     expect(hasPendingEditorBufferChange(NO_SHARING, 'csv-edit-test')).toBe(true)
-    act(() =>
+    void act(() =>
       window.dispatchEvent(
         new CustomEvent(ORCA_EDITOR_FILE_SAVED_EVENT, {
           detail: { fileId: 'csv-edit-test', content: source }

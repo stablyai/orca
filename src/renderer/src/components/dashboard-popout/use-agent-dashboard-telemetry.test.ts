@@ -70,7 +70,7 @@ describe('dashboard visible-use telemetry', () => {
       renderHook(() => useAgentDashboardTelemetry('popout'))
       await flushConsent()
 
-      act(() => vi.advanceTimersByTime(24 * 60 * 60_000))
+      void act(() => vi.advanceTimersByTime(24 * 60 * 60_000))
 
       expect(vi.getTimerCount()).toBe(0)
       expect(track.mock.calls).toEqual([['agent_dashboard_opened', { surface: 'popout' }]])

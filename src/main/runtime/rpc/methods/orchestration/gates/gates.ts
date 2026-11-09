@@ -46,11 +46,17 @@ export const ORCHESTRATION_GATE_METHODS = [
       })
 
       // Do not await the loop; results persist for taskList/runStatus.
-      coordinator.runFromExistingRun(run.id).finally(() => {
-        if (activeCoordinator === coordinator) {
-          activeCoordinator = null
-        }
-      })
+      void coordinator
+        .runFromExistingRun(run.id)
+        .catch((error: unknown) => {
+          // The loop already marked the run failed; this keeps it off the unhandled-rejection path.
+          console.error('[orchestration] coordinator run failed:', error)
+        })
+        .finally(() => {
+          if (activeCoordinator === coordinator) {
+            activeCoordinator = null
+          }
+        })
 
       return { runId: run.id, status: 'running' }
     }

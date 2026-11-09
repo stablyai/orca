@@ -125,7 +125,7 @@ describe('useDashboardSnapshot', () => {
     })
 
     expect(requestSnapshot).not.toHaveBeenCalled()
-    act(() => vi.advanceTimersByTime(1))
+    void act(() => vi.advanceTimersByTime(1))
     expect(requestSnapshot).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
   })
@@ -154,7 +154,7 @@ describe('useDashboardSnapshot', () => {
     })
     expect(requestSnapshot).not.toHaveBeenCalled()
 
-    act(() => vi.advanceTimersByTime(200))
+    void act(() => vi.advanceTimersByTime(200))
     expect(requestSnapshot).toHaveBeenCalledTimes(1)
     vi.useRealTimers()
   })

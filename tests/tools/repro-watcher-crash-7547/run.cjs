@@ -73,4 +73,4 @@ async function main() {
   process.exit(crashed ? 1 : 0)
 }
 
-main()
+void main()

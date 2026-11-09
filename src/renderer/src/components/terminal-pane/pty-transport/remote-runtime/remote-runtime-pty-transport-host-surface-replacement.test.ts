@@ -164,7 +164,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         return payload ? [payload.terminal] : []
       })
     expect(subscribedTerminals).toEqual(['terminal-stale', 'terminal-reconnected'])
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('reattaches from a later host snapshot after bounded replacement polling stops', async () => {
@@ -507,7 +507,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       )
       expect(onPtyExit).not.toHaveBeenCalled()
       expect(onError).not.toHaveBeenCalled()
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }

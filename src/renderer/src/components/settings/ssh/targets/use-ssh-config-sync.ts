@@ -21,7 +21,7 @@ export function useSshConfigSync(onSynced: () => Promise<void>): {
         reAdopt: options?.restoreRemoved === true
       })
       useAppStore.getState().recordSshRepoReadoptions(result.repoReadoptions)
-      recordFeatureInteraction('ssh')
+      void recordFeatureInteraction('ssh')
       if (mountedRef.current) {
         if (result.targets.length === 0) {
           toast(

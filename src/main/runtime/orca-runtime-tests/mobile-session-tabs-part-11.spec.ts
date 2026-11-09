@@ -249,7 +249,7 @@ describe('OrcaRuntimeService', () => {
       if (!terminal || terminal.status !== 'ready') {
         throw new Error('expected a ready terminal fixture')
       }
-      runtime.onPtyExit('serve-live-1', 0)
+      void runtime.onPtyExit('serve-live-1', 0)
       processes.length = 0
 
       const result = await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', {
@@ -522,7 +522,7 @@ describe('OrcaRuntimeService', () => {
       })
       runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
       await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
-      runtime.onPtyExit('persisted-pty', 0)
+      void runtime.onPtyExit('persisted-pty', 0)
       processes.length = 0
 
       await runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'host-tab', {

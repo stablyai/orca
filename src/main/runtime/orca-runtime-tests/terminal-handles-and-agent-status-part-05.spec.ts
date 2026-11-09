@@ -342,7 +342,7 @@ describe('OrcaRuntimeService', () => {
     const events: RuntimeMobileSessionTabsResult[] = []
     const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => events.push(snapshot))
 
-    ;(
+    void (
       runtime as unknown as {
         refreshPtyForegroundAgentFromController: (ptyId: string) => Promise<boolean>
       }

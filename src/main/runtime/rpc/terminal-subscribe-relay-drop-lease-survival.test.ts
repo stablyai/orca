@@ -107,7 +107,7 @@ describe('terminal subscribe when the relay dropped without an exit code', () =>
       expect(types()).not.toContain('end')
 
       // The host comes back and reports the real exit; only now may the lease retire.
-      real.onPtyExit(PTY_ID, 0)
+      void real.onPtyExit(PTY_ID, 0)
 
       await vi.waitFor(() => expect(registry.peekCleanup(subscriptionId)).toBeUndefined())
       expect(types()).toContain('end')

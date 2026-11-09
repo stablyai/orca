@@ -87,7 +87,7 @@ describe('a restored remote pane whose host was stopped', () => {
       await vi.waitFor(() => expect(transport.getPtyId()).toBe(ORIGINAL_ID))
       // Connected now: a second host return does not open it again.
       expect(transport.reopenAfterHostReturned?.()).toBe(false)
-      transport.destroy?.()
+      void transport.destroy?.()
     }
   )
 })

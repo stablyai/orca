@@ -61,7 +61,7 @@ it('routes between two composers by focus, survives disabled-handle replacement 
     expect(nativeChatComposerDestination(pane, null)).toBe(bottomRef.current)
     expect(captured?.kind).toBe('composer')
     if (captured) {
-      insertText('late transcript', captured)
+      void insertText('late transcript', captured)
     }
     expect(transcript).toHaveBeenCalledExactlyOnceWith('late transcript')
   } finally {

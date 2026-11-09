@@ -219,7 +219,7 @@ describe('remote runtime pane across a pairing rotation', () => {
     expect(latestSubscribePayload().terminal).toBe('terminal-1')
     await vi.waitFor(() => expect(inputFrameTexts().join('')).toBe('echo typed-after-update\r'))
     expect(onError).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('rebinds a pane whose stream reopened before main re-paired, instead of dropping its keys', async () => {
@@ -240,7 +240,7 @@ describe('remote runtime pane across a pairing rotation', () => {
     await vi.waitFor(() => expect(inputFrameTexts().join('')).toBe('echo typed-after-repair\r'))
     expect(latestSubscribePayload().terminal).toBe('terminal-1')
     expect(onError).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('rebinds a host session pane through its inventory on the new pairing', async () => {
@@ -260,7 +260,7 @@ describe('remote runtime pane across a pairing rotation', () => {
     expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
     expect(latestSubscribePayload().terminal).toBe('terminal-1')
     expect(onError).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('Reconnect rebinds a pane whose retries stopped while the server restarted re-paired', async () => {
@@ -293,7 +293,7 @@ describe('remote runtime pane across a pairing rotation', () => {
         expect(requestRevision(request)).toBe(2)
       }
       expect(onError).not.toHaveBeenCalled()
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -323,7 +323,7 @@ describe('remote runtime pane across a pairing rotation', () => {
         ].filter(([request]) => requestRevision(request) === 2)
         expect(reachedNewMachine).toEqual([])
         expect(inputFrameTexts()).toEqual([])
-        transport.destroy?.()
+        void transport.destroy?.()
       } finally {
         vi.useRealTimers()
       }
@@ -348,7 +348,7 @@ describe('remote runtime pane across a pairing rotation', () => {
       await vi.waitFor(() => expect(subscribeFrameCount()).toBe(2))
       emitSnapshot(latestSubscribePayload().streamId, 'prompt$ ')
       await vi.waitFor(() => expect(transport.getRecoveryState?.().phase).toBe('connected'))
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }

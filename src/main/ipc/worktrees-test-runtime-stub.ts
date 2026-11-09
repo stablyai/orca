@@ -66,6 +66,7 @@ export function createWorktreeRuntimeStub(mainWindow?: {
     })
   }
   runtimeStub.acquireFileWatcherRemoval.mockImplementation(
+    // oxlint-disable-next-line typescript/no-misused-promises -- test stub mirrors the async runtime method
     async (worktreePath: string, connectionId?: string) => {
       await (
         runtimeStub.closeFileWatchersForRemoval as (

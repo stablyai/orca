@@ -114,13 +114,13 @@ function AgentCapabilitiesSetupForRuntime(
     try {
       const result = await runOnboardingFeatureSetup(featureSetup)
       if (featureSetup.browserUse) {
-        recordFeatureInteraction('agent-browser-setup')
+        void recordFeatureInteraction('agent-browser-setup')
       }
       if (featureSetup.computerUse) {
-        recordFeatureInteraction('computer-use-setup')
+        void recordFeatureInteraction('computer-use-setup')
       }
       if (featureSetup.orchestration) {
-        recordFeatureInteraction('agent-orchestration-setup')
+        void recordFeatureInteraction('agent-orchestration-setup')
       }
       const firstWarning = result.warnings[0]
       if (firstWarning) {

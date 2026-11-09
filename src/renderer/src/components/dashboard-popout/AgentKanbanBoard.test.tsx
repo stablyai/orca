@@ -120,15 +120,15 @@ describe('AgentKanbanBoard', () => {
     expect(screen.getByTestId('card').dataset.now).toBe('100000')
     expect(vi.getTimerCount()).toBe(0)
 
-    act(() => vi.advanceTimersByTime(60_000))
+    void act(() => vi.advanceTimersByTime(60_000))
     expect(screen.getByTestId('card').dataset.now).toBe('100000')
 
     visibilityState = 'visible'
-    act(() => document.dispatchEvent(new Event('visibilitychange')))
+    void act(() => document.dispatchEvent(new Event('visibilitychange')))
     expect(screen.getByTestId('card').dataset.now).toBe('160000')
     expect(vi.getTimerCount()).toBe(1)
 
-    act(() => vi.advanceTimersByTime(30_000))
+    void act(() => vi.advanceTimersByTime(30_000))
     expect(screen.getByTestId('card').dataset.now).toBe('190000')
   })
 

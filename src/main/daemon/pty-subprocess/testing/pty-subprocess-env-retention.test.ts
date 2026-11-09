@@ -99,7 +99,7 @@ describe('native PTY spawn environment lifetime', () => {
       expect(onExit).toHaveBeenCalledWith(7, { kind: 'exited', exitCode: 7 })
       fixture.handle.write('after-exit')
       fixture.handle.kill()
-      fixture.handle.forceKill()
+      void fixture.handle.forceKill()
       expect(fixture.native.process.write).toHaveBeenCalledOnce()
     } finally {
       fixture.handle.dispose?.()

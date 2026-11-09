@@ -269,7 +269,7 @@ it('pairs to host-owned options and persists only a genuine pick on that host', 
     expect(rig.adapter.acquire).toHaveBeenCalledTimes(acquisitionsAfterAttach)
   } finally {
     await server.stop()
-    modelCatalog.stop()
+    void modelCatalog.stop()
     setStructuredAgentSessionHost(null)
     await rig.dispose()
   }

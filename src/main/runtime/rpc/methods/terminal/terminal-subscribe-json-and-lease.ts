@@ -44,7 +44,7 @@ export async function runTerminalJsonSubscription(args: TerminalSubscriptionArgs
     unsubscribeData()
     unsubscribeFit()
     if (registeredRemoteDesktopDriver && clientId) {
-      runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
+      void runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
     }
     resolveStream()
   })

@@ -91,7 +91,7 @@ export function useRemoteBrowserPageContextMenu({
       // Why: filled in below once the async eval reads the guest selection.
       selectionText: ''
     })
-    enqueueRemoteInput(async () => {
+    void enqueueRemoteInput(async () => {
       const operationToken = createRemoteOperationToken(pageId)
       if (!operationToken || !isCurrentRemoteOperationToken(operationToken)) {
         return

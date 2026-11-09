@@ -266,7 +266,7 @@ describe('OrcaRuntimeService', () => {
     runtime.syncWindowGraph(1, { tabs: [], leaves: [] })
     const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`)
     revealTerminalSession.mockClear()
-    runtime.onPtyExit('pty-bg', 0)
+    void runtime.onPtyExit('pty-bg', 0)
 
     await expect(runtime.focusTerminal(handle)).rejects.toThrow('terminal_exited')
     expect(revealTerminalSession).not.toHaveBeenCalled()

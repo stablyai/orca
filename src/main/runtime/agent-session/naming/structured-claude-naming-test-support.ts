@@ -298,7 +298,7 @@ export async function createClaudeNamingRuntime(
     async dispose() {
       native.dispose()
       await stopStructuredAgentSessionRuntime()
-      closeTestJournalHostDatabase(root)
+      await closeTestJournalHostDatabase(root)
       await rm(root, { recursive: true, force: true })
     }
   }

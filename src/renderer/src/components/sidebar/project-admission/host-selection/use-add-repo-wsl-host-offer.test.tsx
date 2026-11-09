@@ -120,7 +120,7 @@ describe('useAddRepoWslHostOffer', () => {
     expect(view.result.current.hostPath).toBeNull()
     cleanup()
     showNotice()
-    act(() => fireEvent.click(screen.getByRole('button', { name: 'Add on this computer' })))
+    void act(() => fireEvent.click(screen.getByRole('button', { name: 'Add on this computer' })))
     expect(addLocalPath).toHaveBeenCalledWith(PATH, 'local_folder_picker')
   })
 

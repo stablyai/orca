@@ -88,7 +88,7 @@ export function createAutomationRunActions({
     if (!result.ok) {
       return
     }
-    useAppStore.getState().recordFeatureInteraction('automation-run')
+    void useAppStore.getState().recordFeatureInteraction('automation-run')
     invalidateRowHost(row.key, 'run')
     await pageRefresh.hydratePersistedUIState()
     await pageRefresh.refresh()

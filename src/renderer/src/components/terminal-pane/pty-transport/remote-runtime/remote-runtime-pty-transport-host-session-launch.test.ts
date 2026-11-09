@@ -261,7 +261,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     })
 
     const connecting = transport.connect({ url: '', callbacks: {} })
-    transport.destroy?.()
+    void transport.destroy?.()
     resolveCreate({
       id: 'rpc-create',
       ok: true,

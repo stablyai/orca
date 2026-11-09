@@ -87,7 +87,7 @@ describe('remote runtime PTY whose host pane is not mounted yet', () => {
       const subscribesAtCutoff = subscribeFrameCount()
       await vi.advanceTimersByTimeAsync(4 * 60_000)
       expect(subscribeFrameCount()).toBe(subscribesAtCutoff)
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }

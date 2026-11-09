@@ -71,7 +71,7 @@ describe('SshConnection', () => {
     } finally {
       emitSshEvent('ready')
       await connected
-      conn.disconnect()
+      void conn.disconnect()
     }
   })
 
@@ -436,7 +436,7 @@ describe('SshConnection', () => {
       await vi.waitFor(() => expect(finish).toHaveBeenCalledWith([]))
       emitSshEvent('error', new Error('All configured authentication methods failed'))
       await expect(connecting).rejects.toThrow('All configured authentication methods failed')
-      conn.disconnect()
+      void conn.disconnect()
     })
 
     it('fails auth (not cancellation) when the server rejects an incorrect MFA answer', async () => {

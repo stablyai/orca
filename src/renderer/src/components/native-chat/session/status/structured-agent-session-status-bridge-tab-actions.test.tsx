@@ -152,7 +152,7 @@ describe('StructuredAgentSessionStatusBridge with tab actions', () => {
       expect.objectContaining({ state: 'working', terminalTitle: 'Renamed' })
     )
 
-    act(() => useAppStore.getState().closeUnifiedTab('chat-1'))
+    void act(() => useAppStore.getState().closeUnifiedTab('chat-1'))
     expect(statusFor('chat-1', 'session-1')).toBeUndefined()
   })
 

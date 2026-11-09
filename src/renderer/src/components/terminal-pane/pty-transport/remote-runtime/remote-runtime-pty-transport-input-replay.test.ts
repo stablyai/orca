@@ -193,7 +193,7 @@ describe('remote pane input across a silent outage', () => {
     endpointLost()
     // Why revert-sensitive: the remount discards this, and saying nothing is the silent loss.
     expect(undelivered).toBe(true)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('treats the frame as refused input on a stream without acks', async () => {
@@ -211,7 +211,7 @@ describe('remote pane input across a silent outage', () => {
       })
     )
     expect(undelivered).toBe(true)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it.each([
@@ -248,7 +248,7 @@ describe('remote pane input across a silent outage', () => {
     await vi.waitFor(() => expect(sentInputs(2)).toHaveLength(1))
     emitInputAck(latestSubscribePayload().streamId, sentInputs(2)[0].seq)
     await expect(second).resolves.toBe(true)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('replays input the dead stream never acknowledged onto the replacement stream (P1-1)', async () => {
@@ -272,7 +272,7 @@ describe('remote pane input across a silent outage', () => {
         { seq: lostSeq + 1, text: 'echo 3\r' }
       ])
     )
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('drops unacknowledged input instead of replaying it into a restarted host runtime', async () => {
@@ -288,7 +288,7 @@ describe('remote pane input across a silent outage', () => {
     transport.sendInput('ls\r', 'driving')
 
     await vi.waitFor(() => expect(sentInputs(2).map((input) => input.text)).toEqual(['ls\r']))
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('keeps Ctrl+C in sequence with typing across a silent outage', async () => {
@@ -315,7 +315,7 @@ describe('remote pane input across a silent outage', () => {
       emitInputAck(latestSubscribePayload().streamId, replayed.seq)
     }
     await expect(interrupted).resolves.toBe(true)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('keeps a paste still in size validation ahead of keys typed after the outage', async () => {
@@ -343,7 +343,7 @@ describe('remote pane input across a silent outage', () => {
       },
       { timeout: 10_000 }
     )
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it.each(['acknowledged', 'legacy', 'accepted key'] as const)(
@@ -430,7 +430,7 @@ describe('remote pane input across a silent outage', () => {
     await reconnect({ outputPause: 1 }, 2)
 
     await vi.waitFor(() => expect(sentInputs(2)).toEqual([{ seq: 0, text: 'echo 2\r' }]))
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('keeps debounced keys pending at detection instead of splitting the line (P1-2)', async () => {
@@ -453,7 +453,7 @@ describe('remote pane input across a silent outage', () => {
     await reconnect({ outputPause: 1 }, 2)
 
     await vi.waitFor(() => expect(sentText()).toBe('PZ600-0123\r'))
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('keeps input held past the auto-recovery window and delivers it when the same terminal returns within the grace (P1-3)', async () => {
@@ -493,7 +493,7 @@ describe('remote pane input across a silent outage', () => {
           .map((input) => input.text)
           .join('')
       ).toBe('HELD-1\rLATE-2\r')
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -538,7 +538,7 @@ describe('remote pane input across a silent outage', () => {
           .map((input) => input.text)
           .join('')
       ).toBe('ls\r')
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -584,7 +584,7 @@ describe('remote pane input across a silent outage', () => {
           .map((input) => input.text)
           .join('')
       ).toBe('ls\r')
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -609,7 +609,7 @@ describe('remote pane input across a silent outage', () => {
 
       // The given-up chunk's slot is filled empty so the host, which writes in order, can go on.
       expect(sentInputs(reattach).map((input) => input.text)).toEqual(['', 'ls\r'])
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -632,7 +632,7 @@ describe('remote pane input across a silent outage', () => {
       await vi.advanceTimersByTimeAsync(50)
 
       expect(sentInputs(reattach).map((input) => input.text)).toEqual(['echo retained ', ''])
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -662,7 +662,7 @@ describe('remote pane input across a silent outage', () => {
     await vi.waitFor(() => expect(sentInputs().at(-1)).toEqual({ seq: 4, text: 'd' }))
     expect(subscribeFrameCount()).toBe(1)
     expect(onWriteUnavailable).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('keeps resending through transient refusals, then falls back to a remount once they persist', async () => {
@@ -689,7 +689,7 @@ describe('remote pane input across a silent outage', () => {
       expect(onWriteUnavailable).toHaveBeenCalledTimes(1)
       emitInputAck(streamId, 0, RESEND_REQUEST)
       expect(onWriteUnavailable).toHaveBeenCalledTimes(1)
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -707,7 +707,7 @@ describe('remote pane input across a silent outage', () => {
     await vi.waitFor(() => expect(sentInputs(2)).toHaveLength(2))
     emitInputAck(latestSubscribePayload().streamId, sentInputs(2)[1].seq)
     await expect(opener).resolves.toBe(false)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('cancels a bracketed paste whose opener ack was lost, without sending the multiline body', async () => {
@@ -750,7 +750,7 @@ describe('remote pane input across a silent outage', () => {
 
     await expect(pasted).resolves.toMatchObject({ status: 'cancelled' })
     expect(sentText()).not.toContain('echo first')
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('reports an accepted write the host failed with unknown delivery as not sent, and never replays it', async () => {
@@ -765,7 +765,7 @@ describe('remote pane input across a silent outage', () => {
     await reconnect({ inputAck: 1 }, 2)
     transport.sendInput('ls\r', 'driving')
     await vi.waitFor(() => expect(sentInputs(2).map((input) => input.text)).toEqual(['ls\r']))
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it.each([1, 2])(
@@ -818,7 +818,7 @@ describe('remote pane input across a silent outage', () => {
         emitInputAck(latestSubscribePayload().streamId, replayed.seq)
       }
       await expect(write).resolves.toBe(true)
-      transport.destroy?.()
+      void transport.destroy?.()
     }
   )
 })

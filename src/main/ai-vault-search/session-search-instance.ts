@@ -57,7 +57,7 @@ export class SessionSearchInstance {
   private queue(settings: AiVaultSearchSettings, clear: boolean): Promise<void> {
     const old = this.live
     this.live = null
-    old?.indexer.close()
+    void old?.indexer.close()
     const retired = old
       ? Promise.all([old.indexer.retired(), old.readers.close()])
       : Promise.resolve()
@@ -77,7 +77,7 @@ export class SessionSearchInstance {
       try {
         await indexer.initialize()
       } catch (error) {
-        indexer.close()
+        void indexer.close()
         await indexer.retired()
         throw error
       }
@@ -88,7 +88,7 @@ export class SessionSearchInstance {
       this.live = { indexer, readers }
       void indexer.start().catch(this.onError)
     })
-    this.trackTransition(operation)
+    void this.trackTransition(operation)
     return operation
   }
   async search(
@@ -141,7 +141,7 @@ export class SessionSearchInstance {
     if (!live) {
       return
     }
-    live.indexer.close()
+    void live.indexer.close()
     await Promise.all([live.indexer.retired(), live.readers.close()])
   }
 }

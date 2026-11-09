@@ -158,11 +158,12 @@ export function WslAgentSkillSetupPanel({
       }
     }
 
-    void refreshCliNotice()
-    window.addEventListener('focus', refreshCliNotice)
+    const handleFocus = (): void => void refreshCliNotice()
+    handleFocus()
+    window.addEventListener('focus', handleFocus)
     return () => {
       canceled = true
-      window.removeEventListener('focus', refreshCliNotice)
+      window.removeEventListener('focus', handleFocus)
     }
   }, [isPrerequisiteAvailable, preInstallNotice, readPrerequisiteStatus])
 

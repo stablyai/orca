@@ -109,14 +109,14 @@ describe('useNow', () => {
     })
     expect(hook.result.current).toBe(1_000)
 
-    act(() => vi.advanceTimersByTime(5_000))
+    void act(() => vi.advanceTimersByTime(5_000))
     expect(hook.result.current).toBe(1_000)
 
     vi.setSystemTime(6_000)
     hook.rerender({ enabled: true })
     expect(hook.result.current).toBe(6_000)
 
-    act(() => vi.advanceTimersByTime(1_000))
+    void act(() => vi.advanceTimersByTime(1_000))
     expect(hook.result.current).toBe(7_000)
   })
 })

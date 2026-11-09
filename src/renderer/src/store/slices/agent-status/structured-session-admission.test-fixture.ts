@@ -2,7 +2,7 @@ import type { admitStructuredAgentSession } from '@/lib/agent-session/structured
 
 export function admissionFromBusy(busy: () => boolean): typeof admitStructuredAgentSession {
   return (_workspace, _tab, _intent, effect) => {
-    effect(busy(), {
+    void effect(busy(), {
       current: () => true,
       busy,
       signal: new AbortController().signal

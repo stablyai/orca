@@ -4,7 +4,7 @@ import { useAppStore } from '../../store'
 /** Installs updater listeners in their historical snapshot-before-push order. */
 export function registerUpdaterStatusIpcBridge(unsubs: (() => void)[]): void {
   // Current behavior intentionally permits the initial snapshot to overwrite an earlier push.
-  window.api.updater.getStatus().then((status) => {
+  void window.api.updater.getStatus().then((status) => {
     useAppStore.getState().setUpdateStatus(status as UpdateStatus)
   })
 

@@ -21,7 +21,7 @@ describe('createRuntimeAutomationRunTerminalObserver', () => {
       foregroundProcess: 'bash',
       data: ''
     })
-    runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', { providerExitObserved: true })
+    void runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', { providerExitObserved: true })
     vi.useFakeTimers()
     const observer = createRuntimeAutomationRunTerminalObserver(runtime)
     await expect(

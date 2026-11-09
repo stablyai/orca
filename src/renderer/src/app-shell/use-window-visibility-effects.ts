@@ -14,7 +14,7 @@ export function useWindowVisibilityEffects(): void {
         actions.refreshAllGitHub()
         actions.bumpGitHubPRVisibleRefreshGeneration()
       } else {
-        actions.reportVisibleGitHubPRRefreshCandidates([], Date.now())
+        void actions.reportVisibleGitHubPRRefreshCandidates([], Date.now())
       }
     }
     document.addEventListener('visibilitychange', handler)

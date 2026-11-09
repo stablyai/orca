@@ -146,7 +146,7 @@ function discardConpty(
   watch: Pick<ConptyStartupWatch, 'claim'>
 ): void {
   watch.claim()
-  physicalOwner.forceKill()
+  void physicalOwner.forceKill()
 }
 
 // Why process-wide: the announcement is a fact of the bundled ConPTY build. Until one pane shows
@@ -215,7 +215,7 @@ export async function spawnConptyWithInputReader(
   )
   let limit: ReturnType<typeof setTimeout> | undefined
   try {
-    firstOwner.forceKill()
+    void firstOwner.forceKill()
     const exited = await Promise.race([
       firstOwner.completion.then(() => true),
       new Promise<false>((resolve) => {

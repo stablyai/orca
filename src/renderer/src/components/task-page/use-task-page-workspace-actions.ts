@@ -48,7 +48,7 @@ export function useTaskPageWorkspaceActions<Model extends TaskPageWorkspaceActio
   )
   const handleUseWorkItem = useCallback(
     (item: GitHubWorkItem): void => {
-      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      void useAppStore.getState().recordFeatureInteraction('github-tasks')
       openComposerForItem(item)
     },
     [openComposerForItem]
@@ -83,7 +83,7 @@ export function useTaskPageWorkspaceActions<Model extends TaskPageWorkspaceActio
         )
         return
       }
-      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      void useAppStore.getState().recordFeatureInteraction('github-tasks')
     },
     [handleUseWorkItem]
   )
@@ -117,7 +117,7 @@ export function useTaskPageWorkspaceActions<Model extends TaskPageWorkspaceActio
   )
   const handleUseGitLabItem = useCallback(
     (item: GitLabWorkItem): void => {
-      useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
+      void useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
       openComposerForGitLabItem(item)
     },
     [openComposerForGitLabItem]

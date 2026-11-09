@@ -38,7 +38,7 @@ function createRemovableRuntime(onFirstStop?: () => void): {
       return false
     }
     // Like the provider: a stopped PTY exits and leaves the runtime's table.
-    runtime.onPtyExit(ptyId, 0)
+    void runtime.onPtyExit(ptyId, 0)
     return true
   })
   const runtime = new OrcaRuntimeService({ ...store, removeProjectForHost })

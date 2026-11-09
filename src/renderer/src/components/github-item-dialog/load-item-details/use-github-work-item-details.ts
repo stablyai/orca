@@ -227,7 +227,7 @@ export function useGitHubWorkItemDetails({
   const pendingViewedPaths = cachedEntry?.viewed?.paths ?? EMPTY_VIEWED_PATHS
   const appendOptimisticComment = useCallback(
     (comment: PRComment) => {
-      useAppStore.getState().recordFeatureInteraction('github-tasks')
+      void useAppStore.getState().recordFeatureInteraction('github-tasks')
       if (detailsCacheKey) {
         settleWorkItemComment(detailsCacheKey, comment)
       }

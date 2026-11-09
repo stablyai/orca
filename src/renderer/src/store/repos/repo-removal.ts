@@ -209,7 +209,7 @@ export function createRepoRemovalActions(
           for (const tab of tabs) {
             for (const ptyId of get().ptyIdsByTabId[tab.id] ?? []) {
               if (!isRemoteRuntimePtyId(ptyId)) {
-                window.api.pty.kill(ptyId)
+                void window.api.pty.kill(ptyId)
               }
             }
           }

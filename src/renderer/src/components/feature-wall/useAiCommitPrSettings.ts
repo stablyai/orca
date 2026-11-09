@@ -129,7 +129,7 @@ export function useAiCommitPrSettings(): AiCommitPrSettingsViewModel {
     if (!latest) {
       return
     }
-    updateSettings({ commitMessageAi: { ...readCommitMessageAiSettings(latest), ...patch } })
+    void updateSettings({ commitMessageAi: { ...readCommitMessageAiSettings(latest), ...patch } })
   }
 
   const toggleAi = (): void => {
@@ -215,7 +215,7 @@ export function useAiCommitPrSettings(): AiCommitPrSettingsViewModel {
         selectedThinkingByModel[modelId] = model.defaultThinkingLevel
       }
     }
-    updateSettings({
+    void updateSettings({
       commitMessageAi: {
         ...latest,
         ...(agentChanged ? { agentId: agent } : {}),

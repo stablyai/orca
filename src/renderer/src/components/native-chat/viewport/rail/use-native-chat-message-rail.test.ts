@@ -121,7 +121,7 @@ describe('message rail hook', () => {
     it('is let go once its row moves, whatever moved it', () => {
       const { result, view, settle, unmount } = clampedJump()
       // Even a jump that fires no scroll must settle.
-      act(() => vi.runAllTimers())
+      void act(() => vi.runAllTimers())
       view.scrollTop = 100
       settle()
       expect(result.current.activeId).toBe('u1')

@@ -173,7 +173,7 @@ describe('createIpcPtyTransport', () => {
 
     const snapshots = unregisterPtyDataHandlers(['pty-1'])
     onReplay?.({ id: 'pty-1', data: 'rollback replay while hidden' })
-    first.destroy?.()
+    void first.destroy?.()
     restorePtyDataHandlersAfterFailedShutdown(snapshots)
 
     const replayedAfterAttach = vi.fn()

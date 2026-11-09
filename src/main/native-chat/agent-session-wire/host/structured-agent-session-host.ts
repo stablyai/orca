@@ -171,7 +171,7 @@ export class StructuredAgentSessionHost {
       now: () => this.now(),
       publishStatus: this.clientDelivery.publishStatus,
       generationEnded: this.clientDelivery.publishGenerationEnded,
-      wakeDelivery: (sessionId: string) => this.conversationDelivery.loop.wake(sessionId),
+      wakeDelivery: (sessionId: string) => void this.conversationDelivery.loop.wake(sessionId),
       endExitedChild: this.eventRecovery.endExitedChildUnderSerialize
     } satisfies StructuredAgentSessionLifetimeContext
   }
@@ -251,6 +251,7 @@ export class StructuredAgentSessionHost {
       restartResume: this.restartResume,
       serialize: this.serialize,
       trigger: options?.trigger ?? 'quit'
+      // oxlint-disable-next-line typescript/no-misused-promises -- Promise#finally awaits closeAll and propagates its rejection
     }).finally(() => this.clientDelivery.closeAll())
   }
 

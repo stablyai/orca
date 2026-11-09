@@ -37,7 +37,7 @@ export function useWorktreeJumpPaletteTaskSelection({
       skipRestoreFocusRef.current = true
       setSelectedItemId('')
       openCmdJTask(result, createWorkspace)
-      recordFeatureInteraction('cmd-j')
+      void recordFeatureInteraction('cmd-j')
     },
     [
       visible,

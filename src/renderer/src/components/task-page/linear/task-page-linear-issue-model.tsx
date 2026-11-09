@@ -130,7 +130,7 @@ export function LinearStateCell({
           useAppStore.getState().invalidateLinearIssueLists({
             scope
           })
-          useAppStore.getState().recordFeatureInteraction('linear-tasks')
+          void useAppStore.getState().recordFeatureInteraction('linear-tasks')
         })
         .catch(() => {
           if (reqId !== reqRef.current) {

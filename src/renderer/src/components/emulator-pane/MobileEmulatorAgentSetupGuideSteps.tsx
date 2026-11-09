@@ -43,10 +43,10 @@ export function MobileEmulatorAgentSetupGuideSteps({
         error={setup.cliSkillError}
         showInstallWhenInstalled={!setup.cliSkillInstalled}
         onBeforeInstall={() => {
-          recordFeatureInteraction('mobile-emulator-agent-setup')
+          void recordFeatureInteraction('mobile-emulator-agent-setup')
         }}
         onRecheck={() => {
-          recordFeatureInteraction('mobile-emulator-agent-setup')
+          void recordFeatureInteraction('mobile-emulator-agent-setup')
           void setup.recheckSetup()
         }}
       />

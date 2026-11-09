@@ -60,6 +60,7 @@ export function useMiniMaxCredentials(owner: RuntimeClientTarget) {
       setStatus,
       setAccess,
       setMiniMaxCredentialBusy,
+      // oxlint-disable-next-line typescript/no-misused-promises -- recordFeatureInteraction catches its own persist failure
       recordFeatureInteraction
     },
     t

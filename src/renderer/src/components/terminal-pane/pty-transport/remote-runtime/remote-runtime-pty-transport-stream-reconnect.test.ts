@@ -85,7 +85,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(runtimeSubscribe).toHaveBeenCalled()
       expect(transport.getPtyId()).not.toBeNull()
     })
-    transport.destroy?.()
+    void transport.destroy?.()
     resolveSubscribe({ unsubscribe, sendBinary: subscriptionSendBinary })
     await connect
 
@@ -249,7 +249,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     ])
     expect(onData.mock.calls.map((call) => call[0])).toEqual(['LIVE_AFTER_RECONNECT'])
     expect(onOutputPauseChanged).toHaveBeenLastCalledWith(false, true, false)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('re-arms the retained-buffer restore when a recovery subscribe replays no snapshot', async () => {
@@ -320,7 +320,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       'INITIAL_SNAPSHOT',
       'RECOVERY_SNAPSHOT'
     ])
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('backs off before retrying a capacity-rejected terminal stream', async () => {
@@ -355,7 +355,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
       await vi.advanceTimersByTimeAsync(1)
       await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(2))
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -400,7 +400,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(3))
     expect(onError).not.toHaveBeenCalled()
     expect(recoveryPhases).toContain('backoff')
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('surfaces fatal transport errors once without retrying or double-unsubscribing', async () => {
@@ -426,7 +426,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(unsubscribe).toHaveBeenCalledTimes(1)
     expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
     expect(transport.isConnected()).toBe(false)
-    transport.destroy?.()
+    void transport.destroy?.()
     expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
 
@@ -487,7 +487,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     expect(onError).not.toHaveBeenCalled()
     expect(runtimeSubscribe).toHaveBeenCalledTimes(11)
-    transport.destroy?.()
+    void transport.destroy?.()
     expect(unsubscribeByEpoch.every((unsubscribe) => unsubscribe.mock.calls.length === 1)).toBe(
       true
     )
@@ -563,7 +563,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(transport.getRecoveryState?.().phase).toBe('connected')
       expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1')
       expect(recoveryStates.at(-1)?.epoch).toBeGreaterThan(disconnectedState?.epoch ?? 0)
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -602,7 +602,7 @@ describe('createRemoteRuntimePtyTransport', () => {
     emitSnapshot(latestSubscribePayload().streamId, 'after drop')
     await vi.waitFor(() => expect(transport.getRecoveryState?.().phase).toBe('connected'))
     expect(transport.getRecoveryState?.().cause).toBeUndefined()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   // #25783/#9092: a route returning without `online` (Tailscale, VPN) left a latched pane dead.
@@ -662,7 +662,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(getControlReadyReviverCountForTests('env-1')).toBe(1)
       transport.detach?.()
       expect(getControlReadyReviverCountForTests('env-1')).toBe(0)
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -742,6 +742,6 @@ describe('createRemoteRuntimePtyTransport', () => {
     transportCallbacks[1].onClose?.()
 
     await vi.waitFor(() => expect(transportCallbacks).toHaveLength(3))
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 })

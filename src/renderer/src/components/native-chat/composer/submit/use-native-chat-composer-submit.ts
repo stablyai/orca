@@ -225,9 +225,9 @@ export function useNativeChatComposerSubmit(args: {
         submitEmpty?.()
       } else if (!disabled) {
         if (intent) {
-          sendStructured(draft, imageAttachments, intent)
+          void sendStructured(draft, imageAttachments, intent)
         } else {
-          sendStructured(draft, imageAttachments)
+          void sendStructured(draft, imageAttachments)
         }
       }
     },

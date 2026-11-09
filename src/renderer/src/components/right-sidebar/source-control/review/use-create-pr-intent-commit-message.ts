@@ -72,7 +72,7 @@ export function useSourceControlCreatePrIntentCommitMessage({
           }
           return { ok: false, reason: result.canceled ? 'canceled' : 'failed' }
         }
-        useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
+        void useAppStore.getState().recordFeatureInteraction('ai-commit-generation')
         operationStore.setState({ generateError: null })
         return { ok: true, message: result.message }
       } catch (error) {

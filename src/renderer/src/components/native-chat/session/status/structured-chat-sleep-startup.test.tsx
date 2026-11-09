@@ -28,7 +28,7 @@ import { useAppStore } from '@/store'
 import { StructuredAgentSessionStatusBridge } from './StructuredAgentSessionStatusBridge'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/native-chat/status/structured-agent-session-status-feed'
 function emit(event: AgentSessionStatusEvent, index = 0): void {
-  act(() => mocks.subscribeStatus.mock.calls[index][1](event))
+  void act(() => mocks.subscribeStatus.mock.calls[index][1](event))
 }
 afterEach(() => {
   cleanup()

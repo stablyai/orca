@@ -305,6 +305,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
         sendHeld,
         ...picker,
         structuredTransport,
+        // oxlint-disable-next-line typescript/no-misused-promises -- sendStructured settles to false on failure; identity must stay stable
         sendStructured,
         ptyCommandRouting: { ...ptyCommandRouting, setActiveSuggestion },
         setNotice,

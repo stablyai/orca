@@ -64,7 +64,7 @@ export function renderOpenCodeAccountsSection(
                 size="xs"
                 onClick={() => {
                   recordFeatureInteraction('usage-tracking')
-                  updateSettings({ opencodeSessionCookie: '' })
+                  void updateSettings({ opencodeSessionCookie: '' })
                 }}
                 className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
               >
@@ -121,7 +121,7 @@ export function renderOpenCodeAccountsSection(
                 size="xs"
                 onClick={() => {
                   recordFeatureInteraction('usage-tracking')
-                  updateSettings({ opencodeWorkspaceId: '' })
+                  void updateSettings({ opencodeWorkspaceId: '' })
                 }}
                 className="h-7 shrink-0 text-xs text-muted-foreground hover:text-foreground"
               >

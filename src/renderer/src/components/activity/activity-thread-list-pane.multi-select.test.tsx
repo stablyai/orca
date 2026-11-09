@@ -139,8 +139,8 @@ describe('ActivityThreadListPane multi-select', () => {
     const doneHeader = Array.from(container.querySelectorAll<HTMLElement>('[role="button"]')).find(
       (element) => element.textContent?.includes('Done')
     )
-    act(() => doneHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
-    act(() => doneHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    void act(() => doneHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    void act(() => doneHeader?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
 
     expect(selectedTitles()).toEqual(['Agent A'])
   })

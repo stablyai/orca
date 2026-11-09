@@ -94,7 +94,7 @@ describe('Explicit desktop read acknowledgements', () => {
     await waitFor(() => expect(fixture.completion).toBeTypeOf('function'))
     act(() => settleTurn())
     await waitFor(() => expect(transport.dispatch).toHaveBeenCalledTimes(1))
-    act(() => useAppStore.getState().acknowledgeAgents([SUBJECT], undefined, 'explicit'))
+    void act(() => useAppStore.getState().acknowledgeAgents([SUBJECT], undefined, 'explicit'))
     await flush()
     expect(dismissIds()).toEqual([
       `${agentSessionAttentionSubjectPrefix(SCOPE, SESSION)}turn:turn-1`
@@ -183,7 +183,7 @@ describe('Explicit desktop read acknowledgements', () => {
     await waitFor(() => expect(fixture.hydrate).toBeTypeOf('function'))
     await act(async () => fixture.hydrate?.())
     await waitFor(() => expect(dismissIds()).toHaveLength(1))
-    act(() => useAppStore.setState({ activeWorktreeId: 'elsewhere' }))
+    void act(() => useAppStore.setState({ activeWorktreeId: 'elsewhere' }))
     screen.rerender(bridge(false))
     await flush()
     transport.dispatch.mockClear()
@@ -197,7 +197,7 @@ describe('Explicit desktop read acknowledgements', () => {
       otherFeed.observe(OTHER)
     })
     await waitFor(() => expect(transport.dispatch).toHaveBeenCalledTimes(2))
-    act(() =>
+    void act(() =>
       useAppStore.getState().acknowledgeAgents([SUBJECT, otherSubject], undefined, 'explicit')
     )
     await flush()
@@ -260,7 +260,7 @@ describe('Viewed structured session owner lifecycle', () => {
   /** The user opens the chat: the pane reads its history and views it. */
   async function show(rerender: () => void): Promise<void> {
     fixture.hydrate = undefined
-    act(() => useAppStore.getState().setActiveWorktree(WORKSPACE))
+    void act(() => useAppStore.getState().setActiveWorktree(WORKSPACE))
     rerender()
     await waitFor(() => expect(fixture.hydrate).toBeTypeOf('function'))
     await act(async () => fixture.hydrate?.())
@@ -284,13 +284,13 @@ describe('Viewed structured session owner lifecycle', () => {
     const screen = await promptWhileAway()
     await show(() => screen.rerender(tree({ shown: true })))
     expect(dismissIds()).toContain(PROMPT_A)
-    act(() => useAppStore.setState({ activeWorktreeId: 'elsewhere' }))
+    void act(() => useAppStore.setState({ activeWorktreeId: 'elsewhere' }))
     screen.rerender(tree({ shown: false }))
     await settle()
     act(() => addPrompt('B'))
     await settle()
     // An owner that already holds history resumes its journal stream instead of re-reading it.
-    act(() => useAppStore.getState().setActiveWorktree(WORKSPACE))
+    void act(() => useAppStore.getState().setActiveWorktree(WORKSPACE))
     screen.rerender(tree({ shown: true }))
     await settle()
     act(() => publishView())
@@ -363,7 +363,7 @@ describe('Accepted structured history read retirement', () => {
     act(() => addPrompt('A'))
     await act(async () => fixture.hydrate?.())
     await waitFor(() => expect(fixture.journal).toBeTypeOf('function'))
-    act(() => useAppStore.getState().acknowledgeAgents([SUBJECT]))
+    void act(() => useAppStore.getState().acknowledgeAgents([SUBJECT]))
     await waitFor(() => expect(dismissIds()).toHaveLength(1))
     const stamp = useAppStore.getState().acknowledgedAgentsByPaneKey[SUBJECT]
     act(() => {
@@ -372,7 +372,7 @@ describe('Accepted structured history read retirement', () => {
     })
     expect(dismissIds()).toHaveLength(1)
     expect(useAppStore.getState().unreadAgentCompletionPanes[SUBJECT]).toBe('agent-completion')
-    act(() => useAppStore.setState({ activeWorktreeId: WORKSPACE }))
+    void act(() => useAppStore.setState({ activeWorktreeId: WORKSPACE }))
     screen.rerender(
       createElement(
         Fragment,
@@ -547,7 +547,7 @@ describe('Accepted structured history read retirement', () => {
     await waitFor(() => expect(fixture.hydrate).toBeTypeOf('function'))
     await act(async () => fixture.hydrate?.())
     expect(readCalls()).toBe(1)
-    act(() => useAppStore.getState().acknowledgeAgents([SUBJECT]))
+    void act(() => useAppStore.getState().acknowledgeAgents([SUBJECT]))
     expect(readCalls()).toBe(1)
     act(() => {
       addPrompt('B')

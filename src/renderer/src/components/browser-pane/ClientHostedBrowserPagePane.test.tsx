@@ -120,7 +120,7 @@ describe('ClientHostedBrowserPagePane', () => {
     )
     onUpdatePageState.mockClear()
 
-    act(() =>
+    void act(() =>
       webview.dispatchEvent(
         Object.assign(new Event('did-fail-load'), {
           errorCode: -3,
@@ -132,7 +132,7 @@ describe('ClientHostedBrowserPagePane', () => {
     )
     expect(onUpdatePageState).not.toHaveBeenCalled()
 
-    act(() =>
+    void act(() =>
       webview.dispatchEvent(
         Object.assign(new Event('did-fail-load'), {
           errorCode: -105,
@@ -150,7 +150,7 @@ describe('ClientHostedBrowserPagePane', () => {
     expect(onUpdatePageState).toHaveBeenCalledWith('page-a', { loading: false, loadError })
     // Why: did-stop-loading follows did-fail-load and must not wipe the failure.
     onUpdatePageState.mockClear()
-    act(() => webview.dispatchEvent(new Event('did-stop-loading')))
+    void act(() => webview.dispatchEvent(new Event('did-stop-loading')))
     expect(onUpdatePageState).toHaveBeenCalledWith('page-a', expect.objectContaining({ loadError }))
 
     view.rerender(

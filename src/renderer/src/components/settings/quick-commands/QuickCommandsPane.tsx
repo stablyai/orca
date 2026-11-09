@@ -245,7 +245,7 @@ export function QuickCommandsPane({
       setEditor(null)
       return false
     }
-    useAppStore.getState().recordFeatureInteraction('quick-commands')
+    void useAppStore.getState().recordFeatureInteraction('quick-commands')
     return await useAppStore.getState().upsertTerminalQuickCommand(editor.hostId, next)
   }
 

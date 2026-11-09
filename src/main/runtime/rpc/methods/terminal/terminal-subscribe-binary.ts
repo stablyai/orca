@@ -80,7 +80,7 @@ export async function runTerminalBinarySubscription(args: TerminalSubscriptionAr
     abortRendererMountWait()
     // Registration owns phone presence; only desktop viewers take width floors here.
     if (!isMobile && registeredRemoteDesktopDriver && clientId) {
-      runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
+      void runtime.unregisterRemoteDesktopViewer(ptyId, remoteDesktopSubscriptionKey)
     }
     resolveStream()
   })

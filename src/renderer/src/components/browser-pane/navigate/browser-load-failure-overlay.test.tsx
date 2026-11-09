@@ -84,9 +84,9 @@ describe('BrowserLoadFailureOverlay', () => {
     }
     expect(screen.queryByText('Connecting…')).toBeNull()
 
-    act(() => vi.advanceTimersByTime(199))
+    void act(() => vi.advanceTimersByTime(199))
     expect(screen.queryByText('Connecting…')).toBeNull()
-    act(() => vi.advanceTimersByTime(1))
+    void act(() => vi.advanceTimersByTime(1))
     expect(screen.getByRole('button', { name: 'Connecting…' })).toBeDisabled()
 
     await act(async () => resolveProceed?.({ ok: true }))

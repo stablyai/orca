@@ -112,7 +112,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
           if (syntheticExit) {
             session.runtime?.markPtyStopRequested(payload.id)
           }
-          session.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId, {
+          void session.runtime?.onPtyExit(payload.id, payload.code, payload.incarnationId, {
             providerExitObserved: true,
             ...(viewShown ? { viewShown } : {}),
             ...(payload.cause ? { cause: payload.cause } : {}),

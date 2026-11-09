@@ -75,7 +75,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
   const handleUseLinearItem = useCallback(
     (issue: LinearIssue): void => {
       // Open the prefilled dialog so name, agent and setup still receive user confirmation.
-      useAppStore.getState().recordFeatureInteraction('linear-tasks')
+      void useAppStore.getState().recordFeatureInteraction('linear-tasks')
       openComposerForLinearItem(issue)
     },
     [openComposerForLinearItem]
@@ -83,7 +83,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
   const handleOpenOrUseLinearItem = useCallback(
     (issue: LinearIssue): void => {
       if (openLinearIssueWorkspaceOrStart(issue, () => handleUseLinearItem(issue)) === 'opened') {
-        useAppStore.getState().recordFeatureInteraction('linear-tasks')
+        void useAppStore.getState().recordFeatureInteraction('linear-tasks')
       }
     },
     [handleUseLinearItem]
@@ -230,7 +230,7 @@ export function useTaskPageComposerActions(model: TaskPageJiraListEffectsModel) 
   )
   const handleUseJiraItem = useCallback(
     (issue: JiraIssue): void => {
-      useAppStore.getState().recordFeatureInteraction('jira-tasks')
+      void useAppStore.getState().recordFeatureInteraction('jira-tasks')
       openComposerForJiraItem(issue)
     },
     [openComposerForJiraItem]

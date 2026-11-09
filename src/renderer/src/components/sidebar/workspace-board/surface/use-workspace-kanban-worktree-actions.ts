@@ -39,7 +39,7 @@ export function useWorkspaceKanbanWorktreeActions(args: {
   worktreesByStatus: ReadonlyMap<string, readonly Worktree[]>
 }) {
   const recordInteraction = (): void => {
-    useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
+    void useAppStore.getState().recordFeatureInteraction('workspace-board-actions')
   }
   const getSourceStatusKeys = useCallback(
     (worktreeKeys: readonly string[]): WorkspaceStatus[] =>

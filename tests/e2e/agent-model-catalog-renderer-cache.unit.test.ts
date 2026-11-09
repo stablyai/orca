@@ -100,7 +100,7 @@ describe('account catalog to renderer cache', () => {
       const first = hostCatalog(agent)
       await first.service.read({ agent, waitForListing: true })
       expect(first.probe).toHaveBeenCalledTimes(1)
-      first.service.stop()
+      void first.service.stop()
       const { service, probe, resolveAccountHome, entered, scope, hold } = hostCatalog(
         agent,
         first.store
@@ -170,7 +170,7 @@ describe('account catalog to renderer cache', () => {
         ).toBeUndefined()
       } finally {
         scope.resolve()
-        service.stop()
+        void service.stop()
       }
     }
   )

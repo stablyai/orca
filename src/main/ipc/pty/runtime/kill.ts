@@ -40,7 +40,7 @@ export function publishSyntheticExit(
   if (evidence instanceof PtyRetirementWithoutProof) {
     deps.runtime?.markPtyLivenessUnverifiable?.(ptyId, evidence.unverifiableReason)
   }
-  deps.runtime?.onPtyExit(ptyId, code, incarnationId)
+  void deps.runtime?.onPtyExit(ptyId, code, incarnationId)
   deps.rememberSyntheticKillExit(ptyId, incarnationId)
   deps.sendPtyExitToRenderer({ id: ptyId, code, ...(incarnationId ? { incarnationId } : {}) })
 }
@@ -88,7 +88,7 @@ export function killPtyFromRuntimeController(
     if (retiredRejectedPtyIds.has(ptyId)) {
       return
     }
-    runtime?.onPtyExit(ptyId, -1, incarnationId)
+    void runtime?.onPtyExit(ptyId, -1, incarnationId)
   }
   const killWithCurrentProvider = (): boolean => {
     let provider: IPtyProvider
@@ -168,7 +168,7 @@ export function retireRejectedPtyFromRuntimeController(
   }
   // Avoid duplicate renderer exits, but finalize runtime exit so a permanently closed SSH pane is not preserved.
   if (!ptyOwnership.has(ptyId)) {
-    runtime?.onPtyExit(ptyId, 0, incarnationId)
+    void runtime?.onPtyExit(ptyId, 0, incarnationId)
     return
   }
   const proof = PtyExitProof.from('stop-confirmed', incarnationId)

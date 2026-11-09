@@ -150,7 +150,7 @@ describe('OrcaRuntimeService', () => {
       write: () => true,
       kill: () => false,
       stopAndWait: async (ptyId) => {
-        runtime.onPtyExit(ptyId, -1)
+        void runtime.onPtyExit(ptyId, -1)
         return true
       },
       getForegroundProcess: async () => null,

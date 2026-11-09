@@ -341,7 +341,7 @@ describe('Orca documentIds in native scripting targets', () => {
     sendMessage.mockRejectedValueOnce(new Error('Receiving end does not exist'))
     const callback = vi.fn()
     const error = await new Promise((resolve) => {
-      chrome.tabs.sendMessage(3, 'private payload', { documentId: ORCA_TOP }, () => {
+      void chrome.tabs.sendMessage(3, 'private payload', { documentId: ORCA_TOP }, () => {
         callback()
         resolve(chrome.runtime.lastError)
       })

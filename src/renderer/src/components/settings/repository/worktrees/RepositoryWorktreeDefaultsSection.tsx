@@ -182,7 +182,7 @@ export function RepositoryWorktreeDefaultsSection({
             if (worktreeBasePath === (repo.worktreeBasePath?.trim() || undefined)) {
               return
             }
-            updateRepo(repo.id, { worktreeBasePath })
+            void updateRepo(repo.id, { worktreeBasePath })
           }}
           className="h-9 text-sm"
         />

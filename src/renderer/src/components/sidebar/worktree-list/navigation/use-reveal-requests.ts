@@ -206,15 +206,12 @@ export function useSidebarRevealRequests(args: {
   )
 
   useEffect(() => {
-    window.addEventListener(
-      SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
-      handleRevealCurrentWorkspaceRequest
-    )
+    const handleEvent = (event: Event): void => {
+      void handleRevealCurrentWorkspaceRequest(event)
+    }
+    window.addEventListener(SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT, handleEvent)
     return () => {
-      window.removeEventListener(
-        SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT,
-        handleRevealCurrentWorkspaceRequest
-      )
+      window.removeEventListener(SCROLL_TO_CURRENT_WORKSPACE_REVEAL_REQUEST_EVENT, handleEvent)
     }
   }, [handleRevealCurrentWorkspaceRequest])
 }

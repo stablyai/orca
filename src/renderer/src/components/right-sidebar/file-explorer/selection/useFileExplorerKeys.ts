@@ -270,14 +270,14 @@ export function useFileExplorerKeys(opts: {
       }
       if (wantsCopyRelativePath) {
         e.preventDefault()
-        window.api.ui.writeClipboardText(
+        void window.api.ui.writeClipboardText(
           formatFileExplorerPathsForClipboard(fallbackNodes, 'relative', pathOwnerRef.current)
         )
         return
       }
       if (wantsCopyPath) {
         e.preventDefault()
-        window.api.ui.writeClipboardText(
+        void window.api.ui.writeClipboardText(
           formatFileExplorerPathsForClipboard(fallbackNodes, 'absolute', pathOwnerRef.current)
         )
       }

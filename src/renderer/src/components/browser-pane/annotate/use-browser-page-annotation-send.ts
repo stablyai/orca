@@ -104,14 +104,14 @@ export function useBrowserPageAnnotationSend({
       return
     }
     void window.api.ui.writeClipboardText(copyPrompt)
-    recordFeatureInteraction('browser-annotations')
+    void recordFeatureInteraction('browser-annotations')
     clearTimeout(annotationCopyTimerRef.current)
     setBrowserAnnotationsCopied(true)
     annotationCopyTimerRef.current = setTimeout(() => setBrowserAnnotationsCopied(false), 1400)
   }, [copyPrompt, recordFeatureInteraction])
 
   const handleBrowserAnnotationsSentToAgent = useCallback((): void => {
-    recordFeatureInteraction('browser-annotations-sent-to-agent')
+    void recordFeatureInteraction('browser-annotations-sent-to-agent')
     removeDeliveredBrowserPageAnnotations(browserTabId, sendableAnnotations)
   }, [
     sendableAnnotations,
@@ -132,7 +132,7 @@ export function useBrowserPageAnnotationSend({
     }
     clearTimeout(annotationCopyTimerRef.current)
     setBrowserAnnotationsCopied(false)
-    recordFeatureInteraction('browser-annotations')
+    void recordFeatureInteraction('browser-annotations')
     clearBrowserPageAnnotations(browserTabId)
   }, [browserTabId, clearBrowserPageAnnotations, recordFeatureInteraction])
 
@@ -222,7 +222,7 @@ export function useBrowserPageAnnotationSend({
         setBrowserAnnotationsCopied(false)
       }
       deleteBrowserPageAnnotation(browserTabId, annotationId)
-      recordFeatureInteraction('browser-annotations')
+      void recordFeatureInteraction('browser-annotations')
     },
     [browserTabId, deleteBrowserPageAnnotation, recordFeatureInteraction]
   )
@@ -235,7 +235,7 @@ export function useBrowserPageAnnotationSend({
       imagePaths: string[]
     ): void => {
       updateBrowserPageAnnotation(browserTabId, annotationId, { comment, intent, imagePaths })
-      recordFeatureInteraction('browser-annotations')
+      void recordFeatureInteraction('browser-annotations')
     },
     [browserTabId, recordFeatureInteraction, updateBrowserPageAnnotation]
   )

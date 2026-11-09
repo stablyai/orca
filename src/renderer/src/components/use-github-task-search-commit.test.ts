@@ -18,15 +18,15 @@ describe('useGitHubTaskSearchCommit', () => {
       { initialProps: { value: 'r' } }
     )
 
-    act(() => vi.advanceTimersByTime(400))
+    void act(() => vi.advanceTimersByTime(400))
     view.rerender({ value: 'ra' })
-    act(() => vi.advanceTimersByTime(400))
+    void act(() => vi.advanceTimersByTime(400))
     view.rerender({ value: 'rate' })
-    act(() => vi.advanceTimersByTime(GITHUB_TASK_SEARCH_IDLE_MS - 1))
+    void act(() => vi.advanceTimersByTime(GITHUB_TASK_SEARCH_IDLE_MS - 1))
 
     expect(onCommit).not.toHaveBeenCalled()
 
-    act(() => vi.advanceTimersByTime(1))
+    void act(() => vi.advanceTimersByTime(1))
     expect(onCommit).toHaveBeenCalledOnce()
     expect(onCommit).toHaveBeenCalledWith('rate')
   })
@@ -41,7 +41,7 @@ describe('useGitHubTaskSearchCommit', () => {
 
     try {
       view.rerender({ value: 'ra' })
-      act(() => vi.advanceTimersByTime(GITHUB_TASK_SEARCH_IDLE_MS))
+      void act(() => vi.advanceTimersByTime(GITHUB_TASK_SEARCH_IDLE_MS))
 
       expect(onCommit).toHaveBeenCalledOnce()
       expect(onCommit).toHaveBeenCalledWith('ra')
@@ -57,10 +57,10 @@ describe('useGitHubTaskSearchCommit', () => {
       { initialProps: { enabled: true } }
     )
 
-    act(() => vi.advanceTimersByTime(400))
+    void act(() => vi.advanceTimersByTime(400))
     view.rerender({ enabled: false })
 
-    act(() => vi.runAllTimers())
+    void act(() => vi.runAllTimers())
     expect(onCommit).not.toHaveBeenCalled()
   })
 
@@ -71,7 +71,7 @@ describe('useGitHubTaskSearchCommit', () => {
     )
 
     view.unmount()
-    act(() => vi.runAllTimers())
+    void act(() => vi.runAllTimers())
 
     expect(onCommit).not.toHaveBeenCalled()
   })

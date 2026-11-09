@@ -211,7 +211,7 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
           if (input.successToast && mountedRef.current) {
             toast.success(input.successToast)
           }
-          useAppStore.getState().recordFeatureInteraction('github-tasks')
+          void useAppStore.getState().recordFeatureInteraction('github-tasks')
         }
         return confirmed
       } catch (err) {

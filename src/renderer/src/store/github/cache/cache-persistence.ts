@@ -17,7 +17,7 @@ export function persistGitHubCacheChanges(
     timer ??= setTimeout(() => {
       timer = null
       const { prCache, issueCache } = store.getState()
-      window.api.cache.setGitHub({ cache: { pr: prCache, issue: issueCache } })
+      void window.api.cache.setGitHub({ cache: { pr: prCache, issue: issueCache } })
     }, SAVE_WINDOW_MS)
   }
   store.subscribe((state, previous) => {

@@ -209,7 +209,7 @@ export function createAgentModelCatalogFilePersistence(
   let retryDelayMs = SAVE_COALESCE_MS
 
   const schedule = (delayMs: number): void => {
-    timer ??= setTimeout(flush, delayMs)
+    timer ??= setTimeout(() => void flush(), delayMs)
     timer.unref?.()
   }
 

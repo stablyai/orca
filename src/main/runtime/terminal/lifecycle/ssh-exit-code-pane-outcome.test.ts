@@ -20,7 +20,7 @@ function exitedSshPane(tabId: string, ptyId: string, exitCode: number) {
     leafId: HEADLESS_LEAF_ID
   })
   const handle = runtime.resolveTerminalPane(paneKey, TEST_WORKTREE_ID).handle
-  runtime.onPtyExit(ptyId, exitCode, undefined, { hostExitConfirmed: true })
+  void runtime.onPtyExit(ptyId, exitCode, undefined, { hostExitConfirmed: true })
   const createTerminal = vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
     handle: 'term-replacement',
     tabId,

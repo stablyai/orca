@@ -265,7 +265,7 @@ export function createBrowserCloseActions(
         )
       ) {
         if (!isCleanup) {
-          get().recordFeatureInteraction?.('terminal-tabs')
+          void get().recordFeatureInteraction?.('terminal-tabs')
         }
         return
       }

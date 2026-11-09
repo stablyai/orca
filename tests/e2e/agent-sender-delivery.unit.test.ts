@@ -214,7 +214,7 @@ it.each([100, 1000])(
     for (let k = 0; k < 5; k++) {
       h.leaves[k].lastOutputAt = 100 + k
       h.deliverAll()
-      act(() =>
+      void act(() =>
         useAppStore.setState((state) => ({
           sidebarBody: k % 2 ? 'agents' : 'workspaces',
           activeWorktreeId: `elsewhere-${k}`,
@@ -232,7 +232,7 @@ it.each([100, 1000])(
       otherRenders
     }).toEqual(settled)
     // A title-only change rescans that one bucket and rebuilds no index.
-    act(() =>
+    void act(() =>
       useAppStore.setState((state) => ({
         tabsByWorktree: {
           ...state.tabsByWorktree,
@@ -358,20 +358,20 @@ function pairedWindow() {
 it('applies a paired host scope its tab gates drop: same-version re-emit, then later frames that omit it', () => {
   const h = host(2)
   const w = pairedWindow()
-  w.frame(h.frame('w1'))
+  void w.frame(h.frame('w1'))
   expect(pairedLocated(0)).toBe(`tab0:${leafOf(0)}`)
   h.open(2, 'w1')
   const reemit = h.frame('w1', h.version())
   expect(reemit.agentSenderAssociations?.associations).toHaveLength(2)
-  w.frame(reemit)
+  void w.frame(reemit)
   const later = h.frame('w1')
   expect(later.agentSenderAssociations).toBeUndefined()
-  w.frame(later)
+  void w.frame(later)
   expect(pairedLocated(2)).toBe(`tab2:${leafOf(2)}`)
   // A resume census at unchanged versions skips its tab work, not its sender scopes.
   h.reconnect()
   h.open(4, 'w1')
-  w.census([h.frame('w1', h.version()), h.frame('w2', h.version())])
+  void w.census([h.frame('w1', h.version()), h.frame('w2', h.version())])
   expect(pairedLocated(4)).toBe(`tab4:${leafOf(4)}`)
   expect(pairedLocated(1)).toBe(`tab1:${leafOf(1)}`)
 })
@@ -379,14 +379,14 @@ it('applies a paired host scope its tab gates drop: same-version re-emit, then l
 it('never lets an older paired scope or a superseded runtime replace a newer one', () => {
   const h = host(2)
   const w = pairedWindow()
-  w.frame(h.frame('w1'))
+  void w.frame(h.frame('w1'))
   // A one-shot list cut before the change arrives after the stream delivered it.
   h.reconnect()
   const delayed = h.frame('w1')
   h.open(2, 'w1')
-  w.frame(h.frame('w1'))
+  void w.frame(h.frame('w1'))
   const applied = useAppStore.getState().agentSenderPublicationsByHost
-  w.frame(delayed)
+  void w.frame(delayed)
   expect(useAppStore.getState().agentSenderPublicationsByHost).toBe(applied)
   expect(pairedLocated(2)).toBe(`tab2:${leafOf(2)}`)
   // The host restarts: the new runtime's scope replaces the old epoch, and the old runtime's
@@ -395,9 +395,9 @@ it('never lets an older paired scope or a superseded runtime replace a newer one
   h.replaceRuntime()
   h.reconnect()
   h.leaves.splice(2, 1)
-  w.frame(h.frame('w1'), 'rt-2')
+  void w.frame(h.frame('w1'), 'rt-2')
   expect(pairedLocated(2)).toBeUndefined()
   const restarted = useAppStore.getState().agentSenderPublicationsByHost
-  w.frame({ ...straggler, agentSenderAssociations: delayed.agentSenderAssociations }, 'rt-1')
+  void w.frame({ ...straggler, agentSenderAssociations: delayed.agentSenderAssociations }, 'rt-1')
   expect(useAppStore.getState().agentSenderPublicationsByHost).toBe(restarted)
 })

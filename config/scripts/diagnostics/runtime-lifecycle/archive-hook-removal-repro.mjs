@@ -498,4 +498,4 @@ async function main() {
 }
 
 setMode('ok')
-main()
+void main()

@@ -39,7 +39,7 @@ export function installPtyWriteIpcHandlers(deps: {
       void claimTail.then((claimed) => (claimed ? writePtyInput(args) : false))
       return
     }
-    writePtyInput(args)
+    void writePtyInput(args)
   })
   ipcMain.handle('pty:writeAccepted', (event, args: unknown): boolean | Promise<boolean> => {
     if (!isPtyWriteEventFromMainWindow(event) || !isPtyWritePayload(args)) {

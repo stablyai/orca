@@ -115,7 +115,7 @@ export function AddRemoteHostDialog({
         ssh: window.api.ssh,
         recordSshRepoReadoptions,
         setSshTargetsMetadata,
-        recordFeatureInteraction
+        recordFeatureInteraction: (feature) => void recordFeatureInteraction(feature)
       })
       if (outcome === 'saved') {
         reset()
@@ -204,7 +204,7 @@ export function AddRemoteHostDialog({
     setPreferAdvancedOpen(openAdvanced)
     setConfigFilledAlias(host.alias)
     setSshView('form')
-    recordFeatureInteraction('ssh')
+    void recordFeatureInteraction('ssh')
     toast.success(
       t(
         'auto.components.sidebar.AddRemoteHostDialog.sshConfigPickerFilled',
@@ -221,7 +221,7 @@ export function AddRemoteHostDialog({
         ssh: window.api.ssh,
         recordSshRepoReadoptions,
         setSshTargetsMetadata,
-        recordFeatureInteraction
+        recordFeatureInteraction: (feature) => void recordFeatureInteraction(feature)
       })
       if (result.kind === 'added') {
         reset()

@@ -401,7 +401,7 @@ describe('useNativeChatComposerRevealFocus', () => {
         } else if (cancellation === 'Tab') {
           document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab' }))
         } else {
-          act(() => vi.advanceTimersByTime(1000))
+          void act(() => vi.advanceTimersByTime(1000))
         }
         await act(async () => dismissOverlay(menu))
         drainFrames()

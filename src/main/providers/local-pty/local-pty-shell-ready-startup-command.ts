@@ -54,7 +54,7 @@ export function writeStartupCommandWhenShellReady(
     postReadyTimer = setTimeout(flush, POST_SHELL_READY_STARTUP_COMMAND_DELAY_MS)
   }
 
-  readyPromise.then((signal) => {
+  void readyPromise.then((signal) => {
     if (sent) {
       return
     }

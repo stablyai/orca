@@ -55,7 +55,7 @@ export function useSourceControlPanelViewState({
     if (!current) {
       return
     }
-    updateSettings({
+    void updateSettings({
       sourceControlViewMode: getNextSourceControlViewMode(
         normalizeSourceControlViewMode(current.sourceControlViewMode)
       )

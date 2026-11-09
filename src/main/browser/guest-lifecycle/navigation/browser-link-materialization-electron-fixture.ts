@@ -12,7 +12,7 @@ if (!root) {
   throw new Error('Missing probe root')
 }
 
-app.whenReady().then(async () => {
+void app.whenReady().then(async () => {
   const window = new BrowserWindow({
     show: false,
     width: 1000,

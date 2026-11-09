@@ -84,12 +84,12 @@ describe('async question send ownership', () => {
         )
       )
     const pick = () => {
-      act(() =>
+      void act(() =>
         [...container.querySelectorAll('button[aria-pressed]')]
           .find((node) => node.textContent?.includes('Blue'))!
           .dispatchEvent(new MouseEvent('click', { bubbles: true }))
       )
-      act(() => vi.advanceTimersByTime(200))
+      void act(() => vi.advanceTimersByTime(200))
     }
     render()
     pick()
@@ -100,7 +100,7 @@ describe('async question send ownership', () => {
     expect(
       container.querySelector<HTMLButtonElement>('button[aria-pressed="true"]')!.disabled
     ).toBe(false)
-    act(() =>
+    void act(() =>
       [...container.querySelectorAll('button')]
         .find((node) => node.textContent === 'Submit')!
         .dispatchEvent(new MouseEvent('click', { bubbles: true }))

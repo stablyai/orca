@@ -193,10 +193,10 @@ describe('Delayed remote prompt delivery', () => {
       })
       if (mode === 'read then away' || mode === 'tab/store rerender') {
         transport.away.mockResolvedValue(true)
-        act(() => useAppStore.setState({ activeWorktreeId: 'elsewhere' }))
+        void act(() => useAppStore.setState({ activeWorktreeId: 'elsewhere' }))
       }
       if (mode === 'tab/store rerender') {
-        act(() =>
+        void act(() =>
           useAppStore.setState((state) => ({
             settings: state.settings ? { ...state.settings } : null,
             unifiedTabsByWorktree: {
@@ -329,13 +329,13 @@ describe('Delayed remote prompt delivery', () => {
       })
       await waitFor(() => expect(dismissIds()).toHaveLength(1))
       transport.away.mockResolvedValue(true)
-      act(() => useAppStore.setState({ activeWorktreeId: 'elsewhere' }))
+      void act(() => useAppStore.setState({ activeWorktreeId: 'elsewhere' }))
       const edge = relay.edges.at(-1)
       if (edge?.type !== 'prompt') {
         throw new Error('expected actual prompt frame')
       }
       if (mode === 'different target') {
-        act(() =>
+        void act(() =>
           useAppStore.setState((state) => ({
             unifiedTabsByWorktree: {
               [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE].map((tab) => ({

@@ -218,7 +218,7 @@ async function connect(): Promise<void> {
   render(<StructuredAgentSessionStatusBridge />)
   await waitFor(() => expect(mocks.subscribeStatus).toHaveBeenCalled())
   for (const [, emit] of mocks.subscribeStatus.mock.calls) {
-    act(() => emit({ type: 'snapshot', sessions: [] }))
+    void act(() => emit({ type: 'snapshot', sessions: [] }))
   }
 }
 

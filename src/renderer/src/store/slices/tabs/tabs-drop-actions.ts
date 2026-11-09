@@ -194,8 +194,8 @@ export function createTabsDropActions(
         }
       })
       if (moved) {
-        get().recordFeatureInteraction?.('terminal-tabs')
-        get().recordFeatureInteraction?.('tab-splits')
+        void get().recordFeatureInteraction?.('terminal-tabs')
+        void get().recordFeatureInteraction?.('tab-splits')
       }
       return moved
     }

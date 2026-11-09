@@ -127,7 +127,7 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
         runtime: target.runtime,
         wslDistro: target.wslDistro
       })
-      recordFeatureInteraction('codex-account-switching')
+      void recordFeatureInteraction('codex-account-switching')
       if (mountedRef.current) {
         setAccounts(next)
       }

@@ -163,7 +163,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       await vi.advanceTimersByTimeAsync(5 * 60_000)
       expect(runtimeSubscribe).toHaveBeenCalledTimes(attemptsAtCutoff)
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -208,7 +208,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       await vi.advanceTimersByTimeAsync(5 * 60_000)
       expect(activateAttempts).toBe(attemptsAfterFatalError)
       expect(transport.getRecoveryState?.().phase).toBe('offline')
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -267,7 +267,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(transport.retryRecovery?.()).toBe(true)
       await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalledTimes(1))
       expect(latestSubscribePayload().terminal).toBe('terminal-1')
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -321,7 +321,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -382,7 +382,7 @@ describe('createRemoteRuntimePtyTransport', () => {
 
       expect(runtimeSubscribe).not.toHaveBeenCalled()
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -429,6 +429,6 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(staleOnError).not.toHaveBeenCalled()
     expect(currentOnError).not.toHaveBeenCalled()
     expect(runtimeSubscribe).toHaveBeenCalledTimes(1)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 })

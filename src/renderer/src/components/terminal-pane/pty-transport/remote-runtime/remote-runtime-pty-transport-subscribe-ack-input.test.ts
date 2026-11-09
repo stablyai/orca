@@ -117,7 +117,7 @@ describe('remote recovery input at the subscribed ack', () => {
     emitSnapshotFrame(streamId, TerminalStreamOpcode.SnapshotEnd, new Uint8Array())
     await vi.waitFor(() => expect(transport.isConnected()).toBe(true))
     expect(inputFrameTexts().join('')).toBe('held-live')
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('holds typing again when the acked stream drops before its snapshot ends', async () => {
@@ -133,7 +133,7 @@ describe('remote recovery input at the subscribed ack', () => {
     const next = latestSubscribePayload().streamId
     acknowledgeSubscribe(next)
     await vi.waitFor(() => expect(inputFrameTexts()).toEqual(['after-drop']))
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('holds typing again when recovery backs off while the acked stream stays installed', async () => {
@@ -147,7 +147,7 @@ describe('remote recovery input at the subscribed ack', () => {
     // Outlasts the input debounce, so an unheld key would have reached the stream.
     await new Promise((resolve) => setTimeout(resolve, 50))
     expect(inputFrameTexts()).toEqual([])
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('replays a viewport claim made during recovery before typing reaches the host', async () => {
@@ -161,7 +161,7 @@ describe('remote recovery input at the subscribed ack', () => {
     expect(transport.sendInput('typed', 'driving')).toBe(true)
     await vi.waitFor(() => expect(inputFrameTexts()).toEqual(['typed']))
     expect(viewportAndInputFrames()).toEqual(['claim 120x40', 'resize 120x40', 'input'])
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('keeps a claim made before the resubscribe until the host acks it', async () => {
@@ -175,7 +175,7 @@ describe('remote recovery input at the subscribed ack', () => {
     expect(transport.sendInput('typed', 'driving')).toBe(true)
     await vi.waitFor(() => expect(inputFrameTexts()).toEqual(['typed']))
     expect(viewportAndInputFrames()).toEqual(['claim 100x30', 'resize 100x30', 'input'])
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('keeps recovering when replaying a claim on an ackless host fails its write', async () => {
@@ -198,7 +198,7 @@ describe('remote recovery input at the subscribed ack', () => {
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(transport.isConnected()).toBe(false)
     expect(['recovering', 'backoff']).toContain(transport.getRecoveryState?.().phase)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('does not let a resize batched before a second outage overwrite the replayed claim', async () => {
@@ -221,7 +221,7 @@ describe('remote recovery input at the subscribed ack', () => {
     // Outlasts the viewport batch window, so a surviving stale batch would have flushed.
     await new Promise((resolve) => setTimeout(resolve, 60))
     expect(viewportAndInputFrames()).toEqual(['claim 120x40', 'resize 120x40'])
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('keeps a deferred claim for the next stream when its replay fails to write', async () => {
@@ -242,7 +242,7 @@ describe('remote recovery input at the subscribed ack', () => {
     await vi.waitFor(() =>
       expect(viewportAndInputFrames()).toEqual(['claim 100x30', 'resize 100x30'])
     )
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('sends a claim made after the subscribed ack instead of dropping it', async () => {
@@ -257,6 +257,6 @@ describe('remote recovery input at the subscribed ack', () => {
     emitSnapshotFrame(streamId, TerminalStreamOpcode.SnapshotStart, new Uint8Array())
     emitSnapshotFrame(streamId, TerminalStreamOpcode.SnapshotEnd, new Uint8Array())
     await vi.waitFor(() => expect(transport.isConnected()).toBe(true))
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 })

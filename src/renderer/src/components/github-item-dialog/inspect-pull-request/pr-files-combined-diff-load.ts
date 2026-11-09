@@ -111,7 +111,7 @@ export function loadPRFilesCombinedDiffSection({
     return { result: getPRFileDiffResult(contents), resultContents: contents }
   }
 
-  load()
+  void load()
     .catch((error) => ({
       result: {
         kind: 'text',

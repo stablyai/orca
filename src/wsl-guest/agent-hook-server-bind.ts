@@ -10,7 +10,7 @@ export async function bindRelayHookServer(options: {
   onFallback: () => void
 }): Promise<void> {
   const listenOn = async (port: number) => {
-    const server = createServer(options.handleRequest)
+    const server = createServer((req, res) => void options.handleRequest(req, res))
     options.setServer(server)
     try {
       await listenForAgentHooks(

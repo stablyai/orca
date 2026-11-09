@@ -23,17 +23,17 @@ export function installInProcessSessionSearchService(args: {
     resolveRoots: args.resolveRoots,
     ...(args.onError ? { onError: args.onError } : {})
   })
-  instance.apply(args.settings)
+  void instance.apply(args.settings)
   setSessionSearchService({
     search: (request, hostScope) => instance.search(request, hostScope),
     status: async () => instance.status(),
     reconcile: () => instance.reconcile()
   })
   return {
-    apply: (settings) => instance.apply(settings),
+    apply: (settings) => void instance.apply(settings),
     dispose: () => {
       setSessionSearchService(null)
-      instance.close()
+      void instance.close()
     }
   }
 }

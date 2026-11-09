@@ -87,7 +87,7 @@ async function stopAllSessionsThenQuit(): Promise<void> {
 // Why consume on every path: main pushes and also queues the request, so only one path may act on it.
 function consumePendingRequest(): void {
   const pending = window.api.ui.consumePendingQuitAndStopAllSessions?.()
-  if (!pending || typeof pending.then !== 'function') {
+  if (typeof pending?.then !== 'function') {
     return
   }
   void pending

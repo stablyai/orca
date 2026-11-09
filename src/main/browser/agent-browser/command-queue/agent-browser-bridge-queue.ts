@@ -201,7 +201,7 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEf
         })
       pageQueue.push(entry)
       stopWatching = watch(webContentsId)
-      this.processQueue(sessionName)
+      void this.processQueue(sessionName)
     }).finally(() => {
       stopWatching()
       if (!started) {

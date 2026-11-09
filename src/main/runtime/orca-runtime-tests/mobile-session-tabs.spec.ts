@@ -41,7 +41,7 @@ describe('OrcaRuntimeService', () => {
     })
     await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
 
-    runtime.onPtyExit('daemon-pty-1', 0)
+    void runtime.onPtyExit('daemon-pty-1', 0)
 
     const result = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
 

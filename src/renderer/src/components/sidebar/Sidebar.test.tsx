@@ -147,7 +147,7 @@ describe('Sidebar', () => {
       mocks.state = { ...mocks.state, startupWorktreeRefreshCompleted: false }
       const view = render(sidebarElement())
       expect(view.queryByRole('status')).toBeNull()
-      act(() => vi.advanceTimersByTime(200))
+      void act(() => vi.advanceTimersByTime(200))
       expect(view.getByRole('status').textContent).toBe('Loading workspaces…')
       mocks.state = { ...mocks.state, startupWorktreeRefreshCompleted: true }
       view.rerender(sidebarElement())

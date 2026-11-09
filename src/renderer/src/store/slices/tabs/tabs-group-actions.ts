@@ -238,7 +238,7 @@ export function createTabsGroupActions(
           ? { splitLandingGroupIds: { ...state.splitLandingGroupIds, [newGroupId]: worktreeId } }
           : {})
       }))
-      get().recordFeatureInteraction?.('terminal-panes')
+      void get().recordFeatureInteraction?.('terminal-panes')
       return newGroupId
     }
   }

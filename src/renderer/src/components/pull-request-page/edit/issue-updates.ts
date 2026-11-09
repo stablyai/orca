@@ -13,7 +13,7 @@ type IssueUpdateRun = (
     onSuccess: () => void
     onError: (err: string) => void
   }
-) => void
+) => Promise<void>
 
 export function changeIssueState(args: {
   newState: 'open' | 'closed'
@@ -37,7 +37,7 @@ export function changeIssueState(args: {
     return
   }
   const prevState = args.localState
-  args.run('state', {
+  void args.run('state', {
     mutate: () =>
       runIssueUpdate({
         repoId: args.item.repoId,
@@ -104,7 +104,7 @@ export function toggleIssueLabel(args: {
     args.patchProjectRowIfNeeded({ labels })
   }
 
-  args.run('labels', {
+  void args.run('labels', {
     mutate: () =>
       runIssueUpdate({
         repoId: args.item.repoId,
@@ -151,7 +151,7 @@ export function toggleIssueAssignee(args: {
     args.patchProjectRowIfNeeded({ assignees })
   }
 
-  args.run('assignees', {
+  void args.run('assignees', {
     mutate: () =>
       runIssueUpdate({
         repoId: args.item.repoId,

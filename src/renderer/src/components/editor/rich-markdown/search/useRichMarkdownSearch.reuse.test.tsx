@@ -86,7 +86,7 @@ describe('live rich markdown search reuse', () => {
     const { hook, editor } = mountSearch()
     act(() => hook.result.current.openSearch())
     act(() => hook.result.current.searchActions.setSearchQuery('beta'))
-    act(() => vi.advanceTimersByTime(150))
+    void act(() => vi.advanceTimersByTime(150))
     act(() => hook.result.current.searchActions.setSearchQuery('locked'))
     expect(hook.result.current.searchState.matchCount).toBe(2)
     act(() => hook.result.current.searchActions.toggleReplaceMode())
@@ -106,7 +106,7 @@ describe('live rich markdown search reuse', () => {
     const { hook, editor, replaceDocSilently } = mountSearch()
     act(() => hook.result.current.openSearch())
     act(() => hook.result.current.searchActions.setSearchQuery('beta'))
-    act(() => vi.advanceTimersByTime(150))
+    void act(() => vi.advanceTimersByTime(150))
     replaceDocSilently(createDoc('beta'))
     const doc = editor.state.doc
     act(() => hook.result.current.searchActions.replaceCurrentMatch())

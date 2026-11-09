@@ -169,7 +169,7 @@ describe('useDocPreviewGuestTools ids', () => {
       send(`${BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX}${token}:${report}`)
       expect(cardY()).toBe(150)
 
-      act(() => attached.webview.dispatchEvent(new Event('did-start-loading')))
+      void act(() => attached.webview.dispatchEvent(new Event('did-start-loading')))
       expect(cardY()).toBe(330)
       attached.detach()
       send(`${BROWSER_ANNOTATION_VIEWPORT_MESSAGE_PREFIX}${token}:${report}`)

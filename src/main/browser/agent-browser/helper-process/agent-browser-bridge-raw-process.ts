@@ -56,7 +56,7 @@ export abstract class AgentBrowserBridgeRawProcess extends AgentBrowserBridgeEle
               liveSession.consecutiveTimeouts++
               if (liveSession.consecutiveTimeouts >= CONSECUTIVE_TIMEOUT_LIMIT) {
                 // Repeated timeouts can indicate a stuck daemon; retire it before reuse.
-                this.destroySession(sessionName)
+                void this.destroySession(sessionName)
               }
             }
             reject(new BrowserError('browser_error', 'Browser command timed out'))

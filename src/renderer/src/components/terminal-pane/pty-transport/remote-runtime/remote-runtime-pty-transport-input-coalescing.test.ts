@@ -119,7 +119,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       rows: 43
     })
 
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('replays a claim before separately framed input and query replies', async () => {
@@ -174,7 +174,7 @@ describe('createRemoteRuntimePtyTransport', () => {
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Input)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
       expect(input).toEqual(['x', '\x1b[?1;2c', 'z'])
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -645,6 +645,6 @@ describe('createRemoteRuntimePtyTransport', () => {
       expect(input.at(0)).toBe('\x1b[?9936;2c')
       expect(input.at(-1)).toBe('\x1b[?9999;2c')
     })
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 })

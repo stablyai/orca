@@ -184,7 +184,10 @@ export function AppearanceWindowSidebarSection({
                       description={toggle.toggleDescription}
                       checked={enabled}
                       onChange={() => {
-                        recordStatusBarToggleInteraction(toggle.id, recordFeatureInteraction)
+                        recordStatusBarToggleInteraction(
+                          toggle.id,
+                          (feature) => void recordFeatureInteraction(feature)
+                        )
                         toggleStatusBarItem(toggle.id)
                       }}
                       ariaLabel={toggle.title}

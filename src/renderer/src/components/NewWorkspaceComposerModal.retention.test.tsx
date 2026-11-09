@@ -403,7 +403,7 @@ it('offers Reopen with the submitted target and picker and does not replace a ne
   await waitFor(() => expect(evidence.submit).toHaveBeenCalledOnce())
   const recovery = evidence.submit.mock.calls[0]?.[1].onLegacyPreparationFailure
   act(() => useAppStore.getState().closeModal())
-  act(() => recovery(new Error('Invalid Arguments')))
+  void act(() => recovery(new Error('Invalid Arguments')))
   const reopen = evidence.toast.mock.calls.at(-1)?.[1].action.onClick
   act(() => useAppStore.getState().openModal('agent-session-history'))
   act(reopen)

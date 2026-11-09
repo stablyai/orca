@@ -100,7 +100,7 @@ export class ExternalConversationSeam {
       for (const [id, { key, worktreeId: linkedTo }] of this.linked) {
         if (linkedTo === worktreeId && !findLink(this.deps.store, key)) {
           this.linked.delete(id)
-          this.chain.cancel(id, 'agent_not_reachable')
+          void this.chain.cancel(id, 'agent_not_reachable')
         }
       }
     })
@@ -332,7 +332,7 @@ export class ExternalConversationSeam {
     laneSignal: AbortSignal,
     reason: ConnectorRefusal = 'agent_not_reachable'
   ): Delivery {
-    this.chain.cancel(id, reason, laneSignal)
+    void this.chain.cancel(id, reason, laneSignal)
     return refused(reason)
   }
 }

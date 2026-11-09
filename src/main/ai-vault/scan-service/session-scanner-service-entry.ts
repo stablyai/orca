@@ -209,7 +209,7 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
       initSessionParseCachePersistence(raw.sessionParseCache)
     }
     if (raw.sessionSearch) {
-      sessionSearch.apply(raw.sessionSearch)
+      void sessionSearch.apply(raw.sessionSearch)
     }
     send({
       type: 'ready',
@@ -247,7 +247,7 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
     return
   }
   if (raw?.type === 'sessionSearch') {
-    sessionSearch.apply(raw.init)
+    void sessionSearch.apply(raw.init)
     return
   }
   if (raw?.type === 'shutdown') {

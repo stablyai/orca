@@ -96,7 +96,7 @@ describe('OrcaRuntimeService', () => {
       `${TEST_REPO_ID}::/tmp/other`
     )
 
-    runtime['removeWorktreeMetadataAndHistory'](store as never, TEST_WORKTREE_ID)
+    void runtime['removeWorktreeMetadataAndHistory'](store as never, TEST_WORKTREE_ID)
 
     expect(host.takeCommands()).toEqual([
       expect.objectContaining({
@@ -127,7 +127,7 @@ describe('OrcaRuntimeService', () => {
     host.detachDelivery()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    runtime['removeWorktreeMetadataAndHistory'](store as never, TEST_WORKTREE_ID)
+    void runtime['removeWorktreeMetadataAndHistory'](store as never, TEST_WORKTREE_ID)
 
     expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-removed')).toBeUndefined()
     expect(runtime['buildHeadlessMobileSessionBrowserTabs'](TEST_WORKTREE_ID)).toEqual([])
@@ -153,7 +153,7 @@ describe('OrcaRuntimeService', () => {
     const host = attachClientBrowserHost(runtime)
     const placement = await publishClientHostedPage(runtime, host, 'page-kept', TEST_WORKTREE_ID)
 
-    runtime['removeWorktreeMetadataAndHistory'](
+    void runtime['removeWorktreeMetadataAndHistory'](
       runtimeStore as never,
       TEST_WORKTREE_ID,
       'runtime:env-b'

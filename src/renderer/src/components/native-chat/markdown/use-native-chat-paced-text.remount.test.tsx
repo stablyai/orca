@@ -25,7 +25,7 @@ function within(reveals = transcript()) {
   }
 }
 function advance(ms: number): void {
-  act(() => vi.advanceTimersByTime(ms))
+  void act(() => vi.advanceTimersByTime(ms))
 }
 
 beforeEach(() => {

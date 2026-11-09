@@ -183,9 +183,9 @@ test('an older rewind-capable desktop releases its temporary same-epoch hold wit
     expect(drafts.readNativeChatDraftCache(input.composerScopeKey)).toContain(
       'return this message to the draft'
     )
-    act(() => vi.advanceTimersByTime(119_999))
+    void act(() => vi.advanceTimersByTime(119_999))
     expect(view.result.current.blockedRef.current).toBe(true)
-    act(() => vi.advanceTimersByTime(1))
+    void act(() => vi.advanceTimersByTime(1))
     expect(view.result.current.pending).toBe(false)
     expect(view.result.current.blockedRef.current).toBe(false)
     expect(toastError).toHaveBeenCalledOnce()

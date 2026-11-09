@@ -298,7 +298,7 @@ describe('remote runtime pane binding ownership', () => {
         }
         expect(callsTo('terminal.create')).toHaveLength(0)
       } finally {
-        transport.destroy?.()
+        void transport.destroy?.()
         vi.useRealTimers()
       }
     }
@@ -356,7 +356,7 @@ describe('remote runtime pane binding ownership', () => {
         expect(callsTo('terminal.create')).toHaveLength(1)
         expect(callsTo('terminal.resolvePane')).toHaveLength(contactLoss ? 2 : 1)
       } finally {
-        transport.destroy?.()
+        void transport.destroy?.()
         vi.useRealTimers()
       }
     }
@@ -440,7 +440,7 @@ describe('remote runtime pane binding ownership', () => {
       expect(transport.ownsRecovery?.()).toBe(false)
       expect(inputFrameTexts().join('')).toBe('echo held')
       expect(onError).not.toHaveBeenCalled()
-      transport.destroy?.()
+      void transport.destroy?.()
     } finally {
       vi.useRealTimers()
     }
@@ -468,7 +468,7 @@ describe('remote runtime pane binding ownership', () => {
       expect(result).toBeUndefined()
       expect(transport.getPtyId()).toBeNull()
       expect(transport.ownsRecovery?.()).toBe(true)
-      transport.destroy?.()
+      void transport.destroy?.()
       expect(transport.ownsRecovery?.()).toBe(false)
     } finally {
       vi.useRealTimers()
@@ -512,7 +512,7 @@ describe('remote runtime pane binding ownership', () => {
         params: expect.objectContaining({ terminal: 'terminal-1', text: 'git status\r' })
       })
     )
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('does not close a pane on an inventory that was already in flight before its leaf published (#20923)', async () => {
@@ -570,7 +570,7 @@ describe('remote runtime pane binding ownership', () => {
       expect(listCalls).toBeGreaterThanOrEqual(2)
     } finally {
       releaseStaleInventory()
-      transport.destroy?.()
+      void transport.destroy?.()
       vi.useRealTimers()
     }
   })

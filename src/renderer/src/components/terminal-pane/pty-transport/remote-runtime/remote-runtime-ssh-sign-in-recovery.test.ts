@@ -61,7 +61,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
-  transport?.destroy?.()
+  void transport?.destroy?.()
   transport = undefined
   vi.useRealTimers()
   expect(appStore.getState).not.toHaveBeenCalled()
@@ -176,7 +176,7 @@ describe.each([
   it.each(['detach', 'destroy'] as const)('does not revive a pane after %s', async (teardown) => {
     const { pane, signIn } = await mountAwaitingPane(tabId, pendingErrors[0])
     expect(pane.getRecoveryState?.().phase).toBe('backoff')
-    pane[teardown]?.()
+    void pane[teardown]?.()
     const callsAfterTeardown = runtimeCall.mock.calls.length
 
     expect(signIn()).toBe(0)
@@ -361,7 +361,7 @@ describe('SSH sign-in for a terminal created while the host waits for sign-in', 
         pendingErrors[0]
       )
       const createsBeforeClose = createCalls().length
-      pane[teardown]?.()
+      void pane[teardown]?.()
       await expect(connected).resolves.toBeUndefined()
 
       expect(signIn()).toBe(0)

@@ -87,7 +87,7 @@ export function useWorktreeJumpPaletteSelectionActions({
       if (!activation) {
         return
       }
-      recordFeatureInteraction('cmd-j-workspace-open')
+      void recordFeatureInteraction('cmd-j-workspace-open')
       dismissForSelection()
       if (!queueWorkspaceActivationTerminalFocus(worktree.id, activation)) {
         focusFallbackSurface()
@@ -115,7 +115,7 @@ export function useWorktreeJumpPaletteSelectionActions({
         )
         return
       }
-      recordFeatureInteraction('cmd-j-browser-page-open')
+      void recordFeatureInteraction('cmd-j-browser-page-open')
       dismissForSelection()
       requestBrowserFocus({ pageId: activation.pageId, target: activation.focusTarget })
     },
@@ -178,7 +178,7 @@ export function useWorktreeJumpPaletteSelectionActions({
       dismissForSelection()
       openSettingsTarget(target)
       openSettingsPage()
-      recordFeatureInteraction('cmd-j-settings-open')
+      void recordFeatureInteraction('cmd-j-settings-open')
     },
     [dismissForSelection, openSettingsPage, openSettingsTarget, recordFeatureInteraction]
   )
@@ -200,10 +200,10 @@ export function useWorktreeJumpPaletteSelectionActions({
             return
           }
           if (action.id === 'create-workspace') {
-            recordFeatureInteraction('cmd-j-create-workspace')
+            void recordFeatureInteraction('cmd-j-create-workspace')
             return
           }
-          recordFeatureInteraction('cmd-j-quick-action')
+          void recordFeatureInteraction('cmd-j-quick-action')
         })
         .catch((error: unknown) => {
           if (!action.id.startsWith('plugin:')) {
@@ -226,7 +226,7 @@ export function useWorktreeJumpPaletteSelectionActions({
       // Why switch: picking a project row explicitly asks to see it in the workspace list.
       useAppStore.getState().setSidebarBody('workspaces')
       revealSidebarRow(result.rowKey, { behavior: 'smooth', highlight: true })
-      recordFeatureInteraction('cmd-j')
+      void recordFeatureInteraction('cmd-j')
       closeModal()
       setSelectedItemId('')
       if (previousActiveTabTypeRef.current === 'browser' && previousBrowserPageIdRef.current) {

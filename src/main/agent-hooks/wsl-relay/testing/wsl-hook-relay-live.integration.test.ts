@@ -139,7 +139,7 @@ describe.skipIf(process.platform === 'win32')(
         daemonBridgeSessions: async () => 'none' as const
       })
 
-      manager.ensureForDistro('LiveDistro', codexHome)
+      void manager.ensureForDistro('LiveDistro', codexHome)
 
       // Wait for Codex rather than the earlier Claude artifact so the installer loop reaches this assertion.
       await vi.waitFor(() => expect(existsSync(join(codexHome, 'hooks.json'))).toBe(true), {

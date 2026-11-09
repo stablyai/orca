@@ -45,7 +45,7 @@ describe('createIpcPtyTransport', () => {
       const transport = createIpcPtyTransport({ connectionId })
       expect(transport.getExecutionHostId?.()).toBe(connectionId ? 'ssh:qa' : 'local')
       expect(transport.getRuntimeEnvironmentId?.()).toBeNull()
-      transport.destroy?.()
+      void transport.destroy?.()
     }
   })
 
@@ -420,7 +420,7 @@ describe('createIpcPtyTransport', () => {
     const transport = createIpcPtyTransport({})
     const connecting = transport.connect({ url: '', sessionId: REVIVED_PTY_ID, callbacks: {} })
     await vi.waitFor(() => expect(window.api.pty.spawn).toHaveBeenCalled())
-    transport.destroy?.()
+    void transport.destroy?.()
     resolveSpawn({ id: REVIVED_PTY_ID, coldRestore: { scrollback: '', cwd: '/repo' } })
     await connecting
 

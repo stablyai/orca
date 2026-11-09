@@ -52,7 +52,7 @@ export function requestTerminalLinkAction(
   const middleClick = isTerminalMiddleClickActivation(event)
   if ((middleClick ? context.middleClickBehavior : context.plainClickBehavior) === 'open') {
     context.focusTerminal()
-    details.primary?.run()
+    void details.primary?.run()
     return true
   }
   if (middleClick && context.middleClickBehavior !== 'actions') {

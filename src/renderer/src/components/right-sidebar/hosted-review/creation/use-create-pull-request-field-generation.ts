@@ -197,7 +197,7 @@ export function useCreatePullRequestFieldGeneration({
           return { result: null }
         }
         const shownFields = applyGeneratedFields(result.fields, currentSeed.fieldRevisions)
-        useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
+        void useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
         setGenerateError(null)
         return { result: shownFields }
       } catch (error) {

@@ -46,7 +46,7 @@ beforeEach(() => {
     }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This hook only registers middleware through the supplied use method.
-  hook.call({} as never, server as ViteDevServer)
+  void hook.call({} as never, server as ViteDevServer)
 })
 
 afterEach(async () => {

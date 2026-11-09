@@ -14,14 +14,14 @@ export function fakeMainSleep(
     requests.push(request)
     const outcomes: WorkspaceSleepOutcome[] = []
     for (const target of request.targets) {
-      followWorkspaceSleep({ worktreeId: target.worktreeId, phase: 'started' })
+      void followWorkspaceSleep({ worktreeId: target.worktreeId, phase: 'started' })
       const outcome = {
         worktreeId: target.worktreeId,
         chatFailed: false,
         receipts: [],
         ...answer(target)
       }
-      followWorkspaceSleep({
+      void followWorkspaceSleep({
         worktreeId: target.worktreeId,
         phase: 'ended',
         slept: outcome.failure === undefined,

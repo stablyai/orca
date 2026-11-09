@@ -73,7 +73,7 @@ export async function preparePendingRuntimeClose(id = 'remote:env-1@@term_origin
         }
       })
       await flushPtySideEffects()
-      remote.destroy?.()
+      void remote.destroy?.()
     }
   }
 }

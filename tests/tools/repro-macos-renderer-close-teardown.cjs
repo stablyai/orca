@@ -87,7 +87,7 @@ app.on('child-process-gone', (_event, details) => {
   log('child-process-gone', { details })
 })
 
-app.whenReady().then(async () => {
+void app.whenReady().then(async () => {
   win = new BrowserWindow({
     width: 420,
     height: 220,

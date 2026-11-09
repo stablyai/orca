@@ -230,7 +230,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
     expect(transport.isConnected()).toBe(true)
     expect(transport.getRecoveryState?.().phase).toBe('connected')
     expect(onError).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('retires the pane when the stale resubscribe finds only the fenced handle', async () => {
@@ -248,7 +248,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
     expect(transport.getRecoveryState?.().phase).toBe('ended')
     expect(transport.getPtyId()).toBeNull()
     expect(onError).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('retires a pane whose stale resubscribe has no tab/leaf ids to re-resolve', async () => {
@@ -269,7 +269,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
     expect(transport.getRecoveryState?.().phase).toBe('ended')
     expect(transport.getPtyId()).toBeNull()
     expect(onError).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('retires the pane when a resubscribe fails with terminal-gone', async () => {
@@ -286,7 +286,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
     expect(transport.getRecoveryState?.().phase).toBe('ended')
     expect(transport.getPtyId()).toBeNull()
     expect(onError).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('recovers the host pane when a resubscribe fails with an expired SSH session', async () => {
@@ -315,7 +315,7 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
     emitSnapshot(latestSubscribePayload().streamId, 'after ssh pane recovery')
     expect(transport.isConnected()).toBe(true)
     expect(onError).not.toHaveBeenCalled()
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 
   it('keeps an oversized-snapshot resubscribe failure informational', async () => {
@@ -333,6 +333,6 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
     expect(onError).not.toHaveBeenCalled()
     expect(onPtyExit).not.toHaveBeenCalled()
     expect(transport.getPtyId()).toBe(FIRST_PTY_ID)
-    transport.destroy?.()
+    void transport.destroy?.()
   })
 })

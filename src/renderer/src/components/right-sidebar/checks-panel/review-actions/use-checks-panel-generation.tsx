@@ -153,7 +153,7 @@ export function useChecksPanelGeneration(model: ChecksPanelGenerationInput) {
             await handleBranchChangedByPullRequestGeneration(generationKey, context)
           }
           if (result.success) {
-            useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
+            void useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
           }
           updatePullRequestGenerationRecord(generationKey, (record) => {
             if (!result.success) {

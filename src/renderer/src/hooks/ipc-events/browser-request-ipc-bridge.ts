@@ -176,11 +176,11 @@ export function registerBrowserRequestIpcBridge(unsubs: (() => void)[]): void {
           for (const page of workspacePages) {
             // Document previews use a fixed partition, so profile changes must preserve their guests.
             if (!page.docLocation) {
-              destroyPersistentWebview(page.id)
+              void destroyPersistentWebview(page.id)
             }
           }
         } else {
-          destroyPersistentWebview(data.browserPageId)
+          void destroyPersistentWebview(data.browserPageId)
         }
         store.switchBrowserTabProfile(owningWorkspace.id, data.profileId, data.sessionPartition)
         window.api.ui.replyTabSetProfile({ requestId: data.requestId })
