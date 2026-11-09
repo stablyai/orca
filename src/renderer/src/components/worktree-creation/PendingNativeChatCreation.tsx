@@ -48,8 +48,8 @@ function failureText(entry: PendingWorktreeCreation, t: Translate = translate): 
   return (
     entry.error ??
     t(
-      'auto.components.worktree.creation.WorktreeCreationPanel.767951265d',
-      'Something went wrong while creating the worktree.'
+      'auto.components.worktree.creation.WorktreeCreationPanel.somethingWentWrong',
+      'Something went wrong while creating the workspace.'
     )
   )
 }

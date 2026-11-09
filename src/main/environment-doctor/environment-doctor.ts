@@ -65,7 +65,8 @@ export async function runEnvironmentDoctor(
     hasGit
       ? check('tools', 'tool.git', 'pass', 'git is installed.')
       : check('tools', 'tool.git', 'fail', 'git is not on PATH.', {
-          remediation: 'Install git in the environment image.'
+          remediation: 'Install git in the environment image.',
+          code: 'gitMissing'
         }),
     ...requirements.map((requirement) =>
       found.has(requirement.command)
@@ -81,7 +82,9 @@ export async function runEnvironmentDoctor(
             'fail',
             `${requirement.command} is not on PATH, but ${requirement.reason} needs it.`,
             {
-              remediation: `Install ${requirement.command} in the environment image or setup script.`
+              remediation: `Install ${requirement.command} in the environment image or setup script.`,
+              code: 'toolMissing',
+              params: { command: requirement.command, reason: requirement.reason }
             }
           )
     )
@@ -117,7 +120,8 @@ async function checkAgents(
   if (agents.length === 0) {
     return [
       check('agents', 'agent.cli', 'warn', 'No coding-agent CLI was found on PATH.', {
-        remediation: 'Install the agent you run here (for example claude or codex).'
+        remediation: 'Install the agent you run here (for example claude or codex).',
+        code: 'agentMissing'
       })
     ]
   }
@@ -142,7 +146,11 @@ async function checkAgents(
         result.timedOut
           ? `${name} is installed, but its sign-in check timed out.`
           : `${name} is installed but not signed in.`,
-        { remediation: `Run \`${probe.signIn}\` in this environment.` }
+        {
+          remediation: `Run \`${probe.signIn}\` in this environment.`,
+          code: result.timedOut ? 'agentSignInTimedOut' : 'agentSignedOut',
+          params: { agent: name }
+        }
       )
     })
   )
@@ -165,14 +173,18 @@ async function checkDisk(
   if (free < DISK_FAIL_BYTES) {
     return [
       check('disk', 'disk.free', 'fail', `Only ${label}.`, {
-        remediation: 'Grow the disk or clean caches; installs and builds will fail.'
+        remediation: 'Grow the disk or clean caches; installs and builds will fail.',
+        code: 'diskVeryLow',
+        params: { free: (free / GIB).toFixed(1) }
       })
     ]
   }
   if (free < DISK_WARN_BYTES) {
     return [
       check('disk', 'disk.free', 'warn', `Only ${label}.`, {
-        remediation: 'Consider a larger disk; dependency installs can need several GB.'
+        remediation: 'Consider a larger disk; dependency installs can need several GB.',
+        code: 'diskLow',
+        params: { free: (free / GIB).toFixed(1) }
       })
     ]
   }

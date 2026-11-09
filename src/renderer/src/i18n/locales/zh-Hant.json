@@ -3641,12 +3641,9 @@
           "WorktreeCreationPanel": {
             "dabd226118": "關閉",
             "34dd5ee38b": "重試",
-            "ed2a664f8b": "無法建立工作樹",
             "a3346fc6ed": "取消工作樹建立",
             "532aea14ce": "取消",
-            "767951265d": "建立工作樹時出現問題。",
-            "cancelProvisioning": "取消",
-            "vmProvisioningLogEmpty": "正在等待環境範本輸出…"
+            "cancelProvisioning": "取消"
           }
         }
       },

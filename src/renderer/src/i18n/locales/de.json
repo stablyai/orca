@@ -3716,12 +3716,9 @@
           "WorktreeCreationPanel": {
             "dabd226118": "Schließen",
             "34dd5ee38b": "Erneut versuchen",
-            "ed2a664f8b": "Worktree konnte nicht erstellt werden",
             "a3346fc6ed": "Worktree-Erstellung abbrechen",
             "532aea14ce": "Abbrechen",
-            "767951265d": "Beim Erstellen des Worktrees ist ein Fehler aufgetreten.",
-            "cancelProvisioning": "Abbrechen",
-            "vmProvisioningLogEmpty": "Warten auf Rezeptausgabe…"
+            "cancelProvisioning": "Abbrechen"
           }
         }
       },

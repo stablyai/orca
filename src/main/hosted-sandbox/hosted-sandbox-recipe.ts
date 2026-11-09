@@ -171,7 +171,12 @@ export function createHostedSandboxStepProvider(
       hooks.onStopped?.(handle.environmentId)
       return ok('')
     } catch (error) {
-      return failed(error)
+      const result = failed(error)
+      // Only streamed stderr reaches the build log, so the control plane's reason must be streamed too.
+      if (result.stderr) {
+        onStderr?.(result.stderr)
+      }
+      return result
     }
   }
 }

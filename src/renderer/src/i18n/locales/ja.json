@@ -3186,12 +3186,9 @@
           "WorktreeCreationPanel": {
             "dabd226118": "閉じる",
             "34dd5ee38b": "再試行",
-            "ed2a664f8b": "ワークツリーを作成できませんでした",
             "a3346fc6ed": "ワークツリーの作成をキャンセルする",
             "532aea14ce": "キャンセル",
-            "767951265d": "ワークツリーの作成中に問題が発生しました。",
-            "cancelProvisioning": "キャンセル",
-            "vmProvisioningLogEmpty": "レシピの出力を待っています…"
+            "cancelProvisioning": "キャンセル"
           }
         }
       },

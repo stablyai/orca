@@ -175,10 +175,12 @@ export type WorktreeSlice = {
       status?: 'creating' | 'error'
       startedAt?: number
       error?: string
+      errorCode?: string
       loaderVisible?: boolean
       request?: PendingWorktreeCreation['request']
       chatSessionOptions?: Readonly<Record<string, string>>
       provisioningLog?: string
+      provisioningLogStamps?: PendingWorktreeCreation['provisioningLogStamps']
       environmentCheck?: PendingWorktreeCreation['environmentCheck']
       vmEnvironmentId?: string
       checkoutProgress?: PendingWorktreeCreation['checkoutProgress']

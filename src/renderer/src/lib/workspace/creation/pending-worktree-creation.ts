@@ -62,6 +62,8 @@ export type WorktreeCreationRequest = {
     recipeId: string
     projectId: string
     checkoutMode?: 'orca-worktree' | 'provisioned-root'
+    /** Set for the built-in hosted provider, whose build sheet speaks in plain language. */
+    provider?: 'orca-cloud'
   }
   // Capture local/runtime progress routing at submit so focus changes cannot alter Retry behavior.
   worktreeCreateProgressMode?: WorktreeCreationProgressMode
@@ -148,6 +150,8 @@ export type PendingVmEnvironmentCheck = {
   /** `skipped`: the VM's server predates the checks. */
   status: 'running' | 'passed' | 'skipped' | 'failed'
   checks?: readonly EnvironmentDoctorCheck[]
+  startedAt?: number
+  finishedAt?: number
 }
 
 /** Session-only creation status drives sidebar/panel and vanishes on reload; completed worktrees reconcile normally. request owns display fields and retry intent so they cannot drift. */
@@ -163,7 +167,11 @@ export type PendingWorktreeCreation = {
   // Instant folder creates retain the initiating surface; explicit opens and retries reveal progress.
   loaderVisible: boolean
   error?: string
+  /** Machine-readable cause of `error`, e.g. `cloudPlanRequired`, so the sheet can offer the right fix. */
+  errorCode?: string
   provisioningLog?: string
+  /** Arrival time of each line in `provisioningLog`, index-aligned with its lines. */
+  provisioningLogStamps?: readonly number[]
   /** VM creates: the provisioned VM's environment checks, run before the workspace is created. */
   environmentCheck?: PendingVmEnvironmentCheck
   /** VM creates: the provisioned VM's runtime environment, known once it answers. */

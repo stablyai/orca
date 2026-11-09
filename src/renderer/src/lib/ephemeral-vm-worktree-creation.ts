@@ -8,6 +8,8 @@ import { translate } from '@/i18n/i18n'
 import { cleanupFailedEphemeralVmWorkspace } from '@/lib/ephemeral-vm-failed-create-cleanup'
 import { gateVmCreateOnEnvironmentCheck } from '@/lib/ephemeral-vm-environment-check'
 import { showOrcaCloudPlanUpsell } from '@/lib/orca-cloud-session-events'
+import { ephemeralVmErrorText } from '@/lib/ephemeral-vm-error-copy'
+import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/worktree-creation-surface'
 import {
   appendProvisioningLog,
   appendProvisioningWarnings
@@ -39,6 +41,7 @@ async function prepareEphemeralVmRecipeRequest(
   store.updatePendingWorktreeCreation(creationId, {
     phase: 'provisioning-vm',
     provisioningLog: '',
+    provisioningLogStamps: [],
     // A retry provisions a new VM; the sheet must not act on the last one.
     vmEnvironmentId: undefined
   })
@@ -74,12 +77,20 @@ async function prepareEphemeralVmRecipeRequest(
     }
     useAppStore.getState().updatePendingWorktreeCreation(creationId, {
       status: 'error',
-      error: preparedTarget.error
+      error: preparedTarget.error,
+      errorCode: preparedTarget.errorCode
     })
-    if (preparedTarget.errorCode === 'cloudPlanRequired') {
-      showOrcaCloudPlanUpsell(preparedTarget.error)
-    } else if (useAppStore.getState().activePendingCreationId !== creationId) {
-      toast.error(preparedTarget.error)
+    // The build sheet explains the failure and offers its fix; toast only when it is not on screen.
+    const state = useAppStore.getState()
+    if (
+      state.activePendingCreationId !== creationId ||
+      !selectWorktreeCreationSurfaceShown(state)
+    ) {
+      if (preparedTarget.errorCode === 'cloudPlanRequired') {
+        showOrcaCloudPlanUpsell(preparedTarget.error)
+      } else {
+        toast.error(ephemeralVmErrorText(preparedTarget))
+      }
     }
     return null
   }

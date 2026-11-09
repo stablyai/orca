@@ -3692,12 +3692,9 @@
           "WorktreeCreationPanel": {
             "dabd226118": "Kapat",
             "34dd5ee38b": "Yeniden dene",
-            "ed2a664f8b": "Worktree oluşturulamadı",
             "a3346fc6ed": "Worktree oluşturmayı iptal et",
             "532aea14ce": "İptal",
-            "767951265d": "Worktree oluşturulurken bir şeyler ters gitti.",
-            "cancelProvisioning": "İptal",
-            "vmProvisioningLogEmpty": "Kurulum çıktısı bekleniyor…"
+            "cancelProvisioning": "İptal"
           }
         }
       },

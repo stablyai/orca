@@ -19517,12 +19517,9 @@
           "WorktreeCreationPanel": {
             "dabd226118": "Descartar",
             "34dd5ee38b": "Tentar novamente",
-            "ed2a664f8b": "Não foi possível criar a worktree",
             "a3346fc6ed": "Cancelar criação da worktree",
             "532aea14ce": "Cancelar",
-            "767951265d": "Algo deu errado ao criar a worktree.",
-            "cancelProvisioning": "Cancelar",
-            "vmProvisioningLogEmpty": "Esperando a saída da receita…"
+            "cancelProvisioning": "Cancelar"
           }
         }
       },
