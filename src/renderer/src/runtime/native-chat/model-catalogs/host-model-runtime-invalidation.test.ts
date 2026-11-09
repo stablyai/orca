@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 const store = vi.hoisted(() => ({
-  subscribe: vi.fn(),
+  subscribe: vi.fn().mockReturnValue(() => {}),
   getState: vi.fn()
 }))
 vi.mock('@/store/index', () => ({ useAppStore: store }))
