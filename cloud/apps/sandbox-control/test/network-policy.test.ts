@@ -50,6 +50,10 @@ describe('compileNetworkPolicy', () => {
     })
   })
 
+  it('allows github.com by default so public repos clone without a GitHub App install', () => {
+    expect(compileNetworkPolicy({ mode: 'allowlist' }).allow['github.com']).toEqual([])
+  })
+
   it('adds the wildcard only when a workspace opts into open egress', () => {
     expect(compileNetworkPolicy({ mode: 'open', allowlist: [] })).toEqual({ allow: { '*': [] } })
   })
