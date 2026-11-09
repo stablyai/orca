@@ -22,9 +22,9 @@ import {
   subscribeHostAgentSignInReports
 } from '@/runtime/provider-accounts/sign-in/host-agent-sign-in-status-client'
 import { signOutAgentOnHost } from '@/lib/agent-sign-in/host-agent-sign-out'
-import type { HostAgentSignInAgent } from '../../../../../../shared/host-agent-sign-in-status'
+import { HOST_AGENT_SIGN_IN_AGENT_NAME } from '../../../../../../shared/host-agent-sign-in-status'
 
-const AGENT_NAME: Record<HostAgentSignInAgent, string> = { claude: 'Claude', codex: 'Codex' }
+const AGENT_NAME = HOST_AGENT_SIGN_IN_AGENT_NAME
 
 /** "Sign out of Claude/Codex" for agents the host reports signed in; nothing otherwise. */
 export function HostAgentSignOutMenuItems({

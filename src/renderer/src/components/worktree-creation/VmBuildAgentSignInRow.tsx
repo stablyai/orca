@@ -10,6 +10,7 @@ import {
 } from '@/runtime/provider-accounts/sign-in/host-agent-sign-in-status-client'
 import {
   HOST_AGENT_SIGN_IN_AGENTS,
+  HOST_AGENT_SIGN_IN_AGENT_NAME,
   type HostAgentSignInAgent,
   type HostAgentSignInReport
 } from '../../../../shared/host-agent-sign-in-status'
@@ -23,7 +24,6 @@ import {
   forgetVmBuildSignedInAgent,
   startVmBuildAgentSignIn,
   useVmBuildAgentSignIn,
-  vmBuildSignInKey,
   type VmBuildAgentSignIn,
   type VmBuildSignedInAgent
 } from '@/lib/agent-sign-in/vm-build-agent-sign-in'
@@ -31,7 +31,7 @@ import { switchHostAgentAccount } from '@/lib/agent-sign-in/host-agent-sign-out'
 import { AgentSignInCard, ErrorLine } from '../agent-sign-in/AgentSignInCard'
 import { agentSignInCardActions } from '../agent-sign-in/AgentSignInPanePortals'
 
-const AGENT_NAME: Record<HostAgentSignInAgent, string> = { claude: 'Claude', codex: 'Codex' }
+const AGENT_NAME = HOST_AGENT_SIGN_IN_AGENT_NAME
 
 export type VmBuildAgentSignInRowModel =
   | { kind: 'idle'; agents: readonly HostAgentSignInAgent[] }
@@ -126,7 +126,7 @@ export function VmBuildAgentSignInRowView({
         : view?.step === 'signed'
           ? t('vmBuildAgentSignIn.signed', '{{agent}}: signed in', { agent: name })
           : cardStep
-            ? null
+            ? t('vmBuildAgentSignIn.continueBelow', '{{agent}}: continue below', { agent: name })
             : t('vmBuildAgentSignIn.starting', '{{agent}}: starting sign-in…', { agent: name })
     // The card below carries its own Cancel.
     meta = cardStep ? null : (
@@ -151,7 +151,7 @@ export function VmBuildAgentSignInRowView({
   } else {
     icon = <CircleCheck aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
     meta = (
-      <span className="pr-2 text-xs text-muted-foreground">
+      <span className="text-xs text-muted-foreground">
         {model.agents.map((entry) => AGENT_NAME[entry.agent]).join(', ')}
       </span>
     )
@@ -159,7 +159,7 @@ export function VmBuildAgentSignInRowView({
 
   return (
     <li className="flex flex-col gap-2 py-1.5" data-vm-build-agent-sign-in={model.kind}>
-      <div className="flex min-h-7 items-center gap-2.5">
+      <div className="flex items-center gap-2.5">
         {icon}
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="truncate">
@@ -171,7 +171,7 @@ export function VmBuildAgentSignInRowView({
         <div className="flex shrink-0 items-center gap-1">{meta}</div>
       </div>
       {otherAccounts.map((entry) => (
-        <div key={entry.agent} className="flex items-start gap-2 pl-6">
+        <div key={entry.agent} className="flex flex-wrap items-center gap-2 pl-6">
           <div className="min-w-0 flex-1">
             <ErrorLine
               tone="warning"
@@ -188,7 +188,7 @@ export function VmBuildAgentSignInRowView({
           </div>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             size="xs"
             onClick={() => actions.switchAccount(entry.agent)}
           >
@@ -220,11 +220,11 @@ export function VmBuildAgentSignInRow({
   creationId: string
   environmentId: string
 }): React.JSX.Element | null {
-  const gateKey = vmBuildSignInKey(creationId)
   const report = useSyncExternalStore(subscribeHostAgentSignInReports, () =>
     readHostAgentSignInReport(environmentId)
   )
-  const run = useVmBuildAgentSignIn(creationId)
+  const run = useVmBuildAgentSignIn(creationId, environmentId)
+  const gateKey = run?.gateKey ?? ''
   const gate = useAgentSignInGate(gateKey)
   const hostLabel = useAppStore(
     (s) => s.runtimeEnvironments.find((environment) => environment.id === environmentId)?.name

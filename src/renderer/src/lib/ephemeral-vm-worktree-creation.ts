@@ -37,7 +37,9 @@ async function prepareEphemeralVmRecipeRequest(
   }
   store.updatePendingWorktreeCreation(creationId, {
     phase: 'provisioning-vm',
-    provisioningLog: ''
+    provisioningLog: '',
+    // A retry provisions a new VM; the sheet must not act on the last one.
+    vmEnvironmentId: undefined
   })
   const unsubscribeProvisionEvents = window.api.ephemeralVm.onProvisionEvent?.((event) => {
     if (event.provisionId !== creationId || event.stream !== 'stderr') {

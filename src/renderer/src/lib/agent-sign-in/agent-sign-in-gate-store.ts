@@ -44,7 +44,7 @@ export type AgentSignInGate = {
 export type GateEntry = AgentSignInGate & {
   /** Each held pane's launch, by pane key. */
   waiters: Map<string, (outcome: 'proceed' | 'cancel') => void>
-  /** Waiters with no launch of their own (the VM build sheet); they never keep a sign-in alive. */
+  /** Waiters with no launch of their own (the VM build sheet). */
   backgroundWaiters: Set<string>
   /** Bumps on every new sign-in attempt so a late result of an abandoned one is ignored. */
   attempt: number
@@ -156,7 +156,8 @@ export async function isAgentSignedOutOnHost(
 
 /** A card raised from a cached verdict steps aside if the host's fresh answer says signed in. */
 function releaseIfHostDisagrees(entry: GateEntry): void {
-  void refreshHostAgentSignInReport(entry.environmentId).then((report) => {
+  // Forced: the verdict being doubted may itself come from the host's one-minute cache.
+  void refreshHostAgentSignInReport(entry.environmentId, { force: true }).then((report) => {
     const state = hostAgentSignInEntry(report, entry.agent)?.state
     if (report && state !== 'signedOut' && entry.view.step === 'need') {
       settleAgentSignInGate(entry, 'proceed')
@@ -196,7 +197,7 @@ export async function requireAgentSignIn(request: {
   hostLabel: string
   agent: HostAgentSignInAgent
   prompt: string | null
-  /** Waits without a launch of its own, so it never keeps the sign-in alive by itself. */
+  /** Waits without a launch of its own (no prompt, no other-account toast). */
   background?: boolean
 }): Promise<'proceed' | 'cancel'> {
   const { key: paneKey, background = false, ...gate } = request
@@ -251,7 +252,7 @@ export function settleAgentSignInGate(entry: GateEntry, outcome: 'proceed' | 'ca
   }
 }
 
-/** Lets one pane go its own way; true when no launching pane still waits on the gate. */
+/** Lets one pane go its own way; true when nothing else waits on the gate. */
 export function releaseAgentSignInPane(paneKey: string, outcome: 'proceed' | 'cancel'): boolean {
   const entry = agentSignInGateEntry(paneKey)
   const resolve = entry?.waiters.get(paneKey)
@@ -263,7 +264,8 @@ export function releaseAgentSignInPane(paneKey: string, outcome: 'proceed' | 'ca
   gateKeyByPane.delete(paneKey)
   notify()
   resolve(outcome)
-  return [...entry.waiters.keys()].every((key) => entry.backgroundWaiters.has(key))
+  // The build sheet counts: a sign-in it started keeps going after a pane leaves.
+  return entry.waiters.size === 0
 }
 
 export function closeAgentSignInForward(entry: GateEntry): void {

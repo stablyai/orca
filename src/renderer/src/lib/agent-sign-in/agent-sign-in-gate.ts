@@ -85,6 +85,7 @@ function newestHostAccount(state: HostAccounts | undefined): { id: string; email
 async function finishSignedIn(entry: GateEntry, status: HostAccountSignInStatus): Promise<void> {
   const owner = { kind: 'environment', environmentId: entry.environmentId } as const
   const account = newestHostAccount(entry.agent === 'claude' ? status.claude : status.codex)
+  const desktopEmail = readDesktopAgentEmail(entry.agent)
   // Launches use the host's selected account; the one just signed in is the one wanted there.
   if (account) {
     await (
@@ -95,7 +96,7 @@ async function finishSignedIn(entry: GateEntry, status: HostAccountSignInStatus)
   }
   void refreshHostAgentSignInReport(entry.environmentId, { force: true })
   const email = account?.email ?? null
-  const expectedEmail = differentAccountEmail(email, await readDesktopAgentEmail(entry.agent))
+  const expectedEmail = differentAccountEmail(email, await desktopEmail)
   if (!isCurrentAgentSignInGate(entry)) {
     return
   }
