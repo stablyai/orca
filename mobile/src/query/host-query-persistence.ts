@@ -136,6 +136,8 @@ export function createHostQueryPersistence(
   const missedAtBoot = new Set<string>()
   const triedOnMiss = new WeakSet<Query>()
   const restored = new Set<string>()
+  // The key a restore is writing, so its own success leaves the mark.
+  let applyingRestore: string | null = null
   restoredKeys.set(queryClient, restored)
 
   function storedData(queryHash: string, data: unknown, persist: HostQueryPersist<unknown>) {
@@ -206,7 +208,12 @@ export function createHostQueryPersistence(
             settledAt.set(queryHash, dataUpdatedAt)
             // Marked first: listeners told of this write must already see it as an earlier launch's.
             restored.add(queryHash)
-            queryClient.setQueryData(queryKey, data, { updatedAt: dataUpdatedAt })
+            applyingRestore = queryHash
+            try {
+              queryClient.setQueryData(queryKey, data, { updatedAt: dataUpdatedAt })
+            } finally {
+              applyingRestore = null
+            }
           }
           settle()
         })
@@ -253,12 +260,15 @@ export function createHostQueryPersistence(
     if (event.type !== 'updated' || event.action.type !== 'success') {
       return
     }
+    // Any write but the restore's own is this launch's, whatever its clock says.
+    if (query.queryHash !== applyingRestore) {
+      restored.delete(query.queryHash)
+    }
     const family = familyOf(query.queryKey)
     const at = query.state.dataUpdatedAt
     if (family === null || at <= (settledAt.get(query.queryHash) ?? 0)) {
       return
     }
-    restored.delete(query.queryHash)
     settledAt.set(query.queryHash, at)
     void persisterFor(family, persist).persistQuery(query)
   })

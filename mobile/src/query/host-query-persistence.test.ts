@@ -125,7 +125,7 @@ describe('createHostQueryPersistence', () => {
     expect(relaunched.getQueryData(key)).toBe(live)
   })
 
-  it("marks restored data as an earlier launch's before anyone hears of it, until a newer answer", async () => {
+  it("marks restored data as an earlier launch's before anyone hears of it, until this launch's own answer", async () => {
     const store = memoryStore('host-a')
     await storeFromEarlierLaunch(store, [liveRow])
 
@@ -144,7 +144,12 @@ describe('createHostQueryPersistence', () => {
     const restoring = persistence.restore(firstPaint)
     await vi.runAllTimersAsync()
     await restoring
-    relaunched.setQueryData(key, { snapshotId: 'snap-8', worktrees: [liveRow] })
+    // A live answer timed before the stored one, as after a clock correction, is still this launch's.
+    relaunched.setQueryData(
+      key,
+      { snapshotId: 'snap-8', worktrees: [liveRow] },
+      { updatedAt: SAVED_AT - 1 }
+    )
 
     expect(heard).toEqual([true, false])
   })
