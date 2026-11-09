@@ -82,7 +82,7 @@ export async function refuseAgentServerRoute(
   )
 }
 
-/** An older Orca would drop --on and send the mail to an agent here, so it must carry peer mail first. */
+/** An older Orca would drop --on and send the mail to an agent here, so it must carry mail between servers first. */
 export async function requirePeerMailCarrier(ctx: HandlerContext): Promise<void> {
   if (!ctx.flags.has('on')) {
     return
@@ -90,7 +90,7 @@ export async function requirePeerMailCarrier(ctx: HandlerContext): Promise<void>
   const { result } = await ctx.client.call<RuntimeStatus>('status.get')
   if (!result.capabilities?.includes(ORCHESTRATION_PEER_MAIL_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError(
-      'peer_mail_unsupported',
+      'server_mail_unsupported',
       'The Orca running here is too old to carry mail to another server. Update or restart Orca here, then send again. Nothing was sent.'
     )
   }

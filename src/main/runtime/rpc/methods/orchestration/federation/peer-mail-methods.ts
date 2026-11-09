@@ -16,7 +16,7 @@ const NOTHING_DELIVERED = { effectsApplied: false } as const
 const MAX_PULL_WAIT_MS = 25_000
 const PULL_PAGE_SIZE = 50
 
-/** Peer mail comes only from a paired computer's Orca, never a phone or this Orca's own clients. */
+/** Mail between servers comes only from a paired computer's Orca, never a phone or this Orca's own clients. */
 function requireRuntimePairing(
   ctx: Pick<RpcContext, 'clientKind' | 'pairedDeviceId' | 'authenticatedCallerFingerprint'>
 ): string {
@@ -26,7 +26,7 @@ function requireRuntimePairing(
     !ctx.authenticatedCallerFingerprint
   ) {
     throw new OrchestrationError(
-      'peer_mail_requires_server_pairing',
+      'mail_requires_server_pairing',
       'Agent mail between Orca servers comes only from a paired computer. Nothing was delivered.',
       NOTHING_DELIVERED
     )
@@ -57,7 +57,7 @@ export const ORCHESTRATION_PEER_MAIL_METHODS = [
       const { runtime } = ctx
       const db = runtime.getOrchestrationDb()
       if (!isGeneratedId(params.messageId, 'msg')) {
-        throw new OrchestrationError('invalid_argument', 'Peer mail needs a message ID.')
+        throw new OrchestrationError('invalid_argument', 'Mail between servers needs a message ID.')
       }
       const to = params.to
       if (/^(run|dispatch|task):/.test(to) || to.startsWith('@')) {
