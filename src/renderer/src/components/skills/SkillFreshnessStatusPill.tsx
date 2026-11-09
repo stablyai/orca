@@ -50,7 +50,13 @@ function statusPill(
 }
 
 // Presence alone cannot imply freshness; copies the updater cannot reach need attention instead of green.
-export function SkillFreshnessStatusPill({ skillName }: { skillName: string }): React.JSX.Element {
+export function SkillFreshnessStatusPill({
+  skillName,
+  hideCurrent = false
+}: {
+  skillName: string
+  hideCurrent?: boolean
+}): React.JSX.Element | null {
   const t = useTranslate()
   const { plan, unsupported, loading, error } = useSkillFreshness(
     useActiveProjectSkillRuntime().bundledSkillTarget
@@ -71,6 +77,9 @@ export function SkillFreshnessStatusPill({ skillName }: { skillName: string }): 
         {t('auto.components.skills.SkillFreshnessStatusPill.checkFailed', 'Check failed')}
       </IntegrationStatusPill>
     )
+  }
+  if (hideCurrent && !skillPlanHasDetails(plan, skillName)) {
+    return null
   }
   return <SkillPlanStatusPill plan={plan} skillName={skillName} />
 }

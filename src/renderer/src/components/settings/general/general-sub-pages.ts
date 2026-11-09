@@ -1,4 +1,4 @@
-import { GENERAL_SETTING_ANCHORS } from './general-setting-anchors'
+import { GENERAL_SETTING_OWNERS } from './general-setting-anchors'
 import type { Translate } from '@/i18n/use-translate'
 
 export type GeneralSubPage = 'folder' | 'worktrees' | 'open-in' | 'editor'
@@ -16,19 +16,6 @@ export function getGeneralSubPageTitle(page: GeneralSubPage, t: Translate): stri
   }
 }
 
-const GENERAL_SUB_PAGE_BY_SECTION: Readonly<Record<string, GeneralSubPage>> = {
-  [GENERAL_SETTING_ANCHORS.folder]: 'folder',
-  [GENERAL_SETTING_ANCHORS.nesting]: 'folder',
-  [GENERAL_SETTING_ANCHORS.worktrees]: 'worktrees',
-  [GENERAL_SETTING_ANCHORS.openIn]: 'open-in',
-  'general-editor-settings': 'editor',
-  ...Object.fromEntries(
-    Object.values(GENERAL_SETTING_ANCHORS)
-      .filter((id) => id.startsWith('general-editor-'))
-      .map((id) => [id, 'editor' as const])
-  )
-}
-
 export function resolveGeneralSubPage(sectionId?: string): GeneralSubPage | null {
-  return sectionId ? (GENERAL_SUB_PAGE_BY_SECTION[sectionId] ?? null) : null
+  return sectionId ? (GENERAL_SETTING_OWNERS[sectionId] ?? null) : null
 }

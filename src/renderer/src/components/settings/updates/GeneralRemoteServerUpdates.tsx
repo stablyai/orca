@@ -81,7 +81,10 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
     >
       <div className="space-y-0.5">
         <div className="text-sm font-medium">
-          {t('auto.components.settings.GeneralRemoteServerUpdates.title', 'Remote Orca Servers')}
+          {t(
+            'auto.components.settings.GeneralRemoteServerUpdates.fdd271abf0',
+            'Remote Orca servers'
+          )}
         </div>
         <p className="text-xs text-muted-foreground">
           {t(
@@ -111,8 +114,8 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
           {running
             ? t('auto.components.settings.GeneralRemoteServerUpdates.updating', 'Updating servers…')
             : t(
-                'auto.components.settings.GeneralRemoteServerUpdates.reviewServers',
-                'Check for Server Updates'
+                'auto.components.settings.GeneralRemoteServerUpdates.e4e5937469',
+                'Check for server updates'
               )}
         </Button>
       </div>

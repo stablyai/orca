@@ -201,7 +201,7 @@ export function TerminalThemeCatalogSection({
             >
               <div className="space-y-2">
                 <p className="text-xs font-medium text-muted-foreground">
-                  {t('auto.components.settings.TerminalThemeSections.target_title', 'Theme Mode')}
+                  {t('auto.components.settings.TerminalThemeSections.2318e07c68', 'Theme mode')}
                 </p>
                 <SettingsSegmentedControl
                   value={target}

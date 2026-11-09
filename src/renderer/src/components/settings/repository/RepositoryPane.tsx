@@ -180,17 +180,17 @@ export function RepositoryPane({
 
   const allEntries = getRepositoryPaneSearchEntries(repo, { isLocalWindowsProject }, t)
   const identityEntryTitles = new Set([
-    t('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
-    t('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
+    t('auto.components.settings.repository.search.7f380f89ea', 'Display name'),
+    t('auto.components.settings.repository.search.0fe07b9e90', 'Project icon'),
     t('components.RepositoryJiraProjectSection.title', 'Default Jira project'),
-    t('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
+    t('auto.components.settings.repository.search.eefc3e51ef', 'GitHub account'),
     getRepositoryAgentTrustSearchEntry().title,
-    t('auto.components.settings.repository.search.keepForkUpToDate', 'Keep Fork Up to Date'),
-    t('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
-    t('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
+    t('auto.components.settings.repository.search.f94afd4078', 'Keep fork up to date'),
+    t('auto.components.settings.repository.search.88d466b2e3', 'Default worktree base'),
+    t('auto.components.settings.repository.search.2e216fbad2', 'Worktree location'),
     t('auto.components.settings.repository.search.externalWorktrees', 'External worktrees'),
-    t('auto.components.settings.repository.search.projectRuntime', 'Project Runtime'),
-    t('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
+    t('auto.components.settings.repository.search.7a89e2dc09', 'Project runtime'),
+    t('auto.components.settings.repository.search.bbbe994528', 'Remove project')
   ])
   const identityEntries = allEntries.filter((entry) => identityEntryTitles.has(entry.title))
   const sparsePresetEntries = allEntries.filter((entry) =>

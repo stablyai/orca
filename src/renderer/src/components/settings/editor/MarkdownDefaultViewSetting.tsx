@@ -22,8 +22,8 @@ export function MarkdownDefaultViewSetting({
   // Why: the store action keeps already-open Markdown tabs on the view they show.
   const setMarkdownDefaultViewMode = useAppStore((s) => s.setMarkdownDefaultViewMode)
   const title = t(
-    'auto.components.settings.GeneralEditorSettingsSection.markdownDefaultView',
-    'Default Markdown View'
+    'auto.components.settings.GeneralEditorSettingsSection.1dd79964bf',
+    'Default Markdown view'
   )
   const description = t(
     'auto.components.settings.GeneralEditorSettingsSection.markdownDefaultViewDesc',

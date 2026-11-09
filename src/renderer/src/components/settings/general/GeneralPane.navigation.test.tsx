@@ -26,7 +26,7 @@ function NavigationHarness({
 }: {
   initialPage?: GeneralSubPage
   initialQuery?: string
-  onWrite?: ReturnType<typeof vi.fn>
+  onWrite?: (updates: Partial<ReturnType<typeof getDefaultSettings>>) => void
 }) {
   const [settings, setSettings] = useState(() => ({
     ...getDefaultSettings('/tmp'),
@@ -61,6 +61,7 @@ function NavigationHarness({
     setActiveSectionId,
     generalSubPage,
     setGeneralSubPage,
+    setHighlightedSettingsTarget: vi.fn(),
     pendingNavRequestTick,
     setPendingNavRequestTick,
     repos: [],
@@ -70,7 +71,7 @@ function NavigationHarness({
   }
   useSettingsRepoScrollEffects(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Every model field this navigation hook reads is supplied; repository loading is inactive.
-    model as SettingsStoreModel,
+    model as unknown as SettingsStoreModel,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Supplies the production hook's complete navigation-ref contract.
     {
       contentScrollRef,
@@ -86,7 +87,7 @@ function NavigationHarness({
       visibleSectionIds: new Set(['general'])
     } as SettingsNavigationModel,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: No repository capability requests are needed for General navigation.
-    { neededRepos: [] } as SettingsTerminalModel
+    { neededRepos: [] } as unknown as SettingsTerminalModel
   )
   return (
     <TooltipProvider>
@@ -125,13 +126,18 @@ it('finds controls across General destinations and opens the actual setting for 
   expect(screen.getByRole('button', { name: /External worktrees/i })).toBeTruthy()
   expect(screen.getByRole('switch', { name: 'Deleting a workspace' })).toBeTruthy()
   fireEvent.change(screen.getByRole('textbox', { name: 'Search settings' }), {
+    target: { value: 'folder per project' }
+  })
+  fireEvent.click(await screen.findByRole('button', { name: /Folder per project/ }))
+  expect(await screen.findByRole('switch', { name: 'Folder per project' })).toBeTruthy()
+  fireEvent.change(screen.getByRole('textbox', { name: 'Search settings' }), {
     target: { value: 'minimap' }
   })
   const result = await screen.findByRole('button', { name: /Minimap/ })
   fireEvent.click(result)
   const control = await screen.findByRole('switch', { name: 'Minimap' })
   await waitFor(() =>
-    expect(scroll.mock.contexts).toContain(control.closest('[data-settings-row]'))
+    expect(scroll.mock.contexts).toContain(control.closest('#general-editor-minimap'))
   )
   fireEvent.click(control)
   expect(onWrite).toHaveBeenCalledWith({ editorMinimapEnabled: false })
@@ -153,8 +159,8 @@ it('opens an old subsection link from another child with a conflicting query, in
 it('keeps an incomplete Open in draft when search temporarily replaces its form', async () => {
   const onWrite = vi.fn()
   render(<NavigationHarness initialPage="open-in" initialQuery="" onWrite={onWrite} />)
-  fireEvent.click(screen.getByRole('button', { name: 'Add app' }))
-  fireEvent.click(screen.getByRole('menuitem', { name: /Custom/ }))
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Add app' }), { key: 'ArrowDown' })
+  fireEvent.click(await screen.findByRole('menuitem', { name: /Custom/ }))
   fireEvent.change(screen.getByPlaceholderText('App name'), { target: { value: 'Draft editor' } })
   fireEvent.blur(screen.getByPlaceholderText('App name'))
   fireEvent.change(screen.getByRole('textbox', { name: 'Search settings' }), {
@@ -164,8 +170,6 @@ it('keeps an incomplete Open in draft when search temporarily replaces its form'
   fireEvent.change(screen.getByRole('textbox', { name: 'Search settings' }), {
     target: { value: '' }
   })
-  expect((await screen.findByPlaceholderText('App name')).getAttribute('value')).toBe(
-    'Draft editor'
-  )
+  expect(await screen.findByDisplayValue('Draft editor')).toBeTruthy()
   expect(onWrite).not.toHaveBeenCalled()
 })

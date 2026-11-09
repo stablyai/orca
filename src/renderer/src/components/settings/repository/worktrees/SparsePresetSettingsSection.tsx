@@ -224,7 +224,7 @@ export function SparsePresetSettingsSection({
             disabled={!!draft || presets === undefined || deletingPresetId !== null}
           >
             <Plus className="size-3.5" />
-            {t('auto.components.settings.SparsePresetSettingsSection.d7565029a9', 'New Preset')}
+            {t('auto.components.settings.SparsePresetSettingsSection.683e781027', 'New preset')}
           </Button>
         }
       >

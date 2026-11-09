@@ -18,7 +18,7 @@ export function OpenAiTranscriptionSettingsRow({
 }: OpenAiTranscriptionSettingsRowProps): React.JSX.Element {
   const t = useTranslate()
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
+    <div data-settings-row="" className="flex items-center justify-between gap-4 py-2">
       <div className="min-w-0 space-y-0.5">
         <div className="flex items-center gap-2">
           <Cloud className="size-4 shrink-0 text-muted-foreground" />

@@ -121,10 +121,9 @@ function GeneralPaneView({
       />
     )
   }
-  const showNavigation =
-    query.trim() === '' ||
-    query.trim().toLocaleLowerCase() ===
-      t('auto.components.settings.Settings.7807c11c4d', 'General').toLocaleLowerCase()
+  const showNavigation = matchesSettingsSearch(query, {
+    title: t('auto.components.settings.Settings.7807c11c4d', 'General')
+  })
   return (
     <div className="space-y-6">
       <GeneralRootSettings {...props} query={query} showNavigation={showNavigation} />

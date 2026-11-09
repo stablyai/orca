@@ -203,7 +203,7 @@ export function getExperimentalSearchEntry(t: Translate = translate) {
   return {
     pet: findEntry(t('auto.components.settings.experimental.search.87d99e634b', 'Pet')),
     agentDashboard: findEntry(
-      t('auto.components.settings.experimental.search.agentDashboard.title', 'Agent Dashboard')
+      t('auto.components.settings.experimental.search.agentDashboard.eaf17a7214', 'Agent dashboard')
     ),
     terminalAttention: findEntry(
       t('auto.components.settings.experimental.search.9e4ddf776d', 'Terminal attention')

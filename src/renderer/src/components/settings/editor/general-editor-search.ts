@@ -1,3 +1,4 @@
+import { getAutoSaveSearchEntry } from './GeneralAutoSaveSetting'
 import { GENERAL_SETTING_ANCHORS, generalSetting } from '../general/general-setting-anchors'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from '../search/settings-search-keywords'
@@ -7,24 +8,10 @@ import { getFormatOnSaveSearchEntry } from './EditorFormatOnSaveSetting'
 import { getInsertFinalNewlineSearchEntry } from './EditorInsertFinalNewlineSetting'
 
 export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
-  generalSetting(GENERAL_SETTING_ANCHORS.formatOnSave, 'editor', getFormatOnSaveSearchEntry()),
-  generalSetting(
-    GENERAL_SETTING_ANCHORS.finalNewline,
-    'editor',
-    getInsertFinalNewlineSearchEntry()
-  ),
-  generalSetting(GENERAL_SETTING_ANCHORS.autoSave, null, {
-    title: translate('auto.components.settings.general.search.2f24c6adae', 'Auto save files'),
-    description: translate(
-      'auto.components.settings.general.search.e9d948d3c3',
-      'Save editor and editable diff changes automatically after a short pause.'
-    ),
-    keywords: [
-      ...translateSearchKeyword('auto.components.settings.general.search.86f54575c7', 'autosave'),
-      ...translateSearchKeyword('auto.components.settings.general.search.4469b6fa4e', 'save')
-    ]
-  }),
-  generalSetting(GENERAL_SETTING_ANCHORS.autoSaveDelay, 'editor', {
+  generalSetting(GENERAL_SETTING_ANCHORS.formatOnSave, getFormatOnSaveSearchEntry()),
+  generalSetting(GENERAL_SETTING_ANCHORS.finalNewline, getInsertFinalNewlineSearchEntry()),
+  generalSetting(GENERAL_SETTING_ANCHORS.autoSave, getAutoSaveSearchEntry()),
+  generalSetting(GENERAL_SETTING_ANCHORS.autoSaveDelay, {
     title: translate('auto.components.settings.general.search.d9168badd2', 'Auto save delay'),
     description: translate(
       'auto.components.settings.general.search.8ea61ad55c',
@@ -39,7 +26,7 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       )
     ]
   }),
-  generalSetting(GENERAL_SETTING_ANCHORS.fontFamily, 'editor', {
+  generalSetting(GENERAL_SETTING_ANCHORS.fontFamily, {
     title: translate('auto.components.settings.general.search.66395fb7ff', 'Editor font family'),
     description: translate(
       'auto.components.settings.general.search.editorFontFamilyDesc',
@@ -52,7 +39,7 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
     ]
   }),
   ...getVisibleEditorTypographySearchDescriptors(),
-  generalSetting(GENERAL_SETTING_ANCHORS.editorWrap, 'editor', {
+  generalSetting(GENERAL_SETTING_ANCHORS.editorWrap, {
     title: translate('auto.components.settings.general.search.e2947b3723', 'Editor word wrap'),
     description: translate(
       'auto.components.settings.general.search.005be5c699',
@@ -63,7 +50,7 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.3ca5ab78a5', 'code')
     ]
   }),
-  generalSetting(GENERAL_SETTING_ANCHORS.collapseUnchanged, 'editor', {
+  generalSetting(GENERAL_SETTING_ANCHORS.collapseUnchanged, {
     title: translate(
       'auto.components.settings.general.search.aa367d753d',
       'Collapse unchanged regions'
@@ -85,7 +72,7 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.foldKw', 'fold')
     ]
   }),
-  generalSetting(GENERAL_SETTING_ANCHORS.diffView, 'editor', {
+  generalSetting(GENERAL_SETTING_ANCHORS.diffView, {
     title: translate('auto.components.settings.general.search.aa1c06eb2c', 'Default diff view'),
     description: translate(
       'auto.components.settings.general.search.ecb9415c80',
@@ -102,7 +89,7 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.be24c7cd67', 'split')
     ]
   }),
-  generalSetting(GENERAL_SETTING_ANCHORS.diffTree, 'editor', {
+  generalSetting(GENERAL_SETTING_ANCHORS.diffTree, {
     title: translate(
       'auto.components.settings.general.search.b8e1e1ac68',
       'Default diff file tree'
@@ -122,7 +109,7 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.19baae651b', 'sidebar')
     ]
   }),
-  generalSetting(GENERAL_SETTING_ANCHORS.minimap, 'editor', {
+  generalSetting(GENERAL_SETTING_ANCHORS.minimap, {
     title: translate('auto.components.settings.general.search.6f584fcb48', 'Minimap'),
     description: translate(
       'auto.components.settings.general.search.716a4dfb1f',
@@ -135,7 +122,7 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.a0014961ae', 'scroll')
     ]
   }),
-  generalSetting(GENERAL_SETTING_ANCHORS.markdownView, 'editor', {
+  generalSetting(GENERAL_SETTING_ANCHORS.markdownView, {
     title: translate('auto.components.settings.general.search.0f9304f821', 'Default Markdown view'),
     description: translate(
       'auto.components.settings.general.search.markdownDefaultViewDesc',
@@ -151,7 +138,7 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.markdownRichKw', 'rich')
     ]
   }),
-  generalSetting(GENERAL_SETTING_ANCHORS.spellcheck, 'editor', {
+  generalSetting(GENERAL_SETTING_ANCHORS.spellcheck, {
     title: translate(
       'auto.components.settings.general.search.8ad175042b',
       'Rich Markdown spellcheck'
@@ -174,7 +161,7 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       )
     ]
   }),
-  generalSetting(GENERAL_SETTING_ANCHORS.reviewNotes, 'editor', {
+  generalSetting(GENERAL_SETTING_ANCHORS.reviewNotes, {
     title: translate('auto.components.settings.general.search.728a309ce1', 'Markdown review notes'),
     description: translate(
       'auto.components.settings.general.search.694613d47f',
@@ -191,7 +178,7 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.baa263d6d8', 'agents')
     ]
   }),
-  generalSetting(GENERAL_SETTING_ANCHORS.diffWhitespace, 'editor', {
+  generalSetting(GENERAL_SETTING_ANCHORS.diffWhitespace, {
     title: translate(
       'auto.components.settings.GeneralEditorSettingsSection.0971ef5c63',
       'Diff show whitespace'
@@ -200,9 +187,16 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       'auto.components.settings.GeneralEditorSettingsSection.94a479cef3',
       'Show leading and trailing whitespace differences in diffs.'
     ),
-    keywords: ['diff', 'whitespace', 'spaces', 'tabs', 'trim', 'indentation']
+    keywords: [
+      ...translateSearchKeyword('settings.general.search.keywords.diff', 'diff'),
+      ...translateSearchKeyword('settings.general.search.keywords.whitespace', 'whitespace'),
+      ...translateSearchKeyword('settings.general.search.keywords.spaces', 'spaces'),
+      ...translateSearchKeyword('settings.general.search.keywords.tabs', 'tabs'),
+      ...translateSearchKeyword('settings.general.search.keywords.trim', 'trim'),
+      ...translateSearchKeyword('settings.general.search.keywords.indentation', 'indentation')
+    ]
   }),
-  generalSetting(GENERAL_SETTING_ANCHORS.diffWrap, 'editor', {
+  generalSetting(GENERAL_SETTING_ANCHORS.diffWrap, {
     title: translate(
       'auto.components.settings.GeneralEditorSettingsSection.6f33c2a32f',
       'Diff word wrap'
@@ -211,7 +205,13 @@ export const getGeneralEditorSearchDescriptors = createLocalizedCatalog(() => [
       'auto.components.settings.GeneralEditorSettingsSection.4aa4d9fb73',
       'Wrap long lines in diff editors instead of requiring horizontal scrolling.'
     ),
-    keywords: ['diff', 'word wrap', 'wrap', 'markdown', 'long lines']
+    keywords: [
+      ...translateSearchKeyword('settings.general.search.keywords.diff', 'diff'),
+      ...translateSearchKeyword('settings.general.search.keywords.word_wrap', 'word wrap'),
+      ...translateSearchKeyword('settings.general.search.keywords.wrap', 'wrap'),
+      ...translateSearchKeyword('settings.general.search.keywords.markdown', 'markdown'),
+      ...translateSearchKeyword('settings.general.search.keywords.long_lines', 'long lines')
+    ]
   })
 ])
 

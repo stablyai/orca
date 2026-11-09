@@ -137,7 +137,7 @@ export function renderClaudeAccountsSection(
                   ) : (
                     <Plus className="size-3" />
                   )}
-                  {t('auto.components.settings.AccountsPane.b0e948a4f9', 'Add Account')}
+                  {t('auto.components.settings.AccountsPane.7e9977b560', 'Add account')}
                 </Button>
                 {!isRemoteAccountScope && canOfferClaudeSignInLink(accountRuntime.runtime) ? (
                   <ClaudeSignInLinkMenu

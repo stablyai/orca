@@ -28,7 +28,10 @@ export function HiddenExperimentalGroup(): React.JSX.Element {
         )}
       </h4>
 
-      <div className="flex items-start justify-between gap-4 rounded-md border border-orange-500/30 bg-orange-500/10 px-3 py-2.5">
+      <div
+        data-settings-row=""
+        className="flex items-start justify-between gap-4 rounded-md border border-orange-500/30 bg-orange-500/10 px-3 py-2.5"
+      >
         <div className="min-w-0 shrink space-y-0.5">
           <Label className="text-orange-600 dark:text-orange-300">
             {t(

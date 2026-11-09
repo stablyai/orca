@@ -51,6 +51,7 @@ export function useSettingsRepoScrollEffects(
     activeSectionId,
     generalSubPage,
     setGeneralSubPage,
+    setHighlightedSettingsTarget,
     pendingNavRequestTick,
     repos,
     setActiveSectionId,
@@ -211,6 +212,9 @@ export function useSettingsRepoScrollEffects(
           })
           return
         }
+        if (pendingNavSectionId === 'general') {
+          setHighlightedSettingsTarget({ id: scrollTargetId })
+        }
         const scrollToSubsection = (): void => {
           scrollSubsectionIntoView(scrollTargetId, contentScrollRef.current)
         }
@@ -242,6 +246,7 @@ export function useSettingsRepoScrollEffects(
     activeSectionId,
     generalSubPage,
     setGeneralSubPage,
+    setHighlightedSettingsTarget,
     contentScrollRef,
     pendingNavRequestTick,
     pendingNavSectionRef,

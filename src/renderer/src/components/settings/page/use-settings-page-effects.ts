@@ -35,7 +35,7 @@ export function useSettingsPageEffects(
     refreshModelStates,
     repoIdToHostSelection,
     repoIdToRepresentative,
-    setHighlightedSettingsTargetId,
+    setHighlightedSettingsTarget,
     setMountedSectionIds,
     setQuickCommandAddIntentSignal,
     setRemoteServerAddIntentSignal,
@@ -207,13 +207,13 @@ export function useSettingsPageEffects(
     consumeSettingsNavigation(settingsNavigationTarget)
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
-    setHighlightedSettingsTargetId(
-      settingsNavigationTarget.pane === 'developer-permissions' ||
-        settingsNavigationTarget.pane === 'general'
-        ? (settingsNavigationTarget.sectionId ?? null)
+    setHighlightedSettingsTarget(
+      settingsNavigationTarget.pane === 'developer-permissions' &&
+        settingsNavigationTarget.sectionId
+        ? { id: settingsNavigationTarget.sectionId }
         : null
     )
-    // Open Appearance’s nested status-bar section before scrolling to its rows.
+
     if (settingsNavigationTarget.pane === 'appearance') {
       const accordion = resolveAppearanceAccordionDeepLink(settingsNavigationTarget.sectionId)
       if (accordion) {
@@ -244,7 +244,7 @@ export function useSettingsPageEffects(
     pendingScrollTargetRef,
     repoIdToHostSelection,
     repoIdToRepresentative,
-    setHighlightedSettingsTargetId,
+    setHighlightedSettingsTarget,
     setMountedSectionIds,
     setPendingNavRequestTick,
     setQuickCommandAddIntentSignal,

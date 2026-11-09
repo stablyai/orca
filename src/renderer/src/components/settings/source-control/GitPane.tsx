@@ -88,10 +88,7 @@ export function SourceControlGroupOrderSetting({
 }): React.JSX.Element {
   const t = useTranslate()
   const value = normalizeSourceControlGroupOrder(settings.sourceControlGroupOrder)
-  const title = t(
-    'auto.components.settings.GitPane.sourceControlGroupOrderTitle',
-    'Source Control Group Order'
-  )
+  const title = t('auto.components.settings.GitPane.53a0daed73', 'Source control group order')
   const description = t(
     'auto.components.settings.GitPane.sourceControlGroupOrderDescription',
     'Choose whether Staged Changes or Changes appear first in Source Control.'
@@ -207,7 +204,7 @@ export function GitPane({
               }`}
             >
               {option === 'git-username'
-                ? t('auto.components.settings.GitPane.a182c5125e', 'Git Username')
+                ? t('auto.components.settings.GitPane.d12c81a103', 'Git username')
                 : option === 'custom'
                   ? t('auto.components.settings.GitPane.1f32ba27a6', 'Custom')
                   : t('auto.components.settings.GitPane.3d172725cc', 'None')}

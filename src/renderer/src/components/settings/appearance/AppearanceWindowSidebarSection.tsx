@@ -343,7 +343,7 @@ export function AppearanceWindowSidebarSection({
             {showFileExplorerAdvanced ? (
               <div className="space-y-3">
                 <SettingsSubsectionHeader
-                  title={t('auto.components.settings.AppearancePane.d496901cd0', 'File Explorer')}
+                  title={t('auto.components.settings.AppearancePane.8e374ce9a3', 'File explorer')}
                 />
                 <div className="ml-4 divide-y divide-border/40">
                   <SearchableSetting

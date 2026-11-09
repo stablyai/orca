@@ -1,3 +1,4 @@
+import { skillPlanHasDetails } from '@/lib/skill-freshness-display-status'
 import { SkillSetupRow } from './SkillSetupRow'
 import { bundledSkillSetupActionLabel } from './bundled-skill-setup-copy'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
@@ -182,7 +183,12 @@ function BundledAgentSkillSetupPanel({
         error={error}
         className={className}
       >
-        {action.kind === 'unknown' ? <div className="mt-1">{freshnessPill}</div> : null}
+        {unsupported ||
+        action.kind === 'unknown' ||
+        action.kind === 'loading' ||
+        skillPlanHasDetails(plan ?? null, freshnessSkillName ?? activeSkillNames[0]) ? (
+          <div className="mt-1">{freshnessPill}</div>
+        ) : null}
         <BundledSkillInstallStatus
           install={skillInstall}
           unsupported={unsupported}

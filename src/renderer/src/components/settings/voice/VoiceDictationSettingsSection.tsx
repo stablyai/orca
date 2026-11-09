@@ -29,7 +29,7 @@ export function VoiceDictationSettingsSection({
 
   return (
     <>
-      <div className="flex items-center justify-between gap-4 py-2">
+      <div data-settings-row="" className="flex items-center justify-between gap-4 py-2">
         <div className="space-y-0.5">
           <Label>
             {t('auto.components.settings.VoicePane.6ffecf36fd', 'Enable voice dictation')}
@@ -54,7 +54,7 @@ export function VoiceDictationSettingsSection({
 
       <Separator />
 
-      <div className="flex items-center justify-between gap-4 py-2">
+      <div data-settings-row="" className="flex items-center justify-between gap-4 py-2">
         <div className="space-y-0.5">
           <Label>{t('auto.components.settings.VoicePane.342f309724', 'Dictation mode')}</Label>
           <p className="text-xs text-muted-foreground">

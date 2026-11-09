@@ -82,7 +82,7 @@ export function renderGeneralSettingsSection(
               return
             }
             model.setGeneralSubPage(page)
-            model.setHighlightedSettingsTargetId(null)
+            model.setHighlightedSettingsTarget(null)
             model.setSettingsSearchQuery('')
             interactions.contentScrollRef.current?.scrollTo({ top: 0 })
           }}

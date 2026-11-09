@@ -161,7 +161,7 @@ export function useSettingsStoreModel() {
     getInitialMountedSectionIds
   )
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
-  const [highlightedSettingsTargetId, setHighlightedSettingsTargetId] = useState<string | null>(
+  const [highlightedSettingsTarget, setHighlightedSettingsTarget] = useState<{ id: string } | null>(
     null
   )
   const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
@@ -263,8 +263,8 @@ export function useSettingsStoreModel() {
     setMountedSectionIds,
     pendingNavRequestTick,
     setPendingNavRequestTick,
-    highlightedSettingsTargetId,
-    setHighlightedSettingsTargetId,
+    highlightedSettingsTarget,
+    setHighlightedSettingsTarget,
     quickCommandAddIntentSignal,
     setQuickCommandAddIntentSignal,
     sshHostAddIntentSignal,

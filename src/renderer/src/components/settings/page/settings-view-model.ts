@@ -10,7 +10,7 @@ import { getSettingsNavGroupDefinitionsForSearch } from '../navigation/settings-
 export function useSettingsNavigationActions(
   model: Pick<
     SettingsStoreModel,
-    | 'setHighlightedSettingsTargetId'
+    | 'setHighlightedSettingsTarget'
     | 'generalSubPage'
     | 'setGeneralSubPage'
     | 'activeSectionId'
@@ -24,7 +24,7 @@ export function useSettingsNavigationActions(
 ) {
   const {
     activeSectionId,
-    setHighlightedSettingsTargetId,
+    setHighlightedSettingsTarget,
     setGeneralSubPage,
     setActiveSectionId,
     setPendingNavRequestTick,
@@ -51,7 +51,7 @@ export function useSettingsNavigationActions(
         // Clear stale filtering when selecting a result’s pane.
         setSettingsSearchQuery('')
       }
-      setHighlightedSettingsTargetId(null)
+      setHighlightedSettingsTarget(null)
       setGeneralSubPage(null)
       releaseNativeAccounts()
       setActiveSectionId(sectionId)
@@ -63,7 +63,7 @@ export function useSettingsNavigationActions(
       contentScrollRef,
       setActiveSectionId,
       setGeneralSubPage,
-      setHighlightedSettingsTargetId,
+      setHighlightedSettingsTarget,
       setSettingsSearchQuery,
       settingsSearchQuery
     ]

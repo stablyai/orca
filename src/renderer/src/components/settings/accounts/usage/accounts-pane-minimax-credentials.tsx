@@ -187,8 +187,8 @@ export function MiniMaxCredentials({
         <UnsealedCredentialNotice
           protection={miniMaxCookieProtection}
           credentialName={t(
-            'auto.components.settings.AccountsPane.21d6eb141e',
-            'MiniMax Session Cookie'
+            'auto.components.settings.AccountsPane.4d41177f74',
+            'MiniMax session cookie'
           )}
         />
         {cookieNotice ? <p className="text-xs text-muted-foreground">{cookieNotice}</p> : null}

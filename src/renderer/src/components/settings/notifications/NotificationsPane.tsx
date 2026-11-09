@@ -259,7 +259,7 @@ export function NotificationsPane({
           className="gap-2"
         >
           <BellRing className="size-3.5" />
-          {t('auto.components.settings.NotificationsPane.906b4afebf', 'Send Test Notification')}
+          {t('auto.components.settings.NotificationsPane.f5b0498e1f', 'Send test notification')}
         </Button>
       </div>
     </div>

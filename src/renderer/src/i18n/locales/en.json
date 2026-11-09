@@ -611,9 +611,9 @@
         "cancelAdministratorRestart": "Cancel",
         "closeAdministratorHelp": "Close",
         "restartingAdministrator": "Restarting…",
-        "openManageSessions": "Open Manage Sessions",
         "administratorSearchDescription": "See Orca’s Windows permissions or restart with administrator approval.",
-        "administratorApproval": "Windows will ask for approval. Use your usual account."
+        "administratorApproval": "Windows will ask for approval. Use your usual account.",
+        "10aafff216": "Open manage sessions"
       },
       "limit": {
         "label": "Maximum running terminals",
@@ -729,7 +729,6 @@
         }
       },
       "reduceVisualEffects": {
-        "title": "Reduce Visual Effects",
         "description": "Turn off blur behind dialogs and menus, and window translucency after a restart. Helps remote desktops and machines without a GPU.",
         "keywords": {
           "blur": "blur",
@@ -1146,7 +1145,9 @@
         "customRules": "Custom rules",
         "shown": "Shown by default",
         "hidden": "All hidden",
-        "description": "Claude Code, GSD and other locations"
+        "description": "Claude Code, GSD and other locations",
+        "addFolder": "Add folder…",
+        "cancelAdd": "Cancel"
       },
       "tabs": {
         "title": "Tabs"
@@ -1250,7 +1251,6 @@
       }
     },
     "windowMaterial": {
-      "title": "Window Material",
       "description": "What shows behind translucent terminals. Requires restart.",
       "off": "Opaque",
       "translucent": "Translucent",
@@ -1267,7 +1267,6 @@
       "fc2ba9b528": "Window material"
     },
     "updateDelay": {
-      "title": "Update Delay",
       "description": "Wait this many days after a release is published before Orca offers it.",
       "none": "None",
       "availableSoon": "Available to you {{relative}}",
@@ -1277,13 +1276,14 @@
       "released": "Released {{released}}",
       "progress": "Time until Orca {{version}} is available",
       "skipDelayOnceHint": "Check for this release now. Your delay setting stays the same.",
-      "skipDelayOnce": "Skip Delay Once",
       "upToDateWithHeld": "You’re up to date. A newer release is on hold until {{date}}.",
       "heldReleaseReady": "A newer release is ready. Check for updates to get it.",
       "keywordDelay": "delay",
       "keywordCooldown": "cooldown",
       "keywordSecurity": "security",
-      "ab7e864374": "About update delay"
+      "ab7e864374": "About update delay",
+      "ee1d96f74a": "Skip delay once",
+      "1b4d825e0e": "Update delay"
     },
     "editorFormatOnSave": {
       "description": "Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default.",
@@ -3550,7 +3550,8 @@
           "statusDownloading": "Downloading update",
           "statusDownloaded": "Update ready to install",
           "statusError": "Update error"
-        }
+        },
+        "b3b02a9d84": "Try again"
       },
       "WorktreeJumpPalette": {
         "ac037cfac2": "Move",
@@ -7734,7 +7735,7 @@
                 "to": {
                   "date": {
                     "setting": {
-                      "f8bda25f29": "Keep Local Main Up to Date"
+                      "f4c23aee76": "Keep local main up to date"
                     }
                   }
                 }
@@ -7744,7 +7745,6 @@
         },
         "AccountsPane": {
           "locationSaveFailed": "Account location could not be saved. Try again.",
-          "c2d2751587": "Remove Account",
           "dbb9626ed1": "Cancel",
           "63843e37e2": "Remove Claude Account?",
           "380a7736cc": "Removing this account permanently deletes its managed Codex home, including all Codex session history and MCP logins stored inside. This cannot be undone. If the account is currently active, Orca falls back to the system default Codex login.",
@@ -7777,7 +7777,6 @@
           "b4c9450319": "No managed Codex accounts for {{value0}}. Orca will use that environment's system default Codex login until you add one here.",
           "93c47b333a": "Needs sign-in",
           "f2a265f8c7": "System default",
-          "b0e948a4f9": "Add Account",
           "c0a52abfc5": "Showing accounts for {{value0}}. New accounts are added there.",
           "94d351af4a": "Accounts",
           "d0d53b7eb0": "Manage which Codex account Orca uses for live rate limit fetching.",
@@ -7808,7 +7807,6 @@
           "8d61637a77": "MiniMax cookie saved.",
           "b43e761fe5": "MiniMax cookie update failed.",
           "5d63bbfbec": "MiniMax",
-          "21d6eb141e": "MiniMax Session Cookie",
           "33bba5ad83": "Paste your MiniMax session cookie for local rate-limit fetching.",
           "73ea15f24b": "Saved",
           "23afe8f226": "Not saved",
@@ -7890,7 +7888,9 @@
           "4d274a02f0": "OpenCode Go session cookie",
           "109431f707": "OpenCode Go workspace id",
           "91a1b78e67": "Account location",
-          "4d41177f74": "MiniMax session cookie"
+          "4d41177f74": "MiniMax session cookie",
+          "699680a328": "Remove account",
+          "7e9977b560": "Add account"
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -7953,14 +7953,14 @@
           "6f99bf5dd0": "No default arguments",
           "8fbe1f37c1": "Environment",
           "2d133152fa": "No default environment",
-          "agentPermissions": "Agent Permissions",
           "3f1bdf3cb4": "Environment text is too large to parse safely.",
           "codexSessionSource": "Codex home to import from",
           "codexSessionSourceInfo": "About importing Codex history",
           "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
           "storedDefaultUndetected": "Saved as your default, but not detected right now",
           "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out.",
-          "3bddd54c9e": "Default agent"
+          "3bddd54c9e": "Default agent",
+          "9f30095d49": "Agent permissions"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
@@ -7973,7 +7973,6 @@
           "0cd9b8228f": "Choose the app icon shown in the Dock and window switcher.",
           "61d842eca0": "Show the Orca Mobile shortcut in the sidebar. It remains available from Toolbox.",
           "dc29f3cc0d": "Sidebar",
-          "d496901cd0": "File Explorer",
           "ef89200c1f": "when not in a terminal pane.",
           "fd89b5487c": "Light",
           "7d26ccabe8": "Dark",
@@ -8010,7 +8009,8 @@
           "e0f9902e18": "Show tasks button",
           "7be0027489": "Show automations button",
           "d2b4ddbea0": "Show Orca Mobile button",
-          "7e958ee950": "Show Git-ignored files"
+          "7e958ee950": "Show Git-ignored files",
+          "8e374ce9a3": "File explorer"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -8060,12 +8060,10 @@
           "7d4c0a2aa4": "Profile name",
           "612f7f6861": "Failed to create profile.",
           "8f22b7580d": "Profile \"{{value0}}\" created.",
-          "8481ee0331": "New Browser Profile",
           "c0f85056d9": "Browser profiles on this Orca server.",
           "86b7c83fee": "This computer",
           "6480776a03": "Browser profiles for the selected host.",
           "5e19a692f7": "Host",
-          "6f2584b39e": "Add Profile",
           "e4aaf8051b": "toolbar menu.",
           "cd47bc9622": "Select a default profile for new browser tabs. Import cookies and switch profiles per-tab via the",
           "aa1074bfe9": "Manage browser profiles and import cookies from Chrome, Edge, Comet, or other browsers.",
@@ -8077,24 +8075,26 @@
           "e25fd16b91": "Default search engine",
           "bc44903d30": "Session & cookies",
           "ddd634b250": "Session & cookies",
-          "7a366a05e1": "Link routing"
+          "7a366a05e1": "Link routing",
+          "f36182ff2f": "New browser profile",
+          "549f28cf10": "Add profile"
         },
         "BrowserProfileRow": {
           "8e636cae25": "Profile \"{{value0}}\" removed.",
           "2d4bea7f35": "Default cookies cleared.",
-          "ebb78dfd6f": "From File…",
-          "cdec84552f": "Import Cookies",
           "796d846483": "No cookies imported",
           "c29648fe5b": "Active",
           "b4c167764d": "Imported {{value0}} cookies from file into {{value1}}.",
           "a3f8c2d1e0b4": "Imported {{value0}} cookies from {{value1}} ({{value2}}) into {{value3}}.",
           "b4e9d3f2a1c5": "Imported {{value0}} cookies from {{value1}} into {{value2}}.",
-          "c5a273a809": "From {{value0}}"
+          "c5a273a809": "From {{value0}}",
+          "80bffd32bf": "Import cookies",
+          "bd7d68f138": "From file…"
         },
         "BrowserUseComputerUseNotice": {
-          "15b5e680ba": "Open Computer Use",
           "79209b37b9": "If cookie import is not the right fit, Computer Use can control local apps and may use existing logged-in browser sessions where applicable. Install the Orca Computer Use skill; macOS also requires privacy permissions.",
-          "333984cf90": "Use an existing browser session"
+          "333984cf90": "Use an existing browser session",
+          "9895ed44de": "Open computer use"
         },
         "BrowserUseEnableSwitch": {
           "ce4d6f80d8": "Enable agent browser use"
@@ -8110,14 +8110,11 @@
           "a602d43069": "Copied {{value0}}."
         },
         "BrowserUsePane": {
-          "be6df68384": "From File…",
           "67d9a53f47": "Manage profiles for separate logins",
           "112f70adc4": "Last imported from {{value0}}",
           "72d4815523": "Bring your existing logins into Orca so agents can reach authenticated pages. Imports into the default profile.",
-          "2eb906706c": "Import Browser Cookies",
           "af8c83ed61": "Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins.",
           "68ea76eb71": "Install the Browser Use skill so agents can operate Orca's browser.",
-          "b8a1f2d84d": "Agent Browser Use",
           "96b91c6349": "Let coding agents drive this browser with your logins.",
           "2ea4617e3a": "Imported {{value0}} cookies from {{value1}}{{value2}}.",
           "2ccfc9cff8": "Import",
@@ -8126,7 +8123,9 @@
           "5301857d88": "From {{value0}}",
           "finishSteps": "Let coding agents drive this browser with your logins. Finish the steps below.",
           "b3e79d1c51": "Import browser cookies",
-          "4451b3c0a6": "Install browser use skill"
+          "4451b3c0a6": "Install browser use skill",
+          "4ab048c0b8": "From file…",
+          "507fdae102": "Agent browser use"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "Enables agents to navigate and verify pages in Orca's browser.",
@@ -8159,7 +8158,7 @@
           "installFailureConflictRemedy": "Remove {{value0}} and register again if it is no longer needed.",
           "6f894ef9c2": "Show in Finder",
           "cbe55e4d48": "Show in Explorer",
-          "9fd4023db0": "Show in File Manager"
+          "71e5d9feae": "Show in file manager"
         },
         "CliSkillRuntimeSetup": {
           "c47127f222": "WSL default"
@@ -8242,9 +8241,7 @@
           "4cfaa7e98a": "Bluetooth device tools and local hardware experiments.",
           "b2210b1b4f": "Bluetooth",
           "dfbc12c8c8": "Hardware debugging and device tools that talk to USB devices.",
-          "bf51e4a542": "USB Devices",
           "f903bf20b5": "Allows terminals and development tools to connect to services on your local network. macOS does not report this permission's current status to Orca.",
-          "e7bb06007c": "Local Network",
           "4a73f5217a": "Apple Events for scripts that control other local apps.",
           "e119f0d66b": "Automation",
           "7ca17b62c8": "macOS names Orca when the agents it runs read other apps' data, because Orca is the responsible process for terminal commands. Grant this to Orca to reduce those prompts. Then quit and reopen Orca.",
@@ -8252,15 +8249,12 @@
           "9f35980756": "Keystroke injection, window control, and UI automation tools.",
           "5b2f22ca2d": "Accessibility",
           "0639db5496": "Screenshot, visual automation, and UI inspection tools.",
-          "f24f31a884": "Screen Recording",
           "550cfa3750": "Webcam capture and camera-driven local test apps.",
           "e5b5f3d6b9": "Camera",
           "cc8151d9fa": "Voice input, transcription, audio recording, sox, ffmpeg, and Whisper CLIs.",
           "16381e040a": "Microphone",
           "dac08ec03e": "Working...",
           "actionRequest": "Request",
-          "actionOpenSettings": "Open Settings",
-          "actionTriggerPrompt": "Trigger Prompt",
           "statusGranted": "Granted",
           "statusDenied": "Denied",
           "statusNotRequested": "Not requested",
@@ -8268,7 +8262,6 @@
           "statusUnsupported": "macOS only",
           "statusEntitled": "Entitled",
           "statusCheckManually": "Check manually",
-          "actionRequestAccess": "Request Access",
           "localNetworkPromptCheck": "Check for a macOS prompt",
           "localNetworkPromptGuidance": "If prompted, choose Allow. If no prompt appears, open System Settings and enable Orca under Privacy & Security → Local Network.",
           "localNetworkOpenSettings": "Open System Settings",
@@ -8289,10 +8282,16 @@
           "connectionTestHost": "Host",
           "connectionTestPort": "Port",
           "connectionTestRunning": "Testing...",
-          "connectionTestAction": "Test Connection",
           "appStatus": "App: ",
           "terminalHostStatus": "Terminal hosts: ",
-          "terminalHostRecovery": "If a terminal cannot read protected files, save its work and close it in Terminal → Manage Sessions. Restart the daemon if new terminals are also affected; restarting closes its current terminals."
+          "terminalHostRecovery": "If a terminal cannot read protected files, save its work and close it in Terminal → Manage Sessions. Restart the daemon if new terminals are also affected; restarting closes its current terminals.",
+          "515baa0f5c": "Screen recording",
+          "b8cd05701d": "Open settings",
+          "28350e590b": "Trigger prompt",
+          "78b1e0b9d4": "Local network",
+          "e2596159f6": "Request access",
+          "91f887e323": "USB devices",
+          "a162df27d5": "Test connection"
         },
         "ExperimentalPane": {
           "a20d5ea365": "Keeps a pane-level highlight visible after terminal bell or agent-completion events until you interact with that pane. Experimental while we tune the signal.",
@@ -8347,8 +8346,6 @@
           }
         },
         "FloatingWorkspacePane": {
-          "aeaf76fda9": "Status Bar",
-          "9fb225f2d7": "Floating Button",
           "3c900e26e5": "The keyboard shortcut works regardless of where the toggle is shown.",
           "505001823e": "Choose floating workspace directory",
           "81afb79785": "New floating terminal tabs start here. Markdown notes are saved in Orca's app-owned floating workspace.",
@@ -8357,7 +8354,9 @@
           "2374e81dd8": "Floating workspace",
           "172d1d75c3": "Enable floating workspace",
           "7cedc178d6": "Terminal directory",
-          "b9c2a85346": "Toggle button location"
+          "b9c2a85346": "Toggle button location",
+          "73ac917638": "Floating button",
+          "dd7eb9270a": "Status bar"
         },
         "AgentCacheTimerSection": {
           "05de84a104": "1 hour",
@@ -8386,7 +8385,6 @@
           "fc5c5306ff": "ms.",
           "8112cd6dcf": "How long Orca waits after your last edit before saving automatically. First launch defaults to",
           "1bec6d8318": "How long Orca waits after your last edit before saving automatically.",
-          "0df2e4fd12": "Auto Save Files",
           "45c6e85c4d": "Editor",
           "4aa4d9fb73": "Wrap long lines in diff editors instead of requiring horizontal scrolling.",
           "94a479cef3": "Show leading and trailing whitespace differences in diffs.",
@@ -8394,9 +8392,7 @@
           "3f6892f307": "On",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
           "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
-          "collapseUnchangedTitle": "Collapse Unchanged Regions",
           "collapseUnchangedDescription": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way.",
-          "markdownDefaultView": "Default Markdown View",
           "markdownDefaultViewDesc": "The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there.",
           "0971ef5c63": "Diff show whitespace",
           "75e326278e": "Editor word wrap",
@@ -8405,7 +8401,10 @@
           "6f33c2a32f": "Diff word wrap",
           "3f63d16992": "Default diff file tree",
           "8b3f8e6b83": "Markdown review notes",
-          "a0361dfb05": "Rich Markdown spellcheck"
+          "a0361dfb05": "Rich Markdown spellcheck",
+          "916c5582f2": "Collapse unchanged regions",
+          "a37865966c": "Auto save files",
+          "1dd79964bf": "Default Markdown view"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
@@ -8442,10 +8441,7 @@
           "d89806cc89": "is ready to install.",
           "a6b37929dc": "Version",
           "8311da27ba": "is available. Click \"Download Update\" to download it.",
-          "f44299636f": "Restart to Update (",
-          "42717918f4": "Download Update (",
           "02dc082e70": "Could not start the update download.",
-          "e1a647adc5": "Check for Updates",
           "ceb579abaf": "Check for app updates and install a newer Orca version.",
           "bd79d412f0": "Update check failed. {{value0}}",
           "b9ad70c30d": "Update error. {{value0}}",
@@ -8454,24 +8450,25 @@
           "31fd7150cf": "Checking for updates...",
           "d69a09b672": "Updates are checked automatically on launch.",
           "e3b9d21c07": "is available. Update Orca through your system package manager — Orca cannot install this release itself.",
-          "6d27bd46e3": "Check for updates"
+          "6d27bd46e3": "Check for updates",
+          "857ca887da": "Download update (",
+          "c0a8f827c7": "Restart to update ("
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Choose apps available from a workspace's Open in menu.",
-          "ea98373cd8": "Ask Before Deleting Automations",
-          "9f380934cf": "Ask Before Deleting Workspaces",
           "4fbf910ded": "Create workspaces inside a repo-named subfolder.",
-          "ba3480642f": "Nest Workspaces",
           "a246f5ce6f": "Root directory where workspace folders are created.",
           "5567191a6e": "Browse",
-          "31e300af1c": "Ask Before Deleting Artifacts",
           "externalWorktrees": "External worktrees",
           "externalWorktreesDescription": "Choose which worktrees created outside Orca appear by default on this host.",
           "ad65d146f6": "Open in apps",
-          "9d0ef6a2a6": "Workspace directory"
+          "9d0ef6a2a6": "Workspace directory",
+          "a8ce626e4b": "Nest workspaces",
+          "c2d4beaf3a": "Ask before deleting workspaces",
+          "3ae2a59ce9": "Ask before deleting automations",
+          "2ffd7c4fc8": "Ask before deleting artifacts"
         },
         "GhosttyImportModal": {
-          "9d3e56ca36": "Apply Changes",
           "f96688b6bc": "Cancel",
           "b7ddae600c": "Done",
           "b58d4c9051": "Unsupported keys",
@@ -8483,9 +8480,10 @@
           "d2f33670a9": "Import from Ghostty",
           "273e7e81fe": "Configs",
           "1f744a72f4": "Config",
-          "choose_file": "Choose Config File",
           "not_found_choose_file": "No Ghostty config found on this computer. Choose a config file to import one from another location.",
-          "cleared": "Cleared"
+          "cleared": "Cleared",
+          "80e9b42a86": "Choose config file",
+          "9759d2dfa2": "Apply changes"
         },
         "WarpThemeImportModal": {
           "title": "Import from Warp",
@@ -8493,8 +8491,6 @@
           "yaml_title": "Import theme YAML",
           "yaml_description": "Import theme YAML files (Warp format) as Orca terminal themes.",
           "yaml_no_themes_found": "No themes found in the selected files.",
-          "choose_file": "Choose File",
-          "choose_folder": "Choose Folder",
           "loading": "Loading Warp themes...",
           "found_theme_one": "Found {{value0}} theme",
           "found_theme_other": "Found {{value0}} themes",
@@ -8511,7 +8507,11 @@
           "cancel": "Cancel",
           "import_theme_one": "Import {{value0}} Theme",
           "import_theme_other": "Import {{value0}} Themes",
-          "import_themes": "Import Themes"
+          "77f3e3d390": "Choose file",
+          "00aaf588da": "Choose folder",
+          "1bceb1553d": "Import themes",
+          "found_theme": "Found {{value0}} themes",
+          "import_theme": "Import {{value0}} Themes"
         },
         "useWarpThemeImport": {
           "unknown_error": "Unknown error",
@@ -8548,24 +8548,23 @@
           "aefa1ecb59": "No git username configured",
           "3d172725cc": "None",
           "1f32ba27a6": "Custom",
-          "a182c5125e": "Git Username",
-          "sourceControlGroupOrderTitle": "Source Control Group Order",
           "sourceControlGroupOrderDescription": "Choose whether Staged Changes or Changes appear first in Source Control.",
           "changesFirst": "Changes first",
           "stagedFirst": "Staged first",
-          "compareAgainstUpstreamTitle": "Default Compare Base",
           "compareAgainstUpstreamDescription": "Choose which base Source Control uses by default for committed-change comparisons. Branch upstream follows the current branch automatically and falls back to the repository default branch when no upstream exists. You can still change the compare base per worktree from that worktree's Git panel. Pull Request and rebase targets don't change.",
           "compareBaseRepositoryDefault": "Repository default",
           "compareBaseBranchUpstream": "Branch upstream",
           "refreshLocalBaseDescription": "When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as <mainBranch>main</mainBranch> or <masterBranch>master</masterBranch>. This keeps commands like <diffCommand>git diff main...HEAD</diffCommand> from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.",
-          "jiraIssueKeyCasingTitle": "Jira Key Casing",
           "jiraIssueKeyCasingDescription": "Casing of the Jira issue key in the workspace and branch names Orca suggests for new Jira-linked workspaces, such as PROJ-123-fix-login instead of proj-123-fix-login. Existing workspaces and names you type are never changed.",
           "jiraIssueKeyCasingLowercase": "Lowercase",
           "jiraIssueKeyCasingPreserve": "Uppercase key",
           "7826f35f63": "Branch prefix",
           "53a0daed73": "Source control group order",
           "fdbcd676b0": "GitHub API budget",
-          "f2765fbbf6": "GitLab API budget"
+          "f2765fbbf6": "GitLab API budget",
+          "074f7aa0d6": "Default compare base",
+          "d12c81a103": "Git username",
+          "8cdbaf4b03": "Jira key casing"
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Arms the bold-glitch capture gestures on this machine: {{samplingShortcut}} starts a sampling burst; {{captureShortcut}} captures pane evidence to disk.",
@@ -8593,16 +8592,16 @@
           "0911d5fa4c": "Enter a Kagi private session link from https://kagi.com/search?token=..."
         },
         "KeybindingsFileActions": {
-          "abc49853fb": "Reload from Disk",
-          "a8a8d6b9d3": "Reveal in File Manager",
           "9e24c0e858": "Open in Cursor",
           "1637f64033": "Open in VS Code",
-          "98f1a23e1c": "Open with Default App",
           "400397a10d": "Open keybindings file menu",
-          "1c2be2b2c6": "Edit File in Orca",
           "c5886a31cc": "Failed to open external editor.",
           "cdf794f46d": "Keybindings file is not available.",
-          "dd532a01ce": "Failed to open keybindings in Orca."
+          "dd532a01ce": "Failed to open keybindings in Orca.",
+          "ad58206841": "Edit file in Orca",
+          "4bfe7a2e43": "Open with default app",
+          "c322555264": "Reveal in file manager",
+          "5b639aea5c": "Reload from disk"
         },
         "ManageSessionKillDialog": {
           "6bf4627168": "Cancel",
@@ -8727,7 +8726,6 @@
           "49089c92b3": "Show Orca Mobile button"
         },
         "NotificationsPane": {
-          "906b4afebf": "Send Test Notification",
           "2772d2f257": "Skip notifications when the triggering worktree is already visible.",
           "2a42dd8d6f": "Notification sound volume",
           "4aa5085cd7": "Custom:",
@@ -8748,8 +8746,6 @@
           "7f45542625": "Test notification requested",
           "98d70fb261": "Custom notification sound could not be played",
           "c83b05a055": "Notifications are not supported on this system",
-          "6e6df3a09a": "Choose Custom File",
-          "76e02467b8": "Change Custom File",
           "e1b1724793": "A coding agent asks for permission or has a question.",
           "b3c7207c8f": "Notification sound",
           "9c41a0d367": "Enable notifications",
@@ -8757,17 +8753,20 @@
           "05f5c5ab50": "Agent needs input",
           "6bc7bd7b6e": "Terminal bell",
           "3b77513cd0": "Notify about hidden workspaces",
-          "badd7ed4cf": "Suppress while focused"
+          "badd7ed4cf": "Suppress while focused",
+          "0b8141ed49": "Change custom file",
+          "38e3bbeb25": "Choose custom file",
+          "f5b0498e1f": "Send test notification"
         },
         "OpenAiTranscriptionKeyDialog": {
-          "fa83512e48": "Save Key",
-          "07b26f2742": "Clear Key",
           "d246b2bdb3": "Local runtime keys are stored in ~/.orca using Electron encrypted storage when available.",
           "c3380e4ca5": "sk-...",
           "2f797018f0": "API key configured",
           "07ed3e512e": "Audio is sent to OpenAI only when an OpenAI speech model is selected.",
-          "439e91879e": "OpenAI Transcription",
-          "c3dfb3840e": "API key"
+          "c3dfb3840e": "API key",
+          "bf1ff9c891": "OpenAI transcription",
+          "be6c3f2eba": "Clear key",
+          "bce1b6d18a": "Save key"
         },
         "OpenAiTranscriptionSettingsRow": {
           "85c589cd61": "Add API key",
@@ -8868,7 +8867,6 @@
           "7d90fd5299": "Edit {{value0}}",
           "8c877dec41": "Global",
           "c6b155911b": "All commands",
-          "5aacc8f7dc": "Add Command",
           "c36912efd5": "Run them from the Quick Commands button in the tab bar, or right-click inside any terminal.",
           "3d9dc558e8": "This quick command will be removed from your saved list.",
           "3edf3deaf8": "Delete \"{{value0}}\"?",
@@ -8890,7 +8888,8 @@
           "8d525e5f15": "Copied",
           "53b17a4b1b": "Couldn't copy",
           "a9a564b7e7": "Copy {{value0}}",
-          "69a1441a21": "Nothing to copy"
+          "69a1441a21": "Nothing to copy",
+          "f8cf6fc086": "Add command"
         },
         "RecentTabOrderControl": {
           "3b17c81ede": "Tab strip order",
@@ -8901,19 +8900,16 @@
         "RepositoryHooksSection": {
           "af49e2a19e": "The file is present, but Orca could not find valid `scripts` or `issueCommand` definitions.",
           "39da2ae12f": "orca.yaml",
-          "32fec28f5b": "Command Source",
           "bbbd6e0bc4": "Command source & orca.yaml",
           "c9bc1bfd8f": "Advanced",
           "610d90fdbd": "Command source and orca.yaml details.",
           "4084720f47": "Complete {{artifact_url}}",
           "2cc27dc12b": "Optional per-user override for the linked-issue command.",
           "b91a0f297d": "Local and shared scripts that run before a worktree is archived.",
-          "9a100323ff": "Archive Script",
           "21fb607a87": "Default behavior when a new worktree is created.",
           "793dcee97d": "When to run",
           "63e1783173": "Choose the default behavior when a setup script is available.",
           "30d555acd2": "Local and shared scripts that run after a new worktree is created.",
-          "52b31baf02": "Setup Script",
           "8567127a40": "Scripts that run when worktrees are created or archived. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
           "5d940bde5c": "Add local script",
           "8c2893fae0": "Runs as a single shell script. Saved on this machine.",
@@ -8977,7 +8973,8 @@
           "1ecf0b115a": "Setup script",
           "1c17e751c4": "When to run setup",
           "bfdb1266ce": "Archive script",
-          "da00f141c2": "Custom GitHub issue command"
+          "da00f141c2": "Custom GitHub issue command",
+          "88c6d1e54a": "Command source"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Use {{value0}} repo color",
@@ -8987,7 +8984,6 @@
           "03ca1a4e9b": "example.com",
           "381b4844fd": "Upload PNG",
           "7da623abcc": "Used by default — GitHub always provides one, even when the owner hasn't set a custom image.",
-          "39da8a10bf": "Use GitHub Avatar",
           "c490787d24": "Emoji",
           "b2d7fd2116": "Icon",
           "2d8bd302fa": "Avatar",
@@ -9003,11 +8999,11 @@
           "emojiTooLongForRepoIcon": "This emoji can't be used as a repo icon.",
           "currentEmojiSelection": "Current: {{value0}}",
           "searchEmojiPlaceholder": "Search emoji",
-          "43bf3709dd": "Repo icon"
+          "43bf3709dd": "Repo icon",
+          "cc76342291": "Use GitHub avatar"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Relative paths resolve from this project root.",
-          "8ccacbeb5a": "Use Global",
           "e63bb96a9b": "Project-specific directory for new worktrees.",
           "8984d06520": "Default base branch or ref when creating worktrees.",
           "e641c359de": "Project icon and color used in the sidebar and tabs.",
@@ -9081,7 +9077,8 @@
           "82733ff808": "Available hosts",
           "41ccd99b57": "Project runtime",
           "38df44846b": "Default worktree base",
-          "5ff7788414": "Worktree location"
+          "5ff7788414": "Worktree location",
+          "077dc18a4a": "Use global"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",
@@ -9134,11 +9131,9 @@
         },
         "RuntimeEnvironmentsPane": {
           "af53761f31": "Cancel",
-          "bb90dd6487": "Remove Server",
           "d2e00809e4": "Switch",
           "05e0fc3ebf": "Switch to",
           "b2290ed203": "Orca will focus this host and load its projects. Existing terminals and browser tabs on other hosts stay alive.",
-          "d570c35a99": "Switch Server",
           "9a91c4a0eb": "Compatible",
           "86ed75bec8": "Update server",
           "62ac182a27": "Update client",
@@ -9184,7 +9179,9 @@
           "removeDefaultServerDescription": "This server is the default host for new projects. Choose another one under New projects open on before removing it. Existing host sessions are left alone.",
           "connectedNewProjectsHint": "Connected to {{value0}}. To create new projects there by default, choose it under New projects open on.",
           "removeDefaultServerBlocked": "This server is the default host for new projects. Choose another one under New projects open on before removing it.",
-          "serverReplaced": "{{value0}} is not the Orca server this computer paired with: Orca connects to the host as a different SSH user, or its server was reinstalled. Open the ⋯ menu here and choose Forget…, then connect the SSH host to pair with its current server."
+          "serverReplaced": "{{value0}} is not the Orca server this computer paired with: Orca connects to the host as a different SSH user, or its server was reinstalled. Open the ⋯ menu here and choose Forget…, then connect the SSH host to pair with its current server.",
+          "6f303a89a3": "Switch server",
+          "4ae8a4a381": "Remove server"
         },
         "RuntimePairingGeneratedUrlRows": {
           "0495f68959": "Copy {{value0}}"
@@ -9400,7 +9397,6 @@
           "6fa754d20f": "Delete",
           "fe1f2c6572": "Edit {{value0}}",
           "88bfbf1a9c": "No sparse presets saved for this repository.",
-          "d7565029a9": "New Preset",
           "17f8c4ce10": "Manage saved directory sets for sparse worktree creation.",
           "8b64731aaf": "+{{value0}} more",
           "755c6a1a0d": "Confirm",
@@ -9412,7 +9408,8 @@
           "8deb7024ab": "Loading sparse presets...",
           "92c08ccae3": "Sparse presets could not be loaded.",
           "2ef2b2674b": "Delete {{value0}}",
-          "124ff6ea6c": "Sparse checkout presets"
+          "124ff6ea6c": "Sparse checkout presets",
+          "683e781027": "New preset"
         },
         "SshDestructiveActionDialog": {
           "895b216267": "Cancel",
@@ -9475,7 +9472,6 @@
         },
         "SshTargetDestructiveActions": {
           "3bb0cf0ee4": "This will remove the target and end any active remote terminals.",
-          "4808966c41": "Remove SSH Target",
           "bulkTitleSingular": "Remove {{count}} SSH host?",
           "bulkTitlePlural": "Remove {{count}} SSH hosts?",
           "bulkDescription": "Removed hosts disappear from host pickers in workspaces, automations and the sidebar. Your ~/.ssh/config is not changed, and later syncs won’t bring them back.",
@@ -9500,9 +9496,7 @@
           "dc1dc52aaa": "Username",
           "2ee9bcd2e8": "server, deploy@server:2222, ssh://server",
           "ce370ce674": "Host or alias *",
-          "b8dab0aa7b": "My Server",
           "298de87a88": "Label",
-          "a62b4cb39a": "Save Changes",
           "8c922dffba": "Reuse SSH connection for faster setup",
           "53e9aabfc0": "Uses OpenSSH multiplexing when available. Turn off for hosts with custom SSH restrictions.",
           "proxyConnectionReuse": "Reuse one proxy connection",
@@ -9517,7 +9511,9 @@
           "addDescription": "Add a persistent machine you can log into over SSH.",
           "editingPrefix": "Editing",
           "addHost": "Add host",
-          "8349b7b4fa": "Identity file"
+          "8349b7b4fa": "Identity file",
+          "bc9854a353": "My server",
+          "92ea40234c": "Save changes"
         },
         "TasksPane": {
           "6b23a34f6d": "Jira",
@@ -9707,7 +9703,6 @@
           "d56af60e6f": "Choose the theme used when Orca is in light mode.",
           "cbe56a0f79": "Controls the split divider line between panes in dark mode.",
           "7add204bd5": "Choose the terminal theme used in dark mode.",
-          "target_title": "Theme Mode",
           "target_aria": "Terminal theme mode",
           "target_dark": "Dark",
           "target_light": "Light",
@@ -9728,7 +9723,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI magenta color",
-          "63f8d9336e": "Color Overrides",
           "e86e09b5c7": "Override individual terminal colors.",
           "1d1920dc8a": "Hide the mouse cursor when typing in the terminal.",
           "1846f6ee6a": "Vertical padding around the terminal grid in pixels.",
@@ -9739,22 +9733,13 @@
           "00eaa6b881": "Window appearance and background settings.",
           "b96ba13ed1": "Window",
           "42e01a6055": "ANSI bright white color",
-          "16948119cb": "Bright White",
           "1601140f03": "ANSI bright cyan color",
-          "f94adc4113": "Bright Cyan",
           "fe4d89ef85": "ANSI bright magenta color",
-          "e56e7d6ea0": "Bright Magenta",
           "bef6c0f6bf": "ANSI bright blue color",
-          "66820332fa": "Bright Blue",
           "e2ef5f4ab7": "ANSI bright yellow color",
-          "936a326be3": "Bright Yellow",
           "0ffb02f921": "ANSI bright green color",
-          "7dafd57730": "Bright Green",
           "667de68863": "ANSI bright red color",
-          "32b1b6acd7": "Bright Red",
           "f30c492769": "ANSI bright black color",
-          "260d69ce9a": "Bright Black",
-          "1be593d3e8": "ANSI Bright",
           "28846b1ca6": "ANSI white color",
           "0cb4459fb8": "White",
           "bd4c759327": "ANSI cyan color",
@@ -9770,14 +9755,9 @@
           "3a78f30b50": "Red",
           "cf4437a2f7": "ANSI black color",
           "adfdee23cb": "Black",
-          "68e9f07de0": "ANSI Normal",
-          "862e463f7f": "Bold Text",
           "b2c0857c49": "Text color of selected text",
-          "8b450b5305": "Selection Foreground",
           "74d8555f85": "Background color of selected text",
-          "40c3cfd30a": "Selection Background",
           "7f4063076c": "Color of text under the cursor (block cursor)",
-          "a2d9f095a7": "Cursor Text",
           "cd0700762b": "Cursor color",
           "c9e1fdf42f": "Cursor",
           "da64e8f4c1": "Terminal background color",
@@ -9796,7 +9776,21 @@
           "2d8a13cabd": "Horizontal padding",
           "44c6f429e9": "Vertical padding",
           "a649973dd3": "Hide mouse while typing",
-          "c9d73aee44": "Color overrides"
+          "c9d73aee44": "Color overrides",
+          "e3e70efcec": "Cursor text",
+          "cd4ab89dc6": "Selection background",
+          "b1dce93161": "Selection foreground",
+          "6ec3252c1f": "Bold text",
+          "5bea0a1ca1": "ANSI normal",
+          "9881daf4f5": "ANSI bright",
+          "f5bda64f57": "Bright black",
+          "c863ae6b57": "Bright red",
+          "93e2bff3ed": "Bright green",
+          "0451b1e684": "Bright yellow",
+          "8a4b23b3c4": "Bright blue",
+          "2b813ceecc": "Bright magenta",
+          "db0a91c623": "Bright cyan",
+          "2e5ea3f11b": "Bright white"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Reset"
@@ -9814,7 +9808,6 @@
           "61a16c8141": "Extracting...",
           "8f4d2a51d7": "offline",
           "d504ab05f0": "streaming",
-          "fbe5990716": "Select Model",
           "e24f7d43d2": "Select a speech model. Local models run offline; cloud models require an API key.",
           "174da92062": "Hold",
           "118b3c2dee": "Toggle",
@@ -9828,7 +9821,8 @@
           "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop.",
           "6ffecf36fd": "Enable voice dictation",
           "342f309724": "Dictation mode",
-          "c5ea32143e": "Speech model"
+          "c5ea32143e": "Speech model",
+          "2d9b81c687": "Select model"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -9838,12 +9832,12 @@
           "b2429aeb31": "Add",
           "ab40b8a5f1": "No matches. Keep typing to add a custom path.",
           "4cd2a4c077": "Type a path (e.g. .env or node_modules)…",
-          "241325302c": "Add Path",
           "7ff265071d": "When a new worktree is created, each path listed here is APFS clone-copied on macOS when possible, otherwise symlinked from the primary checkout.",
           "b07ef5a8b6": "Paths to materialize from the primary checkout into newly created worktrees.",
           "d72ba8dc68": "{{value0}} paths",
           "9ea912d811": "1 path",
-          "a995ebf5ab": "Worktree shared paths"
+          "a995ebf5ab": "Worktree shared paths",
+          "9a7cd44772": "Add path"
         },
         "WslCliRegistration": {
           "c6f6f89d7c": "Cancel",
@@ -10530,7 +10524,6 @@
             "6b5a56ac35": "Floating animated pet in the bottom-right corner.",
             "87d99e634b": "Pet",
             "agentDashboard": {
-              "title": "Agent Dashboard",
               "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
               "dashboard": "dashboard",
               "agent": "agent",
@@ -10613,7 +10606,6 @@
             "2a254b725e": "tab",
             "ca812803ea": "recent tab order",
             "e53d585ed6": "Recent or tab strip.",
-            "editor_preview_tabs_short": "Browsing files reuses one preview tab instead of opening a new one.",
             "preview": "preview",
             "reuse": "reuse",
             "replace": "replace",
@@ -10647,7 +10639,6 @@
             "86f54575c7": "autosave",
             "8ea61ad55c": "How long Orca waits after your last edit before saving automatically.",
             "4469b6fa4e": "save",
-            "e9d948d3c3": "Save editor and editable diff changes automatically after a short pause.",
             "c56cb6f1c2": "network",
             "nodeDistMirror": "mirror",
             "nodeDistNodejs": "nodejs",
@@ -10667,11 +10658,6 @@
             "5a9df5566f": "open menu",
             "b8093e9a93": "open in",
             "a916662068": "Choose apps available from a workspace's Open in menu.",
-            "7e9b556873": "skip",
-            "ca86dd6e27": "dialog",
-            "9f8558233a": "confirm",
-            "7edf4f69e2": "automation",
-            "84c67d0108": "delete",
             "df10666259": "worktree",
             "93f6ec5e70": "directory",
             "9bde064915": "subfolder",
@@ -10704,21 +10690,10 @@
             "externalKeyword": "external",
             "visibility": "visibility",
             "sidebar": "sidebar",
-            "867dddea41": "pinned",
-            "5250cf0e48": "pin",
-            "afa37a34e1": "close",
-            "running_terminal": "running",
-            "terminal": "terminal",
-            "agent": "agent",
-            "command": "command",
-            "confirm": "confirm",
-            "close": "close",
-            "omp": "OMP",
             "markdownDefaultViewDesc": "The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there.",
             "markdownSourceKw": "source",
             "markdownRichKw": "rich",
             "34cda90656": "Prompt cache timer",
-            "2f24c6adae": "Auto save files",
             "d9168badd2": "Auto save delay",
             "66395fb7ff": "Editor font family",
             "e2947b3723": "Editor word wrap",
@@ -11187,7 +11162,6 @@
             "6469de5368": "project",
             "3067595d82": "delete",
             "c86478c3d8": "Remove this project from Orca.",
-            "c5266c2c9d": "Remove Project",
             "4b9a18a56d": "monorepo",
             "4e2529722c": "directories",
             "1ff4f12c0c": "directory",
@@ -11201,11 +11175,9 @@
             "a325a89dff": "workspace path",
             "f3e6dee5fe": "worktree path",
             "cd33a5525e": "Project-specific directory for new worktrees.",
-            "443d127b5a": "Worktree Location",
             "9811f3d152": "branch",
             "f41cef5083": "base ref",
             "f571081ec4": "Default base branch or ref when creating worktrees.",
-            "094adbe930": "Default Worktree Base",
             "27733eb6c1": "favicon",
             "1e73e840ff": "emoji",
             "cb4b4de666": "avatar",
@@ -11215,16 +11187,12 @@
             "b2546efab5": "repository icon",
             "6438a94c63": "project icon",
             "a1f3a2bd47": "Project icon and color used in the sidebar and tabs.",
-            "b24f00294a": "Project Icon",
             "cd73b976d7": "repository name",
             "92af66c7ce": "project name",
             "883aad2801": "Project-specific display details for the sidebar and tabs.",
-            "7e1e456a95": "Display Name",
             "keepForkUpToDate": "Keep Fork Up to Date",
             "keepForkUpToDateDescription": "Safely fast-forward this fork from upstream.",
-            "projectRuntime": "Project Runtime",
             "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
-            "githubAccount": "GitHub Account",
             "githubAccountDescription": "Bind a keyring gh login for this project’s GitHub API calls.",
             "githubAccountKeyword": "github account",
             "ghAccount": "gh account",
@@ -11894,17 +11862,16 @@
           "blocked": "Fork sync skipped",
           "blockedFallback": "Orca could not fast-forward this fork safely.",
           "failed": "Fork sync failed",
-          "title": "Keep Fork Up to Date",
           "description": "Safely fast-forward this fork from upstream.",
           "longDescription": "When this fork is behind upstream, Orca can safely fast-forward its default branch. Orca skips the update if the branch has local-only commits or conflicts.",
           "forkOf": "Fork of {{owner}}/{{repo}}",
           "syncing": "Syncing",
-          "syncNow": "Sync Now",
           "modeLabel": "Fork sync mode",
           "ask": "Ask",
           "off": "Off",
           "1b00dcc746": "Keep fork up to date",
-          "7a1ea2076d": "Safe auto"
+          "7a1ea2076d": "Safe auto",
+          "c64463b5fc": "Sync now"
         },
         "DefaultWindowsProjectRuntimeSetting": {
           "defaultRuntime": "Default project runtime",
@@ -11978,8 +11945,8 @@
           "2a9588b1c2": "Remove this binding"
         },
         "BrowserLocalhostWorktreeLabelsSetting": {
-          "8ac8c3ad19": "Localhost Worktree Labels",
-          "1db3c8b983": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart."
+          "1db3c8b983": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart.",
+          "1af20fbf51": "Localhost worktree labels"
         },
         "AgentRuntimeSetting": {
           "label": "Agent runtime",
@@ -12069,11 +12036,11 @@
           "stopCleanup": "Stop cleanup",
           "cleanupStopped": "Cleanup stopped",
           "stopCleanupFailed": "Couldn’t stop Cloud VM cleanup.",
-          "cloudVmRefreshLabel": "Refresh Cloud VMs",
           "provisioning": "Provisioning",
           "untrackedRuntimeHint": "Orca never received this VM’s details. Cleanup runs destroy with only instance ID {{instanceId}}; if it fails, delete the VM in your provider, then remove it from this list.",
           "removeFromList": "Remove from list",
-          "removeFromListFailed": "Couldn’t remove Cloud VM runtime from the list."
+          "removeFromListFailed": "Couldn’t remove Cloud VM runtime from the list.",
+          "cca21fb369": "Refresh cloud VMs"
         },
         "ephemeralVms": {
           "search": {
@@ -12244,19 +12211,17 @@
           "currentCount": "{{value0}} up to date",
           "manualCount": "{{value0}} manual",
           "offlineCount": "{{value0}} offline",
-          "title": "Remote Orca Servers",
           "description": "Check and update paired Orca servers from this client.",
           "updating": "Updating servers…",
-          "reviewServers": "Check for Server Updates",
           "serverCountOne": "1 paired server",
-          "fdd271abf0": "Remote Orca servers"
+          "fdd271abf0": "Remote Orca servers",
+          "e4e5937469": "Check for server updates"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "Version unavailable",
           "restartingHelp": "Waiting for the replacement server to reconnect on the new version.",
           "retry": "Retry",
           "update": "Update this server",
-          "title": "Update Remote Orca Servers",
           "description": "Review paired servers and update supported installs from this Orca client.",
           "restartWarning": "Updating restarts these servers. {{value0}} and {{value1}} may briefly disconnect.",
           "checking": "Checking paired servers…",
@@ -12267,7 +12232,8 @@
           "liveTabOne": "1 live tab",
           "liveTabs": "{{value0}} live tabs",
           "livePaneOne": "1 live pane",
-          "livePanes": "{{value0}} live panes"
+          "livePanes": "{{value0}} live panes",
+          "dca6780b3a": "Update remote Orca servers"
         },
         "RemoteServerUpdateStatus": {
           "checking": "Checking…",
@@ -12522,7 +12488,6 @@
           "setupSkillBody": "Gives coding agents /orca-linear for reading, updates, triage, and attaching pull or merge requests.",
           "setupVisibleTitle": "3. Show Linear in Tasks",
           "setupVisibleBody": "Keeps Linear in the Tasks source picker and sidebar shortcuts.",
-          "openTaskSources": "Task Sources",
           "setupTitle": "Setup checklist",
           "setupBody": "All three are required for the full Tasks + agent loop. First-time path is also under Task Sources.",
           "setupReady": "All set",
@@ -12538,7 +12503,8 @@
           "noteVisibilityTitle": "Hiding ≠ disconnect",
           "noteVisibilityBody": "Hiding Linear in Task Sources only removes it from the picker. It does not remove your key or skill.",
           "setupChecking": "Checking…",
-          "setupUnverified": "Cannot verify"
+          "setupUnverified": "Cannot verify",
+          "c5cd02806b": "Task sources"
         },
         "TaskSourceLinearSetup": {
           "connectTitle": "Connect Linear",
@@ -12559,11 +12525,11 @@
           "statusConnectRequired": "Connect required",
           "statusSkillRequired": "Skill required",
           "statusUnavailable": "Status unavailable",
-          "statusHidden": "Hidden from Tasks",
           "statusIncomplete": "Needs setup",
           "collapseSetup": "Collapse {{provider}} setup steps",
           "expandSetup": "Show {{provider}} setup steps",
-          "statusUnverified": "Cannot verify"
+          "statusUnverified": "Cannot verify",
+          "d2d9e9707b": "Hidden from tasks"
         },
         "TaskSourceShowInTasksStep": {
           "shown": "Shown",
@@ -12656,8 +12622,8 @@
         },
         "TerminalTccAttributionNotice": {
           "body": "The terminal daemon was started by an Orca install that no longer exists, so macOS can’t attribute its commands to Orca — Accessibility and Automation grants are silently ignored (osascript fails with error -25211). Restarting the daemon fixes this; running terminal sessions will close.",
-          "openManageSessions": "Open Manage Sessions",
-          "title": "macOS permission grants aren’t reaching terminals"
+          "title": "macOS permission grants aren’t reaching terminals",
+          "63b8513f1e": "Open manage sessions"
         },
         "artifacts": {
           "signIn": "Sign in to Orca",
@@ -12671,7 +12637,6 @@
           "linkStepDescription": "After publishing, copy the link and send it to your team.",
           "manageStepTitle": "Manage it in Orca",
           "manageStepDescription": "Open Artifacts from the sidebar to preview or remove links.",
-          "openArtifacts": "Open Artifacts",
           "showButtonDescription": "Show the Artifacts shortcut in the sidebar.",
           "openArtifactsDescriptionV2": "Preview, copy, and manage links shared through your account.",
           "signInTitle": "Sign in to share artifacts",
@@ -12693,7 +12658,8 @@
           "keywordHtml": "HTML",
           "keywordMarkdown": "Markdown",
           "keywordUpload": "upload",
-          "09f41ce46c": "Show artifacts button"
+          "09f41ce46c": "Show artifacts button",
+          "7b2b114099": "Open artifacts"
         },
         "orcaAccount": {
           "connected": "Connected",
@@ -12733,7 +12699,6 @@
           "runStepDescription": "The selected agent gets a fresh workspace when the schedule is due.",
           "reviewStepTitle": "Review the results",
           "reviewStepDescription": "Inspect recent runs and continue the work whenever you need to.",
-          "openAutomations": "Open Automations",
           "openAutomationsDescription": "Create schedules and inspect recent runs.",
           "title": "Automations",
           "description": "Schedule agent work and choose whether Automations appears in the sidebar.",
@@ -12741,7 +12706,8 @@
           "keywordSchedule": "schedule",
           "keywordAgent": "agent",
           "keywordRuns": "runs",
-          "d92f253d2d": "Show automations button"
+          "d92f253d2d": "Show automations button",
+          "9cb6e73d53": "Open automations"
         },
         "AgentAwakeSetting": {
           "on": "On",
@@ -12755,7 +12721,6 @@
           "invalidBinding": "That GitHub account binding is invalid.",
           "unavailable": "That GitHub account is unavailable on this runtime.",
           "saveFailed": "Could not save the GitHub account binding.",
-          "title": "GitHub Account",
           "description": "Use a specific gh login for this project’s GitHub issue and pull request calls.",
           "longDescription": "Orca injects a short-lived token from the selected keyring login into each gh call for this project. Project View stays on the ambient login.",
           "selectLabel": "Account",
@@ -12789,7 +12754,6 @@
           "signIn": "Sign in to Orca",
           "howToTitle": "How to share skills",
           "howToDescription": "Publish one skill or a bundle such as a collection of 30 skills behind one link.",
-          "openSkills": "Open Skills",
           "openSkillsDescription": "Publish a bundle, install from a link, or manage installed and shared skills.",
           "searchDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
           "linksReconnect": "Sign in again to manage shared links.",
@@ -12805,14 +12769,15 @@
           "unshare": "Unshare",
           "showButton": "Show Skills button",
           "showButtonDescription": "Show the Skills shortcut in the sidebar.",
-          "manageInSkills": "Manage in Skills",
           "keywordSkills": "skills",
           "keywordShare": "share",
           "keywordBundle": "bundle",
           "keywordLink": "link",
           "keywordUnlisted": "unlisted",
           "keywordRevoke": "revoke",
-          "ca754fefa1": "Share skills"
+          "ca754fefa1": "Share skills",
+          "57e360b791": "Manage in skills",
+          "c07ba8ab0b": "Open skills"
         },
         "bitbucket": {
           "credentials": {
@@ -12885,7 +12850,6 @@
           "bindingConflict": "{{binding}} conflicts with {{actions}}."
         },
         "contrast": {
-          "title": "Color Contrast",
           "description": "Improve text readability or preserve the colors chosen by terminal programs.",
           "ratio": "Contrast target",
           "autoDescription": "Balances readability with your terminal theme. Recommended.",
@@ -12896,7 +12860,8 @@
           "custom": "Custom",
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
-          "strong": "Strong"
+          "strong": "Strong",
+          "aa914efccf": "Color contrast"
         },
         "TerminalRenderingSection": {
           "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols.",
@@ -12932,7 +12897,7 @@
         },
         "sshManagedHostRemove": {
           "descriptionServerHost": "Orca runs on {{label}}. In Remote Orca Servers, open the ⋯ menu on {{label}} and choose Stop… to remove Orca from the host, or Forget… if the host is gone. Then you can remove this SSH host.",
-          "openServers": "Open Remote Orca Servers"
+          "2ca95e9fd7": "Open remote Orca servers"
         },
         "managedServers": {
           "row": {
@@ -21377,8 +21342,8 @@
           "ignored": "{{model}} only transcribes the languages it was built for, so it ignores this setting.",
           "unsupported": "{{model}} doesn't support {{language}}, so it detects the language itself.",
           "description": "The language you speak. Auto-detect lets the model work it out each time.",
-          "title": "Dictation Language",
-          "auto": "Auto-detect"
+          "auto": "Auto-detect",
+          "a9df191aba": "Dictation language"
         },
         "modelUnload": {
           "description": "How long the on-device model stays in memory after you stop dictating. While it is loaded, dictation starts at once; “Immediately” frees the memory, so each dictation waits for the model to load.",
@@ -23494,37 +23459,14 @@
   },
   "keybindings": {
     "title": {
-      "worktreeQuickOpen": "Go to File",
-      "appSettings": "Open Settings",
-      "appForceReload": "Force Reload",
       "worktreePalette": "Switch worktree",
       "worktreeNavigateUp": "Previous worktree",
       "worktreeNavigateDown": "Next worktree",
       "workspaceCreate": "Create worktree",
       "workspaceRename": "Rename worktree",
-      "workspaceDelete": "Delete Workspace",
-      "workspaceOpenBoard": "Toggle Workspace Board",
-      "dashboardToggle": "Toggle Agent Dashboard",
-      "workspaceSelectByIndex": "Select Workspace 1–9",
       "voiceDictation": "Dictation",
-      "viewTasks": "Open Tasks",
-      "sidebarLeftToggle": "Toggle Sidebar",
-      "sidebarRightToggle": "Toggle Right Sidebar",
       "sidebarExplorerToggle": "Show Explorer",
-      "sidebarSearchToggle": "Show Search",
-      "sidebarSourceControlToggle": "Show Source Control",
-      "sidebarChecksToggle": "Show Checks",
-      "sidebarPortsToggle": "Show Ports",
-      "sidebarSleepingWorkspacesToggle": "Toggle Sleeping Workspaces",
       "sidebarFocusWorktreeList": "Focus worktree list",
-      "floatingTerminalToggle": "Toggle Floating Terminal",
-      "floatingWorkspaceMaximize": "Maximize Floating Workspace Panel",
-      "floatingWorkspaceMinimize": "Minimize Floating Workspace Panel",
-      "zoomIn": "Zoom In",
-      "zoomOut": "Zoom Out",
-      "zoomReset": "Reset Size",
-      "worktreeHistoryBack": "Worktree History Back",
-      "worktreeHistoryForward": "Worktree History Forward",
       "tabNewTerminal": "New terminal tab",
       "tabNewAgent": "New agent tab (default agent)",
       "tabNewBrowser": "New browser tab",
@@ -23542,33 +23484,14 @@
       "tabPreviousRecent": "Previous recent tab",
       "tabNextTerminal": "Next terminal tab",
       "tabPreviousTerminal": "Previous terminal tab",
-      "tabSelectByIndex": "Select Tab 1–9",
       "tabOpenQuickCommandsMenu": "Toggle Quick Commands menu",
-      "browserFind": "Find in Browser",
-      "browserBack": "Go Back in Browser",
-      "browserForward": "Go Forward in Browser",
-      "browserShowHistory": "Show Browser History",
-      "browserReload": "Reload Browser Page",
-      "browserHardReload": "Hard Reload Browser Page",
-      "browserFocusAddressBar": "Focus Browser Address Bar",
-      "browserGrabElement": "Grab Page Element",
-      "browserAnnotateElement": "Annotate Page Element",
       "editorFind": "Find in editor",
       "editorReplace": "Replace in editor",
-      "editorSave": "Save File",
-      "editorMarkdownPreview": "Show Markdown Preview",
-      "editorToggleWordWrap": "Toggle Word Wrap",
-      "editorCopyContext": "Copy Context",
-      "editorPreviousChange": "Go to Previous Change",
-      "editorNextChange": "Go to Next Change",
-      "editorAddReviewNote": "Add Review Note",
-      "sourceControlSendReviewNotes": "Send Review Notes to Agent",
       "fileExplorerUndo": "Undo file operation",
       "fileExplorerRedo": "Redo file operation",
       "fileExplorerCopyPath": "Copy file path",
       "fileExplorerCopyRelativePath": "Copy relative file path",
       "fileExplorerDelete": "Delete file",
-      "settingsSearch": "Search Settings",
       "terminalCopySelection": "Copy terminal selection",
       "terminalSelectAll": "Select all terminal text",
       "terminalPaste": "Paste into terminal",
@@ -23578,32 +23501,74 @@
       "terminalFocusPreviousPane": "Focus previous pane",
       "terminalEqualizePaneSizes": "Equalize pane sizes",
       "terminalExpandPane": "Expand / collapse pane",
-      "terminalSetTitle": "Set Title…",
       "chatFind": "Find in chat",
       "terminalToggleNativeChat": "Switch between Chat UI and terminal",
-      "sidebarChildWorkspacesToggle": "Toggle Child Workspaces",
-      "terminalClearPaneTitle": "Clear Pane Title",
       "terminalClosePane": "Close active pane",
       "terminalSplitRight": "Split terminal right",
       "terminalSplitDown": "Split terminal down",
       "terminalSwitchInputSource": "Switch input source / language (native)",
       "newAgentTab": "New {{agent}} tab",
       "tabNewBrowserSplitRight": "New browser tab in right split",
-      "viewPlugins": "Open Plugins",
-      "sidebarProjectsToggleCollapse": "Collapse / Expand All Projects"
+      "1d1d2ec47b": "Go to file",
+      "e316152321": "Open settings",
+      "8a1982d598": "Force reload",
+      "1d2c86248c": "Delete workspace",
+      "1524825c2c": "Toggle workspace board",
+      "82c1bf448c": "Toggle agent dashboard",
+      "0feb1f0496": "Select workspace 1–9",
+      "81bcb6ec24": "Open tasks",
+      "5c1a9f83e0": "Open plugins",
+      "196b416429": "Toggle sidebar",
+      "5468defe61": "Collapse / expand all projects",
+      "e0d7e6b665": "Toggle right sidebar",
+      "da4e681113": "Show search",
+      "44e8b7dcb5": "Show source control",
+      "e37b19864c": "Show checks",
+      "cb816639bd": "Show ports",
+      "437260810f": "Toggle sleeping workspaces",
+      "e67a41569d": "Toggle floating terminal",
+      "3e3a2d18d4": "Maximize floating workspace panel",
+      "746ff0c872": "Minimize floating workspace panel",
+      "f233164080": "Zoom in",
+      "2b20f1f14a": "Zoom out",
+      "bb3beaeef6": "Reset size",
+      "02dd0f77a0": "Worktree history back",
+      "57c4fb0edd": "Worktree history forward",
+      "eca3c9fdd7": "Select tab 1–9",
+      "fbf2216baa": "Find in browser",
+      "0fe8d02935": "Go back in browser",
+      "53ae577e44": "Go forward in browser",
+      "92fad2c21f": "Show browser history",
+      "67ce6cf5a0": "Reload browser page",
+      "6bd12f3071": "Hard reload browser page",
+      "2f2961bebf": "Focus browser address bar",
+      "23350d5072": "Grab page element",
+      "69b2b72c98": "Annotate page element",
+      "6a99c55b2d": "Save file",
+      "e25a3e5f9a": "Show Markdown preview",
+      "2f207aa199": "Toggle word wrap",
+      "258e7f75ec": "Copy context",
+      "324e886c0f": "Go to previous change",
+      "7055c70bdb": "Go to next change",
+      "9cb1023d40": "Add review note",
+      "e9da9f872a": "Send review notes to agent",
+      "3acf4e9eb1": "Search settings",
+      "128cce6e6d": "Set title…",
+      "8788e3be3a": "Toggle child workspaces",
+      "d286d1ab85": "Clear pane title"
     },
     "group": {
       "global": "Global",
       "tabs": "Tabs",
-      "tabNavigation": "Tab Navigation",
-      "quickCommands": "Quick Commands",
       "browser": "Browser",
       "editors": "Editors",
       "fileExplorer": "File Explorer",
       "settings": "Settings",
-      "terminalPanes": "Terminal Panes",
       "chat": "Chat",
-      "agents": "Agents"
+      "agents": "Agents",
+      "45347db2a3": "Tab navigation",
+      "aab2837fa5": "Quick commands",
+      "3492a954c8": "Terminal panes"
     }
   },
   "gpuFallback": {

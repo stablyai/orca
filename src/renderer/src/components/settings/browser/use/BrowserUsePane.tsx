@@ -90,7 +90,7 @@ export function BrowserUseSetup({
       <div className="flex items-center justify-between gap-4 py-3">
         <div className="space-y-0.5">
           <p className="text-sm font-medium">
-            {t('auto.components.settings.BrowserUsePane.b8a1f2d84d', 'Agent Browser Use')}
+            {t('auto.components.settings.BrowserUsePane.507fdae102', 'Agent browser use')}
           </p>
           <p className="text-xs text-muted-foreground">
             {t(
@@ -112,7 +112,7 @@ export function BrowserUseSetup({
       <div className="flex items-center justify-between gap-3">
         <div className="space-y-0.5">
           <p className="text-sm font-semibold">
-            {t('auto.components.settings.BrowserUsePane.b8a1f2d84d', 'Agent Browser Use')}
+            {t('auto.components.settings.BrowserUsePane.507fdae102', 'Agent browser use')}
           </p>
           <p className="text-xs text-muted-foreground">
             {t(

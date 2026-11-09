@@ -147,7 +147,7 @@ export function renderSettingsPage(
             className={cn(
               'mx-auto flex w-full flex-col gap-6 px-8 pt-6',
               view.isFocusedShortcutsPane ? 'h-full pb-6' : 'pb-24',
-              'max-w-[784px]'
+              view.isFocusedSetupGuidePane || view.isWidePluginsPane ? 'max-w-6xl' : 'max-w-[784px]'
             )}
           >
             {navigation.visibleNavSections.length === 0 ? (
@@ -161,7 +161,9 @@ export function renderSettingsPage(
             ) : (
               <SettingsContentScrollElementProvider value={interactions.contentScrollElement}>
                 <ActiveSettingsSectionProvider value={model.activeSectionId}>
-                  <SettingsTargetHighlightProvider value={model.highlightedSettingsTargetId}>
+                  <SettingsTargetHighlightProvider
+                    value={model.highlightedSettingsTarget?.id ?? null}
+                  >
                     {renderAgentsSettingsSection(context, t)}
                     {renderAccountsSettingsSection(context, t)}
                     {renderOrchestrationSettingsSection(context, t)}

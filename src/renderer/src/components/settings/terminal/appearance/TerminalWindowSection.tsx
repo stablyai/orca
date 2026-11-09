@@ -197,7 +197,7 @@ export function TerminalWindowSection({
               <span className={`transition-transform ${colorOverridesExpanded ? 'rotate-90' : ''}`}>
                 ▶
               </span>
-              {t('auto.components.settings.TerminalWindowSection.63f8d9336e', 'Color Overrides')}
+              {t('auto.components.settings.TerminalWindowSection.c9d73aee44', 'Color overrides')}
             </button>
             <div
               className={`grid overflow-hidden transition-all duration-300 ease-out ${

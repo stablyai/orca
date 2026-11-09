@@ -112,12 +112,12 @@ export function getVisibleEditorTypographySearchEntries(): SettingsSearchEntry[]
 export const getVisibleEditorTypographySearchDescriptors = createLocalizedCatalog(() => {
   const entries = getEditorTypographySearchEntries()
   return [
-    generalSetting(GENERAL_SETTING_ANCHORS.fontSize, 'editor', entries.fontSize),
-    generalSetting(GENERAL_SETTING_ANCHORS.fontWeight, 'editor', entries.fontWeight),
-    generalSetting(GENERAL_SETTING_ANCHORS.lineHeight, 'editor', entries.lineHeight),
-    generalSetting(GENERAL_SETTING_ANCHORS.ligatures, 'editor', entries.ligatures),
+    generalSetting(GENERAL_SETTING_ANCHORS.fontSize, entries.fontSize),
+    generalSetting(GENERAL_SETTING_ANCHORS.fontWeight, entries.fontWeight),
+    generalSetting(GENERAL_SETTING_ANCHORS.lineHeight, entries.lineHeight),
+    generalSetting(GENERAL_SETTING_ANCHORS.ligatures, entries.ligatures),
     ...(supportsCodeFontSmoothing()
-      ? [generalSetting(GENERAL_SETTING_ANCHORS.fontSmoothing, 'editor', entries.fontSmoothing)]
+      ? [generalSetting(GENERAL_SETTING_ANCHORS.fontSmoothing, entries.fontSmoothing)]
       : [])
   ]
 })

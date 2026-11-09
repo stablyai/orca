@@ -42,7 +42,7 @@ function getRevealLabel(platform: string, t: Translate = translate): string {
   if (platform === 'win32') {
     return t('auto.components.settings.CliSection.cbe55e4d48', 'Show in Explorer')
   }
-  return t('auto.components.settings.CliSection.9fd4023db0', 'Show in File Manager')
+  return t('auto.components.settings.CliSection.71e5d9feae', 'Show in file manager')
 }
 
 function getInstallDescription(platform: string): string {

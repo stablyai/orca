@@ -174,7 +174,7 @@ export function ArtifactsSettingsPane({
             </span>
             <span className="min-w-0 flex-1 space-y-0.5">
               <span className="block text-sm font-medium text-foreground">
-                {t('auto.components.settings.artifacts.openArtifacts', 'Open Artifacts')}
+                {t('auto.components.settings.artifacts.7b2b114099', 'Open artifacts')}
               </span>
               <span className="block text-xs font-normal text-muted-foreground">
                 {t(

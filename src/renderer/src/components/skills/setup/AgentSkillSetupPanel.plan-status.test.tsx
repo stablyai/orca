@@ -36,10 +36,12 @@ it.each([
   { reason: 'edited', hideHeader: false },
   { reason: 'other', hideHeader: false },
   { reason: 'edited', hideHeader: true },
-  { reason: 'other', hideHeader: true }
+  { reason: 'other', hideHeader: true },
+  { reason: 'edited', hideHeader: false, variant: 'row' },
+  { reason: 'other', hideHeader: false, variant: 'row' }
 ] as const)(
   'reviews a skipped $reason copy before and after installing for other agents (hideHeader=$hideHeader)',
-  async ({ reason, hideHeader }) => {
+  async ({ reason, hideHeader, ...options }) => {
     const keptCopy = planOp('leave', '/home/u/.claude/skills/orca-cli', {
       reason,
       replaceable: true,
@@ -75,6 +77,7 @@ it.each([
         loading={false}
         error={null}
         hideHeader={hideHeader}
+        variant={'variant' in options ? options.variant : undefined}
         onRecheck={vi.fn()}
       />
     )

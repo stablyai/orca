@@ -2151,13 +2151,19 @@ html.native-shell .app-layout {
 }
 
 /* Shared row primitives also render outside Settings; their density stays local to this page. */
-.settings-view-shell [data-settings-row] [data-slot='label'] {
+.settings-view-shell [data-slot='label'],
+.settings-view-shell [data-source-title] {
   font-size: var(--text-sm);
   line-height: 1.4;
 }
 
-.settings-view-shell [data-settings-row] p.text-xs,
-.settings-view-shell [data-settings-row] p.text-2xs {
+.settings-view-shell p.text-xs,
+.settings-view-shell p.text-2xs,
+.settings-view-shell p[class~='text-[10px]'],
+.settings-view-shell p[class~='text-[11px]'],
+.settings-view-shell p[class~='text-[12px]'],
+.settings-view-shell p[class~='text-[13px]'],
+.settings-view-shell [data-source-path] {
   font-size: var(--text-settings-detail);
   line-height: 1.35;
 }

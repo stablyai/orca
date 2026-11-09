@@ -138,7 +138,7 @@ export function WorktreeSymlinksSection({
             <PopoverTrigger asChild>
               <Button type="button" variant="outline" size="sm">
                 <Plus className="size-3.5" />
-                {t('auto.components.settings.WorktreeSymlinksSection.241325302c', 'Add Path')}
+                {t('auto.components.settings.WorktreeSymlinksSection.9a7cd44772', 'Add path')}
               </Button>
             </PopoverTrigger>
             <PopoverContent align="end" className="w-72 p-0">

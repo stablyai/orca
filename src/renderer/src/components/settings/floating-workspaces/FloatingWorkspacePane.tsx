@@ -181,10 +181,10 @@ export function FloatingWorkspacePane({
               }}
             >
               <ToggleGroupItem value="floating-button">
-                {t('auto.components.settings.FloatingWorkspacePane.9fb225f2d7', 'Floating Button')}
+                {t('auto.components.settings.FloatingWorkspacePane.73ac917638', 'Floating button')}
               </ToggleGroupItem>
               <ToggleGroupItem value="status-bar">
-                {t('auto.components.settings.FloatingWorkspacePane.aeaf76fda9', 'Status Bar')}
+                {t('auto.components.settings.FloatingWorkspacePane.dd7eb9270a', 'Status bar')}
               </ToggleGroupItem>
             </ToggleGroup>
           }

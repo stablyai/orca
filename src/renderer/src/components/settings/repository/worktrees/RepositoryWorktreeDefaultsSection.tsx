@@ -167,7 +167,7 @@ export function RepositoryWorktreeDefaultsSection({
               size="sm"
               onClick={() => updateRepo(repo.id, { worktreeBasePath: undefined })}
             >
-              {t('auto.components.settings.RepositoryPane.8ccacbeb5a', 'Use Global')}
+              {t('auto.components.settings.RepositoryPane.077dc18a4a', 'Use global')}
             </Button>
           ) : null}
         </div>

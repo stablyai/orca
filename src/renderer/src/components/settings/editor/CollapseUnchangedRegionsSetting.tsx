@@ -18,8 +18,8 @@ const KEYWORDS = [
 
 function getTitle(t: Translate = translate): string {
   return t(
-    'auto.components.settings.GeneralEditorSettingsSection.collapseUnchangedTitle',
-    'Collapse Unchanged Regions'
+    'auto.components.settings.GeneralEditorSettingsSection.916c5582f2',
+    'Collapse unchanged regions'
   )
 }
 

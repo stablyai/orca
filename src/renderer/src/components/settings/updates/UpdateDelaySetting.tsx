@@ -234,7 +234,7 @@ export function DelayedUpdatePanel({
               )}
             >
               {checking ? <Loader2 className="animate-spin" /> : null}
-              {t('settings.updateDelay.skipDelayOnce', 'Skip Delay Once')}
+              {t('settings.updateDelay.ee1d96f74a', 'Skip delay once')}
             </Button>
           )}
           <a

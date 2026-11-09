@@ -201,6 +201,29 @@ export function WslAgentSkillSetupPanel({
     }
   }
 
+  const statusPill =
+    setupCommandFailedCode !== null ? (
+      <IntegrationStatusPill tone="attention">
+        {t('auto.components.settings.AgentSkillSetupPanel.setupFailed', 'Setup failed')}
+      </IntegrationStatusPill>
+    ) : loading && !installed ? (
+      <IntegrationStatusPill tone="neutral">
+        {t('auto.components.settings.AgentSkillSetupPanel.68a468752e', 'Checking...')}
+      </IntegrationStatusPill>
+    ) : installed ? (
+      freshnessSkillName ? (
+        <SkillFreshnessStatusPill skillName={freshnessSkillName} hideCurrent={variant === 'row'} />
+      ) : (
+        <IntegrationStatusPill tone="connected">
+          {t('auto.components.settings.AgentSkillSetupPanel.9fcebceb2a', 'Installed')}
+        </IntegrationStatusPill>
+      )
+    ) : (
+      <IntegrationStatusPill tone="attention">
+        {t('auto.components.settings.AgentSkillSetupPanel.5289300939', 'Not installed')}
+      </IntegrationStatusPill>
+    )
+
   const actionRow = (
     <div
       className={cn('flex flex-wrap items-center gap-2', variant === 'row' ? 'shrink-0' : 'mt-3')}
@@ -276,7 +299,17 @@ export function WslAgentSkillSetupPanel({
         className={variant === 'card' ? cn('px-5 pt-5', terminalOpen ? 'pb-2' : 'pb-5') : 'pt-1.5'}
       >
         {variant === 'row' ? (
-          <SkillSetupRow title={title} description={description} actions={actionRow} error={error}>
+          <SkillSetupRow
+            title={
+              <span className="flex flex-wrap items-center gap-2">
+                <span>{title}</span>
+                {statusPill}
+              </span>
+            }
+            description={description}
+            actions={actionRow}
+            error={error}
+          >
             <AgentSkillSetupFailureNotice exitCode={setupCommandFailedCode} />
             {actionHint}
             {!installed && preInstallNotice && preInstallNoticeVisible ? (
@@ -291,7 +324,10 @@ export function WslAgentSkillSetupPanel({
                 {/* hideHeader drops the title row; keep freshness so guided hubs still surface updates. */}
                 {installed && freshnessSkillName && setupCommandFailedCode === null ? (
                   <div className="mb-2">
-                    <SkillFreshnessStatusPill skillName={freshnessSkillName} />
+                    <SkillFreshnessStatusPill
+                      skillName={freshnessSkillName}
+                      hideCurrent={variant === 'row'}
+                    />
                   </div>
                 ) : null}
               </>
@@ -308,39 +344,7 @@ export function WslAgentSkillSetupPanel({
                     <h3 className="text-[15px] font-semibold leading-tight text-foreground">
                       {title}
                     </h3>
-                    {setupCommandFailedCode !== null ? (
-                      <IntegrationStatusPill tone="attention">
-                        {t(
-                          'auto.components.settings.AgentSkillSetupPanel.setupFailed',
-                          'Setup failed'
-                        )}
-                      </IntegrationStatusPill>
-                    ) : loading && !installed ? (
-                      <IntegrationStatusPill tone="neutral">
-                        {t(
-                          'auto.components.settings.AgentSkillSetupPanel.68a468752e',
-                          'Checking...'
-                        )}
-                      </IntegrationStatusPill>
-                    ) : installed ? (
-                      freshnessSkillName ? (
-                        <SkillFreshnessStatusPill skillName={freshnessSkillName} />
-                      ) : (
-                        <IntegrationStatusPill tone="connected">
-                          {t(
-                            'auto.components.settings.AgentSkillSetupPanel.9fcebceb2a',
-                            'Installed'
-                          )}
-                        </IntegrationStatusPill>
-                      )
-                    ) : (
-                      <IntegrationStatusPill tone="attention">
-                        {t(
-                          'auto.components.settings.AgentSkillSetupPanel.5289300939',
-                          'Not installed'
-                        )}
-                      </IntegrationStatusPill>
-                    )}
+                    {statusPill}
                   </div>
                   {error ? <p className="mt-1 text-[12px] text-destructive">{error}</p> : null}
                 </div>

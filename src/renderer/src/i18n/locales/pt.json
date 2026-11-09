@@ -1520,9 +1520,9 @@
         "cancelAdministratorRestart": "Cancelar",
         "closeAdministratorHelp": "Fechar",
         "restartingAdministrator": "Reiniciando…",
-        "openManageSessions": "Abrir Gerenciar sessões",
         "administratorSearchDescription": "Veja as permissões do Orca no Windows ou reinicie com aprovação de administrador.",
-        "administratorApproval": "O Windows pedirá aprovação. Use sua conta habitual."
+        "administratorApproval": "O Windows pedirá aprovação. Use sua conta habitual.",
+        "10aafff216": "Abrir Gerenciar sessões"
       },
       "limit": {
         "savedUnreadable": "Não foi possível ler o limite de terminais salvo neste host. Usando {{value}}. Digite um valor e pressione Enter para substituí-lo."
@@ -3979,7 +3979,6 @@
             "86f54575c7": "salvamento automático",
             "8ea61ad55c": "Quanto tempo o Orca espera após sua última edição antes de salvar automaticamente.",
             "4469b6fa4e": "salvar",
-            "e9d948d3c3": "Salva automaticamente as alterações do editor e do diff editável após uma pequena pausa.",
             "c56cb6f1c2": "rede",
             "3566fce83f": "localhost",
             "91a46caafc": "no_proxy",
@@ -3997,11 +3996,6 @@
             "5a9df5566f": "menu abrir",
             "b8093e9a93": "abrir em",
             "a916662068": "Escolha os apps disponíveis no menu Abrir em de um espaço de trabalho.",
-            "7e9b556873": "pular",
-            "ca86dd6e27": "caixa de diálogo",
-            "9f8558233a": "confirmar",
-            "7edf4f69e2": "automação",
-            "84c67d0108": "excluir",
             "df10666259": "worktree",
             "93f6ec5e70": "diretório",
             "9bde064915": "subpasta",
@@ -4034,17 +4028,6 @@
             "externalKeyword": "externo",
             "visibility": "visibilidade",
             "sidebar": "barra lateral",
-            "867dddea41": "fixado",
-            "5250cf0e48": "fixar",
-            "afa37a34e1": "fechar",
-            "running_terminal": "em execução",
-            "terminal": "terminal",
-            "agent": "agente",
-            "command": "comando",
-            "confirm": "confirmar",
-            "close": "fechar",
-            "omp": "OMP",
-            "editor_preview_tabs_short": "Navegar pelos arquivos reutiliza uma aba de prévia em vez de abrir uma nova.",
             "preview": "prévia",
             "reuse": "reutilizar",
             "replace": "substituir",
@@ -4054,7 +4037,6 @@
             "nodeDistMirror": "espelho",
             "nodeDistNodejs": "nodejs",
             "34cda90656": "Cronômetro do Cache de Prompt",
-            "2f24c6adae": "Salvar Arquivos Automaticamente",
             "d9168badd2": "Atraso do Salvamento Automático",
             "66395fb7ff": "Família de Fonte do Editor",
             "e2947b3723": "Quebra de Linha do Editor",
@@ -4073,7 +4055,6 @@
         },
         "AccountsPane": {
           "locationSaveFailed": "Não foi possível salvar o local das contas. Tente novamente.",
-          "c2d2751587": "Remover Conta",
           "dbb9626ed1": "Cancelar",
           "63843e37e2": "Remover Conta do Claude?",
           "380a7736cc": "Remover esta conta exclui permanentemente seu diretório gerenciado do Codex, incluindo todo o histórico de sessões do Codex e logins MCP armazenados nele. Isso não pode ser desfeito. Se a conta estiver ativa no momento, o Orca volta a usar o login padrão do sistema para o Codex.",
@@ -4102,7 +4083,6 @@
           "b4c9450319": "Nenhuma conta gerenciada do Codex para {{value0}}. O Orca usará o login padrão do sistema do Codex nesse ambiente até que você adicione uma aqui.",
           "93c47b333a": "Precisa entrar",
           "f2a265f8c7": "Padrão do sistema",
-          "b0e948a4f9": "Adicionar Conta",
           "c0a52abfc5": "Mostrando contas de {{value0}}. Novas contas são adicionadas ali.",
           "94d351af4a": "Contas",
           "d0d53b7eb0": "Gerencie qual conta do Codex o Orca usa para obter o limite de taxa em tempo real.",
@@ -4133,7 +4113,6 @@
           "8d61637a77": "Cookie do MiniMax salvo.",
           "b43e761fe5": "Falha ao atualizar o cookie do MiniMax.",
           "5d63bbfbec": "MiniMax",
-          "21d6eb141e": "Cookie de Sessão do MiniMax",
           "33bba5ad83": "Cole seu cookie de sessão do MiniMax para obter o limite de taxa localmente.",
           "73ea15f24b": "Salvo",
           "23afe8f226": "Não salvo",
@@ -4219,7 +4198,9 @@
           "4d274a02f0": "Cookie de Sessão do OpenCode Go",
           "109431f707": "ID do Espaço de Trabalho do OpenCode Go",
           "91a1b78e67": "Local da Conta",
-          "4d41177f74": "Cookie de Sessão do MiniMax"
+          "4d41177f74": "Cookie de Sessão do MiniMax",
+          "699680a328": "Remover Conta",
+          "7e9977b560": "Adicionar Conta"
         },
         "appearance": {
           "search": {
@@ -4467,7 +4448,6 @@
             "6469de5368": "projeto",
             "3067595d82": "excluir",
             "c86478c3d8": "Remove este projeto do Orca.",
-            "c5266c2c9d": "Remover Projeto",
             "4b9a18a56d": "monorepo",
             "4e2529722c": "diretórios",
             "1ff4f12c0c": "diretório",
@@ -4481,11 +4461,9 @@
             "a325a89dff": "caminho do espaço de trabalho",
             "f3e6dee5fe": "caminho da worktree",
             "cd33a5525e": "Diretório específico do projeto para novas worktrees.",
-            "443d127b5a": "Local da Worktree",
             "9811f3d152": "branch",
             "f41cef5083": "ref base",
             "f571081ec4": "Branch ou ref base padrão ao criar worktrees.",
-            "094adbe930": "Base Padrão da Worktree",
             "27733eb6c1": "favicon",
             "1e73e840ff": "emoji",
             "cb4b4de666": "avatar",
@@ -4495,16 +4473,12 @@
             "b2546efab5": "ícone do repositório",
             "6438a94c63": "ícone do projeto",
             "a1f3a2bd47": "Ícone e cor do projeto usados na barra lateral e nas abas.",
-            "b24f00294a": "Ícone do Projeto",
             "cd73b976d7": "nome do repositório",
             "92af66c7ce": "nome do projeto",
             "883aad2801": "Detalhes de exibição específicos do projeto para a barra lateral e as abas.",
-            "7e1e456a95": "Nome de Exibição",
             "keepForkUpToDate": "Manter o Fork Atualizado",
             "keepForkUpToDateDescription": "Faz fast-forward seguro deste fork a partir do upstream.",
-            "projectRuntime": "Runtime do Projeto",
             "projectRuntimeDescription": "Escolha se este projeto é executado no Windows ou no WSL.",
-            "githubAccount": "Conta do GitHub",
             "githubAccountDescription": "Vincula um login gh do keyring para as chamadas de API do GitHub deste projeto.",
             "githubAccountKeyword": "conta do github",
             "ghAccount": "conta gh",
@@ -4680,11 +4654,9 @@
         },
         "RuntimeEnvironmentsPane": {
           "af53761f31": "Cancelar",
-          "bb90dd6487": "Remover Servidor",
           "d2e00809e4": "Alternar",
           "05e0fc3ebf": "Alternar para",
           "b2290ed203": "O Orca vai focar neste host e carregar seus projetos. Terminais e abas de navegador existentes em outros hosts permanecem ativos.",
-          "d570c35a99": "Alternar Servidor",
           "9a91c4a0eb": "Compatível",
           "86ed75bec8": "Atualizar servidor",
           "62ac182a27": "Atualizar cliente",
@@ -4730,7 +4702,9 @@
           "removeDefaultServerDescription": "Este servidor é o host padrão para novos projetos. Escolha outro em Novos projetos abrem em antes de removê-lo. As sessões existentes do host permanecem como estão.",
           "connectedNewProjectsHint": "Conectado a {{value0}}. Para criar novos projetos lá por padrão, escolha-o em Novos projetos abrem em.",
           "removeDefaultServerBlocked": "Este servidor é o host padrão para novos projetos. Escolha outro em Novos projetos abrem em antes de removê-lo.",
-          "serverReplaced": "{{value0}} não é o servidor Orca pareado com este computador: o Orca se conecta ao host como outro usuário SSH ou o servidor foi reinstalado. Abra o menu ⋯ aqui e escolha Esquecer…; depois conecte o host SSH para parear com o servidor atual."
+          "serverReplaced": "{{value0}} não é o servidor Orca pareado com este computador: o Orca se conecta ao host como outro usuário SSH ou o servidor foi reinstalado. Abra o menu ⋯ aqui e escolha Esquecer…; depois conecte o host SSH para parear com o servidor atual.",
+          "6f303a89a3": "Alternar Servidor",
+          "4ae8a4a381": "Remover Servidor"
         },
         "mobile": {
           "emulator": {
@@ -4949,19 +4923,16 @@
         "RepositoryHooksSection": {
           "af49e2a19e": "O arquivo está presente, mas o Orca não conseguiu encontrar definições válidas de `scripts` ou `issueCommand`.",
           "39da2ae12f": "orca.yaml",
-          "32fec28f5b": "Origem do Comando",
           "bbbd6e0bc4": "Origem do comando e orca.yaml",
           "c9bc1bfd8f": "Avançado",
           "610d90fdbd": "Origem do comando e detalhes do orca.yaml.",
           "4084720f47": "Complete {{artifact_url}}",
           "2cc27dc12b": "Substituição opcional por usuário para o comando de issue vinculada.",
           "b91a0f297d": "Scripts locais e compartilhados executados antes de uma worktree ser arquivada.",
-          "9a100323ff": "Script de Arquivamento",
           "21fb607a87": "Comportamento padrão quando uma nova worktree é criada.",
           "793dcee97d": "Quando executar",
           "63e1783173": "Escolha o comportamento padrão quando um script de configuração está disponível.",
           "30d555acd2": "Scripts locais e compartilhados executados após a criação de uma nova worktree.",
-          "52b31baf02": "Script de Configuração",
           "8567127a40": "Scripts executados quando worktrees são criadas ou arquivadas. Scripts locais são armazenados nesta máquina; scripts do `orca.yaml` são compartilhados com sua equipe.",
           "5d940bde5c": "Adicionar script local",
           "8c2893fae0": "Executa como um único script de shell. Salvo nesta máquina.",
@@ -5025,11 +4996,11 @@
           "1ecf0b115a": "Script de Configuração",
           "1c17e751c4": "Quando Executar a Configuração",
           "bfdb1266ce": "Script de Arquivamento",
-          "da00f141c2": "Comando Personalizado de Issue do GitHub"
+          "da00f141c2": "Comando Personalizado de Issue do GitHub",
+          "88c6d1e54a": "Origem do Comando"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Caminhos relativos são resolvidos a partir da raiz deste projeto.",
-          "8ccacbeb5a": "Usar Global",
           "e63bb96a9b": "Diretório específico do projeto para novas worktrees.",
           "8984d06520": "Branch ou ref base padrão ao criar worktrees.",
           "e641c359de": "Ícone e cor do projeto usados na barra lateral e nas abas.",
@@ -5103,7 +5074,8 @@
           "82733ff808": "Hosts Disponíveis",
           "41ccd99b57": "Runtime do Projeto",
           "38df44846b": "Base Padrão da Worktree",
-          "5ff7788414": "Local da Worktree"
+          "5ff7788414": "Local da Worktree",
+          "077dc18a4a": "Usar Global"
         },
         "Settings": {
           "3bf149e873": "Configurações do Projeto > {{value0}}",
@@ -5223,7 +5195,6 @@
             "6b5a56ac35": "Bichinho animado flutuante no canto inferior direito.",
             "87d99e634b": "Bichinho",
             "agentDashboard": {
-              "title": "Painel de Agentes",
               "description": "Quadro kanban para monitorar agentes entre worktrees, na própria janela ou em uma janela separada.",
               "dashboard": "painel",
               "agent": "agente",
@@ -5251,7 +5222,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "Cor magenta ANSI",
-          "63f8d9336e": "Substituições de Cor",
           "e86e09b5c7": "Substitui cores individuais do terminal.",
           "1d1920dc8a": "Oculta o cursor do mouse ao digitar no terminal.",
           "1846f6ee6a": "Espaçamento interno vertical em volta da grade do terminal, em pixels.",
@@ -5262,22 +5232,13 @@
           "00eaa6b881": "Configurações de aparência e fundo da janela.",
           "b96ba13ed1": "Janela",
           "42e01a6055": "Cor branco brilhante ANSI",
-          "16948119cb": "Branco Brilhante",
           "1601140f03": "Cor ciano brilhante ANSI",
-          "f94adc4113": "Ciano Brilhante",
           "fe4d89ef85": "Cor magenta brilhante ANSI",
-          "e56e7d6ea0": "Magenta Brilhante",
           "bef6c0f6bf": "Cor azul brilhante ANSI",
-          "66820332fa": "Azul Brilhante",
           "e2ef5f4ab7": "Cor amarelo brilhante ANSI",
-          "936a326be3": "Amarelo Brilhante",
           "0ffb02f921": "Cor verde brilhante ANSI",
-          "7dafd57730": "Verde Brilhante",
           "667de68863": "Cor vermelho brilhante ANSI",
-          "32b1b6acd7": "Vermelho Brilhante",
           "f30c492769": "Cor preto brilhante ANSI",
-          "260d69ce9a": "Preto Brilhante",
-          "1be593d3e8": "ANSI Brilhante",
           "28846b1ca6": "Cor branco ANSI",
           "0cb4459fb8": "Branco",
           "bd4c759327": "Cor ciano ANSI",
@@ -5293,14 +5254,9 @@
           "3a78f30b50": "Vermelho",
           "cf4437a2f7": "Cor preto ANSI",
           "adfdee23cb": "Preto",
-          "68e9f07de0": "ANSI Normal",
-          "862e463f7f": "Texto em Negrito",
           "b2c0857c49": "Cor do texto selecionado",
-          "8b450b5305": "Cor do Texto da Seleção",
           "74d8555f85": "Cor de fundo do texto selecionado",
-          "40c3cfd30a": "Cor de Fundo da Seleção",
           "7f4063076c": "Cor do texto sob o cursor (cursor em bloco)",
-          "a2d9f095a7": "Texto do Cursor",
           "cd0700762b": "Cor do cursor",
           "c9e1fdf42f": "Cursor",
           "da64e8f4c1": "Cor de fundo do terminal",
@@ -5319,7 +5275,21 @@
           "2d8a13cabd": "Espaçamento Interno Horizontal",
           "44c6f429e9": "Espaçamento Interno Vertical",
           "a649973dd3": "Ocultar Mouse Durante Digitação",
-          "c9d73aee44": "Substituições de Cor"
+          "c9d73aee44": "Substituições de Cor",
+          "e3e70efcec": "Texto do Cursor",
+          "cd4ab89dc6": "Cor de Fundo da Seleção",
+          "b1dce93161": "Cor do Texto da Seleção",
+          "6ec3252c1f": "Texto em Negrito",
+          "5bea0a1ca1": "ANSI Normal",
+          "9881daf4f5": "ANSI Brilhante",
+          "f5bda64f57": "Preto Brilhante",
+          "c863ae6b57": "Vermelho Brilhante",
+          "93e2bff3ed": "Verde Brilhante",
+          "0451b1e684": "Amarelo Brilhante",
+          "8a4b23b3c4": "Azul Brilhante",
+          "2b813ceecc": "Magenta Brilhante",
+          "db0a91c623": "Ciano Brilhante",
+          "2e5ea3f11b": "Branco Brilhante"
         },
         "agents": {
           "search": {
@@ -5405,9 +5375,7 @@
           "4cfaa7e98a": "Ferramentas de dispositivos Bluetooth e experimentos de hardware local.",
           "b2210b1b4f": "Bluetooth",
           "dfbc12c8c8": "Depuração de hardware e ferramentas de dispositivo que se comunicam com dispositivos USB.",
-          "bf51e4a542": "Dispositivos USB",
           "f903bf20b5": "Permite que terminais e ferramentas de desenvolvimento se conectem a serviços na sua rede local. O macOS não relata ao Orca o status atual desta permissão.",
-          "e7bb06007c": "Rede Local",
           "4a73f5217a": "Apple Events para scripts que controlam outros apps locais.",
           "e119f0d66b": "Automação",
           "7ca17b62c8": "O macOS nomeia o Orca quando os agentes que ele executa leem dados de outros apps, porque o Orca é o processo responsável pelos comandos de terminal. Conceda isso ao Orca para reduzir esses avisos. Depois saia e reabra o Orca.",
@@ -5415,15 +5383,12 @@
           "9f35980756": "Injeção de teclas, controle de janelas e ferramentas de automação de UI.",
           "5b2f22ca2d": "Acessibilidade",
           "0639db5496": "Captura de tela, automação visual e ferramentas de inspeção de UI.",
-          "f24f31a884": "Gravação de Tela",
           "550cfa3750": "Captura de webcam e apps de teste local baseados em câmera.",
           "e5b5f3d6b9": "Câmera",
           "cc8151d9fa": "Entrada de voz, transcrição, gravação de áudio, sox, ffmpeg e CLIs do Whisper.",
           "16381e040a": "Microfone",
           "dac08ec03e": "Processando...",
           "actionRequest": "Solicitar",
-          "actionOpenSettings": "Abrir Configurações",
-          "actionTriggerPrompt": "Acionar Aviso",
           "statusGranted": "Concedido",
           "statusDenied": "Negado",
           "statusNotRequested": "Não solicitado",
@@ -5431,7 +5396,6 @@
           "statusUnsupported": "Somente macOS",
           "statusEntitled": "Autorizado",
           "statusCheckManually": "Verificar manualmente",
-          "actionRequestAccess": "Solicitar Acesso",
           "localNetworkPromptCheck": "Verificar se há um aviso do macOS",
           "localNetworkPromptGuidance": "Se solicitado, escolha Permitir. Se nenhum aviso aparecer, abra as Configurações do Sistema e ative o Orca em Privacidade e Segurança → Rede Local.",
           "localNetworkOpenSettings": "Abrir Configurações do Sistema",
@@ -5452,10 +5416,16 @@
           "connectionTestHost": "Host",
           "connectionTestPort": "Porta",
           "connectionTestRunning": "Testando...",
-          "connectionTestAction": "Testar Conexão",
           "appStatus": "Aplicativo: ",
           "terminalHostStatus": "Hosts de terminal: ",
-          "terminalHostRecovery": "Se um terminal não conseguir ler arquivos protegidos, salve o trabalho e feche-o em Terminal → Gerenciar sessões. Reinicie o daemon se novos terminais também forem afetados; a reinicialização fecha os terminais atuais dele."
+          "terminalHostRecovery": "Se um terminal não conseguir ler arquivos protegidos, salve o trabalho e feche-o em Terminal → Gerenciar sessões. Reinicie o daemon se novos terminais também forem afetados; a reinicialização fecha os terminais atuais dele.",
+          "515baa0f5c": "Gravação de Tela",
+          "b8cd05701d": "Abrir Configurações",
+          "28350e590b": "Acionar Aviso",
+          "78b1e0b9d4": "Rede Local",
+          "e2596159f6": "Solicitar Acesso",
+          "91f887e323": "Dispositivos USB",
+          "a162df27d5": "Testar Conexão"
         },
         "accounts": {
           "search": {
@@ -5548,7 +5518,6 @@
           "0cd9b8228f": "Escolha o ícone do app exibido no Dock e no alternador de janelas.",
           "61d842eca0": "Mostra o atalho do Orca Mobile na barra lateral. Ele continua disponível na Caixa de Ferramentas.",
           "dc29f3cc0d": "Barra Lateral",
-          "d496901cd0": "Explorador de Arquivos",
           "ef89200c1f": "quando não estiver em um painel de terminal.",
           "fd89b5487c": "Claro",
           "7d26ccabe8": "Escuro",
@@ -5585,7 +5554,8 @@
           "e0f9902e18": "Mostrar Botão de Tarefas",
           "7be0027489": "Mostrar Botão de Automações",
           "d2b4ddbea0": "Mostrar Botão do Orca Mobile",
-          "7e958ee950": "Mostrar Arquivos Ignorados pelo Git"
+          "7e958ee950": "Mostrar Arquivos Ignorados pelo Git",
+          "8e374ce9a3": "Explorador de Arquivos"
         },
         "git": {
           "search": {
@@ -5676,14 +5646,14 @@
           "6f99bf5dd0": "Nenhum argumento padrão",
           "8fbe1f37c1": "Ambiente",
           "2d133152fa": "Nenhum ambiente padrão",
-          "agentPermissions": "Permissões do Agente",
           "3f1bdf3cb4": "O texto do ambiente é muito grande para interpretar com segurança.",
           "codexSessionSource": "Diretório do Codex de onde importar",
           "codexSessionSourceInfo": "Sobre importar o histórico do Codex",
           "codexSessionSourceTooltip": "O Orca executa o Codex em um diretório isolado. Aponte isso para o diretório Codex existente para importar esse histórico de sessão. Vazio usa ~/.codex.",
           "storedDefaultUndetected": "Salvo como seu padrão, mas não detectado agora",
           "noAgentsDetected": "Nenhum agente detectado. Se um estiver instalado, a verificação pode ter expirado.",
-          "3bddd54c9e": "Agente Padrão"
+          "3bddd54c9e": "Agente Padrão",
+          "9f30095d49": "Permissões do Agente"
         },
         "ExperimentalPane": {
           "a20d5ea365": "Mantém um destaque visível no nível do painel após eventos de sino do terminal ou conclusão de agente, até que você interaja com esse painel. Experimental enquanto ajustamos o sinal.",
@@ -5807,7 +5777,6 @@
           "signIn": "Entrar no Orca",
           "howToTitle": "Como compartilhar skills",
           "howToDescription": "Publique uma skill ou um pacote, como uma coleção de 30 skills, em um único link.",
-          "openSkills": "Abrir Skills",
           "openSkillsDescription": "Publique um pacote, instale a partir de um link, ou gerencie skills instaladas e compartilhadas.",
           "searchDescription": "Compartilhe suas skills com um link não listado. Qualquer pessoa que o tiver pode instalá-las.",
           "linksReconnect": "Entre novamente para gerenciar links compartilhados.",
@@ -5823,14 +5792,15 @@
           "unshare": "Descompartilhar",
           "showButton": "Mostrar botão Skills",
           "showButtonDescription": "Mostra o atalho de Skills na barra lateral.",
-          "manageInSkills": "Gerenciar em Skills",
           "keywordSkills": "skills",
           "keywordShare": "compartilhar",
           "keywordBundle": "pacote",
           "keywordLink": "link",
           "keywordUnlisted": "não listado",
           "keywordRevoke": "revogar",
-          "ca754fefa1": "Compartilhar Skills"
+          "ca754fefa1": "Compartilhar Skills",
+          "57e360b791": "Gerenciar em Skills",
+          "c07ba8ab0b": "Abrir Skills"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Espessura da linha divisória entre painéis.",
@@ -6017,7 +5987,6 @@
           "linkStepDescription": "Depois de publicar, copie o link e envie-o para sua equipe.",
           "manageStepTitle": "Gerencie no Orca",
           "manageStepDescription": "Abra Artifacts na barra lateral para pré-visualizar ou remover links.",
-          "openArtifacts": "Abrir Artifacts",
           "showButtonDescription": "Mostra o atalho de Artifacts na barra lateral.",
           "openArtifactsDescriptionV2": "Pré-visualize, copie e gerencie links compartilhados através da sua conta.",
           "signInTitle": "Entre para compartilhar artifacts",
@@ -6039,7 +6008,8 @@
           "keywordHtml": "HTML",
           "keywordMarkdown": "Markdown",
           "keywordUpload": "envio",
-          "09f41ce46c": "Mostrar Botão de Artifacts"
+          "09f41ce46c": "Mostrar Botão de Artifacts",
+          "7b2b114099": "Abrir Artifacts"
         },
         "CliSection": {
           "8671e406f0": "Cancelar",
@@ -6068,7 +6038,7 @@
           "installFailureConflictRemedy": "Remova {{value0}} e registre novamente se ele não for mais necessário.",
           "6f894ef9c2": "Mostrar no Finder",
           "cbe55e4d48": "Mostrar no Explorer",
-          "9fd4023db0": "Mostrar no Gerenciador de Arquivos"
+          "71e5d9feae": "Mostrar no Gerenciador de Arquivos"
         },
         "GitPane": {
           "895d3f70b8": "gh",
@@ -6089,24 +6059,23 @@
           "aefa1ecb59": "Nenhum nome de usuário do git configurado",
           "3d172725cc": "Nenhum",
           "1f32ba27a6": "Personalizado",
-          "a182c5125e": "Nome de Usuário do Git",
-          "sourceControlGroupOrderTitle": "Ordem dos Grupos de Controle de Versão",
           "sourceControlGroupOrderDescription": "Escolha se Alterações, Alterações no Stage ou Arquivos Não Rastreados aparecem primeiro no Controle de Versão.",
           "changesFirst": "Alterações primeiro",
           "stagedFirst": "Stage primeiro",
-          "compareAgainstUpstreamTitle": "Base de Comparação Padrão",
           "compareAgainstUpstreamDescription": "Escolha qual base o Controle de Versão usa por padrão para comparações de alterações commitadas. Upstream da branch segue a branch atual automaticamente e recorre à branch padrão do repositório quando não há upstream. Você ainda pode alterar a base de comparação por worktree no painel Git dessa worktree. Os destinos de Pull Request e rebase não mudam.",
           "compareBaseRepositoryDefault": "Padrão do repositório",
           "compareBaseBranchUpstream": "Upstream da branch",
           "refreshLocalBaseDescription": "Ao criar um espaço de trabalho, o Orca atualiza a base remota e avança com segurança sua branch local correspondente, como <mainBranch>main</mainBranch> ou <masterBranch>master</masterBranch>. Isso evita que comandos como <diffCommand>git diff main...HEAD</diffCommand> comparem com um histórico desatualizado. O Orca pula a atualização se essa branch tiver alterações não commitadas ou commits apenas locais.",
-          "jiraIssueKeyCasingTitle": "Maiúsculas e minúsculas na chave do Jira",
           "jiraIssueKeyCasingDescription": "Uso de maiúsculas e minúsculas na chave da issue do Jira nos nomes de espaços de trabalho e branches sugeridos pelo Orca para novos espaços de trabalho vinculados ao Jira, como PROJ-123-fix-login em vez de proj-123-fix-login. Os espaços de trabalho existentes e os nomes que você digita nunca são alterados.",
           "jiraIssueKeyCasingLowercase": "Minúsculas",
           "jiraIssueKeyCasingPreserve": "Chave em maiúsculas",
           "7826f35f63": "Prefixo da Branch",
           "53a0daed73": "Ordem dos Grupos de Controle de Versão",
           "fdbcd676b0": "Orçamento de API do GitHub",
-          "f2765fbbf6": "Orçamento de API do GitLab"
+          "f2765fbbf6": "Orçamento de API do GitLab",
+          "074f7aa0d6": "Base de Comparação Padrão",
+          "d12c81a103": "Nome de Usuário do Git",
+          "8cdbaf4b03": "Maiúsculas e minúsculas na chave do Jira"
         },
         "integrations": {
           "search": {
@@ -6207,9 +6176,7 @@
           "dc1dc52aaa": "Nome de Usuário",
           "2ee9bcd2e8": "server, deploy@server:2222, ssh://server",
           "ce370ce674": "Host ou alias *",
-          "b8dab0aa7b": "Meu Servidor",
           "298de87a88": "Rótulo",
-          "a62b4cb39a": "Salvar Alterações",
           "8c922dffba": "Reutilizar conexão SSH para configuração mais rápida",
           "53e9aabfc0": "Usa multiplexação do OpenSSH quando disponível. Desative para hosts com restrições SSH personalizadas.",
           "editTitle": "Editar host SSH",
@@ -6224,7 +6191,9 @@
           "addHost": "Adicionar host",
           "proxyConnectionReuse": "Reutilizar uma única conexão de proxy",
           "proxyConnectionReuseHelp": "Conexões mais rápidas por hosts ProxyCommand ou ProxyJump lentos. Ative somente se o seu ssh_config não depender de regras Match ou %h específicas de host.",
-          "8349b7b4fa": "Arquivo de Identidade"
+          "8349b7b4fa": "Arquivo de Identidade",
+          "bc9854a353": "Meu Servidor",
+          "92ea40234c": "Salvar Alterações"
         },
         "RuntimeHostAccessForm": {
           "namePlaceholder": "Estação de trabalho Linux",
@@ -6365,7 +6334,6 @@
           "fc5c5306ff": "ms.",
           "8112cd6dcf": "Quanto tempo o Orca espera após sua última edição antes de salvar automaticamente. O primeiro lançamento usa por padrão",
           "1bec6d8318": "Quanto tempo o Orca espera após sua última edição antes de salvar automaticamente.",
-          "0df2e4fd12": "Salvar Arquivos Automaticamente",
           "45c6e85c4d": "Editor",
           "4aa4d9fb73": "Quebra linhas longas nos editores de diff em vez de exigir rolagem horizontal.",
           "94a479cef3": "Mostra diferenças de espaços em branco no início e no fim das linhas nos diffs.",
@@ -6373,7 +6341,6 @@
           "3f6892f307": "Ativado",
           "5195f0b9ef": "Mostra sublinhados e sugestões de ortografia do navegador ao editar Markdown avançado.",
           "9b18de6eea": "Quebra linhas longas nos editores de arquivo em vez de exigir rolagem horizontal.",
-          "collapseUnchangedTitle": "Recolher Regiões Inalteradas",
           "collapseUnchangedDescription": "Mostra somente as linhas alteradas e um pouco de contexto ao redor em um diff de arquivo, ocultando o restante por trás de faixas expansíveis. O diff Ver Todas as Alterações sempre recolhe dessa forma.",
           "0971ef5c63": "Mostrar Espaços em Branco no Diff",
           "75e326278e": "Quebra de Linha do Editor",
@@ -6382,7 +6349,9 @@
           "6f33c2a32f": "Quebra de Linha do Diff",
           "3f63d16992": "Árvore de Arquivos Padrão do Diff",
           "8b3f8e6b83": "Notas de Revisão em Markdown",
-          "a0361dfb05": "Verificação Ortográfica no Markdown Avançado"
+          "a0361dfb05": "Verificação Ortográfica no Markdown Avançado",
+          "916c5582f2": "Recolher Regiões Inalteradas",
+          "a37865966c": "Salvar Arquivos Automaticamente"
         },
         "EphemeralVmRuntimesSection": {
           "cleanupFailed": "Falha na limpeza",
@@ -6405,7 +6374,7 @@
           "stopCleanup": "Parar limpeza",
           "cleanupStopped": "Limpeza interrompida",
           "stopCleanupFailed": "Não foi possível parar a limpeza da VM na Nuvem.",
-          "cloudVmRefreshLabel": "Atualizar VMs na nuvem"
+          "cca21fb369": "Atualizar VMs na nuvem"
         },
         "commit": {
           "message": {
@@ -6451,7 +6420,6 @@
           "7d90fd5299": "Editar {{value0}}",
           "8c877dec41": "Global",
           "c6b155911b": "Todos os comandos",
-          "5aacc8f7dc": "Adicionar Comando",
           "c36912efd5": "Execute-os no botão Comandos Rápidos na barra de abas, ou clique com o botão direito dentro de qualquer terminal.",
           "3d9dc558e8": "Este comando rápido será removido da sua lista salva.",
           "3edf3deaf8": "Excluir \"{{value0}}\"?",
@@ -6473,7 +6441,8 @@
           "8d525e5f15": "Copiado",
           "53b17a4b1b": "Não foi possível copiar",
           "a9a564b7e7": "Copiar {{value0}}",
-          "69a1441a21": "Nada para copiar"
+          "69a1441a21": "Nada para copiar",
+          "f8cf6fc086": "Adicionar Comando"
         },
         "VoicePane": {
           "6fa734ed95": "Excluir {{value0}}",
@@ -6488,7 +6457,6 @@
           "61a16c8141": "Extraindo...",
           "8f4d2a51d7": "off-line",
           "d504ab05f0": "streaming",
-          "fbe5990716": "Selecionar Modelo",
           "e24f7d43d2": "Selecione um modelo de voz. Modelos locais funcionam off-line; modelos na nuvem exigem uma chave de API.",
           "174da92062": "Manter Pressionado",
           "118b3c2dee": "Alternar",
@@ -6502,10 +6470,10 @@
           "dictationModesWithAutoDescription": "Automático: mantenha {{shortcut}} pressionado para ditar até soltar, ou toque para iniciar e parar. Manter pressionado: dite enquanto mantém {{shortcut}} pressionado. Alternar: pressione {{shortcut}} uma vez para iniciar e novamente para parar.",
           "6ffecf36fd": "Ativar Ditado por Voz",
           "342f309724": "Modo de Ditado",
-          "c5ea32143e": "Modelo de Voz"
+          "c5ea32143e": "Modelo de Voz",
+          "2d9b81c687": "Selecionar Modelo"
         },
         "NotificationsPane": {
-          "906b4afebf": "Enviar Notificação de Teste",
           "2772d2f257": "Ignora notificações quando a worktree que as acionou já está visível.",
           "2a42dd8d6f": "Volume do som de notificação",
           "4aa5085cd7": "Personalizado:",
@@ -6525,15 +6493,16 @@
           "7f45542625": "Notificação de teste solicitada",
           "98d70fb261": "Não foi possível reproduzir o som de notificação personalizado",
           "c83b05a055": "As notificações não são suportadas neste sistema",
-          "6e6df3a09a": "Escolher Arquivo Personalizado",
-          "76e02467b8": "Alterar Arquivo Personalizado",
           "e4b5e909ff": "Quando desativado, os espaços de trabalho ocultos por uma opção Ocultar no menu Filtros da barra lateral não mostram o ponto de não lido nem enviam notificações para este computador ou seu celular.",
           "b3c7207c8f": "Som de Notificação",
           "9c41a0d367": "Ativar Notificações",
           "0acae1066d": "Tarefa do Agente Concluída",
           "6bc7bd7b6e": "Sino do Terminal",
           "3b77513cd0": "Notificar sobre espaços de trabalho ocultos",
-          "badd7ed4cf": "Suprimir Enquanto em Foco"
+          "badd7ed4cf": "Suprimir Enquanto em Foco",
+          "0b8141ed49": "Alterar Arquivo Personalizado",
+          "38e3bbeb25": "Escolher Arquivo Personalizado",
+          "f5b0498e1f": "Enviar Notificação de Teste"
         },
         "PluginConsentDialog": {
           "reconsent": "Mudou desde que você aprovou",
@@ -6557,7 +6526,6 @@
           "6fa754d20f": "Excluir",
           "fe1f2c6572": "Editar {{value0}}",
           "88bfbf1a9c": "Nenhum preset sparse salvo para este repositório.",
-          "d7565029a9": "Novo Preset",
           "17f8c4ce10": "Gerencie conjuntos de diretórios salvos para criação de worktree sparse.",
           "8b64731aaf": "+{{value0}} mais",
           "755c6a1a0d": "Confirmar",
@@ -6569,7 +6537,8 @@
           "8deb7024ab": "Carregando presets sparse...",
           "92c08ccae3": "Não foi possível carregar os presets sparse.",
           "2ef2b2674b": "Excluir {{value0}}",
-          "124ff6ea6c": "Presets de Sparse Checkout"
+          "124ff6ea6c": "Presets de Sparse Checkout",
+          "683e781027": "Novo Preset"
         },
         "voice": {
           "pane": {
@@ -6767,17 +6736,16 @@
           "blocked": "Sincronização de fork ignorada",
           "blockedFallback": "O Orca não conseguiu fazer fast-forward deste fork com segurança.",
           "failed": "Falha na sincronização do fork",
-          "title": "Manter o Fork Atualizado",
           "description": "Faz fast-forward seguro deste fork a partir do upstream.",
           "longDescription": "Quando este fork está atrás do upstream, o Orca pode fazer fast-forward com segurança da sua branch padrão. O Orca ignora a atualização se a branch tiver commits somente locais ou conflitos.",
           "forkOf": "Fork de {{owner}}/{{repo}}",
           "syncing": "Sincronizando",
-          "syncNow": "Sincronizar Agora",
           "modeLabel": "Modo de sincronização do fork",
           "ask": "Perguntar",
           "off": "Desativado",
           "1b00dcc746": "Manter o Fork Atualizado",
-          "7a1ea2076d": "Automático Seguro"
+          "7a1ea2076d": "Automático Seguro",
+          "c64463b5fc": "Sincronizar Agora"
         },
         "LinearAgentSkillGuide": {
           "setupConnectTitle": "1. Conectar o Linear",
@@ -6788,7 +6756,6 @@
           "setupSkillBody": "Dá aos agentes de código o /orca-linear para leitura, atualizações, triagem e anexação de pull ou merge requests.",
           "setupVisibleTitle": "3. Mostrar o Linear em Tarefas",
           "setupVisibleBody": "Mantém o Linear no seletor de origens de Tarefas e nos atalhos da barra lateral.",
-          "openTaskSources": "Origens de Tarefas",
           "setupTitle": "Checklist de configuração",
           "setupBody": "As três etapas são necessárias para o ciclo completo de Tarefas + agente. O caminho da primeira vez também está em Origens de Tarefas.",
           "setupReady": "Tudo pronto",
@@ -6804,7 +6771,8 @@
           "noteVisibilityTitle": "Ocultar ≠ desconectar",
           "noteVisibilityBody": "Ocultar o Linear em Origens de Tarefas apenas o remove do seletor. Isso não remove sua chave ou skill.",
           "setupChecking": "Verificando…",
-          "setupUnverified": "Não é possível verificar"
+          "setupUnverified": "Não é possível verificar",
+          "c5cd02806b": "Origens de Tarefas"
         },
         "WarpThemeImportModal": {
           "title": "Importar do Warp",
@@ -6812,8 +6780,6 @@
           "yaml_title": "Importar YAML de tema",
           "yaml_description": "Importa arquivos YAML de tema (formato Warp) como temas de terminal do Orca.",
           "yaml_no_themes_found": "Nenhum tema encontrado nos arquivos selecionados.",
-          "choose_file": "Escolher Arquivo",
-          "choose_folder": "Escolher Pasta",
           "loading": "Carregando temas do Warp...",
           "found_theme_one": "{{value0}} tema encontrado",
           "found_theme_other": "{{value0}} temas encontrados",
@@ -6832,7 +6798,9 @@
           "import_theme_one": "Importar {{value0}} Tema",
           "import_theme_other": "Importar {{value0}} Temas",
           "import_theme_many": "Importar {{value0}} Temas",
-          "import_themes": "Importar Temas"
+          "77f3e3d390": "Escolher Arquivo",
+          "00aaf588da": "Escolher Pasta",
+          "1bceb1553d": "Importar Temas"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -6855,12 +6823,10 @@
           "7d4c0a2aa4": "Nome do perfil",
           "612f7f6861": "Falha ao criar o perfil.",
           "8f22b7580d": "Perfil \"{{value0}}\" criado.",
-          "8481ee0331": "Novo Perfil de Navegador",
           "c0f85056d9": "Perfis de navegador neste servidor Orca.",
           "86b7c83fee": "Este computador",
           "6480776a03": "Perfis de navegador para o host selecionado.",
           "5e19a692f7": "Host",
-          "6f2584b39e": "Adicionar Perfil",
           "e4aaf8051b": "menu da barra de ferramentas.",
           "cd47bc9622": "Selecione um perfil padrão para novas abas do navegador. Importe cookies e alterne perfis por aba através do",
           "aa1074bfe9": "Gerencie perfis de navegador e importe cookies do Chrome, Edge, Comet ou outros navegadores.",
@@ -6872,7 +6838,9 @@
           "e25fd16b91": "Mecanismo de Busca Padrão",
           "bc44903d30": "Sessão e Cookies",
           "ddd634b250": "Sessão e Cookies",
-          "7a366a05e1": "Roteamento de Links"
+          "7a366a05e1": "Roteamento de Links",
+          "f36182ff2f": "Novo Perfil de Navegador",
+          "549f28cf10": "Adicionar Perfil"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Usar cor {{value0}} do repositório",
@@ -6882,7 +6850,6 @@
           "03ca1a4e9b": "example.com",
           "381b4844fd": "Enviar PNG",
           "7da623abcc": "Usado por padrão — o GitHub sempre fornece um, mesmo quando o proprietário não definiu uma imagem personalizada.",
-          "39da8a10bf": "Usar Avatar do GitHub",
           "c490787d24": "Emoji",
           "b2d7fd2116": "Ícone",
           "2d8bd302fa": "Avatar",
@@ -6898,7 +6865,8 @@
           "emojiTooLongForRepoIcon": "Este emoji não pode ser usado como ícone de repositório.",
           "currentEmojiSelection": "Atual: {{value0}}",
           "searchEmojiPlaceholder": "Pesquisar emoji",
-          "43bf3709dd": "Ícone do Repositório"
+          "43bf3709dd": "Ícone do Repositório",
+          "cc76342291": "Usar Avatar do GitHub"
         },
         "ComputerUsePane": {
           "1735461723": "Permite que agentes inspecionem e operem apps de desktop locais.",
@@ -6926,24 +6894,23 @@
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Escolha os apps disponíveis no menu Abrir em de um espaço de trabalho.",
-          "ea98373cd8": "Perguntar Antes de Excluir Automações",
-          "9f380934cf": "Perguntar Antes de Excluir Espaços de Trabalho",
           "4fbf910ded": "Cria espaços de trabalho dentro de uma subpasta com o nome do repositório.",
-          "ba3480642f": "Aninhar Espaços de Trabalho",
           "a246f5ce6f": "Diretório raiz onde as pastas de espaço de trabalho são criadas.",
           "5567191a6e": "Procurar",
-          "31e300af1c": "Perguntar Antes de Excluir Artifacts",
           "externalWorktrees": "Worktrees externas",
           "externalWorktreesDescription": "Escolha quais worktrees criadas fora do Orca aparecem por padrão neste host.",
           "ad65d146f6": "Apps do Abrir Em",
-          "9d0ef6a2a6": "Diretório de Espaços de Trabalho"
+          "9d0ef6a2a6": "Diretório de Espaços de Trabalho",
+          "a8ce626e4b": "Aninhar Espaços de Trabalho",
+          "c2d4beaf3a": "Perguntar Antes de Excluir Espaços de Trabalho",
+          "3ae2a59ce9": "Perguntar Antes de Excluir Automações",
+          "2ffd7c4fc8": "Perguntar Antes de Excluir Artifacts"
         },
         "TerminalThemeSections": {
           "5e0c24b5c8": "Controla a linha divisória entre painéis no modo claro.",
           "d56af60e6f": "Escolha o tema usado quando o Orca está no modo claro.",
           "cbe56a0f79": "Controla a linha divisória entre painéis no modo escuro.",
           "7add204bd5": "Escolha o tema de terminal usado no modo escuro.",
-          "target_title": "Modo do Tema",
           "target_aria": "Modo do tema do terminal",
           "target_dark": "Escuro",
           "target_light": "Claro",
@@ -6961,14 +6928,11 @@
           "3ebb499929": "Pré-visualização do Modo Escuro"
         },
         "BrowserUsePane": {
-          "be6df68384": "De um Arquivo…",
           "67d9a53f47": "Gerencie perfis para logins separados",
           "112f70adc4": "Última importação de {{value0}}",
           "72d4815523": "Traga seus logins existentes para o Orca para que os agentes possam acessar páginas autenticadas. Importa para o perfil padrão.",
-          "2eb906706c": "Importar Cookies do Navegador",
           "af8c83ed61": "Importe cookies do Chrome, Edge ou outros navegadores para que os agentes possam reutilizar seus logins.",
           "68ea76eb71": "Instale a skill Browser Use para que os agentes possam operar o navegador do Orca.",
-          "b8a1f2d84d": "Uso do Navegador por Agente",
           "96b91c6349": "Permita que agentes de código controlem este navegador com seus logins.",
           "2ea4617e3a": "{{value0}} cookies importados de {{value1}}{{value2}}.",
           "2ccfc9cff8": "Importar",
@@ -6977,7 +6941,9 @@
           "5301857d88": "De {{value0}}",
           "finishSteps": "Permita que agentes de programação controlem este navegador com suas contas conectadas. Conclua as etapas abaixo.",
           "b3e79d1c51": "Importar Cookies do Navegador",
-          "4451b3c0a6": "Instalar Skill Browser Use"
+          "4451b3c0a6": "Instalar Skill Browser Use",
+          "4ab048c0b8": "De um Arquivo…",
+          "507fdae102": "Uso do Navegador por Agente"
         },
         "MobilePane": {
           "dd3cd78d04": "Escanear com o Orca Mobile",
@@ -7074,10 +7040,7 @@
           "d89806cc89": "está pronto para instalar.",
           "a6b37929dc": "Versão",
           "8311da27ba": "está disponível. Clique em \"Baixar Atualização\" para baixá-lo.",
-          "f44299636f": "Reiniciar para Atualizar (",
-          "42717918f4": "Baixar Atualização (",
           "02dc082e70": "Não foi possível iniciar o download da atualização.",
-          "e1a647adc5": "Verificar Atualizações",
           "ceb579abaf": "Verifica atualizações do app e instala uma versão mais recente do Orca.",
           "bd79d412f0": "Falha na verificação de atualização. {{value0}}",
           "b9ad70c30d": "Erro de atualização. {{value0}}",
@@ -7086,7 +7049,9 @@
           "31fd7150cf": "Verificando atualizações...",
           "d69a09b672": "As atualizações são verificadas automaticamente na inicialização.",
           "e3b9d21c07": "está disponível. Atualize o Orca através do gerenciador de pacotes do seu sistema — o Orca não pode instalar esta versão por conta própria.",
-          "6d27bd46e3": "Verificar Atualizações"
+          "6d27bd46e3": "Verificar Atualizações",
+          "857ca887da": "Baixar Atualização (",
+          "c0a8f827c7": "Reiniciar para Atualizar ("
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "args",
@@ -7262,7 +7227,6 @@
           "restartingHelp": "Esperando o servidor substituto se reconectar na nova versão.",
           "retry": "Tentar novamente",
           "update": "Atualizar este servidor",
-          "title": "Atualizar Servidores Orca Remotos",
           "description": "Revise os servidores pareados e atualize as instalações suportadas a partir deste cliente Orca.",
           "restartWarning": "Atualizar reinicia esses servidores. {{value0}} e {{value1}} podem se desconectar brevemente.",
           "checking": "Verificando servidores pareados…",
@@ -7273,7 +7237,8 @@
           "liveTabOne": "1 aba ativa",
           "liveTabs": "{{value0}} abas ativas",
           "livePaneOne": "1 painel ativo",
-          "livePanes": "{{value0}} painéis ativos"
+          "livePanes": "{{value0}} painéis ativos",
+          "dca6780b3a": "Atualizar Servidores Orca Remotos"
         },
         "PluginInstallDialog": {
           "localRequired": "Digite o caminho da pasta do plugin.",
@@ -7446,7 +7411,6 @@
           "runStepDescription": "O agente selecionado recebe um espaço de trabalho novo quando o agendamento vence.",
           "reviewStepTitle": "Revise os resultados",
           "reviewStepDescription": "Inspecione as execuções recentes e continue o trabalho quando precisar.",
-          "openAutomations": "Abrir Automações",
           "openAutomationsDescription": "Crie agendamentos e inspecione execuções recentes.",
           "title": "Automações",
           "description": "Agende o trabalho dos agentes e escolha se Automações aparece na barra lateral.",
@@ -7454,7 +7418,8 @@
           "keywordSchedule": "agendar",
           "keywordAgent": "agente",
           "keywordRuns": "execuções",
-          "d92f253d2d": "Mostrar Botão de Automações"
+          "d92f253d2d": "Mostrar Botão de Automações",
+          "9cb6e73d53": "Abrir Automações"
         },
         "SshPassphraseDialog": {
           "d5a234456f": "Cancelar",
@@ -7576,7 +7541,6 @@
           "invalidBinding": "Essa vinculação de conta do GitHub é inválida.",
           "unavailable": "Essa conta do GitHub não está disponível neste runtime.",
           "saveFailed": "Não foi possível salvar a vinculação de conta do GitHub.",
-          "title": "Conta do GitHub",
           "description": "Use um login gh específico para as chamadas de issue e pull request do GitHub deste projeto.",
           "longDescription": "O Orca injeta um token de curta duração do login do keyring selecionado em cada chamada gh deste projeto. A Visualização do Projeto permanece no login ambiente.",
           "selectLabel": "Conta",
@@ -7796,17 +7760,16 @@
         "BrowserProfileRow": {
           "8e636cae25": "Perfil \"{{value0}}\" removido.",
           "2d4bea7f35": "Cookies padrão limpos.",
-          "ebb78dfd6f": "De um Arquivo…",
-          "cdec84552f": "Importar Cookies",
           "796d846483": "Nenhum cookie importado",
           "c29648fe5b": "Ativo",
           "b4c167764d": "{{value0}} cookies importados do arquivo para {{value1}}.",
           "a3f8c2d1e0b4": "{{value0}} cookies importados de {{value1}} ({{value2}}) para {{value3}}.",
           "b4e9d3f2a1c5": "{{value0}} cookies importados de {{value1}} para {{value2}}.",
-          "c5a273a809": "De {{value0}}"
+          "c5a273a809": "De {{value0}}",
+          "80bffd32bf": "Importar Cookies",
+          "bd7d68f138": "De um Arquivo…"
         },
         "GhosttyImportModal": {
-          "9d3e56ca36": "Aplicar Alterações",
           "f96688b6bc": "Cancelar",
           "b7ddae600c": "Concluído",
           "b58d4c9051": "Chaves não suportadas",
@@ -7817,7 +7780,8 @@
           "2763b0c045": "Revise as configurações que serão importadas da sua configuração do Ghostty.",
           "d2f33670a9": "Importar do Ghostty",
           "273e7e81fe": "Configurações",
-          "1f744a72f4": "Configuração"
+          "1f744a72f4": "Configuração",
+          "9759d2dfa2": "Aplicar Alterações"
         },
         "ShortcutsPane": {
           "4b7ae34062": "diretamente.",
@@ -7842,12 +7806,12 @@
           "b2429aeb31": "Adicionar",
           "ab40b8a5f1": "Nenhuma correspondência. Continue digitando para adicionar um caminho personalizado.",
           "4cd2a4c077": "Digite um caminho (ex.: .env ou node_modules)…",
-          "241325302c": "Adicionar Caminho",
           "7ff265071d": "Quando uma nova worktree é criada, cada caminho listado aqui é copiado via clone do APFS no macOS quando possível, ou vinculado por link simbólico a partir do checkout principal.",
           "b07ef5a8b6": "Caminhos a materializar do checkout principal para worktrees recém-criadas.",
           "d72ba8dc68": "{{value0}} caminhos",
           "9ea912d811": "1 caminho",
-          "a995ebf5ab": "Caminhos Compartilhados de Worktree"
+          "a995ebf5ab": "Caminhos Compartilhados de Worktree",
+          "9a7cd44772": "Adicionar Caminho"
         },
         "input": {
           "search": {
@@ -7985,12 +7949,11 @@
           "currentCount": "{{value0}} atualizados",
           "manualCount": "{{value0}} manual(is)",
           "offlineCount": "{{value0}} off-line",
-          "title": "Servidores Orca Remotos",
           "description": "Verifique e atualize servidores Orca pareados a partir deste cliente.",
           "updating": "Atualizando servidores…",
-          "reviewServers": "Verificar Atualizações do Servidor",
           "serverCountOne": "1 servidor pareado",
-          "fdd271abf0": "Servidores Orca Remotos"
+          "fdd271abf0": "Servidores Orca Remotos",
+          "e4e5937469": "Verificar Atualizações do Servidor"
         },
         "BrowserTerminalLinkActionsSetting": {
           "title": "Cliques em URL no terminal",
@@ -8006,7 +7969,6 @@
           "leaveToTerminalLabel": "Deixar a cargo do terminal"
         },
         "contrast": {
-          "title": "Contraste de Cor",
           "description": "Melhore a legibilidade do texto ou preserve as cores escolhidas pelos programas do terminal.",
           "ratio": "Meta de contraste",
           "autoDescription": "Equilibra a legibilidade com o seu tema de terminal. Recomendado.",
@@ -8017,11 +7979,10 @@
           "custom": "Personalizado",
           "targetDescription": "Valores mais altos aumentam o contraste quando possível. As cores de fundo permanecem inalteradas.",
           "subtle": "Sutil",
-          "strong": "Forte"
+          "strong": "Forte",
+          "aa914efccf": "Contraste de Cor"
         },
         "FloatingWorkspacePane": {
-          "aeaf76fda9": "Barra de Status",
-          "9fb225f2d7": "Botão Flutuante",
           "3c900e26e5": "O atalho de teclado funciona independentemente de onde o alternador é exibido.",
           "505001823e": "Escolher diretório do espaço de trabalho flutuante",
           "81afb79785": "Novas abas de terminal flutuante começam aqui. Notas em Markdown são salvas no espaço de trabalho flutuante do próprio Orca.",
@@ -8030,7 +7991,9 @@
           "2374e81dd8": "Espaço de Trabalho Flutuante",
           "172d1d75c3": "Ativar Espaço de Trabalho Flutuante",
           "7cedc178d6": "Diretório do Terminal",
-          "b9c2a85346": "Local do Botão de Alternância"
+          "b9c2a85346": "Local do Botão de Alternância",
+          "73ac917638": "Botão Flutuante",
+          "dd7eb9270a": "Barra de Status"
         },
         "source": {
           "control": {
@@ -8092,16 +8055,16 @@
           "eec81ddfee": "Duração do Cronômetro"
         },
         "KeybindingsFileActions": {
-          "abc49853fb": "Recarregar do Disco",
-          "a8a8d6b9d3": "Mostrar no Gerenciador de Arquivos",
           "9e24c0e858": "Abrir no Cursor",
           "1637f64033": "Abrir no VS Code",
-          "98f1a23e1c": "Abrir com o App Padrão",
           "400397a10d": "Abrir menu do arquivo de atalhos",
-          "1c2be2b2c6": "Editar Arquivo no Orca",
           "c5886a31cc": "Falha ao abrir o editor externo.",
           "cdf794f46d": "O arquivo de atalhos não está disponível.",
-          "dd532a01ce": "Falha ao abrir os atalhos no Orca."
+          "dd532a01ce": "Falha ao abrir os atalhos no Orca.",
+          "ad58206841": "Editar Arquivo no Orca",
+          "4bfe7a2e43": "Abrir com o App Padrão",
+          "c322555264": "Mostrar no Gerenciador de Arquivos",
+          "5b639aea5c": "Recarregar do Disco"
         },
         "OrchestrationPane": {
           "52e0634e2c": "Peça a um agente coordenador para usar orquestração em transferências, transferências de worktree e agentes filhos sequenciais ou paralelos.",
@@ -8177,11 +8140,11 @@
           "statusConnectRequired": "Conexão necessária",
           "statusSkillRequired": "Skill necessária",
           "statusUnavailable": "Status indisponível",
-          "statusHidden": "Oculto em Tarefas",
           "statusIncomplete": "Precisa de configuração",
           "collapseSetup": "Recolher etapas de configuração de {{provider}}",
           "expandSetup": "Mostrar etapas de configuração de {{provider}}",
-          "statusUnverified": "Não é possível verificar"
+          "statusUnverified": "Não é possível verificar",
+          "d2d9e9707b": "Oculto em Tarefas"
         },
         "OrchestrationSkillAgentCoverage": {
           "6dec5ce2d2": "Cobertura de agentes",
@@ -8287,14 +8250,14 @@
           "2b077b5544": "Prompt copiado."
         },
         "OpenAiTranscriptionKeyDialog": {
-          "fa83512e48": "Salvar Chave",
-          "07b26f2742": "Limpar Chave",
           "d246b2bdb3": "As chaves do runtime local são armazenadas em ~/.orca usando armazenamento criptografado do Electron quando disponível.",
           "c3380e4ca5": "sk-...",
           "2f797018f0": "Chave de API configurada",
           "07ed3e512e": "O áudio é enviado à OpenAI somente quando um modelo de voz da OpenAI é selecionado.",
-          "439e91879e": "Transcrição da OpenAI",
-          "c3dfb3840e": "Chave de API"
+          "c3dfb3840e": "Chave de API",
+          "bf1ff9c891": "Transcrição da OpenAI",
+          "be6c3f2eba": "Limpar Chave",
+          "bce1b6d18a": "Salvar Chave"
         },
         "PrivacyDiagnosticsSection": {
           "af2fc82cde": "Enviar diagnósticos do app ao suporte",
@@ -8450,7 +8413,6 @@
         },
         "SshTargetDestructiveActions": {
           "3bb0cf0ee4": "Isso vai remover o destino e encerrar quaisquer terminais remotos ativos.",
-          "4808966c41": "Remover Destino SSH",
           "bulkTitleSingular": "Remover {{count}} host SSH?",
           "bulkTitlePlural": "Remover {{count}} hosts SSH?",
           "bulkDescription": "Os hosts removidos desaparecem dos seletores de host nos espaços de trabalho, nas automações e na barra lateral. Seu ~/.ssh/config não é alterado, e sincronizações futuras não os trarão de volta.",
@@ -8598,9 +8560,9 @@
           "f3d989184e": "Zoom Padrão"
         },
         "BrowserUseComputerUseNotice": {
-          "15b5e680ba": "Abrir Uso do Computador",
           "79209b37b9": "Se a importação de cookies não for a opção ideal, o Uso do Computador pode controlar apps locais e usar sessões de navegador já conectadas quando aplicável. Instale a skill Orca Computer Use; o macOS também exige permissões de privacidade.",
-          "333984cf90": "Usar uma sessão de navegador existente"
+          "333984cf90": "Usar uma sessão de navegador existente",
+          "9895ed44de": "Abrir Uso do Computador"
         },
         "BranchPrefixFeedback": {
           "6c40c0908f": "O prefixo não pode conter espaços ou caracteres especiais como ~ ^ : ? * [ \\",
@@ -8628,8 +8590,8 @@
         },
         "TerminalTccAttributionNotice": {
           "body": "O daemon do terminal foi iniciado por uma instalação do Orca que não existe mais, então o macOS não consegue atribuir seus comandos ao Orca — as concessões de Acessibilidade e Automação são ignoradas silenciosamente (o osascript falha com o erro -25211). Reiniciar o daemon corrige isso; as sessões de terminal em execução serão encerradas.",
-          "openManageSessions": "Abrir Gerenciar Sessões",
-          "title": "As concessões de permissão do macOS não estão alcançando os terminais"
+          "title": "As concessões de permissão do macOS não estão alcançando os terminais",
+          "63b8513f1e": "Abrir Gerenciar Sessões"
         },
         "AgentAwakeSetting": {
           "on": "Ativado",
@@ -8674,8 +8636,8 @@
           "2a9588b1c2": "Remover esta vinculação"
         },
         "BrowserLocalhostWorktreeLabelsSetting": {
-          "8ac8c3ad19": "Rótulos de Worktree no Localhost",
-          "1db3c8b983": "Abre as portas do espaço de trabalho como URLs localhost do Orca específicas da worktree, para que as abas do navegador sejam mais fáceis de diferenciar."
+          "1db3c8b983": "Abre as portas do espaço de trabalho como URLs localhost do Orca específicas da worktree, para que as abas do navegador sejam mais fáceis de diferenciar.",
+          "1af20fbf51": "Rótulos de Worktree no Localhost"
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Mostra controles de configuração e destinos de execução de espaço de trabalho para ambientes sob demanda pertencentes ao repositório.",
@@ -8704,7 +8666,7 @@
                 "to": {
                   "date": {
                     "setting": {
-                      "f8bda25f29": "Manter a Main Local Atualizada"
+                      "f4c23aee76": "Manter a Main Local Atualizada"
                     }
                   }
                 }
@@ -8804,7 +8766,7 @@
         },
         "sshManagedHostRemove": {
           "descriptionServerHost": "O Orca está em execução em {{label}}. Em Servidores Orca remotos, abra o menu ⋯ de {{label}} e escolha Parar… para remover o Orca do host ou Esquecer… se o host não existir mais. Depois você poderá remover este host SSH.",
-          "openServers": "Abrir Servidores Orca remotos"
+          "2ca95e9fd7": "Abrir Servidores Orca remotos"
         },
         "managedServers": {
           "row": {
@@ -18472,7 +18434,8 @@
           "statusDownloading": "Baixando atualização",
           "statusDownloaded": "Atualização pronta para instalar",
           "statusError": "Erro na atualização"
-        }
+        },
+        "b3b02a9d84": "Tentar Novamente"
       },
       "LinearIssueWorkspace": {
         "ad5dec37b7": "Pré-visualize, edite e comece a trabalhar a partir da issue selecionada.",
@@ -21637,8 +21600,8 @@
           "ignored": "{{model}} só transcreve os idiomas para os quais foi criado, por isso ignora esta configuração.",
           "unsupported": "{{model}} não suporta {{language}}, por isso detecta o idioma sozinho.",
           "description": "O idioma que você fala. Com Detectar automaticamente, o modelo o identifica a cada vez.",
-          "title": "Idioma do ditado",
-          "auto": "Detectar automaticamente"
+          "auto": "Detectar automaticamente",
+          "a9df191aba": "Idioma do ditado"
         },
         "modelUnload": {
           "description": "Quanto tempo o modelo local fica na memória depois que você para de ditar. Enquanto está carregado, o ditado começa na hora; “Imediatamente” libera a memória, então cada ditado espera o modelo carregar.",
@@ -22795,37 +22758,14 @@
   },
   "keybindings": {
     "title": {
-      "worktreeQuickOpen": "Ir para arquivo",
-      "appSettings": "Abrir Configurações",
-      "appForceReload": "Forçar Recarregamento",
       "worktreePalette": "Alternar worktree",
       "worktreeNavigateUp": "Worktree anterior",
       "worktreeNavigateDown": "Próximo worktree",
       "workspaceCreate": "Criar worktree",
       "workspaceRename": "Renomear worktree",
-      "workspaceDelete": "Excluir Espaço de Trabalho",
-      "workspaceOpenBoard": "Alternar Quadro do Espaço de Trabalho",
-      "dashboardToggle": "Alternar Painel de Agentes",
-      "workspaceSelectByIndex": "Selecionar Espaço de Trabalho 1–9",
       "voiceDictation": "Ditado",
-      "viewTasks": "Abrir Tarefas",
-      "sidebarLeftToggle": "Alternar Barra Lateral",
-      "sidebarRightToggle": "Alternar Barra Lateral Direita",
       "sidebarExplorerToggle": "Mostrar Explorador",
-      "sidebarSearchToggle": "Mostrar Busca",
-      "sidebarSourceControlToggle": "Mostrar Controle de Código-Fonte",
-      "sidebarChecksToggle": "Mostrar Verificações",
-      "sidebarPortsToggle": "Mostrar Portas",
-      "sidebarSleepingWorkspacesToggle": "Alternar Espaços de Trabalho em Repouso",
       "sidebarFocusWorktreeList": "Focar a lista de worktrees",
-      "floatingTerminalToggle": "Alternar Terminal Flutuante",
-      "floatingWorkspaceMaximize": "Maximizar Painel do Espaço de Trabalho Flutuante",
-      "floatingWorkspaceMinimize": "Minimizar Painel do Espaço de Trabalho Flutuante",
-      "zoomIn": "Aumentar Zoom",
-      "zoomOut": "Diminuir Zoom",
-      "zoomReset": "Redefinir Tamanho",
-      "worktreeHistoryBack": "Voltar no Histórico de Worktrees",
-      "worktreeHistoryForward": "Avançar no Histórico de Worktrees",
       "tabNewTerminal": "Nova aba de terminal",
       "tabNewAgent": "Nova aba de agente (agente padrão)",
       "tabNewBrowser": "Nova aba do navegador",
@@ -22843,33 +22783,14 @@
       "tabPreviousRecent": "Aba recente anterior",
       "tabNextTerminal": "Próxima aba de terminal",
       "tabPreviousTerminal": "Aba de terminal anterior",
-      "tabSelectByIndex": "Selecionar Aba 1–9",
       "tabOpenQuickCommandsMenu": "Alternar menu de Comandos Rápidos",
-      "browserFind": "Localizar no Navegador",
-      "browserBack": "Voltar no Navegador",
-      "browserForward": "Avançar no Navegador",
-      "browserShowHistory": "Mostrar Histórico do Navegador",
-      "browserReload": "Recarregar Página do Navegador",
-      "browserHardReload": "Recarregamento Forçado da Página do Navegador",
-      "browserFocusAddressBar": "Focar Barra de Endereço do Navegador",
-      "browserGrabElement": "Capturar Elemento da Página",
-      "browserAnnotateElement": "Anotar Elemento da Página",
       "editorFind": "Localizar no editor",
       "editorReplace": "Substituir no editor",
-      "editorSave": "Salvar Arquivo",
-      "editorMarkdownPreview": "Mostrar Pré-visualização do Markdown",
-      "editorToggleWordWrap": "Alternar Quebra de Linha",
-      "editorCopyContext": "Copiar Contexto",
-      "editorPreviousChange": "Ir para Alteração Anterior",
-      "editorNextChange": "Ir para Próxima Alteração",
-      "editorAddReviewNote": "Adicionar Nota de Revisão",
-      "sourceControlSendReviewNotes": "Enviar Notas de Revisão ao Agente",
       "fileExplorerUndo": "Desfazer operação de arquivo",
       "fileExplorerRedo": "Refazer operação de arquivo",
       "fileExplorerCopyPath": "Copiar caminho do arquivo",
       "fileExplorerCopyRelativePath": "Copiar caminho relativo do arquivo",
       "fileExplorerDelete": "Excluir arquivo",
-      "settingsSearch": "Pesquisar Configurações",
       "terminalCopySelection": "Copiar seleção do terminal",
       "terminalSelectAll": "Selecionar todo o texto do terminal",
       "terminalPaste": "Colar no terminal",
@@ -22879,30 +22800,72 @@
       "terminalFocusPreviousPane": "Focar o painel anterior",
       "terminalEqualizePaneSizes": "Igualar o tamanho dos painéis",
       "terminalExpandPane": "Expandir / recolher painel",
-      "terminalSetTitle": "Definir Título…",
       "chatFind": "Localizar no chat",
       "terminalToggleNativeChat": "Alternar entre a interface de chat e o terminal",
-      "sidebarChildWorkspacesToggle": "Alternar Espaços de Trabalho Filhos",
-      "terminalClearPaneTitle": "Limpar Título do Painel",
       "terminalClosePane": "Fechar painel ativo",
       "terminalSplitRight": "Dividir terminal para a direita",
       "terminalSplitDown": "Dividir terminal para baixo",
       "terminalSwitchInputSource": "Alternar fonte de entrada / idioma (nativo)",
       "newAgentTab": "Nova aba do {{agent}}",
-      "viewPlugins": "Abrir plugins"
+      "1d1d2ec47b": "Ir para arquivo",
+      "e316152321": "Abrir Configurações",
+      "8a1982d598": "Forçar Recarregamento",
+      "1d2c86248c": "Excluir Espaço de Trabalho",
+      "1524825c2c": "Alternar Quadro do Espaço de Trabalho",
+      "82c1bf448c": "Alternar Painel de Agentes",
+      "0feb1f0496": "Selecionar Espaço de Trabalho 1–9",
+      "81bcb6ec24": "Abrir Tarefas",
+      "5c1a9f83e0": "Abrir plugins",
+      "196b416429": "Alternar Barra Lateral",
+      "e0d7e6b665": "Alternar Barra Lateral Direita",
+      "da4e681113": "Mostrar Busca",
+      "44e8b7dcb5": "Mostrar Controle de Código-Fonte",
+      "e37b19864c": "Mostrar Verificações",
+      "cb816639bd": "Mostrar Portas",
+      "437260810f": "Alternar Espaços de Trabalho em Repouso",
+      "e67a41569d": "Alternar Terminal Flutuante",
+      "3e3a2d18d4": "Maximizar Painel do Espaço de Trabalho Flutuante",
+      "746ff0c872": "Minimizar Painel do Espaço de Trabalho Flutuante",
+      "f233164080": "Aumentar Zoom",
+      "2b20f1f14a": "Diminuir Zoom",
+      "bb3beaeef6": "Redefinir Tamanho",
+      "02dd0f77a0": "Voltar no Histórico de Worktrees",
+      "57c4fb0edd": "Avançar no Histórico de Worktrees",
+      "eca3c9fdd7": "Selecionar Aba 1–9",
+      "fbf2216baa": "Localizar no Navegador",
+      "0fe8d02935": "Voltar no Navegador",
+      "53ae577e44": "Avançar no Navegador",
+      "92fad2c21f": "Mostrar Histórico do Navegador",
+      "67ce6cf5a0": "Recarregar Página do Navegador",
+      "6bd12f3071": "Recarregamento Forçado da Página do Navegador",
+      "2f2961bebf": "Focar Barra de Endereço do Navegador",
+      "23350d5072": "Capturar Elemento da Página",
+      "69b2b72c98": "Anotar Elemento da Página",
+      "6a99c55b2d": "Salvar Arquivo",
+      "e25a3e5f9a": "Mostrar Pré-visualização do Markdown",
+      "2f207aa199": "Alternar Quebra de Linha",
+      "258e7f75ec": "Copiar Contexto",
+      "324e886c0f": "Ir para Alteração Anterior",
+      "7055c70bdb": "Ir para Próxima Alteração",
+      "9cb1023d40": "Adicionar Nota de Revisão",
+      "e9da9f872a": "Enviar Notas de Revisão ao Agente",
+      "3acf4e9eb1": "Pesquisar Configurações",
+      "128cce6e6d": "Definir Título…",
+      "8788e3be3a": "Alternar Espaços de Trabalho Filhos",
+      "d286d1ab85": "Limpar Título do Painel"
     },
     "group": {
       "global": "Global",
       "tabs": "Abas",
-      "tabNavigation": "Navegação entre abas",
-      "quickCommands": "Comandos Rápidos",
       "browser": "Navegador",
       "editors": "Editores",
       "fileExplorer": "Explorador de Arquivos",
       "settings": "Configurações",
-      "terminalPanes": "Painéis do terminal",
       "chat": "Chat",
-      "agents": "Agentes"
+      "agents": "Agentes",
+      "45347db2a3": "Navegação entre abas",
+      "aab2837fa5": "Comandos Rápidos",
+      "3492a954c8": "Painéis do terminal"
     }
   },
   "gpuFallback": {

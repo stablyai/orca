@@ -100,12 +100,15 @@ export function BrowserSessionCookiesSection({
         </div>
         <Button variant="outline" size="xs" onClick={onAddProfile} className="shrink-0 gap-1.5">
           <Plus className="size-3" />
-          {t('auto.components.settings.BrowserPane.6f2584b39e', 'Add Profile')}
+          {t('auto.components.settings.BrowserPane.549f28cf10', 'Add profile')}
         </Button>
       </div>
 
       {hostOptions.length > 1 ? (
-        <div className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2">
+        <div
+          data-settings-row=""
+          className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2"
+        >
           <div className="min-w-0 space-y-0.5">
             <Label className="text-xs">
               {t('auto.components.settings.BrowserPane.5e19a692f7', 'Host')}

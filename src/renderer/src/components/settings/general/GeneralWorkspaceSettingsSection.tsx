@@ -49,8 +49,8 @@ export function GeneralWorkspaceSettingsSection({
               'subfolder',
               'directory',
               t(
-                'auto.components.settings.GeneralWorkspaceSettingsSection.ba3480642f',
-                'Nest Workspaces'
+                'auto.components.settings.GeneralWorkspaceSettingsSection.a8ce626e4b',
+                'Nest workspaces'
               )
             ]}
           >

@@ -53,7 +53,7 @@ export function VoiceSpeechModelSection({
   const selectedIsReady = selectedModelState?.status === 'ready'
 
   return (
-    <div className="flex items-center justify-between gap-4 py-2">
+    <div data-settings-row="" className="flex items-center justify-between gap-4 py-2">
       <div className="space-y-0.5">
         <Label>{t('auto.components.settings.VoicePane.c5ea32143e', 'Speech model')}</Label>
         <p className="text-xs text-muted-foreground">
@@ -75,7 +75,7 @@ export function VoiceSpeechModelSection({
           >
             {selectedModel && selectedIsReady
               ? selectedModel.label
-              : t('auto.components.settings.VoicePane.fbe5990716', 'Select Model')}
+              : t('auto.components.settings.VoicePane.2d9b81c687', 'Select model')}
             <ChevronDown className="size-3 opacity-50" />
           </Button>
         </DropdownMenuTrigger>

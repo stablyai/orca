@@ -28,6 +28,34 @@ export const GENERAL_SETTING_ANCHORS = {
   reviewNotes: 'general-editor-review-notes'
 } as const
 
+export const GENERAL_SETTING_OWNERS: Readonly<Record<string, GeneralSubPage | null>> = {
+  [GENERAL_SETTING_ANCHORS.folder]: 'folder',
+  [GENERAL_SETTING_ANCHORS.nesting]: 'folder',
+  [GENERAL_SETTING_ANCHORS.worktrees]: 'worktrees',
+  [GENERAL_SETTING_ANCHORS.openIn]: 'open-in',
+  [GENERAL_SETTING_ANCHORS.autoSave]: null,
+  [GENERAL_SETTING_ANCHORS.autoSaveDelay]: 'editor',
+  [GENERAL_SETTING_ANCHORS.formatOnSave]: 'editor',
+  [GENERAL_SETTING_ANCHORS.finalNewline]: 'editor',
+  [GENERAL_SETTING_ANCHORS.fontFamily]: 'editor',
+  [GENERAL_SETTING_ANCHORS.fontSize]: 'editor',
+  [GENERAL_SETTING_ANCHORS.fontWeight]: 'editor',
+  [GENERAL_SETTING_ANCHORS.lineHeight]: 'editor',
+  [GENERAL_SETTING_ANCHORS.ligatures]: 'editor',
+  [GENERAL_SETTING_ANCHORS.fontSmoothing]: 'editor',
+  [GENERAL_SETTING_ANCHORS.editorWrap]: 'editor',
+  [GENERAL_SETTING_ANCHORS.minimap]: 'editor',
+  [GENERAL_SETTING_ANCHORS.diffView]: 'editor',
+  [GENERAL_SETTING_ANCHORS.diffWhitespace]: 'editor',
+  [GENERAL_SETTING_ANCHORS.collapseUnchanged]: 'editor',
+  [GENERAL_SETTING_ANCHORS.diffWrap]: 'editor',
+  [GENERAL_SETTING_ANCHORS.diffTree]: 'editor',
+  [GENERAL_SETTING_ANCHORS.markdownView]: 'editor',
+  [GENERAL_SETTING_ANCHORS.spellcheck]: 'editor',
+  [GENERAL_SETTING_ANCHORS.reviewNotes]: 'editor',
+  'general-editor-settings': 'editor'
+}
+
 export type GeneralSearchDescriptor = {
   sectionId: string
   page: GeneralSubPage | null
@@ -36,8 +64,7 @@ export type GeneralSearchDescriptor = {
 
 export function generalSetting(
   sectionId: string,
-  page: GeneralSubPage | null,
   entry: SettingsSearchEntry
 ): GeneralSearchDescriptor {
-  return { sectionId, page, entry }
+  return { sectionId, page: GENERAL_SETTING_OWNERS[sectionId] ?? null, entry }
 }

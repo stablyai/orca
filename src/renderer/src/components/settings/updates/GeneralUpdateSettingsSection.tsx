@@ -107,8 +107,8 @@ export function GeneralUpdateSettingsSection({
               <RefreshCw className="size-3.5" />
             )}
             {t(
-              'auto.components.settings.GeneralUpdateSettingsSection.e1a647adc5',
-              'Check for Updates'
+              'auto.components.settings.GeneralUpdateSettingsSection.6d27bd46e3',
+              'Check for updates'
             )}
           </Button>
 
@@ -133,8 +133,8 @@ export function GeneralUpdateSettingsSection({
             >
               <Download className="size-3.5" />
               {t(
-                'auto.components.settings.GeneralUpdateSettingsSection.42717918f4',
-                'Download Update ('
+                'auto.components.settings.GeneralUpdateSettingsSection.857ca887da',
+                'Download update ('
               )}
               {updateStatus.version})
             </Button>
@@ -143,7 +143,7 @@ export function GeneralUpdateSettingsSection({
             updateStatus.retryable !== false ? (
             <Button variant="default" size="sm" onClick={handleRestartToUpdate} className="gap-2">
               <RefreshCw className="size-3.5" />
-              {t('auto.components.UpdateCard.2c2d3e03ca', 'Try Again')}
+              {t('auto.components.UpdateCard.b3b02a9d84', 'Try again')}
             </Button>
           ) : updateStatus.state === 'downloaded' ? (
             <Button
@@ -155,8 +155,8 @@ export function GeneralUpdateSettingsSection({
             >
               <Download className="size-3.5" />
               {t(
-                'auto.components.settings.GeneralUpdateSettingsSection.f44299636f',
-                'Restart to Update ('
+                'auto.components.settings.GeneralUpdateSettingsSection.c0a8f827c7',
+                'Restart to update ('
               )}
               {updateStatus.version})
             </Button>

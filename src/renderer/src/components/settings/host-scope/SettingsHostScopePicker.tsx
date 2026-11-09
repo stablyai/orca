@@ -70,7 +70,7 @@ export function SettingsHostScopePicker({
     <div className="flex min-w-0 items-center text-settings-detail">
       <span className="sr-only">{label}</span>
       <SettingsSearchableSelect
-        triggerClassName="h-7 w-auto min-w-0 max-w-56 border-transparent bg-transparent px-2 shadow-none"
+        compact
         ariaLabel={label}
         value={value}
         groups={[{ key: 'settings-hosts', options }]}
