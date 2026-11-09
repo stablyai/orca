@@ -120,10 +120,11 @@ function cancelStream(streamId: string): void {
   parentPort.post({ type: 'stopped', streamId })
 }
 
-// Runs in queue order, after everything queued for the stream before the cancel.
+// Runs in queue order, after everything queued for the stream before the cancel; the host waits for it.
 function handleDiscard(streamId: string): void {
   discarded.delete(streamId)
   recognizer?.discard(streamId)
+  parentPort.post({ type: 'discarded', streamId })
 }
 
 function handleMessage(

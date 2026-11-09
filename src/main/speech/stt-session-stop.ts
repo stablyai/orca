@@ -30,7 +30,9 @@ export function stopSttDictation(
     // A cancel after Finish still drops the work whose text it would throw away.
     if (options.discard) {
       session.cloud?.cancel()
-      session.engine?.worker.postMessage({ type: 'discard', streamId: session.streamId })
+      if (session.engine) {
+        discardLocalStream(state, session.engine, session.streamId)
+      }
     }
     return session.stopPromise ?? Promise.resolve()
   }
@@ -79,8 +81,64 @@ function stopLocalSession(
     discard,
     finish: (outcome) => finishLocalStop(state, session, engine, outcome, discard)
   })
-  engine.worker.postMessage({ type: discard ? 'discard' : 'stop', streamId: session.streamId })
+  if (discard) {
+    discardLocalStream(state, engine, session.streamId)
+  } else {
+    engine.worker.postMessage({ type: 'stop', streamId: session.streamId })
+  }
   return stopped
+}
+
+/**
+ * The speech process answers a cancel at once and skips the stream's queued work, but a decode already running
+ * finishes first. One that outlasts the grace (hung in native code, or just long) restarts the process, as a
+ * cancel always did, so the next dictation isn't stuck behind it.
+ */
+function discardLocalStream(state: SttSessionState, engine: SttEngine, streamId: string): void {
+  const reached = waitForSttWorkerMessage(
+    engine.worker,
+    (message) => message.type === 'discarded' && message.streamId === streamId,
+    DISCARD_DICTATION_TIMEOUT_MS
+  )
+  engine.worker.postMessage({ type: 'discard', streamId })
+  const draining = reached.then(async (inTime) => {
+    // Another device's decode may hold the queue; never kill its dictation.
+    if (!inTime && state.engine === engine && sttEngineUsers(state, engine).length === 0) {
+      await teardownSttEngine(state, engine)
+    }
+  })
+  engine.draining = draining
+  void draining.finally(() => {
+    if (engine.draining === draining) {
+      engine.draining = null
+    }
+  })
+}
+
+/** Resolves true when the worker sends a matching message (or exits), false after `timeoutMs`. */
+function waitForSttWorkerMessage(
+  worker: SttEngine['worker'],
+  matches: (message: { type: string; streamId?: string }) => boolean,
+  timeoutMs: number
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const settle = (inTime: boolean): void => {
+      clearTimeout(timer)
+      worker.off('message', onMessage)
+      worker.off('exit', onExit)
+      resolve(inTime)
+    }
+    const onMessage = (message: { type: string; streamId?: string }): void => {
+      if (matches(message)) {
+        settle(true)
+      }
+    }
+    const onExit = (): void => settle(true)
+    const timer = setTimeout(() => settle(false), timeoutMs)
+    timer.unref?.()
+    worker.on('message', onMessage)
+    worker.on('exit', onExit)
+  })
 }
 
 function finishLocalStop(
