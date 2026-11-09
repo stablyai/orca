@@ -1,4 +1,5 @@
 import React from 'react'
+import { getCheckConclusion } from '@/components/pr-check-counts'
 import {
   AlertTriangle,
   CircleCheck,
@@ -16,7 +17,7 @@ export const PullRequestIcon = GitPullRequest
 export function checkPresentationKey(check: PRCheckDetail): string {
   return check.gitlabAllowedFailure === true && check.conclusion === 'neutral'
     ? 'gitlabAllowedFailure'
-    : (check.conclusion ?? 'pending')
+    : getCheckConclusion(check)
 }
 
 export const CHECK_ICON: Record<string, React.ComponentType<{ className?: string }>> = {

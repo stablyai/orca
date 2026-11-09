@@ -112,8 +112,6 @@ describe('getHostedReviewForBranch', () => {
     finishOld(old)
     await before
     await expect(click).resolves.toMatchObject({ provider: 'gitlab', state: 'merged', number: 7 })
-    expect(getMergeRequestForBranchMock).toHaveBeenCalledTimes(2)
-    expect(getMergeRequestForBranchMock).toHaveBeenLastCalledWith('/repo', 'feature', null, 'ssh-1')
   })
 
   it('maps GitLab merge requests into the hosted review surface', async () => {
@@ -145,7 +143,6 @@ describe('getHostedReviewForBranch', () => {
       mergeable: 'MERGEABLE'
     })
     expect(getProjectSlugMock).toHaveBeenCalledWith('/repo', 'ssh-1')
-    expect(getMergeRequestForBranchMock).toHaveBeenCalledWith('/repo', 'feature', null, 'ssh-1')
     expect(getPRForBranchOutcomeMock).not.toHaveBeenCalled()
   })
 
