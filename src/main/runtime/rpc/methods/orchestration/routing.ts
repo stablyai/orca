@@ -1,5 +1,5 @@
 import type { OrcaRuntimeService } from '../../../orca-runtime'
-import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../shared/orchestration-party-identity'
+import type { OrchestrationPartyIdentity as OrchestrationCallerIdentity } from '../../../../../shared/orchestration/mailbox/orchestration-party-identity'
 import {
   type MessageType,
   type DispatchContextRow,

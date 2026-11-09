@@ -13,7 +13,7 @@ import {
 } from '../../../shared/agent-session/failures/agent-session-wire-refusals'
 import type { RpcEnvelopeMeta, RpcFailure, RpcSuccess } from './core'
 import { CONNECTOR_REPLY_ERROR_CODES } from '../../../shared/rpc-contract/connector-params'
-import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration-session-caller-codes'
+import { ORCHESTRATION_SESSION_CALLER_ERROR_CODES } from '../../../shared/orchestration/orchestration-session-caller-codes'
 import { computerUseErrorRecoveryData } from '../../../shared/computer-use-error-recovery'
 import { COMPUTER_ERROR_CODES } from '../../../shared/computer-use-runtime-types'
 import { TerminalSplitOutcomeError } from '../../../shared/workspace-layout/terminal-split-outcome'
@@ -38,9 +38,9 @@ import {
 } from '../../../shared/skill-install-failure'
 import { PLUGIN_CLI_ERROR_CODES } from '../../../shared/plugins/approval/plugin-cli-approval'
 import { GIT_DIFF_TOO_LARGE_CODE } from '../../../shared/git/diff/git-diff-transport-budget'
-import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automation-owner-conflict'
+import { AUTOMATION_OWNER_CONFLICT_CODES } from '../../../shared/automations/ownership/automation-owner-conflict'
 import { ARCHIVE_HOOK_FAILED_REMOVAL_CODE } from '../../../shared/worktree/archive-hook-removal-gate'
-import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/nested-worker-depth'
+import { NESTED_WORKER_DEPTH_EXCEEDED_CODE } from '../../../shared/orchestration/workers/nested-worker-depth'
 import { PROJECT_RUNTIME_REPAIR_REQUIRED_CODE } from '../../../shared/project-runtime-repair-message'
 import {
   WORKTREE_CREATE_COLLISION_CODE,
@@ -53,7 +53,7 @@ import { AGENT_LAUNCH_TARGET_FORBIDDEN_CODE } from '../../../shared/agent-launch
 import {
   parseTerminalSpawnDeferral,
   TERMINAL_SPAWN_DEFERRED_CODE
-} from '../../../shared/host-spawn-admission'
+} from '../../../shared/terminal/pty/admission/spawn-admission-contract'
 
 export function successResponse(id: string, meta: RpcEnvelopeMeta, result: unknown): RpcSuccess {
   return { id, ok: true, result, _meta: meta }
@@ -157,6 +157,8 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'worker_prompt_too_large',
   'terminal_worktree_mismatch',
   'terminal_is_coordinator',
+  // Another open Dispatch holds the terminal; data names it and says no effects were applied.
+  'terminal_busy',
   // The user chose Keep open; only they can undo it, so a coordinator must not retry blindly.
   'terminal_kept_open',
   'worker_cannot_coordinate_own_run',

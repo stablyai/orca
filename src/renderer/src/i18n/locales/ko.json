@@ -3667,6 +3667,10 @@
           },
           "WslHostUnavailableBanner": {
             "turnOn": "켜기"
+          },
+          "RemoteViewportHeldChip": {
+            "sizedElsewhere": "다른 창에 맞춘 크기",
+            "fitHere": "여기에 맞추기"
           }
         }
       },
@@ -15613,6 +15617,7 @@
           "kernelStartFailed": "커널을 시작하지 못했습니다.",
           "noPython": "이 컴퓨터에서 Python을 찾을 수 없습니다. [python.org](https://www.python.org/downloads/)에서 설치한 뒤 셀을 다시 실행하세요.",
           "kernelDied": "커널이 종료되었습니다.",
+          "outputTruncated": "출력이 잘렸습니다: Orca가 이 셀 출력의 앞부분만 보관하고 나머지는 버렸습니다. 전부 보관하려면 파일에 기록하세요.",
           "localOnly": "노트북 셀은 이 컴퓨터의 파일에 대해서만 실행할 수 있습니다.",
           "pythonOnly": "Orca에서는 Python 노트북만 실행할 수 있습니다.",
           "commandCopied": "명령이 복사되었습니다.",
@@ -18803,6 +18808,7 @@
         "noCommandsOrSkills": "일치하는 명령어 또는 스킬이 없습니다",
         "commands": "명령어",
         "skills": "스킬",
+        "checkingSkills": "새 스킬을 확인하는 중…",
         "loadingSkills": "스킬 로딩 중…",
         "clearDescription": "대화 컨텍스트 지우기",
         "skillsUnavailableHost": "SSH 채팅에서는 스킬 목록을 표시할 수 없습니다",
@@ -19485,6 +19491,7 @@
         "copyIdentity": "{{value0}} 복사",
         "folder": "폴더",
         "mainCheckout": "기본 체크아웃",
+        "turnWorking": "이 채팅의 에이전트가 작업 중입니다. 턴이 끝난 후 브랜치를 전환하세요.",
         "worktree": "작업 트리"
       },
       "explicitChatWindows": "이 에이전트의 채팅은 아직 Windows에서 사용할 수 없습니다. 대신 터미널에서 여세요.",
@@ -21012,6 +21019,7 @@
       "switch": "브랜치 전환: {{branch}}",
       "search": "브랜치 검색",
       "recover": "{{branch}}(으)로 전환",
+      "copy": "브랜치 이름 복사",
       "create": "{{branch}}에서 {{name}} 브랜치 만들기",
       "open": "작업 공간 열기",
       "occupied": "{{path}}에서 체크아웃됨",
@@ -21061,7 +21069,6 @@
       "sortRelevance": "관련성이 가장 높은",
       "sortNewest": "최신",
       "sortResultsAriaLabel": "결과 정렬: {{value0}}",
-      "consent": "전체 텍스트 검색을 활성화하시겠습니까? Orca는 전체 대화와 도구 출력당 최대 3,072자를 포함하여 로컬 에이전트 기록에서 이 컴퓨터에 인덱스를 구축합니다. 내용은 편집되지 않습니다. 인증된 페어링 클라이언트는 검색이 가능합니다.",
       "remoteDisabled": "이 컴퓨터에서는 검색이 비활성화되어 있습니다. 세션을 검색하려면 해당 컴퓨터에서 기록 색인화를 활성화하십시오.",
       "titleOnly": "이 컴퓨터에서는 전체 텍스트 검색이 꺼져 있어 세션 제목만 일치시킵니다.",
       "notReady": "검색 색인이 아직 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
@@ -21118,7 +21125,6 @@
       "description": "이 컴퓨터와 페어링된 Orca 서버에서 에이전트가 말하고 행한 모든 내용을 검색하세요.",
       "searchDescription": "이 컴퓨터와 페어링된 서버에 대한 세션 검색을 켜거나 검색 데이터를 지웁니다.",
       "indexComputers": "세션 내부 검색",
-      "computersConsent": "각 컴퓨터는 자체 에이전트 대화와 도구 출력의 검색 가능한 사본을 보관합니다. 이 데이터는 해당 컴퓨터 밖으로 전송되지 않습니다.",
       "serverVersion": "Orca v{{version}}",
       "rowSwitchLabel": "{{host}}의 세션 검색",
       "serverOffline": "오프라인",

@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
-import type { Automation, AutomationRun } from '../../../../shared/automations-types'
+import type { Automation } from '../../../../shared/automations/automation-definition'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { formatUiNarrowDuration } from '@/i18n/relative-time-format'
 import {
@@ -12,11 +13,8 @@ import {
   formatAutomationDateTimeWithRelative
 } from './automation-page-parts'
 import { indexLatestAutomationRuns } from './automation-list-last-run'
-import {
-  formatAutomationCost,
-  formatAutomationTokens,
-  summarizeAutomationRunUsage
-} from './automation-usage-model'
+import { formatAutomationCost, formatAutomationTokens } from './automation-usage-model'
+import { summarizeAutomationRunUsage } from '../../../../shared/automations/history/automation-usage-summary'
 import type { AutomationTargetAvailability } from './automation-target-availability'
 import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import { getAutomationHostDetailDisplay } from './automation-host-detail-display'

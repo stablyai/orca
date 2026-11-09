@@ -1,4 +1,4 @@
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { fetchJiraTaskIssues } from './mobile-jira-task-source'
 import { gitlabTodoListRead } from './mobile-task-list-operations'
 import {

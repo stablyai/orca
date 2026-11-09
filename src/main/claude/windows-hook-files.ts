@@ -2,22 +2,22 @@ import { existsSync, readFileSync, rmSync } from 'node:fs'
 import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { AgentHookInstallStatus } from '../../shared/agent-hook-listener/configuration/agent-hook-types'
-import { writeManagedScript } from '../agent-hooks/installer-utils'
-import { getLockedExecutableAsidePath } from '../agent-hooks/locked-executable-rename'
+import { writeManagedScript } from '../agent-hooks/installation/scripts/managed-hook-script-write'
+import { getLockedExecutableAsidePath } from '../agent-hooks/installation/scripts/locked-executable-rename'
 import {
   refreshManagedScriptIfPresent,
   restoreManagedScript,
   scriptStillExists
-} from '../agent-hooks/managed-hook-script-refresh'
+} from '../agent-hooks/installation/scripts/managed-hook-script-refresh'
 import {
   buildWindowsHookEnvironmentGuardLines,
   WINDOWS_HOOK_STDIN_DRAIN_COMMAND
-} from '../agent-hooks/hook-stdin-contract'
+} from '../agent-hooks/installation/scripts/hook-stdin-contract'
 import {
   resolveBundledWindowsNativeHookExecutable,
   WINDOWS_NATIVE_HOOK_EXECUTABLE_NAME
-} from '../agent-hooks/windows-native-hook-executable'
-import { WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD } from '../agent-hooks/claude-background-job-guard'
+} from '../agent-hooks/installation/commands/windows-native-hook-executable'
+import { WINDOWS_CLAUDE_BACKGROUND_JOB_GUARD } from '../agent-hooks/installation/scripts/claude-background-job-guard'
 
 const PAYLOAD_FILE_NAME = 'claude-hook-impl.cmd'
 

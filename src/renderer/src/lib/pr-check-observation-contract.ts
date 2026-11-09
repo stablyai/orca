@@ -1,7 +1,7 @@
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../shared/task-source-context'
+} from '../../../shared/work-items/task-source-context'
 import { RUNTIME_CONNECTION_CHANGED_MESSAGE } from '../web/web-runtime-request-registry'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { AppState } from '../store/types'

@@ -8,7 +8,7 @@ import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
 import {
   getTaskSourceCacheScope,
   type TaskSourceContext
-} from '../../../../../shared/task-source-context'
+} from '../../../../../shared/work-items/task-source-context'
 import { parseWorkspaceKey } from '../../../../../shared/workspace-scope'
 import {
   selectFolderWorkspaces,

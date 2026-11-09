@@ -17,7 +17,7 @@ import type {
   RuntimeTerminalClose,
   RuntimeTerminalRead
 } from '../../../../shared/runtime-terminal-contracts'
-import type { ExactWorkerProviderSession } from '../../../../shared/orchestration-worker-output'
+import type { ExactWorkerProviderSession } from '../../../../shared/orchestration/workers/orchestration-worker-output'
 import type { RuntimeProviderSnapshotReadOptions } from '../output/provider-snapshot-read-options'
 import { OrcaRuntimeWithFitOverrideListeners } from '../lifecycle/terminal-view-resources'
 import type { RuntimeTerminalDriverState as DriverState } from '../../../../shared/runtime-session-contracts'

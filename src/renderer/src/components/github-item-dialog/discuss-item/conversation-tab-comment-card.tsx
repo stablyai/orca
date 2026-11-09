@@ -14,7 +14,7 @@ import { CommentCodeContext } from '@/components/github/CommentCodeContext'
 import { CommentReactions } from '@/components/github/CommentReactions'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { GitHubOwnerRepo, GitHubPRFile } from '../../../../../shared/github/pull-request-types'
-import type { TaskSourceContext } from '../../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../../shared/work-items/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { useIntlLocale, useTranslate, type Translate } from '@/i18n/use-translate'
 import { loadPRFileContents } from '../load-item-details/pr-file-content-cache'
@@ -148,6 +148,7 @@ export function renderCommentCard(
         />
         <CommentMarkdown
           content={comment.body}
+          bodyImageUrls={comment.bodyImageUrls}
           variant="document"
           githubRepo={ctx.markdownGitHubRepo}
           className="min-w-0 max-w-full overflow-hidden break-words text-[13px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"

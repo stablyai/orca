@@ -23,7 +23,7 @@ import { translate } from '../i18n/mobile-i18n'
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session/agent-session-wire'
 import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import { mobileStructuredSendQueues } from './mobile-structured-send-queue-rule'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type {
   MobileNativeChatSendIntent,
   MobileNativeChatSendOutcome
@@ -63,6 +63,7 @@ export function useMobileStructuredSendWithOutcome(args: {
   reject: MobileStructuredSends['reject']
   holdUnconfirmed: MobileStructuredSends['holdUnconfirmed']
   commandPending: { current: boolean }
+  onClearSent: () => () => void
   /** This chat's message sends still out, which a command waits behind as on desktop. */
   sendsOut: MobileStructuredSendsOut
   controller: Pick<
@@ -99,6 +100,7 @@ export function useMobileStructuredSendWithOutcome(args: {
     commandsWait,
     controller,
     enabled,
+    onClearSent,
     reject,
     holdUnconfirmed,
     onSendError,
@@ -193,6 +195,7 @@ export function useMobileStructuredSendWithOutcome(args: {
                 selectAgentSessionCurrentRequests(stateRef.current)
               ),
             onError: onSendError,
+            onClearSent,
             timeoutMs
           })
       if (commandOutcome !== null) {
@@ -275,6 +278,7 @@ export function useMobileStructuredSendWithOutcome(args: {
       commandsWait,
       controller,
       enabled,
+      onClearSent,
       reject,
       holdUnconfirmed,
       onSendError,

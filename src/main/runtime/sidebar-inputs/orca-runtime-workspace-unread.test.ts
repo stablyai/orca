@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../shared/runtime-session-contracts'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import { AgentHookServer } from '../../agent-hooks/server'
+import { AgentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { RpcDispatcher } from '../rpc/dispatcher'
 import type { RpcDispatchStreamingOptions } from '../rpc/dispatcher-stream-options'

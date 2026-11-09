@@ -91,16 +91,21 @@ it.each(['claude', 'codex'] as const)(
     act(() =>
       root.render(
         <TooltipProvider>
-          <EntryActionRow
-            id="actual-search-row"
-            option={{
-              kind: 'agent',
-              option: { agent, aliases: [], label: agent, pickerEntry: refreshed }
-            }}
-            selected={false}
-            onClick={() => launch(undefined)}
-            onUseAgent={(draft) => launch(own.rows[0], draft, refreshed)}
-          />
+          <DropdownMenu defaultOpen modal={false}>
+            <DropdownMenuTrigger>New tab</DropdownMenuTrigger>
+            <DropdownMenuContent>
+              <EntryActionRow
+                id="actual-search-row"
+                option={{
+                  kind: 'agent',
+                  option: { agent, aliases: [], label: agent, pickerEntry: refreshed }
+                }}
+                selected={false}
+                onClick={() => launch(undefined)}
+                onUseAgent={(draft) => launch(own.rows[0], draft, refreshed)}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
         </TooltipProvider>
       )
     )

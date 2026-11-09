@@ -23,7 +23,7 @@ import {
   isEphemeralVmRuntimeEnvironment,
   redactRuntimeEnvironment
 } from '../../../shared/remote-runtime/host-catalog/runtime-environments'
-import type { RuntimeStatus } from '../../../shared/runtime-types'
+import type { RuntimeStatus } from '../../../shared/runtime-session-contracts'
 import {
   remoteServerPairingFailureText,
   type RemoteServerPairingFailureCode

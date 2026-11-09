@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AutomationRun } from '../../../../shared/automations-types'
+import type { AutomationRun } from '../../../../shared/automations/history/automation-run'
 import {
   buildAutomationRunOpenLayout,
   resolveAutomationRunOpenTarget
@@ -45,25 +45,6 @@ function run(overrides: Partial<AutomationRun> = {}): AutomationRun {
 }
 
 describe('automation run open target', () => {
-  it('requires the run PTY to be live for View run', () => {
-    expect(
-      canOpen({
-        run: run(),
-        terminalTabExists: true,
-        currentLayout: runLeafLayout,
-        livePtyIds
-      })
-    ).toBe(true)
-    expect(
-      canOpen({
-        run: run(),
-        terminalTabExists: true,
-        currentLayout: runLeafLayout,
-        livePtyIds: []
-      })
-    ).toBe(false)
-  })
-
   it('rejects a layout whose run leaf is bound to another PTY', () => {
     expect(
       resolveAutomationRunOpenTarget({

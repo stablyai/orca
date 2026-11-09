@@ -1,8 +1,8 @@
 import { useCallback, useLayoutEffect, useRef, type MutableRefObject } from 'react'
-import type { HostConnectionInputs } from '../transport/client-context-connection-metrics'
+import type { HostConnectionInputs } from '../transport/connection/client-context-connection-metrics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
-import type { MobilePrSidebarController } from '../session/use-mobile-pr-sidebar-controller'
+import type { PrSidebarState } from './review/mobile-pr-sidebar-state'
+import type { MobilePrSidebarController } from './review/use-mobile-pr-sidebar-controller'
 import {
   useMobilePrTab,
   type MobilePrCreateSettled,
@@ -12,8 +12,8 @@ import { usePrTabMenuGroups } from '../components/pr-sidebar/use-pr-tab-menu'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 import type { SourceControlHubTab } from './mobile-source-control-hub-tab'
 import type { SourceControlHubScreen } from './use-source-control-hub-navigation'
-import type { MobilePrActions } from '../session/use-mobile-pr-actions'
-import type { MobilePrAiTriage } from '../session/use-mobile-pr-ai-triage'
+import type { MobilePrActions } from './review/use-mobile-pr-actions'
+import type { MobilePrAiTriage } from './review/use-mobile-pr-ai-triage'
 
 /** The hub's way into the PR tab's sheets, filled once the tab exists. */
 export type MobilePrTabOpeners = { createPr: () => void; merge: () => void }

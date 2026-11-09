@@ -17,7 +17,7 @@ import {
 } from '@/components/github/github-work-item-identity'
 import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutations'
 import { ReviewerAvatar } from '@/components/github/work-item-state-presentation'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
+import type { TaskSourceContext } from '../../../../shared/work-items/task-source-context'
 import type { GitHubAssignableUser } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 

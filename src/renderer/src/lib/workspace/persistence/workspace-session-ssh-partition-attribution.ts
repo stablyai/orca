@@ -5,7 +5,7 @@ import { getRepoIdFromWorktreeId } from '../../../../../shared/worktree/id'
 import {
   createRepoRowExecutionHostLookup,
   resolveWorktreeExecutionHost
-} from '../../../../../shared/worktree-execution-host-resolution'
+} from '../../../../../shared/execution-host/worktree-execution-host-resolution'
 import { workspaceIdsNamedByPartition } from '../../../../../shared/workspace-session/workspace-session-stranded-partition-adoption'
 
 /** Contested SSH adoption may gap-fill, never replace: evidence is prior local/runtime rivalry, duplicate SSH partitions, or catalog multi-host repo IDs. Mere local/ssh co-presence is the repair’s input, not collision proof. Foreign means positive catalog reattribution; unknown catalogs prove neither, so unhydrated boot still reunites rows. */

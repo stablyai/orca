@@ -16,10 +16,10 @@ import type * as NodeOs from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
-import type * as InstallerUtils from '../../../agent-hooks/installer-utils'
+import type * as HooksJsonWrite from '../../../agent-hooks/installation/configuration/hooks-json-write'
 import type * as RealHomeHooksJson from './codex-real-home-hooks-json'
-import type { HookDefinition } from '../../../agent-hooks/installer-utils'
-import { wrapPosixHookCommand } from '../../../agent-hooks/posix-hook-command'
+import type { HookDefinition } from '../../../agent-hooks/installation/configuration/hook-config-schema'
+import { wrapPosixHookCommand } from '../../../agent-hooks/installation/commands/posix-hook-command'
 
 const mocks = vi.hoisted(() => {
   const state: { beforeHooksJsonGuard: (() => void) | null; hooksJsonWrites: number } = {
@@ -33,16 +33,19 @@ vi.mock('node:os', async () => ({
   ...(await vi.importActual<typeof NodeOs>('node:os')),
   homedir: mocks.homedir
 }))
-vi.mock('../../../agent-hooks/installer-utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof InstallerUtils>()
-  return {
-    ...actual,
-    writeHooksJson: (...args: Parameters<typeof actual.writeHooksJson>) => {
-      mocks.hooksJsonWrites += 1
-      return actual.writeHooksJson(...args)
+vi.mock(
+  '../../../agent-hooks/installation/configuration/hooks-json-write',
+  async (importOriginal) => {
+    const actual = await importOriginal<typeof HooksJsonWrite>()
+    return {
+      ...actual,
+      writeHooksJson: (...args: Parameters<typeof actual.writeHooksJson>) => {
+        mocks.hooksJsonWrites += 1
+        return actual.writeHooksJson(...args)
+      }
     }
   }
-})
+)
 
 vi.mock('./codex-real-home-hooks-json', async (importOriginal) => {
   const actual = await importOriginal<typeof RealHomeHooksJson>()

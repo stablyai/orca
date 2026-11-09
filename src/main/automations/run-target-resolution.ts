@@ -1,13 +1,13 @@
-import { findAutomationRepo } from '../../shared/automation-repo-target'
+import { findAutomationRepo } from '../../shared/automations/ownership/automation-repo-target'
 import { findProjectHostSetup } from '../../shared/project-host-setup-target'
 import type { Store } from '../persistence/loading-store/store'
-import type { Automation } from '../../shared/automations-types'
-import { getAutomationLegacyRepoId } from '../../shared/automation-run-identity'
+import type { Automation } from '../../shared/automations/automation-definition'
+import { getAutomationLegacyRepoId } from '../../shared/automations/history/automation-run-identity'
 import {
   AUTOMATION_ORPHAN_ISSUES,
   type AutomationCapturedHostIssue
-} from '../../shared/automation-list-scope'
-import { AUTOMATION_CAPTURED_HOST_REFUSALS } from '../../shared/automation-owner-conflict'
+} from '../../shared/automations/ownership/automation-list-scope'
+import { AUTOMATION_CAPTURED_HOST_REFUSALS } from '../../shared/automations/ownership/automation-owner-conflict'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
@@ -15,11 +15,11 @@ import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import {
   buildWorkspaceRunContext,
   type WorkspaceRunContext
-} from '../../shared/task-source-context'
+} from '../../shared/work-items/task-source-context'
 import {
   automationRunFailure,
   type AutomationRunFailure
-} from '../../shared/automation-run-failure-copy'
+} from '../../shared/automations/history/automation-run-failure-copy'
 import { AutomationDispatchCancelledError } from './automation-dispatch-cancelled-error'
 import {
   isOrcadFencedAutomation,

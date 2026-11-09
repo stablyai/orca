@@ -70,3 +70,11 @@ export function getBrowserPasswordsSearchEntry(t?: Translate): SettingsSearchEnt
     ]
   }
 }
+
+export function browserPasswordHostOf(origin: string): string {
+  try {
+    return new URL(origin).host
+  } catch {
+    return origin
+  }
+}

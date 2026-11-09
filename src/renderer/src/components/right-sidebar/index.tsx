@@ -24,7 +24,7 @@ import {
   shouldRenderDesktopWindowChrome
 } from '@/lib/desktop-window-chrome'
 import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
-import { ActivityBarPositionMenu } from './activity-bar-position-menu'
+import { ActivityBarPositionMenu, useActivityBarContextPlugin } from './activity-bar-position-menu'
 import { RightSidebarTopActivityBar } from './right-sidebar-top-activity-bar'
 import { useRightSidebarActivityItems } from './use-right-sidebar-activity-items'
 import { useRightSidebarTabRouting } from './use-right-sidebar-tab-routing'
@@ -36,6 +36,7 @@ import { selectWorktreeCreationSurfaceShown } from '@/lib/workspace/creation/wor
 /** Stays mounted while closed so the return-focus hook can remember pane focus before the sidebar opens. */
 function RightSidebarInner(): React.JSX.Element {
   const t = useTranslate()
+  const contextPlugin = useActivityBarContextPlugin()
   useUiLanguageRevision()
   const hasDesktopWindowChrome = shouldRenderDesktopWindowChrome({
     platform: getRendererAppPlatform(),
@@ -242,7 +243,11 @@ function RightSidebarInner(): React.JSX.Element {
 
       {activityBarPosition === 'side' && (
         <ContextMenu>
-          <ContextMenuTrigger asChild>
+          <ContextMenuTrigger
+            asChild
+            onContextMenu={contextPlugin.onContextMenu}
+            onPointerDown={contextPlugin.onPointerDown}
+          >
             <div className="flex flex-col items-center w-10 min-w-[40px] bg-sidebar border-l border-border side-activity-bar-windows-inset">
               <TooltipProvider delayDuration={400}>{sideActivityBarIcons}</TooltipProvider>
             </div>
@@ -250,6 +255,7 @@ function RightSidebarInner(): React.JSX.Element {
           <ActivityBarPositionMenu
             currentPosition={activityBarPosition}
             onChangePosition={setActivityBarPosition}
+            pluginKey={contextPlugin.pluginKey}
           />
         </ContextMenu>
       )}
