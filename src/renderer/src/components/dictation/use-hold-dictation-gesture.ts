@@ -4,9 +4,11 @@ import { keybindingMatchesAction, type KeybindingOverrides } from '../../../../s
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
+import { getKeybindingContext } from '../terminal-workspace-model'
 
 type HoldDictationGestureOptions = {
   canStartDictation: () => boolean
+  isDictationUnderway: () => boolean
   keybindings: KeybindingOverrides
   settings: GlobalSettings | null
   startDictation: () => Promise<void> | void
@@ -109,12 +111,9 @@ function createHoldDictationReleaseMatcher(event: KeyboardEvent): HoldDictationR
   }
 }
 
-function isTerminalInputTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && target.classList.contains('xterm-helper-textarea')
-}
-
 export function useHoldDictationGesture({
   canStartDictation,
+  isDictationUnderway,
   keybindings,
   settings,
   startDictation,
@@ -127,10 +126,11 @@ export function useHoldDictationGesture({
   const start = useEffectEvent(() => void startDictation())
   const stop = useEffectEvent(() => void stopDictation())
   const canStart = useEffectEvent(() => canStartDictation())
+  const isUnderway = useEffectEvent(() => isDictationUnderway())
   // Main forwards Hold and Auto presses, so the terminal shortcut policy it would apply is applied here.
   const matchesShortcut = useEffectEvent((e: KeyboardEvent) =>
     keybindingMatchesAction('voice.dictation', e, getShortcutPlatform(), keybindings, {
-      context: isTerminalInputTarget(e.target) ? 'terminal' : 'app',
+      context: getKeybindingContext(e.target),
       terminalShortcutPolicy: settings?.terminalShortcutPolicy
     })
   )
@@ -175,12 +175,12 @@ export function useHoldDictationGesture({
       e.preventDefault()
       e.stopPropagation()
       if (!e.repeat) {
-        if (isTerminalInputTarget(e.target)) {
+        if (getKeybindingContext(e.target) === 'terminal') {
           notifyTerminalCapture()
         }
         // macOS drops the shortcut key's keyup while Cmd is held, so every fresh press starts over.
         activeHoldRef.current = null
-        if (mode === 'auto' && !canStart()) {
+        if (mode === 'auto' && isUnderway()) {
           // A tap started this dictation; the next press ends it.
           stop()
           return
@@ -206,8 +206,10 @@ export function useHoldDictationGesture({
     const handleKeyUp = (e: KeyboardEvent): void => {
       const hold = activeHoldRef.current
       if (hold && (matchesShortcut(e) || hold.matchesRelease(e))) {
-        // macOS drops the key's keyup while Cmd is held, so a Cmd keyup says nothing about when the key went up.
-        endHold(getReleasedModifier(e) === 'meta' ? null : performance.now())
+        // macOS drops the key's keyup while Cmd is held, so a keyup with Cmd down or going up can't time the key.
+        const cmdHidesKeyUp =
+          getShortcutPlatform() === 'darwin' && (e.metaKey || getReleasedModifier(e) === 'meta')
+        endHold(cmdHidesKeyUp ? null : performance.now())
       }
     }
 

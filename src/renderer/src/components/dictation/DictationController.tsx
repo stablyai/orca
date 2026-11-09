@@ -298,6 +298,7 @@ export function DictationController() {
 
   useHoldDictationGesture({
     canStartDictation: () => canStartDictation(sessionRef.current.phase),
+    isDictationUnderway: () => isDictationUnderway(sessionRef.current.phase),
     keybindings,
     settings,
     startDictation,

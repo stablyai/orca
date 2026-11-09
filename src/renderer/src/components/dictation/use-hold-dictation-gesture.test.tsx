@@ -36,6 +36,7 @@ function holdSettings(): GlobalSettings {
 function Probe(): null {
   useHoldDictationGesture({
     canStartDictation: () => dictationState === 'idle',
+    isDictationUnderway: () => dictationState === 'starting' || dictationState === 'listening',
     keybindings: {},
     settings: holdSettings(),
     startDictation,
@@ -198,6 +199,22 @@ describe('useHoldDictationGesture in Auto mode', () => {
 
     expect(startDictation).toHaveBeenCalledTimes(1)
     expect(stopDictation).toHaveBeenCalledTimes(1)
+  })
+
+  it('starts a hold pressed while the last dictation was still finishing', async () => {
+    await renderProbe()
+    dictationState = 'stopping'
+
+    act(() => {
+      dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true })
+    })
+    dictationState = 'idle'
+    act(() => {
+      dispatchKeyDown({ key: 'e', code: 'KeyE', metaKey: true, repeat: true })
+    })
+
+    expect(stopDictation).not.toHaveBeenCalled()
+    expect(startDictation).toHaveBeenCalledTimes(1)
   })
 
   it('leaves the shortcut to the IME while composing', async () => {
