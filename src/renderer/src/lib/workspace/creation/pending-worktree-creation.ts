@@ -64,6 +64,8 @@ export type WorktreeCreationRequest = {
     checkoutMode?: 'orca-worktree' | 'provisioned-root'
     /** Set for the built-in hosted provider, whose build sheet speaks in plain language. */
     provider?: 'orca-cloud'
+    /** Orca Cloud: the user chose to start without the repository (it has no GitHub remote). */
+    startEmpty?: boolean
   }
   // Capture local/runtime progress routing at submit so focus changes cannot alter Retry behavior.
   worktreeCreateProgressMode?: WorktreeCreationProgressMode

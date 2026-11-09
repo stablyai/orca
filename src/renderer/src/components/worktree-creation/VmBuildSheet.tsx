@@ -27,6 +27,13 @@ import {
 } from './vm-build-failure'
 import { deriveVmBuildSteps, isOrcaCloudBuild, type VmBuildStep } from './vm-build-steps'
 import { useMinimumRunningSteps } from './use-minimum-running-steps'
+import {
+  connectOrcaCloudGitHub,
+  orcaCloudRepoName,
+  PUSH_TO_GITHUB_URL,
+  startOrcaCloudCreateEmpty
+} from './vm-build-repo-actions'
+import { useVmBuildStepTimings, type VmBuildStepTimings } from './vm-build-timing'
 import { headerTitle, stepLabel, type SheetState } from './vm-build-sheet-copy'
 import { humanizeOrcaCloudLogLine, latestOrcaCloudPhaseLabel } from './orca-cloud-build-log'
 
@@ -79,7 +86,8 @@ export function VmBuildSheet({
   onDismiss,
   onEditRecipe,
   agentSignInRow,
-  cloudAgentStep
+  cloudAgentStep,
+  stepTimings
 }: {
   creationId: string
   entry: PendingWorktreeCreation
@@ -95,6 +103,8 @@ export function VmBuildSheet({
   agentSignInRow?: React.ReactNode
   /** Fixtures only: a fixed "Add an agent" step in place of the live one. */
   cloudAgentStep?: React.ReactNode
+  /** Fixtures only: measured step timings in place of the control plane's. */
+  stepTimings?: VmBuildStepTimings
 }): React.JSX.Element {
   const t = useTranslate()
   const logId = React.useId()
@@ -103,6 +113,8 @@ export function VmBuildSheet({
     [entry.provisioningLog]
   )
   const cloud = isOrcaCloudBuild(entry)
+  const measuredTimings = useVmBuildStepTimings(cloud && stepTimings === undefined)
+  const timings = stepTimings ?? measuredTimings
   const formatLine = React.useMemo(
     () => (cloud ? (line: string) => humanizeOrcaCloudLogLine(line, t) : undefined),
     [cloud, t]
@@ -130,6 +142,16 @@ export function VmBuildSheet({
       ? 'ready'
       : 'building'
   const building = state === 'building'
+
+  const sourceRepo = useAppStore((state) =>
+    recipe ? state.repos.find((repo) => repo.id === recipe.sourceRepoId) : undefined
+  )
+  const repoName = orcaCloudRepoName(sourceRepo)
+  const [connectingGitHub, setConnectingGitHub] = React.useState(false)
+  const connectGitHub = (): void => {
+    setConnectingGitHub(true)
+    void connectOrcaCloudGitHub().finally(() => setConnectingGitHub(false))
+  }
 
   const signIn = (): void => {
     void useAppStore
@@ -204,6 +226,7 @@ export function VmBuildSheet({
                       ? latestOrcaCloudPhaseLabel(entry.provisioningLog ?? '', t)
                       : null
                   }
+                  timing={timings[step.id] ?? null}
                   t={t}
                 />
               ))}
@@ -226,6 +249,8 @@ export function VmBuildSheet({
             canFixWithAgent={Boolean(recipe)}
             canManageBilling={canManageBilling}
             signingIn={signingIn}
+            connectingGitHub={connectingGitHub}
+            repoName={repoName}
             actions={{
               onFixWithAgent: () => {
                 if (recipe) {
@@ -251,7 +276,10 @@ export function VmBuildSheet({
               },
               onSignIn: signIn,
               onShowWorkspaces: () => useAppStore.getState().setSidebarOpen(true),
-              onContactSupport: () => openAppHttpLink(SUPPORT_URL)
+              onContactSupport: () => openAppHttpLink(SUPPORT_URL),
+              onConnectGitHub: connectGitHub,
+              onStartEmpty: () => startOrcaCloudCreateEmpty(creationId, onRetry),
+              onPushToGitHub: () => openAppHttpLink(PUSH_TO_GITHUB_URL)
             }}
           />
         </div>

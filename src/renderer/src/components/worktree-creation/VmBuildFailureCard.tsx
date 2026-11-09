@@ -18,6 +18,8 @@ export function VmBuildFailureCard({
   canFixWithAgent,
   canManageBilling,
   signingIn,
+  connectingGitHub,
+  repoName,
   actions
 }: {
   failure: VmBuildFailure | null
@@ -30,6 +32,9 @@ export function VmBuildFailureCard({
   canFixWithAgent: boolean
   canManageBilling: boolean
   signingIn: boolean
+  connectingGitHub: boolean
+  /** How the user knows the repository, for cards that name it. */
+  repoName: string
   actions: VmBuildFailureActions
 }): React.JSX.Element {
   const t = useTranslate()
@@ -48,7 +53,9 @@ export function VmBuildFailureCard({
     setShown(failure)
   }
   const visible = failure ?? shown
-  const copy = visible ? vmBuildFailureCopy(visible, { cloud, canManageBilling }, t) : null
+  const copy = visible
+    ? vmBuildFailureCopy(visible, { cloud, canManageBilling, repoName }, t)
+    : null
   const headingRef = React.useRef<HTMLHeadingElement>(null)
   const cardRef = React.useRef<HTMLDivElement>(null)
   // Move focus to the card when it opens, so keyboard and screen-reader users land on the way forward.
@@ -114,6 +121,7 @@ export function VmBuildFailureCard({
             canFixWithAgent={canFixWithAgent}
             canManageBilling={canManageBilling}
             signingIn={signingIn}
+            connectingGitHub={connectingGitHub}
             actions={actions}
             t={t}
           />

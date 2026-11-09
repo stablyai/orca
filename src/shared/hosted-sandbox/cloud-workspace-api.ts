@@ -4,6 +4,7 @@
 import type {
   HostedArchivePullRequest,
   HostedArchiveResponse,
+  HostedSandboxConfigResponse,
   HostedWorkspaceStatus
 } from './hosted-sandbox-wire'
 
@@ -59,6 +60,10 @@ export type OrcaCloudWorkspaceApi = {
   }) => Promise<CloudWorkspaceResult<CloudArchiveInfo | null>>
   /** Workspace ids of every Orca Cloud workspace this desktop knows (the sidebar dot / hover card). */
   listCloudWorkspaceIds: () => Promise<string[]>
+  /** Product constants and measured timings; null when the control plane can't be reached. */
+  getConfig: () => Promise<HostedSandboxConfigResponse | null>
+  /** Opens GitHub in the browser to give Orca Cloud access to the account's repositories. */
+  connectGitHub: () => Promise<CloudWorkspaceResult<null>>
   onWakeProgress: (callback: (event: CloudWakeProgressEvent) => void) => () => void
   onOom: (callback: (event: CloudOomEvent) => void) => () => void
 }
@@ -70,6 +75,8 @@ export const ORCA_CLOUD_WORKSPACE_CHANNELS = {
   unarchive: 'orcaCloudWorkspace:unarchive',
   getArchive: 'orcaCloudWorkspace:getArchive',
   listCloudWorkspaceIds: 'orcaCloudWorkspace:listIds',
+  getConfig: 'orcaCloudWorkspace:getConfig',
+  connectGitHub: 'orcaCloudWorkspace:connectGitHub',
   wakeProgress: 'orcaCloudWorkspace:wakeProgress',
   oom: 'orcaCloudWorkspace:oom'
 } as const

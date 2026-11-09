@@ -3,6 +3,8 @@ import {
   Bot,
   ChevronDown,
   CreditCard,
+  FolderPlus,
+  Github,
   Loader2,
   LifeBuoy,
   LogIn,
@@ -33,6 +35,9 @@ export type VmBuildFailureActions = {
   onSignIn: () => void
   onShowWorkspaces: () => void
   onContactSupport: () => void
+  onConnectGitHub: () => void
+  onStartEmpty: () => void
+  onPushToGitHub: () => void
 }
 
 type Action = {
@@ -50,6 +55,7 @@ function failureActions(
   canFixWithAgent: boolean,
   canManageBilling: boolean,
   signingIn: boolean,
+  connectingGitHub: boolean,
   actions: VmBuildFailureActions,
   t: Translate
 ): { primary: Action[]; more: Action[] } {
@@ -99,10 +105,15 @@ function failureActions(
                         'auto.components.worktree.creation.VmBuildFailureCard.updatePayment',
                         'Update payment method'
                       )
-                    : t(
-                        'auto.components.worktree.creation.VmBuildFailureCard.manageBilling',
-                        'Manage billing'
-                      ),
+                    : failure.kind === 'spendCap'
+                      ? t(
+                          'auto.components.worktree.creation.VmBuildFailureCard.raiseSpendCap',
+                          'Raise spend cap'
+                        )
+                      : t(
+                          'auto.components.worktree.creation.VmBuildFailureCard.turnOnOverage',
+                          'Turn on overage'
+                        ),
                 icon: <CreditCard />,
                 onClick: actions.onOpenBilling
               }
@@ -192,6 +203,52 @@ function failureActions(
         ]
       }
     case 'githubNotConnected':
+      return {
+        primary: [
+          {
+            key: 'connectGitHub',
+            label: connectingGitHub
+              ? t(
+                  'auto.components.worktree.creation.VmBuildFailureCard.openingGitHub',
+                  'Opening GitHub…'
+                )
+              : t(
+                  'auto.components.worktree.creation.VmBuildFailureCard.connectGitHub',
+                  'Connect GitHub'
+                ),
+            icon: connectingGitHub ? <Loader2 className="motion-safe:animate-spin" /> : <Github />,
+            onClick: actions.onConnectGitHub,
+            disabled: connectingGitHub
+          },
+          tryAgain
+        ],
+        more: []
+      }
+    case 'noGithubRemote':
+      return {
+        primary: [
+          {
+            key: 'startEmpty',
+            label: t(
+              'auto.components.worktree.creation.VmBuildFailureCard.startEmpty',
+              'Start empty'
+            ),
+            icon: <FolderPlus />,
+            onClick: actions.onStartEmpty
+          },
+          {
+            key: 'pushToGitHub',
+            label: t(
+              'auto.components.worktree.creation.VmBuildFailureCard.pushToGitHubFirst',
+              'Push to GitHub first'
+            ),
+            icon: <SquareArrowOutUpRight />,
+            onClick: actions.onPushToGitHub
+          }
+        ],
+        // After pushing, the same create works without leaving the sheet.
+        more: [tryAgain]
+      }
     case 'unavailable':
     case 'network':
     case 'create':
@@ -206,6 +263,7 @@ export function FailureActionRow({
   canFixWithAgent,
   canManageBilling,
   signingIn,
+  connectingGitHub,
   actions,
   t
 }: {
@@ -215,6 +273,7 @@ export function FailureActionRow({
   canFixWithAgent: boolean
   canManageBilling: boolean
   signingIn: boolean
+  connectingGitHub: boolean
   actions: VmBuildFailureActions
   t: Translate
 }): React.JSX.Element {
@@ -224,6 +283,7 @@ export function FailureActionRow({
     canFixWithAgent,
     canManageBilling,
     signingIn,
+    connectingGitHub,
     actions,
     t
   )

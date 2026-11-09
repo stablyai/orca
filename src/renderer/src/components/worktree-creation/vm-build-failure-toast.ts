@@ -5,6 +5,8 @@ import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-w
 import { classifyVmBuildFailure } from './vm-build-failure'
 import { vmBuildFailureCopy } from './vm-build-failure-copy'
 import { isOrcaCloudBuild } from './vm-build-steps'
+import { orcaCloudRepoName } from './vm-build-repo-actions'
+import { useAppStore } from '@/store'
 
 /** The build sheet's card as a toast, for a VM build that failed while its sheet was off screen. */
 export function showVmBuildFailureToast(entry: PendingWorktreeCreation, error: string): void {
@@ -14,7 +16,17 @@ export function showVmBuildFailureToast(entry: PendingWorktreeCreation, error: s
     return
   }
   // Unknown here; the card itself refines the copy for members once billing status loads.
-  const { title, body } = vmBuildFailureCopy(failure, { cloud, canManageBilling: true }, translate)
+  const recipe = entry.request.ephemeralVmRecipe
+  const repoName = orcaCloudRepoName(
+    recipe
+      ? useAppStore.getState().repos.find((repo) => repo.id === recipe.sourceRepoId)
+      : undefined
+  )
+  const { title, body } = vmBuildFailureCopy(
+    failure,
+    { cloud, canManageBilling: true, repoName },
+    translate
+  )
   toast.error(title, {
     ...(body ? { description: body } : {}),
     ...(failure.kind === 'plan'

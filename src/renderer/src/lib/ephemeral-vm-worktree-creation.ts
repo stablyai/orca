@@ -70,6 +70,7 @@ async function prepareEphemeralVmRecipeRequest(
           }
         : {}),
       provisionId: creationId,
+      ...(recipe.startEmpty ? { startEmpty: true } : {}),
       setupExistingFolder: async (args) => {
         const setup = await store.setupProjectExistingFolder(args)
         if (setup) {

@@ -7,6 +7,7 @@ import {
   FAILED_LOG,
   LOG,
   frame,
+  seedFixtureRepo,
   T0
 } from './vm-build-sheet-fixture-support'
 
@@ -56,22 +57,53 @@ export const cloudSpendCap = cloudFailure(
   `${CLOUD_LOG}\nOrca Cloud: overage_cap_reached`
 )
 
-export const cloudHoursUsedMember = defineFixture({
-  ...cloudFailure(
+// A team member: billing is someone else's to change, so the card says who can.
+function asMember(fixture: ReturnType<typeof cloudFailure>) {
+  return defineFixture({
+    ...fixture,
+    setup: () => {
+      seedFixtureRepo()
+      window.api.orcaProfiles.billingStatus = () =>
+        Promise.resolve({
+          status: 'ok',
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the card reads only canManageBilling.
+          entitlement: { canManageBilling: false } as never
+        })
+    }
+  })
+}
+
+export const cloudHoursUsedMember = asMember(
+  cloudFailure(
     'cloudPlanRequired',
     'Orca Cloud workspaces need a plan with cloud hours.',
     `${CLOUD_LOG}\nOrca Cloud: included_hours_exhausted`
-  ),
-  setup: () => {
-    // A team member: billing is someone else's to change.
-    window.api.orcaProfiles.billingStatus = () =>
-      Promise.resolve({
-        status: 'ok',
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the card reads only canManageBilling.
-        entitlement: { canManageBilling: false } as never
-      })
-  }
-})
+  )
+)
+
+export const cloudSpendCapMember = asMember(
+  cloudFailure(
+    'cloudPlanRequired',
+    'Orca Cloud workspaces need a plan with cloud hours.',
+    `${CLOUD_LOG}\nOrca Cloud: overage_cap_reached`
+  )
+)
+
+export const cloudPaymentFailedMember = asMember(
+  cloudFailure(
+    'cloudPlanRequired',
+    'Orca Cloud workspaces need a plan with cloud hours.',
+    `${CLOUD_LOG}\nOrca Cloud: payment_past_due`
+  )
+)
+
+export const cloudPlanRequiredMember = asMember(
+  cloudFailure(
+    'cloudPlanRequired',
+    'Orca Cloud workspaces need a plan with cloud hours. Open Plan & billing to choose one.',
+    ''
+  )
+)
 
 export const cloudMemberConcurrency = cloudFailure(
   'cloudConcurrencyLimit',
@@ -84,6 +116,30 @@ export const cloudGithubNotConnected = cloudFailure(
   'Connect GitHub to your Orca account so Orca Cloud can clone this repository.',
   `${CLOUD_LOG}\nOrca Cloud: github_not_connected`
 )
+
+export const cloudGithubNotConnectedHttps = defineFixture({
+  ...cloudGithubNotConnected,
+  setup: () => seedFixtureRepo('https://github.com/nwparker/orca-sandbox-push-test.git')
+})
+
+// Refused on this computer before the control plane is asked: no sandbox, no charge.
+export const cloudNoGithubRemote = defineFixture({
+  ...cloudFailure(
+    'cloudNoGithubRemote',
+    'Orca Cloud clones your code from GitHub, and this repository has no GitHub remote.',
+    ''
+  ),
+  setup: () => seedFixtureRepo(null)
+})
+
+export const cloudNoGithubRemoteMore = defineFixture({
+  ...cloudNoGithubRemote,
+  interact: (frameElement) => {
+    Array.from(frameElement.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('More'))
+      ?.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, button: 0 }))
+  }
+})
 
 export const cloudFailedLogsOpen = defineFixture({
   ...cloudFailure('cloudUnavailable', 'Orca Cloud is unavailable right now.', CLOUD_FAILED_LOG),

@@ -2,7 +2,7 @@
 // in-process through the HostedSandboxDriver, and answering like a recipe process would.
 import { z } from 'zod'
 import { EphemeralVmRecipeResultSchema } from '../../shared/ephemeral-vm-recipes'
-import { ephemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
+import { ephemeralVmFailure, type EphemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
 import { normalizeGitRemoteUrl } from '../../shared/git/remotes/git-remote-identity'
 import type { OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 import {
@@ -59,6 +59,22 @@ export async function hostedSandboxRepoUrl(repoPath: string): Promise<string | n
   const remote = await getRemoteUrl(repoPath)
   const normalized = remote ? normalizeGitRemoteUrl(remote) : null
   return normalized?.startsWith('github.com/') ? `https://${normalized}.git` : null
+}
+
+/**
+ * The sandbox can only clone from GitHub, so a repo without a GitHub remote is refused before the
+ * control plane starts (and bills) a sandbox that would open without the code. `startEmpty` is the
+ * user choosing that empty workspace anyway.
+ */
+export async function refuseOrcaCloudWithoutGithub(
+  recipe: Pick<OrcaVmRecipe, 'provider'>,
+  repoPath: string,
+  startEmpty: boolean | undefined
+): Promise<EphemeralVmFailure | null> {
+  if (recipe.provider !== 'orca-cloud' || startEmpty || (await hostedSandboxRepoUrl(repoPath))) {
+    return null
+  }
+  return ephemeralVmFailure('cloudNoGithubRemote')
 }
 
 function ok(stdout: string): RecipeStepProviderResult {

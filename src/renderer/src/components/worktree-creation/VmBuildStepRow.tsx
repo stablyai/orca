@@ -5,7 +5,7 @@ import type { Translate } from '@/i18n/use-translate'
 import { Progress } from '@/components/ui/progress'
 import { StepIcon } from './WorktreeSetupSteps'
 import type { VmBuildStep } from './vm-build-steps'
-import { vmBuildStepTiming } from './vm-build-timing'
+import { typicalStepSeconds, type VmBuildStepTiming } from './vm-build-timing'
 import { formatElapsedTime } from './worktree-creation-clock'
 import { stepLabel, stepStateLabel } from './vm-build-sheet-copy'
 
@@ -14,18 +14,20 @@ export function VmBuildStepRow({
   step,
   cloud,
   detail,
+  timing,
   t
 }: {
   step: VmBuildStep
   cloud: boolean
+  /** The step's measured duration, when there is one. */
+  timing: VmBuildStepTiming | null
   /** What the running step is doing right now, in plain words. */
   detail: string | null
   t: Translate
 }): React.JSX.Element {
   const labelId = React.useId()
-  const timing = step.state === 'running' ? vmBuildStepTiming(step.id, cloud) : null
   // A live percent already says how far along the step is.
-  const hint = timing && step.percent === null ? timing : null
+  const hint = step.state === 'running' && step.percent === null ? timing : null
   const slow = hint !== null && step.elapsedMs !== null && step.elapsedMs > hint.p95Ms
 
   return (
@@ -65,7 +67,7 @@ export function VmBuildStepRow({
               : t(
                   'auto.components.worktree.creation.VmBuildSheet.usually',
                   'usually ~{{seconds}}s',
-                  { seconds: Math.max(1, Math.round(hint.p50Ms / 1000)) }
+                  { seconds: typicalStepSeconds(hint) }
                 )}
           </span>
         ) : null}

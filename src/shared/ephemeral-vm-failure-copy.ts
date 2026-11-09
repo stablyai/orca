@@ -43,7 +43,9 @@ export const EPHEMERAL_VM_FAILURE_COPY = {
   cloudSignInRequired: 'Sign in to Orca to use Orca Cloud workspaces.',
   cloudUnavailable: 'Orca Cloud is unavailable right now. Try again in a moment.',
   cloudGithubNotConnected:
-    'Connect GitHub to your Orca account so Orca Cloud can clone this repository.'
+    'Connect GitHub to your Orca account so Orca Cloud can clone this repository.',
+  cloudNoGithubRemote:
+    'Orca Cloud clones your code from GitHub, and this repository has no GitHub remote. Push it to GitHub first, or start with an empty workspace.'
 } as const
 
 export type EphemeralVmFailureCode = keyof typeof EPHEMERAL_VM_FAILURE_COPY

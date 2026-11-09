@@ -18,6 +18,8 @@ export const orcaCloudWorkspaceApi = {
   unarchive: (args) => ipcRenderer.invoke(CH.unarchive, args),
   getArchive: (args) => ipcRenderer.invoke(CH.getArchive, args),
   listCloudWorkspaceIds: () => ipcRenderer.invoke(CH.listCloudWorkspaceIds),
+  getConfig: () => ipcRenderer.invoke(CH.getConfig),
+  connectGitHub: () => ipcRenderer.invoke(CH.connectGitHub),
   onWakeProgress: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, event: CloudWakeProgressEvent): void =>
       callback(event)

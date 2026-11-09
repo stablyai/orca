@@ -28,6 +28,7 @@ export type PrepareEphemeralVmWorkspaceTargetArgs = {
   branch?: string
   ref?: string
   provisionId?: string
+  startEmpty?: boolean
   setupExistingFolder: (
     args: ProjectHostSetupExistingFolderArgs
   ) => Promise<ProjectHostSetupResult | null>
@@ -62,7 +63,8 @@ export async function prepareEphemeralVmWorkspaceTarget(
     workspaceName: args.workspaceName,
     ...(args.branch ? { branch: args.branch } : {}),
     ...(args.ref ? { ref: args.ref } : {}),
-    ...(args.provisionId ? { provisionId: args.provisionId } : {})
+    ...(args.provisionId ? { provisionId: args.provisionId } : {}),
+    ...(args.startEmpty ? { startEmpty: true } : {})
   })
   if (!provisioned.ok) {
     return {

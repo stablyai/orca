@@ -10,6 +10,8 @@ export type VmBuildAccountFailureKind =
   | 'concurrency'
   | 'memberConcurrency'
   | 'githubNotConnected'
+  /** Refused before the control plane was asked: the sandbox could not clone this repository. */
+  | 'noGithubRemote'
   | 'signIn'
   | 'unavailable'
   | 'network'
@@ -28,7 +30,8 @@ const ERROR_CODE_KINDS: Partial<Record<string, VmBuildAccountFailureKind>> = {
   cloudConcurrencyLimit: 'concurrency',
   cloudSignInRequired: 'signIn',
   cloudUnavailable: 'unavailable',
-  cloudGithubNotConnected: 'githubNotConnected'
+  cloudGithubNotConnected: 'githubNotConnected',
+  cloudNoGithubRemote: 'noGithubRemote'
 }
 
 // The hosted provider logs the control plane's deny reason as `Orca Cloud: <reason>`.
@@ -94,7 +97,8 @@ const ACCOUNT_GATES: ReadonlySet<VmBuildFailure['kind']> = new Set([
   'signIn',
   'concurrency',
   'memberConcurrency',
-  'githubNotConnected'
+  'githubNotConnected',
+  'noGithubRemote'
 ])
 
 // Nothing started, so no step failed: steps stay pending instead of showing a red failure.

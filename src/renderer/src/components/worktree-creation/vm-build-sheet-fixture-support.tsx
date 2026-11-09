@@ -4,6 +4,9 @@ import { defineFixture } from '../../component-fixtures/component-fixture'
 import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-worktree-creation'
 import { VmBuildSheet } from './VmBuildSheet'
 import { formatElapsedTime } from './worktree-creation-clock'
+import type { VmBuildStepTimings } from './vm-build-timing'
+import { useAppStore } from '@/store'
+import type { Repo } from '../../../../shared/repo-types'
 
 export const LOG_LINES = [
   'Creating sandbox from snapshot snap_7f2c…',
@@ -63,9 +66,24 @@ export function sheet(
         onDismiss={() => {}}
         onEditRecipe={() => {}}
         agentSignInRow={agentSignInRow}
+        stepTimings={FIXTURE_STEP_TIMINGS}
       />
     </div>
   )
+}
+
+// What the dev control plane measured (GET /v1/config): starts p50 2.9 s, p95 4.0 s.
+const FIXTURE_STEP_TIMINGS: VmBuildStepTimings = { provision: { p50Ms: 2_900, p95Ms: 4_000 } }
+
+/** The repository a cloud card names: a GitHub remote reads as owner/name. */
+export function seedFixtureRepo(remoteUrl: string | null = 'git@github.com:acme/web.git'): void {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sheet reads only id, displayName and gitRemoteIdentity.
+  const repo = {
+    id: 'repo',
+    displayName: 'web',
+    gitRemoteIdentity: remoteUrl ? { remoteUrl } : null
+  } as unknown as Repo
+  useAppStore.setState({ repos: [repo] })
 }
 
 export function frame(
@@ -74,7 +92,11 @@ export function frame(
   now = NOW,
   agentSignInRow?: React.ReactNode
 ) {
-  return defineFixture({ width: 760, render: () => sheet(value, error, now, agentSignInRow) })
+  return defineFixture({
+    width: 760,
+    setup: () => seedFixtureRepo(),
+    render: () => sheet(value, error, now, agentSignInRow)
+  })
 }
 
 export const CLOUD_LOG = '[orca-cloud] checking-entitlement\n[orca-cloud] provisioning'

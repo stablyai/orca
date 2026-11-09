@@ -6,6 +6,7 @@ import {
 import { NativeChatResumeOccurrenceModal } from './NativeChatResumeOnRestartModal'
 import { useNativeChatRestartOfferEnabled } from './native-chat-restart-offer-gate'
 import { useNativeChatRestartRuntimes } from './native-chat-restart-runtimes'
+import { runtimeEnvironmentDisplayName } from '../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 
 export function NativeChatResumeOnRestartModal(): React.JSX.Element {
   const enabled = useNativeChatRestartOfferEnabled()
@@ -17,7 +18,7 @@ export function NativeChatResumeOnRestartModal(): React.JSX.Element {
         <NativeChatResumeRuntimeModal
           key={environment.id}
           store={store}
-          machineName={environment.name}
+          machineName={runtimeEnvironmentDisplayName(environment)}
           offerEnabled
         />
       ))}
