@@ -8722,10 +8722,7 @@
           "speechGpuLabel": "GPU 사용",
           "speechGpuDescription": "그래픽 카드가 작동하면 그래픽 카드에서, 실패하면 CPU에서 음성을 인식합니다. 받아쓰기 중 컴퓨터가 멈추거나 다시 시작되면 끄세요.",
           "updateToFasterVersion": "더 빠른 버전으로 업데이트 ({{value0}} MB)",
-          "2d9b81c687": "모델 선택",
-          "6ffecf36fd": "음성 받아쓰기 활성화",
-          "c5ea32143e": "음성 모델",
-          "342f309724": "받아쓰기 모드"
+          "c5ea32143e": "음성 모델"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "{{value0}} 제거",

@@ -9289,10 +9289,7 @@
           "speechGpuLabel": "Utiliser le GPU",
           "speechGpuDescription": "Reconnaît la parole sur la carte graphique quand elle fonctionne, et sur le processeur en cas d’échec. Désactivez-le si la dictée fige ou redémarre votre ordinateur.",
           "updateToFasterVersion": "Passer à la version plus rapide ({{value0}} Mo)",
-          "2d9b81c687": "Sélectionner un modèle",
-          "6ffecf36fd": "Activer la dictée vocale",
-          "c5ea32143e": "Modèle vocal",
-          "342f309724": "Mode de dictée"
+          "c5ea32143e": "Modèle vocal"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Supprimer {{value0}}",

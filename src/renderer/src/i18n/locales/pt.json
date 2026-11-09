@@ -6468,10 +6468,7 @@
           "speechGpuLabel": "Usar GPU",
           "speechGpuDescription": "Reconhece a fala na placa de vídeo quando ela funciona e na CPU quando falha. Desative se o ditado travar ou reiniciar o computador.",
           "updateToFasterVersion": "Atualizar para a versão mais rápida ({{value0}} MB)",
-          "2d9b81c687": "Selecionar Modelo",
-          "6ffecf36fd": "Ativar Ditado por Voz",
-          "c5ea32143e": "Modelo de Voz",
-          "342f309724": "Modo de Ditado"
+          "c5ea32143e": "Modelo de Voz"
         },
         "NotificationsPane": {
           "2772d2f257": "Ignora notificações quando a worktree que as acionou já está visível.",

@@ -9000,10 +9000,7 @@
           "speechGpuLabel": "Usar GPU",
           "speechGpuDescription": "Reconoce la voz en la tarjeta gráfica cuando funciona y en la CPU cuando falla. Desactívelo si el dictado congela o reinicia su equipo.",
           "updateToFasterVersion": "Actualizar a la versión más rápida ({{value0}} MB)",
-          "2d9b81c687": "Seleccionar modelo",
-          "6ffecf36fd": "Habilitar dictado de voz",
-          "c5ea32143e": "Modelo de voz",
-          "342f309724": "Modo de dictado"
+          "c5ea32143e": "Modelo de voz"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Quitar {{value0}}",
