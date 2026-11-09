@@ -9,7 +9,8 @@ import { parseLaunchRoute } from '../navigation/LaunchRoute';
 import { ShellRoute, shellRouterParams } from '../navigation/ShellRoute';
 import { getNumber, KEY_HOME_FONT_SCALE } from '../settings/SettingsStore';
 import { removeDesktop } from '../storage/HostRemoval';
-import { listHosts, HostMeta } from '../storage/HostStore';
+import { listHosts, HostMeta, updateHostMachine } from '../storage/HostStore';
+import { HostMachineDescriptor, hostMachineLine, readHostMachineDescriptor } from '../storage/HostMachine';
 import { SpikeRpcClient, RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
 import { SessionPhase } from '../transport/HostSession';
 import { DesktopConnectionLease, retainDesktopConnection, refreshDesktopConnection } from '../transport/DesktopConnections';
@@ -20,7 +21,6 @@ import { AgentActivityWrites } from '../home/AgentActivityWrites';
 import { AgentActions } from '../home/AgentActions';
 import { AgentsTab } from '../home/AgentsTab';
 import { DesktopActions } from '../home/DesktopActions';
-import { DesktopMachine, readDesktopMachine } from '../home/DesktopMachine';
 import { endpointLabel } from '../diagnostics/ConnectionDiagnostics';
 import { appendLog, LOG_LEVEL_INFO } from '../diagnostics/ConnectionLogStore';
 import { HomeUsageCard, HomeUsageWindow, HomeAutomation, HomeAutomationRun, readHomeUsage, readHomeAutomations,
@@ -90,6 +90,7 @@ interface TabSpec {
 interface HomeSectionHeading { title: string; aside: string; first: boolean; }
 
 interface AgentCatalog { worktrees: HomeWorktree[]; entries: HomeAgentEntry[]; at: number; }
+interface LiveDesktopMachine { pairedAt: number; endpoint: string; descriptor: HostMachineDescriptor; }
 
 interface HostRuntime {
   lease: DesktopConnectionLease;
@@ -144,7 +145,7 @@ struct Home {
   @State agentRows: AgentListRow[] = [];
   @State agentDesktops: AgentDesktop[] = [];
   @State summaries: Record<string, string> = {};
-  @State desktopMachines: Record<string, DesktopMachine> = {};
+  @State desktopMachines: Record<string, LiveDesktopMachine> = {};
   @State needsYouByDesktop: Record<string, number> = {};
   @State loadError: string = '';
   @State tabHostPicker: string = '';
@@ -533,17 +534,23 @@ struct Home {
   }
 
   private fetchDesktopStatus(client: SpikeRpcClient, hostId: string, epoch: number): void {
+    let paired = this.runtimes.get(hostId)?.lease.connection.getPairedMeta();
     client.request('status.get', null, 8000).then((response: RpcResponse): void => {
       if (epoch !== this.epoch || this.runtimes.get(hostId)?.client !== client) { return; }
       let allowed = false;
-      if (response instanceof RpcSuccess) {
+      if (paired && response instanceof RpcSuccess) {
         try {
           let value = JSON.parse(response.result) as Record<string, Object>;
           let caps = value['capabilities'];
           allowed = Array.isArray(caps) && (caps as Array<Object>).includes('accounts.codex-reset-credit.v1');
+          let descriptor = readHostMachineDescriptor(value);
           let machines = withoutDesktop(this.desktopMachines, hostId);
-          machines[hostId] = readDesktopMachine(value);
+          machines[hostId] = { pairedAt: paired.lastConnected, endpoint: paired.endpoint, descriptor: descriptor };
           this.desktopMachines = machines;
+          let machineName = value['machineName'];
+          if (descriptor.hostPlatform || descriptor.hostMachine || (typeof machineName === 'string' && machineName.trim())) {
+            updateHostMachine(getContext(this), paired, descriptor).catch(() => {});
+          }
         } catch (e) {}
       }
       let next: Record<string, boolean> = {};
@@ -1037,7 +1044,7 @@ struct Home {
           .height(30)
           .borderRadius(10)
           .backgroundColor(this.pal().bgRaised)
-        Image(this.desktopIcon(host.id)).supportSvg2(true)
+        Image(this.desktopIcon(host)).supportSvg2(true)
           .width(17).height(17)
           .colorFilter(lucideColorFilter(this.pal().textPrimary))
         Circle({ width: 14, height: 14 })
@@ -1062,8 +1069,8 @@ struct Home {
             .fontFamily('Geist').fontSize(14)
             .fontColor(this.hostPhases[host.id] === 'auth-failed' ? this.pal().statusRed : this.pal().textMuted)
             .maxLines(1)
-          if (this.desktopMachines[host.id]?.line) {
-            Text(` · ${this.desktopMachines[host.id].line}`).fontFamily('Geist').fontSize(14).fontColor(this.pal().textSecondary)
+          if (this.desktopMachineLine(host)) {
+            Text(` · ${this.desktopMachineLine(host)}`).fontFamily('Geist').fontSize(14).fontColor(this.pal().textSecondary)
               .maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis }).layoutWeight(1)
           }
         }
@@ -1102,8 +1109,17 @@ struct Home {
     }))
   }
 
-  private desktopIcon(hostId: string): Resource {
-    let kind = this.desktopMachines[hostId]?.kind;
+  private desktopMachine(host: HostMeta): HostMachineDescriptor {
+    let live = this.desktopMachines[host.id];
+    return live?.pairedAt === host.lastConnected && live.endpoint === host.endpoint ? live.descriptor : host;
+  }
+
+  private desktopMachineLine(host: HostMeta): string {
+    return hostMachineLine(this.desktopMachine(host));
+  }
+
+  private desktopIcon(host: HostMeta): Resource {
+    let kind = this.desktopMachine(host).hostMachine?.kind;
     if (kind === 'laptop') { return $r('app.media.lucide_laptop'); }
     if (kind === 'server') { return $r('app.media.lucide_server'); }
     return $r('app.media.lucide_monitor');

@@ -112,6 +112,7 @@ export type BridgeNativePage = 'edit-host' | 'connection-log';
 interface BridgeInitHostWire {
   personalName?: string;
   lastKnownMachineName?: string;
+  lastKnownHostPlatform?: string;
   id: string;
   name: string;
   endpoint: string;
@@ -1322,7 +1323,8 @@ export class BridgeHost {
       endpoint: this.meta.endpoint,
       lastConnected: this.meta.lastConnected,
       personalName: this.meta.personalName || undefined,
-      lastKnownMachineName: this.meta.machineName || undefined
+      lastKnownMachineName: this.meta.machineName || undefined,
+      lastKnownHostPlatform: this.meta.hostPlatform
     };
     // pageStorageEntriesForInit: omit oversize values (they are unwritable), cap entries.
     let storage: Record<string, string> = {};

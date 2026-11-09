@@ -14,6 +14,7 @@ import { RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
 import { parsePairingOffer, PairingOffer } from '../transport/E2eeV2Session';
 import { RelayMove } from '../transport/RelayProtocol';
 import { hostIdFor, hostRemovalTimestamp, hostPairingTimestamp, saveHost, clearHostPairingJournal, HostMeta, PairingJournal } from '../storage/HostStore';
+import { readHostMachineDescriptor } from '../storage/HostMachine';
 import { randomBytes, toHex } from '../transport/crypto/Bytes';
 
 const TICKET_EXCHANGE_CAPABILITY = 'pairing.ticket-exchange.v1';
@@ -302,6 +303,10 @@ struct PairScan {
 
       let meta: HostMeta = { id: hostId, name: hostName, endpoint: endpoint,
         publicKeyB64: offer.publicKeyB64, lastConnected: Date.now() };
+      if (status) {
+        let descriptor = readHostMachineDescriptor(status as Record<string, Object>);
+        meta.hostPlatform = descriptor.hostPlatform; meta.hostMachine = descriptor.hostMachine;
+      }
       let prepared = await prepareRelayPairing(context, journal, meta, client, isActive);
       if (this.disposed) { return; }
       if (this.timedOut) { throw new Error('Pairing timed out'); }

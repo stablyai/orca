@@ -7,13 +7,14 @@ import { util } from '@kit.ArkTS';
 import { sha256 } from '../transport/crypto/Sha256';
 import { utf8Decode, base64DecodeCanonical } from '../transport/crypto/Bytes';
 import { DeviceRowStore } from './DeviceRowStore';
+import { HostMachineDescriptor, readHostMachineDescriptor } from './HostMachine';
 
 /**
  * Paired-host catalog: non-secret metadata in preferences, the device token in the
  * Asset Store (on-device keychain equivalent, mirroring upstream pairing-keychain).
  */
 
-export interface HostMeta {
+export interface HostMeta extends HostMachineDescriptor {
   id: string; // deterministic: first 16 hex chars of sha256(publicKeyB64)
   name: string; // personal override, desktop name, or endpoint
   personalName?: string;
@@ -83,6 +84,8 @@ function parseHosts(text: string): HostMeta[] {
     };
     if (typeof item['personalName'] === 'string') { meta.personalName = item['personalName'] as string; }
     if (typeof item['machineName'] === 'string') { meta.machineName = item['machineName'] as string; }
+    let descriptor = readHostMachineDescriptor(item);
+    meta.hostPlatform = descriptor.hostPlatform; meta.hostMachine = descriptor.hostMachine;
     if (item['relay'] !== undefined) {
       try { meta.relay = readRelayEndpoint(item['relay'], publicKeyB64); } catch (e) { }
     }
@@ -295,6 +298,19 @@ export function updateHostNameAndEndpoint(context: common.Context, hostId: strin
     if (!host) { throw new Error('Desktop was removed'); }
     let machineName = host.machineName ?? (!host.personalName ? host.name : '');
     host.machineName = machineName; host.personalName = name; host.name = name || machineName || address; host.endpoint = address;
+    await writeHostList(context, hosts);
+  });
+}
+
+export function updateHostMachine(context: common.Context, paired: HostMeta, descriptor: HostMachineDescriptor): Promise<void> {
+  return mutateHost(async (): Promise<void> => {
+    let hosts = await readHostList(context);
+    let host = hosts.find((item: HostMeta): boolean => item.id === paired.id);
+    // A status from a replaced pairing or edited address cannot write to its successor.
+    if (!host || host.lastConnected !== paired.lastConnected || host.endpoint !== paired.endpoint) { return; }
+    if (host.hostPlatform === descriptor.hostPlatform && host.hostMachine?.kind === descriptor.hostMachine?.kind
+      && host.hostMachine?.model === descriptor.hostMachine?.model) { return; }
+    host.hostPlatform = descriptor.hostPlatform; host.hostMachine = descriptor.hostMachine;
     await writeHostList(context, hosts);
   });
 }

@@ -2,6 +2,11 @@ const assert = require('node:assert/strict')
 const { test } = require('node:test')
 const { createHash } = require('node:crypto')
 const { loadArkts, util } = require('./arkts-source.cjs')
+const { readHostMachineDescriptor } = loadArkts(
+  'storage/HostMachine.ets',
+  ['readHostMachineDescriptor'],
+  { upstream: require('../../entry/src/main/ets/vendor/host-machine.js') }
+)
 
 function hostStorage() {
   let now = 1800000000000
@@ -133,6 +138,8 @@ function hostStorage() {
       'getDeviceToken',
       'getRelayCredential',
       'updateRelayCredential',
+      'updateHostMachine',
+      'updateHostNameAndEndpoint',
       'hostRemovalTimestamp',
       'hostPairingTimestamp',
       'readHostPairingJournal',
@@ -149,6 +156,7 @@ function hostStorage() {
       asset,
       preferences,
       DeviceRowStore,
+      readHostMachineDescriptor,
       Date: clock
     }
   )
@@ -440,6 +448,33 @@ test('a direct pairing started before removal cannot restore the removed desktop
   )
   assert.deepEqual(Array.from(await host.listHosts({})), [])
   assert.equal(await host.getDeviceToken({}, meta.id), null)
+})
+
+test('desktop machine details survive a host-list reload and stale status cannot cross a pairing', async () => {
+  const { host, meta, advance } = hostStorage()
+  const first = { ...meta, lastConnected: advance() }
+  await host.saveHost({}, first, 'first-device-token', undefined, first.lastConnected)
+  await host.updateHostNameAndEndpoint({}, first.id, 'My desktop', first.endpoint)
+  await host.updateHostMachine({}, first, {
+    hostPlatform: 'darwin',
+    hostMachine: { kind: 'desktop', model: 'Mac mini' }
+  })
+  const [held] = await host.listHosts({})
+  assert.equal(held.name, 'My desktop')
+  assert.equal(held.hostPlatform, 'darwin')
+  assert.equal(held.hostMachine.kind, 'desktop')
+  assert.equal(held.hostMachine.model, 'Mac mini')
+
+  const second = { ...meta, lastConnected: advance(), hostPlatform: 'linux' }
+  await host.saveHost({}, second, 'second-device-token', undefined, second.lastConnected)
+  await host.updateHostMachine({}, first, {
+    hostPlatform: 'darwin',
+    hostMachine: { kind: 'laptop', model: 'MacBook Pro' }
+  })
+  const [repaired] = await host.listHosts({})
+  assert.equal(repaired.name, 'My desktop')
+  assert.equal(repaired.hostPlatform, 'linux')
+  assert.equal(repaired.hostMachine, undefined)
 })
 
 test('a late relay credential writer cannot overwrite credentials from a newer pairing', async () => {

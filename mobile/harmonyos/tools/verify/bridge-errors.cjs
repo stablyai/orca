@@ -35,7 +35,7 @@ function createBridge(peer, client, BridgeHost = bridgeClass(peer)) {
     client,
     controller,
     manifest,
-    { id: hostId, name: 'test', endpoint: 'ws://test' },
+    { id: hostId, name: 'test', endpoint: 'ws://test', hostPlatform: 'darwin' },
     `/h/${hostId}`
   )
   bridge.onPushChannelReady()
@@ -115,6 +115,7 @@ test('a cold offline document restores its live stream after authentication and 
   const initial = frames.find((frame) => frame.type === 'init')
   assert.equal(initial.connection.state, 'reconnecting')
   assert.equal(initial.connection.lastConnectedAt, null)
+  assert.equal(initial.host.lastKnownHostPlatform, 'darwin')
   post(bridge, { type: 'subscribe', id: 'catalog', method: 'session.tabs.subscribeAll' })
   post(bridge, { id: 'write', method: 'worktree.create', params: { name: 'offline draft' } })
   assert.equal(frames.find((frame) => frame.id === 'write').error.isRpcDeliveryUnknown, false)

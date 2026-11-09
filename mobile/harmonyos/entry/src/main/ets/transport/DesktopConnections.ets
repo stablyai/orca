@@ -217,6 +217,7 @@ export class DesktopConnection {
       return;
     }
     meta.name = next.name; meta.machineName = next.machineName; meta.personalName = next.personalName;
+    meta.hostPlatform = next.hostPlatform; meta.hostMachine = next.hostMachine;
   }
 
   private replaceTransport(): void {
