@@ -213,6 +213,7 @@ export function useMobileSessionLifecycle(scope: MobileSessionTabReconciliationM
   }, [connState, scheduleDelayedAction, subscribeToTerminal, terminalResume, unsubscribeTerminal])
   return {
     accessoryPreferencesReady: customKeysLoaded && accessoryLayoutLoaded,
+    visibleCustomKeys: customKeys.filter((key) => key.visible !== false),
     handleSmartRailChange,
     pendingForegroundRecoveryRef
   }
