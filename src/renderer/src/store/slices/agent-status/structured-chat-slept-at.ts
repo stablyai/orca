@@ -10,7 +10,6 @@ export type StructuredChatSleptAtByPaneKey = Readonly<Record<string, number | nu
 
 export type StructuredChatSleptAtSlice = {
   structuredChatSleptAtByPaneKey: StructuredChatSleptAtByPaneKey
-  setStructuredChatSleptAt: (paneKey: string, sleptAt: number | null | undefined) => void
 }
 
 const EMPTY_SLEPT_CHATS: StructuredChatSleptAtByPaneKey = Object.freeze({})
@@ -71,13 +70,6 @@ export const createStructuredChatSleptAtSlice: StateCreator<
   [],
   [],
   StructuredChatSleptAtSlice
-> = (set) => ({
-  structuredChatSleptAtByPaneKey: {},
-  setStructuredChatSleptAt: (paneKey, sleptAt) =>
-    set((state) => {
-      const next = withStructuredChatSleptAt(state.structuredChatSleptAtByPaneKey, paneKey, sleptAt)
-      return next === state.structuredChatSleptAtByPaneKey
-        ? state
-        : { structuredChatSleptAtByPaneKey: next }
-    })
+> = () => ({
+  structuredChatSleptAtByPaneKey: {}
 })

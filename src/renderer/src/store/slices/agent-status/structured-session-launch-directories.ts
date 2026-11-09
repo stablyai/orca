@@ -10,13 +10,6 @@ export type StructuredSessionLaunchDirectory = {
 /** Mirror host-pinned chat directories; absent uses workspace resolution except floating chats, which remain unknown until pinned. */
 export type StructuredSessionLaunchDirectorySlice = {
   structuredSessionLaunchDirectoryByTabId: Record<string, StructuredSessionLaunchDirectory>
-  setStructuredSessionLaunchDirectory: (
-    tabId: string,
-    sessionId: string,
-    launchDirectory: string | undefined
-  ) => void
-  /** Only drops the entry while it still belongs to `sessionId`. */
-  clearStructuredSessionLaunchDirectory: (tabId: string, sessionId: string) => void
 }
 
 type LaunchDirectoriesByTabId = Record<string, StructuredSessionLaunchDirectory>
@@ -50,45 +43,11 @@ export function withoutStructuredSessionLaunchDirectory(
   return byTabId[tabId]?.sessionId === sessionId ? withoutTab(byTabId, tabId) : byTabId
 }
 
-function launchDirectoriesPatch(
-  state: AppState,
-  next: LaunchDirectoriesByTabId
-): Partial<AppState> | AppState {
-  return next === state.structuredSessionLaunchDirectoryByTabId
-    ? state
-    : { structuredSessionLaunchDirectoryByTabId: next }
-}
-
 export const createStructuredSessionLaunchDirectorySlice: StateCreator<
   AppState,
   [],
   [],
   StructuredSessionLaunchDirectorySlice
-> = (set) => ({
-  structuredSessionLaunchDirectoryByTabId: {},
-  setStructuredSessionLaunchDirectory: (tabId, sessionId, launchDirectory) => {
-    set((state) =>
-      launchDirectoriesPatch(
-        state,
-        withStructuredSessionLaunchDirectory(
-          state.structuredSessionLaunchDirectoryByTabId,
-          tabId,
-          sessionId,
-          launchDirectory
-        )
-      )
-    )
-  },
-  clearStructuredSessionLaunchDirectory: (tabId, sessionId) => {
-    set((state) =>
-      launchDirectoriesPatch(
-        state,
-        withoutStructuredSessionLaunchDirectory(
-          state.structuredSessionLaunchDirectoryByTabId,
-          tabId,
-          sessionId
-        )
-      )
-    )
-  }
+> = () => ({
+  structuredSessionLaunchDirectoryByTabId: {}
 })

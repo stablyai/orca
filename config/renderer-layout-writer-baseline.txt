@@ -45,7 +45,6 @@
 1 src/renderer/src/runtime/web-session-tabs-sync/inventory/web-runtime-session-snapshot.ts
 3 src/renderer/src/runtime/web-session-tabs-sync/placement/web-session-client-owned-tab-placement.ts
 2 src/renderer/src/runtime/web-session-tabs-sync/session-tabs-inventory-absence.ts
-7 src/renderer/src/store/seam-record-fields.ts # names the transition seam's tracked fields once; no layout write
 10 src/renderer/src/store/slices/browser/cleanup/browser-close-actions.ts
 2 src/renderer/src/store/slices/browser/create-browser-slice.ts
 1 src/renderer/src/store/slices/browser/hydration/browser-hydration-state.ts
