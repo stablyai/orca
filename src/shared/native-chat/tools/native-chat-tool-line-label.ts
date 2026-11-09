@@ -1,11 +1,7 @@
 import { nativeChatCommandLanguage } from '../native-chat-command-language'
 import { isNativeChatFileCountPath } from './native-chat-edit-patch-files'
 import { nativeChatToolCategory } from './native-chat-tool-icon'
-import {
-  nativeChatFullCommand,
-  nativeChatPlainCommandInput,
-  nativeChatToolInputText
-} from './native-chat-tool-input-text'
+import { nativeChatFullCommand, nativeChatToolInputText } from './native-chat-tool-input-text'
 import { createToolInputDisplay, summarizeToolInput } from './native-chat-tool-summary'
 import type { NativeChatToolCallBlock, NativeChatToolResultBlock } from '../native-chat-types'
 
@@ -101,10 +97,7 @@ export function nativeChatToolLineLabel(
     title = fullCommand ?? target
     if (fullCommand !== null) {
       commandLanguage = nativeChatCommandLanguage(call.name, call.input)
-      const plainCommand = nativeChatPlainCommandInput(call.input)
-      if (plainCommand?.trim() === fullCommand) {
-        commandDetail = plainCommand === target ? null : plainCommand
-      }
+      commandDetail = fullCommand === target ? null : fullCommand
     }
     if (running) {
       verb = 'running'

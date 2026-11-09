@@ -40,7 +40,7 @@ export function nativeChatToolLineView(
   // An edit that has not landed has no output yet, but the change it proposes is worth opening.
   const hasDetail =
     body !== undefined ||
-    label?.commandDetail != null ||
+    label?.fullCommand != null ||
     results.length > 0 ||
     (call !== undefined && diffFromToolCall(call.name, call.input) !== null)
   const resultPreview = call ? '' : (body?.output.split('\n')[0]?.slice(0, 80) ?? '')
