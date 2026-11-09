@@ -60,6 +60,8 @@ test('adopts a recipe-provisioned SSH root without creating a linked worktree', 
       timeout: 240_000
     })
 
+    // Why: the VM's primary checkout is listed (named after its branch) as soon as its project is
+    // set up, while the environment checks still run; only adoption stamps the checkout mode.
     const findAdopted = () =>
       orcaPage.evaluate(
         ({ sourceRepoId, workspaceName }) =>
@@ -67,7 +69,9 @@ test('adopts a recipe-provisioned SSH root without creating a linked worktree', 
             .flat()
             .find(
               (worktree) =>
-                worktree.displayName === workspaceName && worktree.repoId !== sourceRepoId
+                worktree.displayName === workspaceName &&
+                worktree.repoId !== sourceRepoId &&
+                worktree.ephemeralVmCheckoutMode === 'provisioned-root'
             ) ?? null,
         { sourceRepoId, workspaceName }
       )
@@ -211,6 +215,13 @@ ${docker} rm -f ${quotePosixShell(target.containerName)} >/dev/null
   execDockerSshHostTargetCommand(
     target,
     `chown -R root:root ${quotePosixShell(DOCKER_SSH_HOST_REMOTE_REPO_PATH)}`
+  )
+  // Why: VM creates run the environment checks first, and a VM that cannot fetch or push its
+  // remote pauses the create. Give the VM a remote it can reach so the create proceeds unattended.
+  const vmOrigin = '/tmp/provisioned-root-origin.git'
+  execDockerSshHostTargetCommand(
+    target,
+    `git init --bare -q ${quotePosixShell(vmOrigin)} && git -C ${quotePosixShell(DOCKER_SSH_HOST_REMOTE_REPO_PATH)} remote set-url origin ${quotePosixShell(vmOrigin)}`
   )
   return expectedRefHead
 }
