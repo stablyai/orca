@@ -1,4 +1,7 @@
-import { captureCloudWorkspacesBeforeSleep } from '../../../hosted-sandbox/cloud-offline-service'
+import {
+  captureCloudWorkspacesBeforeSleep,
+  failQueuedCloudPrompts
+} from '../../../hosted-sandbox/cloud-offline-service'
 import { ipcMain } from 'electron'
 import type { WorkspaceSleepRequest } from '../../../../shared/workspace-sleep'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
@@ -20,7 +23,10 @@ function isRestoredPane(value: unknown): value is RestoredPane {
 export function registerWorktreeSleepHandlers(context: WorktreeIpcContext): void {
   ipcMain.handle('worktrees:sleep', async (_event, request: WorkspaceSleepRequest) => {
     // Orca Cloud: read terminals, git state and chats into the offline cache while they are up.
-    await captureCloudWorkspacesBeforeSleep(request.targets.map((target) => target.worktreeId))
+    const workspaceIds = request.targets.map((target) => target.worktreeId)
+    await captureCloudWorkspacesBeforeSleep(workspaceIds)
+    // A Sleep the person asked for wins over prompts still waiting to wake the VM.
+    failQueuedCloudPrompts(workspaceIds, 'The workspace was put to sleep before this was sent.')
     return context.runtime.sleepWorkspaces({
       targets: request.targets,
       markChatsAsleep: request.markChatsAsleep

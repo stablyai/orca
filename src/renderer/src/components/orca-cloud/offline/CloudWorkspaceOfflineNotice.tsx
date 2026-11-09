@@ -28,6 +28,16 @@ export function CloudWorkspaceOfflineNotice({
 }: {
   worktreeId: string | null
 }): React.JSX.Element | null {
+  // Keyed: switching workspaces starts from empty state, so one workspace's copy or composer
+  // never shows (or sends) under another.
+  return worktreeId ? <CloudWorkspaceOfflineFor key={worktreeId} worktreeId={worktreeId} /> : null
+}
+
+function CloudWorkspaceOfflineFor({
+  worktreeId
+}: {
+  worktreeId: string
+}): React.JSX.Element | null {
   const t = useTranslate()
   const [isCloud, setIsCloud] = useState(false)
   const [snapshot, setSnapshot] = useState<CloudOfflineSnapshot | null>(null)
@@ -37,10 +47,7 @@ export function CloudWorkspaceOfflineNotice({
 
   useEffect(() => {
     let live = true
-    setIsCloud(false)
-    if (worktreeId) {
-      void knownCloudWorkspaceIds().then((ids) => live && setIsCloud(ids.has(worktreeId)))
-    }
+    void knownCloudWorkspaceIds().then((ids) => live && setIsCloud(ids.has(worktreeId)))
     return () => {
       live = false
     }
@@ -48,20 +55,21 @@ export function CloudWorkspaceOfflineNotice({
 
   const refresh = useCallback(async () => {
     const api = window.api?.orcaCloudOffline
-    if (!api || !worktreeId) {
+    if (!api) {
       return
     }
     const [next, prompts] = await Promise.all([
       api.getSnapshot({ workspaceId: worktreeId }),
       api.listQueuedPrompts({ workspaceId: worktreeId })
     ])
-    setSnapshot(next)
-    setQueued(prompts)
+    // Only answers about this workspace; anything else is dropped.
+    setSnapshot(next && next.workspaceId === worktreeId ? next : null)
+    setQueued(prompts.filter((prompt) => prompt.workspaceId === worktreeId))
     setNow(Date.now())
   }, [worktreeId])
 
   useEffect(() => {
-    if (!isCloud || !worktreeId) {
+    if (!isCloud) {
       return
     }
     void refresh()
@@ -89,7 +97,7 @@ export function CloudWorkspaceOfflineNotice({
   }, [isCloud, worktreeId, refresh])
 
   // Asleep, its panes are gone (restored ones are dead); the cached copy replaces them.
-  if (!worktreeId || !isCloud || !snapshot || !snapshot.asleep) {
+  if (!isCloud || !snapshot || !snapshot.asleep || snapshot.workspaceId !== worktreeId) {
     return null
   }
   const wake = (): void => {
