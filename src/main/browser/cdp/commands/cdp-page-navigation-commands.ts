@@ -1,8 +1,8 @@
 import type { WebSocket } from 'ws'
 import type { WebContents } from 'electron'
 import type { CdpClientResponseWriter } from '../transport/cdp-client-response-writer'
-import type { CdpSyntheticSessionRegistry } from './cdp-synthetic-session-registry'
-import type { CdpDebuggerChannel } from './cdp-debugger-channel'
+import type { CdpSyntheticSessionRegistry } from '../transport/cdp-synthetic-session-registry'
+import type { CdpDebuggerChannel } from '../debugger/cdp-debugger-channel'
 
 const LIFECYCLE_PRIMING_TIMEOUT_MS = 1_000
 

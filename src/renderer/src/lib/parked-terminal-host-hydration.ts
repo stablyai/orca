@@ -1,4 +1,4 @@
-import { getConnectionIdFromState } from './connection-owner-resolution'
+import { getConnectionIdFromState } from './workspace/ownership/connection-owner-resolution'
 import type { AppState } from '@/store/types'
 
 type ParkedPaneHostState = Parameters<typeof getConnectionIdFromState>[0] &

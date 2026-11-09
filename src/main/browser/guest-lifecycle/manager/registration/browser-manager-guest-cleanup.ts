@@ -1,11 +1,6 @@
 import { BrowserManagerGuestNavigationPolicy } from '../navigation/browser-manager-guest-navigation-policy'
 
 export abstract class BrowserManagerGuestCleanup extends BrowserManagerGuestNavigationPolicy {
-  protected retireStaleGuestWebContents(previousWebContentsId: number): void {
-    // Retire the old guest ID so stale callbacks cannot resolve it to the replacement page.
-    this.cleanupGuestPolicyAttachment(previousWebContentsId)
-  }
-
   protected cleanupGuestPolicyAttachment(guestWebContentsId: number): void {
     const browserTabId = this.tabIdByWebContentsId.get(guestWebContentsId)
     const isPrimaryGuest = browserTabId !== undefined
@@ -37,6 +32,7 @@ export abstract class BrowserManagerGuestCleanup extends BrowserManagerGuestNavi
     this.pendingLoadFailuresByGuestId.delete(guestWebContentsId)
     this.loadErrorsByGuestId.delete(guestWebContentsId)
     this.clearedLoadErrorsByGuestId.delete(guestWebContentsId)
+    this.remoteTabFaviconUrlByGuestId.delete(guestWebContentsId)
     this.pendingPermissionEventsByGuestId.delete(guestWebContentsId)
     this.pendingPopupEventsByGuestId.delete(guestWebContentsId)
     this.cancelPendingDownloadsForGuest(guestWebContentsId)

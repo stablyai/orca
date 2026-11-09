@@ -1,4 +1,7 @@
-import { getRootProjectHeaderOccurrenceKey } from '../drag/root-project-header-drop'
+import {
+  getRootProjectHeaderKey,
+  getRootProjectHeaderOccurrenceKey
+} from '../drag/root-project-header-drop'
 import { estimateRenderRowSize } from './virtual-rows'
 import type { RenderRow } from '../listing/render-row'
 import {
@@ -62,30 +65,6 @@ function findNextHeaderRenderRowIndex(rows: readonly RenderRow[], startIndex: nu
   return rows.length
 }
 
-function findProjectGroupSectionEndIndex(
-  rows: readonly RenderRow[],
-  startIndex: number,
-  depth: number
-): number {
-  for (let index = startIndex; index < rows.length; index++) {
-    const row = rows[index]
-    if (!row) {
-      continue
-    }
-    if (row.type === 'host-header') {
-      return index
-    }
-    if (row.type !== 'header') {
-      continue
-    }
-    const rowDepth = row.projectGroupDepth ?? 0
-    if (rowDepth <= depth || (!row.repo && !row.projectGroup)) {
-      return index
-    }
-  }
-  return rows.length
-}
-
 export function getRepoHeaderSectionEndByKey(args: {
   rows: readonly RenderRow[]
   firstHeaderIndex: number
@@ -130,26 +109,29 @@ export function getProjectGroupHeaderSectionEndByGroupId(args: {
 }): Map<string, number> {
   const rowStarts = getEstimatedRenderRowStarts(args.rows, args.firstHeaderIndex)
   const sectionEndByGroupId = new Map<string, number>()
+  const pendingGroups: { groupId: string; depth: number }[] = []
   for (let index = 0; index < args.rows.length; index++) {
     const row = args.rows[index]
-    const projectGroupHeader =
-      row?.type === 'header' &&
-      !row.repo &&
-      !row.repeated &&
-      row.projectGroup &&
-      typeof row.projectGroup.id === 'string'
-        ? { row, groupId: row.projectGroup.id }
-        : null
-    const groupId = projectGroupHeader?.groupId
-    if (!groupId) {
+    if (row.type !== 'header' && row.type !== 'host-header') {
       continue
     }
-    const depth = projectGroupHeader.row.projectGroupDepth ?? 0
-    const endIndex = findProjectGroupSectionEndIndex(args.rows, index + 1, depth)
-    sectionEndByGroupId.set(
-      groupId,
-      rowStarts[endIndex >= 0 ? endIndex : args.rows.length] ?? rowStarts[args.rows.length] ?? 0
-    )
+    const depth =
+      row.type === 'host-header' || (!row.repo && !row.projectGroup)
+        ? Number.NEGATIVE_INFINITY
+        : (row.projectGroupDepth ?? 0)
+    while (pendingGroups.length > 0) {
+      const pending = pendingGroups.at(-1)
+      if (!pending || pending.depth < depth) {
+        break
+      }
+      pendingGroups.pop()
+      sectionEndByGroupId.set(pending.groupId, rowStarts[index])
+    }
+    if (row.type === 'header' && !row.repo && !row.repeated && row.projectGroup?.id) {
+      const groupId = row.projectGroup.id
+      sectionEndByGroupId.set(groupId, rowStarts[args.rows.length])
+      pendingGroups.push({ groupId, depth: row.projectGroupDepth ?? 0 })
+    }
   }
   return sectionEndByGroupId
 }
@@ -162,15 +144,10 @@ export function getRootProjectHeaderSectionEndByKey(
   const ends = new Map<string, number>()
   let pendingKey: string | undefined
   for (const [index, row] of rows.entries()) {
-    const key =
-      row.type === 'header' && (row.projectGroupDepth ?? 0) === 0
-        ? row.repo
-          ? `repo:${row.repo.id}`
-          : row.projectGroup?.id
-            ? `group:${row.projectGroup.id}`
-            : undefined
-        : undefined
-    if (key || row.type === 'host-header') {
+    const key = row.type === 'header' ? getRootProjectHeaderKey(row) : undefined
+    const closesSection =
+      key || row.type === 'host-header' || (row.type === 'header' && !row.repo && !row.projectGroup)
+    if (closesSection) {
       if (pendingKey) {
         ends.set(pendingKey, rowStarts[index])
       }

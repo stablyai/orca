@@ -106,7 +106,13 @@ export function diffReviewActionMountAdapters(
             moveSelection: () => {},
             // Viewed state stays on the phone here; GitHub-viewed files have their own recordings.
             remoteViewed: () => null,
-            setComposerBody: () => {},
+            noteDraft: {
+              composerBody: '',
+              setComposerBody: () => {},
+              openNewNoteSheet: () => {},
+              openEditComposer: () => {},
+              clearSavedNote: () => {}
+            },
             setActionError: (update) => {
               actionError = typeof update === 'function' ? update(actionError) : update
             },

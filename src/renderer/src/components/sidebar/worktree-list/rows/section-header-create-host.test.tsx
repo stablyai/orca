@@ -103,6 +103,7 @@ function headerContext(): SectionHeaderRowContext {
       repoHeaderSectionEndByRowKey: new Map(),
       projectGroupHeaderSectionEndByGroupId: new Map(),
       rootProjectHeaderKeys: undefined,
+      rootProjectHeaderCountByOccurrenceKey: new Map(),
       rootProjectHeaderSectionEndByKey: new Map()
     },
     projectActions: {

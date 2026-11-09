@@ -75,6 +75,14 @@ export function buildClaudeChildProcessEnv(
   }
   // Only the launch names a chat's scratch folder: an inherited one belongs to another chat.
   stripEnvKeys(env, [NATIVE_CHAT_SCRATCH_DIR_ENV, LEGACY_NATIVE_CHAT_VISUALS_DIR_ENV], platform)
+  // Windows env names are case-insensitive, so a launch key replaces a differently cased inherited twin.
+  if (platform === 'win32') {
+    stripEnvKeys(
+      env,
+      Object.keys(configuredEnv).map((key) => key.toUpperCase()),
+      platform
+    )
+  }
   if (options.scrubConfiguredChildSessionStamps) {
     return stripClaudeChildSessionStamps({ ...env, ...configuredEnv }, platform)
   }

@@ -40,6 +40,9 @@ export type ComposerAsyncModel = {
   setCreateMultiple: React.Dispatch<React.SetStateAction<boolean>>
   advancedOpen: boolean
   setAdvancedOpen: React.Dispatch<React.SetStateAction<boolean>>
+  setupChoiceRevealRequest: number
+  revealSetupChoice: () => void
+  clearSetupChoiceReveal: () => void
   sparseEnabled: boolean
   setSparseEnabled: React.Dispatch<React.SetStateAction<boolean>>
   sparseDirectories: string

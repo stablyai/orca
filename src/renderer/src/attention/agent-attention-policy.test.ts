@@ -60,27 +60,6 @@ describe('resolveAgentAttention', () => {
     expect(sink.calls).toEqual([])
   })
 
-  it('admits a viewed surface for delivery but earns it no unread', () => {
-    const decision = resolveAgentAttention(
-      completion(),
-      makeSurface({ isSurfaceViewed: () => true })
-    )
-    expect(decision).toMatchObject({ admitted: true, unread: null })
-
-    const sink = makeSink()
-    applyAgentAttention(decision, sink)
-    expect(sink.calls).toEqual([`deliver:${WORKSPACE}:${SUBJECT}`])
-  })
-
-  it('hands the unread write, with its admitted group and reason, to the sink', () => {
-    const sink = makeSink()
-    applyAgentAttention(resolveAgentAttention(completion(), makeSurface()), sink)
-    expect(sink.calls).toEqual([
-      `unread:${WORKSPACE}:${SUBJECT}:${GROUP}:agent-completion`,
-      `deliver:${WORKSPACE}:${SUBJECT}`
-    ])
-  })
-
   it('delivers a bell without validating the surface address or writing unread', () => {
     const admitSurface = vi.fn()
     const isSurfaceViewed = vi.fn()

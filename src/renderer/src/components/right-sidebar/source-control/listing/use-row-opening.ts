@@ -4,7 +4,7 @@ import {
   useSourceControlScope
 } from '../panel/worktree-scope'
 import { useCallback, useMemo } from 'react'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { openUncommittedEntry } from './open-uncommitted-entry'
 import { useAppStore } from '@/store'
 import { openFileIndex } from '@/store/slices/editor/tabs/workspace-editor-files'

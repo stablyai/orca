@@ -2,7 +2,8 @@
 import { EventEmitter } from 'node:events'
 import { connect } from 'node:net'
 import { PassThrough } from 'node:stream'
-import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/process-spec'
+import type { ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { PipedProcessSpawner } from '@orca/process-host/process-spec'
 import {
   ORCAD_STDIO_BRIDGE_READY,
   ORCAD_STDIO_BRIDGE_REFUSED,
@@ -78,7 +79,7 @@ export function fakeWslBridgeChildren(): FakeWslBridgeChildren {
     socket.on('close', () => finish(0))
     process.nextTick(() => child.emit('spawn'))
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the WSL channel reads only the streams, exit state, kill and events assigned above.
-    return child as unknown as PipedChildProcess
+    return child as unknown as ChildProcessWithoutNullStreams
   }
   return { spawn, commands, live: () => live, maxLive: () => maxLive }
 }

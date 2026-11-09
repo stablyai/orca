@@ -8,7 +8,7 @@ import {
   chatWorkspaceByTabId,
   structuredChatWorkspacesBySessionId
 } from '../../../lib/structured-chat-tab-index'
-import { resolveWorktreeOperationRoute } from '../../../lib/worktree-operation-route'
+import { resolveWorktreeOperationRoute } from '../../../lib/workspace/ownership/worktree-operation-route'
 
 function workspaceOfDraftScope(
   state: Pick<AppState, 'tabsByWorktree' | 'unifiedTabsByWorktree'>,

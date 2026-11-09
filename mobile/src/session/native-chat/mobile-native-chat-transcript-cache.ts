@@ -1,16 +1,19 @@
 import { setBoundedScopeCacheEntry } from '../../../../src/shared/native-chat/native-chat-scope-cache'
 import type { NativeChatMessage } from '../../../../src/shared/native-chat/native-chat-types'
 import type { NativeChatResumePoint } from '../../../../src/shared/rpc-contract/native-chat-params'
+import { peekStoredChatTranscript } from './mobile-native-chat-transcript-store'
 
 const MAX_CACHED_TRANSCRIPTS = 8
 
-type MobileNativeChatCachedTranscript = {
+export type MobileNativeChatCachedTranscript = {
   messages: NativeChatMessage[]
   hasMore: boolean
   beforeOffset: number | null
+  // Set while the rows are an earlier launch's stored copy that no read in this page has confirmed.
+  savedAt?: number
 }
 
-// Lives as long as the page: the WebView has no durable storage, so a relaunch starts empty.
+// The first layer, for this page's lifetime; the phone's store (mobile-native-chat-transcript-store) is the second.
 export const mobileNativeChatTranscriptCache = new Map<string, MobileNativeChatCachedTranscript>()
 
 export function cacheMobileNativeChatTranscript(
@@ -23,6 +26,25 @@ export function cacheMobileNativeChatTranscript(
     transcript,
     MAX_CACHED_TRANSCRIPTS
   )
+}
+
+/** This page's rows for a chat, else the phone's stored copy once read; undefined when neither is held. */
+export function heldMobileNativeChatTranscript(
+  identity: string
+): MobileNativeChatCachedTranscript | undefined {
+  const cached = mobileNativeChatTranscriptCache.get(identity)
+  if (cached) {
+    return cached
+  }
+  const stored = peekStoredChatTranscript(identity)
+  return stored?.kind === 'terminal'
+    ? {
+        messages: stored.messages,
+        hasMore: stored.hasMore,
+        beforeOffset: stored.beforeOffset,
+        savedAt: stored.savedAt
+      }
+    : undefined
 }
 
 /** Older hosts send rows with no file offset; those get a normal snapshot. */

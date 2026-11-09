@@ -8,7 +8,8 @@ import type {
 } from '../../../../../shared/browser-page-command-target'
 import type { BrowserPageZoomCommand } from '../../../../../shared/browser-page-zoom'
 import { paneChannel } from '../client-hosted-browser-pane-test-rig'
-import type { BrowserChromeShortcutScope, GrabIntent } from '../describe-page/browser-page-types'
+import type { BrowserChromeShortcutScope } from '../describe-page/browser-page-types'
+import type { GrabIntent } from '../../../../../shared/browser/element-grab/browser-grab-types'
 import { useBrowserPageKeyboardShortcuts } from './use-browser-page-keyboard-shortcuts'
 
 // Why: the chords are Cmd on macOS and Ctrl elsewhere, so the platform cannot be left to the runner.

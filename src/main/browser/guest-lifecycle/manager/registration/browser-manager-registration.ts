@@ -64,7 +64,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
         // A staged swap must be able to restore this still-live guest on failure.
         this.tabIdByWebContentsId.delete(previousWebContentsId)
       } else {
-        this.retireStaleGuestWebContents(previousWebContentsId)
+        this.cleanupGuestPolicyAttachment(previousWebContentsId)
       }
       this.viewportPresetByTabId.delete(browserTabId)
       this.viewportScrollStateByTabId.delete(browserTabId)
@@ -196,7 +196,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.attachGuestPolicies(guest)
     const previousWebContentsId = this.webContentsIdByTabId.get(browserPageId)
     if (previousWebContentsId !== undefined && previousWebContentsId !== webContentsId) {
-      this.retireStaleGuestWebContents(previousWebContentsId)
+      this.cleanupGuestPolicyAttachment(previousWebContentsId)
       this.viewportPresetByTabId.delete(browserPageId)
       this.viewportScrollStateByTabId.delete(browserPageId)
     }

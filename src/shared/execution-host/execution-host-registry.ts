@@ -15,7 +15,8 @@ import type { RuntimeEnvironmentSource } from '../remote-runtime/host-catalog/ru
 import type { GlobalSettings } from '../global-settings-types'
 import type { Repo } from '../repo-types'
 import { annotateManagedOrcadExecutionHosts } from './managed-orcad-execution-host'
-import { getSshConnectionHealth } from './execution-host-health'
+import { getSshConnectionHealth, type EphemeralVmHostLifecycle } from './execution-host-health'
+import { applyEphemeralVmHostLifecycles } from './execution-host-vm-lifecycle'
 import type {
   ExecutionHostRegistryEntry,
   RuntimeStatusByEnvironmentId,
@@ -113,6 +114,8 @@ export function buildExecutionHostRegistry(args: {
   hostLabelOverrides?: ReadonlyMap<ExecutionHostId, string>
   /** Defaults to this process's platform, which only the host itself may use. */
   localHostLabel?: string
+  /** VM runtime records by the server they host; their lifecycle outranks transport health. */
+  ephemeralVmHosts?: readonly EphemeralVmHostLifecycle[]
 }): ExecutionHostRegistryEntry[] {
   const hosts = new Map<ExecutionHostId, ExecutionHostRegistryEntry>()
   hosts.set(LOCAL_EXECUTION_HOST_ID, {
@@ -210,6 +213,7 @@ export function buildExecutionHostRegistry(args: {
     runtimeEnvironments: args.runtimeEnvironments ?? [],
     sshConnectionStates: args.sshConnectionStates
   })
+  applyEphemeralVmHostLifecycles(hosts, args.ephemeralVmHosts, args.runtimeStatusByEnvironmentId)
 
   const overrides = args.hostLabelOverrides
   if (!overrides || overrides.size === 0) {

@@ -9,7 +9,7 @@ import { SettingsSectionStack } from '../section-layout/SettingsSectionStack'
 import { matchesSettingsSearch } from '../search/settings-search'
 import { useAppStore } from '../../../store/index'
 import { isMacUserAgent, isWindowsUserAgent } from '@/lib/user-agent-platform'
-import { getManageSessionsSearchEntries } from './terminal-window-setup-search'
+import { getManageSessionsSearchEntries } from './session-management/manage-sessions-search'
 import { getTerminalDefaultShellSearchEntry } from './terminal-default-shell-search'
 import {
   getTerminalAdvancedSearchEntries,

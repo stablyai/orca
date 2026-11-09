@@ -1,5 +1,5 @@
 import {
-  getRootProjectHeaderDragKeys,
+  getRootProjectHeaderKey,
   getRootProjectHeaderOccurrenceKey
 } from '../drag/root-project-header-drop'
 import React from 'react'
@@ -79,7 +79,7 @@ export function renderWorktreeSectionHeaderRow(
   )
   const headerRepo = isRepoHeader
     ? usesRootProjectDrag
-      ? row.repo
+      ? (row.anchorRepo ?? row.repo)
       : getHeaderDragRepo(row)
     : undefined
   const projectIdForHeader = headerRepo?.id
@@ -106,19 +106,14 @@ export function renderWorktreeSectionHeaderRow(
     projectGroupDragIdForHeader !== undefined
       ? headerDrag.projectGroupHeaderBucketByGroupId.get(projectGroupDragIdForHeader)
       : undefined
-  const rootProjectHeaderKey = usesRootProjectDrag
-    ? projectIdForHeader
-      ? `repo:${projectIdForHeader}`
-      : projectGroupDragIdForHeader
-        ? `group:${projectGroupDragIdForHeader}`
-        : undefined
-    : undefined
+  const rootProjectHeaderKey = usesRootProjectDrag ? getRootProjectHeaderKey(row) : undefined
   const rootProjectHeaderCount = rootProjectHeaderKey
-    ? getRootProjectHeaderDragKeys(
-        headerDrag.rootProjectHeaderKeys,
-        rootProjectHeaderKey,
-        row.hostId
-      )?.length
+    ? (headerDrag.rootProjectHeaderCountByOccurrenceKey.get(
+        getRootProjectHeaderOccurrenceKey(rootProjectHeaderKey, row.hostId)
+      ) ??
+      headerDrag.rootProjectHeaderCountByOccurrenceKey.get(
+        getRootProjectHeaderOccurrenceKey(rootProjectHeaderKey)
+      ))
     : undefined
   const isDraggableRepoHeader = Boolean(
     headerDrag.canReorderRepoHeaders &&
