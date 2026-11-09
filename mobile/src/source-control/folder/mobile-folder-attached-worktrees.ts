@@ -6,6 +6,7 @@ import {
   type MobileLineageStores
 } from '../../worktree/mobile-workspace-lineage'
 import { getWorktreeRowIdentity } from '../../worktree/worktree-host-row-identity'
+import { serializeFolderLineage } from './folder-lineage-serialization'
 
 /** What a folder list row shows of a host row. */
 export type FolderListRow = Pick<
@@ -19,24 +20,11 @@ type FolderLineageRow = MobileLineageRow & Pick<Worktree, 'createdAt'>
 const lineageKeys = new WeakMap<Worktree, string>()
 const listRows = new WeakMap<Worktree, FolderListRow>()
 
-/** The fields membership and order depend on; labels and agent state are left out so their churn rebuilds nothing. */
+/** A row's lineage key, serialized once per row object. */
 export function folderLineageKey(row: Worktree): string {
   let key = lineageKeys.get(row)
   if (key === undefined) {
-    key = JSON.stringify([
-      row.worktreeId,
-      row.hostId,
-      row.repoId,
-      row.workspaceKind,
-      row.isArchived,
-      row.parentWorktreeId,
-      row.worktreeInstanceId,
-      row.lineageWorktreeInstanceId,
-      row.parentWorktreeInstanceId,
-      row.crossStoreParent,
-      row.workspaceLineage,
-      row.createdAt
-    ])
+    key = serializeFolderLineage(row)
     lineageKeys.set(row, key)
   }
   return key

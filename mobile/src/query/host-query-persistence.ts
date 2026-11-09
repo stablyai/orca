@@ -204,8 +204,9 @@ export function createHostQueryPersistence(
           if (queryClient.getQueryData(queryKey) === undefined) {
             const { data, dataUpdatedAt } = record.state
             settledAt.set(queryHash, dataUpdatedAt)
-            queryClient.setQueryData(queryKey, data, { updatedAt: dataUpdatedAt })
+            // Marked first: listeners told of this write must already see it as an earlier launch's.
             restored.add(queryHash)
+            queryClient.setQueryData(queryKey, data, { updatedAt: dataUpdatedAt })
           }
           settle()
         })
@@ -252,12 +253,12 @@ export function createHostQueryPersistence(
     if (event.type !== 'updated' || event.action.type !== 'success') {
       return
     }
-    restored.delete(query.queryHash)
     const family = familyOf(query.queryKey)
     const at = query.state.dataUpdatedAt
     if (family === null || at <= (settledAt.get(query.queryHash) ?? 0)) {
       return
     }
+    restored.delete(query.queryHash)
     settledAt.set(query.queryHash, at)
     void persisterFor(family, persist).persistQuery(query)
   })

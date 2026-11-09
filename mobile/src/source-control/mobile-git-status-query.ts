@@ -128,7 +128,9 @@ export async function publishGitStatusSummary(
   hostId: string,
   target: HostQueryTarget,
   read: GitStatusRead,
-  readAt: number
+  readAt: number,
+  /** A read accepted now; otherwise a cached one, which can't tell whether a summary read out started before it. */
+  accepted: boolean
 ): Promise<void> {
   // An earlier launch's copy is unconfirmed; the summary's own read decides.
   if (
@@ -150,8 +152,12 @@ export async function publishGitStatusSummary(
   if (!supersedes()) {
     return
   }
-  // A summary read already out started before this answer; landing later, it would undo it.
-  if (queryClient.getQueryState(queryKey)?.fetchStatus === 'fetching') {
+  if (queryClient.getQueryState(queryKey)?.fetchStatus !== 'idle') {
+    // A cached read leaves a summary read out to answer for itself.
+    if (!accepted) {
+      return
+    }
+    // A summary read out started before this answer; landing later, it would undo it.
     await queryClient.cancelQueries({ queryKey, exact: true }, { silent: true })
   }
   if (supersedes()) {

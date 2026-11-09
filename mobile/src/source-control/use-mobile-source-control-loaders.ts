@@ -112,20 +112,27 @@ export function useMobileSourceControlLoaders(params: Params): MobileSourceContr
   useEffect(() => {
     const statusKey = hostQueryKey(hostId, gitStatusQuery.family, target, NO_INPUT)
     const statusHash = hashKey(statusKey)
-    const publish = () => {
+    const publish = (accepted: boolean) => {
       const state = queryClient.getQueryState<GitStatusRead>(statusKey)
       if (state?.data) {
-        void publishGitStatusSummary(queryClient, hostId, target, state.data, state.dataUpdatedAt)
+        void publishGitStatusSummary(
+          queryClient,
+          hostId,
+          target,
+          state.data,
+          state.dataUpdatedAt,
+          accepted
+        )
       }
     }
-    publish()
+    publish(false)
     return queryClient.getQueryCache().subscribe((event) => {
       if (
         event.type === 'updated' &&
         event.action.type === 'success' &&
         event.query.queryHash === statusHash
       ) {
-        publish()
+        publish(true)
       }
     })
   }, [hostId, queryClient, target])

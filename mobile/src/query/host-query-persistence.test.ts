@@ -2,7 +2,12 @@ import { QueryClient } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrcaQueryStoreBackend } from '../device-store/query-storage'
 import { hostWorktreeCatalogKey, hostWorktreeCatalogQuery } from '../host-screen/host-list-queries'
-import { createHostQueryPersistence, persistedHostQueryKey } from './host-query-persistence'
+import {
+  createHostQueryPersistence,
+  holdsRestoredHostQueryData,
+  persistedHostQueryKey
+} from './host-query-persistence'
+import { hashKey } from '@tanstack/react-query'
 
 vi.mock('react-native', () => ({ AppState: {} }))
 
@@ -118,5 +123,29 @@ describe('createHostQueryPersistence', () => {
     await restoring
 
     expect(relaunched.getQueryData(key)).toBe(live)
+  })
+
+  it("marks restored data as an earlier launch's before anyone hears of it, until a newer answer", async () => {
+    const store = memoryStore('host-a')
+    await storeFromEarlierLaunch(store, [liveRow])
+
+    const relaunched = new QueryClient()
+    const persistence = createHostQueryPersistence(relaunched, store.backend)
+    relaunched.getQueryCache().build(relaunched, {
+      queryKey: key,
+      meta: { persist: hostWorktreeCatalogQuery.persist }
+    })
+    const heard: boolean[] = []
+    relaunched.getQueryCache().subscribe((event) => {
+      if (event.type === 'updated' && event.action.type === 'success') {
+        heard.push(holdsRestoredHostQueryData(relaunched, hashKey(key)))
+      }
+    })
+    const restoring = persistence.restore(firstPaint)
+    await vi.runAllTimersAsync()
+    await restoring
+    relaunched.setQueryData(key, { snapshotId: 'snap-8', worktrees: [liveRow] })
+
+    expect(heard).toEqual([true, false])
   })
 })

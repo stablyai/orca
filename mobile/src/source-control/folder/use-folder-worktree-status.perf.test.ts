@@ -194,10 +194,19 @@ describe.each([
       status: { ...listed.data.status, branch: 'after' }
     }
     const target = { exec: opened.routeHost!, worktree: opened.worktreeId }
-    await act(() => publishGitStatusSummary(queryClient!, 'host-1', target, after, Date.now()))
+    await act(() =>
+      publishGitStatusSummary(queryClient!, 'host-1', target, after, Date.now(), true)
+    )
     // A detailed read older than the summary changes nothing.
     await act(() =>
-      publishGitStatusSummary(queryClient!, 'host-1', target, listed.data!, listed.updatedAt - 1)
+      publishGitStatusSummary(
+        queryClient!,
+        'host-1',
+        target,
+        listed.data!,
+        listed.updatedAt - 1,
+        true
+      )
     )
 
     // Back within three seconds, then well past them with no focus or signal.
@@ -232,7 +241,7 @@ describe.each([
     )
 
     await act(() =>
-      publishGitStatusSummary(queryClient!, 'host-1', target, listed.data!, cachedDetailAt)
+      publishGitStatusSummary(queryClient!, 'host-1', target, listed.data!, cachedDetailAt, true)
     )
     expect(queryClient!.getQueryState(key)?.error).toBe(failure)
   })

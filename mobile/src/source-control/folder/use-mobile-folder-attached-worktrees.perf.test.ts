@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, Fragment } from 'react'
 import { useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -18,6 +18,7 @@ import {
   useMobileFolderAttachedWorktrees,
   type MobileFolderAttachedWorktrees
 } from './use-mobile-folder-attached-worktrees'
+import { MobileFolderWorktreeRow } from './MobileFolderWorktreeRow'
 
 vi.mock('react-native', () => ({ AppState: {} }))
 const gates = vi.hoisted(() => ({ hostCapabilities: [] as string[] }))
@@ -28,7 +29,7 @@ const host = vi.hoisted(() => ({ client: null as unknown }))
 vi.mock('../../transport/connection/host-client-hooks', () => ({
   useHostClient: () => ({ client: host.client, clientId: 'client-1', state: 'connected' })
 }))
-const lineage = vi.hoisted(() => ({ resolutions: 0, keyed: 0, seen: new WeakSet<object>() }))
+const lineage = vi.hoisted(() => ({ resolutions: 0, serialized: 0, rowCommits: 0 }))
 vi.mock('../../worktree/mobile-workspace-lineage', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../worktree/mobile-workspace-lineage')>()
   return {
@@ -41,20 +42,32 @@ vi.mock('../../worktree/mobile-workspace-lineage', async (importOriginal) => {
     }
   }
 })
-vi.mock('./mobile-folder-attached-worktrees', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./mobile-folder-attached-worktrees')>()
+// Runs behind the production key cache, so each call is a row serialized.
+vi.mock('./folder-lineage-serialization', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./folder-lineage-serialization')>()
   return {
-    ...actual,
-    // Counts rows keyed for the first time: the per-row lineage work an update costs.
-    folderLineageKey: (row: Worktree) => {
-      if (!lineage.seen.has(row)) {
-        lineage.seen.add(row)
-        lineage.keyed += 1
-      }
-      return actual.folderLineageKey(row)
+    serializeFolderLineage: (row: Worktree) => {
+      lineage.serialized += 1
+      return actual.serializeFolderLineage(row)
     }
   }
 })
+// Inside the production row's memo boundary: each call is a committed row render.
+vi.mock('../../components/list/ListGroup', () => ({
+  ListRow: () => {
+    lineage.rowCommits += 1
+    return null
+  }
+}))
+vi.mock('./use-folder-worktree-status', () => ({
+  useFolderWorktreeStatus: () => NO_STATUS
+}))
+vi.mock('../../i18n/use-mobile-translation', () => ({
+  useMobileTranslation: () => (_key: string, fallback: string) => fallback
+}))
+const NO_STATUS = vi.hoisted(() => ({ data: undefined, error: null }))
+const REFRESHERS = new Set<() => void>()
+const NOOP = (): void => {}
 
 function row(worktreeId: string, overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -131,10 +144,26 @@ afterEach(async () => {
 let queryClient: QueryClient | null = null
 
 async function mount(read: { current: MobileFolderAttachedWorktrees | null }) {
-  function Harness(): null {
+  function Harness() {
     queryClient = useQueryClient()
-    read.current = useMobileFolderAttachedWorktrees('host-1', 'folder:f-1', true)
-    return null
+    const folder = useMobileFolderAttachedWorktrees('host-1', 'folder:f-1', true)
+    read.current = folder
+    return createElement(
+      Fragment,
+      null,
+      folder.worktrees.map((worktree) =>
+        createElement(MobileFolderWorktreeRow, {
+          key: worktree.worktreeId,
+          hostId: 'host-1',
+          desktopCapabilities: folder.desktopCapabilities,
+          worktree,
+          unreachable: false,
+          subscribed: true,
+          refreshers: REFRESHERS,
+          onOpen: NOOP
+        })
+      )
+    )
   }
   await act(async () => {
     renderer = create(queries.wrap(createElement(Harness)))
@@ -165,7 +194,7 @@ describe.each([
   { h: 750, n: 30 },
   { h: 7_500, n: 300 }
 ])('folder membership over H=$h host rows, N=$n attached', ({ h, n }) => {
-  it('resolves lineage again only for lineage changes, keying only changed rows', async () => {
+  it('resolves lineage only for lineage changes, serializing and committing only changed rows', async () => {
     vi.useFakeTimers({ toFake: ['Date'] })
     const fake = catalogHost(catalog(h, n))
     host.client = fake.client
@@ -176,16 +205,18 @@ describe.each([
     expect(read.current?.worktrees).toHaveLength(n)
     const members = read.current!.worktrees
     lineage.resolutions = 0
-    lineage.keyed = 0
+    lineage.serialized = 0
+    lineage.rowCommits = 0
 
     // Agent attention and terminal counts on a member and an unrelated row, and an unrelated rename.
     await rowsChanged(fake, catalog(h, n, churn))
     expect(lineage.resolutions).toBe(0)
-    expect(lineage.keyed).toBe(3)
+    expect(lineage.serialized).toBe(3)
+    expect(lineage.rowCommits).toBe(0)
     expect(read.current?.worktrees).toBe(members)
 
     // A member renamed: shown at once, without resolving lineage or touching the other members.
-    lineage.keyed = 0
+    lineage.serialized = 0
     await rowsChanged(
       fake,
       catalog(h, n, (rows) => {
@@ -194,7 +225,8 @@ describe.each([
       })
     )
     expect(lineage.resolutions).toBe(0)
-    expect(lineage.keyed).toBe(1)
+    expect(lineage.serialized).toBe(1)
+    expect(lineage.rowCommits).toBe(1)
     const renamed = read.current!.worktrees
     expect(renamed[1]).toMatchObject({ displayName: 'renamed', branch: 'renamed-branch' })
     expect(renamed.filter((member, index) => member !== members[index])).toHaveLength(1)
