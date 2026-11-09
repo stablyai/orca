@@ -1,5 +1,5 @@
 import { translate } from '@/i18n/i18n'
-import { emulatorErrorText } from '@/lib/emulator-error-copy'
+import { emulatorErrorText } from '@/lib/simulator/launch/emulator-error-copy'
 
 export function emulatorListDevicesErrorText(error: unknown): string {
   return emulatorErrorText(

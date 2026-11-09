@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
 import { loadNodeOniguruma } from '../syntax-highlighting/oniguruma-test-harness'
-import { monaco } from '../monaco-setup'
+import { monaco } from '../editor/monaco/monaco-setup'
 
 vi.mock('../syntax-highlighting/oniguruma', () => ({ loadOniguruma: loadNodeOniguruma }))
 

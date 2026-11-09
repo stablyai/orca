@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import { useOwnedDiffComments } from '../../../diff-comments/use-diff-comment-owner'
-import { withoutMarkdownReviewNotes } from '@/lib/markdown-review-notes-setting'
+import { withoutMarkdownReviewNotes } from '@/lib/editor/markdown/review-notes/markdown-review-notes-setting'
 import { useCallback, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'

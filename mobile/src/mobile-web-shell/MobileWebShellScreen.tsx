@@ -27,6 +27,7 @@ import { useNativeImageActions } from '../platform/native-image-actions'
 import { processDeviceStore } from '../device-store/device-store'
 import { serveDeviceStoreVerb } from './device-store-verb-server'
 import { BRIDGE_STORE_VERB } from './bridge/bridge-store-verb'
+import { useAppLeavesForeground } from './use-app-leaves-foreground'
 import { useShellPageBack } from './use-shell-page-back'
 import { useShellStackPop } from './use-shell-stack-pop'
 import { usePageLocationOnFold } from './page-location-on-fold'
@@ -263,6 +264,7 @@ export function MobileWebShellScreen({
     // The stream survives dropped frames; keep a count because diagnostics print only once per host.
     onBinaryFramesDropped: reportDroppedBinaryFrames
   })
+  useAppLeavesForeground(bridge.sendAppInactive)
 
   // paneKey changes keep the session mounted; the host deduplicates routes and preserves in-flight frames.
   useShellPageStorageRefresh(refreshStorage, bridge.publishStorage)

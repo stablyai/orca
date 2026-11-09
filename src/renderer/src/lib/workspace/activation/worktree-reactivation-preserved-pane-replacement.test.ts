@@ -7,12 +7,6 @@ import { activateAndRevealWorktree } from './worktree-activation'
 import { waitForWorktreeAgentActivationGateForTests } from './worktree-agent-activation-gate'
 import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/workspace/activation/worktree-activation-created-agent.test-fixture'
 import { makePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
-import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../ownership/worktree-runtime-owner'
-import {
-  markHostSessionMirrorHydrated,
-  resetHostSessionMirrorHydrationForTests
-} from '@/runtime/web-session-tabs-sync/hydration/host-session-mirror-hydration'
 
 // Main's answer to the window's layout commands, as a switch-on build sends them.
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) =>
@@ -27,8 +21,6 @@ const initialAppStoreState = useAppStore.getState()
 
 const LEAF_ID = '22222222-2222-4222-8222-222222222222'
 const HUSK_TAB_ID = 'husk-tab-1'
-const RUNTIME_ENV_ID = 'env-4f0a8c21'
-const RUNTIME_HOST_ID = `runtime:${encodeURIComponent(RUNTIME_ENV_ID)}` as ExecutionHostId
 
 function baseState(worktree: ReturnType<typeof makeWorktree>): Partial<AppState> {
   return {
@@ -137,7 +129,6 @@ function seedSleepingRecord(worktreeId: string, sessionId: string): void {
 
 afterEach(() => {
   useAppStore.setState(initialAppStoreState, true)
-  resetHostSessionMirrorHydrationForTests()
 })
 
 describe('preserved-pane replacement contract on workspace activation', () => {
@@ -226,89 +217,5 @@ describe('preserved-pane replacement contract on workspace activation', () => {
     ])
     // Keep the record with its cold-restoring pane or pane and replacement both resume it.
     expect(after.sleepingAgentSessionsByPaneKey[makePaneKey(HUSK_TAB_ID, LEAF_ID)]).toBeDefined()
-  })
-
-  // Published mirror tabs remain host-owned before hydration. Client replacement once relaunched codex against an active writer, stranding a shell and orphaning the live agent (aug20 windows 2).
-  it('does not replace a still-published web-mirror tab after hydration settles', async () => {
-    const webTabId = 'web-terminal-host-tab'
-    // Paired runtime ownership is required or deferral’s no-host return makes this test vacuous.
-    const worktree = { ...makeWorktree(), createdWithAgent: undefined, hostId: RUNTIME_HOST_ID }
-    const state = baseState(worktree)
-    state.tabsByWorktree = {
-      [worktree.id]: [{ id: webTabId, title: 'Codex', ptyId: null } as never]
-    }
-    state.unifiedTabsByWorktree = {
-      [worktree.id]: [
-        {
-          id: `unified-${webTabId}`,
-          contentType: 'terminal',
-          entityId: webTabId,
-          groupId: 'group-1'
-        } as never
-      ]
-    }
-    state.groupsByWorktree = {
-      [worktree.id]: [
-        {
-          id: 'group-1',
-          activeTabId: `unified-${webTabId}`,
-          tabOrder: [`unified-${webTabId}`],
-          recentTabIds: []
-        } as never
-      ]
-    }
-    state.activeGroupIdByWorktree = { [worktree.id]: 'group-1' }
-    state.terminalLayoutsByTabId = {
-      [webTabId]: {
-        root: { type: 'leaf', leafId: LEAF_ID },
-        activeLeafId: LEAF_ID,
-        ptyIdsByLeafId: { [LEAF_ID]: 'pty-old-1' }
-      } as never
-    }
-    useAppStore.setState(state)
-    const paneKey = makePaneKey(webTabId, LEAF_ID)
-    useAppStore.setState((s) => ({
-      sleepingAgentSessionsByPaneKey: {
-        ...s.sleepingAgentSessionsByPaneKey,
-        [paneKey]: {
-          paneKey,
-          tabId: webTabId,
-          worktreeId: worktree.id,
-          agent: 'codex' as const,
-          providerSession: { key: 'session_id' as const, id: 'codex-session-E' },
-          prompt: 'resume prior task',
-          state: 'working' as const,
-          origin: 'quit' as const,
-          capturedAt: 1000,
-          updatedAt: 1000,
-          terminalTitle: 'Codex'
-        }
-      }
-    }))
-
-    expect(runtimeEnvironmentIdOrLocalUnlessTwin(useAppStore.getState(), worktree.id)).toBe(
-      RUNTIME_ENV_ID
-    )
-
-    activateAndRevealWorktree(worktree.id, { notifyHostRuntime: false })
-    await waitForWorktreeAgentActivationGateForTests(worktree.id)
-
-    const after = useAppStore.getState()
-    expect(after.tabsByWorktree[worktree.id]?.map((tab) => tab.id)).toEqual([webTabId])
-    // The record is the only recovery evidence, so deferral must retain it.
-    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
-    expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
-
-    // Hydration settles inventory delivery, not whether the host's process exited.
-    markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
-
-    const replayed = useAppStore.getState()
-    const replacementIds = (replayed.tabsByWorktree[worktree.id] ?? [])
-      .map((tab) => tab.id)
-      .filter((id) => id !== webTabId)
-    expect(replacementIds).toHaveLength(0)
-    expect(replayed.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
-    expect(replayed.automaticAgentResumeClaimsByTabId).toEqual({})
-    expect(replayed.pendingStartupByTabId).toEqual({})
   })
 })

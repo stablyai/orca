@@ -147,6 +147,20 @@ function processState(pid: number): 'running' | 'exited' {
 }
 
 describe('Claude stream-json connection', () => {
+  it('completes task Stop through the real SDK while semantic reading is paused', async () => {
+    const scenario = scriptScenario([HOLD_OPEN])
+    const connection = await open(launchFor(scenario))
+    await connection.initializationResult()
+    connection.pauseReading?.()
+    await connection.stopTask('owned-shell')
+    expect(scenario.readReport().controlRequests).toContainEqual(
+      expect.objectContaining({
+        request: expect.objectContaining({ subtype: 'stop_task', task_id: 'owned-shell' })
+      })
+    )
+    connection.resumeReading?.()
+  })
+
   it('settles a send only once the frame reached the child, and replays reach onMessage', async () => {
     const replay = {
       type: 'user',

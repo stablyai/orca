@@ -1,5 +1,6 @@
 import { useFocusEffect } from 'expo-router'
 import { useCallback, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { Alert, BackHandler, View } from 'react-native'
 import { GestureHandlerRootView } from 'react-native-gesture-handler'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -54,6 +55,7 @@ export function MobileHomeScreen() {
   const openMobileAccounts = useOpenMobileAccounts()
   const disconnectHostClient = useDisconnectHostClient()
   const forgetHostClient = useForgetHostClient()
+  const queryClient = useQueryClient()
   const forceReconnectHost = useForceReconnect()
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
@@ -128,7 +130,7 @@ export function MobileHomeScreen() {
     }
     const host = confirmRemove
     try {
-      await removeHostAndCloseClient(host.id, forgetHostClient)
+      await removeHostAndCloseClient(host.id, forgetHostClient, queryClient)
       setConfirmRemove(null)
       data.setHostCatalog(await loadHostCatalog())
     } catch {

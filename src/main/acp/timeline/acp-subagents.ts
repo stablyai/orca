@@ -86,6 +86,10 @@ export class AcpSubagents {
         }
       }
       this.known.set(update.id, subagent)
+      if (update.restart && subagent.ended !== undefined) {
+        subagent.ended = undefined
+        subagent.reply = undefined
+      }
       const ending = update.state !== undefined && acpSubagentOutcome(update.state) !== undefined
       // Late live reports must not resurrect an ended run after the host retires its record.
       if (ending || subagent.ended === undefined) {
@@ -133,9 +137,11 @@ function subagentEvidence(update: AcpSubagentUpdate, observedAt: number): AgentC
         state: update.state === 'idle' ? 'idle' : 'working',
         ...(update.label !== undefined ? { description: boundSubagentLabel(update.label) } : {}),
         ...(update.tokens !== undefined ? { totalTokens: update.tokens } : {}),
+        ...(update.ownerId !== undefined ? { ownerId: subagentHandle(update.ownerId).id } : {}),
         // Hashed handles cannot address provider cancellation.
         stoppable: handle.id === update.id
-      }
+      },
+      ...(update.restart ? { restart: true } : {})
     }
   }
   return {

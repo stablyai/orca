@@ -7,7 +7,7 @@ import {
   agentSessionCreateRequest,
   createAgentSessionTrustWorktreeOptions
 } from '@/runtime/hosted-terminals/creation/agent-launch/agent-session-create-request'
-import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-startup-delayed-delivery'
+import { beginAgentStartupDeliveryAttempt } from '@/lib/agent-session/launch/startup/agent-startup-delayed-delivery'
 import {
   planHostedAgentPrompt,
   hostedAgentPromptHostFacts,

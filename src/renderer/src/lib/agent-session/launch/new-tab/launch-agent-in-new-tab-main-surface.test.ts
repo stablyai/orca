@@ -1,4 +1,4 @@
-import { nonRefusedAgentLaunch } from '@/lib/agent-tab-launch-outcome.test-fixture'
+import { nonRefusedAgentLaunch } from '@/lib/agent-session/launch/new-tab/agent-tab-launch-outcome.test-fixture'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   FLOATING_TERMINAL_WORKTREE_ID,

@@ -30,6 +30,8 @@
   overflow-wrap: anywhere;
   color: var(--chat-link);
   text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  /* Clears descenders; on file-link code chips it deliberately lands on the bottom border. */
+  text-underline-offset: 0.25em;
 }
 
 /* File links wrap inline code, so formatted labels follow the link color. */
