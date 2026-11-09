@@ -4921,5 +4921,31 @@
     "ko": "PDF의 잠금을 해제할 수 없습니다",
     "es": "No se pudo desbloquear el PDF",
     "zh-Hant": "無法解鎖 PDF"
+  },
+  "从剪贴板粘贴": {
+    "zh": "从剪贴板粘贴",
+    "tr": "Panodan yapıştır",
+    "ja": "クリップボードから貼り付け",
+    "de": "Aus der Zwischenablage einfügen",
+    "ru": "Вставить из буфера обмена",
+    "pt": "Colar da área de transferência",
+    "en": "Paste from clipboard",
+    "fr": "Coller depuis le presse-papiers",
+    "ko": "클립보드에서 붙여넣기",
+    "es": "Pegar desde el portapapeles",
+    "zh-Hant": "從剪貼簿貼上"
+  },
+  "无法读取剪贴板": {
+    "zh": "无法读取剪贴板",
+    "tr": "Pano okunamadı",
+    "ja": "クリップボードを読み取れませんでした。",
+    "de": "Zwischenablage konnte nicht gelesen werden",
+    "ru": "Не удалось прочитать буфер обмена",
+    "pt": "Não foi possível ler a área de transferência",
+    "en": "Couldn't read the clipboard",
+    "fr": "Impossible de lire le presse-papiers",
+    "ko": "클립보드를 읽지 못했습니다.",
+    "es": "No se pudo leer el portapapeles",
+    "zh-Hant": "無法讀取剪貼簿"
   }
 }

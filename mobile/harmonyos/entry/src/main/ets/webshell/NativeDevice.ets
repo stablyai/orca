@@ -19,6 +19,10 @@ const PHOTO_PIXEL_LIMIT = 32 * 1024 * 1024;
 const READ_LIMIT = 384 * 1024;
 
 interface MediaRecord { bytes: Uint8Array; mime: string; name: string; }
+export interface ClipboardPastePrompt {
+  confirm: () => Promise<void>;
+  cancel: () => void;
+}
 
 export const NATIVE_DEVICE_METHODS: string[] = ['native.clipboard.read', 'native.clipboard.write',
   'native.media.pick', 'native.media.read', 'native.media.release', 'native.media.name',
@@ -50,22 +54,28 @@ export class NativeDevice {
   private previousKeepScreenOn = false;
   private picking = false;
   private selectionGeneration = 0;
+  private clipboardPrompt: ClipboardPastePrompt | null = null;
+  private onClipboardPrompt: (prompt: ClipboardPastePrompt | null) => void;
 
   constructor(context: common.UIAbilityContext, client: SpikeRpcClient | null = null,
-    onPdfPreview: (preview: PdfPreview | null) => void = (_preview: PdfPreview | null): void => {}) {
+    onPdfPreview: (preview: PdfPreview | null) => void = (_preview: PdfPreview | null): void => {},
+    onClipboardPrompt: (prompt: ClipboardPastePrompt | null) => void = (_prompt: ClipboardPastePrompt | null): void => {}) {
     this.context = context; this.speech = new NativeSpeech(context);
     this.images = new NativeImageActions(context); this.pdf = new NativePdfViewer(context, client, onPdfPreview);
+    this.onClipboardPrompt = onClipboardPrompt;
   }
   setDesktopClient(client: SpikeRpcClient | null): void { this.pdf.setClient(client); }
   closePdf(): Promise<void> { return this.pdf.cancel(); }
   async dispose(): Promise<void> {
     this.disposed = true; this.generation++; this.selectionGeneration++; this.media.clear();
+    this.clipboardPrompt?.cancel();
     this.speech.dispose(); this.images.dispose();
     let pdf = this.pdf.dispose();
     await this.stopCapture(); await pdf; this.pcm = new Uint8Array(0);
   }
   async pause(covered: boolean = false): Promise<void> {
     this.selectionGeneration++; this.speech.cancel(); this.images.pause();
+    this.clipboardPrompt?.cancel();
     let pdf = covered ? this.pdf.cancel() : this.pdf.pause();
     await this.stopCapture(); await pdf;
   }
@@ -95,9 +105,9 @@ export class NativeDevice {
     if (method === 'native.clipboard.read') {
       let params: ESObject = this.params(value, ['mime']);
       if (params['mime'] !== 'text') { throw new Error('Text only'); }
-      await this.ensureClipboardPermission();
-      let data = await pasteboard.getSystemPasteboard().getData();
-      let result: Record<string, Object> = { 'value': data.getPrimaryText() ?? '' }; return result;
+      let generation = this.selectionGeneration;
+      let data = await this.readClipboard(pasteboard.MIMETYPE_TEXT_PLAIN); this.checkSelection(generation);
+      let result: Record<string, Object> = { 'value': data?.getPrimaryText() ?? '' }; return result;
     }
     if (method === 'native.clipboard.write') {
       let params: ESObject = this.params(value, ['mime', 'value']);
@@ -157,9 +167,32 @@ export class NativeDevice {
     if (this.disposed || generation !== this.selectionGeneration) { throw new Error('Selection cancelled'); }
   }
 
-  private async ensureClipboardPermission(): Promise<void> {
-    let result = await abilityAccessCtrl.createAtManager().requestPermissionsFromUser(this.context, ['ohos.permission.READ_PASTEBOARD']);
-    if (result.authResults[0] !== 0 || this.disposed) { throw new Error('Clipboard access denied'); }
+  private async readClipboard(mime: string): Promise<pasteboard.PasteData | null> {
+    let system = pasteboard.getSystemPasteboard();
+    if (!system.hasDataType(mime)) { return null; }
+    if (this.clipboardPrompt) { throw new Error('Clipboard paste already pending'); }
+    return new Promise<pasteboard.PasteData>((resolve, reject) => {
+      let reading = false;
+      let finish = (): boolean => {
+        if (this.clipboardPrompt !== prompt) { return false; }
+        this.clipboardPrompt = null; this.onClipboardPrompt(null);
+        return true;
+      };
+      let prompt: ClipboardPastePrompt = {
+        confirm: async (): Promise<void> => {
+          if (reading || this.clipboardPrompt !== prompt) { return; }
+          reading = true;
+          try {
+            let data = await system.getData();
+            if (finish()) { resolve(data); }
+          } catch (e) {
+            if (finish()) { reject(new Error('Clipboard read failed')); }
+          }
+        },
+        cancel: (): void => { if (finish()) { reject(new Error('Clipboard paste cancelled')); } }
+      };
+      this.clipboardPrompt = prompt; this.onClipboardPrompt(prompt);
+    });
   }
   private drainAudio(max: number): string {
     let size = Math.min(max, this.pcm.length);
@@ -235,9 +268,8 @@ export class NativeDevice {
     try {
       if (this.media.size >= 8) { throw new Error('Too many selected files'); }
       if (source === 'clipboard') {
-        await this.ensureClipboardPermission();
-        let data = await pasteboard.getSystemPasteboard().getData(); this.checkSelection(generation);
-        let pixel = data.getPrimaryPixelMap();
+        let data = await this.readClipboard(pasteboard.MIMETYPE_PIXELMAP); this.checkSelection(generation);
+        let pixel = data?.getPrimaryPixelMap();
         if (pixel) {
           let packer = image.createImagePacker();
           try {

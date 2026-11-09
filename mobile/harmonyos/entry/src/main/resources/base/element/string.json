@@ -19,10 +19,6 @@
     {
       "name": "microphone_permission_reason",
       "value": "语音听写：录制音频发送到配对的桌面端转写"
-    },
-    {
-      "name": "clipboard_permission_reason",
-      "value": "用于你点击粘贴时读取剪贴板文字或图片"
     }
   ]
 }

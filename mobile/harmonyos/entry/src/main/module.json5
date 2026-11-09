@@ -37,11 +37,6 @@
     requestPermissions: [
       { name: 'ohos.permission.VIBRATE' },
       {
-        name: 'ohos.permission.READ_PASTEBOARD',
-        reason: '$string:clipboard_permission_reason',
-        usedScene: { abilities: ['EntryAbility'], when: 'inuse' }
-      },
-      {
         name: 'ohos.permission.INTERNET'
       },
       {

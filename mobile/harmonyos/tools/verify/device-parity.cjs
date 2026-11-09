@@ -719,8 +719,34 @@ function deviceHarness(extra = {}) {
     NativePdfViewer: Pdf,
     ...extra
   })
-  return new NativeDevice(extra.context ?? {})
+  return new NativeDevice(extra.context ?? {}, null, () => {}, extra.onClipboardPrompt)
 }
+
+test('a cancelled clipboard prompt leaves the next paste available for explicit confirmation', async () => {
+  let prompt
+  const device = deviceHarness({
+    onClipboardPrompt: (next) => {
+      prompt = next
+    },
+    pasteboard: {
+      MIMETYPE_TEXT_PLAIN: 'text/plain',
+      getSystemPasteboard: () => ({
+        hasDataType: () => true,
+        getData: async () => ({ getPrimaryText: () => 'Copied fixture text' })
+      })
+    }
+  })
+  const first = device.serve('native.clipboard.read', { mime: 'text' })
+  const refused = assert.rejects(first, /Clipboard paste cancelled/)
+  const cancelled = prompt
+  cancelled.cancel()
+  await refused
+  const retry = device.serve('native.clipboard.read', { mime: 'text' })
+  await cancelled.confirm()
+  await prompt.confirm()
+  assert.equal((await retry).value, 'Copied fixture text')
+  await device.dispose()
+})
 
 test('a media picker returning after the page is paused cannot publish staged media handles', async () => {
   const selected = deferred()

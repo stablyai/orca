@@ -2,7 +2,8 @@ import { uiText } from '../settings/NativeUi';
 import { SessionPhase } from '../transport/HostSession';
 import { DesktopConnectionLease, retainDesktopConnection } from '../transport/DesktopConnections';
 import { readHomeResume, saveHomeResume, resumeFromLocation } from '../home/HomeResume';
-import { NATIVE_DEVICE_METHODS, NativeDevice } from './NativeDevice';
+import { ClipboardPastePrompt, NATIVE_DEVICE_METHODS, NativeDevice } from './NativeDevice';
+import { ClipboardPasteSheet } from './ClipboardPasteSheet';
 import { PdfPreview } from './NativePdfViewer';
 import { PdfPreviewSurface } from './PdfPreviewSurface';
 import { PageStorageStore } from '../storage/PageStorageStore';
@@ -89,6 +90,7 @@ export struct ShellSurface {
   @State railKeys: string[] = [];
   @State directionPadAvailable: boolean = false;
   @State pdfPreview: PdfPreview | null = null;
+  @State clipboardPrompt: ClipboardPastePrompt | null = null;
   private startup: ShellStartup = new ShellStartup((message: string): void => this.failStartup(message));
   private startupGeneration: number = 0;
   private routePathname: string = '';
@@ -175,6 +177,7 @@ export struct ShellSurface {
 
   private handleBack(): boolean {
     if (!this.ownsNavigation() || this.navigation.isPending()) { return true; }
+    if (this.clipboardPrompt) { this.clipboardPrompt.cancel(); return true; }
     if (this.pdfPreview) { this.nativeDevice?.closePdf().catch(() => {}); return true; }
     let bridge = this.bridge;
     let stamp = this.navigation.stamp();
@@ -316,6 +319,7 @@ export struct ShellSurface {
   private releaseBridge(): void {
     this.cacheOnly = false; this.attachingClient = null; this.activationFallback = null; this.updateFailed = false;
     this.pdfPreview = null;
+    this.clipboardPrompt = null;
     this.downloadPercent = -1; this.downloadCaption = '';
     this.railClaim = null; this.railKeys = []; this.sideRail = null; this.directionPadAvailable = false;
     if (this.bridge) {
@@ -615,6 +619,8 @@ export struct ShellSurface {
     let nativeDevice = new NativeDevice(getContext(this) as common.UIAbilityContext, client,
       (preview: PdfPreview | null): void => {
         if (this.nativeDevice === nativeDevice) { this.pdfPreview = preview; }
+      }, (prompt: ClipboardPastePrompt | null): void => {
+        if (this.nativeDevice === nativeDevice) { this.clipboardPrompt = prompt; }
       });
     this.nativeDevice = nativeDevice;
     let root = desktopPath(meta.id);
@@ -824,10 +830,11 @@ export struct ShellSurface {
       Column() {
         if (!this.asDrawer && this.painted && this.updateFailed) { this.updateNotice() }
         this.pageSurface()
-      }.width('100%').height('100%').accessibilityLevel(this.pdfPreview ? 'no-hide-descendants' : 'auto')
+      }.width('100%').height('100%').accessibilityLevel(this.pdfPreview || this.clipboardPrompt ? 'no-hide-descendants' : 'auto')
       if (this.pdfPreview) {
         PdfPreviewSurface({ preview: this.pdfPreview, onClose: (): void => { this.nativeDevice?.closePdf().catch(() => {}); } })
       }
+      if (this.clipboardPrompt) { ClipboardPasteSheet({ prompt: this.clipboardPrompt }) }
     }.width('100%').height('100%')
   }
 }
