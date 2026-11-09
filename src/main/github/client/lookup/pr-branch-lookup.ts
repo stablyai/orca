@@ -51,9 +51,11 @@ export async function getRestPRForBranch(
 
 export async function getFallbackPRListForBranch(
   prRepo: GitHubApiRepository,
+  headOwner: string | null,
   branchName: string,
-  ghOptions: ReturnType<typeof ghRepoExecOptions>
-): Promise<PullRequestLookupData | null> {
+  ghOptions: ReturnType<typeof ghRepoExecOptions>,
+  headOid?: string | null
+): Promise<{ data: PullRequestLookupData; headRepo: GitHubApiRepository } | null> {
   noteRepositoryRateLimitSpend(prRepo, 'graphql', 1, ghOptions)
   const { stdout } = await ghExecFileAsync(
     [
@@ -66,16 +68,35 @@ export async function getFallbackPRListForBranch(
       '--state',
       'all',
       '--limit',
-      String(BRANCH_PR_LOOKUP_PAGE_SIZE),
+      '100',
       '--json',
       PR_BRANCH_LIST_JSON_FIELDS
     ],
     { ...ghOptions, ...githubHostExecOptions(prRepo) }
   )
-  const list = JSON.parse(stdout) as PullRequestLookupData[]
-  const pr = preferOpenPullRequest(list)
-  // Branch lists paginate PRs, not their nested check contexts.
-  return pr ? { ...pr, statusCheckRollup: [], checksUnavailable: true } : null
+  const list = JSON.parse(stdout) as (PullRequestLookupData & {
+    headRepositoryOwner?: { login?: string } | null
+  })[]
+  const headMatches = headOwner
+    ? list.filter((pr) => pr.headRepositoryOwner?.login?.toLowerCase() === headOwner.toLowerCase())
+    : headOid
+      ? list.filter((pr) => pr.headRefOid?.toLowerCase() === headOid.toLowerCase())
+      : []
+  const match = headOwner
+    ? (headMatches[0] ?? null)
+    : headMatches.length === 1
+      ? headMatches[0]
+      : null
+  const actualHeadOwner = match?.headRepositoryOwner?.login
+  if (!match || !actualHeadOwner) {
+    return null
+  }
+  return {
+    // Branch lists paginate PRs, not their nested check contexts.
+    data: { ...match, statusCheckRollup: [], checksUnavailable: true },
+    // Why: PR details belong to the base repo, but branch tracking belongs to its actual fork.
+    headRepo: { ...prRepo, owner: actualHeadOwner }
+  }
 }
 
 export async function hydrateBranchLookupWithExactPR(
@@ -106,7 +127,9 @@ export async function hydrateBranchLookupWithExactPR(
 export async function lookupPRByBranchName(args: {
   candidates: OwnerRepo[]
   headRepo: OwnerRepo | null
+  headRepoInferred: boolean
   branchName: string
+  currentHeadOid?: string | null
   ghOptions: GhExecOptions
   executionScope: string
   policy?: PullRequestLookupPolicy
@@ -114,6 +137,7 @@ export async function lookupPRByBranchName(args: {
 }): Promise<{
   data: PullRequestLookupData | null
   dataRepo: OwnerRepo | null
+  dataHeadRepo: GitHubApiRepository | null
   pendingError?: unknown
 }> {
   if (args.candidates.length > 0) {
@@ -128,14 +152,44 @@ export async function lookupPRByBranchName(args: {
         continue
       }
       try {
-        const branchData = args.headRepo
-          ? await getRestPRForBranch(
+        let dataHeadRepo = args.headRepo
+        let branchData: PullRequestLookupData | null
+        if (args.headRepo) {
+          branchData = await getRestPRForBranch(
+            candidate,
+            args.headRepo.owner,
+            args.branchName,
+            args.ghOptions
+          )
+        } else {
+          const fallback = await getFallbackPRListForBranch(
+            candidate,
+            candidate.owner,
+            args.branchName,
+            args.ghOptions
+          )
+          branchData = fallback?.data ?? null
+          dataHeadRepo = fallback?.headRepo ?? null
+        }
+        if (!branchData && args.headRepo && args.headRepoInferred && args.currentHeadOid) {
+          // Why: origin may be canonical while a same-name branch PR lives on a separately named fork.
+          try {
+            const fallback = await getFallbackPRListForBranch(
               candidate,
-              args.headRepo.owner,
+              null,
               args.branchName,
-              args.ghOptions
+              args.ghOptions,
+              args.currentHeadOid
             )
-          : await getFallbackPRListForBranch(candidate, args.branchName, args.ghOptions)
+            branchData = fallback?.data ?? null
+            dataHeadRepo = fallback?.headRepo ?? null
+          } catch (err) {
+            if (!hasPendingError) {
+              pendingError = err
+              hasPendingError = true
+            }
+          }
+        }
         // Cheap branch discovery needs exact hydration for review, queue and auto-merge metadata.
         const data = await hydrateBranchLookupWithExactPR(
           candidate,
@@ -149,7 +203,7 @@ export async function lookupPRByBranchName(args: {
           (!args.policy || (await args.policy.accepts(data, candidate))) &&
           pullRequestMatchesHeadRepository(data, candidate, args.headRepo)
         ) {
-          return { data, dataRepo: candidate }
+          return { data, dataRepo: candidate, dataHeadRepo }
         }
       } catch (err) {
         if (args.headRepo) {
@@ -166,6 +220,7 @@ export async function lookupPRByBranchName(args: {
             args.branchName,
             args.ghOptions
           )
+          const dataHeadRepo = candidate
           const data = await hydrateBranchLookupWithExactPR(
             candidate,
             branchData,
@@ -178,7 +233,7 @@ export async function lookupPRByBranchName(args: {
             (!args.policy || (await args.policy.accepts(data, candidate))) &&
             pullRequestMatchesHeadRepository(data, candidate, args.headRepo)
           ) {
-            return { data, dataRepo: candidate }
+            return { data, dataRepo: candidate, dataHeadRepo }
           }
         } catch (retryErr) {
           if (!hasPendingError) {
@@ -190,8 +245,8 @@ export async function lookupPRByBranchName(args: {
     }
     // Ambiguous fork-list failures still permit exact fallback-number recovery.
     return hasPendingError
-      ? { data: null, dataRepo: null, pendingError }
-      : { data: null, dataRepo: null }
+      ? { data: null, dataRepo: null, dataHeadRepo: null, pendingError }
+      : { data: null, dataRepo: null, dataHeadRepo: null }
   }
 
   try {
@@ -215,13 +270,13 @@ export async function lookupPRByBranchName(args: {
           statusCheckRollup: [],
           checksUnavailable: true
         }
-    const lookup = { data, dataRepo: null }
+    const lookup = { data, dataRepo: null, dataHeadRepo: null }
     return !args.policy || (await args.policy.accepts(lookup.data, null))
       ? lookup
-      : { data: null, dataRepo: null }
+      : { data: null, dataRepo: null, dataHeadRepo: null }
   } catch (err) {
     if (isNoPullRequestError(err)) {
-      return { data: null, dataRepo: null }
+      return { data: null, dataRepo: null, dataHeadRepo: null }
     }
     throw err
   }
