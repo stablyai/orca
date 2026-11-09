@@ -19455,6 +19455,7 @@
         "orcaStopCanContinue": "Bu konuşmada devam edebilirsiniz.",
         "orcaStopUnnamedServer": "uzak sunucu",
         "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
+        "safetyReviewApproved": "{{agent}} bu işleme onay verdi. Ayrıntıları görüntüleyin.",
         "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
         "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
         "forkedFrom": "Çatallandığı kaynak"
@@ -19935,7 +19936,8 @@
       "contextUsage": {
         "label": "Bağlam: {{used}} / {{window}} token kullanıldı (%{{percent}})",
         "title": "Bağlam",
-        "estimated": "Son yanıta göre tahmin edilmiştir."
+        "estimated": "Son yanıta göre tahmin edilmiştir.",
+        "deferredNote": "İhtiyaç olduğunda yüklenir. Kullanılan toplama dahil değildir."
       },
       "contextMenu": {
         "copyOrcaSessionId": "Orca Oturum Kimliğini Kopyala",

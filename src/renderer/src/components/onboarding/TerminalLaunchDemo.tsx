@@ -1,5 +1,6 @@
 import { MessagesSquare, SquareTerminal } from 'lucide-react'
-import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { useTranslate } from '@/i18n/use-translate'
 
 // Shell text, not prose: what a terminal shows when the agent's CLI starts.

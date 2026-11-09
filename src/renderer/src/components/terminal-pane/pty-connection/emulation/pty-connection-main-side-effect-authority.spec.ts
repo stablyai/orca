@@ -81,8 +81,9 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
       it('stops consuming facts after the pane binding is disposed', async () => {
         enableMainAuthority()
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks4 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const handler =
           await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
@@ -110,8 +111,9 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
       it('clears state without completion attention for stale-derived facts', async () => {
         enableMainAuthority()
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks6 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const handler =
           await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
@@ -163,8 +165,9 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
       it('does not byte-scan PR links or OSC 133 — facts are the only consumer', async () => {
         enableMainAuthority()
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks9 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport()
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         transport.connect.mockImplementation(
@@ -205,8 +208,9 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
       it('rejects Command Code facts when Claude owns the pane', async () => {
         enableMainAuthority()
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks11 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks11 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const handler =
           await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
@@ -257,8 +261,9 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
       it('rejects Command Code facts when retained Claude identity owns the pane', async () => {
         enableMainAuthority()
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks12 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks12 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const handler =
           await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
@@ -303,8 +308,9 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
       it('keeps Command Code working when a working fact lands before the done settles', async () => {
         enableMainAuthority()
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks13 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks13 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const handler =
           await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()
@@ -352,8 +358,9 @@ export function registerPtyConnectionMainSideEffectAuthorityTests(): void {
           getSync: vi.fn(() => ({ terminalMainSideEffectAuthority: false }))
         }
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks15 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks15 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const handler =
           await import('../../pty-transport/output/terminal-side-effect-facts-handler')
         const transport = createMockTransport()

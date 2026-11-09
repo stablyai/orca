@@ -20207,6 +20207,7 @@
         "orcaStopCanContinue": "Você pode continuar nesta conversa.",
         "orcaStopUnnamedServer": "o servidor remoto",
         "permissionDenied": "{{agent}} negou a permissão. Ver detalhes.",
+        "safetyReviewApproved": "{{agent}} aprovou esta ação. Ver detalhes.",
         "safetyReview": "{{agent}} relatou um aviso de revisão de segurança. Ver detalhes.",
         "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes).",
         "forkedFrom": "Ramificado de"
@@ -20929,7 +20930,8 @@
       "contextUsage": {
         "label": "Contexto: {{used}} de {{window}} tokens, {{percent}}% usado",
         "title": "Contexto",
-        "estimated": "Estimado a partir da última resposta."
+        "estimated": "Estimado a partir da última resposta.",
+        "deferredNote": "Carregado sob demanda. Não conta no total usado."
       },
       "contextMenu": {
         "copyOrcaSessionId": "Copiar ID de sessão do Orca",

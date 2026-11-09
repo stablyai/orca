@@ -2,7 +2,10 @@ import { useCallback } from 'react'
 import { translate } from '@/i18n/i18n'
 import { readEditorPanelFileContent } from './editor-panel-file-reads'
 import type { OpenFile } from '@/store/slices/editor/types/open-file'
-import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
+import {
+  getConnectionIdForFile,
+  isWorktreeConnectionResolved
+} from '@/lib/workspace/ownership/connection-context'
 import { useAppStore } from '@/store'
 import { getRuntimeFileReadScope } from '@/runtime/files/runtime-file-routing'
 import { readEditorCsvFileContent } from './csv/csv-file-content'
@@ -19,7 +22,6 @@ import {
   type EditorPanelFileContentLoader,
   type UseEditorPanelFileContentLoaderParams
 } from './editor-panel-content-types'
-import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'
 import {
   migrateRestoredEditorFileOwner,
   restoredOwnerMigrationErrorMessage
@@ -33,11 +35,10 @@ import {
   applyEditorFileLoadFailure,
   getEditorFileLoadFailureContent
 } from './external-changes/editor-deleted-file-reload'
-export type { EditorPanelFileContentLoader } from './editor-panel-content-types'
 import {
   acquireEditorFileOperation,
   isSameEditorFileOperationIdentity
-} from '@/lib/editor-file-operation-owner'
+} from '@/lib/editor/file-operations/editor-file-operation-owner'
 
 export function useEditorPanelFileContentLoader({
   fileLoadRetryAttemptsRef,
@@ -47,14 +48,8 @@ export function useEditorPanelFileContentLoader({
   outstandingFileReadsRef,
   setFileContents
 }: UseEditorPanelFileContentLoaderParams): EditorPanelFileContentLoader {
-  return useCallback(
-    async (
-      filePath: string,
-      id: string,
-      worktreeId?: string,
-      relativePath?: string,
-      options?: EditorPanelContentLoadOptions
-    ): Promise<void> => {
+  return useCallback<EditorPanelFileContentLoader>(
+    async (filePath, id, worktreeId, relativePath, options) => {
       const generation = ++fileReadGenerationCounterRef.current
       fileReadGenerationRef.current[id] = generation
       outstandingFileReadsRef.current[id] = generation

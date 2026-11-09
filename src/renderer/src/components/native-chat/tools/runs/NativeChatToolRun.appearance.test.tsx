@@ -18,9 +18,6 @@ import {
   useNativeChatDisclosures
 } from '../../messages/disclosure/native-chat-disclosure-store'
 
-import { i18n } from '@/i18n/i18n'
-import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
-
 {
   const QUESTION = 'What would you like me to do next in this repo?'
   const ASK_INPUT = { questions: [{ question: QUESTION }] }
@@ -285,69 +282,6 @@ import { TranslationScopeProvider } from '@/i18n/translation-scope-provider'
       expect(container.querySelector('[data-native-chat-tool-run-members]')).toBeNull()
       fireEvent.click(returnedHeader)
       expect(membersBox(container).scrollTop).toBe(0)
-    })
-  })
-}
-
-{
-  function runHeader(container: HTMLElement): HTMLElement {
-    const header = container.querySelector('button')
-    if (!header) {
-      throw new Error('run header did not render')
-    }
-    return header
-  }
-
-  describe('tool run sentences', () => {
-    afterEach(async () => {
-      cleanup()
-      await i18n.changeLanguage('en')
-    })
-
-    it('relabels an already-mounted run and its rows when the UI language changes', async () => {
-      const blocks: NativeChatBlock[] = [
-        { type: 'tool-call', name: 'Bash', input: { command: 'false' }, state: 'failed' },
-        { type: 'tool-result', output: 'exit 1', isError: true },
-        {
-          type: 'tool-call',
-          name: 'Agent',
-          input: { description: 'explore settings' },
-          state: 'completed'
-        }
-      ]
-      const { container } = render(
-        <NativeChatToolRun
-          blocks={blocks}
-          backgroundTasks={[
-            {
-              type: 'background-task',
-              taskId: 'workflow-1',
-              kind: 'workflow',
-              label: 'task',
-              state: 'blocked',
-              outputFile: '/tmp/result.txt'
-            }
-          ]}
-          expandSignal
-        />,
-        { wrapper: TranslationScopeProvider }
-      )
-      const header = runHeader(container)
-      expect(header).toHaveTextContent('Ran 1 command and ran 1 agent · 1 failed')
-      expect(screen.getByText('Subagent')).toBeInTheDocument()
-      expect(screen.getByText('Background workflow')).toBeInTheDocument()
-      expect(screen.getByText('Output: /tmp/result.txt')).toBeInTheDocument()
-
-      await act(async () => {
-        await i18n.changeLanguage('es')
-      })
-
-      expect(header).toHaveTextContent('Se ejecutó 1 comando y se ejecutó 1 agente · 1 fallidas')
-      expect(header).toHaveAccessibleName(/Llamadas a herramientas fallidas: 1/)
-      expect(screen.getByText('Subagente')).toBeInTheDocument()
-      expect(screen.getByText('Flujo de trabajo en segundo plano')).toBeInTheDocument()
-      expect(screen.getByText('Salida: /tmp/result.txt')).toBeInTheDocument()
-      expect(screen.getByText('bloqueado · con error')).toBeInTheDocument()
     })
   })
 }

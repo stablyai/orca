@@ -1,7 +1,7 @@
 // Frame views reconstruct main-owned diff tabs after window reload, from both records frames and initial snapshots.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 import type { LayoutEditorView } from '../../../../../shared/workspace-layout/layout-editor-view'
 import { applyLayoutCommand } from '../../../../../shared/workspace-layout/workspace-layout-commands'
 import type { CommandOf } from '../../../../../shared/workspace-layout/workspace-layout-command-types'
@@ -24,7 +24,7 @@ import { installLayoutFrameApplyCheck } from '../testing/workspace-layout-frame-
 import { openWorkspaceLayoutFrameSync } from './workspace-layout-frame-sync'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })

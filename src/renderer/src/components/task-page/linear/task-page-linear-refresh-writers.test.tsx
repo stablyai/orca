@@ -5,7 +5,7 @@ import { LinearIssueProjectSelector } from '../../linear-issue-project-selector'
 import { pendingLinearIssueWrites } from '@/store/slices/linear/linear-issue-publication'
 import { writeLinearIssue } from '@/lib/work-items/linear/linear-issue-write'
 
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 import LinearItemDrawer from '../../LinearItemDrawer'
 
