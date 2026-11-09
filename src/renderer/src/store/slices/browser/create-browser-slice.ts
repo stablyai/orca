@@ -1,5 +1,5 @@
 import { createBrowserAnnotationActions } from './annotations/browser-annotation-actions'
-import { createBrowserPageViewportActions } from './pages/browser-page-viewport-actions'
+import { createBrowserPagePresentationActions } from './pages/browser-page-presentation-actions'
 import { createBrowserRemotePageHandleActions } from './hosts/browser-remote-page-handle-actions'
 import { createBrowserProfileSwitchActions } from './profiles/browser-profile-switch-actions'
 import type { StateCreator } from 'zustand'
@@ -58,7 +58,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   ...createBrowserPageStateActions(set, get),
   ...createBrowserAudioActions(set, get),
   ...createBrowserRemotePageHandleActions(set),
-  ...createBrowserPageViewportActions(set),
+  ...createBrowserPagePresentationActions(set),
   ...createBrowserAnnotationActions(set),
   ...createBrowserHydrationActions(set, get),
   ...createBrowserProfileSwitchActions(set, get),

@@ -13,6 +13,7 @@ export type PersistedClientHostedBrowserPage = {
   pairedDeviceId: string
   /** When the row was last written; the only input to never-returning-host expiry. */
   savedAt: number
+  chromeless?: boolean
 }
 
 /** Forbid live-authority fields at compile time so persisted generations can never be replayed as authority. */
@@ -51,5 +52,6 @@ export const persistedClientHostedBrowserPageSchema: z.ZodType<PersistedClientHo
     url: z.string().max(8192),
     title: z.string().max(4096),
     pairedDeviceId: identity,
-    savedAt: z.number().int().nonnegative()
+    savedAt: z.number().int().nonnegative(),
+    chromeless: z.boolean().optional()
   })

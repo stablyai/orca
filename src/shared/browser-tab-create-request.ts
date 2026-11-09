@@ -9,6 +9,7 @@ export type BrowserTabCreateRequest = {
   sessionProfileId?: string | null
   sessionPartition?: string
   activate?: boolean
+  chromeless?: boolean
   fallbackWorktreeId?: string
   split?: BrowserTabSplitDirection
   splitFromTabId?: string

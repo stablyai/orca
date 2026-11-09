@@ -16,6 +16,31 @@ const livePlacement = Object.freeze({
 })
 
 describe('client-hosted browser page persistence', () => {
+  it('retains the initial chromeless preference when a client page is restored', () => {
+    const store = sessionStore()
+    const pages = new RuntimeBrowserPageRegistry()
+    pages.publishClientPage({
+      browserPageId: 'clean',
+      workspaceId: 'repo-1::wt-a',
+      browserProfileId: 'default',
+      executionHostKey: 'local',
+      placement: livePlacement,
+      pairedDeviceId: 'device-a',
+      chromeless: true,
+      url: 'https://example.com',
+      loading: false,
+      active: false
+    })
+    persistClientHostedBrowserPages(store, pages, 'repo-1::wt-a')
+    const restored = new RuntimeBrowserPageRegistry()
+    rehydrateClientHostedBrowserPages(restored, {
+      listWorkspaceSessions: () => [store.session],
+      isKnownWorktree: () => true,
+      now: () => NOW
+    })
+    expect(restored.getPage('clean')?.chromeless).toBe(true)
+  })
+
   it('never rehydrates a row whose worktree is gone', () => {
     const store = sessionStore()
     persistClientHostedBrowserPages(store, registryWith(livePlacement), 'repo-1::wt-a')

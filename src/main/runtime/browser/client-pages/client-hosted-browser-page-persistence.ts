@@ -85,6 +85,7 @@ export function persistClientHostedBrowserPages(
   return true
 }
 
+/** Save paired page metadata and its initial toolbar hint without retaining live placement authority. */
 export function buildPersistedClientHostedBrowserPages(
   pages: readonly RuntimeBrowserClientPage[],
   savedAt: number
@@ -101,7 +102,8 @@ export function buildPersistedClientHostedBrowserPages(
             url: page.url,
             title: page.title,
             pairedDeviceId: page.pairedDeviceId,
-            savedAt
+            savedAt,
+            ...(page.chromeless !== undefined ? { chromeless: page.chromeless } : {})
           } satisfies PersistedClientHostedBrowserPage
         ]
   )
@@ -148,7 +150,8 @@ export function rehydrateClientHostedBrowserPages(
             // No host can finish an inherited load spinner.
             loading: false,
             // The returning host owns focus; do not deactivate its actual selected sibling.
-            active: false
+            active: false,
+            ...(row.chromeless !== undefined ? { chromeless: row.chromeless } : {})
           })
           restored.push(row.browserPageId)
         } catch (error) {
@@ -171,6 +174,7 @@ function needsAgeRefresh(
   return (existing ?? []).some((row) => now - row.savedAt > CLIENT_HOSTED_BROWSER_PAGE_REFRESH_MS)
 }
 
+/** Compare restorable metadata, including explicit toolbar hints; timestamps are refreshed separately. */
 function samePersistedClientHostedBrowserPages(
   left: readonly PersistedClientHostedBrowserPage[] | undefined,
   right: readonly PersistedClientHostedBrowserPage[]
@@ -187,6 +191,7 @@ function samePersistedClientHostedBrowserPages(
       row.browserProfileId === next.browserProfileId &&
       row.url === next.url &&
       row.title === next.title &&
+      row.chromeless === next.chromeless &&
       row.pairedDeviceId === next.pairedDeviceId
     )
   })

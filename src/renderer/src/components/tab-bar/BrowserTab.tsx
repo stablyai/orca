@@ -41,6 +41,7 @@ import {
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 import { useAppStore } from '@/store'
+import { BrowserToolbarVisibilityMenuItem } from '../browser-pane/assemble-chrome/browser-toolbar-visibility-menu-item'
 
 export function formatBrowserTabUrlLabel(url: string, t: Translate = translate): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
@@ -70,6 +71,7 @@ function isBlankBrowserTab(tab: BrowserWorkspace): boolean {
   return tab.url === ORCA_BROWSER_BLANK_URL || tab.url === 'about:blank'
 }
 
+/** Keep workspace tab actions, including toolbar recovery, available independently of the page's chrome. */
 export default function BrowserTab({
   tab,
   isActive,
@@ -306,6 +308,7 @@ export default function BrowserTab({
             ? t('auto.components.tab.bar.BrowserTab.c5aaee8c39', 'Unpin Tab')
             : t('auto.components.tab.bar.BrowserTab.911542656f', 'Pin Tab')}
         </ContextMenuItem>
+        <BrowserToolbarVisibilityMenuItem browserPageId={tab.activePageId} menuKind="context" />
         {showAudioControl ? (
           <ContextMenuItem inset onSelect={() => setBrowserTabAudioMuted(tab.id, !audioMuted)}>
             {toggleAudioMutedLabel}

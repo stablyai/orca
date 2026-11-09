@@ -15,14 +15,18 @@ export type ServeBrowserPageState = {
   pageId: string
   url: string
   title: string
+  chromeless?: boolean
 }
 
 /** The saved browser tab showing this page, and the page; a host's own tab is named by its page. */
 export function findSavedBrowserPage(
-  session: WorkspaceSessionState,
+  session: WorkspaceSessionState | null | undefined,
   worktreeId: string,
   pageId: string
 ): { tabId: string; page: BrowserPage } | null {
+  if (!session) {
+    return null
+  }
   for (const tab of session.browserTabsByWorktree?.[worktreeId] ?? []) {
     const page = session.browserPagesByWorkspace?.[tab.id]?.find((entry) => entry.id === pageId)
     if (page) {
@@ -74,6 +78,7 @@ export function withOpenedServeBrowserTab(
   })
 }
 
+/** Seed a saved server page with its presentation hint; absent hints keep the normal toolbar default. */
 function servePageRecord(page: ServeBrowserPageState, createdAt: number): BrowserPage {
   return {
     ...BLANK_BROWSER_TAB_STATE,
@@ -82,7 +87,8 @@ function servePageRecord(page: ServeBrowserPageState, createdAt: number): Browse
     id: page.pageId,
     workspaceId: page.pageId,
     worktreeId: page.worktreeId,
-    createdAt
+    createdAt,
+    ...(page.chromeless !== undefined ? { chromeless: page.chromeless } : {})
   }
 }
 

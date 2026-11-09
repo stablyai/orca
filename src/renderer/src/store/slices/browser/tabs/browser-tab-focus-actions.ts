@@ -13,6 +13,7 @@ import {
   hasPendingEntityTab
 } from '@/runtime/workspace-layout/intents/layout-owner-pending-tabs'
 
+/** Restore closed tabs with each page's saved presentation and coordinate browser-tab selection. */
 export function createBrowserTabFocusActions(
   set: BrowserSliceSet,
   get: BrowserSliceGet
@@ -70,6 +71,7 @@ export function createBrowserTabFocusActions(
       const [firstPage, ...restPages] = pages
       const restored = get().createBrowserTab(worktreeId, firstPage.url, {
         title: firstPage.title,
+        chromeless: firstPage.chromeless,
         activate: true,
         sessionProfileId,
         sessionPartition,
@@ -99,6 +101,7 @@ export function createBrowserTabFocusActions(
           get().createBrowserPage(restored.id, p.url, {
             activate: false,
             title: p.title,
+            chromeless: p.chromeless,
             browserRuntimeEnvironmentId: p.browserRuntimeEnvironmentId,
             ...(p.docLocation ? { docLocation: p.docLocation } : {})
           })

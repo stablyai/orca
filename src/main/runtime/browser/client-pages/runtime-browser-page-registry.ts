@@ -21,6 +21,7 @@ export type RuntimeBrowserClientPage = Readonly<{
   canGoForward: boolean
   active: boolean
   metadataRevision: number
+  chromeless?: boolean
 }>
 
 type RuntimeBrowserClientPageInput = Pick<
@@ -37,7 +38,7 @@ type RuntimeBrowserClientPageInput = Pick<
   Partial<
     Pick<
       RuntimeBrowserClientPage,
-      'pairedDeviceId' | 'title' | 'canGoBack' | 'canGoForward' | 'metadataRevision'
+      'pairedDeviceId' | 'title' | 'canGoBack' | 'canGoForward' | 'metadataRevision' | 'chromeless'
     >
   >
 
