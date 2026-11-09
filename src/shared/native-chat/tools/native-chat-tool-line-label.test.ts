@@ -53,7 +53,7 @@ describe('command disclosure', () => {
   })
 
   it('keeps the full command accessible when metadata accompanies a shortened label', () => {
-    const command = 'pnpm test ' + 'src/checkout/payment-validation.test.ts '.repeat(4)
+    const command = `pnpm test ${'src/checkout/payment-validation.test.ts '.repeat(4)}`
     const view = nativeChatToolLineView({
       type: 'tool-call',
       name: 'Bash',
