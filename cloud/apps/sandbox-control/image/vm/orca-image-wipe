@@ -4,7 +4,7 @@
 set -euo pipefail
 pkill -f orcad-server.js 2>/dev/null || true
 for path in \
-  "$HOME/.orcad-data" "$HOME/.orca-sandbox" "$HOME/.config/orca" "$HOME/.config/orca-dev" \
+  "$HOME/.orcad-data" "$HOME/.orca-sandbox" "$HOME/.orca-desktop" "$HOME/.config/orca" "$HOME/.config/orca-dev" \
   "$HOME/.claude" "$HOME/.claude.json" "$HOME/.codex" "$HOME/.config/gh" "$HOME/.gemini" \
   "$HOME/.local/share/opencode" "$HOME/.npm" "$HOME/.cache" "$HOME/.config/google-chrome" "$HOME/.bash_history" \
   /vercel/sandbox/project; do

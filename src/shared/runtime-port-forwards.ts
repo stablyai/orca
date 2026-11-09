@@ -81,5 +81,7 @@ export function normalizeRuntimePortForwardSettings(
   }
 }
 
-/** Host ports Orca runs itself (the Orca Cloud VM's sshd); never auto-forwarded or announced. */
-export const RUNTIME_PORT_FORWARD_AUTO_EXCLUDED_PORTS: ReadonlySet<number> = new Set([2222, 6768])
+/** Host ports Orca runs itself (Orca Cloud VM sshd, remote desktop, orcad); never auto-forwarded or announced. */
+export const RUNTIME_PORT_FORWARD_AUTO_EXCLUDED_PORTS: ReadonlySet<number> = new Set([
+  2222, 6080, 6768
+])

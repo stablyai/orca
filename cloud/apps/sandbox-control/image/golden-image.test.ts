@@ -1,8 +1,10 @@
 import { spawnSync } from 'node:child_process'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { VM_SCRIPTS, buildGoldenImage, resolveReleaseBundle, type BuildInputs } from './golden-image'
+import { ManifestSchema, VM_SCRIPTS, buildGoldenImage, provisionEnv, resolveReleaseBundle, type BuildInputs } from './golden-image'
 import { renderVmScriptsModule } from './generate-vm-scripts'
 
 const manifest: BuildInputs['manifest'] = {
@@ -103,6 +105,32 @@ describe('golden image build', () => {
       const isNode = readFileSync(path, 'utf8').startsWith('#!/usr/bin/env node')
       expect(spawnSync(isNode ? process.execPath : 'bash', isNode ? ['--check', path] : ['-n', path]).status, script).toBe(0)
     }
+  })
+
+  it('passes the remote desktop pins only when the manifest asks for the desktop', () => {
+    expect(provisionEnv(inputs())).not.toHaveProperty('NOVNC_VERSION')
+    const desktop = {
+      novnc: { version: '1.6.0', sha256: 'b'.repeat(64) },
+      websockify: { version: '0.13.0', sha256: 'c'.repeat(64) }
+    }
+    expect(provisionEnv(inputs({ manifest: { ...manifest, desktop } }))).toMatchObject({
+      NOVNC_VERSION: '1.6.0',
+      NOVNC_SHA256: 'b'.repeat(64),
+      WEBSOCKIFY_VERSION: '0.13.0',
+      WEBSOCKIFY_SHA256: 'c'.repeat(64)
+    })
+    const committed = JSON.parse(readFileSync(fileURLToPath(new URL('./golden-image.manifest.json', import.meta.url).href), 'utf8'))
+    expect(ManifestSchema.parse(committed).desktop?.novnc.version).toMatch(/^\d+\.\d+\.\d+$/)
+  })
+
+  it('orca-desktop-start says "not installed" (exit 3) on an image without the desktop', () => {
+    const home = mkdtempSync(join(tmpdir(), 'orca-desktop-'))
+    const script = fileURLToPath(new URL('./vm/orca-desktop-start', import.meta.url).href)
+    // No Xvnc on this PATH: the image-without-desktop case the control plane maps to a 409.
+    const run = spawnSync('/bin/bash', [script], { env: { HOME: home, PATH: '/nonexistent' }, encoding: 'utf8' })
+    expect(run.status).toBe(3)
+    expect(run.stdout).toBe('')
+    expect(run.stderr).toContain('not installed')
   })
 
   it('pins a released orca-server tarball by its published checksum', async () => {

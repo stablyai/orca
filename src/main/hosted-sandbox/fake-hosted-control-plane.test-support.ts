@@ -16,6 +16,8 @@ export type FakeHostedControlPlane = {
   /** Next lifecycle start is refused by billing with this reason. */
   denyNextStart: (reason: string) => void
   requests: { method: string; path: string; authorization: string | null }[]
+  /** False models an image built before the remote desktop. */
+  desktopInstalled: boolean
 }
 
 export function createFakeHostedControlPlane(
@@ -137,6 +139,13 @@ export function createFakeHostedControlPlane(
         )
         return json({ sandbox })
       }
+      case 'POST /desktop':
+        if (sandbox.status !== 'running') {
+          return fail('conflict', 409, `sandbox_${sandbox.status}`)
+        }
+        return fake.desktopInstalled
+          ? json({ desktop: { port: 6080, path: 'vnc.html', password: 'Ab3dE6gH' } })
+          : fail('conflict', 409, 'desktop_not_installed')
       case 'POST /rollover':
         if (sandbox.status !== 'running') {
           return fail('conflict', 409)
@@ -163,13 +172,15 @@ export function createFakeHostedControlPlane(
     return handle(method, url.pathname, body)
   }
 
-  return {
+  const fake: FakeHostedControlPlane = {
     fetch: fakeFetch,
     token,
     sandboxes,
     denyNextStart: (reason) => {
       pendingDeny = reason
     },
-    requests
+    requests,
+    desktopInstalled: true
   }
+  return fake
 }

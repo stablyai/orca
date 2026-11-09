@@ -51,5 +51,7 @@ export const ephemeralVmApi = {
   cloudSshCopyCommand: (args) => ipcRenderer.invoke('cloudSsh:copyCommand', args),
   cloudSshOpenInEditor: (args) => ipcRenderer.invoke('cloudSsh:openInEditor', args),
   cloudSshRevoke: (args) => ipcRenderer.invoke('cloudSsh:revoke', args),
-  cloudSshRemoveSshConfigInclude: () => ipcRenderer.invoke('cloudSsh:removeSshConfigInclude')
+  cloudSshRemoveSshConfigInclude: () => ipcRenderer.invoke('cloudSsh:removeSshConfigInclude'),
+  cloudEnvironmentIds: () => ipcRenderer.invoke('ephemeralVm:cloudEnvironmentIds'),
+  openCloudRemoteDesktop: (args) => ipcRenderer.invoke('ephemeralVm:openCloudRemoteDesktop', args)
 } satisfies PreloadApi['ephemeralVm']

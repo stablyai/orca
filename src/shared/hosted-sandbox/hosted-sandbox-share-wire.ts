@@ -52,8 +52,8 @@ export function parseCloudShareDeepLink(url: string): string | null {
   return /^orca:\/\/cloud-share\/([0-9a-f]{52})\/?$/.exec(url.trim())?.[1] ?? null
 }
 
-/** Ports the control plane reserves (sshd, orcad, the share proxy); they can't be shared. */
-export const SHARE_RESERVED_PORTS: readonly number[] = [2222, 6768, 6769]
+/** Ports the control plane reserves (sshd, remote desktop, orcad, the share proxy); they can't be shared. */
+export const SHARE_RESERVED_PORTS: readonly number[] = [2222, 6080, 6768, 6769]
 
 export type CloudShareFailureCode =
   | 'not_cloud'

@@ -186,3 +186,55 @@ export async function drainOrcad(provider: SandboxProviderApi, sessionId: string
     throw error
   }
 }
+
+export const DESKTOP_COMMAND = '/opt/orca/bin/orca-desktop-start'
+/** noVNC on the VM's loopback; reached only through the paired forward, never shared. */
+export const DESKTOP_PORT = 6080
+const DESKTOP_TIMEOUT_MS = 45_000
+/** orca-desktop-start's exit code for an image built without the remote desktop. */
+const DESKTOP_NOT_INSTALLED_EXIT = 3
+
+const DesktopReadySchema = z
+  .object({
+    schemaVersion: z.literal(1),
+    port: z.number().int().min(1024).max(65_535),
+    display: z.string().regex(/^:\d{1,3}$/),
+    path: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/),
+    /** Per-boot VNC password: the desktop's localhost forward is reachable by any local process. */
+    password: z.string().regex(/^[A-Za-z0-9]{8}$/)
+  })
+  .strict()
+
+export type DesktopReady = z.infer<typeof DesktopReadySchema>
+
+export class DesktopCommandError extends Error {
+  constructor(readonly code: 'desktop_not_installed' | 'desktop_start_failed' | 'desktop_ready_invalid') {
+    super(code)
+    this.name = 'DesktopCommandError'
+  }
+}
+
+/** Starts the VM's remote desktop (idempotent per boot): Xvnc + noVNC on the VM's loopback only. */
+export async function startDesktop(provider: SandboxProviderApi, sessionId: string): Promise<DesktopReady> {
+  let result: Awaited<ReturnType<SandboxProviderApi['runCommand']>>
+  try {
+    result = await provider.runCommand(sessionId, { command: DESKTOP_COMMAND, timeoutMs: DESKTOP_TIMEOUT_MS })
+  } catch (error) {
+    // Vercel refuses to spawn a missing executable: an image from before the desktop.
+    if (error instanceof ProviderError && error.status === 400 && error.code === 'command_failed') {
+      throw new DesktopCommandError('desktop_not_installed')
+    }
+    throw error
+  }
+  if (result.exitCode === DESKTOP_NOT_INSTALLED_EXIT || result.exitCode === 127) {
+    throw new DesktopCommandError('desktop_not_installed')
+  }
+  if (result.exitCode !== 0) {
+    throw new DesktopCommandError('desktop_start_failed')
+  }
+  try {
+    return DesktopReadySchema.parse(JSON.parse(result.stdout.trim().split('\n').at(-1) ?? ''))
+  } catch {
+    throw new DesktopCommandError('desktop_ready_invalid')
+  }
+}

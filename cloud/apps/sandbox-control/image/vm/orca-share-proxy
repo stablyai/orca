@@ -20,7 +20,8 @@ const LISTEN_PORT = Number(process.env.ORCA_SHARE_PROXY_PORT || 6769)
 const KEY = Buffer.from((process.env.ORCA_SHARE_PROXY_KEY || fs.readFileSync(0, 'utf8')).trim(), 'base64url')
 delete process.env.ORCA_SHARE_PROXY_KEY
 // Never proxy to the VM's sshd, orcad or this proxy itself.
-const BLOCKED_PORTS = new Set([2222, 6768, LISTEN_PORT])
+// 6080: the remote desktop (VNC behind a password) is for its owner's forward only.
+const BLOCKED_PORTS = new Set([2222, 6080, 6768, LISTEN_PORT])
 const MAX_SKEW_SECONDS = 300
 const MAX_CONNECTION_SECONDS = 3600
 const HOP_BY_HOP = ['connection', 'keep-alive', 'proxy-connection', 'transfer-encoding', 'te', 'trailer', 'upgrade']

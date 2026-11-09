@@ -18,5 +18,15 @@
   "agentCliPackages": [
     "@anthropic-ai/claude-code@2.1.319",
     "@openai/codex@0.166.0"
-  ]
+  ],
+  "desktop": {
+    "novnc": {
+      "version": "1.6.0",
+      "sha256": "5066103959ef4e9b10f37e5a148627360dd8414e4cf8a7db92bdbd022e728aaa"
+    },
+    "websockify": {
+      "version": "0.13.0",
+      "sha256": "b6413e364efd04f3c92ec8c17747e3c4adc20157c2ef1c5d019a26d944a46df8"
+    }
+  }
 }
