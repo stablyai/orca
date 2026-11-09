@@ -1,6 +1,7 @@
 import type { SecretAtRestProtection } from '../../shared/secret-at-rest-protection'
 import { ipcRenderer } from 'electron'
 import type {
+  DictationContext,
   OpenAiCompatibleSpeechProvider,
   OpenAiCompatibleSpeechProviderSummary,
   SpeechAudioPortMessage,
@@ -40,7 +41,7 @@ export const speechApi = {
     ipcRenderer.invoke('speech:deleteModel', modelId),
   startDictation: async (
     modelId: string,
-    hotwords: string[] | undefined,
+    context: DictationContext | undefined,
     sessionId: string
   ): Promise<void> => {
     const { port1, port2 } = new MessageChannel()
@@ -51,7 +52,7 @@ export const speechApi = {
       const result: { directAudio?: boolean } | undefined = await ipcRenderer.invoke(
         'speech:startDictation',
         modelId,
-        hotwords,
+        context,
         sessionId
       )
       directAudio = result?.directAudio === true

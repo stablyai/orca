@@ -100,6 +100,8 @@ export function MobileDictationHostProvider({ children }: { children: ReactNode 
     client: owner?.client ?? null,
     enabled: true,
     removeFillerWords: owner?.removeFillerWords ?? true,
+    dictationTerms: owner?.dictationTerms,
+    worktreeId: owner?.worktreeId,
     onTranscript: (text) => {
       const current = ownerRef.current
       if (!current) {

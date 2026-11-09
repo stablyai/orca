@@ -106,6 +106,8 @@ function handleMessage(
   switch (msg.type) {
     case 'init':
       return handleInit(msg)
+    case 'open':
+      return recognizer?.open(msg.streamId, msg.vocabulary)
     case 'feed':
       return handleFeed(msg)
     case 'stop':

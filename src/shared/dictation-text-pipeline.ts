@@ -1,3 +1,4 @@
+import { createDictationDictionary, type DictationTerm } from './dictation-dictionary'
 import { engineDictationLanguage } from './dictation-language'
 import { removeFillerWords } from './dictation-filler-words'
 import type { SpeechModelManifest, VoiceSettings } from './speech-types'
@@ -26,11 +27,18 @@ function dictatedTextLanguages(
 /** The passes dictated text goes through before anyone sees it, or null when every pass is off. */
 export function createDictationTextPipeline(
   model: DictationTextModel | undefined,
-  settings: Partial<DictationTextSettings> | undefined
+  settings: Partial<DictationTextSettings> | undefined,
+  terms?: readonly DictationTerm[]
 ): ((text: string) => string) | null {
-  if (settings?.removeFillerWords === false) {
-    return null
-  }
   const languages = dictatedTextLanguages(model, settings?.dictationLanguage)
-  return (text) => removeFillerWords(text, languages)
+  const dropFillers =
+    settings?.removeFillerWords === false
+      ? null
+      : (text: string) => removeFillerWords(text, languages)
+  const spellTerms = createDictationDictionary(terms)
+  if (!dropFillers || !spellTerms) {
+    return dropFillers ?? spellTerms
+  }
+  // Terms last, so a filler removed at a sentence start can't recapitalize a lowercase term like "pnpm".
+  return (text) => spellTerms(dropFillers(text))
 }

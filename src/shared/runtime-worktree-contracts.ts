@@ -1,3 +1,4 @@
+import type { DictationTerm } from './dictation-dictionary'
 import type { SmartTier } from './sidebar-list/sort-stamps'
 import type {
   AgentStatusState,
@@ -177,6 +178,8 @@ export type RuntimeSpeechSetupState = {
   dictationHoldToRecord: boolean
   /** Phones that recognize speech themselves clean their own text by this switch. */
   removeFillerWords: boolean
+  /** ...and spell these terms, repo terms first; absent from older hosts. */
+  dictationTerms?: DictationTerm[]
   models: RuntimeSpeechModelSummary[]
 }
 

@@ -20,6 +20,10 @@ export type UseMobileDictationOptions = {
   onError?: (error: Error, outcome: { kept: boolean }) => void
   // The computer's filler switch, for text the phone recognizes itself; unknown means on.
   removeFillerWords?: boolean
+  // The computer's dictionary for this worktree, unvalidated, for text the phone recognizes itself.
+  dictationTerms?: unknown
+  // Lets the computer pick this worktree's repo terms for text it recognizes.
+  worktreeId?: string
   // The host's cloud upload is full; the dictation stops and inserts what was kept.
   onAudioLimitReached?: () => void
 }

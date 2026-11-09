@@ -22,6 +22,7 @@ export async function startMobileDictationOnHost(
   await startMobileDictationDesktopSession({
     client,
     dictationId,
+    worktreeId: run.worktreeId.current,
     generation,
     getCurrentGeneration: () => run.generation.current,
     getEnabled: () => run.enabled.current,

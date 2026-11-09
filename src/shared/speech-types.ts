@@ -1,3 +1,4 @@
+import type { DictationTerm } from './dictation-dictionary'
 export type SpeechModelType =
   | 'transducer'
   | 'paraformer'
@@ -106,4 +107,12 @@ export type VoiceSettings = {
   unloadModelAfterMinutes: number | null
   /** 'off' keeps on-device recognition on the CPU, for machines whose GPU driver hard-crashes. Absent = 'auto'. */
   speechGpu?: SpeechGpuMode
+  /** Personal dictionary, used in every repo; each repo adds its own Repo.dictationTerms. */
+  dictationTerms?: DictationTerm[]
+}
+
+/** Where a dictation goes: an engine in the desktop's own process takes repoTerms, a host resolves worktreeId itself. */
+export type DictationContext = {
+  worktreeId?: string
+  repoTerms?: DictationTerm[]
 }

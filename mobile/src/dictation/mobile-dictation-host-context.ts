@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useSyncExternalStore } 
 import type { UseMobileDictationResult } from '../hooks/mobile-dictation-session-state'
 import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileDictationAwayTarget } from './mobile-dictation-away-insert'
+import type { DictationTerm } from '../../../src/shared/dictation-dictionary'
 
 export type MobileDictationHostToast = { message: string; open?: () => void }
 
@@ -20,6 +21,10 @@ export type MobileDictationOwner = {
   readonly paneKey: string | undefined
   readonly dictationMode: string | undefined
   readonly removeFillerWords: boolean
+  // The computer's terms for this worktree, for words the phone recognizes itself.
+  readonly dictationTerms: readonly DictationTerm[] | undefined
+  // The computer spells its own words with this worktree's repo terms.
+  readonly worktreeId: string
 }
 
 // A mounted session screen, as the dictation host sees it.
