@@ -178,10 +178,10 @@ export function TeamInviteComposer(props: TeamInviteComposerProps): React.JSX.El
       <label htmlFor={`${id}-input`} className="text-sm font-medium">
         {t('auto.components.billing.team.inviteLabel', 'Invite teammates')}
       </label>
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+      <div className="flex flex-wrap items-start gap-2">
         <div
           className={cn(
-            'flex min-h-8 min-w-0 flex-1 cursor-text flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-2 py-0.5 shadow-xs transition-[color,box-shadow] dark:bg-input/30',
+            'flex min-h-8 min-w-[16rem] flex-1 cursor-text flex-wrap items-center gap-1 rounded-md border border-input bg-transparent px-2 py-0.5 shadow-xs transition-[color,box-shadow] dark:bg-input/30',
             'focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50'
           )}
           onClick={() => localInput.current?.focus()}

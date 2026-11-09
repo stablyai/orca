@@ -1,6 +1,8 @@
 import { useRef } from 'react'
 import { LogOut, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
+import { Skeleton } from '@/components/ui/skeleton'
 import { SettingsDisabledControlTooltip } from '@/components/settings/form-controls/SettingsDisabledControlTooltip'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
@@ -61,24 +63,23 @@ function viewerRoleSentence(role: OrcaOrgRole, t: Translate): string {
 
 /** Mirrors the plan card (title + badge, three stats, a two-line note) so loading doesn't jump. */
 function PlanSkeleton(): React.JSX.Element {
-  const bar = 'block rounded bg-muted motion-safe:animate-pulse'
   return (
     <div aria-hidden className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-xs">
       <div className="flex items-center gap-2">
-        <span className={`${bar} h-4 w-12`} />
-        <span className={`${bar} h-5 w-14 rounded-full`} />
+        <Skeleton className="h-4 w-12" />
+        <Skeleton className="h-5 w-14 rounded-full" />
       </div>
       <div className="grid grid-cols-3 gap-4">
         {[0, 1, 2].map((index) => (
-          <span key={index} className="space-y-1.5">
-            <span className={`${bar} h-3 w-16`} />
-            <span className={`${bar} h-4 w-12`} />
-            <span className={`${bar} h-3 w-24`} />
-          </span>
+          <div key={index} className="space-y-1.5">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-4 w-12" />
+            <Skeleton className="h-3 w-24" />
+          </div>
         ))}
       </div>
-      <span className={`${bar} h-3 w-11/12`} />
-      <span className={`${bar} h-3 w-2/3`} />
+      <Skeleton className="h-3 w-11/12" />
+      <Skeleton className="h-3 w-2/3" />
     </div>
   )
 }
@@ -91,12 +92,12 @@ function SkeletonRows(): React.JSX.Element {
     >
       {[0, 1, 2].map((index) => (
         <div key={index} className="flex min-h-12 items-center gap-3 bg-card px-3 py-2">
-          <span className="size-6 rounded-full bg-muted motion-safe:animate-pulse" />
-          <span className="flex-1 space-y-1.5">
-            <span className="block h-3 w-32 rounded bg-muted motion-safe:animate-pulse" />
-            <span className="block h-2.5 w-44 rounded bg-muted/70 motion-safe:animate-pulse" />
-          </span>
-          <span className="h-8 w-24 rounded-md bg-muted/70 motion-safe:animate-pulse" />
+          <Skeleton className="size-6 rounded-full" />
+          <div className="flex-1 space-y-1.5">
+            <Skeleton className="h-3 w-32" />
+            <Skeleton className="h-2.5 w-44" />
+          </div>
+          <Skeleton className="h-8 w-28" />
         </div>
       ))}
     </div>
@@ -231,9 +232,10 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
         ) : props.roster === null ? (
           <SkeletonRows />
         ) : (
-          <div className="flex flex-col items-center gap-3 rounded-xl border border-border p-8 text-center">
-            <p className="text-sm text-muted-foreground">
-              {props.roster.status === 'reconnect-required'
+          <InlineError
+            title={t('auto.components.billing.team.loadFailedTitle', 'Couldn’t load team')}
+            detail={
+              props.roster.status === 'reconnect-required'
                 ? t(
                     'auto.components.billing.openSignedOut',
                     'Sign in to Orca again to manage billing.'
@@ -241,13 +243,12 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
                 : t(
                     'auto.components.billing.team.loadFailed2',
                     'Couldn’t load your team. Check your connection.'
-                  )}
-            </p>
-            <Button type="button" variant="outline" size="sm" onClick={props.onRefresh}>
-              <RefreshCw />
-              {t('auto.components.billing.plans.retry', 'Try again')}
-            </Button>
-          </div>
+                  )
+            }
+            retryLabel={t('auto.components.billing.plans.retry', 'Try again')}
+            onRetry={props.onRefresh}
+            retrying={props.refreshing}
+          />
         )}
         {roster && !roster.canManageMembers ? (
           <p className="text-xs text-muted-foreground">

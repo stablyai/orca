@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Cloud, KeyRound, RefreshCw, Zap } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Cloud, KeyRound, Zap } from 'lucide-react'
+import { InlineError } from '@/components/ui/inline-error'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Progress } from '@/components/ui/progress'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import {
@@ -142,7 +143,7 @@ function CurrentPlanStrip({
 }
 
 function SkeletonLine({ className }: { className: string }): React.JSX.Element {
-  return <span className={`block rounded bg-muted motion-safe:animate-pulse ${className}`} />
+  return <Skeleton className={className} />
 }
 
 function SkeletonCard({ lines }: { lines: number }): React.JSX.Element {
@@ -192,24 +193,16 @@ function PlansLoadError({ onRetry }: { onRetry: () => void }): React.JSX.Element
   return (
     <div className="space-y-6">
       <ValueProps />
-      <div
-        role="alert"
-        className="mx-auto flex max-w-md flex-col items-center gap-3 rounded-xl border border-border p-8 text-center"
-      >
-        <p className="text-sm font-medium">
-          {t('auto.components.billing.plans.loadFailedTitle', 'Plans didn’t load')}
-        </p>
-        <p className="text-sm text-muted-foreground">
-          {t(
-            'auto.components.billing.plans.loadFailed',
-            'Could not load plans. Try again in a moment.'
-          )}
-        </p>
-        <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-          <RefreshCw />
-          {t('auto.components.billing.plans.retry', 'Try again')}
-        </Button>
-      </div>
+      <InlineError
+        className="mx-auto max-w-md"
+        title={t('auto.components.billing.plans.loadFailedTitle', 'Plans didn’t load')}
+        detail={t(
+          'auto.components.billing.plans.loadFailed',
+          'Could not load plans. Try again in a moment.'
+        )}
+        retryLabel={t('auto.components.billing.plans.retry', 'Try again')}
+        onRetry={onRetry}
+      />
     </div>
   )
 }

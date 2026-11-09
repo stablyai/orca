@@ -128,9 +128,14 @@ export function TeamSeatsCard({
         value0: String(entitlement.seatChange.seatsAtRenewal),
         value1: date(entitlement.seatChange.effectiveAt)
       })
-    : t('auto.components.billing.team.seatsInUse', '{{value0}} in use', {
-        value0: String(Math.min(members, entitlement.seats))
-      })
+    : members > entitlement.seats
+      ? // Billing re-reads membership on its next sync and charges the new seats then.
+        t('auto.components.billing.team.seatsSyncing', '{{value0}} members · updating', {
+          value0: String(members)
+        })
+      : t('auto.components.billing.team.seatsInUse', '{{value0}} in use', {
+          value0: String(members)
+        })
   return (
     <div className="space-y-3 rounded-xl border border-border bg-card p-4 shadow-xs">
       <div className="flex flex-wrap items-center gap-2">

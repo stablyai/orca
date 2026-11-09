@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { CreditCard, ExternalLink, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { InlineError } from '@/components/ui/inline-error'
 import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { formatCents } from './plans/plans-pricing'
 import { cn } from '@/lib/utils'
@@ -123,9 +124,12 @@ export function PlanBillingView({
     return (
       <div className="space-y-3 border-t border-border/60 pt-5">
         {header}
-        <p className="text-xs text-muted-foreground">
-          {t('auto.components.billing.loadFailed', 'Could not load your plan. Try again.')}
-        </p>
+        <InlineError
+          title={t('auto.components.billing.loadFailedTitle', 'Couldn’t load your plan')}
+          retryLabel={t('auto.components.billing.plans.retry', 'Try again')}
+          onRetry={onRefresh}
+          retrying={loading}
+        />
       </div>
     )
   }
