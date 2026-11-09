@@ -93,13 +93,15 @@ export function withOrcaClaudeEntrypoint(
   // Windows env names are case-insensitive, so a differently cased twin is the same variable.
   const isEntrypointKey = (key: string): boolean =>
     (platform === 'win32' ? key.toUpperCase() : key) === CLAUDE_ENTRYPOINT_ENV
-  const env = Object.fromEntries(
-    Object.entries(inheritedEnv).filter(([key]) => !isEntrypointKey(key))
-  )
-  if (!Object.keys(overlay ?? {}).some(isEntrypointKey)) {
-    env[CLAUDE_ENTRYPOINT_ENV] = 'orca'
+  const withoutEntrypoint = (source: Record<string, string>): Record<string, string> =>
+    Object.fromEntries(Object.entries(source).filter(([key]) => !isEntrypointKey(key)))
+  const override = Object.entries(overlay ?? {}).find(([key]) => isEntrypointKey(key))?.[1]
+  // The SDK reads only the exact name and otherwise adds its own default, which Windows would pick.
+  return {
+    ...withoutEntrypoint(inheritedEnv),
+    ...withoutEntrypoint(overlay ?? {}),
+    [CLAUDE_ENTRYPOINT_ENV]: override ?? 'orca'
   }
-  return { ...env, ...overlay }
 }
 
 // Merge onto the shell environment to retain PATH and ambient Anthropic auth.

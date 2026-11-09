@@ -51,7 +51,7 @@ it('keeps a differently cased Windows launch value over the Orca default', () =>
   const inherited = { Claude_Code_Entrypoint: 'cli', PATH: 'C:\\bin' }
   expect(
     withOrcaClaudeEntrypoint(inherited, { claude_code_entrypoint: 'company-client' }, 'win32')
-  ).toEqual({ PATH: 'C:\\bin', claude_code_entrypoint: 'company-client' })
+  ).toEqual({ PATH: 'C:\\bin', CLAUDE_CODE_ENTRYPOINT: 'company-client' })
   expect(withOrcaClaudeEntrypoint(inherited, undefined, 'win32')).toEqual({
     PATH: 'C:\\bin',
     CLAUDE_CODE_ENTRYPOINT: 'orca'
