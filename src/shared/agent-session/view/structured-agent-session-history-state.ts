@@ -59,10 +59,14 @@ export function replacePage(
 }
 
 export function mergeItems(
-  current: readonly AgentJournalRenderItem[],
+  current: AgentJournalRenderItem[],
   incoming: readonly AgentJournalRenderItem[],
   removedIds: readonly string[]
 ): AgentJournalRenderItem[] {
+  const upserted = removedIds.length === 0 ? upsertItems(current, incoming) : null
+  if (upserted) {
+    return upserted
+  }
   const removed = new Set(removedIds)
   const byId = new Map(
     current.filter((item) => !removed.has(item.itemId)).map((item) => [item.itemId, item])
@@ -74,6 +78,50 @@ export function mergeItems(
     }
   }
   return [...byId.values()].sort(compareAgentJournalItems)
+}
+
+/** Streamed revisions replace their row in place and new rows append past the tail, keeping every other row's
+ * position; anything that would move a row returns null for the full merge. */
+function upsertItems(
+  current: AgentJournalRenderItem[],
+  incoming: readonly AgentJournalRenderItem[]
+): AgentJournalRenderItem[] | null {
+  let next: AgentJournalRenderItem[] | null = null
+  let changed = false
+  for (const item of incoming) {
+    let index = -1
+    if (next) {
+      index = next.findLastIndex((row) => row.itemId === item.itemId)
+    } else {
+      // One pass both copies the rows and finds the revised one.
+      next = []
+      for (const row of current) {
+        if (row.itemId === item.itemId) {
+          index = next.length
+        }
+        next.push(row)
+      }
+    }
+    const prior = next[index]
+    if (prior && item.revision < prior.revision) {
+      continue
+    }
+    const tail = next.at(-1)
+    if (
+      prior
+        ? compareAgentJournalItems(prior, item) !== 0
+        : tail && compareAgentJournalItems(tail, item) >= 0
+    ) {
+      return null
+    }
+    if (prior) {
+      next[index] = item
+    } else {
+      next.push(item)
+    }
+    changed = true
+  }
+  return changed && next ? next : current
 }
 
 /** Keep the contiguous loaded suffix: an older revision retains its sequence and would move the paging anchor past a hole.
