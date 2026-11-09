@@ -156,7 +156,7 @@ function VocabularyChip({
         type="button"
         variant="ghost"
         size="icon-xs-round"
-        className="size-4.5 text-muted-foreground"
+        className="size-4.5"
         aria-label={t('components.settings.voice.vocabulary.remove', 'Remove {{term}}', {
           term: entry.term
         })}
@@ -198,7 +198,7 @@ function VocabularyAddRow({
   return (
     <div className="flex flex-wrap gap-2">
       <Input
-        className="h-8 min-w-36 flex-1 text-xs"
+        className="h-8 min-w-36 flex-1"
         value={term}
         maxLength={MAX_DICTATION_TERM_LENGTH}
         placeholder={t('components.settings.voice.vocabulary.term', 'Word or phrase')}
@@ -207,7 +207,7 @@ function VocabularyAddRow({
         onKeyDown={addOnEnter}
       />
       <Input
-        className="h-8 min-w-36 flex-1 text-xs"
+        className="h-8 min-w-36 flex-1"
         value={heardAs}
         maxLength={MAX_DICTATION_TERM_LENGTH}
         placeholder={t('components.settings.voice.vocabulary.heardAs', 'Heard as (optional)')}
