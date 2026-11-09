@@ -2,9 +2,12 @@ import { captureNativeChatEditDraftDestination } from '../../drafts/native-chat-
 import { useNativeChatPickerCommandDispatch } from '../../composer/pickers/use-native-chat-picker-command-dispatch'
 import {
   useCallback,
+  useEffect,
   useImperativeHandle,
   useLayoutEffect,
   useMemo,
+  useRef,
+  useState,
   type ForwardedRef,
   type RefObject
 } from 'react'
@@ -14,6 +17,7 @@ import type { NativeChatPickerItem } from '../../../../../../shared/native-chat/
 import { prepareQueuedMessageEditText } from '../../../../../../shared/queued-message-edit-command'
 import { translate } from '@/i18n/i18n'
 import { registerDictationComposerTarget } from '../../../dictation/dictation-insertion-target'
+import { queueComposerSendAfterDictation } from '../../../dictation/use-dictation-queued-send'
 import { insertNativeChatComposerDraftText } from '../../drafts/native-chat-composer-draft-insertion'
 import { registerNativeChatComposerDestination } from '../../composer/focus/native-chat-composer-destination'
 import type { NativeChatComposerSendIntent } from '../../composer/submit/native-chat-composer-send-intent'
@@ -108,17 +112,35 @@ export function useNativeChatComposerEditSession({
     },
     [editSession, setNotice, acceptsText]
   )
+  // A Send while this composer is being dictated into runs after the last words land, once they've rendered.
+  const dictationSendRef = useRef<{ intent?: NativeChatComposerSendIntent } | null>(null)
+  const [dictationSendTick, setDictationSendTick] = useState(0)
+  useEffect(() => {
+    const pending = dictationSendRef.current
+    dictationSendRef.current = null
+    if (pending) {
+      sendMessage(pending.intent)
+    }
+  }, [dictationSendTick, sendMessage])
   const send = useCallback(
     (intent?: NativeChatComposerSendIntent) => {
       if (!editSession) {
-        sendMessage(intent)
+        const queued =
+          root.current !== null &&
+          queueComposerSendAfterDictation(root.current, () => {
+            dictationSendRef.current = { intent }
+            setDictationSendTick((tick) => tick + 1)
+          })
+        if (!queued) {
+          sendMessage(intent)
+        }
         return
       }
       if (!disabled && !sendHeld && editSession.canSave) {
         editSession.save()
       }
     },
-    [disabled, editSession, sendHeld, sendMessage]
+    [disabled, editSession, root, sendHeld, sendMessage]
   )
   const submit = useLatestHandler(() => send())
   // The pane's own handle object, so its identity changes only when that handle does.

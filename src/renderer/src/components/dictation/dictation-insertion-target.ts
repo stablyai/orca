@@ -13,7 +13,11 @@ import { DICTATION_FOCUS_INPUT_EVENT } from './dictation-control-events'
 
 /** Each returns whether the text landed. */
 type ComposerInsert = (text: string) => boolean
-type TerminalInsert = (text: string, paneId: number) => Promise<boolean>
+type TerminalInput = {
+  insert: (text: string, paneId: number) => Promise<boolean>
+  /** Enter as if typed, once the pane has taken the dictated text. */
+  pressEnter: (paneId: number) => Promise<void>
+}
 
 export type DictationInsertionTarget =
   | { kind: 'composer'; insert: ComposerInsert; root: HTMLElement }
@@ -22,7 +26,7 @@ export type DictationInsertionTarget =
   | { kind: 'contentEditable'; element: HTMLElement }
 
 const composerTargets = new WeakMap<HTMLElement, ComposerInsert>()
-const terminalTargets = new Map<string, TerminalInsert>()
+const terminalTargets = new Map<string, TerminalInput>()
 
 /** A late transcript lands in the composer's draft even after focus left its editor; the composer spaces it. */
 export function registerDictationComposerTarget(
@@ -38,13 +42,19 @@ export function registerDictationComposerTarget(
 }
 
 /** A late transcript lands in the pane it started in, even after its tab was switched away. */
-export function registerDictationTerminalTarget(tabId: string, insert: TerminalInsert): () => void {
-  terminalTargets.set(tabId, insert)
+export function registerDictationTerminalTarget(tabId: string, input: TerminalInput): () => void {
+  terminalTargets.set(tabId, input)
   return () => {
-    if (terminalTargets.get(tabId) === insert) {
+    if (terminalTargets.get(tabId) === input) {
       terminalTargets.delete(tabId)
     }
   }
+}
+
+export async function pressDictationTerminalEnter(
+  target: Extract<DictationInsertionTarget, { kind: 'terminal' }>
+): Promise<void> {
+  await terminalTargets.get(target.tabId)?.pressEnter(target.paneId)
 }
 
 export function captureInsertionTarget(): DictationInsertionTarget | null {
@@ -140,8 +150,8 @@ export async function insertText(
     return target.insert(text)
   }
   if (target.kind === 'terminal') {
-    const insert = terminalTargets.get(target.tabId)
-    return insert ? insert(spaced(text, previousText, ''), target.paneId) : false
+    const input = terminalTargets.get(target.tabId)
+    return input ? input.insert(spaced(text, previousText, ''), target.paneId) : false
   }
   if (target.kind === 'text') {
     const element = target.element
