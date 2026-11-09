@@ -22,7 +22,7 @@ type TrackedField =
   | (typeof SEAM_SCOPED_TAB_RECORD_FIELDS)[number]
 
 export function isSeamTabMapField(field: string): field is SeamTabMapField {
-  return (SEAM_TAB_MAP_FIELDS as readonly string[]).includes(field)
+  return SEAM_TAB_MAP_FIELDS.some((name) => name === field)
 }
 
 /** Cold path: every tracked record this patch replaces was rebuilt wholesale. */
