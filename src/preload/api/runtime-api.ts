@@ -113,6 +113,11 @@ export type RuntimeApi = {
     }) => Promise<VerifyAndAddRuntimeEnvironmentResult>
     resolve: (args: { selector: string }) => Promise<PublicKnownRuntimeEnvironment>
     remove: (args: { selector: string }) => Promise<RuntimeEnvironmentRemoval>
+    /** Renames a saved server in place; identity, pairing and endpoints are unchanged. */
+    rename: (args: {
+      selector: string
+      name: string
+    }) => Promise<{ environment: PublicKnownRuntimeEnvironment }>
     disconnect: (args: {
       selector: string
     }) => Promise<{ disconnected: PublicKnownRuntimeEnvironment }>

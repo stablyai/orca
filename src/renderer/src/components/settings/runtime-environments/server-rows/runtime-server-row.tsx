@@ -69,6 +69,7 @@ type RuntimeServerRowProps = {
   onDisconnect: (environment: PublicKnownRuntimeEnvironment) => void
   onConnect: (environment: PublicKnownRuntimeEnvironment) => void
   onRemove: (environment: PublicKnownRuntimeEnvironment) => void
+  onRename: (environment: PublicKnownRuntimeEnvironment) => void
   onMakeDefault?: (environment: PublicKnownRuntimeEnvironment) => void
   onCheckForUpdates?: (options: UpdateCheckOptions) => void
   onChanged?: () => void
@@ -98,6 +99,7 @@ export function RuntimeServerRow({
   onDisconnect,
   onConnect,
   onRemove,
+  onRename,
   onMakeDefault,
   onCheckForUpdates,
   onChanged,
@@ -334,6 +336,7 @@ export function RuntimeServerRow({
             }
             showDisconnect={row.isReachable}
             showMakeDefault={Boolean(onMakeDefault) && !isActive}
+            showRename={!deployment}
             sshAccessLinked={showSshAccess ? Boolean(sshAccess) : null}
             detailsExpanded={expanded}
             actionBusy={actionBusy}
@@ -354,6 +357,7 @@ export function RuntimeServerRow({
               setSshDialogOpen(true)
             }}
             onToggleDetails={() => setExpanded((v) => !v)}
+            onRename={() => onRename(environment)}
             onRemove={() => onRemove(environment)}
           />
         }

@@ -143,6 +143,38 @@ export function removeEnvironment(userDataPath: string, selector: string): Known
   return environment
 }
 
+/** Renames a saved server in place; id, pairing, endpoints and history are untouched. */
+export function renameEnvironment(
+  userDataPath: string,
+  selector: string,
+  args: { name: string; now?: number }
+): PersistedRuntimeEnvironment {
+  const store = readPersistedEnvironmentStore(userDataPath)
+  const existing = resolveEnvironmentFromStore(store, selector)
+  const name = args.name.trim()
+  if (!name) {
+    throw new RuntimeEnvironmentStoreError('invalid_argument', 'Environment name cannot be empty.')
+  }
+  if (name === existing.name) {
+    return existing
+  }
+  const colliding = findCollidingEnvironmentName(
+    store.environments.filter((entry) => entry.id !== existing.id),
+    name
+  )
+  if (colliding) {
+    throw remoteServerPairingStoreError('nameTaken', { name: colliding.name })
+  }
+  const renamed = { ...existing, name, updatedAt: args.now ?? Date.now() }
+  writeEnvironmentStore(userDataPath, {
+    version: 1,
+    environments: store.environments
+      .map((entry) => (entry.id === existing.id ? renamed : entry))
+      .sort((a, b) => a.name.localeCompare(b.name))
+  })
+  return renamed
+}
+
 export function updateEnvironmentFromPairingCode(
   userDataPath: string,
   selector: string,
