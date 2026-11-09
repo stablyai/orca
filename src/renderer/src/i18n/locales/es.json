@@ -19999,6 +19999,7 @@
       "composerWorkspace": {
         "copyFailed": "No se pudo copiar",
         "copyIdentity": "Copiar {{value0}}",
+        "detachedCommit": "Commit {{head}} (no es una rama)",
         "folder": "Carpeta",
         "mainCheckout": "Checkout principal",
         "turnWorking": "El agente de este chat está trabajando. Cambia de rama cuando termine su turno.",
@@ -20470,6 +20471,9 @@
           "never": "Nunca",
           "immediately": "Inmediatamente"
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "Variables de entorno disponibles"
       }
     },
     "onboarding": {
@@ -22240,7 +22244,8 @@
     "refresh": "Actualizar",
     "restartLocal": "Reiniciar daemon local",
     "killAllLocal": "Finalizar todas las sesiones locales",
-    "killFailed": "No se pudo finalizar el terminal. Se conservan las sesiones observadas por última vez."
+    "killFailed": "No se pudo finalizar el terminal. Se conservan las sesiones observadas por última vez.",
+    "metricDetails": "Detalles de las métricas"
   },
   "csv": {
     "detectingDelimiter": "Detectando delimitador…",

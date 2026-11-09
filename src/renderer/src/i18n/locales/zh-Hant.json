@@ -19887,6 +19887,7 @@
       "composerWorkspace": {
         "copyFailed": "複製失敗",
         "copyIdentity": "複製 {{value0}}",
+        "detachedCommit": "提交 {{head}}（非分支）",
         "folder": "資料夾",
         "mainCheckout": "主要工作副本",
         "turnWorking": "此聊天的代理正在工作。請在其回合結束後再切換分支。",
@@ -20347,6 +20348,9 @@
           "never": "從不",
           "immediately": "立即"
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "可用的環境變數"
       }
     },
     "agentChildRow": {
@@ -22068,7 +22072,8 @@
     "refresh": "重新整理",
     "restartLocal": "重新啟動本機常駐程式",
     "killAllLocal": "結束所有本機工作階段",
-    "killFailed": "無法結束終端機。將保留上次觀察到的工作階段。"
+    "killFailed": "無法結束終端機。將保留上次觀察到的工作階段。",
+    "metricDetails": "指標詳細資訊"
   },
   "browserExtensions": {
     "permission": {

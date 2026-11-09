@@ -20220,6 +20220,7 @@
       "composerWorkspace": {
         "copyFailed": "Échec de la copie",
         "copyIdentity": "Copier {{value0}}",
+        "detachedCommit": "Commit {{head}} (pas une branche)",
         "folder": "Dossier",
         "mainCheckout": "Copie principale",
         "turnWorking": "L’agent de ce chat est en cours d’exécution. Changez de branche une fois son tour terminé.",
@@ -20769,6 +20770,9 @@
           "never": "Jamais",
           "immediately": "Immédiatement"
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "Variables d'environnement disponibles"
       }
     },
     "agentChildRow": {
@@ -22240,7 +22244,8 @@
     "refresh": "Actualiser",
     "restartLocal": "Redémarrer le daemon local",
     "killAllLocal": "Terminer toutes les sessions locales",
-    "killFailed": "Le terminal n’a pas pu être arrêté. Les sessions observées en dernier sont conservées."
+    "killFailed": "Le terminal n’a pas pu être arrêté. Les sessions observées en dernier sont conservées.",
+    "metricDetails": "Détails des métriques"
   },
   "csv": {
     "detectingDelimiter": "Détection du délimiteur…",
@@ -22419,6 +22424,7 @@
     "alwaysForceDelete": "Toujours forcer la suppression",
     "alwaysForceDeleteDescription": "S'applique à toutes les futures suppressions d'espace de travail.",
     "moreActions": "Plus d'options de suppression forcée",
+    "alwaysForceDeleteBranchesDescription": "S'applique aux branches conservées après les suppressions futures de l'espace de travail.",
     "alwaysForceDeleteBranches": "Toujours supprimer les branches conservées",
     "moreBranchActions": "Plus d'options de suppression de branche",
     "moreDeleteOptions": "Plus d'options de suppression",

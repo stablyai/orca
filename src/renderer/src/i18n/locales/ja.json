@@ -19490,6 +19490,7 @@
       "composerWorkspace": {
         "copyFailed": "コピーできませんでした",
         "copyIdentity": "{{value0}} をコピー",
+        "detachedCommit": "コミット {{head}}（ブランチではありません）",
         "folder": "フォルダー",
         "mainCheckout": "メインチェックアウト",
         "turnWorking": "このチャットの Agent が作業中です。ターンが終わってからブランチを切り替えてください。",
@@ -19962,6 +19963,9 @@
           "never": "しない",
           "immediately": "すぐに"
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "利用可能な環境変数"
       }
     },
     "agentChildRow": {
@@ -22060,7 +22064,8 @@
     "refresh": "更新",
     "restartLocal": "ローカルデーモンを再起動",
     "killAllLocal": "すべてのローカルセッションを終了",
-    "killFailed": "ターミナルを終了できませんでした。最後に観測されたセッションを保持しています。"
+    "killFailed": "ターミナルを終了できませんでした。最後に観測されたセッションを保持しています。",
+    "metricDetails": "メトリクスの詳細"
   },
   "workspaceSpace": {
     "table": {

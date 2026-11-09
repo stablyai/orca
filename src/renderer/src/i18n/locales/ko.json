@@ -19490,6 +19490,7 @@
       "composerWorkspace": {
         "copyFailed": "복사하지 못했습니다",
         "copyIdentity": "{{value0}} 복사",
+        "detachedCommit": "커밋 {{head}} (브랜치 아님)",
         "folder": "폴더",
         "mainCheckout": "기본 체크아웃",
         "turnWorking": "이 채팅의 에이전트가 작업 중입니다. 턴이 끝난 후 브랜치를 전환하세요.",
@@ -19962,6 +19963,9 @@
           "never": "안 함",
           "immediately": "즉시"
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "사용 가능한 환경 변수"
       }
     },
     "agentChildRow": {
@@ -21697,6 +21701,7 @@
     "alwaysForceDelete": "항상 강제 삭제",
     "alwaysForceDeleteDescription": "이후 모든 워크스페이스 삭제에 적용됩니다.",
     "moreActions": "추가 강제 삭제 옵션",
+    "alwaysForceDeleteBranchesDescription": "향후 워크스페이스 삭제 후 보존되는 브랜치에 적용됩니다.",
     "moreBranchActions": "브랜치 삭제 옵션 더 보기",
     "alwaysForceDeleteBranches": "보존된 브랜치 항상 삭제",
     "moreDeleteOptions": "추가 삭제 옵션",
@@ -22059,7 +22064,8 @@
     "refresh": "새로 고침",
     "restartLocal": "로컬 데몬 다시 시작",
     "killAllLocal": "모든 로컬 세션 종료",
-    "killFailed": "터미널을 종료할 수 없습니다. 마지막으로 관찰된 세션이 유지됩니다."
+    "killFailed": "터미널을 종료할 수 없습니다. 마지막으로 관찰된 세션이 유지됩니다.",
+    "metricDetails": "지표 세부 정보"
   },
   "workspaceSpace": {
     "table": {

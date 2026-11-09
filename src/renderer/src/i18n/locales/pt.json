@@ -21174,6 +21174,7 @@
       "composerWorkspace": {
         "copyFailed": "Falha ao copiar",
         "copyIdentity": "Copiar {{value0}}",
+        "detachedCommit": "Commit {{head}} (não é uma branch)",
         "folder": "Pasta",
         "mainCheckout": "Checkout principal",
         "turnWorking": "O agente deste chat está trabalhando. Troque de branch quando o turno dele terminar.",
@@ -21652,6 +21653,9 @@
           "never": "Nunca",
           "immediately": "Imediatamente"
         }
+      },
+      "repositoryHooks": {
+        "availableEnvVars": "Variáveis de ambiente disponíveis"
       }
     },
     "jiraIssueAssigneeField": {
@@ -22772,7 +22776,8 @@
     "openToObserve": "Abra Recursos para observar as sessões de terminal.",
     "killAllLocal": "Encerrar todas as sessões locais",
     "ptys": "PTYs",
-    "restartLocal": "Reiniciar daemon local"
+    "restartLocal": "Reiniciar daemon local",
+    "metricDetails": "Detalhes das métricas"
   },
   "browserTab": {
     "agentDriving": "Um agente está usando esta página",
