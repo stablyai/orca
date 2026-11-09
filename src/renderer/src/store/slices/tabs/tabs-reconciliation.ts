@@ -13,6 +13,8 @@ import {
 import {
   createReconciliationDrafts,
   finishReconciliationDrafts,
+  SEAM_RECONCILED_ALWAYS_FIELDS,
+  SEAM_RECONCILED_LAYOUT_FIELDS,
   type ReconciliationDraftField,
   type WorktreeTabModelReconciliationBatch
 } from './tabs-reconciliation-batch'
@@ -219,18 +221,14 @@ export function projectWorktreeTabModelReconciliation(
         batch?.ownedStateKeys.add('unreadTerminalTabs')
       }
     }
-    const written = new Set<ReconciliationDraftField>([
-      'unifiedTabsByWorktree',
-      'groupsByWorktree',
-      'activeGroupIdByWorktree'
-    ])
+    const written = new Set<ReconciliationDraftField>(SEAM_RECONCILED_ALWAYS_FIELDS)
     drafts.unifiedTabsByWorktree.set(worktreeId, validTabs)
     drafts.groupsByWorktree.set(worktreeId, nextGroups)
     drafts.activeGroupIdByWorktree.set(worktreeId, nextActiveGroupId)
     if (nextLayout && layoutChanged) {
       // Why: restored runtime terminals need a concrete leaf before activation.
       drafts.layoutByWorktree.set(worktreeId, nextLayout)
-      written.add('layoutByWorktree')
+      SEAM_RECONCILED_LAYOUT_FIELDS.forEach((field) => written.add(field))
     }
     if (batch) {
       written.forEach((field) => batch.writtenDraftFields.add(field))

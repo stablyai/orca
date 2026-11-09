@@ -17,6 +17,16 @@ export type ReconciliationDrafts = {
 
 export type ReconciliationDraftField = keyof ReconciliationDrafts
 
+// Field names, not writes: the drafts every reconciliation writes, and the one a new leaf adds.
+export const SEAM_RECONCILED_ALWAYS_FIELDS = [
+  'unifiedTabsByWorktree',
+  'groupsByWorktree',
+  'activeGroupIdByWorktree'
+] as const satisfies readonly ReconciliationDraftField[]
+export const SEAM_RECONCILED_LAYOUT_FIELDS = [
+  'layoutByWorktree'
+] as const satisfies readonly ReconciliationDraftField[]
+
 /** One multi-workspace fold clones each shared map once and indexes read-only openFiles once, avoiding repeated map spreads and file scans per workspace. */
 export type WorktreeTabModelReconciliationBatch = {
   /** Top-level `AppState` keys this fold already cloned and therefore owns. */
