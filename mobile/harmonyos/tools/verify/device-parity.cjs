@@ -976,7 +976,8 @@ for (const loss of ['focus', 'stopped', 'background']) {
       ...microphoneBindings(capturer, recordingWindow),
       NativeSpeech: speechHarness(async () => engine)
     })
-    const startSpeech = () => device.serve('native.speech.act', { action: 'start', locale: 'zh-CN' })
+    const startSpeech = () =>
+      device.serve('native.speech.act', { action: 'start', locale: 'zh-CN' })
     const startAudio = () => device.serve('native.audio.start', { sampleRate: 16000 })
     const finishSpeech = () => device.serve('native.speech.act', { action: 'finish' })
     const readAudio = () => device.serve('native.audio.read', { maxBytes: 128 })
