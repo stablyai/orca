@@ -161,6 +161,7 @@ describe('legacy host navigation through inventory reconstruction', () => {
           active: index === 0
         }))
       }),
+      getRemoteTabFaviconUrl: () => null,
       tabSwitch: vi.fn(async () => ({ switched: 1, browserPageId: 'page-b' })),
       getRegisteredTabs: () =>
         new Map([

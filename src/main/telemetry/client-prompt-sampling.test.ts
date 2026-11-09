@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EventProps } from '../../shared/telemetry-events'
 import { track } from './client'
 import {
+  BASE_COMMON,
   cleanupTelemetryClientTest,
   setupTelemetryClientTest,
   type TelemetryClientTestState
@@ -18,7 +19,13 @@ describe('prompt event sampling', () => {
 
   beforeEach(() => {
     vi.useFakeTimers()
-    state = setupTelemetryClientTest()
+    // Milestones already earned, so only the sampled prompt stream is measured here.
+    state = setupTelemetryClientTest({
+      optedIn: true,
+      installId: BASE_COMMON.install_id,
+      existedBeforeTelemetryRelease: false,
+      protectedMilestones: { firstAgentInteractionDay: 0, meaningfulActivityDay: 1_000_000 }
+    })
   })
 
   afterEach(() => {

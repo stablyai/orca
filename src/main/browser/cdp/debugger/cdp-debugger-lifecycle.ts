@@ -1,10 +1,10 @@
 import type { WebContents } from 'electron'
 import { BrowserError } from '../../browser-error'
-import type { CdpTabState } from './cdp-auxiliary-commands'
-import type { CdpCommandSender } from '../snapshots/snapshot-engine'
-import type { CdpBridgeState } from './cdp-bridge-state'
+import type { CdpTabState } from '../commands/cdp-tab-state'
+import type { CdpCommandSender } from './cdp-command-sender'
+import type { CdpBridgeState } from '../commands/cdp-bridge-state'
 import { createCdpDebuggerMessageListener } from './cdp-debugger-events'
-import { sendGuestCdpCommand } from '../debugger/guest-cdp-command'
+import { sendGuestCdpCommand } from './guest-cdp-command'
 
 export class CdpDebuggerLifecycle {
   constructor(private readonly bridgeState: CdpBridgeState) {}
