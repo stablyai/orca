@@ -4,6 +4,7 @@ import {
   Columns2,
   Folder,
   GitBranch,
+  History,
   ListChecks,
   Plus,
   SquareChevronRight
@@ -32,6 +33,9 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
     setShowHeaderMoreActions,
     showAgentSessionHistoryAction,
     showChecksAction,
+    showRecentSessionCardsAction,
+    setShowRecentSessionCards,
+    visibleTabs,
     openAgentSessionHistory,
     handlePanelTap,
     canSplitTerminals,
@@ -114,18 +118,33 @@ export function MobileSessionHeaderMoreMenu({ controller, anchorRef, actionsColl
           }
         ]
       : []
-  const tabs: ActionSheetAction[] = actionsCollapsed
-    ? [
-        {
-          id: 'newTab',
-          label: t('session.header.newTab', 'New tab'),
-          icon: Plus,
-          disabled: tabActionsDisabled,
-          closeBeforePress: true,
-          onPress: handleOpenNewTab
-        }
-      ]
-    : []
+  const recentlyUsedVisible =
+    showRecentSessionCardsAction && (actionsCollapsed || (visibleTabs?.length ?? 0) === 0)
+  const tabs: ActionSheetAction[] = [
+    ...(recentlyUsedVisible
+      ? [
+          {
+            id: 'recentlyUsed',
+            label: t('recentSessionCardsSectionTitle', 'Recently Used'),
+            icon: History,
+            closeBeforePress: true,
+            onPress: () => setShowRecentSessionCards(true)
+          }
+        ]
+      : []),
+    ...(actionsCollapsed
+      ? [
+          {
+            id: 'newTab',
+            label: t('session.header.newTab', 'New tab'),
+            icon: Plus,
+            disabled: tabActionsDisabled,
+            closeBeforePress: true,
+            onPress: handleOpenNewTab
+          }
+        ]
+      : [])
+  ]
   return (
     <PullDownMenu
       visible={showHeaderMoreActions}

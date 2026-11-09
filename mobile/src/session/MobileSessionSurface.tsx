@@ -31,6 +31,7 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
   const obscured = Boolean(
     !titleVisible ||
     controller.showHeaderMoreActions ||
+    controller.showRecentSessionCards ||
     controller.showCreateTabDrawer ||
     controller.showTerminalLayout ||
     (controller.showQuickCommands && controller.quickCommandsSupported === true) ||

@@ -114,7 +114,8 @@ const EDGE_HINT_RANK: Partial<Record<AgentDotState, number>> = {
   blocked: 0,
   waiting: 0,
   working: 1,
-  monitoring: 1
+  monitoring: 1,
+  unread: 2
 }
 
 export function resolveTabStripEdgeHint(

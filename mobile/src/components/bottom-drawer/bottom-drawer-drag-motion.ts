@@ -15,6 +15,70 @@ const MIN_DISMISS_MS = 160
 // The dismiss curve's first control point: its start slope is y1 / x1, so y1 = slope * x1 starts
 // the close at the finger's speed, and the curve can start no steeper than 1 / x1.
 const DISMISS_CURVE_X1 = 0.3
+export const TOP_SCROLL_EPSILON = 1
+
+export type WebScrollTouchEvent = {
+  touches: ArrayLike<{ clientY: number }>
+  cancelable?: boolean
+  preventDefault: () => void
+}
+
+export type WebScrollableTarget = {
+  scrollTop: number
+  addEventListener: (
+    type: 'touchstart' | 'touchmove',
+    listener: (event: WebScrollTouchEvent) => void,
+    options?: AddEventListenerOptions
+  ) => void
+  removeEventListener: (
+    type: 'touchstart' | 'touchmove',
+    listener: (event: WebScrollTouchEvent) => void,
+    options?: EventListenerOptions
+  ) => void
+}
+
+// NativeViewGestureHandler sets touch-action:auto on ScrollView, stopping W3C touch-action lookup below scrollFrame; preventDefault at top keeps downward pull on PanGestureHandler instead of pointercancel.
+export function attachWebScrollDragToDismiss(
+  scroller: WebScrollableTarget,
+  scrollOffsetY: { value: number }
+): () => void {
+  let startY = 0
+  let gestureMode: 'undecided' | 'sheet' | 'scroll' = 'undecided'
+
+  const onTouchStart = (event: WebScrollTouchEvent) => {
+    const touch = event.touches[0]
+    if (!touch) {
+      return
+    }
+    startY = touch.clientY
+    const scrollTop = Math.max(scroller.scrollTop, 0)
+    scrollOffsetY.value = scrollTop
+    gestureMode = scrollTop > TOP_SCROLL_EPSILON ? 'scroll' : 'undecided'
+  }
+
+  const onTouchMove = (event: WebScrollTouchEvent) => {
+    const touch = event.touches[0]
+    if (!touch) {
+      return
+    }
+    const scrollTop = Math.max(scroller.scrollTop, 0)
+    scrollOffsetY.value = scrollTop
+    const dy = touch.clientY - startY
+    if (gestureMode === 'undecided' && Math.abs(dy) > TOP_SCROLL_EPSILON) {
+      gestureMode = scrollTop <= TOP_SCROLL_EPSILON && dy > 0 ? 'sheet' : 'scroll'
+    }
+    if (gestureMode === 'sheet' && event.cancelable) {
+      event.preventDefault()
+    }
+  }
+
+  scroller.addEventListener('touchstart', onTouchStart, { passive: true })
+  scroller.addEventListener('touchmove', onTouchMove, { passive: false })
+  return () => {
+    scroller.removeEventListener('touchstart', onTouchStart)
+    scroller.removeEventListener('touchmove', onTouchMove)
+  }
+}
 
 export function bottomDrawerTravel(sheetHeight: number, screenHeight: number): number {
   'worklet'

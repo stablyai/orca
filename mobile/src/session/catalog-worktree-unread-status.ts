@@ -1,0 +1,304 @@
+import {
+  isAgentStatusState,
+  normalizeMainAgentStatusField,
+  type AgentStatusEntry
+} from '../../../src/shared/agent-status/contracts/agent-status-types'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
+import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
+import { agentDotState, type AgentDotState } from '../worktree/agent-row-display'
+import {
+  acknowledgeSupersededCatalogInTurn,
+  hasHostUnacknowledgedTabCompletion,
+  hasUnacknowledgedTabCompletion,
+  isInTurnDotState,
+  isTabCompletionAcknowledged,
+  markWorktreeUnreadForTabCompletion,
+  notifyTabCompletionStateChanged,
+  recordCatalogAgentTabState,
+  subscribeTabCompletionState
+} from './tab-completion-state'
+
+export { subscribeTabCompletionState }
+
+export type ReconciledTerminalAgentStatus = Pick<
+  AgentStatusEntry,
+  | 'state'
+  | 'updatedAt'
+  | 'stateStartedAt'
+  | 'evidenceObservedAt'
+  | 'mirroredEvidenceReceivedAt'
+  | 'structuredHostOwned'
+  | 'workingMode'
+  | 'interrupted'
+  | 'mainAgent'
+  | 'restoredUnconfirmed'
+>
+
+type SessionSupersededDone = {
+  updatedAt: number
+  stateStartedAt: number
+}
+
+const sessionDoneByPaneKey = new Map<string, SessionSupersededDone>()
+
+export function clearSessionSupersededDoneForTests(): void {
+  sessionDoneByPaneKey.clear()
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+export function toReconciledStatus(
+  source: Record<string, unknown>,
+  fallbackReceivedAt?: number
+): ReconciledTerminalAgentStatus | null {
+  if (!isAgentStatusState(source.state) || typeof source.updatedAt !== 'number') {
+    return null
+  }
+  const receivedAt =
+    typeof source.mirroredEvidenceReceivedAt === 'number'
+      ? source.mirroredEvidenceReceivedAt
+      : fallbackReceivedAt
+  return {
+    state: source.state,
+    updatedAt: source.updatedAt,
+    stateStartedAt:
+      typeof source.stateStartedAt === 'number' ? source.stateStartedAt : source.updatedAt,
+    evidenceObservedAt:
+      typeof source.evidenceObservedAt === 'number' ? source.evidenceObservedAt : undefined,
+    mirroredEvidenceReceivedAt: receivedAt,
+    structuredHostOwned: source.structuredHostOwned === true ? true : undefined,
+    workingMode: source.workingMode === 'monitoring' ? 'monitoring' : undefined,
+    interrupted: typeof source.interrupted === 'boolean' ? source.interrupted : undefined,
+    mainAgent: normalizeMainAgentStatusField(source.mainAgent),
+    restoredUnconfirmed: source.restoredUnconfirmed === true ? true : undefined
+  }
+}
+
+function catalogAgentTabId(paneKey: string): string {
+  const colonIdx = paneKey.indexOf(':')
+  return colonIdx === -1 ? paneKey : paneKey.slice(0, colonIdx)
+}
+
+function catalogAgentSessionKeys(tabId: string): string[] {
+  if (!tabId.startsWith('structured-agent-session-')) {
+    return []
+  }
+  const sessionId = tabId.slice('structured-agent-session-'.length)
+  return sessionId ? [`session:${sessionId}`, `tab:agent-session:${sessionId}`] : []
+}
+
+function catalogAgentTabKeys(paneKey: string, tabCount: number): string[] {
+  const tabId = catalogAgentTabId(paneKey)
+  return [
+    `pane:${paneKey}`,
+    `tab:${paneKey.replace(':', '::')}`,
+    ...catalogAgentSessionKeys(tabId),
+    ...(tabCount === 1 ? [`tab:${tabId}`] : [])
+  ]
+}
+
+function catalogAgentLookupKeys(paneKey: string): string[] {
+  return catalogAgentTabKeys(paneKey, 1)
+}
+
+export function recordSessionSupersededDone(
+  paneKey: string | null | undefined,
+  done: SessionSupersededDone | null,
+  supersededCatalogInTurn = false
+): void {
+  if (!paneKey) {
+    return
+  }
+  const tabId = catalogAgentTabId(paneKey)
+  if (!done) {
+    const matching = !paneKey.includes(':')
+      ? [...sessionDoneByPaneKey.keys()].filter((k) => catalogAgentTabId(k) === tabId)
+      : []
+    const deleted = [paneKey, tabId, ...matching].some((k) => sessionDoneByPaneKey.delete(k))
+    if (deleted) {
+      notifyTabCompletionStateChanged()
+    }
+    return
+  }
+  if (supersededCatalogInTurn) {
+    acknowledgeSupersededCatalogInTurn(catalogAgentLookupKeys(paneKey), done.stateStartedAt)
+  }
+  const prev = sessionDoneByPaneKey.get(paneKey)
+  if (!prev || prev.updatedAt !== done.updatedAt || prev.stateStartedAt !== done.stateStartedAt) {
+    sessionDoneByPaneKey.set(paneKey, done)
+    notifyTabCompletionStateChanged()
+  }
+}
+
+export function reconcileWorktreeAgentRowWithSessionDone<T extends Record<string, unknown>>(
+  row: T
+): T {
+  const paneKey = typeof row.paneKey === 'string' ? row.paneKey : null
+  const tabId = paneKey ? catalogAgentTabId(paneKey) : null
+  const sessionDone =
+    paneKey && row.state !== 'done'
+      ? (sessionDoneByPaneKey.get(paneKey) ?? (tabId ? sessionDoneByPaneKey.get(tabId) : undefined))
+      : undefined
+  if (!paneKey || !tabId || !sessionDone) {
+    return row
+  }
+  const rowUpdatedAt = typeof row.updatedAt === 'number' ? row.updatedAt : -Infinity
+  const rowStateStartedAt =
+    typeof row.stateStartedAt === 'number' ? row.stateStartedAt : rowUpdatedAt
+  if (
+    sessionDone.updatedAt >= rowUpdatedAt &&
+    sessionDone.updatedAt >= rowStateStartedAt &&
+    (sessionDone.updatedAt > rowUpdatedAt || sessionDone.stateStartedAt >= rowStateStartedAt)
+  ) {
+    return {
+      ...row,
+      state: 'done',
+      updatedAt: sessionDone.updatedAt,
+      stateStartedAt: sessionDone.stateStartedAt
+    }
+  }
+  if (rowUpdatedAt > sessionDone.updatedAt || rowStateStartedAt > sessionDone.updatedAt) {
+    sessionDoneByPaneKey.delete(paneKey)
+    sessionDoneByPaneKey.delete(tabId)
+  }
+  return row
+}
+
+export function resolveHostAgentRowDotState(
+  row: RuntimeWorktreeAgentRow,
+  now: number
+): AgentDotState {
+  const effectiveRow = reconcileWorktreeAgentRowWithSessionDone(row)
+  const baseState = agentDotState(effectiveRow, now)
+  if (
+    baseState === 'done' &&
+    hasHostUnacknowledgedTabCompletion(catalogAgentLookupKeys(row.paneKey), 'done')
+  ) {
+    return 'unread'
+  }
+  return baseState
+}
+
+export function resolveHostWorktreeRowStatus(
+  item: {
+    worktreeId?: string
+    unread?: boolean
+    agents?: readonly RuntimeWorktreeAgentRow[]
+  },
+  status: WorktreeStatus,
+  now: number
+): { status: WorktreeStatus; unread: boolean } {
+  syncUnreadWorktreeForTabStatus(item, now)
+  const agents = item.agents
+  let hasUnreadAgent = false
+  let hasInTurnAgent = false
+  let hadSupersededAgent = false
+  let hasAcknowledgedAgent = false
+  if (agents && agents.length > 0) {
+    for (const agent of agents) {
+      const reconciled = reconcileWorktreeAgentRowWithSessionDone(agent)
+      if (reconciled !== agent) {
+        hadSupersededAgent = true
+      }
+      const dotState = resolveHostAgentRowDotState(reconciled, now)
+      if (dotState === 'unread') {
+        hasUnreadAgent = true
+      } else if (isInTurnDotState(dotState)) {
+        hasInTurnAgent = true
+      } else if (
+        dotState === 'done' &&
+        isTabCompletionAcknowledged(
+          catalogAgentLookupKeys(agent.paneKey),
+          reconciled.stateStartedAt ?? reconciled.updatedAt
+        )
+      ) {
+        hasAcknowledgedAgent = true
+      }
+    }
+  }
+  const unread =
+    agents && agents.length > 0
+      ? hasUnreadAgent
+      : Boolean(item.unread) && (!hasAcknowledgedAgent || hasUnreadAgent)
+  const effectiveStatus: WorktreeStatus =
+    (status === 'working' || status === 'monitoring') &&
+    (hadSupersededAgent || hasUnreadAgent) &&
+    !hasInTurnAgent
+      ? 'done'
+      : status
+  return { status: effectiveStatus, unread }
+}
+
+export function syncUnreadWorktreeForTabStatus(worktree: unknown, receivedAt = Date.now()): void {
+  if (!isRecord(worktree)) {
+    return
+  }
+  const wtId =
+    typeof worktree.worktreeId === 'string'
+      ? worktree.worktreeId
+      : typeof worktree.id === 'string'
+        ? worktree.id
+        : undefined
+  const isUnread = worktree.unread === true || worktree.isUnread === true
+  if (!Array.isArray(worktree.agents)) {
+    if (isUnread && wtId) {
+      markWorktreeUnreadForTabCompletion(wtId)
+    }
+    return
+  }
+  const agentRows = worktree.agents.filter(
+    (r): r is Record<string, unknown> & { paneKey: string } =>
+      isRecord(r) && typeof r.paneKey === 'string'
+  )
+  const tabCounts = new Map<string, number>()
+  for (const row of agentRows) {
+    const tabId = catalogAgentTabId(row.paneKey)
+    tabCounts.set(tabId, (tabCounts.get(tabId) ?? 0) + 1)
+  }
+  const prepared = agentRows.map((row) => {
+    const keys = catalogAgentTabKeys(
+      row.paneKey,
+      tabCounts.get(catalogAgentTabId(row.paneKey)) ?? 0
+    )
+    const status = toReconciledStatus(reconcileWorktreeAgentRowWithSessionDone(row))
+    const rawState =
+      status && !status.restoredUnconfirmed ? agentDotState(status, receivedAt) : undefined
+    const doneStamp = status ? (status.stateStartedAt ?? status.updatedAt) : undefined
+    recordCatalogAgentTabState({ keys, rawState, doneStamp })
+    return { keys, rawState, doneStamp }
+  })
+  if (!isUnread) {
+    return
+  }
+  const doneAgents = prepared.filter((item) => item.rawState === 'done')
+  const allDoneAcknowledged =
+    doneAgents.length > 0 &&
+    doneAgents.every((item) => isTabCompletionAcknowledged(item.keys, item.doneStamp))
+  if (wtId && !allDoneAcknowledged) {
+    markWorktreeUnreadForTabCompletion(wtId)
+  }
+  if (
+    allDoneAcknowledged ||
+    prepared.some((item) => hasUnacknowledgedTabCompletion(item.keys, item.rawState))
+  ) {
+    return
+  }
+  let maxStamp = -Infinity
+  for (const item of doneAgents) {
+    if (item.doneStamp !== undefined && item.doneStamp > maxStamp) {
+      maxStamp = item.doneStamp
+    }
+  }
+  const targets =
+    maxStamp === -Infinity ? doneAgents : doneAgents.filter((item) => item.doneStamp === maxStamp)
+  for (const target of targets) {
+    recordCatalogAgentTabState({
+      keys: target.keys,
+      rawState: 'done',
+      doneStamp: target.doneStamp,
+      forceUnreadIfUnacknowledged: true
+    })
+  }
+}

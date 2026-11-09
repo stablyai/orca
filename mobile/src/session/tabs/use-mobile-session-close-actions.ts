@@ -10,6 +10,7 @@ import {
 } from '../../terminal/session/mobile-session-terminal-operations'
 import type { MobileSessionTab } from './mobile-session-tabs'
 import type { Terminal } from '../../terminal/session/mobile-terminal-model'
+import { removeRecentSessionCard } from '../recent-session-cards'
 import type { MobileSessionContentCreateActionsModel } from '../use-mobile-session-content-create-actions'
 import { mobileNativeChatScopeKey } from '../native-chat/mobile-native-chat-scope-key'
 import { closeMobileNativeChatTabDraft } from '../native-chat/composer/mobile-native-chat-draft-store'
@@ -100,6 +101,9 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         await sessionTerminalClose.request(client, { terminal: target.handle })
       )
       if (response.accepted) {
+        if (hostId && worktreeId) {
+          removeRecentSessionCard(hostId, worktreeId, undefined, target.handle)
+        }
         unsubscribeTerminal(target.handle)
         terminalRefs.current.delete(target.handle)
         const next = terminalsRef.current.filter((terminal) => terminal.handle !== target.handle)
@@ -139,6 +143,14 @@ export function useMobileSessionCloseActions(scope: MobileSessionContentCreateAc
         })
       )
       if (response.accepted && !response.value.refused) {
+        if (hostId && worktreeId) {
+          removeRecentSessionCard(
+            hostId,
+            worktreeId,
+            tab.id,
+            tab.type === 'terminal' ? tab.terminal : undefined
+          )
+        }
         const chatScope = mobileNativeChatScopeKey(hostId, worktreeId, tab.id)
         if (chatScope && response.value.retirementConfirmed) {
           closeMobileNativeChatTabDraft(chatScope)

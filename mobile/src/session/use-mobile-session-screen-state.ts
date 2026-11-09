@@ -72,6 +72,7 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
   const [showQuickCommands, setShowQuickCommands] = useState(false)
   const [showCreateBrowserModal, setShowCreateBrowserModal] = useState(false)
   const [showHeaderMoreActions, setShowHeaderMoreActions] = useState(false)
+  const [showRecentSessionCards, setShowRecentSessionCards] = useState(false)
   const [showTerminalLayout, setShowTerminalLayout] = useState(false)
   const sessionTabActionTargets = useMobileSessionTabActionTargets()
   const [discardMarkdownTarget, setDiscardMarkdownTarget] = useState<Extract<
@@ -169,6 +170,8 @@ export function useMobileSessionScreenState(scope: MobileSessionFoundationModel)
     setShowCreateBrowserModal,
     showHeaderMoreActions,
     setShowHeaderMoreActions,
+    showRecentSessionCards,
+    setShowRecentSessionCards,
     showTerminalLayout,
     setShowTerminalLayout,
     ...sessionTabActionTargets,

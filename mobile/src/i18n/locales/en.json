@@ -151,6 +151,13 @@
     "agents": {
       "permissionOwnAll": "Agents' own settings"
     },
+    "nativeChat": {
+      "recentlyUsed": "RECENTLY USED",
+      "maxRecentItems": "Max recent items",
+      "cardsUnit": "cards",
+      "decreaseMaxRecent": "Decrease max recent items",
+      "increaseMaxRecent": "Increase max recent items"
+    },
     "voiceTranscribeOn": {
       "heading": "TRANSCRIBE ON",
       "description": "Speech heard on this phone stays on it. Automatic uses your computer when this phone can’t transcribe.",
@@ -922,6 +929,7 @@
       "days_one": "{{count}}d",
       "days_other": "{{count}}d",
       "done": "Done",
+      "unread": "Unread",
       "permission": "Needs attention"
     },
     "hostWorkspaceListStates": {
@@ -2860,6 +2868,14 @@
     },
     "usePrTextAction": {
       "updateFailed": "Failed to update pull request."
+    },
+    "recentSessionCards": {
+      "decreaseLimit": "Decrease recent cards limit",
+      "increaseLimit": "Increase recent cards limit",
+      "cardClosed": "Card was closed",
+      "waitingForHost": "Waiting for host…",
+      "workspaceGone": "Workspace no longer exists",
+      "cardClosedOpeningWorkspace": "Card was closed; opening workspace"
     }
   },
   "chat": {
@@ -4778,6 +4794,8 @@
       }
     }
   },
+  "recentSessionCardsSectionTitle": "Recently Used",
+  "recentSessionCardsEmpty": "No other recent cards yet",
   "hostMutation": {
     "renameOffline": "{{host}} is offline. Your text stays here until you can save.",
     "renameUnconfirmed": "Not confirmed yet. Orca checks the name when {{host}} is back.",
