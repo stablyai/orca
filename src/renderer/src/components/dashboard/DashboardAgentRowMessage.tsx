@@ -4,7 +4,7 @@ import {
   CommentMarkdownAsync,
   preloadCommentMarkdown
 } from '@/components/sidebar/comment-markdown-lazy'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type DashboardAgentRowMessageProps = {
   expanded: boolean
@@ -21,6 +21,7 @@ export function DashboardAgentRowMessage({
   stoppedByUser,
   lastAssistantMessage
 }: DashboardAgentRowMessageProps): React.JSX.Element | null {
+  const t = useTranslate()
   // Warm the sidebar’s only boot-visible markdown chunk on mount rather than waiting for text.
   useEffect(preloadCommentMarkdown, [])
   // Reserve the collapsed message slot so incoming/cleared assistant text cannot shift row height.
@@ -37,20 +38,14 @@ export function DashboardAgentRowMessage({
           className="shrink-0 text-[10px] leading-snug text-muted-foreground/80"
           aria-label={
             stoppedByUser
-              ? translate(
+              ? t(
                   'auto.components.dashboard.DashboardAgentRowMessage.1ec01cef03',
                   'Interrupted by user'
                 )
-              : translate(
-                  'auto.components.activity.ActivityPrototypePage.interrupted',
-                  'Interrupted'
-                )
+              : t('auto.components.activity.ActivityPrototypePage.interrupted', 'Interrupted')
           }
         >
-          {translate(
-            'auto.components.dashboard.DashboardAgentRowMessage.0a01046763',
-            'interrupted'
-          )}
+          {t('auto.components.dashboard.DashboardAgentRowMessage.0a01046763', 'interrupted')}
         </span>
       ) : null}
       {lastAssistantMessage ? (

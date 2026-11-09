@@ -1,0 +1,50 @@
+import type { JiraConnectionStatus, JiraIssue } from '../../../../shared/jira/jira-types'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
+import { callRuntimeRpc } from '../rpc/calls/runtime-rpc-call'
+import { rowLessSourceTarget } from '../../lib/default-creation-host'
+import type { RowLessSource as RuntimeJiraSettings } from '../../lib/default-creation-host'
+import { parseJiraConnectionStatus } from './runtime-jira-connection-status'
+
+export async function jiraReadStatus(settings: RuntimeJiraSettings): Promise<JiraConnectionStatus> {
+  const target = rowLessSourceTarget(settings)
+  return parseJiraConnectionStatus(
+    target.kind === 'environment'
+      ? await callRuntimeRpc<unknown>(target, 'jira.readStatus', undefined, { timeoutMs: 15_000 })
+      : await window.api.jira.readStatus()
+  )
+}
+
+export async function jiraLookupIssueSummary(
+  settings: RuntimeJiraSettings,
+  key: string,
+  siteId: string,
+  signal?: AbortSignal
+): Promise<JiraIssue | null> {
+  const target = rowLessSourceTarget(settings)
+  const args = { key, siteId }
+  if (target.kind === 'environment') {
+    return callRuntimeRpc<JiraIssue | null>(target, 'jira.lookupIssueSummary', args, {
+      timeoutMs: 30_000,
+      signal
+    })
+  }
+  if (signal?.aborted) {
+    throw createSummaryAbortError()
+  }
+  const requestId = createBrowserUuid()
+  const handleAbort = (): void => {
+    void window.api.jira.cancelIssueSummary({ requestId }).catch(() => {})
+  }
+  signal?.addEventListener('abort', handleAbort, { once: true })
+  try {
+    return await window.api.jira.lookupIssueSummary({ ...args, requestId })
+  } finally {
+    signal?.removeEventListener('abort', handleAbort)
+  }
+}
+
+function createSummaryAbortError(): Error {
+  const error = new Error('Jira summary lookup aborted')
+  error.name = 'AbortError'
+  return error
+}

@@ -2,7 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { expect, it, vi } from 'vitest'
 import { NativeScreenRecovery } from './NativeScreenRecovery'
-import { connectionLogStore } from '../transport/persisted-connection-log-store'
+import { connectionLogStore } from '../diagnostics/connection/persisted-connection-log-store'
 import { NATIVE_APP_LOG_ID } from '../diagnostics/native-render-log'
 
 const navigation = vi.hoisted(() => ({ segments: ['about'] }))

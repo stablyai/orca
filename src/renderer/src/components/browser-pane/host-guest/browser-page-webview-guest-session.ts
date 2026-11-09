@@ -10,7 +10,7 @@ import type {
 } from '../../../../../shared/browser-workspace-types'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { findWorkspace } from '@/store/slices/browser-page-records'
+import { findWorkspace } from '@/store/slices/browser/pages/browser-page-records'
 import {
   BROWSER_GUEST_RECOVERY_ERROR_CODE,
   createBrowserPageGuestRecovery,
@@ -92,12 +92,12 @@ export function createBrowserPageWebviewGuestSession({
       return null
     }
   }
-  const ownsGuest = (webContentsId: number | null): boolean =>
-    webContentsId !== null &&
+  const ownsWebview = (): boolean =>
     !guestRecovery.isDisposed() &&
     webviewRef.current === webview &&
-    webviewRegistry.get(browserTabId) === webview &&
-    readWebContentsId() === webContentsId
+    webviewRegistry.get(browserTabId) === webview
+  const ownsGuest = (webContentsId: number | null): boolean =>
+    webContentsId !== null && ownsWebview() && readWebContentsId() === webContentsId
   const registerGuest = (webContentsId: number | null): Promise<boolean | null> => {
     if (webContentsId === null || !ownsGuest(webContentsId)) {
       return Promise.resolve(null)
@@ -235,7 +235,8 @@ export function createBrowserPageWebviewGuestSession({
       liveWebContentsId === null || registeredWebContentsIds.get(browserTabId) !== liveWebContentsId
     if (queuedAnnotationViewportBridgeSync) {
       void registerGuest(liveWebContentsId).then((registered) => {
-        if (!ownsGuest(liveWebContentsId)) {
+        // Why: an unreadable ID has no owner to fence; validation must still retry until it reads.
+        if (liveWebContentsId === null ? !ownsWebview() : !ownsGuest(liveWebContentsId)) {
           return
         }
         const completedRecovery = guestRecovery.finish()

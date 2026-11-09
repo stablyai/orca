@@ -6,7 +6,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import type { HostDisplaySource } from '../transport/use-host-display'
+import type { HostDisplaySource } from '../transport/hosts/use-host-display'
 import type { DownloadProgressFeed } from './download-progress-feed'
 import type {
   MobileWebShellFailureCause,

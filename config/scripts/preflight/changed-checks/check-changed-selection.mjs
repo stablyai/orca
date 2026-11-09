@@ -35,7 +35,16 @@ const RATCHET_INPUTS = {
   'check-host-list-render-ratchet.mjs': ['src/renderer/src/'],
   'check-id-only-store-write-ratchet.mjs': ['src/main/persistence/'],
   'check-layout-writer-ratchets.mjs': ['src/main/', 'src/renderer/src/'],
+  'check-main-sync-fs-ratchet.mjs': ['src/main/', 'src/shared/'],
   'check-main-sync-spawn-ratchet.mjs': ['src/main/'],
+  'check-react-compiler-compat-ratchet.mjs': ['src/renderer/src/'],
+  'check-recurring-timer-ratchet.mjs': [
+    'src/main/',
+    'src/renderer/src/',
+    'src/shared/',
+    'src/cli/'
+  ],
+  'check-render-path-translate-ratchet.mjs': ['src/renderer/src/'],
   'check-repo-host-read-ratchet.mjs': ['src/cli/', 'src/main/', 'src/shared/'],
   'check-runtime-electron-ratchet.mjs': ['src/main/', 'src/cli/', 'src/shared/'],
   'check-unproven-pty-retirement-ratchet.mjs': ['src/main/'],
@@ -256,7 +265,15 @@ export function selectTypecheckProjects(files) {
 const RATCHET_SHARED_MODULES = {
   'config/scripts/static-analysis/process-boundaries/gated-call-use-collector.mjs': [
     'check-daemon-blocking-call-ratchet.mjs',
-    'check-main-sync-spawn-ratchet.mjs'
+    'check-main-sync-fs-ratchet.mjs',
+    'check-main-sync-spawn-ratchet.mjs',
+    'check-recurring-timer-ratchet.mjs'
+  ],
+  'config/scripts/static-analysis/ratchets/react-compiler/react-compiler-hazards.mjs': [
+    'check-react-compiler-compat-ratchet.mjs'
+  ],
+  'config/scripts/localization/reactive-translate/render-path-translate.mjs': [
+    'check-render-path-translate-ratchet.mjs'
   ]
 }
 

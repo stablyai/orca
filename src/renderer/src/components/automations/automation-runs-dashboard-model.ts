@@ -1,4 +1,7 @@
-import type { AutomationRun, AutomationRunStatus } from '../../../../shared/automations-types'
+import type {
+  AutomationRun,
+  AutomationRunStatus
+} from '../../../../shared/automations/history/automation-run'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import type { AutomationActionNotice } from './automation-row-action-dispatch'
 import type { AutomationListRow } from './automation-list-row-identity'

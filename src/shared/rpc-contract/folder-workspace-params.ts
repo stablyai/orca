@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { WorkspaceLinkedItemSchema } from '../workspace-attachments/workspace-linked-item-schema'
 import { WorkspaceAttachmentsSchema } from '../workspace-attachments/workspace-attachment-schema'
-import { TaskSourceContextSchema } from '../task-source-context-schema'
+import { TaskSourceContextSchema } from '../work-items/task-source-context-schema'
 import { isWorkspaceLinkedItemSourceContextMatch } from '../workspace-attachments/workspace-linked-item-source-context'
 import { isTuiAgent } from '../agent-launch/catalog/tui-agent-config'
 import { OptionalFiniteNumber, OptionalString, requiredString } from './rpc-param-primitives'
@@ -43,8 +43,12 @@ export const FolderWorkspaceCreate = z
   })
   .superRefine(assertLinkedTaskSourceContextMatch)
 
+// Hosts advertising the unique-id mutation capability refuse a shared folder id when this is set.
+const RequireUniqueId = z.boolean().optional()
+
 export const FolderWorkspaceUpdate = z.object({
   folderWorkspaceId: requiredString('Missing folder workspace id'),
+  requireUniqueId: RequireUniqueId,
   updates: z
     .object({
       name: OptionalString,
@@ -72,6 +76,10 @@ export const FolderWorkspaceUpdate = z.object({
 
 export const FolderWorkspaceSelector = z.object({
   folderWorkspaceId: requiredString('Missing folder workspace id')
+})
+
+export const FolderWorkspaceDelete = FolderWorkspaceSelector.extend({
+  requireUniqueId: RequireUniqueId
 })
 
 export const FolderWorkspacePathStatus = z.discriminatedUnion('scope', [

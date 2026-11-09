@@ -7,7 +7,7 @@ import {
   getLocalImageCacheKey,
   loadLocalImageAbsolutePath
 } from '../../document-images/useLocalImageSrc'
-import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
+import type { RuntimeFileOperationArgs } from '@/runtime/files/runtime-file-client-types'
 import { documentResourceAccess } from '@/lib/local-file-access'
 
 export const MARKDOWN_PREVIEW_LOCAL_IMAGE_PREWARM_LIMIT = 64

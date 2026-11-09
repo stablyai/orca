@@ -35,11 +35,11 @@ vi.mock('electron', () => ({
   }
 }))
 
-vi.mock('../popups/popup-origin-bar-window', () => ({
+vi.mock('../popups/presentation/popup-origin-bar-window', () => ({
   openPopupWithOriginBar: browserMocks.openPopupWithOriginBarMock
 }))
 
-import { browserManager } from '../../browser-manager'
+import { browserManager } from './browser-manager'
 import { rendererPublicationThrottle } from '../../../window/renderer-publication-throttle'
 import {
   rendererWebContentsId,

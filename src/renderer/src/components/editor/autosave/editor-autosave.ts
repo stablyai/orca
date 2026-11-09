@@ -64,6 +64,7 @@ export type EditorSaveFileTarget = {
 
 export type EditorSaveAndCloseDetail = {
   fileId: string
+  tabId?: string
   /** Called at once when the tab stays open, so a waiting dialog needn't time out. */
   onNotClosed?: (reason: 'blocked-stale' | 'not-utf8' | 'not-saved') => void
 }
@@ -83,6 +84,7 @@ export type EditorFileSavedDetail = {
 
 export type EditorRequestFileCloseDetail = {
   fileId: string
+  tabId?: string
   /** Runs once the file actually closes — after save or discard, never on cancel. */
   onClosed?: () => void
 }
@@ -227,7 +229,7 @@ export async function requestEditorFileSave(target: EditorSaveFileTarget): Promi
 
 export function requestEditorFileClose(
   fileId: string,
-  options?: Pick<EditorRequestFileCloseDetail, 'onClosed'>
+  options?: Pick<EditorRequestFileCloseDetail, 'onClosed' | 'tabId'>
 ): void {
   window.dispatchEvent(
     new CustomEvent<EditorRequestFileCloseDetail>(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, {

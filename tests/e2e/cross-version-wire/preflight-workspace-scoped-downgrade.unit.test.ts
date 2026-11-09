@@ -9,7 +9,7 @@ import {
 import { RPC_PARAMS_BY_METHOD } from '../../../src/shared/rpc-contract/rpc-params-catalog.generated'
 import { parseRpcRequestParams } from '../../../src/main/runtime/rpc/dispatcher-request-parsing'
 import type { RpcAnyMethodDeclaration, RpcRequest } from '../../../src/main/runtime/rpc/core'
-import { getRuntimeAgentInventoryKey } from '../../../src/renderer/src/store/slices/runtime-agent-inventory-key'
+import { getRuntimeAgentInventoryKey } from '../../../src/renderer/src/store/slices/agent-inventory/runtime-agent-inventory-key'
 import {
   importReleaseCheckoutModule,
   materializeReleaseCheckout,
@@ -39,17 +39,29 @@ const wire = vi.hoisted(() => {
   return state
 })
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+vi.mock('@/runtime/rpc/compatibility/runtime-capability-proof', async (importOriginal) => {
   const actual = await importOriginal<Record<string, unknown>>()
   return {
     ...actual,
     runtimeEnvironmentSupportsCapability: async (_environmentId: string, capability: string) =>
-      wire.host?.capabilities.includes(capability) ?? false,
+      wire.host?.capabilities.includes(capability) ?? false
+  }
+})
+vi.mock('@/runtime/rpc/compatibility/runtime-compatibility-probe', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
     // Why linux: an old Windows host is asked to update instead of answering its default list.
     getRuntimeEnvironmentStatus: async () => ({
       capabilities: wire.host?.capabilities ?? [],
       hostPlatform: 'linux'
-    }),
+    })
+  }
+})
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
     callRuntimeRpc: async (_target: unknown, method: string, params?: unknown) => {
       const hostSaw = wire.host?.parse(method, params)
       wire.sent.push({ method, params, hostSaw })
@@ -64,7 +76,7 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
 globalThis.window = { api: {} }
 
 const { createTestStore } =
-  await import('../../../src/renderer/src/store/slices/store-test-helpers')
+  await import('../../../src/renderer/src/store/testing/app-store-test-fixture')
 
 function hostBuild(
   capabilities: readonly string[],

@@ -17,7 +17,7 @@ import {
   resolveHoveredWorkspaceDeleteTarget
 } from '../components/sidebar/workspace-actions/deletion/hovered-workspace-delete'
 import { useAppStore } from '../store'
-import type { usePluginCommands } from '@/store/plugin-panels'
+import type { usePluginCommands } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { isGitRepoKind } from '../../../shared/repo-kind'
 import { openPluginsSettings } from '@/lib/open-plugins-settings'
 import { resolveActiveTabRenameTarget } from './active-tab-rename-target'

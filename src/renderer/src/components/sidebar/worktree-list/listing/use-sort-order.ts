@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { getAllWorktreesFromState } from '@/store/selectors'
+import { getIndexedAllWorktrees } from '@/store/slices/worktrees/listing/worktree-catalog-index'
 import { persistWorktreeSortOrderByHost } from '@/lib/worktree-sort-order-persistence'
 import type { Repo } from '../../../../../../shared/repo-types'
 import {
@@ -19,7 +19,7 @@ import {
   getWorktreeHostIdentity,
   getWorktreeIdFromHostIdentity
 } from '../../../../../../shared/worktree/host-qualified-identity'
-import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
+import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
 
 // Compute settled order synchronously; selection side effects must not reorder rows under the user.
 function useSettledSidebarWorktreeSortOrder(args: {
@@ -43,7 +43,9 @@ function useSettledSidebarWorktreeSortOrder(args: {
   const recomputedSort = useMemo(() => {
     const state = useAppStore.getState()
     const ranking = rankWorktreesForSort({
-      worktrees: getAllWorktreesFromState(state).filter((worktree) => !worktree.isArchived),
+      worktrees: getIndexedAllWorktrees(selectWorktreesByRepo(state)).filter(
+        (worktree) => !worktree.isArchived
+      ),
       sortBy,
       latched: sessionHasHadLiveSmartSignal.current,
       repoMap,
@@ -99,7 +101,7 @@ function useStampSidebarWorktreeSortOrder(args: {
   const ranked = useMemo(
     () =>
       rankWorktreesForSort({
-        worktrees: getAllWorktreesFromState({ worktreesByRepo }).filter(
+        worktrees: getIndexedAllWorktrees(worktreesByRepo).filter(
           (worktree) => !worktree.isArchived
         ),
         sortBy,

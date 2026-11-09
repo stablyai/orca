@@ -54,6 +54,8 @@ export type EnrichedAgentHookEventPayload = AgentHookEventPayload & {
   programStatus?: ProgramStatusFacet
   /** Facet-only publication; state readers must not infer a transition. */
   programStatusOnly?: true
+  /** The lead's full final reply for the turn `leadTurnKey` names; main-process only, never persisted or published. */
+  acceptedReply?: { text: string; leadTurnKey: number }
 }
 
 // Persist non-agent work too: mainAgent cannot describe shell/cron/notification work that affects hydration.
@@ -71,6 +73,8 @@ export type PersistedAgentHookEventPayload = Omit<
   | 'observation'
   // Terminal handles belong to one runtime.
   | 'terminalHandle'
+  | 'acceptedReply'
+  | 'replyCandidate'
 > & {
   launchTokenHash?: string
 }

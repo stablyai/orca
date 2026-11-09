@@ -1,8 +1,8 @@
 import React, { useMemo } from 'react'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
 import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
-import { svgMarkupDataUri } from '../../../../shared/svg-document'
+import { svgMarkupDataUri } from '../../../../shared/file-preview/svg-document'
 import { PanZoomImageDialog } from './PanZoomImageDialog'
 
 function readSvgImage(svg: string): { xml: string; size: PanZoomSize } | null {
@@ -22,6 +22,7 @@ function readSvgImage(svg: string): { xml: string; size: PanZoomSize } | null {
 }
 
 export default function DiagramViewerModal(): React.JSX.Element {
+  const t = useTranslate()
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const svg = typeof modalData.svg === 'string' ? modalData.svg : ''
@@ -35,7 +36,7 @@ export default function DiagramViewerModal(): React.JSX.Element {
       onOpenChange={(open) => !open && closeModal()}
       src={url}
       size={image?.size}
-      title={translate('auto.components.editor.DiagramViewerModal.title', 'Diagram')}
+      title={t('auto.components.editor.DiagramViewerModal.title', 'Diagram')}
       background={background}
     />
   )

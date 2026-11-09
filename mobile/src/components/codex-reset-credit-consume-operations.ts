@@ -1,5 +1,5 @@
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
 import { codexResetCreditReplySchema } from './codex-reset-credit-reply-schema'
 
 // Use require-result-or-throw-message so confirm shows host sentence. Keep payload opaque: call-site decodeResetResult alone checks attempt scope/snapshot.

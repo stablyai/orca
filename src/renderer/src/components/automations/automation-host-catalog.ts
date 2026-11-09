@@ -1,10 +1,13 @@
-import { hostStableKey, parseHostStableKey } from '../../../../shared/automation-owner-key'
+import {
+  hostStableKey,
+  parseHostStableKey
+} from '../../../../shared/automations/ownership/automation-owner-key'
 import { translate } from '@/i18n/i18n'
 import type {
   AutomationOwnerRef,
   StableAutomationAuthorityRef,
   StableAutomationCatalogRef
-} from '../../../../shared/automation-owner-ref'
+} from '../../../../shared/automations/ownership/automation-owner-ref'
 import { isOwnedSshTargetId } from '../../../../shared/execution-host'
 import {
   automationAuthorityCatalogKey,
@@ -41,6 +44,8 @@ type AuthorityProjectionContext = {
   ssh: AutomationCatalogSshMirrorInput
   referenced: ReferencedAuthorityScope
   orphanCount: number | undefined
+  /** Desktop SSH target id to the self entry of the managed Orca server that serves it. */
+  servedBy?: ReadonlyMap<string, string>
 }
 
 const EMPTY_SCOPE: ReferencedAuthorityScope = { targetIds: new Set(), orphan: false }
@@ -98,6 +103,10 @@ function withScopeGap(scopeGap: AutomationHostScopeGap | undefined): {
   scopeGap?: AutomationHostScopeGap
 } {
   return scopeGap === undefined ? {} : { scopeGap }
+}
+
+function withServedBy(servedBy: string | undefined): { servedBy?: string } {
+  return servedBy === undefined ? {} : { servedBy }
 }
 
 /** The authority's own contract; the only gap an entry with no target can have. */
@@ -202,7 +211,8 @@ function projectSshEntries(ctx: AuthorityProjectionContext): AutomationHostCatal
           // Why: without a registration generation the entry keys on target id alone, so it stays view-only.
           querySupport:
             ctx.querySupport === 'scoped' && !scoped ? 'legacy-unscoped' : ctx.querySupport,
-          ...withScopeGap(resolveSshScopeGap(ctx.querySupport, catalogState, generation))
+          ...withScopeGap(resolveSshScopeGap(ctx.querySupport, catalogState, generation)),
+          ...withServedBy(ctx.servedBy?.get(targetId))
         }
       )
     )
@@ -255,7 +265,22 @@ export function buildAutomationHostCatalog(
     pairingRevision: null,
     ssh: input.desktop.ssh,
     referenced: referenced.get(automationAuthorityCatalogKey(desktopAuthority)) ?? EMPTY_SCOPE,
-    orphanCount: input.desktop.orphanCount
+    orphanCount: input.desktop.orphanCount,
+    servedBy: new Map(
+      input.runtimes.flatMap((runtime) =>
+        runtime.managedSshTargetId
+          ? [
+              [
+                runtime.managedSshTargetId,
+                hostStableKey({
+                  authority: { kind: 'runtime', environmentId: runtime.environmentId },
+                  selector: { kind: 'self' }
+                })
+              ] as const
+            ]
+          : []
+      )
+    )
   }
   const contexts: AuthorityProjectionContext[] = [
     ...(desktopAliasEnvironmentId === undefined ? [desktopContext] : []),

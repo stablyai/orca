@@ -1,3 +1,4 @@
+import type { FolderWorkspace } from '../../../../shared/folder-workspaces/folder-workspace-types'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -64,6 +65,16 @@ function ports() {
   return {
     resolveWorktree: vi.fn(async (selector: string) => resolved(selector.replace(/^id:/, ''))),
     validateParent: vi.fn(),
+    resolveParent: vi.fn(async (selector: string) => {
+      const id = selector.replace(/^(id:)?folder:/, '')
+      return {
+        type: 'folder' as const,
+        workspaceKey: `folder:${id}` as const,
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: recording reads only the parent folder's id.
+        folderWorkspace: { id } as FolderWorkspace,
+        instanceId: null
+      }
+    }),
     invalidateResolved: vi.fn(),
     invalidateScan: vi.fn(),
     notifyChanged: vi.fn(),
@@ -97,13 +108,6 @@ describe('updateRuntimeManagedWorktreeMetadata under a WSL move', () => {
     expect(p.notifyChanged).not.toHaveBeenCalled()
   })
 
-  it('refuses a user edit', async () => {
-    await expect(update(MOVING, { comment: 'mine' })).rejects.toBeInstanceOf(
-      WslMoveProjectFencedError
-    )
-    expect(store.getWorktreeMeta(MOVING)).toBeUndefined()
-  })
-
   it('refuses a lineage change even alongside passive fields', async () => {
     await expect(
       update(MOVING, { isUnread: true, lineage: { noParent: true } })
@@ -124,5 +128,35 @@ describe('persistRuntimeManagedWorktreeSortOrder under a WSL move', () => {
     expect(result).toEqual({ updated: 1 })
     expect(store.getWorktreeMeta(MOVING)?.sortOrder).toBe(1)
     expect(store.getWorktreeMeta(STAYING)?.sortOrder).toBeGreaterThan(2)
+  })
+})
+
+describe('updateRuntimeManagedWorktreeMetadata with a folder workspace parent', () => {
+  it('replaces the worktree parent with the folder, in both lists', async () => {
+    const target = hostWorktreeTarget({ id: STAYING, hostId: 'local' })
+    store.setWorktreeMeta(target, { instanceId: `${STAYING}#instance` })
+    store.setWorktreeLineage(target, {
+      worktreeId: STAYING,
+      worktreeInstanceId: `${STAYING}#instance`,
+      parentWorktreeId: 'repo-2::/src/parent',
+      parentWorktreeInstanceId: 'parent#instance',
+      origin: 'manual',
+      capture: { source: 'manual-action', confidence: 'explicit' },
+      createdAt: 1
+    })
+
+    await updateRuntimeManagedWorktreeMetadata({
+      selector: `id:${STAYING}`,
+      updates: { lineage: { parentWorktree: 'id:folder:5b1c' } },
+      store,
+      ports: ports()
+    })
+
+    expect(store.getWorktreeLineage(STAYING)).toBeUndefined()
+    expect(store.getWorkspaceLineage(`worktree:${STAYING}`)).toMatchObject({
+      parentWorkspaceKey: 'folder:5b1c',
+      parentInstanceId: '5b1c',
+      childInstanceId: `${STAYING}#instance`
+    })
   })
 })

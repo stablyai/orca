@@ -5,11 +5,11 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter'
-import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
-import { emptyAgentSessionBatch } from '../../../src/main/native-chat/agent-session-wire/agent-session-empty-batch'
-import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
-import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+import type { StructuredAgentSessionAdapter } from '../../../src/main/native-chat/agent-session-wire/providers/structured-agent-session-adapter'
+import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
+import { emptyAgentSessionBatch } from '../../../src/main/native-chat/agent-session-wire/publication/subscribers/agent-session-empty-batch'
+import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-support'
+import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import type { AgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session/agent-session-wire'
@@ -53,10 +53,10 @@ import {
   type RpcClientIdentity,
   type RpcReply
 } from './versioned-agent-session-wire'
-import * as journalHostDatabase from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
+import * as journalHostDatabase from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../src/shared/agent-session/lifecycle/agent-session-provider-handle-encoding'
-import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
+import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
 import { describeReleasedStopNoteProjection } from './cross-version-stop-note-scenarios'
 
 const SUITE_TIMEOUT_MS = 180_000
@@ -764,8 +764,8 @@ describe('cross-version structured agent sessions', () => {
       )
     })
 
-    // Create replies at spawn, so the first send carries handshake proof; unproven starts must time out as rejected messages.
-    it("answers a released client's send once the startup limit ends a start that never proves itself", async () => {
+    // Unproven starts return the person's message to the queue instead of leaving a legacy RPC waiting.
+    it("answers a released client's send with its returned row once the startup limit ends", async () => {
       const released = baseline.capabilities.filter(
         (capability) => capability !== AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY
       )
@@ -780,7 +780,12 @@ describe('cross-version structured agent sessions', () => {
 
       expect(reply).toMatchObject({
         ok: true,
-        result: { value: { submission: { dispatchState: 'rejected' } } }
+        result: { value: { queued: { state: 'returned' } } }
+      })
+      const [replayed] = await call('agentSession.send', params, released)
+      expect(replayed).toMatchObject({
+        ok: true,
+        result: { replayed: true, value: { queued: { state: 'returned' } } }
       })
     })
   })

@@ -5,7 +5,7 @@ import {
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionProviderHandle } from '../../shared/agent-session/lifecycle/agent-session-provider-handle'
 import type { AiVaultPrepareSessionResumeArgs } from '../../shared/ai-vault/resume/ai-vault-resume-preparation'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { copyStructuredChatConversation } from './structured-chat-conversation-copy'
 import { installCopyingChat as installChat } from './structured-session-ownership.test-support'
 

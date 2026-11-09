@@ -1,7 +1,7 @@
 import type {
   RuntimeEditorTabReveal,
   RuntimeFileOpenPosition
-} from '../../shared/runtime-file-contracts'
+} from '../../shared/file-access/runtime-editor-file-open'
 import { ipcRenderer } from 'electron'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { TerminalTabCreateReply } from '../../shared/workspace-layout/terminal-reveal-identity'

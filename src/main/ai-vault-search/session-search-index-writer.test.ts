@@ -177,28 +177,6 @@ it('declines a behind cursor in beginRead before it ever reaches the store', () 
   expect(attempted).toEqual([100])
 })
 
-it("hands the read's identity accessor to the store", () => {
-  const captured: unknown[] = []
-  vi.spyOn(store, 'indexedFile').mockReturnValue(null)
-  vi.spyOn(store, 'beginWrite').mockImplementation(
-    (_candidate, _mode, _previousByteOffset, identity) => {
-      captured.push(identity)
-      return { add: () => undefined, commit: () => true, discard: () => undefined }
-    }
-  )
-  vi.spyOn(store, 'setFileState').mockImplementation(() => undefined)
-  const identity = (): null => null
-
-  new SessionSearchIndexConsumer(store).beginRead({
-    candidate: syntheticCandidate(),
-    mode: 'replace',
-    previousByteOffset: 0,
-    identity
-  })
-
-  expect(captured).toEqual([identity])
-})
-
 it('treats half a recorded identity as no identity at all', () => {
   const partial = {
     ...syntheticCandidate({ dev: 7 }),

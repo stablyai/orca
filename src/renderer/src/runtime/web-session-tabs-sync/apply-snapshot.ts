@@ -1,15 +1,15 @@
-import { agentSenderPublicationPatch } from '../agent-sender-associations'
+import { agentSenderPublicationPatch } from '../native-chat/agent-senders/agent-sender-publication-patch'
 import { isWebSessionTabsWorktreeRemovalFrame } from './session-tabs-inventory-absence'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
-import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owner'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '../native-chat/local-sessions/local-structured-session-owner'
 import type {
   WebSessionTabsBatchContext,
   WebSessionTabsSnapshotApplyOptions,
   WebSessionTabsSyncState
 } from './state'
-import { suppressE2eWebRuntimeBrowserSnapshot } from '../web-runtime-browser-creation-e2e-fault'
+import { suppressE2eWebRuntimeBrowserSnapshot } from '../browser/creation/testing/web-runtime-browser-creation-e2e-fault'
 import { prepareWebSessionTabsSnapshotBase } from './apply-preparation-base'
 import { prepareWebSessionTabsSnapshotBrowser } from './apply-preparation-browser'
 import { prepareWebSessionTabsSnapshotUnified } from './apply-preparation-unified'
@@ -19,7 +19,7 @@ import { applyBrowserRecordUpdates } from './apply-browser-records'
 import { applyWorktreeRecordUpdates } from './apply-worktree-records'
 import { applyActiveStateUpdates } from './apply-active-state'
 import { buildWebSessionTabsFinalPatch } from './apply-final-patch'
-import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspaces'
+import { isFrameDrawnServerWorkspace } from './frame-drawn-server-workspace-set'
 import { buildFrameDrawnWorkspaceStatusPatch } from './frame-drawn-workspace-status-patch'
 import { indexMirroredTerminalSurfaces } from './mirrored-terminal-handle-index'
 

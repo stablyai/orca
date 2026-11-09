@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import type { Translate } from '@/i18n/use-translate'
 import type { AgentSessionRestartActivity } from '../../../shared/agent-session/lifecycle/agent-session-restart-activity'
 
 export type ResumeActivityLabel = {
@@ -8,15 +9,14 @@ export type ResumeActivityLabel = {
   detail: string
 }
 
-function named(label: string): string {
-  return (
-    label || translate('auto.components.NativeChatResumeOnRestartModal.activityUnnamed', 'unnamed')
-  )
+function named(label: string, t: Translate = translate): string {
+  return label || t('auto.components.NativeChatResumeOnRestartModal.activityUnnamed', 'unnamed')
 }
 
 /** Read the host’s stop-time snapshot; older hosts/offers may omit it, so return null for caller fallback copy. */
 export function resumeActivityLabel(
-  activity: AgentSessionRestartActivity | undefined
+  activity: AgentSessionRestartActivity | undefined,
+  t: Translate = translate
 ): ResumeActivityLabel | null {
   if (!activity) {
     return null
@@ -27,20 +27,20 @@ export function resumeActivityLabel(
   if (activity.state === 'blocked' && prompt) {
     parts.push(
       prompt.kind === 'approval'
-        ? translate(
+        ? t(
             'auto.components.NativeChatResumeOnRestartModal.activityApproval',
             'Waiting for your approval: {{value0}}',
-            { value0: named(prompt.label) }
+            { value0: named(prompt.label, t) }
           )
-        : translate(
+        : t(
             'auto.components.NativeChatResumeOnRestartModal.activityQuestion',
             'Waiting for your answer: {{value0}}',
-            { value0: named(prompt.label) }
+            { value0: named(prompt.label, t) }
           )
     )
   } else if (activity.state === 'working') {
     parts.push(
-      translate('auto.components.NativeChatResumeOnRestartModal.activityMidReply', 'Was mid-reply')
+      t('auto.components.NativeChatResumeOnRestartModal.activityMidReply', 'Was mid-reply')
     )
   }
   const agents = activity.tasks.filter((task) => task.kind === 'agent')
@@ -51,15 +51,15 @@ export function resumeActivityLabel(
   const [onlyWatch] = watches
   if (agents.length === 1 && onlyAgent) {
     parts.push(
-      translate(
+      t(
         'auto.components.NativeChatResumeOnRestartModal.activitySubagentOne',
         'Subagent running: {{value0}}',
-        { value0: named(onlyAgent.label) }
+        { value0: named(onlyAgent.label, t) }
       )
     )
   } else if (agents.length > 1) {
     parts.push(
-      translate(
+      t(
         'auto.components.NativeChatResumeOnRestartModal.activitySubagentCount',
         '{{count}} subagents running',
         { count: agents.length, defaultValue_one: '{{count}} subagent running' }
@@ -68,15 +68,15 @@ export function resumeActivityLabel(
   }
   if (watches.length === 1 && onlyWatch) {
     parts.push(
-      translate(
+      t(
         'auto.components.NativeChatResumeOnRestartModal.activityMonitorOne',
         'Monitoring: {{value0}}',
-        { value0: named(onlyWatch.label) }
+        { value0: named(onlyWatch.label, t) }
       )
     )
   } else if (watches.length > 1) {
     parts.push(
-      translate(
+      t(
         'auto.components.NativeChatResumeOnRestartModal.activityMonitorCount',
         'Monitoring {{count}} background tasks',
         { count: watches.length, defaultValue_one: 'Monitoring {{count}} background task' }

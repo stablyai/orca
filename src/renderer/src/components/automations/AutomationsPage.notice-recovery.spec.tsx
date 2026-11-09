@@ -12,12 +12,11 @@ import {
   renderPage,
   runtimeHost,
   RUNTIME_ID,
-  RUNTIME_REPO_ID,
   RUNTIME_SELF_FILTER,
-  RUNTIME_WORKSPACE_ID,
   scopedList,
   settleHostQueries
 } from './automations-page-test-harness'
+import { RUNTIME_REPO_ID, RUNTIME_WORKSPACE_ID } from './automations-page-runtime-fixtures'
 import { listedRow } from './automations-page-listed-items'
 import { makeAutomation } from './automations-page-fixtures'
 

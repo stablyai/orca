@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createTestStore } from '../store-test-helpers'
+import { createTestStore } from '../../testing/app-store-test-fixture'
 
 // Directly test paneKey reuse: minted IDs make ordinary collisions rare, but stale closed-pane acks must never suppress a future unvisited signal.
 

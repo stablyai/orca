@@ -1,7 +1,7 @@
 import type React from 'react'
 import '../drag/project-header-drag'
 import { isRepoHeaderActionTarget } from '../drag/project-header-drag-contract'
-import { isProjectSectionGroupKey } from '../../../../../../shared/sidebar-list/group-keys'
+import { isProjectOrPinnedSectionGroupKey } from '../../../../../../shared/sidebar-list/group-keys'
 
 export function stopRepoHeaderKeyboardToggle(event: React.KeyboardEvent<HTMLElement>): void {
   if (event.key === 'Enter' || event.key === ' ') {
@@ -31,13 +31,13 @@ export function shouldIgnoreRepoHeaderToggle(event: React.SyntheticEvent<HTMLEle
   return isRepoHeaderActionTarget(event.target, event.currentTarget)
 }
 
-// Alt/Option-click toggles every project, matching tree views in VS Code and Finder.
+// Alt/Option-click toggles all projects and Pinned together.
 export function toggleSectionHeaderCollapse(
   event: React.MouseEvent | React.KeyboardEvent,
   collapseKey: string,
   ctx: { toggleGroupWithScrollAnchor: (key: string) => void; toggleAllProjects?: () => void }
 ): void {
-  if (event.altKey && ctx.toggleAllProjects && isProjectSectionGroupKey(collapseKey)) {
+  if (event.altKey && ctx.toggleAllProjects && isProjectOrPinnedSectionGroupKey(collapseKey)) {
     ctx.toggleAllProjects()
     return
   }

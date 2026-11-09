@@ -1,5 +1,6 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { SearchableSetting } from '../section-layout/SearchableSetting'
 import { SettingsRow, SettingsSegmentedControl } from '../form-controls/SettingsFormControls'
 import { matchesSettingsSearch } from '../search/settings-search'
@@ -21,24 +22,21 @@ export const COMPARE_AGAINST_UPSTREAM_KEYWORDS = [
   'source control'
 ]
 
-function getCompareAgainstUpstreamTitle(): string {
-  return translate(
-    'auto.components.settings.GitPane.compareAgainstUpstreamTitle',
-    'Default Compare Base'
-  )
+function getCompareAgainstUpstreamTitle(t: Translate = translate): string {
+  return t('auto.components.settings.GitPane.compareAgainstUpstreamTitle', 'Default Compare Base')
 }
 
-function getCompareAgainstUpstreamDescription(): string {
-  return translate(
+function getCompareAgainstUpstreamDescription(t: Translate = translate): string {
+  return t(
     'auto.components.settings.GitPane.compareAgainstUpstreamDescription',
     "Choose which base Source Control uses by default for committed-change comparisons. Branch upstream follows the current branch automatically and falls back to the repository default branch when no upstream exists. You can still change the compare base per worktree from that worktree's Git panel. Pull Request and rebase targets don't change."
   )
 }
 
-export function compareAgainstUpstreamMatchesSearch(searchQuery: string): boolean {
+export function compareAgainstUpstreamMatchesSearch(searchQuery: string, t?: Translate): boolean {
   return matchesSettingsSearch(searchQuery, {
-    title: getCompareAgainstUpstreamTitle(),
-    description: getCompareAgainstUpstreamDescription(),
+    title: getCompareAgainstUpstreamTitle(t),
+    description: getCompareAgainstUpstreamDescription(t),
     keywords: COMPARE_AGAINST_UPSTREAM_KEYWORDS
   })
 }
@@ -50,8 +48,9 @@ export function CompareAgainstUpstreamSetting({
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }): React.JSX.Element {
-  const title = getCompareAgainstUpstreamTitle()
-  const description = getCompareAgainstUpstreamDescription()
+  const t = useTranslate()
+  const title = getCompareAgainstUpstreamTitle(t)
+  const description = getCompareAgainstUpstreamDescription(t)
   const value: SourceControlCompareBasePolicy = settings.sourceControlCompareAgainstUpstream
     ? 'branch-upstream'
     : 'repository-default'
@@ -82,14 +81,14 @@ export function CompareAgainstUpstreamSetting({
             options={[
               {
                 value: 'repository-default',
-                label: translate(
+                label: t(
                   'auto.components.settings.GitPane.compareBaseRepositoryDefault',
                   'Repository default'
                 )
               },
               {
                 value: 'branch-upstream',
-                label: translate(
+                label: t(
                   'auto.components.settings.GitPane.compareBaseBranchUpstream',
                   'Branch upstream'
                 )

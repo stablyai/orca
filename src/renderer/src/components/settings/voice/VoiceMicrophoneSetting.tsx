@@ -12,6 +12,7 @@ import {
 } from '@/components/dictation/microphone-devices'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 
@@ -78,6 +79,7 @@ export function VoiceMicrophoneSetting({
   voiceSettings,
   onUpdateVoiceSettings
 }: VoiceMicrophoneSettingProps): React.JSX.Element {
+  const t = useTranslate()
   const languageRevision = useUiLanguageRevision()
   const [devices, setDevices] = useState<VoiceMicrophoneDevice[]>([])
   const [devicesKnown, setDevicesKnown] = useState(false)
@@ -206,11 +208,11 @@ export function VoiceMicrophoneSetting({
         devicesKnown,
         preferredDeviceId: voiceSettings.microphoneDeviceId,
         preferredDeviceLabel: voiceSettings.microphoneDeviceLabel,
-        systemDefaultLabel: translate(
+        systemDefaultLabel: t(
           'auto.components.settings.VoiceMicrophoneSetting.systemDefault',
           'System default'
         ),
-        unavailableSuffix: translate(
+        unavailableSuffix: t(
           'auto.components.settings.VoiceMicrophoneSetting.unavailable',
           'unavailable'
         )
@@ -221,7 +223,8 @@ export function VoiceMicrophoneSetting({
       devicesKnown,
       voiceSettings.microphoneDeviceId,
       voiceSettings.microphoneDeviceLabel,
-      languageRevision
+      languageRevision,
+      t
     ]
   )
 
@@ -230,11 +233,9 @@ export function VoiceMicrophoneSetting({
   return (
     <div className="flex items-center justify-between gap-4 py-2">
       <div className="min-w-0 space-y-0.5">
-        <Label>
-          {translate('auto.components.settings.VoiceMicrophoneSetting.label', 'Microphone')}
-        </Label>
+        <Label>{t('auto.components.settings.VoiceMicrophoneSetting.label', 'Microphone')}</Label>
         <p className="text-xs text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.settings.VoiceMicrophoneSetting.description',
             'Input device used for voice dictation. System default follows the OS microphone setting.'
           )}
@@ -247,7 +248,7 @@ export function VoiceMicrophoneSetting({
               </p>
             ) : (
               <p className="text-xs text-muted-foreground">
-                {translate(
+                {t(
                   'auto.components.settings.VoiceMicrophoneSetting.accessHint',
                   'Allow microphone access to list input devices.'
                 )}
@@ -260,10 +261,7 @@ export function VoiceMicrophoneSetting({
               disabled={accessPending}
               onClick={() => void requestMicrophoneAccess()}
             >
-              {translate(
-                'auto.components.settings.VoiceMicrophoneSetting.allowAccess',
-                'Allow access'
-              )}
+              {t('auto.components.settings.VoiceMicrophoneSetting.allowAccess', 'Allow access')}
             </Button>
           </div>
         )}
@@ -294,10 +292,7 @@ export function VoiceMicrophoneSetting({
       >
         <SelectTrigger
           className={`h-7 w-52 shrink-0 text-xs ${!voiceSettings.enabled ? 'opacity-50' : ''}`}
-          aria-label={translate(
-            'auto.components.settings.VoiceMicrophoneSetting.label',
-            'Microphone'
-          )}
+          aria-label={t('auto.components.settings.VoiceMicrophoneSetting.label', 'Microphone')}
         >
           <SelectValue />
         </SelectTrigger>
