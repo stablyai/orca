@@ -637,6 +637,7 @@
       "fullCopySaveUpdate": "Copiar todo y Guardar para este adjunto estarán disponibles en una actualización del teléfono."
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} está sin conexión · a las {{time}}",
       "reconnecting": "{{hostName}} se está reconectando…",
       "stopped": "{{hostName}} está detenido. Inícialo en tu ordenador.",
       "server": "El servidor",

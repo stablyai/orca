@@ -598,6 +598,7 @@
       "fullCopySaveUpdate": "完整複製和儲存此附件的功能將在手機更新中提供。"
     },
     "hostOutage": {
+      "offlineAsOf": "{{host}} 已離線 · 截至 {{time}}",
       "reconnecting": "{{hostName}} 正在重新連線…",
       "stopped": "{{hostName}} 已停止。請在你的電腦上啟動它。",
       "server": "伺服器",
