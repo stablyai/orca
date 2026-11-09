@@ -24,7 +24,10 @@ import { structuredChatNamingDeps } from './structured-chat-naming-runtime'
 import type { AgentJournalSnapshot } from '../../../../shared/agent-session/journal/agent-session-journal-types'
 import type * as TextGeneration from '../../../text-generation/commit-message-text-generation'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/host/structured-agent-session-host'
-import { createQueuedMessageTestRig } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
+import {
+  createQueuedMessageTestRig,
+  QUEUED_RIG_CALLER
+} from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-queued-message-rig.test-fixture'
 import { holdDelivery } from '../../../native-chat/agent-session-wire/host/testing/structured-agent-session-delivery-hold.test-fixture'
 import { holdUnsentSends } from '../../../native-chat/agent-session-journal/queued-messages/journal-unsent-send-hold'
 import { AgentSessionAcquisitionRootExitObservedError } from '../../../native-chat/agent-session-wire/acquisition/structured-agent-session-acquisition-errors'
@@ -671,8 +674,12 @@ it('finishes naming admitted during delivery even if recording its failure canno
   const { chat, title, done, seeded } = await atRestNaming()
   const release = chat.holdNextStart()
   chat.failNextStart(new Error('Startup refused'))
+  const fields = { command: 'compact' as const }
+  const command = chat.host.conversationCommand(QUEUED_RIG_CALLER, {
+    ...fields,
+    envelope: chat.envelope(fields, 'agentSession.conversationCommand', 'compact-before-prose')
+  })
   try {
-    expect(await chat.send('/help').result).toMatchObject({ ok: true })
     await vi.waitFor(() => expect(chat.starts).toHaveBeenCalledOnce())
     const sent = chat.send('Repair login')
     expect(await sent.result).toMatchObject({ ok: true })
@@ -689,6 +696,9 @@ it('finishes naming admitted during delivery even if recording its failure canno
     failure.mockRestore()
   } finally {
     release()
+    vi.restoreAllMocks()
+    await chat.stop()
+    await command
     await chat.dispose()
   }
 })
