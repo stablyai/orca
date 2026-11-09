@@ -74,6 +74,7 @@ function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState
       .then(async (outcome) => {
         if (outcome.status === 'created') {
           await selectOrg(outcome.orgId)
+          clearTeamPageArrival()
           toast.success(
             t('auto.components.billing.team.createdToast', '{{value0}} created', {
               value0: outcome.name
@@ -129,7 +130,8 @@ function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState
     })
   }
 
-  const org = orgId ? { orgId, name: cloud?.activeOrgName ?? orgId } : null
+  const org =
+    orgId && arrival?.kind !== 'create' ? { orgId, name: cloud?.activeOrgName ?? orgId } : null
 
   return (
     <TeamPageView
@@ -182,6 +184,7 @@ function TeamPageBody({ arrival }: { arrival: ReturnType<typeof useTeamPageState
         openModal('new-workspace-composer', { telemetrySource: 'unknown' })
       }}
       onDismissArrival={clearTeamPageArrival}
+      onContactSales={(url) => void window.api.shell.openUrl(url)}
     />
   )
 }

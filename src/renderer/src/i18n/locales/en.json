@@ -7796,6 +7796,13 @@
           "includeRemoved": "Removed from ~/.ssh/config",
           "includeRemovedDetail": "Editors no longer see Orca Cloud hosts. Opening one in an editor asks again.",
           "revokedUnreachableDetail": "Deleted here. Orca couldn’t reach the workspace, so its copy is removed the next time this computer connects."
+        },
+        "teamSwitcher": {
+          "create": "Create a team…",
+          "failed": "Couldn’t switch teams. Try again.",
+          "manage": "Manage team…",
+          "personal": "Personal account",
+          "switched": "Switched to {{value0}}"
         }
       },
       "shared": {
@@ -20039,7 +20046,10 @@
           "youAreAdmin": "You’re an admin",
           "youAreMember": "You’re a member",
           "youAreOwner": "You’re an owner",
-          "yourTeams": "Or open a team you’re in"
+          "yourTeams": "Or open a team you’re in",
+          "contactUs": "Contact us",
+          "ssoBody": "SAML SSO and SCIM user provisioning are part of {{value0}}.",
+          "ssoTitle": "Single sign-on and provisioning"
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",

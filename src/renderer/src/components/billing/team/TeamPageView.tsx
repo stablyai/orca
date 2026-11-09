@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { LogOut, RefreshCw } from 'lucide-react'
+import { ExternalLink, KeyRound, LogOut, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -48,6 +48,8 @@ export type TeamPageViewProps = {
   onManageBilling: () => void
   onCreateWorkspace: () => void
   onDismissArrival: () => void
+  /** Opens the Enterprise contact page (SSO/SCIM are Enterprise; nothing here pretends otherwise). */
+  onContactSales: (url: string) => void
 }
 
 function viewerRoleSentence(role: OrcaOrgRole, t: Translate): string {
@@ -120,6 +122,7 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
 
   const roster = props.roster?.status === 'ok' ? props.roster.roster : null
   const entitlement = props.billing?.status === 'ok' ? props.billing.entitlement : null
+  const enterprise = entitlement?.offers?.enterprise ?? null
   const rows = roster ? teamRows(roster, props.viewerUserId) : []
   const selfRow = rows.find((row) => row.self)
   const viewerRole = roster?.viewerRole ?? 'member'
@@ -259,6 +262,38 @@ export function TeamPageView(props: TeamPageViewProps): React.JSX.Element {
           </p>
         ) : null}
       </section>
+
+      {roster?.canManageMembers && enterprise ? (
+        <section
+          aria-labelledby="team-sso-title"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-border p-4"
+        >
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+            <KeyRound className="size-4" />
+          </span>
+          <div className="min-w-[14rem] flex-1 space-y-0.5">
+            <h3 id="team-sso-title" className="text-sm font-medium">
+              {t('auto.components.billing.team.ssoTitle', 'Single sign-on and provisioning')}
+            </h3>
+            <p className="text-xs text-muted-foreground text-pretty">
+              {t(
+                'auto.components.billing.team.ssoBody',
+                'SAML SSO and SCIM user provisioning are part of {{value0}}.',
+                { value0: enterprise.label }
+              )}
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => props.onContactSales(enterprise.contactUrl)}
+          >
+            {t('auto.components.billing.team.contactUs', 'Contact us')}
+            <ExternalLink />
+          </Button>
+        </section>
+      ) : null}
 
       {selfRow ? (
         <section

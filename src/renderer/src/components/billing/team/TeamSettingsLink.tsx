@@ -1,4 +1,5 @@
 import { ChevronRight } from 'lucide-react'
+import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
 import { useTranslate } from '@/i18n/use-translate'
 import { TeamMark } from './TeamAvatar'
 import { memberCountLabel } from './team-copy'
@@ -18,9 +19,10 @@ export function TeamSettingsLink({
   const members = roster.result?.status === 'ok' ? roster.result.roster.members.length : null
   return (
     <div className="space-y-3 border-t border-border/60 pt-5">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        {t('auto.components.billing.team.title', 'Team')}
-      </p>
+      <SettingsGroupHeader
+        className="px-0"
+        title={t('auto.components.billing.team.title', 'Team')}
+      />
       <button
         type="button"
         onClick={() => openTeamPage()}

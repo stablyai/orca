@@ -17,6 +17,7 @@ import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
 import { cn } from '@/lib/utils'
 import { useBillingSummary } from '../../billing/billing-summary-store'
+import { SidebarTeamSubmenu } from './SidebarTeamSubmenu'
 import { useSetupGuideProgress } from '../../setup-guide/use-setup-guide-progress'
 import { getAccountMenuIdentity, type AccountMenuIdentity } from './account-menu-identity'
 import { selectVisibleAccountMenuItems, useRegisteredAccountMenuItems } from './account-menu-items'
@@ -190,6 +191,7 @@ export function SidebarAccountMenu(): React.JSX.Element {
               <DropdownMenuSeparator />
             </>
           ) : null}
+          <SidebarTeamSubmenu authStatus={authStatus} />
           {extensionItems.length > 0 ? (
             <>
               {extensionItems.map((item) => {

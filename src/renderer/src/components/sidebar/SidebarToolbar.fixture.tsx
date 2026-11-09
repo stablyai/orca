@@ -116,3 +116,25 @@ export const signedInMenuOnTeam = footer({
   setup: withBilling(true),
   interact: openAccountMenu
 })
+
+const openTeamSwitcher = async (frame: HTMLElement): Promise<void> => {
+  await openAccountMenu(frame)
+  const trigger = document.querySelector<HTMLElement>('[data-account-menu-team-switcher]')
+  trigger?.focus()
+  trigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+  await settle()
+}
+
+export const teamSwitcher = footer({
+  width: 560,
+  height: 420,
+  authStatus: {
+    ...signedInWithBilling,
+    organizations: [
+      { orgId: 'org-acme', name: 'Acme', role: 'Owner' },
+      { orgId: 'org-oss', name: 'Open Source Club', role: 'Member' }
+    ]
+  },
+  setup: withBilling(true),
+  interact: openTeamSwitcher
+})

@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { SettingsGroupHeader } from '@/components/settings/section-layout/SettingsGroup'
 import { CreditCard, ExternalLink, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { InlineError } from '@/components/ui/inline-error'
@@ -103,21 +104,22 @@ export function PlanBillingView({
   }
 
   const header = (
-    <div className="flex items-center justify-between gap-3">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
-        {t('auto.components.billing.title', 'Plan & billing')}
-      </p>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        disabled={loading}
-        onClick={onRefresh}
-        aria-label={t('auto.components.billing.refresh', 'Refresh plan')}
-      >
-        <RefreshCw className={cn(loading && 'animate-spin')} />
-      </Button>
-    </div>
+    <SettingsGroupHeader
+      className="px-0"
+      title={t('auto.components.billing.title', 'Plan & billing')}
+      action={
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          disabled={loading}
+          onClick={onRefresh}
+          aria-label={t('auto.components.billing.refresh', 'Refresh plan')}
+        >
+          <RefreshCw className={cn(loading && 'motion-safe:animate-spin')} />
+        </Button>
+      }
+    />
   )
 
   if (result.status === 'failed') {
