@@ -39,18 +39,10 @@ export type {
   CliRuntimeState,
   CliStatusResult,
   DeviceScope,
-  RuntimeBrowserDriverState,
   RuntimeDesktopWindowStatus,
   RuntimeGraphStatus,
-  RuntimeMobileSessionAgentTab,
-  RuntimeMobileSessionAgentTabStatus,
-  RuntimeMobileSessionBrowserTab,
-  RuntimeMobileSessionClientTab,
   RuntimeMobileSessionCreateTerminalResult,
-  RuntimeMobileSessionFileTab,
-  RuntimeMobileSessionMarkdownTab,
   RuntimeMobileSessionRetiredTerminalSurface,
-  RuntimeMobileSessionSnapshotTab,
   RuntimeMobileSessionTabCloseResult,
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTabMove,
@@ -58,9 +50,6 @@ export type {
   RuntimeMobileSessionTabsRemovedResult,
   RuntimeMobileSessionTabsResult,
   RuntimeMobileSessionTabsSnapshot,
-  RuntimeMobileSessionTerminalClientTab,
-  RuntimeMobileSessionTerminalTab,
-  RuntimeMobileTerminalTheme,
   RuntimeMountedLeaf,
   RuntimeNativeChatLaunchDraftResolution,
   RuntimeRendererSyncWindowGraph,
@@ -69,8 +58,7 @@ export type {
   RuntimeSyncedLeaf,
   RuntimeSyncedTab,
   RuntimeSyncWindowGraph,
-  RuntimeSyncWindowGraphResult,
-  RuntimeTerminalDriverState
+  RuntimeSyncWindowGraphResult
 } from './runtime-session-contracts'
 export type {
   RuntimeTerminalAgentStatus,
