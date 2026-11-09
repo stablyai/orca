@@ -27,6 +27,11 @@ import {
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-manual-disconnect'
 import { runtimeEnvironmentChangedFailure } from './runtime-environment-revision-guard'
 import { resolveManagedRuntimeEnvironment } from './runtime-environment-managed-tunnel'
+import { isRecipeVmEnvironmentAsleep } from '../../ephemeral-vm/recipe-vm-asleep'
+import {
+  RUNTIME_ENVIRONMENT_ASLEEP_ERROR_CODE,
+  RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE
+} from '../../../shared/remote-runtime/recipe-vm-wake'
 
 const statusListeners = new Set<(snapshot: RuntimeHostStatusSnapshot) => void>()
 
@@ -78,6 +83,14 @@ export function createRuntimeEnvironmentStatusOwner(
       const incarnation = getRuntimeEnvironmentCapabilityIncarnation(environment.id)
       const isCurrent = (): boolean =>
         getRuntimeEnvironmentCapabilityIncarnation(environment.id) === incarnation
+      // A sleeping VM's health probe would be the dial that wakes it; answer without dialing.
+      // (A tunnelled server is refused the same way by its preparation below.)
+      if (isRecipeVmEnvironmentAsleep(userDataPath, environment.id)) {
+        return runtimeHostStatusFailure(
+          RUNTIME_ENVIRONMENT_ASLEEP_ERROR_CODE,
+          RUNTIME_ENVIRONMENT_ASLEEP_MESSAGE
+        )
+      }
       if (environment.connectionDependency === 'ssh-tunnel') {
         try {
           await resolveManagedRuntimeEnvironment(userDataPath, environment.id)
