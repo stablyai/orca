@@ -41,14 +41,15 @@ export async function replyOverPeerMail(args: {
   const threadId = original.thread_id ?? original.id
   const senderLabel = peerMailSenderLabel(runtime, replier)
 
+  if (params.on !== undefined) {
+    throw new OrchestrationError(
+      'request_mismatch',
+      `${original.id} came from ${original.from_handle}; its reply goes back there by itself. Drop --on. No reply was sent.`,
+      NOTHING_SENT
+    )
+  }
+
   if (conversation.role === 'peer') {
-    if (params.on !== undefined) {
-      throw new OrchestrationError(
-        'request_mismatch',
-        `${original.id} came from ${original.from_handle}; its reply goes back there by itself. Drop --on. No reply was sent.`,
-        NOTHING_SENT
-      )
-    }
     db.enqueueFederationRelay({
       dispatchId: conversation.conversation_id,
       direction: 'to_home',
@@ -72,16 +73,6 @@ export async function replyOverPeerMail(args: {
   }
 
   const environmentId = conversation.environment_id ?? ''
-  if (params.on !== undefined) {
-    const named = runtime.resolveOrchestrationWorkerServer(params.on)
-    if (named.environmentId !== environmentId) {
-      throw new OrchestrationError(
-        'request_mismatch',
-        `${original.id} came from server ${original.from_handle}, not ${named.name}. Drop --on; the reply goes back there by itself. No reply was sent.`,
-        NOTHING_SENT
-      )
-    }
-  }
   if (!route.remote_party) {
     throw new OrchestrationError(
       'request_mismatch',

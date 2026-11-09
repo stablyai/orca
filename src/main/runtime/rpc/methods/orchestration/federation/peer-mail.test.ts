@@ -181,6 +181,10 @@ describe('agent mail between paired Orca servers', () => {
       thread_id: onB!.id
     })
 
+    await expect(
+      mutation(a, 'orchestration.reply', { id: back!.id, body: 'x', from: 'term_a', on: 'devB' })
+    ).resolves.toMatchObject({ ok: false, error: { code: 'request_mismatch' } })
+
     // The opener can keep answering, and the reply reaches the same agent again.
     await expect(
       mutation(a, 'orchestration.reply', { id: back!.id, body: 'Thanks.', from: 'term_a' })
