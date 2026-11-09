@@ -33,9 +33,7 @@ export function createAgentPickerInventorySource(
   return {
     getSnapshot: () => entries,
     usesSource: (entry: AgentPickerEntry, source: ModelCatalogSource) =>
-      source !== 'cli' ||
-      modelCatalogSource(entry.agent, entry.defaultSurface) === source ||
-      (demand.get(entry.agent) ?? 0) > 0,
+      source !== 'cli' || (demand.get(entry.agent) ?? 0) > 0,
     subscribeDemand: (listener: () => void) => {
       demandListeners.add(listener)
       return () => {
