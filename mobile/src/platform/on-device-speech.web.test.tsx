@@ -16,7 +16,7 @@ vi.mock('../mobile-web-shell/bridge/use-native-verbs', () => {
       failure: null
     }),
     speechFinish: async () => ({
-      text: 'Äh, das ist um fünf Uhr, ähm, glaube ich.',
+      text: 'Äh, das ist, ähm, um fünf Uhr fertig.',
       failure: null
     }),
     speechCancel: async () => ({})
@@ -50,7 +50,7 @@ describe('on-device dictation text', () => {
 
     expect(await speech.read()).toMatchObject({ committed: 'Das ist um fünf Uhr.', tentative: '' })
     expect(await speech.finish()).toEqual({
-      text: 'Das ist um fünf Uhr, glaube ich.',
+      text: 'Das ist um fünf Uhr fertig.',
       failure: null
     })
   })
@@ -60,7 +60,7 @@ describe('on-device dictation text', () => {
     await speech.start()
 
     expect(await speech.finish()).toEqual({
-      text: 'Äh, das ist um fünf Uhr, ähm, glaube ich.',
+      text: 'Äh, das ist, ähm, um fünf Uhr fertig.',
       failure: null
     })
   })
