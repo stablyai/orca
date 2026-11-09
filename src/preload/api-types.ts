@@ -28,6 +28,7 @@ import type { DashboardApi, TerminalPreviewApi } from './api/dashboard-api'
 import type { DocPreviewApi } from './api/doc-preview-api'
 import type { EmulatorApi } from './api/emulator-api'
 import type { EphemeralVmApi } from './api/ephemeral-vm-api'
+import type { OrcaCloudWorkspaceApi } from '../shared/hosted-sandbox/cloud-workspace-api'
 import type { ExportApi, FilesystemApi } from './api/filesystem-api'
 import type { GitInspectionApi } from './api/git-inspection-api'
 import type { GitOperationApi } from './api/git-operation-api'
@@ -134,6 +135,8 @@ export type PreloadApi = {
   emulator: EmulatorApi
   hooks: HooksApi
   ephemeralVm: EphemeralVmApi
+  /** Orca Cloud workspace lifecycle (status panel, Restart, archive); absent in builds without Orca Cloud. */
+  orcaCloudWorkspace: OrcaCloudWorkspaceApi
   cache: WorkspaceSessionApi['cache']
   session: WorkspaceSessionApi['session']
   updater: UpdaterApi

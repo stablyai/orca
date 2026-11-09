@@ -2,6 +2,13 @@
 // the provider credential never leaves the control plane.
 import type { z } from 'zod'
 import {
+  HostedArchiveResponseSchema,
+  HostedWakeResponseSchema,
+  HostedWorkspaceStatusResponseSchema,
+  type HostedArchiveRequest,
+  type HostedArchiveResponse,
+  type HostedWakeResponse,
+  type HostedWorkspaceStatus,
   HostedSandboxErrorResponseSchema,
   HostedSandboxListResponseSchema,
   HostedSandboxReadyResponseSchema,
@@ -27,6 +34,22 @@ export type HostedSandboxControlPlaneClient = {
   renewLease(sandboxId: string, extendMs: number, signal?: AbortSignal): Promise<HostedSandboxView>
   rollover(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxReadyResponse>
   destroy(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxView>
+  /** Idempotent wake; `waitMs` (max 30s) long-polls until orcad is ready. */
+  wake(sandboxId: string, waitMs: number, signal?: AbortSignal): Promise<HostedWakeResponse>
+  /** Status panel: state, live VM metrics, uptime, cost so far. */
+  workspaceStatus(
+    sandboxId: string,
+    signal?: AbortSignal
+  ): Promise<{ sandbox: HostedSandboxView; status: HostedWorkspaceStatus }>
+  /** Forced rehydrate for an unresponsive workspace (same disk, new session). */
+  restart(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxReadyResponse>
+  archive(
+    sandboxId: string,
+    body: HostedArchiveRequest,
+    signal?: AbortSignal
+  ): Promise<HostedSandboxView>
+  archiveInfo(sandboxId: string, signal?: AbortSignal): Promise<HostedArchiveResponse['archive']>
+  unarchive(sandboxId: string, signal?: AbortSignal): Promise<HostedSandboxReadyResponse>
 }
 
 export type HostedSandboxControlPlaneClientOptions = {
@@ -143,7 +166,44 @@ export function createHostedSandboxControlPlaneClient(
           kind: 'control',
           signal
         })
-      ).sandbox
+      ).sandbox,
+    wake: (id, waitMs, signal) =>
+      call(
+        'POST',
+        `${sandboxPath(id, '/wake')}?wait=${Math.max(0, Math.min(30_000, Math.floor(waitMs)))}ms`,
+        HostedWakeResponseSchema,
+        { kind: 'control', signal }
+      ),
+    workspaceStatus: (id, signal) =>
+      call('GET', sandboxPath(id, '/status'), HostedWorkspaceStatusResponseSchema, {
+        kind: 'control',
+        signal
+      }),
+    restart: (id, signal) =>
+      call('POST', sandboxPath(id, '/restart'), HostedSandboxReadyResponseSchema, {
+        kind: 'boot',
+        signal
+      }),
+    archive: async (id, body, signal) =>
+      (
+        await call('POST', sandboxPath(id, '/archive'), HostedSandboxStatusResponseSchema, {
+          body,
+          kind: 'boot',
+          signal
+        })
+      ).sandbox,
+    archiveInfo: async (id, signal) =>
+      (
+        await call('GET', sandboxPath(id, '/archive'), HostedArchiveResponseSchema, {
+          kind: 'control',
+          signal
+        })
+      ).archive,
+    unarchive: (id, signal) =>
+      call('POST', sandboxPath(id, '/unarchive'), HostedSandboxReadyResponseSchema, {
+        kind: 'boot',
+        signal
+      })
   }
 }
 

@@ -531,7 +531,8 @@ export async function markProviderStopped(deps: LifecycleDeps, row: SandboxRow):
 }
 
 export async function suspendSandbox(deps: LifecycleDeps, row: SandboxRow): Promise<SandboxRow> {
-  if (row.status === 'suspended') {
+  // Archived is already stopped (the desktop's Sleep runs after or before an archive).
+  if (row.status === 'suspended' || row.status === 'archived') {
     return row
   }
   if (row.status !== 'running') {

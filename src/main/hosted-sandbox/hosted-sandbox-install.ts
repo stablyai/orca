@@ -10,9 +10,14 @@ import type { PluginService } from '../plugins/plugin-service'
 import { getHostedSandboxConfig } from './hosted-sandbox-config'
 import {
   ORCA_CLOUD_RECIPE,
+  createHostedSandboxRecipeClient,
   createHostedSandboxRecipeDriver,
   registerHostedSandboxRecipe
 } from './hosted-sandbox-recipe'
+import {
+  installHostedWorkspaceService,
+  setHostedWorkspaceService
+} from './hosted-workspace-service'
 import { createHostedSessionRegistry, type HostedSessionRegistry } from './hosted-session-registry'
 import { setHostedSessionSync } from './hosted-session-sync'
 
@@ -34,7 +39,8 @@ export function installHostedSandbox(): void {
   if (!config) {
     return
   }
-  const base = createHostedSandboxRecipeDriver(config)
+  const client = createHostedSandboxRecipeClient(config)
+  const base = createHostedSandboxRecipeDriver(config, client)
   // Dev rehearsals shorten idle sleep; packaged builds always use the provider's default.
   const idleOverride = app.isPackaged
     ? Number.NaN
@@ -47,17 +53,35 @@ export function installHostedSandbox(): void {
     driver,
     windows: () => BrowserWindow.getAllWindows()
   })
+  const workspaces = installHostedWorkspaceService({
+    userDataPath,
+    client,
+    windows: () => BrowserWindow.getAllWindows(),
+    syncSessions: () => void registry.sync()
+  })
+  setHostedWorkspaceService(workspaces)
   // Records land after the step answers and wakes can come from any path, so reconcile on a slow beat too.
   let beat: ReturnType<typeof setTimeout> | null = null
+  let beats = 0
   const schedule = (ms: number): void => {
     beat = setTimeout(() => {
-      void registry.sync().finally(() => schedule(30_000))
+      // OOM in the guest is checked every other beat (~1 min) for running cloud workspaces.
+      const oom = beats++ % 2 === 1 ? workspaces.pollOom() : Promise.resolve()
+      void Promise.all([registry.sync(), oom]).finally(() => schedule(30_000))
     }, ms)
     beat.unref?.()
   }
   registerHostedSandboxRecipe(driver, {
     onReady: () => setTimeout(() => void registry.sync(), 3_000).unref?.(),
-    onStopped: (environmentId) => registry.stopEnvironment(environmentId)
+    onStopped: (environmentId) => registry.stopEnvironment(environmentId),
+    onWake: ({ workspaceId, phase, startedAt, message }) =>
+      workspaces.emitWakeProgress({
+        workspaceId,
+        phase,
+        startedAt,
+        message,
+        source: phase === 'waking' ? workspaces.takeWakeSource(workspaceId) : 'open'
+      })
   })
   installed = { registry }
   setHostedSessionSync(() => void registry.sync())
@@ -67,6 +91,8 @@ export function installHostedSandbox(): void {
       clearTimeout(beat)
     }
     registry.dispose()
+    workspaces.dispose()
+    setHostedWorkspaceService(null)
   })
 }
 
