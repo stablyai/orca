@@ -246,7 +246,7 @@ export async function createCloudLinkedOrcaProfile(
 
 export async function selectCurrentOrcaProfileOrg(
   userDataPath: string,
-  orgId: string
+  orgId: string | null
 ): Promise<SelectOrcaProfileOrgResult> {
   const active = ensureActiveOrcaProfile(userDataPath)
   if (isOrcaCloudDevAuthEnabled()) {
