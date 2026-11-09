@@ -307,9 +307,12 @@ export function CloudAgentSetupView({
           {footerError}
         </p>
         <div className="flex shrink-0 gap-2">
-          <Button type="button" variant="ghost" size="sm" onClick={() => !saving && onCancel()}>
-            {t('cloudSecrets.cancel', 'Cancel')}
-          </Button>
+          {/* Settings' Subscription tab has nothing to cancel: Got it is the only way out. */}
+          {option === 'sign-in' && !onSignIn ? null : (
+            <Button type="button" variant="ghost" size="sm" onClick={() => !saving && onCancel()}>
+              {t('cloudSecrets.cancel', 'Cancel')}
+            </Button>
+          )}
           {option === 'sign-in' ? (
             <Button type="button" size="sm" onClick={onSignIn ?? onCancel}>
               {onSignIn

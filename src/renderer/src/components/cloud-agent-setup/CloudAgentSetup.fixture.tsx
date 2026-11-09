@@ -80,6 +80,8 @@ export const buildKeysAdmin = sheet({ readiness: NONE, canShare: true }, { kind:
 
 export const buildSignInPending = sheet({ readiness: NONE, canShare: false }, { kind: 'signIn' })
 
+export const buildSkipped = sheet({ readiness: NONE, canShare: false }, { kind: 'skipped' })
+
 export const buildSaved = sheet(
   { readiness: NONE, canShare: true },
   { kind: 'saved', saved: { agents: ['claude'], scope: 'org' } }

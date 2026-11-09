@@ -32,6 +32,7 @@ export type VmBuildCloudAgentStepMode =
   | { kind: 'keys' }
   | { kind: 'signIn' }
   | { kind: 'saved'; saved: CloudAgentSetupSaved }
+  | { kind: 'skipped' }
 
 export type VmBuildCloudAgentStepActions = {
   onSave: CloudAgentSetupViewProps['onSave']
@@ -87,17 +88,70 @@ export function VmBuildCloudAgentStepView({
   const [mode, setMode] = useState<VmBuildCloudAgentStepMode>(initialMode)
   const ready = isCloudAgentReady(model.readiness)
   const offerRef = useRef<HTMLButtonElement>(null)
+  const signInRef = useRef<HTMLButtonElement>(null)
+  const rowRef = useRef<HTMLLIElement>(null)
+  // Every swap unmounts the button that had focus; move focus to the new row (or its action) and
+  // announce the change, so keyboard and screen-reader users are not dropped on <body>.
+  const [announcement, setAnnouncement] = useState('')
+  const go = (
+    next: VmBuildCloudAgentStepMode,
+    focus: 'row' | 'offer' | 'signIn' | 'none',
+    say = ''
+  ): void => {
+    setMode(next)
+    setAnnouncement(say)
+    requestAnimationFrame(() => {
+      const target =
+        focus === 'row'
+          ? rowRef.current
+          : focus === 'offer'
+            ? offerRef.current
+            : focus === 'signIn'
+              ? signInRef.current
+              : null
+      target?.focus({ preventScroll: true })
+    })
+  }
+  const status = (
+    <span role="status" className="sr-only">
+      {announcement}
+    </span>
+  )
+
+  if (mode.kind === 'skipped') {
+    return (
+      <li
+        ref={rowRef}
+        tabIndex={-1}
+        className="py-1.5 outline-none"
+        data-vm-build-cloud-agent="skipped"
+      >
+        {status}
+        <Row
+          icon={KEY_ICON}
+          title={t('cloudAgentSetup.skippedTitle', 'Agent setup skipped')}
+          detail={t(
+            'cloudAgentSetup.skippedDetail',
+            'Set it up any time from Settings › Orca Account › Cloud secrets.'
+          )}
+        />
+      </li>
+    )
+  }
 
   if (mode.kind === 'saved') {
     return (
-      <li className="py-1.5" data-vm-build-cloud-agent="saved">
+      <li
+        ref={rowRef}
+        tabIndex={-1}
+        className="py-1.5 outline-none"
+        data-vm-build-cloud-agent="saved"
+      >
+        {status}
         <Row
           icon={DONE_ICON}
           title={cloudAgentSavedSummary(mode.saved, t)}
-          detail={t(
-            'cloudAgentSetup.saved.detail',
-            'New terminals and agents in running cloud workspaces get it within seconds, no rebuild.'
-          )}
+          detail={t('cloudAgentSetup.saved.short', 'Hidden from now on')}
         />
       </li>
     )
@@ -105,7 +159,13 @@ export function VmBuildCloudAgentStepView({
 
   if (mode.kind === 'signIn') {
     return (
-      <li className="py-1.5" data-vm-build-cloud-agent="sign-in">
+      <li
+        ref={rowRef}
+        tabIndex={-1}
+        className="py-1.5 outline-none"
+        data-vm-build-cloud-agent="sign-in"
+      >
+        {status}
         <Row
           icon={KEY_ICON}
           title={t('cloudAgentSetup.signInPending', 'Agent sign-in')}
@@ -120,7 +180,7 @@ export function VmBuildCloudAgentStepView({
               size="sm"
               onClick={() => {
                 actions.onCancelSignIn()
-                setMode(OFFER)
+                go(OFFER, 'signIn', t('cloudAgentSetup.signInCancelled', 'Sign-in cancelled'))
               }}
             >
               {t('cloudAgentSetup.skipSignIn', 'Don’t sign in')}
@@ -133,7 +193,8 @@ export function VmBuildCloudAgentStepView({
 
   if (ready && mode.kind === 'offer') {
     return (
-      <li className="py-1.5" data-vm-build-cloud-agent="ready">
+      <li ref={rowRef} className="py-1.5" data-vm-build-cloud-agent="ready">
+        {status}
         <Row
           icon={DONE_ICON}
           title={
@@ -149,7 +210,7 @@ export function VmBuildCloudAgentStepView({
               type="button"
               variant="ghost"
               size="sm"
-              onClick={() => setMode({ kind: 'keys' })}
+              onClick={() => go({ kind: 'keys' }, 'none')}
             >
               {t('cloudAgentSetup.change', 'Change')}
             </Button>
@@ -171,11 +232,16 @@ export function VmBuildCloudAgentStepView({
   const signIn = (): void => {
     actions.onSignIn()
     actions.onDone()
-    setMode({ kind: 'signIn' })
+    go(
+      { kind: 'signIn' },
+      'row',
+      t('cloudAgentSetup.signInQueued', 'Agent sign-in will open when the VM is ready')
+    )
   }
 
   return (
-    <li className="flex flex-col gap-2 py-1.5" data-vm-build-cloud-agent={mode.kind}>
+    <li ref={rowRef} className="flex flex-col gap-2 py-1.5" data-vm-build-cloud-agent={mode.kind}>
+      {status}
       <Row
         icon={KEY_ICON}
         title={title}
@@ -186,7 +252,7 @@ export function VmBuildCloudAgentStepView({
         actions={
           mode.kind === 'offer' ? (
             <>
-              <Button type="button" variant="outline" size="sm" onClick={signIn}>
+              <Button ref={signInRef} type="button" variant="outline" size="sm" onClick={signIn}>
                 {t('cloudAgentSetup.signIn.action', 'Sign in when ready')}
               </Button>
               <Button
@@ -194,11 +260,23 @@ export function VmBuildCloudAgentStepView({
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setMode({ kind: 'keys' })}
+                onClick={() => go({ kind: 'keys' }, 'none')}
               >
                 {t('cloudAgentSetup.useKey', 'Use a key')}
               </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={actions.onLater}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  actions.onLater()
+                  go(
+                    { kind: 'skipped' },
+                    'row',
+                    t('cloudAgentSetup.skippedTitle', 'Agent setup skipped')
+                  )
+                }}
+              >
                 {t('cloudAgentSetup.later', 'Later')}
               </Button>
             </>
@@ -215,12 +293,9 @@ export function VmBuildCloudAgentStepView({
             onSave={actions.onSave}
             onSaved={(saved) => {
               actions.onDone()
-              setMode({ kind: 'saved', saved })
+              go({ kind: 'saved', saved }, 'row', cloudAgentSavedSummary(saved, t))
             }}
-            onCancel={() => {
-              setMode({ kind: 'offer' })
-              requestAnimationFrame(() => offerRef.current?.focus())
-            }}
+            onCancel={() => go(OFFER, 'offer')}
             onSignIn={signIn}
           />
         </div>
@@ -282,7 +357,6 @@ export function VmBuildCloudAgentStep({
   const markDone = useAppStore((s) => s.markCloudAgentSetupDone)
   // Decided once per build, so finishing the step mid-build does not yank its confirmation away.
   const [eligible] = useState(() => !done)
-  const [skipped, setSkipped] = useState(false)
   const [signInRequested, setSignInRequested] = useState(false)
   const isCloud = entry.request.ephemeralVmRecipe?.recipeId === ORCA_CLOUD_RECIPE_ID
   const repoKey = useAppStore((s) => {
@@ -307,7 +381,6 @@ export function VmBuildCloudAgentStep({
   if (
     !isCloud ||
     !eligible ||
-    skipped ||
     handedToSignInRow ||
     model.status === 'loading' ||
     entry.status === 'error'
@@ -322,10 +395,7 @@ export function VmBuildCloudAgentStep({
         onDone: markDone,
         onSignIn: () => setSignInRequested(true),
         onCancelSignIn: () => setSignInRequested(false),
-        onLater: () => {
-          markDone()
-          setSkipped(true)
-        }
+        onLater: markDone
       }}
     />
   )

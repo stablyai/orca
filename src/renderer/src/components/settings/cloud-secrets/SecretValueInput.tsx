@@ -31,6 +31,8 @@ export function SecretValueInput({
 }): React.JSX.Element {
   const t = useTranslate()
   const [revealed, setRevealed] = useState(false)
+  // A multi-line paste swaps the field for its summary; focus follows instead of dropping to <body>.
+  const [pastedMultiline, setPastedMultiline] = useState(false)
   const multiline = value.includes('\n')
   const lines = multiline ? value.split('\n').length : 1
   const toggle = (
@@ -67,12 +69,19 @@ export function SecretValueInput({
             spellCheck={false}
             autoComplete="off"
             data-1p-ignore=""
+            autoFocus
+            onBlur={(event) => {
+              if (!event.currentTarget.parentElement?.contains(event.relatedTarget)) {
+                setRevealed(false)
+              }
+            }}
             className="max-h-48 min-h-20"
           />
         ) : (
           <Input
             id={id}
             readOnly
+            autoFocus={pastedMultiline}
             variant="code"
             value={t('cloudSecrets.value.lines', 'Multi-line value · {{lines}} lines', {
               lines: String(lines)
@@ -115,6 +124,7 @@ export function SecretValueInput({
           const pasted = event.clipboardData.getData('text')
           if (pasted.includes('\n')) {
             event.preventDefault()
+            setPastedMultiline(true)
             onChange(pasted.replace(/\r\n?/g, '\n').replace(/\n+$/, ''))
           }
         }}

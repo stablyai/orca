@@ -10,6 +10,7 @@ import {
 } from '../../shared/cloud-secrets/cloud-secrets-wire'
 import { listEphemeralVmRuntimes } from '../../shared/ephemeral-vm-runtime-store'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
+import { withCloudBuildDefaults } from '../cloud-build-defaults'
 import { getHostedSandboxConfig } from '../hosted-sandbox/hosted-sandbox-config'
 import { HOSTED_SANDBOX_DRIVER_ID } from '../hosted-sandbox/hosted-sandbox-driver'
 import { getOrcaCloudAvailability } from '../hosted-sandbox/hosted-sandbox-install'
@@ -84,7 +85,12 @@ function sandboxIdFor(userDataPath: string, runtimeEnvironmentId: string): strin
 }
 
 export function registerCloudSecretsHandlers(userDataPath: string): void {
-  const config = getHostedSandboxConfig(userDataPath, process.env, app.isPackaged)
+  // Packaged integration builds read no shell env; their control-plane URL is baked in.
+  const config = getHostedSandboxConfig(
+    userDataPath,
+    withCloudBuildDefaults(process.env),
+    app.isPackaged
+  )
   const client = config
     ? createCloudSecretsClient({
         baseUrl: config.controlPlaneUrl,

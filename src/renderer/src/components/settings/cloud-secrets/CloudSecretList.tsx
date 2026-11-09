@@ -95,7 +95,10 @@ function SecretRow({
               : t('cloudSecrets.list.hiddenLabel', 'Value hidden')}
           </span>
         </span>
-        <span className="w-40 shrink-0 truncate text-xs text-muted-foreground">
+        <span
+          className="w-40 shrink-0 truncate text-xs text-muted-foreground"
+          title={t('cloudSecrets.list.updated', '{{who}} · {{when}}', { who, when })}
+        >
           {saved ? (
             <span className="inline-flex items-center gap-1 text-foreground motion-safe:animate-in motion-safe:fade-in-0">
               <Check className="size-3.5" />
@@ -113,6 +116,9 @@ function SecretRow({
                 <Button
                   variant="destructive-chip"
                   size="xs"
+                  aria-label={t('cloudSecrets.list.confirmDeleteLabel', 'Confirm delete {{name}}', {
+                    name: secret.name
+                  })}
                   aria-disabled={removing || undefined}
                   aria-busy={removing || undefined}
                   onClick={() => {
@@ -125,6 +131,12 @@ function SecretRow({
                       setError(failure)
                       if (failure) {
                         setConfirming(false)
+                        // A failed delete keeps the row, so focus stays on its Delete.
+                        requestAnimationFrame(() =>
+                          document
+                            .querySelector<HTMLElement>(`[data-delete="${secret.name}"]`)
+                            ?.focus()
+                        )
                       }
                     })
                   }}
