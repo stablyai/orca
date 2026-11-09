@@ -8,7 +8,7 @@ import { legacyLaunchTextUpdates } from './agent-launch-permission-updates'
 import { composeAgentLaunchProfile } from './tui-agent-launch-defaults'
 import { structuredLaunchSeedOptions } from '../../native-chat/input/native-chat-session-option-defaults'
 import { createGlobalSettingsFixture } from '../../global-settings-test-fixture'
-import { quoteStartupArg, tokenizeStartupCommand } from '../startup/tui-agent-startup-shell'
+import { quoteStartupSettingArg, tokenizeStartupCommand } from '../startup/tui-agent-startup-shell'
 
 it('conserves canonical identity across both host-shell publications, edits and removals', () => {
   for (const [terminalWindowsShell, shell] of [
@@ -156,7 +156,7 @@ it('keeps native-only unrepresented choices and cuts Windows settings with their
       agentPermissionDefault: 'own',
       agentLaunchChoices: { claude: { model: 'sonnet', options: { fastMode } } },
       agentDefaultArgs: {
-        claude: `--settings ${quoteStartupArg('{"theme":"light"}', shell)} --add-dir docs`
+        claude: `--settings ${quoteStartupSettingArg('{"theme":"light"}', shell)} --add-dir docs`
       },
       nativeChatSessionOptions: {
         claude: { model: 'sonnet', valuesByModel: { sonnet: { fastMode: fastMode !== 'true' } } }
@@ -203,7 +203,7 @@ it('keeps native-only unrepresented choices and cuts Windows settings with their
         {
           type: target,
           agent: 'claude',
-          value: `--model sonnet --settings ${quoteStartupArg(`{"theme":"light","fastMode":"${fastMode}"}`, shell)} --debug`
+          value: `--model sonnet --settings ${quoteStartupSettingArg(`{"theme":"light","fastMode":"${fastMode}"}`, shell)} --debug`
         },
         'win32'
       )
@@ -219,7 +219,7 @@ it('keeps native-only unrepresented choices and cuts Windows settings with their
         {
           type: target,
           agent: 'claude',
-          value: `--model sonnet --settings ${quoteStartupArg('{"theme":"dark"}', shell)} --add-dir docs --debug`
+          value: `--model sonnet --settings ${quoteStartupSettingArg('{"theme":"dark"}', shell)} --add-dir docs --debug`
         },
         'win32'
       )

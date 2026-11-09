@@ -7,7 +7,7 @@ import {
 import { agentPermissionArgs } from '../permissions/tui-agent-permission-choice'
 import { readAgentChoiceSettings, agentChoiceSettingsOccurrences } from './agent-choice-settings'
 import {
-  quoteStartupArg,
+  quoteStartupSettingArg as quoteSettingArg,
   tokenizeStartupCommand,
   type AgentStartupShell
 } from '../startup/tui-agent-startup-shell'
@@ -148,7 +148,7 @@ export function analyzeChoiceArgs(
               continue
             }
             const { [form.key]: _removed, ...remaining } = settings
-            replacement = `${name} ${quoteStartupArg(JSON.stringify(remaining), grammars[0])}`
+            replacement = `${name} ${quoteSettingArg(JSON.stringify(remaining), grammars[0])}`
             value = String(choice)
             valueType = typeof choice === 'boolean' ? 'boolean' : 'string'
           }
@@ -178,7 +178,7 @@ export function analyzeChoiceArgs(
               spans.every(
                 (span, offset) =>
                   !span.divergesFromShell ||
-                  text.slice(span.start, span.end) === quoteStartupArg(words[offset], grammars[0])
+                  text.slice(span.start, span.end) === quoteSettingArg(words[offset], grammars[0])
               )
           ) ?? false
         const sourceAgreed = originals.every((original, grammarIndex) => {

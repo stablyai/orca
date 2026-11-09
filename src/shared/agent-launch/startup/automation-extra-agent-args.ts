@@ -6,7 +6,7 @@ import { getAgentSessionOptionLaunchCatalog } from '../../agent-session/options/
 import { PI_THINKING_LEVELS } from '../../agent-session/options/structured-agent-session-effective-effort'
 import { findOptionOccurrence } from '../../command-option-occurrence'
 import {
-  quoteStartupArg,
+  quoteStartupSettingArg,
   tokenizeStartupCommand,
   type AgentStartupShell
 } from './tui-agent-startup-shell'
@@ -311,7 +311,7 @@ export function mergeParsedExtraAgentArgs(args: {
   const kept = removeDefaultsFor(args.agent, extras.kinds, defaults.tokens)
   const terminator = agentArgTerminatorIndex(args.agent, kept)
   const merged = [...kept.slice(0, terminator), ...extras.tokens, ...kept.slice(terminator)]
-  const agentArgs = merged.map((token) => quoteStartupArg(token, args.shell)).join(' ')
+  const agentArgs = merged.map((token) => quoteStartupSettingArg(token, args.shell)).join(' ')
   // Why: the launch re-tokenizes this string; refuse rather than launch different argv.
   const reparsed = tokenizeStartupCommand(agentArgs, args.shell)
   if (
