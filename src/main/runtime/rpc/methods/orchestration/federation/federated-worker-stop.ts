@@ -193,10 +193,10 @@ async function sendFederatedStop(
   const stillUnknown = (reason: string, stage?: 'stop_owed' | 'stop_outcome_unknown') =>
     fenced(() => {
       const now = db.getWorkerDispatch(dispatchId)
-      return now?.state === 'stopped' ||
+      const keep =
+        now?.state === 'stopped' ||
         (attempt.resend && stage === 'stop_owed' && now?.stage === 'stop_owed')
-        ? (now as { state: string; last_error: string | null })
-        : db.markWorkerStopUnknown(dispatchId, reason, stage)
+      return now && keep ? now : db.markWorkerStopUnknown(dispatchId, reason, stage)
     })
   try {
     const status = RemoteCapabilities.parse(await call('status.get'))
