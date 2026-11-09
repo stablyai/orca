@@ -92,15 +92,17 @@ describe('Store', () => {
       '/Users/me/dev'
     )
     expect(store.getSettings().workspaceDirHistory).toEqual(historyBefore)
-    expect(store.updateSettings({ workspaceDir: ' C:\\work' }).workspaceDir).toBe('C:\\work')
     // Trailing characters and relative paths can be real folder names.
     expect(store.updateSettings({ workspaceDir: '/tmp/workspaces ' }).workspaceDir).toBe(
       '/tmp/workspaces '
     )
     expect(store.updateSettings({ workspaceDir: ' ~notes' }).workspaceDir).toBe(' ~notes')
-    if (process.platform !== 'win32') {
-      // ~\\ is not a home path off Windows, so the value stays relative and exact.
+    if (process.platform === 'win32') {
+      expect(store.updateSettings({ workspaceDir: ' C:\\work' }).workspaceDir).toBe('C:\\work')
+    } else {
+      // ~\ and a leading \ are relative off Windows, so the value stays exact.
       expect(store.updateSettings({ workspaceDir: ' ~\\work' }).workspaceDir).toBe(' ~\\work')
+      expect(store.updateSettings({ workspaceDir: ' \\work' }).workspaceDir).toBe(' \\work')
     }
   })
 

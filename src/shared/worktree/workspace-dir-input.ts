@@ -4,7 +4,8 @@ import { isRuntimePathAbsolute } from '../cross-platform-path'
 export function normalizeWorkspaceDirInput(value: string, isWindowsHost: boolean): string {
   const start = value.trimStart()
   // Trailing characters and relative values stay byte-exact: they can be part of a real folder name.
-  return isRuntimePathAbsolute(start, 'windows') || isHomePrefixedPath(start, isWindowsHost)
+  return isRuntimePathAbsolute(start, isWindowsHost ? 'windows' : 'posix') ||
+    isHomePrefixedPath(start, isWindowsHost)
     ? start
     : value
 }
