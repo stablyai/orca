@@ -19,6 +19,8 @@ export type SttEngine = SttRecognizerConfig & {
   detach: () => void
   /** Torn down on purpose, so a load it cut short is not a failure of the model. */
   retired: boolean
+  /** Absent when the VAD wasn't downloaded yet at load, so this process cuts text only at stop. */
+  vadModelPath: string | undefined
   /** Called once this process is gone; set when it must not outlive its last dictation. */
   onUnloaded: (() => void)[]
 }

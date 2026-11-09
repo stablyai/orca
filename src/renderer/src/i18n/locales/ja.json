@@ -10626,7 +10626,10 @@
               "modelMemoryKeyword": "メモリ",
               "fillerWordsTitle": "フィラーを削除",
               "fillerWordsDescription": "「えーと」「うーん」などのつなぎ言葉を音声入力のテキストから取り除きます。",
-              "fillerWordsKeyword": "フィラー"
+              "fillerWordsKeyword": "フィラー",
+              "vocabularyTitle": "語彙",
+              "vocabularyDescription": "音声入力が自分の書き方で表記する名前やコード用語。個人用またはリポジトリ用。",
+              "vocabularyKeyword": "辞書"
             }
           }
         },
@@ -20027,6 +20030,24 @@
           "local": "このコンピューター",
           "cloudDescription": "クラウドモデルは音声をプロバイダーに送信します。このコンピューター上のモデルなら音声は外に出ません。",
           "sendsToCompatible": "音声を設定したサービスに送信します。"
+        },
+        "vocabulary": {
+          "title": "語彙",
+          "description": "名前やコード用語を自分の書き方で入力します。モデルが繰り返し聞き間違える場合は、聞き取られる言い方も追加してください。",
+          "repoScope": "{{repo}} で音声入力するときだけ使います。",
+          "personalScope": "すべてのリポジトリで使います。",
+          "scope": "用語の対象",
+          "personal": "個人 · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "{{term}} を削除",
+          "term": "単語またはフレーズ",
+          "heardAs": "聞き取られ方（任意）",
+          "heardAsLabel": "聞き取られ方",
+          "add": "追加",
+          "repoNameHint": "リポジトリ名をヒントとして使う",
+          "repoNameHintDescription": "リポジトリ名を認識しやすくします。",
+          "repoSaveFailed": "リポジトリの用語を保存できませんでした。このリポジトリのホストで Orca の更新が必要かもしれません。"
         }
       },
       "repositoryHooks": {

@@ -1484,6 +1484,10 @@
       "uncertainFolderCreate": "This worktree may have been created. Check the folder before creating another.",
       "uncertainCreate": "This workspace may have been created. Check your workspaces before creating another.",
       "folderCreateBusy": "A worktree in this repository is still being created or checked. It shows in the folder once it lands."
+    },
+    "smartRailRow": {
+      "title": "Smart rail",
+      "subtitle": "Shows keys for what your agent is doing"
     }
   },
   "pullRequest": {
@@ -2892,6 +2896,25 @@
     },
     "usePrTextAction": {
       "updateFailed": "Failed to update pull request."
+    },
+    "smartKeys": {
+      "always": "Always",
+      "answer": "Answer",
+      "background": "Background",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "edit": "Edit",
+      "history": "History",
+      "keyLabel": "{{word}}, sends {{combo}}",
+      "mode": "Mode",
+      "no": "No",
+      "queue": "Queue",
+      "reject": "Reject",
+      "rewind": "Rewind",
+      "sendNow": "Send now",
+      "skip": "Skip",
+      "stop": "Stop",
+      "yes": "Yes"
     }
   },
   "chat": {
