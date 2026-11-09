@@ -186,6 +186,16 @@ export const OPERATIONS: Record<string, Record<string, Op>> = {
   '/v1/api-keys/{id}': {
     delete: { tags: ['API keys'], sessionOnly: true, summary: 'Revoke an API key', params: [idParam('id', 'Key id')], responses: { 200: 'Revoked' } }
   },
+  '/v1/oauth-approvals': {
+    post: {
+      tags: ['API keys'],
+      sessionOnly: true,
+      summary: 'Mint a one-time MCP approval code',
+      description: 'A single-use code (10 minutes) the user pastes on the MCP OAuth approval page instead of an API key. Defaults to every scope the role allows.',
+      body: obj({ scopes: { type: 'array', items: { type: 'string', enum: [...API_SCOPES] } } }),
+      responses: { 201: { description: 'Created', schema: obj({ code: { type: 'string' }, expiresAt: { type: 'integer' }, scopes: { type: 'array', items: { type: 'string' } } }) } }
+    }
+  },
   '/v1/settings': {
     get: { tags: ['Account'], summary: 'Programmatic-access settings', responses: { 200: { description: 'Settings', schema: obj({ settings: obj({ vmCliEnabled: { type: 'boolean' } }) }) } } },
     put: { tags: ['Account'], sessionOnly: true, summary: 'Update settings (owner/admin)', body: obj({ vmCliEnabled: { type: 'boolean' } }, ['vmCliEnabled']), responses: { 200: 'Updated' } }
@@ -393,8 +403,10 @@ curl -X POST ${o}/v1/workspaces/$ID/wake    -H "Authorization: Bearer $ORCA_API_
 curl -X POST ${o}/v1/workspaces/$ID/archive -H "Authorization: Bearer $ORCA_API_KEY"
 curl -X DELETE ${o}/v1/workspaces/$ID       -H "Authorization: Bearer $ORCA_API_KEY"</pre>
 <h2>MCP</h2>
-<p>Point any MCP client at <code>${o}/mcp</code>. Clients that support OAuth sign in through the browser; others can send an API key as a bearer token.</p>
-<pre>claude mcp add --transport http orca-cloud ${o}/mcp</pre>
+<p>Point any MCP client at <code>${o}/mcp</code> (Streamable HTTP). Clients that support OAuth register themselves and open an approval page in the browser: approve with a one-time code from Orca → Settings → API keys → <i>Approve an app</i>, or with one of your API keys. The app never gets more than that key may do. Clients without OAuth can send an API key as a bearer token.</p>
+<pre>claude mcp add --transport http orca-cloud ${o}/mcp
+claude mcp add --transport http orca-cloud ${o}/mcp --header "Authorization: Bearer $ORCA_API_KEY"</pre>
+<p>Tools: whoami, list_projects, list_workspaces, get_workspace, create_workspace, sleep_workspace, wake_workspace, archive_workspace, destroy_workspace, send_message, get_message, list_sessions, list_routines, run_routine. They use the same scopes, rate limits and audit log as the REST API.</p>
 <h2>Limits and errors</h2>
 <div class="grid">
 <div class="card"><b>Rate limits</b>120 requests/min per key, 30 messages/min per user, 10 workspace creates/min per org. 429 responses carry <code>Retry-After</code>.</div>
