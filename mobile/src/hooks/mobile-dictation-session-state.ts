@@ -9,11 +9,15 @@ export type DictationStatus = 'idle' | 'starting' | 'recording' | 'processing' |
 // Who is transcribing, for the icon by the timer; movedAt marks when Automatic moved from the phone to the computer.
 export type MobileDictationEngineShown = { kind: 'phone' | 'computer'; movedAt: number | null }
 
+// offline: the computer was out of reach when it failed, which is the reason the user needs.
+export type MobileDictationKeptFailure = { message: string; offline: boolean }
+
 export type UseMobileDictationOptions = {
   client: RpcClient | null
   enabled: boolean
   onTranscript: (text: string) => void
-  onError?: (error: Error) => void
+  // kept: the recording is kept for Retry, so the failure shows in place rather than as a toast.
+  onError?: (error: Error, outcome: { kept: boolean }) => void
   // The computer's filler switch, for text the phone recognizes itself; unknown means on.
   removeFillerWords?: boolean
   // The host's cloud upload is full; the dictation stops and inserts what was kept.
@@ -28,10 +32,13 @@ export type UseMobileDictationResult = {
   // Empty until a newer host reports words; older hosts never do.
   transcriptSoFar: string
   error: string | null
+  // A failure whose recording is kept: Retry plays it to the computer again, cancel discards it.
+  failure: MobileDictationKeptFailure | null
   // Null until recording starts on an engine.
   engine: MobileDictationEngineShown | null
   start: () => Promise<void>
   stop: () => Promise<void>
+  retry: () => Promise<void>
   cancel: () => Promise<void>
   meter: MobileDictationMeter
 }

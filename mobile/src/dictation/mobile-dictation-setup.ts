@@ -44,7 +44,7 @@ function speechlessServerMessage(): string {
   )
 }
 
-function isSpeechlessServerError(message: string): boolean {
+export function isSpeechlessServerError(message: string): boolean {
   return message.startsWith('speech_unavailable')
 }
 
