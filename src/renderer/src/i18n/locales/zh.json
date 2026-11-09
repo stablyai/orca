@@ -16313,8 +16313,8 @@
           "cancel": "取消",
           "finish": "完成",
           "oneMinuteLeft": "还剩 1 分钟。",
-          "sendsWhenLanded": "文字送达后发送",
-          "entersWhenLanded": "文字送达后按 Enter"
+          "sendsWhenLanded": "文字送达后自动发送",
+          "entersWhenLanded": "文字送达后自动按 Enter"
         },
         "DictationPillFailure": {
           "discard": "舍弃录音",
