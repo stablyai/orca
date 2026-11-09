@@ -1,3 +1,5 @@
+import { sleepingAgentRecordIndex } from '../../terminals/sleeping-agent-record-index'
+import { terminalInputRecordTransition } from '../../terminals/terminal-input-record-transition'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
@@ -41,7 +43,20 @@ export function createAgentStatusRecoveryActions(
             changed = true
           }
         }
-        return changed ? { sleepingAgentSessionsByPaneKey: next } : s
+        return changed
+          ? {
+              sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+                s.sleepingAgentSessionsByPaneKey,
+                next,
+                [
+                  ...sleepingAgentRecordIndex
+                    .entries(s.sleepingAgentSessionsByPaneKey, worktreeId)
+                    .map(([key]) => key),
+                  ...Object.keys(records)
+                ]
+              )
+            }
+          : s
       })
     },
 
@@ -67,7 +82,15 @@ export function createAgentStatusRecoveryActions(
             changed = true
           }
         }
-        return changed ? { sleepingAgentSessionsByPaneKey: next } : s
+        return changed
+          ? {
+              sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+                s.sleepingAgentSessionsByPaneKey,
+                next,
+                Object.keys(s.agentStatusByPaneKey)
+              )
+            }
+          : s
       })
     },
 
@@ -78,10 +101,14 @@ export function createAgentStatusRecoveryActions(
         s.sleepingAgentSessionsByPaneKey[record.paneKey] !== replaces
           ? s
           : {
-              sleepingAgentSessionsByPaneKey: {
-                ...s.sleepingAgentSessionsByPaneKey,
-                [record.paneKey]: record
-              }
+              sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+                s.sleepingAgentSessionsByPaneKey,
+                {
+                  ...s.sleepingAgentSessionsByPaneKey,
+                  [record.paneKey]: record
+                },
+                [record.paneKey]
+              )
             }
       )
     },
@@ -90,14 +117,16 @@ export function createAgentStatusRecoveryActions(
     clearSleepingAgentSessionsByWorktree: (worktreeId) => {
       set((s) => {
         let changed = false
-        const next: Record<string, SleepingAgentSessionRecord> = {}
+        const next = { ...s.sleepingAgentSessionsByPaneKey }
         const removed: string[] = []
-        for (const [paneKey, record] of Object.entries(s.sleepingAgentSessionsByPaneKey)) {
+        for (const [paneKey, record] of sleepingAgentRecordIndex.entries(
+          s.sleepingAgentSessionsByPaneKey,
+          worktreeId
+        )) {
           if (record.worktreeId === worktreeId) {
             changed = true
             removed.push(paneKey)
-          } else {
-            next[paneKey] = record
+            delete next[paneKey]
           }
         }
         if (!changed) {
@@ -109,7 +138,11 @@ export function createAgentStatusRecoveryActions(
           delete nextLaunch[paneKey]
         }
         return {
-          sleepingAgentSessionsByPaneKey: next,
+          sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+            s.sleepingAgentSessionsByPaneKey,
+            next,
+            removed
+          ),
           ...(nextLaunch !== s.agentLaunchConfigByPaneKey
             ? { agentLaunchConfigByPaneKey: nextLaunch }
             : {})
@@ -139,7 +172,11 @@ export function createAgentStatusRecoveryActions(
           delete nextLaunch[paneKey]
         }
         return {
-          sleepingAgentSessionsByPaneKey: next,
+          sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+            s.sleepingAgentSessionsByPaneKey,
+            next,
+            removed
+          ),
           ...(nextLaunch !== s.agentLaunchConfigByPaneKey
             ? { agentLaunchConfigByPaneKey: nextLaunch }
             : {})

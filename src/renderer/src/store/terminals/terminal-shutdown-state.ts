@@ -1,3 +1,4 @@
+import { terminalInputRecordTransition } from './terminal-input-record-transition'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { clearTransientTerminalState } from './terminal-transient-state'
@@ -113,16 +114,34 @@ export function commitTerminalShutdownState({
       }
 
       return {
-        tabsByWorktree,
-        ptyIdsByTabId: ptyIdsByTabId.read(),
-        lastKnownRelayPtyIdByTabId: lastKnownRelayPtyIdByTabId.read(),
-        runtimePaneTitlesByTabId: runtimePaneTitlesByTabId.read(),
+        tabsByWorktree: terminalInputRecordTransition(state.tabsByWorktree, tabsByWorktree, [
+          worktreeId
+        ]),
+        ptyIdsByTabId: terminalInputRecordTransition(
+          state.ptyIdsByTabId,
+          ptyIdsByTabId.read(),
+          tabs.map((tab) => tab.id)
+        ),
+        lastKnownRelayPtyIdByTabId: terminalInputRecordTransition(
+          state.lastKnownRelayPtyIdByTabId,
+          lastKnownRelayPtyIdByTabId.read(),
+          tabs.map((tab) => tab.id)
+        ),
+        runtimePaneTitlesByTabId: terminalInputRecordTransition(
+          state.runtimePaneTitlesByTabId,
+          runtimePaneTitlesByTabId.read(),
+          tabs.map((tab) => tab.id)
+        ),
         suppressedPtyExitIds: suppressedPtyExitIds.read(),
         pendingPtyShutdownIds: pendingPtyShutdownIds.read(),
         pendingPaneAccountRestarts: pendingPaneAccountRestarts.read(),
         codexRestartNoticeByPtyId: codexRestartNoticeByPtyId.read(),
         pendingIssueCommandSplitByTabId: pendingIssueCommandSplitByTabId.read(),
-        terminalLayoutsByTabId: terminalLayoutsByTabId.read(),
+        terminalLayoutsByTabId: terminalInputRecordTransition(
+          state.terminalLayoutsByTabId,
+          terminalLayoutsByTabId.read(),
+          tabs.map((tab) => tab.id)
+        ),
         ...removeTabsAttention(
           state,
           tabs.map((tab) => tab.id)
@@ -144,10 +163,11 @@ export function commitTerminalShutdownState({
             ).records
           : state.sleepingAgentSessionsByPaneKey
       return {
-        sleepingAgentSessionsByPaneKey: {
-          ...base,
-          ...sleepingAgentSessionRecords
-        }
+        sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+          base,
+          { ...base, ...sleepingAgentSessionRecords },
+          Object.keys(sleepingAgentSessionRecords)
+        )
       }
     })
   } else {

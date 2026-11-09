@@ -1,3 +1,5 @@
+import { terminalInputRecordChangedKeys } from '@/store/terminals/terminal-input-record-transition'
+
 export type WorktreeTabBucketProjection<T, P> = {
   project: (source: Readonly<Record<string, readonly T[]>>) => Record<string, P[]>
 }
@@ -17,12 +19,23 @@ export function createWorktreeTabBucketProjection<T, P>(args: {
         return previousProjection
       }
 
-      const sourceKeys = Object.keys(source)
+      const knownKeys = previousSource
+        ? terminalInputRecordChangedKeys(previousSource, source)
+        : null
+      const sourceKeys = knownKeys ? [...knownKeys] : Object.keys(source)
       let changed =
-        previousProjection === null || sourceKeys.length !== Object.keys(previousProjection).length
-      const nextProjection: Record<string, P[]> = {}
+        previousProjection === null ||
+        (!knownKeys && sourceKeys.length !== Object.keys(previousProjection).length)
+      const nextProjection: Record<string, P[]> = knownKeys ? { ...previousProjection } : {}
 
       for (const worktreeId of sourceKeys) {
+        if (!(worktreeId in source)) {
+          if (worktreeId in nextProjection) {
+            changed = true
+          }
+          delete nextProjection[worktreeId]
+          continue
+        }
         const sourceTabs = source[worktreeId] ?? []
         const previousTabs = previousProjection?.[worktreeId]
         let projectedTabs: P[]

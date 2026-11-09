@@ -1,3 +1,5 @@
+import { terminalInputRecordTransition } from './terminal-input-record-transition'
+import { getTerminalTabOwnerWorktreeIds } from './terminal-tab-owner-index'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalSlice, TerminalStoreSet } from './terminal-state'
 
@@ -7,8 +9,12 @@ export function createTerminalTabAgentLaunchPaneActions(
   return {
     setTabAgentLaunchPane: (tabId, launchPane, options) => {
       set((s) => {
+        const owners = [...getTerminalTabOwnerWorktreeIds(s.tabsByWorktree, tabId)]
+        if (owners.length === 0) {
+          return s
+        }
         const next = { ...s.tabsByWorktree }
-        for (const wId of Object.keys(next)) {
+        for (const wId of owners) {
           if (!next[wId].some((t) => t.id === tabId)) {
             continue
           }
@@ -25,7 +31,7 @@ export function createTerminalTabAgentLaunchPaneActions(
             return launchPane ? { ...remounted, agentLaunchPane: launchPane } : remounted
           })
         }
-        return { tabsByWorktree: next }
+        return { tabsByWorktree: terminalInputRecordTransition(s.tabsByWorktree, next, owners) }
       })
     }
   }

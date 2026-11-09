@@ -1,3 +1,5 @@
+import { terminalInputRecordTransition } from './terminal-input-record-transition'
+import { getFirstTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
@@ -23,7 +25,9 @@ export function createTerminalPtyReleaseActions(
         const existingPtyIds = s.ptyIdsByTabId[tabId] ?? []
         const remainingPtyIds = ptyId ? existingPtyIds.filter((id) => id !== ptyId) : []
         let nextTabsByWorktree = s.tabsByWorktree
-        for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
+        const ownerId = getFirstTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+        for (const wId of ownerId ? [ownerId] : []) {
+          const tabs = s.tabsByWorktree[wId] ?? []
           const index = tabs.findIndex((t) => t.id === tabId)
           if (index === -1) {
             continue
@@ -90,10 +94,20 @@ export function createTerminalPtyReleaseActions(
         }
         return {
           ...(nextTabsByWorktree !== s.tabsByWorktree
-            ? { tabsByWorktree: nextTabsByWorktree }
+            ? {
+                tabsByWorktree: terminalInputRecordTransition(
+                  s.tabsByWorktree,
+                  nextTabsByWorktree,
+                  worktreeId ? [worktreeId] : []
+                )
+              }
             : {}),
-          ptyIdsByTabId: nextPtyIdsByTabId,
-          lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
+          ptyIdsByTabId: terminalInputRecordTransition(s.ptyIdsByTabId, nextPtyIdsByTabId, [tabId]),
+          lastKnownRelayPtyIdByTabId: terminalInputRecordTransition(
+            s.lastKnownRelayPtyIdByTabId,
+            nextLastKnownRelay,
+            [tabId]
+          ),
           pendingPaneAccountRestarts: nextPendingPaneAccountRestarts,
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId
         }

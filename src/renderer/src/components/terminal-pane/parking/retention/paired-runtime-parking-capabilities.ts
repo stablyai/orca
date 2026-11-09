@@ -1,4 +1,5 @@
 import '../../../../../../shared/protocol-version'
+import { terminalInputRecordChangedKeys } from '@/store/terminals/terminal-input-record-transition'
 import { TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY } from '../../../../../../shared/terminal/runtime-policy/terminal-runtime-capabilities'
 import {
   isRuntimeHostContactRevoked,
@@ -46,8 +47,15 @@ export function createPairedRuntimeParkingEnvironmentIdsSelector() {
       return cached.environmentIds
     }
 
-    const capable = new Set<string>()
-    for (const [environmentId, entry] of statuses) {
+    const changedIds = cached ? terminalInputRecordChangedKeys(cached.statuses, statuses) : null
+    const capable = changedIds ? new Set(cached?.environmentIds) : new Set<string>()
+    const environmentIdsToInspect = changedIds ?? statuses.keys()
+    for (const environmentId of environmentIdsToInspect) {
+      capable.delete(environmentId)
+      const entry = statuses.get(environmentId)
+      if (!entry) {
+        continue
+      }
       // Keep last-verified build capabilities across unverifiable probes; a revoked host cannot promise restoration (docs/reference/ssh-execution-boundary.md).
       if (isRuntimeHostContactRevoked(entry)) {
         continue

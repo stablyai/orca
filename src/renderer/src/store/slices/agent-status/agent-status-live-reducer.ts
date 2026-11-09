@@ -1,3 +1,4 @@
+import { terminalInputRecordTransition } from '../../terminals/terminal-input-record-transition'
 import { projectAgentPaneConversation } from './agent-pane-conversation'
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -116,7 +117,11 @@ export function reduceAgentStatusLiveUpdate(
       ? { agentConversationsByPaneKey: nextConversations }
       : {}),
     retainedAgentsByPaneKey: nextRetainedAgents,
-    sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions,
+    sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+      state.sleepingAgentSessionsByPaneKey,
+      nextSleepingAgentSessions,
+      [paneKey, ...evictedPaneKeys]
+    ),
     agentLaunchConfigByPaneKey: nextLaunchConfigs,
     migrationUnsupportedByPtyId: migrationUnsupported.next,
     retentionSuppressedPaneKeys: nextRetentionSuppressedPaneKeys,

@@ -1,3 +1,5 @@
+import { terminalInputRecordTransition } from './terminal-input-record-transition'
+import { getFirstTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import type {
   TerminalLayoutSnapshot,
   TerminalTab
@@ -50,22 +52,29 @@ export function resolvePrimaryLayoutPtyId(layout: TerminalLayoutSnapshot): strin
   return activePtyId ?? Object.values(ptyIdsByLeafId)[0] ?? null
 }
 
-export function withTerminalTabPtyId(
+export function withTerminalTabPtyIds(
   tabsByWorktree: Record<string, TerminalTab[]>,
-  tabId: string,
-  ptyId: string | null
+  changes: readonly { tabId: string; ptyId: string | null }[]
 ): Record<string, TerminalTab[]> {
-  for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-    const index = tabs.findIndex((tab) => tab.id === tabId)
-    if (index === -1) {
+  let next = tabsByWorktree
+  const changedWorktreeIds = new Set<string>()
+  for (const { tabId, ptyId } of changes) {
+    const worktreeId = getFirstTerminalTabOwnerWorktreeId(tabsByWorktree, tabId)
+    if (!worktreeId) {
       continue
     }
-    if (tabs[index]?.ptyId === ptyId) {
-      return tabsByWorktree
+    const tabs = next[worktreeId] ?? []
+    const index = tabs.findIndex((tab) => tab.id === tabId)
+    if (index === -1 || tabs[index]?.ptyId === ptyId) {
+      continue
+    }
+    if (next === tabsByWorktree) {
+      next = { ...tabsByWorktree }
     }
     const nextTabs = [...tabs]
     nextTabs[index] = { ...nextTabs[index]!, ptyId }
-    return { ...tabsByWorktree, [worktreeId]: nextTabs }
+    next[worktreeId] = nextTabs
+    changedWorktreeIds.add(worktreeId)
   }
-  return tabsByWorktree
+  return terminalInputRecordTransition(tabsByWorktree, next, changedWorktreeIds)
 }

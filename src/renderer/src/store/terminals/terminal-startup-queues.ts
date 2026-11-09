@@ -1,5 +1,6 @@
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
+import { terminalInputRecordTransition } from './terminal-input-record-transition'
 
 type TabStartupCommand = TerminalSlice['pendingStartupByTabId'][string]
 
@@ -32,10 +33,14 @@ export function createTerminalStartupQueueActions(
     queueTabStartupCommand: (tabId, startup) => {
       const normalized = normalizeTabStartupCommand(startup)
       set((s) => ({
-        pendingStartupByTabId: {
-          ...s.pendingStartupByTabId,
-          [tabId]: normalized
-        }
+        pendingStartupByTabId: terminalInputRecordTransition(
+          s.pendingStartupByTabId,
+          {
+            ...s.pendingStartupByTabId,
+            [tabId]: normalized
+          },
+          [tabId]
+        )
       }))
     },
     queueTabInitialCwd: (tabId, cwd) => {
@@ -71,7 +76,11 @@ export function createTerminalStartupQueueActions(
         }
         const next = { ...s.pendingStartupByTabId }
         delete next[tabId]
-        return { pendingStartupByTabId: next }
+        return {
+          pendingStartupByTabId: terminalInputRecordTransition(s.pendingStartupByTabId, next, [
+            tabId
+          ])
+        }
       })
       return pending
     },

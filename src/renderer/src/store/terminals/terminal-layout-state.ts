@@ -1,3 +1,4 @@
+import { terminalInputRecordTransition } from './terminal-input-record-transition'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { terminalLayoutEqual } from '../../../../shared/workspace-layout/terminal-layout-equality'
@@ -9,7 +10,7 @@ import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './termin
 import {
   resolvePrimaryLayoutPtyId,
   uniquePtyIds,
-  withTerminalTabPtyId
+  withTerminalTabPtyIds
 } from './terminal-pty-identities'
 import { transferNormalizedTerminalLayoutPtyOwnership } from './workspace-terminal-hydration-patch'
 import { recordChatPaneInLayoutOwner } from './terminal-chat-pane-layout-owner'
@@ -49,13 +50,17 @@ export function createTerminalLayoutActions(
           return s
         }
         return {
-          terminalLayoutsByTabId: {
-            ...s.terminalLayoutsByTabId,
-            [tabId]: {
-              ...layout,
-              ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId }
-            }
-          }
+          terminalLayoutsByTabId: terminalInputRecordTransition(
+            s.terminalLayoutsByTabId,
+            {
+              ...s.terminalLayoutsByTabId,
+              [tabId]: {
+                ...layout,
+                ptyIdsByLeafId: { ...layout.ptyIdsByLeafId, [leafId]: ptyId }
+              }
+            },
+            [tabId]
+          )
         }
       })
     },
@@ -84,7 +89,11 @@ export function createTerminalLayoutActions(
           }
           const next = { ...s.terminalLayoutsByTabId }
           delete next[tabId]
-          return { terminalLayoutsByTabId: next }
+          return {
+            terminalLayoutsByTabId: terminalInputRecordTransition(s.terminalLayoutsByTabId, next, [
+              tabId
+            ])
+          }
         }
         const normalized = normalizeTerminalLayoutPtyOwnership(layout)
         // Resolved before the bailout: normalization can transfer pane ownership even when the stored snapshot is untouched.
@@ -100,7 +109,11 @@ export function createTerminalLayoutActions(
           return s
         }
         return {
-          terminalLayoutsByTabId: { ...s.terminalLayoutsByTabId, [tabId]: normalized.snapshot }
+          terminalLayoutsByTabId: terminalInputRecordTransition(
+            s.terminalLayoutsByTabId,
+            { ...s.terminalLayoutsByTabId, [tabId]: normalized.snapshot },
+            [tabId]
+          )
         }
       })
       transferNormalizedTerminalLayoutPtyOwnership(get(), tabId, ownershipTransfers)
@@ -147,17 +160,20 @@ export function createTerminalLayoutActions(
           nextLastKnownRelayPtyIdByTabId[targetTabId] = detachedPtyId
         }
         // Why: pane-to-tab detach moves a live PTY without spawning or exiting, so transfer identity without activity bumps.
-        const sourceTabsByWorktree = withTerminalTabPtyId(
-          s.tabsByWorktree,
-          sourceTabId,
-          sourcePrimaryPtyId
-        )
-        const nextTabsByWorktree = detachedPtyId
-          ? withTerminalTabPtyId(sourceTabsByWorktree, targetTabId, detachedPtyId)
-          : sourceTabsByWorktree
+        const nextTabsByWorktree = withTerminalTabPtyIds(s.tabsByWorktree, [
+          { tabId: sourceTabId, ptyId: sourcePrimaryPtyId },
+          ...(detachedPtyId ? [{ tabId: targetTabId, ptyId: detachedPtyId }] : [])
+        ])
         return {
-          ptyIdsByTabId: nextPtyIdsByTabId,
-          lastKnownRelayPtyIdByTabId: nextLastKnownRelayPtyIdByTabId,
+          ptyIdsByTabId: terminalInputRecordTransition(s.ptyIdsByTabId, nextPtyIdsByTabId, [
+            sourceTabId,
+            targetTabId
+          ]),
+          lastKnownRelayPtyIdByTabId: terminalInputRecordTransition(
+            s.lastKnownRelayPtyIdByTabId,
+            nextLastKnownRelayPtyIdByTabId,
+            [sourceTabId, targetTabId]
+          ),
           ...(nextTabsByWorktree !== s.tabsByWorktree ? { tabsByWorktree: nextTabsByWorktree } : {})
         }
       })

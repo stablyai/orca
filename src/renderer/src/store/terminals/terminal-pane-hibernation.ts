@@ -1,3 +1,4 @@
+import { terminalInputRecordTransition } from './terminal-input-record-transition'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
@@ -118,7 +119,14 @@ export function createTerminalPaneHibernationActions(
               delete nextSleeping[key]
             }
           }
-          return { suppressedPtyExitIds: next, sleepingAgentSessionsByPaneKey: nextSleeping }
+          return {
+            suppressedPtyExitIds: next,
+            sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+              s.sleepingAgentSessionsByPaneKey,
+              nextSleeping,
+              sleepingRecordKeys
+            )
+          }
         })
       }
       set((s) => ({
@@ -126,10 +134,14 @@ export function createTerminalPaneHibernationActions(
           ...s.suppressedPtyExitIds,
           ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
         },
-        sleepingAgentSessionsByPaneKey: {
-          ...s.sleepingAgentSessionsByPaneKey,
-          ...sleepingAgentSessionRecords
-        }
+        sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+          s.sleepingAgentSessionsByPaneKey,
+          {
+            ...s.sleepingAgentSessionsByPaneKey,
+            ...sleepingAgentSessionRecords
+          },
+          sleepingRecordKeys
+        )
       }))
       if (expectedRuntimePtyIds.length > 0) {
         if (!runtimeEnvironmentId) {
@@ -240,19 +252,35 @@ export function createTerminalPaneHibernationActions(
           const nextLastTerminalInputAtByPaneKey = { ...s.lastTerminalInputAtByPaneKey }
           delete nextLastTerminalInputAtByPaneKey[opts.paneKey]
           return {
-            tabsByWorktree: nextTabsByWorktree,
-            ptyIdsByTabId: {
-              ...s.ptyIdsByTabId,
-              [opts.tabId]: remainingPtyIds
-            },
-            lastKnownRelayPtyIdByTabId: nextLastKnownRelay,
+            tabsByWorktree: terminalInputRecordTransition(s.tabsByWorktree, nextTabsByWorktree, [
+              worktreeId
+            ]),
+            ptyIdsByTabId: terminalInputRecordTransition(
+              s.ptyIdsByTabId,
+              {
+                ...s.ptyIdsByTabId,
+                [opts.tabId]: remainingPtyIds
+              },
+              [opts.tabId]
+            ),
+            lastKnownRelayPtyIdByTabId: terminalInputRecordTransition(
+              s.lastKnownRelayPtyIdByTabId,
+              nextLastKnownRelay,
+              [opts.tabId]
+            ),
             suppressedPtyExitIds: {
               ...s.suppressedPtyExitIds,
               ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
             },
             codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
             ...(nextRuntimePaneTitlesByTabId !== s.runtimePaneTitlesByTabId
-              ? { runtimePaneTitlesByTabId: nextRuntimePaneTitlesByTabId }
+              ? {
+                  runtimePaneTitlesByTabId: terminalInputRecordTransition(
+                    s.runtimePaneTitlesByTabId,
+                    nextRuntimePaneTitlesByTabId,
+                    [opts.tabId]
+                  )
+                }
               : {}),
             ...removePanesAttention(s, new Set([opts.paneKey])),
             lastTerminalInputAtByPaneKey: nextLastTerminalInputAtByPaneKey

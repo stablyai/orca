@@ -1,8 +1,10 @@
+import { createRuntimeEnvironmentStatusRetention } from './runtime-environment-status-retention'
 import type {
   RuntimeStatusSlice,
   RuntimeStatusStoreSetState,
   RuntimeStatusStoreState
 } from './runtime-status-types'
+import { terminalInputRecordTransition } from '../../terminals/terminal-input-record-transition'
 
 import { lastVerifiedRuntimeStatus } from '../../../../../shared/remote-runtime/host-status/runtime-host-status'
 import { runtimeEnvironmentStatusesEqual } from './runtime-environment-status-equality'
@@ -75,16 +77,19 @@ export const createRuntimeStatusSlice: (
     set((s) => {
       const keep = new Set(environments.map((environment) => environment.id))
       const nextStatuses = new Map(s.runtimeStatusByEnvironmentId)
+      const removedStatusIds = new Set<string>()
       let statusesChanged = false
       for (const id of nextStatuses.keys()) {
         if (!keep.has(id)) {
           nextStatuses.delete(id)
+          removedStatusIds.add(id)
           runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(id)
           statusesChanged = true
         }
       }
       for (const id of replacedEnvironmentIds) {
         if (nextStatuses.delete(id)) {
+          removedStatusIds.add(id)
           statusesChanged = true
         }
         runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(id)
@@ -123,7 +128,15 @@ export const createRuntimeStatusSlice: (
         runtimeEnvironments: catalogUnchanged ? s.runtimeEnvironments : reconciled,
         runtimeEnvironmentCatalogHydrated: true,
         runtimeEnvironmentCatalogSettled: true,
-        ...(statusesChanged ? { runtimeStatusByEnvironmentId: nextStatuses } : {}),
+        ...(statusesChanged
+          ? {
+              runtimeStatusByEnvironmentId: terminalInputRecordTransition(
+                s.runtimeStatusByEnvironmentId,
+                nextStatuses,
+                removedStatusIds
+              )
+            }
+          : {}),
         ...(removedChanged ? { removedRuntimeEnvironmentIds: nextRemoved } : {})
       }
     })
@@ -155,9 +168,10 @@ export const createRuntimeStatusSlice: (
     const apply = (): void =>
       applyRuntimeHostStatusSnapshot(snapshot, get(), (entry) => {
         set((s) => ({
-          runtimeStatusByEnvironmentId: new Map(s.runtimeStatusByEnvironmentId).set(
-            snapshot.environmentId,
-            entry
+          runtimeStatusByEnvironmentId: terminalInputRecordTransition(
+            s.runtimeStatusByEnvironmentId,
+            new Map(s.runtimeStatusByEnvironmentId).set(snapshot.environmentId, entry),
+            [snapshot.environmentId]
           )
         }))
       })
@@ -239,7 +253,11 @@ export const createRuntimeStatusSlice: (
       return {
         runtimeStatusByEnvironmentId: statusUnchanged
           ? s.runtimeStatusByEnvironmentId
-          : new Map(s.runtimeStatusByEnvironmentId).set(environmentId, nextEntry),
+          : terminalInputRecordTransition(
+              s.runtimeStatusByEnvironmentId,
+              new Map(s.runtimeStatusByEnvironmentId).set(environmentId, nextEntry),
+              [environmentId]
+            ),
         ...(environmentsChanged ? { runtimeEnvironments } : {})
       }
     })
@@ -255,38 +273,7 @@ export const createRuntimeStatusSlice: (
     }
   },
 
-  clearRuntimeEnvironmentStatus: (environmentId) => {
-    dismissRuntimeDisconnectedToast(environmentId)
-    set((s) => {
-      runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(environmentId)
-      if (!s.runtimeStatusByEnvironmentId.has(environmentId)) {
-        return s
-      }
-      const next = new Map(s.runtimeStatusByEnvironmentId)
-      next.delete(environmentId)
-      return { runtimeStatusByEnvironmentId: next }
-    })
-  },
-
-  retainRuntimeEnvironmentStatuses: (environmentIds) => {
-    const keep = new Set(environmentIds)
-    for (const id of get().runtimeStatusByEnvironmentId.keys()) {
-      if (!keep.has(id)) {
-        dismissRuntimeDisconnectedToast(id)
-      }
-    }
-    set((s) => {
-      let changed = false
-      const next = new Map(s.runtimeStatusByEnvironmentId)
-      for (const id of next.keys()) {
-        if (!keep.has(id)) {
-          next.delete(id)
-          changed = true
-        }
-      }
-      return changed ? { runtimeStatusByEnvironmentId: next } : s
-    })
-  },
+  ...createRuntimeEnvironmentStatusRetention(set, get),
 
   refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000) =>
     refreshRuntimeEnvironmentStatus(

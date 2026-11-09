@@ -1,3 +1,4 @@
+import { terminalInputRecordTransition } from '../../terminals/terminal-input-record-transition'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type {
@@ -155,10 +156,14 @@ export function createAgentStatusProviderSessionActions(
               ? { agentConversationsByPaneKey: nextConversations }
               : {}),
             retainedAgentsByPaneKey: nextRetained,
-            sleepingAgentSessionsByPaneKey: {
-              ...s.sleepingAgentSessionsByPaneKey,
-              [paneKey]: record
-            },
+            sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+              s.sleepingAgentSessionsByPaneKey,
+              {
+                ...s.sleepingAgentSessionsByPaneKey,
+                [paneKey]: record
+              },
+              [paneKey]
+            ),
             agentLaunchConfigByPaneKey: nextLaunchConfigs,
             acknowledgedAgentsByPaneKey: removePaneKeys(
               s.acknowledgedAgentsByPaneKey,

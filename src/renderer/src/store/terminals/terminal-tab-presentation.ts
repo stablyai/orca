@@ -1,3 +1,4 @@
+import { terminalInputRecordTransition } from './terminal-input-record-transition'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
@@ -72,10 +73,11 @@ export function createTerminalTabPresentationActions(
         scheduleRuntimeGraphSync()
         return {
           tabsByWorktree: nextTabsByWorktree,
-          unifiedTabsByWorktree: {
-            ...s.unifiedTabsByWorktree,
-            [ownerWorktreeId]: nextUnifiedTabs
-          }
+          unifiedTabsByWorktree: terminalInputRecordTransition(
+            s.unifiedTabsByWorktree,
+            { ...s.unifiedTabsByWorktree, [ownerWorktreeId]: nextUnifiedTabs },
+            [ownerWorktreeId]
+          )
         }
       })
     },
@@ -136,7 +138,13 @@ export function createTerminalTabPresentationActions(
         const nextTabs = [...tabs]
         nextTabs[tabIndex] = tabWithoutLaunchAgent
         scheduleRuntimeGraphSync()
-        return { tabsByWorktree: { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs } }
+        return {
+          tabsByWorktree: terminalInputRecordTransition(
+            s.tabsByWorktree,
+            { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs },
+            [ownerWorktreeId]
+          )
+        }
       })
     },
     setRuntimePaneTitle: (tabId, paneId, title) => {
@@ -159,10 +167,11 @@ export function createTerminalTabPresentationActions(
         const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
         const shouldBump = classificationChanged && ownerWorktreeId !== null && !isActive
         return {
-          runtimePaneTitlesByTabId: {
-            ...s.runtimePaneTitlesByTabId,
-            [tabId]: { ...currentByPane, [paneId]: title }
-          },
+          runtimePaneTitlesByTabId: terminalInputRecordTransition(
+            s.runtimePaneTitlesByTabId,
+            { ...s.runtimePaneTitlesByTabId, [tabId]: { ...currentByPane, [paneId]: title } },
+            [tabId]
+          ),
           ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
         }
       })
@@ -191,7 +200,11 @@ export function createTerminalTabPresentationActions(
         const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
         const shouldBump = hadClassification && ownerWorktreeId !== null && !isActive
         return {
-          runtimePaneTitlesByTabId: next,
+          runtimePaneTitlesByTabId: terminalInputRecordTransition(
+            s.runtimePaneTitlesByTabId,
+            next,
+            [tabId]
+          ),
           ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
         }
       })

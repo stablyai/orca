@@ -1,3 +1,4 @@
+import { terminalInputRecordTransition } from '../../terminals/terminal-input-record-transition'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import type { AgentLaunchConfigRegistryEntry } from './agent-status-contract'
@@ -84,7 +85,13 @@ export function createAgentStatusLaunchActions(
               }
             : {}),
           ...(nextSleepingAgentSessions !== s.sleepingAgentSessionsByPaneKey
-            ? { sleepingAgentSessionsByPaneKey: nextSleepingAgentSessions }
+            ? {
+                sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+                  s.sleepingAgentSessionsByPaneKey,
+                  nextSleepingAgentSessions,
+                  [paneKey]
+                )
+              }
             : {})
         }
       })

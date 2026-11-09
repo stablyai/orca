@@ -8,6 +8,7 @@ import { isSupportedWindowsShellOverride } from '../../../../shared/windows-term
 import type { AppState } from '../types'
 import type { TerminalPaneStart } from './terminal-state'
 import { getRemoteConnectionIdForWorktree, worktreeUsesWslPath } from './terminal-workspace-routing'
+import { terminalInputRecordTransition } from './terminal-input-record-transition'
 
 type TabStartup = AppState['pendingStartupByTabId'][string]
 
@@ -94,7 +95,13 @@ export function startWindowTabInMain(
   if (startup) {
     // Main runs it; a later mount of the pane must not run it again.
     const { [tab.id]: _started, ...pendingStartupByTabId } = state.pendingStartupByTabId
-    store.setState({ pendingStartupByTabId })
+    store.setState({
+      pendingStartupByTabId: terminalInputRecordTransition(
+        state.pendingStartupByTabId,
+        pendingStartupByTabId,
+        [tab.id]
+      )
+    })
   }
   void callRuntimeRpc<{ terminal: { ptyId: string } }>({ kind: 'local' }, 'terminal.create', {
     worktree: `id:${tab.worktreeId}`,
@@ -123,8 +130,13 @@ export function startWindowTabInMain(
       if (message === 'host_not_owned') {
         // Restore startup only if main started nothing and the tab remains open; closed tabs cannot consume it.
         if (startup && store.getState().terminalLayoutsByTabId[tab.id]) {
+          const pending = store.getState().pendingStartupByTabId
           store.setState({
-            pendingStartupByTabId: { ...store.getState().pendingStartupByTabId, [tab.id]: startup }
+            pendingStartupByTabId: terminalInputRecordTransition(
+              pending,
+              { ...pending, [tab.id]: startup },
+              [tab.id]
+            )
           })
         }
         clearWindowTabMark(store, paneKey, mark)

@@ -1,3 +1,5 @@
+import { terminalInputRecordTransition } from '../../terminals/terminal-input-record-transition'
+import { sleepingAgentRecordIndex } from '../../terminals/sleeping-agent-record-index'
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
@@ -78,7 +80,8 @@ export function removeSleepingRecordsReplacedByManualWorktreeSleep(
   const allowedPaneKeys = paneKeys ? new Set(paneKeys) : null
   let next = records
   let changed = false
-  for (const [paneKey, record] of Object.entries(records)) {
+  const removed = new Set<string>()
+  for (const [paneKey, record] of sleepingAgentRecordIndex.entries(records, worktreeId)) {
     if (record.worktreeId !== worktreeId || (allowedPaneKeys && !allowedPaneKeys.has(paneKey))) {
       continue
     }
@@ -90,7 +93,8 @@ export function removeSleepingRecordsReplacedByManualWorktreeSleep(
       next = { ...records }
     }
     delete next[paneKey]
+    removed.add(paneKey)
     changed = true
   }
-  return { records: next, changed }
+  return { records: terminalInputRecordTransition(records, next, removed), changed }
 }

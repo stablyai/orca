@@ -1,3 +1,5 @@
+import { terminalInputRecordTransition } from './terminal-input-record-transition'
+import { getTerminalTabOwnerWorktreeIds } from './terminal-tab-owner-index'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
@@ -16,12 +18,16 @@ export function createTerminalTabAppearanceActions(
         ({ renameHostTerminalTab }) => renameHostTerminalTab(state, tabId, title)
       )
       set((s) => {
+        const owners = [...getTerminalTabOwnerWorktreeIds(s.tabsByWorktree, tabId)]
+        if (owners.length === 0) {
+          return s
+        }
         const next = { ...s.tabsByWorktree }
-        for (const wId of Object.keys(next)) {
+        for (const wId of owners) {
           next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, customTitle: title } : t))
         }
         scheduleRuntimeGraphSync()
-        return { tabsByWorktree: next }
+        return { tabsByWorktree: terminalInputRecordTransition(s.tabsByWorktree, next, owners) }
       })
       const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
       if (item?.contentType === 'agent-session') {
@@ -44,11 +50,15 @@ export function createTerminalTabAppearanceActions(
     },
     setTabColor: (tabId, color, opts) => {
       set((s) => {
+        const owners = [...getTerminalTabOwnerWorktreeIds(s.tabsByWorktree, tabId)]
+        if (owners.length === 0) {
+          return s
+        }
         const next = { ...s.tabsByWorktree }
-        for (const wId of Object.keys(next)) {
+        for (const wId of owners) {
           next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, color } : t))
         }
-        return { tabsByWorktree: next }
+        return { tabsByWorktree: terminalInputRecordTransition(s.tabsByWorktree, next, owners) }
       })
       const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
       if (item) {

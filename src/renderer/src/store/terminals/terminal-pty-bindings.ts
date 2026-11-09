@@ -1,3 +1,5 @@
+import { terminalInputRecordTransition } from './terminal-input-record-transition'
+import { getFirstTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import {
   isRemoteRuntimePtyId,
   parseRemoteRuntimePtyId,
@@ -70,7 +72,9 @@ export function createTerminalPtyBindingActions(
           }
         }
         let nextTabsByWorktree = s.tabsByWorktree
-        for (const [wId, tabs] of Object.entries(s.tabsByWorktree)) {
+        const ownerId = getFirstTerminalTabOwnerWorktreeId(s.tabsByWorktree, tabId)
+        for (const wId of ownerId ? [ownerId] : []) {
+          const tabs = s.tabsByWorktree[wId] ?? []
           const index = tabs.findIndex((t) => t.id === tabId)
           if (index === -1) {
             continue
@@ -176,17 +180,30 @@ export function createTerminalPtyBindingActions(
         }
         return {
           ...(nextTabsByWorktree !== s.tabsByWorktree
-            ? { tabsByWorktree: nextTabsByWorktree }
+            ? {
+                tabsByWorktree: terminalInputRecordTransition(
+                  s.tabsByWorktree,
+                  nextTabsByWorktree,
+                  worktreeId ? [worktreeId] : []
+                )
+              }
             : {}),
           ...(nextPtyIds !== existingPtyIds || !(tabId in s.ptyIdsByTabId)
-            ? { ptyIdsByTabId: { ...s.ptyIdsByTabId, [tabId]: nextPtyIds } }
+            ? {
+                ptyIdsByTabId: terminalInputRecordTransition(
+                  s.ptyIdsByTabId,
+                  { ...s.ptyIdsByTabId, [tabId]: nextPtyIds },
+                  [tabId]
+                )
+              }
             : {}),
           ...(s.lastKnownRelayPtyIdByTabId[tabId] !== ptyId
             ? {
-                lastKnownRelayPtyIdByTabId: {
-                  ...s.lastKnownRelayPtyIdByTabId,
-                  [tabId]: ptyId
-                }
+                lastKnownRelayPtyIdByTabId: terminalInputRecordTransition(
+                  s.lastKnownRelayPtyIdByTabId,
+                  { ...s.lastKnownRelayPtyIdByTabId, [tabId]: ptyId },
+                  [tabId]
+                )
               }
             : {}),
           ...(nextUnverifiedPtyLossTabIds !== s.unverifiedPtyLossTabIds
@@ -200,7 +217,13 @@ export function createTerminalPtyBindingActions(
           codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
           migrationUnsupportedByPtyId: nextMigrationUnsupportedByPtyId,
           ...(nextTerminalLayoutsByTabId !== s.terminalLayoutsByTabId
-            ? { terminalLayoutsByTabId: nextTerminalLayoutsByTabId }
+            ? {
+                terminalLayoutsByTabId: terminalInputRecordTransition(
+                  s.terminalLayoutsByTabId,
+                  nextTerminalLayoutsByTabId,
+                  [tabId]
+                )
+              }
             : {}),
           ...(shouldBumpSortEpoch ? { sortEpoch: s.sortEpoch + 1 } : {})
         }

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
+import { invalidateTerminalParkingInputs } from '../terminal-pane/parking/terminal-parking-input-events'
 import { useAppStore } from '@/store'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import { hasRegisteredRuntimeTerminalTab } from '../../runtime/hosted-terminals/mounted-surfaces/mounted-terminal-tab-registry'
@@ -62,7 +63,7 @@ export function useTerminalWorktreePrewarm(controller: TerminalColdActivationCon
             c.renderedActiveWorktreeId === worktreeId ||
             c.lastActivationWorktreeIdRef.current === worktreeId
         })
-        bumpRevision()
+        bumpRevision(worktreeId)
       },
       remainingHoldMs: (worktreeId) => {
         const c = controllerRef.current
@@ -79,8 +80,10 @@ export function useTerminalWorktreePrewarm(controller: TerminalColdActivationCon
           : cooldownUntilMs + NARROWING_UNDO_MARGIN_MS - Date.now()
       }
     })
-    const bumpRevision = (): void =>
+    const bumpRevision = (worktreeId: string): void => {
+      invalidateTerminalParkingInputs(worktreeId)
       controllerRef.current.setBackgroundMountRevision((revision) => revision + 1)
+    }
 
     const stopMeasuring = (worktreeId: string): void => {
       const c = controllerRef.current
@@ -90,7 +93,7 @@ export function useTerminalWorktreePrewarm(controller: TerminalColdActivationCon
         // Skip the post-measure cool-down: ordinary parking (or the neighbor exemption) decides from here.
         c.measuringTerminalWorktreeIdsRef.current.delete(worktreeId)
       }
-      bumpRevision()
+      bumpRevision(worktreeId)
     }
 
     const advance = (
@@ -99,7 +102,7 @@ export function useTerminalWorktreePrewarm(controller: TerminalColdActivationCon
       stage: TerminalPrewarmStage
     ): void => {
       controllerRef.current.prewarmLeasesRef.current.set(worktreeId, stage)
-      bumpRevision()
+      bumpRevision(worktreeId)
       const next = stage === 'mount' ? 'layout' : stage === 'layout' ? 'warm' : null
       if (next === null && lease.hovered) {
         return
