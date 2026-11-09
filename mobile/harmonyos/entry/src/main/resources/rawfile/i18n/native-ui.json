@@ -4569,5 +4569,121 @@
     "ko": "지금",
     "es": "ahora",
     "zh-Hant": "現在"
+  },
+  "刚刚": {
+    "de": "gerade eben",
+    "en": "just now",
+    "es": "ahora mismo",
+    "fr": "à l'instant",
+    "ja": "たった今",
+    "ko": "방금",
+    "pt": "agora mesmo",
+    "ru": "только что",
+    "tr": "az önce",
+    "zh": "刚刚",
+    "zh-Hant": "剛剛"
+  },
+  "{{count}} 分钟（单数）": {
+    "de": "{{count}} Min.",
+    "en": "{{count}}m",
+    "es": "{{count}} min",
+    "fr": "{{count}} m",
+    "ja": "{{count}}分",
+    "ko": "{{count}}분",
+    "pt": "{{count}}m",
+    "ru": "{{count}} мин",
+    "tr": "{{count}}dk",
+    "zh": "{{count}} 分钟",
+    "zh-Hant": "{{count}} 分鐘"
+  },
+  "{{count}} 分钟": {
+    "de": "{{count}} Min.",
+    "en": "{{count}}m",
+    "es": "{{count}} min",
+    "fr": "{{count}} m",
+    "ja": "{{count}}分",
+    "ko": "{{count}}분",
+    "pt": "{{count}}m",
+    "ru": "{{count}} мин",
+    "tr": "{{count}}dk",
+    "zh": "{{count}} 分钟",
+    "zh-Hant": "{{count}} 分鐘"
+  },
+  "{{count}} 小时（单数）": {
+    "de": "{{count}} Std.",
+    "en": "{{count}}h",
+    "es": "{{count}} h",
+    "fr": "{{count}} h",
+    "ja": "{{count}}時間",
+    "ko": "{{count}}시간",
+    "pt": "{{count}}h",
+    "ru": "{{count}} ч",
+    "tr": "{{count}}sa",
+    "zh": "{{count}} 小时",
+    "zh-Hant": "{{count}} 小時"
+  },
+  "{{count}} 小时": {
+    "de": "{{count}} Std.",
+    "en": "{{count}}h",
+    "es": "{{count}} h",
+    "fr": "{{count}} h",
+    "ja": "{{count}}時間",
+    "ko": "{{count}}시간",
+    "pt": "{{count}}h",
+    "ru": "{{count}} ч",
+    "tr": "{{count}}sa",
+    "zh": "{{count}} 小时",
+    "zh-Hant": "{{count}} 小時"
+  },
+  "{{count}} 天（单数）": {
+    "de": "{{count}} T.",
+    "en": "{{count}}d",
+    "es": "{{count}} d",
+    "fr": "{{count}} j",
+    "ja": "{{count}}日",
+    "ko": "{{count}}일",
+    "pt": "{{count}}d",
+    "ru": "{{count}} д",
+    "tr": "{{count}}g",
+    "zh": "{{count}} 天",
+    "zh-Hant": "{{count}} 天"
+  },
+  "{{count}} 天": {
+    "de": "{{count}} T.",
+    "en": "{{count}}d",
+    "es": "{{count}} d",
+    "fr": "{{count}} j",
+    "ja": "{{count}}日",
+    "ko": "{{count}}일",
+    "pt": "{{count}}d",
+    "ru": "{{count}} д",
+    "tr": "{{count}}g",
+    "zh": "{{count}} 天",
+    "zh-Hant": "{{count}} 天"
+  },
+  "{{count}} 个子智能体（单数）": {
+    "en": "{{count}} worker",
+    "zh": "{{count}} 个子智能体",
+    "zh-Hant": "{{count}} 個子智能體"
+  },
+  "{{count}} 个子智能体": {
+    "en": "{{count}} workers",
+    "zh": "{{count}} 个子智能体",
+    "zh-Hant": "{{count}} 個子智能體"
+  },
+  "其桌面已离线。": {
+    "zh": "其桌面已离线。",
+    "en": "Its desktop is offline.",
+    "zh-Hant": "其電腦已離線。"
+  },
+  "无法确定工作区": {
+    "zh": "无法确定工作区",
+    "en": "Workspace unavailable",
+    "zh-Hant": "無法確定工作區"
+  },
+  "无法确认此工作区属于哪台主机。": {
+    "zh": "无法确认此工作区属于哪台主机。",
+    "en": "Couldn’t confirm which host owns this workspace.",
+    "zh-Hant": "無法確認此工作區屬於哪台主機。"
   }
 }

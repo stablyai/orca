@@ -2,11 +2,116 @@ const assert = require('node:assert/strict')
 const { test } = require('node:test')
 const { loadArkts } = require('./arkts-source.cjs')
 const { readHomeCatalog } = loadArkts('home/HomeCatalog.ets', ['readHomeCatalog'])
+const { createRpcPeer } = require('./fixtures/rpc-peer.cjs')
 const { buildAgentList, agentsNeedingYou, listedAgents } = loadArkts(
   'home/AgentListModel.ets',
   ['buildAgentList', 'agentsNeedingYou', 'listedAgents'],
   { upstream: require('../../entry/src/main/ets/vendor/agent-list.js') }
 )
+
+test('agent activity stays scoped to its desktop and a settled write cannot roll back a newer queued choice', async () => {
+  const { RpcSuccess } = createRpcPeer()
+  const { AgentActivityWrites } = loadArkts(
+    'home/AgentActivityWrites.ets',
+    ['AgentActivityWrites'],
+    { RpcSuccess }
+  )
+  const queue = new AgentActivityWrites(() => {})
+  let finishRead
+  let releaseRefresh
+  let finishUnread
+  let unreadSent
+  const first = new Promise((resolve) => {
+    finishRead = resolve
+  })
+  const firstRefresh = new Promise((resolve) => {
+    releaseRefresh = resolve
+  })
+  const last = new Promise((resolve) => {
+    finishUnread = resolve
+  })
+  const unreadStarted = new Promise((resolve) => {
+    unreadSent = resolve
+  })
+  const sent = []
+  const pairedA = {
+    async request(method, raw) {
+      const args = JSON.parse(raw)
+      sent.push(['a', method, args])
+      if (!args.read) {
+        unreadSent()
+        return last
+      }
+      return first
+    }
+  }
+  const pairedB = {
+    async request(method, raw) {
+      sent.push(['b', method, JSON.parse(raw)])
+      return new RpcSuccess('clear', '{"applied":true}')
+    }
+  }
+  const connected = () => true
+  const read = queue.write('a', ['same-pane'], true, pairedA, connected, () => firstRefresh)
+  const unread = queue.write('a', ['same-pane'], false, pairedA, connected, async () => {})
+  const clear = queue.write('b', ['same-pane'], undefined, pairedB, connected, async () => {})
+  assert.equal(queue.snapshot('a')['a:same-pane'].unread, true)
+  assert.equal(queue.snapshot('b')['b:same-pane'].cleared, true)
+  assert.equal(await clear, '')
+  assert.deepEqual(sent, [
+    ['a', 'agentActivity.setRead', { paneKeys: ['same-pane'], read: true }],
+    ['b', 'agentActivity.clear', { paneKeys: ['same-pane'] }]
+  ])
+  finishRead(new RpcSuccess('read', '{"applied":true}'))
+  await unreadStarted
+  releaseRefresh()
+  await read
+  assert.equal(queue.snapshot('a')['a:same-pane'].unread, true)
+  finishUnread({ errorCode: 'timeout', errorMessage: 'Timed out' })
+  assert.equal(await unread, 'timeout')
+  assert.equal(queue.snapshot('a')['a:same-pane'], undefined)
+})
+
+test('agents in matching local and SSH workspaces remain in separate workspace and project groups', () => {
+  const catalog = readHomeCatalog(
+    JSON.stringify({
+      worktrees: ['local', 'ssh:studio'].map((hostId, index) => ({
+        hostId,
+        worktreeId: 'repo-a::/srv/project',
+        displayName: 'Project',
+        repoId: 'repo-a',
+        repo: 'Same project name',
+        agents: [
+          {
+            paneKey: index === 0 ? 'local-pane' : 'ssh-pane',
+            state: 'done',
+            activity: {
+              listed: true,
+              title: 'Task',
+              status: 'done',
+              sortAt: 1000,
+              unread: false,
+              clearable: true
+            }
+          }
+        ]
+      }))
+    })
+  ).flatMap((worktree) => worktree.agents)
+  const hosts = [{ id: 'desktop', connection: 'connected', catalog, live: true, loading: false }]
+  for (const groupBy of ['workspace', 'project']) {
+    const groups = buildAgentList(
+      hosts,
+      { groupBy, unreadOnly: false, showWorkers: true },
+      '',
+      ''
+    ).sections
+    assert.deepEqual(
+      Array.from(groups, (group) => Array.from(group.rows, (row) => row.entry.agent.paneKey)),
+      [['local-pane'], ['ssh-pane']]
+    )
+  }
+})
 const { readHomeUsage, readHomeAutomations, homeAutomationToggleParams, readHomeAutomationRuns } =
   loadArkts('home/HomeAccountUsage.ets', [
     'readHomeUsage',
@@ -15,7 +120,7 @@ const { readHomeUsage, readHomeAutomations, homeAutomationToggleParams, readHome
     'readHomeAutomationRuns'
   ])
 
-test('the desktop catalog keeps every listed pane and routes SSH workspaces to their runtime', () => {
+test('the desktop catalog keeps every listed pane and the workspace runtime target', () => {
   const rows = readHomeCatalog(
     JSON.stringify({
       worktrees: [
@@ -94,6 +199,109 @@ test('catalog refusal is distinct from a confirmed empty catalog', () => {
   assert.equal(readHomeCatalog('{"unchanged":true}'), null)
   assert.equal(readHomeCatalog('{"worktrees":[{}]}'), null)
   assert.equal(readHomeCatalog('{"worktrees":[]}').length, 0)
+})
+
+test('the worktree wire keeps each host identity and flags an archived twin before opening a session', () => {
+  const rows = readHomeCatalog(
+    JSON.stringify({
+      worktrees: [
+        {
+          worktreeId: 'repo-a::/srv/app',
+          repoId: 'repo-a',
+          hostId: 'local',
+          identity: {
+            key: 'wt2:local:inst-local',
+            executionHostId: 'local',
+            instanceId: 'inst-local'
+          },
+          agents: [{ paneKey: 'desktop-pane' }]
+        },
+        {
+          worktreeId: 'repo-a::/srv/app',
+          repoId: 'repo-a',
+          hostId: 'ssh:server',
+          identity: {
+            key: 'wt2:ssh%3Aserver:inst-ssh',
+            executionHostId: 'ssh:server',
+            instanceId: 'inst-ssh'
+          },
+          isArchived: true,
+          agents: [{ paneKey: 'archived-pane' }]
+        },
+        {
+          worktreeId: 'repo-a::/srv/unique',
+          repoId: 'repo-a',
+          hostId: 'ssh:server',
+          identity: {
+            key: 'wt2:ssh%3Aserver:inst-unique',
+            executionHostId: 'ssh:server',
+            instanceId: 'inst-unique'
+          },
+          agents: [{ paneKey: 'ssh-pane' }]
+        },
+        {
+          worktreeId: 'repo-b::/work/app',
+          repoId: 'repo-b',
+          hostId: 'runtime:server-a',
+          identity: {
+            key: 'wt2:local:inst-server',
+            executionHostId: 'local',
+            instanceId: 'inst-server'
+          },
+          agents: [{ paneKey: 'runtime-pane' }]
+        },
+        {
+          worktreeId: 'repo-c::/work/unresolved',
+          repoId: 'repo-c',
+          hostId: 'runtime:unresolved-owner',
+          agents: [{ paneKey: 'unresolved-pane' }]
+        }
+      ]
+    })
+  )
+  assert.deepEqual(
+    Array.from(rows).flatMap((row) =>
+      Array.from(row.agents, (entry) => [
+        entry.agent.paneKey,
+        entry.worktreeId,
+        entry.repoId,
+        entry.executionHostId,
+        entry.workspaceIdentityKey,
+        entry.executionHost,
+        entry.ambiguousWorkspace
+      ])
+    ),
+    [
+      ['desktop-pane', 'repo-a::/srv/app', 'repo-a', 'local', 'wt2:local:inst-local', '', true],
+      [
+        'ssh-pane',
+        'repo-a::/srv/unique',
+        'repo-a',
+        'ssh:server',
+        'wt2:ssh%3Aserver:inst-unique',
+        '',
+        undefined
+      ],
+      [
+        'runtime-pane',
+        'repo-b::/work/app',
+        'repo-b',
+        'runtime:server-a',
+        'wt2:local:inst-server',
+        'runtime:server-a',
+        undefined
+      ],
+      [
+        'unresolved-pane',
+        'repo-c::/work/unresolved',
+        'repo-c',
+        'runtime:unresolved-owner',
+        undefined,
+        '',
+        true
+      ]
+    ]
+  )
 })
 
 test('usage follows the selected WSL account without assigning its quota to another login', () => {

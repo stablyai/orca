@@ -7,10 +7,14 @@ import { join, resolve } from 'node:path'
 const project = resolve(import.meta.dirname, '..')
 const upstream = resolve(process.argv[2] ?? join(project, '../..'))
 const { build, version } = createRequire(join(upstream, 'package.json'))('esbuild')
-const revision = execFileSync('git', ['rev-parse', 'origin/main'], {
-  cwd: upstream,
-  encoding: 'utf8'
-}).trim()
+const revision = execFileSync(
+  'git',
+  ['rev-parse', '--verify', `${process.argv[3] ?? 'origin/main'}^{commit}`],
+  {
+    cwd: upstream,
+    encoding: 'utf8'
+  }
+).trim()
 const models = [
   {
     file: 'terminal-rail',

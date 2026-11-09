@@ -1,7 +1,12 @@
 import upstream from '../vendor/agent-list.js';
+import { uiText } from '../settings/NativeUi';
 
 export interface HomeAgentEntry {
   worktreeId: string;
+  workspaceIdentityKey?: string;
+  executionHostId?: string;
+  repoId?: string;
+  ambiguousWorkspace?: boolean;
   workspaceName: string;
   repo: string;
   branch: string;
@@ -17,7 +22,10 @@ export interface AgentDesktop {
   live: boolean;
   loading: boolean;
   seenAt: number;
+  pendingActivity?: Record<string, AgentActivityChange>;
 }
+
+export interface AgentActivityChange { unread?: boolean; cleared?: boolean; }
 
 export interface AgentListView {
   groupBy: string;
@@ -67,15 +75,17 @@ interface AgentListInput {
   hosts: AgentDesktop[];
   hostStates: Record<string, string>;
   worktreeInfo: Record<string, AgentDesktopWorktreeInfo>;
+  pendingActivity: Record<string, AgentActivityChange>;
   now: number;
 }
 interface AgentListOptions { view: AgentListView; hostFilter: string | null; query: string; }
 
 const model: ESObject = upstream;
 
-function toInput(hosts: AgentDesktop[]): AgentListInput {
+function toInput(hosts: AgentDesktop[], now: number): AgentListInput {
   let states: Record<string, string> = {};
   let info: Record<string, AgentDesktopWorktreeInfo> = {};
+  let pending: Record<string, AgentActivityChange> = {};
   hosts.forEach((host: AgentDesktop): void => {
     states[host.id] = host.connection;
     info[host.id] = {
@@ -84,21 +94,25 @@ function toInput(hosts: AgentDesktop[]): AgentListInput {
       catalogUnavailable: !host.live,
       countsProvenAt: host.seenAt > 0 ? host.seenAt : undefined
     };
+    let changes = host.pendingActivity;
+    if (changes) {
+      for (let key of Object.keys(changes)) { pending[key] = changes[key]; }
+    }
   });
-  return { hosts: hosts, hostStates: states, worktreeInfo: info, now: Date.now() };
+  return { hosts: hosts, hostStates: states, worktreeInfo: info, pendingActivity: pending, now: now };
 }
 
 export function buildAgentList(hosts: AgentDesktop[], view: AgentListView, hostId: string, query: string): AgentListResult {
   let options: AgentListOptions = { view: view, hostFilter: hostId || null, query: query };
-  return model.buildAgentList(toInput(hosts), options) as AgentListResult;
+  return model.buildAgentList(toInput(hosts, Date.now()), options) as AgentListResult;
 }
 
 export function agentsNeedingYou(hosts: AgentDesktop[]): AgentListRow[] {
-  return model.selectAgentsNeedingYou(toInput(hosts)) as AgentListRow[];
+  return model.selectAgentsNeedingYou(toInput(hosts, Date.now())) as AgentListRow[];
 }
 
 export function summarizeAgentDesktops(hosts: AgentDesktop[]): AgentDesktopSummary[] {
-  return model.summarizeAgentListHosts(toInput(hosts)) as AgentDesktopSummary[];
+  return model.summarizeAgentListHosts(toInput(hosts, Date.now())) as AgentDesktopSummary[];
 }
 
 export function listedAgents(sections: AgentListSection[]): AgentListRow[] {
@@ -111,6 +125,26 @@ export function agentPreview(row: AgentListRow): string {
 
 export function agentKind(row: AgentListRow): string {
   return model.formatAgentTypeLabel(row.entry.agent['agentType']) as string;
+}
+
+export function agentNeedsAttention(row: AgentListRow): boolean {
+  return !row.stale && model.agentStatusGroup(row.dotState) === 'needs-you';
+}
+
+export function agentRowRevision(row: AgentListRow, preview: string): string {
+  return JSON.stringify([row.key, row.title, preview, row.dotState, row.timeAt, row.stale, row.offline,
+    row.unread ?? null, row.clearable, row.depth, row.workers.length, row.entry.worktreeId, row.entry.workspaceIdentityKey,
+    row.entry.ambiguousWorkspace, row.entry.executionHost, row.entry.workspaceName, String(row.entry.agent['agentType'] ?? '')]);
+}
+
+export function agentTimeAgo(at: number, now: number, locale: string): string {
+  if (at <= 0) { return ''; }
+  let minutes = Math.floor((now - at) / 60000);
+  if (minutes < 1) { return uiText('刚刚', locale); }
+  let hours = Math.floor(minutes / 60);
+  let count = hours < 1 ? minutes : hours < 24 ? hours : Math.floor(hours / 24);
+  let key = hours < 1 ? '{{count}} 分钟' : hours < 24 ? '{{count}} 小时' : '{{count}} 天';
+  return uiText(count === 1 ? `${key}（单数）` : key, locale).replace('{{count}}', String(count));
 }
 
 export function readAgentView(raw: string): AgentListView {

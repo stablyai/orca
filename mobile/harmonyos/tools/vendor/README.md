@@ -12,3 +12,5 @@
 Keep each dependency's LICENSE. Full attribution is packaged in `entry/src/main/resources/rawfile/licenses/THIRD_PARTY_NOTICES.txt` and verified by the preparation check.
 
 `sync-mobile-models.mjs` also bundles first-party code from the pinned Orca revision. `terminal-rail.js` reuses the mobile side-strip geometry and terminal key repeat controller.
+
+Pass a checkout path and a committed revision to generate from changes on a feature branch. Run `node tools/sync-mobile-models.mjs <checkout> <revision>` from the HarmonyOS directory. The generator checks that the bundled inputs match that revision before recording their provenance.

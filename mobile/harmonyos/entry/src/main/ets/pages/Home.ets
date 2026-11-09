@@ -1,4 +1,5 @@
 import { lucideColorFilter } from '../settings/LucideColor';
+import { playHapticFeedback } from '../settings/HapticFeedback';
 import { enterHomePrewarm, invalidateHomePrewarm, leaveHomePrewarm, scheduleHomePrewarm } from '../webshell/HomeShellPrewarm';
 import { uiText } from '../settings/NativeUi';
 import { router, promptAction } from '@kit.ArkUI';
@@ -13,8 +14,10 @@ import { SpikeRpcClient, RpcResponse, RpcSuccess } from '../transport/SpikeRpcCl
 import { SessionPhase } from '../transport/HostSession';
 import { DesktopConnectionLease, retainDesktopConnection, refreshDesktopConnection } from '../transport/DesktopConnections';
 import { HomeWorktree, readHomeCatalog } from '../home/HomeCatalog';
-import { AgentDesktop, AgentListRow, HomeAgentEntry, agentsNeedingYou } from '../home/AgentListModel';
+import { AgentDesktop, AgentListRow, HomeAgentEntry, agentPreview, agentRowRevision, agentsNeedingYou } from '../home/AgentListModel';
 import { AgentListRows } from '../home/AgentListRows';
+import { AgentActivityWrites } from '../home/AgentActivityWrites';
+import { AgentActions } from '../home/AgentActions';
 import { AgentsTab } from '../home/AgentsTab';
 import { DesktopActions } from '../home/DesktopActions';
 import { endpointLabel } from '../diagnostics/ConnectionDiagnostics';
@@ -85,8 +88,7 @@ interface TabSpec {
 }
 interface HomeSectionHeading { title: string; aside: string; first: boolean; }
 
-interface AgentCatalog { entries: HomeAgentEntry[]; at: number; }
-interface AgentActivityArgs { paneKeys: string[]; read?: boolean; }
+interface AgentCatalog { worktrees: HomeWorktree[]; entries: HomeAgentEntry[]; at: number; }
 
 interface HostRuntime {
   lease: DesktopConnectionLease;
@@ -95,8 +97,9 @@ interface HostRuntime {
   online: boolean;
   connecting: boolean;
   refreshTimer: number;
-  catalogPending: boolean;
-  catalogRefetch: boolean;
+  catalogState: string;
+  catalogPending: Promise<void> | null;
+  catalogRefetch: Promise<void> | null;
   automationPending: Promise<void> | null;
   automationFetchedAt: number;
 }
@@ -133,6 +136,9 @@ struct Home {
   @State hostActionTarget: HostMeta | null = null;
   @State hostSheetOpen: boolean = false;
   private hostAction: string = '';
+  @State agentActionTarget: AgentListRow | null = null;
+  @State agentSheetOpen: boolean = false;
+  private agentAction: string = '';
   @State connecting: boolean = false;
   @State agentRows: AgentListRow[] = [];
   @State agentDesktops: AgentDesktop[] = [];
@@ -163,9 +169,8 @@ struct Home {
   @State automationBusy: string[] = [];
   @State automationRequested: Record<string, boolean> = {};
   private runtimes: Map<string, HostRuntime> = new Map();
-  private accByHost: Map<string, HomeWorktree[]> = new Map();
   private agentCatalogs: Map<string, AgentCatalog> = new Map();
-  private agentActivityWrites: Set<string> = new Set();
+  private agentActivityWrites: AgentActivityWrites = new AgentActivityWrites((): void => this.rebuildRows());
   private epoch: number = 0;
   private visible: boolean = false;
   private appInForeground: boolean = true;
@@ -257,6 +262,7 @@ struct Home {
       return true;
     }
     if (this.hostSheetOpen) { this.hostSheetOpen = false; return true; }
+    if (this.agentSheetOpen) { this.agentSheetOpen = false; return true; }
     if (this.tabHostPickerOpen) { this.tabHostPickerOpen = false; return true; }
     if (this.activeTab !== 'feed') { this.activeTab = 'feed'; this.updateTabClock(); return true; }
     return false;
@@ -360,7 +366,7 @@ struct Home {
   }
 
   private updateTabClock(): void {
-    let active = this.visible && this.appInForeground && ['usage', 'automations'].includes(this.activeTab);
+    let active = this.visible && this.appInForeground && this.activeTab !== 'settings';
     if (active && this.tabClock < 0) {
       this.homeNow = Date.now();
       this.tabClock = setInterval((): void => { this.homeNow = Date.now(); }, 60000);
@@ -443,7 +449,7 @@ struct Home {
   }
 
   private clearLiveDesktopData(hostId: string, removed: boolean = false): void {
-    this.accByHost.delete(hostId);
+    this.agentActivityWrites.forget(hostId);
     if (removed) {
       this.usageByHost = withoutDesktop(this.usageByHost, hostId);
       this.automationsByHost = withoutDesktop(this.automationsByHost, hostId);
@@ -457,7 +463,8 @@ struct Home {
     let context = getContext(this) as common.UIAbilityContext;
     let lease = retainDesktopConnection(context, hostId);
     let runtime: HostRuntime = { lease: lease, unobserve: (): void => {}, client: null, online: false,
-      connecting: false, refreshTimer: -1, catalogPending: false, catalogRefetch: false, automationPending: null, automationFetchedAt: 0 };
+      connecting: false, refreshTimer: -1, catalogState: 'initial', catalogPending: null, catalogRefetch: null,
+      automationPending: null, automationFetchedAt: 0 };
     this.runtimes.set(hostId, runtime);
     let epoch = this.epoch;
     runtime.unobserve = lease.connection.observe((phase: SessionPhase): void => {
@@ -467,7 +474,8 @@ struct Home {
       let client = lease.connection.getClient();
       if (runtime.client !== client) {
         if (runtime.refreshTimer >= 0) { clearTimeout(runtime.refreshTimer); runtime.refreshTimer = -1; }
-        runtime.catalogPending = false; runtime.catalogRefetch = false; runtime.automationPending = null; runtime.automationFetchedAt = 0;
+        runtime.catalogState = 'initial'; runtime.catalogPending = null; runtime.catalogRefetch = null;
+        runtime.automationPending = null; runtime.automationFetchedAt = 0;
         this.clearLiveDesktopData(hostId);
         if (!client) { invalidateHomePrewarm(hostId); }
         runtime.client = client;
@@ -688,31 +696,41 @@ struct Home {
     if (rt && rt.online && rt.client) { this.fetchAutomations(rt.client, hostId, this.epoch); }
   }
 
-  private fetchCatalog(client: SpikeRpcClient, hostId: string, epoch: number): void {
+  private fetchCatalog(client: SpikeRpcClient, hostId: string, epoch: number, afterCurrent: boolean = false): Promise<void> {
     let found = this.runtimes.get(hostId);
-    if (!this.visible || !this.appInForeground || !found || found.client !== client || found.catalogPending) { return; }
+    if ((!this.visible && !afterCurrent) || !this.appInForeground || epoch !== this.epoch || !found ||
+      !found.online || found.client !== client) { return Promise.resolve(); }
     let rt: HostRuntime = found;
+    if (rt.catalogPending) {
+      if (!afterCurrent) { return rt.catalogPending; }
+      if (!rt.catalogRefetch) {
+        let refetch: Promise<void> = rt.catalogPending.then((): Promise<void> => {
+          if (rt.catalogRefetch === refetch) { rt.catalogRefetch = null; }
+          return this.fetchCatalog(client, hostId, epoch, true);
+        });
+        rt.catalogRefetch = refetch;
+      }
+      return rt.catalogRefetch!;
+    }
     if (rt.refreshTimer >= 0) { clearTimeout(rt.refreshTimer); rt.refreshTimer = -1; }
-    rt.catalogPending = true;
-    client.request('worktree.ps', JSON.stringify({ limit: 10000 }), 8000).then((response: RpcResponse): void => {
+    let request = client.request('worktree.ps', JSON.stringify({ limit: 10000 }), 8000).then((response: RpcResponse): void => {
       let rows = response instanceof RpcSuccess ? readHomeCatalog(response.result) : null;
       this.finishCatalog(client, hostId, epoch, rt, rows);
-    }).catch((): void => this.finishCatalog(client, hostId, epoch, rt, null));
+    }, (): void => this.finishCatalog(client, hostId, epoch, rt, null));
+    rt.catalogPending = request;
+    return request;
   }
 
   private finishCatalog(client: SpikeRpcClient, hostId: string, epoch: number, rt: HostRuntime, rows: HomeWorktree[] | null): void {
     if (epoch !== this.epoch || this.runtimes.get(hostId) !== rt || rt.client !== client) { return; }
-    rt.catalogPending = false;
+    rt.catalogPending = null;
+    rt.catalogState = rows ? 'ready' : 'unavailable';
     if (rows) {
-      this.accByHost.set(hostId, rows);
       let entries = rows.flatMap((row: HomeWorktree): HomeAgentEntry[] => row.agents);
-      this.agentCatalogs.set(hostId, { entries: entries, at: Date.now() });
-    } else {
-      this.accByHost.delete(hostId);
+      this.agentCatalogs.set(hostId, { worktrees: rows, entries: entries, at: Date.now() });
     }
     this.rebuildRows();
     if (!this.visible || !this.appInForeground) { return; }
-    if (rt.catalogRefetch) { rt.catalogRefetch = false; this.fetchCatalog(client, hostId, epoch); return; }
     if (this.activeTab === 'automations' && this.tabDesktop(this.automationDesktopId)?.id === hostId
       && Date.now() - rt.automationFetchedAt > 15000) { this.fetchAutomations(client, hostId, epoch); }
     rt.refreshTimer = setTimeout((): void => {
@@ -723,7 +741,8 @@ struct Home {
 
   private refreshSummaries(): void {
     let next: Record<string, string> = {};
-    this.accByHost.forEach((rows: HomeWorktree[], hostId: string): void => {
+    this.agentCatalogs.forEach((catalog: AgentCatalog, hostId: string): void => {
+      let rows = catalog.worktrees;
       let active = rows.filter((row: HomeWorktree): boolean => row.state !== 'inactive').length;
       next[hostId] = `${rows.length} 个工作区${active > 0 ? ` · ${active} 个活跃` : ''}`;
     });
@@ -737,8 +756,9 @@ struct Home {
       return {
         id: host.id, name: host.name, catalog: snapshot?.entries ?? null, seenAt: snapshot?.at ?? 0,
         connection: runtime?.online ? 'connected' : runtime?.connecting ? 'connecting' : 'disconnected',
-        live: runtime?.online === true && this.accByHost.has(host.id),
-        loading: runtime?.connecting === true || (runtime?.online === true && runtime.catalogPending)
+        live: runtime?.online === true && runtime.catalogState === 'ready',
+        loading: runtime?.connecting === true || (runtime?.online === true && runtime.catalogState === 'initial'),
+        pendingActivity: this.agentActivityWrites.snapshot(host.id)
       };
     });
     this.agentDesktops = desktops;
@@ -768,6 +788,14 @@ struct Home {
         message: uiText('重新连接后可打开此智能体。', this.uiLocale) }).catch(() => {});
       return;
     }
+    let latest = this.agentCatalogs.get(row.hostId)?.entries.find((entry: HomeAgentEntry): boolean =>
+      entry.agent['paneKey'] === row.entry.agent['paneKey'] && entry.worktreeId === row.entry.worktreeId
+      && entry.executionHostId === row.entry.executionHostId && entry.workspaceIdentityKey === row.entry.workspaceIdentityKey);
+    if (!latest || latest.ambiguousWorkspace) {
+      promptAction.showDialog({ title: uiText('无法确定工作区', this.uiLocale),
+        message: uiText('无法确认此工作区属于哪台主机。', this.uiLocale) }).catch(() => {});
+      return;
+    }
     if (withPane && row.unread === true) { this.changeAgentActivity([row], true, false).catch(() => {}); }
     let params: Record<string, string> = { 'executionHost': row.entry.executionHost, 'name': row.entry.workspaceName };
     if (withPane) { params['paneKey'] = String(row.entry.agent['paneKey']); }
@@ -777,38 +805,22 @@ struct Home {
   private async writeAgentActivity(hostId: string, paneKeys: string[], read?: boolean): Promise<string> {
     let runtime = this.runtimes.get(hostId);
     let client = runtime?.client;
-    if (!runtime || !runtime.online || !client || this.agentActivityWrites.has(hostId)) { return 'unavailable'; }
+    if (!runtime || !runtime.online || !client) { return 'unavailable'; }
+    let activeRuntime: HostRuntime = runtime;
+    let activeClient: SpikeRpcClient = client;
     let epoch = this.epoch;
-    this.agentActivityWrites.add(hostId);
-    let result = '';
-    try {
-      for (let start = 0; start < paneKeys.length; start += 500) {
-        if (this.epoch !== epoch || runtime.client !== client) { return 'unavailable'; }
-        let args: AgentActivityArgs = { paneKeys: paneKeys.slice(start, start + 500) };
-        if (read !== undefined) { args.read = read; }
-        let response = await client.request(read === undefined ? 'agentActivity.clear' : 'agentActivity.setRead', JSON.stringify(args));
-        if (!(response instanceof RpcSuccess)) {
-          return response.errorMessage.includes('agent_activity_needs_desktop_window')
-            ? 'agent_activity_needs_desktop_window' : response.errorCode || 'refused';
-        }
-        let accepted: ESObject = JSON.parse(response.result);
-        if (accepted?.['applied'] !== true) { return 'refused'; }
-      }
-    } catch (e) { result = 'refused'; }
-    finally {
-      this.agentActivityWrites.delete(hostId);
-      if (this.epoch === epoch && this.runtimes.get(hostId) === runtime && runtime.client === client) {
-        if (runtime.catalogPending) { runtime.catalogRefetch = true; }
-        else { this.fetchCatalog(client, hostId, epoch); }
-      }
-    }
-    return result;
+    return this.agentActivityWrites.write(hostId, paneKeys, read, activeClient,
+      (): boolean => this.epoch === epoch && this.runtimes.get(hostId) === activeRuntime
+        && activeRuntime.online && activeRuntime.client === activeClient,
+      (): Promise<void> => this.fetchCatalog(activeClient, hostId, epoch, true));
   }
 
   private async changeAgentActivity(rows: AgentListRow[], read?: boolean, report: boolean = true): Promise<void> {
     let requests = new Map<string, string[]>();
+    let unavailable = false;
     rows.forEach((row: AgentListRow): void => {
       if (row.offline || (read === undefined ? !row.clearable : row.unread === undefined)) { return; }
+      if (row.entry.executionHost || row.entry.executionHostId?.startsWith('runtime:')) { unavailable = true; return; }
       let keys = requests.get(row.hostId) ?? [];
       let paneKey = String(row.entry.agent['paneKey']);
       if (!keys.includes(paneKey)) { keys.push(paneKey); }
@@ -822,22 +834,33 @@ struct Home {
         ? uiText('无法更新。请在 {{desktop}} 上打开 Orca。', this.uiLocale).replace('{{desktop}}', name)
         : uiText('无法更新智能体列表。', this.uiLocale);
     }));
-    let failure = outcomes.find((message: string): boolean => message.length > 0);
+    let failure = outcomes.find((message: string): boolean => message.length > 0)
+      ?? (unavailable ? uiText('无法更新智能体列表。', this.uiLocale) : '');
     if (report && failure && this.visible) { promptAction.showToast({ message: failure }); }
   }
 
-  private async agentActions(row: AgentListRow): Promise<void> {
-    let actions: string[] = row.offline ? [] : ['打开', '前往工作区'];
-    if (row.unread !== undefined) { actions.push(row.unread ? '标为已读' : '标为未读'); }
-    actions.push('复制标题');
-    if (row.clearable) { actions.push('清除列表项'); }
-    let buttons = actions.map((label: string): promptAction.Button => ({ text: uiText(label, this.uiLocale), color: this.pal().textPrimary }));
-    let choice = await promptAction.showActionMenu({ title: row.title, buttons: [buttons[0], buttons[1], buttons[2], buttons[3], buttons[4]] });
-    let action = actions[choice.index];
-    if (action === '打开' || action === '前往工作区') { this.openAgent(row, action === '打开'); }
-    else if (action === '标为已读' || action === '标为未读') { await this.changeAgentActivity([row], action === '标为已读'); }
-    else if (action === '清除列表项') { await this.changeAgentActivity([row]); }
-    else if (action === '复制标题') {
+  private agentActions(row: AgentListRow): void {
+    playHapticFeedback('mediumImpact').catch(() => {});
+    this.agentAction = ''; this.agentActionTarget = row; this.agentSheetOpen = true;
+  }
+
+  @Builder
+  private agentActionsSheet() {
+    AgentActions({ row: this.agentActionTarget,
+      onChoose: (action: string): void => { this.agentAction = action; this.agentSheetOpen = false; } })
+  }
+
+  private async afterAgentActions(): Promise<void> {
+    let row = this.agentActionTarget;
+    let action = this.agentAction;
+    this.agentActionTarget = null; this.agentAction = ''; this.agentSheetOpen = false;
+    if (!row || !this.visible) { return; }
+    let hostId = row.hostId;
+    if (!this.hosts.some((host: HostMeta): boolean => host.id === hostId)) { return; }
+    if (action === 'open' || action === 'workspace') { this.openAgent(row, action === 'open'); }
+    else if (action === 'read') { await this.changeAgentActivity([row], row.unread === true); }
+    else if (action === 'clear') { await this.changeAgentActivity([row]); }
+    else if (action === 'copy') {
       try {
         await pasteboard.getSystemPasteboard().setData(pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, row.title));
         promptAction.showToast({ message: uiText('已复制', this.uiLocale) });
@@ -1089,19 +1112,24 @@ struct Home {
         Scroll() {
           Column() {
             if (this.agentRows.length > 0) {
-              Row() {
-                Text(`${uiText('需要处理', this.uiLocale)} · ${this.agentRows.length}`).fontFamily('Geist').fontSize(15 * this.fontScale)
-                  .fontWeight(FontWeight.Medium).fontColor(this.pal().textPrimary).layoutWeight(1)
-                Button(uiText('查看所有智能体', this.uiLocale)).fontFamily('Geist').fontSize(13)
-                  .fontColor(this.pal().textSecondary).backgroundColor(Color.Transparent)
+              Row({ space: 6 }) {
+                Text(uiText('需要处理', this.uiLocale)).fontFamily('Geist').fontSize(15 * this.fontScale)
+                  .fontWeight(FontWeight.Medium).fontColor(this.pal().textPrimary)
+                Text(String(this.agentRows.length)).fontFamily('Geist').fontSize(13).fontColor(this.pal().textMuted)
+                Blank()
+                Text(uiText('查看所有智能体', this.uiLocale)).fontFamily('Geist').fontSize(13)
+                  .fontColor(this.pal().accentBlue).padding({ top: 8, bottom: 8 })
                   .onClick(() => { this.activeTab = 'agents'; })
               }.width('100%').padding({ left: 4, right: 4 })
-              AgentListRows({ rows: this.agentRows.slice(0, 3), desktops: this.agentDesktops,
-                nameDesktop: this.hosts.length > 1, fontScale: this.fontScale,
-                onOpen: (row: AgentListRow): void => this.openAgent(row),
-                onActions: (row: AgentListRow): void => { this.agentActions(row).catch(() => {}); },
-                onRead: (rows: AgentListRow[], read: boolean): void => { this.changeAgentActivity(rows, read).catch(() => {}); },
-                onClear: (rows: AgentListRow[]): void => { this.changeAgentActivity(rows).catch(() => {}); } })
+              ForEach([this.agentRows.slice(0, 3)], (rows: AgentListRow[]) => {
+                AgentListRows({ rows: rows, desktops: this.agentDesktops,
+                  nameDesktop: this.hosts.length > 1, fontScale: this.fontScale, now: this.homeNow,
+                  onOpen: (row: AgentListRow): void => this.openAgent(row),
+                  onActions: (row: AgentListRow): void => this.agentActions(row),
+                  onRead: (items: AgentListRow[], read: boolean): void => { this.changeAgentActivity(items, read).catch(() => {}); },
+                  onClear: (items: AgentListRow[]): void => { this.changeAgentActivity(items).catch(() => {}); } })
+              }, (rows: AgentListRow[]): string =>
+                JSON.stringify(rows.map((row: AgentListRow): string => agentRowRevision(row, agentPreview(row)))))
             }
 
             this.sectionHeading({ title: uiText('已配对桌面', this.uiLocale), aside: '', first: this.agentRows.length === 0 })
@@ -1793,9 +1821,9 @@ struct Home {
             Column() { this.feedTab() }.width('100%').height('100%')
               .visibility(this.activeTab === 'feed' ? Visibility.Visible : Visibility.Hidden)
             Column() {
-              AgentsTab({ desktops: this.agentDesktops, loaded: this.loaded, fontScale: this.fontScale,
+              AgentsTab({ desktops: this.agentDesktops, loaded: this.loaded, fontScale: this.fontScale, now: this.homeNow,
                 onOpen: (row: AgentListRow): void => this.openAgent(row),
-                onActions: (row: AgentListRow): void => { this.agentActions(row).catch(() => {}); },
+                onActions: (row: AgentListRow): void => this.agentActions(row),
                 onRead: (rows: AgentListRow[], read: boolean): void => { this.changeAgentActivity(rows, read).catch(() => {}); },
                 onClear: (rows: AgentListRow[]): void => { this.changeAgentActivity(rows).catch(() => {}); } })
             }.width('100%').height('100%').visibility(this.activeTab === 'agents' ? Visibility.Visible : Visibility.Hidden)
@@ -1858,5 +1886,8 @@ struct Home {
           } })
       }
     }.width('100%').height('100%')
+      .bindSheet(this.agentSheetOpen, this.agentActionsSheet, { height: SheetSize.FIT_CONTENT,
+        backgroundColor: this.themeSheet, maskColor: 'rgba(0,0,0,0.55)', showClose: false,
+        onDisappear: (): void => { this.afterAgentActions().catch(() => {}); } })
   }
 }

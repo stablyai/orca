@@ -3,7 +3,7 @@ import { uiText } from '../settings/NativeUi';
 import { lucideColorFilter } from '../settings/LucideColor';
 import {
   AGENT_GROUPS, AgentDesktop, AgentDesktopSummary, AgentListResult, AgentListRow, AgentListSection, AgentListView,
-  DEFAULT_AGENT_VIEW, buildAgentList, listedAgents, readAgentView, summarizeAgentDesktops
+  DEFAULT_AGENT_VIEW, agentPreview, agentRowRevision, agentTimeAgo, buildAgentList, listedAgents, readAgentView, summarizeAgentDesktops
 } from './AgentListModel';
 import { AgentListRows } from './AgentListRows';
 
@@ -19,12 +19,16 @@ export struct AgentsTab {
   @Prop @Watch('refreshList') desktops: AgentDesktop[] = [];
   @Prop loaded: boolean = false;
   @Prop fontScale: number = 1;
+  @Prop now: number = 0;
   @StorageProp('uiLocale') locale: string = 'en';
   @StorageProp('themeText') text: string = '#fafafa';
   @StorageProp('themeSecondary') secondary: string = '#acacac';
   @StorageProp('themeMuted') muted: string = '#898989';
   @StorageProp('themeSurface') surface: string = '#171717';
-  @StorageProp('themeBg') backgroundTint: string = '#0a0a0a';
+  @StorageProp('themeRaised') raised: string = '#262626';
+  @StorageProp('themeSheet') sheet: string = '#171717';
+  @StorageProp('themeAccent') accent: string = '#3276f2';
+  @StorageProp('themeBorder') borderTint: string = '#2c2c2c';
   @State view: AgentListView = DEFAULT_AGENT_VIEW;
   @State list: AgentListResult = { sections: [], anyLive: false };
   @State shownRows: AgentListRow[] = [];
@@ -96,15 +100,21 @@ export struct AgentsTab {
   private sectionAside(section: AgentListSection): string {
     if (section.lastSeen) {
       let when = section.lastSeen.at;
-      let ago = when !== undefined && Date.now() - when < 60000
-        ? this.tr('刚刚在线')
-        : when !== undefined ? this.tr('上次在线 {{time}}').replace('{{time}}', new Date(when).toLocaleTimeString()) : '';
+      let now = this.now || Date.now();
+      let ago = when !== undefined && now - when < 60000 ? this.tr('刚刚在线')
+        : when !== undefined ? this.tr('上次在线 {{time}}').replace('{{time}}', agentTimeAgo(when, now, this.locale)) : '';
       return [section.lastSeen.offline ? this.tr('离线') : '', ago].filter((part: string): boolean => !!part).join(' · ');
     }
     if (!this.desktopId && this.desktops.length > 1 && ['workspace', 'project'].includes(section.kind)) {
       return this.desktopName(section.hostId ?? '');
     }
     return '';
+  }
+
+  private sectionKey(section: AgentListSection): string {
+    let rows = listedAgents([section]);
+    return JSON.stringify([section.kind, section.key, section.title, section.lastSeen, section.nameDesktop,
+      section.rows.length, rows.map((row: AgentListRow): string => agentRowRevision(row, agentPreview(row)))]);
   }
 
   @Builder
@@ -155,7 +165,9 @@ export struct AgentsTab {
       if (this.desktopId === id) {
         Image($r('app.media.lucide_check')).width(18).height(18).supportSvg2(true).colorFilter(lucideColorFilter(this.text))
       }
-    }.width('100%').padding(12).onClick(() => {
+    }.width('100%').padding({ left: 14, right: 14, top: 11, bottom: 11 })
+      .accessibilityGroup(true).accessibilityRole(AccessibilityRoleType.BUTTON).accessibilitySelected(this.desktopId === id)
+      .onClick(() => {
       this.desktopId = id;
       this.choosingDesktop = false;
       this.refreshList();
@@ -164,18 +176,19 @@ export struct AgentsTab {
 
   @Builder
   private desktopPicker() {
-    Column({ space: 8 }) {
-      Text(this.tr('选择显示智能体的桌面')).fontFamily('Geist').fontSize(18).fontWeight(FontWeight.Bold)
-        .fontColor(this.text).width('100%')
+    Column({ space: 12 }) {
+      Text(this.tr('选择显示智能体的桌面')).fontFamily('Geist').fontSize(17).fontWeight(FontWeight.Medium)
+        .fontColor(this.text).width('100%').padding({ left: 4, right: 4 })
       Scroll() {
         Column() {
           this.desktopOption('', this.tr('所有桌面'))
           ForEach(this.desktops, (host: AgentDesktop) => {
+            Divider().strokeWidth(0.5).color(this.borderTint).margin({ left: 42 })
             this.desktopOption(host.id, host.name)
-          }, (host: AgentDesktop): string => host.id)
-        }
-      }.width('100%').layoutWeight(1)
-    }.width('100%').height('100%').padding(20).backgroundColor(this.backgroundTint)
+          }, (host: AgentDesktop): string => `${host.id}:${host.name}:${this.desktopSubtitle(host.id)}`)
+        }.width('100%').backgroundColor(this.surface).borderRadius(16).clip(true)
+      }.width('100%').constraintSize({ maxHeight: 380 }).scrollBar(BarState.Off)
+    }.width('100%').padding({ left: 16, right: 16, top: 14, bottom: 20 })
   }
 
   private isConnecting(): boolean {
@@ -206,17 +219,22 @@ export struct AgentsTab {
           }
           Blank()
           if (section.kind === 'done' && this.clearableRows(listedAgents([section])).length > 0) {
-            Button(this.tr('清除')).backgroundColor(Color.Transparent).fontColor(this.secondary).fontSize(13)
+            Text(this.tr('清除')).fontColor(this.accent).fontSize(13).padding({ top: 6, bottom: 6 })
               .onClick(() => this.onClear(this.clearableRows(listedAgents([section]))))
           } else if (this.sectionAside(section)) {
-            Text(this.sectionAside(section)).fontFamily('Geist').fontSize(13).fontColor(this.muted).maxLines(1)
+            Row({ space: 4 }) {
+              if (section.lastSeen?.offline) {
+                Image($r('app.media.lucide_wifi_off')).width(13).height(13).supportSvg2(true).colorFilter(lucideColorFilter(this.muted))
+              }
+              Text(this.sectionAside(section)).fontFamily('Geist').fontSize(13).fontColor(this.muted).maxLines(1)
+            }
           }
         }.width('100%').padding({ left: 4, right: 4 })
       }
       if (section.rows.length > 0 || (section.idleRows?.length ?? 0) > 0) {
         AgentListRows({ rows: section.rows, idleRows: section.idleRows ?? [], desktops: this.desktops,
           nameDesktop: section.nameDesktop, footer: section.footer, idleKey: `idle:${this.view.groupBy}`,
-          expanded: this.expanded, fontScale: this.fontScale, onToggle: (key: string): void => this.toggle(key),
+          expanded: this.expanded, fontScale: this.fontScale, now: this.now, onToggle: (key: string): void => this.toggle(key),
           onOpen: this.onOpen, onActions: this.onActions, onRead: this.onRead, onClear: this.onClear })
       }
     }.width('100%').alignItems(HorizontalAlign.Start)
@@ -224,22 +242,25 @@ export struct AgentsTab {
 
   build() {
     Column({ space: 8 }) {
-      Row({ space: 8 }) {
+      Row({ space: 2 }) {
         Text(this.tr('智能体')).fontFamily('Geist').fontSize(22).fontWeight(FontWeight.Bold).fontColor(this.text).layoutWeight(1)
         Button() {
-          Image($r('app.media.lucide_search')).width(19).height(19).supportSvg2(true).colorFilter(lucideColorFilter(this.text))
-        }.width(40).height(40).backgroundColor(this.searchOpen ? this.surface : Color.Transparent)
+          Image($r('app.media.lucide_search')).width(21).height(21).supportSvg2(true).colorFilter(lucideColorFilter(this.secondary))
+        }.width(44).height(44).borderRadius(12).backgroundColor(this.searchOpen ? this.raised : Color.Transparent)
           .accessibilityText(this.tr('搜索智能体')).onClick(() => {
             this.searchOpen = !this.searchOpen; this.query = ''; this.refreshList();
           })
         Button() {
-          Image($r('app.media.lucide_sliders_horizontal')).width(19).height(19).supportSvg2(true).colorFilter(lucideColorFilter(this.text))
-        }.width(40).height(40).backgroundColor(Color.Transparent).accessibilityText(this.tr('智能体列表选项'))
+          Image($r('app.media.lucide_sliders_horizontal')).width(21).height(21).supportSvg2(true).colorFilter(lucideColorFilter(this.secondary))
+        }.width(44).height(44).borderRadius(12).backgroundColor(Color.Transparent).accessibilityText(this.tr('智能体列表选项'))
           .bindMenu(this.optionsMenu)
-      }.width('100%').height(44).padding({ left: 20, right: 12 })
+      }.width('100%').height(44).padding({ left: 20, right: 8 })
       if (this.searchOpen) {
         Search({ value: this.query, placeholder: this.tr('搜索智能体') })
-          .defaultFocus(true).height(42).width('calc(100% - 32vp)').backgroundColor(this.surface)
+          .id('agent-search-field').height(42).width('calc(100% - 32vp)').backgroundColor(this.surface)
+          .onAppear((): void => {
+            setTimeout((): void => { if (this.searchOpen) { this.getUIContext().getFocusController().requestFocus('agent-search-field'); } }, 0);
+          })
           .fontColor(this.text).onChange((query: string) => { this.query = query; this.refreshList(); })
       }
       if (this.desktops.length > 1) {
@@ -248,9 +269,12 @@ export struct AgentsTab {
             Row({ space: 7 }) {
               Image($r('app.media.lucide_monitor')).width(15).height(15).supportSvg2(true).colorFilter(lucideColorFilter(this.text))
               Text(this.desktopName(this.desktopId)).fontFamily('Geist').fontSize(14).fontColor(this.text).maxLines(1)
+              Image($r('app.media.lucide_chevron_down')).width(14).height(14).supportSvg2(true).colorFilter(lucideColorFilter(this.secondary))
             }
           }.height(36).backgroundColor(this.surface).onClick(() => { this.choosingDesktop = true; })
-            .bindSheet(this.choosingDesktop, this.desktopPicker, { height: SheetSize.MEDIUM, onDisappear: () => { this.choosingDesktop = false; } })
+            .bindSheet(this.choosingDesktop, this.desktopPicker, { height: SheetSize.FIT_CONTENT,
+              backgroundColor: this.sheet, maskColor: 'rgba(0,0,0,0.55)', showClose: false,
+              onDisappear: (): void => { this.choosingDesktop = false; } })
         }.width('100%').padding({ left: 16 })
       }
       Scroll() {
@@ -258,7 +282,7 @@ export struct AgentsTab {
           if (this.loaded) {
             if (this.list.sections.length > 0) {
               ForEach(this.list.sections, (section: AgentListSection) => { this.section(section) },
-                (section: AgentListSection): string => `${section.kind}:${section.key}`)
+                (section: AgentListSection): string => this.sectionKey(section))
             } else if (this.query.trim()) {
               this.empty(this.tr('没有与“{{query}}”匹配的智能体').replace('{{query}}', this.query.trim()), '')
             } else if (!this.desktops.length) {
@@ -271,7 +295,7 @@ export struct AgentsTab {
               this.empty(this.tr('没有运行中的智能体'), this.tr('在任意工作区启动智能体后，就会显示在这里。'))
             }
           }
-        }.width('100%').constraintSize({ maxWidth: 680 }).padding({ left: 16, right: 16, bottom: 24 })
+        }.width('100%').constraintSize({ maxWidth: 720 }).padding({ left: 16, right: 16, bottom: 24 })
       }.width('100%').layoutWeight(1).scrollBar(BarState.Off)
     }.width('100%').height('100%')
   }
