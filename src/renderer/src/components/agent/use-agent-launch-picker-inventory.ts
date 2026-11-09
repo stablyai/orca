@@ -1,6 +1,6 @@
 import { withAgentPickerCatalogAvailability } from './agent-picker-catalog-jobs'
 import { recomputeOn } from '@/lib/recompute-on'
-import { useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
+import { useHostStructuredAgentsVersion } from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import {
   createAgentPickerInventorySource,
   useAgentPickerInventoryEntries,

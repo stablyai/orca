@@ -4,7 +4,7 @@ import {
   normalizeExternalBrowserUrl,
   redactKagiSessionToken
 } from '../../../../shared/browser-url'
-import type { BrowserContextMenuRequestedEvent } from '../../../../shared/browser-guest-events'
+import type { BrowserContextMenuRequestedEvent } from '../../../../shared/browser/guest-lifecycle/browser-guest-events'
 import { readContextMenuSpelling } from '../../../window/editable-context-menu'
 import { readGuestNavigationState } from '../navigation/browser-guest-navigation-state'
 import type { ResolveRenderer } from '../browser-guest-renderer-target'

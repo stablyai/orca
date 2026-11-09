@@ -24,11 +24,13 @@ const WORD_CHAR = String.raw`[\p{L}\p{N}\p{M}_/'\u2019\-]`
 const standalone = (fillers: string): string =>
   String.raw`(?<!${WORD_CHAR}|${WORD_CHAR}\.)(${fillers})(?!${WORD_CHAR}|\.${WORD_CHAR})(?!\s*[?\uFF1F!\uFF01])`
 // The comma or ellipsis after a filler goes with it.
-const TRAILING_PAUSE = String.raw`(?:\s*(?:[,\uFF0C\u3001\u2026]|\.{3}))?\s*`
+const TRAILING_PAUSE = String.raw`(?:\s*(?<pause>[,\uFF0C\u3001\u2026]|\.{3}))?\s*`
 const SENTENCE_END_CHARS = '.!?。！？'
 const SENTENCE_END_RE = new RegExp(`^[${SENTENCE_END_CHARS}]+\\s*`, 'u')
 // A comma left in front of a removed filler that ended the sentence or the text.
 const TRAILING_SOFT_PUNCTUATION_RE = /[\s,\uFF0C\u3001]+$/u
+// The comma before a filler that a pause also follows, keeping the space after it.
+const COMMA_BEFORE_PAUSED_FILLER_RE = /[,\uFF0C\u3001](\s*)$/u
 const NON_LATIN_LETTER_RE = /(?=\p{L})\P{Script=Latin}/u
 
 function fillerPattern(languages: readonly string[] | undefined, text: string): RegExp | null {
@@ -87,6 +89,9 @@ export function removeFillerWords(text: string, languages: readonly string[] | u
       cursor += sentenceEnd[0].length
     } else if (sentenceEnd) {
       out = out.replace(TRAILING_SOFT_PUNCTUATION_RE, '')
+    } else if (match.groups?.pause) {
+      // "we should, uh, ship" set the filler off on both sides; neither comma belongs to the sentence.
+      out = out.replace(COMMA_BEFORE_PAUSED_FILLER_RE, '$1')
     }
     // Only a capitalised "Um" began a sentence the next word now begins.
     capitalizeNext ||= atSentenceStart && filler.charAt(0) !== filler.charAt(0).toLowerCase()

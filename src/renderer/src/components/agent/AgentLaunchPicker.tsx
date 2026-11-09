@@ -21,7 +21,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
-import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
+import { getAgentLabel } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { useTranslate } from '@/i18n/use-translate'
 import { rowLabel } from '../tab-bar/tab-agent-row-presentation'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
@@ -56,6 +57,7 @@ export const AgentLaunchPicker = memo(
     emptyLabel,
     cli,
     children,
+    onSelectBlankTerminal,
     onTriggerEnter,
     onOpenChange,
     onCatalogOpen,
@@ -81,6 +83,7 @@ export const AgentLaunchPicker = memo(
     /** True when this launch is the terminal and a chat exists, so the closed field says "(CLI)". */
     cli?: boolean
     children?: ReactNode
+    onSelectBlankTerminal?: () => void
     onTriggerEnter?: () => void
     onOpenChange?: (open: boolean) => void
     /** Supplied entries own their catalogs; this says which agent's menu the user is viewing. */
@@ -89,7 +92,7 @@ export const AgentLaunchPicker = memo(
     onOpenAgentSettings?: (invoker: HTMLButtonElement) => void
     /** The saved default; with onSetDefault, right-clicking an agent row offers "Set as default". */
     defaultAgent?: AgentPickerEntry['agent'] | 'blank' | null
-    onSetDefault?: (agent: AgentPickerEntry['agent']) => void
+    onSetDefault?: (agent: AgentPickerEntry['agent'] | 'blank') => void
     onPick: (
       agent: AgentPickerEntry['agent'],
       draft?: AgentPickerDraft,
@@ -247,7 +250,6 @@ export const AgentLaunchPicker = memo(
                 : 'min-w-64'
             }
           >
-            {children}
             {model.state === 'settled' ? (
               <AgentLaunchPickerMenu
                 draftScope={draftScope ?? ownDraftScope}
@@ -256,6 +258,8 @@ export const AgentLaunchPicker = memo(
                 catalogDemand={suppliedEntries ? catalogDemand : inventory.observeSurface}
                 initialQuery={initialQuery}
                 searchInputRef={setSearchInput}
+                leadingItems={children}
+                onSelectBlankTerminal={onSelectBlankTerminal}
                 value={value}
                 draftForEntry={draftForEntry}
                 mode="select"

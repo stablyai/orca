@@ -1,31 +1,48 @@
-import { app, ipcMain } from 'electron'
+import { app, BrowserWindow, ipcMain } from 'electron'
 import type { Store } from '../persistence/loading-store/store'
 import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus
 } from '../../shared/ephemeral-vm-runtime-store'
+import {
+  EPHEMERAL_VM_RUNTIMES_CHANGED_CHANNEL,
+  onEphemeralVmRuntimesChanged
+} from '../../shared/ephemeral-vm-runtime-store-events'
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
-import { releaseEphemeralVmRuntimeEnvironments } from '../ephemeral-vm/runtime-environment-release'
-import { cleanupEphemeralVmRuntime } from '../ephemeral-vm/runtime-service'
+import { cleanupOwnedEphemeralVmRuntime } from '../ephemeral-vm/owned-runtime-cleanup'
 import { stopEphemeralVmRuntimeCleanup } from '../ephemeral-vm/runtime-cleanup-control'
-import { removeEphemeralVmRuntimeSshTarget } from '../ephemeral-vm/runtime-ssh-cleanup'
 import {
   buildEphemeralVmRecipeCleanupCommand,
   buildEphemeralVmRecipeCleanupPayload
 } from '../../shared/ephemeral-vm-recipe-lifecycle-payload'
-import { removeRuntimeOwnedSshTarget } from '../ephemeral-vm/runtime-ssh'
 import { getRuntimeRecipeContext } from './ephemeral-vm-recipe-context'
-import {
-  ephemeralVmFailure,
-  ephemeralVmFailureFromError
-} from '../../shared/ephemeral-vm-failure-copy'
-import { invalidateRuntimeEnvironmentTransport } from './runtime-environments/runtime-environments'
-import { retireRemovedRuntimeEnvironment } from './runtime-environments/runtime-environment-removal-cleanup'
+import { ephemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
 import { attachEphemeralVmRuntimeToWorkspace } from '../ephemeral-vm/runtime-attachment'
-import {
-  forgetInterruptedEphemeralVmProvision,
-  isEphemeralVmProvisionLive
-} from '../ephemeral-vm/runtime-provisioning-persistence'
+import { forgetInterruptedEphemeralVmProvision } from '../ephemeral-vm/runtime-provisioning-persistence'
+
+let stopRuntimesChangedBroadcast: (() => void) | null = null
+let runtimesChangedBroadcastQueued = false
+
+/** One coalesced signal per tick: a lifecycle op writes the store several times. */
+function broadcastEphemeralVmRuntimesChanged(): void {
+  if (runtimesChangedBroadcastQueued) {
+    return
+  }
+  runtimesChangedBroadcastQueued = true
+  setImmediate(() => {
+    runtimesChangedBroadcastQueued = false
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (window.isDestroyed()) {
+        continue
+      }
+      try {
+        window.webContents.send(EPHEMERAL_VM_RUNTIMES_CHANGED_CHANNEL)
+      } catch {
+        // A renderer can disappear between isDestroyed() and send().
+      }
+    }
+  })
+}
 
 export type EphemeralVmCleanupCommandResult = {
   runtimeId: string
@@ -42,6 +59,8 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
   ipcMain.removeHandler('ephemeralVm:stopCleanup')
   ipcMain.removeHandler('ephemeralVm:forgetRuntime')
   ipcMain.removeHandler('ephemeralVm:getCleanupCommand')
+  stopRuntimesChangedBroadcast?.()
+  stopRuntimesChangedBroadcast = onEphemeralVmRuntimesChanged(broadcastEphemeralVmRuntimesChanged)
 
   ipcMain.handle('ephemeralVm:listRuntimes', (): EphemeralVmRuntimeRecord[] => {
     return listEphemeralVmRuntimes(app.getPath('userData'))
@@ -61,67 +80,7 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
   ipcMain.handle(
     'ephemeralVm:cleanup',
     async (_event, args: { runtimeId: string }): Promise<EphemeralVmRuntimeRecord> => {
-      const userDataPath = app.getPath('userData')
-      const runtime = listEphemeralVmRuntimes(userDataPath).find(
-        (entry) => entry.id === args.runtimeId
-      )
-      if (!runtime) {
-        throw new Error(`Unknown ephemeral VM runtime: ${args.runtimeId}`)
-      }
-      if (runtime.status === 'provisioning' && isEphemeralVmProvisionLive(runtime.id)) {
-        // Why: don't mark a create in flight as cleanup_failed; its own outcome settles the row.
-        throw new Error(`Ephemeral VM runtime is still provisioning: ${runtime.id}`)
-      }
-      let result
-      if (runtime.cleanupStatus === 'succeeded') {
-        result = { ok: true as const, runtime, skipped: false }
-      } else {
-        let resolved: ReturnType<typeof getRuntimeRecipeContext>
-        try {
-          resolved = getRuntimeRecipeContext(store, userDataPath, runtime.id)
-        } catch (error) {
-          const failed = updateEphemeralVmRuntimeStatus(userDataPath, runtime.id, {
-            status: 'cleanup_failed',
-            cleanupStatus: 'failed',
-            cleanupLastAttemptAt: Date.now(),
-            cleanupLastError: ephemeralVmFailureFromError(error)
-          })
-          return removeEphemeralVmRuntimeSshTarget({
-            userDataPath,
-            runtime: failed,
-            removeTarget: removeRuntimeOwnedSshTarget
-          })
-        }
-        result = await cleanupEphemeralVmRuntime({
-          userDataPath,
-          repoPath: resolved.repoPath,
-          recipe: resolved.recipe,
-          runtimeId: runtime.id
-        })
-      }
-      if (result.ok) {
-        try {
-          await releaseEphemeralVmRuntimeEnvironments(userDataPath, runtime, (environmentId) => {
-            void retireRemovedRuntimeEnvironment(
-              environmentId,
-              invalidateRuntimeEnvironmentTransport,
-              store,
-              userDataPath
-            )
-          })
-        } catch {
-          // Cleanup of provider resources matters more than hiding a stale local
-          // environment row; users can still remove that manually.
-        }
-      }
-      if (!result.ok) {
-        return result.runtime
-      }
-      return removeEphemeralVmRuntimeSshTarget({
-        userDataPath,
-        runtime: result.runtime,
-        removeTarget: removeRuntimeOwnedSshTarget
-      })
+      return cleanupOwnedEphemeralVmRuntime(store, app.getPath('userData'), args.runtimeId)
     }
   )
 

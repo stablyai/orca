@@ -19,7 +19,7 @@ import {
 import { classifyGitHubUnavailable } from '../../../../../shared/github/api-availability'
 import { callRuntimeRpc } from '../../../runtime/rpc/calls/runtime-rpc-call'
 import { RuntimeRpcCallError } from '../../../runtime/rpc/calls/runtime-rpc-result'
-import { getHostlessSourceRepoOwnerEnvironmentId } from '@/lib/repo-runtime-owner'
+import { getHostlessSourceRepoOwnerEnvironmentId } from '@/lib/workspace/ownership/repo-runtime-owner'
 import {
   runtimeTargetForOwnerEnvironment,
   ipcOrRuntimeTargetForHostId

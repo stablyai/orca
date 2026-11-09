@@ -23,13 +23,13 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspaces/catalog/workspace-record-fields'
 import { getFolderWorkspaceWorktree } from '../../../../shared/folder-workspaces/folder-workspace-worktree'
-import { resolveExactWorktreeRoute } from '@/lib/worktree-owner-route'
+import { resolveExactWorktreeRoute } from '@/lib/workspace/ownership/worktree-owner-route'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getAutomationRunViewState } from './automation-run-view-state'
-import { resolveOwner } from '@/lib/resolve-owner'
-import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
+import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import { resolveQualifiedFolderWorkspaceResult } from '../../../../shared/folder-workspaces/folder-workspace-execution-host'
-import { getRuntimeEnvironmentIdForFolderWorkspace } from '@/lib/folder-workspace-runtime-owner'
+import { getRuntimeEnvironmentIdForFolderWorkspace } from '@/lib/workspace/ownership/folder-workspace-runtime-owner'
 
 export type AutomationRunPaneTarget = {
   tabId: string

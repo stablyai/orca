@@ -3,17 +3,17 @@ import { hasClosedTerminalTabRecord } from '../../../../../shared/workspace-layo
 import { parsePaneKey } from '../../../../../shared/workspace-layout/stable-pane-id'
 import { worktreeIdsEqual } from '../../../../../shared/worktree/id'
 import type { useAppStore } from '@/store/index'
-import type { WorktreeOperationRouteState } from '@/lib/worktree-operation-route'
+import type { WorktreeOperationRouteState } from '@/lib/workspace/ownership/worktree-operation-route'
 import {
   layoutFramesHoldTerminalPane,
   layoutFrameTerminalTab
 } from '@/runtime/workspace-layout/frames/layout-frame-terminal-panes'
-import { runtimeEnvironmentIdUnlessTwin } from '@/lib/resolve-owner'
+import { runtimeEnvironmentIdUnlessTwin } from '@/lib/workspace/ownership/resolve-owner'
 import { resolveTerminalTabPtyOwnership } from '../../terminal-tab-for-pty-id'
 import type {
   LiveTerminalSurfaceOwner,
   LiveTerminalSurfaceOwnerIndex
-} from '../../worktree-live-terminal-surface-owners'
+} from '../ownership/worktree-live-terminal-surface-owners'
 
 export type LiveSurfaceAdoptionStore = WorktreeOperationRouteState &
   Pick<

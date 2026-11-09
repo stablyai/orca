@@ -11,7 +11,7 @@ import { agentPickerUsesNativeRuntime } from '@/components/agent/agent-launch-pi
 import { modelMenuOptions } from '../../../../../../shared/agent-session/options/model-menu-options'
 import { agentPickerModelCatalogReads } from '@/components/agent/agent-launch-picker-host-reads'
 import type { AgentPickerEntry } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
-import type * as ConnectionOwnerResolutionModule from '../../../connection-owner-resolution'
+import type * as ConnectionOwnerResolutionModule from '../../../workspace/ownership/connection-owner-resolution'
 
 const mocks = vi.hoisted(() => ({
   catalogCall: vi.fn(),
@@ -30,7 +30,7 @@ vi.mock('@/lib/workspace/ownership/worktree-runtime-owner', () => ({
   getExecutionHostIdForWorktree: mocks.getExecutionHostIdForWorktree
 }))
 // Stage only workspace ownership; repo fallback must use the real resolver.
-vi.mock('@/lib/connection-owner-resolution', async (importOriginal) => ({
+vi.mock('@/lib/workspace/ownership/connection-owner-resolution', async (importOriginal) => ({
   ...(await importOriginal<typeof ConnectionOwnerResolutionModule>()),
   getConnectionIdFromState: mocks.getConnectionIdFromState
 }))

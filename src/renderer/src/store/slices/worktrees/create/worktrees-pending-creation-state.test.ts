@@ -8,6 +8,12 @@ import {
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory
 } from '../worktrees-slice-test-harness'
+import {
+  hideVmCreateCheckout,
+  readHiddenVmCheckouts,
+  releaseVmCreateCheckout,
+  withoutHiddenVmWorktrees
+} from '@/lib/vm-create-hidden-checkouts'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
 
@@ -25,7 +31,18 @@ vi.mock('@/components/worktree-base-fallback-notice', () => ({
   requestWorktreeBaseFallbackNotice
 }))
 
-beforeEach(resetWorktreeSliceModuleMemory)
+beforeEach(() => {
+  resetWorktreeSliceModuleMemory()
+  releaseVmCreateCheckout('c1')
+  releaseVmCreateCheckout('c2')
+})
+
+function isCheckoutHidden(repoId: string): boolean {
+  return (
+    withoutHiddenVmWorktrees([{ repoId, path: '/workspace/repo' }], readHiddenVmCheckouts())
+      .length === 0
+  )
+}
 
 function makePendingCreation(
   creationId: string,
@@ -195,6 +212,31 @@ describe('pending worktree creation state', () => {
 
     expect(mockApi.ephemeralVm.cleanup).not.toHaveBeenCalled()
     expect(store.getState().pendingWorktreeCreations.c1).toBeUndefined()
+  })
+
+  it('keeps a cancelled VM checkout hidden once cleaned up, and shows it if the VM was not destroyed', async () => {
+    const store = createTestStore()
+    const request = { ...makePendingCreation('c1').request, ephemeralVmRuntimeId: 'runtime-1' }
+    store.getState().beginPendingWorktreeCreation(makePendingCreation('c1', { request }))
+    hideVmCreateCheckout('c1', { repoId: 'vm-repo', path: '/workspace/repo' })
+    store.getState().removePendingWorktreeCreation('c1')
+    await vi.waitFor(() => expect(mockApi.ephemeralVm.cleanup).toHaveBeenCalledTimes(1))
+    // Let the cleanup chain settle its hide before checking it was kept.
+    for (let i = 0; i < 10; i++) {
+      await Promise.resolve()
+    }
+    expect(isCheckoutHidden('vm-repo')).toBe(true)
+
+    // A recipe whose destroy fails resolves a record rather than rejecting.
+    mockApi.ephemeralVm.cleanup.mockResolvedValueOnce({ cleanupStatus: 'failed' })
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    store
+      .getState()
+      .beginPendingWorktreeCreation(makePendingCreation('c2', { request: { ...request } }))
+    hideVmCreateCheckout('c2', { repoId: 'vm-repo-2', path: '/workspace/repo' })
+    store.getState().removePendingWorktreeCreation('c2')
+    await vi.waitFor(() => expect(isCheckoutHidden('vm-repo-2')).toBe(false))
+    errorSpy.mockRestore()
   })
 
   it('setActiveWorktree dismisses the creation panel even when re-selecting the already-active worktree', () => {

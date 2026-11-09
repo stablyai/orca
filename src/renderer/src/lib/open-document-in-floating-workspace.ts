@@ -1,7 +1,7 @@
 import type { FileDocument } from '../../../shared/file-listing/file-document'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import type { EditorFilesSlice } from '@/store/slices/editor/types/editor-files-slice'
-import { detectLanguage } from './language-detect'
+import { detectLanguage } from '../../../shared/editor-language/editor-language-detect'
 
 /** Open picker/shell-resolved absolute local files in the floating workspace; focused runtime routing would read the wrong machine. */
 export function openDocumentInFloatingWorkspace(

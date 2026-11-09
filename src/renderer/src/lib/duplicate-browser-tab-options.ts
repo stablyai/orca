@@ -1,7 +1,7 @@
-import type { BrowserTab } from '../../../shared/browser-workspace-types'
+import type { BrowserWorkspace } from '../../../shared/browser-workspace-types'
 
 export function buildDuplicatedBrowserTabOptions(
-  source: Pick<BrowserTab, 'title' | 'sessionProfileId' | 'sessionPartition'>
+  source: Pick<BrowserWorkspace, 'title' | 'sessionProfileId' | 'sessionPartition'>
 ): {
   title: string
   sessionProfileId: string | null

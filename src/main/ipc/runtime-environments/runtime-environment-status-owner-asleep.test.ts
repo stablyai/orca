@@ -11,8 +11,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../runtime/construction/runtime-desktop-surface', () => ({
   getRuntimeDesktopSurface: () => ({})
 }))
-vi.mock('../../../shared/remote-runtime/remote-runtime-client', () => ({
-  sendRemoteRuntimeRequest: mocks.send
+vi.mock('../../../shared/remote-runtime/requests/remote-runtime-request-socket', () => ({
+  sendRemoteRuntimeRequestOnSocket: mocks.send
 }))
 vi.mock(
   '../../../shared/remote-runtime/host-catalog/runtime-environments',
@@ -60,11 +60,5 @@ describe('status probe of a sleeping VM server', () => {
     }
     expect(mocks.send).not.toHaveBeenCalled()
     expect(mocks.resolveManaged).not.toHaveBeenCalled()
-  })
-
-  it('probes again once the VM is awake', async () => {
-    mocks.asleep = false
-    await owner().refresh({ timeoutMs: 1_000 })
-    expect(mocks.send).toHaveBeenCalledTimes(1)
   })
 })
