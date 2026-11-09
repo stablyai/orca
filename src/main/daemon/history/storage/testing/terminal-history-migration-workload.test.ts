@@ -97,9 +97,11 @@ it.each([3, 30])(
       expect(results).toEqual(Array(count).fill('canonical'))
       for (let index = 0; index < count; index++) {
         for (const name of ['meta.json', 'checkpoint.json', 'output.log']) {
-          expect(readFileSync(join(root.path, `scope-${index}`, name))).toEqual(
-            readFileSync(join(root.path, String(index), name))
-          )
+          expect(
+            readFileSync(join(root.path, `scope-${index}`, name)).equals(
+              readFileSync(join(root.path, String(index), name))
+            )
+          ).toBe(true)
         }
       }
       const copies = copyStarted.length
@@ -132,9 +134,11 @@ it.each([3, 30])(
       expect(
         await installTerminalHistoryIdentity(root, '0', 'retry-scope', initial, () => true)
       ).toBe('canonical')
-      expect(readFileSync(join(root.path, 'retry-scope/checkpoint.json'))).toEqual(
-        readFileSync(join(root.path, '0/checkpoint.json'))
-      )
+      expect(
+        readFileSync(join(root.path, 'retry-scope/checkpoint.json')).equals(
+          readFileSync(join(root.path, '0/checkpoint.json'))
+        )
+      ).toBe(true)
       expect(readdirSync(root.path).filter((name) => name.startsWith('.identity-copy-'))).toEqual(
         []
       )

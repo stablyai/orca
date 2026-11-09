@@ -1,7 +1,5 @@
-import {
-  closeLegacyTerminalRestores,
-  retireRemovedScopedTerminalRow
-} from '../../pty/legacy-terminal-restore-ownership'
+import { closeLegacyTerminalRestores } from '../../pty/legacy-terminal-restore-ownership'
+import { retireRemovedScopedTerminalRow } from '../../pty/legacy-terminal-retirement'
 import { legacyTerminalIdentityClaims } from './legacy-terminal-identity-claims'
 import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/terminal-row-order'
 import type { PersistedState } from '../../../shared/persisted-state-types'

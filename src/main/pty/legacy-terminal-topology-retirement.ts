@@ -2,7 +2,7 @@ import { TerminalIdentityHandoff } from './terminal-identity-handoff'
 import type { WorkspaceSessionState } from '../../shared/workspace-session/workspace-session-state-types'
 import type { TerminalLayoutSnapshot } from '../../shared/workspace-layout/terminal-tab-types'
 import type { LegacyTerminalIdentityClaims } from '../persistence/loading-store/legacy-terminal-identity-claims'
-import { retireRemovedScopedTerminalRow } from './legacy-terminal-restore-ownership'
+import { retireRemovedScopedTerminalRow } from './legacy-terminal-retirement'
 
 export function collectRetainedTerminalLeaves(
   layout: TerminalLayoutSnapshot | undefined,

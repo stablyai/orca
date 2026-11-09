@@ -1,4 +1,4 @@
-import { retireRemovedScopedTerminalRow } from '../../pty/legacy-terminal-restore-ownership'
+import { retireRemovedScopedTerminalRow } from '../../pty/legacy-terminal-retirement'
 import { legacyTerminalIdentityClaims } from './legacy-terminal-identity-claims'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {

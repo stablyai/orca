@@ -6,9 +6,9 @@ import {
 } from './pane/legacy-pane-identity-selection'
 import {
   admitLegacyTerminalRestore,
-  locateLegacyTerminalRestore,
-  retireScopedTerminal
+  locateLegacyTerminalRestore
 } from '../../pty/legacy-terminal-restore-ownership'
+import { retireScopedTerminal } from '../../pty/legacy-terminal-retirement'
 import type { PaneSpawnOperation } from './pane/pane-spawn-operation'
 import { normalizeFreshPtySessionId } from '../../daemon/sessions/pty-session-id'
 import type { AdoptStablePaneArgs } from './ipc/spawn-types'

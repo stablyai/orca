@@ -1,7 +1,7 @@
 import { LegacyTerminalBindingReplay } from './legacy-terminal-binding-replay'
 import type * as BindingReplay from './workspace-session-terminal-binding-replay'
 import { createHash } from 'node:crypto'
-import * as retirement from '../../pty/legacy-terminal-restore-ownership'
+import * as retirement from '../../pty/legacy-terminal-retirement'
 import { fixture } from './profile-state-delayed-authority-fixture'
 import { TerminalIdentityHandoff } from '../../pty/terminal-identity-handoff'
 import { describe, expect, it, vi } from 'vitest'

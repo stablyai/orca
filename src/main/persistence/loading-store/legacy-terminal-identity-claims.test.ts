@@ -71,17 +71,17 @@ describe('legacy terminal identity ownership', () => {
       isRestorablePtyBinding: () => true,
       hasRestorableSshRemotePtyLease: () => false
     }
-    preserveMissingWorkspaceSessionTerminalBindings(incoming, prior, recovery, {
+    const rebased = preserveMissingWorkspaceSessionTerminalBindings(incoming, prior, recovery, {
       isLocalWorkspace: claims.isLocalWorkspace.bind(claims)
     })
-    expect(incoming.terminalLayoutsByTabId[row.id].ptyIdsByLeafId?.[leaf]).toBe(canonical)
+    expect(rebased.terminalLayoutsByTabId[row.id].ptyIdsByLeafId?.[leaf]).toBe(canonical)
     const removed = session(canonical)
     removed.terminalLayoutsByTabId[row.id].root = null
     const stale = session()
-    preserveMissingWorkspaceSessionTerminalBindings(stale, removed, recovery, {
+    const unchanged = preserveMissingWorkspaceSessionTerminalBindings(stale, removed, recovery, {
       isLocalWorkspace: claims.isLocalWorkspace.bind(claims)
     })
-    expect(stale.terminalLayoutsByTabId[row.id].ptyIdsByLeafId?.[leaf]).toBe('9')
+    expect(unchanged.terminalLayoutsByTabId[row.id].ptyIdsByLeafId?.[leaf]).toBe('9')
     const duplicates = session()
     duplicates.tabsByWorktree['other::/worktree'] = [
       { ...row, id: 'other-tab', worktreeId: 'other::/worktree' }
