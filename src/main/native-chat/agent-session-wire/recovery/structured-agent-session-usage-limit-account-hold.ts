@@ -6,6 +6,10 @@ import {
 } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import type { StructuredAgentSessionHostDeps } from '../host/structured-agent-session-host-types'
 import type { AgentSessionRecordStore } from '../../../runtime/agent-session/records/agent-session-record-store'
+import {
+  agentSessionAccountHomePath,
+  type AgentSessionAccountHome
+} from '../../../../shared/agent-session/lifecycle/agent-session-account-home'
 import { usageLimitContinueIdentity as identity } from './structured-agent-session-usage-limit-chain'
 
 /** The polled usage of the account a chat continues on, as the host attributes it. */
@@ -20,6 +24,16 @@ export type UsageLimitAccountUsage = {
   refresh: () => void
 }
 
+/** Where a launch would bill: a hold never outlives the scope it was taken in. */
+export type UsageLimitAccountScope = {
+  /** Canonical launch home plus billing kind. */
+  scope: string
+  /** The reading that describes this scope's account; absent when none does. */
+  account?: UsageLimitAccountUsage
+  /** Asks for a first reading while the provider has none; a due send waits for it briefly. */
+  bootstrap?: () => void
+}
+
 export type UsageLimitAccountVerdict = {
   /** The latest reset the send waits for: the cut's, or a later one the account still shows spent. */
   resetsAt: number
@@ -31,6 +45,7 @@ export type UsageLimitAccountVerdict = {
 
 type Hold = {
   cut: string
+  scope?: string
   account?: string
   heldUntil?: number
   unknownReset?: boolean
@@ -44,7 +59,20 @@ const READING_WAIT_MS = 120_000
 /** Derived each pass from the polled reading; nothing is saved. A hold only grows for its cut and account. */
 export class UsageLimitAccountHolds {
   private readonly holds = new Map<string, Hold>()
-  private readonly accounts = new Map<string, UsageLimitAccountUsage | undefined>()
+  private readonly scopes = new Map<string, UsageLimitAccountScope | undefined>()
+  /** Shared by every chat of a pass: work scales with accounts, not chats. */
+  private launchHomes = new Map<string, Promise<AgentSessionAccountHome | null>>()
+  private readings = new Map<string, Promise<UsageLimitAccountScope | undefined>>()
+
+  get size(): number {
+    return this.holds.size + this.scopes.size
+  }
+
+  /** Launch homes and readings resolve again, once each, from here on. */
+  beginPass(): void {
+    this.launchHomes = new Map()
+    this.readings = new Map()
+  }
 
   /** Re-attributed each pass: the account a chat continues on follows the host's selection. */
   async attribute(
@@ -55,18 +83,42 @@ export class UsageLimitAccountHolds {
   ): Promise<void> {
     const record = host.store.getRecord(id)
     const read = host.usageLimitAutoContinue?.accountUsage
-    let account: UsageLimitAccountUsage | undefined
+    let scope: UsageLimitAccountScope | undefined
     try {
-      const home = record && ((await host.launchAccountHome?.(record)) ?? record.accountHome)
-      account = home && read ? await read(record.provider, home) : undefined
+      // WSL readings never reach this host, so a WSL launch keeps the cut's own reset.
+      if (record && read && record.location.wslDistro === null) {
+        // Off WSL a launch home follows only the provider's selection, never the chat.
+        let launch = this.launchHomes.get(record.provider)
+        if (!launch) {
+          launch = (async () => (await host.launchAccountHome?.(record)) ?? null)()
+          this.launchHomes.set(record.provider, launch)
+        }
+        const home = (await launch) ?? record.accountHome
+        const path = agentSessionAccountHomePath(home)
+        if (home && path) {
+          const key = JSON.stringify([record.provider, path])
+          let reading = this.readings.get(key)
+          if (!reading) {
+            reading = read(record.provider, home)
+            this.readings.set(key, reading)
+          }
+          scope = await reading
+        }
+      }
     } catch {
       // No attributable account this pass: the cut's own reset and any hold already seen decide.
     }
-    this.accounts.set(id, account)
+    this.scopes.set(id, scope)
+  }
+
+  /** Names the scope and account a send was checked against. */
+  attributionKey(id: string): string | undefined {
+    const scope = this.scopes.get(id)
+    return scope && JSON.stringify([scope.scope, scope.account?.key ?? null])
   }
 
   retain(shown: ReadonlySet<string>): void {
-    for (const cache of [this.holds, this.accounts]) {
+    for (const cache of [this.holds, this.scopes]) {
       for (const id of cache.keys()) {
         if (!shown.has(id)) {
           cache.delete(id)
@@ -75,9 +127,15 @@ export class UsageLimitAccountHolds {
     }
   }
 
+  forget(id: string): void {
+    this.holds.delete(id)
+    this.scopes.delete(id)
+  }
+
   clear(): void {
     this.holds.clear()
-    this.accounts.clear()
+    this.scopes.clear()
+    this.beginPass()
   }
 
   verdict(
@@ -85,13 +143,19 @@ export class UsageLimitAccountHolds {
     cut: { turnItemId: string; resetsAt: number },
     now: number
   ): UsageLimitAccountVerdict {
-    const account = this.accounts.get(id)
+    const scope = this.scopes.get(id)
     let hold = this.holds.get(id)
+    // Nothing attributed and nothing held: the cut decides, and nothing is kept for it.
+    if (!hold && !scope) {
+      return { resetsAt: cut.resetsAt, unknownReset: false, awaitingReading: false }
+    }
+    const account = scope?.account
     if (
       hold?.cut !== identity(cut) ||
+      (scope && hold.scope !== scope.scope) ||
       (account && hold.account !== undefined && hold.account !== account.key)
     ) {
-      hold = { cut: identity(cut) }
+      hold = { cut: identity(cut), ...(scope ? { scope: scope.scope } : {}) }
       this.holds.set(id, hold)
     }
     hold.account = account?.key ?? hold.account
@@ -120,8 +184,7 @@ export class UsageLimitAccountHolds {
       resetsAt,
       unknownReset: hold.unknownReset === true,
       awaitingReading:
-        account !== undefined &&
-        !fresh(resetsAt) &&
+        (account ? !fresh(resetsAt) : scope?.bootstrap !== undefined) &&
         now >= resetsAt + GRACE_MS &&
         now < resetsAt + GRACE_MS + READING_WAIT_MS
     }
@@ -152,10 +215,11 @@ export class UsageLimitAccountHolds {
       return false
     }
     const record = this.holds.get(id)
-    const account = this.accounts.get(id)
-    if (hold.awaitingReading && record && account && record.refreshedFor !== hold.resetsAt) {
+    const scope = this.scopes.get(id)
+    const refresh = scope?.account?.refresh ?? scope?.bootstrap
+    if (hold.awaitingReading && record && refresh && record.refreshedFor !== hold.resetsAt) {
       record.refreshedFor = hold.resetsAt
-      account.refresh()
+      refresh()
     }
     return !hold.awaitingReading
   }

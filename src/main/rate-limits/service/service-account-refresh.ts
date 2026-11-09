@@ -10,6 +10,7 @@ import {
   type ClaudeAccountSelectionTarget
 } from '../../claude-accounts/runtime-selection'
 import type {
+  ProviderRateLimits,
   RateLimitRuntimeTarget,
   RateLimitState,
   CodexRateLimitResetResult
@@ -32,6 +33,11 @@ export abstract class RateLimitServiceAccountRefresh extends RateLimitServiceIna
   /** The home and auth provenance the selected host-runtime reading was taken under. */
   usageReadingAccount(provider: 'claude' | 'codex'): { home: string; provenance: string } | null {
     return this.usageReadingAccounts[provider] ?? null
+  }
+
+  /** One provider's applied reading, without the snapshot work `getState` does. */
+  usageReading(provider: 'claude' | 'codex'): ProviderRateLimits | null {
+    return this.state[provider]
   }
 
   /** An automatic, non-forced read of one provider that waits out its Retry-After. */
