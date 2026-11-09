@@ -30,15 +30,9 @@ export function pullRequestChangeObserver(
   publish: (change: PullRequestChange) => void
 ): PRRefreshOutcomeObserver {
   const published = new Map<string, string>()
-  return (candidate, outcome) => {
-    // A client's own read names no checkout, and that client already holds the answer.
-    const { worktreeId, repoId, branch } = candidate
-    if (!worktreeId) {
-      return
-    }
-    const key = `${worktreeId}\0${branch}`
-    const signature = outcomeSignature(outcome)
-    if (signature === null || published.get(key) === signature) {
+  const publishIfChanged = (change: PullRequestChange, signature: string): void => {
+    const key = `${change.worktreeId}\0${change.branch}`
+    if (published.get(key) === signature) {
       return
     }
     published.delete(key)
@@ -47,6 +41,19 @@ export function pullRequestChangeObserver(
     if (published.size > MAX_TRACKED_CHECKOUTS && oldest !== undefined) {
       published.delete(oldest)
     }
-    publish({ worktreeId, repoId, branch })
+    publish(change)
+  }
+  return (candidate, outcome, aliases) => {
+    const signature = outcomeSignature(outcome)
+    if (signature === null) {
+      return
+    }
+    // One read can stand for several checkouts linked to the same PR. A client's own read names
+    // no checkout, and that client already holds the answer.
+    for (const { worktreeId, repoId, branch } of [candidate, ...aliases]) {
+      if (worktreeId) {
+        publishIfChanged({ worktreeId, repoId: repoId ?? candidate.repoId, branch }, signature)
+      }
+    }
   }
 }

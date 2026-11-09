@@ -28,20 +28,43 @@ describe('pullRequestChangeObserver', () => {
     const published: PullRequestChange[] = []
     const observe = pullRequestChangeObserver((change) => published.push(change))
 
-    observe(candidate, { kind: 'found', pr, fetchedAt: 1 })
+    observe(candidate, { kind: 'found', pr, fetchedAt: 1 }, [])
     // Same PR read again, with a field outside the change set moved.
-    observe(candidate, { kind: 'found', pr: { ...pr, title: 'Renamed' }, fetchedAt: 2 })
-    observe(candidate, {
-      kind: 'upstream-error',
-      errorType: 'network',
-      message: 'offline',
-      fetchedAt: 3
-    })
-    observe(candidate, { kind: 'found', pr: { ...pr, checksStatus: 'success' }, fetchedAt: 4 })
+    observe(candidate, { kind: 'found', pr: { ...pr, title: 'Renamed' }, fetchedAt: 2 }, [])
+    observe(
+      candidate,
+      {
+        kind: 'upstream-error',
+        errorType: 'network',
+        message: 'offline',
+        fetchedAt: 3
+      },
+      []
+    )
+    observe(candidate, { kind: 'found', pr: { ...pr, checksStatus: 'success' }, fetchedAt: 4 }, [])
 
     expect(published).toEqual([
       { worktreeId: 'repo-1::/repo', repoId: 'repo-1', branch: 'feature' },
       { worktreeId: 'repo-1::/repo', repoId: 'repo-1', branch: 'feature' }
+    ])
+  })
+
+  // Checkouts linked to the same PR share one coordinator read.
+  it('publishes for every checkout one read stood for', () => {
+    const published: PullRequestChange[] = []
+    const observe = pullRequestChangeObserver((change) => published.push(change))
+    const sibling = {
+      cacheKey: '/repo-b::other',
+      repoPath: '/repo-b',
+      branch: 'other',
+      worktreeId: 'repo-1::/repo-b'
+    }
+
+    observe(candidate, { kind: 'found', pr, fetchedAt: 1 }, [candidate, sibling])
+
+    expect(published).toEqual([
+      { worktreeId: 'repo-1::/repo', repoId: 'repo-1', branch: 'feature' },
+      { worktreeId: 'repo-1::/repo-b', repoId: 'repo-1', branch: 'other' }
     ])
   })
 })
