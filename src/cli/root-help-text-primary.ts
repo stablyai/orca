@@ -78,6 +78,7 @@ export const ROOT_HELP_TEXT_PRIMARY = [
   '',
   'Environment Recipes:',
   '  vm recipe doctor          Validate a per-workspace environment recipe',
+  '  vm env doctor             Check that this environment can run agents',
   '',
   'Automations:',
   '  automations list          List scheduled Orca automations',
