@@ -40,8 +40,8 @@ type Row = {
   // Every read and write of the row runs in order, the load first.
   chain: Promise<void>
   state: 'pending' | 'loaded'
-  // A row whose read fails twice stays in memory for the page, so every hook and save doesn't read again.
-  failedReads: number
+  // After a failed read, no hook or save reads again until then; the text stays in memory meanwhile.
+  retryReadAt: number
   // What the backend holds; undefined after a failed write, so the next save cannot match it.
   written: string | undefined
   timer: ReturnType<typeof setTimeout> | null
@@ -50,7 +50,8 @@ type Row = {
 
 const rows = new Map<string, Row>()
 
-const MAX_FAILED_READS = 2
+// One retry per row at most this often, however many hooks open it or saves land.
+const READ_RETRY_MS = 10_000
 
 /** A value past the store's cap is refused and would leave an older value behind, so owners keep none instead. */
 export function fitsDeviceStore(value: unknown): boolean {
@@ -131,14 +132,14 @@ function enqueue(row: Row, step: () => Promise<void>): Promise<void> {
 }
 
 async function load(row: Row): Promise<void> {
-  if (row.state !== 'pending' || row.failedReads >= MAX_FAILED_READS) {
+  if (row.state !== 'pending' || Date.now() < row.retryReadAt) {
     return
   }
   row.backend ??= row.owner.backend()
   const read = await row.backend.read()
   if (!read.ok) {
-    // A dropped or refused read is retried once, backend re-picked; until then the text stays in memory.
-    row.failedReads += 1
+    // A dropped or refused read is retried later, backend re-picked; until then the text stays in memory.
+    row.retryReadAt = Date.now() + READ_RETRY_MS
     row.backend = null
     return
   }
@@ -202,7 +203,7 @@ export function durableDraftRow(key: string, owner: DurableDraftRowOwner): Durab
     backend: null,
     chain: Promise.resolve(),
     state: 'pending',
-    failedReads: 0,
+    retryReadAt: 0,
     written: undefined,
     timer: null,
     handle: {
