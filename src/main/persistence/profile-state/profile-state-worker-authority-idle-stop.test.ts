@@ -42,6 +42,20 @@ async function idleFixture(onFailure?: (error: Error) => void) {
 }
 
 describe('worker authority idle stop', () => {
+  it('leaves an idle writer stopped for optional catalog reads and still reopens for the next save', async () => {
+    const { authority, close, directory, readState } = await idleFixture()
+    await idleStopped(close)
+    const constructed = threadFailures.constructed
+    expect(
+      await authority.readTerminalClaims({ userDataPath: directory, profileId: 'inactive' })
+    ).toEqual({ kind: 'unknown' })
+    expect(threadFailures.constructed).toBe(constructed)
+    await authority.writeSerializedDomains([
+      { domain: 'ui', payload: '{"savedAfterOptionalRead":true}' }
+    ])
+    expect(readState().ui).toEqual({ savedAfterOptionalRead: true })
+  })
+
   it('retries a failed reopen on the next write instead of wedging saving', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     const { authority, close, readState } = await idleFixture()

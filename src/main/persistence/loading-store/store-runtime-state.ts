@@ -43,6 +43,9 @@ export type DurableProfileStateMutation<T> = {
 
 export type StoreRuntimeOptions = {
   dataFile?: string
+  /** Outer root owning terminal history, daemon runtime and the instance lock. */
+  userDataPath?: string
+  profileStateLocation?: { profileId: string; databaseFile: string }
   storageAuthority?: AutomationStorageAuthority
   profileStateAuthority?: ProfileStatePersistenceAuthority
   paneShellPath?: (defaultShell: string | undefined) => string
@@ -51,6 +54,8 @@ export type StoreRuntimeOptions = {
 export class StoreRuntimeState {
   state!: PersistedState
   readonly dataFile: string
+  readonly userDataPath: string | undefined
+  readonly profileStateLocation: StoreRuntimeOptions['profileStateLocation']
   readonly storageAuthority: AutomationStorageAuthority
   readonly profileStateAuthority: ProfileStatePersistenceAuthority | undefined
   readonly paneShellPath: (defaultShell: string | undefined) => string
@@ -123,6 +128,8 @@ export class StoreRuntimeState {
 
   constructor(options: StoreRuntimeOptions = {}) {
     this.dataFile = options.dataFile ?? getDataFile()
+    this.userDataPath = options.userDataPath
+    this.profileStateLocation = options.profileStateLocation
     this.storageAuthority = options.storageAuthority ?? 'desktop'
     this.profileStateAuthority = options.profileStateAuthority
     this.paneShellPath = options.paneShellPath ?? resolveNewPaneShellPath

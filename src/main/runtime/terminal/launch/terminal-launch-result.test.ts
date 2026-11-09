@@ -5,6 +5,8 @@ import { resolveTerminalLaunchResult, terminalLaunchPublicFacts } from './termin
 
 it('keeps fresh launch facts when an accepted completion follows its moved pane through result copies', () => {
   const attempt: LegacyTerminalRestoreAttempt = {
+    catalog: { ready: Promise.resolve(true), complete: true, finish: () => {} },
+    readinessDeadline: 1000,
     workspace: 'workspace',
     tabId: 'source',
     leafId: 'leaf',

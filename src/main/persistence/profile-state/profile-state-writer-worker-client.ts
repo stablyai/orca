@@ -1,5 +1,9 @@
 import type { ProfileStateDomainReplacement } from '../loading-store/profile-state-authority'
 import { ProfileStateWriterConnection } from './profile-state-writer-connection'
+import type {
+  ProfileTerminalClaims,
+  ProfileTerminalClaimsRequest
+} from './profile-state-terminal-claims-contract'
 export { resolveProfileStateWriterWorkerPath } from './profile-state-writer-worker-path'
 export {
   ProfileStateWriterError,
@@ -8,6 +12,12 @@ export {
 export type { ProfileStateWriterInitialization } from './profile-state-writer-protocol'
 
 export class ProfileStateWriteWorkerClient extends ProfileStateWriterConnection {
+  readTerminalClaims(request: ProfileTerminalClaimsRequest): Promise<ProfileTerminalClaims> {
+    return this.dispatch({ command: 'read-terminal-claims', ...request }).then(
+      (response) => response.terminalClaims ?? { kind: 'unknown' }
+    )
+  }
+
   assertWritable(): void {
     this.assertDispatchable()
   }

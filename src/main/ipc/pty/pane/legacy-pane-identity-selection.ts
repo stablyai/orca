@@ -1,12 +1,10 @@
 import {
   acquireProspectivePtySpawn,
   bindProspectivePtySpawn,
-  carryProspectivePtySpawn,
   type ProspectivePtySpawn
 } from '../../../pty/prospective-pty-spawn'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { AdoptStablePaneArgs, PtySpawnIpcArgs } from '../ipc/spawn-types'
-import type { PtySpawnOptions } from '../../../providers/pty-provider-contract'
 import { peekDaemonHistoryRoot } from '../../../daemon/launch/daemon-launch-paths'
 import { legacyPanePtySessionId } from '../../../daemon/sessions/pty-session-id'
 import {
@@ -20,44 +18,21 @@ import type { PaneSpawnOperation } from './pane-spawn-operation'
 import type { LegacyTerminalRestoreAttempt } from '../../../pty/legacy-terminal-restore-ownership'
 import { getProvider } from '../provider/registry'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { prepareLegacyPaneCatalogReadiness } from './legacy-pane-catalog-readiness'
 
-const selectedIdentity = Symbol('selectedLegacyTerminalIdentity')
-type Selection = { id: string; attempt: LegacyTerminalRestoreAttempt }
-export type LegacyIdentityCarrier = Pick<PtySpawnOptions, 'cols' | 'rows'> & {
-  [selectedIdentity]?: Selection
-}
-
-export function carrySelectedLegacyIdentity(
-  source: LegacyIdentityCarrier,
-  target: LegacyIdentityCarrier
-): void {
-  carryProspectivePtySpawn(source, target)
-  const selection = source[selectedIdentity]
-  if (selection) {
-    Object.assign(target, { [selectedIdentity]: selection })
-  }
-}
-
-export function assertSelectedLegacyIdentityOpen(options: LegacyIdentityCarrier): void {
-  const selection = options[selectedIdentity]
-  if (selection?.attempt.closed) {
-    throw new Error('terminal_pane_owner_changed')
-  }
-}
-
-export function selectedLegacyIdentity(
-  options: LegacyIdentityCarrier | undefined
-): Selection | undefined {
-  return options?.[selectedIdentity]
-}
-
-export function legacyPaneRestoreAttempt(
-  options: (LegacyIdentityCarrier & { paneSpawnOperation?: PaneSpawnOperation }) | undefined
-): LegacyTerminalRestoreAttempt | undefined {
-  return (
-    selectedLegacyIdentity(options)?.attempt ?? options?.paneSpawnOperation?.legacyRestore?.attempt
-  )
-}
+import {
+  selectedIdentity,
+  selectedLegacyIdentity,
+  carrySelectedLegacyIdentity,
+  type LegacyIdentityCarrier
+} from './legacy-pane-identity-carrier'
+export {
+  selectedLegacyIdentity,
+  carrySelectedLegacyIdentity,
+  assertSelectedLegacyIdentityOpen,
+  legacyPaneRestoreAttempt,
+  type LegacyIdentityCarrier
+} from './legacy-pane-identity-carrier'
 
 export function applyLegacyPaneAcquisition(
   operation: PaneSpawnOperation,
@@ -80,12 +55,18 @@ export function applyLegacyPaneAcquisition(
   }
   const carrier = context.carrier
   const selection = selectedLegacyIdentity(carrier)
-  if (!carrier || !selection) {
+  if (!carrier || !context.selection) {
     return false
   }
-  const changed = target.sessionId !== selection.id || selectedLegacyIdentity(target) !== selection
-  carrySelectedLegacyIdentity(carrier, target)
-  target.sessionId = selection.id
+  context.selection.assertCurrent()
+  const id = selection?.id ?? context.selection.originalId
+  const changed =
+    target.sessionId !== id ||
+    (selection !== undefined && selectedLegacyIdentity(target) !== selection)
+  if (selection) {
+    carrySelectedLegacyIdentity(carrier, target)
+  }
+  target.sessionId = id
   target.signal = target.signal
     ? AbortSignal.any([target.signal, context.attempt.close.signal])
     : context.attempt.close.signal
@@ -159,11 +140,8 @@ export function legacyPaneIdentitySelection(
     return null
   }
   const root = peekDaemonHistoryRoot()
-  if (!root) {
-    return null
-  }
   const canonicalId = legacyPanePtySessionId(workspace, pane.leafId, originalId)
-  const revision = store.legacyTerminalIdentityAuthority.revision
+  let revision = store.legacyTerminalIdentityAuthority.revision
   const incarnation = session.terminalPtyIncarnationsByPaneKey?.[paneKey]
   attempt.originalId = originalId
   attempt.originalIncarnation = incarnation
@@ -175,15 +153,25 @@ export function legacyPaneIdentitySelection(
       return false
     }
     const now = store.getWorkspaceSession()
+    const row = now.tabsByWorktree?.[workspace]?.find((row) => row.id === attempt.tabId)
+    const layout = now.terminalLayoutsByTabId?.[attempt.tabId!]
+    const id =
+      layout?.ptyIdsByLeafId?.[attempt.leafId!] ??
+      (layout?.root?.type === 'leaf' && layout.root.leafId === attempt.leafId
+        ? row?.ptyId
+        : undefined)
     return (
-      now.tabsByWorktree?.[workspace]?.some((row) => row.id === attempt.tabId) === true &&
-      now.terminalLayoutsByTabId?.[attempt.tabId!]?.ptyIdsByLeafId?.[attempt.leafId!] ===
-        originalId &&
+      !!row &&
+      terminalTreeHasLeaf(layout?.root, attempt.leafId!) &&
+      id === originalId &&
       now.terminalPtyIncarnationsByPaneKey?.[currentPaneKey()] === incarnation
     )
   }
   let committed: boolean | undefined
   const hasCanonical = (refresh = false): boolean => {
+    if (!root) {
+      return false
+    }
     if (refresh || committed === undefined) {
       committed = hasCommittedTerminalHistoryIdentity(root.path, canonicalId)
     }
@@ -200,22 +188,37 @@ export function legacyPaneIdentitySelection(
       rows: args.rows
     }))
   return {
+    assertCurrent: () => {
+      if (!current()) {
+        throw new Error('terminal_pane_owner_changed')
+      }
+    },
     release: () => prospective?.release(),
     follow,
     originalId,
     canonicalSelected: () =>
-      root.matchesProfile(store.legacyTerminalIdentityAuthority.canonicalProfile) && hasCanonical(),
+      !!root &&
+      root.matchesProfile(store.legacyTerminalIdentityAuthority.canonicalProfile) &&
+      hasCanonical(),
     prepareOwner: async () => {
-      await Promise.all([
-        root.profileReady(),
-        store.legacyTerminalIdentityAuthority.canonicalProfileReady
-      ])
-      if (!root.matchesProfile(store.legacyTerminalIdentityAuthority.canonicalProfile)) {
+      if (!root) {
         return
       }
-      if (attempt.closed) {
+      if (
+        !(await prepareLegacyPaneCatalogReadiness(
+          root,
+          store.legacyTerminalIdentityAuthority,
+          attempt,
+          args.signal,
+          hasCanonical
+        ))
+      ) {
+        return
+      }
+      if (!current()) {
         throw new Error('terminal_pane_owner_changed')
       }
+      revision = store.legacyTerminalIdentityAuthority.revision
       if (
         !store.legacyTerminalIdentityAuthority.unique(workspace, currentPaneKey(), originalId) &&
         !hasCanonical()
@@ -242,7 +245,7 @@ export function legacyPaneIdentitySelection(
       operation: PaneSpawnOperation,
       target: LegacyIdentityCarrier & { sessionId?: string }
     ) => {
-      if (!root.matchesProfile(store.legacyTerminalIdentityAuthority.canonicalProfile)) {
+      if (!root || !root.matchesProfile(store.legacyTerminalIdentityAuthority.canonicalProfile)) {
         return
       }
       if (!current()) {
@@ -253,6 +256,7 @@ export function legacyPaneIdentitySelection(
       let selected = hasCanonical(true)
       if (
         !selected &&
+        !attempt.catalogDeclined &&
         (prospective ?? (await admitTarget())) !== null &&
         store.legacyTerminalIdentityAuthority.unique(workspace, currentPaneKey(), originalId)
       ) {

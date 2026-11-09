@@ -1,10 +1,12 @@
+import {
+  catalogEpoch,
+  type LegacyClaimState,
+  type LegacyClaimLayout,
+  type LegacyTerminalCatalogEpoch
+} from './legacy-terminal-claim-contract'
+export type * from './legacy-terminal-claim-contract'
 import { realpath } from 'node:fs/promises'
-import { dirname } from 'node:path'
 import type { PersistedState } from '../../../shared/persisted-state-types'
-import type {
-  TerminalLayoutSnapshot,
-  TerminalTab
-} from '../../../shared/workspace-layout/terminal-tab-types'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../../shared/workspace-scope'
 import {
@@ -29,8 +31,9 @@ export class LegacyTerminalIdentityClaims {
   revision = 0
   canonicalProfile: string | undefined
   canonicalProfileReady: Promise<void> = Promise.resolve()
+  private externalCatalog = catalogEpoch(true)
 
-  constructor(private readonly state: PersistedState) {
+  constructor(private readonly state: LegacyClaimState) {
     this.refreshCatalog(false)
     this.observeMembership()
   }
@@ -169,11 +172,7 @@ export class LegacyTerminalIdentityClaims {
     this.admit(id, this.kind(workspace) === 'local' ? ownerKey(workspace, pane) : null)
   }
 
-  observeLayout(
-    workspace: string | undefined,
-    tabId: string,
-    layout: TerminalLayoutSnapshot
-  ): void {
+  observeLayout(workspace: string | undefined, tabId: string, layout: LegacyClaimLayout): void {
     for (const [leafId, id] of Object.entries(layout.ptyIdsByLeafId ?? {})) {
       if (workspace) {
         this.observeBinding(workspace, makePaneKey(tabId, leafId), id)
@@ -185,8 +184,8 @@ export class LegacyTerminalIdentityClaims {
 
   observeRow(
     workspace: string,
-    row: TerminalTab,
-    layout?: TerminalLayoutSnapshot,
+    row: { id: string; ptyId?: string | null },
+    layout?: LegacyClaimLayout,
     remoteId?: string
   ): void {
     if (
@@ -230,9 +229,43 @@ export class LegacyTerminalIdentityClaims {
     )
   }
 
+  potentiallyLocalNumericIds(): string[] {
+    return [...this.owners.keys()]
+  }
+
+  captureExternalCatalog(): LegacyTerminalCatalogEpoch {
+    return this.externalCatalog
+  }
+
+  invalidateExternalCatalog(): LegacyTerminalCatalogEpoch {
+    this.externalCatalog.finish(false)
+    this.externalCatalog = catalogEpoch(false)
+    this.revision++
+    return this.externalCatalog
+  }
+
+  publishExternalCatalog(
+    epoch: LegacyTerminalCatalogEpoch,
+    ids: readonly string[],
+    complete: boolean
+  ): void {
+    if (epoch !== this.externalCatalog) {
+      return
+    }
+    if (complete) {
+      for (const id of ids) {
+        this.admit(id, null)
+      }
+      epoch.complete = true
+      this.revision++
+    }
+    epoch.finish(complete)
+  }
+
   unique(workspace: string, pane: string, id: string): boolean {
     workspace = normalizeWorkspaceSessionKeyToWorkspaceId(workspace)
     return (
+      this.externalCatalog.complete &&
       this.kind(workspace) === 'local' &&
       numeric(id) &&
       this.owners.has(id) &&
@@ -243,13 +276,13 @@ export class LegacyTerminalIdentityClaims {
 
 export function initializeLegacyTerminalIdentityClaims(runtime: {
   state: PersistedState
-  dataFile?: string
+  userDataPath?: string
 }): LegacyTerminalIdentityClaims {
   const claims = new LegacyTerminalIdentityClaims(runtime.state)
   claimsByRuntime.set(runtime, claims)
   claimsByState.set(runtime.state, claims)
-  if (runtime.dataFile) {
-    claims.canonicalProfileReady = realpath(dirname(runtime.dataFile))
+  if (runtime.userDataPath) {
+    claims.canonicalProfileReady = realpath(runtime.userDataPath)
       .then((path) => {
         claims.canonicalProfile = path
       })

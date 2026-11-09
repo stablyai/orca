@@ -1,6 +1,8 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { ProfileStateSqliteAuthority } from './profile-state-sqlite-authority'
 import { writeVersionedProfileStateExport } from './legacy-json/profile-state-versioned-export'
+import { readProfileTerminalClaims } from './profile-state-terminal-claims-reader'
+import type { ProfileTerminalClaims } from './profile-state-terminal-claims-contract'
 import {
   encodeProfileStateWriterError,
   ProfileStateWriterError
@@ -39,6 +41,7 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
     throw new Error('Profile state writer is not initialized')
   }
   let exportedRevision: number | null | undefined
+  let terminalClaims: ProfileTerminalClaims | undefined
   switch (request.command) {
     case 'write-state':
       authority.writeSerializedState(Buffer.from(request.payload))
@@ -57,6 +60,9 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
       break
     case 'assert-revision':
       authority.assertCurrentRevision()
+      break
+    case 'read-terminal-claims':
+      terminalClaims = await readProfileTerminalClaims(request)
       break
     case 'export-json':
       authority.assertCurrentRevision()
@@ -79,6 +85,7 @@ async function execute(request: ProfileStateWriterRequest): Promise<ProfileState
     id: request.id,
     ok: true,
     revision: authority.revision,
+    ...(terminalClaims === undefined ? {} : { terminalClaims }),
     ...(exportedRevision === undefined ? {} : { exportedRevision })
   }
 }

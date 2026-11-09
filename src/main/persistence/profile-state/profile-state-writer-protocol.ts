@@ -1,5 +1,11 @@
 import type { ProfileStateDomainReplacement } from '../loading-store/profile-state-authority'
 import { isRecord } from './profile-state-document-validation'
+import {
+  isProfileTerminalClaimsRequest,
+  isProfileTerminalClaims,
+  type ProfileTerminalClaims,
+  type ProfileTerminalClaimsRequest
+} from './profile-state-terminal-claims-contract'
 
 export type ProfileStateWriterInitialization = {
   databasePath: string
@@ -19,6 +25,7 @@ export type ProfileStateWriterCommand =
       runPayloads: readonly string[]
     }
   | { command: 'assert-revision' }
+  | ({ command: 'read-terminal-claims' } & ProfileTerminalClaimsRequest)
   /** Only a graceful shutdown refreshes the downgrade copy; maintenance and quarantine must not write. */
   | { command: 'close'; refreshLegacyDocuments?: boolean }
   | { command: 'export-json' | 'export-latest'; targetPath: string }
@@ -36,7 +43,13 @@ export type ProfileStateWriterErrorData = {
   cause?: { code?: string; errcode?: number; message: string }
 }
 export type ProfileStateWriterResponse =
-  | { id: number; ok: true; revision: number; exportedRevision?: number | null }
+  | {
+      id: number
+      ok: true
+      revision: number
+      exportedRevision?: number | null
+      terminalClaims?: ProfileTerminalClaims
+    }
   | { id: number; ok: false; error: ProfileStateWriterErrorData }
 
 export function isProfileStateRevision(value: unknown): value is number {
@@ -74,6 +87,8 @@ export function isProfileStateWriterRequest(value: unknown): value is ProfileSta
       return value.payload instanceof Uint8Array
     case 'assert-revision':
       return true
+    case 'read-terminal-claims':
+      return isProfileTerminalClaimsRequest(value)
     case 'close':
       return (
         value.refreshLegacyDocuments === undefined ||
@@ -125,6 +140,7 @@ export function isProfileStateWriterResponse(value: unknown): value is ProfileSt
   }
   return value.ok === true
     ? isProfileStateRevision(value.revision) &&
+        (value.terminalClaims === undefined || isProfileTerminalClaims(value.terminalClaims)) &&
         (value.exportedRevision === undefined ||
           value.exportedRevision === null ||
           isProfileStateRevision(value.exportedRevision))

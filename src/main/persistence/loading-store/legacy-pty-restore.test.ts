@@ -285,6 +285,7 @@ it('keeps the canonical history address across a durable move and a fresh Store 
   expect(saved.workspaceSession.terminalLayoutsByTabId[movedTab].ptyIdsByLeafId[leafId]).toBe('9')
   await f.store.freezeWritesAsync()
   const reopened = new Store({
+    userDataPath: f.profile,
     profileStateAuthority: new ProfileStateSqliteAuthority(
       join(f.profile, 'profile-state.db'),
       'coordination-test'

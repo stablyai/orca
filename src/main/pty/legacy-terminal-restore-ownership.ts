@@ -1,9 +1,15 @@
-import type { LegacyTerminalIdentityClaims } from '../persistence/loading-store/legacy-terminal-identity-claims'
+import type {
+  LegacyTerminalIdentityClaims,
+  LegacyTerminalCatalogEpoch
+} from '../persistence/loading-store/legacy-terminal-identity-claims'
 import type { WorktreePtyHostFence } from '../runtime/workspaces/removal/worktree-pty-host-fence'
 import type { TerminalSurfaceCloseTarget } from '../../shared/workspace-layout/terminal-surface-close-target'
 import { normalizeWorkspaceSessionKeyToWorkspaceId } from '../../shared/workspace-scope'
 
 export type LegacyTerminalRestoreAttempt = {
+  catalog: LegacyTerminalCatalogEpoch
+  readinessDeadline: number
+  catalogDeclined?: true
   workspace: string
   tabId?: string
   leafId?: string
@@ -38,6 +44,8 @@ export function admitLegacyTerminalRestore(
   const attempts = tabs.get(tabId ?? '') ?? new Set<LegacyTerminalRestoreAttempt>()
   tabs.set(tabId ?? '', attempts)
   const attempt: LegacyTerminalRestoreAttempt = {
+    catalog: authority.captureExternalCatalog(),
+    readinessDeadline: Date.now() + LEGACY_TERMINAL_CATALOG_WAIT_MS,
     workspace,
     tabId,
     leafId,
@@ -60,6 +68,8 @@ export function admitLegacyTerminalRestore(
     }
   }
 }
+
+const LEGACY_TERMINAL_CATALOG_WAIT_MS = 1_000
 
 export function closeLegacyTerminalRestores(
   authority: LegacyTerminalIdentityClaims,

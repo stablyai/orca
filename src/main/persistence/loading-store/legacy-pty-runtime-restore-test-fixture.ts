@@ -1,3 +1,4 @@
+// @orca-isolated-worker: fixture re-mocks must retain the runtime controller's provider registry.
 import { vi } from 'vitest'
 import { createPtySpawnCommitDependencies } from './pty-spawn-commit-dependencies-fixture'
 import { adoptStablePane } from '../../ipc/pty/pane/adopt-stable'
@@ -24,8 +25,9 @@ vi.mock('../../ipc/pty/host-env/assembly', () => ({
   buildPtyHostEnv: async (_id: string, env: Record<string, string> | undefined) => ({ ...env })
 }))
 
-import { type restoreFixture, workspace, tabId, leafId } from './legacy-pty-restore-test-fixture'
-export function installedRestore(f: Awaited<ReturnType<typeof restoreFixture>>) {
+import { workspace, tabId, leafId } from './legacy-pty-restore-test-fixture'
+import type { Store } from './store'
+export function installedRestore(f: { store: Store }) {
   const runtime = new OrcaRuntimeService(f.store)
   const deps = createPtySpawnCommitDependencies(runtime, f.store)
   Object.defineProperty(deps, 'mainWindow', { value: null })

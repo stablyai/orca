@@ -87,6 +87,10 @@ describe('worker authority close admission', () => {
       code: 'profile-state-writer-closed'
     })
 
+    await expect(
+      authority.readTerminalClaims({ userDataPath: directory, profileId: 'inactive' })
+    ).resolves.toEqual({ kind: 'unknown' })
+
     release.resolve()
     await closing
     expect(closeWriter).toHaveBeenCalledOnce()

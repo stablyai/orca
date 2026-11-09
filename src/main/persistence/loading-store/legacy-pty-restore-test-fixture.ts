@@ -1,6 +1,6 @@
 import type { AcquisitionArgs } from '../../ipc/pty/pane/legacy-pane-acquisition-context'
 import { admitProspectivePtySpawn } from '../../pty/prospective-pty-spawn'
-import { expect, onTestFinished, vi } from 'vitest'
+import { onTestFinished, vi } from 'vitest'
 import { fixture, deferred } from './profile-state-delayed-authority-fixture'
 import { getAppEnvironment, setAppEnvironment } from '../../../shared/app-environment'
 import { acquireOrcadInstanceLock } from '../../orcad/orcad-instance-lock'
@@ -18,6 +18,7 @@ import { SessionNotFoundError } from '../../daemon/protocol/daemon-errors'
 import type { IPtyProvider, PtySpawnOptions } from '../../providers/pty-provider-contract'
 import { terminalSurfaceCloseMutation } from '../../runtime/terminal/surface/terminal-surface-close'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import type { Store } from './store'
 
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({
@@ -41,7 +42,13 @@ export const paneKey = `${tabId}:${leafId}`
 
 export async function restoreFixture() {
   const { store, readState, authority } = await fixture()
-  const profile = store.getProfileStorageDirectory()
+  return Object.assign(await restoreFixtureForStore(store, store.getProfileStorageDirectory()), {
+    readState,
+    authority
+  })
+}
+
+export async function restoreFixtureForStore(store: Store, profile: string) {
   const environment = getAppEnvironment()
   setAppEnvironment({
     ...environment,
@@ -66,17 +73,18 @@ export async function restoreFixture() {
       alternateScreen: false
     }
   })
-  await store.admitTerminalPane({ type: 'createTerminalTab', workspace, tabId, leafId })
-  // Legacy renderer-owned snapshots predate main's membership watermark.
-  delete store.getWorkspaceSession().terminalTopologyRevisionByRepoId
-  await store.persistPtyBinding({
-    worktreeId: workspace,
-    tabId,
-    leafId,
-    ptyId: '9',
-    mayCreate: false
-  })
-  expect(store.legacyTerminalIdentityAuthority.unique(workspace, paneKey, '9')).toBe(true)
+  if (!store.getWorkspaceSession().terminalLayoutsByTabId?.[tabId]?.ptyIdsByLeafId?.[leafId]) {
+    await store.admitTerminalPane({ type: 'createTerminalTab', workspace, tabId, leafId })
+    // Legacy renderer-owned snapshots predate main's membership watermark.
+    delete store.getWorkspaceSession().terminalTopologyRevisionByRepoId
+    await store.persistPtyBinding({
+      worktreeId: workspace,
+      tabId,
+      leafId,
+      ptyId: '9',
+      mayCreate: false
+    })
+  }
   const legacySnapshot = structuredClone(store.getWorkspaceSession())
   const alive = new Set<string>()
   const seen: { id: string; attachOnly: boolean }[] = []
@@ -253,7 +261,6 @@ export async function restoreFixture() {
   })
   return {
     store,
-    authority,
     start,
     close,
     alive,
@@ -261,7 +268,6 @@ export async function restoreFixture() {
     seen,
     provider,
     legacySnapshot,
-    readState,
     profile,
     pauseFresh: () => {
       nextFresh = deferred<void>()

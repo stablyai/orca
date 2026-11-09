@@ -1,6 +1,10 @@
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
+import type {
+  ProfileTerminalClaims,
+  ProfileTerminalClaimsRequest
+} from '../profile-state/profile-state-terminal-claims-contract'
 
 export type ProfileStateMaintenance = {
   resume(): Promise<void>
@@ -58,6 +62,7 @@ export type AsyncProfileStateAuthority = Omit<
   readonly asynchronous: true
   assertWritable(): void
   abort(): Promise<void>
+  readTerminalClaims?: (request: ProfileTerminalClaimsRequest) => Promise<ProfileTerminalClaims>
   assertCurrentRevision(): Promise<void>
   writeSerializedDomains(replacements: readonly ProfileStateDomainReplacement[]): Promise<void>
   writeSerializedAutomationRuns(

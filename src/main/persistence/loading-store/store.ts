@@ -1,5 +1,6 @@
 import type { LegacyTerminalIdentityClaims } from './legacy-terminal-identity-claims'
 import { initializeLegacyTerminalIdentityClaims } from './legacy-terminal-identity-claims'
+import { LegacyTerminalProfileCatalog } from './legacy-terminal-profile-catalog'
 import { dirname } from 'node:path'
 import {
   setMigrationUnsupportedPty,
@@ -30,18 +31,17 @@ import {
   migrateLegacyOpenCodeGoApiKey,
   type OpenCodeGoApiKeyTarget
 } from './legacy-opencode-go-api-key-migration'
-import { enqueuePrimaryStateOperation, writeToDiskAsync } from './primary-state-writes'
+import { enqueueProfileExport } from './live-profile-state-export'
 import type { ProfileStateDatabaseQuarantine } from '../profile-state/profile-state-database-quarantine'
 import { writeVersionedProfileStateExport } from '../profile-state/legacy-json/profile-state-versioned-export'
 import { createInitialHomeWorkspaceState } from './initial-home-workspace'
 import {
-  beginProfileStateMaintenance,
+  beginCatalogProfileMaintenance,
   freezeProfileStateWrites,
   freezeProfileStateWritesAsync,
   type ProfileStateMaintenanceOptions
 } from './profile-state-maintenance'
 import type {
-  AsyncProfileStateAuthority,
   ProfileStateAuthorityInitialState,
   ProfileStateStartupPaneAlias,
   ProfileStatePersistenceAuthority,
@@ -71,6 +71,7 @@ export type PtyBindingSourceExpectation = {
 // oxlint-disable-next-line typescript-eslint/no-unsafe-declaration-merging -- Store installs the exact concrete domain class descriptors and contexts below
 export class Store {
   readonly legacyTerminalIdentityAuthority: LegacyTerminalIdentityClaims
+  private readonly legacyTerminalProfileCatalog: LegacyTerminalProfileCatalog
   private readonly runtime: StoreRuntimeState
   private readonly domains: StoreDomains
   private readonly state: PersistedState
@@ -184,6 +185,19 @@ export class Store {
       }
     }
     this.legacyTerminalIdentityAuthority = initializeLegacyTerminalIdentityClaims(this.runtime)
+    this.legacyTerminalProfileCatalog = new LegacyTerminalProfileCatalog(
+      this.runtime,
+      this.domains.writes,
+      this.legacyTerminalIdentityAuthority
+    )
+  }
+
+  beginLegacyTerminalProfileChange(): (changedIds?: readonly string[]) => void {
+    return this.legacyTerminalProfileCatalog.beginChange()
+  }
+
+  invalidateLegacyTerminalProfileCatalog(): void {
+    this.legacyTerminalProfileCatalog.invalidate()
   }
 
   /** Retain the legacy settings key until migration to the main-owned store succeeds. */
@@ -246,32 +260,9 @@ export class Store {
     if (!this.runtime.profileStateAuthority?.asynchronous) {
       return Promise.resolve(this.writeLatestProfileStateJsonExport())
     }
-    return this.enqueueProfileExport((authority) =>
+    return enqueueProfileExport(this.runtime, this.domains.writes, (authority) =>
       authority.writeLatestJsonExport(this.runtime.dataFile)
     )
-  }
-
-  private enqueueProfileExport(
-    exportState: (authority: AsyncProfileStateAuthority) => Promise<number | undefined>
-  ): Promise<number | undefined> {
-    if (
-      this.runtime.writesFrozen ||
-      this.runtime.quitFlushStarted ||
-      this.runtime.profileMaintenancePending
-    ) {
-      return Promise.reject(new Error('Cannot export finalized profile persistence'))
-    }
-    const authority = this.runtime.profileStateAuthority
-    if (!authority?.asynchronous) {
-      return Promise.resolve(undefined)
-    }
-    return enqueuePrimaryStateOperation(this.domains.writes, async () => {
-      this.runtime.dirtyProfileStateDomains = null
-      if (!(await writeToDiskAsync(this.domains.writes))) {
-        throw new Error('Profile state changed while preparing its export')
-      }
-      return exportState(authority)
-    })
   }
 
   quarantineProfileStateDatabase(
@@ -296,7 +287,12 @@ export class Store {
   beginProfileMaintenance(
     options?: ProfileStateMaintenanceOptions
   ): Promise<ProfileStateMaintenance> {
-    return beginProfileStateMaintenance(this.runtime, this.domains, options)
+    return beginCatalogProfileMaintenance(
+      this.runtime,
+      this.domains,
+      this.legacyTerminalProfileCatalog,
+      options
+    )
   }
 
   freezeWritesAsync(): Promise<void> {
