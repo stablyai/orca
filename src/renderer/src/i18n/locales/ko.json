@@ -16298,7 +16298,8 @@
           "micFallback": "선택한 마이크를 사용할 수 없습니다. 시스템 기본값을 사용합니다.",
           "micDisconnected": "마이크 연결이 끊어졌습니다. 받아쓰기가 중지되었습니다.",
           "cloudLimitReached": "클라우드 10분 제한에 도달해 받아쓰기가 중지되었습니다.",
-          "stoppedAfterSilence": "1분 동안 말소리가 없어 중지했습니다."
+          "stoppedAfterSilence": "1분 동안 말소리가 없어 중지했습니다.",
+          "retryUnmatched": "다시 시도할 때 이미 입력된 단어를 찾지 못해 전부 삽입했습니다."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "받아쓰기를 삽입할 수 없어 클립보드에 복사했습니다.",
@@ -16306,7 +16307,21 @@
           "lost": "받아쓰기를 삽입하거나 복사할 수 없습니다."
         },
         "DictationIndicator": {
-          "4977162383": "음량이 너무 큽니다"
+          "4977162383": "음량이 너무 큽니다",
+          "finishing": "마무리 중…",
+          "listening": "듣는 중…",
+          "cancel": "취소",
+          "finish": "완료",
+          "oneMinuteLeft": "1분 남았습니다.",
+          "sendsWhenLanded": "텍스트가 입력되면 전송합니다",
+          "entersWhenLanded": "텍스트가 입력되면 Enter를 누릅니다"
+        },
+        "DictationPillFailure": {
+          "discard": "녹음 삭제",
+          "modelFailed": "음성 모델을 불러오지 못했습니다.",
+          "transcribeFailed": "받아쓰기에 실패했습니다. 녹음은 보관됩니다.",
+          "openSettings": "설정 열기",
+          "retry": "다시 시도"
         }
       },
       "dashboard": {

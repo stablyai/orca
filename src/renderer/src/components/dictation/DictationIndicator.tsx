@@ -75,7 +75,8 @@ function useIsCloudModel(): boolean {
     let current = true
     if (!catalogRequest) {
       catalogRequest = Promise.resolve()
-        .then(() => window.api.speech.getCatalog())
+        // The paired web client's fallback resolves with nothing rather than a list.
+        .then(async () => (await window.api.speech.getCatalog()) ?? [])
         .catch(() => [])
     }
     void catalogRequest.then((catalog) => {

@@ -19259,7 +19259,8 @@
           "micFallback": "O microfone selecionado não está disponível. Usando o padrão do sistema.",
           "micDisconnected": "Microfone desconectado. O ditado foi interrompido.",
           "cloudLimitReached": "O ditado foi interrompido no limite de 10 minutos da nuvem.",
-          "stoppedAfterSilence": "Parou após um minuto de silêncio"
+          "stoppedAfterSilence": "Parou após um minuto de silêncio",
+          "retryUnmatched": "Ao tentar de novo, não foi possível saber quais palavras já estavam digitadas, então todas foram inseridas."
         },
         "dictation-transcript-delivery": {
           "copiedAfterFailedInsert": "Não foi possível inserir o ditado, então ele foi copiado para a área de transferência.",
@@ -19267,7 +19268,21 @@
           "lost": "Não foi possível inserir nem copiar o ditado."
         },
         "DictationIndicator": {
-          "4977162383": "Muito alto"
+          "4977162383": "Muito alto",
+          "finishing": "Finalizando…",
+          "listening": "Ouvindo…",
+          "cancel": "Cancelar",
+          "finish": "Concluir",
+          "oneMinuteLeft": "Falta um minuto.",
+          "sendsWhenLanded": "Envia quando o texto chegar",
+          "entersWhenLanded": "Pressiona Enter quando o texto chegar"
+        },
+        "DictationPillFailure": {
+          "discard": "Descartar gravação",
+          "modelFailed": "Modelo não carregou.",
+          "transcribeFailed": "Não transcrito. Gravação mantida.",
+          "openSettings": "Configurações",
+          "retry": "Repetir"
         }
       },
       "link": {

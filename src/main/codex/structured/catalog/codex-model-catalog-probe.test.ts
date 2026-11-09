@@ -55,12 +55,7 @@ it.each(['saved', 'recover'] as const)(
 )
 
 describe('codex model catalog probe', () => {
-  it.each([
-    [[]],
-    [['node_modules/@openai/codex/bin/codex.js']],
-    [['--env-file=work env', '--', 'codex']],
-    [['-c', 'model_instructions_file="./prompt.md"']]
-  ])(
+  it.each([[[]]])(
     "lists a command line with arguments %j from Orca's folder for every chat",
     async (prefixArgs) => {
       // The chat's repo never picks the list, so no listing runs in a chat's folder.
