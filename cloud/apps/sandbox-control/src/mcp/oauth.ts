@@ -26,6 +26,11 @@ const MAX_REDIRECT_URIS = 10
 const REGISTRATIONS_PER_MINUTE_PER_IP = 10
 const CONSENTS_PER_MINUTE_PER_IP = 20
 const TOKENS_PER_MINUTE_PER_CLIENT = 60
+const TOKENS_PER_MINUTE_PER_IP = 120
+/** A grant ends 90 days after its code exchange, however often it is refreshed: re-consent then. */
+export const GRANT_TTL_MS = 90 * 86_400_000
+/** Registrations that never complete a code exchange are purged after this. */
+const UNUSED_CLIENT_TTL_MS = 86_400_000
 
 /** What an MCP client gets when it asks for nothing specific: everything but admin and project edits. */
 export const DEFAULT_MCP_SCOPES: readonly ApiScope[] = ['workspaces:read', 'workspaces:write', 'messages:write', 'projects:read', 'routines:read', 'routines:write']
@@ -322,10 +327,10 @@ export async function authorize(request: Request, url: URL, env: OAuthEnv): Prom
   const familyId = randomId('fam')
   await env.db
     .prepare(
-      `INSERT INTO oauth_codes (code_hash, client_id, account_id, user_id, creator_role, scopes, redirect_uri, code_challenge, resource, expires_at, family_id, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      `INSERT INTO oauth_codes (code_hash, client_id, account_id, user_id, creator_role, scopes, redirect_uri, code_challenge, resource, expires_at, family_id, created_at, grantor_key_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
-    .bind(await sha256Hex(code), req.clientId, grantor.accountId, grantor.userId, grantor.role, scopes.join(' '), req.redirectUri, req.codeChallenge, req.resource, now + CODE_TTL_MS, familyId, now)
+    .bind(await sha256Hex(code), req.clientId, grantor.accountId, grantor.userId, grantor.role, scopes.join(' '), req.redirectUri, req.codeChallenge, req.resource, now + CODE_TTL_MS, familyId, now, grantor.keyId)
     .run()
   await audit(
     env.db,
@@ -360,7 +365,7 @@ function viewFor(req: AuthorizeParams, client: ClientRow, csrf: string, error: s
   }
 }
 
-type Grantor = { accountId: string; userId: string; role: OrgRole | null; scopes: Set<ApiScope>; via: 'approval_code' | 'api_key' }
+type Grantor = { accountId: string; userId: string; role: OrgRole | null; scopes: Set<ApiScope>; via: 'approval_code' | 'api_key'; keyId: string | null }
 
 function orgOf(accountId: string): string | undefined {
   return accountId.startsWith('org:') ? accountId.slice(4) : accountId.startsWith('dev:org:') ? accountId.slice(8) : undefined
@@ -375,7 +380,7 @@ async function resolveGrantor(db: D1Database, credential: string, now: number): 
       .bind(now, hash, now)
       .first<{ account_id: string; user_id: string; creator_role: OrgRole | null; scopes: string }>()
     if (!claimed) return null
-    return { accountId: claimed.account_id, userId: claimed.user_id, role: claimed.creator_role, scopes: new Set(parseScopes(claimed.scopes)), via: 'approval_code' }
+    return { accountId: claimed.account_id, userId: claimed.user_id, role: claimed.creator_role, scopes: new Set(parseScopes(claimed.scopes)), via: 'approval_code', keyId: null }
   }
   const key = await resolveApiKey(db, credential, now)
   // Only a person's own key; workspace and OAuth tokens cannot bootstrap new grants.
@@ -387,7 +392,8 @@ async function resolveGrantor(db: D1Database, credential: string, now: number): 
     userId: key.created_by,
     role: key.creator_role,
     scopes: new Set(parseScopes(key.scopes).filter((scope) => allowed.has(scope))),
-    via: 'api_key'
+    via: 'api_key',
+    keyId: key.id
   }
 }
 
@@ -413,20 +419,50 @@ async function pkceS256(verifier: string): Promise<string> {
   return btoa(String.fromCharCode(...digest)).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '')
 }
 
-async function revokeFamily(db: D1Database, familyId: string, now: number): Promise<void> {
-  await db.prepare(`UPDATE api_keys SET revoked_at = ?, revoked_by = 'system' WHERE family_id = ? AND revoked_at IS NULL`).bind(now, familyId).run()
+/** Ends a grant for good: its tokens are revoked and the family is remembered (see issueTokens). */
+export async function revokeFamily(db: D1Database, familyId: string, reason: string, now: number): Promise<number> {
+  const [, revoked] = await db.batch([
+    db.prepare('INSERT OR IGNORE INTO oauth_revoked_families (family_id, reason, revoked_at) VALUES (?, ?, ?)').bind(familyId, reason, now),
+    db.prepare(`UPDATE api_keys SET revoked_at = ?, revoked_by = 'system' WHERE family_id = ? AND revoked_at IS NULL`).bind(now, familyId)
+  ])
+  return revoked!.meta.changes
+}
+
+async function familyRevoked(db: D1Database, familyId: string): Promise<boolean> {
+  return (await db.prepare('SELECT 1 AS x FROM oauth_revoked_families WHERE family_id = ?').bind(familyId).first()) !== null
 }
 
 async function issueTokens(
   env: OAuthEnv,
-  grant: { accountId: string; userId: string; role: OrgRole | null; scopes: ApiScope[]; clientId: string; clientName: string | null; familyId: string },
-  now: number
+  grant: {
+    accountId: string
+    userId: string
+    role: OrgRole | null
+    scopes: ApiScope[]
+    clientId: string
+    clientName: string | null
+    familyId: string
+    grantorKeyId: string | null
+    familyExpiresAt: number
+  },
+  now: number,
+  /** Re-checked after minting: true when the code was replayed meanwhile. */
+  replayed: () => Promise<boolean>
 ): Promise<Response> {
   const name = `MCP · ${grant.clientName ?? grant.clientId}`.slice(0, 100)
-  const oauth = { clientId: grant.clientId, audience: mcpResource(env.origin), familyId: grant.familyId }
+  const oauth = { clientId: grant.clientId, audience: mcpResource(env.origin), familyId: grant.familyId, grantorKeyId: grant.grantorKeyId, familyExpiresAt: grant.familyExpiresAt }
   const base = { accountId: grant.accountId, createdBy: grant.userId, creatorRole: grant.role, name, scopes: grant.scopes, oauth }
-  const access = await mintApiKey(env.db, { ...base, kind: 'oauth', expiresAt: now + ACCESS_TOKEN_TTL_MS }, now)
-  const refresh = await mintApiKey(env.db, { ...base, kind: 'oauth_refresh', expiresAt: now + REFRESH_TOKEN_TTL_MS }, now)
+  const access = await mintApiKey(env.db, { ...base, kind: 'oauth', expiresAt: Math.min(now + ACCESS_TOKEN_TTL_MS, grant.familyExpiresAt) }, now)
+  const refresh = await mintApiKey(env.db, { ...base, kind: 'oauth_refresh', expiresAt: Math.min(now + REFRESH_TOKEN_TTL_MS, grant.familyExpiresAt) }, now)
+  // Close the window between claim and mint: a replay, a revoked family or a revoked approving key
+  // that landed meanwhile takes these new tokens down too.
+  const grantorGone =
+    grant.grantorKeyId !== null &&
+    (await env.db.prepare('SELECT 1 AS x FROM api_keys WHERE id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?)').bind(grant.grantorKeyId, now).first()) === null
+  if (grantorGone || (await replayed()) || (await familyRevoked(env.db, grant.familyId))) {
+    await revokeFamily(env.db, grant.familyId, grantorGone ? 'grantor_revoked' : 'replay', now)
+    return oauthError('invalid_grant', grantorGone ? 'The credential that approved this grant was revoked' : 'Grant revoked')
+  }
   return json({
     access_token: access.secret,
     token_type: 'Bearer',
@@ -449,6 +485,8 @@ type CodeRow = {
   expires_at: number
   consumed_at: number | null
   family_id: string | null
+  grantor_key_id: string | null
+  replayed_at: number | null
 }
 
 export async function token(request: Request, env: OAuthEnv): Promise<Response> {
@@ -457,6 +495,8 @@ export async function token(request: Request, env: OAuthEnv): Promise<Response> 
   }
   const form = await readForm(request)
   const now = env.now()
+  const tooFast = await limited(env.db, `oauth-token-ip:${clientIp(request)}`, TOKENS_PER_MINUTE_PER_IP, now)
+  if (tooFast) return tooFast
   const client = await getClient(env.db, form.get('client_id'))
   if (!client) {
     return oauthError('invalid_client', 'Unknown client_id', 401)
@@ -477,21 +517,35 @@ export async function token(request: Request, env: OAuthEnv): Promise<Response> 
     const hash = await sha256Hex(code)
     const row = await env.db.prepare('SELECT * FROM oauth_codes WHERE code_hash = ?').bind(hash).first<CodeRow>()
     if (!row || row.client_id !== client.client_id) return oauthError('invalid_grant', 'Invalid authorization code')
-    if (row.consumed_at !== null) {
+    const replay = async () => {
       // A replayed code means it leaked: everything minted from it dies (OAuth 2.1 §4.1.3).
-      if (row.family_id) await revokeFamily(env.db, row.family_id, now)
+      await env.db.prepare('UPDATE oauth_codes SET replayed_at = ? WHERE code_hash = ?').bind(now, hash).run()
+      if (row.family_id) await revokeFamily(env.db, row.family_id, 'code_replay', now)
       await audit(env.db, { accountId: row.account_id, type: 'mcp', id: client.client_id, userId: row.user_id }, { action: 'mcp.code_replay', targetType: 'oauth_client', targetId: client.client_id }, now)
       return oauthError('invalid_grant', 'Authorization code already used')
     }
+    if (row.consumed_at !== null) return replay()
     if (row.expires_at <= now) return oauthError('invalid_grant', 'Authorization code expired')
     if (form.get('redirect_uri') !== null && form.get('redirect_uri') !== row.redirect_uri) return oauthError('invalid_grant', 'redirect_uri does not match')
     if (!timingSafeEqual(await pkceS256(verifier), row.code_challenge)) return oauthError('invalid_grant', 'PKCE verification failed')
     const claimed = await env.db.prepare('UPDATE oauth_codes SET consumed_at = ? WHERE code_hash = ? AND consumed_at IS NULL').bind(now, hash).run()
-    if (claimed.meta.changes !== 1) return oauthError('invalid_grant', 'Authorization code already used')
+    if (claimed.meta.changes !== 1) return replay()
+    await env.db.prepare('UPDATE oauth_clients SET last_granted_at = ? WHERE client_id = ?').bind(now, client.client_id).run()
     return issueTokens(
       env,
-      { accountId: row.account_id, userId: row.user_id, role: row.creator_role, scopes: parseScopes(row.scopes), clientId: client.client_id, clientName: client.client_name, familyId: row.family_id ?? randomId('fam') },
-      now
+      {
+        accountId: row.account_id,
+        userId: row.user_id,
+        role: row.creator_role,
+        scopes: parseScopes(row.scopes),
+        clientId: client.client_id,
+        clientName: client.client_name,
+        familyId: row.family_id ?? randomId('fam'),
+        grantorKeyId: row.grantor_key_id,
+        familyExpiresAt: now + GRANT_TTL_MS
+      },
+      now,
+      async () => (await env.db.prepare('SELECT replayed_at FROM oauth_codes WHERE code_hash = ?').bind(hash).first<{ replayed_at: number | null }>())?.replayed_at != null
     )
   }
 
@@ -503,12 +557,17 @@ export async function token(request: Request, env: OAuthEnv): Promise<Response> 
     if (row.revoked_at !== null) {
       // Rotated tokens are single use: a second use means a copy leaked, so end the whole grant.
       if (row.family_id && row.revoked_by === 'rotated') {
-        await revokeFamily(env.db, row.family_id, now)
+        await revokeFamily(env.db, row.family_id, 'refresh_replay', now)
         await audit(env.db, { accountId: row.account_id, type: 'mcp', id: client.client_id, userId: row.created_by }, { action: 'mcp.refresh_replay', targetType: 'oauth_client', targetId: client.client_id }, now)
       }
       return oauthError('invalid_grant', 'Refresh token revoked')
     }
     if (row.expires_at !== null && row.expires_at <= now) return oauthError('invalid_grant', 'Refresh token expired')
+    // Rows from before migration 0028 have no family end: count 90 days from this token.
+    const familyExpiresAt = row.family_expires_at ?? row.created_at + GRANT_TTL_MS
+    if (familyExpiresAt <= now) return oauthError('invalid_grant', 'Grant expired; reconnect to approve again')
+    if (!row.family_id || (await familyRevoked(env.db, row.family_id))) return oauthError('invalid_grant', 'Grant revoked')
+    const familyId = row.family_id
     const rotated = await env.db.prepare(`UPDATE api_keys SET revoked_at = ?, revoked_by = 'rotated' WHERE id = ? AND revoked_at IS NULL`).bind(now, row.id).run()
     if (rotated.meta.changes !== 1) return oauthError('invalid_grant', 'Refresh token revoked')
     const granted = parseScopes(row.scopes)
@@ -517,8 +576,20 @@ export async function token(request: Request, env: OAuthEnv): Promise<Response> 
     if (scopes.length === 0) return oauthError('invalid_scope', 'Requested scope exceeds the grant')
     return issueTokens(
       env,
-      { accountId: row.account_id, userId: row.created_by, role: row.creator_role, scopes, clientId: client.client_id, clientName: client.client_name, familyId: row.family_id ?? randomId('fam') },
-      now
+      {
+        accountId: row.account_id,
+        userId: row.created_by,
+        role: row.creator_role,
+        scopes,
+        clientId: client.client_id,
+        clientName: client.client_name,
+        familyId,
+        grantorKeyId: row.grantor_key_id ?? null,
+        familyExpiresAt
+      },
+      now,
+      // A replay of the token just rotated revokes the family, which issueTokens re-checks.
+      async () => false
     )
   }
 
@@ -536,7 +607,7 @@ export async function revoke(request: Request, env: OAuthEnv): Promise<Response>
   if (/^orca_(oat|ort)_[A-Za-z0-9]{32}$/.test(presented)) {
     const row = await env.db.prepare(`SELECT * FROM api_keys WHERE secret_hash = ? AND kind IN ('oauth', 'oauth_refresh')`).bind(await sha256Hex(presented)).first<ApiKeyRow>()
     if (row && row.family_id && (clientId === null || clientId === row.client_id)) {
-      await revokeFamily(env.db, row.family_id, env.now())
+      await revokeFamily(env.db, row.family_id, 'client_revoked', env.now())
     }
   }
   return json({})
@@ -557,4 +628,73 @@ export async function mintApproval(
     .bind(await sha256Hex(code), caller.accountId, caller.userId, caller.orgId ? (caller.orgRole ?? 'member') : null, scopes.join(' '), expiresAt, now)
     .run()
   return { code, expiresAt, scopes }
+}
+
+// --- Grants (connected apps) and housekeeping -----------------------------------------------
+
+export type GrantRow = {
+  family_id: string
+  client_id: string
+  client_name: string | null
+  created_by: string
+  scopes: string
+  family_expires_at: number | null
+  granted_at: number
+  last_used_at: number | null
+  via_key: string | null
+}
+
+/** Live grants: one row per family that still has an unrevoked, unexpired refresh token. */
+export async function listGrants(db: D1Database, accountId: string, now: number, createdBy?: string): Promise<GrantRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT r.family_id, r.client_id, c.client_name, r.created_by, r.scopes, r.family_expires_at,
+         (SELECT MIN(f.created_at) FROM api_keys f WHERE f.family_id = r.family_id) AS granted_at,
+         (SELECT MAX(f.last_used_at) FROM api_keys f WHERE f.family_id = r.family_id) AS last_used_at,
+         (SELECT k.prefix FROM api_keys k WHERE k.id = r.grantor_key_id) AS via_key
+       FROM api_keys r LEFT JOIN oauth_clients c ON c.client_id = r.client_id
+       WHERE r.account_id = ? AND r.kind = 'oauth_refresh' AND r.revoked_at IS NULL AND r.expires_at > ? AND r.family_id IS NOT NULL
+       ${createdBy ? 'AND r.created_by = ?' : ''}
+       ORDER BY granted_at DESC LIMIT 200`
+    )
+    .bind(accountId, now, ...(createdBy ? [createdBy] : []))
+    .all<GrantRow>()
+  return results
+}
+
+export function grantView(row: GrantRow) {
+  return {
+    id: row.family_id,
+    clientId: row.client_id,
+    clientName: row.client_name,
+    userId: row.created_by,
+    scopes: row.scopes.split(' ').filter(Boolean),
+    approvedWith: row.via_key ? { apiKeyPrefix: row.via_key } : { approvalCode: true },
+    grantedAt: row.granted_at,
+    lastUsedAt: row.last_used_at,
+    expiresAt: row.family_expires_at
+  }
+}
+
+/** Who owns a grant family inside an account, or null when it is not this account's. */
+export function grantOwner(db: D1Database, accountId: string, familyId: string): Promise<{ created_by: string; client_id: string | null } | null> {
+  return db
+    .prepare(`SELECT created_by, client_id FROM api_keys WHERE family_id = ? AND account_id = ? AND kind IN ('oauth', 'oauth_refresh') LIMIT 1`)
+    .bind(familyId, accountId)
+    .first()
+}
+
+/** Cron housekeeping: abandoned registrations and dead codes/approvals. Returns rows deleted. */
+export async function purgeOAuth(db: D1Database, now: number): Promise<number> {
+  const results = await db.batch([
+    db
+      .prepare(
+        `DELETE FROM oauth_clients WHERE last_granted_at IS NULL AND created_at < ?
+           AND NOT EXISTS (SELECT 1 FROM oauth_codes c WHERE c.client_id = oauth_clients.client_id AND c.expires_at > ?)`
+      )
+      .bind(now - UNUSED_CLIENT_TTL_MS, now),
+    db.prepare('DELETE FROM oauth_codes WHERE expires_at < ?').bind(now - 86_400_000),
+    db.prepare('DELETE FROM oauth_approvals WHERE expires_at < ?').bind(now - 86_400_000)
+  ])
+  return results.reduce((sum, r) => sum + r.meta.changes, 0)
 }

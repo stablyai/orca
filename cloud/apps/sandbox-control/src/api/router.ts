@@ -130,7 +130,7 @@ function messageBucket(caller: ApiCaller): string {
 }
 
 export function isApiPath(pathname: string): boolean {
-  return /^\/v1\/(me|api-keys|settings|audit|projects|workspaces|routines|oauth-approvals)(\/|$)/.test(pathname)
+  return /^\/v1\/(me|api-keys|settings|audit|projects|workspaces|routines|oauth-approvals|oauth-grants)(\/|$)/.test(pathname)
 }
 
 export async function handleApi(request: Request, url: URL, env: Parameters<typeof authenticateApi>[0], ctx: ApiContext): Promise<Response> {

@@ -2,7 +2,7 @@
 // /v1/oauth-approvals API route the desktop uses to approve an MCP client.
 import { z } from 'zod'
 import { auditCaller } from '../api/audit'
-import { ApiError, scopesForRole, type ApiCaller } from '../api/caller'
+import { ApiError, isAdmin, scopesForRole, type ApiCaller } from '../api/caller'
 import { API_SCOPES, type ApiScope } from '../api/keys'
 import type { ApiExtension } from '../api/router'
 import {
@@ -15,6 +15,10 @@ import {
   protectedResourceMetadataUrl,
   registerClient,
   revoke,
+  revokeFamily,
+  grantOwner,
+  grantView,
+  listGrants,
   token
 } from './oauth'
 import { handleMcpPost } from './server'
@@ -169,4 +173,37 @@ export const oauthApprovalsApi: ApiExtension = async (request, url, caller, ctx)
   const approval = await mintApproval(ctx.db, caller, requested, now)
   await auditCaller(ctx.db, caller, { action: 'mcp.approval_create', targetType: 'account', targetId: caller.accountId, detail: { scopes: requested } }, now)
   return Response.json(approval, { status: 201, headers: { 'cache-control': 'no-store' } })
+}
+
+/**
+ * Connected MCP apps (signed-in desktop only): GET /v1/oauth-grants lists live grants (members see
+ * their own, owners/admins the account's); DELETE /v1/oauth-grants/:id revokes one for good.
+ */
+export const oauthGrantsApi: ApiExtension = async (request, url, caller, ctx) => {
+  if (url.pathname !== '/v1/oauth-grants' && !url.pathname.startsWith('/v1/oauth-grants/')) {
+    return null
+  }
+  const match = /^\/v1\/oauth-grants(?:\/(fam_[A-Za-z0-9]{20}))?$/.exec(url.pathname)
+  if (!match) {
+    throw new ApiError(404, 'not_found')
+  }
+  if (caller.via !== 'session') {
+    throw new ApiError(403, 'forbidden', 'session_required')
+  }
+  const now = ctx.now()
+  const familyId = match[1]
+  if (!familyId && request.method === 'GET') {
+    const rows = await listGrants(ctx.db, caller.accountId, now, isAdmin(caller) ? undefined : caller.userId)
+    return Response.json({ grants: rows.map(grantView) }, { headers: { 'cache-control': 'no-store' } })
+  }
+  if (familyId && request.method === 'DELETE') {
+    const owner = await grantOwner(ctx.db, caller.accountId, familyId)
+    if (!owner || (owner.created_by !== caller.userId && !isAdmin(caller))) {
+      throw new ApiError(404, 'not_found')
+    }
+    const revoked = await revokeFamily(ctx.db, familyId, 'user_revoked', now)
+    await auditCaller(ctx.db, caller, { action: 'mcp.grant_revoke', targetType: 'oauth_grant', targetId: familyId, detail: { clientId: owner.client_id, tokensRevoked: revoked } }, now)
+    return Response.json({ revoked: true }, { headers: { 'cache-control': 'no-store' } })
+  }
+  throw new ApiError(405, 'method_not_allowed')
 }

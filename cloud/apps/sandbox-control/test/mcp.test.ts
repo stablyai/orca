@@ -1,13 +1,14 @@
 import { createHash, randomBytes } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
+import { purgeOAuth } from '../src/mcp/oauth'
 import { createHarness } from './harness'
 
 const ORIGIN = 'https://sandbox.test'
 const REDIRECT = 'http://127.0.0.1:33418/callback'
 
-async function harness() {
+async function harness(overrides: Record<string, string> = {}) {
   const pending: Promise<unknown>[] = []
-  const h = await createHarness({ PUBLIC_API_URL: ORIGIN }, { waitUntil: (p) => void pending.push(p) })
+  const h = await createHarness({ PUBLIC_API_URL: ORIGIN, ...overrides }, { waitUntil: (p) => void pending.push(p) })
   let rpcId = 0
 
   async function rpc(bearer: string | null, method: string, params?: unknown, headers: Record<string, string> = {}) {
@@ -429,5 +430,125 @@ describe('MCP authorization', () => {
     const client = (await h.register()).body
     const again = await h.consent(h.authorizeParams(client.client_id, h.pkce().challenge), approval.body.code)
     expect(again.res.status).toBe(401)
+  })
+})
+
+describe('MCP grants', () => {
+  it('lists connected apps, lets owners and admins disconnect them, and audits it', async () => {
+    const h = await harness()
+    const memberJwt = await h.token('bob', 'acme', 'sandbox', { orgRole: 'member' })
+    const adminJwt = await h.token('carol', 'acme', 'sandbox', { orgRole: 'admin' })
+    const bobKey = await h.apiKey(['workspaces:read'], 'bob', { org: 'acme', role: 'member' })
+    const carolKey = await h.apiKey(['workspaces:read'], 'carol', { org: 'acme', role: 'admin' })
+    const bob = await h.connect(bobKey, { scope: 'workspaces:read' })
+    const carol = await h.connect(carolKey, { scope: 'workspaces:read' })
+    await h.rpc(bob.tokens.access_token, 'ping')
+
+    const mine = await h.call('GET', '/v1/oauth-grants', { bearer: memberJwt })
+    expect(mine.status).toBe(200)
+    expect(mine.body.grants).toHaveLength(1)
+    const grant = mine.body.grants[0]
+    expect(grant).toMatchObject({ clientName: 'Test Client', userId: 'bob', scopes: ['workspaces:read'], approvedWith: { apiKeyPrefix: bobKey.slice(0, 12) } })
+    expect(grant.id).toMatch(/^fam_/)
+    expect(grant.expiresAt).toBe(grant.grantedAt + 90 * 86_400_000)
+    expect((await h.call('GET', '/v1/oauth-grants', { bearer: adminJwt })).body.grants).toHaveLength(2)
+    // Keys cannot manage grants; other accounts cannot see them.
+    expect((await h.call('GET', '/v1/oauth-grants', { bearer: bobKey })).status).toBe(403)
+    expect((await h.call('GET', '/v1/oauth-grants', { as: 'mallory' })).body.grants).toHaveLength(0)
+
+    // A member cannot disconnect the admin's app; the admin can disconnect the member's.
+    const carolGrant = (await h.call('GET', '/v1/oauth-grants', { bearer: adminJwt })).body.grants.find((g: { userId: string }) => g.userId === 'carol')
+    expect((await h.call('DELETE', `/v1/oauth-grants/${carolGrant.id}`, { bearer: memberJwt })).status).toBe(404)
+    expect((await h.call('DELETE', `/v1/oauth-grants/${grant.id}`, { as: 'mallory' })).status).toBe(404)
+    expect((await h.call('DELETE', `/v1/oauth-grants/${grant.id}`, { bearer: adminJwt })).status).toBe(200)
+    expect((await h.rpc(bob.tokens.access_token, 'ping')).status).toBe(401)
+    expect((await h.tokenRequest({ grant_type: 'refresh_token', refresh_token: bob.tokens.refresh_token, client_id: bob.client.client_id })).body.error).toBe('invalid_grant')
+    expect((await h.rpc(carol.tokens.access_token, 'ping')).status).toBe(200)
+    expect((await h.call('GET', '/v1/oauth-grants', { bearer: memberJwt })).body.grants).toHaveLength(0)
+    expect(h.raw.prepare(`SELECT actor_type, target_id FROM audit_log WHERE action = 'mcp.grant_revoke'`).all()).toEqual([{ actor_type: 'user', target_id: grant.id }])
+  })
+
+  it('revokes every grant an API key approved when that key is revoked, pending codes included', async () => {
+    const h = await harness()
+    const key = await h.apiKey(['workspaces:read'])
+    const { client, tokens } = await h.connect(key, { scope: 'workspaces:read' })
+    const next = await h.tokenRequest({ grant_type: 'refresh_token', refresh_token: tokens.refresh_token, client_id: client.client_id })
+    expect(next.status).toBe(200)
+    // A code approved with the key but not exchanged yet.
+    const pending = h.pkce()
+    const consent = await h.consent(h.authorizeParams(client.client_id, pending.challenge, { scope: 'workspaces:read' }), key)
+    const id = (h.raw.prepare(`SELECT id FROM api_keys WHERE kind = 'user'`).get() as { id: string }).id
+    expect((await h.call('DELETE', `/v1/api-keys/${id}`)).status).toBe(200)
+    expect((await h.rpc(next.body.access_token, 'ping')).status).toBe(401)
+    expect((await h.tokenRequest({ grant_type: 'refresh_token', refresh_token: next.body.refresh_token, client_id: client.client_id })).body.error).toBe('invalid_grant')
+    const late = await h.tokenRequest({ grant_type: 'authorization_code', code: consent.location!.searchParams.get('code')!, code_verifier: pending.verifier, client_id: client.client_id })
+    expect(late.body).toMatchObject({ error: 'invalid_grant', error_description: 'The credential that approved this grant was revoked' })
+    expect(h.raw.prepare(`SELECT COUNT(*) AS n FROM api_keys WHERE kind IN ('oauth', 'oauth_refresh') AND revoked_at IS NULL`).get()).toEqual({ n: 0 })
+  })
+
+  it('ends a grant 90 days after approval however often it is refreshed', async () => {
+    const h = await harness()
+    const key = await h.apiKey(['workspaces:read'])
+    const { client, tokens } = await h.connect(key, { scope: 'workspaces:read' })
+    let refresh = tokens.refresh_token
+    for (let i = 0; i < 3; i++) {
+      h.advance(29 * 86_400_000)
+      const next = await h.tokenRequest({ grant_type: 'refresh_token', refresh_token: refresh, client_id: client.client_id })
+      expect(next.status).toBe(200)
+      refresh = next.body.refresh_token
+    }
+    // The last pair cannot outlive the grant.
+    const last = h.raw.prepare(`SELECT expires_at, family_expires_at FROM api_keys WHERE kind = 'oauth_refresh' AND revoked_at IS NULL`).get() as { expires_at: number; family_expires_at: number }
+    expect(last.expires_at).toBe(last.family_expires_at)
+    h.advance(3 * 86_400_000 + 1)
+    expect((await h.tokenRequest({ grant_type: 'refresh_token', refresh_token: refresh, client_id: client.client_id })).body.error).toBe('invalid_grant')
+  })
+
+  it('kills tokens minted while the code was being replayed (claim/mint race)', async () => {
+    const h = await harness()
+    const key = await h.apiKey(['workspaces:read'])
+    const client = (await h.register()).body
+    const { verifier, challenge } = h.pkce()
+    const { location } = await h.consent(h.authorizeParams(client.client_id, challenge, { scope: 'workspaces:read' }), key)
+    // Simulate a replay landing between the claim and the mint: the first token insert flags it.
+    h.raw.exec(`CREATE TRIGGER replay_mid_flight AFTER INSERT ON api_keys WHEN NEW.kind = 'oauth' BEGIN UPDATE oauth_codes SET replayed_at = 1; END`)
+    const res = await h.tokenRequest({ grant_type: 'authorization_code', code: location!.searchParams.get('code')!, code_verifier: verifier, client_id: client.client_id })
+    expect(res.body).toMatchObject({ error: 'invalid_grant', error_description: 'Grant revoked' })
+    expect(h.raw.prepare(`SELECT COUNT(*) AS n FROM api_keys WHERE kind IN ('oauth', 'oauth_refresh') AND revoked_at IS NULL`).get()).toEqual({ n: 0 })
+  })
+
+  it("consumes a removed member's pending codes and approval codes", async () => {
+    const OP = 'o'.repeat(40)
+    const h = await harness({ OPERATOR_TOKEN: OP })
+    const bobJwt = await h.token('bob', 'acme', 'sandbox', { orgRole: 'member' })
+    const approval = (await h.call('POST', '/v1/oauth-approvals', { bearer: bobJwt, body: {} })).body.code
+    const unused = (await h.call('POST', '/v1/oauth-approvals', { bearer: bobJwt, body: {} })).body.code
+    const client = (await h.register()).body
+    const { verifier, challenge } = h.pkce()
+    const { location } = await h.consent(h.authorizeParams(client.client_id, challenge, { scope: 'workspaces:read' }), approval)
+    const removed = await h.call('POST', '/v1/internal/members/removed', { bearer: OP, body: { accountId: 'org:acme', userId: 'bob' } })
+    expect(removed.status).toBe(200)
+    expect((await h.tokenRequest({ grant_type: 'authorization_code', code: location!.searchParams.get('code')!, code_verifier: verifier, client_id: client.client_id })).body.error).toBe('invalid_grant')
+    expect((await h.consent(h.authorizeParams(client.client_id, h.pkce().challenge), unused)).res.status).toBe(401)
+  })
+
+  it('purges abandoned registrations and dead codes, and limits the token endpoint per IP', async () => {
+    const h = await harness()
+    const key = await h.apiKey(['workspaces:read'])
+    const used = await h.connect(key, { scope: 'workspaces:read' })
+    const abandoned = (await h.register()).body
+    h.advance(25 * 3_600_000)
+    expect(await purgeOAuth(h.env.SANDBOX_DB, h.now())).toBeGreaterThanOrEqual(1)
+    const left = (h.raw.prepare('SELECT client_id FROM oauth_clients').all() as { client_id: string }[]).map((r) => r.client_id)
+    expect(left).toContain(used.client.client_id)
+    expect(left).not.toContain(abandoned.client_id)
+    h.advance(24 * 3_600_000)
+    await purgeOAuth(h.env.SANDBOX_DB, h.now())
+    expect(h.raw.prepare('SELECT COUNT(*) AS n FROM oauth_codes').get()).toEqual({ n: 0 })
+
+    const hit = () =>
+      h.send(new Request(`${ORIGIN}/oauth/token`, { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded', 'cf-connecting-ip': '203.0.113.9' }, body: 'grant_type=refresh_token&client_id=mcpc_00000000000000000000' }))
+    for (let i = 0; i < 120; i++) expect((await hit()).status).toBe(401)
+    expect((await hit()).status).toBe(429)
   })
 })

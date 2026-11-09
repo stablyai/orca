@@ -16,7 +16,8 @@ import { maintainPool, poolConfigFromEnv } from './pool'
 import { authenticateDesktop } from './auth'
 import { authenticateApi } from './api/caller'
 import { handleApi, handleApiAs, isApiPath, type ApiContext, type ApiExtension } from './api/router'
-import { handleMcpRoutes, isMcpPath, oauthApprovalsApi } from './mcp'
+import { handleMcpRoutes, isMcpPath, oauthApprovalsApi, oauthGrantsApi } from './mcp'
+import { purgeOAuth } from './mcp/oauth'
 import { retryPendingMessages } from './api/messages'
 import { revokeWorkspaceTokens } from './api/keys'
 import { provisionWorkspaceToken } from './api/settings'
@@ -301,7 +302,7 @@ async function apiContext(env: Env, deps: Deps, request: Request, life?: Promise
     life: await (life ?? lifecycleDeps(env, deps)),
     waitUntil: deps.waitUntil ?? ((promise) => void promise.catch(() => undefined)),
     readJson: () => readJson(request),
-    extensions: [oauthApprovalsApi, ...(deps.apiExtensions ?? [])]
+    extensions: [oauthApprovalsApi, oauthGrantsApi,...(deps.apiExtensions ?? [])]
   }
 }
 
@@ -690,6 +691,11 @@ export default {
           if (retried !== 0) {
             console.log(JSON.stringify({ event: 'message_retry', retried }))
           }
+        }
+        // Abandoned MCP client registrations and dead OAuth codes/approvals.
+        const purged = await purgeOAuth(env.SANDBOX_DB, Date.now()).catch(() => -1)
+        if (purged !== 0) {
+          console.log(JSON.stringify({ event: 'oauth_purge', purged }))
         }
         await advanceGoldenImagesFromEnv(env).catch((error: unknown) =>
           console.log(JSON.stringify({ event: 'golden_image_tick_failed', error: String(error).slice(0, 200) }))

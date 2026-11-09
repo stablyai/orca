@@ -43,6 +43,9 @@ export type ApiKeyRow = {
   client_id?: string | null
   audience?: string | null
   family_id?: string | null
+  /** Migration 0028: the orca_sk_ key that approved the grant, and the grant's absolute end. */
+  grantor_key_id?: string | null
+  family_expires_at?: number | null
 }
 
 const TAG: Record<ApiKeyKind, string> = { user: 'sk', workspace: 'ws', oauth: 'oat', oauth_refresh: 'ort' }
@@ -95,7 +98,7 @@ export async function mintApiKey(
     kind?: ApiKeyKind
     sandboxId?: string | null
     expiresAt?: number | null
-    oauth?: { clientId: string; audience: string; familyId: string }
+    oauth?: { clientId: string; audience: string; familyId: string; grantorKeyId: string | null; familyExpiresAt: number }
   },
   now: number
 ): Promise<MintedKey> {
@@ -120,17 +123,19 @@ export async function mintApiKey(
     revoked_by: null,
     client_id: input.oauth?.clientId ?? null,
     audience: input.oauth?.audience ?? null,
-    family_id: input.oauth?.familyId ?? null
+    family_id: input.oauth?.familyId ?? null,
+    grantor_key_id: input.oauth?.grantorKeyId ?? null,
+    family_expires_at: input.oauth?.familyExpiresAt ?? null
   }
   await db
     .prepare(
       `INSERT INTO api_keys (id, account_id, created_by, creator_role, name, prefix, secret_hash, scopes, kind,
-         sandbox_id, expires_at, created_at${row.client_id ? ', client_id, audience, family_id' : ''})
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${row.client_id ? ', ?, ?, ?' : ''})`
+         sandbox_id, expires_at, created_at${row.client_id ? ', client_id, audience, family_id, grantor_key_id, family_expires_at' : ''})
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?${row.client_id ? ', ?, ?, ?, ?, ?' : ''})`
     )
     .bind(row.id, row.account_id, row.created_by, row.creator_role, row.name, row.prefix, row.secret_hash,
       row.scopes, row.kind, row.sandbox_id, row.expires_at, row.created_at,
-      ...(row.client_id ? [row.client_id, row.audience, row.family_id] : []))
+      ...(row.client_id ? [row.client_id, row.audience, row.family_id, row.grantor_key_id, row.family_expires_at] : []))
     .run()
   return { row, secret }
 }
@@ -173,11 +178,16 @@ export function getApiKey(db: D1Database, id: string): Promise<ApiKeyRow | null>
 }
 
 export async function revokeApiKey(db: D1Database, id: string, by: string, now: number): Promise<boolean> {
-  const result = await db
-    .prepare('UPDATE api_keys SET revoked_at = ?, revoked_by = ? WHERE id = ? AND revoked_at IS NULL')
-    .bind(now, by, id)
-    .run()
-  return result.meta.changes === 1
+  const [result] = await db.batch([
+    db.prepare('UPDATE api_keys SET revoked_at = ?, revoked_by = ? WHERE id = ? AND revoked_at IS NULL').bind(now, by, id),
+    // MCP grants approved with this key die with it (their families stay revoked, see oauth.ts).
+    db
+      .prepare(`INSERT OR IGNORE INTO oauth_revoked_families (family_id, reason, revoked_at)
+        SELECT DISTINCT family_id, 'grantor_revoked', ? FROM api_keys WHERE grantor_key_id = ? AND family_id IS NOT NULL`)
+      .bind(now, id),
+    db.prepare(`UPDATE api_keys SET revoked_at = ?, revoked_by = 'system:grantor_revoked' WHERE grantor_key_id = ? AND revoked_at IS NULL`).bind(now, id)
+  ])
+  return result!.meta.changes === 1
 }
 
 /** Workspace tokens die with their session: revoked on every new boot, suspend and destroy. */
