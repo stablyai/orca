@@ -1,4 +1,7 @@
-import type { RuntimeMobileTerminalTheme } from '../../../../src/shared/runtime-mobile-session-tab-contracts'
+import type {
+  RuntimeMobileSessionTerminalTab,
+  RuntimeMobileTerminalTheme
+} from '../../../../src/shared/runtime-mobile-session-tab-contracts'
 import type { AgentStatusEntry } from '../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { BrowserLoadError } from '../../../../src/shared/browser-workspace-types'
 import { browserLoadErrorsEqual } from '../../../../src/shared/browser-load-failure'
@@ -17,7 +20,12 @@ export type TerminalRecord = {
   agentIdentity?: string
 }
 
-export type MobileTerminalSessionTab = {
+export type MobileTerminalSessionTab = Partial<
+  Pick<
+    RuntimeMobileSessionTerminalTab,
+    'customTitle' | 'quickCommandLabel' | 'aiVaultTitle' | 'generatedTitle'
+  >
+> & {
   type: 'terminal'
   id: string
   title: string
@@ -154,6 +162,11 @@ function mobileSessionTabEqual(
         a.terminal === b.terminal &&
         a.launchDraft === b.launchDraft &&
         a.launchDraftCreatedAt === b.launchDraftCreatedAt &&
+        // Names decide whether the title is agent evidence, so a name-only change must re-render.
+        a.customTitle === b.customTitle &&
+        a.quickCommandLabel === b.quickCommandLabel &&
+        a.aiVaultTitle?.title === b.aiVaultTitle?.title &&
+        a.generatedTitle === b.generatedTitle &&
         JSON.stringify(a.agentStatus ?? null) === JSON.stringify(b.agentStatus ?? null) &&
         JSON.stringify(a.nativeChatIdentity ?? null) ===
           JSON.stringify(b.nativeChatIdentity ?? null) &&

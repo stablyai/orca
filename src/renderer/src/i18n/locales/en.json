@@ -484,13 +484,27 @@
         "never": "Never for this site",
         "notNow": "Not now",
         "update": "Update",
-        "save": "Save"
+        "save": "Save",
+        "saveChip": "Save password",
+        "updateChip": "Update password"
       },
       "fill": {
         "noUsername": "(no username)",
         "title": "Saved logins",
         "otherLogins": "Other logins on this site"
       }
+    },
+    "toolbar": {
+      "annotate": "Annotate",
+      "grab": "Grab",
+      "draw": "Draw",
+      "annotateOptions": "More annotate tools",
+      "copyAllNotes": "Copy all notes",
+      "clearNotes": "Clear notes",
+      "resetZoom": "Reset zoom",
+      "resetViewport": "Reset viewport size",
+      "findOnPage": "Find on page",
+      "profile": "Profile"
     }
   },
   "editor": {
@@ -1142,21 +1156,6 @@
         "invalid": "Enter a valid proxy URL.",
         "unsupportedProtocol": "Use an http, https, socks, socks4, or socks5 proxy URL.",
         "missingHost": "Proxy URL must include a host."
-      }
-    },
-    "voice": {
-      "modelDescriptions": {
-        "parakeetV3": "Highest accuracy for 25 European languages. Punctuation, capitalization, and word-level timestamps.",
-        "parakeetV2": "English only. Faster than v3 with similar accuracy. Punctuation and capitalization.",
-        "zipformerBilingual": "Chinese + English with code-switching. Low-latency real-time streaming.",
-        "paraformerBilingual": "Chinese (Mandarin + dialects) + English. Strong on accented and regional Chinese.",
-        "zipformerStreamingEnRetired": "No longer offered: it drops the start of sentences. Delete it to free up space.",
-        "zipformerStreamingZh": "Chinese only. Ultra-lightweight 14M-param model, ideal for low-resource devices.",
-        "zipformerStreamingKo": "Korean only. Low-latency real-time streaming.",
-        "parakeetJa": "Japanese only. Trained on 35k+ hours of natural speech. Punctuation included.",
-        "whisperTiny": "90+ languages. Lower accuracy than Parakeet but broadest language coverage.",
-        "senseVoice": "Chinese, English, Japanese, Korean, and Cantonese with automatic language detection.",
-        "gptTranscribe": "Cloud transcription with high accuracy. Requires an OpenAI API key."
       }
     },
     "diagnostics": {
@@ -9511,7 +9510,6 @@
           "7807c11c4d": "General",
           "6855b0f77d": "Finish the core workflows that make Orca useful for parallel agent work.",
           "6d119427ef": "Onboarding checklist",
-          "eb1176a14e": "Local speech-to-text dictation with on-device models.",
           "5063bb47a5": "Voice",
           "7118953f14": "Enable agents to control any app on your computer.",
           "c9841721cb": "Computer Use",
@@ -10032,7 +10030,6 @@
         "VoicePane": {
           "6fa734ed95": "Delete {{value0}}",
           "68de13f72c": "Failed to delete model.",
-          "1ba81c0ff0": "recommended",
           "cfde55c7b0": "Failed to download model.",
           "43fd4f454b": "Speech Model",
           "ba4a900d1d": "Dictation Mode",
@@ -10043,10 +10040,6 @@
           "506df81ba6": "OpenAI API key saved",
           "91980ce124": "{{value0}} MB",
           "61a16c8141": "Extracting...",
-          "8f4d2a51d7": "offline",
-          "d504ab05f0": "streaming",
-          "fbe5990716": "Select Model",
-          "e24f7d43d2": "Select a speech model. Local models run offline; cloud models require an API key.",
           "174da92062": "Hold",
           "118b3c2dee": "Toggle",
           "ad5d036ecc": "Could not request microphone permission. Voice dictation was not enabled.",
@@ -10054,9 +10047,11 @@
           "1eac933202": "Opened macOS Privacy & Security. Enable dictation again after granting access.",
           "cd9fe37556": "Microphone permission granted",
           "openAiKeyName": "Your OpenAI transcription key",
-          "dictationShortcutDescription": "Press {{shortcut}} to dictate text into any focused pane.",
           "dictationModeAuto": "Auto",
-          "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop."
+          "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop.",
+          "speechGpuLabel": "Use GPU",
+          "speechGpuDescription": "Recognize speech on the graphics card when it works, and on the CPU when it fails. Turn off if dictation freezes or restarts your computer.",
+          "updateToFasterVersion": "Update to the faster version ({{value0}} MB)"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -11902,7 +11897,10 @@
               "modelMemoryKeyword": "memory",
               "fillerWordsTitle": "Remove Filler Words",
               "fillerWordsDescription": "Drop “um”, “uh” and similar sounds from dictated text.",
-              "fillerWordsKeyword": "filler words"
+              "fillerWordsKeyword": "filler words",
+              "vocabularyTitle": "Vocabulary",
+              "vocabularyDescription": "Names and code terms dictation spells your way, for you or for one repo.",
+              "vocabularyKeyword": "dictionary"
             }
           }
         },
@@ -18226,6 +18224,7 @@
           "noModel": "No speech model selected. Download one in Settings > Voice.",
           "disabled": "Voice dictation is disabled. Enable it in Settings > Voice.",
           "notReady": "Speech model not ready. Download it in Settings > Voice.",
+          "modelNeedsUpdate": "Your speech model needs an update to keep working. Update it to the faster version in Settings > Voice.",
           "unknownModel": "Selected model is no longer available. Please choose another in Settings > Voice.",
           "5d2c3e7ae3": "No speech detected.",
           "micFallback": "Selected microphone unavailable. Using system default.",
@@ -18413,10 +18412,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Grab page context for agents",
-                      "body": "Use the grab tool to copy a page element's context for agents."
-                    },
                     "annotate": {
                       "title": "Mark design feedback in place",
                       "body": "Annotate elements and send those notes to an agent."
@@ -18554,7 +18549,6 @@
             "244266c122": "Import…",
             "e52a955e6f": "You can always find this in Settings > Browser.",
             "4f5ffaa6a1": "Import browser data",
-            "b24fef25be": "Import",
             "02e89014c5": "Imported {{value0}} cookies from {{value1}}{{value2}}.",
             "d40d584769": "Imported {{value0}} cookies from file."
           },
@@ -18616,7 +18610,6 @@
             "4328a0a062": "Grab failed: {{value0}}",
             "759f32af29": "Downloading",
             "4300f38145": "Downloading from {{value0}}{{value1}}",
-            "acbe79fd01": "Grab page element ({{value0}})",
             "cc4a071d3a": "Annotate page element ({{value0}})",
             "572046436a": "Remote browser",
             "b313a7275b": "Opening remote browser",
@@ -21060,7 +21053,10 @@
         "readFailed": "Unable to read this attachment on its host. Reconnect and try again. The file may have been removed or changed."
       },
       "install": {
-        "checking": "Checking whether {{agent}} is ready on this host…"
+        "checking": "Checking whether {{agent}} is ready on this host…",
+        "cliInstall": "Install",
+        "cliRecheck": "Check again",
+        "cliRecheckFailed": "Could not check installed agents on this host. Try again."
       },
       "reasoning": "Reasoning",
       "failureWords": {
@@ -21117,6 +21113,10 @@
         "modelUnavailable": "{{agent}} couldn't use {{detail}}. Pick another model and send again.",
         "modelUnavailableUpdate": "{{agent}} couldn't use {{detail}}. Update {{agent}} to {{minimumVersion}} or later to keep it after a restart, or pick another model and send again.",
         "modelNotSelected": "{{agent}} has no model selected. Check your model selection and {{agent}} sign-in, then send again.",
+        "providerUnavailable": "{{agent}} couldn't respond because the service is busy. Pick another model, or wait a little and send again.",
+        "providerSafetyStopped": "{{agent}} stopped this response after a safety check. Review your request and send again.",
+        "providerResponseFailed": "{{agent}} couldn't finish this response. Open Details for more information.",
+        "selectedModel": "the selected model",
         "providerRejected": "{{agent}} didn't accept this message.",
         "providerRejectedQuoted": "{{agent}} didn't accept this message: {{detail}}.",
         "attachmentEmpty": "An image on this message is empty, so the message was not sent.",
@@ -21620,6 +21620,8 @@
         "showAgent": "Show {{value0}} in the conversation"
       },
       "jumpToLatest": "Jump to latest",
+      "newRowsAnnouncement": "New messages arrived while you were away",
+      "newRowsMarker": "New",
       "find": {
         "label": "Find in chat",
         "noResults": "No results",
@@ -22572,6 +22574,9 @@
         "scrollToLatestOnSendTitle": "Scroll to latest when sending",
         "scrollToLatestOnSendCopy": "Sending while scrolled up jumps to the latest message and follows the reply. Turn off to keep your place.",
         "scrollToLatestOnSendSearchPosition": "position",
+        "markNewMessagesTitle": "Mark new messages when returning to a chat",
+        "markNewMessagesCopy": "Coming back to a chat draws a New line above what arrived while you were away, and scrolls to it if you were reading the latest.",
+        "markNewMessagesSearchUnread": "unread",
         "inlineVisualsTitle": "Inline visuals",
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
@@ -22632,6 +22637,106 @@
         "fillerWords": {
           "title": "Remove Filler Words",
           "description": "Drops sounds like “um” and “uh” from dictated text, in the dictation language."
+        },
+        "openAiCompatible": {
+          "updateFailed": "Could not update the provider",
+          "title": "OpenAI-compatible provider",
+          "description": "Audio goes to this service only while the OpenAI-compatible model is selected. It works with Groq, Mistral, OpenAI and local servers.",
+          "baseUrl": "Base URL",
+          "baseUrlPlaceholder": "https://api.groq.com/openai/v1",
+          "model": "Model",
+          "modelPlaceholder": "whisper-large-v3-turbo",
+          "apiKey": "API Key",
+          "keySaved": "Saved key kept",
+          "keyOptional": "Optional for local servers",
+          "save": "Save",
+          "rowConfigured": "Base URL and model saved for the OpenAI-compatible model.",
+          "rowMissing": "Add a base URL and model before selecting the OpenAI-compatible model.",
+          "edit": "Edit",
+          "removeLabel": "Remove OpenAI-compatible provider",
+          "setUp": "Set up"
+        },
+        "sectionDescription": "Talk instead of typing in any pane. Speech is recognized on this computer unless you pick a cloud model.",
+        "input": {
+          "title": "Input",
+          "shortcut": "Shortcut",
+          "shortcutDescription": "Starts dictation in the focused pane.",
+          "changeShortcut": "Change"
+        },
+        "language": {
+          "title": "Language"
+        },
+        "cleanup": {
+          "title": "Cleanup"
+        },
+        "advanced": {
+          "title": "Advanced"
+        },
+        "setup": {
+          "downloadingDescription": "You can leave this page. Dictation works once the download finishes.",
+          "title": "Set up dictation",
+          "pickModel": "Talk instead of typing in any pane. Download a speech model below to start; models on this computer keep your audio here.",
+          "microphoneMissingTitle": "{{microphone}} isn’t connected",
+          "microphoneMissingDescription": "Dictation uses the system default microphone until it’s back.",
+          "changeMicrophone": "Change Microphone",
+          "onTitle": "Dictation is on",
+          "onLocal": "Press {{shortcut}} in any pane. {{model}} runs on this computer.",
+          "onCloud": "Press {{shortcut}} in any pane. {{model}} runs in the cloud.",
+          "offTitle": "Dictation is off",
+          "offDescription": "Turn it on to dictate with {{shortcut}} in any pane.",
+          "savedMicrophone": "Your microphone",
+          "description": "Talk instead of typing in any pane. Speech is recognized on this computer, so your audio stays here.",
+          "setUp": "Set up",
+          "asksForMicrophone": "Orca will ask for microphone access."
+        },
+        "quality": {
+          "unsupported": "Doesn’t support your language",
+          "unmeasured": "Not measured",
+          "poor": "Poor",
+          "fair": "Fair",
+          "good": "Good",
+          "veryGood": "Very good",
+          "excellent": "Excellent",
+          "characterErrorRate": "{{percent}}% character error rate",
+          "wordErrorRate": "{{percent}}% word error rate",
+          "librispeech": "Test: LibriSpeech read speech, {{clips}} clips, measured {{date}}.",
+          "fleurs": "Test: FLEURS read speech, {{clips}} clips, measured {{date}}.",
+          "bench": "Orca’s benchmark on a Mac with Apple silicon.",
+          "label": "Quality: {{word}}"
+        },
+        "models": {
+          "retired": "No longer offered. Delete it to free up space.",
+          "sendsToOpenAi": "Sends your audio to OpenAI.",
+          "sendsToCompatible": "Sends your audio to the service you set up.",
+          "delete": "Delete",
+          "cancelDownload": "Cancel download",
+          "inUse": "In use",
+          "use": "Use",
+          "setUpCloud": "Set up",
+          "download": "Download",
+          "cloud": "Cloud",
+          "description": "Quality is rated for {{language}}. Hover a rating to see the test behind it.",
+          "where": "Where models run",
+          "local": "On this computer",
+          "cloudDescription": "Cloud models send your audio to the provider. Models on this computer keep it here."
+        },
+        "vocabulary": {
+          "title": "Vocabulary",
+          "description": "Names and code terms to spell your way. Add what the model mishears it as, if it keeps getting it wrong.",
+          "repoScope": "Only used while you dictate in {{repo}}.",
+          "personalScope": "Used in every repo.",
+          "scope": "Terms for",
+          "personal": "Personal · {{total}}",
+          "repo": "{{repo}} · {{total}}",
+          "heardAsChip": "← {{heardAs}}",
+          "remove": "Remove {{term}}",
+          "term": "Word or phrase",
+          "heardAs": "Heard as (optional)",
+          "heardAsLabel": "Heard as",
+          "add": "Add",
+          "repoNameHint": "Use the repo name as a hint",
+          "repoNameHintDescription": "Helps recognize the repo's name.",
+          "repoSaveFailed": "Couldn't save the repo's terms. The host running this repo may need an Orca update."
         }
       },
       "repositoryHooks": {
@@ -26533,5 +26638,31 @@
     "syncingShort": "Syncing…",
     "title": "MCP servers",
     "toggleServer": "Sync {{name}} ({{agent}}) to cloud workspaces"
+  },
+  "speechModelUpdate": {
+    "updateTitle": "Update your speech model",
+    "updateDescription": "Dictation now runs on a faster engine. {{model}} needs a one-time download ({{size}} MB) before you can dictate again.",
+    "update": "Update",
+    "replacedTitle": "Your speech model was replaced",
+    "replacedDescription": "{{old}} can't run on the new speech engine. {{model}} replaces it ({{size}} MB).",
+    "downloadReplacement": "Download {{model}}",
+    "later": "Later",
+    "dismiss": "Dismiss",
+    "updatingTitle": "Updating {{model}}",
+    "downloadingTitle": "Downloading {{model}}",
+    "downloadingDescription": "You can keep working. Dictation is back when this finishes.",
+    "progress": "{{done}} of {{total}} MB",
+    "cancel": "Cancel",
+    "doneTitle": "Dictation is ready",
+    "doneDescription": "{{model}} is updated. The old files were removed.",
+    "doneRetiredDescription": "{{model}} is set up. The old {{old}} files are still on disk.",
+    "keep": "Keep",
+    "deleteOld": "Delete old model",
+    "deleteFailed": "Failed to delete {{model}}.",
+    "updateFailedTitle": "Couldn't update {{model}}",
+    "downloadFailedTitle": "Couldn't download {{model}}",
+    "failedAtDescription": "The download stopped at {{mb}} MB. Check your connection and try again.",
+    "failedDescription": "The download stopped. Check your connection and try again.",
+    "tryAgain": "Try again"
   }
 }

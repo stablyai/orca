@@ -35,6 +35,7 @@ export type ComposerCardSourceProps = Pick<
   | 'tuiAgent'
   | 'detectedAgentIds'
   | 'advancedOpen'
+  | 'setupChoiceRevealRequest'
   | 'projectError'
   | 'creating'
   | 'note'
@@ -102,6 +103,7 @@ export type ComposerCardActionProps = {
   onTuiAgentChange: ComposerModel['setTuiAgent']
   onOpenAgentSettings: ComposerModel['handleOpenAgentSettings']
   onToggleAdvanced: () => void
+  onSetupChoiceRevealed: () => void
   createDisabled: boolean
   onNoteChange: ComposerModel['setNote']
   onBaseBranchChange: ComposerModel['handleBaseBranchChange']

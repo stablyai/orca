@@ -1,6 +1,7 @@
 import type { AgentMainAgentStatus } from '../../agent-status/lifecycle/main-agent-status'
 import type { ParsedAgentStatusPayload } from '../../agent-status/contracts/agent-status-types'
 import { isAskUserQuestionTool } from '../../agent-status/lifecycle/agent-question-answered-intent'
+import { CODEX_ASYNC_QUESTION_TOOL } from '../../codex-async-question-input'
 import {
   continueMainAgentStatus,
   foldAgentLeadStatus,
@@ -191,9 +192,14 @@ export function codexLeadStateForHookEvent(
   toolName?: string
 ): CodexLeadTurnState['state'] | undefined {
   // Preserve execution-host reviewer ownership; event names alone would turn every relayed approval into waiting.
-  return eventName === 'PermissionRequest' && normalizedState === 'working'
-    ? 'working'
-    : codexHookEventState(eventName, toolName)
+  if (eventName === 'PermissionRequest' && normalizedState === 'working') {
+    return 'working'
+  }
+  // The execution host tracks Codex's async questions; its waiting outlasts the events around it.
+  if (normalizedState === 'waiting' && toolName === CODEX_ASYNC_QUESTION_TOOL) {
+    return 'waiting'
+  }
+  return codexHookEventState(eventName, toolName)
 }
 
 /** Which children an unlabelled relayed poll may retire by omitting them. */

@@ -6,6 +6,10 @@ import type {
   HostedSessionWarningEvent
 } from '../../shared/hosted-sandbox/hosted-session-events'
 import { EPHEMERAL_VM_RUNTIMES_CHANGED_CHANNEL } from '../../shared/ephemeral-vm-runtime-store-events'
+import {
+  PENDING_VM_CHECKOUTS_CHANGED_CHANNEL,
+  type PendingVmCheckout
+} from '../../shared/pending-vm-checkouts'
 
 export const ephemeralVmApi = {
   listRecipes: (args) => ipcRenderer.invoke('ephemeralVm:listRecipes', args),
@@ -61,5 +65,15 @@ export const ephemeralVmApi = {
   cloudSshRevoke: (args) => ipcRenderer.invoke('cloudSsh:revoke', args),
   cloudSshRemoveSshConfigInclude: () => ipcRenderer.invoke('cloudSsh:removeSshConfigInclude'),
   cloudEnvironmentIds: () => ipcRenderer.invoke('ephemeralVm:cloudEnvironmentIds'),
-  openCloudRemoteDesktop: (args) => ipcRenderer.invoke('ephemeralVm:openCloudRemoteDesktop', args)
+  openCloudRemoteDesktop: (args) => ipcRenderer.invoke('ephemeralVm:openCloudRemoteDesktop', args),
+  publishPendingCheckouts: (checkouts) => {
+    void ipcRenderer.invoke('ephemeralVm:publishPendingCheckouts', checkouts).catch(() => {})
+  },
+  listPendingCheckouts: () => ipcRenderer.invoke('ephemeralVm:listPendingCheckouts'),
+  onPendingCheckoutsChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, checkouts: PendingVmCheckout[]): void =>
+      callback(checkouts)
+    ipcRenderer.on(PENDING_VM_CHECKOUTS_CHANGED_CHANNEL, listener)
+    return () => ipcRenderer.removeListener(PENDING_VM_CHECKOUTS_CHANGED_CHANNEL, listener)
+  }
 } satisfies PreloadApi['ephemeralVm']

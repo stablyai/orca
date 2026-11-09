@@ -60,6 +60,7 @@
     "check:id-only-store-write-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-id-only-store-write-ratchet.mjs",
     "check:repo-host-read-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-repo-host-read-ratchet.mjs",
     "check:workspace-record-read-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-workspace-record-read-ratchet.mjs",
+    "check:tab-map-seam-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-tab-map-seam-ratchet.mjs",
     "check:worktree-id-composer-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-worktree-id-composer-ratchet.mjs",
     "check:direct-link-open-ratchet": "node config/scripts/static-analysis/ratchets/renderer-state/check-direct-link-open-ratchet.mjs",
     "check:e2e-typecheck-ratchet": "node config/scripts/typecheck/e2e-admission/check-e2e-typecheck-ratchet.mjs",
@@ -392,12 +393,13 @@
   "optionalDependencies": {
     "@orca/windows-registry": "workspace:*",
     "@orca/windows-security": "workspace:*",
+    "@transcribe-cpp/darwin-arm64-metal": "0.4.1",
+    "@transcribe-cpp/darwin-x64-cpu": "0.4.1",
+    "@transcribe-cpp/linux-arm64-cpu-vulkan": "0.4.1",
+    "@transcribe-cpp/linux-x64-cpu-vulkan": "0.4.1",
+    "@transcribe-cpp/win32-x64-cpu-vulkan": "0.4.1",
     "@vscode/windows-process-tree": "0.8.0",
-    "sherpa-onnx-darwin-arm64": "1.12.37",
-    "sherpa-onnx-darwin-x64": "1.12.37",
-    "sherpa-onnx-linux-arm64": "1.12.37",
-    "sherpa-onnx-linux-x64": "1.12.37",
-    "sherpa-onnx-win-x64": "1.12.37"
+    "transcribe-cpp": "0.4.1"
   },
   "lint-staged": {
     "{*.{ts,tsx,js,jsx,mjs,mts,cts},!(cloud)/**/*.{ts,tsx,js,jsx,mjs,mts,cts}}": [

@@ -22,6 +22,7 @@ import type {
   CloudSshStatus
 } from '../../shared/cloud-ssh'
 import type { CloudRemoteDesktopResult } from '../../shared/hosted-sandbox/cloud-remote-desktop'
+import type { PendingVmCheckout } from '../../shared/pending-vm-checkouts'
 
 export type EphemeralVmApi = {
   listRecipes: (args: { repoId: string }) => Promise<{
@@ -121,4 +122,9 @@ export type EphemeralVmApi = {
   cloudSshRevoke: (args: { workspaceId: string }) => Promise<CloudSshRevokeResult>
   /** Takes Orca's Include line back out of ~/.ssh/config. */
   cloudSshRemoveSshConfigInclude: () => Promise<boolean>
+  /** This window's VM checkouts whose creates have not adopted them yet; replaces its last set. */
+  publishPendingCheckouts: (checkouts: PendingVmCheckout[]) => void
+  listPendingCheckouts: () => Promise<PendingVmCheckout[]>
+  /** Every window's pending VM checkouts, whenever any window's set changes. */
+  onPendingCheckoutsChanged: (callback: (checkouts: PendingVmCheckout[]) => void) => () => void
 }
