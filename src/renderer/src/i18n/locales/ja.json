@@ -10645,7 +10645,10 @@
               "modelUnloadTitle": "音声モデルの解放",
               "modelUnloadDescription": "ローカル音声モデルをメモリから解放するタイミングを選びます。",
               "modelUnloadKeyword": "解放",
-              "modelMemoryKeyword": "メモリ"
+              "modelMemoryKeyword": "メモリ",
+              "fillerWordsTitle": "フィラーを削除",
+              "fillerWordsDescription": "「えーと」「うーん」などのつなぎ言葉を音声入力のテキストから取り除きます。",
+              "fillerWordsKeyword": "フィラー"
             }
           }
         },
@@ -19963,6 +19966,10 @@
           "cloud": "クラウドモデルはプロバイダーのサーバーで動くため、ここには何も読み込まれません。",
           "never": "しない",
           "immediately": "すぐに"
+        },
+        "fillerWords": {
+          "title": "フィラーを削除",
+          "description": "音声入力の言語に合わせて、「えーと」「うーん」などのつなぎ言葉を入力テキストから取り除きます。"
         }
       }
     },

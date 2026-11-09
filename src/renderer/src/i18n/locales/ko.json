@@ -10608,7 +10608,10 @@
               "modelUnloadTitle": "음성 모델 언로드",
               "modelUnloadDescription": "로컬 음성 모델을 메모리에서 언로드할 시점을 선택합니다.",
               "modelUnloadKeyword": "언로드",
-              "modelMemoryKeyword": "메모리"
+              "modelMemoryKeyword": "메모리",
+              "fillerWordsTitle": "군말 제거",
+              "fillerWordsDescription": "받아쓴 텍스트에서 “음”, “흠” 같은 소리를 지웁니다.",
+              "fillerWordsKeyword": "군말"
             }
           }
         },
@@ -19963,6 +19966,10 @@
           "cloud": "클라우드 모델은 제공업체 서버에서 실행되므로 여기에는 아무것도 로드되지 않습니다.",
           "never": "안 함",
           "immediately": "즉시"
+        },
+        "fillerWords": {
+          "title": "군말 제거",
+          "description": "받아쓰기 언어에 맞춰 받아쓴 텍스트에서 “음”, “흠” 같은 소리를 지웁니다."
         }
       }
     },

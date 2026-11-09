@@ -11284,7 +11284,10 @@
               "modelUnloadTitle": "Konuşma modelini bellekten kaldır",
               "modelUnloadDescription": "Yerel konuşma modelinin bellekten ne zaman kaldırılacağını seçin.",
               "modelUnloadKeyword": "kaldır",
-              "modelMemoryKeyword": "bellek"
+              "modelMemoryKeyword": "bellek",
+              "fillerWordsTitle": "Dolgu seslerini kaldır",
+              "fillerWordsDescription": "Dikte edilen metinden “hmm” gibi duraksama seslerini çıkarır.",
+              "fillerWordsKeyword": "dolgu"
             }
           }
         },
@@ -20646,6 +20649,10 @@
           "cloud": "Bulut modelleri sağlayıcının sunucularında çalışır, bu yüzden burada hiçbir şey yüklü kalmaz.",
           "never": "Asla",
           "immediately": "Hemen"
+        },
+        "fillerWords": {
+          "title": "Dolgu seslerini kaldır",
+          "description": "Dikte edilen metinden “hmm” gibi duraksama seslerini dikte diline göre çıkarır."
         }
       }
     },
