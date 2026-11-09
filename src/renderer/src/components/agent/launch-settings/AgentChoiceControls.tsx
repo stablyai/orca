@@ -88,7 +88,7 @@ export function AgentChoiceFields({
       (!optionIds || optionIds.includes(option.id))
   )
   const effort = modelMenu?.descriptors.find((entry) => entry.id === 'effort')
-  if (modelMenu) {
+  if (modelMenu && selected?.model) {
     options = options.filter(({ option }) => option.id !== 'effort')
     if (effort?.kind.type === 'select') {
       options.push({

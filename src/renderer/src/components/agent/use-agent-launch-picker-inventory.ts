@@ -25,7 +25,8 @@ import {
   agentPickerModelCatalogReads,
   readAgentPickerLaunchSupport
 } from './agent-launch-picker-host-reads'
-import { getWslDistroFromPath } from '@/lib/local-preflight-context'
+import { agentPickerUsesNativeRuntime } from './agent-launch-picker-runtime'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
 import { AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY } from '../../../../shared/agent-session/structured-agent-session-surface-capabilities'
 import { formatAgentTypeLabel } from '../../../../shared/agent-status/presentation/agent-type-label'
 import {
@@ -112,12 +113,16 @@ export function useAgentLaunchPickerInventorySource(
       ...(worktreeId ? { worktreeId } : {})
     }
   })
-  const nativeRuntime =
-    !getWslDistroFromPath(
-      context?.launchCwd ?? (selectedWorkspace ? selectedWorkspace.path : repo?.path) ?? ''
-    ) &&
-    route.projectRuntime?.status !== 'repair-required' &&
-    !(route.projectRuntime?.status === 'resolved' && route.projectRuntime.runtime.kind === 'wsl')
+  const platform =
+    target?.kind === 'environment'
+      ? lastVerifiedRuntimeStatus(state.runtimeStatusByEnvironmentId.get(target.environmentId))
+          ?.hostPlatform
+      : getRendererAppPlatform()
+  const nativeRuntime = agentPickerUsesNativeRuntime(
+    route,
+    platform,
+    context?.launchCwd ?? (selectedWorkspace ? selectedWorkspace.path : repo?.path) ?? ''
+  )
   const coherentCatalog =
     route.hostCapabilities?.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY) === true
   const draftTarget = useMemo(
@@ -272,12 +277,7 @@ export function useAgentLaunchPickerInventorySource(
           target,
           selector,
           nativeRuntime,
-          platform:
-            target.kind === 'environment'
-              ? lastVerifiedRuntimeStatus(
-                  state.runtimeStatusByEnvironmentId.get(target.environmentId)
-                )?.hostPlatform
-              : window.api.platform.get().platform,
+          platform,
           settings,
           serverSettings:
             target.kind === 'environment' ? async () => (await readDefaults())?.settings : undefined

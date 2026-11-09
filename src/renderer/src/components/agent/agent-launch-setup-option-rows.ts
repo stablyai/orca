@@ -95,9 +95,9 @@ export function agentLaunchSetupOptionRows(
     ...(currentModel ? { model: currentModel } : {}),
     ...argumentsView.choices.options
   }).descriptors.find((row) => row.id === 'effort')
-  const readonlyEffort = !entry.textGeneration && effort?.settable === false ? effort : undefined
+  const sharedEffort = !entry.textGeneration ? effort : undefined
   const rows: SessionOptionDescriptor[] = options
-    .filter((option) => !readonlyEffort || option.id !== 'effort')
+    .filter((option) => !sharedEffort || option.id !== 'effort')
     .map((option) => {
       const effortInArguments =
         entry.textGeneration?.effortInArguments &&
@@ -170,7 +170,17 @@ export function agentLaunchSetupOptionRows(
             argumentsKnown)
       }
     })
-  return readonlyEffort ? [...rows, readonlyEffort] : rows
+  if (sharedEffort) {
+    rows.push(
+      argumentsView.context.analysis.opaqueKeys.has('effort')
+        ? argumentsOwnedRow('effort', sharedEffort.label, sharedEffort.category, t)
+        : {
+            ...sharedEffort,
+            settable: sharedEffort.settable && !disabled && !defaultsPending
+          }
+    )
+  }
+  return rows
 }
 
 /** Speed rows sit apart from the rest; launch also lifts level rows onto speed's line. */

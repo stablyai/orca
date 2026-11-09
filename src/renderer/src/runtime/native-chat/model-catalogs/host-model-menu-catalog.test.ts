@@ -11,6 +11,7 @@ vi.mock('../host-capabilities/structured-agent-session-host-capability', () => (
 import { hostModelMenuCatalog } from './host-model-menu-catalog'
 import {
   forgetHostModelCatalogSnapshots,
+  readHostModelCatalogSnapshot,
   recordHostModelCatalogSnapshot,
   resetHostModelCatalogSnapshotsForTests
 } from './host-model-catalog-snapshots'
@@ -87,6 +88,70 @@ it('drops a late reply after an account switch and consumes a plain legacy listi
   expect(mocks.call).toHaveBeenCalledTimes(2)
   expect(mocks.call.mock.calls.every((call) => call[2].waitForListing === undefined)).toBe(true)
   stop()
+})
+
+it.each([75, 750])(
+  'compares only changed catalog payloads with %i retained workspaces',
+  (count) => {
+    let visits = 0
+    const answer = (changed = false): AgentSessionModelCatalogResult => ({
+      origin: 'probe',
+      fetchedAt: 1,
+      modelsDifferByWorkspace: true,
+      models: Array.from({ length: 20 }, (_, index) => ({
+        id: `${changed ? 'new' : 'old'}-${index}`,
+        get label() {
+          visits += 1
+          return 'Model'
+        },
+        isDefault: false,
+        efforts: []
+      }))
+    })
+    for (let i = 0; i < count; i += 1) {
+      recordHostModelCatalogSnapshot(target, 'codex', `id:wt-${i}`, answer())
+    }
+    visits = 0
+    recordHostModelCatalogSnapshot(target, 'codex', 'id:wt-0', answer())
+    recordHostModelCatalogSnapshot(target, 'codex', 'id:wt-0', answer(true))
+    expect(visits).toBeLessThanOrEqual(80)
+    const held = readHostModelCatalogSnapshot(target, 'codex', {
+      newLaunch: true,
+      seedsModel: true,
+      worktree: 'id:wt-0'
+    })
+    expect(held?.origin !== 'unknown' && held?.models[0].id).toBe('new-0')
+  }
+)
+
+it('publishes completed empty and retired answers without changing another workspace', () => {
+  const a = hostModelMenuCatalog({ target, agent: 'codex', worktree: 'id:a' })
+  const b = hostModelMenuCatalog({ target, agent: 'codex', worktree: 'id:b' })
+  const onA = vi.fn(),
+    onB = vi.fn()
+  const stopA = a.subscribe(onA),
+    stopB = b.subscribe(onB)
+  recordHostModelCatalogSnapshot(target, 'codex', 'id:a', catalog('old-only'))
+  recordHostModelCatalogSnapshot(target, 'codex', 'id:b', catalog('other'))
+  onA.mockClear()
+  onB.mockClear()
+  recordHostModelCatalogSnapshot(target, 'codex', 'id:a', {
+    origin: 'probe',
+    fetchedAt: 2,
+    models: []
+  })
+  expect(a.snapshot.answer).toEqual({ origin: 'probe', fetchedAt: 2, models: [] })
+  expect(onA).toHaveBeenCalledTimes(1)
+  expect(onB).not.toHaveBeenCalled()
+  recordHostModelCatalogSnapshot(target, 'codex', 'id:b', catalog('other-new'))
+  expect(a.snapshot.answer).toEqual({ origin: 'probe', fetchedAt: 2, models: [] })
+  onB.mockClear()
+  recordHostModelCatalogSnapshot(target, 'codex', 'id:a', { origin: 'unknown' })
+  expect(a.snapshot.answer).toEqual({ origin: 'unknown' })
+  expect(b.snapshot.answer).toMatchObject({ models: [{ id: 'other-new' }] })
+  expect(onB).not.toHaveBeenCalled()
+  stopA()
+  stopB()
 })
 
 it('keeps native-only answers out of guest and differing paired-command routes', async () => {

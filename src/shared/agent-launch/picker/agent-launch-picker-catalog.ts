@@ -1,4 +1,5 @@
 import { modelMenuOptions } from '../../agent-session/options/model-menu-options'
+import { listedModelDescribing } from '../../agent-session/options/structured-agent-session-listed-model'
 import {
   discoveredModel,
   structuredModelEfforts
@@ -44,9 +45,10 @@ export function agentPickerEntryOptions(
       : []
   }
   let options = agentPickerOptions(entry.agent, model, surface)
-  const live = agentPickerModelMenu(entry, surface).rows.find(
-    (row) => row.id === model || (model === undefined && row.isDefault)
-  )
+  const rows = agentPickerModelMenu(entry, surface).rows
+  const live = model
+    ? listedModelDescribing(rows, undefined, model)
+    : rows.find((row) => row.isDefault)
   if (!live && model) {
     return []
   }

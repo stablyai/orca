@@ -74,14 +74,19 @@ export function modelMenuOptions(
       : state.catalogSource === 'builtin'
         ? 'builtin'
         : 'listed'
+  const liveById = new Map<string, AgentSessionModelOption>()
+  if (surfaced?.origin !== 'unknown') {
+    for (const row of surfaced?.models ?? []) {
+      if (!liveById.has(row.id)) {
+        liveById.set(row.id, row)
+      }
+    }
+  }
   const rows: AgentSessionModelOption[] =
     status === 'listing'
       ? []
       : (state.catalog?.models ?? []).map((model) => {
-          const live =
-            surfaced?.origin !== 'unknown'
-              ? surfaced?.models.find((row) => row.id === model.id)
-              : undefined
+          const live = liveById.get(model.id)
           const effort = model.options.find((option) => option.id === 'effort')?.kind
           return (
             live ?? {

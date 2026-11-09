@@ -47,7 +47,13 @@ class HostModelMenuCatalog {
       ...value,
       generation: hostModelCatalogGeneration(this.scope.target, this.scope.agent)
     }
-    if (JSON.stringify(this.snapshot) === JSON.stringify(next)) {
+    if (
+      this.snapshot.generation === next.generation &&
+      this.snapshot.pending === next.pending &&
+      this.snapshot.attempted === next.attempted &&
+      (this.snapshot.answer === next.answer ||
+        JSON.stringify(this.snapshot.answer) === JSON.stringify(next.answer))
+    ) {
       return
     }
     this.snapshot = next
@@ -58,16 +64,31 @@ class HostModelMenuCatalog {
     this.unsubscribe ??= subscribeHostModelCatalogSnapshot(
       this.scope.target,
       this.scope.agent,
-      (forgotten) => {
-        if (forgotten) {
+      (change) => {
+        if (change.forgotten) {
           // An older account's physical read may finish, but cannot own this generation.
           this.pending = undefined
           this.publish({ pending: false })
         } else {
-          const held = this.held()
-          if (held) {
-            this.publish({ ...this.snapshot, answer: held })
+          const exact = change.worktree === (this.scope.worktree ?? null)
+          const current = this.snapshot.answer
+          if (
+            !exact &&
+            change.worktree !== null &&
+            current &&
+            !current.listingInProgress &&
+            (current.origin === 'unknown' || current.models.length === 0)
+          ) {
+            return
           }
+          const held = this.held()
+          const retired =
+            !change.catalog.listingInProgress &&
+            (change.catalog.origin === 'unknown' || change.catalog.models.length === 0)
+          this.publish({
+            ...this.snapshot,
+            answer: exact && retired ? change.catalog : held
+          })
         }
       }
     )

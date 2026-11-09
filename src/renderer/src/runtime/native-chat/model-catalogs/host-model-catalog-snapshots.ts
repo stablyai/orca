@@ -17,7 +17,10 @@ const catalogGenerations = new Map<string, number>()
 // Bumped per host and agent by each chat's answer, so an older preload never replaces it.
 const chatAnswers = new Map<string, number>()
 
-type CatalogListener = (forgotten: boolean) => void
+type CatalogChange =
+  | { forgotten: true }
+  | { forgotten: false; worktree: string | null; catalog: AgentSessionModelCatalogResult }
+type CatalogListener = (change: CatalogChange) => void
 const listeners = new Map<string, Set<CatalogListener>>()
 
 export function subscribeHostModelCatalogSnapshot(
@@ -74,11 +77,14 @@ export function recordHostModelCatalogSnapshot(
   if (worktree !== null && next !== snapshots.get(key) && next?.byWorktree.has(worktree)) {
     chatAnswers.set(key, (chatAnswers.get(key) ?? 0) + 1)
   }
-  if (
-    JSON.stringify(previous?.account) === JSON.stringify(next?.account) &&
-    JSON.stringify([...(previous?.byWorktree ?? [])]) ===
-      JSON.stringify([...(next?.byWorktree ?? [])])
-  ) {
+  const same = (a: unknown, b: unknown) => a === b || JSON.stringify(a) === JSON.stringify(b)
+  const unchanged =
+    previous === next ||
+    (same(previous?.account, next?.account) &&
+      previous?.byWorktree.size === next?.byWorktree.size &&
+      (worktree === null ||
+        same(previous?.byWorktree.get(worktree), next?.byWorktree.get(worktree))))
+  if (unchanged && catalog.origin !== 'unknown' && catalog.models.length > 0) {
     return
   }
   if (next) {
@@ -86,7 +92,7 @@ export function recordHostModelCatalogSnapshot(
   } else {
     snapshots.delete(key)
   }
-  listeners.get(key)?.forEach((listener) => listener(false))
+  listeners.get(key)?.forEach((listener) => listener({ forgotten: false, worktree, catalog }))
 }
 
 /** Drop all or selected agents’ host answers when the account a new chat pins may change. */
@@ -111,7 +117,7 @@ export function forgetHostModelCatalogSnapshots(
   for (const [key, scoped] of listeners) {
     const [keyHost, keyAgent] = key.split('\u0000')
     if (keyHost === hostKey && (!agents || agents.includes(keyAgent ?? ''))) {
-      scoped.forEach((listener) => listener(true))
+      scoped.forEach((listener) => listener({ forgotten: true }))
     }
   }
 }

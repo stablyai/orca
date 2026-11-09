@@ -2,6 +2,8 @@
 import { render, fireEvent, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { cleanup } from '@testing-library/react'
+import { useState } from 'react'
+import type { AgentDedicatedChoices } from '../../../../../shared/agent-launch/choices/agent-launch-choices'
 const mocks = vi.hoisted(() => ({ call: vi.fn() }))
 vi.mock('@/runtime/native-chat/requests/structured-agent-session-call', () => ({
   callStructuredAgentSession: mocks.call
@@ -79,6 +81,68 @@ it('clears the saved model through Agent default, without persisting a listed de
     target: { value: '__agent_default__' }
   })
   expect(change).toHaveBeenCalledWith({})
+})
+
+it('keeps options-only effort editable through pinning and clearing the model', () => {
+  const changed = vi.fn()
+  function Editor() {
+    const [value, setValue] = useState<AgentDedicatedChoices | undefined>({
+      options: { effort: 'high' }
+    })
+    const menu = modelMenuOptions(
+      {
+        origin: 'probe',
+        fetchedAt: 1,
+        models: [
+          {
+            id: 'account-only',
+            label: 'Account',
+            isDefault: false,
+            efforts: [
+              { value: 'low', label: 'Low' },
+              { value: 'medium', label: 'Medium' },
+              { value: 'high', label: 'High' }
+            ]
+          }
+        ]
+      },
+      {
+        agent: 'codex',
+        seed: getAgentSessionOptionLaunchCatalog('codex')!,
+        surface: 'terminal',
+        newLaunch: true,
+        seedsModel: false,
+        saved: { ...(value?.model ? { model: value.model } : {}), ...value?.options }
+      }
+    )
+    return (
+      <AgentChoiceControls
+        agent="codex"
+        value={value}
+        modelMenu={menu}
+        onChange={(next) => {
+          changed(next)
+          setValue(next)
+        }}
+      />
+    )
+  }
+  render(<Editor />)
+  const effort = () =>
+    screen.getByRole('combobox', { name: 'Reasoning effort' }) as HTMLSelectElement
+  expect(effort().value).toBe('high')
+  fireEvent.change(effort(), { target: { value: 'medium' } })
+  expect(changed).toHaveBeenLastCalledWith({ options: { effort: 'medium' } })
+  fireEvent.change(screen.getByRole('combobox', { name: 'Model' }), {
+    target: { value: 'account-only' }
+  })
+  fireEvent.change(screen.getByRole('combobox', { name: 'Model' }), {
+    target: { value: '__agent_default__' }
+  })
+  expect(effort().value).toBe('medium')
+  expect(changed).toHaveBeenLastCalledWith({ options: { effort: 'medium' } })
+  fireEvent.change(effort(), { target: { value: '__agent_default__' } })
+  expect(changed).toHaveBeenLastCalledWith({})
 })
 
 it('does not read collapsed model menus and shares one read when Settings menus open', async () => {

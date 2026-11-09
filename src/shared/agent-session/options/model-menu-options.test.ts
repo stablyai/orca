@@ -76,6 +76,29 @@ it('uses listed membership and live efforts, including when a seed names the sam
   })
 })
 
+it.each([200, 2000])('builds %i menu rows with linear live-row lookup work', (count) => {
+  let reads = 0
+  const menu = modelMenuOptions(
+    {
+      origin: 'probe',
+      fetchedAt: 1,
+      models: Array.from({ length: count }, (_, index) => ({
+        get id() {
+          reads += 1
+          return `model-${index}`
+        },
+        label: `Model ${index}`,
+        isDefault: false,
+        efforts: []
+      }))
+    },
+    input
+  )
+  expect(menu.rows).toHaveLength(count)
+  expect(menu.rows.at(-1)?.id).toBe(`model-${count - 1}`)
+  expect(reads).toBeLessThanOrEqual(count * 12)
+})
+
 it('distinguishes listing, unavailable discovery, coherent empty and legacy empty', () => {
   const listing = modelMenuOptions({ origin: 'unknown', listingInProgress: true }, input)
   expect(listing.status).toBe('listing')
