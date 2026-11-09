@@ -43,6 +43,7 @@ import { HostRenameDialog } from '../../HostRenameDialog'
 import { HostRemoveDialog } from '../../HostRemoveDialog'
 import { RuntimeRepairDialog } from '../../../runtime-access/RuntimeRepairDialog'
 import { resolveHostRemoval } from '../../host-rename-remove'
+import { HostAgentSignOutMenuItems } from './HostAgentSignOutMenuItems'
 
 function blockedTitle(
   reason: 'client-too-old' | 'server-too-old',
@@ -296,6 +297,13 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
             <RefreshCw className="size-3.5" />
             {t('auto.components.sidebar.HostSectionHeaderMenu.2d3e4f5a6b', 'Check connection')}
           </DropdownMenuItem>
+        )}
+        {runtimeEnvironmentId && row.health !== 'blocked' && (
+          <HostAgentSignOutMenuItems
+            environmentId={runtimeEnvironmentId}
+            hostLabel={row.label}
+            open={open}
+          />
         )}
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={handleManage}>

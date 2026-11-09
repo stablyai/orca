@@ -24,12 +24,23 @@ import {
   type RuntimeEnvironmentSubscriptionHandle
 } from '../runtime-environment-subscriptions'
 import type { PreloadApi } from '../api-types'
+import type {
+  AuthCallbackForwardRequest,
+  AuthCallbackForwardResult
+} from '../../shared/auth-callback-forward'
 import { managedOrcadApi } from './managed-orcad-api'
 import { getWslHostsApi } from './wsl-hosts-api'
 
 export const runtimeEnvironmentsApi = {
   desktopCreatedChatIds: (): Promise<string[]> =>
     ipcRenderer.invoke('runtimeEnvironments:desktopCreatedChatIds'),
+  openAuthCallbackForward: (
+    request: AuthCallbackForwardRequest
+  ): Promise<AuthCallbackForwardResult> =>
+    ipcRenderer.invoke('runtimeEnvironments:openAuthCallbackForward', request),
+  closeAuthCallbackForward: (
+    request: Pick<AuthCallbackForwardRequest, 'environmentId' | 'flowId'>
+  ): Promise<void> => ipcRenderer.invoke('runtimeEnvironments:closeAuthCallbackForward', request),
   getStatusSnapshots: (): Promise<RuntimeHostStatusSnapshot[]> =>
     ipcRenderer.invoke('runtimeEnvironments:getStatusSnapshots'),
   onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void): (() => void) => {

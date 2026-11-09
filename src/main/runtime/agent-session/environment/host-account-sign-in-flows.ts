@@ -32,6 +32,7 @@ export type HostAccountSignInRunner = (
 
 type Flow = {
   owner: string
+  callback: boolean
   status: HostAccountSignInStatus
   ended: AbortController
   stop: 'cancelled' | 'silent' | null
@@ -55,7 +56,11 @@ export class HostAccountSignInFlows {
     private readonly platform: NodeJS.Platform = process.platform
   ) {}
 
-  start(owner: string, provider: HostAccountSignInProvider): HostAccountSignInStatus {
+  start(
+    owner: string,
+    provider: HostAccountSignInProvider,
+    options: { callback?: boolean } = {}
+  ): HostAccountSignInStatus {
     if (this.platform === 'win32') {
       throw new Error(
         'Adding accounts from another device is not available on Windows hosts yet. Run `orca account add` in a terminal on that host.'
@@ -63,7 +68,12 @@ export class HostAccountSignInFlows {
     }
     const current = this.active
     if (current) {
-      if (current.owner === owner && current.status.provider === provider && !current.stop) {
+      if (
+        current.owner === owner &&
+        current.status.provider === provider &&
+        current.callback === (options.callback === true) &&
+        !current.stop
+      ) {
         this.touch(current)
         return current.status
       }
@@ -78,6 +88,7 @@ export class HostAccountSignInFlows {
     code.promise.catch(() => {})
     const flow: Flow = {
       owner,
+      callback: options.callback === true,
       status: { flowId: randomUUID(), provider, revision: 1, phase: 'starting' },
       ended: new AbortController(),
       stop: null,
@@ -106,7 +117,8 @@ export class HostAccountSignInFlows {
           this.update(flow, { phase: 'waiting', prompt })
         }
       },
-      nextCode: () => flow.code.promise
+      nextCode: () => flow.code.promise,
+      ...(flow.callback ? { callback: true } : {})
     }
     try {
       const result = await this.run(flow.status.provider, channel)
@@ -150,6 +162,24 @@ export class HostAccountSignInFlows {
       signal?.addEventListener('abort', done, { once: true })
     })
     return flow.status
+  }
+
+  /** The callback port `owner` may reach on this host: only its own flow, only while it waits in the browser. */
+  callbackTarget(owner: string, flowId: string): { port: number; ended: AbortSignal } | null {
+    const flow = this.latest.get(owner)
+    const port = flow?.status.prompt?.callbackPort
+    if (
+      !flow ||
+      flow !== this.active ||
+      flow.status.flowId !== flowId ||
+      flow.status.phase !== 'waiting' ||
+      flow.stop ||
+      port === undefined
+    ) {
+      return null
+    }
+    this.touch(flow)
+    return { port, ended: flow.ended.signal }
   }
 
   submitCode(owner: string, flowId: string, code: string): HostAccountSignInStatus {

@@ -20,7 +20,6 @@ import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-w
 import { resolveBackendDraftStartup } from '@/lib/workspace/creation/worktree-draft-startup-view-mode'
 import {
   recoverWorktreeLegacyPreparation,
-  hostPlannableAgentLaunch,
   worktreeCreationAgentLaunchOptions,
   windowStartupAfterCreate
 } from '@/lib/workspace/creation/worktree-creation-host-agent-launch'
@@ -38,12 +37,14 @@ import {
 } from '@/lib/workspace/creation/worktree-creation-surface'
 import { prepareCreatedWorktreeActivation } from '@/lib/workspace/creation/worktree-creation-initial-tabs'
 import type { UISlice } from '@/store/slices/ui/ui-slice-contract'
+import { hostSignInCheck, signedInHostLaunch } from '@/lib/agent-sign-in/host-agent-launch-sign-in'
 
 export async function executeWorktreeCreation(
   creationId: string,
   request: WorktreeCreationRequest,
   originView: UISlice['activeView'] = 'terminal'
 ): Promise<void> {
+  const signedOut = hostSignInCheck(request) // asked while the request is prepared
   const trustedRequest = request.hookPreparation
     ? await prepareWorktreeCreationHooks(creationId, request)
     : request
@@ -57,7 +58,7 @@ export async function executeWorktreeCreation(
   const creationHostId =
     preparedRequest.workspaceRunContext?.hostId ?? preparedRequest.executionHostId
   const onCreationHost = creationHostId ? { executionHostId: creationHostId } : {}
-  const hostAgentLaunch = hostPlannableAgentLaunch(preparedRequest)
+  const hostAgentLaunch = await signedInHostLaunch(preparedRequest, signedOut)
   let result: CreatedWorktreeResult
   try {
     const provisionedRoot = getProvisionedRootCreateOptions(preparedRequest)
