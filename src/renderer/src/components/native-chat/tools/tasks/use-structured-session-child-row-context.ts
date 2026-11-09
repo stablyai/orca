@@ -3,10 +3,13 @@ import {
   agentChildRowContextForParent,
   type AgentChildRowContext
 } from '../../../../../../shared/agent-status/presentation/agent-child-row-model'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  isAgentStatusFresh
+} from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { useNow } from '@/hooks/use-now'
-import { isAgentStatusFresh } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
+
 import { useAppStore } from '@/store'
 
 /** The verdict a session's status row gives its children, exactly as the sidebar derives it. */

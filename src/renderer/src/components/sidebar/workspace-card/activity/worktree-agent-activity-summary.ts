@@ -4,14 +4,17 @@ import {
   type VisibleOrchestrationState
 } from '@/runtime/agent-orchestration/visible-agent-orchestration'
 import type { AppState } from '@/store/types'
-import { isAgentStatusFresh } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  isAgentStatusFresh,
+  AGENT_STATUS_STALE_AFTER_MS
+} from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import { migrationUnsupportedToAgentStatusEntry } from '../../../../../../shared/migration-unsupported-agent-entry'
 import {
   mergeAgentStatusOrchestration,
   parseAgentStatusPaneIdentity,
   resolveAgentStatusWorktreeId
 } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
+
 import type { AgentStatusOrchestrationContext } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import { agentVerdictDisplayMark } from '../../../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { applyAgentPaneActivityFlags } from '../../../../../../shared/worktree-status-rollup'

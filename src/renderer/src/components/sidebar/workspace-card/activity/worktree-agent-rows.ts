@@ -1,9 +1,12 @@
 import type { Tab } from '../../../../../../shared/tab-types'
 import { parseAgentStatusPaneIdentity } from '../../../../../../shared/agent-status/identity/agent-status-worktree-attribution'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
-import { isAgentStatusFresh } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  isAgentStatusFresh,
+  AGENT_STATUS_STALE_AFTER_MS
+} from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
+
 import type {
   AgentStatusEntry,
   AgentStatusOrchestrationContext

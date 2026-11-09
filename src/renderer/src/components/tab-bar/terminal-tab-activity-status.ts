@@ -2,9 +2,12 @@ import {
   readAgentAttentionUnreadReason,
   type ReadableAgentAttentionUnread
 } from '@/attention/agent-attention-contract'
-import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  isAgentStatusFresh,
+  AGENT_STATUS_STALE_AFTER_MS
+} from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { resolveWorktreeStatus, type WorktreeStatus } from '@/lib/worktree-status'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+
 import type { AgentStatusEntry } from '../../../../shared/agent-status/contracts/agent-status-types'
 import { agentVerdictDisplayMark } from '../../../../shared/agent-status/lifecycle/agent-main-agent-verdict'
 import { resolveProgramStatusPresentation } from '../../../../shared/program-status/presentation'

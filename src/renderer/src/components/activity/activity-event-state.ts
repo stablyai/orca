@@ -1,5 +1,8 @@
-import { isAgentStatusFresh } from '../../../../shared/agent-status/contracts/agent-status-freshness'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  isAgentStatusFresh,
+  AGENT_STATUS_STALE_AFTER_MS
+} from '../../../../shared/agent-status/contracts/agent-status-freshness'
+
 import type {
   AgentStatusEntry,
   AgentStatusState,

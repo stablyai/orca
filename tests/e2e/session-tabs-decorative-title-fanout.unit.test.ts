@@ -4,8 +4,11 @@ import type {
   RuntimeMobileSessionTabsSnapshot
 } from '../../src/shared/runtime-types'
 import '../../src/shared/agent-status/title/agent-title-status'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../src/shared/agent-status/contracts/agent-status-freshness'
-import { isAgentStatusFresh } from '../../src/shared/agent-status/contracts/agent-status-freshness'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  isAgentStatusFresh
+} from '../../src/shared/agent-status/contracts/agent-status-freshness'
+
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import { SESSION_TABS_AGENT_STATUS_HEARTBEAT_INTERVAL_MS } from '../../src/main/runtime/session-lifecycle/publication/mobile-session-tabs-agent-status-heartbeat'
 import { applyFreshWebSessionTabsSnapshot } from '../../src/renderer/src/runtime/web-session-tabs-sync/snapshot-api'

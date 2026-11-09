@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_STATUS_STALE_AFTER_MS, isFreshNonDoneAgentStatus } from './agent-status-freshness'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  isFreshNonDoneAgentStatus,
+  isAgentStatusFresh
+} from './agent-status-freshness'
 import type { AgentStatusEntry } from './agent-status-types'
-import { isAgentStatusFresh } from './agent-status-freshness'
 
 const NOW = new Date('2026-04-09T12:00:00.000Z').getTime()
 const OBSERVED_AT = NOW - AGENT_STATUS_STALE_AFTER_MS - 60_000

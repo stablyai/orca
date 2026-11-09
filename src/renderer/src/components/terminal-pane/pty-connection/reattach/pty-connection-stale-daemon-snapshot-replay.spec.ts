@@ -6,14 +6,14 @@ import {
   createPane,
   captureCallbackTerminalWrites,
   createManager,
-  type ConnectCallbacks
+  type ConnectCallbacks,
+  type MockTransport
 } from '../test-fixtures/pty-connection-test-pane-fixtures'
 import {
   type PtyConnectionAgentTitleMocks as AgentTitleMocks,
-  bindPaneAgentTitleMocks
+  bindPaneAgentTitleMocks,
+  type buildPaneConnectionDeps
 } from '../test-fixtures/pty-connection-test-deps'
-import type { buildPaneConnectionDeps } from '../test-fixtures/pty-connection-test-deps'
-import type { MockTransport } from '../test-fixtures/pty-connection-test-pane-fixtures'
 
 export function registerStaleDaemonSnapshotReplayTests(
   getContext: () => {

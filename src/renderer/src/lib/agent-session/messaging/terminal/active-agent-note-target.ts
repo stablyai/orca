@@ -2,7 +2,10 @@ import type { RuntimeTerminalListResult } from '../../../../../../shared/runtime
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/rpc/targets/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
 import { toHostSessionTabId } from '../../../../../../shared/workspace-layout/terminal-surface-id'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  isAgentStatusFresh
+} from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
 import type { AgentStatusEntry } from '../../../../../../shared/agent-status/contracts/agent-status-types'
 import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -15,7 +18,7 @@ import {
 } from '../../../../../../shared/workspace-layout/stable-pane-id'
 import type { TerminalLayoutSnapshot } from '../../../../../../shared/workspace-layout/terminal-tab-types'
 import { detectAgentStatusFromTitle } from '../../../../../../shared/agent-status/title/agent-title-status'
-import { isAgentStatusFresh } from '../../../../../../shared/agent-status/contracts/agent-status-freshness'
+
 import { getAgentLabel } from '../../../../../../shared/agent-status/title/agent-title-identity'
 import { resolveRuntimePaneTitleForLeaf } from '../../../../../../shared/runtime-pane-title-leaf-id'
 
