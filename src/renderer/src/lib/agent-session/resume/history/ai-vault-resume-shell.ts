@@ -1,6 +1,7 @@
 import type { AppState } from '@/store/types'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { getFolderWorkspaceCandidateRepos } from '../../../folder-workspace-connection'
+import '../../../workspace/ownership/folder-workspace-connection'
+import { findFolderWorkspaceCandidateRepos } from '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getAiVaultResumeWorkspaceExecutionHostId } from './ai-vault-resume-target'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../../shared/execution-host'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
@@ -109,7 +110,9 @@ export function getAiVaultResumeWorkspaceWslDistro(
     ) {
       return null
     }
-    if (getFolderWorkspaceCandidateRepos(runtimeState, workspaceKey.folderWorkspaceId).length > 1) {
+    if (
+      findFolderWorkspaceCandidateRepos(runtimeState, workspaceKey.folderWorkspaceId).length > 1
+    ) {
       return undefined
     }
   }

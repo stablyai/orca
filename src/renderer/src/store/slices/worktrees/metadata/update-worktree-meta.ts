@@ -35,9 +35,9 @@ import { buildWorktreeMetaStateUpdate } from './worktree-meta-state-update'
 import { withPendingSidebarRowWrites } from '@/lib/sidebar-pending-layer'
 import { isRuntimeSelectorNotFoundError } from '../listing/runtime-worktree-rpc-errors'
 import { runtimeTargetForWorktreeOwner } from '../listing/worktree-owner-target'
-import { runtimeTargetForWorkspaceOwner } from '@/lib/resolve-owner'
+import { runtimeTargetForWorkspaceOwner } from '@/lib/workspace/ownership/resolve-owner'
 
-import { hasUniqueIndexedRepositoryHost } from '@/lib/repository-owner-index'
+import { hasUniqueIndexedRepositoryHost } from '@/lib/workspace/ownership/repository-owner-index'
 import { resolveReviewRepository } from '@/lib/review-owner'
 import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 export function createUpdateWorktreeMeta(

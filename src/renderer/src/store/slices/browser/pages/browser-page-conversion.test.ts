@@ -1,6 +1,6 @@
 import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as AgentStatusModule from '@/lib/agent-status'
+import type * as AgentStatusModule from '@/lib/agent-status/aggregation/worktree-agent-status'
 
 import { browserPageSchema } from '../../../../../../shared/workspace-session/workspace-session-browser-schema'
 import { createTestStore } from '../../../testing/app-store-test-fixture'
@@ -11,7 +11,7 @@ import {
 } from '../../tabs/tabs-drawn-from-main.test-fixture'
 
 const mocks = vi.hoisted(() => ({ releaseDocPreviewGrant: vi.fn(), callRuntimeRpc: vi.fn() }))
-vi.mock('@/lib/doc-preview-grants', () => ({
+vi.mock('@/lib/browser/documents/doc-preview-grants', () => ({
   releaseDocPreviewGrant: mocks.releaseDocPreviewGrant,
   ensureDocPreviewGrant: vi.fn(),
   buildDocPreviewGrantRequest: vi.fn()
@@ -32,7 +32,7 @@ vi.mock('@/runtime/workspace-layout/frames/runtime-layout-client', async (import
   ).runtimeLayoutClientWithTestFrames(await importOriginal())
 )
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
-vi.mock('@/lib/agent-status', async (importOriginal) => {
+vi.mock('@/lib/agent-status/aggregation/worktree-agent-status', async (importOriginal) => {
   const actual = await importOriginal<typeof AgentStatusModule>()
   return { ...actual, detectAgentStatusFromTitle: vi.fn().mockReturnValue(null) }
 })

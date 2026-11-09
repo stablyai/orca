@@ -5,14 +5,14 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../../../shared/constant
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance
-} from '@/lib/editor-file-operation-provenance'
-import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+} from '@/lib/editor/file-operations/editor-file-operation-provenance'
+import { getEditorFileOperationContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import {
   createUntitledMarkdownFile,
   type UntitledMarkdownFileInfo
-} from '@/lib/create-untitled-markdown'
+} from '@/lib/editor/file-operations/create-untitled-markdown'
 import type { RuntimeClientTarget } from '../../../../../../shared/runtime-client-target'
-import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
+import type { EditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import { findGroupForTab } from '../../tabs/tab-group-state'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'

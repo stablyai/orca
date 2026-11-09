@@ -14,7 +14,7 @@ import { linearCreateSubIssue } from '@/runtime/linear/runtime-linear-issue-clie
 import { useAppStore } from '@/store'
 import type { LinearIssue, LinearIssueChildSummary } from '../../../shared/linear/issue-types'
 import type { TaskSourceContext } from '../../../shared/work-items/task-source-context'
-import { defaultScopeSource } from '@/lib/default-creation-host'
+import { defaultScopeSource } from '@/runtime/hosts/selection/default-creation-host'
 
 function mergeLinearSubIssues(
   serverSubIssues: LinearIssueChildSummary[] | undefined,

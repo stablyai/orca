@@ -300,6 +300,7 @@
       "plan": "計畫",
       "stoppedManually": "已手動停止",
       "permissionDenied": "{{agent}} 拒絕了權限。查看詳細資訊。",
+      "safetyReviewApproved": "{{agent}} 已核准此操作。查看詳細資訊。",
       "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
       "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。",
       "modelFallback": "Claude 已切換模型：{{from}} → {{to}}。",

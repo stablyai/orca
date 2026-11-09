@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { buildAppFontFamily } from '@/lib/app-font-family'
-import { applyCodeFontSmoothing } from '@/lib/code-font-smoothing'
-import { applyMarkdownCodeFontFamily } from '@/lib/markdown-code-font'
+import { applyCodeFontSmoothing } from '@/lib/editor/appearance/code-font-smoothing'
+import { applyMarkdownCodeFontFamily } from '@/lib/editor/appearance/markdown-code-font'
 import { useSplitDividerSetting } from '@/hooks/use-split-divider-setting'
 import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manager-registry'
 import { applyDocumentTheme, applyPluginAppTheme } from '../lib/document-theme'
@@ -15,7 +15,7 @@ import {
   findCodeEditorTheme,
   paintCodeEditorColors,
   resolveCodeEditorTheme
-} from '../lib/code-editor-theme'
+} from '../lib/editor/appearance/code-editor-theme'
 import { browserColorProbe } from '../lib/plugin-theme-tokens'
 import {
   TINTED_HOST_PILL_OUTLINE_MIX_TOKEN,

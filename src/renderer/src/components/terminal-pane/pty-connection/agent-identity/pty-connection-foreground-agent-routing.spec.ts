@@ -68,8 +68,9 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     it('routes a manually typed Droid only after foreground enrichment confirms it', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks3 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
       const pane = createPane(1)
       const ptyId = 'pty-manually-typed-droid'
@@ -120,8 +121,9 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     it('confirms a manually typed Droid without OSC command boundaries', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks4 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('droid')
       const pane = createPane(1)
       const ptyId = 'pty-manual-droid-no-osc'
@@ -161,8 +163,9 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       // Retry across Droid boot while early foreground reads still see its shell.
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks6 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       const foregroundResults = ['bash.exe', 'bash.exe', 'droid']
       vi.mocked(window.api.pty.confirmForegroundProcess).mockImplementation(
         async () => foregroundResults.shift() ?? 'droid'
@@ -208,8 +211,9 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
       // A slow-boot miss must remain recoverable; latching shell would erase launch identity and poison later routing.
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks7 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       let foreground = 'bash.exe'
       // Why both: the pane's process monitor reads the same foreground the confirm read sees.
       vi.mocked(window.api.pty.getForegroundProcess).mockImplementation(async () => foreground)
@@ -266,8 +270,9 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     it('confirms a delayed Claude from fresh startup output after the first read window expires', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks8 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       let foreground = 'sleep'
       vi.mocked(window.api.pty.getForegroundProcess).mockImplementation(async () => foreground)
       vi.mocked(window.api.pty.confirmForegroundProcess).mockImplementation(async () => foreground)
@@ -307,8 +312,9 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     it('revokes trusted Droid after accepted no-OSC exit input until shell confirmation', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks9 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('cmd.exe')
       const pane = createPane(1)
       const ptyId = 'pty-droid-exit-no-osc'
@@ -355,8 +361,9 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     it('trusts Pi in a no-OSC shell and retires routing after accepted exit input', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks10 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks10 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       let foreground = 'pi'
       vi.mocked(window.api.pty.getForegroundProcess).mockResolvedValue('pi')
       vi.mocked(window.api.pty.confirmForegroundProcess).mockImplementation(async () => foreground)
@@ -416,8 +423,9 @@ export function registerPtyConnectionForegroundAgentRoutingTests(): void {
     it('never promotes typed Droid text when foreground enrichment is unavailable', async () => {
       vi.useFakeTimers()
       const { connectPanePty } = await import('../connect-pane-pty')
-      const agentTitleMocks11 =
-        await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+      const agentTitleMocks11 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+        '@/lib/agent-status/aggregation/worktree-agent-status'
+      )
       vi.mocked(window.api.pty.confirmForegroundProcess)
         .mockResolvedValueOnce(null)
         .mockRejectedValueOnce(new Error('inspection unavailable'))

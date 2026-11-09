@@ -67,8 +67,9 @@ export function registerPtyConnectionSessionLivenessTests(): void {
     describe('reconcileIfSessionMissing', () => {
       it('closes a split pane when targeted liveness says its local session is missing', async () => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -104,8 +105,9 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('does not close when targeted liveness is live or unknown', async () => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks2 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks2 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
@@ -132,8 +134,9 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('does not apply a stale targeted liveness result after reattach', async () => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks3 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks3 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         let resolveHasPty: (value: boolean) => void = () => {
           throw new Error('hasPty promise resolver was not initialized')
         }
@@ -170,8 +173,9 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       it('does NOT tear down a newborn pane when liveness was requested before it bound', async () => {
         // Liveness requested before binding cannot prove the fresh PTY dead.
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks4 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks4 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -215,8 +219,9 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('tears down the pane when liveness was requested after it bound', async () => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks5 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks5 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -262,8 +267,9 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('routes the last pane through onPtyExitRef when its session is dead', async () => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks6 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks6 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('pty-pane-1')
         transportFactoryQueue.push(transport)
         const manager = createManager(1)
@@ -288,8 +294,9 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('is a no-op for remote: web-runtime ids', async () => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks7 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks7 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         enableActiveRuntimeEnvironment('env-1')
         const transport = createMockTransport('remote:env-1:pane-2')
         transport.getConnectionId.mockReturnValue(null)
@@ -317,8 +324,9 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('is a no-op for SSH/non-local ids (non-null connectionId)', async () => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks8 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks8 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('pty-pane-2')
         transport.getConnectionId.mockReturnValue('ssh-target-1')
         transportFactoryQueue.push(transport)
@@ -345,8 +353,9 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('respects suppression: a suppressed dead session keeps the pane mounted', async () => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks9 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks9 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const transport = createMockTransport('pty-pane-2')
         transportFactoryQueue.push(transport)
         const manager = createManager(2)
@@ -375,8 +384,9 @@ export function registerPtyConnectionSessionLivenessTests(): void {
       it('still closes the replacement PTY after a suppressed restart rebinds the pane', async () => {
         // Scope exit guards by PTY ID so a rebound replacement’s later exit still tears down.
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks10 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks10 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -426,8 +436,9 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('closes a split pane exactly once across reconcile + a racing real exit', async () => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks11 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks11 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(
@@ -472,8 +483,9 @@ export function registerPtyConnectionSessionLivenessTests(): void {
 
       it('closes a genuinely-dead non-suppressed pane once (not misread as suppressed)', async () => {
         const { connectPanePty } = await import('../connect-pane-pty')
-        const agentTitleMocks12 =
-          await vi.importMock<PtyConnectionAgentTitleMocks>('@/lib/agent-status')
+        const agentTitleMocks12 = await vi.importMock<PtyConnectionAgentTitleMocks>(
+          '@/lib/agent-status/aggregation/worktree-agent-status'
+        )
         const capturedDataCallback: { current: ((data: string) => void) | null } = { current: null }
         const transport = createMockTransport('pty-pane-2')
         transport.connect.mockImplementation(

@@ -40,7 +40,7 @@ vi.mock('../../../store/index', () => ({
     getState: () => store
   })
 }))
-vi.mock('@/lib/chat-provider-agents', () => ({
+vi.mock('@/runtime/native-chat/agent-catalogs/chat-provider-agents', () => ({
   chatProviderAgents: () => ['claude', 'codex', 'antigravity'],
   useHostStructuredAgentsVersion: () => 0
 }))
