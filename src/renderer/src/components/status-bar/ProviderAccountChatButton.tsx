@@ -1,4 +1,5 @@
 import type { ComponentProps } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store'
@@ -27,7 +28,6 @@ export function ProviderAccountChatButton({
       type="button"
       variant="outline"
       size="xs"
-      className="w-full"
       disabled={disabled}
       onClick={
         add
@@ -44,9 +44,14 @@ export function ProviderAccountChatButton({
           : buttonProps.onClick
       }
     >
-      {add
-        ? t('components.native-chat.usageLimitActions.addAccount', 'Add Account…')
-        : t('components.native-chat.usageLimitActions.switchAccount', 'Switch Account')}
+      {add ? (
+        t('components.native-chat.usageLimitActions.addAccount', 'Add Account…')
+      ) : (
+        <>
+          {t('components.native-chat.usageLimitActions.switchAccount', 'Switch Account')}
+          <ChevronDown />
+        </>
+      )}
     </Button>
   )
 }

@@ -20804,17 +20804,16 @@
       },
       "usageLimitActions": {
         "continueNow": "Continue Now",
-        "leadIn": "Continue this chat without waiting:",
         "switchAccount": "Switch Account",
         "addAccount": "Add Account…",
-        "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead."
+        "accountUnavailable": "This chat cannot move to another account. Hand it off to another agent instead.",
+        "handOff": "Hand Off…"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "Couldn't cancel automatic continuation. Try again.",
-        "openSetting": "Continue automatically when limits reset",
         "cancelled": "Orca won't continue this chat automatically.",
         "scheduled": "Orca will continue this chat at {{time}}.",
-        "cancel": "Don't continue"
+        "continueAt": "Continue automatically at {{time}}"
       },
       "settings": "Chat settings",
       "composerWorkspace": {
@@ -20894,6 +20893,12 @@
         "questionNotSentDetail": "Your question is still in this chat. Send /btw again to retry.",
         "questionUnconfirmed": "{{agent}} couldn't confirm the side chat got your question",
         "questionUnconfirmedDetail": "Check the side chat before asking again. Your question is still in this chat."
+      },
+      "usageLimitHeadline": {
+        "unnamed": "Usage limit reached",
+        "window": "{{agent}} {{window}} limit reached",
+        "agent": "{{agent}} usage limit reached",
+        "resetsAt": "Resets at {{time}}"
       }
     },
     "tab": {

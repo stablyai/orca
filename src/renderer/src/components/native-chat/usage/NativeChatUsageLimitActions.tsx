@@ -8,7 +8,6 @@ import {
   useState,
   type ReactNode
 } from 'react'
-import { MessageSquarePlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useTranslate } from '@/i18n/use-translate'
 import { useAppStore } from '@/store/index'
@@ -39,7 +38,7 @@ type UsageLimitActions = {
   handOff?: () => void
   disabled: boolean
 }
-const UsageLimitActionsContext = createContext<UsageLimitActions | null>(null)
+export const NativeChatUsageLimitActionsContext = createContext<UsageLimitActions | null>(null)
 
 export function NativeChatUsageLimitActionsProvider({
   pane,
@@ -226,7 +225,7 @@ export function NativeChatUsageLimitActionsProvider({
     [intentKey, view]
   )
   return (
-    <UsageLimitActionsContext.Provider value={actions}>
+    <NativeChatUsageLimitActionsContext.Provider value={actions}>
       <NativeChatOrcaStopContext.Provider value={stopView}>
         {children}
       </NativeChatOrcaStopContext.Provider>
@@ -243,25 +242,19 @@ export function NativeChatUsageLimitActionsProvider({
           }}
         />
       ) : null}
-    </UsageLimitActionsContext.Provider>
+    </NativeChatUsageLimitActionsContext.Provider>
   )
 }
 
 export function NativeChatUsageLimitActions(): React.JSX.Element | null {
   const t = useTranslate()
-  const actions = useContext(UsageLimitActionsContext)
+  const actions = useContext(NativeChatUsageLimitActionsContext)
   if (!actions || (!actions.account && !actions.handOff)) {
     return null
   }
   return (
-    <div className="ml-6 flex flex-wrap items-center gap-2 text-chat-foreground-faint">
-      <p className="text-xs">
-        {t(
-          'components.native-chat.usageLimitActions.leadIn',
-          'Continue this chat without waiting:'
-        )}
-      </p>
-      {actions.account ? <div className="w-32 shrink-0 empty:hidden">{actions.account}</div> : null}
+    <div className="ml-6 flex flex-wrap items-center gap-2">
+      {actions.account}
       {actions.handOff ? (
         <Button
           type="button"
@@ -270,11 +263,7 @@ export function NativeChatUsageLimitActions(): React.JSX.Element | null {
           disabled={actions.disabled}
           onClick={actions.handOff}
         >
-          <MessageSquarePlus />
-          {t(
-            'components.agentSessionContinuation.handOffToAnotherAgent',
-            'Hand Off to Another Agent'
-          )}
+          {t('components.native-chat.usageLimitActions.handOff', 'Hand Off…')}
         </Button>
       ) : null}
     </div>

@@ -4,6 +4,7 @@ import {
 } from '../../../../../../shared/native-chat/claude-model-fallback'
 import { NativeChatUsageLimitAutoContinue } from '../../usage/NativeChatUsageLimitAutoContinue'
 import { NativeChatUsageLimitActions } from '../../usage/NativeChatUsageLimitActions'
+import { NativeChatUsageLimitHeadline } from '../../usage/NativeChatUsageLimitHeadline'
 import { agentSessionGoalControlWords } from '../../session/goals/agent-session-goal-control-words'
 import { AlertCircle, AlertTriangle, Info } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -313,9 +314,13 @@ export function NativeChatNoticeRow({
     >
       <div className="flex items-start gap-2">
         {Icon ? <Icon aria-hidden="true" className="mt-0.5 size-4 shrink-0" /> : null}
-        <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">
-          {antigravitySignInContent ?? text}
-        </p>
+        {failure?.kind === 'usageLimitReached' && !named ? (
+          <NativeChatUsageLimitHeadline agentName={agentName} usageLimit={failure.usageLimit} />
+        ) : (
+          <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">
+            {antigravitySignInContent ?? text}
+          </p>
+        )}
         {continueOffered ? (
           <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />
         ) : usageLimitContinue ? (

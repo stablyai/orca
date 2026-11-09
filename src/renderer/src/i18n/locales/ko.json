@@ -19462,17 +19462,16 @@
       },
       "usageLimitActions": {
         "continueNow": "지금 계속",
-        "leadIn": "기다리지 않고 이 채팅을 계속하세요:",
         "switchAccount": "계정 전환",
         "addAccount": "계정 추가…",
-        "accountUnavailable": "이 채팅을 다른 계정으로 옮길 수 없습니다. 다른 에이전트에게 인계하세요."
+        "accountUnavailable": "이 채팅을 다른 계정으로 옮길 수 없습니다. 다른 에이전트에게 인계하세요.",
+        "handOff": "넘기기…"
       },
       "usageLimitAutoContinue": {
         "cancelFailed": "자동 계속을 취소하지 못했습니다. 다시 시도하세요.",
-        "openSetting": "한도가 재설정되면 자동으로 계속하기",
         "cancelled": "Orca가 이 채팅을 자동으로 계속하지 않습니다.",
         "scheduled": "Orca가 {{time}}에 이 채팅을 계속합니다.",
-        "cancel": "계속하지 않기"
+        "continueAt": "{{time}}에 자동으로 계속"
       },
       "settings": "채팅 설정",
       "textAttachmentPreview": {
@@ -19526,7 +19525,13 @@
         "many_other": "풀 리퀘스트 {{count}}개 열림"
       },
       "splitRight": "오른쪽으로 분할",
-      "splitDown": "아래로 분할"
+      "splitDown": "아래로 분할",
+      "usageLimitHeadline": {
+        "unnamed": "사용 한도에 도달함",
+        "window": "{{agent}}이(가) {{window}} 한도에 도달함",
+        "agent": "{{agent}}이(가) 사용 한도에 도달함",
+        "resetsAt": "{{time}}에 초기화"
+      }
     },
     "tab": {
       "bar": {
