@@ -189,6 +189,8 @@ export class BridgeHost {
   private nativeHandler: ((method: string, params: ESObject) => Promise<Object>) | null = null;
   private nativeMethods: string[] = [];
   private onBack: ((home: boolean) => void) | null = null;
+  private overlayNavigation: ((pathname: string, params: Record<string, string>) => void) | null = null;
+  private overlayNavigated: boolean = false;
   private onPaint: (() => void) | null = null;
   private safeAreaInsets: BridgeSafeAreaInsets = { top: 0, right: 0, bottom: 0, left: 0 };
   private keyboardInset: number = 0;
@@ -254,6 +256,9 @@ export class BridgeHost {
     this.nativeMethods = methods; this.nativeHandler = handler;
   }
   setNavigation(back: (home: boolean) => void, paint: () => void): void { this.onBack = back; this.onPaint = paint; }
+  setOverlayNavigation(navigate: (pathname: string, params: Record<string, string>) => void): void {
+    this.overlayNavigation = navigate;
+  }
   getRoute(): string { return this.routePathname; }
   getRouteParams(): Record<string, string> { return this.routeParams; }
   handleBack(): boolean {
@@ -588,7 +593,7 @@ export class BridgeHost {
       this.handleTerminalViewportNotify(msg);
       return;
     }
-    if (name === 'navigate-back') { if (this.onBack) { this.onBack(false); } return; }
+    if (name === 'navigate-back') { if (!this.overlayNavigated) { this.onBack?.(false); } return; }
     if (name === 'back-claim') { this.backClaimed = msg['claimed'] === true; return; }
     if (name === 'painted') { if (this.onPaint) { this.onPaint(); } return; }
     if (name === 'navigate' || name === 'location') {
@@ -599,6 +604,7 @@ export class BridgeHost {
   }
 
   private handleRouteNotify(navigate: boolean, href: string, replace: boolean): void {
+    if (this.overlayNavigated) { return; }
     if (typeof href !== 'string' || href.length > 2048 || /[\\#\s\x00-\x1f\x7f]/.test(href)) { return; }
     if (navigate && !this.routeGrants().includes('navigate')) { return; }
     if (navigate && href === '/') { if (this.onBack) { this.onBack(true); } return; }
@@ -619,6 +625,13 @@ export class BridgeHost {
     }
     if (pathname !== hostPath && !pathname.startsWith(`${hostPath}/`)) { return; }
     if (!this.acceptsLocationPath(pathname)) { return; }
+    if (this.overlayNavigation && pathname !== this.routePathname) {
+      if (navigate && this.manifest.routes.some((route: BundleRoute): boolean => this.routeMatches(route.pathname, pathname))) {
+        this.overlayNavigated = true;
+        this.overlayNavigation(pathname, params);
+      }
+      return;
+    }
     this.routePathname = pathname;
     this.routeParams = params;
     if (this.locationSink) { this.locationSink(pathname, params); }
@@ -632,8 +645,8 @@ export class BridgeHost {
     try {
       for (let i = 0; i < pairs.length; i++) {
         let at = pairs[i].indexOf('=');
-        let key = decodeURIComponent(at < 0 ? pairs[i] : pairs[i].substring(0, at));
-        let value = decodeURIComponent(at < 0 ? '' : pairs[i].substring(at + 1));
+        let key = decodeURIComponent((at < 0 ? pairs[i] : pairs[i].substring(0, at)).replace(/\+/g, ' '));
+        let value = decodeURIComponent((at < 0 ? '' : pairs[i].substring(at + 1)).replace(/\+/g, ' '));
         if (!key || ['__proto__', 'constructor', 'prototype'].includes(key) || params[key] !== undefined) { return null; }
         params[key] = value;
       }
@@ -1149,7 +1162,8 @@ export class BridgeHost {
     let grants = this.routeGrants();
     let pageRoutes: string[] = [];
     for (let i = 0; i < this.manifest.routes.length; i++) {
-      pageRoutes.push(this.manifest.routes[i].pathname);
+      let pattern = this.manifest.routes[i].pathname;
+      if (!this.overlayNavigation || this.routeMatches(pattern, this.routePathname)) { pageRoutes.push(pattern); }
     }
     let rpcGrants: BridgeRpcGrants = {
       maxPendingRequests: MAX_PENDING_REQUESTS,

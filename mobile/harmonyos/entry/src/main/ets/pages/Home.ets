@@ -5,6 +5,7 @@ import { router, promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
 import { parseLaunchRoute } from '../navigation/LaunchRoute';
+import { ShellRoute, shellRouterParams } from '../navigation/ShellRoute';
 import { getNumber, KEY_HOME_FONT_SCALE } from '../settings/SettingsStore';
 import { removeDesktop } from '../storage/HostRemoval';
 import { listHosts, HostMeta } from '../storage/HostStore';
@@ -26,11 +27,13 @@ import { loadMobileOnboardingSteps } from '../onboarding/MobileOnboardingPlan';
 import { recoverRelayPairings } from '../transport/RelayPairing';
 import { HomeStats, readHomeStats, totalHomeStats } from '../home/HomeStats';
 import { HomeQuotaOffer, HomeQuotaScope, readHomeQuotaOffer, consumeHomeQuotaReset } from '../home/HomeQuotaReset';
+import { ShellSurface, ShellSurfaceBack } from '../webshell/ShellSurface';
 
 // upstream src/theme/mobile-theme.ts: darkColors / lightColors（外壳用到的子集）
 interface HomePalette {
   bgBase: string;
   bgPanel: string;
+  sheetGroup: string;
   bgRaised: string;
   borderSubtle: string;
   textPrimary: string;
@@ -46,6 +49,7 @@ interface HomePalette {
 const PALETTE_DARK: HomePalette = {
   bgBase: '#0a0a0a',
   bgPanel: '#171717',
+  sheetGroup: '#262626',
   bgRaised: '#262626',
   borderSubtle: '#2c2c2c', // rgba(255,255,255,0.07) over #0a0a0a/#171717
   textPrimary: '#fafafa',
@@ -61,6 +65,7 @@ const PALETTE_DARK: HomePalette = {
 const PALETTE_LIGHT: HomePalette = {
   bgBase: '#ffffff',
   bgPanel: '#fafafa',
+  sheetGroup: '#ffffff',
   bgRaised: '#f5f5f5',
   borderSubtle: '#e5e5e5',
   textPrimary: '#0a0a0a',
@@ -118,6 +123,7 @@ function withoutDesktop<T>(values: Record<string, T>, hostId: string): Record<st
 struct Home {
   @StorageProp('uiLocale') uiLocale: string = 'en';
   @StorageProp('themeScheme') scheme: string = 'dark';
+  @StorageProp('themeSheet') themeSheet: string = '#171717';
   @State activeTab: string = 'feed';
   @State hosts: HostMeta[] = [];
   @State loaded: boolean = false;
@@ -132,8 +138,13 @@ struct Home {
   @State agentDesktops: AgentDesktop[] = [];
   @State summaries: Record<string, string> = {};
   @State loadError: string = '';
-  @State hostPickerRoute: string = '';
   @State tabHostPicker: string = '';
+  @State tabHostPickerOpen: boolean = false;
+  @State offeredActionHosts: string[] = [];
+  @State workspaceDrawer: ShellRoute | null = null;
+  @State workspacePageVisible: boolean = true;
+  private pickerAction: ShellRoute | null = null;
+  private workspaceBack: ShellSurfaceBack = new ShellSurfaceBack();
   @State usageDesktopId: string = '';
   @State automationDesktopId: string = '';
   @State usageRefreshing: string[] = [];
@@ -195,6 +206,7 @@ struct Home {
 
   onPageShow(): void {
     this.visible = true; enterHomePrewarm();
+    this.workspacePageVisible = true;
     this.updateTabClock();
     let uri = AppStorage.get<string>('pendingLaunchUri') ?? '';
     AppStorage.setOrCreate('pendingLaunchUri', '');
@@ -214,6 +226,7 @@ struct Home {
 
   onPageHide(): void {
     this.visible = false; leaveHomePrewarm();
+    this.workspacePageVisible = false;
     this.updateTabClock();
     this.loadEpoch++;
     this.pauseHomeCatalogs();
@@ -237,9 +250,12 @@ struct Home {
   }
 
   onBackPress(): boolean {
+    if (this.workspaceDrawer) {
+      if (!this.workspaceBack.handle()) { this.workspaceDrawer = null; }
+      return true;
+    }
     if (this.hostSheetOpen) { this.hostSheetOpen = false; return true; }
-    if (this.tabHostPicker) { this.tabHostPicker = ''; return true; }
-    if (this.hostPickerRoute) { this.hostPickerRoute = ''; return true; }
+    if (this.tabHostPickerOpen) { this.tabHostPickerOpen = false; return true; }
     if (this.activeTab !== 'feed') { this.activeTab = 'feed'; this.updateTabClock(); return true; }
     return false;
   }
@@ -310,8 +326,26 @@ struct Home {
     if (this.tabHostPicker === 'usage') { this.usageDesktopId = hostId; }
     else if (this.tabHostPicker === 'automations') {
       this.automationDesktopId = hostId; this.refreshAutomations(hostId);
+    } else if (this.offeredActionHosts.includes(hostId) && this.online[hostId] === true) {
+      let suffix = this.tabHostPicker === 'workspace' ? '/new-workspace' : '/tasks';
+      this.pickerAction = { hostId: hostId, pathname: `/h/${encodeURIComponent(hostId)}${suffix}`, params: {} };
     }
-    this.tabHostPicker = '';
+    this.tabHostPickerOpen = false;
+  }
+
+  private showTabHostPicker(tab: string): void {
+    this.tabHostPicker = tab; this.pickerAction = null; this.tabHostPickerOpen = true;
+  }
+
+  private finishTabHostPicker(): void {
+    let route = this.pickerAction;
+    this.tabHostPickerOpen = false; this.tabHostPicker = ''; this.pickerAction = null; this.offeredActionHosts = [];
+    if (route && this.visible && this.online[route.hostId] === true) { this.openPickedDesktop(route); }
+  }
+
+  private openPickedDesktop(route: ShellRoute): void {
+    if (route.pathname.endsWith('/new-workspace')) { this.workspaceDrawer = route; }
+    else { this.openShellRoute(route); }
   }
 
   private updateTabClock(): void {
@@ -709,10 +743,11 @@ struct Home {
   }
 
   openHostRoute(hostId: string, suffix: string, params: Record<string, string> = {}): void {
-    let routeParams: Record<string, string> = { 'hostId': hostId, 'route': `/h/${encodeURIComponent(hostId)}${suffix}` };
-    let keys = Object.keys(params);
-    for (let i = 0; i < keys.length; i++) { routeParams[keys[i]] = params[keys[i]]; }
-    router.pushUrl({ url: 'pages/ShellScreen', params: routeParams }).catch(() => {});
+    this.openShellRoute({ hostId: hostId, pathname: `/h/${encodeURIComponent(hostId)}${suffix}`, params: params });
+  }
+
+  private openShellRoute(route: ShellRoute): void {
+    router.pushUrl({ url: 'pages/ShellScreen', params: shellRouterParams(route) }).catch(() => {});
   }
 
   private openAgent(row: AgentListRow, withPane: boolean = true): void {
@@ -805,8 +840,13 @@ struct Home {
 
   openOnConnectedHost(route: string): void {
     let hosts = this.hosts.filter((host: HostMeta): boolean => this.online[host.id] === true);
-    if (hosts.length === 1) { this.openHostRoute(hosts[0].id, route); }
-    else if (hosts.length > 1) { this.hostPickerRoute = route; }
+    if (hosts.length === 1) {
+      let hostId = hosts[0].id;
+      this.openPickedDesktop({ hostId: hostId, pathname: `/h/${encodeURIComponent(hostId)}${route}`, params: {} });
+    } else if (hosts.length > 1) {
+      this.offeredActionHosts = hosts.map((host: HostMeta): string => host.id);
+      this.showTabHostPicker(route === '/new-workspace' ? 'workspace' : 'tasks');
+    }
   }
 
   openNewAutomation(hostId: string): void {
@@ -1236,17 +1276,43 @@ struct Home {
       .margin({ top: 4, bottom: 8, left: 2 }).borderRadius(20).backgroundColor(this.pal().bgPanel)
       .accessibilityGroup(true).accessibilityText(this.hosts.length > 1
         ? uiText('{{desktop}}，选择另一台桌面', this.uiLocale).replace('{{desktop}}', host.name) : host.name)
-      .onClick(() => { if (this.hosts.length > 1) { this.tabHostPicker = tab; } })
+      .onClick(() => { if (this.hosts.length > 1) { this.showTabHostPicker(tab); } })
+  }
+
+  private tabPickerTitle(): string {
+    if (this.tabHostPicker === 'usage') { return '选择要显示使用情况的桌面'; }
+    if (this.tabHostPicker === 'automations') { return '选择要显示自动化的桌面'; }
+    return this.tabHostPicker === 'workspace' ? '选择创建工作区的桌面' : '选择桌面';
+  }
+
+  private pickerHosts(): HostMeta[] {
+    return this.offeredActionHosts.length > 0
+      ? this.hosts.filter((host: HostMeta): boolean => this.offeredActionHosts.includes(host.id)) : this.hosts;
+  }
+
+  private pickedTabHostId(): string {
+    if (this.tabHostPicker === 'usage') { return this.tabDesktop(this.usageDesktopId)?.id ?? ''; }
+    if (this.tabHostPicker === 'automations') { return this.tabDesktop(this.automationDesktopId)?.id ?? ''; }
+    return '';
+  }
+
+  private pickerHostSubtitle(host: HostMeta): string {
+    let address = endpointLabel(host.endpoint);
+    let duplicate = this.pickerHosts().some((other: HostMeta): boolean =>
+      other.id !== host.id && other.name === host.name && endpointLabel(other.endpoint) === address);
+    return duplicate ? `${address} · ${host.id}` : address;
   }
 
   @Builder
   tabDesktopPicker() {
-    Column({ space: 12 }) {
-      Text(uiText(this.tabHostPicker === 'usage' ? '选择要显示使用情况的桌面' : '选择要显示自动化的桌面', this.uiLocale))
-        .fontFamily('Geist').fontSize(18).fontWeight(FontWeight.Medium).fontColor(this.pal().textPrimary)
-        .width('100%')
+    Column() {
+      Row().width(36).height(5).borderRadius(3).backgroundColor(this.pal().textMuted).opacity(0.5)
+        .margin({ bottom: 16 })
+      Text(uiText(this.tabPickerTitle(), this.uiLocale))
+        .fontFamily('Geist').fontSize(13).fontWeight(FontWeight.Medium).fontColor(this.pal().textSecondary)
+        .width('100%').padding({ left: 16, right: 16 }).margin({ bottom: 8 })
       List() {
-        ForEach(this.hosts, (host: HostMeta, index: number) => {
+        ForEach(this.pickerHosts(), (host: HostMeta, index: number) => {
           ListItem() {
             Column() {
               if (index > 0) { this.hairline(16) }
@@ -1254,21 +1320,23 @@ struct Home {
                 Row({ space: 12 }) {
                   Column({ space: 3 }) {
                     Text(host.name).fontFamily('Geist').fontSize(16).fontColor(this.pal().textPrimary).maxLines(1)
-                    Text(endpointLabel(host.endpoint)).fontFamily('Geist').fontSize(13)
-                      .fontColor(this.pal().textSecondary).maxLines(1)
+                    Text(this.pickerHostSubtitle(host)).fontFamily('Geist').fontSize(13)
+                      .fontColor(this.pal().textSecondary).maxLines(1).textOverflow({ overflow: TextOverflow.Ellipsis })
                   }.alignItems(HorizontalAlign.Start).layoutWeight(1)
-                  if (this.tabDesktop(this.tabHostPicker === 'usage' ? this.usageDesktopId : this.automationDesktopId)?.id === host.id) {
+                  if (this.pickedTabHostId() === host.id) {
                     Image($r('app.media.lucide_check')).supportSvg2(true).width(18).height(18)
                       .colorFilter(lucideColorFilter(this.pal().accentBlue))
                   }
                 }.width('100%').padding({ left: 16, right: 16 })
               }.width('100%').height(56).backgroundColor(Color.Transparent)
+                .enabled(this.offeredActionHosts.length === 0 || this.online[host.id] === true)
                 .onClick(() => this.pickTabDesktop(host.id))
             }.width('100%')
           }
         }, (host: HostMeta): string => host.id)
-      }.layoutWeight(1).width('100%').borderRadius(16).backgroundColor(this.pal().bgPanel).scrollBar(BarState.Off)
-    }.width('100%').height('100%').padding({ left: 16, right: 16, top: 18, bottom: 16 })
+      }.height(Math.min(this.pickerHosts().length, 4) * 56.5).width('100%').borderRadius(16)
+        .clip(true).backgroundColor(this.pal().sheetGroup).scrollBar(BarState.Auto)
+    }.width('100%').padding({ left: 16, right: 16, top: 8, bottom: 20 })
   }
 
   private usageMeterColor(used: number): string {
@@ -1695,7 +1763,8 @@ struct Home {
     return this.hosts.length === 0 || this.onlineCount() === 0;
   }
 
-  build() {
+  @Builder
+  private homeContents() {
     Column() {
       Stack({ alignContent: Alignment.BottomEnd }) {
         Column() {
@@ -1732,40 +1801,41 @@ struct Home {
         .width('100%')
         .height('100%')
 
-        if (this.hostPickerRoute) {
-          Column({ space: 12 }) {
-            Text(uiText('选择桌面', this.uiLocale)).fontFamily('Geist').fontSize(18).fontColor(this.pal().textPrimary)
-            ForEach(this.hosts, (host: HostMeta) => {
-              if (this.online[host.id] === true) {
-                Button(host.name).width('100%').fontFamily('Geist').fontSize(16).fontColor(this.pal().textPrimary)
-                  .backgroundColor(this.pal().bgPanel).onClick(() => {
-                    let route = this.hostPickerRoute;
-                    this.hostPickerRoute = ''; this.openHostRoute(host.id, route);
-                  })
-              }
-            }, (host: HostMeta) => host.id)
-            Button(uiText('取消', this.uiLocale)).fontColor(this.pal().textSecondary).backgroundColor(Color.Transparent)
-              .onClick(() => { this.hostPickerRoute = ''; })
-          }.width('100%').height('100%').padding(24).justifyContent(FlexAlign.Center)
-            .backgroundColor(this.pal().bgBase)
-        }
-
-        if (!this.hostPickerRoute && this.loaded && (this.activeTab === 'feed' && this.hosts.length > 0
+        if (this.loaded && (this.activeTab === 'feed' && this.hosts.length > 0
           || this.activeTab === 'automations' && this.online[this.tabDesktop(this.automationDesktopId)?.id ?? ''] === true)) {
           this.fab()
         }
       }
       .width('100%')
       .layoutWeight(1)
-      .bindSheet(this.tabHostPicker !== '', this.tabDesktopPicker, { height: SheetSize.MEDIUM,
-        backgroundColor: this.pal().bgBase, showClose: true, onDisappear: (): void => { this.tabHostPicker = ''; } })
+      .bindSheet(this.tabHostPickerOpen, this.tabDesktopPicker, { height: SheetSize.FIT_CONTENT,
+        backgroundColor: this.themeSheet, maskColor: 'rgba(0,0,0,0.55)', showClose: false, dragBar: false,
+        onDisappear: (): void => this.finishTabHostPicker() })
 
       this.tabBar()
     }
     .width('100%')
     .height('100%')
     .backgroundColor(this.pal().bgBase)
+    .accessibilityLevel(this.workspaceDrawer ? 'no-hide-descendants' : 'auto')
+    .hitTestBehavior(this.workspaceDrawer ? HitTestMode.None : HitTestMode.Default)
     .bindSheet(this.hostSheetOpen, this.desktopActionsSheet, { height: SheetSize.FIT_CONTENT,
       backgroundColor: this.pal().bgBase, showClose: false, onDisappear: (): void => this.afterDesktopActions() })
+  }
+
+  build() {
+    Stack() {
+      this.homeContents()
+      if (this.workspaceDrawer) {
+        ShellSurface({ request: this.workspaceDrawer!, asDrawer: true, visible: this.workspacePageVisible, back: this.workspaceBack,
+          onOverlayClose: (): void => { this.workspaceDrawer = null; },
+          onOverlayNavigate: (route: ShellRoute): void => {
+            if (this.workspaceDrawer?.hostId === route.hostId) {
+              this.workspaceDrawer = null;
+              this.openShellRoute(route);
+            }
+          } })
+      }
+    }.width('100%').height('100%')
   }
 }

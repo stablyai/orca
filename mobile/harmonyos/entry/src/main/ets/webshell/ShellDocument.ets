@@ -3,63 +3,9 @@ import { webview } from '@kit.ArkWeb';
 import { fileIo as fs } from '@kit.CoreFileKit';
 import { BundleManifest, isSafeBundlePath, WebBundleFetcher } from '../transport/WebBundleFetcher';
 import { BridgeHost } from './BridgeHost';
+import { SHELL_PAGE_CHANNEL_SCRIPT } from './ShellPageChannelScript';
 
 const SHELL_ORIGIN = 'https://appassets.orca-shell.local';
-
-// Page channel shim: window.orcaBridge (postMessage + assignable onmessage) over the
-// orcaNative proxy, mirroring orca-bridge-page-channel.ts's exact surface.
-const BRIDGE_SHIM = `
-(function () {
-  'use strict';
-  var native = window.orcaNative;
-  if (!native || typeof native.postMessage !== 'function') {
-    window.__orcaShellError = 'orcaNative proxy missing';
-    return;
-  }
-  var queued = [];
-  var handler = null;
-  var bridge = {
-    postMessage: function (json) { native.postMessage(String(json)); },
-  };
-  Object.defineProperty(bridge, 'onmessage', {
-    set: function (fn) {
-      handler = fn;
-      try { native.notifyOnMessageSet(); } catch (e) { /* proxy not callable yet */ }
-      while (queued.length > 0) {
-        var f = queued.shift();
-        try { fn({ data: f }); } catch (e) { /* handler error surfaces via page console */ }
-      }
-    },
-    get: function () { return handler; },
-    configurable: true
-  });
-  window.orcaBridge = bridge;
-  ['warn', 'error'].forEach(function (level) {
-    var orig = console[level].bind(console);
-    console[level] = function () {
-      var parts = [];
-      for (var i = 0; i < arguments.length; i++) {
-        try {
-          var a = arguments[i];
-          parts.push(typeof a === 'string' ? a : JSON.stringify(a));
-        } catch (e) { parts.push('[unserializable]'); }
-      }
-      try {
-        native.postMessage(JSON.stringify({ v: 1, type: 'page.console', level: level, text: parts.join(' ').slice(0, 400) }));
-      } catch (e2) { /* drop */ }
-      orig.apply(null, arguments);
-    };
-  });
-  window.__orcaNativePush = function (json) {
-    if (handler) {
-      try { handler({ data: json }); return 'delivered'; }
-      catch (e) { return 'error: ' + (e && e.message || String(e)); }
-    }
-    queued.push(json);
-    return 'queued';
-  };
-})();
-`;
 
 const PARKED_FRAME = '{"v":1,"type":"parked"}';
 let nextDocumentId = 0;
@@ -68,14 +14,17 @@ class ShellDocumentChannel {
   private bridge: BridgeHost | null = null;
   private earlyReady: string = '';
   private pushReady: boolean = false;
+  private drawer: boolean = false;
   private disposed: boolean = false;
   private parked: () => void;
 
   constructor(parked: () => void) { this.parked = parked; }
   ready(): boolean { return this.earlyReady !== '' && this.pushReady; }
 
-  attach(bridge: BridgeHost): void {
-    this.bridge = bridge;
+  isWorkspaceDrawer(): boolean { return this.drawer; }
+
+  attach(bridge: BridgeHost, drawer: boolean): void {
+    this.bridge = bridge; this.drawer = drawer;
     if (this.pushReady) { bridge.onPushChannelReady(); }
     if (this.earlyReady) {
       let frame = this.earlyReady; this.earlyReady = '';
@@ -117,7 +66,7 @@ export class ShellDocument {
   // The shared page lifts its input dock while preserving the desktop terminal size.
   readonly keyboardMode: WebKeyboardAvoidMode = AppStorage.get<boolean>('shellKeyboardOverlay')
     ? WebKeyboardAvoidMode.OVERLAYS_CONTENT : WebKeyboardAvoidMode.RESIZE_CONTENT;
-  readonly scripts: ScriptItem[] = [{ script: BRIDGE_SHIM, scriptRules: [SHELL_ORIGIN] }];
+  readonly scripts: ScriptItem[] = [{ script: SHELL_PAGE_CHANNEL_SCRIPT, scriptRules: [SHELL_ORIGIN] }];
   private node: BuilderNode<ShellDocument[]> | null = null;
   private bridge: BridgeHost | null = null;
   private parked: boolean;
@@ -143,8 +92,8 @@ export class ShellDocument {
   frame(): FrameNode | null { return this.node?.getFrameNode() ?? null; }
   isReady(): boolean { return !this.disposed && this.announcedReady && this.channel.ready(); }
 
-  bind(bridge: BridgeHost): void {
-    this.bridge = bridge; this.parked = false; this.channel.attach(bridge);
+  bind(bridge: BridgeHost, drawer: boolean): void {
+    this.bridge = bridge; this.parked = false; this.channel.attach(bridge, drawer);
   }
 
   activate(): void {
@@ -212,9 +161,10 @@ export class ShellDocument {
 @Builder
 function renderShellWeb(document: ShellDocument) {
   Web({ src: document.source, controller: document.controller })
+    .backgroundColor(Color.Transparent)
     .keyboardAvoidMode(document.keyboardMode)
     .javaScriptProxy({ object: document.channel, name: 'orcaNative',
-      methodList: ['postMessage', 'notifyOnMessageSet'], controller: document.controller })
+      methodList: ['postMessage', 'notifyOnMessageSet', 'isWorkspaceDrawer'], controller: document.controller })
     .javaScriptOnDocumentStart(document.scripts)
     .onControllerAttached((): void => document.activate())
     .onLoadIntercept((event): boolean => document.loadIntercept(event.data))

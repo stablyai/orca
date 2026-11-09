@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
+const { runInNewContext } = require('node:vm')
 const zlib = require('node:zlib')
 const { loadArkts, util } = require('./arkts-source.cjs')
 const { createRpcPeer } = require('./fixtures/rpc-peer.cjs')
@@ -323,6 +324,66 @@ test('the bridge reports a workspace location without interpreting its encoded I
     [windowsPathname, 'runtime:wsl'],
     [posixPathname, '']
   ])
+})
+
+test('the workspace drawer opens the created session when an older page posts Back before navigation', async () => {
+  const peer = createRpcPeer()
+  const { BridgeHost } = loadArkts('webshell/BridgeHost.ets', ['BridgeHost'], { ...peer, ...bytes })
+  const controller = createController()
+  const bridge = new BridgeHost(
+    new peer.SpikeRpcClient(),
+    controller,
+    {
+      ...manifest,
+      routes: [
+        ...manifest.routes,
+        ...['/h/[hostId]/new-workspace', '/h/[hostId]/session/[worktreeId]'].map((pathname) => ({
+          pathname,
+          grants: ['navigate'],
+          optionalGrants: []
+        }))
+      ]
+    },
+    meta,
+    `/h/${hostId}/new-workspace`
+  )
+  const exits = []
+  bridge.setNavigation(
+    () => exits.push('closed'),
+    () => {}
+  )
+  bridge.setOverlayNavigation((pathname, params) =>
+    exits.push([pathname, params.name, params.created, params.executionHost])
+  )
+  bridge.onPushChannelReady()
+  post(bridge, { type: 'ready' })
+  assert.deepEqual(controller.replies.find((frame) => frame.type === 'init').pageRoutes, [
+    '/h/[hostId]/new-workspace'
+  ])
+  const target = `/h/${hostId}/session/folder%3A%2Fremote%2FProject`
+  const query = '?name=QA+Session+%2B+Tools&created=1&executionHost=runtime%3Assh'
+  const { SHELL_PAGE_CHANNEL_SCRIPT } = loadArkts('webshell/ShellPageChannelScript.ets', [
+    'SHELL_PAGE_CHANNEL_SCRIPT'
+  ])
+  const window = {
+    orcaNative: {
+      isWorkspaceDrawer: () => true,
+      postMessage: (frame) => bridge.onClientMessage(frame)
+    }
+  }
+  runInNewContext(SHELL_PAGE_CHANNEL_SCRIPT, { window, queueMicrotask })
+  const notify = (frame) =>
+    window.orcaBridge.postMessage(JSON.stringify({ v: 1, type: 'notify', ...frame }))
+  post(bridge, { type: 'notify', name: 'location', href: target + query })
+  post(bridge, { type: 'notify', name: 'navigate', href: `/h/${'b'.repeat(32)}/session/folder` })
+  notify({ name: 'navigate-back' })
+  await Promise.resolve()
+  assert.deepEqual(exits, ['closed'])
+  notify({ name: 'navigate-back' })
+  notify({ name: 'navigate', href: target + query, replace: true })
+  await Promise.resolve()
+  assert.deepEqual(exits, ['closed', [target, 'QA Session + Tools', '1', 'runtime:ssh']])
+  bridge.dispose()
 })
 
 test('the bridge opens only granted native edit and diagnostics destinations for its paired host', () => {

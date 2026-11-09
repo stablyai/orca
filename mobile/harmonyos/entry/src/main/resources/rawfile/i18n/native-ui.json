@@ -3802,5 +3802,48 @@
     "ko": "건너뜀 · 로그인 필요",
     "es": "Omitida · inicio de sesión necesario",
     "zh-Hant": "已略過 · 需要登入"
+  },
+  "选择创建工作区的桌面": {
+    "zh": "选择创建工作区的主机",
+    "en": "Create Workspace On",
+    "tr": "Çalışma Alanı İçin Sunucu",
+    "ja": "ワークスペースの作成先ホスト",
+    "de": "Arbeitsbereich auf Host erstellen",
+    "ru": "Где создать рабочее пространство",
+    "pt": "Criar Espaço de Trabalho em",
+    "fr": "Créer un espace de travail sur",
+    "ko": "워크스페이스 생성 호스트",
+    "es": "Crear espacio de trabajo en",
+    "zh-Hant": "選擇建立工作區的主機"
+  },
+  "正在下载… {{progress}}": {
+    "zh": "正在下载… {{progress}}",
+    "en": "Downloading… {{progress}}",
+    "tr": "İndiriliyor… {{progress}}",
+    "ja": "ダウンロード中… {{progress}}",
+    "de": "Wird heruntergeladen… {{progress}}",
+    "ru": "Скачивание… {{progress}}",
+    "pt": "Baixando… {{progress}}",
+    "fr": "Téléchargement… {{progress}}",
+    "ko": "다운로드 중… {{progress}}",
+    "es": "Descargando… {{progress}}",
+    "zh-Hant": "正在下載… {{progress}}"
+  },
+  "正在加载…": {
+    "zh": "加载中",
+    "en": "Loading",
+    "tr": "Yükleniyor",
+    "ja": "読み込み中",
+    "de": "Wird geladen",
+    "ru": "Загрузка",
+    "pt": "Carregando",
+    "fr": "Chargement",
+    "ko": "로드 중",
+    "es": "Cargando",
+    "zh-Hant": "載入中"
+  },
+  "桌面未提供新建工作区页面": {
+    "zh": "桌面未提供新建工作区页面",
+    "en": "The desktop does not offer the new workspace page"
   }
 }

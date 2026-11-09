@@ -10,6 +10,7 @@ export function applyThemeMode(mode: string): void {
   AppStorage.setOrCreate('themeScheme', light ? 'light' : 'dark');
   AppStorage.setOrCreate('themeBg', light ? '#ffffff' : '#0a0a0a');
   AppStorage.setOrCreate('themeSurface', light ? '#fafafa' : '#171717');
+  AppStorage.setOrCreate('themeSheet', light ? '#f5f5f5' : '#171717');
   AppStorage.setOrCreate('themeBorder', light ? '#e5e5e5' : 'rgba(255, 255, 255, 0.07)');
   AppStorage.setOrCreate('themeText', light ? '#0a0a0a' : '#fafafa');
   AppStorage.setOrCreate('themeMuted', light ? '#696969' : '#898989');
