@@ -23848,7 +23848,8 @@
       "keepRunningButton": "Keep Running",
       "title": "Restart Orca in Safe Graphics Mode?",
       "message": "Orca's graphics process has crashed repeatedly.",
-      "detail": "Safe graphics mode disables hardware acceleration and WebGL for this Orca version. Terminals and 3D content may render more slowly. Keep Running leaves graphics settings unchanged."
+      "detail": "Safe graphics mode disables hardware acceleration and WebGL for this Orca version. Terminals and 3D content may render more slowly. Keep Running leaves graphics settings unchanged.",
+      "detailLinux": "Safe graphics mode disables hardware acceleration for this Orca version. Software rendering may keep WebGL available. Terminals and 3D content may render more slowly. Keep Running leaves graphics settings unchanged."
     }
   },
   "localBuild": {
