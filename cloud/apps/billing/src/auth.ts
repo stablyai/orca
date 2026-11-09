@@ -57,6 +57,22 @@ function devKeysFor(env: Env): JWTVerifyGetKey | null {
   return devKeys.keys
 }
 
+let stagingKeys: { source: string; keys: JWTVerifyGetKey } | null = null
+
+/** Staging auth's keys and issuer; never honored when BILLING_ENV is 'prod'. */
+function stagingKeysFor(env: Env): { keys: JWTVerifyGetKey; issuer: string } | null {
+  if (env.BILLING_ENV === 'prod' || !env.BILLING_STAGING_JWKS_URL || !env.BILLING_STAGING_AUTH_ISSUER) {
+    return null
+  }
+  if (stagingKeys?.source !== env.BILLING_STAGING_JWKS_URL) {
+    stagingKeys = {
+      source: env.BILLING_STAGING_JWKS_URL,
+      keys: createRemoteJWKSet(new URL(env.BILLING_STAGING_JWKS_URL))
+    }
+  }
+  return { keys: stagingKeys.keys, issuer: env.BILLING_STAGING_AUTH_ISSUER }
+}
+
 export function readBearer(value: string | null): string | null {
   return /^Bearer ([^\s]+)$/.exec(value ?? '')?.[1] ?? null
 }
@@ -90,16 +106,30 @@ export async function authenticateDesktop(
       ...(issuer ? { issuer } : {})
     })
   try {
-    let verified
-    try {
-      verified = await verify(keysFor(env), env.BILLING_AUTH_ISSUER)
-    } catch (error) {
-      // Dev only: an operator key set (its own issuer) until auth mints billing tokens.
-      const dev = devKeysFor(env)
-      if (!dev) {
-        throw error
+    // Production auth first; in dev only, then staging auth, then the operator key set.
+    const attempts: Array<() => ReturnType<typeof verify>> = [
+      () => verify(keysFor(env), env.BILLING_AUTH_ISSUER)
+    ]
+    const staging = stagingKeysFor(env)
+    if (staging) {
+      attempts.push(() => verify(staging.keys, staging.issuer))
+    }
+    const dev = devKeysFor(env)
+    if (dev) {
+      attempts.push(() => verify(dev, DEV_ISSUER))
+    }
+    let verified: Awaited<ReturnType<typeof verify>> | undefined
+    let lastError: unknown
+    for (const attempt of attempts) {
+      try {
+        verified = await attempt()
+        break
+      } catch (error) {
+        lastError = error
       }
-      verified = await verify(dev, DEV_ISSUER)
+    }
+    if (!verified) {
+      throw lastError
     }
     const claims = ClaimsSchema.parse(verified.payload)
     return {

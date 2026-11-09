@@ -36,6 +36,11 @@ export function authMembershipSource(env: Env, fetchImpl: typeof fetch = fetch):
     } catch {
       throw new MembershipUnavailableError('auth unreachable')
     }
+    // Dev only: AUTH_INTERNAL_URL points at staging auth, which does not know orgs from production
+    // or operator dev tokens; those fall back to the Checkout request's quantity instead of failing.
+    if (response.status === 404 && env.BILLING_ENV !== 'prod') {
+      return null
+    }
     if (!response.ok) {
       throw new MembershipUnavailableError(`auth answered ${response.status}`)
     }
