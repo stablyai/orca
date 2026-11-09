@@ -2,17 +2,17 @@ import { pairedRuntimeConnectionFromOffer } from '../../../../shared/remote-runt
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PairingOffer } from '../../../../shared/remote-runtime/pairing/mobile-relay-pairing-offer'
 import type {
-  RemoteRuntimeSubscription,
-  RemoteRuntimeSubscriptionCallbacks
-} from '../../../../shared/remote-runtime/remote-runtime-client'
+  RemoteRuntimeTransportSubscription,
+  RemoteRuntimeTransportSubscriptionCallbacks
+} from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 
 const { subscribeRemoteRuntimeRequestMock } = vi.hoisted(() => ({
   subscribeRemoteRuntimeRequestMock: vi.fn()
 }))
 
-vi.mock('../../../../shared/remote-runtime/remote-runtime-client', () => ({
-  subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
+vi.mock('../../../../shared/remote-runtime/requests/remote-runtime-subscription-transport', () => ({
+  subscribeRemoteRuntimeTransport: subscribeRemoteRuntimeRequestMock
 }))
 
 import { PairedRuntimeBrowserHostLease } from '../leases/paired-runtime-browser-host-lease'
@@ -133,17 +133,17 @@ function createLease(overrides: {
 }
 
 function mockAttempts(): {
-  callbacks: RemoteRuntimeSubscriptionCallbacks
+  callbacks: RemoteRuntimeTransportSubscriptionCallbacks
   close: ReturnType<typeof vi.fn>
   sendRequest: ReturnType<typeof vi.fn>
 }[] {
   const attempts: {
-    callbacks: RemoteRuntimeSubscriptionCallbacks
+    callbacks: RemoteRuntimeTransportSubscriptionCallbacks
     close: ReturnType<typeof vi.fn>
     sendRequest: ReturnType<typeof vi.fn>
   }[] = []
   subscribeRemoteRuntimeRequestMock.mockImplementation(
-    async (...args: unknown[]): Promise<RemoteRuntimeSubscription> => {
+    async (...args: unknown[]): Promise<RemoteRuntimeTransportSubscription> => {
       const close = vi.fn()
       const sendRequest = vi.fn().mockResolvedValue({
         id: 'file-channel',
@@ -152,7 +152,7 @@ function mockAttempts(): {
         _meta: { runtimeId: 'runtime-a' }
       })
       attempts.push({
-        callbacks: args[4] as RemoteRuntimeSubscriptionCallbacks,
+        callbacks: args[4] as RemoteRuntimeTransportSubscriptionCallbacks,
         close,
         sendRequest
       })

@@ -7,10 +7,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { pairedRuntimeConnectionFromOffer } from '../../shared/remote-runtime/pairing/paired-runtime-connection'
 import { parsePairingCode } from '../../shared/remote-runtime/pairing/pairing'
-import {
-  subscribeRemoteRuntimeRequest,
-  type RemoteRuntimeSubscription
-} from '../../shared/remote-runtime/remote-runtime-client'
+import '../../shared/remote-runtime/requests/remote-runtime-request-socket'
+import { subscribeRemoteRuntimeTransport } from '../../shared/remote-runtime/requests/remote-runtime-subscription-transport'
+import type { RemoteRuntimeTransportSubscription } from '../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -78,7 +77,7 @@ async function attach(
   const pairing = parsePairingCode(pairingUrl)!
   const responses: StreamResponse[] = []
   const frames: ReturnType<typeof decodeTerminalStreamFrame>[] = []
-  const subscription: RemoteRuntimeSubscription = await subscribeRemoteRuntimeRequest(
+  const subscription: RemoteRuntimeTransportSubscription = await subscribeRemoteRuntimeTransport(
     pairedRuntimeConnectionFromOffer(pairing),
     'terminal.multiplex',
     {},

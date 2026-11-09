@@ -6,11 +6,11 @@ import {
   BrowserClientAutomationResult as BrowserClientHostCommandResult,
   type BrowserClientAutomationResult as BrowserClientHostCommandResultType
 } from '../../../../shared/browser/client-hosting/browser-client-automation-protocol'
-import type { RemoteRuntimeSubscription } from '../../../../shared/remote-runtime/remote-runtime-client'
+import type { RemoteRuntimeTransportSubscription } from '../../../../shared/remote-runtime/requests/remote-runtime-subscription-contract'
 import { RemoteRuntimeClientError } from '../../../../shared/remote-runtime/remote-runtime-client-error'
 
 export async function submitBrowserHostCommandResult(
-  sendRequest: NonNullable<RemoteRuntimeSubscription['sendRequest']>,
+  sendRequest: NonNullable<RemoteRuntimeTransportSubscription['sendRequest']>,
   command: BrowserClientHostCommandEvent,
   candidate: BrowserClientHostCommandResultType,
   timeoutMs: number

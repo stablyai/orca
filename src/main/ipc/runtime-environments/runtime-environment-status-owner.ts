@@ -1,5 +1,5 @@
 import { getRuntimeDesktopSurface } from '../../runtime/construction/runtime-desktop-surface'
-import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
+import { sendRemoteRuntimeRequestOnSocket } from '../../../shared/remote-runtime/requests/remote-runtime-request-socket'
 import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../../shared/protocol-version'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import {
@@ -113,14 +113,17 @@ export function createRuntimeEnvironmentStatusOwner(
         getAcceptedRuntimeEnvironmentCapabilityOutcome(environment.id, connection, null)?.kind ===
           'supported'
           ? transport.request(signal)
-          : sendRemoteRuntimeRequest<RuntimeStatus>(
+          : sendRemoteRuntimeRequestOnSocket<RuntimeStatus>(
               connection,
               'status.get',
               undefined,
               15_000,
               undefined,
+              undefined,
               signal,
-              ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
+              ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+              undefined,
+              undefined
             ))
       } catch (error) {
         response = runtimeHostStatusError(error)
