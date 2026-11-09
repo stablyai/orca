@@ -1,14 +1,15 @@
-import { constants as fsConstants } from 'node:fs'
-import { access, chmod, mkdir, readFile } from 'node:fs/promises'
+import { chmod, mkdir, readFile } from 'node:fs/promises'
 import { lookup } from 'node:dns/promises'
 import { homedir } from 'node:os'
-import { delimiter, dirname, isAbsolute, join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type {
   AgentMcpSyncParams,
   AgentMcpSyncResult,
   McpSyncHostOutcome
 } from '../../../shared/agent-mcp-sync/mcp-sync-contract'
 import { writeFileAtomicallyIfUnchanged } from '../../filesystem/atomic-file-publication'
+import { isCommandOnLocalPath } from '../../ipc/command-path/command-path-resolver'
+import { hostShellEnvironment } from '../../runtime/agent-session/environment/structured-agent-shell-environment'
 import { mergeClaudeMcpServers } from './claude-json-mcp-merge'
 import { mergeCodexMcpServers } from './codex-toml-mcp-merge'
 import { parseMcpSyncLedger, type McpSyncLedger } from './mcp-sync-ledger'
@@ -61,36 +62,14 @@ async function writePrivate(path: string, expected: string | null, text: string)
   return true
 }
 
-/** Login shells add these to PATH; orcad's own environment may not have them yet. */
-function searchPath(): string[] {
-  const home = homedir()
-  return [
-    ...(process.env.PATH ?? '').split(delimiter),
-    join(home, '.local', 'bin'),
-    join(home, '.npm-global', 'bin'),
-    join(home, '.bun', 'bin'),
-    join(home, '.cargo', 'bin'),
-    '/usr/local/bin',
-    '/usr/bin',
-    '/bin'
-  ].filter(Boolean)
-}
-
+/** Same lookup and login-shell environment Orca uses to find agent CLIs, so the answer matches
+ * what an agent launched here would see. */
 export async function defaultCommandExists(command: string): Promise<boolean> {
-  const candidates = isAbsolute(command)
-    ? [command]
-    : command.includes('/')
-      ? []
-      : searchPath().map((dir) => join(dir, command))
-  for (const candidate of candidates) {
-    try {
-      await access(candidate, fsConstants.X_OK)
-      return true
-    } catch {
-      // Try the next PATH entry.
-    }
-  }
-  return false
+  const shellEnv = await hostShellEnvironment().catch(() => process.env)
+  return (
+    (await isCommandOnLocalPath(command, { env: shellEnv })) ||
+    (await isCommandOnLocalPath(command))
+  )
 }
 
 async function defaultResolves(hostname: string): Promise<boolean> {

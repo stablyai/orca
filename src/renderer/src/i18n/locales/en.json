@@ -2011,6 +2011,11 @@
               "googleCookiesSkippedRemoteWorkspace": "Google cookies were not imported. Open a browser tab in the {{value0}} workspace with this profile, then sign into Google."
             }
           }
+        },
+        "navigation": {
+          "remoteOAuthCallbackRelay": {
+            "failed": "Orca could not pass this sign-in back to the remote host, so the browser may show a connection error when it finishes."
+          }
         }
       },
       "pluginCommandKeybindings": {
@@ -26195,6 +26200,38 @@
       "unterminatedQuote": "The closing quote is missing.",
       "overridden": "Set again further down; the later line is used.",
       "unknown": "Something went wrong in Orca Cloud. Nothing was changed. Try again."
+    }
+  },
+  "cloudMcpSync": {
+    "toggleServer": "Sync {{name}} ({{agent}}) to cloud workspaces",
+    "title": "MCP servers",
+    "syncNow": "Sync now",
+    "autoSync": "Sync each time a cloud workspace connects. Servers you add in the workspace are never changed.",
+    "lastSynced": "Last synced at {{time}}",
+    "error": {
+      "failed": "The last sync didn’t finish.",
+      "hostOutdated": "This workspace runs an older Orca server that can’t receive MCP servers yet.",
+      "hostUnreachable": "Orca couldn’t reach this workspace."
+    },
+    "summary": {
+      "syncing": "Syncing…",
+      "none": "None on this computer",
+      "notSynced": "{{count}} found, not synced yet",
+      "synced": "{{synced}} synced",
+      "syncedSkipped": "{{synced}} synced, {{skipped}} skipped"
+    },
+    "row": {
+      "unreachable": "Synced, but the workspace can’t reach this host. Its network may block it.",
+      "turnedOff": "Off for cloud workspaces",
+      "inRepo": "Comes from the repo’s .mcp.json",
+      "localCommand": "Its command only exists on this computer",
+      "localPath": "Uses files on this computer",
+      "localUrl": "Runs on this computer’s localhost",
+      "commandMissing": "{{command}} isn’t installed in the workspace",
+      "keptHost": "Already set up in the workspace; left as is",
+      "configUnreadable": "The agent’s config in the workspace couldn’t be updated",
+      "invalid": "Invalid server entry",
+      "pending": "Not synced yet"
     }
   }
 }
