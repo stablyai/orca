@@ -121,4 +121,14 @@ export class SttService {
     this.state.prewarmGeneration += 1
     return teardownIdleSttEngine(this.state)
   }
+
+  /** Unloads the recognizer now, or when the dictations using it end; resolves once it is gone. */
+  unloadModelWhenIdle(): Promise<void> {
+    this.state.prewarmGeneration += 1
+    const engine = this.state.engine
+    if (!engine || sttEngineUsers(this.state, engine).length === 0) {
+      return teardownIdleSttEngine(this.state)
+    }
+    return new Promise((resolve) => engine.onUnloaded.push(resolve))
+  }
 }
