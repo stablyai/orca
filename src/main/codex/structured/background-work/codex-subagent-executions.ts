@@ -125,62 +125,46 @@ export class CodexSubagentExecutions {
   }
 
   lineage(roots: ReadonlySet<string>, commandThreads: Iterable<string>): CodexExecutionChild[] {
-    const selected = new Map<string, CodexExecutionChild>()
-    const reachesRoot = new Map<string, boolean>()
+    const ancestors = new Map<string, CodexExecutionChild | undefined>()
+    const spawnedBy = new Map<string, CodexExecutionChild[]>()
     const candidates = new Set([...this.working.keys(), ...commandThreads])
     for (const threadId of candidates) {
-      let id = threadId
-      const path = new Set<string>()
-      while (!roots.has(id) && !reachesRoot.has(id) && !path.has(id)) {
-        path.add(id)
-        const spawner = this.children.get(id)?.spawnerThreadId
-        if (spawner === null || spawner === undefined) {
+      let id: string | null = threadId
+      while (id !== null && !ancestors.has(id)) {
+        const child = this.children.get(id)
+        ancestors.set(id, child)
+        if (!child) {
           break
         }
-        id = spawner
-      }
-      const included = roots.has(id) || reachesRoot.get(id) === true
-      for (const ancestor of path) {
-        reachesRoot.set(ancestor, included)
-      }
-      if (included) {
-        for (const ancestor of [...path, id]) {
-          const child = this.children.get(ancestor)
-          if (child) {
-            selected.set(ancestor, child)
-          }
+        if (child.spawnerThreadId !== null) {
+          const siblings = spawnedBy.get(child.spawnerThreadId) ?? []
+          siblings.push(child)
+          spawnedBy.set(child.spawnerThreadId, siblings)
         }
-      }
-    }
-    const spawnedBy = new Map<string, CodexExecutionChild[]>()
-    for (const child of [...selected.values()].sort(
-      (a, b) => a.observationOrder - b.observationOrder
-    )) {
-      if (child.spawnerThreadId !== null) {
-        const siblings = spawnedBy.get(child.spawnerThreadId) ?? []
-        siblings.push(child)
-        spawnedBy.set(child.spawnerThreadId, siblings)
+        id = child.spawnerThreadId
       }
     }
     const lineage: CodexExecutionChild[] = []
     const seen = new Set<string>()
     const orderedRoots = [...roots]
       .flatMap((root) => {
-        const child = selected.get(root)
+        const child = ancestors.get(root)
         return child ? [child] : []
       })
       .sort((a, b) => a.observationOrder - b.observationOrder)
     for (const root of orderedRoots) {
       const pending = [root.agentThreadId]
       for (let id = pending.pop(); id !== undefined; id = pending.pop()) {
-        const child = selected.get(id)
+        const child = ancestors.get(id)
         if (!child || seen.has(id)) {
           continue
         }
         seen.add(id)
         lineage.push(child)
-        for (const spawned of spawnedBy.get(id) ?? []) {
-          pending.push(spawned.agentThreadId)
+        const spawned = spawnedBy.get(id) ?? []
+        spawned.sort((a, b) => a.observationOrder - b.observationOrder)
+        for (const child of spawned) {
+          pending.push(child.agentThreadId)
         }
       }
     }

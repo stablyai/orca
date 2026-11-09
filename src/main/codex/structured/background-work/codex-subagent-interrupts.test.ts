@@ -46,7 +46,24 @@ async function runningHelper(routes: Record<string, Route>) {
       .map((call) => call.params)
   const stop = (taskIds: string[], fence = 7) =>
     adapter.stopBackgroundTasks({ sessionId: 'session-1', fence, taskIds })
-  return { adapter, evidence, notify, interrupts, stop }
+  const spawn = (parent: string, child: string, turnId: string) => {
+    notify('item/started', {
+      threadId: parent,
+      turnId,
+      item: {
+        type: 'subAgentActivity',
+        id: `spawn-${child}`,
+        kind: 'started',
+        agentThreadId: child,
+        agentPath: `/root/${child}`
+      }
+    })
+    notify('turn/started', {
+      threadId: child,
+      turn: { id: `${child}-turn`, status: 'inProgress' }
+    })
+  }
+  return { adapter, evidence, notify, interrupts, stop, spawn }
 }
 
 describe('Codex sub-agent Stop', () => {
@@ -96,25 +113,8 @@ describe('Codex sub-agent Stop', () => {
         return { terminated: true }
       }
     })
-    const spawn = (parent: string, child: string, turnId: string) => {
-      codex.notify('item/started', {
-        threadId: parent,
-        turnId,
-        item: {
-          type: 'subAgentActivity',
-          id: `spawn-${child}`,
-          kind: 'started',
-          agentThreadId: child,
-          agentPath: `/root/${child}`
-        }
-      })
-      codex.notify('turn/started', {
-        threadId: child,
-        turn: { id: `${child}-turn`, status: 'inProgress' }
-      })
-    }
-    spawn(HELPER, 'intermediary', HELPER_TURN)
-    spawn('intermediary', 'grandchild', 'intermediary-turn')
+    codex.spawn(HELPER, 'intermediary', HELPER_TURN)
+    codex.spawn('intermediary', 'grandchild', 'intermediary-turn')
     codex.notify('item/started', {
       threadId: 'intermediary',
       turnId: 'intermediary-turn',
@@ -147,6 +147,36 @@ describe('Codex sub-agent Stop', () => {
     timeOut = false
     await expect(codex.stop([HELPER])).resolves.toEqual({ cancelled: true })
     expect(terminated).toEqual([{ threadId: 'intermediary', processId: '4343' }])
+  })
+
+  it('interrupts an explicitly named descendant before a sibling timeout across a commandless settled helper', async () => {
+    const timeout = new CodexAppServerTimeoutError('codex app-server turn/interrupt timed out')
+    const codex = await runningHelper({
+      'turn/interrupt': (params) => {
+        if (params?.threadId === 'earlier-sibling') {
+          throw timeout
+        }
+        return {}
+      }
+    })
+    codex.spawn(HELPER, 'earlier-sibling', HELPER_TURN)
+    codex.spawn(HELPER, 'intermediary', HELPER_TURN)
+    codex.spawn('intermediary', 'grandchild', 'intermediary-turn')
+    codex.notify('turn/completed', {
+      threadId: 'intermediary',
+      turn: { id: 'intermediary-turn', status: 'completed' }
+    })
+    for (const taskIds of [
+      [HELPER, 'grandchild'],
+      ['grandchild', HELPER]
+    ]) {
+      await expect(codex.stop(taskIds)).rejects.toBe(timeout)
+      expect(codex.interrupts().slice(-3)).toEqual([
+        { threadId: HELPER, turnId: HELPER_TURN },
+        { threadId: 'grandchild', turnId: 'grandchild-turn' },
+        { threadId: 'earlier-sibling', turnId: 'earlier-sibling-turn' }
+      ])
+    }
   })
 
   async function helperAndDevServer(interrupt: Route) {
