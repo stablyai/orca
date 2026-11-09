@@ -77,9 +77,9 @@ async function signInOne(
   agent: HostAgentSignInAgent
 ): Promise<'proceed' | 'cancel'> {
   const environmentId = runs.get(creationId)!.environmentId
-  let lastView: AgentSignInGateView | null = null
+  const seen: { view: AgentSignInGateView | null } = { view: null }
   const unsubscribe = subscribeAgentSignInGates(() => {
-    lastView = readAgentSignInGate(gateKey)?.view ?? lastView
+    seen.view = readAgentSignInGate(gateKey)?.view ?? seen.view
   })
   try {
     const held = requireAgentSignIn({
@@ -99,7 +99,7 @@ async function signInOne(
       startAgentSignIn(gateKey)
     }
     const outcome = await held
-    const signed = lastView as AgentSignInGateView | null
+    const signed = seen.view
     const run = runs.get(creationId)
     if (outcome === 'proceed' && signed?.step === 'signed' && run?.gateKey === gateKey) {
       update(creationId, gateKey, {

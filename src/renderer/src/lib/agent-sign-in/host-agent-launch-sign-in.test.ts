@@ -11,8 +11,8 @@ vi.mock('@/lib/workspace/creation/worktree-creation-host-agent-launch', () => ({
 
 const { hostSignInCheck, signedInHostLaunch } = await import('./host-agent-launch-sign-in')
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only host and agent are read.
-const onHost = (hostId: string | null) =>
+const onHost = (hostId: string | null): WorktreeCreationRequest =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only host and agent are read.
   ({ agent: 'claude', executionHostId: hostId }) as WorktreeCreationRequest
 
 describe('host-started agent launch on a new VM', () => {
