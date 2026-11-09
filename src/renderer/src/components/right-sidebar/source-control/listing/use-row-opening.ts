@@ -15,7 +15,7 @@ import type {
 } from '../../../../../../shared/git/diff/git-diff-compare-types'
 import type { GitStatusEntry } from '../../../../../../shared/git/status/git-status-types'
 import { buildActiveOpenFileSignature, buildActiveOpenRowKeys } from './active-open-file-keys'
-import { canOpenWorkingTreeStatusEntry } from '../../../../../../shared/source-control-entry-actions'
+import { canOpenWorkingTreeStatusEntry } from '../../../../../../shared/source-control/listing/source-control-entry-actions'
 import type { FlatEntry } from './use-selection'
 import {
   isSourceControlSplitOpenModifier,
@@ -39,6 +39,7 @@ export function useSourceControlRowOpening({
   branchSummary: GitBranchCompareSummary | null
 }) {
   const scope = useSourceControlScope()
+  const openFile = useAppStore((s) => s.openFile)
   const executionHostId = scope?.executionHostId
   const placementWorkspaceId = scope?.placementWorkspaceId
   const placementId = placementWorkspaceId ?? activeWorktreeId

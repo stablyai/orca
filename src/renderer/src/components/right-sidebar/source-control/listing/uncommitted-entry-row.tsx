@@ -225,7 +225,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
           {canOpenFile && (
             <ActionButton
               icon={FileText}
-              title={translate('auto.components.right.sidebar.SourceControl.openFile', 'Open file')}
+              title={t('auto.components.right.sidebar.SourceControl.openFile', 'Open file')}
               onClick={(event) => {
                 event.stopPropagation()
                 onOpenFile(entry)
