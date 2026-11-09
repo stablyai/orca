@@ -34,7 +34,9 @@ Code: `cloud/apps/billing` (Worker), desktop `src/main/billing`, `src/renderer/s
 | `usage_events` | sandbox usage segments keyed by caller's `usageId`; weighted seconds; overage seconds fixed at insert |
 | `meter_reports` | outbox of overage → Stripe meter events (pending/sent/failed, attempts) |
 
-Plan entitlements live in code (`src/plans.ts`): Pro 50 h / 2 concurrent / standard; Max 300 h / 5 / all sizes;
+Plans are config, not code: Stripe price ids are Worker vars, and `BILLING_PLANS` (JSON) overrides any default in
+`src/plans.ts` (label, display price, included hours, concurrency, sizes, overage cap); malformed config fails closed
+(503). The desktop renders plan cards from the `plans` list the entitlements endpoint returns. Draft defaults: Pro 50 h / 2 concurrent / standard; Max 300 h / 5 / all sizes;
 Team 150 h × seats pooled / 3 / standard+large. Overage spend cap per plan (Pro 100 h, Max 500 h, Team 200 h/seat).
 Usage is metered in "standard seconds" (wall seconds × size weight 1/2/4). Enterprise/BYOC: out of scope (sales-led).
 
@@ -44,6 +46,9 @@ Usage is metered in "standard seconds" (wall seconds × size weight 1/2/4). Ente
   (qty=seats) + metered overage price; `payment_method_collection=always` (no free plan; optional card-required trial via
   `STRIPE_TRIAL_DAYS`); `subscription_data.metadata.account_id`. One Stripe customer per account (idempotency key
   `customer-create:<account>`). 409 if a subscription is already open — plan/seat changes go through the Portal.
+- **Tax**: `STRIPE_AUTOMATIC_TAX=true` adds `automatic_tax` + `tax_id_collection` to Checkout (default off). Before
+  enabling: activate Stripe Tax, set the origin address (California), product tax code for SaaS, and add
+  registrations as thresholds are crossed (dashboard work, no code).
 - **Customer Portal** (`POST /v1/billing/portal`): upgrade/downgrade/cancel/payment methods/invoices. Portal config
   (allowed plan switches) is set in the Stripe dashboard.
 - **Webhooks** (`POST /v1/stripe/webhook`): HMAC-SHA256 verification of `Stripe-Signature` over the raw body
@@ -56,7 +61,7 @@ Usage is metered in "standard seconds" (wall seconds × size weight 1/2/4). Ente
   Stripe prices). Overage is computed inside the INSERT from the running period total, so concurrent reports can't
   double-claim included time. Meter `orca_sandbox_seconds` (sum, by customer id); overage price $0.45/h via
   `transform_quantity.divide_by=3600, round=up`. `identifier=usageId` + Idempotency-Key dedupe retries.
-  Setup: `cloud/apps/billing/scripts/stripe-test-setup.ts` (refuses non-test keys).
+  Setup: `cloud/apps/billing/scripts/stripe-test-setup.ts` (refuses non-test keys; prices via `STRIPE_SETUP_PRICES`).
 
 ## Entitlement checks
 
@@ -92,6 +97,6 @@ Usage is metered in "standard seconds" (wall seconds × size weight 1/2/4). Ente
 
 ## Open decisions
 
-1. Final prices/included hours/overage caps; trial length. 2. past_due grace for running sandboxes. 3. Team seat ↔
-org member count sync (manual seats in Portal for now). 4. Tax (Stripe Tax) and invoicing for Team. 5. Billing URL
+1. Final prices/included hours/overage caps (config only); trial length. 2. past_due grace for running sandboxes. 3. Team seat ↔
+org member count sync (manual seats in Portal for now). 4. When to turn on Stripe Tax; invoicing for Team. 5. Billing URL
 host (e.g. `billing.onorca.dev`) and return page that deep-links back to Orca.

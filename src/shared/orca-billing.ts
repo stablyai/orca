@@ -28,6 +28,18 @@ export type OrcaBillingEntitlement = {
   canStartSandbox: boolean
   reason: OrcaBillingDenyReason | null
   canManageBilling: boolean
+  /** Plans on offer, from the billing service's catalog (prices are config there, not here). */
+  plans: OrcaBillingPlanOption[]
+}
+
+export type OrcaBillingPlanOption = {
+  plan: OrcaBillingPlanId
+  label: string
+  /** Display only, e.g. "$25/mo"; Stripe charges the configured price. */
+  priceLabel: string
+  includedHours: number
+  /** Team: hours are per seat and pooled. */
+  perSeat: boolean
 }
 
 export type OrcaBillingStatusResult =

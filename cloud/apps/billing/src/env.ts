@@ -25,6 +25,13 @@ export type Env = {
   STRIPE_METER_EVENT_NAME: string
   // Optional card-required trial length for new subscriptions.
   STRIPE_TRIAL_DAYS?: string
+  // 'true' turns on Stripe Tax in Checkout (automatic_tax + tax id collection). Requires Stripe Tax
+  // to be activated with an origin address and registrations in the dashboard. Default off.
+  STRIPE_AUTOMATIC_TAX?: string
+
+  // Optional JSON overriding any field of the default plan catalog (src/plans.ts), e.g.
+  // {"pro":{"priceLabel":"$20/mo","includedHoursPerSeat":40}}. Malformed JSON fails closed (503).
+  BILLING_PLANS?: string
 
   // Where Checkout and the portal send the browser back (a page that deep-links into Orca).
   BILLING_RETURN_URL: string

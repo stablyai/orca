@@ -1,6 +1,7 @@
 // "Can this account start a sandbox, and how many hours are left?" One computation shared by the
 // desktop endpoint and the control plane's start check, so the two can never disagree.
-import { MACHINE_SIZES, PLANS, includedSeconds, overageCapSeconds, type MachineSize, type PlanId } from './plans'
+import { MACHINE_SIZES, includedSeconds, overageCapSeconds, planCatalog, type MachineSize, type PlanId } from './plans'
+import type { Env } from './env'
 import { currentSubscription, periodUsage } from './store'
 
 export type DenyReason =
@@ -33,7 +34,9 @@ export type Entitlement = {
 
 const LIVE_STATUSES = new Set(['active', 'trialing'])
 
-export async function computeEntitlement(db: D1Database, accountId: string): Promise<Entitlement> {
+export async function computeEntitlement(env: Pick<Env, 'BILLING_DB' | 'BILLING_PLANS'>, accountId: string): Promise<Entitlement> {
+  const db = env.BILLING_DB
+  const catalog = planCatalog(env)
   const subscription = await currentSubscription(db, accountId)
   if (!subscription) {
     return {
@@ -55,9 +58,9 @@ export async function computeEntitlement(db: D1Database, accountId: string): Pro
       reason: 'no_subscription'
     }
   }
-  const plan = PLANS[subscription.plan]
-  const included = includedSeconds(subscription.plan, subscription.seats)
-  const cap = overageCapSeconds(subscription.plan, subscription.seats)
+  const plan = catalog[subscription.plan]
+  const included = includedSeconds(plan, subscription.seats)
+  const cap = overageCapSeconds(plan, subscription.seats)
   const usage = await periodUsage(db, accountId, subscription.current_period_start)
   const remaining = Math.max(0, included - usage.usedSeconds)
   const overageEnabled = subscription.overage_enabled === 1

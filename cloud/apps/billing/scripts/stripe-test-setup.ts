@@ -35,19 +35,23 @@ async function post<T>(path: string, params: Record<string, unknown>, idempotenc
   return json
 }
 
+// Monthly price in cents per plan (Team is per seat) and the overage price per standard hour.
+// Draft numbers; override with STRIPE_SETUP_PRICES='{"pro":2000,"max":10000,"team":5000,"overagePerHour":45}'.
+const prices = { pro: 2500, max: 10000, team: 6000, overagePerHour: 45, ...JSON.parse(process.env.STRIPE_SETUP_PRICES ?? '{}') }
 const plans = [
-  { id: 'pro', name: 'Orca Pro', cents: 2500 },
-  { id: 'max', name: 'Orca Max', cents: 10000 },
-  { id: 'team', name: 'Orca Team (per seat)', cents: 6000 }
+  { id: 'pro', name: 'Orca Pro', cents: prices.pro },
+  { id: 'max', name: 'Orca Max', cents: prices.max },
+  { id: 'team', name: 'Orca Team (per seat)', cents: prices.team }
 ] as const
+const suffix = `${prices.pro}-${prices.max}-${prices.team}-${prices.overagePerHour}`
 
 const out: Record<string, string> = {}
 for (const plan of plans) {
   const product = await post<{ id: string }>('/v1/products', { name: plan.name, metadata: { orca_plan: plan.id } }, `product:${plan.id}`)
   const price = await post<{ id: string }>(
     '/v1/prices',
-    { product: product.id, currency: 'usd', unit_amount: plan.cents, recurring: { interval: 'month' }, lookup_key: `orca_${plan.id}_monthly` },
-    `price:${plan.id}`
+    { product: product.id, currency: 'usd', unit_amount: plan.cents, recurring: { interval: 'month' }, lookup_key: `orca_${plan.id}_monthly`, transfer_lookup_key: true },
+    `price:${plan.id}:${suffix}`
   )
   out[`STRIPE_PRICE_${plan.id.toUpperCase()}`] = price.id
 }
@@ -64,18 +68,19 @@ const meter = await post<{ id: string; event_name: string }>(
   'meter'
 )
 const overageProduct = await post<{ id: string }>('/v1/products', { name: 'Orca sandbox overage', unit_label: 'hour' }, 'product:overage')
-// $0.45 per standard hour; the meter counts seconds and Stripe divides by 3600 (rounding up) on the invoice.
+// Per standard hour; the meter counts seconds and Stripe divides by 3600 (rounding up) on the invoice.
 const overage = await post<{ id: string }>(
   '/v1/prices',
   {
     product: overageProduct.id,
     currency: 'usd',
-    unit_amount: 45,
+    unit_amount: prices.overagePerHour,
     recurring: { interval: 'month', usage_type: 'metered', meter: meter.id },
     transform_quantity: { divide_by: 3600, round: 'up' },
-    lookup_key: 'orca_sandbox_overage_hourly'
+    lookup_key: 'orca_sandbox_overage_hourly',
+    transfer_lookup_key: true
   },
-  'price:overage'
+  `price:overage:${suffix}`
 )
 out.STRIPE_PRICE_OVERAGE = overage.id
 out.STRIPE_METER_EVENT_NAME = meter.event_name

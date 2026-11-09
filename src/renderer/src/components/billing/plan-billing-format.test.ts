@@ -17,7 +17,8 @@ const base: OrcaBillingEntitlement = {
   overageCapSeconds: 100 * 3600,
   canStartSandbox: true,
   reason: null,
-  canManageBilling: true
+  canManageBilling: true,
+  plans: []
 }
 
 describe('plan billing format', () => {

@@ -1,7 +1,7 @@
 import { CreditCard } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store/index'
-import { registerAccountMenuItem } from './account-menu-adapter'
+import { registerAccountMenuItem } from '../sidebar/account-menu/account-menu-items'
 
 /** Cloud capability flag that turns billing on per account (server-controlled rollout). */
 export const BILLING_CAPABILITY = 'billing'

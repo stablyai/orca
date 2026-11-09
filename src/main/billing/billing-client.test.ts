@@ -147,7 +147,17 @@ describe('billing client', () => {
           canStartSandbox: true,
           reason: 'something_new',
           canManageBilling: true,
-          accountId: 'org:o1'
+          accountId: 'org:o1',
+          plans: [
+            { plan: 'pro', label: 'Pro', priceLabel: '$25/mo', includedHours: 50, perSeat: false },
+            {
+              plan: 'enterprise',
+              label: 'Enterprise',
+              priceLabel: 'Talk to us',
+              includedHours: 0,
+              perSeat: true
+            }
+          ]
         })
       })
     )
@@ -158,5 +168,8 @@ describe('billing client', () => {
       canManageBilling: true
     })
     expect(entitlement).not.toHaveProperty('accountId')
+    expect(entitlement.plans).toEqual([
+      { plan: 'pro', label: 'Pro', priceLabel: '$25/mo', includedHours: 50, perSeat: false }
+    ])
   })
 })
