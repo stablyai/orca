@@ -84,8 +84,36 @@ async function readLeadingSessionId(file: string): Promise<LeadingRead> {
     try {
       const buffer = Buffer.alloc(FIRST_WINDOW_BYTES)
       const { bytesRead } = await handle.read(buffer, 0, FIRST_WINDOW_BYTES, 0)
-      const match = /"sessionId"\s*:\s*"([^"]+)"/.exec(buffer.toString('utf8', 0, bytesRead))
-      return match ? { kind: 'session', id: match[1]! } : { kind: 'none' }
+      const text = buffer.toString('utf8', 0, bytesRead)
+      const lines = text.split('\n')
+      // The read window can cut the last row; a truncated row proves nothing.
+      const trailingPartial = bytesRead === FIRST_WINDOW_BYTES && !text.endsWith('\n')
+      if (trailingPartial) {
+        lines.pop()
+      }
+      let sawRow = false
+      for (const line of lines) {
+        if (!line.trim()) {
+          continue
+        }
+        let row: unknown
+        try {
+          row = JSON.parse(line)
+        } catch {
+          return { kind: 'unreadable' }
+        }
+        sawRow = true
+        // Rows carry their own top-level session; nested message payloads can name another one.
+        const sessionId =
+          row && typeof row === 'object' && 'sessionId' in row
+            ? (row as { sessionId?: unknown }).sessionId
+            : undefined
+        if (typeof sessionId === 'string') {
+          return { kind: 'session', id: sessionId }
+        }
+      }
+      // A window cut mid-row cannot establish this transcript's session.
+      return trailingPartial || !sawRow ? { kind: 'unreadable' } : { kind: 'none' }
     } finally {
       await handle.close()
     }

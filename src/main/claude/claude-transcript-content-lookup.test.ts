@@ -119,3 +119,28 @@ it('refuses to call an unreadable candidate absent in strict adoption', async ()
     await rig.cleanup()
   }
 })
+
+it('matches the row-level session id, not a nested payload session id', async () => {
+  const rig = await makeProjects()
+  try {
+    const file = join(rig.bucketDir, 'nested-session.jsonl')
+    await writeFile(
+      file,
+      JSON.stringify({
+        type: 'user',
+        message: { sessionId: 'another-session' },
+        sessionId: 'session-1'
+      })
+    )
+
+    await expect(
+      findClaudeTranscriptBySessionIdContent({
+        projectsDir: join(rig.root, 'projects'),
+        workspaceCwd: rig.workspaceCwd,
+        providerSessionId: 'session-1'
+      })
+    ).resolves.toBe(file)
+  } finally {
+    await rig.cleanup()
+  }
+})
