@@ -2,11 +2,7 @@ import { Laptop, Loader2, X } from 'lucide-react'
 import { TabHoverCard } from './TabHoverCard'
 import { useTranslate } from '@/i18n/use-translate'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
-import {
-  ACTIVE_TAB_INDICATOR_CLASSES,
-  getTabRootStateClasses,
-  getTabStripBorderClasses
-} from './drop-indicator'
+import { getTabRootStateClasses } from './drop-indicator'
 import {
   describeClientHostedBrowserRowHost,
   getClientHostedBrowserRowLabel
@@ -14,6 +10,7 @@ import {
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
+import { useTabStripChromeClasses } from './use-tab-strip-chrome-classes'
 
 /** Paired-client pages have no unified tab: expose presence and close without persisted ordering, pinning or drag actions. */
 export default function ClientHostedBrowserTab({
@@ -32,6 +29,7 @@ export default function ClientHostedBrowserTab({
   includeTopTabBorder?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
+  const chrome = useTabStripChromeClasses(hasTabsToRight, includeTopTabBorder, null)
   const slotProps = useTabStripSlotProps(row.browserPageId, isActive)
   const loading = row.loading && !row.hostAbsent
   const PageIcon = loading ? Loader2 : Laptop
@@ -48,7 +46,7 @@ export default function ClientHostedBrowserTab({
       >
         <div
           data-client-hosted-browser-row-id={row.browserPageId}
-          className={`w-full group relative flex h-full cursor-pointer select-none items-center px-1.5 text-xs outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getTabRootStateClasses(isActive)}`}
+          className={`w-full group relative flex h-full cursor-pointer select-none items-center px-1.5 text-xs outline-none focus:outline-none focus-visible:outline-none ${chrome.edges} ${getTabRootStateClasses(isActive)}`}
           onPointerDown={onActivate}
           onMouseDown={(event) => {
             if (event.button === 1) {
@@ -64,7 +62,7 @@ export default function ClientHostedBrowserTab({
             }
           }}
         >
-          {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+          {isActive && <span className={chrome.activeIndicator} aria-hidden />}
           <PageIcon
             className={`mr-1 size-3 shrink-0 ${loading ? 'motion-safe:animate-spin' : ''} ${row.hostAbsent ? 'text-muted-foreground' : 'text-blue-500'}`}
             aria-hidden

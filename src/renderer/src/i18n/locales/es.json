@@ -13087,6 +13087,15 @@
           "shownPluginCount_other": "{{count}} complementos coincidentes mostrados, incluido este",
           "samePublisher": "Más elementos incluidos como {{value0}}",
           "shownPluginCount_many": "{{count}} complementos coincidentes mostrados, incluido este"
+        },
+        "TabStripPlacementControl": {
+          "description": "Muestra las pestañas en la franja superior o en un panel redimensionable a la derecha.",
+          "keywordSidePanel": "panel lateral",
+          "keywordTabStrip": "franja de pestañas",
+          "keywordVerticalTabs": "pestañas verticales",
+          "rightPanel": "Panel derecho",
+          "title": "Ubicación de pestañas",
+          "top": "Franja superior"
         }
       },
       "right": {

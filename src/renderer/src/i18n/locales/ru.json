@@ -13811,6 +13811,15 @@
           "samePublisher": "Другие под именем {{value0}}",
           "shownPluginCount_few": "Показано {{count}} подходящих плагина, включая этот",
           "shownPluginCount_many": "Показано {{count}} подходящих плагинов, включая этот"
+        },
+        "TabStripPlacementControl": {
+          "description": "Показывать вкладки в верхней полосе или на панели справа с изменяемой шириной.",
+          "keywordSidePanel": "боковая панель",
+          "keywordTabStrip": "полоса вкладок",
+          "keywordVerticalTabs": "вертикальные вкладки",
+          "rightPanel": "Панель справа",
+          "title": "Расположение вкладок",
+          "top": "Верхняя полоса"
         }
       },
       "right": {

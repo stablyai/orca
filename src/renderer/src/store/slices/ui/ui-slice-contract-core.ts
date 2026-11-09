@@ -130,6 +130,8 @@ export type UISliceCore = {
   toggleSidebar: () => void
   setSidebarOpen: (open: boolean) => void
   setSidebarWidth: (width: number) => void
+  tabSidePanelWidth: number
+  setTabSidePanelWidth: (width: number) => void
   agentSendPopoverTargetMode: AgentSendPopoverTargetMode | null
   openAgentSendPopoverTargetMode: (args: OpenAgentSendPopoverTargetModeArgs) => void
   closeAgentSendPopoverTargetMode: (id?: string, instanceId?: string) => void

@@ -24,11 +24,13 @@ import type { SshRemoteControlSettings } from './ssh-remote-control-settings'
 import type { AgentWorkspaceTrustSettings } from './agent-launch/permissions/agent-workspace-trust-decision'
 import type { KeybindingGlobalSettings } from './keybindings/global-settings'
 import type { WorkspaceCleanupPolicySettings } from './workspace-cleanup/workspace-cleanup-policy'
+import type { TabStripPlacementSettings } from './tab-types'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
 export type GlobalSettingsBase = AntigravityChatAuthSettings &
   EmulatorOpeningSettings &
   SshRemoteControlSettings &
+  TabStripPlacementSettings &
   ClaudeAgentViewSettings &
   NativeChatGlobalSettings &
   NativeChatIdleStopSettings &

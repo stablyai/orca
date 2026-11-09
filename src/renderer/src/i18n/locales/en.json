@@ -14299,6 +14299,15 @@
           "cancel": "Cancel",
           "confirm": "Remove",
           "unknownHost": "Unknown host"
+        },
+        "TabStripPlacementControl": {
+          "description": "Show tabs in the top strip, or in a resizable panel on the right.",
+          "keywordSidePanel": "side panel",
+          "keywordTabStrip": "tab strip",
+          "keywordVerticalTabs": "vertical tabs",
+          "rightPanel": "Right panel",
+          "title": "Tab Placement",
+          "top": "Top strip"
         }
       },
       "right": {

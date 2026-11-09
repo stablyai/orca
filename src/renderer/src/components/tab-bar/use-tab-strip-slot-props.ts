@@ -1,8 +1,10 @@
 import { cn } from '@/lib/class-names'
 import { useTabDragActive } from '../tab-group/tab-drag-context'
+import { TAB_STRIP_ORIENTATION, useTabStripOrientation } from './tab-strip-orientation'
 import {
   TERMINAL_TAB_CONTAINER_WIDTH_CLASSES,
-  CONTENT_TAB_CONTAINER_WIDTH_CLASSES
+  CONTENT_TAB_CONTAINER_WIDTH_CLASSES,
+  VERTICAL_TAB_CONTAINER_CLASSES
 } from './tab-width-rules'
 
 type TabStripSlotProps = {
@@ -18,6 +20,14 @@ export function useTabStripSlotProps(
   sizing: 'content' | 'terminal' = 'content'
 ): TabStripSlotProps {
   const isTabDragActive = useTabDragActive()
+  const orientation = useTabStripOrientation()
+  if (orientation === TAB_STRIP_ORIENTATION.vertical) {
+    return {
+      className: VERTICAL_TAB_CONTAINER_CLASSES,
+      'data-tab-strip-slot': tabId,
+      'data-active-tab-dock': undefined
+    }
+  }
   const docks = isActive && !isTabDragActive
   return {
     className: cn(

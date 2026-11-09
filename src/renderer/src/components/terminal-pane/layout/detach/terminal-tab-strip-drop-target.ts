@@ -1,5 +1,6 @@
 import type { PaneExternalDropTarget } from '@/lib/pane-manager/pane-manager-types'
 import type { AppState } from '@/store/types'
+import { TAB_STRIP_ORIENTATION } from '../../../tab-bar/tab-strip-orientation'
 
 const TAB_GROUP_STRIP_SELECTOR = '[data-tab-group-strip-id][data-worktree-id]'
 
@@ -39,16 +40,24 @@ function getTabElements(strip: HTMLElement): HTMLElement[] {
 function getInsertionMarkerRect(
   tabRects: DOMRect[],
   insertionIndex: number,
-  stripRect: DOMRect
+  stripRect: DOMRect,
+  vertical: boolean
 ): DOMRect {
-  const markerWidth = 2
+  const markerSize = 2
   const clampedIndex = clampIndex(insertionIndex, tabRects.length)
+  const nextTab = clampedIndex < tabRects.length ? tabRects[clampedIndex] : undefined
+  const lastTab = tabRects.at(-1)
+  if (vertical) {
+    const rawTop = nextTab?.top ?? (lastTab?.bottom ?? stripRect.top) - markerSize
+    const top = Math.min(Math.max(rawTop, stripRect.top), stripRect.bottom - markerSize)
+    return rectFromBox({ left: stripRect.left, top, width: stripRect.width, height: markerSize })
+  }
   const rawLeft =
     clampedIndex < tabRects.length
-      ? (tabRects[clampedIndex]?.left ?? stripRect.left)
-      : (tabRects.at(-1)?.right ?? stripRect.left) - markerWidth
-  const left = Math.min(Math.max(rawLeft, stripRect.left), stripRect.right - markerWidth)
-  return rectFromBox({ left, top: stripRect.top, width: markerWidth, height: stripRect.height })
+      ? (nextTab?.left ?? stripRect.left)
+      : (lastTab?.right ?? stripRect.left) - markerSize
+  const left = Math.min(Math.max(rawLeft, stripRect.left), stripRect.right - markerSize)
+  return rectFromBox({ left, top: stripRect.top, width: markerSize, height: stripRect.height })
 }
 
 function resolveTabStripInsertion(args: {
@@ -62,37 +71,33 @@ function resolveTabStripInsertion(args: {
   if (tabs.length === 0) {
     return null
   }
+  const vertical = args.strip.dataset.tabStripOrientation === TAB_STRIP_ORIENTATION.vertical
+  const pointer = vertical ? args.clientY : args.clientX
   const tabRects = tabs.map((tab) => tab.getBoundingClientRect())
+  const insertAt = (index: number): { index: number; rect: DOMRect } => {
+    const insertionIndex = clampIndex(index, args.groupTabOrderLength)
+    return {
+      index: insertionIndex,
+      rect: getInsertionMarkerRect(tabRects, insertionIndex, args.stripRect, vertical)
+    }
+  }
 
   for (let index = 0; index < tabRects.length; index += 1) {
     const tabRect = tabRects[index]
     if (!tabRect) {
       continue
     }
-    if (args.clientX < tabRect.left) {
-      const insertionIndex = clampIndex(index, args.groupTabOrderLength)
-      return {
-        index: insertionIndex,
-        rect: getInsertionMarkerRect(tabRects, insertionIndex, args.stripRect)
-      }
+    const start = vertical ? tabRect.top : tabRect.left
+    const size = vertical ? tabRect.height : tabRect.width
+    if (pointer < start) {
+      return insertAt(index)
     }
     if (pointWithinRect(args.clientX, args.clientY, tabRect)) {
-      const insertionIndex = clampIndex(
-        index + (args.clientX < tabRect.left + tabRect.width / 2 ? 0 : 1),
-        args.groupTabOrderLength
-      )
-      return {
-        index: insertionIndex,
-        rect: getInsertionMarkerRect(tabRects, insertionIndex, args.stripRect)
-      }
+      return insertAt(index + (pointer < start + size / 2 ? 0 : 1))
     }
   }
 
-  const insertionIndex = args.groupTabOrderLength
-  return {
-    index: insertionIndex,
-    rect: getInsertionMarkerRect(tabRects, insertionIndex, args.stripRect)
-  }
+  return insertAt(args.groupTabOrderLength)
 }
 
 function getElementsFromPoint(clientX: number, clientY: number): Element[] {

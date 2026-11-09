@@ -12804,6 +12804,15 @@
           "shownPluginCount_one": "これを含む {{count}} 件の一致するプラグインを表示",
           "shownPluginCount_other": "これを含む {{count}} 件の一致するプラグインを表示",
           "samePublisher": "{{value0}} として掲載された他のプラグイン"
+        },
+        "TabStripPlacementControl": {
+          "description": "タブを上部のストリップ、またはサイズ変更できる右側のパネルに表示します。",
+          "keywordSidePanel": "サイドパネル",
+          "keywordTabStrip": "タブストリップ",
+          "keywordVerticalTabs": "縦タブ",
+          "rightPanel": "右パネル",
+          "title": "タブの配置",
+          "top": "上部ストリップ"
         }
       },
       "right": {

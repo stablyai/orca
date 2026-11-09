@@ -20,18 +20,14 @@ import { STATUS_LABELS } from '../../../../shared/git/status/git-status-labels'
 import { getUntitledFileRoot } from '@/components/editor/untitled-file-rename-path'
 import { preventMiddleButtonDefault } from './middle-button-default-guard'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '@/lib/overlay-interaction/close-all-context-menus'
-import {
-  ACTIVE_TAB_INDICATOR_CLASSES,
-  getDropIndicatorClasses,
-  getTabRootStateClasses,
-  getTabStripBorderClasses
-} from './drop-indicator'
+import { getTabRootStateClasses } from './drop-indicator'
 import { canOpenMarkdownPreview } from '@/components/editor/view-mode/markdown-preview-controls'
 import { EditorFileTabContextMenu } from './EditorFileTabContextMenu'
 import { getEditorFileTabModeIcon } from './editor-file-tab-mode-icon'
 import { useTranslate } from '@/i18n/use-translate'
 import { TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { useTabStripSlotProps } from './use-tab-strip-slot-props'
+import { useTabStripChromeClasses } from './use-tab-strip-chrome-classes'
 import { EditorFileTabCloseButton } from './EditorFileTabCloseButton'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { useTabContextMenuOpening } from './tab-context-menu-opening'
@@ -209,6 +205,11 @@ export default function EditorFileTab({
     disabled: isRenaming
   })
   const handleMenuOpenChange = useTabContextMenuOpening(setMenuOpen, retirePendingActivation)
+  const chrome = useTabStripChromeClasses(
+    hasTabsToRight,
+    includeTopTabBorder,
+    dropIndicator ?? null
+  )
   const slotProps = useTabStripSlotProps(file.tabId ?? file.id, isActive)
 
   const tabRoot = (
@@ -219,7 +220,7 @@ export default function EditorFileTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...dragListeners}
-      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
+      className={`w-full group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${chrome.edges} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         onPointerDown(
           e,
@@ -248,7 +249,7 @@ export default function EditorFileTab({
         }
       }}
     >
-      {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {isActive && <span className={chrome.activeIndicator} aria-hidden />}
       {isConflictReview ? (
         <ShieldAlert
           className={`w-3 h-3 mr-1 shrink-0 ${isActive ? 'text-orange-400' : 'text-orange-400/70'}`}

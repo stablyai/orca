@@ -28,6 +28,8 @@ const buttonVariants = cva(
         'menu-launch':
           'min-w-0 flex-1 justify-start rounded-l-[7px] rounded-r-none text-foreground',
         'menu-segment': 'rounded-l-none border-l border-border',
+        // The mirrored segment, for a row whose submenu opens to the left.
+        'menu-segment-start': 'rounded-r-none border-r border-border',
         'pane-title': 'pane-title-split-trigger',
         'pane-title-close': 'pane-title-close',
         // The worktree card's "rename failed" chip, for a failure the user can open.

@@ -5,6 +5,7 @@ import type { SettingsSearchEntry } from '../search/settings-search'
 import { getGeneralEditorSearchEntries } from '../editor/general-editor-search'
 import { translate } from '@/i18n/i18n'
 import { searchKeywords, translateSearchKeyword } from '../search/settings-search-keywords'
+import { getTabStripPlacementSearchEntry } from '../appearance/tab-strip-placement-search'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { getGeneralProjectRuntimeSearchEntries } from './project-runtime/general-project-runtime-search'
 import { getGeneralSupportSearchEntries } from './general-support-search'
@@ -115,6 +116,7 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.fb84767421', 'switch')
     ]
   },
+  getTabStripPlacementSearchEntry(),
   {
     title: translate('settings.general.previewTabs.title', 'Preview tabs'),
     description: translate(

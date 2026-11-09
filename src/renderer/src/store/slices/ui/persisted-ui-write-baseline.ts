@@ -12,6 +12,7 @@ export type PersistedUIWriteBaseline = {
   rightSidebarWidth: number
   activityBarPosition: ActivityBarPosition
   markdownTocPanelWidth: number
+  tabSidePanelWidth: number
   combinedDiffFileTreeWidth: number
   groupBy: PersistedUIState['groupBy']
   sortBy: PersistedUIState['sortBy']
@@ -44,6 +45,7 @@ const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
   rightSidebarWidth: true,
   activityBarPosition: true,
   markdownTocPanelWidth: true,
+  tabSidePanelWidth: true,
   combinedDiffFileTreeWidth: true,
   groupBy: true,
   sortBy: true,

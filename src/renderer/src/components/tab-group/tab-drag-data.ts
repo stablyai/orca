@@ -1,6 +1,7 @@
 import type { TabGroup } from '../../../../shared/tab-types'
 import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
 import type { TabSplitDirection } from '../../store/slices/tabs/tabs-slice-contract'
+import type { TabStripOrientation } from '../tab-bar/tab-strip-orientation'
 
 export type TabDropZone = 'center' | TabSplitDirection
 
@@ -15,6 +16,8 @@ export type TabDragItemData = {
   iconPath?: string
   color?: string | null
   agent?: TuiAgent | null
+  /** Which axis splits this tab into before/after halves when another tab hovers it. */
+  stripOrientation?: TabStripOrientation
 }
 
 export type TabPaneDropData = {

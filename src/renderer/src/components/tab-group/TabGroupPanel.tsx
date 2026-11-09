@@ -1,11 +1,12 @@
-import { Suspense, useCallback, useMemo, useRef } from 'react'
+import { Suspense, useCallback, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/app-shell/startup/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
 import { useAppStore } from '../../store/index'
 import TabBar from '../tab-bar/TabBar'
+import { TabSidePanel } from './TabSidePanel'
+import { useTabSidePanelEnabled } from './use-tab-side-panel-enabled'
 
-import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
-import { TabGroupPaneActionsMenu } from './TabGroupPaneActionsMenu'
+import { TabGroupStripActions } from './TabGroupStripActions'
 import { useTabGroupWorkspaceModel } from './useTabGroupWorkspaceModel'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
@@ -15,6 +16,7 @@ import { registerTabGroupBody } from './tab-group-body-geometry'
 import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { useTranslate } from '@/i18n/use-translate'
 import type { TabGroup } from '../../../../shared/tab-types'
+import { TAB_STRIP_ORIENTATION } from '../tab-bar/tab-strip-orientation'
 import { isStructuredTab } from '../../../../shared/agent-session/view/structured-agent-session-tab'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
 import { useClientHostedBrowserRows } from '@/runtime/browser/client-hosting/client-hosted-browser-row-state'
@@ -74,10 +76,11 @@ export default function TabGroupPanel({
 }): React.JSX.Element {
   const t = useTranslate()
   const rightSidebarOpen = useAppStore((state) => state.rightSidebarOpen)
+  // Floating panels keep their external strip: they have no room for a side column.
+  const usesSidePanel = useTabSidePanelEnabled(tabStrip === 'attached')
   const sidebarOpen = useAppStore((state) => state.sidebarOpen)
   const reserveRightTitlebarSpace = reserveClosedExplorerToggleSpace && !rightSidebarOpen
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
-  const quickCommandsSlotRef = useRef<HTMLDivElement>(null)
   const {
     activeTab,
     agentSessionItems,
@@ -250,18 +253,21 @@ export default function TabGroupPanel({
       }}
       tabBarOrder={tabBarOrder}
       hoveredTabInsertion={hoveredTabInsertion}
+      orientation={
+        usesSidePanel ? TAB_STRIP_ORIENTATION.vertical : TAB_STRIP_ORIENTATION.horizontal
+      }
     />
   )
 
-  // Why: actions hide before the tab bar's floor is reached; min-w-0 + clipping is only a backstop so reserved spacers stay clear.
-  const actionChromeClassName = cn(
-    'flex min-w-0 items-center gap-0.5 overflow-hidden pl-1.5 pr-0.5 transition-opacity duration-150',
-    !isFocused && 'opacity-50 hover:opacity-100 focus-within:opacity-100'
-  )
   return (
     <div
       // Dim unfocused splits only when siblings exist; keep vertical seams neutral and change only the bottom focus border.
-      className={`group/tab-group relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
+      // Why grid over a wrapper: split geometry reads the panel as the body's parent, and toggling must not remount the body.
+      className={`group/tab-group relative ${
+        usesSidePanel
+          ? 'grid grid-cols-[minmax(0,1fr)_auto] grid-rows-[32px_minmax(0,1fr)]'
+          : 'flex flex-col'
+      } flex-1 min-w-0 min-h-0 overflow-hidden${
         hasSplitGroups
           ? // Why: skip border-l/border-r on edge-touching groups; the split-layout wrapper and right sidebar already paint borders at those seams (double line otherwise).
             ` ${
@@ -287,8 +293,11 @@ export default function TabGroupPanel({
       {/* Omit external strips entirely because hidden duplicates would still register competing drag sortables. */}
       {tabStrip !== 'attached' ? null : (
         <div
-          className="h-[32px] shrink-0 border-b border-border bg-tab-bar"
-          data-tab-group-strip-id={groupId}
+          className={cn(
+            'h-[32px] shrink-0 border-b border-border bg-tab-bar',
+            usesSidePanel && 'col-span-2'
+          )}
+          data-tab-group-strip-id={usesSidePanel ? undefined : groupId}
           data-terminal-focus-release-surface="true"
           data-worktree-id={worktreeId}
         >
@@ -307,36 +316,18 @@ export default function TabGroupPanel({
             ) : null}
             {/* Why: the tab-strip container excludes the reserved spacers, so width rules see only the room tabs and actions share. */}
             <div className="@container/tab-strip flex min-w-0 flex-1 items-stretch">
-              <div className="min-w-10 flex-1 h-full">{tabBar}</div>
+              <div className="min-w-10 flex-1 h-full">{usesSidePanel ? null : tabBar}</div>
               {/* Why: overflowing tabs eat all strip whitespace; keep a window-drag handle while the right sidebar header is closed. It goes first in narrow strips: 203 = 40 gap + 163 for the tab floor and every control, so controls never clip behind it. */}
               {reserveRightTitlebarSpace ? (
                 <div className="w-10 min-w-0 @max-[203px]/tab-strip:hidden" />
               ) : null}
-              <div
-                className={actionChromeClassName}
-                style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-              >
-                {/* Why: drop an action whole (and from Tab order) once it can't fit beside the tab floor and "+", never leave a clipped focus target.
-                    163 = 40 tab + 36 "+" + 8 padding + 47 widest collapsed quick-command trigger + 2 gap + 28 pane actions + 2 sub-pixel slack; 114 = 40 + 36 + 8 + 28 + 2. */}
-                <div ref={quickCommandsSlotRef} className="contents @max-[163px]/tab-strip:hidden">
-                  <TabBarQuickCommandsButton
-                    worktreeId={worktreeId}
-                    groupId={groupId}
-                    isFocused={isFocused}
-                  />
-                </div>
-                {hasSplitGroups ? (
-                  <div className="contents @max-[114px]/tab-strip:hidden">
-                    <TabGroupPaneActionsMenu
-                      isFocused={isFocused}
-                      onCloseGroup={commands.closeGroup}
-                      worktreeId={worktreeId}
-                      groupId={groupId}
-                      quickCommandsSlotRef={quickCommandsSlotRef}
-                    />
-                  </div>
-                ) : null}
-              </div>
+              <TabGroupStripActions
+                worktreeId={worktreeId}
+                groupId={groupId}
+                isFocused={isFocused}
+                hasSplitGroups={hasSplitGroups}
+                onCloseGroup={commands.closeGroup}
+              />
             </div>
             {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
             {reserveRightTitlebarSpace ? (
@@ -415,6 +406,11 @@ export default function TabGroupPanel({
 
         {/* Why: terminal/browser/simulator/structured-chat panes render at the worktree level; tab activation only changes overlay visibility and never remounts a live surface. */}
       </div>
+      {usesSidePanel ? (
+        <TabSidePanel groupId={groupId} worktreeId={worktreeId}>
+          {tabBar}
+        </TabSidePanel>
+      ) : null}
     </div>
   )
 }

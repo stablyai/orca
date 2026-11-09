@@ -13458,6 +13458,15 @@
           "shownPluginCount_one": "{{count}} passendes Plugin angezeigt, einschließlich dieses Plugins",
           "shownPluginCount_other": "{{count}} passende Plugins angezeigt, einschließlich dieses Plugins",
           "samePublisher": "Weitere unter {{value0}} aufgeführte Plugins"
+        },
+        "TabStripPlacementControl": {
+          "description": "Tabs in der oberen Leiste oder in einem größenverstellbaren Bereich rechts anzeigen.",
+          "keywordSidePanel": "Seitenbereich",
+          "keywordTabStrip": "Tab-Leiste",
+          "keywordVerticalTabs": "vertikale Tabs",
+          "rightPanel": "Rechter Bereich",
+          "title": "Tab-Position",
+          "top": "Obere Leiste"
         }
       },
       "right": {

@@ -5,6 +5,10 @@ import type { ContextualTourId } from '../../../../../shared/contextual-tours'
 import { normalizeFeatureInteractions } from '../../../../../shared/feature-interactions'
 import { normalizeContextualTourIds } from '../../../../../shared/contextual-tours'
 import type { UISlice } from './ui-slice-contract'
+import type { AppState } from '../../types'
+import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
+import { restoreTabSidePanelWidth } from '../../../../../shared/tab-side-panel-width'
+import { clampCombinedDiffFileTreeWidth } from '../../../../../shared/combined-diff-file-tree-width'
 import {
   sanitizeAcknowledgedAgentsByPaneKey,
   sanitizeActivityClearedAtByPaneKey,
@@ -152,5 +156,26 @@ export function hydrateAgentReadState(
     ),
     activityClearedAtByPaneKey: sanitizeActivityClearedAtByPaneKey(ui.activityClearedAtByPaneKey),
     manuallyUnreadTurnsByPaneKey: sanitizePaneKeyTimestampRecord(ui.manuallyUnreadTurnsByPaneKey)
+  }
+}
+
+type PanelWidths = Pick<
+  AppState,
+  'markdownTocPanelWidth' | 'tabSidePanelWidth' | 'combinedDiffFileTreeWidth'
+>
+
+export function hydratePanelWidths(ui: PersistedUIState, current: PanelWidths): PanelWidths {
+  return {
+    markdownTocPanelWidth: clampMarkdownTocPanelWidth(
+      ui.markdownTocPanelWidth,
+      undefined,
+      current.markdownTocPanelWidth
+    ),
+    tabSidePanelWidth: restoreTabSidePanelWidth(ui.tabSidePanelWidth, current.tabSidePanelWidth),
+    combinedDiffFileTreeWidth: clampCombinedDiffFileTreeWidth(
+      ui.combinedDiffFileTreeWidth,
+      undefined,
+      current.combinedDiffFileTreeWidth
+    )
   }
 }

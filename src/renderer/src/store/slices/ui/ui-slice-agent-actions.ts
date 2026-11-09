@@ -16,6 +16,10 @@ function createAgentSendTargetModeInstanceId(): string {
   agentSendTargetModeInstanceCounter += 1
   return `${Date.now()}:${agentSendTargetModeInstanceCounter}`
 }
+import {
+  restoreTabSidePanelWidth,
+  TAB_SIDE_PANEL_DEFAULT_WIDTH
+} from '../../../../../shared/tab-side-panel-width'
 
 export function createUiAgentActions(
   set: UISliceSet,
@@ -27,6 +31,8 @@ export function createUiAgentActions(
   | 'toggleSidebar'
   | 'setSidebarOpen'
   | 'setSidebarWidth'
+  | 'tabSidePanelWidth'
+  | 'setTabSidePanelWidth'
   | 'agentSendPopoverTargetMode'
   | 'openAgentSendPopoverTargetMode'
   | 'closeAgentSendPopoverTargetMode'
@@ -49,6 +55,11 @@ export function createUiAgentActions(
     toggleSidebar: () => set((s) => ({ sidebarOpen: !s.sidebarOpen })),
     setSidebarOpen: (open) => set({ sidebarOpen: open }),
     setSidebarWidth: (width) => set({ sidebarWidth: width }),
+    tabSidePanelWidth: TAB_SIDE_PANEL_DEFAULT_WIDTH,
+    setTabSidePanelWidth: (width) =>
+      set((s) => ({
+        tabSidePanelWidth: restoreTabSidePanelWidth(width, s.tabSidePanelWidth)
+      })),
     agentSendPopoverTargetMode: null,
     openAgentSendPopoverTargetMode: (args) => {
       const targets = deriveRunningAgentSendTargets(get(), args.worktreeId)
