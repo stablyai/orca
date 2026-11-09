@@ -1,4 +1,7 @@
-import { verifyPreloadOutput } from '../output-contracts/preload-output-contract.mjs'
+import {
+  verifyPreloadOutput,
+  verifySandboxedMainPreloadOutputs
+} from '../output-contracts/preload-output-contract.mjs'
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
 import { createRequire } from 'node:module'
@@ -39,13 +42,16 @@ child.on('exit', async (code, signal) => {
   const target = process.env.ORCA_ELECTRON_VITE_TARGET
   const builtRenderer =
     (!target || target === 'renderer') && fs.existsSync(path.join(RENDERER_BUILD_DIR, 'index.html'))
-  if (!target || target === 'preload') {
-    try {
-      await verifyPreloadOutput()
-    } catch (error) {
-      console.error(error)
-      process.exit(1)
+  try {
+    if (!target || target === 'main') {
+      await verifySandboxedMainPreloadOutputs()
     }
+    if (!target || target === 'preload') {
+      await verifyPreloadOutput()
+    }
+  } catch (error) {
+    console.error(error)
+    process.exit(1)
   }
   process.exit(builtRenderer ? verifyRendererBootGraph() : 0)
 })

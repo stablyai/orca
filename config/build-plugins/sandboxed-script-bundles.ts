@@ -11,7 +11,8 @@ type BundledScript = { code: string; moduleIds: string[] }
 const GUEST_PRELOADS = [
   { entry: 'src/preload/browser-guest.ts', fileName: 'browser-guest-preload.js' },
   { entry: 'src/preload/doc-preview-link.ts', fileName: 'doc-preview-link-preload.js' },
-  { entry: 'src/preload/plugin-frame-guest.ts', fileName: 'plugin-frame-guest-preload.js' }
+  { entry: 'src/preload/plugin-frame-guest.ts', fileName: 'plugin-frame-guest-preload.js' },
+  { entry: 'src/preload/browser-extension-preload.ts', fileName: 'browser-extension-preload.js' }
 ]
 
 const WORKER_SHIM = {
@@ -77,8 +78,18 @@ export function bundleBrowserExtensionContentScript(): Promise<BundledScript> {
 export function createSandboxedScriptBundlesPlugin(): Plugin {
   return {
     name: 'orca-sandboxed-script-bundles',
-    async buildStart() {
-      for (const script of [WORKER_SHIM, CONTENT_SCRIPT, ...GUEST_PRELOADS]) {
+    async buildStart(options) {
+      const entryNames = Array.isArray(options.input) ? [] : Object.keys(options.input)
+      const scripts = [WORKER_SHIM, CONTENT_SCRIPT, ...GUEST_PRELOADS]
+      const collision = scripts.find(({ fileName }) =>
+        entryNames.includes(fileName.replace(/\.js$/, ''))
+      )
+      if (collision) {
+        this.error(
+          `${collision.fileName} is a sandboxed bundle; remove it from the main build entries`
+        )
+      }
+      for (const script of scripts) {
         const { entry, fileName } = script
         const format = GUEST_PRELOADS.includes(script) ? 'cjs' : 'iife'
         const { code, moduleIds } = await bundleScript(entry, fileName, format)
