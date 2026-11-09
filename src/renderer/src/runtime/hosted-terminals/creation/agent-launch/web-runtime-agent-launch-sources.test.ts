@@ -8,7 +8,9 @@ import {
   agentPickerFreshLaunchInputs
 } from '../../../../../../shared/agent-launch/picker/agent-launch-picker'
 
-beforeEach(() => call.mockClear())
+beforeEach(() => {
+  call.mockClear()
+})
 
 it.each(['current', 'legacy-authority', 'legacy-choices'] as const)(
   'sends an effort-only default replaced by a CLI model through the %s paired carrier',
