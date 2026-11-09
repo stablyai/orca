@@ -4,6 +4,7 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 import type { LayoutApplyReply } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import type { WindowLayoutCommand } from './runtime-layout-apply'
 import { PaneGridRecorder } from './pane-grid-recording'
+import { HEADLESS_RUNTIME_WINDOW_ID } from '../../../../shared/runtime-session-contracts'
 
 export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMostRecentActor {
   protected abstract suppressResizesForMs(ms: number): void
@@ -32,7 +33,13 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
   }
   protected abstract notifyTerminalResize(
     ptyId: string,
-    event: { cols: number; rows: number; displayMode: string; reason: string; seq?: number }
+    event: {
+      cols: number
+      rows: number
+      displayMode: string
+      reason: string
+      seq?: number
+    }
   ): void
 
   protected async applyLayout(ptyId: string, target: PtyLayoutTarget): Promise<ApplyLayoutResult> {
@@ -148,7 +155,7 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
   }
 
   setMobileDisplayMode(ptyId: string, mode: 'auto' | 'desktop'): void {
-    if (mode === 'auto') {
+    if (mode === this.getDefaultMobileDisplayMode()) {
       this.mobileDisplayModes.delete(ptyId)
     } else {
       this.mobileDisplayModes.set(ptyId, mode)
@@ -156,7 +163,21 @@ export abstract class OrcaRuntimeWithApplyLayout extends OrcaRuntimeWithPickMost
   }
 
   getMobileDisplayMode(ptyId: string): 'auto' | 'desktop' {
-    return this.mobileDisplayModes.get(ptyId) ?? 'auto'
+    return this.mobileDisplayModes.get(ptyId) ?? this.getDefaultMobileDisplayMode()
+  }
+
+  // Why: a headless runtime (orca serve) serves several clients at once, so a phone that only
+  // views a terminal must not shrink it for all of them. Phone input or an explicit phone-mode
+  // request still claims the size; a desktop host keeps fitting phones on open.
+  protected getDefaultMobileDisplayMode(): 'auto' | 'desktop' {
+    return this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID ? 'desktop' : 'auto'
+  }
+
+  // A phone opening a terminal no other phone is viewing starts passive again on a headless host.
+  protected resetMobileDisplayModeForFreshViewer(ptyId: string): void {
+    if (this.getDefaultMobileDisplayMode() === 'desktop') {
+      this.mobileDisplayModes.delete(ptyId)
+    }
   }
 
   isMobileSubscriberActive(ptyId: string): boolean {
