@@ -11,19 +11,27 @@ final class OrcaMobileWebShellView: ExpoView, MobileWebShellDocumentSink,
 
   // The page's own Back: the stack's swipe is off while the page claims Back, and a strip overlay would eat taps.
   private let backEdgePan = UIPanGestureRecognizer()
-  private let document = MobileWebShellDocument()
+  /// Taken on the first prop commit, not in init: the session id says whether a spare was booted for it.
+  private var document: MobileWebShellDocument?
   private var generationDirectory = ""
   private var sessionId = ""
   private var bridgeEnabled = false
 
   override func didMoveToWindow() {
     super.didMoveToWindow()
-    document.loadWhenIsolated()
+    document?.loadWhenIsolated()
   }
 
   required init(appContext: AppContext? = nil) {
     super.init(appContext: appContext)
-    document.sink = self
+    backEdgePan.isEnabled = false
+    backEdgePan.addTarget(self, action: #selector(handleBackEdgePan(_:)))
+    backEdgePan.delegate = self
+    addGestureRecognizer(backEdgePan)
+  }
+
+  private func hostDocument() -> MobileWebShellDocument {
+    let document = MobileWebShellSparePool.shared.document(for: sessionId, sink: self)
     let webView = document.webView
     webView.translatesAutoresizingMaskIntoConstraints = false
     addSubview(webView)
@@ -33,11 +41,8 @@ final class OrcaMobileWebShellView: ExpoView, MobileWebShellDocumentSink,
       webView.leadingAnchor.constraint(equalTo: leadingAnchor),
       webView.trailingAnchor.constraint(equalTo: trailingAnchor)
     ])
-    backEdgePan.isEnabled = false
-    backEdgePan.addTarget(self, action: #selector(handleBackEdgePan(_:)))
-    backEdgePan.delegate = self
-    addGestureRecognizer(backEdgePan)
     webView.scrollView.panGestureRecognizer.require(toFail: backEdgePan)
+    return document
   }
 
   func setBackEdgeSwipe(_ value: Bool) {
@@ -78,6 +83,8 @@ final class OrcaMobileWebShellView: ExpoView, MobileWebShellDocumentSink,
   }
 
   func propsDidUpdate() {
+    let document = self.document ?? hostDocument()
+    self.document = document
     document.apply(
       generationDirectory: generationDirectory,
       sessionId: sessionId,
@@ -86,6 +93,7 @@ final class OrcaMobileWebShellView: ExpoView, MobileWebShellDocumentSink,
   }
 
   func postBridgeMessage(_ json: String, promise: Promise) throws {
+    guard let document else { throw MobileWebShellBridgeUnavailableException() }
     try document.postBridgeMessage(json, promise: promise)
   }
 

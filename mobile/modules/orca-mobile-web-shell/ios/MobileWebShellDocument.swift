@@ -184,7 +184,7 @@ internal final class MobileWebShellBridgeMessageTooLargeException: GenericExcept
   }
 }
 
-/// Where a document's reports go: the view showing it.
+/// Where a document's reports go: the view showing it, or the spare pool while it is parked.
 protocol MobileWebShellDocumentSink: AnyObject {
   func documentLoadState(_ payload: [String: Any])
   func documentBridgeMessage(_ json: String)
@@ -206,6 +206,7 @@ final class MobileWebShellDocument: NSObject, WKNavigationDelegate, WKUIDelegate
   private var pendingDocumentUrl: URL?
   private var isolationReady = false
   private var isolationFailed = false
+  private var destroyed = false
   private let loadState = MobileWebShellLoadStateMachine()
   private var keyboardPreparationPending = false
   private var windowObservers: [NSObjectProtocol] = []
@@ -252,6 +253,19 @@ final class MobileWebShellDocument: NSObject, WKNavigationDelegate, WKUIDelegate
     for observer in windowObservers {
       NotificationCenter.default.removeObserver(observer)
     }
+  }
+
+  /// Still showable: not torn down, and no terminal load failure or content-process loss.
+  var isUsable: Bool { !destroyed && !loadState.isTerminal }
+
+  /// The spare pool's teardown; the content process goes with the last reference.
+  func destroy() {
+    destroyed = true
+    sink = nil
+    clearBridgeTarget()
+    pendingDocumentUrl = nil
+    webView.stopLoading()
+    webView.removeFromSuperview()
   }
 
   /// Apply unordered props together; identical triples do not retry (remount required).
@@ -392,6 +406,12 @@ final class MobileWebShellDocument: NSObject, WKNavigationDelegate, WKUIDelegate
         promise.reject(MobileWebShellBridgeDeliveryFailedException(error.localizedDescription))
       }
     }
+  }
+
+  /// A frame from the shell itself, to the frame that spoke; nothing waits on its delivery.
+  func postHostFrame(_ json: String) {
+    guard let frame = bridgeTarget.frame else { return }
+    webView.callAsyncJavaScript(bridgeDeliver, arguments: ["m": json], in: frame, in: .page) { _ in }
   }
 
   private func installNetworkBlock(into controller: WKUserContentController) {

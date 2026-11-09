@@ -33,7 +33,7 @@ private class MobileWebShellServed(
   val originHost: String
 )
 
-/** Where a document's reports go: the view showing it. */
+/** Where a document's reports go: the view showing it, or the spare pool while it is parked. */
 internal interface MobileWebShellDocumentSink {
   fun documentLoadState(payload: Map<String, Any>)
   fun documentBridgeMessage(json: String)
@@ -57,6 +57,9 @@ internal class MobileWebShellDocument(private val context: Context) {
   // Read by the interceptor thread when it reports a failed main-frame load.
   @Volatile var webView: WebView? = createWebView()
     private set
+
+  /** Still showable: not torn down, and no terminal load failure or renderer loss. */
+  val isUsable: Boolean get() = webView != null && !loadState.isTerminal
 
   /** Apply unordered props together; identical triples do not retry. Recovery requires a remount. */
   fun apply(generationDirectory: String, sessionId: String, bridgeEnabled: Boolean) {
@@ -167,6 +170,11 @@ internal class MobileWebShellDocument(private val context: Context) {
       throw MobileWebShellBridgeMessageTooLargeException(byteCount)
     }
     proxy.postMessage(json)
+  }
+
+  /** A frame from the shell itself, to the frame that spoke. */
+  fun postHostFrame(json: String) {
+    replyProxy?.postMessage(json)
   }
 
   /** The view's attach and detach: off-window, the page reads hidden, as a buried WKWebView does on iOS. */
