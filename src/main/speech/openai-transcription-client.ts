@@ -155,9 +155,7 @@ export class OpenAiTranscriptionSession {
     // A named WAV blob satisfies multipart uploads without temporary files.
     form.append('file', new Blob([wav], { type: 'audio/wav' }), 'dictation.wav')
 
-    const timeout = AbortSignal.timeout(
-      cloudTranscriptionTimeoutMs(this.audioSamples / CLOUD_TRANSCRIPTION_SAMPLE_RATE)
-    )
+    const timeout = AbortSignal.timeout(cloudTranscriptionTimeoutMs(this.audioSamples))
     try {
       return await this.upload(form, AbortSignal.any([this.abortController.signal, timeout]))
     } catch (error) {
