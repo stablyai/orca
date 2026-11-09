@@ -2,7 +2,7 @@ import type {
   BrowserCookieDeleteResult,
   BrowserCookieGetResult,
   BrowserCookieSetResult
-} from '../../shared/runtime-browser-contracts'
+} from '../../shared/browser/runtime/runtime-browser-contracts'
 import type { CommandHandler } from '../dispatch'
 import { printResult } from '../format'
 import {

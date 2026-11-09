@@ -5,7 +5,7 @@ import { settleAgentTabLaunch } from '@/lib/agent-session/launch/new-tab/launch-
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { buildAgentSessionForkPrompt } from '@/lib/agent-session-fork-context'
 import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
-import { resolveOwner } from '@/lib/resolve-owner'
+import { resolveOwner } from '@/lib/workspace/ownership/resolve-owner'
 import {
   toRuntimeExecutionHostId,
   type ExecutionHostId

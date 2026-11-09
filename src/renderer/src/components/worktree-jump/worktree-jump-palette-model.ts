@@ -1,6 +1,6 @@
 import type { BrowserPaletteSearchResult } from '@/lib/browser/palette/browser-palette-search'
 import type { PaletteSearchResult } from '@/lib/workspace/search/worktrees/worktree-palette-search'
-import type { SimulatorPaletteSearchResult } from '@/lib/simulator-palette-search-types'
+import type { SimulatorPaletteSearchResult } from '@/lib/simulator/search/simulator-palette-search-types'
 import type { WorkspaceTabPaletteSearchResult } from '@/lib/workspace/search/tabs/workspace-tab-palette-results'
 import type {
   CmdJActionResult,

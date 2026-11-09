@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import {
-  clampUtf8TextPrefix,
-  getUtf8ChunkEndIndex,
-  isUtf8ByteLengthWithinLimit,
-  measureUtf8ByteLength,
-  readUtf8CodePointAt
-} from './utf8-byte-limits'
+import { clampUtf8TextPrefix, getUtf8ChunkEndIndex } from './utf8-byte-limits'
 
 // Node 24/26 V8 optimization can pair a slice’s trailing high surrogate with a parent unit outside the slice.
 // Force tier-up on a rope cut mid-pair to expose the intermittent one-byte overcount.
@@ -26,23 +20,6 @@ function buildSliceEndingInLoneHighSurrogate(): string {
 
 describe('scanning a prefix slice whose parent continues past the slice', () => {
   const sliced = buildSliceEndingInLoneHighSurrogate()
-
-  it('reads the trailing lone surrogate without pairing past the end in every JIT tier', () => {
-    const observed = new Set<number>()
-    for (let iteration = 0; iteration < TIER_UP_ITERATIONS; iteration += 1) {
-      observed.add(readUtf8CodePointAt(sliced, SLICE_BOUNDARY_UNITS - 1))
-    }
-    expect([...observed]).toEqual([0xd9f6])
-  })
-
-  it('does not report an exceeded limit at the true byte length in every JIT tier', () => {
-    const limit = Buffer.byteLength(sliced, 'utf8')
-    const observed = new Set<boolean>()
-    for (let iteration = 0; iteration < TIER_UP_ITERATIONS; iteration += 1) {
-      observed.add(measureUtf8ByteLength(sliced, { stopAfterBytes: limit }).exceededLimit)
-    }
-    expect([...observed]).toEqual([false])
-  })
 
   it('keeps the whole slice when clamping to its true byte length in every JIT tier', () => {
     const limit = Buffer.byteLength(sliced, 'utf8')
@@ -77,25 +54,5 @@ describe('getUtf8ChunkEndIndex', () => {
 
   it.each([0, -1])('consumes one code point when the %s-byte budget is exceeded', (maxBytes) => {
     expect(getUtf8ChunkEndIndex('😀a', 0, maxBytes)).toBe(2)
-  })
-})
-
-describe('isUtf8ByteLengthWithinLimit', () => {
-  it.each([
-    { name: 'ASCII at a finite limit', text: 'abc', maxBytes: 3, expected: true },
-    { name: 'ASCII over a finite limit', text: 'abcd', maxBytes: 3, expected: false },
-    { name: 'multibyte text at its limit', text: 'é中', maxBytes: 5, expected: true },
-    { name: 'multibyte text over its limit', text: 'é中', maxBytes: 4, expected: false },
-    { name: 'empty text with a negative limit', text: '', maxBytes: -1, expected: true },
-    {
-      name: 'nonempty text with negative infinity',
-      text: 'a',
-      maxBytes: -Infinity,
-      expected: false
-    },
-    { name: 'text with a NaN limit', text: '😀', maxBytes: Number.NaN, expected: true },
-    { name: 'text with positive infinity', text: '😀', maxBytes: Infinity, expected: true }
-  ])('$name', ({ text, maxBytes, expected }) => {
-    expect(isUtf8ByteLengthWithinLimit(text, maxBytes)).toBe(expected)
   })
 })

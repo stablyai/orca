@@ -20,7 +20,7 @@ import {
 import { createStoreSessionMockApi } from '../../../store/testing/app-store-session-api.test-fixture'
 import { createTestStore } from '../../../store/testing/app-store-test-fixture'
 import { adoptLiveWorkspacePtySurfaces } from './worktree-agent-live-surface-adoption'
-import type { LiveTerminalSurfaceOwnerIndex } from '../../worktree-live-terminal-surface-owners'
+import type { LiveTerminalSurfaceOwnerIndex } from '../ownership/worktree-live-terminal-surface-owners'
 
 vi.mock('../../../../../shared/layout-owner-switch', () => ({ ORCA_LAYOUT_OWNER_IS_MAIN: true }))
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))

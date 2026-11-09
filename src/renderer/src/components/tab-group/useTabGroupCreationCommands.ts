@@ -6,8 +6,11 @@ import { createWebRuntimeSessionBrowserTab } from '../../runtime/browser/creatio
 import { createWebRuntimeSessionTerminal } from '../../runtime/hosted-terminals/creation/web-runtime-terminal-creation'
 import { isWebRuntimeSessionActive } from '../../runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
 import { openTabBarEntry, type TabCreateEntryArgs } from '../tab-bar/tab-create-entry-action'
-import { openMobileEmulatorTab } from '@/lib/open-mobile-emulator-tab'
-import { ensureSimulatorTab, getSimulatorTabForWorktree } from '@/lib/ensure-simulator-tab'
+import { openMobileEmulatorTab } from '@/lib/simulator/launch/open-mobile-emulator-tab'
+import {
+  ensureSimulatorTab,
+  getSimulatorTabForWorktree
+} from '@/lib/simulator/tabs/ensure-simulator-tab'
 import { buildDuplicatedBrowserTabOptions } from '@/lib/duplicate-browser-tab-options'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/browser/ownership/remote-browser-tab-ownership'

@@ -51,7 +51,7 @@ type RuntimeProjectHostSetupDependencies = {
   getStore: () => RuntimeStore | null
   listRepos: () => Repo[]
   addRepo: (path: string, kind: 'folder' | 'git', hostId: ExecutionHostId) => Promise<Repo>
-  cloneRepo: (url: string, destination: string, hostId: ExecutionHostId) => Promise<Repo>
+  cloneRepo: (args: ProjectHostSetupCloneArgs) => Promise<Repo>
   invalidateResolvedWorktrees: () => void
   invalidateWorktreeScan: (repoId: string) => void
   notifyReposChanged: () => void
@@ -151,7 +151,7 @@ export class RuntimeProjectHostSetupController {
   async setupClone(args: ProjectHostSetupCloneArgs): Promise<ProjectHostSetupResult> {
     assertCloneHostIsSupported(args.hostId)
     const knownRepoIds = new Set(this.deps.listRepos().map((repo) => repo.id))
-    const repo = await this.deps.cloneRepo(args.url, args.destination, args.hostId)
+    const repo = await this.deps.cloneRepo(args)
     return this.completeSetup(
       { ...args, path: repo.path, kind: 'git', setupMethod: 'cloned' },
       repo,

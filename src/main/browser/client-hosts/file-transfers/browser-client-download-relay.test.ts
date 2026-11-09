@@ -4,11 +4,11 @@ import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { BrowserClientHostedPageInventory } from '../../../../shared/browser/client-hosting/browser-client-host-protocol'
+import { BrowserClientDownloadRelay } from './browser-client-download-relay'
 import {
-  BrowserClientDownloadRelay,
+  resetBrowserClientDownloadRouting,
   type BrowserClientDownloadRoute
-} from './browser-client-download-relay'
-import { resetBrowserClientDownloadRouting } from './browser-client-download-routing'
+} from './browser-client-download-routing'
 import { BrowserClientFileChannelTransport } from './browser-client-file-channel-transport'
 
 const page: BrowserClientHostedPageInventory = Object.freeze({

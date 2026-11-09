@@ -3,14 +3,15 @@ import {
   getEmulatorOpeningMode,
   type EmulatorSelectionRequired
 } from '../../../../shared/emulator-opening-preferences'
-import { supportsEmulatorOpeningPreferences } from '@/lib/emulator-opening-preferences-capability'
+import { supportsEmulatorOpeningPreferences } from '@/lib/simulator/launch/emulator-opening-preferences-capability'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
 import { useAppStore } from '@/store'
 import {
   deviceLabel,
   simulatorPreviewStreamUrl,
-  type EmulatorPaneSession
+  type EmulatorPaneSession,
+  type UseEmulatorPaneSessionArgs
 } from './emulator-pane-types'
 import { markSimulatorDeviceShutdown } from './emulator-device-state'
 import { useEmulatorPaneControls } from './use-emulator-pane-controls'
@@ -18,8 +19,8 @@ import { useEmulatorPaneSessionEvents } from './use-emulator-pane-session-events
 import {
   consumePrelaunchedSimulatorSession,
   isManualSimulatorLaunchPending
-} from '@/lib/simulator-launch-coordination'
-import { shutdownManagedSimulatorIfNoPane } from '@/lib/simulator-pane-shutdown-scheduler'
+} from '@/lib/simulator/launch/simulator-launch-coordination'
+import { shutdownManagedSimulatorIfNoPane } from '@/lib/simulator/tabs/simulator-pane-shutdown-scheduler'
 import { buildPrelaunchedEmulatorSessionState } from './emulator-prelaunched-session'
 import { useEmulatorPaneManualLaunchEvents } from './use-emulator-pane-manual-launch-events'
 import { buildEmulatorPaneSessionView } from './emulator-pane-session-view'
@@ -27,14 +28,11 @@ import { attachWithAvdFallback } from './emulator-attach-target'
 import { useEmulatorPaneLifecycle } from './use-emulator-pane-lifecycle'
 import { useEmulatorPaneShutdown } from './use-emulator-pane-shutdown'
 import { emulatorStartErrorText, noEmulatorDevicesError } from './emulator-pane-error-copy'
-import { SIMULATOR_DEFAULT_TAB_LABEL, formatSimulatorTabLabel } from '@/lib/simulator-tab-label'
+import {
+  SIMULATOR_DEFAULT_TAB_LABEL,
+  formatSimulatorTabLabel
+} from '@/lib/simulator/tabs/simulator-tab-label'
 import { useTranslate } from '@/i18n/use-translate'
-
-type UseEmulatorPaneSessionArgs = {
-  worktreeId: string
-  tabId?: string
-  autoAttachOnMount: boolean
-}
 
 export function useEmulatorPaneSession({
   worktreeId,

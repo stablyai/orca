@@ -20,7 +20,7 @@ import {
   readHostOrcadActivation
 } from './helpers/orcad-template-variant'
 import { seedRelayEraProfile } from './helpers/orcad-upgrade-profile'
-import { findOrcadMigrationSourceCutoverForTarget } from '../../src/main/ssh/orcad-migration-cutover-journal'
+import { findOrcadMigrationSourceCutoverForTarget } from '../../src/main/persistence/migrating-orcad-catalog/orcad-migration-cutover-journal'
 import { toSshExecutionHostId } from '../../src/shared/execution-host'
 import {
   decommissionConvertedHost,

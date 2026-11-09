@@ -10,7 +10,7 @@ import {
   formatMarkdownReviewNotes,
   getMarkdownReviewCardQuote,
   type MarkdownReviewNote
-} from '@/lib/markdown-review-notes'
+} from '@/lib/editor/markdown/review-notes/markdown-review-notes'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
 import { useTranslate } from '@/i18n/use-translate'
 

@@ -8,18 +8,21 @@ const usage = summarizeContextUsage({
   percentage: 61,
   estimated: false,
   categories: [
-    { name: 'Messages', tokens: 589_000 },
+    { name: 'System prompt', tokens: 4_100 },
+    { name: 'System tools', tokens: 8_900 },
     { name: 'MCP tools (deferred)', tokens: 542_000, deferred: true },
-    { name: 'System prompt', tokens: 12_000 },
     { name: 'System tools (deferred)', tokens: 17_000, deferred: true },
-    { name: 'Memory files', tokens: 6_700 }
+    { name: 'Memory files', tokens: 5_700 },
+    { name: 'Messages', tokens: 589_000 },
+    { name: 'Free space', tokens: 359_300 },
+    { name: 'Autocompact buffer', tokens: 33_000 }
   ]
 })
 
 export const deferredTools = defineFixture({
   width: 360,
   render: () => (
-    <div className="native-chat-appearance flex h-112 items-end justify-end p-4">
+    <div className="flex h-96 items-end justify-end bg-background p-4">
       <NativeChatContextUsageRing usage={usage} />
     </div>
   ),

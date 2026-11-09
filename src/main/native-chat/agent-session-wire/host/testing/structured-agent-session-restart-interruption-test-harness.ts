@@ -134,7 +134,8 @@ export async function interruptedRestart(
       const fields = { body, delivery: 'queue-if-active' as const }
       const queued = await previous.host.send(CALLER, {
         envelope: envelope('agentSession.send', fields),
-        ...fields
+        ...fields,
+        userSend: true
       })
       expect(queued).toMatchObject({ ok: true, value: { queued: expect.anything() } })
     }

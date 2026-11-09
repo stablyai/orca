@@ -73,6 +73,7 @@ export type UserModelConfig = {
   sampleRate?: number
 }
 
+// See dictation-shortcut-mode.ts for Auto.
 export type DictationMode = 'toggle' | 'hold'
 
 export type VoiceSettings = {
@@ -82,6 +83,9 @@ export type VoiceSettings = {
   /** 'auto' or an ISO-639-1 code. Not `language`: its stored 'en' default never came from the user. */
   dictationLanguage: string
   dictationMode: DictationMode
+  dictationHoldToRecord: boolean
+  /** Drops "um", "uh" and their equivalents in the dictation language before text is inserted. */
+  removeFillerWords: boolean
   terminalConfirmBeforeInsert: boolean
   userModels: UserModelConfig[]
   openAiApiKeyConfigured: boolean

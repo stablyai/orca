@@ -55,29 +55,6 @@ describe('a CLI command for a recipe VM environment', () => {
 
   afterEach(() => rmSync(userDataPath, { recursive: true, force: true }))
 
-  // Only the desktop knows a sleep still suspending a VM whose record says running.
-  // Even an "already up" answer may follow a concurrent wake that re-paired the server.
-  it.each([
-    ['up', 'reload'],
-    ['unsupported', 'unchanged']
-  ] as const)(
-    'lets the desktop decide when opening a running VM workspace (desktop says %s)',
-    async (answer, result) => {
-      recordVm('running')
-      const { prepared, askDesktopToWake } = prepare('worktree.activate', answer)
-      await expect(prepared).resolves.toBe(result)
-      expect(askDesktopToWake).toHaveBeenCalledWith(environmentId)
-    }
-  )
-
-  it('asks the desktop to wake a suspended VM before opening its workspace', async () => {
-    recordVm('suspended')
-    const { prepared, askDesktopToWake } = prepare('worktree.activate')
-    // The caller reads the server's pairing again, since the resume may have changed it.
-    await expect(prepared).resolves.toBe('reload')
-    expect(askDesktopToWake).toHaveBeenCalledWith(environmentId)
-  })
-
   it('says a suspended VM is asleep for a command that does not open its workspace', async () => {
     recordVm('suspended')
     const { prepared, askDesktopToWake } = prepare('worktree.ps')

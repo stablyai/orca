@@ -1,9 +1,7 @@
 import { prepareWorktreeCreationHooks, setupCreateArgs } from './worktree-creation-hook-preparation'
 import { useAppStore } from '@/store/index'
-import {
-  activateAndRevealWorktree,
-  type ActivateAndRevealResult
-} from '@/lib/workspace/activation/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/workspace/activation/worktree-activation'
+import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/workspace/activation/initial-surface/worktree-initial-terminal-seeding'
 import {
   attachEphemeralVmRuntimeToWorkspace,

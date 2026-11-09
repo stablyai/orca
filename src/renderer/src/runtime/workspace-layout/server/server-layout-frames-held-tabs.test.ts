@@ -1,7 +1,7 @@
 import type * as RuntimeRpcCallModule from '@/runtime/rpc/calls/runtime-rpc-call'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
-import type * as ResolveOwnerModule from '@/lib/resolve-owner'
+import type * as ResolveOwnerModule from '@/lib/workspace/ownership/resolve-owner'
 import type * as WorktreeRuntimeOwnerModule from '@/lib/workspace/ownership/worktree-runtime-owner'
 
 import type * as FrameDrawnModule from '../../web-session-tabs-sync/frame-drawn-server-workspaces'
@@ -24,7 +24,7 @@ import {
   _resetStagedBrowserFrameHandoversForTests,
   wasStagedBrowserTabHandedToFrames
 } from '@/lib/staged-browser-frame-handover'
-import { ensureSimulatorTab } from '@/lib/ensure-simulator-tab'
+import { ensureSimulatorTab } from '@/lib/simulator/tabs/ensure-simulator-tab'
 import type { DragEndEvent } from '@dnd-kit/core'
 import { commitTabDragDrop } from '@/components/tab-group/tab-drag-drop-commit'
 import '@/components/tab-bar/tab-move-to-pane-column'
@@ -79,7 +79,7 @@ vi.mock('../../web-session-tabs-sync/mirrored-workspace-owner', () => ({
   mirroredRuntimeEnvironmentIdForWorkspace: (_state: unknown, key: string) =>
     hoisted.owners.get(key) ?? null
 }))
-vi.mock('@/lib/resolve-owner', async (importOriginal) => ({
+vi.mock('@/lib/workspace/ownership/resolve-owner', async (importOriginal) => ({
   ...(await importOriginal<typeof ResolveOwnerModule>()),
   runtimeEnvironmentIdUnlessTwin: (_state: unknown, key: string) => hoisted.owners.get(key) ?? null
 }))

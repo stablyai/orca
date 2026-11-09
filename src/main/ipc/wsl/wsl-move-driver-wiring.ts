@@ -13,7 +13,7 @@ import {
   WSL_MOVE_PROGRESS_CHANNEL,
   type WslMoveProgressEvent
 } from '../../../shared/wsl-move/wsl-move-driver-types'
-import { agentHookServer } from '../../agent-hooks/server'
+import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { getDaemonHistoryDir } from '../../daemon/launch/daemon-launch-paths'
 import {
   countInProcessFallbackTerminals,
@@ -73,12 +73,10 @@ import {
   setWslMoveReloadLanding,
   setWslMoveReloadableWindow
 } from '../../persistence/moving-wsl-projects/wsl-move-window-write-hold'
-import {
-  commitRemoteOrcadMigrationCatalog,
-  listRemoteOrcadRepositories,
-  stageRemoteOrcadMigrationBlobChunk
-} from '../../ssh/orcad-migration-catalog-client'
-import { listRemoteOrcadFolderCatalog } from '../../ssh/orcad-server-folder-workspaces'
+import { commitRemoteOrcadMigrationCatalog } from '../../managed-server/migration/catalog/orcad-migration-catalog-client'
+import { listRemoteOrcadRepositories } from '../../managed-server/migration/linking/orcad-server-repositories'
+import { stageRemoteOrcadMigrationBlobChunk } from '../../managed-server/migration/transfers/orcad-migration-chunk-client'
+import { listRemoteOrcadFolderCatalog } from '../../managed-server/migration/linking/orcad-server-folder-workspaces'
 import { makeTerminalScrollbackSnapshotRef } from '../../pty/scrollback/terminal-scrollback-snapshots'
 import { pauseWorkspacesForProjectMove } from '../../window/project-move-pause'
 import { getWslHostService } from '../../wsl/host-lifecycle/wsl-host-service-instance'

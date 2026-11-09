@@ -4,8 +4,10 @@ import { useStructuredChatTabNames } from '@/runtime/native-chat/naming/structur
 import { buildActivityEvents, createActivityEventBuildCache } from './activity-event-builder'
 import { freshActivityLiveAgentState } from './activity-event-state'
 import {
-  useAgentPaneThreadStoreData,
-  type AgentPaneThreadsStoreData
+  useAgentPaneThreadsDefaultHostId,
+  useAllAgentPaneThreadStoreData,
+  type AgentPaneThreadsStoreData,
+  type AllAgentPaneThreadsStoreData
 } from './use-agent-pane-thread-store-data'
 import { buildAgentPaneThreads, createAgentPaneThreadReuseCache } from './activity-thread-builder'
 import { collectHiddenChildAgentPaneKeys } from './activity-thread-child-agent'
@@ -34,56 +36,12 @@ const EMPTY_ACTIVITY_BUILD: ReturnType<typeof buildActivityEvents> = {
   paneEntryByPaneKey: {}
 }
 
-/** Shared Activity/sidebar pipeline: store data to events, threads, filters and groups. */
-export function useAgentPaneThreads(args: {
-  query: string
-  readFilter: ThreadReadFilter
-  groupBy: ActivityGroupBy
-  selectedPaneKey: string | null
-  showChildAgents?: boolean
-  /** Prepare only live badge rows, omitting list groups and bulk-action sets. */
-  badgeOnly?: boolean
-}): {
-  storeData: AgentPaneThreadsStoreData
+/** Every Activity thread before any view filter: store data to events and threads. */
+export function useAllAgentPaneThreads({ badgeOnly = false }: { badgeOnly?: boolean } = {}): {
+  storeData: AllAgentPaneThreadsStoreData
   allThreads: AgentPaneThread[]
-  selectedPaneKeyIsLive: boolean
-  effectiveSelectedPaneKey: string | null
-  /** Every active view filter applies here; destructive Clear completed must not touch hidden rows. */
-  visibleThreads: AgentPaneThread[]
-  /** Badge-coherent threads after child classification; ignore transient search/scope/read filters so Mark all read can clear the badge. */
-  markAllReadThreads: AgentPaneThread[]
-  visibleThreadGroups: ActivityThreadGroup[]
 } {
-  const {
-    query,
-    readFilter,
-    groupBy,
-    selectedPaneKey,
-    showChildAgents = false,
-    badgeOnly = false
-  } = args
-  const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
-  const agentsFilterRepoIds = useAppStore((s) => s.agentsFilterRepoIds)
-  const hideWorkspacesFromOtherDevices = useAppStore((s) => s.agentsHideWorkspacesFromOtherDevices)
-  const hideAutomationGeneratedWorkspaces = useAppStore(
-    (s) => s.agentsHideAutomationGeneratedWorkspaces
-  )
-  const hideCliCreatedWorkspaces = useAppStore((s) => s.agentsHideCliCreatedWorkspaces)
-  // Why gated selectors: runtime status churns, and only the other-device filter reads it.
-  const runtimeEnvironments = useAppStore((s) =>
-    s.agentsHideWorkspacesFromOtherDevices ? s.runtimeEnvironments : null
-  )
-  const runtimeStatusByEnvironmentId = useAppStore((s) =>
-    s.agentsHideWorkspacesFromOtherDevices ? s.runtimeStatusByEnvironmentId : null
-  )
-  const pairedDeviceIdsByEnvironment = useMemo(
-    () =>
-      runtimeEnvironments && runtimeStatusByEnvironmentId
-        ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, runtimeStatusByEnvironmentId)
-        : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
-    [runtimeEnvironments, runtimeStatusByEnvironmentId]
-  )
-  const storeData = useAgentPaneThreadStoreData()
+  const storeData = useAllAgentPaneThreadStoreData()
   // Why: agentStatusEpoch is a dep (not used in the body) so the memo recomputes when freshness boundaries expire even without new PTY data.
   const agentStatusEpoch = useAppStore((s) => s.agentStatusEpoch)
   const chatNames = useStructuredChatTabNames()
@@ -153,6 +111,65 @@ export function useAgentPaneThreads(args: {
     [allEvents, liveAgentByPaneKey, paneEntryByPaneKey, storeData.generatedTitlesEnabled, badgeOnly]
   )
 
+  return { storeData, allThreads }
+}
+
+/** Shared Activity/sidebar pipeline: store data to events, threads, filters and groups. */
+export function useAgentPaneThreads(args: {
+  query: string
+  readFilter: ThreadReadFilter
+  groupBy: ActivityGroupBy
+  selectedPaneKey: string | null
+  showChildAgents?: boolean
+  /** Prepare only live badge rows, omitting list groups and bulk-action sets. */
+  badgeOnly?: boolean
+}): {
+  storeData: AgentPaneThreadsStoreData
+  allThreads: AgentPaneThread[]
+  selectedPaneKeyIsLive: boolean
+  effectiveSelectedPaneKey: string | null
+  /** Every active view filter applies here; destructive Clear completed must not touch hidden rows. */
+  visibleThreads: AgentPaneThread[]
+  /** Badge-coherent threads after child classification; ignore transient search/scope/read filters so Mark all read can clear the badge. */
+  markAllReadThreads: AgentPaneThread[]
+  visibleThreadGroups: ActivityThreadGroup[]
+} {
+  const {
+    query,
+    readFilter,
+    groupBy,
+    selectedPaneKey,
+    showChildAgents = false,
+    badgeOnly = false
+  } = args
+  const agentsVisibleHostIds = useAppStore((s) => s.agentsVisibleHostIds)
+  const agentsFilterRepoIds = useAppStore((s) => s.agentsFilterRepoIds)
+  const hideWorkspacesFromOtherDevices = useAppStore((s) => s.agentsHideWorkspacesFromOtherDevices)
+  const hideAutomationGeneratedWorkspaces = useAppStore(
+    (s) => s.agentsHideAutomationGeneratedWorkspaces
+  )
+  const hideCliCreatedWorkspaces = useAppStore((s) => s.agentsHideCliCreatedWorkspaces)
+  // Why gated selectors: runtime status churns, and only the other-device filter reads it.
+  const runtimeEnvironments = useAppStore((s) =>
+    s.agentsHideWorkspacesFromOtherDevices ? s.runtimeEnvironments : null
+  )
+  const runtimeStatusByEnvironmentId = useAppStore((s) =>
+    s.agentsHideWorkspacesFromOtherDevices ? s.runtimeStatusByEnvironmentId : null
+  )
+  const pairedDeviceIdsByEnvironment = useMemo(
+    () =>
+      runtimeEnvironments && runtimeStatusByEnvironmentId
+        ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, runtimeStatusByEnvironmentId)
+        : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
+    [runtimeEnvironments, runtimeStatusByEnvironmentId]
+  )
+  const { storeData: unscopedStoreData, allThreads } = useAllAgentPaneThreads({ badgeOnly })
+  const defaultHostId = useAgentPaneThreadsDefaultHostId()
+  const storeData = useMemo(
+    () => ({ ...unscopedStoreData, defaultHostId }),
+    [unscopedStoreData, defaultHostId]
+  )
+
   const selectedPaneKeyIsLive =
     selectedPaneKey === null || allThreads.some((thread) => thread.paneKey === selectedPaneKey)
   const effectiveSelectedPaneKey = selectedPaneKeyIsLive ? selectedPaneKey : null
@@ -201,12 +218,14 @@ export function useAgentPaneThreads(args: {
     const normalizedQuery = isActivitySearchQueryTooLarge(deferredQuery)
       ? null
       : deferredQuery.trim().toLowerCase()
-    let matchesSearchQuery: ReturnType<typeof createActivityThreadSearchMatcher> | undefined
+    const matchesSearchQuery =
+      normalizedQuery === null ? null : createActivityThreadSearchMatcher(normalizedQuery)
     return scopeVisibleThreads.filter((thread) => {
-      // Why: keep the just-selected thread visible after auto-mark-read flips it to read, else unread-only mode makes the clicked row vanish from the list.
+      // Keep live agents and the selected row visible after marking read; migration blocks are unavailable.
       if (
         readFilter === 'unread' &&
         !thread.unread &&
+        (thread.currentAgentState === null || thread.migrationUnsupportedPtyId !== undefined) &&
         thread.paneKey !== effectiveSelectedPaneKey
       ) {
         return false
@@ -219,11 +238,7 @@ export function useAgentPaneThreads(args: {
       ) {
         return false
       }
-      if (normalizedQuery === null) {
-        return false
-      }
-      matchesSearchQuery ??= createActivityThreadSearchMatcher(normalizedQuery)
-      return matchesSearchQuery(thread)
+      return matchesSearchQuery !== null && matchesSearchQuery(thread)
     })
   }, [
     scopeVisibleThreads,

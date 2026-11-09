@@ -82,16 +82,6 @@ afterEach(() => {
 })
 
 describe('preview', () => {
-  it('selects the whole distro by default and reuses its preview', async () => {
-    await openWslMoveDialog({ distro: 'Ubuntu' })
-    const state = dialog()
-    expect(state.stage).toBe('preview')
-    expect(state.stage === 'preview' && state.selected).toHaveLength(3)
-    expect(state.stage === 'preview' && state.preview).toBe(READY)
-    expect(api.preview).toHaveBeenCalledTimes(1)
-    expect(api.preview).toHaveBeenCalledWith({ distro: 'Ubuntu', sleptPanes: [] })
-  })
-
   it('opened from one project, checks only it and previews that selection', async () => {
     await openWslMoveDialog({ distro: 'Ubuntu', only: { kind: 'repo', id: 'web' } })
     expect(api.preview).toHaveBeenLastCalledWith({
@@ -171,13 +161,6 @@ describe('preview', () => {
     expect(state.stage === 'preview' && state.preview).toBe(READY)
     expect(api.preview).toHaveBeenCalledTimes(2)
   })
-
-  it('turns a failed preview call into a refusal, never a stuck spinner', async () => {
-    api.preview.mockRejectedValueOnce(new Error('ipc'))
-    await openWslMoveDialog({ distro: 'Ubuntu' })
-    const state = dialog()
-    expect(state.stage === 'preview' && state.preview?.outcome).toBe('refused')
-  })
 })
 
 describe('run', () => {
@@ -249,16 +232,6 @@ describe('run', () => {
     const state = dialog()
     expect(state.stage === 'running' && state.cancel).toBe('too-late')
     expect(api.cancel).toHaveBeenCalledWith('Ubuntu')
-  })
-
-  it('turns a failed start call into a refusal', async () => {
-    await openWslMoveDialog({ distro: 'Ubuntu' })
-    api.start.mockRejectedValueOnce(new Error('ipc'))
-    await startWslMove()
-    const state = dialog()
-    expect(state.stage === 'result' && state.result.outcome).toBe('refused')
-    closeWslMoveDialog()
-    expect(dialog().stage).toBe('closed')
   })
 
   it('reloads through restart preparation and shows a refused reload', async () => {

@@ -1,4 +1,4 @@
-import type { ActivateAndRevealResult } from '@/lib/worktree-activation-outcome'
+import type { ActivateAndRevealResult } from '@/lib/workspace/activation/worktree-activation-outcome'
 import { readAgentLaunchPreferencesForWorkspace } from '@/runtime/agent-launch-settings/use-host-agent-launch-preferences'
 import type { AgentLaunchPreferences } from '@/runtime/agent-launch-settings/host-agent-launch-preferences-resource'
 import { agentLaunchCommandErrorMessage } from '@/lib/workspace/creation/work-item/launch-work-item-direct-messages'
@@ -24,7 +24,7 @@ import type { AgentSessionLaunchPlan } from '@/lib/agent-session/launch/routing/
 import {
   resolveExecutionHostAgentStartupShell,
   type KnownExecutionHostPlatform
-} from '@/lib/execution-host-facts'
+} from '@/runtime/hosts/platform/execution-host-facts'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import type { DeclinedStructuredLaunchTerminalOptions } from '@/lib/agent-session/launch/structured-agent-session-launch-admission'
 import {

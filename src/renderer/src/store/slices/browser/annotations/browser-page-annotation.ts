@@ -1,7 +1,7 @@
 import {
   GRAB_BUDGET,
   type BrowserPageAnnotation
-} from '../../../../../../shared/browser-grab-types'
+} from '../../../../../../shared/browser/element-grab/browser-grab-types'
 
 export function sanitizeBrowserPageAnnotation(
   annotation: BrowserPageAnnotation

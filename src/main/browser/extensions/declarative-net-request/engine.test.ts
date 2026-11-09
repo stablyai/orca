@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { createDnrRequestState } from './request-state'
 import { DnrEngine, type DnrEvaluateOptions } from './engine'
 import type { DnrRequestInfo } from './request-context'
-import type { DnrRule, DnrRulesetSource } from './rule-types'
-import { buildDnrRuleset } from './ruleset-builder'
+import type { DnrRule, DnrRulesetSource } from './rule-compilation/rule-types'
+import { buildDnrRuleset } from './rule-compilation/ruleset-builder'
 
 const OLD = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
 

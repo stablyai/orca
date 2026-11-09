@@ -10,7 +10,7 @@ import {
   activateAndRevealWorkspace,
   activateAndRevealWorktree
 } from '@/lib/workspace/activation/worktree-activation'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import type { AppState } from '../../store/types'

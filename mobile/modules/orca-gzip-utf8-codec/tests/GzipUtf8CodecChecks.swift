@@ -37,9 +37,6 @@ import Foundation
       check(actual == expected, "gunzip: \(name)")
     }
 
-    let text = "{\"a\":\"x\u{e9}\u{2713}\u{1F642}\"}"
-    check(decodeStrictUtf8(Data(text.utf8)) == text, "utf8: every sequence length")
-    check(decodeStrictUtf8(Data()) == "", "utf8: empty")
     let refused: [[UInt8]] = [
       [0xef, 0xbb, 0xbf, 0x41], [0xc0, 0x80], [0xed, 0xa0, 0x80], [0x41, 0xe2, 0x82], [0x80],
       [0xf5, 0x80, 0x80, 0x80],

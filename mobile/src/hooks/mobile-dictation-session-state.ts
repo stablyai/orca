@@ -6,11 +6,18 @@ import type { MobileDictationMeter } from './mobile-dictation-meter'
 
 export type DictationStatus = 'idle' | 'starting' | 'recording' | 'processing' | 'error'
 
+// Who is transcribing, for the icon by the timer; movedAt marks when Automatic moved from the phone to the computer.
+export type MobileDictationEngineShown = { kind: 'phone' | 'computer'; movedAt: number | null }
+
 export type UseMobileDictationOptions = {
   client: RpcClient | null
   enabled: boolean
   onTranscript: (text: string) => void
   onError?: (error: Error) => void
+  // The computer's filler switch, for text the phone recognizes itself; unknown means on.
+  removeFillerWords?: boolean
+  // The host's cloud upload is full; the dictation stops and inserts what was kept.
+  onAudioLimitReached?: () => void
 }
 
 export type UseMobileDictationResult = {
@@ -21,13 +28,13 @@ export type UseMobileDictationResult = {
   // Empty until a newer host reports words; older hosts never do.
   transcriptSoFar: string
   error: string | null
+  // Null until recording starts on an engine.
+  engine: MobileDictationEngineShown | null
   start: () => Promise<void>
   stop: () => Promise<void>
   cancel: () => Promise<void>
   meter: MobileDictationMeter
 }
-
-export const DICTATION_FINISH_TIMEOUT_MS = 75_000
 
 // An interrupted user tap needs a renderable error; only explicit user cancellation may end silently.
 export const MOBILE_DICTATION_INPUT_CLOSED_ERROR_MESSAGE =
