@@ -192,8 +192,13 @@ export function useNativeChatStructuredComposerSend({
         clearSkillOrigin()
       }
       // A refused command returns only to an empty composer; a lone command typed since would be replaced.
-      const recoversDraft = () =>
-        consumed && (!hostCommand || readNativeChatComposerDraft(draftScopeKey).text.trim() === '')
+      const recoversDraft = () => {
+        const current = readNativeChatComposerDraft(draftScopeKey)
+        return (
+          consumed &&
+          (!hostCommand || (current.text.trim() === '' && (current.images?.length ?? 0) === 0))
+        )
+      }
       const prepareAttachments: StructuredAgentSessionAttachmentPreparation | undefined =
         stagedInput ? (input) => stagedInput.prepare(input, structuredTransport) : undefined
       return dispatchNativeChatStructuredComposerText(
