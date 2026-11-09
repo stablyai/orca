@@ -4,6 +4,7 @@ import fflateModule from '../vendor/fflate-umd.js';
 import { SpikeRpcClient, RpcResponse, RpcSuccess } from './SpikeRpcClient';
 import { base64Decode, utf8Encode } from './crypto/Bytes';
 import { sha256 } from './crypto/Sha256';
+import bundleCompat, { BundleProtocolFacts, DesktopProtocolFacts } from '../vendor/bundle-compat.js';
 
 /**
  * Desktop web-bundle download pipeline (Phase 2a of upstream mobile/src/transport/web-bundle):
@@ -25,17 +26,28 @@ export interface BundleRoute {
   grants: string[];
   optionalGrants: string[];
   canOwnHostArea: boolean;
+  canOwnHostAreaAcrossLayouts?: boolean;
 }
 
-export interface BundleManifest {
+export interface BundleManifest extends BundleProtocolFacts {
   buildId: string;
   entrypoint: string;
   desktopVersion: string;
-  pageVersion: number;
   assets: BundleAsset[];
   routes: BundleRoute[];
   chunkBytes: number;
   rangeBytes: number; // 0 when the host does not advertise range support
+}
+
+export type BundleRemedy = 'desktop' | 'mobile' | 'workspace';
+
+export class BundleCompatibilityError extends Error {
+  readonly remedy: BundleRemedy;
+
+  constructor(remedy: BundleRemedy, reason: string) {
+    super(reason);
+    this.remedy = remedy;
+  }
 }
 
 export interface CachedWebBundle {
@@ -47,6 +59,42 @@ const RANGE_METHOD = 'mobileWeb.bundle.range';
 const CHUNK_METHOD = 'mobileWeb.bundle.chunk';
 const MANIFEST_METHOD = 'mobileWeb.bundle.manifest';
 const MAX_CACHE_METADATA_BYTES = 8 * 1024 * 1024;
+const MAX_PAGE_ROUTES = 64;
+const MAX_ROUTE_GRANTS = 16;
+
+function protocolNumber(value: Object): number | undefined {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : undefined;
+}
+
+function manifestFields(reply: Object | null): Record<string, Object> {
+  if (!reply || typeof reply !== 'object' || Array.isArray(reply)) { throw new Error('Invalid manifest reply'); }
+  let fields = (reply as Record<string, Object>)['manifest'];
+  if (!fields || typeof fields !== 'object' || Array.isArray(fields)) { throw new Error('Missing manifest'); }
+  return fields as Record<string, Object>;
+}
+
+function protocolFacts(fields: Record<string, Object>): BundleProtocolFacts {
+  let schemaVersion = protocolNumber(fields['schemaVersion']);
+  if (schemaVersion === undefined) { throw new Error('Missing manifest schema'); }
+  if (!bundleCompat.SUPPORTED_MOBILE_WEB_BUNDLE_SCHEMA_VERSIONS.includes(schemaVersion)) {
+    throw new BundleCompatibilityError('mobile', 'bundle-shell-too-old');
+  }
+  let runtimeVersion = protocolNumber(fields['runtimeProtocolVersion']);
+  let minRuntimeVersion = protocolNumber(fields['minCompatibleRuntimeProtocolVersion']);
+  if (runtimeVersion === undefined || minRuntimeVersion === undefined) { throw new Error('Missing manifest protocol'); }
+  return { schemaVersion: schemaVersion, runtimeProtocolVersion: runtimeVersion,
+    minCompatibleRuntimeProtocolVersion: minRuntimeVersion, pageVersion: protocolNumber(fields['pageVersion']) ?? 0 };
+}
+
+function readGrants(value: Object): string[] {
+  if (!Array.isArray(value) || value.length > MAX_ROUTE_GRANTS) { throw new Error('Invalid route grants'); }
+  let grants: string[] = [];
+  (value as Object[]).forEach((item: Object): void => {
+    if (typeof item !== 'string' || item.length === 0 || item.length > 64) { throw new Error('Invalid route grant'); }
+    if (!grants.includes(item)) { grants.push(item); }
+  });
+  return grants;
+}
 
 export function isSafeBundlePath(path: string): boolean {
   if (path.length === 0 || path.length > 1024 || /[\\%?#\x00-\x1f:]/.test(path)) { return false; }
@@ -158,19 +206,39 @@ export class WebBundleFetcher {
   }
 
   async fetchManifest(): Promise<BundleManifest> {
-    return WebBundleFetcher.readManifest(await this.requestJson(MANIFEST_METHOD, null));
+    let status = await this.client.request('status.get', null, 8000);
+    if (!(status instanceof RpcSuccess)) { throw new Error('Desktop status unavailable'); }
+    let reply = JSON.parse(status.result) as Record<string, Object>;
+    if (!reply || typeof reply !== 'object' || Array.isArray(reply)) { throw new Error('Invalid desktop status'); }
+    let hostStatus: DesktopProtocolFacts = { protocolVersion: protocolNumber(reply['protocolVersion']),
+      minCompatibleMobileVersion: protocolNumber(reply['minCompatibleMobileVersion']) };
+    let general = bundleCompat.evaluateCompat({ desktopProtocolVersion: hostStatus.protocolVersion,
+      desktopMinCompatibleMobileVersion: hostStatus.minCompatibleMobileVersion });
+    if (general.kind === 'blocked') {
+      throw new BundleCompatibilityError(general.reason === 'mobile-too-old' ? 'mobile' : 'desktop', general.reason ?? '');
+    }
+    let advertised = reply['capabilities'];
+    let capabilities = Array.isArray(advertised) && (advertised as Object[]).every((value: Object): boolean =>
+      typeof value === 'string') ? advertised as string[] : [];
+    let eligibility = bundleCompat.evaluateMobileWebBundleCompat({
+      hostCapabilities: capabilities, hostStatus: hostStatus, manifest: null
+    });
+    if (eligibility.kind === 'blocked') { throw new BundleCompatibilityError('desktop', eligibility.reason ?? ''); }
+    let manifestReply = await this.requestJson(MANIFEST_METHOD, null);
+    let facts = protocolFacts(manifestFields(manifestReply));
+    let verdict = bundleCompat.evaluateMobileWebBundleCompat({
+      hostCapabilities: capabilities, hostStatus: hostStatus, manifest: facts
+    });
+    if (verdict.kind === 'blocked') {
+      throw new BundleCompatibilityError(verdict.side === 'mobile' ? 'workspace' : 'desktop', verdict.reason ?? '');
+    }
+    return WebBundleFetcher.readManifest(manifestReply);
   }
 
   private static readManifest(parsed: Object | null): BundleManifest {
-    if (parsed === null || typeof parsed !== 'object') {
-      throw new Error('manifest reply is not an object');
-    }
+    let m = manifestFields(parsed);
+    let facts = protocolFacts(m);
     let rec = parsed as Record<string, Object>;
-    let manifestValue: Object = rec['manifest'];
-    if (manifestValue === null || manifestValue === undefined || typeof manifestValue !== 'object') {
-      throw new Error('manifest reply missing manifest');
-    }
-    let m = manifestValue as Record<string, Object>;
     let buildId = m['buildId'];
     let entrypoint = m['entrypoint'];
     let desktopVersion = m['desktopVersion'];
@@ -178,8 +246,8 @@ export class WebBundleFetcher {
       throw new Error('manifest missing buildId/entrypoint/desktopVersion');
     }
     let assetsValue: Object = m['assets'];
-    let routesValue: Object = m['routes'];
-    if (!Array.isArray(assetsValue) || !Array.isArray(routesValue)) {
+    let routesValue: Object = m['routes'] ?? [];
+    if (!Array.isArray(assetsValue) || !Array.isArray(routesValue) || routesValue.length > MAX_PAGE_ROUTES) {
       throw new Error('manifest assets/routes missing');
     }
     let assets: BundleAsset[] = [];
@@ -197,45 +265,28 @@ export class WebBundleFetcher {
     for (let i = 0; i < routesArr.length; i++) {
       let rec2 = routesArr[i] as Record<string, Object>;
       let pathname = rec2['pathname'];
-      if (typeof pathname !== 'string') {
-        continue;
-      }
-      let grants: string[] = [];
-      let grantsValue: Object = rec2['grants'];
-      if (Array.isArray(grantsValue)) {
-        let g = grantsValue as Array<Object>;
-        for (let j = 0; j < g.length; j++) {
-          if (typeof g[j] === 'string') {
-            grants.push(g[j] as string);
-          }
-        }
-      }
-      let optionalGrants: string[] = [];
-      let optionalValue: Object = rec2['optionalGrants'];
-      if (Array.isArray(optionalValue)) {
-        let g = optionalValue as Array<Object>;
-        for (let j = 0; j < g.length; j++) {
-          if (typeof g[j] === 'string') {
-            optionalGrants.push(g[j] as string);
-          }
-        }
+      if (typeof pathname !== 'string' || pathname.length > 255 || !/^\/(?![/\\])[^?#\s]*$/.test(pathname)) {
+        throw new Error('Invalid page route');
       }
       let route: BundleRoute = {
         pathname: pathname,
-        grants: grants,
-        optionalGrants: optionalGrants,
-        canOwnHostArea: rec2['canOwnHostArea'] === true
+        grants: readGrants(rec2['grants']),
+        optionalGrants: rec2['optionalGrants'] === undefined ? [] : readGrants(rec2['optionalGrants']),
+        canOwnHostArea: rec2['canOwnHostArea'] === true,
+        canOwnHostAreaAcrossLayouts: rec2['canOwnHostAreaAcrossLayouts'] === true
       };
       routes.push(route);
     }
     let chunkBytesValue: Object = rec['chunkBytes'];
     let rangeBytesValue: Object = rec['rangeBytes'];
-    let pageVersionValue: Object = m['pageVersion'];
     let manifest: BundleManifest = {
+      schemaVersion: facts.schemaVersion,
+      runtimeProtocolVersion: facts.runtimeProtocolVersion,
+      minCompatibleRuntimeProtocolVersion: facts.minCompatibleRuntimeProtocolVersion,
       buildId: buildId,
       entrypoint: entrypoint,
       desktopVersion: desktopVersion,
-      pageVersion: typeof pageVersionValue === 'number' && Number.isSafeInteger(pageVersionValue) && pageVersionValue > 0 ? pageVersionValue : 0,
+      pageVersion: facts.pageVersion,
       assets: assets,
       routes: routes,
       chunkBytes: typeof chunkBytesValue === 'number' ? chunkBytesValue : 49152,
@@ -333,6 +384,7 @@ export class WebBundleFetcher {
       let metadata = JSON.parse(fs.readTextSync(path)) as Record<string, Object>;
       if (metadata['pairedAt'] !== pairedAt) { return null; }
       let manifest = WebBundleFetcher.readManifest(metadata);
+      if (manifest.pageVersion < bundleCompat.MOBILE_WEB_PAGE_VERSION_FLOOR) { return null; }
       let fingerprint = bundleFingerprint(manifest);
       let directory = bundleDirectory(context, manifest, fingerprint);
       return WebBundleFetcher.isComplete(manifest, directory, fingerprint)

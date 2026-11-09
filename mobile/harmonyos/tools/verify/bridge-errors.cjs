@@ -11,7 +11,13 @@ const hostId = 'a'.repeat(32)
 const manifest = {
   buildId: 'test',
   routes: [
-    { pathname: '/h/[hostId]', canOwnHostArea: true, grants: ['navigate'], optionalGrants: [] }
+    {
+      pathname: '/h/[hostId]',
+      canOwnHostArea: true,
+      canOwnHostAreaAcrossLayouts: true,
+      grants: ['navigate'],
+      optionalGrants: []
+    }
   ]
 }
 function bridgeClass(peer) {
@@ -130,6 +136,48 @@ test('a cold offline document restores its live stream after authentication and 
   assert.equal(frames.findLast((frame) => frame.type === 'init').sessionId, initial.sessionId)
   bridge.dispose()
   client.close()
+})
+
+test('a narrow legacy host list hands sessions to the native stack and refuses unavailable required grants', () => {
+  const BridgeHost = bridgeClass(createRpcPeer())
+  const frames = []
+  const root = `/h/${hostId}`
+  const build = {
+    buildId: 'legacy',
+    routes: [
+      { pathname: '/h/[hostId]', canOwnHostArea: true, grants: ['navigate'], optionalGrants: [] },
+      {
+        pathname: '/h/[hostId]/session/[worktreeId]',
+        grants: ['navigate'],
+        optionalGrants: ['native.future.optional']
+      },
+      {
+        pathname: '/h/[hostId]/files/[worktreeId]',
+        grants: ['native.future.required'],
+        optionalGrants: []
+      }
+    ]
+  }
+  const controller = {
+    runJavaScript(script) {
+      frames.push(JSON.parse(JSON.parse(script.slice('window.__orcaNativePush('.length, -1))))
+      return Promise.resolve()
+    }
+  }
+  const bridge = new BridgeHost(null, controller, build, { id: hostId }, root)
+  const opened = []
+  bridge.setShellNavigation((pathname, params) => opened.push([pathname, params.paneKey]))
+  bridge.onPushChannelReady()
+  post(bridge, { type: 'ready' })
+  assert.equal(frames[0].ownsHostArea, false)
+  assert.deepEqual(frames[0].pageRoutes, ['/h/[hostId]', '/h/[hostId]/session/[worktreeId]'])
+  assert.deepEqual(frames[0].pageRouteGrants[1].grants, ['navigate'])
+  assert.equal(bridge.routeBlock(`${root}/files/tree`), 'mobile')
+  assert.equal(bridge.routeBlock(`${root}/missing`), 'desktop')
+  post(bridge, { type: 'notify', name: 'navigate', href: `${root}/session/tree?paneKey=target` })
+  assert.deepEqual(opened, [[`${root}/session/tree`, 'target']])
+  assert.equal(bridge.getRoute(), root)
+  bridge.dispose()
 })
 
 test('reconnect preserves the page and restores live streams without repeating writes', async () => {

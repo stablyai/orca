@@ -45,7 +45,15 @@ async function bridgeSession(grants = []) {
   const view = controller()
   const manifest = {
     buildId: 'test',
-    routes: [{ pathname: '/h/[hostId]', grants, optionalGrants: [], canOwnHostArea: true }]
+    routes: [
+      {
+        pathname: '/h/[hostId]',
+        grants,
+        optionalGrants: [],
+        canOwnHostArea: true,
+        canOwnHostAreaAcrossLayouts: true
+      }
+    ]
   }
   const bridge = new BridgeHost(client, view, manifest, meta, `/h/${hostId}`)
   bridge.onPushChannelReady()

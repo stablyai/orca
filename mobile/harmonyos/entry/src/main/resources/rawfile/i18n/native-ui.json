@@ -4685,5 +4685,132 @@
     "zh": "无法确认此工作区属于哪台主机。",
     "en": "Couldn’t confirm which host owns this workspace.",
     "zh-Hant": "無法確認此工作區屬於哪台主機。"
+  },
+  "更新 Orca Mobile": {
+    "en": "Update Orca Mobile",
+    "zh": "更新 Orca Mobile",
+    "zh-Hant": "更新 Orca Mobile",
+    "ko": "Orca 모바일 업데이트",
+    "ja": "Orca Mobile を更新",
+    "es": "Actualiza Orca Mobile",
+    "fr": "Mettre à jour Orca Mobile",
+    "pt": "Atualizar o Orca Mobile",
+    "ru": "Обновите Orca Mobile",
+    "tr": "Orca Mobile'ı güncelleyin",
+    "de": "Orca Mobile aktualisieren"
+  },
+  "更新电脑上的 Orca": {
+    "en": "Update Orca on your computer",
+    "zh": "更新电脑上的 Orca",
+    "zh-Hant": "更新電腦上的 Orca",
+    "ko": "컴퓨터의 Orca 업데이트",
+    "ja": "コンピュータの Orca を更新",
+    "es": "Actualiza Orca en tu equipo",
+    "fr": "Mettre à jour Orca sur votre ordinateur",
+    "pt": "Atualizar o Orca no seu computador",
+    "ru": "Обновите Orca на компьютере",
+    "tr": "Bilgisayarınızdaki Orca'yı güncelleyin",
+    "de": "Orca auf dem Computer aktualisieren"
+  },
+  "刷新移动端工作区": {
+    "en": "Refresh the mobile workspace",
+    "zh": "刷新移动端工作区",
+    "zh-Hant": "重新整理行動版工作區",
+    "ko": "모바일 워크스페이스 새로고침",
+    "ja": "モバイルワークスペースを更新",
+    "es": "Actualiza el espacio de trabajo móvil",
+    "fr": "Actualiser l'espace de travail mobile",
+    "pt": "Atualizar o espaço de trabalho mobile",
+    "ru": "Обновите мобильное рабочее пространство",
+    "tr": "Mobil çalışma alanını yenileyin",
+    "de": "Mobilen Arbeitsbereich aktualisieren"
+  },
+  "此主机的工作区缓存版本低于桌面要求。请重新连接此主机，下载当前版本。": {
+    "en": "The workspace cached for this host is older than the desktop expects. Reconnect to this host to download the current one.",
+    "zh": "此主机的工作区缓存版本低于桌面要求。请重新连接此主机，下载当前版本。",
+    "zh-Hant": "此主機的工作區快取版本低於桌面版要求的版本。請重新連線至此主機，以下載目前版本。",
+    "ko": "이 호스트용으로 캐시된 워크스페이스가 데스크톱에서 요구하는 버전보다 오래되었습니다. 이 호스트에 다시 연결하여 최신 버전을 다운로드하세요.",
+    "ja": "このホスト用にキャッシュされたワークスペースは、デスクトップが必要とするバージョンより古くなっています。このホストに再接続して、最新のワークスペースをダウンロードしてください。",
+    "es": "La versión en caché del espacio de trabajo de este host es anterior a la que espera el escritorio. Vuelve a conectarte a este host para descargar la versión actual.",
+    "fr": "La version de l'espace de travail en cache pour cet hôte est antérieure à celle attendue par l'ordinateur. Reconnectez-vous à cet hôte pour télécharger la version actuelle.",
+    "pt": "O espaço de trabalho em cache deste host é mais antigo do que o desktop espera. Reconecte-se a este host para baixar a versão atual.",
+    "ru": "Версия рабочего пространства этого сервера в кэше старее той, которую ожидает Orca на компьютере. Подключитесь к этому серверу заново, чтобы загрузить актуальную версию.",
+    "tr": "Bu sunucu için önbelleğe alınan çalışma alanı, masaüstü uygulamasının beklediğinden daha eski. Güncel sürümü indirmek için bu sunucuya yeniden bağlanın.",
+    "de": "Der für diesen Host zwischengespeicherte Arbeitsbereich ist älter als von der Desktop-App erwartet. Erneut mit diesem Host verbinden, um die aktuelle Version herunterzuladen."
+  },
+  "已配对的桌面应用版本过旧，无法与当前的 Orca Mobile 兼容。请更新电脑上的 Orca，然后重新连接此主机。": {
+    "en": "This paired desktop app is too old for your current Orca Mobile app. Update Orca on your computer, then try this host again.",
+    "zh": "已配对的桌面应用版本过旧，无法与当前的 Orca Mobile 兼容。请更新电脑上的 Orca，然后重新连接此主机。",
+    "zh-Hant": "已配對的桌面版版本過舊，無法搭配目前的 Orca Mobile 使用。請更新電腦上的 Orca，再重新連線至此主機。",
+    "ko": "페어링된 데스크톱 앱의 버전이 오래되어 현재 Orca 모바일 앱과 호환되지 않습니다. 컴퓨터에서 Orca를 업데이트한 후 이 호스트에 다시 연결하세요.",
+    "ja": "ペアリング済みのデスクトップアプリは、現在の Orca Mobile に対応していない古いバージョンです。コンピュータの Orca を更新して、このホストへの接続を再試行してください。",
+    "es": "La aplicación del escritorio emparejado es demasiado antigua para tu versión actual de Orca Mobile. Actualiza Orca en tu equipo y vuelve a intentarlo con este host.",
+    "fr": "La version d'Orca sur cet ordinateur appairé est trop ancienne pour votre version actuelle d'Orca Mobile. Mettez Orca à jour sur votre ordinateur, puis réessayez de vous connecter à cet hôte.",
+    "pt": "A versão do app desktop pareado é antiga demais para a sua versão atual do Orca Mobile. Atualize o Orca no seu computador e tente se conectar a este host novamente.",
+    "ru": "Версия Orca на сопряжённом компьютере устарела и несовместима с текущей версией Orca Mobile. Обновите Orca на компьютере, затем снова подключитесь к этому серверу.",
+    "tr": "Eşleştirilmiş bu masaüstü uygulaması, mevcut Orca Mobile sürümünüz için çok eski. Bilgisayarınızdaki Orca'yı güncelleyin, ardından bu sunucuya bağlanmayı tekrar deneyin.",
+    "de": "Die gekoppelte Desktop-App ist für die aktuelle Version von Orca Mobile zu alt. Orca auf dem Computer aktualisieren und dann erneut mit diesem Host verbinden."
+  },
+  "打开 GitHub Releases": {
+    "en": "Open GitHub Releases",
+    "zh": "打开 GitHub Releases",
+    "zh-Hant": "開啟 GitHub Releases",
+    "ko": "GitHub Releases 열기",
+    "ja": "GitHub Releases を開く",
+    "es": "Abrir GitHub Releases",
+    "fr": "Ouvrir GitHub Releases",
+    "pt": "Abrir GitHub Releases",
+    "ru": "Открыть GitHub Releases",
+    "tr": "GitHub Releases Sayfasını Aç",
+    "de": "GitHub Releases öffnen"
+  },
+  "如果仍显示此消息，请移除此主机并重新配对。": {
+    "en": "If this message stays, remove this host and pair it again.",
+    "zh": "如果仍显示此消息，请移除此主机并重新配对。",
+    "zh-Hant": "如果仍顯示此訊息，請移除此主機並重新配對。",
+    "ko": "이 메시지가 계속 표시되면 이 호스트를 제거한 후 다시 페어링하세요.",
+    "ja": "このメッセージが表示され続ける場合は、このホストを削除して、再度ペアリングしてください。",
+    "es": "Si este mensaje persiste, elimina este host y vuelve a emparejarlo.",
+    "fr": "Si ce message persiste, supprimez cet hôte et appairez-le à nouveau.",
+    "pt": "Se esta mensagem persistir, remova este host e faça o pareamento novamente.",
+    "ru": "Если сообщение не исчезнет, удалите этот сервер и выполните сопряжение заново.",
+    "tr": "Bu mesaj görünmeye devam ederse bu sunucuyu kaldırıp yeniden eşleştirin.",
+    "de": "Wenn diese Meldung weiterhin erscheint, diesen Host entfernen und erneut koppeln."
+  },
+  "已经更新？请返回“主机”并刷新连接。如果仍显示此消息，请移除此主机并重新配对。": {
+    "en": "Already updated? Go back to Hosts and refresh the connection. If this message stays, remove this host and pair it again.",
+    "zh": "已经更新？请返回“主机”并刷新连接。如果仍显示此消息，请移除此主机并重新配对。",
+    "zh-Hant": "已經更新了嗎？請返回「主機」並重新整理連線。如果仍顯示此訊息，請移除此主機並重新配對。",
+    "ko": "이미 업데이트하셨습니까? 호스트 화면으로 돌아가 연결을 새로고침하세요. 이 메시지가 계속 표시되면 이 호스트를 제거한 후 다시 페어링하세요.",
+    "ja": "すでに更新済みですか？「ホスト」に戻り、接続を更新してください。このメッセージが表示され続ける場合は、このホストを削除して、再度ペアリングしてください。",
+    "es": "¿Ya has actualizado? Vuelve a Hosts y actualiza la conexión. Si este mensaje persiste, elimina este host y vuelve a emparejarlo.",
+    "fr": "Déjà à jour ? Revenez à l'écran Hôtes et actualisez la connexion. Si ce message persiste, supprimez cet hôte et appairez-le à nouveau.",
+    "pt": "Já atualizou? Volte para Hosts e atualize a conexão. Se esta mensagem persistir, remova este host e faça o pareamento novamente.",
+    "ru": "Уже обновили? Вернитесь в раздел «Серверы» и обновите подключение. Если сообщение не исчезнет, удалите этот сервер и выполните сопряжение заново.",
+    "tr": "Zaten güncellediniz mi? Sunucular bölümüne dönüp bağlantıyı yenileyin. Bu mesaj görünmeye devam ederse bu sunucuyu kaldırıp yeniden eşleştirin.",
+    "de": "Bereits aktualisiert? Zu „Hosts“ zurückkehren und die Verbindung erneuern. Wenn diese Meldung weiterhin erscheint, diesen Host entfernen und erneut koppeln."
+  },
+  "返回主机列表": {
+    "en": "Back to hosts",
+    "zh": "返回主机列表",
+    "zh-Hant": "返回主機清單",
+    "ko": "호스트로 돌아가기",
+    "ja": "ホストに戻る",
+    "es": "Volver a hosts",
+    "fr": "Retour aux hôtes",
+    "pt": "Voltar para hosts",
+    "ru": "Вернуться к серверам",
+    "tr": "Sunucular bölümüne dön",
+    "de": "Zurück zu Hosts"
+  },
+  "此桌面需要更新版本的 Orca Mobile。请安装新版鸿蒙构建，再重新连接。": {
+    "en": "This desktop needs a newer HarmonyOS build of Orca Mobile. Install the update, then try this host again.",
+    "zh": "此桌面需要更新版本的 Orca Mobile。请安装新版鸿蒙构建，再重新连接。",
+    "zh-Hant": "此桌面需要較新版本的 Orca Mobile。請安裝新版 HarmonyOS 組建，再重新連線。"
+  },
+  "无法打开链接": {
+    "en": "Could not open the link",
+    "zh": "无法打开链接",
+    "zh-Hant": "無法開啟連結"
   }
 }

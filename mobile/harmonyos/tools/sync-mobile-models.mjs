@@ -17,6 +17,14 @@ const revision = execFileSync(
 ).trim()
 const models = [
   {
+    file: 'bundle-compat',
+    provenance: 'orcaBundleCompat',
+    contents: `
+      export { evaluateCompat } from './mobile/src/transport/connection/protocol-compat'
+      export { evaluateMobileWebBundleCompat, MOBILE_WEB_PAGE_VERSION_FLOOR, MOBILE_WEB_PAGE_VERSION_OPENS_TARGETS, SUPPORTED_MOBILE_WEB_BUNDLE_SCHEMA_VERSIONS } from './mobile/src/transport/web-bundle/mobile-web-bundle-compat'
+    `
+  },
+  {
     file: 'terminal-rail',
     provenance: 'orcaTerminalRail',
     contents: `

@@ -3,12 +3,11 @@ const { test } = require('node:test')
 const { runInNewContext } = require('node:vm')
 const zlib = require('node:zlib')
 const { loadArkts, util } = require('./arkts-source.cjs')
-const shellRoutes = loadArkts('navigation/ShellRoute.ets', [
-  'desktopPath',
-  'shellRouterParams',
-  'readShellRoute',
-  'sessionOpenParam'
-])
+const shellRoutes = loadArkts(
+  'navigation/ShellRoute.ets',
+  ['desktopPath', 'shellRouterParams', 'readShellRoute', 'sessionOpenParam'],
+  { bundleCompat: require('../../entry/src/main/ets/vendor/bundle-compat.js') }
+)
 const { createRpcPeer } = require('./fixtures/rpc-peer.cjs')
 
 const bytes = loadArkts(
@@ -24,6 +23,7 @@ const manifest = {
     {
       pathname: '/h/[hostId]',
       canOwnHostArea: true,
+      canOwnHostAreaAcrossLayouts: true,
       grants: ['storage', 'navigate'],
       optionalGrants: []
     }
@@ -485,6 +485,7 @@ test('the bridge reports a workspace location without interpreting its encoded I
         {
           pathname: '/h/[hostId]/session/[worktreeId]',
           canOwnHostArea: true,
+          canOwnHostAreaAcrossLayouts: true,
           grants: ['navigate'],
           optionalGrants: []
         }
@@ -584,7 +585,19 @@ test('an opened session retains the desktop list across a bridge init and consum
   const host = `/h/${hostId}`
   const session = `${host}/session/folder%3Aone`
   const controller = createController()
-  const bridge = new BridgeHost(new peer.SpikeRpcClient(), controller, manifest, meta, host)
+  const bridge = new BridgeHost(
+    new peer.SpikeRpcClient(),
+    controller,
+    {
+      ...manifest,
+      routes: [
+        ...manifest.routes,
+        { pathname: '/h/[hostId]/session/[worktreeId]', grants: ['navigate'], optionalGrants: [] }
+      ]
+    },
+    meta,
+    host
+  )
   bridge.setRouteParams({ open: `${session}?paneKey=terminal%3A2` })
   bridge.onPushChannelReady()
   post(bridge, { type: 'ready' })
@@ -666,7 +679,13 @@ test('the bridge offers preview links only from a granted user navigation', () =
   const bridge = new BridgeHost(
     new peer.SpikeRpcClient(),
     createController(),
-    { ...manifest, routes: [{ ...manifest.routes[0], optionalGrants: ['externalNavigation'] }] },
+    {
+      ...manifest,
+      routes: [
+        { ...manifest.routes[0], optionalGrants: ['externalNavigation'] },
+        { pathname: '/h/[hostId]/session/[worktreeId]', grants: ['navigate'], optionalGrants: [] }
+      ]
+    },
     meta,
     `/h/${hostId}`
   )
@@ -687,7 +706,7 @@ test('the bridge offers preview links only from a granted user navigation', () =
   bridge.offerExternalNavigation('https://redirect.example', true, true, true, 'GET')
   bridge.offerExternalNavigation('https://form.example', true, true, false, 'POST')
   bridge.offerExternalNavigation('javascript:alert(1)', true, true, false, 'GET')
-  post(bridge, { type: 'notify', name: 'location', href: `/h/${hostId}/unserved` })
+  post(bridge, { type: 'notify', name: 'location', href: `/h/${hostId}/session/workspace` })
   bridge.offerExternalNavigation('https://ungranted.example', true, true, false, 'GET')
   assert.deepEqual(opened, ['https://example.com/', 'mailto:review@example.com'])
 })

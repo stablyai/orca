@@ -131,6 +131,7 @@ interface BridgeInitWire {
   grants: BridgeGrantsWire;
   route: BridgeRouteWire;
   pageRoutes: string[];
+  pageRouteGrants: PageRouteGrant[];
   colorScheme: string;
   uiLocale: string;
   host: BridgeInitHostWire;
@@ -143,6 +144,8 @@ interface BridgeInitWire {
   foldDivision: FoldDivision | null;
   terminalKeyRail: string[];
 }
+
+interface PageRouteGrant { pathname: string; grants: string[]; }
 
 /** A forwarded terminal.subscribe: the handle its params named, for viewport routing. */
 interface StreamWindowFrame { seq: number; bytes: number; json: string; }
@@ -195,6 +198,8 @@ export class BridgeHost {
   private nativeMethods: string[] = [];
   private onBack: ((home: boolean) => void) | null = null;
   private desktopListBack: boolean = false;
+  private wideLayout: boolean = false;
+  private shellNavigation: ((pathname: string, params: Record<string, string>, replace: boolean) => void) | null = null;
   private overlayNavigation: ((pathname: string, params: Record<string, string>) => void) | null = null;
   private overlayNavigated: boolean = false;
   private onPaint: (() => void) | null = null;
@@ -289,6 +294,10 @@ export class BridgeHost {
   private nativeNavigation: ((page: BridgeNativePage, replace: boolean) => void) | null = null;
   setLocationSink(sink: (pathname: string, params: Record<string, string>) => void): void { this.locationSink = sink; }
   setNativeNavigation(sink: (page: BridgeNativePage, replace: boolean) => void): void { this.nativeNavigation = sink; }
+  setShellNavigation(sink: (pathname: string, params: Record<string, string>, replace: boolean) => void): void {
+    this.shellNavigation = sink;
+  }
+  setWideLayout(wide: boolean): void { this.wideLayout = wide; }
 
   setStorage(store: PageStorageStore): void { this.storageStore = store; this.pageStorage = store.entries(); }
   setRouteParams(params: Record<string, string>): void {
@@ -427,15 +436,16 @@ export class BridgeHost {
     }
   }
 
-  /** Upstream matchesRoutePattern: [dyn] segments match any non-empty path segment. */
+  /** A rest segment must be last and consume at least one segment. */
   static routeMatches(pattern: string, pathname: string): boolean {
     let pat = pattern.split('/');
     let act = pathname.split('/');
-    if (pat.length !== act.length) {
-      return false;
-    }
+    let rest = pat.findIndex((segment: string): boolean => BridgeHost.isRestSegment(segment));
+    if (rest >= 0 && rest !== pat.length - 1) { return false; }
+    if (rest < 0 ? pat.length !== act.length : act.length <= rest) { return false; }
     for (let i = 0; i < pat.length; i++) {
       let seg = pat[i];
+      if (i === rest) { return act.slice(i).every((part: string): boolean => part.length > 0); }
       if (seg.length > 2 && seg.charAt(0) === '[' && seg.charAt(seg.length - 1) === ']') {
         if (act[i].length === 0) {
           return false;
@@ -447,14 +457,23 @@ export class BridgeHost {
     return true;
   }
 
-  private ownsHostArea(pathname: string = this.routePathname): boolean {
-    for (let i = 0; i < this.manifest.routes.length; i++) {
-      let route: BundleRoute = this.manifest.routes[i];
-      if (route.canOwnHostArea && BridgeHost.routeMatches(route.pathname, pathname)) {
-        return true;
-      }
-    }
-    return false;
+  private static isRestSegment(segment: string): boolean { return segment.startsWith('[...') && segment.endsWith(']'); }
+
+  private servedRoutes(routes: BundleRoute[] = this.manifest.routes): BundleRoute[] {
+    return routes.filter((route: BundleRoute): boolean => route.grants.every((grant: string): boolean => this.supportsGrant(grant)));
+  }
+
+  routeBlock(pathname: string, manifest: BundleManifest = this.manifest): string {
+    let declared = manifest.routes.some((route: BundleRoute): boolean => BridgeHost.routeMatches(route.pathname, pathname));
+    if (!declared) { return 'desktop'; }
+    return this.servedRoutes(manifest.routes).some((route: BundleRoute): boolean => BridgeHost.routeMatches(route.pathname, pathname))
+      ? '' : 'mobile';
+  }
+
+  ownsHostArea(pathname: string = this.routePathname): boolean {
+    if (this.overlayNavigation || pathname !== `/h/${this.meta.id}`) { return false; }
+    return this.servedRoutes().some((route: BundleRoute): boolean => route.canOwnHostArea
+      && (this.wideLayout || route.canOwnHostAreaAcrossLayouts === true) && BridgeHost.routeMatches(route.pathname, pathname));
   }
 
   /**
@@ -476,32 +495,25 @@ export class BridgeHost {
   }
 
   private routeGrants(pathname: string = this.routePathname): string[] {
-    let grants: string[] = ['rpcEnvelope'];
-    let seen: Set<string> = new Set();
+    let grants = new Set<string>(['rpcEnvelope']);
     let hostArea = this.ownsHostArea(pathname);
-    for (let i = 0; i < this.manifest.routes.length; i++) {
-      let route: BundleRoute = this.manifest.routes[i];
-      let include = hostArea || BridgeHost.routeMatches(route.pathname, pathname);
-      if (!include) {
-        continue;
-      }
-      for (let j = 0; j < route.grants.length; j++) {
-        if (!seen.has(route.grants[j])) {
-          seen.add(route.grants[j]);
-          if (this.supportsGrant(route.grants[j])) { grants.push(route.grants[j]); }
-        }
-      }
-      for (let j = 0; j < route.optionalGrants.length; j++) {
-        if (!seen.has(route.optionalGrants[j])) {
-          seen.add(route.optionalGrants[j]);
-          if (this.supportsGrant(route.optionalGrants[j])) { grants.push(route.optionalGrants[j]); }
-        }
-      }
+    let entries = this.servedRoutes();
+    let matching = hostArea ? entries : entries.filter((route: BundleRoute): boolean => BridgeHost.routeMatches(route.pathname, pathname));
+    if (!hostArea && matching.length > 1) {
+      let explicit = matching.find((route: BundleRoute): boolean =>
+        !route.pathname.split('/').some((segment: string): boolean => BridgeHost.isRestSegment(segment)));
+      matching = [explicit ?? matching[0]];
     }
-    if (hostArea && !seen.has('native.storage.read')) {
-      grants.push('native.storage.read');
-    }
-    return grants;
+    matching.forEach((route: BundleRoute): void => {
+      this.grantsForEntry(route).forEach((grant: string): void => { grants.add(grant); });
+    });
+    if (hostArea) { grants.add('native.storage.read'); }
+    return Array.from(grants);
+  }
+
+  private grantsForEntry(route: BundleRoute): string[] {
+    return Array.from(new Set<string>([...route.grants, ...route.optionalGrants]
+      .filter((grant: string): boolean => this.supportsGrant(grant))));
   }
 
   /** Native→page push via the document-start shim; queued until the page attached onmessage. */
@@ -692,12 +704,18 @@ export class BridgeHost {
       return;
     }
     if (this.overlayNavigation && pathname !== this.routePathname) {
-      if (navigate && this.manifest.routes.some((route: BundleRoute): boolean => BridgeHost.routeMatches(route.pathname, pathname))) {
+      if (navigate) {
         this.overlayNavigated = true;
         this.overlayNavigation(pathname, params);
       }
       return;
     }
+    let served = this.routeBlock(pathname) === '';
+    if (navigate && pathname !== this.routePathname && (!served || !this.ownsHostArea(this.entryPathname))) {
+      this.shellNavigation?.(pathname, params, replace);
+      return;
+    }
+    if (!served) { return; }
     let previous = this.routePathname;
     this.routePathname = pathname;
     this.routeParams = params;
@@ -1236,10 +1254,21 @@ export class BridgeHost {
     let ownsHostArea = this.ownsHostArea(this.entryPathname);
     let grants = this.routeGrants(ownsHostArea ? this.entryPathname : this.routePathname);
     let pageRoutes: string[] = [];
-    for (let i = 0; i < this.manifest.routes.length; i++) {
-      let pattern = this.manifest.routes[i].pathname;
-      if (this.desktopListBack && BridgeHost.routeMatches(pattern, `/h/${this.meta.id}`)) { continue; }
-      if (!this.overlayNavigation || BridgeHost.routeMatches(pattern, this.routePathname)) { pageRoutes.push(pattern); }
+    let pageRouteGrants: PageRouteGrant[] = [];
+    let hostRoot = `/h/${this.meta.id}`;
+    let rootUsesOwnDocument = !ownsHostArea && this.ownsHostArea(hostRoot);
+    let entries = this.servedRoutes();
+    for (let i = 0; i < entries.length; i++) {
+      let entry = entries[i];
+      let pattern = entry.pathname;
+      let hostList = BridgeHost.routeMatches(pattern, hostRoot);
+      if (this.desktopListBack && hostList) { continue; }
+      if (!this.overlayNavigation || BridgeHost.routeMatches(pattern, this.routePathname)) {
+        pageRoutes.push(pattern);
+        if (!hostList || !rootUsesOwnDocument) {
+          pageRouteGrants.push({ pathname: pattern, grants: this.grantsForEntry(entry) });
+        }
+      }
     }
     let rpcGrants: BridgeRpcGrants = {
       maxPendingRequests: MAX_PENDING_REQUESTS,
@@ -1287,6 +1316,7 @@ export class BridgeHost {
       grants: grantsValue,
       route: route,
       pageRoutes: pageRoutes,
+      pageRouteGrants: pageRouteGrants,
       colorScheme: this.scheme,
       uiLocale: this.locale,
       host: hostValue,

@@ -5,6 +5,7 @@ const os = require('node:os')
 const path = require('node:path')
 const { createHash } = require('node:crypto')
 const { loadArkts } = require('./arkts-source.cjs')
+const bundleCompat = require('../../entry/src/main/ets/vendor/bundle-compat.js')
 
 const sha256 = (value) => new Uint8Array(createHash('sha256').update(value).digest())
 const fileIo = {
@@ -31,6 +32,10 @@ class RpcSuccess {
 }
 function manifest(content) {
   return {
+    schemaVersion: 1,
+    runtimeProtocolVersion: 3,
+    minCompatibleRuntimeProtocolVersion: 2,
+    pageVersion: 3,
     buildId: 'same-build-id',
     entrypoint: 'index.html',
     desktopVersion: '1',
@@ -47,19 +52,35 @@ function manifest(content) {
     ]
   }
 }
-function fetcher(root, content) {
+function fetcher(root, content, options = {}) {
   const { WebBundleFetcher } = loadArkts('transport/WebBundleFetcher.ets', ['WebBundleFetcher'], {
     fs: fileIo,
     RpcSuccess,
+    bundleCompat,
     sha256,
     utf8Encode: (value) => new TextEncoder().encode(value),
     base64Decode: (value) => new Uint8Array(Buffer.from(value, 'base64'))
   })
   const client = {
+    request: async () =>
+      new RpcSuccess(
+        'status',
+        JSON.stringify(
+          options.status ?? {
+            protocolVersion: 3,
+            minCompatibleMobileVersion: 2,
+            capabilities: ['mobileWeb.bundle.v1']
+          }
+        )
+      ),
     buildWire: (_id, method, params) => ({ method, params }),
     requestRaw: async (id, { method, params }) => {
       if (method === 'mobileWeb.bundle.manifest') {
-        return new RpcSuccess(id, JSON.stringify({ manifest: manifest(content) }))
+        options.onManifest?.()
+        return new RpcSuccess(
+          id,
+          JSON.stringify({ manifest: { ...manifest(content), ...options.manifest } })
+        )
       }
       const request = JSON.parse(params)
       return new RpcSuccess(
@@ -115,4 +136,31 @@ test('cold offline startup can reopen only the verified bundle for this pairing'
   await online.ensureBundle(installed)
   offline.forgetPairedBundle(context, hostA)
   assert.equal(offline.readPairedBundle(context, hostA, 100), null)
+})
+
+test('compatibility distinguishes desktop updates, app updates and stale workspace bundles', async () => {
+  let requestedManifest = false
+  const noBundle = fetcher('', '', {
+    status: { protocolVersion: 3, minCompatibleMobileVersion: 2, capabilities: [] },
+    onManifest: () => {
+      requestedManifest = true
+    }
+  })
+  await assert.rejects(noBundle.fetchManifest(), {
+    remedy: 'desktop',
+    message: 'bundle-unavailable'
+  })
+  assert.equal(requestedManifest, false)
+  await assert.rejects(fetcher('', '', { manifest: { schemaVersion: 2 } }).fetchManifest(), {
+    remedy: 'mobile',
+    message: 'bundle-shell-too-old'
+  })
+  await assert.rejects(fetcher('', '', { manifest: { pageVersion: 0 } }).fetchManifest(), {
+    remedy: 'desktop',
+    message: 'bundle-incompatible'
+  })
+  await assert.rejects(
+    fetcher('', '', { manifest: { runtimeProtocolVersion: 1 } }).fetchManifest(),
+    { remedy: 'workspace', message: 'bundle-incompatible' }
+  )
 })

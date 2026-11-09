@@ -1,3 +1,5 @@
+import bundleCompat from '../vendor/bundle-compat.js';
+
 export interface ShellRoute {
   hostId: string;
   pathname: string;
@@ -16,8 +18,7 @@ export function isDesktopSession(route: ShellRoute): boolean {
 }
 
 export function sessionOpenParam(route: ShellRoute, pageVersion: number): string {
-  // MOBILE_WEB_PAGE_VERSION_OPENS_TARGETS in the shared mobile shell.
-  if (pageVersion < 3 || !isDesktopSession(route)) { return ''; }
+  if (pageVersion < bundleCompat.MOBILE_WEB_PAGE_VERSION_OPENS_TARGETS || !isDesktopSession(route)) { return ''; }
   let search = Object.keys(route.params).map((key: string): string =>
     `${encodeURIComponent(key)}=${encodeURIComponent(route.params[key])}`).join('&');
   let href = search ? `${route.pathname}?${search}` : route.pathname;

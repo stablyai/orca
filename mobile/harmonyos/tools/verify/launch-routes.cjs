@@ -1,12 +1,11 @@
 const test = require('node:test')
 const assert = require('node:assert/strict')
 const { loadArkts } = require('./arkts-source.cjs')
-const shellRoutes = loadArkts('navigation/ShellRoute.ets', [
-  'desktopPath',
-  'shellRouterParams',
-  'readShellRoute',
-  'sessionOpenParam'
-])
+const shellRoutes = loadArkts(
+  'navigation/ShellRoute.ets',
+  ['desktopPath', 'shellRouterParams', 'readShellRoute', 'sessionOpenParam'],
+  { bundleCompat: require('../../entry/src/main/ets/vendor/bundle-compat.js') }
+)
 const { parseLaunchRoute } = loadArkts(
   'navigation/LaunchRoute.ets',
   ['parseLaunchRoute'],

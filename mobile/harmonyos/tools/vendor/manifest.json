@@ -21,7 +21,8 @@
     "tools/vendor/tweetnacl/nacl-fast.min.js": "3ec535c004aeeb225785d8e93fb33bf99f52e399bd7dfc01969b5629baea5131",
     "entry/src/main/ets/vendor/agent-list.js": "85d63d7df4a1c5abe2235614014615cfe0e2becbab3fbdf227fb0cb24a961de3",
     "entry/src/main/ets/vendor/connection-diagnostics.js": "178a047ae96377fe16f7b1ace1b6d3c13eba81487954cd0440175939fc2d4ab1",
-    "entry/src/main/ets/vendor/terminal-rail.js": "172f7f933854c677cdcdc2fd00c373a79b07973ba51777c10d205d5c4160e5b7"
+    "entry/src/main/ets/vendor/terminal-rail.js": "172f7f933854c677cdcdc2fd00c373a79b07973ba51777c10d205d5c4160e5b7",
+    "entry/src/main/ets/vendor/bundle-compat.js": "7ad72dd427a2f052a164eccc08e587b02a27413be1a404084a9357a3987d4162"
   },
   "orcaAgentList": {
     "revision": "cba8f0efcc3588a4f6606d9834555a8b3860a39c",
@@ -71,6 +72,16 @@
     "sources": [
       "mobile/src/layout/side-rail-strip.ts",
       "mobile/src/terminal/terminal-accessory-repeat.ts"
+    ]
+  },
+  "orcaBundleCompat": {
+    "revision": "cba8f0efcc3588a4f6606d9834555a8b3860a39c",
+    "esbuild": "0.28.2",
+    "sources": [
+      "mobile/src/transport/connection/protocol-compat.ts",
+      "mobile/src/transport/connection/protocol-version.ts",
+      "mobile/src/transport/web-bundle/mobile-web-bundle-compat.ts",
+      "src/shared/mobile-web-bundle/mobile-web-bundle-capability.ts"
     ]
   }
 }

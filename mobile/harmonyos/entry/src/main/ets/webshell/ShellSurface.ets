@@ -8,7 +8,7 @@ import { appendLog as recordConnection, LOG_LEVEL_INFO, LOG_LEVEL_ERROR } from '
 import { common } from '@kit.AbilityKit';
 import { router } from '@kit.ArkUI';
 import { SpikeRpcClient } from '../transport/SpikeRpcClient';
-import { BundleManifest, WebBundleFetcher } from '../transport/WebBundleFetcher';
+import { BundleCompatibilityError, BundleManifest, BundleRemedy, WebBundleFetcher } from '../transport/WebBundleFetcher';
 import { ShellStartup } from './ShellStartup';
 import { ShellDocument, ShellDocumentMount } from './ShellDocument';
 import { claimHomeDocument } from './HomeShellPrewarm';
@@ -18,10 +18,11 @@ import { desktopPath, isDesktopSession, sessionOpenParam, ShellRoute } from '../
 import { lucideColorFilter } from '../settings/LucideColor';
 import { projectPageRegions, projectSideRail, readWindowRegions, WindowRegion } from './WindowRegions';
 import { TerminalKeyRail } from './TerminalKeyRail';
+import { BundleCompatibilityCard } from './BundleCompatibilityCard';
 import { terminalRailKeys, TerminalRailClaim } from './TerminalRailClaim';
 import terminalRail, { SideRailStrip } from '../vendor/terminal-rail.js';
 
-type ShellStage = 'checking' | 'downloading' | 'opening' | 'offline' | 'repair' | 'failed' | 'ready';
+type ShellStage = 'checking' | 'downloading' | 'opening' | 'offline' | 'repair' | 'failed' | 'incompatible' | 'ready';
 
 export class ShellSurfaceBack {
   private handler: (() => boolean) | null = null;
@@ -43,6 +44,7 @@ export struct ShellSurface {
   returnsToDesktop: boolean = false;
   back: ShellSurfaceBack = new ShellSurfaceBack();
   onNativeSession: (route: ShellRoute) => void = (_route: ShellRoute): void => {};
+  onNativeRoute: (route: ShellRoute, replace: boolean) => void = (_route: ShellRoute, _replace: boolean): void => {};
   onOverlayClose: () => void = (): void => {};
   onOverlayNavigate: (route: ShellRoute) => void = (_route: ShellRoute): void => {};
   private unbindBack: (() => void) | null = null;
@@ -65,6 +67,7 @@ export struct ShellSurface {
   private phase: string = '';
   @State stage: ShellStage = 'checking';
   @State failureMessage: string = '';
+  @State bundleRemedy: BundleRemedy = 'desktop';
   @State desktopName: string = '';
   @State downloadPercent: number = -1;
   @State downloadCaption: string = '';
@@ -269,6 +272,14 @@ export struct ShellSurface {
     }
   }
 
+  private handleStartupFailure(error: Object): void {
+    if (!(error instanceof BundleCompatibilityError)) { this.failStartup('会话加载未完成，请重试'); return; }
+    this.startup.cancel(); this.generation++; this.releaseBridge();
+    this.painted = false; this.bundleRemedy = error.remedy;
+    if (!error.message.startsWith('page-route-')) { WebBundleFetcher.forgetPairedBundle(getContext(this), this.hostId); }
+    this.publishPhase(`失败：${error.message}`, 'incompatible');
+  }
+
   private rememberBundle(meta: HostMeta, document: ShellDocument): void {
     try { WebBundleFetcher.rememberPairedBundle(getContext(this), meta.id, meta.lastConnected, document.manifest); }
     catch (e) {}
@@ -352,9 +363,6 @@ export struct ShellSurface {
       let fetcher = new WebBundleFetcher(client, getContext(this));
       let manifest = await fetcher.fetchManifest();
       if (this.disposed || generation !== this.generation || this.client !== client) { return; }
-      if (this.asDrawer && !manifest.routes.some((route): boolean => route.pathname === '/h/[hostId]/new-workspace')) {
-        this.failStartup('桌面未提供新建工作区页面'); return;
-      }
       let startupGeneration = this.startupGeneration;
       let baseDir = await fetcher.ensureBundle(manifest, (received: number, total: number): void => {
         if (this.disposed || generation !== this.generation || this.client !== client) { return; }
@@ -370,7 +378,7 @@ export struct ShellSurface {
       this.downloadPercent = -1;
       this.mountBundle(client, meta, manifest, baseDir, generation);
     } catch (e) {
-      if (!this.disposed && generation === this.generation) { this.failStartup('会话加载未完成，请重试'); }
+      if (!this.disposed && generation === this.generation) { this.handleStartupFailure(e); }
     }
   }
 
@@ -389,7 +397,12 @@ export struct ShellSurface {
     try {
       this.mountBundle(null, meta, cached.manifest, cached.directory, generation);
       recordConnection(getContext(this), LOG_LEVEL_INFO, '已离线打开缓存页面', '', meta.id, 'web-shell-flow').catch(() => {});
-    } catch (e) { this.failStartup('会话加载未完成，请重试'); }
+    } catch (e) {
+      if (e instanceof BundleCompatibilityError) {
+        this.startup.cancel(); this.generation++; this.releaseBridge();
+        this.publishPhase('连接中断', 'offline');
+      } else { this.failStartup('会话加载未完成，请重试'); }
+    }
   }
 
   private async refreshCachedBundle(client: SpikeRpcClient, meta: HostMeta, document: ShellDocument): Promise<void> {
@@ -400,7 +413,8 @@ export struct ShellSurface {
     try {
       let fetcher = new WebBundleFetcher(client, getContext(this));
       let manifest = await fetcher.fetchManifest();
-      if (!current() || !this.bundleServes(manifest, this.request.pathname)) { return; }
+      if (!current()) { return; }
+      this.requireRoute(this.bridge?.routeBlock(this.request.pathname, manifest) ?? 'desktop');
       let baseDir = await fetcher.ensureBundle(manifest);
       if (!current()) { return; }
       if (baseDir === document.baseDir && this.bridge && this.nativeDevice) {
@@ -418,10 +432,17 @@ export struct ShellSurface {
       this.startupGeneration = this.startup.begin();
       this.mountBundle(client, meta, manifest, baseDir, generation);
     } catch (e) {
-      if (!this.cacheOnly && !this.disposed && this.client === client) { this.failStartup('会话加载未完成，请重试'); }
+      if ((current() && e instanceof BundleCompatibilityError) || (!this.cacheOnly && !this.disposed && this.client === client)) {
+        this.handleStartupFailure(e);
+      }
     } finally {
       if (this.cacheRefreshClient === client) { this.cacheRefreshClient = null; }
     }
+  }
+
+  private requireRoute(block: string): void {
+    if (block === 'desktop') { throw new BundleCompatibilityError('desktop', 'page-route-unlisted'); }
+    if (block === 'mobile') { throw new BundleCompatibilityError('mobile', 'page-route-grant-missing'); }
   }
 
   private mountBundle(client: SpikeRpcClient | null, meta: HostMeta, manifest: BundleManifest, baseDir: string,
@@ -436,12 +457,10 @@ export struct ShellSurface {
     let shown: ShellRoute = { hostId: meta.id, pathname: this.routePathname, params: this.routeParams };
     if (!this.pendingSession && this.request.pathname === root && isDesktopSession(shown)) { this.pendingSession = shown; }
     let target = this.pendingSession;
-    let open = target && manifest.routes.some((route): boolean => route.pathname === '/h/[hostId]' && route.canOwnHostArea)
-      ? sessionOpenParam(target, manifest.pageVersion) : '';
-    this.opensSessionNatively = target !== null && open === '';
-    let params: Record<string, string> = open ? { 'open': open } : target ? {} : shown.params;
-    let bridge = new BridgeHost(client, document.controller, manifest, meta, target ? root : shown.pathname, path);
-    bridge.setStorage(storage); bridge.setColorScheme(this.scheme); bridge.setUiLocale(this.uiLocale); bridge.setRouteParams(params);
+    let entry = target ? root : shown.pathname;
+    let bridge = new BridgeHost(client, document.controller, manifest, meta, entry, path);
+    bridge.setWideLayout(this.surface.width >= 700 && this.surface.height >= 600);
+    bridge.setStorage(storage); bridge.setColorScheme(this.scheme); bridge.setUiLocale(this.uiLocale);
     if (!this.asDrawer) {
       bridge.setTerminalRailClaimSink((claim: TerminalRailClaim | null): void => {
         if (this.bridge === bridge) { this.railClaim = claim; this.publishPageRegions(); }
@@ -462,6 +481,10 @@ export struct ShellSurface {
       let navigation = replace ? router.replaceUrl({ url: url, params: params }) : router.pushUrl({ url: url, params: params });
       navigation.catch(() => {});
     });
+    bridge.setShellNavigation((pathname: string, params: Record<string, string>, replace: boolean): void => {
+      if (this.disposed || !this.pageVisible || !this.foreground || this.bridge !== bridge) { return; }
+      this.onNativeRoute({ hostId: meta.id, pathname: pathname, params: params }, replace);
+    });
     this.recordResume(this.routePathname, this.routeParams);
     bridge.setDeviceNotifies((target: string): Promise<void> => nativeDevice.notifyExternalLink(target),
       (kind: string): Promise<void> => nativeDevice.notifyHaptic(kind), true);
@@ -474,6 +497,11 @@ export struct ShellSurface {
     }
     bridge.setFaultSink((_message: string): void => this.failStartup('会话页面发生错误，请重试'));
     this.bridge = bridge;
+    this.requireRoute(bridge.routeBlock(entry));
+    let open = target && bridge.ownsHostArea(root) && !bridge.routeBlock(target.pathname)
+      ? sessionOpenParam(target, manifest.pageVersion) : '';
+    this.opensSessionNatively = target !== null && open === '';
+    bridge.setRouteParams(open ? { 'open': open } : target ? {} : shown.params);
     this.publishKeyboardInset();
     this.publishPageRegions();
     document.onReady = (): void => {};
@@ -600,7 +628,9 @@ export struct ShellSurface {
       }
       // Keep the viewport fixed through first paint and transport recovery.
       if (!this.painted) {
-        if (this.asDrawer) { this.overlayLoadingDrawer() }
+        if (this.stage === 'incompatible') {
+          BundleCompatibilityCard({ remedy: this.bundleRemedy, onBack: (): void => this.navigateBack(true) })
+        } else if (this.asDrawer) { this.overlayLoadingDrawer() }
         else { this.startupScreen() }
       }
     }.width('100%').height('100%').backgroundColor(this.asDrawer ? Color.Transparent : this.themeBg)
