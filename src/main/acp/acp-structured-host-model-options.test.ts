@@ -163,27 +163,29 @@ async function openModels(
     places: state.deliveryOrder['lanes'].get(SESSION)?.places.size ?? 0,
     lanes: state.deliveryOrder['lanes'].size
   })
-  const submissionFor = (id: string) => {
+  const submissionFor = async (id: string) => {
     const current = journal()
-    return current.submission(current.queuedMessages.get(id)?.consumedAs ?? id)
+    return current.reads.submission((await current.queuedMessages.get(id))?.consumedAs ?? id)
   }
   const complete = async (id: string) => {
-    await waitFor(() => expect(submissionFor(id)?.dispatchState).toMatch(/admitted|accepted/))
+    await waitFor(async () =>
+      expect((await submissionFor(id))?.dispatchState).toMatch(/admitted|accepted/)
+    )
     const frame = framesOf(rig.rig.child(), 'session/prompt').at(-1)!
     const turn = (await journal().reads.runningTurn())?.turnId
     rig.rig.child().agent.reply(frame, { stopReason: 'end_turn' })
     await rig.rig.settle()
     await rig.host.flushStreamedEvents(SESSION)
-    await waitFor(() => expect(journal().runningTurn()?.turnId).not.toBe(turn))
+    await waitFor(async () => expect((await journal().reads.runningTurn())?.turnId).not.toBe(turn))
     expect(
-      structuredAgentSessionHandingOver(journal()).has(submissionFor(id)!.clientMessageId)
+      structuredAgentSessionHandingOver(journal()).has((await submissionFor(id))!.clientMessageId)
     ).toBe(false)
   }
   const defer = async (path: string | false) => {
     const busy = path === 'busy' ? await send(rig.host, 'busy') : undefined
     if (busy) {
-      await waitFor(() =>
-        expect(journal().submission(busy)?.dispatchState).toMatch(/admitted|accepted/)
+      await waitFor(async () =>
+        expect((await journal().reads.submission(busy))?.dispatchState).toMatch(/admitted|accepted/)
       )
     }
     if (path === 'held') {
@@ -303,7 +305,8 @@ it.each([10, 100, 'Send', 'rejection'] as const)(
         [second, PRO]
       ] as const) {
         expect(
-          (await rig.journal().queuedMessages.get(id))?.options ?? rig.submissionFor(id)?.options
+          (await rig.journal().queuedMessages.get(id))?.options ??
+            (await rig.submissionFor(id))?.options
         ).toEqual({ model, effort: 'low' })
         await rig.complete(id)
       }

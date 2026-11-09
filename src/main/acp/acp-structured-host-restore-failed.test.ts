@@ -9,7 +9,7 @@ import { HOST_TEST_SESSION as SESSION } from '../native-chat/agent-session-wire/
 import type { AcpScriptedAgent } from './acp-scripted-agent.test-support'
 import { GROK, GROK_CONFIG_OPTIONS, PROVIDER_SESSION } from './acp-structured-adapter.test-support'
 import { ACP_HANDLE_TRANSPORT } from './acp-structured-agent-definitions'
-import { restoreJournal } from '../native-chat/agent-session-journal/replay/journal-open'
+import { journalSqlReads } from '../native-chat/agent-session-journal/journal-sql-reads'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import { createAcpStructuredLaunchResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition.test-support'
 import {
@@ -81,7 +81,12 @@ async function openRestoreRig(code: number, message: string) {
   const { rig, host, store, journalDatabase } = opened
   resolver.resolve = createAcpStructuredLaunchResolver(GROK, {
     store,
-    readJournal: (sessionId) => restoreJournal(journalDatabase.db, sessionId),
+    savedSession: {
+      hasProviderTurn: (sessionId, nativeId) =>
+        journalSqlReads(journalDatabase.readers, sessionId).hasProviderTurn(nativeId),
+      savedItemIds: async (sessionId, itemIds) =>
+        new Set(await journalSqlReads(journalDatabase.readers, sessionId).savedItemIds(itemIds))
+    },
     resolveWorkspacePath: async () => '/workspace',
     resolveEnvironment: async () => ({ PATH: '/usr/bin' }),
     resolveCommand: () => '/fake/grok'
@@ -197,7 +202,7 @@ describe('a replacement after its earlier attach failed to open the journal', ()
     const spawnedBefore = [...rig.spawned]
     const chainBefore = structuredClone(store.getRecord(SESSION)?.providerHandleChain)
     // Fail before the spawned child's background handshake can prove a replacement link.
-    vi.spyOn(AgentSessionJournal.prototype, 'open').mockRejectedValueOnce(
+    vi.spyOn(AgentSessionJournal, 'open').mockRejectedValueOnce(
       new Error('journal path unavailable')
     )
     expect(await host.attach(CALLER, attachParams(fence()))).toMatchObject({

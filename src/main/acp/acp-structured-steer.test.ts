@@ -186,7 +186,9 @@ describe('permission changes with already admitted ACP input', () => {
     expect(promptIdOf(prompt)).toBe(`prompt:${handoffId}`)
     rig.child().agent.notify('session/update', replyChunk(promptIdOf(prompt), 'done'))
     rig.child().agent.reply(prompt, { stopReason: 'end_turn' })
-    await waitFor(() => expect(journal.submission(handoffId)?.dispatchState).toBe('accepted'))
+    await waitFor(async () =>
+      expect((await journal.reads.submission(handoffId))?.dispatchState).toBe('accepted')
+    )
     expect(framesOf(rig.child(), 'session/prompt')).toHaveLength(1)
     await host.close(SESSION, 'user-close')
   })
@@ -213,23 +215,27 @@ describe('permission changes with already admitted ACP input', () => {
       ).toMatchObject({ ok: true })
       const c = await send(host, 'C new policy')
       const journal = host.collaboratorsForTests().sessions.get(SESSION)!.journal
-      const handoffId = (id: string) => journal.queuedMessages.get(id)?.consumedAs ?? id
+      const handoffId = async (id: string) =>
+        (await journal.queuedMessages.get(id))?.consumedAs ??
+        (await journal.reads.input({ kind: 'linked-to', messageId: id })).submissions[0]
+          ?.clientMessageId ??
+        id
+      const dispatchOf = async (id: string) =>
+        (await journal.reads.submission(await handoffId(id)))?.dispatchState
       expect(await journal.queuedMessages.get(c)).toMatchObject({
         state: 'waiting',
         consumedAs: null
       })
-      expect((await journal.reads.submission(handoffId(b)))?.dispatchState).toBe('pending')
+      expect(await dispatchOf(b)).toBe('pending')
       expect(framesOf(original, 'session/prompt')).toHaveLength(1)
       original.agent.reply(promptA, { stopReason: 'cancelled' })
       const promptB = await rig.frame('session/prompt', 1)
-      expect(promptIdOf(promptB)).toBe(`prompt:${handoffId(b)}`)
+      expect(promptIdOf(promptB)).toBe(`prompt:${await handoffId(b)}`)
       original.agent.notify('session/update', replyChunk(promptIdOf(promptB), 'answered B'))
-      await waitFor(() => expect(journal.submission(handoffId(b))?.dispatchState).toBe('accepted'))
+      await waitFor(async () => expect(await dispatchOf(b)).toBe('accepted'))
       if (outcome === 'deadline') {
-        await waitFor(() =>
-          expect(journal.submission(handoffId(c))?.dispatchState).toBe('rejected')
-        )
-        expect((await journal.reads.submission(handoffId(c)))?.rejection).toMatchObject({
+        await waitFor(async () => expect(await dispatchOf(c)).toBe('rejected'))
+        expect((await journal.reads.submission(await handoffId(c)))?.rejection).toMatchObject({
           kind: 'restartFailed',
           neverReachedAgent: true
         })
@@ -241,14 +247,18 @@ describe('permission changes with already admitted ACP input', () => {
       if (outcome === 'drained') {
         await waitFor(() => expect(original.exited).toBe(true))
         const promptC = await rig.frame('session/prompt')
-        expect(promptIdOf(promptC)).toBe(`prompt:${handoffId(c)}`)
+        // The restarted agent receives C as its own delivery of the queued card.
+        const deliveredC = promptIdOf(promptC).replace(/^prompt:/, '')
+        expect(await journal.reads.submissionBody(deliveredC)).toMatchObject({
+          blocks: [{ type: 'text', text: 'C new policy' }]
+        })
         rig.child().agent.notify('session/update', replyChunk(promptIdOf(promptC), 'answered C'))
         rig.child().agent.reply(promptC, { stopReason: 'end_turn' })
-        await waitFor(() =>
-          expect(journal.submission(handoffId(c))?.dispatchState).toBe('accepted')
+        await waitFor(async () =>
+          expect((await journal.reads.submission(deliveredC))?.dispatchState).toBe('accepted')
         )
       } else {
-        expect((await journal.reads.submission(handoffId(c)))?.dispatchState).toBe('rejected')
+        expect(await dispatchOf(c)).toBe('rejected')
       }
       await host.close(SESSION, 'user-close')
     }
