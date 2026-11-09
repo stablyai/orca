@@ -1,0 +1,231 @@
+import { common } from '@kit.AbilityKit';
+import { DesktopNotifications } from '../notifications/DesktopNotifications';
+import { getDeviceToken, getRelayCredential, HostMeta, listHosts } from '../storage/HostStore';
+import { HostSession, SessionPhase } from './HostSession';
+import { SpikeRpcClient } from './SpikeRpcClient';
+
+type ProfileChange = 'name' | 'endpoint' | 'paired';
+
+type DesktopListener = (phase: SessionPhase, detail: string) => void;
+
+export interface DesktopConnectionLease {
+  connection: DesktopConnection;
+  release: (keepForNavigation?: boolean) => void;
+}
+
+const desktops = new Map<string, DesktopConnection>();
+const idleTimers = new Map<string, number>();
+
+function cancelIdle(hostId: string): void {
+  let timer = idleTimers.get(hostId);
+  if (timer !== undefined) { clearTimeout(timer); idleTimers.delete(hostId); }
+}
+
+function closeIdle(hostId: string, connection: DesktopConnection): void {
+  cancelIdle(hostId);
+  if (desktops.get(hostId) === connection) { desktops.delete(hostId); connection.dispose(); }
+}
+
+export function closeIdleDesktopConnections(): void {
+  Array.from(idleTimers.keys()).forEach((id: string): void => {
+    let connection = desktops.get(id);
+    if (connection) { closeIdle(id, connection); }
+  });
+}
+
+export function retainDesktopConnection(context: common.UIAbilityContext, hostId: string): DesktopConnectionLease {
+  cancelIdle(hostId);
+  let existing = desktops.get(hostId);
+  let connection = existing ?? new DesktopConnection(context, hostId);
+  if (!existing) { desktops.set(hostId, connection); }
+  connection.retain();
+  let held = true;
+  return { connection: connection, release: (keepForNavigation: boolean = false): void => {
+    if (!held) { return; }
+    held = false;
+    if (!connection.release() || desktops.get(hostId) !== connection) { return; }
+    // A shell can pop before Home finishes reading a newly paired desktop.
+    if (keepForNavigation) {
+      idleTimers.set(hostId, setTimeout((): void => closeIdle(hostId, connection), 2000));
+    } else { closeIdle(hostId, connection); }
+  } };
+}
+
+export function refreshDesktopConnection(hostId: string, change: ProfileChange): void {
+  desktops.get(hostId)?.refresh(change);
+}
+
+export function forgetDesktopConnection(hostId: string): void {
+  cancelIdle(hostId);
+  let connection = desktops.get(hostId);
+  desktops.delete(hostId);
+  connection?.forget();
+}
+
+export function reviveDesktopConnections(): void {
+  desktops.forEach((connection: DesktopConnection): void => connection.revive());
+}
+
+export class DesktopConnection {
+  private readonly context: common.UIAbilityContext;
+  private readonly hostId: string;
+  private readonly notifications: DesktopNotifications;
+  private listeners: Set<DesktopListener> = new Set();
+  private session: HostSession | null = null;
+  private unsubscribeSession: (() => void) | null = null;
+  private meta: HostMeta | null = null;
+  private client: SpikeRpcClient | null = null;
+  private phase: SessionPhase = 'idle';
+  private detail: string = '';
+  private connectedAt: number | null = null;
+  private activePath: string = 'lan';
+  private holders: number = 0;
+  private generation: number = 0;
+  private profileRevision: number = 0;
+  private opening: boolean = false;
+  private wanted: boolean = false;
+  private paused: boolean = false;
+  private removed: boolean = false;
+
+  constructor(context: common.UIAbilityContext, hostId: string) {
+    this.context = context; this.hostId = hostId;
+    this.notifications = new DesktopNotifications(context);
+  }
+
+  retain(): void { this.holders++; }
+
+  release(): boolean { return --this.holders === 0; }
+  dispose(): void { this.closeTransport(); }
+
+  observe(listener: DesktopListener): () => void {
+    this.listeners.add(listener);
+    listener(this.phase, this.detail);
+    return (): void => { this.listeners.delete(listener); };
+  }
+
+  getPhase(): SessionPhase { return this.phase; }
+  getClient(): SpikeRpcClient | null { return this.client; }
+  getMeta(): HostMeta | null { return this.meta; }
+  getActivePath(): string { return this.activePath; }
+  getPendingPath(): string | undefined { return this.session?.getPendingPath(); }
+  getConnectedAt(): number | null { return this.connectedAt; }
+  getReconnectAttempt(): number { return this.session?.getReconnectAttempt() ?? 0; }
+
+  setViewing(owner: Object, worktree: string, executionHost: string): void {
+    this.notifications.setViewing(owner, this.hostId, worktree, executionHost);
+  }
+
+  clearViewing(owner: Object): void { this.notifications.clearViewing(owner); }
+
+  private publish(phase: SessionPhase, detail: string): void {
+    this.phase = phase; this.detail = detail;
+    Array.from(this.listeners).forEach((listener: DesktopListener): void => listener(phase, detail));
+  }
+
+  private closeTransport(): void {
+    this.generation++; this.profileRevision++; this.opening = false;
+    this.unsubscribeSession?.(); this.unsubscribeSession = null;
+    this.notifications.stop(); this.client = null;
+    let previous = this.session; this.session = null;
+    previous?.stop();
+  }
+
+  connect(explicit: boolean = false): void {
+    if (this.removed || this.holders === 0 || (this.paused && !explicit)) { return; }
+    if (explicit) { this.paused = false; }
+    this.wanted = true;
+    if (this.opening || this.session || (!explicit && this.phase === 'auth-failed')) { return; }
+    let generation = ++this.generation;
+    this.opening = true; this.publish('connecting', '正在连接');
+    this.open(generation).catch(() => {
+      if (generation !== this.generation) { return; }
+      this.opening = false; this.publish('stopped', '无法读取桌面凭证');
+    });
+  }
+
+  private async open(generation: number): Promise<void> {
+    let hosts = await listHosts(this.context);
+    if (generation !== this.generation) { return; }
+    let meta = hosts.find((host: HostMeta): boolean => host.id === this.hostId);
+    if (!meta) {
+      this.opening = false; this.publish('stopped', '主机不存在'); return;
+    }
+    this.meta = meta;
+    let token = await getDeviceToken(this.context, this.hostId);
+    if (generation !== this.generation) { return; }
+    if (!token) {
+      this.opening = false; this.publish('auth-failed', '凭证缺失 — 请重新配对'); return;
+    }
+    let relay = await getRelayCredential(this.context, this.hostId);
+    if (generation !== this.generation) { return; }
+    let session = new HostSession(meta, token, relay ?? undefined, this.context);
+    this.opening = false; this.session = session;
+    this.unsubscribeSession = session.addListener((phase: SessionPhase, detail: string): void => {
+      if (this.session !== session) { return; }
+      let client = phase === 'connected' ? session.getClient() : null;
+      if (this.client !== client) {
+        this.client = client;
+        if (client) {
+          this.connectedAt = session.getConnectedAt(); this.activePath = session.getActivePath();
+          this.notifications.attach(client, this.hostId);
+        } else { this.notifications.stop(); }
+      }
+      this.publish(phase, detail);
+    });
+    session.start();
+  }
+
+  reconnect(): void {
+    if (this.removed) { return; }
+    this.paused = false;
+    // Keep a healthy Relay path while checking that it still answers.
+    if (this.phase === 'connected' && this.activePath === 'relay') { this.session?.revive(); return; }
+    this.closeTransport(); this.connect(true);
+  }
+
+  disconnect(): void {
+    this.wanted = false; this.paused = true;
+    this.closeTransport(); this.publish('stopped', '已断开');
+  }
+
+  forget(): void { this.removed = true; this.meta = null; this.disconnect(); }
+
+  refresh(change: ProfileChange): void {
+    if (this.removed) { return; }
+    let revision = ++this.profileRevision;
+    if (change === 'paired' || change === 'endpoint') {
+      if (change === 'paired') { this.paused = false; }
+      this.replaceTransport();
+      return;
+    }
+    listHosts(this.context).then((hosts: HostMeta[]): void => {
+      if (revision !== this.profileRevision || this.removed) { return; }
+      let next = hosts.find((host: HostMeta): boolean => host.id === this.hostId);
+      if (next) { this.updateProfile(next); }
+    }).catch(() => {});
+  }
+
+  updateProfile(next: HostMeta): void {
+    let meta = this.meta;
+    if (!meta) { return; }
+    if (meta.endpoint !== next.endpoint || meta.lastConnected !== next.lastConnected) {
+      let paired = meta.lastConnected !== next.lastConnected;
+      if (paired) { this.paused = false; }
+      this.replaceTransport();
+      return;
+    }
+    meta.name = next.name; meta.machineName = next.machineName; meta.personalName = next.personalName;
+  }
+
+  private replaceTransport(): void {
+    this.closeTransport(); this.meta = null;
+    if (this.wanted && !this.paused) { this.connect(true); }
+    else { this.publish('stopped', '已断开'); }
+  }
+
+  revive(): void {
+    if (this.removed || this.paused || !this.wanted) { return; }
+    if (this.session) { this.session.revive(); }
+    else { this.connect(); }
+  }
+}

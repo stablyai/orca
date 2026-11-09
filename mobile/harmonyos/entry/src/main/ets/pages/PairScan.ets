@@ -6,6 +6,7 @@ import { abilityAccessCtrl, common } from '@kit.AbilityKit';
 import { PairingCamera } from '../pairing/PairingCamera';
 import { lucideColorFilter } from '../settings/LucideColor';
 import { loadMobileOnboardingSteps } from '../onboarding/MobileOnboardingPlan';
+import { refreshDesktopConnection } from '../transport/DesktopConnections';
 import { PairingConnection, PAIRING_CODE_REFUSED } from '../pairing/PairingConnection';
 import { prepareRelayPairing, commitRelayPairing } from '../transport/RelayPairing';
 import { RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
@@ -300,6 +301,7 @@ struct PairScan {
       if (this.timedOut) { throw new Error('Pairing timed out'); }
       if (prepared) { await commitRelayPairing(getContext(this), meta, token, prepared, (): boolean => !this.disposed && !this.timedOut); }
       else { await saveHost(getContext(this), meta, token, undefined, pairingStartedAt); }
+      refreshDesktopConnection(meta.id, 'paired');
       if (this.disposed) { return; }
       this.pairingCode = '';
       this.appendLog('配对成功');

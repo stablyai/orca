@@ -31,6 +31,7 @@ for (const command of [
   ['--disable-warning=ExperimentalWarning', 'tools/verify/device-parity.cjs'],
   ['--disable-warning=ExperimentalWarning', 'tools/verify/relay-contracts.cjs'],
   ['--disable-warning=ExperimentalWarning', 'tools/verify/connection-diagnostics.cjs'],
+  ['--disable-warning=ExperimentalWarning', 'tools/verify/desktop-connections.cjs'],
   ['--disable-warning=ExperimentalWarning', 'tools/verify/pairing-connection.cjs'],
   ['--disable-warning=ExperimentalWarning', 'tools/verify/home-actions.cjs'],
   ['--disable-warning=ExperimentalWarning', 'tools/verify/bundle-cache-contracts.cjs'],

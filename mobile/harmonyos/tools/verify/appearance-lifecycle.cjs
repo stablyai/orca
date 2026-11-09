@@ -51,6 +51,8 @@ test('synchronous system theme callbacks do not reenter appearance configuration
     loadUiLanguage: async () => {},
     applyUiLanguage() {},
     setUiLocaleListener() {},
+    closeIdleDesktopConnections() {},
+    dropHomePrewarm() {},
     hilog: { info() {}, warn() {}, error() {} },
     $rawfile: (name) => name
   })

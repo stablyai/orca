@@ -14,7 +14,10 @@ const manifest = {
     { pathname: '/h/[hostId]', canOwnHostArea: true, grants: ['navigate'], optionalGrants: [] }
   ]
 }
-function createBridge(peer, client) {
+function bridgeClass(peer) {
+  return loadArkts('webshell/BridgeHost.ets', ['BridgeHost'], { ...peer, ...bytes }).BridgeHost
+}
+function createBridge(peer, client, BridgeHost = bridgeClass(peer)) {
   const frames = []
   const controller = {
     runJavaScript(script) {
@@ -22,7 +25,6 @@ function createBridge(peer, client) {
       return Promise.resolve()
     }
   }
-  const { BridgeHost } = loadArkts('webshell/BridgeHost.ets', ['BridgeHost'], { ...peer, ...bytes })
   const bridge = new BridgeHost(
     client,
     controller,
@@ -36,6 +38,39 @@ function createBridge(peer, client) {
 function post(bridge, message) {
   bridge.onClientMessage(JSON.stringify({ v: 1, type: 'request', ...message }))
 }
+
+test('two documents on one connection receive and cancel only their own calls', async () => {
+  const peer = createRpcPeer()
+  const client = new peer.SpikeRpcClient()
+  await client.connect('ws://test', 'test-token', 'key', 'v2')
+  const BridgeHost = bridgeClass(peer)
+  const first = createBridge(peer, client, BridgeHost)
+  const second = createBridge(peer, client, BridgeHost)
+  for (const { bridge } of [first, second]) {
+    post(bridge, { id: 'page-request', method: 'status.get' })
+    post(bridge, { type: 'subscribe', id: 'page-stream', method: 'session.tabs.subscribeAll' })
+  }
+  const [firstCall, firstStream, secondCall, secondStream] = peer.sent.map(JSON.parse)
+  first.bridge.dispose()
+  const release = peer.sent
+    .map(JSON.parse)
+    .find((wire) => wire.method === 'session.tabs.unsubscribeAll')
+  assert.equal(release.params.subscriptionId, firstStream.id)
+  peer.receiveText(JSON.stringify({ id: firstCall.id, ok: true, result: { title: 'first' } }))
+  peer.receiveText(JSON.stringify({ id: secondCall.id, ok: true, result: { title: 'second' } }))
+  peer.receiveText(
+    JSON.stringify({ id: secondStream.id, ok: true, streaming: true, result: { title: 'live' } })
+  )
+  await new Promise(setImmediate)
+  assert.deepEqual(second.frames.find((frame) => frame.type === 'reply').payload, {
+    id: 'page-request',
+    ok: true,
+    result: { title: 'second' }
+  })
+  assert.equal(second.frames.find((frame) => frame.id === 'page-stream').payload.title, 'live')
+  second.bridge.dispose()
+  client.close()
+})
 
 test('an unconfirmed mutation timeout reaches the page with delivery ambiguity intact', async (t) => {
   t.mock.timers.enable({ apis: ['setTimeout'] })
@@ -86,15 +121,21 @@ test('reconnect preserves the page and restores live streams without repeating w
     method: 'worktree.create',
     params: { name: 'draft' }
   })
-  first.receiveText('{"id":"live","ok":true,"streaming":true,"result":{"title":"before outage"}}')
+  function streamEvent(peer, title) {
+    const { id } = peer.sent
+      .map(JSON.parse)
+      .find((wire) => wire.method === 'session.tabs.subscribeAll')
+    peer.receiveText(JSON.stringify({ id, ok: true, streaming: true, result: { title } }))
+  }
+  streamEvent(first, 'before outage')
 
   bridge.suspendTransport(1)
   post(bridge, { type: 'cancel', id: 'retired', target: 'subscription' })
   post(bridge, { id: 'offline-write', method: 'worktree.create', params: { name: 'draft' } })
-  first.receiveText('{"id":"live","ok":true,"streaming":true,"result":{"title":"stale socket"}}')
+  streamEvent(first, 'stale socket')
   bridge.attachTransport(newClient, 'relay')
   post(bridge, { type: 'ready' })
-  next.receiveText('{"id":"live","ok":true,"streaming":true,"result":{"title":"after reconnect"}}')
+  streamEvent(next, 'after reconnect')
   await new Promise(setImmediate)
 
   assert.equal(frames.findLast((frame) => frame.type === 'init').sessionId, document)

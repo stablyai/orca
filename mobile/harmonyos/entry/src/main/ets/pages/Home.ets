@@ -1,17 +1,16 @@
 import { lucideColorFilter } from '../settings/LucideColor';
+import { enterHomePrewarm, invalidateHomePrewarm, leaveHomePrewarm, scheduleHomePrewarm } from '../webshell/HomeShellPrewarm';
 import { uiText } from '../settings/NativeUi';
 import { router, promptAction } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { pasteboard } from '@kit.BasicServicesKit';
-import { AgentWatch } from '../notifications/AgentWatch';
-import { LocalNotifier, DesktopNotification } from '../notifications/LocalNotifier';
-import { getBool, KEY_NOTIFICATIONS_LOCAL_ENABLED } from '../settings/SettingsStore';
 import { parseLaunchRoute } from '../navigation/LaunchRoute';
 import { getNumber, KEY_HOME_FONT_SCALE } from '../settings/SettingsStore';
 import { removeDesktop } from '../storage/HostRemoval';
-import { listHosts, getDeviceToken, getRelayCredential, HostMeta } from '../storage/HostStore';
+import { listHosts, HostMeta } from '../storage/HostStore';
 import { SpikeRpcClient, RpcResponse, RpcSuccess } from '../transport/SpikeRpcClient';
-import { HostSession, SessionPhase } from '../transport/HostSession';
+import { SessionPhase } from '../transport/HostSession';
+import { DesktopConnectionLease, retainDesktopConnection } from '../transport/DesktopConnections';
 import { HomeWorktree, readHomeCatalog } from '../home/HomeCatalog';
 import { AgentDesktop, AgentListRow, HomeAgentEntry, agentsNeedingYou } from '../home/AgentListModel';
 import { AgentListRows } from '../home/AgentListRows';
@@ -83,7 +82,8 @@ interface AgentCatalog { entries: HomeAgentEntry[]; at: number; }
 interface AgentActivityArgs { paneKeys: string[]; read?: boolean; }
 
 interface HostRuntime {
-  session: HostSession;
+  lease: DesktopConnectionLease;
+  unobserve: () => void;
   client: SpikeRpcClient | null;
   online: boolean;
   connecting: boolean;
@@ -92,7 +92,6 @@ interface HostRuntime {
   catalogRefetch: boolean;
   automationPending: boolean;
   automationFetchedAt: number;
-  watch: AgentWatch | null;
 }
 
 const TAB_SPECS: TabSpec[] = [
@@ -120,9 +119,6 @@ struct Home {
   @State hostActionTarget: HostMeta | null = null;
   @State hostSheetOpen: boolean = false;
   private hostAction: string = '';
-  private manualDisconnects: Set<string> = new Set();
-  private probeOwners: Map<string, number> = new Map();
-  private nextProbeOwner: number = 0;
   @State connecting: boolean = false;
   @State agentRows: AgentListRow[] = [];
   @State agentDesktops: AgentDesktop[] = [];
@@ -139,7 +135,6 @@ struct Home {
   @State quotaBusy: string[] = [];
   @State statsTotal: HomeStats | null = null;
   private statsByHost: Record<string, HomeStats> = {};
-  private notifier: LocalNotifier = new LocalNotifier();
   @State automationBusy: string[] = [];
   @State automationRequested: Record<string, boolean> = {};
   private runtimes: Map<string, HostRuntime> = new Map();
@@ -148,6 +143,7 @@ struct Home {
   private agentActivityWrites: Set<string> = new Set();
   private epoch: number = 0;
   private visible: boolean = false;
+  private appInForeground: boolean = true;
   private loadEpoch: number = 0;
   private onboardingChecked: boolean = false;
   private onboardingPending: boolean = false;
@@ -161,8 +157,28 @@ struct Home {
 
 
 
+  private onAppBackground = (): void => {
+    this.appInForeground = false;
+    this.pauseHomeCatalogs();
+  };
+  private onAppForeground = (): void => {
+    this.appInForeground = true;
+    if (this.visible) {
+      enterHomePrewarm(); this.schedulePrewarm();
+      this.runtimes.forEach((rt: HostRuntime, id: string): void => {
+        if (rt.client && rt.online) { this.fetchCatalog(rt.client, id, this.epoch); }
+      });
+    }
+  };
+
+  aboutToAppear(): void {
+    let events = (getContext(this) as common.UIAbilityContext).eventHub;
+    events.on('orcaForeground', this.onAppForeground);
+    events.on('orcaBackground', this.onAppBackground);
+  }
+
   onPageShow(): void {
-    this.visible = true;
+    this.visible = true; enterHomePrewarm();
     let uri = AppStorage.get<string>('pendingLaunchUri') ?? '';
     AppStorage.setOrCreate('pendingLaunchUri', '');
     let destination = parseLaunchRoute(uri);
@@ -180,12 +196,22 @@ struct Home {
   }
 
   onPageHide(): void {
-    this.visible = false;
+    this.visible = false; leaveHomePrewarm();
     this.loadEpoch++;
-    this.stopProbes();
+    this.pauseHomeCatalogs();
+  }
+
+  private pauseHomeCatalogs(): void {
+    this.runtimes.forEach((runtime: HostRuntime): void => {
+      if (runtime.refreshTimer >= 0) { clearTimeout(runtime.refreshTimer); runtime.refreshTimer = -1; }
+    });
   }
 
   aboutToDisappear(): void {
+    let events = (getContext(this) as common.UIAbilityContext).eventHub;
+    events.off('orcaForeground', this.onAppForeground);
+    events.off('orcaBackground', this.onAppBackground);
+    if (this.visible) { leaveHomePrewarm(); }
     this.visible = false;
     this.loadEpoch++;
     this.stopProbes();
@@ -204,21 +230,17 @@ struct Home {
     recoverRelayPairings(context).then(() => listHosts(context)).then((hosts: HostMeta[]): void => {
       if (!this.visible || loadEpoch !== this.loadEpoch) { return; }
       this.hosts = hosts;
-      this.manualDisconnects.forEach((id: string): void => {
-        if (!hosts.some((host: HostMeta): boolean => host.id === id)) { this.manualDisconnects.delete(id); }
-      });
       this.agentCatalogs.forEach((_catalog: AgentCatalog, id: string): void => {
         if (!hosts.some((host: HostMeta): boolean => host.id === id)) { this.agentCatalogs.delete(id); }
       });
       this.statsTotal = totalHomeStats(this.statsByHost, hosts.map((host: HostMeta): string => host.id));
       this.loaded = true;
       this.loadError = '';
-      if (!this.openPendingOnboarding(context)) { this.startProbes(); }
+      if (!this.openPendingOnboarding(context)) { this.syncDesktops(); }
     }).catch((_e: Error) => {
       if (!this.visible || loadEpoch !== this.loadEpoch) { return; }
       this.loaded = true;
       this.loadError = '无法读取已配对桌面，请重试。';
-      this.stopProbes();
     });
   }
 
@@ -269,10 +291,9 @@ struct Home {
     let next: Record<string, boolean> = {};
     let phases: Record<string, string> = {};
     let anyConnecting = false;
-    this.probeOwners.forEach((_owner: number, hostId: string): void => { phases[hostId] = 'connecting'; });
     this.runtimes.forEach((rt: HostRuntime, hostId: string): void => {
       next[hostId] = rt.online;
-      phases[hostId] = rt.session.getPhase();
+      phases[hostId] = rt.lease.connection.getPhase();
       if (rt.connecting) {
         anyConnecting = true;
       }
@@ -281,120 +302,100 @@ struct Home {
     this.hostPhases = phases;
     this.connecting = anyConnecting;
     this.rebuildRows();
+    this.schedulePrewarm();
+  }
+
+  private schedulePrewarm(): void {
+    if (!this.visible || !this.appInForeground) { return; }
+    let recent = this.hosts.slice().sort((a: HostMeta, b: HostMeta): number =>
+      (this.runtimes.get(b.id)?.lease.connection.getConnectedAt() ?? b.lastConnected) -
+      (this.runtimes.get(a.id)?.lease.connection.getConnectedAt() ?? a.lastConnected));
+    let host = recent.find((item: HostMeta): boolean => this.runtimes.get(item.id)?.online === true);
+    if (!host) { return; }
+    let id = host.id;
+    let client = this.runtimes.get(id)?.client;
+    if (client) {
+      scheduleHomePrewarm(this.getUIContext(), getContext(this) as common.UIAbilityContext, id, client,
+        (): boolean => this.visible && this.runtimes.get(id)?.client === client);
+    }
   }
 
   private stopProbes(): void {
     this.epoch++;
-    let runtimes = Array.from(this.runtimes.values());
-    this.runtimes.clear();
-    this.probeOwners.clear();
-    for (let i = 0; i < runtimes.length; i++) {
-      let rt = runtimes[i];
-      if (rt.refreshTimer >= 0) { clearTimeout(rt.refreshTimer); }
-      if (rt.watch) { rt.watch.stop(); rt.watch = null; }
-      rt.session.stop();
-    }
-    this.accByHost.clear();
-    this.online = {};
-    this.hostPhases = {};
-    this.usageByHost = {}; this.automationsByHost = {};
-    this.usageErrors = {}; this.automationErrors = {};
-    this.automationRunsByHost = {}; this.automationBusy = []; this.automationRequested = {};
-    this.quotaOffers = {}; this.quotaAllowed = {}; this.quotaBusy = [];
-    this.rebuildRows();
-    this.connecting = false;
+    Array.from(this.runtimes.keys()).forEach((id: string): void => this.releaseDesktop(id));
   }
 
-  private startProbes(): void {
-    this.stopProbes();
-    let epoch = this.epoch;
-    for (let i = 0; i < this.hosts.length; i++) { this.probeHost(this.hosts[i], epoch); }
+  private syncDesktops(): void {
+    let hosts = this.hosts;
+    Array.from(this.runtimes.keys()).forEach((id: string): void => {
+      if (!hosts.some((host: HostMeta): boolean => host.id === id)) { this.releaseDesktop(id); }
+    });
+    hosts.forEach((host: HostMeta): void => {
+      let runtime = this.runtimes.get(host.id) ?? this.retainDesktop(host.id);
+      runtime.lease.connection.updateProfile(host);
+      let client = runtime.client;
+      if (client && runtime.online) {
+        this.fetchCatalog(client, host.id, this.epoch);
+        this.fetchStats(client, host.id, this.epoch);
+        this.fetchAutomations(client, host.id, this.epoch);
+      }
+    });
+    let recent = hosts.slice().sort((left: HostMeta, right: HostMeta): number =>
+      right.lastConnected - left.lastConnected || left.id.localeCompare(right.id)).slice(0, 3);
+    recent.forEach((host: HostMeta): void => this.runtimes.get(host.id)?.lease.connection.connect());
+    this.syncConnState();
   }
 
-  private stopDesktop(hostId: string): void {
-    this.probeOwners.delete(hostId);
+  private releaseDesktop(hostId: string): void {
     let runtime = this.runtimes.get(hostId);
+    if (!runtime) { return; }
     this.runtimes.delete(hostId);
-    if (runtime) {
-      if (runtime.refreshTimer >= 0) { clearTimeout(runtime.refreshTimer); }
-      runtime.watch?.stop();
-      runtime.session.stop();
-    }
+    runtime.unobserve();
+    if (runtime.refreshTimer >= 0) { clearTimeout(runtime.refreshTimer); }
+    runtime.client?.cancelById(`home-accounts-${hostId}`);
+    runtime.lease.release();
+    this.clearLiveDesktopData(hostId);
+    this.syncConnState();
+  }
+
+  private clearLiveDesktopData(hostId: string): void {
     this.accByHost.delete(hostId);
     this.usageByHost[hostId] = []; this.automationsByHost[hostId] = []; this.automationRunsByHost[hostId] = [];
     this.quotaAllowed[hostId] = false;
     this.setHostError('usageErrors', hostId, ''); this.setHostError('automationErrors', hostId, '');
-    this.syncConnState();
   }
 
-  private probeHost(host: HostMeta, epoch: number): void {
-    if (this.manualDisconnects.has(host.id) || this.runtimes.has(host.id) || this.probeOwners.has(host.id)) { return; }
-    let owner = ++this.nextProbeOwner;
-    this.probeOwners.set(host.id, owner);
-    this.syncConnState();
-    let context = getContext(this) as common.Context;
-    let current = (): boolean => this.visible && epoch === this.epoch && this.probeOwners.get(host.id) === owner;
-    getDeviceToken(context, host.id).then(async (token: string | null): Promise<void> => {
-      if (!current()) { return; }
-      if (!token) { this.probeOwners.delete(host.id); this.syncConnState(); return; }
-      let relay = await getRelayCredential(context, host.id);
-      if (!current()) { return; }
-      this.probeOwners.delete(host.id);
-      let session = new HostSession(host, token, relay ?? undefined, context);
-      let rt: HostRuntime = { session: session, client: null, online: false,
-        connecting: true, refreshTimer: -1, catalogPending: false, catalogRefetch: false, automationPending: false, automationFetchedAt: 0, watch: null };
-      this.runtimes.set(host.id, rt);
-      session.addListener((phase: SessionPhase, _detail: string): void => {
-        if (epoch !== this.epoch || this.runtimes.get(host.id) !== rt) { return; }
-        rt.online = phase === 'connected';
-        rt.connecting = phase === 'connecting' || phase === 'reconnecting';
-        if (rt.watch) { rt.watch.stop(); rt.watch = null; }
-        if (rt.refreshTimer >= 0) { clearTimeout(rt.refreshTimer); rt.refreshTimer = -1; }
-        rt.catalogPending = false; rt.catalogRefetch = false; rt.automationPending = false;
-        let nextClient = session.getClient();
-        if (rt.client !== nextClient) { this.accByHost.delete(host.id); }
-        rt.client = nextClient;
-        if (rt.online && rt.client) {
-          this.fetchCatalog(rt.client, host.id, epoch);
-          this.subscribeUsage(rt.client, host.id, epoch);
-          this.fetchAutomations(rt.client, host.id, epoch);
-          this.fetchStats(rt.client, host.id, epoch);
-          this.fetchQuotaCapability(rt.client, host.id, epoch);
-          this.startHostNotifications(rt.client, host.id, epoch);
-        } else {
-          this.accByHost.delete(host.id);
-          this.usageByHost[host.id] = []; this.automationsByHost[host.id] = [];
-        }
-        this.syncConnState();
-      });
-      session.start();
-      this.syncConnState();
-    }).catch((_e: Error): void => {
-      if (current()) { this.probeOwners.delete(host.id); this.syncConnState(); }
-    });
-  }
-
-  private startHostNotifications(client: SpikeRpcClient, hostId: string, epoch: number): void {
+  private retainDesktop(hostId: string): HostRuntime {
     let context = getContext(this) as common.UIAbilityContext;
-    getBool(context, KEY_NOTIFICATIONS_LOCAL_ENABLED).then((enabled: boolean): void => {
-      let found = this.runtimes.get(hostId);
-      if (!enabled || epoch !== this.epoch || !found || found.client !== client || found.watch) { return; }
-      let runtime: HostRuntime = found;
-      let notifier = this.notifier;
-      notifier.setContext(context); notifier.setViewing('', '');
-      notifier.ensureSlot().then((): void => {
-        if (epoch !== this.epoch || this.runtimes.get(hostId) !== runtime || runtime.client !== client) { return; }
-        let watch = new AgentWatch({ deviceToken: client.deviceToken, hostId: hostId,
-          subscribe: (id: string, wire: string, onEvent: (frame: string) => void): boolean => client.subscribeWithId(id, wire, onEvent),
-          cancel: (id: string): void => client.cancelById(id),
-          notify: (title: string, body: string, host: string, worktree: string, paneKey?: string, executionHost?: string): boolean =>
-            notifier.publishAgentEvent(title, body, host, worktree, paneKey, executionHost),
-          notifyEvent: (event: DesktopNotification): boolean => notifier.publishDesktopEvent(event),
-          dismiss: (id: string): void => { notifier.dismiss(id).catch(() => {}); },
-          logSink: (_line: string): void => {} });
-        runtime.watch = watch; watch.start();
-      }).catch(() => {});
-    }).catch(() => {});
+    let lease = retainDesktopConnection(context, hostId);
+    let runtime: HostRuntime = { lease: lease, unobserve: (): void => {}, client: null, online: false,
+      connecting: false, refreshTimer: -1, catalogPending: false, catalogRefetch: false, automationPending: false, automationFetchedAt: 0 };
+    this.runtimes.set(hostId, runtime);
+    let epoch = this.epoch;
+    runtime.unobserve = lease.connection.observe((phase: SessionPhase): void => {
+      if (epoch !== this.epoch || this.runtimes.get(hostId) !== runtime) { return; }
+      runtime.online = phase === 'connected';
+      runtime.connecting = phase === 'connecting' || phase === 'reconnecting';
+      let client = lease.connection.getClient();
+      if (runtime.client !== client) {
+        if (runtime.refreshTimer >= 0) { clearTimeout(runtime.refreshTimer); runtime.refreshTimer = -1; }
+        runtime.catalogPending = false; runtime.catalogRefetch = false; runtime.automationPending = false;
+        this.clearLiveDesktopData(hostId);
+        if (!client) { invalidateHomePrewarm(hostId); }
+        runtime.client = client;
+        if (client && runtime.online) {
+          this.subscribeUsage(client, hostId, epoch);
+          this.fetchQuotaCapability(client, hostId, epoch);
+          if (this.visible) {
+            this.fetchCatalog(client, hostId, epoch);
+            this.fetchAutomations(client, hostId, epoch);
+            this.fetchStats(client, hostId, epoch);
+          }
+        }
+      }
+      this.syncConnState();
+    });
+    return runtime;
   }
 
   private setHostError(target: string, hostId: string, message: string): void {
@@ -585,7 +586,7 @@ struct Home {
 
   private fetchCatalog(client: SpikeRpcClient, hostId: string, epoch: number): void {
     let found = this.runtimes.get(hostId);
-    if (!found || found.client !== client || found.catalogPending) { return; }
+    if (!this.visible || !this.appInForeground || !found || found.client !== client || found.catalogPending) { return; }
     let rt: HostRuntime = found;
     if (rt.refreshTimer >= 0) { clearTimeout(rt.refreshTimer); rt.refreshTimer = -1; }
     rt.catalogPending = true;
@@ -606,6 +607,7 @@ struct Home {
       this.accByHost.delete(hostId);
     }
     this.rebuildRows();
+    if (!this.visible || !this.appInForeground) { return; }
     if (rt.catalogRefetch) { rt.catalogRefetch = false; this.fetchCatalog(client, hostId, epoch); return; }
     if (Date.now() - rt.automationFetchedAt > 15000) { this.fetchAutomations(client, hostId, epoch); }
     rt.refreshTimer = setTimeout((): void => {
@@ -643,7 +645,6 @@ struct Home {
 
   openHostDetail(hostId: string): void {
     if (this.hostPhases[hostId] === 'auth-failed') { this.openPairScan(); return; }
-    this.manualDisconnects.delete(hostId);
     this.openHostRoute(hostId, '');
   }
 
@@ -759,7 +760,7 @@ struct Home {
 
   private desktopSubtitle(host: HostMeta | null): string {
     if (!host) { return ''; }
-    let path = this.runtimes.get(host.id)?.session.getActivePath();
+    let path = this.runtimes.get(host.id)?.lease.connection.getActivePath();
     let label = path === 'relay' ? 'Orca Relay' : uiText(path === 'tailscale' ? '直连 · Tailscale' : '直连 · 局域网', this.uiLocale);
     return this.online[host.id] === true ? `${label} · ${endpointLabel(host.endpoint)}` : endpointLabel(host.endpoint);
   }
@@ -783,14 +784,11 @@ struct Home {
     let host = this.hosts.find((item: HostMeta): boolean => item.id === id);
     if (!this.visible || !host) { return; }
     if (action === 'connect') {
-      this.manualDisconnects.delete(host.id);
-      this.stopDesktop(host.id); this.probeHost(host, this.epoch);
+      this.runtimes.get(host.id)?.lease.connection.reconnect();
     } else if (action === 'disconnect') {
-      this.manualDisconnects.add(host.id);
-      this.stopDesktop(host.id);
+      this.runtimes.get(host.id)?.lease.connection.disconnect();
       appendLog(getContext(this), LOG_LEVEL_INFO, '已断开连接', '', host.id).catch(() => {});
     } else if (action === 'diagnostics') {
-      this.manualDisconnects.delete(host.id);
       router.pushUrl({ url: 'pages/ConnectionLog', params: { 'hostId': host.id } }).catch(() => {});
     } else if (action === 'edit') {
       router.pushUrl({ url: 'pages/HostDetail', params: { 'hostId': host.id } }).catch(() => {});
@@ -811,9 +809,8 @@ struct Home {
       await removeDesktop(context, host.id, (): void => {
         this.loadEpoch++;
         this.hosts = this.hosts.filter((item: HostMeta): boolean => item.id !== host.id);
-        this.manualDisconnects.delete(host.id);
-        this.agentCatalogs.delete(host.id);
-        this.stopDesktop(host.id);
+          this.agentCatalogs.delete(host.id);
+        this.releaseDesktop(host.id);
       });
     } catch (e) {
       this.loadError = '移除失败，凭证或页面数据未能清理，请重试。';

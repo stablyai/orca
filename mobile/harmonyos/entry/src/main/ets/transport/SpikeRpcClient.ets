@@ -101,6 +101,7 @@ export class SpikeRpcClient {
     if (reject) { reject(new Error(reason)); }
     this.rejectAllPending(reason);
     this.streams.clear();
+    this.screencastOwner = '';
     if (!this.closedNotified) {
       this.closedNotified = true;
       for (let i = 0; i < this.closeListeners.length; i++) { this.closeListeners[i](); }
@@ -111,6 +112,14 @@ export class SpikeRpcClient {
   private streams: Map<string, (responseJson: string) => void> = new Map();
   private closeListeners: (() => void)[] = [];
   private binaryListeners: ((bytes: Uint8Array) => void)[] = [];
+  private screencastOwner: string = '';
+
+  claimScreencast(id: string): boolean {
+    if (this.screencastOwner) { return false; }
+    this.screencastOwner = id; return true;
+  }
+  ownsScreencast(id: string): boolean { return this.screencastOwner === id; }
+  releaseScreencast(id: string): void { if (this.ownsScreencast(id)) { this.screencastOwner = ''; } }
 
   onBinaryFrames(listener: (bytes: Uint8Array) => void): () => void {
     this.binaryListeners.push(listener);

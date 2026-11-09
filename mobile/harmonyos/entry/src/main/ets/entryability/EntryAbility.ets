@@ -1,3 +1,5 @@
+import { dropHomePrewarm, dropPrewarmForMemoryPressure } from '../webshell/HomeShellPrewarm';
+import { closeIdleDesktopConnections, reviveDesktopConnections } from '../transport/DesktopConnections';
 import { AbilityConstant, UIAbility, Want, Configuration, ConfigurationConstant } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window, router } from '@kit.ArkUI';
@@ -65,7 +67,8 @@ export default class EntryAbility extends UIAbility {
     });
   }
   onConfigurationUpdate(config: Configuration): void { applyUiLanguage(); if (config.colorMode !== undefined) { setSystemAppearance(config.colorMode); } }
-  onWindowStageDestroy(): void { this.windowReady = false; this.mainWindow = null; setAppearanceListener(null); setUiLocaleListener(null); }
-  onForeground(): void { this.context.eventHub.emit('orcaForeground'); this.styleSystemBars(); }
-  onBackground(): void { this.context.eventHub.emit('orcaBackground'); }
+  onWindowStageDestroy(): void { closeIdleDesktopConnections(); dropHomePrewarm(); this.windowReady = false; this.mainWindow = null; setAppearanceListener(null); setUiLocaleListener(null); }
+  onForeground(): void { reviveDesktopConnections(); this.context.eventHub.emit('orcaForeground'); this.styleSystemBars(); }
+  onBackground(): void { closeIdleDesktopConnections(); dropHomePrewarm(); this.context.eventHub.emit('orcaBackground'); }
+  onMemoryLevel(_level: AbilityConstant.MemoryLevel): void { dropPrewarmForMemoryPressure(); }
 }

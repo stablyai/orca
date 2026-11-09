@@ -3,12 +3,13 @@ import { router } from '@kit.ArkUI';
 import { common } from '@kit.AbilityKit';
 import { getNumber, setNumber, readPagePreferencesSync, writePagePreferenceSync, KEY_TERMINAL_TEXT_SCALE, TERMINAL_TEXT_SCALES } from '../settings/SettingsStore';
 import { TERMINAL_SHORTCUTS, CustomShortcut, shortcutLabel, TerminalShortcut } from '../settings/TerminalShortcuts';
-import { listHosts, getDeviceToken, getRelayCredential, HostMeta } from '../storage/HostStore';
-import { HostSession, SessionPhase } from '../transport/HostSession';
-import { SpikeRpcClient, RpcSuccess } from '../transport/SpikeRpcClient';
-import fflateModule from '../vendor/fflate-umd.js';
+import { listHosts, HostMeta } from '../storage/HostStore';
+import { SessionPhase } from '../transport/HostSession';
+import { DesktopConnectionLease, retainDesktopConnection } from '../transport/DesktopConnections';
+import { RpcSuccess } from '../transport/SpikeRpcClient';
 
 interface HostFit { id: string; name: string; connected: boolean; ms: number | null; loaded: boolean; saving: boolean; }
+interface FitConnection { lease: DesktopConnectionLease; unobserve: () => void; }
 interface RestoreOption { label: string; ms: number | null; }
 const RESTORE_OPTIONS: RestoreOption[] = [ { label: '保持手机尺寸', ms: null }, { label: '1 分钟后', ms: 60000 },
   { label: '5 分钟后', ms: 300000 }, { label: '30 分钟后', ms: 1800000 } ];
@@ -34,14 +35,18 @@ struct TerminalSettings {
   @State customEnter: boolean = false;
   @State editing: string = '';
   @State fits: HostFit[] = [];
-  private sessions: Map<string, HostSession> = new Map();
+  private sessions: Map<string, FitConnection> = new Map();
   private epoch = 0;
 
   onPageShow(): void { this.load(); }
   onPageHide(): void { this.stopSessions(); }
   aboutToDisappear(): void { this.stopSessions(); }
 
-  private stopSessions(): void { this.epoch++; this.sessions.forEach((session: HostSession): void => session.stop()); this.sessions.clear(); }
+  private stopSessions(): void {
+    this.epoch++;
+    this.sessions.forEach((session: FitConnection): void => { session.unobserve(); session.lease.release(); });
+    this.sessions.clear();
+  }
 
   private load(): void {
     this.stopSessions(); let epoch = this.epoch;
@@ -64,32 +69,30 @@ struct TerminalSettings {
           });
       }
     } catch (e) { this.error = '无法读取终端设置'; }
-    listHosts(getContext(this)).then(async (hosts: HostMeta[]): Promise<void> => {
+    let context = getContext(this) as common.UIAbilityContext;
+    listHosts(context).then((hosts: HostMeta[]): void => {
       if (epoch !== this.epoch) { return; }
-      this.fits = hosts.map((host: HostMeta): HostFit => { return { id: host.id, name: host.name, connected: false, ms: null, loaded: false, saving: false }; });
-      for (let i = 0; i < hosts.length; i++) {
-        let host = hosts[i]; let token = await getDeviceToken(getContext(this), host.id);
-        if (epoch !== this.epoch) { return; }
-        if (!token) { continue; }
-        let credential = await getRelayCredential(getContext(this), host.id);
-        if (epoch !== this.epoch) { return; }
-        let session = new HostSession(host, token, credential ?? undefined, getContext(this)); this.sessions.set(host.id, session);
-        session.setClientSetup((client: SpikeRpcClient): void => client.setFflate(fflateModule));
-        session.addListener((phase: SessionPhase): void => {
+      this.fits = hosts.map((host: HostMeta): HostFit =>
+        ({ id: host.id, name: host.name, connected: false, ms: null, loaded: false, saving: false }));
+      hosts.forEach((host: HostMeta): void => {
+        let lease = retainDesktopConnection(context, host.id);
+        let connection = lease.connection;
+        let unobserve = connection.observe((phase: SessionPhase): void => {
           if (epoch !== this.epoch) { return; }
           this.updateFit(host.id, phase === 'connected', null, false, false);
-          let client = session.getClient();
+          let client = connection.getClient();
           if (phase === 'connected' && client) {
             client.request('terminal.getAutoRestoreFit', null).then((response): void => {
-              if (epoch !== this.epoch || session.getClient() !== client || !(response instanceof RpcSuccess)) { return; }
+              if (epoch !== this.epoch || connection.getClient() !== client || !(response instanceof RpcSuccess)) { return; }
               try { let value: ESObject = JSON.parse(response.result); this.updateFit(host.id, true, this.readFit(value), true, false); }
               catch (e) { this.error = '无法读取桌面终端恢复设置'; }
-            });
+            }).catch(() => {});
           }
         });
-        session.start();
-      }
-    }).catch((): void => { this.error = '无法读取已配对桌面'; });
+        this.sessions.set(host.id, { lease: lease, unobserve: unobserve });
+        connection.connect();
+      });
+    }).catch((): void => { if (epoch === this.epoch) { this.error = '无法读取已配对桌面'; } });
   }
 
   private readFit(value: ESObject): number | null {
@@ -105,10 +108,10 @@ struct TerminalSettings {
   }
 
   private async saveFit(row: HostFit, ms: number | null): Promise<void> {
-    let client = this.sessions.get(row.id)?.getClient(); if (!client || row.saving) { return; }
+    let client = this.sessions.get(row.id)?.lease.connection.getClient(); if (!client || row.saving) { return; }
     let epoch = this.epoch; this.updateFit(row.id, true, row.ms, row.loaded, true); this.error = '';
     let response = await client.request('terminal.setAutoRestoreFit', JSON.stringify({ ms: ms }));
-    if (epoch !== this.epoch || this.sessions.get(row.id)?.getClient() !== client) { return; }
+    if (epoch !== this.epoch || this.sessions.get(row.id)?.lease.connection.getClient() !== client) { return; }
     if (response instanceof RpcSuccess) {
       try {
         let value: ESObject = JSON.parse(response.result);

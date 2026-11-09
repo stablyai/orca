@@ -6,9 +6,10 @@ import { appVersion, connectionReport, ConnectionDiagnosis, ConnectionEvidence, 
   diagnoseConnection, platformVersion, redactDiagnosticText, reportableIncident, sendConnectionReport } from '../diagnostics/ConnectionDiagnostics';
 import { uiText } from '../settings/NativeUi';
 import { lucideColorFilter } from '../settings/LucideColor';
-import { activeHostSession, HostSession, SessionPhase } from '../transport/HostSession';
+import { SessionPhase } from '../transport/HostSession';
+import { DesktopConnectionLease, retainDesktopConnection } from '../transport/DesktopConnections';
 import { RpcSuccess, SpikeRpcClient } from '../transport/SpikeRpcClient';
-import { getDeviceToken, getRelayCredential, HostMeta, listHosts } from '../storage/HostStore';
+import { HostMeta, listHosts } from '../storage/HostStore';
 
 const PHASE_LABELS = new Map<string, string>([
   ['connecting', '正在连接'], ['reconnecting', '正在重连'], ['connected', '已连接'],
@@ -41,8 +42,7 @@ struct ConnectionLog {
   private requestedId: string = '';
   private version: string | null = null;
   private versionClient: SpikeRpcClient | null = null;
-  private session: HostSession | null = null;
-  private ownedSession: HostSession | null = null;
+  private desktop: DesktopConnectionLease | null = null;
   private unsubscribeLogs: (() => void) | null = null;
   private unsubscribeSession: (() => void) | null = null;
   private copiedTimer: number = -1;
@@ -72,7 +72,7 @@ struct ConnectionLog {
       this.hosts = hosts;
       let id = this.selected?.id ?? this.requestedId;
       let host = hosts.find((entry: HostMeta): boolean => entry.id === id) ?? hosts[0] ?? null;
-      await this.selectHost(host);
+      this.selectHost(host);
     } catch (e) {
       if (this.shown && epoch === this.epoch) { this.loading = false; this.failed = true; }
     }
@@ -82,12 +82,12 @@ struct ConnectionLog {
     this.epoch++;
     this.unsubscribeLogs?.(); this.unsubscribeLogs = null;
     this.unsubscribeSession?.(); this.unsubscribeSession = null;
-    this.ownedSession?.stop(); this.ownedSession = null;
-    this.session = null; this.versionClient = null; this.version = null;
+    this.desktop?.release(true); this.desktop = null;
+    this.versionClient = null; this.version = null;
     if (this.copiedTimer >= 0) { clearTimeout(this.copiedTimer); this.copiedTimer = -1; }
   }
 
-  private async selectHost(host: HostMeta | null): Promise<void> {
+  private selectHost(host: HostMeta | null): void {
     this.detach();
     let epoch = this.epoch;
     this.selected = host; this.entries = []; this.diagnosis = null; this.copied = false; this.submission = '';
@@ -95,37 +95,20 @@ struct ConnectionLog {
     this.unsubscribeLogs = subscribeLogs((): void => { this.refreshLogs(epoch).catch(() => {}); });
     this.refreshLogs(epoch).catch(() => {});
     if (!host) { return; }
-    let context = getContext(this) as common.Context;
-    try {
-      let session = activeHostSession(host.id);
-      if (!session) {
-        let token = await getDeviceToken(context, host.id);
-        if (!this.shown || epoch !== this.epoch) { return; }
-        if (!token) { this.phase = 'auth-failed'; this.refreshDiagnosis(); return; }
-        let relay = await getRelayCredential(context, host.id);
-        if (!this.shown || epoch !== this.epoch) { return; }
-        session = activeHostSession(host.id);
-        if (!session) {
-          this.ownedSession = new HostSession(host, token, relay ?? undefined, context);
-          session = this.ownedSession;
-        }
-      }
-      this.session = session;
-      this.unsubscribeSession = session.addListener((phase: SessionPhase): void => {
-        if (this.shown && epoch === this.epoch) { this.observe(phase, epoch); }
-      });
-      if (session === this.ownedSession) { session.start(); }
-      else { this.observe(session.getPhase(), epoch); }
-    } catch (e) {
-      if (this.shown && epoch === this.epoch) { this.phase = 'disconnected'; this.refreshDiagnosis(); }
-    }
+    let context = getContext(this) as common.UIAbilityContext;
+    let desktop = retainDesktopConnection(context, host.id);
+    this.desktop = desktop;
+    this.unsubscribeSession = desktop.connection.observe((phase: SessionPhase): void => {
+      if (this.shown && epoch === this.epoch) { this.observe(phase, epoch); }
+    });
+    desktop.connection.connect(true);
   }
 
   private observe(phase: SessionPhase, epoch: number): void {
     this.phase = phase === 'idle' || phase === 'stopped' ? 'disconnected' : phase;
-    this.attempts = this.session?.getReconnectAttempt() ?? 0;
+    this.attempts = this.desktop?.connection.getReconnectAttempt() ?? 0;
     this.refreshDiagnosis();
-    let client = this.phase === 'connected' ? this.session?.getClient() ?? null : null;
+    let client = this.phase === 'connected' ? this.desktop?.connection.getClient() ?? null : null;
     if (client === this.versionClient) { return; }
     this.versionClient = client; this.version = null;
     client?.request('status.get', null, 5000).then((reply): void => {
@@ -137,8 +120,8 @@ struct ConnectionLog {
 
   private evidence(): ConnectionEvidence {
     return { endpoint: this.selected?.endpoint ?? '', state: this.phase,
-      activePath: this.session?.getConnectedAt() != null ? this.session?.getActivePath() : undefined,
-      pendingPath: this.session?.getPendingPath(), entries: this.entries };
+      activePath: this.desktop?.connection.getConnectedAt() != null ? this.desktop?.connection.getActivePath() : undefined,
+      pendingPath: this.desktop?.connection.getPendingPath(), entries: this.entries };
   }
 
   private incidentKey(): string {
@@ -166,7 +149,7 @@ struct ConnectionLog {
     let report: ConnectionReport = {
       endpoint: evidence.endpoint, state: evidence.state, activePath: evidence.activePath, pendingPath: evidence.pendingPath,
       entries: evidence.entries, hostName: redactDiagnosticText(host.name), reconnectAttempts: this.attempts,
-      lastConnectedAt: this.session?.getConnectedAt() ?? null, desktopAppVersion: this.version,
+      lastConnectedAt: this.desktop?.connection.getConnectedAt() ?? null, desktopAppVersion: this.version,
       appVersion: version, platform: platform, bridgeProtocolVersion: 1
     };
     return connectionReport(report, this.entries);
@@ -314,7 +297,7 @@ struct ConnectionLog {
                   .backgroundColor(this.selected?.id === host.id ? this.surface : this.raised())
                   .border({ width: 0.5, color: this.selected?.id === host.id ? this.borderTint : Color.Transparent, radius: 999 })
                   .constraintSize({ maxWidth: 160 }).height(32).margin({ right: 8, bottom: 4 })
-                  .onClick((): void => { if (host.id !== this.selected?.id) { this.selectHost(host).catch(() => {}); } })
+                  .onClick((): void => { if (host.id !== this.selected?.id) { this.selectHost(host); } })
               }, (host: HostMeta): string => host.id)
             }.width('100%')
           }

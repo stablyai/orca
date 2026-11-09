@@ -77,6 +77,33 @@ function bytesToHex(bytes: Uint8Array): string {
   return out;
 }
 
+type BundleProgress = (received: number, total: number) => void;
+
+class BundleInstall {
+  task: Promise<string> = Promise.resolve('');
+  received: number = 0;
+  total: number = 0;
+  listeners: Set<BundleProgress> = new Set();
+  readonly client: SpikeRpcClient;
+  constructor(client: SpikeRpcClient) { this.client = client; }
+
+  progress(received: number, total: number): void {
+    this.received = received; this.total = total;
+    this.listeners.forEach((listener: BundleProgress): void => listener(received, total));
+  }
+
+  async join(onProgress?: BundleProgress): Promise<string> {
+    if (onProgress) {
+      this.listeners.add(onProgress);
+      onProgress(this.received, this.total);
+    }
+    try { return await this.task; }
+    finally { if (onProgress) { this.listeners.delete(onProgress); } }
+  }
+}
+
+const bundleInstalls: Map<string, BundleInstall> = new Map();
+
 export class WebBundleFetcher {
   private client: SpikeRpcClient;
   private context: common.Context;
@@ -253,15 +280,11 @@ export class WebBundleFetcher {
       // HarmonyOS mkdirSync throws File exists even with recursion — ignore.
     }
     let file = fs.openSync(target, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
-    fs.writeSync(file.fd, bytes.buffer);
-    fs.closeSync(file);
+    try { fs.writeSync(file.fd, bytes.buffer); }
+    finally { fs.closeSync(file); }
   }
 
-  /** Downloads every manifest asset into <filesDir>/webshell/<buildId>/; skips when the build is cached. */
-  async ensureBundle(manifest: BundleManifest, onProgress?: (received: number, total: number) => void): Promise<string> {
-    validateManifest(manifest);
-    let fingerprint = bytesToHex(sha256(utf8Encode(JSON.stringify(manifest))));
-    let baseDir = `${this.context.cacheDir}/webshell/${manifest.buildId}-${fingerprint}`;
+  private isComplete(manifest: BundleManifest, baseDir: string, fingerprint: string): boolean {
     let marker = `${baseDir}/.complete`;
     try {
       if (fs.readTextSync(marker) === fingerprint) {
@@ -270,11 +293,37 @@ export class WebBundleFetcher {
           let asset = manifest.assets[i];
           if (fs.statSync(`${baseDir}/${asset.path}`).size !== asset.byteLength) { complete = false; break; }
         }
-        if (complete) { return baseDir; }
+        if (complete) { return true; }
       }
     } catch (e) {
-      // not cached — fall through to download
+      return false;
     }
+    return false;
+  }
+
+  async ensureBundle(manifest: BundleManifest, onProgress?: BundleProgress): Promise<string> {
+    validateManifest(manifest);
+    let fingerprint = bytesToHex(sha256(utf8Encode(JSON.stringify(manifest))));
+    let baseDir = `${this.context.cacheDir}/webshell/${manifest.buildId}-${fingerprint}`;
+    if (this.isComplete(manifest, baseDir, fingerprint)) { return baseDir; }
+    let pending = bundleInstalls.get(baseDir);
+    if (pending) {
+      try { return await pending.join(onProgress); }
+      catch (e) {
+        if (pending.client === this.client) { throw e as Error; }
+        return await this.ensureBundle(manifest, onProgress);
+      }
+    }
+    let install = new BundleInstall(this.client);
+    bundleInstalls.set(baseDir, install);
+    install.task = this.installBundle(manifest, baseDir, fingerprint, (received: number, total: number): void => {
+      install.progress(received, total);
+    }).finally((): void => { bundleInstalls.delete(baseDir); });
+    return await install.join(onProgress);
+  }
+
+  private async installBundle(manifest: BundleManifest, baseDir: string, fingerprint: string,
+    onProgress: BundleProgress): Promise<string> {
     let received = 0;
     let total = manifest.assets.reduce((sum: number, asset: BundleAsset): number => sum + asset.byteLength, 0);
     onProgress?.(received, total);
@@ -290,9 +339,8 @@ export class WebBundleFetcher {
     } catch (e) {
       // ignore — see downloadAsset
     }
-    let file = fs.openSync(marker, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
-    fs.writeSync(file.fd, fingerprint);
-    fs.closeSync(file);
+    let file = fs.openSync(`${baseDir}/.complete`, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.TRUNC);
+    try { fs.writeSync(file.fd, fingerprint); } finally { fs.closeSync(file); }
     return baseDir;
   }
 

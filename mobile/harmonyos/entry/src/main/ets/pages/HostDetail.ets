@@ -5,7 +5,7 @@ import { lucideColorFilter } from '../settings/LucideColor';
 import { DesktopEndpointEdit, displayHostEndpoint, resolveDesktopEndpoint } from '../diagnostics/ConnectionDiagnostics';
 import { listHosts, updateHostNameAndEndpoint, HostMeta } from '../storage/HostStore';
 import { removeDesktop } from '../storage/HostRemoval';
-import { activeHostSession } from '../transport/HostSession';
+import { refreshDesktopConnection } from '../transport/DesktopConnections';
 
 @Entry
 @Component
@@ -79,7 +79,7 @@ struct HostDetail {
     try {
       let context = getContext(this) as common.UIAbilityContext;
       await updateHostNameAndEndpoint(context, this.hostId, this.personalName.trim(), endpoint);
-      if (changed) { context.eventHub.emit('orcaHostEndpointSaved', this.hostId, endpoint); }
+      refreshDesktopConnection(this.hostId, changed ? 'endpoint' : 'name');
       if (epoch === this.epoch) { router.back(); }
     } catch (e) {
       if (epoch === this.epoch) { this.saveError = '保存失败，请检查桌面地址并重试'; }
@@ -98,7 +98,7 @@ struct HostDetail {
     let removed = false;
     let id = host.id;
     try {
-      await removeDesktop(getContext(this), id, (): void => { removed = true; activeHostSession(id)?.stop(); });
+      await removeDesktop(getContext(this), id, (): void => { removed = true; });
     } catch (e) {
       if (epoch === this.epoch) { this.saveError = '移除失败，凭证或页面数据未能清理，请重试。'; }
     } finally {

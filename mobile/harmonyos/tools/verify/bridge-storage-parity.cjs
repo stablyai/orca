@@ -53,10 +53,11 @@ async function bridgeSession(grants = []) {
 }
 
 test('large multilingual desktop replies reach the page in bounded reconstructable parts', async () => {
-  const { bridge, client, view, receiveText } = await bridgeSession()
+  const { bridge, client, view, sent, receiveText } = await bridgeSession()
   post(bridge, { type: 'request', id: 'large', method: 'git.diff', params: {} })
+  const { id } = JSON.parse(sent.at(-1))
   const value = '雪😀"\\'.repeat(120000)
-  receiveText(JSON.stringify({ id: 'large', ok: true, result: { diff: value } }))
+  receiveText(JSON.stringify({ id, ok: true, result: { diff: value } }))
   await Promise.resolve()
   const frames = view.frames.filter((frame) => frame.id === 'large')
   assert.ok(frames.length > 1)
@@ -67,7 +68,9 @@ test('large multilingual desktop replies reach the page in bounded reconstructab
 })
 
 test('a granted browser stream delivers its image bytes and stops after cancellation', async () => {
-  const { bridge, client, view, receiveBinary } = await bridgeSession(['screencastBinary'])
+  const { bridge, client, view, sent, receiveText, receiveBinary } = await bridgeSession([
+    'screencastBinary'
+  ])
   post(bridge, {
     type: 'subscribe',
     id: 'screen',
@@ -75,6 +78,15 @@ test('a granted browser stream delivers its image bytes and stops after cancella
     params: { page: 'page' },
     wantsBinary: true
   })
+  const { id } = JSON.parse(sent.at(-1))
+  receiveText(
+    JSON.stringify({
+      id,
+      ok: true,
+      streaming: true,
+      result: { type: 'ready', subscriptionId: 'server-stream' }
+    })
+  )
   const metadata = Buffer.from('{"deviceWidth":640,"deviceHeight":480}')
   const frame = Buffer.alloc(16 + metadata.length + 3)
   frame.set([0x62, 1, 1, 1])
@@ -106,8 +118,14 @@ test('cancel before browser ready releases the remote subscription when its iden
     envelope: { executionHost: 'runtime:server' }
   })
   post(bridge, { type: 'cancel', id: 'pending' })
+  const { id } = JSON.parse(sent.at(-1))
   receiveText(
-    '{"id":"pending","ok":true,"streaming":true,"result":{"type":"ready","subscriptionId":"server-stream"}}'
+    JSON.stringify({
+      id,
+      ok: true,
+      streaming: true,
+      result: { type: 'ready', subscriptionId: 'server-stream' }
+    })
   )
   const unsubscribe = sent
     .map((wire) => JSON.parse(wire))

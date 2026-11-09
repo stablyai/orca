@@ -12,13 +12,6 @@ import { directPath } from '../diagnostics/ConnectionDiagnostics';
 export type SessionPhase = 'idle' | 'connecting' | 'connected' | 'reconnecting' | 'stopped' | 'auth-failed';
 type Listener = (phase: SessionPhase, detail: string) => void;
 
-const activeSessions = new Map<string, HostSession[]>();
-
-export function activeHostSession(hostId: string): HostSession | undefined {
-  let sessions = activeSessions.get(hostId);
-  return sessions?.[sessions.length - 1];
-}
-
 export class HostSession {
   private client: SpikeRpcClient | null = null;
   private meta: HostMeta;
@@ -44,14 +37,12 @@ export class HostSession {
   private ownerSuperseded: boolean = false;
   private listeners: Listener[] = [];
   private logSink: ((line: string) => void) | null = null;
-  private setup: ((client: SpikeRpcClient) => void) | null = null;
 
   constructor(meta: HostMeta, token: string, credential?: RelayCredential, context?: common.Context) {
     this.meta = meta; this.token = token; this.credential = credential ?? null; this.context = context ?? null;
     this.localPath = directPath(meta.endpoint);
   }
   setLogSink(sink: (line: string) => void): void { this.logSink = sink; }
-  setClientSetup(setup: (client: SpikeRpcClient) => void): void { this.setup = setup; }
   addListener(listener: Listener): () => void {
     this.listeners.push(listener);
     return (): void => { this.listeners = this.listeners.filter((held: Listener): boolean => held !== listener); };
@@ -73,21 +64,23 @@ export class HostSession {
   }
   start(): void {
     if (!this.stopped) { return; }
-    let sessions = activeSessions.get(this.meta.id) ?? [];
-    if (!sessions.includes(this)) { sessions.push(this); activeSessions.set(this.meta.id, sessions); }
     this.stopped = false;
     this.record(LOG_LEVEL_INFO, '正在连接桌面', 'client-session-started');
     this.dial();
   }
   stop(): void {
-    let active = activeSessions.get(this.meta.id)?.filter((session: HostSession): boolean => session !== this) ?? [];
-    if (active.length > 0) { activeSessions.set(this.meta.id, active); } else { activeSessions.delete(this.meta.id); }
     this.stopped = true; this.pendingPath = undefined; this.clearTimers();
     let old = this.client; this.client = null;
     if (old) { old.close(); }
     let upgrade = this.upgradeClient; this.upgradeClient = null;
     if (upgrade) { upgrade.close(); }
     this.publish('stopped', '已断开');
+  }
+  revive(): void {
+    if (this.stopped) { return; }
+    if (this.reconnectTimer >= 0) { this.dial(); return; }
+    let client = this.client;
+    if (this.phase === 'connected' && client) { this.checkHealth(client); }
   }
   private clearTimers(): void {
     if (this.reconnectTimer >= 0) { clearTimeout(this.reconnectTimer); this.reconnectTimer = -1; }
@@ -102,7 +95,6 @@ export class HostSession {
     this.useRelayNext = false; this.pendingPath = useRelay ? 'relay' : this.localPath;
     let client = new SpikeRpcClient(useRelay ? 30000 : 10000); this.client = client;
     client.setFflate(fflateModule); client.setLogSink((line: string): void => this.log(line));
-    if (this.setup) { this.setup(client); }
     client.onSocketClosed((): void => this.retry(client));
     this.publish(this.attempt === 0 ? 'connecting' : 'reconnecting', useRelay ? '正在通过 Relay 连接' : '正在连接');
     this.connectAttempt(client, useRelay).then((): void => {
@@ -211,16 +203,24 @@ export class HostSession {
     }
   }
   private probeLater(client: SpikeRpcClient): void {
+    if (this.probeTimer >= 0) { clearTimeout(this.probeTimer); }
     this.probeTimer = setTimeout((): void => {
       this.probeTimer = -1;
-      if (this.stopped || this.client !== client) { return; }
-      client.request('status.get', null, 5000).then((response: RpcResponse): void => {
-        if (this.stopped || this.client !== client) { return; }
-        if (response instanceof RpcSuccess) {
-          this.probeLater(client); this.bookkeep(client).catch((): void => {});
-        } else { this.retry(client, true); }
-      }).catch((): void => this.retry(client, true));
+      this.checkHealth(client);
     }, 20000);
+  }
+  private healthClient: SpikeRpcClient | null = null;
+  private checkHealth(client: SpikeRpcClient): void {
+    if (this.stopped || this.client !== client || this.healthClient === client) { return; }
+    this.healthClient = client;
+    client.request('status.get', null, 5000).then((response: RpcResponse): void => {
+      if (this.stopped || this.client !== client) { return; }
+      if (response instanceof RpcSuccess) {
+        this.probeLater(client); this.bookkeep(client).catch((): void => {});
+      } else { this.retry(client, true); }
+    }).catch((): void => this.retry(client, true)).finally((): void => {
+      if (this.healthClient === client) { this.healthClient = null; }
+    });
   }
   private scheduleDirectUpgrade(relay: SpikeRpcClient): void {
     this.upgradeTimer = setTimeout((): void => {
@@ -228,7 +228,6 @@ export class HostSession {
       if (this.stopped || this.client !== relay) { return; }
       let candidate = new SpikeRpcClient(5000); this.upgradeClient = candidate;
       candidate.setFflate(fflateModule); candidate.setLogSink((line: string): void => this.log(line));
-      if (this.setup) { this.setup(candidate); }
       candidate.connect(this.meta.endpoint, this.token, this.meta.publicKeyB64, 'v2').then(async (): Promise<void> => {
         await settleRuntimeCapabilities(candidate);
         if (this.stopped || this.client !== relay) { candidate.close(); return; }

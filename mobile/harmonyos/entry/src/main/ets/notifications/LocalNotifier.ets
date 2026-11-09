@@ -113,10 +113,11 @@ export class LocalNotifier {
     if (!test && (!await getBool(context, KEY_NOTIFICATIONS_LOCAL_ENABLED)
       || await getBool(context, KEY_NOTIFICATIONS_DND_ENABLED))) { return false; }
     let preferences = notificationDeliveryPreferences(context);
+    if (!test && preferences.suppressWhileViewing && hostId === this.viewingHost && worktreeId === this.viewingWorktree
+      && executionHost === this.viewingExecutionHost) { return false; }
     if (event && ((preferences.onlyWhenDesktopAway && event.desktopAway === false)
-      || (preferences.onlyWhenAgentNeedsInput && event.source === 'agent-task-complete' && !['blocked', 'waiting', 'needs-input'].includes(event.agentState))
-      || (preferences.suppressWhileViewing && event.hostId === this.viewingHost && event.worktreeId === this.viewingWorktree
-        && event.executionHost === this.viewingExecutionHost))) { return false; }
+      || (preferences.onlyWhenAgentNeedsInput && event.source === 'agent-task-complete' &&
+        !['blocked', 'waiting', 'needs-input'].includes(event.agentState)))) { return false; }
     if (!await notificationManager.isNotificationEnabled() || !await this.ensureSlot()) { return false; }
     nextNotificationId = Math.max(nextNotificationId + 1, Date.now() % 2000000000); let id = nextNotificationId;
     let uri = `orca://session?hostId=${encodeURIComponent(hostId)}`;

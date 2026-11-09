@@ -110,7 +110,6 @@ test('bridge request and subscription preserve execution-host routing and protec
   assert.equal(request.executionHost, 'runtime:vm')
   assert.equal(request.deviceToken, 'synthetic-token')
   assert.equal(subscription.executionHost, 'runtime:vm')
-  assert.equal(subscription.id, 'subscription')
   bridge.dispose()
   client.close()
 })

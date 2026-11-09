@@ -72,6 +72,14 @@ const RECONNECTABLE_STREAMS = [
   'runtime.clientEvents.subscribe', 'session.tabs.subscribe', 'session.tabs.subscribeAll',
   'terminal.subscribe', 'terminal.subscribeClaudeAgentViews', 'terminal.multiplex'
 ];
+const SERVER_STREAM_RELEASE: Map<string, string> = new Map([
+  ['accounts.subscribe', 'accounts.unsubscribe'],
+  ['browser.screencast', 'browser.screencast.unsubscribe'],
+  ['files.watch', 'files.unwatch'],
+  ['layout.subscribe', 'layout.unsubscribe'],
+  ['notifications.subscribe', 'notifications.unsubscribe'],
+  ['runtime.clientEvents.subscribe', 'runtime.clientEvents.unsubscribe']
+]);
 
 interface BridgeConnectionSnapshot {
   state: string;
@@ -142,6 +150,8 @@ interface TerminalSubscriptionRecord {
   terminal: string;
 }
 
+let nextBridgeOwner = 0;
+
 export class BridgeHost {
   private client: SpikeRpcClient | null;
   private unbindBinary: (() => void) | null = null;
@@ -168,6 +178,7 @@ export class BridgeHost {
   /** Keys whose stored value exceeded the page cap; writes to them are refused. */
   private oversizeKeys: Set<string> = new Set();
   private unsubscribeCounter = 0;
+  private readonly wirePrefix: string = `shell-${++nextBridgeOwner}`;
   private pushQueue: string[] = [];
   private pushReady = false;
   private disposed = false;
@@ -184,11 +195,11 @@ export class BridgeHost {
   private pageGeometry: BridgePageGeometry = { occlusions: [], sideRail: false, directionPadAvailable: false };
   private readySink: (() => void) | null = null;
   private faultSink: ((message: string) => void) | null = null;
+  private livenessSink: (() => void) | null = null;
   private pageFaulted: boolean = false;
-  private probing: boolean = false;
-  private lastProbeAt: number = 0;
   setReadySink(sink: () => void): void { this.readySink = sink; }
   setFaultSink(sink: (message: string) => void): void { this.faultSink = sink; }
+  setLivenessSink(sink: () => void): void { this.livenessSink = sink; }
   private validInset(value: number): boolean { return Number.isFinite(value) && value >= 0 && value <= 4096; }
   setSafeAreaInsets(value: BridgeSafeAreaInsets): void {
     if (![value.top, value.right, value.bottom, value.left].every((inset: number): boolean => this.validInset(inset))
@@ -266,7 +277,7 @@ export class BridgeHost {
     this.manifest = manifest;
     this.meta = meta;
     this.routePathname = routePathname;
-    this.sessionId = `sess-${meta.id}-${Date.now()}`;
+    this.sessionId = `sess-${meta.id}-${Date.now()}-${this.wirePrefix}`;
     this.connection = {
       state: 'connected', reconnectAttempt: 0, lastConnectedAt: Date.now(),
       lastInboundAt: null, generation: 1, activePath: path
@@ -288,18 +299,18 @@ export class BridgeHost {
     this.client = null;
     this.unbindBinary?.();
     this.unbindBinary = null;
-    this.probing = false;
-    this.lastProbeAt = 0;
     this.desktopPending.forEach((id: string): void => {
       this.pendingIds.delete(id);
-      client.cancelById(id);
+      client.cancelById(this.wireId(id));
       this.sendError(id, 'Request delivery could not be confirmed', true);
     });
     this.desktopPending.clear();
     this.desktopSubs.forEach((record: DesktopSubscriptionRecord, id: string): void => {
-      client.cancelById(id);
       if (record.cancelled) { this.desktopSubs.delete(id); }
-      else if (!RECONNECTABLE_STREAMS.includes(record.method)) { this.endDesktopSubscription(id); }
+      else {
+        client.cancelById(this.wireId(id));
+        if (!RECONNECTABLE_STREAMS.includes(record.method)) { this.endDesktopSubscription(id); }
+      }
     });
     this.streamIds.clear();
     this.snapshots.clear();
@@ -531,13 +542,7 @@ export class BridgeHost {
   private handleNotify(msg: ESObject): void {
     let name: string = msg['name'];
     if (name === 'foreground' || name === 'liveness-probe') {
-      const client = this.client;
-      if (!client || this.probing || client.getState() !== 'ready' || Date.now() - this.lastProbeAt < 10000) { return; }
-      this.probing = true; this.lastProbeAt = Date.now();
-      client.request('status.get', null, 5000).then((reply: RpcResponse): void => {
-        if (this.client === client && !(reply instanceof RpcSuccess)) { client.close(); }
-      }).catch((): void => { if (this.client === client) { client.close(); } })
-        .finally((): void => { if (this.client === client) { this.probing = false; } });
+      this.livenessSink?.();
       return;
     }
     if (name === 'fault') {
@@ -833,7 +838,7 @@ export class BridgeHost {
     if (typeof id !== 'string' || typeof method !== 'string') {
       return;
     }
-    if (id.length === 0 || id.length > 128 || this.pendingIds.has(id) || this.subscriptions.has(id)) {
+    if (id.length === 0 || id.length > 128 || this.pendingIds.has(id) || this.subscriptions.has(id) || this.desktopSubs.has(id)) {
       this.sendError(id, 'request id unavailable'); return;
     }
     if (method.startsWith('native.')) { this.serveNativeRequest(msg, id, method, streaming); return; }
@@ -860,14 +865,15 @@ export class BridgeHost {
     } else {
       if (!client) { this.sendError(id, 'channel unavailable'); return; }
       let params: ESObject = this.substitutePageClientIdentity(msg['params'], client.deviceToken);
-      let wire = this.buildForwardWire(msg['envelope'], id, method, params, client);
+      let wireId = this.wireId(id);
+      let wire = this.buildForwardWire(msg['envelope'], wireId, method, params, client);
       if (wire.length === 0) { this.sendError(id, 'invalid envelope'); return; }
       if (this.pendingIds.size >= MAX_PENDING_REQUESTS) { this.sendError(id, 'request limit'); return; }
       this.pendingIds.add(id); this.desktopPending.add(id);
       this.log(`→ ${method} (${id})`);
       let options: ESObject = msg['options'];
       let timeout: number = options && typeof options['timeoutMs'] === 'number' ? options['timeoutMs'] : 30000;
-      client.requestRaw(id, wire, timeout).then((response: RpcResponse) => {
+      client.requestRaw(wireId, wire, timeout).then((response: RpcResponse) => {
         if (this.client !== client || !this.desktopPending.delete(id) || !this.pendingIds.delete(id)) { return; }
         this.sendReply(id, response);
       }).catch(() => {
@@ -881,19 +887,29 @@ export class BridgeHost {
     if (replay && record.method === 'terminal.subscribe' && params && typeof params === 'object' && !Array.isArray(params)) {
       params['resume'] = undefined;
     }
+    let wireId = this.wireId(id);
+    let screencast = record.method === 'browser.screencast';
+    if (screencast && !client.claimScreencast(wireId)) {
+      this.handleCancel({ id }); this.sendError(id, 'screencast already active'); return;
+    }
+    if (record.method === 'nativeChat.subscribe' && params && typeof params === 'object' && !Array.isArray(params)) {
+      params['subscriptionId'] = wireId;
+    }
     params = this.substitutePageClientIdentity(params, client.deviceToken);
-    let wire = this.buildForwardWire(record.envelope, id, record.method, params, client);
+    let wire = this.buildForwardWire(record.envelope, wireId, record.method, params, client);
     record.readyId = '';
     let window: StreamWindow = { outstanding: [], bytes: 0, backlog: [], backlogBytes: 0 };
     this.streamWindows.set(id, window);
-    let sent = wire.length > 0 && client.subscribeWithId(id, wire, (responseJson: string): void => {
-      if (this.client !== client || this.desktopSubs.get(id) !== record) { return; }
-      this.noteDesktopSubscription(id, responseJson);
-      if (!this.subscriptions.has(id)) { return; }
+    let sent = wire.length > 0 && client.subscribeWithId(wireId, wire, (responseJson: string): void => {
+      if (!record.cancelled && (this.client !== client || this.desktopSubs.get(id) !== record)) { return; }
+      if (!this.noteDesktopSubscription(id, record, client, responseJson)) { return; }
       this.rememberStreamId(id, responseJson);
       this.forwardEvent(id, responseJson);
     });
-    if (!sent) { this.endDesktopSubscription(id); }
+    if (!sent) {
+      if (screencast) { client.releaseScreencast(wireId); }
+      this.endDesktopSubscription(id);
+    }
   }
 
   private endDesktopSubscription(id: string): void {
@@ -901,6 +917,8 @@ export class BridgeHost {
     this.handleCancel({ id });
     this.pushFrame(`{"v":1,"type":"end","id":${JSON.stringify(id)},"reason":"closed"}`);
   }
+
+  private wireId(id: string): string { return `${this.wirePrefix}-r-${id}`; }
 
   private buildForwardWire(envelope: ESObject, id: string, method: string, params: ESObject, client: SpikeRpcClient): string {
     let wire: Record<string, Object> = {};
@@ -1035,9 +1053,10 @@ export class BridgeHost {
 
   private handleCancel(msg: ESObject): void {
     let cancelId: string = msg['id'];
+    if (typeof cancelId !== 'string') { return; }
     this.pendingIds.delete(cancelId);
     this.desktopPending.delete(cancelId);
-    if (!this.desktopSubs.has(cancelId)) { this.client?.cancelById(cancelId); }
+    if (!this.desktopSubs.has(cancelId)) { this.client?.cancelById(this.wireId(cancelId)); }
     let stale: number[] = [];
     this.streamIds.forEach((value: string, key: number) => {
       if (value === cancelId) {
@@ -1053,19 +1072,27 @@ export class BridgeHost {
     this.subscriptions.delete(cancelId); this.binarySubscriptions.delete(cancelId); this.streamWindows.delete(cancelId); this.seq.delete(cancelId);
   }
 
-  private noteDesktopSubscription(id: string, json: string): void {
-    let record = this.desktopSubs.get(id);
-    if (!record) { return; }
+  private noteDesktopSubscription(id: string, record: DesktopSubscriptionRecord, client: SpikeRpcClient, json: string): boolean {
     try {
       let reply: ESObject = JSON.parse(json);
-      if (reply['ok'] === false) {
-        this.endDesktopSubscription(id);
-        return;
-      }
       let result: ESObject = reply['result'];
+      if (reply['ok'] === false || result?.['type'] === 'end') {
+        client.cancelById(this.wireId(id));
+        if (record.method === 'browser.screencast') { client.releaseScreencast(this.wireId(id)); }
+        if (this.desktopSubs.get(id) === record) {
+          if (record.cancelled) { this.desktopSubs.delete(id); }
+          else if (reply['ok'] === false) { this.endDesktopSubscription(id); }
+          else {
+            this.forwardEvent(id, json);
+            this.endDesktopSubscription(id);
+          }
+        }
+        return false;
+      }
       if (result && typeof result['subscriptionId'] === 'string') { record.readyId = result['subscriptionId']; }
-      if (record.cancelled && record.readyId.length > 0) { this.releaseDesktopSubscription(id); }
-    } catch (e) { }
+      if (record.cancelled && record.readyId) { this.closeDesktopSubscription(id, record, client); }
+      return !record.cancelled && this.subscriptions.has(id);
+    } catch (e) { return false; }
   }
 
   private releaseDesktopSubscription(id: string): void {
@@ -1074,6 +1101,11 @@ export class BridgeHost {
     let transport = this.client;
     if (!transport) { this.desktopSubs.delete(id); return; }
     record.cancelled = true;
+    this.closeDesktopSubscription(id, record, transport);
+  }
+
+  private closeDesktopSubscription(id: string, record: DesktopSubscriptionRecord, transport: SpikeRpcClient): void {
+    let wireId = this.wireId(id);
     let params: Record<string, Object> = {};
     let method = '';
     let source: ESObject = record.params;
@@ -1082,28 +1114,35 @@ export class BridgeHost {
       let clientId: string = client && typeof client['id'] === 'string' ? client['id'] : '';
       if (clientId === 'orca-page-client') { clientId = transport.deviceToken; }
       params['subscriptionId'] = clientId ? `${source['terminal']}:${clientId}` : source['terminal'];
-      params['requestId'] = id;
+      params['requestId'] = wireId;
       if (clientId) { let identity: Record<string, string> = { 'id': clientId }; params['client'] = identity; }
       method = 'terminal.unsubscribe';
     } else if (record.method === 'session.tabs.subscribeAll') {
-      method = 'session.tabs.unsubscribeAll'; params['subscriptionId'] = id;
+      method = 'session.tabs.unsubscribeAll'; params['subscriptionId'] = wireId;
     } else if (record.method === 'session.tabs.subscribe' && source && typeof source['worktree'] === 'string') {
-      method = 'session.tabs.unsubscribe'; params['worktree'] = source['worktree']; params['subscriptionId'] = id;
+      method = 'session.tabs.unsubscribe'; params['worktree'] = source['worktree']; params['subscriptionId'] = wireId;
     } else if (record.method === 'agentSession.subscribe' && source && typeof source['sessionId'] === 'string') {
-      method = 'agentSession.unsubscribe'; params['sessionId'] = source['sessionId']; params['subscriptionId'] = id;
-    } else if (record.method === 'nativeChat.subscribe' && source && typeof source['subscriptionId'] === 'string') {
-      method = 'nativeChat.unsubscribe'; params['subscriptionId'] = source['subscriptionId'];
-    } else if (['browser.screencast', 'runtime.clientEvents.subscribe', 'notifications.subscribe', 'accounts.subscribe'].includes(record.method)) {
+      method = 'agentSession.unsubscribe'; params['sessionId'] = source['sessionId']; params['subscriptionId'] = wireId;
+    } else if (record.method === 'nativeChat.subscribe') {
+      method = 'nativeChat.unsubscribe'; params['subscriptionId'] = wireId;
+    } else if (SERVER_STREAM_RELEASE.has(record.method)) {
       if (!record.readyId) { return; }
-      method = record.method === 'browser.screencast' ? 'browser.screencast.unsubscribe' : record.method.replace('.subscribe', '.unsubscribe');
+      method = SERVER_STREAM_RELEASE.get(record.method) ?? '';
       params['subscriptionId'] = record.readyId;
     }
-    this.desktopSubs.delete(id); transport.cancelById(id);
+    if (this.desktopSubs.get(id) === record) { this.desktopSubs.delete(id); }
+    if (record.method !== 'browser.screencast') { transport.cancelById(wireId); }
     if (!method) { return; }
     this.unsubscribeCounter++;
-    let requestId = `unsub-${this.unsubscribeCounter}-${Date.now()}`;
+    let requestId = `${this.wirePrefix}-u-${this.unsubscribeCounter}`;
     let wire = this.buildForwardWire(record.envelope, requestId, method, params, transport);
-    if (wire.length > 0) { transport.requestRaw(requestId, wire).catch((): void => {}); }
+    if (wire.length > 0) {
+      transport.requestRaw(requestId, wire).then((reply: RpcResponse): void => {
+        if (record.method === 'browser.screencast' && reply instanceof RpcSuccess) {
+          transport.cancelById(wireId); transport.releaseScreencast(wireId);
+        }
+      }).catch((): void => {});
+    }
   }
 
   private sendInit(): void {
@@ -1254,14 +1293,20 @@ export class BridgeHost {
     if (!(response instanceof RpcSuccess) && response.wire.length === 0 && ['timeout', 'closed'].includes(response.errorCode)) {
       this.sendError(id, 'Request delivery could not be confirmed', true); return;
     }
+    if (response.wire.length > 0) {
+      let payload: ESObject = JSON.parse(response.wire);
+      payload['id'] = id;
+      this.pushReply(id, JSON.stringify(payload));
+      return;
+    }
     let payloadJson: string;
     if (response instanceof RpcSuccess) {
-      payloadJson = `{"id":${JSON.stringify(response.id)},"ok":true,"result":${response.result}}`;
+      payloadJson = `{"id":${JSON.stringify(id)},"ok":true,"result":${response.result}}`;
     } else {
       let failure = response as Object as Record<string, string>;
-      payloadJson = `{"id":${JSON.stringify(failure['id'])},"ok":false,"error":{"code":${JSON.stringify(failure['errorCode'])},"message":${JSON.stringify(failure['errorMessage'])}}}`;
+      payloadJson = `{"id":${JSON.stringify(id)},"ok":false,"error":{"code":${JSON.stringify(failure['errorCode'])},"message":${JSON.stringify(failure['errorMessage'])}}}`;
     }
-    this.pushReply(id, response.wire.length > 0 ? response.wire : payloadJson);
+    this.pushReply(id, payloadJson);
   }
 
   private pushStreamFrame(id: string, seq: number, json: string, binary: boolean): void {
@@ -1341,6 +1386,7 @@ export class BridgeHost {
       }
       let binary: Record<string, Object> = { 'b64': base64Encode(bytes.subarray(16 + metadataLength)), 'format': bytes[3] === 1 ? 'jpeg' : 'png', 'frameSeq': view.getUint32(4, true), 'metadata': checked };
       this.binarySubscriptions.forEach((id: string): void => {
+        if (!this.client?.ownsScreencast(this.wireId(id)) || !this.desktopSubs.get(id)?.readyId) { return; }
         let event: Record<string, Object> = { 'v': 1, 'type': 'event', 'id': id, 'seq': this.nextSeq(id), 'binary': binary };
         this.pushStreamFrame(id, event['seq'] as number, JSON.stringify(event), true);
       });
