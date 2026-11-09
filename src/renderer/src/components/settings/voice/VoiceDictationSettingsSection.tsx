@@ -32,7 +32,7 @@ export function VoiceDictationSettingsSection({
       <div className="flex items-center justify-between gap-4 py-2">
         <div className="space-y-0.5">
           <Label>
-            {t('auto.components.settings.VoicePane.0121960365', 'Enable Voice Dictation')}
+            {t('auto.components.settings.VoicePane.6ffecf36fd', 'Enable voice dictation')}
           </Label>
           <p className="text-xs text-muted-foreground">
             {t(
@@ -44,7 +44,7 @@ export function VoiceDictationSettingsSection({
         </div>
         <Switch
           checked={voiceSettings.enabled}
-          aria-label={t('auto.components.settings.VoicePane.0121960365', 'Enable Voice Dictation')}
+          aria-label={t('auto.components.settings.VoicePane.6ffecf36fd', 'Enable voice dictation')}
           aria-busy={permissionPending}
           disabled={permissionPending}
           onCheckedChange={() => void onToggleVoiceDictation()}
@@ -56,7 +56,7 @@ export function VoiceDictationSettingsSection({
 
       <div className="flex items-center justify-between gap-4 py-2">
         <div className="space-y-0.5">
-          <Label>{t('auto.components.settings.VoicePane.ba4a900d1d', 'Dictation Mode')}</Label>
+          <Label>{t('auto.components.settings.VoicePane.342f309724', 'Dictation mode')}</Label>
           <p className="text-xs text-muted-foreground">
             {t(
               'auto.components.settings.VoicePane.dictationModesWithAutoDescription',

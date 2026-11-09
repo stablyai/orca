@@ -21,8 +21,8 @@ export function MobileEmulatorAgentControlRow(): React.JSX.Element {
   return (
     <SettingsGroup
       title={t(
-        'auto.components.settings.MobileEmulatorAgentControlRow.2a674aa810',
-        'Agent Mobile Emulator Control'
+        'auto.components.settings.MobileEmulatorAgentControlRow.10243e70ff',
+        'Agent mobile emulator control'
       )}
       description={t(
         'auto.components.settings.MobileEmulatorAgentControlRow.ff4b7e65d6',

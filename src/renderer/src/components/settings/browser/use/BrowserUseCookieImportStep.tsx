@@ -86,7 +86,7 @@ export function BrowserUseCookieImportStep({
 
   return (
     <SearchableSetting
-      title={t('auto.components.settings.BrowserUsePane.2eb906706c', 'Import Browser Cookies')}
+      title={t('auto.components.settings.BrowserUsePane.b3e79d1c51', 'Import browser cookies')}
       description={t(
         'auto.components.settings.BrowserUsePane.af8c83ed61',
         'Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins.'

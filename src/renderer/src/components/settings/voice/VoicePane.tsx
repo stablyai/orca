@@ -232,7 +232,7 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
       <Separator />
 
       <SettingsSwitchRow
-        label={t('components.settings.voice.fillerWords.title', 'Remove Filler Words')}
+        label={t('components.settings.voice.fillerWords.0134406785', 'Remove filler words')}
         description={t(
           'components.settings.voice.fillerWords.description',
           'Drops sounds like “um” and “uh” from dictated text, in the dictation language.'

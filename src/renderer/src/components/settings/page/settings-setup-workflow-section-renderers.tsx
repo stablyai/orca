@@ -1,3 +1,4 @@
+import { useAppStore } from '@/store'
 import { SessionHistorySettingsPane } from '../session-history/SessionHistorySettingsPane'
 import { ArtifactsSettingsPane } from '../artifacts/ArtifactsSettingsPane'
 import { AutomationsSettingsPane } from '../automations/AutomationsSettingsPane'
@@ -20,7 +21,7 @@ export function renderOrcaAccountSettingsSection(
   return model.showDesktopOnlySettings ? (
     <SettingsSection
       id="orca-account"
-      title={t('auto.components.settings.orcaAccount.title', 'Orca Account')}
+      title={t('auto.components.settings.orcaAccount.80f0478ea1', 'Orca account')}
       description={t(
         'auto.components.settings.orcaAccount.description',
         'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
@@ -62,6 +63,7 @@ export function renderGeneralSettingsSection(
     <SettingsSection
       id="general"
       grouped
+      hideHeader
       title={t('auto.components.settings.Settings.7807c11c4d', 'General')}
       description={t(
         'auto.components.settings.Settings.f9b77539fd',
@@ -71,6 +73,19 @@ export function renderGeneralSettingsSection(
     >
       {view.isSectionMounted('general') ? (
         <GeneralPane
+          subPage={model.generalSubPage}
+          onSelectSubPage={(page, sectionId) => {
+            if (sectionId) {
+              useAppStore
+                .getState()
+                .openSettingsTarget({ pane: 'general', repoId: null, sectionId })
+              return
+            }
+            model.setGeneralSubPage(page)
+            model.setHighlightedSettingsTargetId(null)
+            model.setSettingsSearchQuery('')
+            interactions.contentScrollRef.current?.scrollTo({ top: 0 })
+          }}
           settings={model.settings}
           updateSettings={model.updateSettings}
           updateSettingsOrThrow={model.updateSettingsOrThrow}
@@ -186,7 +201,7 @@ export function renderShareSkillsSettingsSection(
     <SettingsSection
       id="share-skills"
       grouped
-      title={t('auto.components.settings.shareSkills.title', 'Share Skills')}
+      title={t('auto.components.settings.shareSkills.ca754fefa1', 'Share skills')}
       badge="Beta"
       description={t(
         'auto.components.settings.shareSkills.description',
@@ -208,7 +223,7 @@ export function renderSessionHistorySettingsSection(
     <SettingsSection
       id="session-history"
       grouped
-      title={t('sessionHistory.settings.title', 'Agent Session Search')}
+      title={t('sessionHistory.settings.4f87f1dd17', 'Agent session search')}
       description={t(
         'sessionHistory.settings.description',
         'Search everything your agents have said and done, on this computer and on any paired Orca server.'

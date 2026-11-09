@@ -24,8 +24,8 @@ export function OpenAiTranscriptionSettingsRow({
           <Cloud className="size-4 shrink-0 text-muted-foreground" />
           <Label>
             {t(
-              'auto.components.settings.OpenAiTranscriptionSettingsRow.27e0cb656d',
-              'OpenAI Transcription'
+              'auto.components.settings.OpenAiTranscriptionSettingsRow.ff28e99b54',
+              'OpenAI transcription'
             )}
           </Label>
           {configured && (

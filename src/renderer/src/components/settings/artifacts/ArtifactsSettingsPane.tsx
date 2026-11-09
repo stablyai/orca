@@ -99,7 +99,7 @@ export function ArtifactsSettingsPane({
           onChange={() => void updateSettings({ artifactSharingEnabled: !sharingEnabled })}
         />
         <SettingsSwitchRow
-          label={t('auto.components.settings.artifacts.showButton', 'Show Artifacts Button')}
+          label={t('auto.components.settings.artifacts.09f41ce46c', 'Show artifacts button')}
           description={t(
             'auto.components.settings.artifacts.showButtonDescription',
             'Show the Artifacts shortcut in the sidebar.'

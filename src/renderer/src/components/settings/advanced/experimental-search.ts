@@ -50,8 +50,8 @@ export const getExperimentalPaneSearchEntries = createLocalizedCatalog(
     },
     {
       title: translate(
-        'auto.components.settings.experimental.search.agentDashboard.title',
-        'Agent Dashboard'
+        'auto.components.settings.experimental.search.agentDashboard.eaf17a7214',
+        'Agent dashboard'
       ),
       description: translate(
         'auto.components.settings.experimental.search.agentDashboard.description',

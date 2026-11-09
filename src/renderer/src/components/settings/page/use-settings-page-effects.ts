@@ -1,3 +1,4 @@
+import { resolveGeneralSubPage } from '../general/general-sub-pages'
 import { useEffect } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '../../../store/index'
@@ -26,6 +27,7 @@ export function useSettingsPageEffects(
 ): void {
   const {
     activeSectionId,
+    setGeneralSubPage,
     clearSettingsTarget,
     fetchKeybindings,
     fetchSettings,
@@ -56,6 +58,12 @@ export function useSettingsPageEffects(
     searchInputRef,
     shortcutsEscapeConfirmUntilRef
   } = interactions
+
+  useEffect(() => {
+    if (activeSectionId !== 'general') {
+      setGeneralSubPage(null)
+    }
+  }, [activeSectionId, setGeneralSubPage])
 
   useEffect(() => {
     fetchSettings()
@@ -193,11 +201,15 @@ export function useSettingsPageEffects(
         )
       }
     }
+    if (settingsNavigationTarget.pane === 'general') {
+      setGeneralSubPage(resolveGeneralSubPage(settingsNavigationTarget.sectionId))
+    }
     consumeSettingsNavigation(settingsNavigationTarget)
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
     setHighlightedSettingsTargetId(
-      settingsNavigationTarget.pane === 'developer-permissions'
+      settingsNavigationTarget.pane === 'developer-permissions' ||
+        settingsNavigationTarget.pane === 'general'
         ? (settingsNavigationTarget.sectionId ?? null)
         : null
     )
@@ -238,6 +250,7 @@ export function useSettingsPageEffects(
     setQuickCommandAddIntentSignal,
     setRemoteServerAddIntentSignal,
     consumeSettingsNavigation,
+    setGeneralSubPage,
     setSettingsProjectHostSelection,
     setSshHostAddIntentSignal,
     settings,

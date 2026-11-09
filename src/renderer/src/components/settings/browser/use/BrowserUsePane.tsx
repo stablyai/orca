@@ -145,8 +145,8 @@ export function BrowserUseSetup({
       {showSkillStep ? (
         <SearchableSetting
           title={t(
-            'auto.components.settings.BrowserUsePane.2d6ead9ab2',
-            'Install Browser Use Skill'
+            'auto.components.settings.BrowserUsePane.4451b3c0a6',
+            'Install browser use skill'
           )}
           description={t(
             'auto.components.settings.BrowserUsePane.68ea76eb71',

@@ -39,6 +39,7 @@ type SettingsSearchableSelectProps = {
   groups: readonly SettingsSearchableSelectGroup[]
   onValueChange: (value: string) => void
   searchPlaceholder: string
+  triggerClassName?: string
   emptyText?: string
   open?: boolean
   disabled?: boolean
@@ -67,6 +68,7 @@ function SettingsSearchableSelectControl({
   onValueChange,
   searchPlaceholder,
   emptyText,
+  triggerClassName,
   open: controlledOpen,
   disabled = false,
   onOpenChange,
@@ -160,7 +162,7 @@ function SettingsSearchableSelectControl({
           aria-label={ariaLabel}
           disabled={disabled}
           onKeyDown={handleTriggerKeyDown}
-          className="min-w-[220px] justify-between"
+          className={cn('min-w-[220px] justify-between', triggerClassName)}
         >
           <span className="inline-flex min-w-0 flex-1 items-center gap-2">
             {selected?.icon}

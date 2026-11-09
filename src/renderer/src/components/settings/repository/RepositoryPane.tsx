@@ -263,7 +263,7 @@ export function RepositoryPane({
         }
       >
         <SearchableSetting
-          title={t('auto.components.settings.RepositoryPane.c7ef4415de', 'Display Name')}
+          title={t('auto.components.settings.RepositoryPane.07deadaa00', 'Display name')}
           description={t(
             'auto.components.settings.RepositoryPane.b0a0c14a1c',
             'Project-specific display details for the sidebar and tabs.'
@@ -273,7 +273,7 @@ export function RepositoryPane({
           forceVisible={forceFullPaneForRepoMatch}
         >
           <Label htmlFor={`repo-display-name-${repo.id}`} className="text-sm font-semibold">
-            {t('auto.components.settings.RepositoryPane.c7ef4415de', 'Display Name')}
+            {t('auto.components.settings.RepositoryPane.07deadaa00', 'Display name')}
           </Label>
           <RepoSettingsDraftInput
             id={`repo-display-name-${repo.id}`}
@@ -285,7 +285,7 @@ export function RepositoryPane({
         </SearchableSetting>
 
         <SearchableSetting
-          title={t('auto.components.settings.RepositoryPane.26fef02bf3', 'Project Icon')}
+          title={t('auto.components.settings.RepositoryPane.e856e61455', 'Project icon')}
           description={t(
             'auto.components.settings.RepositoryPane.e641c359de',
             'Project icon and color used in the sidebar and tabs.'

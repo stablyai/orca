@@ -171,7 +171,10 @@ export function RepositoryGitHubAccountSection({
 
   return (
     <SearchableSetting
-      title={t('auto.components.settings.RepositoryGitHubAccountSection.title', 'GitHub Account')}
+      title={t(
+        'auto.components.settings.RepositoryGitHubAccountSection.b3249d1abc',
+        'GitHub account'
+      )}
       description={t(
         'auto.components.settings.RepositoryGitHubAccountSection.description',
         'Use a specific gh login for this project’s GitHub issue and pull request calls.'

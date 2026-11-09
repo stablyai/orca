@@ -54,7 +54,7 @@ export function getRepositoryPaneSearchEntries(
       ]
     },
     {
-      title: t('auto.components.settings.repository.search.7e1e456a95', 'Display Name'),
+      title: t('auto.components.settings.repository.search.7f380f89ea', 'Display name'),
       description: t(
         'auto.components.settings.repository.search.883aad2801',
         'Project-specific display details for the sidebar and tabs.'
@@ -73,7 +73,7 @@ export function getRepositoryPaneSearchEntries(
       ]
     },
     {
-      title: t('auto.components.settings.repository.search.b24f00294a', 'Project Icon'),
+      title: t('auto.components.settings.repository.search.0fe07b9e90', 'Project icon'),
       description: t(
         'auto.components.settings.repository.search.a1f3a2bd47',
         'Project icon and color used in the sidebar and tabs.'
@@ -109,7 +109,7 @@ export function getRepositoryPaneSearchEntries(
     ...(!isFolder
       ? [
           {
-            title: t('auto.components.settings.repository.search.githubAccount', 'GitHub Account'),
+            title: t('auto.components.settings.repository.search.eefc3e51ef', 'GitHub account'),
             description: t(
               'auto.components.settings.repository.search.githubAccountDescription',
               'Bind a keyring gh login for this project’s GitHub API calls.'
@@ -141,8 +141,8 @@ export function getRepositoryPaneSearchEntries(
       ? [
           {
             title: t(
-              'auto.components.settings.repository.search.keepForkUpToDate',
-              'Keep Fork Up to Date'
+              'auto.components.settings.repository.search.f94afd4078',
+              'Keep fork up to date'
             ),
             description: t(
               'auto.components.settings.repository.search.keepForkUpToDateDescription',
@@ -185,10 +185,7 @@ export function getRepositoryPaneSearchEntries(
       ? []
       : [
           {
-            title: t(
-              'auto.components.settings.repository.search.projectRuntime',
-              'Project Runtime'
-            ),
+            title: t('auto.components.settings.repository.search.7a89e2dc09', 'Project runtime'),
             description: t(
               'auto.components.settings.repository.search.projectRuntimeDescription',
               'Choose whether this project runs on Windows or WSL.'
@@ -225,7 +222,7 @@ export function getRepositoryPaneSearchEntries(
         ]),
     ...(isFolder ? [] : getRepositoryGitWorktreeSearchEntries(repo, t)),
     {
-      title: t('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project'),
+      title: t('auto.components.settings.repository.search.bbbe994528', 'Remove project'),
       description: t(
         'auto.components.settings.repository.search.c86478c3d8',
         'Remove this project from Orca.'

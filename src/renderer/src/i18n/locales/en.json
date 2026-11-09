@@ -244,7 +244,6 @@
   },
   "browser": {
     "googleCookieClear": {
-      "heading": "Google Cookies",
       "signInKeyword": "sign-in",
       "unavailable": "Unavailable for this profile on the selected host.",
       "explanation": "Google ties its sign-ins to the browser they were made in, so Orca doesn't import Google cookies from other browsers. If Google is stuck on the wrong account or keeps signing you out, clear Google cookies from the active profile, then sign in to Google again in Orca. Other sites stay signed in.",
@@ -256,7 +255,8 @@
       "cleared": "Google cookies cleared from {{profile}}.",
       "empty": "No Google cookies to clear in {{profile}}.",
       "remaining": "Some Google cookies couldn't be removed from {{profile}}. Try again.",
-      "unverified": "Couldn't check {{profile}}'s Google cookies. Try again."
+      "unverified": "Couldn't check {{profile}}'s Google cookies. Try again.",
+      "fe3f6e1721": "Google cookies"
     },
     "loadFailure": {
       "connectionNotSecure": "Connection isn't secure",
@@ -674,13 +674,13 @@
         "museToggleDescription": "Show Muse subscription quota from the Muse CLI."
       },
       "menuBarIcon": {
-        "title": "Show Menu Bar Icon",
         "description": "Keep an Orca shortcut and activity indicator in the macOS menu bar.",
         "keyword": {
           "menuBar": "menu bar",
           "statusItem": "status item",
           "activity": "activity"
-        }
+        },
+        "026624e2ec": "Show menu bar icon"
       },
       "chat": {
         "fontFamily": "Font family",
@@ -737,7 +737,8 @@
           "performance": "performance",
           "remote": "remote",
           "gpu": "gpu"
-        }
+        },
+        "08c854149e": "Reduce visual effects"
       },
       "appIcon": {
         "importCustom": "Custom…",
@@ -1128,6 +1129,72 @@
           "devinDesktop": "devin desktop",
           "antigravity": "antigravity"
         }
+      },
+      "cli": {
+        "otherTerminals": "{{command}} in other terminals",
+        "title": "Command line",
+        "description": "Orca’s own terminals already have it.",
+        "skillTitle": "Orca skill for agents"
+      },
+      "editorGroups": {
+        "saving": "Saving",
+        "editor": "Editor",
+        "diffs": "Diffs",
+        "markdown": "Markdown"
+      },
+      "worktrees": {
+        "customRules": "Custom rules",
+        "shown": "Shown by default",
+        "hidden": "All hidden",
+        "description": "Claude Code, GSD and other locations"
+      },
+      "tabs": {
+        "title": "Tabs"
+      },
+      "previewTabs": {
+        "title": "Preview tabs",
+        "description": "Single-clicking a file reuses one preview tab until you edit or pin it."
+      },
+      "workspaces": {
+        "title": "Workspaces"
+      },
+      "folder": {
+        "perProject": "Folder per project",
+        "oneFolder": "One folder"
+      },
+      "openIn": {
+        "description": "Apps in a workspace’s Open in menu",
+        "none": "No apps added"
+      },
+      "editor": {
+        "description": "Saving, editor, diff and Markdown options",
+        "sideBySide": "Side-by-side diffs",
+        "inline": "Inline diffs"
+      },
+      "about": {
+        "title": "About",
+        "version": "Orca {{version}}"
+      },
+      "autoSave": {
+        "title": "Auto save",
+        "description": "Save edits after a short pause."
+      },
+      "confirmations": {
+        "title": "Confirmations",
+        "pinned": "Closing a pinned tab",
+        "running": "Closing a running chat or terminal",
+        "runningHelp": "Ask before stopping an agent or command that’s still running.",
+        "workspace": "Deleting a workspace",
+        "automation": "Deleting an automation",
+        "automationHelp": "Its run history is deleted too.",
+        "artifact": "Deleting an artifact",
+        "artifactHelp": "Anyone with its public link loses access."
+      },
+      "pages": {
+        "folder": "Workspace folder",
+        "worktrees": "Worktrees from other tools",
+        "openIn": "Open in",
+        "editor": "Editor and diffs"
       }
     },
     "openInApp": {
@@ -1196,12 +1263,12 @@
       "keywords": {
         "acrylic": "acrylic"
       },
-      "windowsUnsupported": "Requires Windows 11 version 22H2 or later."
+      "windowsUnsupported": "Requires Windows 11 version 22H2 or later.",
+      "fc2ba9b528": "Window material"
     },
     "updateDelay": {
       "title": "Update Delay",
       "description": "Wait this many days after a release is published before Orca offers it.",
-      "info": "About Update Delay",
       "none": "None",
       "availableSoon": "Available to you {{relative}}",
       "availableOn": "Available to you {{date}} ({{relative}})",
@@ -1215,21 +1282,21 @@
       "heldReleaseReady": "A newer release is ready. Check for updates to get it.",
       "keywordDelay": "delay",
       "keywordCooldown": "cooldown",
-      "keywordSecurity": "security"
+      "keywordSecurity": "security",
+      "ab7e864374": "About update delay"
     },
     "editorFormatOnSave": {
-      "title": "Format on Save",
       "description": "Format text before manual saves and auto save. Configure a formatter command in Settings > Projects. Off by default.",
-      "keywords": "formatter format on save prettier biome gofmt"
+      "keywords": "formatter format on save prettier biome gofmt",
+      "47b45a6179": "Format on save"
     },
     "editorInsertFinalNewline": {
-      "title": "Insert Final Newline",
       "description": "Add a line break when saving a non-empty code file that does not end with one. Off by default.",
       "keywordNewline": "newline",
-      "keywordEndOfFile": "end of file"
+      "keywordEndOfFile": "end of file",
+      "62aa3336d9": "Insert final newline"
     },
     "repositoryFormatter": {
-      "title": "Formatter Command",
       "description": "Use this project’s formatter for Format on Save.",
       "saveFailed": "Could not save formatter settings.",
       "command": "Command",
@@ -1238,9 +1305,15 @@
       "includeHelp": "Match paths relative to the workspace root. No matching glob means no formatting. * and ** skip dot-prefixed names; list them explicitly, e.g. .github/**/*.yml. Enable Format on Save in General > Editor to use this command.",
       "saving": "Saving…",
       "save": "Save formatter",
-      "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\""
+      "placeholder": "npx --no-install prettier --stdin-filepath \"${file}\"",
+      "710343e374": "Formatter command"
     },
-    "experimental": {}
+    "experimental": {},
+    "breadcrumb": {
+      "settings": "Settings",
+      "label": "Settings breadcrumb",
+      "close": "Close settings"
+    }
   },
   "menu": {
     "checkForUpdates": "Check for Updates...",
@@ -2186,38 +2259,28 @@
         "e338c507c1": "Low-level compatibility settings for troubleshooting.",
         "580a04cd81": "Advanced",
         "8400cfe1c1": "Anonymous usage data and telemetry controls.",
-        "3618579df6": "Privacy & Telemetry",
         "65ec7d1968": "macOS privacy access for terminal-launched developer tools.",
         "d91ae31fbd": "macOS Permissions",
         "95a1886d94": "Control terminals and agents from your phone.",
         "1cd25673df": "Mobile",
         "31e57d1c70": "Use existing machines over SSH for files, terminals, Git, and workspaces.",
-        "94a5afe910": "SSH Hosts",
         "40d80bad8a": "Beta",
-        "de0c2907a1": "Remote Orca Servers",
         "b351014180": "Orca stats plus Claude, Codex, OpenCode, Muse token analytics and Grok subscription usage.",
-        "d72a58b5b9": "Stats & Usage",
         "dcd0d9b74f": "Keyboard shortcuts for common actions.",
         "94295ebfb3": "Shortcuts",
         "7682607591": "Native desktop notifications for agent and terminal events.",
         "2eece16ad1": "Notifications",
         "1f452cbd4c": "Selection and editing behavior.",
-        "0c6ee88a5f": "Input & Editing",
         "b11a5a48a2": "Theme, zoom, app and terminal appearance, sidebars, and status bar.",
         "93d88d20bf": "Appearance",
         "2d0659f6f0": "Global terminal, browser, and markdown tabs.",
-        "65b19f5bde": "Floating Workspace",
         "3d65d3f1b9": "Configure mobile emulator support for Orca and coding agents.",
-        "1e761cff2b": "Mobile Emulator",
         "e815fd01bd": "Home page, link routing, and session cookies.",
         "8c197f74a1": "Browser",
         "42ae40842f": "Saved terminal commands, scoped globally or per project.",
-        "3fc3db144f": "Quick Commands",
         "c33bfd664c": "Shells, renderer, sessions, and terminal behavior.",
         "a9fb10afca": "Terminal",
-        "85f4fd7710": "Task Sources",
         "ab4b21b58e": "Branch naming, base refs, and Git AI Author.",
-        "09607cb0fe": "Git & Source Control",
         "33a5e1d597": "Connect GitHub, GitLab, Linear, and source-hosting services.",
         "2b043783ef": "Integrations",
         "2cd4ea75da": "Workspace defaults, app setup, and maintenance.",
@@ -2231,15 +2294,11 @@
         "8ac3de82f5": "Local speech-to-text dictation with on-device models.",
         "6a50cdcd7c": "Voice",
         "0059bd17f3": "Enable agents to control any app on your computer.",
-        "b35e92364b": "Computer Use",
         "cd50cec5d7": "Coordinate multiple coding agents through Orca.",
         "58a868e8e4": "Orchestration",
-        "7c79d3b7bf": "Optional",
         "b1c2f8b0ac": "Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.",
-        "f70ac54d38": "AI Provider Accounts",
         "4121f7a0a2": "Manage AI agents, set a default, and customize commands.",
         "b49abbd2f7": "Agents",
-        "dev": "Dev Tools",
         "devDescription": "Dev-only tools for exercising UI states.",
         "devBadge": "Dev",
         "devSearchNotificationPlayground": "Notification playground",
@@ -2259,9 +2318,22 @@
         "artifactsDescription": "Share HTML and Markdown files with your team and manage their public links.",
         "automationsTitle": "Automations",
         "automationsDescription": "Schedule agent work and choose whether Automations appears in the sidebar.",
-        "shareSkillsTitle": "Share Skills",
         "shareSkillsDescription": "Share your skills with an unlisted link. Anyone who has it can install them.",
-        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs."
+        "floatingWorkspaceWebDescription": "Global terminal and markdown tabs.",
+        "597921ad92": "AI provider accounts",
+        "ef8fac05ea": "Computer use",
+        "19f6f97e1e": "Input & editing",
+        "6318b87ae3": "Stats & usage",
+        "9b8c94d338": "SSH hosts",
+        "f5d7f03cb3": "Remote Orca servers",
+        "ad5ed245ff": "Privacy & telemetry",
+        "9867e8c5f8": "Dev tools",
+        "9861b1455d": "Share skills",
+        "dd27f49eba": "Git & source control",
+        "006ce6d734": "Task sources",
+        "db3e9bce57": "Quick commands",
+        "1e6405f955": "Mobile emulator",
+        "9d66ac1c2b": "Floating workspace"
       },
       "useAppMenuPaste": {
         "pasteTooLarge": "Paste is too large."
@@ -7684,13 +7756,11 @@
           "a122332371": "wrk_… (leave blank for automatic lookup)",
           "dbdb0b0bd8": "Workspace ID override",
           "d70a5287a4": "Optional workspace ID override if the automatic lookup fails.",
-          "02cb127710": "OpenCode Go Workspace ID",
           "d5267cce63": "). The auth cookie still covers workspace discovery; auth alone is not enough for usage. OpenCode Go auth is web-based and shared across Windows and WSL terminals.",
           "62ab430f94": "Paste the full Cookie header from your browser's DevTools → Network → any opencode.ai request, including __Host-console_session (e.g.",
           "37b4b4a3f7": "auth=…; __Host-console_session=…",
           "67e3c33670": "OpenCode Go session cookie",
           "0335bd31d5": "Paste the full opencode.ai Cookie header, including __Host-console_session, for rate limit fetching.",
-          "36223200ac": "OpenCode Go Session Cookie",
           "ea631977b5": "Configure OpenCode Go provider settings.",
           "4ac10b4d08": "OpenCode Go",
           "c2aee76420": "Extracts OAuth credentials from your local Gemini CLI installation to authenticate with Google for {{value0}}. This uses credentials issued to the Gemini CLI app, not Orca. May break if Google updates the CLI. Use at your own risk.",
@@ -7711,13 +7781,11 @@
           "c0a52abfc5": "Showing accounts for {{value0}}. New accounts are added there.",
           "94d351af4a": "Accounts",
           "d0d53b7eb0": "Manage which Codex account Orca uses for live rate limit fetching.",
-          "3180536c7a": "Codex Accounts",
           "340d6f7a85": "Each account keeps its own local sign-in context in Orca. Account auth stays on this device.",
           "cedfab35ab": "Optional. Orca can use your normal Codex login; add accounts only if you want quick switching in Orca.",
           "ef91cfa06b": "Codex",
           "3fe7862418": "No managed Claude accounts for {{value0}}. Orca will use that environment's system default Claude login until you add one here.",
           "fcc4093fc1": "Use your current {{value0}} Codex login.",
-          "8bbfd74556": "Claude Accounts",
           "72b36ea174": "Optional. Orca can use your normal Claude login; add accounts only if you want quick switching without moving chat sessions.",
           "26ef4b55be": "Claude",
           "2743cdc0af": "Claude account update failed.",
@@ -7731,7 +7799,6 @@
           "0b4591ff93": "Choose which local environment to inspect and where new managed Claude and Codex accounts are added.",
           "0c67a2a1aa": "WSL is not available on this machine.",
           "2cd197025c": "Choose whether provider accounts are inspected and added in {{value0}} or WSL.",
-          "f54b4fbd71": "Account Location",
           "fd62f37c24": "Codex reported this {{value0}} login is out of date.",
           "e4a28e8894": "Codex reported that the {{value0}} login needs a fresh sign-in. Sign in again before starting new Codex sessions.",
           "75ca9b718e": "Codex reported that the active account needs a fresh sign-in. Re-authenticate it before starting new Codex sessions.",
@@ -7807,17 +7874,23 @@
           "apiKeyInstructions": "Copy the API key from your MiniMax console → API keys. A saved API key takes priority over the cookie; use Forget key to switch back to the cookie.",
           "opencodeGo": {
             "apiKey": {
-              "title": "OpenCode Go API Key",
               "description": "Optional override. Orca otherwise uses the key OpenCode saved when you ran /connect, then OPENCODE_API_KEY.",
               "label": "OpenCode Go API key",
               "placeholder": "Leave blank to use the key saved by /connect or OPENCODE_API_KEY",
               "help": "Used for OpenCode Go usage in the status bar. The session cookie below is only needed for legacy console (OpenCode Black) accounts.",
               "checking": "Checking…",
-              "unavailable": "Status unavailable"
+              "unavailable": "Status unavailable",
+              "9447604f08": "OpenCode Go API key"
             }
           },
           "remoteScopeLocalAccountsKeptHostPicker": "Accounts managed on this desktop are unchanged. Choose this computer in the Host menu at the top of Settings to view them.",
-          "apiKeyUpdateFailed": "MiniMax API key update failed."
+          "apiKeyUpdateFailed": "MiniMax API key update failed.",
+          "89b9a151c3": "Claude accounts",
+          "bd16d363ed": "Codex accounts",
+          "4d274a02f0": "OpenCode Go session cookie",
+          "109431f707": "OpenCode Go workspace id",
+          "91a1b78e67": "Account location",
+          "4d41177f74": "MiniMax session cookie"
         },
         "AdvancedPane": {
           "40b29e0bf3": "Restart",
@@ -7863,7 +7936,6 @@
           "retryDetection": "Retry",
           "02e0143be5": "Installed",
           "92033495ff": "Auto",
-          "385212c7a1": "Default Agent",
           "f9f127d664": "Override the binary path or name, and edit the default launch arguments or environment for this agent.",
           "f95b5c79b8": "Install",
           "fe4d630c94": "Docs",
@@ -7887,7 +7959,8 @@
           "codexSessionSourceInfo": "About importing Codex history",
           "codexSessionSourceTooltip": "Orca runs Codex in an isolated home. Point this at your existing Codex home to import that session history. Empty uses ~/.codex.",
           "storedDefaultUndetected": "Saved as your default, but not detected right now",
-          "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out."
+          "noAgentsDetected": "No agents detected. If one is installed, the probe may have timed out.",
+          "3bddd54c9e": "Default agent"
         },
         "AppIconSelector": {
           "d5a112dc9b": "Next icon",
@@ -7896,48 +7969,48 @@
         },
         "AppearancePane": {
           "3057983501": "Unassigned",
-          "2edf606c46": "Minimize to Tray on Close",
           "b707773a0d": "When enabled, closing the window keeps Orca running in the system tray instead of quitting.",
           "0cd9b8228f": "Choose the app icon shown in the Dock and window switcher.",
-          "ca1590d42f": "App Icon",
           "61d842eca0": "Show the Orca Mobile shortcut in the sidebar. It remains available from Toolbox.",
-          "9da1020447": "Show Orca Mobile Button",
-          "511f270ebb": "Show Automations Button",
-          "cf81907069": "Show Tasks Button",
           "dc29f3cc0d": "Sidebar",
-          "3e4175e5c6": "Status Bar",
-          "9868f39007": "Titlebar App Name",
-          "0fafabcf35": "Show Git-Ignored Files",
           "d496901cd0": "File Explorer",
-          "102d6b5f9b": "IDE Font",
           "ef89200c1f": "when not in a terminal pane.",
-          "5e6d7aba8d": "UI Zoom",
           "fd89b5487c": "Light",
           "7d26ccabe8": "Dark",
           "fb0e0b4453": "System",
           "932ff1fbff": "Theme",
           "leftSidebarAppearance": {
-            "title": "Left Sidebar Appearance",
             "default": "Default",
             "tinted": "Tinted",
-            "tintColor": "Sidebar Tint",
             "tintColorDescription": "The color mixed into the left sidebar surface.",
-            "tintOpacity": "Tint Strength",
             "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar.",
-            "tintDescription": "Keep the left sidebar default or tint it. To follow the terminal, pick Match Terminal as the Light or Dark theme."
+            "tintDescription": "Keep the left sidebar default or tint it. To follow the terminal, pick Match Terminal as the Light or Dark theme.",
+            "fcc653abee": "Left sidebar appearance",
+            "ba1d9a0607": "Sidebar tint",
+            "df205a675e": "Tint strength"
           },
           "interfaceDefaultFont": "Default font",
           "terminalDefaultFont": "Default font",
           "interfaceTitle": "Interface",
           "terminalTitle": "Terminal",
-          "windowSidebarTitle": "Window & Sidebar",
           "windowSidebarSummary": "Sidebar, status bar, and file explorer",
           "gitIgnoredGlossary": "Files matched by .gitignore.",
           "statusBarDescription": "Choose which indicators appear in the status bar.",
           "showPinnedWorktreesInGroups": {
             "title": "Also show pinned worktrees in their original lists",
             "description": "Pinned worktrees stay in Pinned and also appear in All, Project, Status, and PR."
-          }
+          },
+          "173edfb768": "UI zoom",
+          "657a7230a2": "IDE font",
+          "8063dd3b6b": "Titlebar app name",
+          "95a5581f66": "Minimize to tray on close",
+          "e90c5d745a": "Window & sidebar",
+          "907888cd09": "App icon",
+          "3a5d06686d": "Status bar",
+          "e0f9902e18": "Show tasks button",
+          "7be0027489": "Show automations button",
+          "d2b4ddbea0": "Show Orca Mobile button",
+          "7e958ee950": "Show Git-ignored files"
         },
         "AutoRenameBranchFromWorkSetting": {
           "1626524572": "Nautilus",
@@ -7972,15 +8045,15 @@
           "ee110e1830": "No default base ref"
         },
         "BrowserDefaultZoomSetting": {
-          "265597101f": "Default Zoom",
-          "siteDefault": "Zoom for sites you haven't zoomed."
+          "siteDefault": "Zoom for sites you haven't zoomed.",
+          "f3d989184e": "Default zoom"
         },
         "BrowserHomePageSetting": {
           "d4ddcd0056": "Save",
           "37a30c5bfd": "https://google.com",
           "c6cbd1c105": "Home page saved.",
           "6a37540f4b": "URL opened when creating a new browser tab. Leave empty to open a blank tab.",
-          "70224e37b1": "Default Home Page"
+          "9b9df9fe19": "Default home page"
         },
         "BrowserPane": {
           "81ff774667": "Cancel",
@@ -7995,16 +8068,16 @@
           "6f2584b39e": "Add Profile",
           "e4aaf8051b": "toolbar menu.",
           "cd47bc9622": "Select a default profile for new browser tabs. Import cookies and switch profiles per-tab via the",
-          "2d66a6efb5": "Session & Cookies",
           "aa1074bfe9": "Manage browser profiles and import cookies from Chrome, Edge, Comet, or other browsers.",
-          "113cd2dc9b": "Session & Cookies",
-          "d3eb69c0aa": "Link Routing",
           "3e46903ad4": "Used when typing non-URL text in the address bar.",
-          "0d9c987f21": "Default Search Engine",
           "7b225c78f5": "Search engine used when typing non-URL text in the address bar.",
           "64898ecdab": "Create",
           "7b649a578a": "Creating…",
-          "4399c77caa": "Default"
+          "4399c77caa": "Default",
+          "e25fd16b91": "Default search engine",
+          "bc44903d30": "Session & cookies",
+          "ddd634b250": "Session & cookies",
+          "7a366a05e1": "Link routing"
         },
         "BrowserProfileRow": {
           "8e636cae25": "Profile \"{{value0}}\" removed.",
@@ -8024,7 +8097,7 @@
           "333984cf90": "Use an existing browser session"
         },
         "BrowserUseEnableSwitch": {
-          "aea3f45349": "Enable Agent Browser Use"
+          "ce4d6f80d8": "Enable agent browser use"
         },
         "BrowserUseExamples": {
           "1199258ace": "Copy",
@@ -8044,7 +8117,6 @@
           "2eb906706c": "Import Browser Cookies",
           "af8c83ed61": "Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins.",
           "68ea76eb71": "Install the Browser Use skill so agents can operate Orca's browser.",
-          "2d6ead9ab2": "Install Browser Use Skill",
           "b8a1f2d84d": "Agent Browser Use",
           "96b91c6349": "Let coding agents drive this browser with your logins.",
           "2ea4617e3a": "Imported {{value0}} cookies from {{value1}}{{value2}}.",
@@ -8052,7 +8124,9 @@
           "0462565413": "Re-import",
           "8f2675c2f3": "Imported {{value0}} cookies from file.",
           "5301857d88": "From {{value0}}",
-          "finishSteps": "Let coding agents drive this browser with your logins. Finish the steps below."
+          "finishSteps": "Let coding agents drive this browser with your logins. Finish the steps below.",
+          "b3e79d1c51": "Import browser cookies",
+          "4451b3c0a6": "Install browser use skill"
         },
         "BrowserUseSkillStep": {
           "0871b6998d": "Enables agents to navigate and verify pages in Orca's browser.",
@@ -8062,17 +8136,11 @@
           "8671e406f0": "Cancel",
           "a4aafe46e3": "Target path:",
           "e8012c03a1": "Enables agents to use Orca workspace, terminal, and progress commands.",
-          "6053cf736c": "CLI skill",
-          "36a6f919ba": "Give agents Orca-aware workspace, terminal, and progress workflows.",
-          "04873eea3e": "Agent skills",
           "7f2747f7dd": "is not currently visible on PATH for this shell.",
           "b0c310ab46": "Existing launcher target:",
           "15eaad0d31": "Command path:",
           "5dae812f50": "Refresh",
           "52e640f3a0": "Refresh CLI status",
-          "38edbb5721": "Shell command",
-          "outsideOrcaDescription": "Orca terminals already have `orca`. Turn this on to use `orca` from other terminals outside Orca.",
-          "c5c0f2641d": "Orca CLI",
           "d77352f2df": "Failed to remove `{{value0}}` from PATH.",
           "af5540930c": "Removed `{{value0}}` from PATH.",
           "a2b13efa94": "Failed to register `{{value0}}` in PATH.",
@@ -8282,90 +8350,82 @@
           "aeaf76fda9": "Status Bar",
           "9fb225f2d7": "Floating Button",
           "3c900e26e5": "The keyboard shortcut works regardless of where the toggle is shown.",
-          "5e5a8da236": "Toggle Button Location",
           "505001823e": "Choose floating workspace directory",
           "81afb79785": "New floating terminal tabs start here. Markdown notes are saved in Orca's app-owned floating workspace.",
-          "12aa09f10c": "Terminal Directory",
           "41eb95f7f0": "Shows the floating workspace button and panel.",
-          "5136813663": "Enable Floating Workspace",
           "37df688d6f": "Enable the floating workspace and choose where new tabs start.",
-          "1f67f39384": "Floating Workspace"
+          "2374e81dd8": "Floating workspace",
+          "172d1d75c3": "Enable floating workspace",
+          "7cedc178d6": "Terminal directory",
+          "b9c2a85346": "Toggle button location"
         },
         "AgentCacheTimerSection": {
           "05de84a104": "1 hour",
           "54395ecd7c": "5 minutes",
           "8b9e202e0a": "Match this to your provider's cache TTL. The default is 5 minutes.",
-          "a2a8962138": "Timer Duration",
-          "b4e7302944": "Cache Timer",
           "487b176240": "Show a countdown in the sidebar after a Claude agent becomes idle.",
           "9c20253679": "Show a countdown after a Claude agent becomes idle.",
           "fe590653c1": "Claude caches your conversation to reduce costs. When idle too long the cache expires and the next message resends full context at higher cost. This shows a countdown so you know when to resume.",
-          "a137f8854d": "Prompt Cache Timer",
-          "80c454e8a6": "Match this to your provider's cache TTL."
+          "80c454e8a6": "Match this to your provider's cache TTL.",
+          "915265188a": "Prompt cache timer",
+          "988e060497": "Cache timer",
+          "eec81ddfee": "Timer duration"
         },
         "GeneralEditorSettingsSection": {
           "f80603d293": "Show markdown note controls in every markdown view and include markdown notes in agent handoff actions.",
-          "4edc104f0f": "Markdown Review Notes",
           "5f02e6fb21": "Show local markdown review note controls in markdown files.",
           "51161d1647": "Show the minimap overview when editing a file.",
           "6690b1ffb9": "Minimap",
           "5a1ea6eaa2": "Hidden",
           "73a09aad63": "Shown",
-          "1de48ad940": "Default Diff File Tree",
           "1b87897af9": "Show or hide the file tree when opening combined diff views.",
           "12cbc0d0d6": "Side-by-side",
           "05b6df93b3": "Inline",
-          "7311f67ee7": "Default Diff View",
           "b492397d34": "Preferred presentation format for showing git diffs by default.",
           "a5db1d3975": "ms",
           "fc5c5306ff": "ms.",
           "8112cd6dcf": "How long Orca waits after your last edit before saving automatically. First launch defaults to",
-          "d6cf227ca0": "Auto Save Delay",
           "1bec6d8318": "How long Orca waits after your last edit before saving automatically.",
-          "70bb30feb1": "Save editor and editable diff changes automatically after a short pause.",
           "0df2e4fd12": "Auto Save Files",
-          "d21136d9ef": "Configure how Orca persists file edits.",
           "45c6e85c4d": "Editor",
-          "8f1afdfbd8": "Diff Word Wrap",
           "4aa4d9fb73": "Wrap long lines in diff editors instead of requiring horizontal scrolling.",
-          "f1b3ceeb98": "Diff Show Whitespace",
           "94a479cef3": "Show leading and trailing whitespace differences in diffs.",
           "bf16ef0af2": "Off",
           "3f6892f307": "On",
-          "b82f86d7d2": "Rich Markdown Spellcheck",
           "5195f0b9ef": "Show browser spelling underlines and suggestions while editing rich Markdown.",
-          "7ddd66fede": "Editor Word Wrap",
           "9b18de6eea": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
           "collapseUnchangedTitle": "Collapse Unchanged Regions",
           "collapseUnchangedDescription": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way.",
           "markdownDefaultView": "Default Markdown View",
-          "markdownDefaultViewDesc": "The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there."
+          "markdownDefaultViewDesc": "The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there.",
+          "0971ef5c63": "Diff show whitespace",
+          "75e326278e": "Editor word wrap",
+          "89ba15b474": "Auto save delay",
+          "b11d620d45": "Default diff view",
+          "6f33c2a32f": "Diff word wrap",
+          "3f63d16992": "Default diff file tree",
+          "8b3f8e6b83": "Markdown review notes",
+          "a0361dfb05": "Rich Markdown spellcheck"
         },
         "AdvancedNetworkSettingsSection": {
           "3e431564b5": "localhost, 127.0.0.1, *.internal",
           "33ee3ca3af": "Optional. Separate hosts with commas, semicolons, or new lines.",
-          "f6d76cc8f4": "Proxy Bypass Rules",
           "0adfce9fa7": "Supports http, https, socks, socks4, and socks5 URLs.",
           "476f302aca": "http://proxy.example.com:8080",
           "1e214e265a": "Leave empty to use system proxy settings and inherited proxy environment variables.",
-          "f00daf6324": "HTTP Proxy",
           "823e0f15b1": "Proxy URL for Orca network requests and local terminal children.",
           "c46cdbbd4e": "Network",
           "nodeDistMirrorLabel": "Node.js Download Mirror",
           "nodeDistMirrorPlaceholder": "https://mirror.example.com/nodejs/dist",
           "nodeDistMirrorDescription": "Optional. A copy of nodejs.org/dist that Orca uses first when it installs Node on SSH and WSL servers. Each file is still checked against the release Orca expects.",
-          "configureProxy": "Configure proxy"
+          "configureProxy": "Configure proxy",
+          "f8ec545b7c": "HTTP proxy",
+          "abbc3efa4a": "Proxy bypass rules"
         },
         "GeneralPane": {
           "editor_preview_tabs": "Reuse a preview tab when browsing files",
-          "editor_preview_tabs_description": "Single-clicking a file in the Explorer, or following a link in Markdown source, reuses one italic preview tab per group instead of opening a new one. Editing, double-clicking, or pinning keeps that tab open. Turn this off to give every file its own tab.",
           "confirm_running_work_close": "Confirm before closing active chats or terminals",
-          "confirm_running_work_close_description": "Ask before stopping an active agent or command when closing its chat or terminal.",
-          "d58fccfd84": "Navigation",
-          "5cb5475664": "Confirm before closing pinned tabs",
-          "36b2a5dc6d": "Show a confirmation dialog before a pinned tab is closed.",
-          "projectRuntime": "Project Runtime",
-          "projectRuntimeDescription": "Default runtime for local Windows projects that do not override it."
+          "5cb5475664": "Confirm before closing pinned tabs"
         },
         "GeneralSupportSection": {
           "af7d9f4396": "Thanks for the support!",
@@ -8387,37 +8447,28 @@
           "02dc082e70": "Could not start the update download.",
           "e1a647adc5": "Check for Updates",
           "ceb579abaf": "Check for app updates and install a newer Orca version.",
-          "d91ebfb87e": "Current version: {{value0}}",
-          "f2b1ccc12a": "Updates",
           "bd79d412f0": "Update check failed. {{value0}}",
           "b9ad70c30d": "Update error. {{value0}}",
           "2a48034c4c": "Downloading v{{value0}}... {{value1}}%",
           "f40d88390d": "You’re on the latest version.",
           "31fd7150cf": "Checking for updates...",
           "d69a09b672": "Updates are checked automatically on launch.",
-          "e3b9d21c07": "is available. Update Orca through your system package manager — Orca cannot install this release itself."
+          "e3b9d21c07": "is available. Update Orca through your system package manager — Orca cannot install this release itself.",
+          "6d27bd46e3": "Check for updates"
         },
         "GeneralWorkspaceSettingsSection": {
           "3d538a98f7": "Choose apps available from a workspace's Open in menu.",
-          "008f92085f": "Open In Apps",
-          "824b98a0d9": "Show a confirmation before deleting automations and their run history.",
           "ea98373cd8": "Ask Before Deleting Automations",
-          "d2dd2ca2e3": "Show a confirmation dialog before deleting an automation and its run history.",
-          "28bc3d085e": "Show a confirmation before deleting a workspace from the context menu. Failed deletes still surface a Force Delete fallback.",
           "9f380934cf": "Ask Before Deleting Workspaces",
-          "5734db82af": "Show a confirmation dialog before deleting a workspace.",
           "4fbf910ded": "Create workspaces inside a repo-named subfolder.",
           "ba3480642f": "Nest Workspaces",
           "a246f5ce6f": "Root directory where workspace folders are created.",
           "5567191a6e": "Browse",
-          "0e9fc0eadc": "Workspace Directory",
-          "e2955d9ccb": "Configure where new workspaces are created.",
-          "7511097c5d": "Workspace",
           "31e300af1c": "Ask Before Deleting Artifacts",
-          "fb29a73a17": "Show a confirmation dialog before deleting a shared artifact and breaking its public link.",
-          "bf46474e33": "Show a confirmation before deleting a shared artifact. Anyone holding its public link loses access.",
           "externalWorktrees": "External worktrees",
-          "externalWorktreesDescription": "Choose which worktrees created outside Orca appear by default on this host."
+          "externalWorktreesDescription": "Choose which worktrees created outside Orca appear by default on this host.",
+          "ad65d146f6": "Open in apps",
+          "9d0ef6a2a6": "Workspace directory"
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "Apply Changes",
@@ -8482,16 +8533,13 @@
           "895d3f70b8": "gh",
           "32dca11189": "github",
           "c4f610d057": "Current GitLab CLI REST rate-limit headers when available.",
-          "0de4ae556c": "GitLab API Budget",
           "cdd793134e": "api budget",
           "b9c011fbc2": "rate limit",
           "3072428ac7": "glab",
           "8a527d48e3": "gitlab",
           "aa204f185f": "Current GitHub CLI REST, Search, and GraphQL rate limits.",
-          "612a440e57": "GitHub API Budget",
           "2cde9044a8": "graphql",
           "1ec5c91e1d": "Choose whether branch names use your Git username, a custom prefix, or no prefix.",
-          "330f584b50": "Branch Prefix",
           "1ffaadf0a0": "Prefix added to branch names when creating worktrees.",
           "813e15b346": "custom",
           "2351aa5a31": "git username",
@@ -8513,7 +8561,11 @@
           "jiraIssueKeyCasingTitle": "Jira Key Casing",
           "jiraIssueKeyCasingDescription": "Casing of the Jira issue key in the workspace and branch names Orca suggests for new Jira-linked workspaces, such as PROJ-123-fix-login instead of proj-123-fix-login. Existing workspaces and names you type are never changed.",
           "jiraIssueKeyCasingLowercase": "Lowercase",
-          "jiraIssueKeyCasingPreserve": "Uppercase key"
+          "jiraIssueKeyCasingPreserve": "Uppercase key",
+          "7826f35f63": "Branch prefix",
+          "53a0daed73": "Source control group order",
+          "fdbcd676b0": "GitHub API budget",
+          "f2765fbbf6": "GitLab API budget"
         },
         "HiddenExperimentalGroup": {
           "7c4e18d2f6": "Arms the bold-glitch capture gestures on this machine: {{samplingShortcut}} starts a sampling burst; {{captureShortcut}} captures pane evidence to disk.",
@@ -8522,7 +8574,7 @@
         },
         "InputPane": {
           "db15068196": "Enabled by default on Linux and macOS. Linux uses the system selection clipboard; other platforms use a private buffer.",
-          "ad31c3c5fb": "Middle-click Paste from Selection"
+          "dc26974909": "Middle-click paste from selection"
         },
         "IntegrationsPane": {
           "3ba07f933b": "Connect issue trackers Orca can use to browse tasks and start workspaces with linked context.",
@@ -8570,11 +8622,11 @@
           "b3b1cc5708": "Refresh",
           "a795a9552a": "Sessions",
           "7c4889a724": "Recover from a frozen or misbehaving terminal by killing sessions or restarting the underlying daemon.",
-          "d1b80fd5cd": "Manage Sessions",
           "8dbd96b463": "Couldn’t kill session.",
           "0735b7a586": "Couldn’t kill session — it may already be gone.",
           "bfba05dccd": "Killed session.",
-          "c535cbdd09": "Couldn’t load sessions."
+          "c535cbdd09": "Couldn’t load sessions.",
+          "0e07cc838b": "Manage sessions"
         },
         "McpConfigFileRow": {
           "b145eb6009": "env:",
@@ -8586,13 +8638,13 @@
           "f34c152dc0": "Refresh MCP configs",
           "6bac9ddfc6": "SSH repos are read through the remote filesystem. Starter creation is limited to the workspace root config.",
           "96f5609b04": "Inspect MCP server definitions that agents can use while working in this repo.",
-          "55eea3ef47": "MCP Configs",
           "9ee215caf6": ".mcp.json",
           "1f3665e35a": "MCP config created",
           "82436439eb": "Add MCP config",
           "0a5c1ead54": "Create empty config",
           "detectedServers_one": "{{detected}} detected · {{count}} server",
-          "detectedServers_other": "{{detected}} detected · {{count}} servers"
+          "detectedServers_other": "{{detected}} detected · {{count}} servers",
+          "283bebb198": "MCP configs"
         },
         "MobileEmulatorAgentControlRow": {
           "8af7a8bc38": "Commands target the active emulator for the current worktree. Coordinates are normalized from 0..1.",
@@ -8600,7 +8652,7 @@
           "d94ca6a623": "Enables agents to use Orca CLI commands, including mobile emulator control.",
           "67e19ee03c": "Orca CLI skill",
           "ff4b7e65d6": "Let coding agents control the active mobile emulator with Orca CLI commands.",
-          "2a674aa810": "Agent Mobile Emulator Control"
+          "10243e70ff": "Agent mobile emulator control"
         },
         "MobileEmulatorExamples": {
           "edf13dd03b": "Copy",
@@ -8614,20 +8666,20 @@
         },
         "MobileEmulatorSettingsPane": {
           "19d39113b6": "Let coding agents control the active mobile emulator with Orca CLI commands.",
-          "f2f8d97bb6": "Agent Mobile Emulator Control",
           "8aec2f99a0": "Refresh emulator availability",
           "ae1612c58c": "Availability",
           "f9af91ea26": "Shows the New Mobile Emulator action and allows agents to attach to the active emulator.",
-          "700ddbf9b1": "Enable Mobile Emulator",
           "bc39d0f115": "Configure mobile emulator support for Orca and coding agents.",
-          "6593c9ddd3": "Mobile Emulator",
           "a4f1c82d90": "Disabled",
           "b5e2d93e01": "Checking...",
           "c6f3ea4f12": "Ready",
           "d704fb5023": "Needs setup",
           "06b06429c6": "Checking Android SDK and iOS Simulator support.",
           "6d1483d4a0": "1 emulator device detected.",
-          "0a452d4d3b": "{{value0}} emulator devices detected."
+          "0a452d4d3b": "{{value0}} emulator devices detected.",
+          "d2d8632e0d": "Mobile emulator",
+          "b1e5af97e9": "Enable mobile emulator",
+          "fd698d2d47": "Agent mobile emulator control"
         },
         "MobileNetworkInterfaceSection": {
           "b2c384cfd6": "No interfaces found"
@@ -8637,7 +8689,6 @@
           "ee56f1c7e4": "When you leave the mobile app",
           "3939fd062c": "Revoking a device disconnects it immediately.",
           "254a6d09e4": "Paired",
-          "d7ce676270": "Paired Devices",
           "e778ecb209": "Or paste this code in the mobile app:",
           "310924ad2c": "Scan this code with the Orca mobile app. Each code creates a unique device token.",
           "870e1b5ca5": "Failed to revoke device",
@@ -8661,7 +8712,8 @@
           "5e2c7a1f84": "While you're using a terminal on your phone, Orca shrinks it to fit your phone screen. When you close the app or switch away, this controls whether it stays at phone size (so interactive CLI tools don't reflow) or resizes back to your desktop. You can always use Restore or Restore all on the banner to resize manually.",
           "codeRefreshesAutomatically": "Code refreshes automatically. A copied code works for up to 10 minutes.",
           "legacyEncryption": "Uses older encryption. Update the Orca app on this device.",
-          "olderPairingMethod": "Uses an older pairing method. Update the Orca app on this phone."
+          "olderPairingMethod": "Uses an older pairing method. Update the Orca app on this phone.",
+          "5f539ff331": "Paired devices"
         },
         "MobileSettingsPane": {
           "b5a2ed83ff": "App Store",
@@ -8670,27 +8722,21 @@
           "androidApkLabel": "Android APK",
           "e7a3ae8c4e": "Mobile",
           "174f4a3c6d": "Control terminals and agents from your phone.",
-          "1de96ec8a6": "Show Orca Mobile Button",
           "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
-          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar."
+          "d4f2b65f30": "Show the Orca Mobile shortcut in the sidebar.",
+          "49089c92b3": "Show Orca Mobile button"
         },
         "NotificationsPane": {
           "906b4afebf": "Send Test Notification",
           "2772d2f257": "Skip notifications when the triggering worktree is already visible.",
-          "00cd406dbb": "Suppress While Focused",
           "2a42dd8d6f": "Notification sound volume",
           "4aa5085cd7": "Custom:",
           "c258cb96dc": "Choose notification sound",
           "2a2033c388": "Choose the alert Orca plays when a desktop notification is delivered.",
-          "88686e6ca8": "Notification Sound",
           "b6fc369244": "A background terminal emits a bell character.",
-          "ba07e60f38": "Notify About Hidden Workspaces",
           "e4b5e909ff": "When off, workspaces hidden by a Hide switch in the sidebar's Filters menu show no unread dot and send no notifications to this computer or your phone.",
-          "591fe605b9": "Terminal Bell",
           "55f901a59b": "A coding agent finishes and becomes idle.",
-          "ca76d06fd2": "Agent Task Complete",
           "deff6d30da": "Native system notifications for background events.",
-          "841c8c549f": "Enable Notifications",
           "0fadad17ce": "Notification sound could not be played",
           "406feb0aa6": "Test notification was not delivered",
           "6fc3781729": "Notifications are disabled",
@@ -8704,8 +8750,14 @@
           "c83b05a055": "Notifications are not supported on this system",
           "6e6df3a09a": "Choose Custom File",
           "76e02467b8": "Change Custom File",
-          "63fc5ec9d2": "Agent Needs Input",
-          "e1b1724793": "A coding agent asks for permission or has a question."
+          "e1b1724793": "A coding agent asks for permission or has a question.",
+          "b3c7207c8f": "Notification sound",
+          "9c41a0d367": "Enable notifications",
+          "0acae1066d": "Agent task complete",
+          "05f5c5ab50": "Agent needs input",
+          "6bc7bd7b6e": "Terminal bell",
+          "3b77513cd0": "Notify about hidden workspaces",
+          "badd7ed4cf": "Suppress while focused"
         },
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Save Key",
@@ -8713,25 +8765,24 @@
           "d246b2bdb3": "Local runtime keys are stored in ~/.orca using Electron encrypted storage when available.",
           "c3380e4ca5": "sk-...",
           "2f797018f0": "API key configured",
-          "16015322f9": "API Key",
           "07ed3e512e": "Audio is sent to OpenAI only when an OpenAI speech model is selected.",
-          "439e91879e": "OpenAI Transcription"
+          "439e91879e": "OpenAI Transcription",
+          "c3dfb3840e": "API key"
         },
         "OpenAiTranscriptionSettingsRow": {
           "85c589cd61": "Add API key",
           "ae2df8f511": "Disconnect OpenAI API key",
           "a622bc3b37": "Replace key",
           "3b0ab3fc0b": "Connected",
-          "27e0cb656d": "OpenAI Transcription",
           "893790e13b": "Add an OpenAI API key before selecting cloud speech-to-text models.",
-          "b59b9b2b51": "API key configured for cloud speech-to-text models."
+          "b59b9b2b51": "API key configured for cloud speech-to-text models.",
+          "ff28e99b54": "OpenAI transcription"
         },
         "OpenInMenuSetting": {
           "03b00b1f64": "Custom app",
           "c1d817e027": "Added",
           "e4064916aa": "Add app",
           "9d0413817d": "Choose apps available from a workspace's Open in menu.",
-          "6ed52fe71e": "Open In Apps",
           "eb55b87570": "The command you would type in Terminal to open this app.",
           "ba1422ee07": "Terminal command",
           "e1fc0085c6": "Menu label",
@@ -8741,7 +8792,8 @@
           "810ef39b56": "cursor",
           "3ebe650f74": "App name",
           "3743ed080c": "Set command",
-          "f79084947b": "New app"
+          "f79084947b": "New app",
+          "d686e15816": "Open in apps"
         },
         "OrchestrationPane": {
           "52e0634e2c": "Ask a coordinator agent to use orchestration for handoffs, worktree handovers, and sequential or parallel child agents.",
@@ -8749,14 +8801,14 @@
           "9bedd2a6e5": "Enables agents to hand off context and coordinate work through Orca.",
           "07641b9768": "Orchestration skill",
           "2aacdb0517": "Coordinate coding agents across handoffs, worktree handovers, and child-agent work.",
-          "191ac34567": "Agent Orchestration",
           "nestedWorkerDepthTitle": "Nested worker depth",
           "nestedWorkerDepthDescription": "How many generations of dispatched workers may spawn their own workers. 1 keeps the agent tree flat: a coordinator dispatches workers, and those workers do not dispatch.",
           "workerAutoReleaseTitle": "Auto-close finished workers",
           "workerAutoReleaseDescription": "Closes a worker's terminal or chat 2 minutes after it finishes, unless you choose Keep open. If it starts working again, the 2 minutes start over when it finishes.",
           "workerAutoReleaseKeywordClose": "close",
           "workerAutoReleaseKeywordRelease": "release",
-          "7bc082f4de": "Copy install command"
+          "7bc082f4de": "Copy install command",
+          "8a94078d05": "Agent orchestration"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "Enables agents to hand off context and coordinate work through Orca.",
@@ -8843,8 +8895,8 @@
         "RecentTabOrderControl": {
           "3b17c81ede": "Tab strip order",
           "6e6a3fcc61": "Most recent",
-          "7a546f2309": "Tab Order",
-          "a867a0889f": "Recent or tab strip."
+          "a867a0889f": "Recent or tab strip.",
+          "b5cfdc0198": "Tab order"
         },
         "RepositoryHooksSection": {
           "af49e2a19e": "The file is present, but Orca could not find valid `scripts` or `issueCommand` definitions.",
@@ -8854,18 +8906,15 @@
           "c9bc1bfd8f": "Advanced",
           "610d90fdbd": "Command source and orca.yaml details.",
           "4084720f47": "Complete {{artifact_url}}",
-          "13394103bd": "Custom GitHub Issue Command",
           "2cc27dc12b": "Optional per-user override for the linked-issue command.",
           "b91a0f297d": "Local and shared scripts that run before a worktree is archived.",
           "9a100323ff": "Archive Script",
           "21fb607a87": "Default behavior when a new worktree is created.",
           "793dcee97d": "When to run",
           "63e1783173": "Choose the default behavior when a setup script is available.",
-          "fb6bebcf7e": "When to Run Setup",
           "30d555acd2": "Local and shared scripts that run after a new worktree is created.",
           "52b31baf02": "Setup Script",
           "8567127a40": "Scripts that run when worktrees are created or archived. Local scripts are stored on this machine; `orca.yaml` scripts are shared with your team.",
-          "ff082fe7c6": "Worktree Hooks",
           "5d940bde5c": "Add local script",
           "8c2893fae0": "Runs as a single shell script. Saved on this machine.",
           "40a446ae16": "- just for you, on this machine",
@@ -8923,7 +8972,12 @@
           "issueCommandSharedDefault": "Leave blank to use the repo default from <yaml>orca.yaml</yaml>.",
           "issueCommandOptionalDefault": "Leave blank to use the repo default from <yaml>orca.yaml</yaml> when one exists.",
           "commandSourceDescription": "When both <yaml>orca.yaml</yaml> and local commands exist, choose which run.",
-          "issueCommandWslStopped": "WSL distro {{distro}} is stopped. Open a terminal in it to see or edit this command."
+          "issueCommandWslStopped": "WSL distro {{distro}} is stopped. Open a terminal in it to see or edit this command.",
+          "01bdba296f": "Worktree hooks",
+          "1ecf0b115a": "Setup script",
+          "1c17e751c4": "When to run setup",
+          "bfdb1266ce": "Archive script",
+          "da00f141c2": "Custom GitHub issue command"
         },
         "RepositoryIconPicker": {
           "2b7d27b93c": "Use {{value0}} repo color",
@@ -8941,7 +8995,6 @@
           "0e5f0693c1": "Choose custom repo color",
           "642dc29c6d": "Color",
           "549d126081": "Reset",
-          "4e2a14f967": "Repo Icon",
           "d71df44587": "Failed to resolve the GitHub repo.",
           "f79972271a": "No GitHub remote found for this repo.",
           "4d039317f4": "Website favicon",
@@ -8949,26 +9002,21 @@
           "868c5c9b56": "Failed to import repo icon",
           "emojiTooLongForRepoIcon": "This emoji can't be used as a repo icon.",
           "currentEmojiSelection": "Current: {{value0}}",
-          "searchEmojiPlaceholder": "Search emoji"
+          "searchEmojiPlaceholder": "Search emoji",
+          "43bf3709dd": "Repo icon"
         },
         "RepositoryPane": {
           "15a99d9b9f": "Relative paths resolve from this project root.",
           "8ccacbeb5a": "Use Global",
-          "e9bd57a336": "Worktree Location",
           "e63bb96a9b": "Project-specific directory for new worktrees.",
-          "f88db4fece": "Default Worktree Base",
           "8984d06520": "Default base branch or ref when creating worktrees.",
           "e641c359de": "Project icon and color used in the sidebar and tabs.",
-          "26fef02bf3": "Project Icon",
-          "c7ef4415de": "Display Name",
           "b0a0c14a1c": "Project-specific display details for the sidebar and tabs.",
           "removeProjectAllHosts": "Remove this project from Orca on all configured hosts.",
           "removeProjectCheckout": "Remove this checkout from Orca. Other checkouts of this project stay.",
           "removeProjectKeepCheckouts": "Remove this project from Orca. Checkouts that have their own settings stay.",
-          "0909e5d650": "Remove Project",
           "ee5a290616": "Opened as folder. Git features are unavailable for this workspace.",
           "323debba71": "Type:",
-          "availableHosts": "Available Hosts",
           "availableHostsDescription": "Hosts where this project is set up.",
           "availableHostsHelp": "Project paths and worktree settings are host-specific; creating a workspace can target any ready setup.",
           "viewingHost": "Viewing host",
@@ -9014,7 +9062,6 @@
           "existingFolder": "Existing folder",
           "addPlannedHostToHost": "Add {{host}}",
           "addPlannedHostConfirm": "This only records that the project should be available on this host. You can add the folder or clone later.",
-          "projectRuntime": "Project Runtime",
           "projectRuntimeDescription": "Choose whether this project runs on Windows or WSL.",
           "hostStateDisconnected": "Disconnected",
           "hostStateUnknown": "Unknown",
@@ -9027,7 +9074,14 @@
           "show": "Show",
           "hide": "Hide",
           "externalWorktreesGlobal": "Global default: {{value0}}",
-          "useGlobal": "Use global"
+          "useGlobal": "Use global",
+          "07deadaa00": "Display name",
+          "e856e61455": "Project icon",
+          "04eebebbea": "Remove project",
+          "82733ff808": "Available hosts",
+          "41ccd99b57": "Project runtime",
+          "38df44846b": "Default worktree base",
+          "5ff7788414": "Worktree location"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "Command template",
@@ -9062,7 +9116,7 @@
           "981eae7e14": "Draft by default"
         },
         "RepositorySourceControlAiSection": {
-          "71b003b62b": "Source Control AI"
+          "112f3b934f": "Source control AI"
         },
         "RuntimeAccessGrantList": {
           "sshAccessCaveat": "Revoking here doesn't stop someone with SSH access to this computer from pairing again. To cut them off, remove their SSH access.",
@@ -9190,38 +9244,28 @@
           "499c1cd7f9": "Low-level compatibility settings for troubleshooting.",
           "1c87f8d024": "Advanced",
           "c1b43dc4e2": "Anonymous usage data and telemetry controls.",
-          "d7e3f62d70": "Privacy & Telemetry",
           "9b83cc62c2": "macOS privacy access for terminal-launched developer tools.",
           "65660d4548": "macOS Permissions",
           "c6c01ac209": "Control terminals and agents from your phone.",
           "c40dadaac8": "Mobile",
           "c2ee313198": "Use existing machines over SSH for files, terminals, Git, and workspaces.",
-          "9b02492d1f": "SSH Hosts",
           "7686cb5c36": "Connect this browser to a saved Orca server.",
-          "bd0181eeca": "Remote Orca Servers",
           "8acf3f22e0": "Orca stats plus Claude, Codex, OpenCode, Muse token analytics and Grok subscription usage.",
-          "954a8f5aef": "Stats & Usage",
           "a737a4bb22": "Keyboard shortcuts for common actions.",
           "23bf7a1ad4": "Shortcuts",
           "7210ac09c4": "Native desktop notifications for agent activity and terminal events.",
           "9907545fa3": "Notifications",
           "d0b7021d64": "Selection and editing behavior.",
-          "d7a3e635b6": "Input & Editing",
           "6d1a27e193": "Theme, zoom, app and terminal appearance, sidebars, and status bar.",
           "2b4474780a": "Appearance",
           "3d9adfe6a5": "Global terminal, browser, and markdown tabs.",
-          "3eb22a3ada": "Floating Workspace",
           "01f9d36292": "Configure mobile emulator support for Orca and coding agents.",
-          "f75daf1002": "Mobile Emulator",
           "ad9788036f": "Home page, link routing, and session cookies.",
           "c46215ea03": "Browser",
           "6742c7932c": "Saved terminal commands, scoped globally or per project.",
-          "13d4fe30ad": "Quick Commands",
           "b79b5b31e9": "Shells, renderer, sessions, and terminal behavior.",
           "3de4bbb841": "Terminal",
-          "11faa2f7dd": "Task Sources",
           "cfa34f4465": "Branch naming, base refs, and Git AI Author.",
-          "70100f94c7": "Git & Source Control",
           "b07041697f": "Connect GitHub, GitLab, Linear, and source-hosting services.",
           "c9ca101a3b": "Integrations",
           "f9b77539fd": "Workspace defaults, app setup, and maintenance.",
@@ -9231,11 +9275,9 @@
           "eb1176a14e": "Local speech-to-text dictation with on-device models.",
           "5063bb47a5": "Voice",
           "7118953f14": "Enable agents to control any app on your computer.",
-          "c9841721cb": "Computer Use",
           "475980f53d": "Coordinate multiple coding agents through Orca.",
           "00c3a7950d": "Orchestration",
           "21f09426ea": "Optional. Orca works with your existing provider logins; add accounts only if you want Orca to help switch between them.",
-          "ad6c529693": "AI Provider Accounts",
           "ec1ba547f7": "Manage AI agents, set a default, and customize commands.",
           "8afa676615": "Agents",
           "c7ad095d96": "Loading settings...",
@@ -9249,13 +9291,25 @@
           "9abb9be3bc": "Set Up",
           "23c6874fdf": "AI Capabilities",
           "65358016ea": "Discard",
-          "dev": "Dev Tools",
           "devDescription": "Dev-only tools for exercising UI states.",
           "linearTitle": "Linear",
           "linearDescription": "How Linear works in Orca, setup checklist, agent skill, and example prompts.",
           "tasksDescription": "Connect providers, install the Linear skill, and choose what appears in Tasks.",
           "remoteServersDescription": "Run Orca on another machine and work on it from here.",
-          "noSettingsFoundForQuery": "No settings found for \"{{value0}}\""
+          "noSettingsFoundForQuery": "No settings found for \"{{value0}}\"",
+          "3eac6fb97f": "Dev tools",
+          "4198aae333": "AI provider accounts",
+          "3f3e11cb5d": "Computer use",
+          "d09b9d8f00": "Git & source control",
+          "c0900fa64a": "Task sources",
+          "d60b7f0e58": "Quick commands",
+          "129ae9859c": "Mobile emulator",
+          "c2bb9fc528": "Floating workspace",
+          "f1fddf7764": "Input & editing",
+          "084f34826d": "Stats & usage",
+          "022effa46f": "Remote Orca servers",
+          "045db77e21": "SSH hosts",
+          "742ca66ea6": "Privacy & telemetry"
         },
         "SettingsFormControls": {
           "42a4d15a30": "No matching fonts.",
@@ -9299,13 +9353,12 @@
           "0762983d13": "Terminal first",
           "63308571d8": "Orca first",
           "c43c7ff5f9": "Decide who first intercepts shortcuts",
-          "c3a554288e": "Shortcuts in Terminal",
-          "0f55c6f15c": "Choose whether Orca or the focused terminal wins when shortcuts overlap."
+          "0f55c6f15c": "Choose whether Orca or the focused terminal wins when shortcuts overlap.",
+          "7d81bebd89": "Shortcuts in terminal"
         },
         "ShortcutsPane": {
           "4b7ae34062": "directly.",
           "38e86e206a": "Customize shortcuts visually or edit",
-          "47f8f7aef9": "Keyboard Shortcuts",
           "f0b35b0b2e": "Disabled while a terminal or TUI has keyboard focus.",
           "5c65d5db9d": "Terminal first",
           "dfa8ff612f": "Also runs while a terminal or TUI has keyboard focus.",
@@ -9315,7 +9368,8 @@
           "781cb74d22": "Runs from terminal panes.",
           "cb02e00202": "Terminal",
           "d8c988dab4": "~/.orca/keybindings.json",
-          "shortcutUnavailable": "Shortcut is no longer available."
+          "shortcutUnavailable": "Shortcut is no longer available.",
+          "9a3a3ca03d": "Keyboard shortcuts"
         },
         "SourceControlAiActionRecipeDefaults": {
           "2576299196": "args",
@@ -9348,7 +9402,6 @@
           "88bfbf1a9c": "No sparse presets saved for this repository.",
           "d7565029a9": "New Preset",
           "17f8c4ce10": "Manage saved directory sets for sparse worktree creation.",
-          "388513be2d": "Sparse Checkout Presets",
           "8b64731aaf": "+{{value0}} more",
           "755c6a1a0d": "Confirm",
           "a7bcf206b1": "Deleting",
@@ -9358,7 +9411,8 @@
           "9d3c087fc0": "1 directory",
           "8deb7024ab": "Loading sparse presets...",
           "92c08ccae3": "Sparse presets could not be loaded.",
-          "2ef2b2674b": "Delete {{value0}}"
+          "2ef2b2674b": "Delete {{value0}}",
+          "124ff6ea6c": "Sparse checkout presets"
         },
         "SshDestructiveActionDialog": {
           "895b216267": "Cancel",
@@ -9428,7 +9482,8 @@
           "bulkAction": "Remove {{count}}",
           "bulkProgress": "Removing {{done}} of {{count}}…",
           "bulkConnectedSingular": "{{count}} host is connected. Its remote terminals will be closed.",
-          "bulkConnectedPlural": "{{count}} hosts are connected. Their remote terminals will be closed."
+          "bulkConnectedPlural": "{{count}} hosts are connected. Their remote terminals will be closed.",
+          "916f480036": "Remove SSH target"
         },
         "SshTargetForm": {
           "fea9cb402e": "Cancel",
@@ -9440,7 +9495,6 @@
           "c7d0e18ecb": "Proxy Command",
           "cb91f6375c": "Optional. SSH agent is used by default.",
           "d6a5f2ee5c": "~/.ssh/id_ed25519 (leave empty for SSH agent)",
-          "63c0c145c1": "Identity File",
           "c94cfa634c": "Port",
           "47e082bc17": "deploy",
           "dc1dc52aaa": "Username",
@@ -9462,10 +9516,10 @@
           "editDescription": "Update connection details for this machine. Changes apply on next connect.",
           "addDescription": "Add a persistent machine you can log into over SSH.",
           "editingPrefix": "Editing",
-          "addHost": "Add host"
+          "addHost": "Add host",
+          "8349b7b4fa": "Identity file"
         },
         "TasksPane": {
-          "f71d8a9dd3": "Task Providers",
           "6b23a34f6d": "Jira",
           "09ae2d7c51": "Linear",
           "7c5d7fdc20": "GitLab",
@@ -9492,51 +9546,52 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "30255b39dc": "Task providers"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
-          "f27a99978d": "Divider Thickness",
           "db632cb50e": "Opacity applied to panes that are not currently active.",
-          "a6fdd6a3b1": "Inactive Pane Opacity",
-          "e1a5c25555": "Terminal Panes",
           "04cdf85dec": "Opacity of the terminal cursor.",
-          "b9f1804422": "Cursor Opacity",
           "2de6b5a699": "Uses the blinking variant of the selected cursor shape.",
           "74736cc9b1": "Blinking Cursor",
           "2e5aec3cf6": "Underline",
           "52854a5608": "Block",
           "e070e8aeba": "Bar",
-          "db270cc9a9": "Cursor Shape",
           "d455f2ef4f": "Default cursor appearance for Orca terminal panes.",
           "abcb4dd019": "Terminal Cursor",
           "31f6e61085": "Ligatures are currently",
           "870377082f": "Off",
           "84bd22f2cd": "On",
           "bc9ff84d61": "Auto",
-          "be8da35e7f": "Font Ligatures",
           "4b1f29598e": "Auto - disabled for \"{{value0}}\".",
           "400e950ca5": "Auto - enabled for \"{{value0}}\".",
           "04569feb07": "Always off, even for fonts that ship them.",
           "7234abcd08": "Always on. Fonts without ligatures simply render as-is.",
-          "c084eb7d4c": "Line Height",
-          "4aae5db258": "Font Weight",
-          "a408266e67": "Font Family",
           "855a76343a": "Import from Ghostty",
-          "048aac8a64": "Terminal Typography",
           "4415beb958": "disabled",
           "4e7d41a9f0": "enabled",
           "dimUnfocusedPanes": "Dim unfocused panes.",
-          "kitty_import": "Import from Kitty"
+          "kitty_import": "Import from Kitty",
+          "bb4ac88514": "Font weight",
+          "d9c0df9673": "Line height",
+          "e4cccb139e": "Font ligatures",
+          "5ae74b7796": "Terminal typography",
+          "a157b95a08": "Font family",
+          "4adb9364f4": "Cursor shape",
+          "55c3f22e7c": "Cursor opacity",
+          "0f6515bf50": "Terminal panes",
+          "4d8b35c479": "Inactive pane opacity",
+          "835aad4f9d": "Divider thickness"
         },
         "TerminalAdvancedTypographyControls": {
-          "f5fa1a08f1": "Bold Font Weight",
-          "0e0d1ee15a": "Adjust independently from Font Weight. Some fonts map several values to one face, so lower Font Weight or choose another font if bold looks unchanged."
+          "0e0d1ee15a": "Adjust independently from Font Weight. Some fonts map several values to one face, so lower Font Weight or choose another font if bold looks unchanged.",
+          "f40f6ef17c": "Bold font weight"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",
           "0f4c92e595": "Default terminal font size for new panes and live updates.",
-          "a4a352b1e9": "Font Size"
+          "a653570abf": "Font size"
         },
         "TerminalPane": {
           "4263e940e0": "Pressing the JIS Yen (¥) key sends a backslash (\\\\) instead.",
@@ -9555,30 +9610,22 @@
           "2561d3fc1b": "Controls whether the macOS Option key sends Alt/Esc sequences or composes characters.",
           "96be03b8eb": "PowerShell 7+",
           "d26174e1dd": "Windows PowerShell",
-          "fe20f79dd1": "PowerShell Version",
           "822f62ddcd": "Download PowerShell 7+",
           "a016ffbeed": "Auto uses Windows PowerShell now and switches to PowerShell 7+ when installed.",
           "5ed5c95344": "Choose between Windows PowerShell and PowerShell 7+ for new terminal panes.",
           "3d88af864d": "Choose whether the PowerShell shell option launches Windows PowerShell or PowerShell 7+ for new terminal panes.",
-          "4bebcc2b2c": "Word Separators",
           "12e06178fa": "rows",
           "907b0b9d3e": "Custom",
           "5336c096af": "{{value0}} rows",
           "81d86b2dd2": "Retained desktop terminal rows for new and open panes.",
-          "9df53f7c14": "Scrollback Rows",
           "c3810b2b42": "Retained desktop terminal rows.",
           "267d020745": "Scrollback, word boundaries, and platform-specific terminal behaviors.",
           "5e5f06c82c": "Advanced",
           "6e6480a7df": "Let programs in the terminal (Zellij, tmux, Neovim, fzf, Grok, SSH) copy to your system clipboard.",
-          "3338dcf8c1": "Allow TUI Clipboard Writes (OSC 52)",
           "69c64a479c": "Let Zellij, tmux, Neovim, fzf, and Grok copy to the system clipboard over the PTY (including over SSH).",
-          "902f5dee1f": "Copy on Select",
           "9129b7e805": "Hovering a terminal pane activates it without needing to click.",
-          "8eefeaa3da": "Focus Follows Mouse",
           "96fe15def8": "Scrolling, mouse, and clipboard behavior for terminal panes.",
-          "45721f3e67": "Terminal Interaction",
           "9c0b1c1792": "On",
-          "c1fc9e9444": "GPU Acceleration",
           "e0996d141a": "Auto tries WebGL, with DOM fallback for unsupported or risky renderers.",
           "7eaccc1424": "WebGL is always attempted for terminal panes.",
           "fe4acf36c6": "WebGL disabled; DOM renderer for max compatibility.",
@@ -9589,16 +9636,13 @@
           "f61ac77f16": "Git Bash",
           "0f1b8669e6": "Command Prompt",
           "eb7fc4d98a": "PowerShell",
-          "27e301f22c": "Default Shell",
           "09bf02de9a": "Shell used when opening a new terminal pane. Takes effect for new terminals.",
           "bd68f3170d": "Choose the default shell for new terminal panes on Windows.",
           "a55eee649f": "Default shell for new terminal panes on Windows.",
-          "87e678a8af": "Windows Shell",
           "16753eea48": "Right-click pastes the clipboard. Ctrl+right-click opens the context menu.",
           "9c178cf8aa": "Right-click to paste",
           "af0c3b6e39": "Right-click pastes the clipboard into the terminal. Use Ctrl+right-click to open the context menu.",
           "scrollSpeed": {
-            "title": "Scroll Speed",
             "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed.",
             "helper": "Adjust how wheel input feels in scrollback and in mouse-aware terminal apps.",
             "reset": "Reset",
@@ -9607,7 +9651,8 @@
             "fast": "Fast",
             "fastDescription": "Extra multiplier while scrolling with a modifier key.",
             "tui": "TUI",
-            "tuiDescription": "Discrete wheel reports for full-screen terminal apps."
+            "tuiDescription": "Discrete wheel reports for full-screen terminal apps.",
+            "f7b030e015": "Scroll speed"
           },
           "8dbe0bc942": "Shell arguments, one per line",
           "f58cb71f53": "--rcfile\n/path/to/rcfile",
@@ -9639,7 +9684,17 @@
           "a909136b3f": "shell",
           "1c29734248": "Shell used for new terminal panes",
           "9589abc009": "Default shell",
-          "5a5eac2f44": "Shell not found: {{value0}}"
+          "5a5eac2f44": "Shell not found: {{value0}}",
+          "143ca8e340": "Scrollback rows",
+          "8abcfcf8d3": "Word separators",
+          "1be0263c55": "PowerShell version",
+          "82e19f00f0": "Terminal interaction",
+          "8c07bc4d7a": "Focus follows mouse",
+          "8f3e7bc91f": "Copy on select",
+          "d54811df09": "Allow TUI clipboard writes (OSC 52)",
+          "37389522c6": "GPU acceleration",
+          "5aab473c7e": "Windows shell",
+          "e9c84d0338": "Default shell"
         },
         "TerminalSettingsPreview": {
           "a63953a48a": "Preview {{value0}} theme",
@@ -9648,17 +9703,10 @@
           "50419052fe": "Pane divider"
         },
         "TerminalThemeSections": {
-          "db210115c5": "Light Mode Preview",
           "5e0c24b5c8": "Controls the split divider line between panes in light mode.",
-          "ec2e33ad80": "Light Divider Color",
           "d56af60e6f": "Choose the theme used when Orca is in light mode.",
-          "8273bc75d7": "Light Theme",
-          "bc8e8a251a": "Dark Mode Preview",
           "cbe56a0f79": "Controls the split divider line between panes in dark mode.",
-          "b739d2abfe": "Dark Divider Color",
           "7add204bd5": "Choose the terminal theme used in dark mode.",
-          "9499ad1dc4": "Dark Theme",
-          "catalog_title": "Terminal Themes",
           "target_title": "Theme Mode",
           "target_aria": "Terminal theme mode",
           "target_dark": "Dark",
@@ -9668,21 +9716,25 @@
           "light_preview_description": "Shows the effective light terminal appearance.",
           "dark_preview_description": "Shows the effective dark terminal appearance.",
           "deleted_imported_theme": "Deleted \"{{value0}}\"",
-          "undo": "Undo"
+          "undo": "Undo",
+          "3d91303d0d": "Light theme",
+          "44a006ab99": "Dark theme",
+          "43afde3df7": "Light divider color",
+          "3a05b51211": "Dark divider color",
+          "a39d64fe4a": "Terminal themes",
+          "2318e07c68": "Theme mode",
+          "2a11e028ff": "Light mode preview",
+          "3ebb499929": "Dark mode preview"
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI magenta color",
           "63f8d9336e": "Color Overrides",
           "e86e09b5c7": "Override individual terminal colors.",
           "1d1920dc8a": "Hide the mouse cursor when typing in the terminal.",
-          "3530908ef9": "Hide Mouse While Typing",
           "1846f6ee6a": "Vertical padding around the terminal grid in pixels.",
-          "1afcc1d973": "Vertical Padding",
           "25e2f8e8e1": "Horizontal padding around the terminal grid in pixels.",
-          "36b8402015": "Horizontal Padding",
           "c65bb9ce63": "Restart required",
           "809f37738d": "Controls the transparency of the terminal background. 1 is fully opaque, 0 is fully transparent.",
-          "ea7b1a158e": "Background Opacity",
           "03acb60aa0": "Controls the transparency of the terminal background.",
           "00eaa6b881": "Window appearance and background settings.",
           "b96ba13ed1": "Window",
@@ -9739,7 +9791,12 @@
           "color_overrides_dark_description": "Override individual colors of the dark terminal theme.",
           "color_overrides_light_description": "Override individual colors of the light terminal theme.",
           "reset_dark_color_overrides": "Reset dark color overrides",
-          "reset_light_color_overrides": "Reset light color overrides"
+          "reset_light_color_overrides": "Reset light color overrides",
+          "e80b782206": "Background opacity",
+          "2d8a13cabd": "Horizontal padding",
+          "44c6f429e9": "Vertical padding",
+          "a649973dd3": "Hide mouse while typing",
+          "c9d73aee44": "Color overrides"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Reset"
@@ -9749,9 +9806,6 @@
           "68de13f72c": "Failed to delete model.",
           "1ba81c0ff0": "recommended",
           "cfde55c7b0": "Failed to download model.",
-          "43fd4f454b": "Speech Model",
-          "ba4a900d1d": "Dictation Mode",
-          "0121960365": "Enable Voice Dictation",
           "62d2a84d31": "Failed to clear OpenAI API key",
           "37aba8bb63": "OpenAI API key cleared",
           "8572bbb537": "Failed to save OpenAI API key",
@@ -9771,7 +9825,10 @@
           "openAiKeyName": "Your OpenAI transcription key",
           "dictationShortcutDescription": "Press {{shortcut}} to dictate text into any focused pane.",
           "dictationModeAuto": "Auto",
-          "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop."
+          "dictationModesWithAutoDescription": "Auto: hold {{shortcut}} to dictate until you let go, or tap it to start and stop. Hold: dictate while {{shortcut}} is held. Toggle: press {{shortcut}} once to start, again to stop.",
+          "6ffecf36fd": "Enable voice dictation",
+          "342f309724": "Dictation mode",
+          "c5ea32143e": "Speech model"
         },
         "WorktreeSymlinksSection": {
           "1c1e35b219": "Remove {{value0}}",
@@ -9783,10 +9840,10 @@
           "4cd2a4c077": "Type a path (e.g. .env or node_modules)…",
           "241325302c": "Add Path",
           "7ff265071d": "When a new worktree is created, each path listed here is APFS clone-copied on macOS when possible, otherwise symlinked from the primary checkout.",
-          "4755f120b6": "Worktree Shared Paths",
           "b07ef5a8b6": "Paths to materialize from the primary checkout into newly created worktrees.",
           "d72ba8dc68": "{{value0}} paths",
-          "9ea912d811": "1 path"
+          "9ea912d811": "1 path",
+          "a995ebf5ab": "Worktree shared paths"
         },
         "WslCliRegistration": {
           "c6f6f89d7c": "Cancel",
@@ -9821,12 +9878,10 @@
             "be8b621bdc": "workspace",
             "8dcbef1856": "opencode",
             "38d22ff8d6": "Optional workspace ID override if the automatic lookup fails.",
-            "4ee2029e9c": "OpenCode Go Workspace ID",
             "9c4e40cf6b": "session",
             "61f7d1fcbe": "cookie",
             "37020a02c2": "console",
             "25591bf95b": "Paste the full opencode.ai Cookie header, including __Host-console_session, for rate limit fetching.",
-            "6ed1401020": "OpenCode Go Session Cookie",
             "b7c2cee442": "experimental",
             "7118d2f908": "credentials",
             "933deaf732": "oauth",
@@ -9841,16 +9896,13 @@
             "06662af91e": "account",
             "70d1b8def5": "codex",
             "87a4a8584e": "Choose which optional saved Codex account powers live quota reads.",
-            "a4bcfd6f86": "Active Codex Account",
             "042885c07c": "out of date",
             "02c438bc7b": "expired",
             "77e32a2ad3": "reauthenticate",
             "c759741d77": "quota",
             "b40d5b6570": "Optional account switching for Codex and live rate limit fetching.",
-            "17c5d244eb": "Codex Accounts",
             "e14049e1a8": "claude",
             "dd75a73991": "Optional account switching for Claude while preserving shared chat context.",
-            "75682e1b62": "Claude Accounts",
             "e02c136ad0": "auth",
             "9f70aa706c": "provider",
             "488a7e9206": "linux",
@@ -9858,8 +9910,6 @@
             "bdbd1e668e": "windows",
             "593720c17f": "location",
             "b84a5b0c8a": "Choose whether provider accounts are inspected and added on this device or in WSL.",
-            "d09fb5ca92": "Account Location",
-            "733f9e2a93": "MiniMax Usage",
             "f8374c3151": "Configure MiniMax usage tracking. Pick the overseas or China endpoint, then paste a session cookie or save an API key that works on either host.",
             "f4a8c2e1b7": "Grok (xAI) Usage",
             "e3b7d1f9a2": "OAuth sign-in via Grok CLI (grok login) for weekly credit usage.",
@@ -9873,7 +9923,6 @@
             "5d8f1a3b7c": "china",
             "7e2a4b8c1d": "overseas",
             "cursor": {
-              "title": "Cursor Usage",
               "description": "Plan usage read from the Cursor sign-in already on this computer (cursor-agent login).",
               "kw": {
                 "cursor": "cursor",
@@ -9881,10 +9930,10 @@
                 "spend": "spend",
                 "rateLimit": "rate limit",
                 "statusBar": "status bar"
-              }
+              },
+              "39bbdebe13": "Cursor usage"
             },
             "zcodePlan": {
-              "title": "GLM Coding Plan",
               "description": "Track Z.AI or Zhipu (BigModel) GLM Coding Plan usage. Pick the site and save the plan API key.",
               "kw": {
                 "glm": "glm",
@@ -9893,8 +9942,16 @@
                 "bigmodel": "bigmodel",
                 "codingPlan": "coding plan",
                 "rateLimit": "rate limit"
-              }
-            }
+              },
+              "0db9d0465f": "GLM coding plan"
+            },
+            "be3a748ebb": "Claude accounts",
+            "5e2101f61f": "Account location",
+            "54c541fc6e": "Codex accounts",
+            "4518496456": "Active Codex account",
+            "f0e6678f99": "OpenCode Go session cookie",
+            "8eef999193": "OpenCode Go workspace id",
+            "9b6ce52c36": "MiniMax usage"
           }
         },
         "advanced": {
@@ -9976,8 +10033,6 @@
             "8a17fd6026": "stable",
             "a79d266f71": "session",
             "afbf35be68": "stable session",
-            "agentPermissions": "Agent Permissions",
-            "agentRuntime": "Agent Runtime",
             "agentRuntimeDescription": "Choose whether agents are detected and launched on Windows or in WSL by default.",
             "runtime": "runtime",
             "agentLocation": "agent location",
@@ -9987,12 +10042,13 @@
             "yolo": "yolo",
             "manual": "manual",
             "skip": "skip",
-            "checks": "checks"
+            "checks": "checks",
+            "1523c4190f": "Agent runtime",
+            "788559d398": "Agent permissions"
           }
         },
         "appearance": {
           "search": {
-            "9a115966d3": "Minimize to Tray on Close",
             "4d5b9427b5": "When enabled, closing the window keeps Orca running in the system tray instead of quitting.",
             "468448bba4": "watercolor",
             "f586abfa35": "blue",
@@ -10002,7 +10058,6 @@
             "1f2880a9d5": "orca",
             "2cfb3420c0": "app icon",
             "e80c2af428": "Choose the app icon shown in the Dock and window switcher.",
-            "2b313598c6": "App Icon",
             "839fb1e3ed": "toolbox",
             "ac79fe4a04": "show",
             "648eeada79": "hide",
@@ -10011,29 +10066,24 @@
             "5e5b8878bf": "phone",
             "74618577c7": "mobile",
             "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
-            "1de96ec8a6": "Show Orca Mobile Button",
             "4c920ab2d1": "schedule",
             "58f4e22fa2": "automation",
             "b186f3cefb": "automations",
             "ae13a0d340": "Show the Automations button at the top of the left sidebar.",
-            "caa27e1a8e": "Show Automations Button",
             "6b846424cc": "linear",
             "2ee4810f38": "github",
             "0d5a74b606": "tasks",
             "9a248333c7": "Show the Tasks button at the top of the left sidebar.",
-            "155a1e7438": "Show Tasks Button",
             "a895d0f938": "brand",
             "51f957ce39": "name",
             "36e006efc1": "app",
             "bed343b03e": "titlebar",
             "18b4c4c30b": "Show Orca in the titlebar.",
-            "fdd31b00d0": "Titlebar App Name",
             "c1bca1885a": "file explorer",
             "9f2df826ac": "ignored",
             "08c86bf58e": "gitignore",
             "bce3ac317a": "git",
             "7164edf71a": "Dim files matched by .gitignore in the file explorer.",
-            "f8129fb544": "Show Git-Ignored Files",
             "2f12e1aa3a": "ui",
             "5095258df2": "interface",
             "fab91464dd": "ide",
@@ -10041,12 +10091,10 @@
             "a0e09aed9c": "typeface",
             "24094af355": "font",
             "07c7c38fac": "Choose the font used by the Orca interface.",
-            "ddb991024d": "IDE Font",
             "0c83659f48": "shortcut",
             "0952091186": "scale",
             "3ae5de6101": "zoom",
             "adddb91a3d": "Scale the entire application interface.",
-            "c5e933970f": "UI Zoom",
             "3a9b69d734": "system",
             "44d873fd18": "light",
             "262fe1d24f": "dark",
@@ -10067,56 +10115,47 @@
             "9c4d5f0894": "manager",
             "c690a15849": "resource",
             "81ef5abc2f": "Show CPU, memory, terminal sessions, and workspace disk usage in the status bar.",
-            "7cf005b29f": "Resource Manager",
             "fe192b060e": "host",
             "f4997e0f8a": "connection",
             "a278406ed5": "remote",
             "6ecad74eb3": "ssh",
             "f17d66d0d2": "Show remote host connection status in the status bar.",
-            "57fb424c56": "Remote Hosts",
             "35565867cb": "moonshot",
             "de586def95": "subscription",
             "00a028f25f": "usage",
             "40e5c3c285": "kimi",
             "c927a155d5": "Show Kimi subscription usage in the status bar.",
-            "3a6c028ea8": "Kimi Usage",
             "25e51b62ee": "rate limit",
             "d9e7cef86f": "cookie",
             "d16378a88f": "minimax",
             "e46178eb1b": "Show MiniMax subscription usage in the status bar.",
-            "0f08f6b483": "MiniMax Usage",
             "edbf0f63a0": "cost",
             "afbb6a3767": "tokens",
             "d77537b580": "opencode-go",
             "a9d56852eb": "opencode",
             "7f72de7cbe": "Show OpenCode Go token and cost usage in the status bar.",
-            "bc046e7899": "OpenCode Go Usage",
             "51b0ccd6a2": "google",
             "2804a920ad": "gemini",
             "9660c5b2f1": "Show Gemini token and cost usage in the status bar.",
-            "5bfb874d05": "Gemini Usage",
             "97957e374e": "openai",
             "8dfd676c28": "codex",
             "e9e4412545": "Show Codex token and cost usage in the status bar.",
-            "54b1acf24f": "Codex Usage",
             "dea0a9a665": "anthropic",
             "c9fe3a7876": "claude",
             "de50c6f516": "Show Claude token and cost usage in the status bar.",
-            "9dc15020d7": "Claude Usage",
             "language": {
               "locale": "locale",
               "i18n": "i18n",
               "translation": "translation"
             },
             "leftSidebarAppearance": {
-              "title": "Left Sidebar Appearance",
               "project": "project",
               "background": "background",
               "tint": "tint",
-              "tintDescription": "Keep the left sidebar default or tint it. To follow the terminal, pick Match Terminal as the Light or Dark theme."
+              "tintDescription": "Keep the left sidebar default or tint it. To follow the terminal, pick Match Terminal as the Light or Dark theme.",
+              "0a5d3677f0": "Left sidebar appearance"
             },
             "workspaceCardLayout": {
-              "title": "Workspace Card Layout",
               "description": "Workspace cards can use compact or detailed layouts.",
               "compact": "compact",
               "compactDisplay": "compact display",
@@ -10124,7 +10163,8 @@
               "worktreeCards": "worktree cards",
               "cardLayout": "card layout",
               "workspaceOptions": "workspace options",
-              "detailed": "detailed"
+              "detailed": "detailed",
+              "fc7c945fd9": "Workspace card layout"
             },
             "showPinnedWorktreesInGroups": {
               "title": "Also show pinned worktrees in their original lists",
@@ -10138,16 +10178,13 @@
               "pr": "pr",
               "duplicate": "duplicate"
             },
-            "antigravityUsageTitle": "Antigravity Usage",
             "antigravityUsageDescription": "Show Antigravity subscription usage in the status bar.",
             "antigravityKeyword": "antigravity",
-            "f8e2a1c4b6": "Grok Usage",
             "e7d1b0f3a5": "Show Grok weekly credit usage from Grok CLI OAuth.",
             "d6c0a9e2f4": "grok",
             "c5b9f8d1e3": "xai",
             "usagePercentageDisplayTitle": "Usage percentages",
             "usagePercentageDisplayDescription": "Choose whether provider limits show the percentage used or remaining.",
-            "zcodeUsageTitle": "ZCode Usage",
             "zcodeUsageDescription": "Show ZCode Coding Plan quota usage in the status bar.",
             "zcode": "zcode",
             "zai": "zai",
@@ -10161,17 +10198,37 @@
               "background": "background"
             },
             "cursor": {
-              "title": "Cursor Usage",
               "description": "Show Cursor plan usage from the Cursor sign-in on this computer.",
               "kw": {
                 "cursor": "cursor"
-              }
+              },
+              "34f2b8c539": "Cursor usage"
             },
             "matchTerminal": "match terminal",
-            "museUsageTitle": "Muse Usage",
             "museUsageDescription": "Show Muse subscription quota in the status bar.",
             "muse": "muse",
-            "meta": "meta"
+            "meta": "meta",
+            "19aa904233": "App icon",
+            "37e6b58b0e": "UI zoom",
+            "aff6e6afdf": "IDE font",
+            "4af9002a0c": "Show Git-ignored files",
+            "fb2353b8dd": "Titlebar app name",
+            "9bc701a4d1": "Show tasks button",
+            "7f5d534f81": "Show automations button",
+            "1b404ee6ad": "Show Orca Mobile button",
+            "ba1f9d39a6": "Antigravity usage",
+            "ca64c95969": "Grok usage",
+            "96e32c1118": "MiniMax usage",
+            "e8d2710689": "Muse usage",
+            "931c53cd16": "Claude usage",
+            "40c10c4deb": "Codex usage",
+            "585be839e9": "Gemini usage",
+            "20e7d30150": "OpenCode Go usage",
+            "c29089716e": "Kimi usage",
+            "20b33a61c8": "Remote hosts",
+            "b8dc238d07": "Resource manager",
+            "183e6b8ef9": "ZCode usage",
+            "d408ece868": "Minimize to tray on close"
           }
         },
         "auto": {
@@ -10213,7 +10270,6 @@
             "29193a51d5": "cookies",
             "2d2d995c58": "browser",
             "060ac1fcba": "Import cookies from Chrome, Edge, or other browsers to use existing logins inside Orca.",
-            "96afedcb5c": "Session & Cookies",
             "a7a07d5415": "editor",
             "8dd4805991": "file",
             "68d1db8929": "markdown",
@@ -10242,7 +10298,6 @@
             "82ba1c80ea": "localhost",
             "bea27bac4b": "links",
             "44d14df30d": "preview",
-            "5cb082b3e3": "Link Routing",
             "95944898e0": "percentage",
             "483a0eb5e0": "new tab",
             "726f2a8556": "page zoom",
@@ -10250,7 +10305,6 @@
             "54f4ea55f7": "scale",
             "4a98ed195f": "zoom",
             "c3d89ed4d0": "Zoom level applied to newly opened browser tabs.",
-            "072b7f5c1f": "Default Zoom",
             "0bb34eacc9": "query",
             "8b8ed06e4b": "omnibox",
             "3538b3aaeb": "token",
@@ -10262,15 +10316,12 @@
             "72b4b89970": "engine",
             "16bd69cd82": "search",
             "0628d5943b": "Search engine used when typing non-URL text in the address bar.",
-            "5e755920c9": "Default Search Engine",
             "4596a52cf7": "landing",
             "5164c47e31": "blank",
             "4fda4fb066": "url",
             "0dbb1eaf4e": "homepage",
             "291f480a5e": "home",
             "a942905148": "URL opened when creating a new browser tab. Leave empty to open a blank tab.",
-            "c3903322d2": "Default Home Page",
-            "19ea5607cf": "Localhost Worktree Labels",
             "4e0fdf0a3f": "Open workspace ports as worktree-specific Orca localhost URLs so browser tabs are easier to tell apart.",
             "6f5199381e": "ports",
             "8f036ea11f": "worktree",
@@ -10297,7 +10348,13 @@
               "native": "native",
               "cleaned": "cleaned",
               "restart": "restart"
-            }
+            },
+            "1c2aff8f82": "Default home page",
+            "5a70844e54": "Default search engine",
+            "f6de9e25a0": "Default zoom",
+            "f0eb09ce09": "Link routing",
+            "e2e32ba6da": "Localhost worktree labels",
+            "f1da035bcb": "Session & cookies"
           },
           "use": {
             "search": {
@@ -10318,7 +10375,6 @@
               "fb8178824f": "cookies",
               "ba4eb53b72": "browser use",
               "2fb24d17db": "Import cookies from Chrome, Edge, or other browsers so agents can reuse your logins.",
-              "614c756ab1": "Import Browser Cookies",
               "cee44fb442": "automation",
               "a57c2172dc": "agent-browser",
               "f5b8fdddf5": "orca-cli",
@@ -10326,7 +10382,8 @@
               "9d97446873": "agent",
               "a2d489263e": "skill",
               "a7e82445fa": "Install the Browser Use skill so agents can operate Orca's browser.",
-              "a1414dcefb": "Install Browser Use Skill"
+              "e72d500ca5": "Install browser use skill",
+              "9e2bfa1405": "Import browser cookies"
             }
           }
         },
@@ -10379,7 +10436,7 @@
               "82f01c2d2c": "accessibility",
               "fefb452f5b": "computer use",
               "9210db582b": "Allow agents to inspect screenshots and operate local apps when you ask.",
-              "442bec10fe": "Computer Use"
+              "c3c3d70b5e": "Computer use"
             }
           }
         },
@@ -10408,7 +10465,6 @@
               "08f8039ca9": "accessibility",
               "3cd51d18a1": "screen recording",
               "2e5d98ab56": "Allow screenshots, screen inspection, keystrokes, and window automation.",
-              "39bb49e662": "Screen Recording and Accessibility",
               "00e954319e": "whisper",
               "1e6e27b202": "ffmpeg",
               "f061f08b7b": "sox",
@@ -10418,14 +10474,15 @@
               "259b829b84": "camera",
               "ed7c12bdb4": "microphone",
               "6eca1636b7": "Allow voice, transcription, webcam, and media capture tools.",
-              "302c0c42f9": "Microphone and Camera",
               "4e225e7c56": "developer tools",
               "6db4fca386": "macos",
               "0c13b249e3": "tcc",
               "2270ccff3f": "privacy",
               "a98aa11a9c": "permissions",
               "bc8ac95310": "macOS permissions for terminal-launched developer tools.",
-              "e92cb0896d": "Developer Permissions"
+              "ad085fa291": "Developer permissions",
+              "16490ec4cd": "Microphone and camera",
+              "70ffdc218d": "Screen recording and accessibility"
             }
           }
         },
@@ -10481,7 +10538,8 @@
               "popout": "pop-out",
               "board": "board",
               "inWindow": "in-window",
-              "worktrees": "worktrees"
+              "worktrees": "worktrees",
+              "eaf17a7214": "Agent dashboard"
             },
             "browserExtensions": {
               "title": "Browser extensions",
@@ -10509,7 +10567,7 @@
               "6f183fa1b9": "floating terminal",
               "a08e482f6d": "floating workspace",
               "b96b5ee6cf": "Enable the floating workspace, choose where new tabs start, and choose where the toggle button appears.",
-              "b2b60e7163": "Floating Workspace"
+              "0eb607e5ef": "Floating workspace"
             }
           }
         },
@@ -10530,13 +10588,11 @@
             "939b80f5fd": "timer",
             "b2601a778c": "cache",
             "40c9585e43": "Countdown timer showing time until prompt cache expires (Claude agents).",
-            "1e0f28c6f1": "Prompt Cache Timer",
             "e49e739a59": "download",
             "c9d8c1ce66": "release notes",
             "9e86ccd05c": "version",
             "f89a94773c": "update",
             "79ff46776e": "Check for app updates and install a newer Orca version.",
-            "e15af4eb64": "Check for Updates",
             "baa263d6d8": "agents",
             "bda108e66c": "skill",
             "244e3fb4c8": "Install the Orca skill so agents know to use the Orca CLI.",
@@ -10564,13 +10620,11 @@
             "explorer": "explorer",
             "italic": "italic",
             "browsing": "browsing",
-            "256d92554d": "Tab Order",
             "22572e99c1": "annotations",
             "1ff67ba40c": "notes",
             "4dd5684836": "review",
             "d05f629d2c": "markdown",
             "694613d47f": "Show local markdown review note controls in rich editor mode.",
-            "128bc09325": "Markdown Review Notes",
             "a0014961ae": "scroll",
             "3ca5ab78a5": "code",
             "e3919429c0": "overview",
@@ -10583,21 +10637,17 @@
             "2f42852568": "tree",
             "3b5733573e": "diff",
             "dec71988f0": "Show or hide the file tree when opening combined diff views.",
-            "adec13f2ef": "Default Diff File Tree",
             "be24c7cd67": "split",
             "233f7e2f37": "side-by-side",
             "0a5fa65926": "inline",
             "2b463f0bf9": "view",
             "ecb9415c80": "Preferred presentation format for showing git diffs by default.",
-            "2760c9933f": "Default Diff View",
             "b2799ba622": "milliseconds",
             "146728ac2c": "delay",
             "86f54575c7": "autosave",
             "8ea61ad55c": "How long Orca waits after your last edit before saving automatically.",
-            "14e46c745b": "Auto Save Delay",
             "4469b6fa4e": "save",
             "e9d948d3c3": "Save editor and editable diff changes automatically after a short pause.",
-            "ae21e806ce": "Auto Save Files",
             "c56cb6f1c2": "network",
             "nodeDistMirror": "mirror",
             "nodeDistNodejs": "nodejs",
@@ -10617,37 +10667,23 @@
             "5a9df5566f": "open menu",
             "b8093e9a93": "open in",
             "a916662068": "Choose apps available from a workspace's Open in menu.",
-            "451d4af994": "Open In Apps",
             "7e9b556873": "skip",
             "ca86dd6e27": "dialog",
             "9f8558233a": "confirm",
             "7edf4f69e2": "automation",
             "84c67d0108": "delete",
-            "a0c44061ee": "Show a confirmation dialog before deleting an automation and its run history.",
-            "d0a65b27fd": "Ask Before Deleting Automations",
             "df10666259": "worktree",
-            "ae98c9cf36": "Show a confirmation dialog before deleting a workspace.",
-            "913242091d": "Ask Before Deleting Workspaces",
             "93f6ec5e70": "directory",
             "9bde064915": "subfolder",
             "ec5049e510": "nested",
             "b9cffd374d": "Create workspaces inside a repo-named subfolder.",
-            "141f71c69f": "Nest Workspaces",
             "7887a2c262": "folder",
             "7baf524b04": "workspace",
             "d0bc793689": "Root directory where workspace folders are created.",
-            "4c95d08fa2": "Workspace Directory",
-            "161a86a9da": "Confirm before closing pinned tabs",
-            "8e593f04fc": "Show a confirmation dialog before a pinned tab is closed.",
-            "defaultProjectRuntime": "Default Project Runtime",
             "defaultProjectRuntimeDescription": "Choose the runtime inherited by local Windows projects.",
-            "d2d2d929c0": "Rich Markdown Spellcheck",
             "4497e2e2bb": "Show browser spelling underlines and suggestions while editing rich Markdown.",
-            "e61157e926": "Editor Word Wrap",
             "005be5c699": "Wrap long lines in file editors instead of requiring horizontal scrolling.",
-            "editorFontFamily": "Editor Font Family",
             "editorFontFamilyDesc": "Font used by file editors and diff views, and by Markdown code when set. Leave empty to follow the terminal font.",
-            "collapseUnchanged": "Collapse Unchanged Regions",
             "collapseUnchangedDesc": "Show only changed lines and a little surrounding context in a file diff, hiding the rest behind expandable bands. The View All Changes diff always collapses this way.",
             "collapseUnchangedKw": "collapse",
             "hideUnchangedKw": "hide unchanged",
@@ -10678,10 +10714,26 @@
             "confirm": "confirm",
             "close": "close",
             "omp": "OMP",
-            "markdownDefaultView": "Default Markdown View",
             "markdownDefaultViewDesc": "The view Markdown files open in. Right-click the view switcher in a Markdown tab to change it there.",
             "markdownSourceKw": "source",
-            "markdownRichKw": "rich"
+            "markdownRichKw": "rich",
+            "34cda90656": "Prompt cache timer",
+            "2f24c6adae": "Auto save files",
+            "d9168badd2": "Auto save delay",
+            "66395fb7ff": "Editor font family",
+            "e2947b3723": "Editor word wrap",
+            "aa367d753d": "Collapse unchanged regions",
+            "aa1c06eb2c": "Default diff view",
+            "b8e1e1ac68": "Default diff file tree",
+            "0f9304f821": "Default Markdown view",
+            "8ad175042b": "Rich Markdown spellcheck",
+            "728a309ce1": "Markdown review notes",
+            "0e030ce4e3": "Workspace directory",
+            "11003cbcbd": "Nest workspaces",
+            "da5c42780e": "Open in apps",
+            "b180c1041b": "Tab order",
+            "0504f69ba0": "Check for updates",
+            "a361519c97": "Default project runtime"
           }
         },
         "git": {
@@ -10693,10 +10745,8 @@
             "ead733645f": "glab",
             "4808f065b3": "gitlab",
             "2b4a72885d": "Current GitLab CLI REST rate-limit headers when available.",
-            "83ecb3f470": "GitLab API Budget",
             "65b69d9f80": "graphql",
             "1139f61512": "Current GitHub CLI REST, Search, and GraphQL rate limits.",
-            "ff86e354c4": "GitHub API Budget",
             "035134fcd9": "worktree",
             "0c75583ca9": "safely",
             "bae91effdd": "fresh base",
@@ -10710,13 +10760,10 @@
             "28192e3a63": "master",
             "e3e9adde59": "main",
             "0e993bf00f": "When you create a workspace, Orca refreshes the remote base and safely fast-forwards your matching local branch, such as main or master. This keeps commands like git diff main...HEAD from comparing against stale history. Orca skips the update if that branch has uncommitted changes or local-only commits.",
-            "f8bda25f29": "Keep Local Main Up to Date",
             "769ddd7f81": "custom",
             "1d2fae1fa2": "git username",
             "f83c8937c4": "branch naming",
             "5ecd91c5ef": "Prefix added to branch names when creating worktrees.",
-            "68bd65fdb8": "Branch Prefix",
-            "sourceControlGroupOrderTitle": "Source Control Group Order",
             "sourceControlGroupOrderDescription": "Choose whether Staged Changes or Changes appear first in Source Control.",
             "groupOrder": "group order",
             "changesFirst": "changes first",
@@ -10724,7 +10771,6 @@
             "untrackedFirst": "untracked first",
             "sourceControl": "source control",
             "gitChanges": "git changes",
-            "compareAgainstUpstreamTitle": "Default Compare Base",
             "compareAgainstUpstreamDescription": "Choose which base Source Control uses by default for committed-change comparisons. Branch upstream follows the current branch automatically and falls back to the repository default branch when no upstream exists. You can still change the compare base per worktree from that worktree's Git panel. Pull Request and rebase targets don't change.",
             "compareBase": "compare base",
             "defaultCompareBase": "default compare base",
@@ -10737,12 +10783,18 @@
             "originMaster": "origin/master",
             "committedChanges": "committed changes",
             "diffBase": "diff base",
-            "jiraIssueKeyCasingTitle": "Jira Key Casing",
             "jiraIssueKeyCasingDescription": "Casing of the Jira issue key in the workspace and branch names Orca suggests for new Jira-linked workspaces, such as PROJ-123-fix-login instead of proj-123-fix-login. Existing workspaces and names you type are never changed.",
             "jira": "jira",
             "issueKey": "issue key",
             "uppercase": "uppercase",
-            "lowercase": "lowercase"
+            "lowercase": "lowercase",
+            "52d52b099d": "GitHub API budget",
+            "b7562365cd": "GitLab API budget",
+            "25eac7e904": "Branch prefix",
+            "f760fc929e": "Jira key casing",
+            "410e821889": "Keep local main up to date",
+            "85983bb4f9": "Source control group order",
+            "1ad8060ddc": "Default compare base"
           }
         },
         "input": {
@@ -10759,7 +10811,7 @@
             "e25165320e": "editing",
             "b51d47ceb7": "input",
             "874d88f4a6": "Enabled by default on Linux and macOS. Linux uses the system selection clipboard; other platforms use a private buffer.",
-            "d952ce9b46": "Middle-click Paste from Selection"
+            "0e98af0293": "Middle-click paste from selection"
           }
         },
         "integrations": {
@@ -10770,37 +10822,37 @@
             "c450244ad7": "integration",
             "7319e3015b": "linear",
             "16a486a49d": "Connect Linear to browse and link issues.",
-            "b027b4b318": "Linear Integration",
             "20540996ef": "credentials",
             "2ec2bd328c": "api token",
             "7345b7c3e6": "atlassian",
             "e1263dd748": "jira",
             "76f6af7c57": "Connect Jira Cloud or update Jira API token credentials.",
-            "617603509b": "Jira Integration",
             "8c568d761c": "pull request",
             "33180e8c10": "self-hosted",
             "129fc59aa8": "gitea",
             "d0d019dc29": "Gitea authentication via API token environment variables.",
-            "aab86d64e5": "Gitea Integration",
             "03a7b275be": "ado",
             "ed63380247": "azure repos",
             "b38b5d27f1": "azure devops",
             "7b1f3984bb": "Azure DevOps Repos authentication via token environment variables.",
-            "af6611fa6e": "Azure DevOps Integration",
             "50d20817f7": "bitbucket",
-            "67a2a0e868": "Bitbucket Integration",
             "371ee914d2": "merge request",
             "581844769a": "mr",
             "b40cbe5de4": "glab",
             "b939695c69": "gitlab",
             "6e2ab619c6": "GitLab authentication via the glab CLI.",
-            "b50b71ef9d": "GitLab Integration",
             "41ccade05c": "gh",
             "b79c21bd42": "github",
             "7166b9090c": "GitHub authentication via the gh CLI.",
-            "f16e41cc72": "GitHub Integration",
             "760e2446e0": "Bitbucket Cloud authentication with a saved API token or environment variables.",
-            "af5ae87847": "access token"
+            "af5ae87847": "access token",
+            "a17a94d0b0": "GitHub integration",
+            "cd74b2f587": "GitLab integration",
+            "9e238582e8": "Bitbucket integration",
+            "b3efe7ab71": "Azure DevOps integration",
+            "86a08aa60c": "Gitea integration",
+            "d8906d60a9": "Jira integration",
+            "d905b3ecee": "Linear integration"
           }
         },
         "jira": {
@@ -10836,20 +10888,17 @@
               "6f728f1456": "emulator tap",
               "f8b871d655": "agent cli",
               "2e0b45b2ba": "Use Orca CLI commands to list, attach, tap, and type into a mobile emulator.",
-              "ea3eac39bb": "Agent CLI Control",
               "8ef0f08d36": "runtime",
               "27397fe8e9": "xcode command line tools",
               "7650063d17": "simctl",
               "3211e7acf9": "xcrun",
               "42bfab45d8": "availability",
               "ea1f51b980": "Check whether Xcode, simctl, serve-sim, and emulator devices are ready.",
-              "0b95dfd5b3": "Emulator Availability",
               "04c5f5d901": "device",
               "25d7bfbcd4": "udid",
               "ec3c4043fd": "default ipad",
               "1dc8c52ffa": "default iphone",
               "ab4814f3c5": "default simulator",
-              "54184cb9c5": "Default Emulator Device",
               "b8ddd13195": "agent emulator",
               "1ad6fb6230": "default device",
               "ac0a985873": "emulator skill",
@@ -10864,7 +10913,10 @@
               "c5eca29310": "ios simulator",
               "25159de808": "mobile emulator",
               "9595354cff": "Configure mobile emulator support for Orca and coding agents.",
-              "cdd3c31918": "Mobile Emulator"
+              "f8468700d1": "Mobile emulator",
+              "b8c9f903eb": "Default emulator device",
+              "de556a0911": "Emulator availability",
+              "0d6e7dba38": "Agent CLI control"
             }
           },
           "pane": {
@@ -10894,19 +10946,19 @@
               "a023683767": "interface",
               "7b37c2e557": "network",
               "3190ef67a4": "Choose which network address to use for mobile pairing.",
-              "d96c315227": "Network Interface",
               "7d01f93ec0": "connected",
               "5e8fda4d7f": "paired",
               "905c65a308": "revoke",
               "82783d9b71": "devices",
               "13419718b3": "Manage paired mobile devices.",
-              "9d3a9397ba": "Connected Devices",
               "2128a21096": "scan",
               "e518cbd61c": "pair",
               "4a0c826f3d": "code",
               "3c1807a81a": "qr",
               "7fb728fb2b": "Pair a mobile device by scanning a QR code.",
-              "d49925710a": "Mobile Pairing"
+              "a068d70f7b": "Network interface",
+              "1dcb1d1a11": "Mobile pairing",
+              "cb018bcc07": "Connected devices"
             }
           },
           "settings": {
@@ -10924,7 +10976,6 @@
               "f213400800": "mobile",
               "671eb4173c": "Control terminals and agents from your phone.",
               "ffd52a96e4": "Mobile",
-              "1de96ec8a6": "Show Orca Mobile Button",
               "682293cadf": "Show the Orca Mobile button at the top of the left sidebar.",
               "e4f4daea0e": "relay",
               "5d5af8e041": "iphone",
@@ -10933,7 +10984,8 @@
               "5bff6a2ef0": "sidebar",
               "6cf5f54ce1": "button",
               "648eeada79": "hide",
-              "ac79fe4a04": "show"
+              "ac79fe4a04": "show",
+              "b305668a18": "Show Orca Mobile button"
             }
           }
         },
@@ -10942,12 +10994,10 @@
             "aa288005c3": "test",
             "ca8faa40d7": "notifications",
             "4e30b1925e": "Trigger a sample desktop notification using the native delivery path.",
-            "ef9b311346": "Send Test Notification",
             "ecdeff4993": "loudness",
             "d58b64dddf": "volume",
             "dc7d7c07cd": "sound",
             "eeb6f77322": "Playback volume for non-system notification sounds.",
-            "aace1a62c6": "Notification Volume",
             "ef86a782cc": "bong",
             "3014ad1b8f": "ding",
             "079c29aeb5": "flac",
@@ -10958,39 +11008,41 @@
             "5362074f19": "mp3",
             "6e08f78315": "audio",
             "c718793e95": "Choose the built-in, system, or local audio file Orca plays for desktop notifications.",
-            "ea8cb8d9ce": "Notification Sound",
             "4ada6bfde9": "filtering",
             "fa60d8e4ab": "suppress",
             "a4c3b29a3c": "focused",
             "7247b97a31": "Avoid notifying when Orca is focused on the active worktree.",
-            "96562a72c6": "Suppress While Focused",
             "a2ab73b325": "attention",
             "ae0487f8fd": "bell",
             "c638ae989d": "terminal",
             "d3f1c48677": "Notify when a background terminal emits a bell character.",
-            "a5edee1d99": "Terminal Bell",
             "193e1f107c": "task",
             "dd9d3e5f0f": "idle",
             "5f7472d3fb": "complete",
             "7fa07e9600": "agent",
             "10d83ef8dc": "Notify when a coding agent transitions from working to idle.",
-            "bdc1edaeb4": "Agent Task Complete",
             "adbc3a0fcf": "native",
             "72539aede4": "system",
             "51ae2183e1": "desktop",
             "0534c76311": "Master switch for Orca desktop notifications.",
-            "4a210b2f72": "Enable Notifications",
             "machines": "Machines",
             "machinesDescription": "Choose which machines can show notifications on this computer, such as SSH machines or paired servers.",
             "host": "host",
             "remote": "remote",
             "ssh": "ssh",
             "mute": "mute",
-            "d46216d768": "Agent Needs Input",
             "c9b2b656e0": "Notify when a coding agent asks for permission or has a question.",
             "b8bf5471d1": "permission",
             "5b9dafd570": "question",
-            "009548060d": "input"
+            "009548060d": "input",
+            "25f58f061f": "Enable notifications",
+            "db32fed5aa": "Agent task complete",
+            "32f70cca40": "Agent needs input",
+            "209323590a": "Terminal bell",
+            "8eeee85a4f": "Suppress while focused",
+            "8517a2dd51": "Notification sound",
+            "fe11c91724": "Notification volume",
+            "55ecae5b7e": "Send test notification"
           }
         },
         "orchestration": {
@@ -11011,7 +11063,7 @@
             "d86705ba77": "multi-agent",
             "a7f76b4ca7": "orchestration",
             "e05ff36753": "Coordinate multiple coding agents via messaging, task DAGs, dispatch, and decision gates.",
-            "c34045764e": "Agent Orchestration"
+            "abafc3f10f": "Agent orchestration"
           }
         },
         "privacy": {
@@ -11038,12 +11090,12 @@
             "79c319948b": "usage",
             "77d3180def": "telemetry",
             "b707cc3981": "Help improve Orca by sending anonymous feature-usage events.",
-            "57b283461a": "Share Anonymous Usage Data",
             "2b5a5c312f": "posthog",
             "4104f6f0f3": "analytics",
             "10124159f1": "privacy",
             "aa3b794c17": "Anonymous product usage data, diagnostics, and telemetry controls.",
-            "5c508bad41": "Privacy & Telemetry"
+            "a966af0840": "Privacy & telemetry",
+            "6776226be7": "Share anonymous usage data"
           }
         },
         "quick": {
@@ -11065,7 +11117,7 @@
               "fecb031823": "command",
               "236d4cfac8": "quick",
               "d691c4e8d8": "Saved terminal commands that can be launched from any terminal, scoped globally or to a specific project.",
-              "4c8945952b": "Quick Commands"
+              "915776ccfa": "Quick commands"
             }
           }
         },
@@ -11078,13 +11130,11 @@
             "66b584bd6c": "issue command",
             "2011a6a4f2": "github issue command",
             "d42d1e49c0": "File-based linked-issue command configured via orca.yaml and optional local override.",
-            "d86ea12d16": "Custom GitHub Issue Command",
             "c5e8bdbcbb": "skip by default",
             "a69c5cbe90": "run by default",
             "80c490b012": "ask",
             "f9d84b7971": "setup run policy",
             "c00a549e03": "Choose the default behavior when a setup script is available.",
-            "cdfe398068": "When to Run Setup",
             "5e9445bbfd": "authoritative",
             "f1e1bfa89f": "source",
             "1d90a6cfbb": "both",
@@ -11102,12 +11152,10 @@
             "4c17787d7b": "archive",
             "8655e3387b": "hooks",
             "acd1157f0c": "Local and shared scripts that run before a worktree is archived.",
-            "bce0ca23c6": "Archive Script",
             "491b05d6e6": "setup command",
             "a31b43a7f8": "setup script",
             "5590388dfa": "setup",
             "baaf70bb37": "Local and shared scripts that run after a new worktree is created.",
-            "b79df26937": "Setup Script",
             "d73fb47b45": ".claude/mcp.json",
             "db11b337c4": ".claude.json",
             "26f42fe773": ".cursor/mcp.json",
@@ -11115,7 +11163,6 @@
             "16dc7a4637": "model context protocol",
             "343f0a508c": "mcp",
             "3c31801626": "Inspect project-level MCP server config files.",
-            "31bd0a2420": "MCP Configs",
             "84da7fa2d7": "node_modules",
             "0a3a582794": "env",
             "3c180a251c": "link",
@@ -11126,7 +11173,6 @@
             "clone": "clone",
             "apfs": "apfs",
             "ed885e589f": "Paths to materialize from the primary checkout into newly created worktrees.",
-            "01b3377ebc": "Worktree Shared Paths",
             "fff8834983": "prompt",
             "fa3131f223": "model",
             "130d76dc16": "rename",
@@ -11137,7 +11183,6 @@
             "cfad7ce5f3": "ai",
             "a47f51127e": "source control",
             "6cc5c65e64": "Project-specific git generation overrides.",
-            "eec3995dc6": "Git AI Author",
             "cc876ca5f2": "repository",
             "6469de5368": "project",
             "3067595d82": "delete",
@@ -11151,7 +11196,6 @@
             "aa42616e3d": "checkout",
             "4f3c0230c2": "sparse",
             "90a331fd68": "Saved directory sets for sparse worktree creation.",
-            "1f0f20bbb6": "Sparse Checkout Presets",
             "4733ec2395": "../worktrees",
             "58d8bca414": "relative",
             "a325a89dff": "workspace path",
@@ -11205,7 +11249,23 @@
             "wsl": "wsl",
             "distro": "distro",
             "agentRuntime": "agent runtime",
-            "skillRuntime": "skill runtime"
+            "skillRuntime": "skill runtime",
+            "810b9f4106": "Setup script",
+            "1617bc353d": "Archive script",
+            "cedbe6c02c": "When to run setup",
+            "aced2fc1be": "Custom GitHub issue command",
+            "b1b5a4139d": "MCP configs",
+            "7f380f89ea": "Display name",
+            "0fe07b9e90": "Project icon",
+            "eefc3e51ef": "GitHub account",
+            "f94afd4078": "Keep fork up to date",
+            "7a89e2dc09": "Project runtime",
+            "bbbe994528": "Remove project",
+            "6259586017": "Git AI author",
+            "88d466b2e3": "Default worktree base",
+            "2e216fbad2": "Worktree location",
+            "355868ac19": "Sparse checkout presets",
+            "ea22e2187e": "Worktree shared paths"
           }
         },
         "runtime": {
@@ -11220,7 +11280,6 @@
               "ebd5369acf": "environment",
               "d198440ce3": "runtime",
               "baec27aa8f": "Connect this browser to a saved Orca server.",
-              "3517fb2ec0": "Remote Orca Servers",
               "c6e5a03aa0": "dev box",
               "f1575f1e09": "web client",
               "81444c4102": "pairing url",
@@ -11231,7 +11290,8 @@
               "addShareDefault": "Add a remote Orca server, share this computer, or choose where new projects open.",
               "shareComputerKeyword": "share this computer",
               "accessLinkKeyword": "access link",
-              "installKeyword": "install server"
+              "installKeyword": "install server",
+              "24cc0a2244": "Remote Orca servers"
             }
           }
         },
@@ -11248,7 +11308,7 @@
             "7e3fc707aa": "terminal",
             "0ecba9aa5f": "keyboard",
             "ebd7d81e1d": "Choose whether Orca or the focused terminal wins when shortcuts overlap.",
-            "f052906167": "Shortcuts in Terminal"
+            "d6b5c7dd6d": "Shortcuts in terminal"
           }
         },
         "ssh": {
@@ -11258,22 +11318,22 @@
             "8cb870b109": "test",
             "7efd17e816": "ssh",
             "96ca5d9a0b": "Test connectivity to an SSH target.",
-            "a3058f3605": "Test Connection",
             "2cd40ba0d0": "hosts",
             "5220501141": "config",
             "3b12e064a4": "import",
             "7f251a45a8": "Import hosts from ~/.ssh/config.",
-            "41a3127094": "Import from SSH Config",
             "f9493b80c0": "server",
             "8fb1cc87cc": "host",
             "09395490af": "target",
             "00d1fda01a": "new",
             "f7b6383aec": "add",
             "62826efbe9": "Add a new SSH host.",
-            "f5a691bb6c": "Add SSH Target",
             "d4bcd497c7": "remote",
             "74c6d90d78": "Manage SSH hosts.",
-            "380a788da7": "SSH Connections"
+            "53ae83cb55": "SSH connections",
+            "004ef87a84": "Add SSH target",
+            "893c8717f2": "Import from SSH config",
+            "50416e3809": "Test connection"
           }
         },
         "tasks": {
@@ -11288,12 +11348,12 @@
             "3d81c26d78": "source",
             "cf0e3e0c2f": "provider",
             "2ec54bee51": "tasks",
-            "5b8e4aace5": "Task Providers",
             "providersDescription": "Connect task providers, install the Linear agent skill, and choose what appears in Tasks.",
             "setup": "setup",
             "apiKey": "api key",
             "skill": "skill",
-            "connect": "connect"
+            "connect": "connect",
+            "12d2fdff3c": "Task providers"
           }
         },
         "terminal": {
@@ -11311,7 +11371,6 @@
               "9dfc125cd3": "osc52",
               "62d1208b90": "osc 52",
               "459fea094a": "Let programs in the terminal copy to the system clipboard through OSC 52, including over SSH.",
-              "74db8721e4": "Allow TUI Clipboard Writes (OSC 52)",
               "4043e294d2": "gnome",
               "cf83ac3dbd": "linux",
               "737cef6de1": "x11",
@@ -11319,9 +11378,10 @@
               "664789b73a": "auto",
               "c38c18be15": "selection",
               "797fdfe4ca": "select",
-              "3bdc84f059": "Copy on Select",
               "zellij": "zellij",
-              "grok": "grok"
+              "grok": "grok",
+              "5639f17c59": "Copy on select",
+              "eacb392fe3": "Allow TUI clipboard writes (OSC 52)"
             }
           },
           "search": {
@@ -11333,20 +11393,16 @@
             "d8bd6182b8": "override",
             "674b7c8436": "color",
             "3023e01415": "Override individual terminal colors.",
-            "aed2a4b4eb": "Color Overrides",
             "6eaf7ee0e4": "cursor",
             "34fe1af39d": "typing",
             "ee611ae238": "hide",
             "ea364ce6e4": "mouse",
             "77201c0bb2": "Hide the mouse cursor when typing in the terminal.",
-            "d1fe5f99ff": "Hide Mouse While Typing",
             "f25d948664": "margin",
             "b2f52cb96c": "spacing",
             "e8baf0d12c": "padding",
             "4655567c37": "Vertical padding around the terminal grid in pixels.",
-            "692c4ad032": "Vertical Padding",
             "75691e4911": "Horizontal padding around the terminal grid in pixels.",
-            "b4f182f24d": "Horizontal Padding",
             "6c2f9f05c8": "vibrancy",
             "4f7f8f28ca": "transparency",
             "f6dd9ff606": "background",
@@ -11355,7 +11411,6 @@
             "7db59c4738": "alpha",
             "46d99ef4bb": "opacity",
             "4c643695aa": "Controls the transparency of the terminal background.",
-            "b36fd2416d": "Background Opacity",
             "d4daf4f612": "unfreeze",
             "88561b3499": "frozen",
             "0a05629060": "recover",
@@ -11371,7 +11426,6 @@
             "9f2dda133c": "pty",
             "f35400f7e8": "daemon",
             "f72abc493c": "Recover from frozen terminals by killing sessions, clearing saved scrollback, or restarting the daemon.",
-            "6f5d486a68": "Manage Sessions",
             "10f9fb6fea": "settings",
             "2ade3ea490": "config",
             "fd752b3cac": "import",
@@ -11417,42 +11471,32 @@
             "d4aeafac10": "separator",
             "7286cd2566": "word",
             "3ab64c47d8": "Characters treated as word boundaries for double-click selection.",
-            "957a0203fc": "Word Separators",
             "56fff3d113": "memory",
             "fffdff40a7": "buffer",
             "rows": "rows",
             "f7d56b6281": "Retained desktop terminal rows.",
-            "7674e758e1": "Scrollback Rows",
             "411229c636": "light",
             "781f49d942": "divider",
             "77d9f9cd55": "Controls the split divider line between panes in light mode.",
-            "595b97b446": "Light Divider Color",
             "7718d70356": "preview",
             "1dee533bd9": "Choose the theme used when Orca is in light mode.",
-            "1d89457764": "Light Theme",
             "da864e6cec": "light mode",
             "f268092ee3": "Light mode can use its own terminal theme.",
             "match_dark_mode_title": "Match dark mode",
             "f785374072": "dark",
             "9c32726f47": "Controls the split divider line between panes in dark mode.",
-            "8987db7ff2": "Dark Divider Color",
             "13f6310dd3": "Choose the terminal theme used in dark mode.",
-            "ec07ce9b02": "Dark Theme",
             "f036794286": "active",
             "846a7a1204": "pane",
             "d1fa00a9cb": "hover",
             "b5116e7b12": "follows",
             "f5d1e3d472": "focus",
             "17cc3ea102": "Hovering a terminal pane activates it without needing to click. Mirrors Ghostty's focus-follows-mouse setting. Selections and window switching stay safe.",
-            "c6178a2b4d": "Focus Follows Mouse",
             "f637a7dee9": "thickness",
             "e58d4040d0": "Thickness of the pane divider line.",
-            "2d5ab88b7c": "Divider Thickness",
             "6c4c85ba43": "dimming",
             "18dd5026c6": "Opacity applied to panes that are not currently active.",
-            "72bbcbd1dd": "Inactive Pane Opacity",
             "d4f7d1ce5c": "Opacity of the terminal cursor.",
-            "7f1e356a54": "Cursor Opacity",
             "25f606d9e5": "blink",
             "a27f6edf52": "Uses the blinking variant of the selected cursor shape.",
             "b03d01fd49": "Blinking Cursor",
@@ -11460,7 +11504,6 @@
             "015c82349f": "block",
             "a6e9dcc829": "bar",
             "275a9d6395": "Default cursor appearance for Orca terminal panes.",
-            "97bcfff662": "Cursor Shape",
             "1abcf4d7de": "linux",
             "7d924d870d": "graphics",
             "bc7ae1f7c0": "rendering",
@@ -11469,7 +11512,6 @@
             "4b4e80d850": "acceleration",
             "db82cb13b0": "gpu",
             "8f9f953de7": "Controls whether the terminal uses xterm.js WebGL rendering. Auto tries WebGL when the renderer is supported, with conservative fallback for software or unknown GPU renderers.",
-            "13a2502dfc": "GPU Acceleration",
             "d5e6c7fab1": "font features",
             "a16224d16a": "calt",
             "6ded6297fe": "iosevka",
@@ -11480,29 +11522,23 @@
             "afc8d5f790": "ligatures",
             "103cdb862f": "typography",
             "893aa92997": "Render programming ligatures (e.g. => → ≠ ≥) for fonts that ship them. \"Auto\" enables ligatures only for known ligature fonts (Fira Code, JetBrains Mono, Cascadia Code, Iosevka, etc.).",
-            "58da1ae45d": "Font Ligatures",
             "7341e3d00e": "line height",
             "36a1b38bc8": "Controls the terminal line height multiplier.",
-            "0f2fb0cb74": "Line Height",
             "20ce287cc6": "weight",
             "98c18f2c77": "Controls the terminal text font weight.",
-            "28ea41bd2d": "Font Weight",
             "b0bb76ae6b": "font",
             "0acdc17891": "Default terminal font family for new panes and live updates.",
-            "e989914ad6": "Font Family",
             "33031c1465": "text size",
             "0fe0073f0c": "Default terminal font size for new panes and live updates.",
-            "5930244899": "Font Size",
-            "ask_before_closing_running_terminals_title": "Ask Before Closing Running Terminals",
             "ask_before_closing_running_terminals_description": "Show a confirmation before closing a terminal that has a running command or agent.",
             "scrollSpeed": {
-              "title": "Scroll Speed",
-              "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed."
+              "description": "Tune normal terminal scrollback, fast modifier scrolling, and full-screen TUI wheel speed.",
+              "dd481aaad2": "Scroll speed"
             },
             "theme_target": {
-              "title": "Theme Mode",
               "keyword_target": "target",
-              "keyword_editing": "editing"
+              "keyword_editing": "editing",
+              "329882bdda": "Theme mode"
             },
             "39ea7c0d28": "terminal",
             "scroll": "scroll",
@@ -11520,7 +11556,6 @@
             "prompt": "prompt",
             "stop": "stop",
             "minimumContrast": {
-              "title": "Color Contrast",
               "description": "Improve text readability or preserve the colors chosen by terminal programs.",
               "contrast": "contrast",
               "minimum": "minimum",
@@ -11530,7 +11565,8 @@
               "powerline": "powerline",
               "statusline": "statusline",
               "dim": "dim",
-              "colors": "colors"
+              "colors": "colors",
+              "26ffe2edb6": "Color contrast"
             },
             "d31ed1ac1c": "rcfile",
             "d9e29543a1": "wrapper",
@@ -11545,7 +11581,31 @@
             "3de504994c": "Shell and arguments used for new local interactive terminal panes",
             "1733ccd3e9": "Terminal shell",
             "kitty_import": "Import from Kitty",
-            "kitty_import_description": "One-time import of supported settings from kitty.conf."
+            "kitty_import_description": "One-time import of supported settings from kitty.conf.",
+            "6e795fc619": "Inactive pane opacity",
+            "9ae234eae2": "Divider thickness",
+            "1b00063795": "Ask before closing running terminals",
+            "64f6b4fdf6": "Focus follows mouse",
+            "8afdce471f": "Font size",
+            "651c993c32": "Font family",
+            "7fabc609fa": "Font weight",
+            "c1794a43d7": "Line height",
+            "e3dae5017c": "Font ligatures",
+            "b1061a2826": "GPU acceleration",
+            "990137dab4": "Cursor shape",
+            "317af36f37": "Cursor opacity",
+            "9b41f4be64": "Background opacity",
+            "cfdaed8dae": "Horizontal padding",
+            "3fdccf0277": "Vertical padding",
+            "9d81f938fd": "Hide mouse while typing",
+            "a5e5d2bca5": "Color overrides",
+            "edd38f8bb8": "Scrollback rows",
+            "10344a316c": "Word separators",
+            "bf8746544c": "Manage sessions",
+            "ee9665265e": "Dark theme",
+            "88f3d1cec0": "Dark divider color",
+            "e4d3288a81": "Light theme",
+            "18a9f63aff": "Light divider color"
           },
           "windows": {
             "search": {
@@ -11564,7 +11624,6 @@
               "f9162f0b8e": "windows powershell",
               "2d99cd91be": "powershell",
               "41a69bc24d": "Choose whether the PowerShell shell option launches Windows PowerShell or PowerShell 7+ for new terminal panes.",
-              "860e0e6402": "PowerShell Version",
               "07ec155fb6": "bash.exe",
               "5a2db98d23": "bash",
               "591912177b": "git bash",
@@ -11572,7 +11631,8 @@
               "6cd20b9e64": "cmd",
               "7c7056940a": "shell",
               "713c4a2f92": "Choose the default shell for new terminal panes on Windows.",
-              "13715f9d23": "Default Shell"
+              "94792c10ac": "Default shell",
+              "6efd8b2174": "PowerShell version"
             }
           }
         },
@@ -11588,36 +11648,36 @@
               "080202facb": "model",
               "7640ed9848": "voice",
               "56defcd6c3": "Select a local or cloud speech-to-text model to use for dictation.",
-              "7e62cd7c41": "Speech Model",
               "931b1a9e53": "push to talk",
               "064a9bd94a": "hold",
               "6fa48bcd41": "toggle",
               "d86f5600da": "mode",
               "089d31a45b": "dictation",
               "748b33e531": "Toggle or hold-to-talk dictation behavior.",
-              "6a3abb4338": "Dictation Mode",
               "e360027a65": "microphone",
               "698376a38d": "Master toggle for voice dictation features.",
-              "20574cbc72": "Enable Voice Dictation",
               "322d457a0d": "transcription",
               "dcc7846641": "Configure the OpenAI API key used for cloud speech-to-text models.",
-              "ebfd0b32e5": "OpenAI Transcription",
               "microphoneTitle": "Microphone",
               "microphoneDescription": "Choose which input device voice dictation uses.",
               "micInput": "input",
               "micDevice": "device",
               "micAirpods": "airpods",
               "micDefault": "system default",
-              "dictationLanguageTitle": "Dictation Language",
               "dictationLanguageDescription": "Tell the speech model which language you speak.",
               "dictationLanguageKeyword": "language",
-              "modelUnloadTitle": "Unload Speech Model",
               "modelUnloadDescription": "Choose when the on-device speech model is unloaded from memory.",
               "modelUnloadKeyword": "unload",
               "modelMemoryKeyword": "memory",
-              "fillerWordsTitle": "Remove Filler Words",
               "fillerWordsDescription": "Drop “um”, “uh” and similar sounds from dictated text.",
-              "fillerWordsKeyword": "filler words"
+              "fillerWordsKeyword": "filler words",
+              "ffaa3efe7c": "OpenAI transcription",
+              "a5fb30e4da": "Enable voice dictation",
+              "d0c230c061": "Dictation mode",
+              "9d83747eae": "Dictation language",
+              "c7a7eaa0da": "Remove filler words",
+              "b3920972d4": "Unload speech model",
+              "7f5a2416a6": "Speech model"
             }
           }
         },
@@ -11842,8 +11902,9 @@
           "syncNow": "Sync Now",
           "modeLabel": "Fork sync mode",
           "ask": "Ask",
-          "safeAuto": "Safe Auto",
-          "off": "Off"
+          "off": "Off",
+          "1b00dcc746": "Keep fork up to date",
+          "7a1ea2076d": "Safe auto"
         },
         "DefaultWindowsProjectRuntimeSetting": {
           "defaultRuntime": "Default project runtime",
@@ -12022,7 +12083,8 @@
             "keywordSandbox": "sandbox",
             "keywordCloud": "cloud",
             "keywordRecipe": "recipe",
-            "keywordEphemeral": "ephemeral"
+            "keywordEphemeral": "ephemeral",
+            "5e7d7868a2": "Cloud vm"
           }
         },
         "EphemeralVmsPane": {
@@ -12045,7 +12107,7 @@
         },
         "ephemeralVmsExperimentalSetting": {
           "description": "Shows setup controls and workspace run targets for repo-owned, on-demand environments.",
-          "cloudVmToggleLabel": "Toggle Cloud VM"
+          "f561738b7d": "Toggle cloud vm"
         },
         "SourceControlActionRepoOverrideNote": {
           "agent": "Agent",
@@ -12172,9 +12234,9 @@
           "notice": "Orca Relay is in beta."
         },
         "EditorFontFamilySetting": {
-          "title": "Editor Font Family",
           "description": "Font used by file editors and diff views, and by Markdown code when set. Leave empty to follow the terminal font.",
-          "placeholder": "Same as terminal font"
+          "placeholder": "Same as terminal font",
+          "458ec82128": "Editor font family"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
@@ -12186,7 +12248,8 @@
           "description": "Check and update paired Orca servers from this client.",
           "updating": "Updating servers…",
           "reviewServers": "Check for Server Updates",
-          "serverCountOne": "1 paired server"
+          "serverCountOne": "1 paired server",
+          "fdd271abf0": "Remote Orca servers"
         },
         "RemoteServerUpdateDialog": {
           "versionUnavailable": "Version unavailable",
@@ -12510,8 +12573,8 @@
           "showProviderAction": "Show {{provider}} in Tasks",
           "lastProviderAction": "{{provider}} is shown in Tasks. At least one provider must stay visible.",
           "lastProviderHint": "At least one provider must stay visible in Tasks.",
-          "title": "Show in Tasks",
-          "description": "Include this provider in the Tasks source picker and sidebar shortcuts."
+          "description": "Include this provider in the Tasks source picker and sidebar shortcuts.",
+          "8f0bb9edf3": "Show in tasks"
         },
         "RuntimeHostAccessForm": {
           "namePlaceholder": "Linux workstation",
@@ -12609,7 +12672,6 @@
           "manageStepTitle": "Manage it in Orca",
           "manageStepDescription": "Open Artifacts from the sidebar to preview or remove links.",
           "openArtifacts": "Open Artifacts",
-          "showButton": "Show Artifacts Button",
           "showButtonDescription": "Show the Artifacts shortcut in the sidebar.",
           "openArtifactsDescriptionV2": "Preview, copy, and manage links shared through your account.",
           "signInTitle": "Sign in to share artifacts",
@@ -12630,7 +12692,8 @@
           "keywordPermission": "permission",
           "keywordHtml": "HTML",
           "keywordMarkdown": "Markdown",
-          "keywordUpload": "upload"
+          "keywordUpload": "upload",
+          "09f41ce46c": "Show artifacts button"
         },
         "orcaAccount": {
           "connected": "Connected",
@@ -12642,7 +12705,6 @@
           "signOut": "Sign out",
           "signInAgain": "Sign in again",
           "signIn": "Sign in to Orca",
-          "title": "Orca Account",
           "description": "Share work instantly and reach your desktop from Orca Mobile wherever you are.",
           "searchDescription": "Sign in or out of the account used by Artifacts and Orca Relay.",
           "benefitsTitle": "Included with your account",
@@ -12658,10 +12720,10 @@
           "keywordSignIn": "sign in",
           "keywordSignOut": "sign out",
           "keywordRelay": "relay",
-          "keywordCloud": "cloud"
+          "keywordCloud": "cloud",
+          "80f0478ea1": "Orca account"
         },
         "automations": {
-          "showButton": "Show Automations Button",
           "showButtonDescription": "Show the Automations shortcut in the sidebar.",
           "howItWorksTitle": "How Automations work",
           "howItWorksDescription": "Schedule agent work once, then let Orca create each run and keep its results together.",
@@ -12678,7 +12740,8 @@
           "keywordAutomations": "automations",
           "keywordSchedule": "schedule",
           "keywordAgent": "agent",
-          "keywordRuns": "runs"
+          "keywordRuns": "runs",
+          "d92f253d2d": "Show automations button"
         },
         "AgentAwakeSetting": {
           "on": "On",
@@ -12701,10 +12764,10 @@
           "capabilityBlocked": "Binding is unavailable until this runtime’s GitHub CLI supports `gh auth token --user` (gh ≥ 2.40).",
           "capabilityUnknownHint": "Could not determine GitHub CLI account-binding support on this runtime. Clear the binding or retry.",
           "notEnforced": "Saved, but not enforced by this runtime (mixed-version host).",
-          "refreshAccounts": "Refresh GitHub accounts"
+          "refreshAccounts": "Refresh GitHub accounts",
+          "b3249d1abc": "GitHub account"
         },
         "shareSkills": {
-          "title": "Share Skills",
           "description": "Share your skills with an unlisted link. Anyone who has it can install them.",
           "allowAgentPublishing": "Allow agents and the Orca CLI to publish skill links",
           "allowAgentPublishingDescription": "Let commands publish explicitly named installed skills. Skill folders can contain scripts, configuration, or secrets, so this is off by default.",
@@ -12748,7 +12811,8 @@
           "keywordBundle": "bundle",
           "keywordLink": "link",
           "keywordUnlisted": "unlisted",
-          "keywordRevoke": "revoke"
+          "keywordRevoke": "revoke",
+          "ca754fefa1": "Share skills"
         },
         "bitbucket": {
           "credentials": {
@@ -12835,8 +12899,8 @@
           "strong": "Strong"
         },
         "TerminalRenderingSection": {
-          "6d4c55bacc": "Inline Images",
-          "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols."
+          "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols.",
+          "08db7947d8": "Inline images"
         },
         "CursorAccountsSection": {
           "source": {
@@ -13127,7 +13191,6 @@
           "label": "Host",
           "unavailable": "{{value0}} (unavailable)",
           "loading": "Loading hosts…",
-          "description": "Accounts, detected agents and terminal options below are for this host.",
           "unavailableNotice": "This server is no longer saved, so nothing can be shown for it. Choose another host at the top of Settings."
         },
         "wslHostsExperimental": {
@@ -13284,7 +13347,6 @@
           "lastSeen": "Last seen {{when}}",
           "retry": "Retry",
           "pasteAccessLinkHelp": "Pair with Orca already running on another machine.",
-          "cloudVm": "Cloud VM",
           "cloudVmHelp": "Created per workspace from an environment recipe.",
           "addDescriptionShort": "Paste the access link from Share this computer on the other machine.",
           "installHostPlaceholder": "Choose an SSH host without Orca",
@@ -13304,7 +13366,8 @@
           "settingUpInBackground": "Setting up Orca on {{name}} in the background. It appears in the list when it’s ready.",
           "setUpOnSshHost": "Set up Orca on an SSH host",
           "setUp": "Set up",
-          "overYourSsh": "Over your SSH connection"
+          "overYourSsh": "Over your SSH connection",
+          "b159dc5efa": "Cloud vm"
         },
         "sshBulkRemove": {
           "removedCount": "{{count}} removed",
@@ -13388,14 +13451,14 @@
         },
         "AppearanceThemeControl": {
           "useTerminalTheme": "Use its terminal colors",
-          "matchTerminal": "Match Terminal",
           "dynamic": "dynamic",
           "browseThemes": "Browse themes",
           "moreThemes": "More themes",
           "moreThemesLoading": "Loading themes…",
           "installingTheme": "Installing {{value0}}…",
           "searchThemes": "Search themes…",
-          "noThemes": "No themes match your search."
+          "noThemes": "No themes match your search.",
+          "7ad388ec82": "Match terminal"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
@@ -13796,27 +13859,27 @@
           "fontSmoothingGrayscale": "Grayscale",
           "fontSmoothingNative": "Native",
           "typographyKw": "typography",
-          "fontSize": "Editor Font Size",
           "fontSizeDesc": "Base size for file editors and diff views. Leave empty to follow the terminal font size.",
           "sizeKw": "size",
-          "fontWeight": "Editor Font Weight",
           "fontWeightDesc": "Weight for file editors and diff views. Leave empty for regular weight (400).",
           "weightKw": "weight",
           "boldKw": "bold",
-          "lineHeight": "Editor Line Height",
           "lineHeightDesc": "Line spacing as a multiple of the editor font size; values of 8 or more are read as pixels. Leave empty or 0 for automatic spacing.",
           "lineHeightKw": "line height",
           "spacingKw": "spacing",
-          "ligatures": "Editor Font Ligatures",
           "ligaturesDesc": "Render ligatures such as => and !== in file editors and diff views.",
           "ligaturesKw": "ligatures",
           "ligatureKw": "ligature",
           "fontFeaturesKw": "font features",
-          "fontSmoothing": "Font Smoothing",
           "fontSmoothingDesc": "How terminals and code editors smooth text. Native draws heavier glyphs, closer to other macOS terminals.",
           "smoothingKw": "smoothing",
           "antialiasingKw": "antialiasing",
-          "thinKw": "thin text"
+          "thinKw": "thin text",
+          "253fc29ebb": "Editor font size",
+          "09d72edc6f": "Editor font weight",
+          "8e8a87f9ed": "Editor line height",
+          "83db4f82b0": "Editor font ligatures",
+          "d4b7264499": "Font smoothing"
         },
         "PluginSettingsSection": {
           "reset": "Reset",
@@ -16645,7 +16708,8 @@
           "ac3bb87913": "Edit",
           "0d193dc03c": "Preview",
           "aff15f94f5": "Rich Editor",
-          "4d6ccb7ba6": "Source"
+          "4d6ccb7ba6": "Source",
+          "bcaccaddf1": "Rich editor"
         },
         "ImageDiffViewer": {
           "a651be62b0": "Modified",
@@ -21226,11 +21290,11 @@
     },
     "settings": {
       "TerminalInteraction": {
-        "copyTrimsGutter": "Trim Gutter on Copy",
         "copyTrimsGutterDescription": "Drop the left gutter agent output is painted behind, so copied text is not indented. Only the indent every selected line shares is removed.",
         "copyOnSelectDescription": "Automatically copy text you select in a terminal or chat to the clipboard.",
-        "scrollOnUserInput": "Scroll to Bottom on Input",
-        "scrollOnUserInputDescription": "Typing or pasting while scrolled up jumps to the latest output. Turn off to keep your place."
+        "scrollOnUserInputDescription": "Typing or pasting while scrolled up jumps to the latest output. Turn off to keep your place.",
+        "4c690cdfc3": "Scroll to bottom on input",
+        "4ed43d5060": "Trim gutter on copy"
       },
       "terminal": {
         "clipboard": {
@@ -21256,9 +21320,9 @@
           "position": "position"
         },
         "claudeCodeThemeSync": {
-          "title": "Match Claude Code to Terminal Theme",
           "description": "Claude Code on this computer uses your terminal colors and follows theme changes live, including outside Orca. Turning this off restores your previous Claude Code theme. Picking a theme in Claude Code stops the sync.",
-          "claude": "claude"
+          "claude": "claude",
+          "9353305ea6": "Match Claude Code to terminal theme"
         }
       },
       "nativeChat": {
@@ -21317,15 +21381,15 @@
           "auto": "Auto-detect"
         },
         "modelUnload": {
-          "title": "Unload Speech Model",
           "description": "How long the on-device model stays in memory after you stop dictating. While it is loaded, dictation starts at once; “Immediately” frees the memory, so each dictation waits for the model to load.",
           "cloud": "Cloud models run on the provider’s servers, so nothing stays loaded here.",
           "never": "Never",
-          "immediately": "Immediately"
+          "immediately": "Immediately",
+          "94afd37271": "Unload speech model"
         },
         "fillerWords": {
-          "title": "Remove Filler Words",
-          "description": "Drops sounds like “um” and “uh” from dictated text, in the dictation language."
+          "description": "Drops sounds like “um” and “uh” from dictated text, in the dictation language.",
+          "0134406785": "Remove filler words"
         }
       },
       "repositoryHooks": {
@@ -22194,7 +22258,6 @@
       "cleared": "Search data cleared.",
       "clearError": "Could not clear search data. Try again.",
       "webUnsupported": "Turn on session search from the Orca desktop app on that computer.",
-      "title": "Agent Session Search",
       "description": "Search everything your agents have said and done, on this computer and on any paired Orca server.",
       "searchDescription": "Turn on session search for this computer and paired servers, or clear search data.",
       "indexComputers": "Search inside sessions",
@@ -22213,7 +22276,8 @@
       "openInSidebar": "Open in the sidebar",
       "openInSidebarCopy": "Type what you remember, or ask an agent: “find the session where we fixed the login timeout.”",
       "open": "Open",
-      "enableOnAll": "Enable on all computers"
+      "enableOnAll": "Enable on all computers",
+      "4f87f1dd17": "Agent session search"
     },
     "dialog": {
       "select": "Select",
@@ -22486,7 +22550,6 @@
       "select": "Select",
       "remove": "Remove",
       "sessions": "Selection applies to new agy sessions on this host. Existing sessions may keep their previous account.",
-      "searchTitle": "Antigravity Accounts",
       "searchDescription": "Save and select native agy Google accounts on the execution host.",
       "title": "Antigravity",
       "keyword": {
@@ -22518,7 +22581,8 @@
       "chatSignInWith": "Sign in with {{method}}",
       "chatPasteOpen": "Browser page didn't load?",
       "chatSwitchMethod": "Sign in again to switch to {{method}}.",
-      "enterpriseFieldsNeeded": "Enter a Google Cloud project and location."
+      "enterpriseFieldsNeeded": "Enter a Google Cloud project and location.",
+      "fd47b5a5dd": "Antigravity accounts"
     },
     "claude": {
       "added": "Account added. Select it to use it for the next Claude you start.",

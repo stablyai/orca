@@ -98,7 +98,7 @@ export function renderClaudeAccountsSection(
         )}
       >
         <SearchableSetting
-          title={t('auto.components.settings.AccountsPane.8bbfd74556', 'Claude Accounts')}
+          title={t('auto.components.settings.AccountsPane.89b9a151c3', 'Claude accounts')}
           description={t(
             'accounts.claude.profileSwitching',
             'Switching applies to the next Claude you start in any tab.'

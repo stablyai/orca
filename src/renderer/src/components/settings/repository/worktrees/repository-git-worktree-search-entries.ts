@@ -33,7 +33,7 @@ export function getRepositoryGitWorktreeSearchEntries(
       ]
     },
     {
-      title: t('auto.components.settings.repository.search.094adbe930', 'Default Worktree Base'),
+      title: t('auto.components.settings.repository.search.88d466b2e3', 'Default worktree base'),
       description: t(
         'auto.components.settings.repository.search.f571081ec4',
         'Default base branch or ref when creating worktrees.'
@@ -48,7 +48,7 @@ export function getRepositoryGitWorktreeSearchEntries(
       ]
     },
     {
-      title: t('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
+      title: t('auto.components.settings.repository.search.2e216fbad2', 'Worktree location'),
       description: t(
         'auto.components.settings.repository.search.cd33a5525e',
         'Project-specific directory for new worktrees.'
@@ -78,7 +78,7 @@ export function getRepositoryGitWorktreeSearchEntries(
       ]
     },
     {
-      title: t('auto.components.settings.repository.search.1f0f20bbb6', 'Sparse Checkout Presets'),
+      title: t('auto.components.settings.repository.search.355868ac19', 'Sparse checkout presets'),
       description: t(
         'auto.components.settings.repository.search.90a331fd68',
         'Saved directory sets for sparse worktree creation.'
@@ -116,7 +116,7 @@ export function getRepositoryGitWorktreeSearchEntries(
       ]
     },
     {
-      title: t('auto.components.settings.repository.search.01b3377ebc', 'Worktree Shared Paths'),
+      title: t('auto.components.settings.repository.search.ea22e2187e', 'Worktree shared paths'),
       description: t(
         'auto.components.settings.repository.search.ed885e589f',
         'Paths to materialize from the primary checkout into newly created worktrees.'

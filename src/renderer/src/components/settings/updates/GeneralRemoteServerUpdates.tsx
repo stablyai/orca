@@ -1,6 +1,5 @@
 import type React from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
-import { useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store/index'
 import { useTranslate } from '@/i18n/use-translate'
@@ -16,10 +15,6 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
   const refresh = useAppStore((state) => state.refreshRemoteServerUpdates)
   const setDialogOpen = useAppStore((state) => state.setRemoteServerUpdateDialogOpen)
   const updateCheckHint = getUpdateCheckHint()
-
-  useEffect(() => {
-    void refresh()
-  }, [refresh])
 
   if (entries.length === 0) {
     return null
@@ -73,7 +68,10 @@ export function GeneralRemoteServerUpdates(): React.JSX.Element | null {
 
   return (
     <SearchableSetting
-      title={t('auto.components.settings.GeneralRemoteServerUpdates.title', 'Remote Orca Servers')}
+      title={t(
+        'auto.components.settings.GeneralRemoteServerUpdates.fdd271abf0',
+        'Remote Orca servers'
+      )}
       description={t(
         'auto.components.settings.GeneralRemoteServerUpdates.description',
         'Check and update paired Orca servers from this client.'

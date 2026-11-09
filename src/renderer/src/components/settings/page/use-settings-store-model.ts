@@ -1,3 +1,4 @@
+import type { GeneralSubPage } from '../general/general-sub-pages'
 import { useCallback, useMemo, useState } from 'react'
 import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../../shared/project-types'
@@ -155,6 +156,7 @@ export function useSettingsStoreModel() {
     [fontSuggestions]
   )
   const [activeSectionId, setActiveSectionId] = useState('general')
+  const [generalSubPage, setGeneralSubPage] = useState<GeneralSubPage | null>(null)
   const [mountedSectionIds, setMountedSectionIds] = useState<Set<string>>(
     getInitialMountedSectionIds
   )
@@ -203,6 +205,8 @@ export function useSettingsStoreModel() {
   )
 
   return {
+    generalSubPage,
+    setGeneralSubPage,
     settings,
     keybindings,
     updateSettings,

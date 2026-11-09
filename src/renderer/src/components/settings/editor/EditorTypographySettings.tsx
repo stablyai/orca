@@ -1,3 +1,4 @@
+import { GENERAL_SETTING_ANCHORS } from '../general/general-setting-anchors'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import {
@@ -41,7 +42,7 @@ export function EditorTypographySettings({
 
   return (
     <>
-      <SearchableSetting {...entries.fontSize}>
+      <SearchableSetting id={GENERAL_SETTING_ANCHORS.fontSize} {...entries.fontSize}>
         <NumberField
           label={entries.fontSize.title}
           description={entries.fontSize.description}
@@ -57,7 +58,7 @@ export function EditorTypographySettings({
         />
       </SearchableSetting>
 
-      <SearchableSetting {...entries.fontWeight}>
+      <SearchableSetting id={GENERAL_SETTING_ANCHORS.fontWeight} {...entries.fontWeight}>
         <NumberField
           label={entries.fontWeight.title}
           description={entries.fontWeight.description}
@@ -73,7 +74,7 @@ export function EditorTypographySettings({
         />
       </SearchableSetting>
 
-      <SearchableSetting {...entries.lineHeight}>
+      <SearchableSetting id={GENERAL_SETTING_ANCHORS.lineHeight} {...entries.lineHeight}>
         <NumberField
           label={entries.lineHeight.title}
           description={entries.lineHeight.description}
@@ -87,7 +88,7 @@ export function EditorTypographySettings({
         />
       </SearchableSetting>
 
-      <SearchableSetting {...entries.ligatures}>
+      <SearchableSetting id={GENERAL_SETTING_ANCHORS.ligatures} {...entries.ligatures}>
         <SettingsRow
           label={entries.ligatures.title}
           description={
@@ -130,7 +131,7 @@ export function EditorTypographySettings({
       </SearchableSetting>
 
       {supportsCodeFontSmoothing() ? (
-        <SearchableSetting {...entries.fontSmoothing}>
+        <SearchableSetting id={GENERAL_SETTING_ANCHORS.fontSmoothing} {...entries.fontSmoothing}>
           <SettingsRow
             label={entries.fontSmoothing.title}
             description={entries.fontSmoothing.description}

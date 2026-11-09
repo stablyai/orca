@@ -162,7 +162,10 @@ export function RepositoryForkSyncSection({
 
   return (
     <SearchableSetting
-      title={t('auto.components.settings.RepositoryForkSyncSection.title', 'Keep Fork Up to Date')}
+      title={t(
+        'auto.components.settings.RepositoryForkSyncSection.1b00dcc746',
+        'Keep fork up to date'
+      )}
       description={t(
         'auto.components.settings.RepositoryForkSyncSection.description',
         'Safely fast-forward this fork from upstream.'
@@ -247,7 +250,7 @@ export function RepositoryForkSyncSection({
           },
           {
             value: 'safe-auto',
-            label: t('auto.components.settings.RepositoryForkSyncSection.safeAuto', 'Safe Auto'),
+            label: t('auto.components.settings.RepositoryForkSyncSection.7a1ea2076d', 'Safe auto'),
             disabled: syncing
           },
           {

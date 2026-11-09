@@ -53,7 +53,7 @@ export function OpenAiTranscriptionKeyDialog({
         </DialogHeader>
         <div className="space-y-2">
           <Label htmlFor="openai-speech-api-key">
-            {t('auto.components.settings.OpenAiTranscriptionKeyDialog.16015322f9', 'API Key')}
+            {t('auto.components.settings.OpenAiTranscriptionKeyDialog.c3dfb3840e', 'API key')}
           </Label>
           <Input
             id="openai-speech-api-key"

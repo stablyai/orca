@@ -103,8 +103,8 @@ export function WorktreeSymlinksSection({
   return (
     <SearchableSetting
       title={t(
-        'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
-        'Worktree Shared Paths'
+        'auto.components.settings.WorktreeSymlinksSection.a995ebf5ab',
+        'Worktree shared paths'
       )}
       description={t(
         'auto.components.settings.WorktreeSymlinksSection.b07ef5a8b6',
@@ -126,8 +126,8 @@ export function WorktreeSymlinksSection({
     >
       <SettingsGroup
         title={t(
-          'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
-          'Worktree Shared Paths'
+          'auto.components.settings.WorktreeSymlinksSection.a995ebf5ab',
+          'Worktree shared paths'
         )}
         description={t(
           'auto.components.settings.WorktreeSymlinksSection.7ff265071d',

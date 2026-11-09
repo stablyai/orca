@@ -20,7 +20,7 @@ export function AutomationsSettingsPane({
     <div className="space-y-8">
       <SettingsGroup>
         <SettingsSwitchRow
-          label={t('auto.components.settings.automations.showButton', 'Show Automations Button')}
+          label={t('auto.components.settings.automations.d92f253d2d', 'Show automations button')}
           description={t(
             'auto.components.settings.automations.showButtonDescription',
             'Show the Automations shortcut in the sidebar.'

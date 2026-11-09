@@ -4,7 +4,7 @@ import { translateSearchKeyword } from '../../search/settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 
 export const getEphemeralVmsSearchEntry = createLocalizedCatalog((): SettingsSearchEntry => ({
-  title: translate('auto.components.settings.ephemeralVms.search.cloudVmTitle', 'Cloud VM'),
+  title: translate('auto.components.settings.ephemeralVms.search.5e7d7868a2', 'Cloud vm'),
   description: translate(
     'auto.components.settings.ephemeralVms.search.description',
     'Learn how repo-owned recipes give each workspace its own on-demand, disposable environment.'

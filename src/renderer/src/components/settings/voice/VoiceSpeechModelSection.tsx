@@ -55,7 +55,7 @@ export function VoiceSpeechModelSection({
   return (
     <div className="flex items-center justify-between gap-4 py-2">
       <div className="space-y-0.5">
-        <Label>{t('auto.components.settings.VoicePane.43fd4f454b', 'Speech Model')}</Label>
+        <Label>{t('auto.components.settings.VoicePane.c5ea32143e', 'Speech model')}</Label>
         <p className="text-xs text-muted-foreground">
           {selectedModel && selectedIsReady
             ? `${selectedModel.label} — ${speechModelDescription(selectedModel)}`

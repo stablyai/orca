@@ -1,3 +1,4 @@
+import { resolveGeneralSubPage } from '../general/general-sub-pages'
 import { useEffect, useRef, useState } from 'react'
 import type { OrcaHooks } from '../../../../../shared/orca-yaml-hook-types'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
@@ -48,6 +49,8 @@ export function useSettingsRepoScrollEffects(
 ): void {
   const {
     activeSectionId,
+    generalSubPage,
+    setGeneralSubPage,
     pendingNavRequestTick,
     repos,
     setActiveSectionId,
@@ -181,7 +184,14 @@ export function useSettingsRepoScrollEffects(
 
     if (scrollTargetId && pendingNavSectionId && visibleSectionIds.has(pendingNavSectionId)) {
       // Inactive panes have no DOM; activate before locating the subsection next render.
-      if (activeSectionId !== pendingNavSectionId) {
+      const requestedGeneralSubPage = resolveGeneralSubPage(scrollTargetId)
+      if (
+        activeSectionId !== pendingNavSectionId ||
+        (pendingNavSectionId === 'general' && generalSubPage !== requestedGeneralSubPage)
+      ) {
+        if (pendingNavSectionId === 'general') {
+          setGeneralSubPage(requestedGeneralSubPage)
+        }
         setActiveSectionId(pendingNavSectionId)
         return
       }
@@ -230,6 +240,8 @@ export function useSettingsRepoScrollEffects(
     }
   }, [
     activeSectionId,
+    generalSubPage,
+    setGeneralSubPage,
     contentScrollRef,
     pendingNavRequestTick,
     pendingNavSectionRef,

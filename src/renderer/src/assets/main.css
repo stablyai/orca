@@ -49,6 +49,10 @@
   --text-2xs--line-height: calc(1 / 0.6875);
   --text-3xs: 0.625rem;
   --text-3xs--line-height: calc(0.875 / 0.625);
+  --text-settings-detail: 0.78125rem;
+  --text-settings-detail--line-height: 1.35;
+  --text-settings-heading: 0.9375rem;
+  --text-settings-heading--line-height: 1.4;
   --text-chat-code: 0.75rem;
   --text-chat-code--line-height: calc(1 / 0.75);
 }
@@ -2144,6 +2148,37 @@ html.native-shell .app-layout {
 
 .settings-view-shell {
   animation: settings-shell-enter 180ms ease-out;
+}
+
+/* Shared row primitives also render outside Settings; their density stays local to this page. */
+.settings-view-shell [data-settings-row] [data-slot='label'] {
+  font-size: var(--text-sm);
+  line-height: 1.4;
+}
+
+.settings-view-shell [data-settings-row] p.text-xs,
+.settings-view-shell [data-settings-row] p.text-2xs {
+  font-size: var(--text-settings-detail);
+  line-height: 1.35;
+}
+
+.settings-view-shell [data-slot='select-trigger'],
+.settings-view-shell button[role='combobox'] {
+  min-height: 28px;
+  height: 28px;
+}
+
+.settings-view-shell [data-settings-row]:not(:has([data-settings-row])) {
+  padding-block: 9px;
+  min-height: 44px;
+}
+
+.settings-view-shell [data-settings-group-heading] {
+  font-size: var(--text-settings-heading);
+}
+
+.settings-view-shell [data-settings-group-description] {
+  font-size: var(--text-settings-detail);
 }
 
 .repo-icon-emoji-picker .EmojiPickerReact {

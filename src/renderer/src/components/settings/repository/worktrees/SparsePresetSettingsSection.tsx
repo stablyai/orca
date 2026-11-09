@@ -208,8 +208,8 @@ export function SparsePresetSettingsSection({
     <section ref={sectionRef}>
       <SettingsGroup
         title={t(
-          'auto.components.settings.SparsePresetSettingsSection.388513be2d',
-          'Sparse Checkout Presets'
+          'auto.components.settings.SparsePresetSettingsSection.124ff6ea6c',
+          'Sparse checkout presets'
         )}
         description={t(
           'auto.components.settings.SparsePresetSettingsSection.17f8c4ce10',

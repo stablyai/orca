@@ -203,7 +203,7 @@ export function SshTargetForm({
               <div className="col-span-2 space-y-1.5">
                 <Label htmlFor="ssh-target-identity" className="flex items-center gap-1.5">
                   <FileKey className="size-3.5" />
-                  {t('auto.components.settings.SshTargetForm.63c0c145c1', 'Identity File')}
+                  {t('auto.components.settings.SshTargetForm.8349b7b4fa', 'Identity file')}
                 </Label>
                 <Input
                   id="ssh-target-identity"
