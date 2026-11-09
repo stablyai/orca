@@ -11424,7 +11424,7 @@
       "id": "terminal-render.foreground-repair-span",
       "title": "A forced foreground repaint covers every row the write changed",
       "maturity": "experimental",
-      "protection": "partial",
+      "protection": "none",
       "owner": "terminal-rendering",
       "layer": "renderer-unit",
       "surfaces": [
@@ -11437,39 +11437,20 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["local", "daemon", "ssh", "remote-runtime"],
-      "coveredPlatforms": ["macos"],
+      "coveredPlatforms": [],
       "coveredProviders": [],
-      "coverageNotes": "Audit2236: retire the21-profile real-parser row-change corpus and bottom-row narrowing bound. Retain one controlled hardcoded dirty-span case proving pre/post cursor inclusion. No retained case proves real-parser changed-row convergence, viewport-scroll/alternate-screen full-grid fallback, work bounds or pixel behavior. Historical dated parser/CDP/red-green/performance evidence remains verbatim history and does not validate reduced source bytes; no equivalent replacement or fresh evidence is claimed. Historical prior account (preserved verbatim): Renderer-unit convergence corpus over a real xterm parser, plus manual CDP pixel evidence on the macOS WebGL renderer. The repaint span is provider-independent because it is computed from xterm's parse, not from the transport; SSH/WSL/remote were not exercised live. The audit removes isolated unobservable-span fallback and follow-up full-grid repaint examples. The retained real-parser corpus checks observed row changes and cursor spans; it does not establish those removed fallback alarms.",
+      "coverageNotes": "Audit2615: all retained source alarms retired. No retained source coverage or current source oracle remains for this gate. Prior notes and dated evidence are historical only; no equivalent replacement or fresh evidence is claimed. Audit2236: retire the21-profile real-parser row-change corpus and bottom-row narrowing bound. Retain one controlled hardcoded dirty-span case proving pre/post cursor inclusion. No retained case proves real-parser changed-row convergence, viewport-scroll/alternate-screen full-grid fallback, work bounds or pixel behavior. Historical dated parser/CDP/red-green/performance evidence remains verbatim history and does not validate reduced source bytes; no equivalent replacement or fresh evidence is claimed. Historical prior account (preserved verbatim): Renderer-unit convergence corpus over a real xterm parser, plus manual CDP pixel evidence on the macOS WebGL renderer. The repaint span is provider-independent because it is computed from xterm's parse, not from the transport; SSH/WSL/remote were not exercised live. The audit removes isolated unobservable-span fallback and follow-up full-grid repaint examples. The retained real-parser corpus checks observed row changes and cursor spans; it does not establish those removed fallback alarms.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/pull/2669",
         "https://github.com/stablyai/orca/pull/4669",
         "https://github.com/stablyai/orca/pull/8178"
       ],
       "invariant": "The row span Orca asks xterm to repaint after a forced foreground refresh must cover every viewport row whose rendered content changed during that write, plus the cursor row before and after it; when the span cannot be established — unobservable parse, viewport scroll, or a normal/alternate buffer flip — the whole viewport must be repainted.",
-      "oracle": "Audit2236: retire the21-profile real-parser row-change corpus and bottom-row narrowing bound. Retain one controlled hardcoded dirty-span case proving pre/post cursor inclusion. No retained case proves real-parser changed-row convergence, viewport-scroll/alternate-screen full-grid fallback, work bounds or pixel behavior. Historical dated parser/CDP/red-green/performance evidence remains verbatim history and does not validate reduced source bytes; no equivalent replacement or fresh evidence is claimed. Historical prior account (preserved verbatim): A real @xterm/headless parser replays an adversarial corpus (in-place bottom-row redraws, standalone CR overwrite, backspace, erase-in-line, erase-in-display above and below the cursor, full clear, wide CJK, emoji, combining marks, ZWJ sequences, scroll-region insert/delete, reverse index, DEC 2026 frames, alternate-screen enter and exit, viewport scroll, narrow panes). Each viewport row is serialized cell-by-cell with its attributes before and after the write, and every row that differs must fall inside the span the settle path requested. A vacuity guard asserts each case actually moves the screen.",
-      "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-foreground-repair-convergence.test.ts"
-      ],
-      "testFiles": [
-        "src/renderer/src/lib/pane-manager/terminal-foreground-repair-convergence.test.ts"
-      ],
-      "assertionRefs": [
-        {
-          "file": "src/renderer/src/lib/pane-manager/terminal-foreground-repair-convergence.test.ts",
-          "assertions": ["widens the repair to the cursor rows on both sides of the write"]
-        }
-      ],
-      "evidenceRuns": [
-        {
-          "date": "2026-09-02",
-          "runner": "local",
-          "platform": "macos",
-          "result": "passed",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-foreground-repair-convergence.test.ts",
-          "durationSeconds": 1,
-          "summary": "25 cases passed against a real xterm parser; paired CDP run on a 4-pane macOS WebGL dev build produced screenshots byte-identical to a forced full model rebuild."
-        }
-      ],
+      "oracle": "Audit2615: all retained source alarms retired. No retained source coverage or current source oracle remains for this gate. Prior notes and dated evidence are historical only; no equivalent replacement or fresh evidence is claimed. Audit2236: retire the21-profile real-parser row-change corpus and bottom-row narrowing bound. Retain one controlled hardcoded dirty-span case proving pre/post cursor inclusion. No retained case proves real-parser changed-row convergence, viewport-scroll/alternate-screen full-grid fallback, work bounds or pixel behavior. Historical dated parser/CDP/red-green/performance evidence remains verbatim history and does not validate reduced source bytes; no equivalent replacement or fresh evidence is claimed. Historical prior account (preserved verbatim): A real @xterm/headless parser replays an adversarial corpus (in-place bottom-row redraws, standalone CR overwrite, backspace, erase-in-line, erase-in-display above and below the cursor, full clear, wide CJK, emoji, combining marks, ZWJ sequences, scroll-region insert/delete, reverse index, DEC 2026 frames, alternate-screen enter and exit, viewport scroll, narrow panes). Each viewport row is serialized cell-by-cell with its attributes before and after the write, and every row that differs must fall inside the span the settle path requested. A vacuity guard asserts each case actually moves the screen.",
+      "commands": [],
+      "testFiles": [],
+      "assertionRefs": [],
+      "evidenceRuns": [],
       "runtimeBudget": {
         "p95Seconds": 15,
         "scope": "Renderer-unit convergence corpus"
@@ -11492,11 +11473,13 @@
         "Keep a full-grid fallback assertion for every new span-narrowing condition."
       ],
       "knownGaps": [
+        "Audit2615: all retained source alarms retired. No retained source coverage or current source oracle remains for this gate. Prior notes and dated evidence are historical only; no equivalent replacement or fresh evidence is claimed.",
         "Audit2236: retire the21-profile real-parser row-change corpus and bottom-row narrowing bound. Retain one controlled hardcoded dirty-span case proving pre/post cursor inclusion. No retained case proves real-parser changed-row convergence, viewport-scroll/alternate-screen full-grid fallback, work bounds or pixel behavior. Historical dated parser/CDP/red-green/performance evidence remains verbatim history and does not validate reduced source bytes; no equivalent replacement or fresh evidence is claimed.",
         "No CI-wired pixel oracle; WebGL convergence evidence was collected manually over CDP.",
         "Windows ConPTY synchronous repair has no retained parser-corpus or Windows-runner coverage after the corpus retirement.",
         "SSH/WSL/remote providers were not exercised live; the span is transport-independent by construction.",
-        "The audit removes isolated unobservable-span fallback and follow-up full-grid repaint examples, and retires the real-parser corpus. The surviving controlled cursor-span case does not establish those fallback alarms or real-parser convergence."
+        "The audit removes isolated unobservable-span fallback and follow-up full-grid repaint examples, and retires the real-parser corpus. The surviving controlled cursor-span case does not establish those fallback alarms or real-parser convergence.",
+        "Audit2615 historical evidenceRuns only; no current protection. Original JSON verbatim:\n[\n        {\n          \"date\": \"2026-09-02\",\n          \"runner\": \"local\",\n          \"platform\": \"macos\",\n          \"result\": \"passed\",\n          \"command\": \"pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/pane-manager/terminal-foreground-repair-convergence.test.ts\",\n          \"durationSeconds\": 1,\n          \"summary\": \"25 cases passed against a real xterm parser; paired CDP run on a 4-pane macOS WebGL dev build produced screenshots byte-identical to a forced full model rebuild.\"\n        }\n      ]"
       ],
       "demotionRule": "Demote or block if a narrowing condition is added without a matching convergence case, if the corpus stops asserting that each case changes at least one row, or if a repaint regression is reported for in-place agent redraws."
     },
