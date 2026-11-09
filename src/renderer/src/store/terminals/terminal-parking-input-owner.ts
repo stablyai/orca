@@ -7,7 +7,7 @@ import {
 } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import type { AppState } from '../types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
-import { readRecordChanges } from '@/store/keyed-record-transitions'
+import { readRecordChanges } from '@/store/keyed-record-change-reads'
 import { sleepingAgentRecordIndex } from './sleeping-agent-record-index'
 import { getTerminalTabOwnerWorktreeId, getTerminalTabOwners } from './terminal-tab-owner-index'
 import {

@@ -1,5 +1,5 @@
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { readRecordChanges } from '@/store/keyed-record-transitions'
+import { readRecordChanges } from '@/store/keyed-record-change-reads'
 
 type Records = Readonly<Record<string, SleepingAgentSessionRecord | undefined>>
 type RecordEntry = readonly [string, SleepingAgentSessionRecord]

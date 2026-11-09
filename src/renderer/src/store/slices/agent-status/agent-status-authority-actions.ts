@@ -1,3 +1,4 @@
+import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
 import { rendererAgentStatusObservations } from '../../../lib/renderer-agent-status-observations'
@@ -226,7 +227,7 @@ export function createAgentStatusAuthorityActions(
           sleepingAgentSessionsByPaneKey:
             sleepingSession === undefined
               ? s.sleepingAgentSessionsByPaneKey
-              : replaceRecordEntries(s.sleepingAgentSessionsByPaneKey, [
+              : replaceRecordEntries<SleepingAgentSessionRecord>(s.sleepingAgentSessionsByPaneKey, [
                   [from, null],
                   [to, { ...sleepingSession, paneKey: to, tabId: targetTabId }]
                 ]),

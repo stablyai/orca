@@ -1,5 +1,5 @@
 import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
-import { readRecordChanges } from '@/store/keyed-record-transitions'
+import { readRecordChanges } from '@/store/keyed-record-change-reads'
 
 export class MountedTerminalWorktrees extends Set<string> {
   private readonly changedIds = new Set<string>()

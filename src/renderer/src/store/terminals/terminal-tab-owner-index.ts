@@ -1,4 +1,4 @@
-import { readTabMapChanges } from '@/store/keyed-record-transitions'
+import { readTabMapChanges } from '@/store/keyed-record-change-reads'
 import { isIndexKey } from '@/store/keyed-record-index-keys'
 
 type TerminalTabOwnerBuckets<T extends { id: string } = { id: string }> = Readonly<
