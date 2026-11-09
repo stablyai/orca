@@ -182,7 +182,8 @@ export function MobileAccountsScreen() {
     const activeUsage = getActiveProviderRateLimits(snapshot, provider)
     const resetCredit = provider === 'codex' ? getCodexResetCreditSummary(activeUsage, now) : null
     const Icon = provider === 'claude' ? ClaudeIcon : OpenAIIcon
-    const switchBlocked = busyAccountId !== null || resettingCodex || connState !== 'connected'
+    // Stored rows may name a selection or Codex target the desktop has since changed.
+    const switchBlocked = busyAccountId !== null || resettingCodex || !live
     const spinner = <ActivityIndicator size="small" color={colors.textSecondary} />
     return (
       <View>

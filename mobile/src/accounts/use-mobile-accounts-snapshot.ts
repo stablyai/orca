@@ -31,39 +31,51 @@ export function useMobileAccountsSnapshot({
   const t = useMobileTranslation()
   const queryClient = useQueryClient()
   const { data, dataUpdatedAt } = useQuery(accountsSnapshotOptions(hostId))
-  const [error, setError] = useState<string | null>(null)
+  // Dated by when its read was sent, so a failure from an earlier connection doesn't outlive it.
+  const [failure, setFailure] = useState<{ message: string; at: number } | null>(null)
   const [refreshing, setRefreshing] = useState(false)
 
+  // Dated by when the read was sent: a reply from before the latest connect lands but never counts as live.
   const acceptSnapshot = useCallback(
-    (nextSnapshot: AccountsSnapshot) => {
-      queryClient.setQueryData(accountsSnapshotKey(hostId), nextSnapshot)
-      setError(null)
+    (nextSnapshot: AccountsSnapshot, readAt = Date.now()) => {
+      const key = accountsSnapshotKey(hostId)
+      if ((queryClient.getQueryState(key)?.dataUpdatedAt ?? 0) <= readAt) {
+        queryClient.setQueryData(key, nextSnapshot, { updatedAt: readAt })
+      }
+      setFailure(null)
     },
     [hostId, queryClient]
   )
-  const rejectInvalidSnapshot = useCallback(() => {
-    // Fail closed on unrecognized snapshot: stale data can expose finite reset for wrong account.
-    queryClient.setQueryData(accountsSnapshotKey(hostId), null)
-    setError(t('accounts.screen.invalidSnapshot', 'Invalid accounts snapshot from host'))
-  }, [hostId, queryClient, t])
+  const rejectInvalidSnapshot = useCallback(
+    (readAt = Date.now()) => {
+      // Fail closed on unrecognized snapshot: stale data can expose finite reset for wrong account.
+      queryClient.setQueryData(accountsSnapshotKey(hostId), null)
+      setFailure({
+        message: t('accounts.screen.invalidSnapshot', 'Invalid accounts snapshot from host'),
+        at: readAt
+      })
+    },
+    [hostId, queryClient, t]
+  )
 
   const refresh = useCallback(async () => {
     if (!client) {
       return
     }
     setRefreshing(true)
+    const sentAt = Date.now()
     try {
       const res = await client.sendRequest('accounts.list')
       if (res.ok) {
-        acceptSnapshot(decodeAccountsSnapshot(res.result))
+        acceptSnapshot(decodeAccountsSnapshot(res.result), sentAt)
       } else {
-        setError(res.error.message)
+        setFailure({ message: res.error.message, at: sentAt })
       }
     } catch (e) {
       if (e instanceof AccountsSnapshotError) {
-        rejectInvalidSnapshot()
+        rejectInvalidSnapshot(sentAt)
       } else {
-        setError(e instanceof Error ? e.message : String(e))
+        setFailure({ message: e instanceof Error ? e.message : String(e), at: sentAt })
       }
     } finally {
       setRefreshing(false)
@@ -76,8 +88,8 @@ export function useMobileAccountsSnapshot({
       return
     }
     return subscribeAccountsSnapshots(client, {
-      onSnapshot: acceptSnapshot,
-      onInvalidSnapshot: rejectInvalidSnapshot,
+      onSnapshot: (nextSnapshot) => acceptSnapshot(nextSnapshot),
+      onInvalidSnapshot: () => rejectInvalidSnapshot(),
       onStreamError: () => void refresh()
     })
   }, [acceptSnapshot, client, connState, refresh, rejectInvalidSnapshot])
@@ -94,6 +106,9 @@ export function useMobileAccountsSnapshot({
     () => (live ? (data ?? null) : withoutAccountUsage(data ?? null)),
     [live, data]
   )
+
+  const error =
+    failure && (lastConnectedAt === null || failure.at >= lastConnectedAt) ? failure.message : null
 
   return {
     snapshot,
