@@ -96,7 +96,9 @@ export function CloudWorkspaceOfflineView(props: CloudOfflineViewProps): React.J
             </TabsTrigger>
             <TabsTrigger value="changes">
               {t('components.orcaCloud.offline.tabChanges', 'Changes')}
-              {changeCount > 0 ? <span className="text-muted-foreground">{changeCount}</span> : null}
+              {changeCount > 0 ? (
+                <span className="text-muted-foreground">{changeCount}</span>
+              ) : null}
             </TabsTrigger>
           </TabsList>
           <TabsContent value="chat" className="flex min-h-0 flex-1 flex-col pt-3">

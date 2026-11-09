@@ -14,7 +14,10 @@ import {
 } from './orca-cloud-workspace-state'
 
 const NOW = 1_800_000_000_000
-const status = (state: HostedWorkspaceStatus['state'], archive: HostedWorkspaceStatus['archive'] = null): HostedWorkspaceStatus => ({
+const status = (
+  state: HostedWorkspaceStatus['state'],
+  archive: HostedWorkspaceStatus['archive'] = null
+): HostedWorkspaceStatus => ({
   state,
   metrics: null,
   uptimeMs: null,
@@ -32,18 +35,39 @@ const wake = (phase: CloudWakeProgressEvent['phase'], at = NOW): CloudWakeProgre
 
 describe('deriveCloudDotState', () => {
   it('shows an in-flight wake over everything, including a sleeping desktop record', () => {
-    expect(deriveCloudDotState({ status: status('sleeping'), wake: wake('waking'), sleeping: true, now: NOW })).toBe('waking')
-    expect(deriveCloudDotState({ status: status('ready'), wake: wake('connecting'), sleeping: false, now: NOW })).toBe('waking')
+    expect(
+      deriveCloudDotState({
+        status: status('sleeping'),
+        wake: wake('waking'),
+        sleeping: true,
+        now: NOW
+      })
+    ).toBe('waking')
+    expect(
+      deriveCloudDotState({
+        status: status('ready'),
+        wake: wake('connecting'),
+        sleeping: false,
+        now: NOW
+      })
+    ).toBe('waking')
   })
 
   it('treats a wake with no terminal event for 4 minutes as stale', () => {
     expect(
-      deriveCloudDotState({ status: status('ready'), wake: wake('waking', NOW - 5 * 60_000), sleeping: false, now: NOW })
+      deriveCloudDotState({
+        status: status('ready'),
+        wake: wake('waking', NOW - 5 * 60_000),
+        sleeping: false,
+        now: NOW
+      })
     ).toBe('running')
   })
 
   it('archived beats the desktop sleep state; failed wakes show until stale', () => {
-    expect(deriveCloudDotState({ status: status('archived'), wake: undefined, sleeping: true, now: NOW })).toBe('archived')
+    expect(
+      deriveCloudDotState({ status: status('archived'), wake: undefined, sleeping: true, now: NOW })
+    ).toBe('archived')
     expect(
       deriveCloudDotState({
         status: status('sleeping', { archivedAt: NOW, expiresAt: null }),
@@ -52,16 +76,45 @@ describe('deriveCloudDotState', () => {
         now: NOW
       })
     ).toBe('archived')
-    expect(deriveCloudDotState({ status: status('sleeping'), wake: wake('failed'), sleeping: true, now: NOW })).toBe('failed')
+    expect(
+      deriveCloudDotState({
+        status: status('sleeping'),
+        wake: wake('failed'),
+        sleeping: true,
+        now: NOW
+      })
+    ).toBe('failed')
   })
 
   it('maps control-plane states; the local sleep record only fills in before the first read', () => {
-    expect(deriveCloudDotState({ status: status('ready'), wake: undefined, sleeping: false, now: NOW })).toBe('running')
-    expect(deriveCloudDotState({ status: status('unresponsive'), wake: undefined, sleeping: false, now: NOW })).toBe('unresponsive')
-    expect(deriveCloudDotState({ status: status('ready'), wake: undefined, sleeping: true, now: NOW })).toBe('running')
-    expect(deriveCloudDotState({ status: null, wake: undefined, sleeping: true, now: NOW })).toBe('sleeping')
-    expect(deriveCloudDotState({ status: status('provisioning'), wake: undefined, sleeping: false, now: NOW })).toBe('waking')
-    expect(deriveCloudDotState({ status: null, wake: undefined, sleeping: false, now: NOW })).toBe('unknown')
+    expect(
+      deriveCloudDotState({ status: status('ready'), wake: undefined, sleeping: false, now: NOW })
+    ).toBe('running')
+    expect(
+      deriveCloudDotState({
+        status: status('unresponsive'),
+        wake: undefined,
+        sleeping: false,
+        now: NOW
+      })
+    ).toBe('unresponsive')
+    expect(
+      deriveCloudDotState({ status: status('ready'), wake: undefined, sleeping: true, now: NOW })
+    ).toBe('running')
+    expect(deriveCloudDotState({ status: null, wake: undefined, sleeping: true, now: NOW })).toBe(
+      'sleeping'
+    )
+    expect(
+      deriveCloudDotState({
+        status: status('provisioning'),
+        wake: undefined,
+        sleeping: false,
+        now: NOW
+      })
+    ).toBe('waking')
+    expect(deriveCloudDotState({ status: null, wake: undefined, sleeping: false, now: NOW })).toBe(
+      'unknown'
+    )
   })
 })
 

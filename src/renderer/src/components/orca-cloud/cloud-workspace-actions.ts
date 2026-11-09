@@ -109,7 +109,9 @@ export function runArchiveCloudWorkspace(
     }, options.undoMs ?? ARCHIVE_UNDO_MS)
     toast(
       options.name
-        ? translate('orcaCloudWorkspace.archivingNamed', 'Archiving {{name}}…', { name: options.name })
+        ? translate('orcaCloudWorkspace.archivingNamed', 'Archiving {{name}}…', {
+            name: options.name
+          })
         : translate('orcaCloudWorkspace.archiving', 'Archiving workspace…'),
       {
         id: toastId,

@@ -32,10 +32,7 @@ export function WorktreeCloudTransferMenuItem({
   return (
     <DropdownMenuItem onSelect={() => void runOrcaCloudTransferToLocal(worktreeId)}>
       <Laptop className="size-3.5" />
-      {t(
-        'auto.components.sidebar.WorktreeContextMenu.moveToThisComputer',
-        'Move to this computer'
-      )}
+      {t('auto.components.sidebar.WorktreeContextMenu.moveToThisComputer', 'Move to this computer')}
     </DropdownMenuItem>
   )
 }

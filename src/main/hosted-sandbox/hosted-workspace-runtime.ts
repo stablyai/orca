@@ -5,6 +5,7 @@ import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-p
 import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtimes'
 import type {
   CloudOomEvent,
+  CloudWakeProgressEvent,
   CloudWorkspaceErrorCode,
   CloudWorkspaceResult
 } from '../../shared/hosted-sandbox/cloud-workspace-api'
@@ -18,6 +19,7 @@ import {
 } from '../environment-providers/environment-provider-driver'
 import { environmentHandleFromRecipeResult } from '../environment-providers/environment-provider-recipe-adapter'
 import { isHostedEntitlementDenied } from './hosted-environment-provider'
+import { callRuntimeEnvironment } from '../ipc/runtime-environments/runtime-environment-transport-routing'
 import { HOSTED_SANDBOX_DRIVER_ID } from './hosted-sandbox-driver'
 import type { HostedWorkspaceService } from './hosted-workspace-service'
 
@@ -165,6 +167,83 @@ export function getHostedWorkspaceService(): HostedWorkspaceService | null {
   return current
 }
 
+/** Polls a cheap terminal listing until the woken server answers it (or the deadline passes). */
+export async function waitForTerminalsReachable(
+  userDataPath: string,
+  environmentId: string,
+  deadline: number,
+  stillWanted: () => boolean = () => true
+): Promise<boolean> {
+  while (Date.now() < deadline && stillWanted()) {
+    const remaining = deadline - Date.now()
+    // Bounded by the deadline: the probe neither waits past it on a wake in flight nor on a slow server.
+    const signal = AbortSignal.timeout(Math.max(1, remaining))
+    const response = await callRuntimeEnvironment(
+      userDataPath,
+      environmentId,
+      'terminal.list',
+      { limit: 1 },
+      Math.min(5_000, Math.max(1, remaining)),
+      undefined,
+      undefined,
+      { signal, preparation: { recipeVmHoldMs: Math.max(0, remaining) } }
+    ).catch(() => null)
+    if (response?.ok) {
+      return stillWanted()
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+  return false
+}
+
+/**
+ * After a wake's step answers: `ready` once the runtime record says running AND the woken server
+ * answers a terminal listing (panes rebind to the restarted server's terminals a moment after
+ * running; keys typed before that are dropped by design). `failed` when it never answers. Nothing
+ * when this wake is no longer the current one (a newer wake, a failure or a Sleep took over).
+ */
+export async function announceWakeUsable(
+  userDataPath: string,
+  workspaceId: string,
+  startedAt: number,
+  hooks: { isCurrent: () => boolean; emit: (event: Omit<CloudWakeProgressEvent, 'at'>) => void },
+  timeoutMs = 60_000
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs
+  const running = (): EphemeralVmRuntimeRecord | null => {
+    const runtime = findCloudRuntime(userDataPath, workspaceId)?.runtime
+    return runtime?.status === 'running' ? runtime : null
+  }
+  while (Date.now() < deadline && hooks.isCurrent()) {
+    const runtime = running()
+    if (runtime) {
+      const reachable = runtime.runtimeEnvironmentId
+        ? await waitForTerminalsReachable(
+            userDataPath,
+            runtime.runtimeEnvironmentId,
+            deadline,
+            hooks.isCurrent
+          )
+        : true
+      if (hooks.isCurrent() && running()) {
+        hooks.emit(
+          reachable
+            ? { workspaceId, phase: 'ready', source: 'open', startedAt }
+            : {
+                workspaceId,
+                phase: 'failed',
+                source: 'open',
+                startedAt,
+                message: 'The workspace did not answer after waking.'
+              }
+        )
+      }
+      return
+    }
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+}
+
 /** Whether the control plane says this workspace is archived; unknown counts as not archived. */
 export async function isArchivedOnControlPlane(
   userDataPath: string,
@@ -185,7 +264,9 @@ export async function isArchivedOnControlPlane(
 
 let archiveCheck: ((workspaceId: string) => Promise<boolean>) | null = null
 /** Installed with Orca Cloud; the wake path asks it before resuming a cloud workspace. */
-export function setCloudArchiveCheck(check: ((workspaceId: string) => Promise<boolean>) | null): void {
+export function setCloudArchiveCheck(
+  check: ((workspaceId: string) => Promise<boolean>) | null
+): void {
   archiveCheck = check
 }
 /** False when Orca Cloud is off in this build. */

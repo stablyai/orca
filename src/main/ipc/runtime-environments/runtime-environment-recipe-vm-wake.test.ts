@@ -13,7 +13,7 @@ import type {
   RecipeVmOpening,
   RecipeVmState
 } from '../../runtime/workspaces/sleep/recipe-vm-operations'
-import { prepareRecipeVm } from './runtime-environment-recipe-vm-wake'
+import { holdForInFlightRecipeVmWake, prepareRecipeVm } from './runtime-environment-recipe-vm-wake'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import {
   forgetRecipeVmWakePairingsForTests,
@@ -130,6 +130,65 @@ describe('a request to a recipe VM environment', () => {
       await expect(codeOf('none')).resolves.toBe(code)
     }
   )
+
+  it('holds a request that does not open the workspace for an in-flight wake, outside its call slot', async () => {
+    recordVm('running')
+    ownerState = 'waking'
+    const awaitWake = vi.fn(async () => 'up' as const)
+    registerRecipeVmWaker({
+      state,
+      noteOpened: vi.fn(),
+      holdOpen,
+      awaitWake,
+      openEnvironment: async () => 'up'
+    })
+    await holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list', 5_000)
+    expect(awaitWake).toHaveBeenCalledWith('workspace-of-vm-1', false, 5_000, undefined)
+    // Bounded by the caller's hold (0 = never wait) and never for an open (that wakes in its slot).
+    await holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list', 5_000, {
+      preparation: { recipeVmHoldMs: 0 }
+    })
+    await holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'worktree.activate', 5_000)
+    expect(awaitWake).toHaveBeenCalledTimes(1)
+    expect(holdOpen).not.toHaveBeenCalled()
+    // Inside the slot the request is still answered at once from the owner's state.
+    await expect(codeOf('none')).resolves.toBe('runtime_environment_waking')
+  })
+
+  it('caps the hold at the in-flight maximum and does not wait on a VM that is not waking', async () => {
+    recordVm('running')
+    const awaitWake = vi.fn(async () => 'up' as const)
+    registerRecipeVmWaker({
+      state,
+      noteOpened: vi.fn(),
+      holdOpen,
+      awaitWake,
+      openEnvironment: async () => 'up'
+    })
+    await holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list', 600_000)
+    expect(awaitWake).not.toHaveBeenCalled()
+    ownerState = 'waking'
+    await holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list', 600_000)
+    expect(awaitWake).toHaveBeenCalledWith('workspace-of-vm-1', false, 60_000, undefined)
+  })
+
+  it('reports the pairing a wake it waited through left, for the caller fence', async () => {
+    recordVm('running')
+    ownerState = 'waking'
+    registerRecipeVmWaker({
+      state,
+      noteOpened: vi.fn(),
+      holdOpen,
+      awaitWake: async () => {
+        noteRecipeVmWakePairing(VM_ENVIRONMENT.id, 9, true)
+        return 'up' as const
+      },
+      openEnvironment: async () => 'up'
+    })
+    await expect(
+      holdForInFlightRecipeVmWake(userDataPath, VM_ENVIRONMENT, 'terminal.list', 5_000)
+    ).resolves.toEqual({ before: VM_ENVIRONMENT, wokenPairingRevision: 9 })
+  })
 
   // A phone gives up after 30 seconds, so its open is held for less.
 

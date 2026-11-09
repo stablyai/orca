@@ -18,7 +18,7 @@ import type {
 import { applyResumedRuntimePairing } from '../ephemeral-vm/runtime-resume-pairing'
 import { noteRecipeVmWakePairing } from '../ephemeral-vm/recipe-vm-wake-pairings'
 import { invalidateRuntimeEnvironmentTransport } from '../ipc/runtime-environments/runtime-environments'
-import { autoResumeAgentsAfterRollover } from './hosted-agent-auto-resume'
+import { autoResumeAgentsAfterRollover, listRestartOfferIds } from './hosted-agent-auto-resume'
 import type { HostedSandboxControlPlaneClient } from './hosted-sandbox-control-plane-client'
 import { toReady } from './hosted-sandbox-driver'
 import { createHostedRuntimeEnvironmentCall } from './hosted-runtime-environment-call'
@@ -28,6 +28,7 @@ import {
   failure,
   findCloudRuntime,
   readCachedCheckouts,
+  announceWakeUsable,
   type CloudRuntime
 } from './hosted-workspace-runtime'
 
@@ -95,17 +96,11 @@ export function installHostedWorkspaceService(deps: {
   }
 
   /** The step answers before the window re-pairs; `ready` fires once the runtime record says running. */
-  async function announceReadyWhenRunning(workspaceId: string, startedAt: number): Promise<void> {
-    const deadline = Date.now() + 60_000
-    while (Date.now() < deadline && wakes.has(workspaceId)) {
-      const runtime = findCloudRuntime(deps.userDataPath, workspaceId)?.runtime
-      if (runtime?.status === 'running') {
-        service.emitWakeProgress({ workspaceId, phase: 'ready', source: 'open', startedAt })
-        return
-      }
-      await new Promise((resolve) => setTimeout(resolve, 250))
-    }
-  }
+  const announceReadyWhenRunning = (workspaceId: string, startedAt: number): Promise<void> =>
+    announceWakeUsable(deps.userDataPath, workspaceId, startedAt, {
+      isCurrent: () => wakes.get(workspaceId)?.startedAt === startedAt,
+      emit: (event) => service.emitWakeProgress(event)
+    })
 
   const service: HostedWorkspaceService = {
     emitWakeProgress(event) {
@@ -213,6 +208,11 @@ export function installHostedWorkspaceService(deps: {
       source: 'restart',
       startedAt
     })
+    const call = found.runtime.runtimeEnvironmentId
+      ? createHostedRuntimeEnvironmentCall(deps.userDataPath, found.runtime.runtimeEnvironmentId)
+      : null
+    // Offers the host already holds were left for the user; only this restart's are continued.
+    const offersBeforeDrain = call ? await listRestartOfferIds(call) : null
     // The scheduler holds the old session's deadline and would warn/roll over the new one; a fresh one starts on sync.
     deps.stopSession(found.sandboxId)
     try {
@@ -231,14 +231,10 @@ export function installHostedWorkspaceService(deps: {
         source: 'restart',
         startedAt
       })
-      if (found.runtime.runtimeEnvironmentId) {
+      if (call) {
         // Same continuation as a rollover: chats the restart interrupted carry on by themselves.
-        const call = createHostedRuntimeEnvironmentCall(
-          deps.userDataPath,
-          found.runtime.runtimeEnvironmentId
-        )
-        void autoResumeAgentsAfterRollover(call, startedAt).catch((error: unknown) =>
-          log(`[orca-cloud] auto-resume after restart failed: ${String(error)}`)
+        void autoResumeAgentsAfterRollover(call, startedAt, offersBeforeDrain).catch(
+          (error: unknown) => log(`[orca-cloud] auto-resume after restart failed: ${String(error)}`)
         )
       }
       return { ok: true, value: null }

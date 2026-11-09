@@ -44,7 +44,12 @@ const running: HostedWorkspaceStatus = {
   archive: null,
   checkedAt: NOW
 }
-const asleep: HostedWorkspaceStatus = { ...running, state: 'sleeping', metrics: null, uptimeMs: null }
+const asleep: HostedWorkspaceStatus = {
+  ...running,
+  state: 'sleeping',
+  metrics: null,
+  uptimeMs: null
+}
 const entry = (
   status: HostedWorkspaceStatus | null,
   over: Partial<CloudStatusEntry> = {}
@@ -100,7 +105,11 @@ export const panelUnresponsive = defineFixture({
 export const panelRestarting = defineFixture({
   width: 300,
   render: () => (
-    <Panel state="unresponsive" value={entry({ ...running, state: 'unresponsive' })} pending="restart" />
+    <Panel
+      state="unresponsive"
+      value={entry({ ...running, state: 'unresponsive' })}
+      pending="restart"
+    />
   )
 })
 
@@ -298,7 +307,7 @@ function IdleToast(): React.JSX.Element {
   return (
     <>
       <div className="h-[200px] bg-background" />
-      <Toaster position="top-left" toastOptions={{ className: "font-sans text-sm" }} />
+      <Toaster position="top-left" toastOptions={{ className: 'font-sans text-sm' }} />
     </>
   )
 }

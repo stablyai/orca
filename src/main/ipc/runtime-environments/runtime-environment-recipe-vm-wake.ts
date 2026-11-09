@@ -14,6 +14,7 @@ import {
   RUNTIME_ENVIRONMENT_WAKE_FAILED_MESSAGE,
   RUNTIME_ENVIRONMENT_WAKING_ERROR_CODE,
   RUNTIME_ENVIRONMENT_WAKING_MESSAGE,
+  recipeVmWakeIntentFor,
   type RecipeVmWakeIntent
 } from '../../../shared/remote-runtime/recipe-vm-wake'
 import { getRecipeVmWaker } from '../../runtime/workspaces/sleep/recipe-vm-waker-registry'
@@ -117,6 +118,46 @@ export async function prepareRecipeVm(
   return UNCHANGED
 }
 
+/** How long a request that does not open the workspace waits for a wake already in flight. */
+export const RECIPE_VM_IN_FLIGHT_WAKE_HOLD_MS = 60_000
+
+/**
+ * Before a request that does not open the workspace takes its call slot: while the VM's wake is
+ * already underway (often just reconnecting), wait for it, up to `holdMs`, instead of being refused
+ * and never retried. Never starts a wake and never refuses: the request's own preparation decides
+ * what happens next (it is refused there if the wake failed or is still running).
+ */
+export async function awaitRecipeVmInFlightWake<E extends RecipeVmEnvironment>(
+  userDataPath: string,
+  environment: E,
+  holdMs: number,
+  signal?: AbortSignal
+): Promise<HeldRecipeVmWake<E> | null> {
+  const waker = getRecipeVmWaker()
+  if (holdMs <= 0 || !waker?.awaitWake) {
+    return null
+  }
+  const vm = recipeVmOf(userDataPath, environment)
+  if (!vm || waker.state(vm.workspaceId, vm.recordSuspended) !== 'waking') {
+    return null
+  }
+  const before = latestRecipeVmWake(environment.id)
+  await waker.awaitWake(vm.workspaceId, vm.recordSuspended, holdMs, signal).catch(() => undefined)
+  const woken = latestRecipeVmWake(environment.id)
+  // The wake this request waited through re-paired the server: the caller's fence names the pairing
+  // before it, exactly as for a request that woke the VM itself.
+  return woken !== before
+    ? { before: environment, wokenPairingRevision: woken?.pairingRevision ?? null }
+    : null
+}
+
+/** A wake a request waited through before taking its call slot: the record from before it and
+ *  the pairing it left. */
+export type HeldRecipeVmWake<E = RecipeVmEnvironment> = {
+  before: E
+  wokenPairingRevision: number | null
+}
+
 /** The pairing revision a recipe VM wake this request waited for left its server on, if any. */
 export type RecipeVmPreparation = { wokenPairingRevision: number | null }
 const UNCHANGED: RecipeVmPreparation = { wokenPairingRevision: null }
@@ -155,3 +196,27 @@ function refusal(outcome: Exclude<RecipeVmOpening, 'up'> | 'asleep'): RemoteRunt
       )
   }
 }
+
+/** A request that does not open the workspace waits (bounded by its own timeout and hold) for a wake
+ *  already in flight. Called before the request takes a per-environment call slot, so held
+ *  background requests never block an open. */
+export function holdForInFlightRecipeVmWake<E extends RecipeVmEnvironment>(
+  userDataPath: string,
+  environment: E,
+  method: string,
+  timeoutMs: number | undefined,
+  options?: { preparation?: { recipeVmHoldMs?: number }; signal?: AbortSignal }
+): Promise<HeldRecipeVmWake<E> | null> {
+  if (recipeVmWakeIntentFor(method) !== 'none') {
+    return Promise.resolve(null)
+  }
+  const holdMs = Math.min(
+    RECIPE_VM_IN_FLIGHT_WAKE_HOLD_MS,
+    options?.preparation?.recipeVmHoldMs ?? Infinity,
+    timeoutMs ?? DEFAULT_CALL_TIMEOUT_MS
+  )
+  return awaitRecipeVmInFlightWake(userDataPath, environment, holdMs, options?.signal)
+}
+
+/** The transport's default call timeout, which also bounds the hold for calls that set none. */
+const DEFAULT_CALL_TIMEOUT_MS = 15_000

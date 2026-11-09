@@ -95,8 +95,9 @@ export class WorkspaceSleepCoordinator {
   private readonly reopenings = new Map<string, number>()
   private readonly vmOperations = new Map<string, Promise<void>>()
   /** The VM operations asked for per workspace, in order, until each settles. */
-  private readonly pendingVmOperations = new Map<string, VmOperation[]>()
-  private readonly sleepRequests = new WorkspaceSleepRequests()
+  /** Read by the in-flight wake hold (awaitInFlightWake); written only here. */
+  readonly pendingVmOperations = new Map<string, VmOperation[]>()
+  readonly sleepRequests = new WorkspaceSleepRequests()
 
   constructor(private readonly runtime: WorkspaceSleepRuntime) {}
 

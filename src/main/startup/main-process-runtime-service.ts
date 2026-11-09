@@ -128,13 +128,17 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
         onRuntimeEnvironmentStatusPublished(trackRuntimeEnvironmentVerifiedTransitions(listener))
     },
     workspaceSleepPlatform: {
+      // Sleep's own calls and observations never wait on a wake in flight.
       callEnvironment: (environmentId, method, params, timeoutMs) =>
         callRuntimeEnvironment(
           getRuntimeEnvironmentRegistryRoot(),
           environmentId,
           method,
           params,
-          timeoutMs
+          timeoutMs,
+          undefined,
+          undefined,
+          { preparation: { recipeVmHoldMs: 0 } }
         ),
       ownsVm: (workspaceId) =>
         findWorkspaceEphemeralVmRuntime(app.getPath('userData'), workspaceId) !== undefined,
@@ -166,6 +170,8 @@ export function initializeMainProcessRuntime(): OrcaRuntimeService {
     noteOpened: (workspaceId) => runtime.noteWorkspaceReopened(workspaceId),
     holdOpen: (workspaceId, suspended, timeoutMs, signal) =>
       runtime.holdWorkspaceVmOpen(workspaceId, suspended, timeoutMs, signal),
+    awaitWake: (workspaceId, suspended, timeoutMs, signal) =>
+      runtime.awaitWorkspaceVmWake(workspaceId, suspended, timeoutMs, signal),
     openEnvironment: (selector) => {
       const root = getRuntimeEnvironmentRegistryRoot()
       return openRecipeVmEnvironment(root, resolveEnvironment(root, selector))

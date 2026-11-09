@@ -6,7 +6,7 @@ import type {
   WorkspaceSleepRequest
 } from '../../../../shared/workspace-sleep'
 import { WorkspaceSleepCoordinator } from './workspace-sleep-runtime'
-import type { RecipeVmOpening, RecipeVmState } from './recipe-vm-operations'
+import { awaitInFlightWake, type RecipeVmOpening, type RecipeVmState } from './recipe-vm-operations'
 import { dropStrandedSleepRecord } from '../../terminal/stop/worktree-sleep-resume-records'
 import type { RestoredPane } from '../../terminal/recovery/restored-pane-start'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
@@ -164,6 +164,18 @@ export abstract class RuntimeWorkspaceSleepOperations extends OrcaRuntimeWithRes
     signal?: AbortSignal
   ): Promise<RecipeVmOpening> {
     return this.workspaceSleep.holdOpen(worktreeId, recordSuspended, timeoutMs, signal)
+  }
+
+  /** Holds a request that does not open this workspace while its in-flight wake finishes. */
+  awaitWorkspaceVmWake(
+    worktreeId: string,
+    recordSuspended: boolean,
+    timeoutMs: number,
+    signal?: AbortSignal
+  ): Promise<RecipeVmOpening | 'asleep'> {
+    const pending = this.workspaceSleep.pendingVmOperations.get(worktreeId) ?? []
+    const sleeps = this.workspaceSleep.sleepRequests
+    return awaitInFlightWake(pending, recordSuspended, sleeps, worktreeId, timeoutMs, signal)
   }
 
   /** The window opened a slept pane; main resumes it and the window attaches. */

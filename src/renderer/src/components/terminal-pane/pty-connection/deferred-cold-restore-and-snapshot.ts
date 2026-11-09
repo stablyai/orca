@@ -1,3 +1,4 @@
+import { markInterruptedTurnContinued } from './startup/cold-restore-resume-startup'
 import { paneResumeRecord } from './startup/pane-resume-record'
 import { useAppStore } from '@/store/index'
 import type { PtyReplayDataMeta } from '../pty-transport/pty-transport-types'
@@ -34,6 +35,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     if (!startup || startup.resumeSource?.cancelled) {
       return false
     }
+    markInterruptedTurnContinued(startup.interruptedTurnKey)
     const state = useAppStore.getState()
     if (!session.pendingStartupCommand && session.shouldDeliverStartupViaTerminalPaste) {
       session.pendingStartupCommand = {

@@ -19,7 +19,10 @@ const status = (state: HostedWorkspaceStatus['state']): HostedWorkspaceStatus =>
   checkedAt: 1
 })
 
-function stub(getStatus: OrcaCloudWorkspaceApi['getStatus'], ids: string[] = []): OrcaCloudWorkspaceApi {
+function stub(
+  getStatus: OrcaCloudWorkspaceApi['getStatus'],
+  ids: string[] = []
+): OrcaCloudWorkspaceApi {
   const bridge = {
     getStatus: vi.fn(getStatus),
     listCloudWorkspaceIds: vi.fn(async () => ids)
@@ -48,7 +51,13 @@ describe('wake state and archive guard', () => {
 
   it('a failed wake stays until dismissed', async () => {
     stub(async () => ({ ok: true, value: status('sleeping') }))
-    noteCloudWakeProgress({ workspaceId: 'a', phase: 'failed', source: 'open', startedAt: 1, at: 2 })
+    noteCloudWakeProgress({
+      workspaceId: 'a',
+      phase: 'failed',
+      source: 'open',
+      startedAt: 1,
+      at: 2
+    })
     expect(getCloudWorkspaceSnapshot().wake.a?.phase).toBe('failed')
     dismissCloudWake('a')
     expect(getCloudWorkspaceSnapshot().wake.a).toBeUndefined()

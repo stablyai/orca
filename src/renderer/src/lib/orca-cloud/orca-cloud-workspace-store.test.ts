@@ -28,7 +28,7 @@ const ready: HostedWorkspaceStatus = {
   archive: null,
   checkedAt: 1
 }
-const ok = <T,>(value: T): CloudWorkspaceResult<T> => ({ ok: true, value })
+const ok = <T>(value: T): CloudWorkspaceResult<T> => ({ ok: true, value })
 
 function stubApi(overrides: Partial<OrcaCloudWorkspaceApi> = {}): OrcaCloudWorkspaceApi {
   const bridge: OrcaCloudWorkspaceApi = {
@@ -42,7 +42,9 @@ function stubApi(overrides: Partial<OrcaCloudWorkspaceApi> = {}): OrcaCloudWorks
     onOom: vi.fn(() => () => {}),
     ...overrides
   }
-  ;(globalThis as unknown as { window: { api: { orcaCloudWorkspace: OrcaCloudWorkspaceApi } } }).window = {
+  ;(
+    globalThis as unknown as { window: { api: { orcaCloudWorkspace: OrcaCloudWorkspaceApi } } }
+  ).window = {
     api: { orcaCloudWorkspace: bridge }
   }
   return bridge
@@ -66,7 +68,11 @@ describe('orca cloud workspace store', () => {
     const bridge = stubApi()
     await Promise.all([refreshCloudWorkspaceStatus('a'), refreshCloudWorkspaceStatus('a')])
     expect(bridge.getStatus).toHaveBeenCalledTimes(1)
-    bridge.getStatus = vi.fn(async () => ({ ok: false as const, code: 'unavailable' as const, message: 'down' }))
+    bridge.getStatus = vi.fn(async () => ({
+      ok: false as const,
+      code: 'unavailable' as const,
+      message: 'down'
+    }))
     await refreshCloudWorkspaceStatus('a')
     const entry = getCloudWorkspaceSnapshot().status.a!
     expect(entry.status?.state).toBe('ready')
@@ -75,7 +81,13 @@ describe('orca cloud workspace store', () => {
   })
 
   it('forgets a workspace the main process says is not cloud', async () => {
-    stubApi({ getStatus: vi.fn(async () => ({ ok: false as const, code: 'not_cloud' as const, message: 'no' })) })
+    stubApi({
+      getStatus: vi.fn(async () => ({
+        ok: false as const,
+        code: 'not_cloud' as const,
+        message: 'no'
+      }))
+    })
     seedCloudWorkspaceSnapshot({ ids: new Set(['a']) })
     await refreshCloudWorkspaceStatus('a')
     expect(getCloudWorkspaceSnapshot().ids.has('a')).toBe(false)
@@ -117,7 +129,13 @@ describe('orca cloud workspace store', () => {
 
   it('tracks wake progress (adding the id) and dismisses OOM notices up to the seen count', async () => {
     stubApi()
-    noteCloudWakeProgress({ workspaceId: 'c', phase: 'waking', source: 'message', startedAt: 1, at: 2 })
+    noteCloudWakeProgress({
+      workspaceId: 'c',
+      phase: 'waking',
+      source: 'message',
+      startedAt: 1,
+      at: 2
+    })
     expect(getCloudWorkspaceSnapshot().ids.has('c')).toBe(true)
     noteCloudOom({ workspaceId: 'c', oomKills: 1, victim: 'node', at: 3 })
     dismissCloudOom('c')

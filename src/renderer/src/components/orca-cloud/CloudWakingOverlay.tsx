@@ -127,7 +127,9 @@ export function CloudWakingOverlay({
           : wake.source === 'restart'
             ? t('orcaCloudWorkspace.announce.restarting', 'Restarting {{name}}.', { name })
             : wake.source === 'unarchive'
-              ? t('orcaCloudWorkspace.announce.unarchiving', 'Restoring {{name}} from archive.', { name })
+              ? t('orcaCloudWorkspace.announce.unarchiving', 'Restoring {{name}} from archive.', {
+                  name
+                })
               : t('orcaCloudWorkspace.announce.waking', 'Waking {{name}}.', { name })
       }
     >
