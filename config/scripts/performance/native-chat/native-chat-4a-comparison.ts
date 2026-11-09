@@ -219,12 +219,18 @@ async function main(): Promise<void> {
   if (values['report-only']) {
     const results = readdirSync(out)
       .filter((file) => /^arm-.*\.json$/.test(file))
-      .map((file) => JSON.parse(readFileSync(path.join(out, file), 'utf8')) as ArmResult)
+      .map((file): ArmResult => JSON.parse(readFileSync(path.join(out, file), 'utf8')))
       .sort((a, b) => a.startedAt.localeCompare(b.startedAt))
     writeComparison(out, workload, results, log)
     return
   }
-  const families = new Set(values.families.split(',').map((family) => family.trim()) as Family[])
+  const isFamily = (name: string): name is Family => FAMILIES.some((family) => family === name)
+  const families = new Set(
+    values.families
+      .split(',')
+      .map((family) => family.trim())
+      .filter(isFamily)
+  )
   const { resolveArm, writeProviderStub } = await import('./native-chat-4a-arm')
   const { seedProfile, seedDirFor } = await import('./native-chat-4a-fixture')
   const { createSeededTestRepo } = await import('../../../../tests/e2e/helpers/seeded-test-repo')

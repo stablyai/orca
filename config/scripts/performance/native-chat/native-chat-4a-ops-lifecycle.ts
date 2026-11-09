@@ -1,6 +1,6 @@
 // 4a process-lifecycle rows: cold/warm open and rewind; first launch on the seeded profile lives in the conversion module.
 import { unconvertedOpenTarget } from './native-chat-4a-fixture'
-import { markerSeenAt, rendererNow, rpc, watchMarkers } from './native-chat-4a-probes'
+import { markerSeenAt, rendererNow, rendererTime, rpc, watchMarkers } from './native-chat-4a-probes'
 import type { Sample } from './native-chat-4a-report'
 import {
   addRow,
@@ -170,7 +170,7 @@ export async function rewindRows(ctx: RunContext): Promise<void> {
           goneMarker,
           { timeout: 600_000, polling: 16 }
         )
-        .then(async (handle) => (await handle.jsonValue()) as number)
+        .then(rendererTime)
       await waitForDurable(page(ctx), other, `4A-TAIL-${competingTag}`)
       return {
         hostMs: answer.hostMs,

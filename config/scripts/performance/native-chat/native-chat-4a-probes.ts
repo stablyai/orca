@@ -6,7 +6,35 @@ import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { retryTransientMainEvaluate } from '../../../../tests/e2e/helpers/electron-main-evaluate-retry'
 import { summarizeEventLoopDelay } from '../../../../tests/e2e/helpers/event-loop-delay-report'
 
-export type RpcAnswer<T = unknown> = { ok: true; result: T } | { ok: false; error: unknown }
+type ProbeState = { seen: Map<string, number>; mutations: number[]; watch: Set<string> }
+
+declare global {
+  // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
+  interface Window {
+    /** The 4a visibility probe, installed by installVisibilityProbe. */
+    __4a?: ProbeState
+  }
+}
+
+/** The refusal some writes (create, fork) carry inside a successful call: `{ ok: false, refusal }`. */
+function inResultRefusal(result: unknown): { refusal: unknown } | null {
+  return typeof result === 'object' &&
+    result !== null &&
+    'ok' in result &&
+    result.ok === false &&
+    'refusal' in result
+    ? { refusal: result.refusal }
+    : null
+}
+
+/** A waitForFunction handle whose value is a renderer-clock time. */
+export async function rendererTime(handle: { jsonValue(): Promise<unknown> }): Promise<number> {
+  const value = await handle.jsonValue()
+  if (typeof value !== 'number') {
+    throw new Error(`expected a renderer time, got ${JSON.stringify(value)}`)
+  }
+  return value
+}
 
 /** One RPC from the renderer, timed on the renderer clock: the host span every row reports beside its visible end point. */
 export async function rpc<T>(
@@ -18,21 +46,18 @@ export async function rpc<T>(
   const answer = await page.evaluate(
     async ({ method, params }) => {
       const startedAt = performance.now()
-      const reply = (await window.api.runtime.call({ method, params })) as RpcAnswer
+      const reply = await window.api.runtime.call({ method, params })
       return { reply, startedAt, hostMs: performance.now() - startedAt }
     },
     { method, params }
   )
-  // Some writes (create, fork) refuse inside a successful call: `{ ok: false, refusal }`.
-  const result = answer.reply.ok
-    ? (answer.reply.result as { ok?: unknown; refusal?: unknown })
-    : null
-  const inResult = result?.ok === false && 'refusal' in result
-  const refused = !answer.reply.ok || inResult
+  const inResult = answer.reply.ok ? inResultRefusal(answer.reply.result) : null
+  const refused = !answer.reply.ok || inResult !== null
   if (refused && !options.allowRefusal) {
-    const reason = answer.reply.ok ? result?.refusal : answer.reply.error
+    const reason = answer.reply.ok ? inResult?.refusal : answer.reply.error
     throw new Error(`${method} refused: ${JSON.stringify(reason).slice(0, 400)}`)
   }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime RPC answers untyped JSON; each caller names the shape its method returns and reads optional fields defensively.
   const value = (answer.reply.ok ? answer.reply.result : answer.reply.error) as T
   return { value, refused, startedAt: answer.startedAt, hostMs: answer.hostMs }
 }
@@ -40,18 +65,11 @@ export async function rpc<T>(
 /** Install once per page: records when text first appears in the chat root and every transcript mutation batch. */
 export async function installVisibilityProbe(page: Page): Promise<void> {
   await page.evaluate(() => {
-    const probe = window as unknown as {
-      __4a?: { seen: Map<string, number>; mutations: number[]; watch: Set<string> }
-    }
-    if (probe.__4a) {
+    if (window.__4a) {
       return
     }
-    const state = {
-      seen: new Map<string, number>(),
-      mutations: [] as number[],
-      watch: new Set<string>()
-    }
-    probe.__4a = state
+    const state: ProbeState = { seen: new Map(), mutations: [], watch: new Set() }
+    window.__4a = state
     const check = (): void => {
       const now = performance.now()
       state.mutations.push(now)
@@ -86,8 +104,10 @@ export async function installVisibilityProbe(page: Page): Promise<void> {
 
 export async function watchMarkers(page: Page, markers: string[]): Promise<void> {
   await page.evaluate((markers) => {
-    const state = (window as unknown as { __4a: { watch: Set<string>; seen: Map<string, number> } })
-      .__4a
+    const state = window.__4a
+    if (!state) {
+      throw new Error('4a visibility probe not installed')
+    }
     for (const marker of markers) {
       state.seen.delete(marker)
       state.watch.add(marker)
@@ -103,9 +123,12 @@ export async function markerSeenAt(
 ): Promise<number> {
   const handle = await page
     .waitForFunction(
-      (marker) =>
-        (window as unknown as { __4a: { seen: Map<string, number> } }).__4a.seen.get(marker) ??
-        false,
+      (marker) => {
+        if (!window.__4a) {
+          throw new Error('4a visibility probe not installed')
+        }
+        return window.__4a.seen.get(marker) ?? false
+      },
       marker,
       { timeout: timeoutMs, polling: 16 }
     )
@@ -117,7 +140,7 @@ export async function markerSeenAt(
         }
       )
     })
-  return (await handle.jsonValue()) as number
+  return rendererTime(handle)
 }
 
 /** One line on the chat the user sees, for timeout messages. */
@@ -136,9 +159,10 @@ export function visibleChatState(page: Page): Promise<string> {
 export async function mutationGaps(page: Page, from: number, to: number): Promise<number[]> {
   return page.evaluate(
     ({ from, to }) => {
-      const times = (window as unknown as { __4a: { mutations: number[] } }).__4a.mutations.filter(
-        (t) => t >= from && t <= to
-      )
+      if (!window.__4a) {
+        throw new Error('4a visibility probe not installed')
+      }
+      const times = window.__4a.mutations.filter((t) => t >= from && t <= to)
       return times.slice(1).map((time, index) => time - times[index]!)
     },
     { from, to }
@@ -155,12 +179,14 @@ export async function hostWorkMark(app: ElectronApplication): Promise<() => Prom
   const start = await retryTransientMainEvaluate(() =>
     app.evaluate(() => ({
       cpu: process.cpuUsage(),
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this callback runs in Electron's main process, where performance is Node's perf_hooks object; the DOM lib this file needs types it as the browser one.
       elu: (performance as unknown as NodePerformance).eventLoopUtilization()
     }))
   )
   return async () => {
     const delta = await retryTransientMainEvaluate(() =>
       app.evaluate((_electron, start) => {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: main-process callback; performance is Node's perf_hooks object, typed here by the DOM lib.
         const node = performance as unknown as NodePerformance
         return {
           cpu: process.cpuUsage(start.cpu),
