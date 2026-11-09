@@ -1,4 +1,5 @@
 import type { ModelManager } from './model-manager'
+import type { SpeechModelState } from '../../shared/speech-types'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -136,12 +137,15 @@ const stoppedReply = (worker: InstanceType<typeof MockWorker>) => ({
   streamId: worker.messages.findLast((message) => message.type === 'stop')?.streamId
 })
 
+const testModels = (models: Pick<ModelManager, 'getModelState' | 'getModelDir'>): ModelManager =>
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SttService reads getModelState and getModelDir, and fetches the VAD with downloadModel.
+  ({ ...models, downloadModel: vi.fn().mockResolvedValue(undefined) }) as never
+
 const readyModels = (): ModelManager =>
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SttService reads only getModelState and getModelDir.
-  ({
+  testModels({
     getModelState: vi.fn().mockResolvedValue({ id: 'model-a', status: 'ready' }),
     getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
-  }) as never
+  })
 
 // Starting a session awaits the model check before it spawns the process.
 async function flushMicrotasks(): Promise<void> {
@@ -350,12 +354,11 @@ describe('SttService', () => {
   })
 
   it('rebuilds the warm worker when the dictation language changes', async () => {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a local start reads only getModelState and getModelDir.
     const service = new SttService(
-      {
+      testModels({
         getModelState: vi.fn().mockResolvedValue({ id: 'whisper-model', status: 'ready' }),
         getModelDir: vi.fn().mockReturnValue('/tmp/whisper-model')
-      } as never,
+      }),
       spawnMockWorker
     )
 
@@ -490,15 +493,15 @@ describe('SttService', () => {
   })
 
   it('rejects deletion prep while the target model is starting', async () => {
-    let resolveModelState: (state: { id: string; status: string }) => void = () => {}
-    const modelStatePromise = new Promise<{ id: string; status: string }>((resolve) => {
+    let resolveModelState: (state: SpeechModelState) => void = () => {}
+    const modelStatePromise = new Promise<SpeechModelState>((resolve) => {
       resolveModelState = resolve
     })
     const service = new SttService(
-      {
+      testModels({
         getModelState: vi.fn(() => modelStatePromise),
         getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
-      } as never,
+      }),
       spawnMockWorker
     )
 
@@ -528,10 +531,10 @@ describe('SttService', () => {
   it('uses the OpenAI transcription session without creating a worker', async () => {
     const sink = vi.fn()
     const service = new SttService(
-      {
+      testModels({
         getModelState: vi.fn().mockResolvedValue({ id: 'openai-model', status: 'ready' }),
         getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
-      } as never,
+      }),
       spawnMockWorker
     )
 
@@ -815,10 +818,10 @@ describe('SttService', () => {
       status: modelStatus
     }))
     const service = new SttService(
-      {
+      testModels({
         getModelState,
         getModelDir: vi.fn().mockReturnValue('/tmp/model-a')
-      } as never,
+      }),
       spawnMockWorker
     )
 
@@ -845,14 +848,15 @@ describe('SttService', () => {
     async (event) => {
       vi.useFakeTimers()
       try {
-        const models: Pick<ModelManager, 'getModelState' | 'getModelDir'> = {
+        const models: Pick<ModelManager, 'getModelState' | 'getModelDir' | 'downloadModel'> = {
           getModelState: vi.fn<ModelManager['getModelState']>().mockResolvedValue({
             id: 'model-a',
             status: 'ready'
           }),
-          getModelDir: vi.fn<ModelManager['getModelDir']>().mockReturnValue('/tmp/model-a')
+          getModelDir: vi.fn<ModelManager['getModelDir']>().mockReturnValue('/tmp/model-a'),
+          downloadModel: vi.fn().mockResolvedValue(undefined)
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This lifecycle reads only getModelState/getModelDir on the model manager.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This lifecycle reads getModelState/getModelDir and downloadModel (VAD) on the model manager.
         const service = new SttService(models as ModelManager, spawnMockWorker)
         const sink = vi.fn<SttEventSink>()
         await service.startDictation('model-a', sink, undefined, 'desktop')
