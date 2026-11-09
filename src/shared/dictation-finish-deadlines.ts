@@ -6,7 +6,7 @@ const WAV_HEADER_BYTES = 44
 const CLOUD_RESPONSE_ALLOWANCE_MS = 30_000
 const UPLOAD_BYTES_PER_MS = 125
 
-// A finishing on-device dictation fails once the engine goes this long without text for it.
+// A finishing on-device dictation fails once the engine goes this long without answering.
 export const LOCAL_DICTATION_STOP_TIMEOUT_MS = 60_000
 // How long an on-device model may take to load before its dictation fails.
 export const START_DICTATION_TIMEOUT_MS = 60_000
