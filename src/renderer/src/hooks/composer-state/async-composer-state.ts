@@ -22,7 +22,7 @@ type ComposerAsyncStateInput = Pick<
   | 'setName'
 >
 
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useCallback } from 'react'
 import type { OrcaHooks, SetupAgentStartupPolicy } from '../../../../shared/orca-yaml-hook-types'
 import type { IssueCommandReadResult } from '@/runtime/repo-hooks/runtime-hooks-client'
 import type { WorkspaceCreateErrorDisplay } from '@/lib/workspace-create-error-format'
@@ -108,6 +108,13 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
   const [advancedOpen, setAdvancedOpen] = useState(
     persistDraft ? Boolean((newWorkspaceDraft?.note ?? '').trim()) : false
   )
+
+  // Each request opens Advanced and brings the Run/Skip choice into view, even if Advanced was open.
+  const [setupChoiceRevealRequest, setSetupChoiceRevealRequest] = useState(0)
+  const revealSetupChoice = useCallback(() => {
+    setAdvancedOpen(true)
+    setSetupChoiceRevealRequest((current) => current + 1)
+  }, [])
 
   const [sparseEnabled, setSparseEnabled] = useState(false)
 
@@ -237,6 +244,8 @@ export function useComposerAsyncState(input: ComposerAsyncStateInput) {
     setCreateMultiple,
     advancedOpen,
     setAdvancedOpen,
+    setupChoiceRevealRequest,
+    revealSetupChoice,
     sparseEnabled,
     setSparseEnabled,
     sparseDirectories,

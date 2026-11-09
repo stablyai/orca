@@ -176,6 +176,7 @@ vi.mock('@/hooks/useComposerState', () => ({
       onReuseSelectedBranchChange: noOp,
       forkPushWarning: null,
       advancedOpen: false,
+      setupChoiceRevealRequest: 0,
       onToggleAdvanced: noOp,
       parentWorktreeId: null,
       onParentWorktreeIdChange: noOp,

@@ -28,7 +28,7 @@ function renderQuickSubmit(overrides: Partial<QuickSubmitActionInput>) {
     selectedRepoRequiresConnection: false,
     selectedTargetNeedsVisibleHost: false,
     selectedWorkspaceTarget: { status: 'none' },
-    setAdvancedOpen: vi.fn(),
+    revealSetupChoice: vi.fn(),
     setCreateError: vi.fn(),
     setCreating: vi.fn(),
     setupDecision: null,
@@ -50,7 +50,7 @@ describe('useQuickSubmitAction setup choice', () => {
 
     await act(() => submitQuick(null))
 
-    expect(input.setAdvancedOpen).toHaveBeenCalledWith(true)
+    expect(input.revealSetupChoice).toHaveBeenCalledTimes(1)
     expect(input.setCreating).not.toHaveBeenCalled()
     expect(input.executeQuickCreation).not.toHaveBeenCalled()
   })

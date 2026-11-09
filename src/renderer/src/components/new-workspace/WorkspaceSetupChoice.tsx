@@ -1,21 +1,41 @@
+import { useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
+
+// Matches the Advanced section's expand transition so the choice is laid out before scrolling.
+const REVEAL_AFTER_EXPAND_MS = 220
 
 export function WorkspaceSetupChoice({
   decision,
   onChange,
   disabled = false,
   runLabel,
-  skipLabel
+  skipLabel,
+  revealRequest = 0
 }: {
   decision: 'run' | 'skip' | null
   onChange: (decision: 'run' | 'skip') => void
   disabled?: boolean
   runLabel: string
   skipLabel: string
+  revealRequest?: number
 }): React.JSX.Element {
+  const runButtonRef = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (revealRequest === 0) {
+      return
+    }
+    // A submit without a choice lands here; scroll the choice into the dialog's view and focus it.
+    const timer = setTimeout(() => {
+      runButtonRef.current?.scrollIntoView({ block: 'nearest' })
+      runButtonRef.current?.focus()
+    }, REVEAL_AFTER_EXPAND_MS)
+    return () => clearTimeout(timer)
+  }, [revealRequest])
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <Button
+        ref={runButtonRef}
         type="button"
         disabled={disabled}
         onClick={() => onChange('run')}

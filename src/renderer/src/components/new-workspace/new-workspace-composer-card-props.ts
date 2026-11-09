@@ -114,6 +114,7 @@ export type NewWorkspaceComposerCardProps = {
   detectedAgentIds: Set<TuiAgent> | null
   onOpenAgentSettings: (invoker: HTMLButtonElement) => void
   advancedOpen: boolean
+  setupChoiceRevealRequest: number
   onToggleAdvanced: () => void
   createDisabled: boolean
   projectError: string | null

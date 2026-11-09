@@ -23,6 +23,7 @@ export function buildComposerCardProps(state: ComposerModel) {
       : undefined
   const {
     advancedOpen,
+    setupChoiceRevealRequest,
     agentPrompt,
     attachmentPaths,
     baseBranch,
@@ -237,6 +238,7 @@ export function buildComposerCardProps(state: ComposerModel) {
     agentRows: resolveComposerAgentRows(state),
     onOpenAgentSettings: handleOpenAgentSettings,
     advancedOpen,
+    setupChoiceRevealRequest,
     onToggleAdvanced: () => setAdvancedOpen((current) => !current),
     createDisabled,
     projectError: isProjectGroupTarget ? pathStatusProjectError : projectError,

@@ -22,6 +22,7 @@ import type { NewWorkspaceComposerCardProps } from './new-workspace-composer-car
 type NewWorkspaceComposerAdvancedSectionProps = Pick<
   NewWorkspaceComposerCardProps,
   | 'advancedOpen'
+  | 'setupChoiceRevealRequest'
   | 'smartNameSelection'
   | 'name'
   | 'onNameValueChange'
@@ -61,6 +62,7 @@ type NewWorkspaceComposerAdvancedSectionProps = Pick<
 
 export function NewWorkspaceComposerAdvancedSection({
   advancedOpen,
+  setupChoiceRevealRequest,
   sparseEditing,
   onSparseEditingChange,
   smartNameSelection,
@@ -223,6 +225,7 @@ export function NewWorkspaceComposerAdvancedSection({
               setupConfig={setupConfig}
               copy={selectWorkspaceSetupCopy(setupConfig, getComposerWorkspaceSetupLabels(t))}
               requiresExplicitSetupChoice={requiresExplicitSetupChoice}
+              revealRequest={setupChoiceRevealRequest}
               resolvedSetupDecision={resolvedSetupDecision}
               setupDecision={setupDecision}
               onSetupDecisionChange={onSetupDecisionChange}

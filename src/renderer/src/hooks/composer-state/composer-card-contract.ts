@@ -34,6 +34,7 @@ export type ComposerCardSourceProps = Pick<
   | 'tuiAgent'
   | 'detectedAgentIds'
   | 'advancedOpen'
+  | 'setupChoiceRevealRequest'
   | 'projectError'
   | 'creating'
   | 'note'
