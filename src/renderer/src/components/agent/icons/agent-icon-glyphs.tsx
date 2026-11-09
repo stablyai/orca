@@ -164,6 +164,7 @@ export function OpenCodeIcon({
   )
 }
 
+/** The MiniMax gradient mark used for mcode entries in agent pickers and tabs. */
 export function MiniMaxIcon({
   size = 14,
   className

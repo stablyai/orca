@@ -80,10 +80,11 @@ export function parseMcodeModelCatalog(content: string): AgentSessionModelOption
       return ia !== -1 ? -1 : ib !== -1 ? 1 : 0
     })
     for (const [modelId, model] of entries) {
-      if (seen.has(modelId)) {
+      const qualifiedId = `${providerId}/${modelId}`
+      if (seen.has(qualifiedId)) {
         continue
       }
-      seen.add(modelId)
+      seen.add(qualifiedId)
       models.push({
         id: `m:${providerId}:${modelId}:v:thinking`,
         label: MCODE_MODEL_LABELS[modelId] ?? (model.name ? `MiniMax ${model.name}` : modelId),

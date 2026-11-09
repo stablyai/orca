@@ -20,7 +20,9 @@ const CONFIG_YAML = [
   '  minimax-legacy:',
   '    models:',
   '      MiniMax-M2.7:',
-  '        name: M2.7'
+  '        name: M2.7',
+  '      MiniMax-M3:',
+  '        name: M3'
 ].join('\n')
 
 describe('parseMcodeModelCatalog', () => {
@@ -72,6 +74,18 @@ describe('parseMcodeModelCatalog', () => {
         id: 'm:custom_provider:minimax-legacy:MiniMax-M2.7:v:thinking',
         label: 'MiniMax M2.7',
         description: 'Capable model for everyday programming tasks',
+        isDefault: false,
+        efforts: [
+          { value: 'off', label: 'Off' },
+          { value: 'on', label: 'On' }
+        ],
+        defaultEffort: 'on',
+        declaredDefaultEffort: 'on'
+      },
+      {
+        id: 'm:custom_provider:minimax-legacy:MiniMax-M3:v:thinking',
+        label: 'MiniMax M3',
+        description: 'Frontier model for complex agentic coding and deep reasoning',
         isDefault: false,
         efforts: [
           { value: 'off', label: 'Off' },
