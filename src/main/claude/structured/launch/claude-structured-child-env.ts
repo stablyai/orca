@@ -82,6 +82,26 @@ async function readClaudeChildEnvSources(deps: ClaudeEnvDeps): Promise<ClaudeChi
   return { ...invocation, overlay: overlay ? cloneDefinedEnv(overlay) : undefined, inheritedEnv }
 }
 
+const CLAUDE_ENTRYPOINT_ENV = 'CLAUDE_CODE_ENTRYPOINT'
+
+// Name Orca as the client instead of the SDK's sdk-ts default or a launching Claude's value.
+export function withOrcaClaudeEntrypoint(
+  inheritedEnv: Record<string, string>,
+  overlay: Record<string, string> | undefined,
+  platform: NodeJS.Platform
+): Record<string, string> {
+  // Windows env names are case-insensitive, so a differently cased twin is the same variable.
+  const isEntrypointKey = (key: string): boolean =>
+    (platform === 'win32' ? key.toUpperCase() : key) === CLAUDE_ENTRYPOINT_ENV
+  const env = Object.fromEntries(
+    Object.entries(inheritedEnv).filter(([key]) => !isEntrypointKey(key))
+  )
+  if (!Object.keys(overlay ?? {}).some(isEntrypointKey)) {
+    env[CLAUDE_ENTRYPOINT_ENV] = 'orca'
+  }
+  return { ...env, ...overlay }
+}
+
 // Merge onto the shell environment to retain PATH and ambient Anthropic auth.
 export function claudeChildEnv(
   sources: ClaudeChildEnvSources,
@@ -89,12 +109,13 @@ export function claudeChildEnv(
   /** False when the session's seal pairs the CLI runtime itself, behind this app's CLI. */
   { runtimeOnPath = true }: { runtimeOnPath?: boolean } = {}
 ): Record<string, string> {
-  const env = decorateEnv({
-    ...withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform),
-    // Name Orca as the client instead of the SDK's sdk-ts default or a launching Claude's value.
-    CLAUDE_CODE_ENTRYPOINT: 'orca',
-    ...sources.overlay
-  })
+  const env = decorateEnv(
+    withOrcaClaudeEntrypoint(
+      withoutInheritedClaudeConfigDir(sources.inheritedEnv, process.platform),
+      sources.overlay,
+      process.platform
+    )
+  )
   return runtimeOnPath
     ? withCliRuntimeOnPath(sources.command, env, { platform: process.platform })
     : env
