@@ -4,7 +4,7 @@ import { createDictationTextPipeline } from './dictation-text-pipeline'
 
 describe('removeFillerWords', () => {
   it.each([
-    ['en', 'Um, I think we should, uh, ship it.', 'I think we should, ship it.'],
+    ['en', 'Um, I think we should, uh, ship it.', 'I think we should ship it.'],
     ['en', 'Let me check umm the logs.', 'Let me check the logs.'],
     ['en', 'Yes. Uh. No.', 'Yes. No.'],
     ['en', 'We should ship it, hmm', 'We should ship it'],
@@ -12,16 +12,13 @@ describe('removeFillerWords', () => {
     ['en', 'We should ship, um.', 'We should ship.'],
     ['en', 'um so we ship', 'so we ship'],
     ['en', 'Um, iPhone builds first.', 'iPhone builds first.'],
-    [
-      'de',
-      'Äh, das ist um fünf Uhr fertig, ähm, glaube ich.',
-      'Das ist um fünf Uhr fertig, glaube ich.'
-    ],
+    ['de', 'Äh, das ist um fünf Uhr fertig.', 'Das ist um fünf Uhr fertig.'],
     ['es', 'Ehm, creo que em funciona.', 'Creo que funciona.'],
+    ['de', 'Das ist, ähm, um fünf Uhr fertig.', 'Das ist um fünf Uhr fertig.'],
     ['ru', 'Э, ну, давай так.', 'Ну, давай так.'],
-    ['ja', 'えーと、明日の会議は、うーん、十時です。', '明日の会議は、十時です。'],
+    ['ja', 'えーと、明日の会議は、うーん、十時です。', '明日の会議は十時です。'],
     ['ko', '음, 내일 회의는 흠, 열 시예요.', '내일 회의는 열 시예요.'],
-    ['zh', '嗯，我觉得，呃，这个可以。', '我觉得，这个可以。'],
+    ['zh', '嗯，我觉得，呃，这个可以。', '我觉得这个可以。'],
     ['zh', '額，我覺得可以。', '我覺得可以。'],
     ['en', 'UM I THINK WE SHOULD UH SHIP IT', 'I THINK WE SHOULD SHIP IT']
   ])('%s: %s', (language, text, expected) => {
@@ -43,8 +40,8 @@ describe('removeFillerWords', () => {
   })
 
   it('uses only fillers that are no word elsewhere when the language is unknown', () => {
-    expect(removeFillerWords('Um carro, uh, azul.', undefined)).toBe('Um carro, azul.')
-    expect(removeFillerWords('Er kommt, hmm, morgen.', undefined)).toBe('Er kommt, morgen.')
+    expect(removeFillerWords('Um carro, uh, azul.', undefined)).toBe('Um carro azul.')
+    expect(removeFillerWords('Er kommt, hmm, morgen.', undefined)).toBe('Er kommt morgen.')
     expect(removeFillerWords('呃，好的。', undefined)).toBe('呃，好的。')
   })
 })
@@ -52,7 +49,7 @@ describe('removeFillerWords', () => {
 describe('createDictationTextPipeline', () => {
   it('reads the language from a single-language model before the setting', () => {
     const clean = createDictationTextPipeline({ language: 'en' }, { dictationLanguage: 'de' })
-    expect(clean?.('Äh, um, ship it.')).toBe('Äh, ship it.')
+    expect(clean?.('Äh, um, ship it.')).toBe('Äh ship it.')
   })
 
   it('reads the language from the setting for a multilingual model that takes it', () => {

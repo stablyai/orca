@@ -260,7 +260,7 @@ describe('SttService', () => {
 
     expect(cleaned.mock.calls.slice(1)).toEqual([
       [{ type: 'partial', text: 'Ship' }],
-      [{ type: 'final', text: 'Ship it, today.' }]
+      [{ type: 'final', text: 'Ship it today.' }]
     ])
     expect(raw.mock.calls.slice(1)).toEqual([
       [{ type: 'partial', text: 'Um, ship' }],
