@@ -13,6 +13,7 @@ import {
 import { getNamedFileRelativeDirectory, hasPathSeparator } from '@/lib/create-named-file'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 
 type NewFileDialogProps = {
   worktreePath: string
@@ -33,6 +34,7 @@ export function NewFileDialog({
   onCreate,
   onClose
 }: NewFileDialogProps): React.JSX.Element {
+  const t = useTranslate()
   const [name, setName] = useState('')
   const [folder, setFolder] = useState(defaultFolder)
   const [error, setError] = useState<string | null>(null)
@@ -133,11 +135,9 @@ export function NewFileDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>
-            {translate('auto.components.editor.NewFileDialog.title', 'New file')}
-          </DialogTitle>
+          <DialogTitle>{t('auto.components.editor.NewFileDialog.title', 'New file')}</DialogTitle>
           <DialogDescription>
-            {translate(
+            {t(
               'auto.components.editor.NewFileDialog.description',
               'Name your file and pick a folder. Leave the name empty to use the suggested name.'
             )}
@@ -149,7 +149,7 @@ export function NewFileDialog({
               htmlFor={nameInputId}
               className="text-2xs font-medium text-muted-foreground mb-1 block"
             >
-              {translate('auto.components.editor.NewFileDialog.name', 'Name')}
+              {t('auto.components.editor.NewFileDialog.name', 'Name')}
             </label>
             <Input
               id={nameInputId}
@@ -171,7 +171,7 @@ export function NewFileDialog({
               htmlFor={folderInputId}
               className="text-2xs font-medium text-muted-foreground mb-1 block"
             >
-              {translate('auto.components.editor.NewFileDialog.folder', 'Folder')}
+              {t('auto.components.editor.NewFileDialog.folder', 'Folder')}
             </label>
             <div className="flex items-center gap-1.5">
               <Input
@@ -195,11 +195,11 @@ export function NewFileDialog({
                 onClick={() => void handleBrowse()}
                 title={
                   disableBrowse
-                    ? translate(
+                    ? t(
                         'auto.components.editor.NewFileDialog.browseUnavailable',
                         'Folder picker unavailable for remote files'
                       )
-                    : translate('auto.components.editor.NewFileDialog.browse', 'Browse folders')
+                    : t('auto.components.editor.NewFileDialog.browse', 'Browse folders')
                 }
               >
                 <FolderOpen className="size-3.5" />
@@ -214,10 +214,10 @@ export function NewFileDialog({
         )}
         <DialogFooter className="mt-1">
           <Button variant="outline" size="sm" onClick={onClose}>
-            {translate('auto.components.editor.NewFileDialog.cancel', 'Cancel')}
+            {t('auto.components.editor.NewFileDialog.cancel', 'Cancel')}
           </Button>
           <Button size="sm" disabled={submitting} onClick={() => void handleSubmit()}>
-            {translate('auto.components.editor.NewFileDialog.create', 'Create')}
+            {t('auto.components.editor.NewFileDialog.create', 'Create')}
           </Button>
         </DialogFooter>
       </DialogContent>

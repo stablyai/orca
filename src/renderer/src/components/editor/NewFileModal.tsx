@@ -1,14 +1,15 @@
-import React, { useCallback, useEffect, useMemo } from 'react'
+import React, { useCallback, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
+import { getEditorFileOperationContext } from '@/lib/editor/file-operations/editor-file-operation-owner'
 import {
   assertEditorFileOperationCurrent,
   captureEditorFileOperationProvenance,
-  getEditorFileOperationContext,
   type EditorFileOperationProvenance
-} from '@/lib/editor-file-operation-owner'
+} from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import {
   createNamedFile,
   isSshOwnedFileContext,
@@ -48,9 +49,10 @@ export default function NewFileModal(): React.JSX.Element | null {
   })
   const closeModal = useAppStore((s) => s.closeModal)
   const mountedRef = useMountedRef()
+  const t = useTranslate()
 
   // Why: pinned at open so a worktree switch behind the dialog cannot redirect the write.
-  const opened = useMemo((): OpenResult | null => {
+  const [opened] = useState((): OpenResult | null => {
     if (!worktreeId || !worktreePath) {
       return null
     }
@@ -72,7 +74,7 @@ export default function NewFileModal(): React.JSX.Element | null {
         if (isSshOwnedFileContext(context)) {
           return {
             session: null,
-            blockedMessage: translate(
+            blockedMessage: t(
               'auto.components.editor.NewFileDialog.sshUnsupported',
               "Creating files in SSH workspaces isn't supported yet."
             )
@@ -91,15 +93,11 @@ export default function NewFileModal(): React.JSX.Element | null {
         session: null,
         blockedMessage: extractIpcErrorMessage(
           err,
-          translate(
-            'auto.components.editor.NewFileDialog.createFailed',
-            "Couldn't create the file."
-          )
+          t('auto.components.editor.NewFileDialog.createFailed', "Couldn't create the file.")
         )
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- snapshot once per mount
-  }, [])
+  })
 
   const session = opened?.session ?? null
   const blockedMessage = opened?.blockedMessage ?? null

@@ -1,8 +1,8 @@
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import { createRuntimePath } from '../runtime/runtime-file-mutation-client'
-import { runtimePathExists } from '../runtime/runtime-file-metadata-client'
-import { runtimeTargetEnvironmentId } from '../runtime/runtime-client-target'
-import { detectLanguage } from './language-detect'
+import { createRuntimePath } from '../runtime/files/mutations/runtime-file-mutation-client'
+import { runtimePathExists } from '../runtime/files/metadata/runtime-file-metadata-client'
+import { runtimeTargetEnvironmentId } from '../runtime/rpc/targets/runtime-client-target'
+import { detectLanguage } from '../../../shared/editor-language/editor-language-detect'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { dirname, getRelativePathInsideRoot, joinPath } from './path'
 
