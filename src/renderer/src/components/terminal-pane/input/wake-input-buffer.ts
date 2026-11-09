@@ -233,6 +233,11 @@ export function endWorkspaceWake(workspaceId: string, outcome: 'ready' | 'failed
   pump()
 }
 
+/** True while this workspace has a wake or held typing (cheap gate before anything else). */
+export function hasWakeInput(workspaceId: string | null | undefined): boolean {
+  return Boolean(workspaceId && wakes.has(workspaceId))
+}
+
 export function isWorkspaceWaking(workspaceId: string | null | undefined): boolean {
   return Boolean(workspaceId && wakes.get(workspaceId)?.outcome === 'pending')
 }

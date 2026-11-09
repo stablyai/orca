@@ -26116,7 +26116,10 @@
       "failedDetail": "Your files and chats are saved.",
       "tryAgain": "Try again",
       "stalled": "Orca Cloud stopped responding while waking.",
-      "pendingInput": "Sending when awake"
+      "pendingInput": "Sending when awake",
+      "pendingKeys_one": "{{count}} key waiting · goes to the terminal when it’s up",
+      "pendingKeys_other": "{{count}} keys waiting · go to the terminal when it’s up",
+      "clearPendingKeys": "Discard waiting keys"
     },
     "announce": {
       "restarting": "Restarting {{name}}.",
@@ -26199,7 +26202,8 @@
     "sandboxHoursValue": "{{value}} sandbox hours",
     "idleSleptMinutes": "{{name}} slept after {{count}} minutes idle",
     "idleSleptNoTime": "{{name}} went to sleep while idle",
-    "idleSleptDetail": "Files and chats are saved. It uses no sandbox hours until you open it."
+    "idleSleptDetail": "Files and chats are saved. It uses no sandbox hours until you open it.",
+    "typedWhileWaking": "What you typed is on the prompt. Press Enter to run it."
   },
   "cloudAgentSetup": {
     "loading": "Checking what agents can use…",

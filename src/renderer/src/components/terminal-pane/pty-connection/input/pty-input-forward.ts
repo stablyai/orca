@@ -18,7 +18,11 @@ import { isCodexPaneStale } from './codex-pane-stale'
 import { installTerminalSelectionFitGuard } from '../../viewport/terminal-selection-fit-guard'
 import type { ConnectPanePtySession } from '../connect-pane-pty-session'
 import { recordAdmittedTerminalUserInput } from '@/lib/telemetry'
-import { captureWakeInput, rebindWakeInputTarget } from '../../input/wake-input-buffer'
+import {
+  captureWakeInput,
+  hasWakeInput,
+  rebindWakeInputTarget
+} from '../../input/wake-input-buffer'
 import { findColdRestoreResumeSource } from '../startup/cold-restore-resume-startup'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
@@ -172,7 +176,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
   const isAgentPane = (): boolean => {
     const state = useAppStore.getState()
     return (
-      state.agentStatusByPaneKey[session.cacheKey] !== undefined ||
+      state.agentStatusByPaneKey?.[session.cacheKey] !== undefined ||
       findColdRestoreResumeSource(session, state) !== null
     )
   }
@@ -184,6 +188,7 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
       // once this pane is attached to the woken terminal.
       if (
         wasUserInput &&
+        hasWakeInput(session.deps.worktreeId) &&
         !isAgentPane() &&
         captureWakeInput(
           session.deps.worktreeId,
