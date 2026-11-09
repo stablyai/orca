@@ -124,10 +124,10 @@ export function NativeChatMessageList({
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {
   const t = useTranslate()
+  const questionTranscript = useMemo(() => desktopStructuredTranscript.stream(), [])
   const receipts = useMemo(
-    () =>
-      journalItems ? desktopStructuredTranscript.transcript(journalItems).receipts : new Map(),
-    [journalItems]
+    () => (journalItems ? questionTranscript(journalItems).receipts : new Map()),
+    [journalItems, questionTranscript]
   )
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const contentRef = useRef<HTMLDivElement | null>(null)

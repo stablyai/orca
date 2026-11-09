@@ -2,7 +2,8 @@ import { Bot, ChevronDown } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { useShortcutKeyDetails } from '@/hooks/useShortcutLabel'
 import { useTranslate } from '@/i18n/use-translate'
-import { cn } from '@/lib/utils'
+import { Button } from '@/components/ui/button'
+import { ButtonGroup } from '@/components/ui/button-group'
 import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
 import { AgentIcon } from '@/components/agent/icons/AgentIcon'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -18,9 +19,9 @@ import {
   resolveTerminalAgentTabShortcut
 } from '../terminal-agent-tab-shortcut'
 import { launchAgentTabShortcut } from '../agent-tab-shortcut-launch'
-import { LANDING_ROW_CLASS, LandingRowShortcut } from './split-pane-landing-row'
+import { LandingRowLabel, LandingRowShortcut } from './split-pane-landing-row'
 
-/** The default agent as one row; the chevron opens the + menu's agent list for any other. */
+/** The default agent as a split button; the chevron opens the + menu's agent list for any other. */
 export function SplitPaneLandingAgentRow({
   worktreeId,
   groupId,
@@ -59,36 +60,32 @@ export function SplitPaneLandingAgentRow({
   }
 
   return (
-    // Why: a stretched button keeps the row one click target while the chevron stays its own button.
-    <div
-      className={cn(
-        LANDING_ROW_CLASS,
-        'relative has-[[data-landing-row]:focus-visible]:bg-accent has-[[data-landing-row]:focus-visible]:text-accent-foreground'
-      )}
-    >
-      <button
+    <ButtonGroup className="w-full">
+      <Button
         type="button"
+        variant="outline"
+        size="lg"
         data-landing-row
-        aria-label={label}
-        className="absolute inset-0 rounded-md focus-visible:outline-none"
+        className="min-w-0 flex-1 justify-start"
         onClick={launchDefault}
         autoFocus={autoFocus}
-      />
-      <span className="pointer-events-none flex text-muted-foreground">
-        {defaultAgent ? <AgentIcon agent={defaultAgent} size={16} /> : <Bot className="size-4" />}
-      </span>
-      <span className="pointer-events-none min-w-0 truncate">{label}</span>
+      >
+        {defaultAgent ? <AgentIcon agent={defaultAgent} size={16} /> : <Bot />}
+        <LandingRowLabel label={label} />
+        <LandingRowShortcut shortcut={shortcut} />
+      </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button
+          <Button
             type="button"
+            variant="outline"
+            size="icon-lg"
             aria-label={t('components.tabGroup.splitPaneLanding.chooseAgent', 'Choose agent')}
-            className="relative -ml-1.5 flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-foreground/10 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-foreground/10 data-[state=open]:text-foreground"
           >
-            <ChevronDown className="size-3.5" />
-          </button>
+            <ChevronDown className="text-muted-foreground" />
+          </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" sideOffset={6} className="w-64">
+        <DropdownMenuContent align="end" sideOffset={6} className="w-64">
           <QuickLaunchAgentMenuItems
             worktreeId={worktreeId}
             groupId={groupId}
@@ -96,10 +93,7 @@ export function SplitPaneLandingAgentRow({
           />
         </DropdownMenuContent>
       </DropdownMenu>
-      <span className="pointer-events-none ml-auto flex">
-        <LandingRowShortcut shortcut={shortcut} />
-      </span>
-    </div>
+    </ButtonGroup>
   )
 }
 

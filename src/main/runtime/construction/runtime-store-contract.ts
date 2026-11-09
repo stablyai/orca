@@ -21,6 +21,7 @@ export type RuntimeStore = {
   getProjectGroups?: Store['getProjectGroups']
   createProjectGroup?: Store['createProjectGroup']
   updateProjectGroup?: Store['updateProjectGroup']
+  updateProjectGroups?: Store['updateProjectGroups']
   deleteProjectGroup?: Store['deleteProjectGroup']
   moveProjectToGroup?: Store['moveProjectToGroup']
   getFolderWorkspace?: Store['getFolderWorkspace']

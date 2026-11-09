@@ -5,6 +5,10 @@ import { agentTypeToIconAgent } from '../../../../src/shared/agent-status/presen
 import { resolveTabAgentFromSignalSnapshot } from '../../../../src/shared/tab-agent-from-signals'
 import type { AgentStatusEntry } from '../../../../src/shared/agent-status/contracts/agent-status-types'
 import type { TuiAgent } from '../../../../src/shared/agent-launch/catalog/tui-agent'
+import {
+  resolveAgentSmartKeys,
+  type AgentSmartKeySet
+} from '../../../../src/shared/terminal/input/agent-smart-keys'
 import { isBlankBrowserUrl } from '../../browser/browser-url'
 import { translate } from '../../i18n/mobile-i18n'
 import type { MobileSessionTab } from '../../session/tabs/mobile-session-tabs'
@@ -113,4 +117,21 @@ export function getMobileSessionTabTitle(
     )
   }
   return tab.title || translate('session.terminalTabAgent.terminal', 'Terminal')
+}
+
+/** The keys for what the tab's agent is doing now, or null for a shell, an unknown agent or state. */
+export function resolveMobileTerminalTabSmartKeys(
+  tab: MobileSessionTab | null | undefined,
+  terminals: readonly { handle: string; agentIdentity?: string }[]
+): AgentSmartKeySet | null {
+  if (tab?.type !== 'terminal' || !isMobileTerminalTabRunningAgent(tab)) {
+    return null
+  }
+  return resolveAgentSmartKeys(
+    resolveMobileTerminalTabOwnedAgentId(
+      tab,
+      getMobileTerminalTabHostAgentIdentity(tab, terminals)
+    ),
+    tab.agentStatus
+  )
 }

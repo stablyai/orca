@@ -47,3 +47,12 @@ export function decodePendingWorktreeCreationKeys(pendingCreationKeys: readonly 
     }
   })
 }
+
+export function getPendingCreationHostById(pendingCreationKeys: readonly string[]) {
+  return new Map(
+    decodePendingWorktreeCreationKeys(pendingCreationKeys).map((key) => [
+      key.creationId,
+      key.hostId
+    ])
+  )
+}

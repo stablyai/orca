@@ -9,6 +9,11 @@ import {
 } from '@/lib/sidebar-pending-layer'
 import { useSidebarListSession } from '@/lib/sidebar-list-session'
 import { readEndedCreations, subscribeEndedCreations } from '@/lib/sidebar-ended-creations'
+import {
+  readHiddenVmCheckouts,
+  subscribeHiddenVmCheckouts,
+  withoutHiddenVmCheckouts
+} from '@/lib/vm-create-hidden-checkouts'
 import '../../../../../../shared/folder-workspaces/folder-workspace-execution-host'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspaces/folder-workspace-host-id'
 import type { FolderWorkspace } from '../../../../../../shared/folder-workspaces/folder-workspace-types'
@@ -33,7 +38,7 @@ import {
   getVisibleSidebarHostIdSet
 } from '../../../../../../shared/sidebar-list/host-filtering'
 import { mergeDraggedHostSectionOrder } from '../../../../../../shared/sidebar-list/host-section-order'
-import { collectHeaderRevealPlacements } from '../../../../../../shared/sidebar-list/header-reveal-placement'
+import { useHeaderRevealPlacements } from './use-header-reveal-placements'
 import type { HostSectionRow } from '../../../../../../shared/sidebar-list/host-section-rows'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
@@ -41,7 +46,10 @@ import { sidebarWorkspaceRowFilters } from '../controls/sidebar-filter-actions'
 import type { SidebarListModel, SidebarListModelArgs } from './sidebar-list-model'
 import { withWindowCreations } from './window-worktree-creations'
 export { withWindowCreations } from './window-worktree-creations'
-import { selectPendingWorktreeCreationKeys } from './pending-worktree-creation-keys'
+import {
+  getPendingCreationHostById,
+  selectPendingWorktreeCreationKeys
+} from './pending-worktree-creation-keys'
 import { collectRenderedSidebarRowKeys } from './rendered-row-keys'
 import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import { useSidebarExternalWorktreeCards } from './use-external-worktree-cards'
@@ -74,6 +82,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
   const feed = useDesktopSidebarFeed()
   const pending = useSyncExternalStore(subscribeSidebarPendingLayer, readSidebarPendingLayer)
   const endedCreationIds = useSyncExternalStore(subscribeEndedCreations, readEndedCreations)
+  const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
   const pendingCreationKeys = useAppStore(
     useShallow((s) => selectPendingWorktreeCreationKeys(s.pendingWorktreeCreations))
   )
@@ -85,10 +94,13 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
   const domains = useMemo(
     () =>
       withWindowCreations(
-        overlaySidebarPendingLayer(feed?.domains ?? EMPTY_SIDEBAR_FEED_DOMAINS, pending, {
-          repos,
-          lineageById: args.worktreeLineageById
-        }),
+        withoutHiddenVmCheckouts(
+          overlaySidebarPendingLayer(feed?.domains ?? EMPTY_SIDEBAR_FEED_DOMAINS, pending, {
+            repos,
+            lineageById: args.worktreeLineageById
+          }),
+          hiddenVmCheckouts
+        ),
         pendingCreationKeys,
         endedCreationIds,
         hiddenCreationKeys
@@ -99,6 +111,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
       pendingCreationKeys,
       endedCreationIds,
       hiddenCreationKeys,
+      hiddenVmCheckouts,
       repos,
       args.worktreeLineageById
     ]
@@ -167,12 +180,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
           : undefined,
         importedWorktreesByRepo,
         newExternalWorktreesInboxByRepo,
-        creationHostById: new Map(
-          pendingCreationKeys.map((key) => {
-            const separator = key.indexOf(' ')
-            return [key.slice(0, separator), key.slice(separator + 1, key.indexOf('\0', separator))]
-          })
-        )
+        creationHostById: getPendingCreationHostById(pendingCreationKeys)
       }),
     [
       domains,
@@ -242,19 +250,7 @@ export function useMainSidebarListModel(args: SidebarListModelArgs): SidebarList
     () => renderSidebarFeedRows(planned, view, effectiveCollapsedGroups, hostDragActive),
     [planned, view, effectiveCollapsedGroups, hostDragActive]
   )
-  const revealPending = useAppStore((state) =>
-    Boolean(state.pendingRevealSidebarRow || state.pendingRevealWorktree)
-  )
-  const headerRevealPlacements = useMemo(
-    () =>
-      revealPending
-        ? collectHeaderRevealPlacements(
-            renderSidebarFeedRows(planned, view, PLANNED_UNCOLLAPSED).sectionRows,
-            planned.plan.headerRevealPaths
-          )
-        : undefined,
-    [planned, view, revealPending]
-  )
+  const headerRevealPlacements = useHeaderRevealPlacements(planned, view)
   const sectionRows = useMemo(
     () =>
       rendered.sectionRows.map((row): HostSectionRow => {

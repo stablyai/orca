@@ -201,6 +201,14 @@ export function useWorktreeContextMenuCommands(args: {
   const handleSleepSubtree = useCallback(() => {
     sleepWorktreesAfterMenuClose(args.subtreeSleepableWorktrees)
   }, [args.subtreeSleepableWorktrees, sleepWorktreesAfterMenuClose])
+  // Suspend VM with active descendants: this workspace sleeps too, even idle, so its VM suspends
+  // once every child session on it has stopped.
+  const handleSleepSubtreeWithVm = useCallback(() => {
+    sleepWorktreesAfterMenuClose([
+      args.worktree,
+      ...args.subtreeSleepableWorktrees.filter((target) => target.id !== args.worktree.id)
+    ])
+  }, [args.worktree, args.subtreeSleepableWorktrees, sleepWorktreesAfterMenuClose])
   const handleDelete = useCallback(() => {
     const restoreSidebarPosition = preserveDeleteSiblingPosition(args.scopeRef.current)
     args.scopeRef.current
@@ -242,6 +250,7 @@ export function useWorktreeContextMenuCommands(args: {
     handleRemoveProjectFromGroup,
     handleRename,
     handleSleepSubtree,
+    handleSleepSubtreeWithVm,
     handleSubmitNewProjectGroup,
     handleTogglePin,
     handleToggleRead

@@ -1,19 +1,16 @@
-import {
-  getRootProjectHeaderDragKeys,
-  getRootProjectHeaderOccurrenceKey
-} from '../drag/root-project-header-drop'
+import { getRootProjectHeaderOccurrenceKey } from '../drag/root-project-header-drop'
 import type { SectionHeaderRowContext } from './section-header-row-context'
 
 /** Where a header sits in its drag bucket and whether it can be, or is being, dragged. */
 export function getSectionHeaderDragState(
   headerDrag: SectionHeaderRowContext['headerDrag'],
   {
-    usesRootProjectDrag,
+    rootProjectHeaderKey,
     projectIdForHeader,
     projectGroupDragIdForHeader,
     hostId
   }: {
-    usesRootProjectDrag: boolean
+    rootProjectHeaderKey: string | undefined
     projectIdForHeader: string | undefined
     projectGroupDragIdForHeader: string | undefined
     hostId: string | undefined
@@ -35,16 +32,13 @@ export function getSectionHeaderDragState(
     projectGroupDragIdForHeader !== undefined
       ? headerDrag.projectGroupHeaderBucketByGroupId.get(projectGroupDragIdForHeader)
       : undefined
-  const rootProjectHeaderKey = usesRootProjectDrag
-    ? projectIdForHeader
-      ? `repo:${projectIdForHeader}`
-      : projectGroupDragIdForHeader
-        ? `group:${projectGroupDragIdForHeader}`
-        : undefined
-    : undefined
   const rootProjectHeaderCount = rootProjectHeaderKey
-    ? getRootProjectHeaderDragKeys(headerDrag.rootProjectHeaderKeys, rootProjectHeaderKey, hostId)
-        ?.length
+    ? (headerDrag.rootProjectHeaderCountByOccurrenceKey.get(
+        getRootProjectHeaderOccurrenceKey(rootProjectHeaderKey, hostId)
+      ) ??
+      headerDrag.rootProjectHeaderCountByOccurrenceKey.get(
+        getRootProjectHeaderOccurrenceKey(rootProjectHeaderKey)
+      ))
     : undefined
   const isDraggableRepoHeader = Boolean(
     headerDrag.canReorderRepoHeaders &&
@@ -79,7 +73,6 @@ export function getSectionHeaderDragState(
     repoHeaderBucketKey,
     projectGroupHeaderIndex,
     projectGroupHeaderBucketKey,
-    rootProjectHeaderKey,
     rootProjectHeaderSectionEnd,
     isDraggableRepoHeader,
     isDraggableProjectGroupHeader,

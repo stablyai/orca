@@ -1,7 +1,4 @@
-import {
-  initializeNewRootProjectGroupOrder,
-  persistProjectGroupUpdate
-} from './project-group-update-persistence'
+import { initializeNewRootProjectGroupOrder } from './project-group-update-persistence'
 import type { RepoSlice, ProjectRemovalFailure } from '../repos/repo-state'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
 import type { AppState } from '../types'
@@ -93,31 +90,8 @@ export function createProjectGroupMutationActions(
       }
     },
 
-    updateProjectGroup: async (groupId, updates, options) => {
-      try {
-        // Why: the sidebar lists groups from every host, so the mutation follows the group's owner, not the focused host.
-        const ownerHostId = resolveProjectGroupOwnerHostId(get(), groupId, options?.hostId)
-        const target = runtimeTargetForProjectGroupOwner(get(), groupId, options?.hostId)
-        if (!target) {
-          return false
-        }
-        const updated = await persistProjectGroupUpdate(target, groupId, updates)
-        if (!updated) {
-          return false
-        }
-        const ownedGroup = adoptFromEndpoint(target, { kind: 'projectGroup', row: updated })
-        set((s) => ({
-          projectGroups: s.projectGroups.map((group) =>
-            projectGroupMatchesOwnerHost(group, groupId, ownerHostId) ? ownedGroup : group
-          ),
-          folderWorkspacePathStatuses: {}
-        }))
-        return true
-      } catch (err) {
-        console.error('Failed to update project group:', err)
-        return false
-      }
-    },
+    updateProjectGroup: (groupId, updates, options) =>
+      get().updateProjectGroups([{ groupId, updates, hostId: options?.hostId }]),
 
     deleteProjectGroup: async (groupId, options) => {
       try {

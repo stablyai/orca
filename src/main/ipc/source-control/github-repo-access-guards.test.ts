@@ -179,11 +179,12 @@ const { getIssue: getIssueMock, listWorkItems: listWorkItemsMock } = mocks.clien
 describe('registerGitHubHandlers', () => {
   const harness = createGitHubIpcHarness(mocks)
   const { handlers, store, stats } = harness
+  const runtime = { notifyPullRequestChangedForRemoteClients: () => {} }
 
   beforeEach(harness.reset)
 
   it('rejects unknown repository paths', async () => {
-    registerGitHubHandlers(store as never, stats as never)
+    registerGitHubHandlers(store as never, stats as never, runtime)
 
     // Background issue reads are async (they check the repo's WSL distro first), so access errors reject.
     await expect(async () =>
@@ -197,7 +198,7 @@ describe('registerGitHubHandlers', () => {
   })
 
   it('rejects GitHub source context from a different host', async () => {
-    registerGitHubHandlers(store as never, stats as never)
+    registerGitHubHandlers(store as never, stats as never, runtime)
 
     await expect(async () =>
       handlers['gh:listWorkItems'](null, {

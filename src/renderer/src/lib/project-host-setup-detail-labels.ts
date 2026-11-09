@@ -1,22 +1,4 @@
-import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host/execution-host-registry-entry'
 import type { ProjectHostSetup } from '../../../shared/project-types'
-
-export function getHostHealthUnavailableDetail(
-  health: ExecutionHostRegistryEntry['health']
-): string | null {
-  switch (health) {
-    case 'connecting':
-      return 'Connecting to host'
-    case 'disconnected':
-      return 'Connect this host to set up projects'
-    case 'error':
-      return 'Host connection needs attention'
-    case 'available':
-    case 'blocked':
-    case 'local':
-      return null
-  }
-}
 
 export function getPendingSetupDetail(setup: ProjectHostSetup): string {
   switch (setup.setupState) {

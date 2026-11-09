@@ -38,6 +38,7 @@ export function useWorktreeJumpPaletteProjectTargets({
   workspaces,
   repos,
   worktreesByRepo,
+  pendingVmRepoIds,
   detectedWorktreesByRepo,
   worktreeVisibilityDefaultsByHost,
   pendingWorktreeCreations,
@@ -72,7 +73,8 @@ export function useWorktreeJumpPaletteProjectTargets({
       }
     }
     for (const repo of repos) {
-      if ((worktreesByRepo[repo.id]?.length ?? 0) === 0) {
+      // A VM create's project is not a target until the create adopts its checkout.
+      if ((worktreesByRepo[repo.id]?.length ?? 0) === 0 && !pendingVmRepoIds.has(repo.id)) {
         ids.add(repo.id)
       }
     }
@@ -97,7 +99,8 @@ export function useWorktreeJumpPaletteProjectTargets({
     pendingWorktreeCreations,
     repos,
     worktreeVisibilityDefaultsByHost,
-    worktreesByRepo
+    worktreesByRepo,
+    pendingVmRepoIds
   ])
   const hasAnyProjectSearchCandidates = useMemo(
     () =>

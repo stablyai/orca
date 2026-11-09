@@ -49,6 +49,7 @@ export class StructuredAgentSessionSinkQueue {
   private readonly buffered: Admitted[] = []
   private readonly waitingPublications = new Map<string, Admitted>()
   private readonly waiters: StructuredAgentSessionDrainWaiter[] = []
+  private readonly boundListeners = new Set<() => void>()
 
   constructor(
     private readonly deps: {
@@ -75,6 +76,16 @@ export class StructuredAgentSessionSinkQueue {
   journalEpoch = (): string | null => this.target?.journal.epoch ?? null
 
   journalLinkage = (): StructuredAgentSessionLinkageJournal | null => this.target?.journal ?? null
+
+  onJournalBound = (listener: () => void): (() => void) => {
+    if (!this.closed) {
+      this.boundListeners.add(listener)
+      if (this.target) {
+        listener()
+      }
+    }
+    return () => this.boundListeners.delete(listener)
+  }
 
   journalHistory = (): StructuredAgentSessionHistoryJournal | null => this.target?.journal ?? null
 
@@ -104,6 +115,13 @@ export class StructuredAgentSessionSinkQueue {
     for (const operation of this.buffered.splice(0)) {
       this.handOver(operation, target)
     }
+    for (const listener of this.boundListeners) {
+      try {
+        listener()
+      } catch (error) {
+        this.fail(error)
+      }
+    }
   }
 
   unbind(): void {
@@ -112,6 +130,7 @@ export class StructuredAgentSessionSinkQueue {
 
   close(): void {
     this.closed = true
+    this.boundListeners.clear()
     this.dropBuffered()
     this.updateBackpressure()
   }

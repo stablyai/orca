@@ -71,6 +71,8 @@ export async function renderCard(
         onRepoChange={() => {}}
         onProjectChange={() => {}}
         primaryActionLabel="Create workspace"
+        setupChoiceRevealRequest={0}
+        onSetupChoiceRevealed={() => {}}
         name=""
         onNameValueChange={() => {}}
         onSmartGitHubItemSelect={() => {}}

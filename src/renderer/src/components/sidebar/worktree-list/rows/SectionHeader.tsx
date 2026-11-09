@@ -1,3 +1,4 @@
+import { getRootProjectHeaderKey } from '../drag/root-project-header-drop'
 import React from 'react'
 import { ChevronDown } from 'lucide-react'
 import { ProjectHeaderHostLabel, ProjectHeaderHostTooltip } from './ProjectHeaderHostLabel'
@@ -78,7 +79,7 @@ export function renderWorktreeSectionHeaderRow(
   )
   const headerRepo = isRepoHeader
     ? usesRootProjectDrag
-      ? row.repo
+      ? (row.anchorRepo ?? row.repo)
       : getHeaderDragRepo(row)
     : undefined
   const projectIdForHeader = headerRepo?.id
@@ -93,19 +94,19 @@ export function renderWorktreeSectionHeaderRow(
     row.projectGroup && 'createdFrom' in row.projectGroup
       ? getProjectGroupHostId(row.projectGroup)
       : undefined
+  const rootProjectHeaderKey = usesRootProjectDrag ? getRootProjectHeaderKey(row) : undefined
   const {
     repoHeaderIndex,
     repoHeaderBucketKey,
     projectGroupHeaderIndex,
     projectGroupHeaderBucketKey,
-    rootProjectHeaderKey,
     rootProjectHeaderSectionEnd,
     isDraggableRepoHeader,
     isDraggableProjectGroupHeader,
     isDraggingThis,
     isDraggingThisProjectGroup
   } = getSectionHeaderDragState(headerDrag, {
-    usesRootProjectDrag,
+    rootProjectHeaderKey,
     projectIdForHeader,
     projectGroupDragIdForHeader,
     hostId: row.hostId

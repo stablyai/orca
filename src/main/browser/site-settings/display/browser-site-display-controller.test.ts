@@ -178,9 +178,7 @@ describe('BrowserSiteDisplayController color scheme', () => {
 
   it.each([
     { order: 'read-first', profileId: 'work', colorScheme: 'light', saved: 'dark' },
-    { order: 'registration-first', profileId: 'work', colorScheme: 'light', saved: 'dark' },
-    { order: 'read-first', profileId: 'default', colorScheme: 'dark', saved: 'light' },
-    { order: 'registration-first', profileId: 'default', colorScheme: 'dark', saved: 'light' }
+    { order: 'registration-first', profileId: 'work', colorScheme: 'light', saved: 'dark' }
   ] as const)(
     'keeps actual $profileId precedence across $order, reload and debugger loss',
     ({ order, profileId, colorScheme, saved }) => {

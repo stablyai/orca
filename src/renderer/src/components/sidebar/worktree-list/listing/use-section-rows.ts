@@ -1,7 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
-import { shallow } from 'zustand/shallow'
-import { persistedUIValuesEqual } from '../../../../../../shared/persisted-ui-equality'
-import { selectWslHostsServing } from '../../use-wsl-hosts-enabled'
+import { useCallback, useMemo, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store/index'
 import { selectSidebarLineageParentIdentities } from '@/store/slices/worktrees/metadata/cross-store-lineage-parents'
@@ -17,6 +14,7 @@ import { useEffectiveCollapsedGroups } from './use-collapsed-groups'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
 import type { SectionRowsArgs } from './sidebar-list-model'
 import { getLogicalRepoOrderRankById } from '../../../../../../shared/project-section-order'
+import { readHiddenVmCheckouts, subscribeHiddenVmCheckouts } from '@/lib/vm-create-hidden-checkouts'
 import { getEmptyProjectPlaceholderRepoIds } from '../../../../../../shared/sidebar-list/empty-project-placeholder-repos'
 import {
   deferHostSectionCollapse,
@@ -30,50 +28,13 @@ import {
   orderHostSectionOptions
 } from '../../../../../../shared/sidebar-list/host-section-order'
 import type { ExecutionHostRegistryEntry } from '../../../../../../shared/execution-host/execution-host-registry-entry'
-import {
-  createSidebarHostLabelsSelector,
-  buildSidebarHostOptions,
-  sidebarHostSemantics
-} from '../controls/sidebar-host-options'
+import { createSidebarHostLabelsSelector } from '../controls/sidebar-host-options'
+import { createSidebarHostOptionsSelector } from './sidebar-host-options-selector'
 import {
   selectPendingWorktreeCreationKeys,
   decodePendingWorktreeCreationKeys
 } from './pending-worktree-creation-keys'
 import { selectWorktreesByRepo } from '@/store/workspaces/catalog/workspace-record-fields'
-
-function createSidebarHostOptionsSelector() {
-  let inputs: readonly unknown[] = []
-  let result: ReturnType<typeof buildSidebarHostOptions> = []
-  return (
-    state: ReturnType<typeof useAppStore.getState>,
-    repos: SectionRowsArgs['repos'],
-    settings: SectionRowsArgs['settings'],
-    hostLabelOverrides: Parameters<typeof buildSidebarHostOptions>[0]['hostLabelOverrides']
-  ): ReturnType<typeof buildSidebarHostOptions> => {
-    const options = {
-      repos,
-      sshTargetLabels: state.sshTargetLabels,
-      sshConnectionStates: state.sshConnectionStates,
-      settings,
-      runtimeEnvironments: state.runtimeEnvironments,
-      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
-      hostLabelOverrides,
-      wslHostStatuses: state.wslHostStatuses,
-      wslHostsEnabled: selectWslHostsServing(state),
-      wslHostServerFilesMissing: state.wslHostServerFiles === 'missing'
-    }
-    const nextInputs = Object.values(options)
-    if (shallow(inputs, nextInputs)) {
-      return result
-    }
-    inputs = nextInputs
-    const next = buildSidebarHostOptions(options)
-    if (!persistedUIValuesEqual(result.map(sidebarHostSemantics), next.map(sidebarHostSemantics))) {
-      result = next
-    }
-    return result
-  }
-}
 
 export function useSidebarSectionRows(args: SectionRowsArgs) {
   const { repos, worktrees, repoMap, defaultHostId } = args
@@ -88,6 +49,7 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
     [repos]
   )
   const allRepoIds = useMemo(() => repos.map((r) => r.id), [repos])
+  const hiddenVmCheckouts = useSyncExternalStore(subscribeHiddenVmCheckouts, readHiddenVmCheckouts)
   const placeholderRepoIds = useMemo(
     () =>
       getEmptyProjectPlaceholderRepoIds({
@@ -95,9 +57,17 @@ export function useSidebarSectionRows(args: SectionRowsArgs) {
         repos: args.visibleReposForRows,
         worktreesByRepo,
         visibleWorktrees: worktrees,
-        filterRepoIds: args.filterRepoIds
+        filterRepoIds: args.filterRepoIds,
+        pendingVmRepoIds: hiddenVmCheckouts.repoIds
       }),
-    [args.filterRepoIds, args.groupBy, args.visibleReposForRows, worktrees, worktreesByRepo]
+    [
+      args.filterRepoIds,
+      args.groupBy,
+      args.visibleReposForRows,
+      worktrees,
+      worktreesByRepo,
+      hiddenVmCheckouts
+    ]
   )
 
   // Why: subscribe on a flat key array (useShallow) so progress ticks don't rebuild the whole row model.

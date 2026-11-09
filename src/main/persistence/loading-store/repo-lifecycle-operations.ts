@@ -104,9 +104,7 @@ export class RepoLifecycleOperations {
         .filter((repo) => repo.id === id && getRepoExecutionHostId(repo) === hostId)
         .map(getProjectIdentityKey)
     )
-    const repoRemoved = state.repos.some(
-      (repo) => repo.id === id && getRepoExecutionHostId(repo) === hostId
-    )
+    const repoRemoved = removedProjectIds.size > 0
     state.repos = state.repos.filter((r) => !(r.id === id && getRepoExecutionHostId(r) === hostId))
     if (repoRemoved) {
       bumpLocalWorktreeScanGeneration(id)
@@ -188,6 +186,7 @@ export class RepoLifecycleOperations {
         | 'folderUpgradeGitRootPath'
         | 'executionHostId'
         | 'symlinkPaths'
+        | 'dictationTerms'
         | 'issueSourcePreference'
         | 'forkSyncMode'
         | 'agentWorkspaceTrust'

@@ -575,6 +575,7 @@ import {
   ProjectGroupScanNested,
   ProjectGroupSelector,
   ProjectGroupUpdate,
+  ProjectGroupUpdateMany,
   RepoClone,
   RepoCreate,
   RepoHooksCheck,
@@ -616,7 +617,8 @@ import {
   DictationSetup,
   DictationStart,
   OpenAiSpeechKeySet,
-  SpeechModelAction
+  SpeechModelAction,
+  SpeechSetupRead
 } from './speech-params'
 import {
   RepoAddRemote,
@@ -1431,6 +1433,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'projectGroup.moveProject': ProjectGroupMoveProject,
   'projectGroup.scanNested': ProjectGroupScanNested,
   'projectGroup.update': ProjectGroupUpdate,
+  'projectGroup.updateMany': ProjectGroupUpdateMany,
   'projectHostSetup.clone': ProjectHostSetupClone,
   'projectHostSetup.create': ProjectHostSetupCreate,
   'projectHostSetup.delete': ProjectHostSetupDelete,
@@ -1525,7 +1528,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'speech.dictation.start': DictationStart,
   'speech.models.delete': SpeechModelAction,
   'speech.models.download': SpeechModelAction,
-  'speech.models.list': null,
+  'speech.models.list': SpeechSetupRead,
   'speech.openAiKey.clear': null,
   'speech.openAiKey.set': OpenAiSpeechKeySet,
   'speech.openAiKey.status': null,

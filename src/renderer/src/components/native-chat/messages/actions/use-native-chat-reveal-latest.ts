@@ -56,7 +56,7 @@ export type NativeChatMessageListHandle = {
   readerAtEnd: () => boolean
   /** Bring a find match into view, clear of the find bar; the reader stops following the latest. */
   revealFindMatch: (match: Range, bar: DOMRectReadOnly | null) => void
-  /** What the row drawing this message copies from its hover button; null when none draws it. */
+  /** What the row drawing this message copies from its Copy button; null when none draws it. */
   messageCopyText: (messageId: string) => string | null
   /** Open a subagent's activity where it sits in the conversation and bring it into view. */
   revealSubagent: (agentId: string) => void
