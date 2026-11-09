@@ -81,7 +81,7 @@ export class RemoteLayoutSnapshotPersistence {
       return
     }
     if (snapshot) {
-      writeSnapshotEntry(snapshots, environmentId, structuredClone(snapshot))
+      writeSnapshotEntry(snapshots, environmentId, snapshot)
     } else {
       delete snapshots[environmentId]
     }
@@ -100,7 +100,7 @@ export class RemoteLayoutSnapshotPersistence {
       ? snapshots[environmentId].workspaces
       : {}
     if (workspace) {
-      writeSnapshotEntry(workspaces, worktreeId, structuredClone(workspace))
+      writeSnapshotEntry(workspaces, worktreeId, workspace)
     } else {
       delete workspaces[worktreeId]
     }
