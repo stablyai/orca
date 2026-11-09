@@ -2,6 +2,7 @@
 // progress and OOM notices. Maps the renderer's workspace id to its Orca Cloud runtime record.
 import { failQueuedCloudPrompts } from './cloud-offline-service'
 import { ipcMain, type BrowserWindow } from 'electron'
+import { HOSTED_ACCOUNT_CHANNELS, registerHostedAccountHandlers } from './hosted-account-ipc'
 import {
   listEphemeralVmRuntimes,
   updateEphemeralVmRuntimeStatus
@@ -168,7 +169,8 @@ export function installHostedWorkspaceService(deps: {
         CH.archive,
         CH.unarchive,
         CH.getArchive,
-        CH.listCloudWorkspaceIds
+        CH.listCloudWorkspaceIds,
+        ...HOSTED_ACCOUNT_CHANNELS
       ]) {
         ipcMain.removeHandler(channel)
       }
@@ -181,6 +183,8 @@ export function installHostedWorkspaceService(deps: {
       .filter((runtime) => runtime.recipe?.provider === 'orca-cloud' && runtime.workspaceId)
       .map((runtime) => runtime.workspaceId!)
   )
+
+  registerHostedAccountHandlers(deps.client)
 
   ipcMain.handle(CH.getStatus, async (_event, args: { workspaceId: string }) => {
     const found = findCloudRuntime(deps.userDataPath, args.workspaceId)

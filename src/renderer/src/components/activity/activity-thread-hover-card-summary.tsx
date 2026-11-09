@@ -32,6 +32,7 @@ import { EventTime, ThreadAgentStateIndicator } from './activity-thread-controls
 import { activityThreadRowCopy, threadAgentStateLabel } from './activity-thread-presentation'
 import { getActivityThreadWorkspaceTitle } from '@/lib/activity-thread-display'
 import type { AgentPaneThread } from './activity-thread-types'
+import { runtimeEnvironmentDisplayName } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 
 export function ActivityThreadHoverCardSummary({
   thread,
@@ -59,7 +60,7 @@ export function ActivityThreadHoverCardSummary({
     if (parsedHost?.kind === 'runtime') {
       const environment = runtimeEnvironments.find((entry) => entry.id === parsedHost.environmentId)
       if (environment?.name) {
-        return environment.name
+        return runtimeEnvironmentDisplayName(environment)
       }
     }
     if (parsedHost?.kind === 'ssh') {

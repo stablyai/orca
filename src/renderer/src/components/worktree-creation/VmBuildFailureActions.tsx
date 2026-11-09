@@ -3,15 +3,18 @@ import {
   Bot,
   ChevronDown,
   CreditCard,
+  Github,
   Loader2,
+  LifeBuoy,
   LogIn,
+  PanelLeft,
   Pencil,
   RotateCcw,
-  Sparkles,
   SquareArrowOutUpRight,
   Trash2
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +33,10 @@ export type VmBuildFailureActions = {
   onSeePlans: () => void
   onOpenBilling: () => void
   onSignIn: () => void
+  onShowWorkspaces: () => void
+  onContactSupport: () => void
+  onConnectGitHub: () => void
+  onPushToGitHub: () => void
 }
 
 type Action = {
@@ -38,6 +45,8 @@ type Action = {
   icon?: React.ReactNode
   onClick: () => void
   disabled?: boolean
+  /** In progress: stays focusable (aria-disabled + aria-busy) so keyboard focus isn't dropped. */
+  pending?: boolean
 }
 
 /** At most two visible actions; the rest sit in a More menu so the way forward stays obvious. */
@@ -45,7 +54,9 @@ function failureActions(
   failure: VmBuildFailure,
   cloud: boolean,
   canFixWithAgent: boolean,
+  canManageBilling: boolean,
   signingIn: boolean,
+  connectingGitHub: boolean,
   actions: VmBuildFailureActions,
   t: Translate
 ): { primary: Action[]; more: Action[] } {
@@ -75,32 +86,40 @@ function failureActions(
           {
             key: 'plans',
             label: t('auto.lib.orcaCloudSession.seePlans', 'See plans'),
-            icon: <Sparkles />,
             onClick: actions.onSeePlans
           }
         ],
         more: []
       }
     case 'hoursUsed':
+    case 'spendCap':
     case 'payment':
+      // Members can't change billing; their card tells them who can.
       return {
-        primary: [
-          {
-            key: 'billing',
-            label:
-              failure.kind === 'payment'
-                ? t(
-                    'auto.components.worktree.creation.VmBuildFailureCard.updatePayment',
-                    'Update payment method'
-                  )
-                : t(
-                    'auto.components.worktree.creation.VmBuildFailureCard.manageBilling',
-                    'Manage billing'
-                  ),
-            icon: <CreditCard />,
-            onClick: actions.onOpenBilling
-          }
-        ],
+        primary: canManageBilling
+          ? [
+              {
+                key: 'billing',
+                label:
+                  failure.kind === 'payment'
+                    ? t(
+                        'auto.components.worktree.creation.VmBuildFailureCard.updatePayment',
+                        'Update payment method'
+                      )
+                    : failure.kind === 'spendCap'
+                      ? t(
+                          'auto.components.worktree.creation.VmBuildFailureCard.raiseSpendCap',
+                          'Raise spend cap'
+                        )
+                      : t(
+                          'auto.components.worktree.creation.VmBuildFailureCard.turnOnOverage',
+                          'Turn on overage'
+                        ),
+                icon: <CreditCard />,
+                onClick: actions.onOpenBilling
+              }
+            ]
+          : [],
         more: []
       }
     case 'signIn':
@@ -113,7 +132,7 @@ function failureActions(
               : t('auto.components.worktree.creation.VmBuildFailureCard.signIn', 'Sign in'),
             icon: signingIn ? <Loader2 className="motion-safe:animate-spin" /> : <LogIn />,
             onClick: actions.onSignIn,
-            disabled: signingIn
+            pending: signingIn
           }
         ],
         more: []
@@ -153,9 +172,78 @@ function failureActions(
             more: [editRecipe]
           }
     case 'concurrency':
+    case 'memberConcurrency':
+      return {
+        primary: [
+          {
+            key: 'workspaces',
+            label: t(
+              'auto.components.worktree.creation.VmBuildFailureCard.showWorkspaces',
+              'Show cloud workspaces'
+            ),
+            icon: <PanelLeft />,
+            onClick: actions.onShowWorkspaces
+          },
+          tryAgain
+        ],
+        more: []
+      }
+    case 'snapshotMissing':
+      return {
+        primary: [tryAgain],
+        more: [
+          {
+            key: 'support',
+            label: t(
+              'auto.components.worktree.creation.VmBuildFailureCard.contactSupport',
+              'Contact support'
+            ),
+            icon: <LifeBuoy />,
+            onClick: actions.onContactSupport
+          }
+        ]
+      }
+    case 'githubNotConnected':
+      return {
+        primary: [
+          {
+            key: 'connectGitHub',
+            label: connectingGitHub
+              ? t(
+                  'auto.components.worktree.creation.VmBuildFailureCard.openingGitHub',
+                  'Opening GitHub…'
+                )
+              : t(
+                  'auto.components.worktree.creation.VmBuildFailureCard.connectGitHub',
+                  'Connect GitHub'
+                ),
+            icon: connectingGitHub ? <Loader2 className="motion-safe:animate-spin" /> : <Github />,
+            onClick: actions.onConnectGitHub,
+            pending: connectingGitHub
+          },
+          tryAgain
+        ],
+        more: []
+      }
+    case 'noGithubRemote':
+      return {
+        primary: [
+          {
+            key: 'pushToGitHub',
+            label: t(
+              'auto.components.worktree.creation.VmBuildFailureCard.howToPushToGitHub',
+              'How to push to GitHub'
+            ),
+            icon: <SquareArrowOutUpRight />,
+            onClick: actions.onPushToGitHub
+          },
+          // After pushing, the same create works without leaving the sheet.
+          tryAgain
+        ],
+        more: []
+      }
     case 'unavailable':
     case 'network':
-    case 'snapshotMissing':
     case 'create':
       return { primary: [tryAgain], more: [] }
   }
@@ -166,7 +254,9 @@ export function FailureActionRow({
   cloud,
   vmKept,
   canFixWithAgent,
+  canManageBilling,
   signingIn,
+  connectingGitHub,
   actions,
   t
 }: {
@@ -174,11 +264,22 @@ export function FailureActionRow({
   cloud: boolean
   vmKept: boolean
   canFixWithAgent: boolean
+  canManageBilling: boolean
   signingIn: boolean
+  connectingGitHub: boolean
   actions: VmBuildFailureActions
   t: Translate
 }): React.JSX.Element {
-  const { primary, more } = failureActions(failure, cloud, canFixWithAgent, signingIn, actions, t)
+  const { primary, more } = failureActions(
+    failure,
+    cloud,
+    canFixWithAgent,
+    canManageBilling,
+    signingIn,
+    connectingGitHub,
+    actions,
+    t
+  )
   // Leaving a build that still holds a VM destroys it, so say so on the button.
   const destroys = vmKept
   return (
@@ -189,8 +290,10 @@ export function FailureActionRow({
           type="button"
           size="xs"
           variant={index === 0 ? 'default' : 'outline'}
-          onClick={action.onClick}
+          onClick={action.pending ? undefined : action.onClick}
           disabled={action.disabled}
+          aria-disabled={action.pending || undefined}
+          aria-busy={action.pending || undefined}
         >
           {action.icon}
           {action.label}
@@ -223,7 +326,8 @@ export function FailureActionRow({
         variant={destroys ? 'destructive-chip' : 'ghost'}
         size="xs"
         onClick={actions.onDismiss}
-        className="ml-auto"
+        // Leaving is the quiet way out; only deleting a running sandbox earns the destructive chip.
+        className={cn('ml-auto', !destroys && 'text-muted-foreground hover:text-foreground')}
       >
         {destroys ? <Trash2 /> : null}
         {destroys

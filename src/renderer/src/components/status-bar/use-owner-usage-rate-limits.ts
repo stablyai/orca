@@ -16,6 +16,7 @@ import {
   type OwnerUsageFailureReason,
   type OwnerUsageState
 } from './owner-usage-rate-limits'
+import { runtimeEnvironmentDisplayName } from '../../../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 
 // Why: accounts.list({refreshUsage}) waits for the host's provider fetches.
 const REMOTE_USAGE_REFRESH_TIMEOUT_MS = 30_000
@@ -59,9 +60,10 @@ export function useOwnerUsageRateLimits(local: RateLimitState): OwnerUsageRateLi
   // Why: route by the focused workspace's owner, never by the Active Server setting.
   const { target } = useActiveAccountOwner(LOCAL_TARGET)
   const ownerId = runtimeTargetEnvironmentId(target)
-  const ownerName = useAppStore(
-    (s) => s.runtimeEnvironments.find((environment) => environment.id === ownerId)?.name ?? null
-  )
+  const ownerName = useAppStore((s) => {
+    const environment = s.runtimeEnvironments.find((entry) => entry.id === ownerId)
+    return environment ? runtimeEnvironmentDisplayName(environment) : null
+  })
   const [owned, setOwned] = useState<OwnedUsage | null>(null)
   const ownedRef = useRef<OwnedUsage | null>(null)
 

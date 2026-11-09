@@ -7,6 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { formatElapsedTime } from './worktree-creation-clock'
 import type { WorktreeSetupStep, WorktreeSetupStepId } from './worktree-setup-steps'
+import { stepStateLabel } from './vm-build-sheet-copy'
 
 function stepLabel(id: WorktreeSetupStepId, agentLabel: string, t: Translate = translate): string {
   switch (id) {
@@ -41,7 +42,7 @@ export function StepIcon({ state }: { state: WorktreeSetupStep['state'] }): Reac
     case 'failed':
       return <CircleX aria-hidden className="size-3.5 shrink-0 text-destructive" />
     case 'pending':
-      return <Circle aria-hidden className="size-3.5 shrink-0 text-muted-foreground/60" />
+      return <Circle aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
   }
 }
 
@@ -79,6 +80,7 @@ export function WorktreeSetupSteps({
               >
                 {stepLabel(step.id, agentLabel, t)}
               </span>
+              <span className="sr-only">{stepStateLabel(step.state, t)}</span>
               {step.percent !== null ? (
                 <span className="text-xs tabular-nums text-muted-foreground">{step.percent}%</span>
               ) : null}

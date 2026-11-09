@@ -6,6 +6,7 @@ import type { EphemeralVmRuntimeRecord } from '../../shared/ephemeral-vm-runtime
 import { isFolderRepo, isGitRepoKind } from '../../shared/repo-kind'
 import type { OrcaCloudAvailability, OrcaVmRecipe } from '../../shared/orca-yaml-hook-types'
 import type { PluginService } from '../plugins/plugin-service'
+import { orcaCloudEnvironmentName } from '../../shared/remote-runtime/host-catalog/orca-cloud-environment-name'
 import {
   getOrcaCloudAvailability,
   withProviderRecipes
@@ -24,6 +25,17 @@ export type EphemeralVmRecipeListResult = {
   message?: string
   messageCode?: string
   messageParams?: Record<string, string | number>
+}
+
+export type EphemeralVmProvisionArgs = {
+  repoId: string
+  recipeId: string
+  workspaceName?: string
+  projectId?: string
+  workspaceId?: string
+  branch?: string
+  ref?: string
+  provisionId?: string
 }
 
 export type EphemeralVmRecipeCatalogEntry = {
@@ -70,7 +82,9 @@ export function buildEphemeralEnvironmentName(
   runtimeId: string,
   recipe: { provider?: string }
 ): string {
-  return `${repo} ${recipe.provider === 'orca-cloud' ? 'sandbox' : 'VM'} ${runtimeId.slice(-8)}`
+  return recipe.provider === 'orca-cloud'
+    ? orcaCloudEnvironmentName(repo, runtimeId)
+    : `${repo} VM ${runtimeId.slice(-8)}`
 }
 
 /** The Run-on picker's list, plus Orca Cloud availability so it can offer sign-in or an upsell. */

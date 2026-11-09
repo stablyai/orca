@@ -21,6 +21,7 @@ import type {
   ProvisionEphemeralVmRuntimeResult
 } from './runtime-service'
 import { cleanupFailedEphemeralVmStart } from './failed-start-cleanup'
+import { renameLegacyOrcaCloudEnvironments } from './legacy-orca-cloud-environment-names'
 
 export type EphemeralVmWriteAhead = {
   instanceId: string
@@ -159,6 +160,11 @@ export function reconcileInterruptedEphemeralVmProvisionsOnStartup(userDataPath:
     reconcileInterruptedEphemeralVmProvisions(userDataPath)
   } catch (error) {
     console.warn('[ephemeral-vm] Could not reconcile interrupted provisions:', error)
+  }
+  try {
+    renameLegacyOrcaCloudEnvironments(userDataPath, listEphemeralVmRuntimes(userDataPath))
+  } catch (error) {
+    console.warn('[ephemeral-vm] Could not rename legacy Orca Cloud servers:', error)
   }
 }
 
