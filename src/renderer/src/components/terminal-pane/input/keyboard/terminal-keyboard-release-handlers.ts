@@ -5,6 +5,7 @@ import { isEditableTarget } from './terminal-keyboard-shortcut-matching'
 import { hasPendingTerminalImeComposition } from '../ime/terminal-ime-composition-route'
 import { keyboardEventBelongsToScope } from './terminal-keyboard-scope'
 import { synchronizeTerminalKeyboardPane } from './terminal-keyboard-pane-resolution'
+import { releaseSpatialFocusHold } from './terminal-spatial-focus-dispatch'
 
 type Runtime = ReturnType<typeof createTerminalKeyboardRuntime>
 type ReleaseContext = KeyboardHandlersDeps &
@@ -48,6 +49,7 @@ export function createTerminalKeyboardReleaseHandlers(context: ReleaseContextWit
   } = context
 
   const onKeyUp = (e: KeyboardEvent): void => {
+    releaseSpatialFocusHold(e)
     if (!isTerminalImeEnterKeyUp(e)) {
       reconcileHeldImeEnterModifiers(e)
     }
@@ -151,6 +153,7 @@ export function createTerminalKeyboardReleaseHandlers(context: ReleaseContextWit
   }
 
   const onNativeOnlyBlur = (): void => {
+    releaseSpatialFocusHold()
     optionKeyLocations.clear()
     optionKittyReleases.clear()
     nativeOnlyShortcutTracker.clear()

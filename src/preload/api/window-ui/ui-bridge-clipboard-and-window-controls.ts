@@ -175,6 +175,9 @@ export const uiClipboardAndWindowControlsApi = {
   setTerminalInputFocused: (focused: boolean): void => {
     ipcRenderer.send('ui:setTerminalInputFocused', focused)
   },
+  setNativeChatCoverFocused: (focused: boolean): void => {
+    ipcRenderer.send('ui:setNativeChatCoverFocused', focused)
+  },
   setFloatingFocus: (state: { panelFocused: boolean; terminalFocused: boolean }): void => {
     ipcRenderer.send('ui:setFloatingFocus', state)
   },
