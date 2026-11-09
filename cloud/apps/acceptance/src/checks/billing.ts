@@ -170,10 +170,10 @@ export const billingChecks: Record<string, Check> = {
     const same = await push(2)
     const ok =
       added.body?.status === 'updated' && qtyAfterAdd === 3 && invoice?.billing_reason === 'subscription_update' && invoice?.status === 'paid' &&
-      removed.body?.status === 'updated' && qtyAfterRemove === 2 && ent?.seats === 2 && same.body?.status === 'unchanged'
+      removed.body?.status === 'deferred' && qtyAfterRemove === 3 && removed.body?.effectiveAt > Date.now() && same.body?.status === 'deferred'
     return {
       status: ok ? 'pass' : 'fail',
-      detail: `member added -> ${qtyAfterAdd} seats, proration invoice ${invoice?.billing_reason}/${invoice?.status} $${((invoice?.amount_paid ?? 0) / 100).toFixed(2)} charged now; member removed -> ${qtyAfterRemove} seats (credit next invoice), entitlements ${ent?.seats} seats; repeat push -> ${same.body?.status}`,
+      detail: `member added -> ${qtyAfterAdd} seats, proration invoice ${invoice?.billing_reason}/${invoice?.status} $${((invoice?.amount_paid ?? 0) / 100).toFixed(2)} charged now; member removed -> ${removed.body?.status} until ${removed.body?.effectiveAt ? new Date(removed.body.effectiveAt).toISOString().slice(0, 10) : '?'} (peak-seat billing: paid seat kept to period end, no mid-period refund abuse), still ${qtyAfterRemove} seats / entitlements ${ent?.seats}; repeat push -> ${same.body?.status}`,
       evidence: [log('seat pushes', JSON.stringify({ added: added.body, removed: removed.body, same: same.body }))]
     }
   },

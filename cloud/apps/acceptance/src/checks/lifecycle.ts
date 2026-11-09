@@ -116,8 +116,10 @@ export const lifecycleChecks: Record<string, Check> = {
     await serve(ctx, b.sessionId, 4173)
     await openTerminal(b.code, b.root)
     let found: any = null
-    for (let i = 0; i < 6 && !found; i++) {
-      const r = await orca(b.code, ['ports', '--all'])
+    let last = ''
+    for (let i = 0; i < 3 && !found; i++) {
+      const r = await orca(b.code, ['ports', '--all'], 30_000)
+      last = `${r.ms} ms ${r.stderr.slice(0, 200) || JSON.stringify(r.json?.error ?? r.json).slice(0, 200)}`
       found = JSON.stringify(r.json ?? '').includes('4173') ? r.json : null
       if (!found) {
         await sleep(2000)
@@ -125,7 +127,7 @@ export const lifecycleChecks: Record<string, Check> = {
     }
     return {
       status: found ? 'pass' : 'fail',
-      detail: found ? 'orca ports over the pairing sees port 4173 in the VM' : 'port 4173 not listed by orca ports',
+      detail: found ? 'orca ports over the pairing sees port 4173 in the VM' : `port 4173 not listed by orca ports over the pairing code (last: ${last})`,
       evidence: found ? [log('orca ports', JSON.stringify(found).slice(0, 1200))] : []
     }
   },
@@ -174,7 +176,8 @@ export const lifecycleChecks: Record<string, Check> = {
     const raw = Buffer.from(publicKey.export({ format: 'jwk' }).x!, 'base64url')
     const blob = Buffer.concat([Buffer.from([0, 0, 0, 11]), Buffer.from('ssh-ed25519'), Buffer.from([0, 0, 0, 32]), raw]).toString('base64')
     const r = await control.as(ctx.solo, 'POST', `/v1/sandboxes/${b.id}/ssh-keys`, { publicKey: `ssh-ed25519 ${blob} w9-acceptance` })
-    const listening = (await ctx.exec(b.sessionId, `ss -ltn 2>/dev/null | grep -c ":${r.body?.ssh?.port ?? 2222} " ; grep -c w9-acceptance ~/.ssh/authorized_keys 2>/dev/null`)).stdout.trim().split('\n')
+    const portHex = (r.body?.ssh?.port ?? 2222).toString(16).toUpperCase().padStart(4, '0')
+    const listening = (await ctx.exec(b.sessionId, `cat /proc/net/tcp /proc/net/tcp6 2>/dev/null | awk '$4=="0A"' | grep -c ":${portHex} "; sudo sh -c 'cat /home/*/.ssh/authorized_keys /root/.ssh/authorized_keys 2>/dev/null' | grep -c w9-acceptance`)).stdout.trim().split('\n')
     const ok = r.status === 200 && Number(listening[0]) > 0 && Number(listening[1]) > 0
     return {
       status: ok ? 'partial' : 'fail',

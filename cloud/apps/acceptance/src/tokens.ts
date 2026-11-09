@@ -14,10 +14,14 @@ function signingKey() {
   key ??= importJWK(jwk.private, 'ES256')
   return key
 }
+function kid(): string {
+  const jwk = secrets.devJwk() as { kid?: string; private: { kid?: string } } | null
+  return jwk?.kid ?? jwk?.private.kid ?? 'dev1'
+}
 
 async function sign(claims: Record<string, unknown>, issuer: string, audience: string): Promise<string> {
   return new SignJWT(claims)
-    .setProtectedHeader({ alg: 'ES256', kid: 'dev1' })
+    .setProtectedHeader({ alg: 'ES256', kid: kid() })
     .setIssuer(issuer)
     .setAudience(audience)
     .setIssuedAt()

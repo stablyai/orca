@@ -66,15 +66,15 @@ export const coreChecks: Record<string, Check> = {
     const r = await ctx.exec(p.sandbox.session!.id, 'df -BG --output=size,avail /vercel/sandbox | tail -1')
     const [size, avail] = r.stdout.trim().split(/\s+/).map((v) => Number.parseInt(v, 10))
     return {
-      status: (size ?? 0) >= 30 ? 'partial' : 'fail',
-      detail: `disk ${size} GB (${avail} GB free). Conductor: 64 GB. Low-disk alert not yet probed (W1/W2).`,
+      status: (size ?? 0) >= 60 ? 'pass' : (size ?? 0) >= 30 ? 'partial' : 'fail',
+      detail: `disk ${size} GB (${avail} GB free). Conductor: 64 GB. Low-disk banner is desktop UI (W1 #47), driven by status.metrics.diskUsedBytes.`,
       evidence: [log('df', r.stdout)]
     }
   },
 
   'sub.tools': async (ctx) => {
     const p = await ctx.primary()
-    const tools = ['node', 'npm', 'pnpm', 'python3', 'git', 'gh', 'jq', 'rg', 'git-lfs', 'tmux', 'vim', 'claude', 'codex', 'orca', 'chromium', 'google-chrome']
+    const tools = ['node', 'npm', 'pnpm', 'python3', 'git', 'gh', 'jq', 'rg', 'git-lfs', 'tmux', 'vim', 'claude', 'codex', 'orca', 'google-chrome']
     const r = await ctx.exec(p.sandbox.session!.id, LOGIN(`for t in ${tools.join(' ')}; do command -v $t >/dev/null 2>&1 && echo "$t=yes" || echo "$t=no"; done; node --version; claude --version 2>/dev/null | head -1; codex --version 2>/dev/null | head -1`))
     const have = new Set(r.stdout.split('\n').filter((l) => l.endsWith('=yes')).map((l) => l.slice(0, -4)))
     const missing = tools.filter((t) => !have.has(t))

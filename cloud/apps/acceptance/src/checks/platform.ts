@@ -251,7 +251,7 @@ export const platformChecks: Record<string, Check> = {
 
   // ---------------- W5 ----------------
   'api.rest': async (ctx) => {
-    const created = await api(ctx, 'POST', '/v1/workspaces', { name: `w9-api-${tag(ctx)}`, repo: config.testRepo })
+    const created = await api(ctx, 'POST', '/v1/workspaces', { name: `w9-api-${tag(ctx)}`, repo: { url: config.testRepo } })
     const id = created.body?.workspace?.id ?? created.body?.id
     if (!id) {
       return { status: 'fail', detail: `POST /v1/workspaces ${created.status} ${JSON.stringify(created.body).slice(0, 300)}` }
@@ -295,7 +295,7 @@ export const platformChecks: Record<string, Check> = {
   'api.routine-webhook': async (ctx) => {
     const r = await api(ctx, 'POST', '/v1/routines', {
       name: `w9-hook-${tag(ctx)}`,
-      repo: config.testRepo,
+      repo: { url: config.testRepo },
       trigger: { kind: 'webhook' },
       agent: 'claude',
       prompt: 'Reply with the single word ok. Do not change any files.',
@@ -334,7 +334,7 @@ export const platformChecks: Record<string, Check> = {
   'api.routine-cron': async (ctx) => {
     const r = await api(ctx, 'POST', '/v1/routines', {
       name: `w9-cron-${tag(ctx)}`,
-      repo: config.testRepo,
+      repo: { url: config.testRepo },
       trigger: { kind: 'schedule', cron: '0 9 * * 1-5', timezone: 'America/Los_Angeles' },
       agent: 'claude',
       prompt: 'Reply ok.',
@@ -345,7 +345,7 @@ export const platformChecks: Record<string, Check> = {
     const id = r.body?.routine?.id
     const gh = await api(ctx, 'POST', '/v1/routines', {
       name: `w9-gh-${tag(ctx)}`,
-      repo: config.testRepo,
+      repo: { url: config.testRepo },
       trigger: { kind: 'github', events: ['pull_request.opened'], labels: ['orca'] },
       agent: 'codex',
       prompt: 'Review.',

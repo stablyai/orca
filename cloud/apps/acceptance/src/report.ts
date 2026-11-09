@@ -162,6 +162,7 @@ Parity bar: <a href="conductor-parity-matrix.html">conductor-parity-matrix.html<
 <code>create.usable</code> adds the user's client connecting (orca CLI, E2EE handshake); <code>*.firstEcho</code> adds registering the project, opening a PTY and seeing a typed command echoed
 (each CLI call reconnects, so this is an upper bound on what the desktop's warm connection sees); <code>rollover.gap</code> = drain + stop + boot + orcad ready.</p>
 ${benchTable(runs)}
+<p class="small muted">${runs.filter((r) => r.benchmarks.length).slice(-1).flatMap((r) => r.notes.filter((n) => n.startsWith('load'))).map(esc).join(' · ')}</p>
 <h2>Known gaps and findings</h2>
 <ul>${[...(extra.findings ?? []), ...(extra.gaps ?? [])].map((g) => `<li>${g}</li>`).join('') || '<li>none recorded</li>'}</ul>
 <h2>Cost of the eval and every cloud resource</h2>

@@ -12,6 +12,7 @@ import { opsChecks } from './checks/ops'
 import { pendingChecks } from './checks/pending'
 import { secretChecks } from './checks/secrets'
 import { Ctx, runCheck, type Check } from './context'
+import { control } from './clients'
 import { config } from './env'
 import { renderReport } from './report'
 import { RunState } from './run-state'
@@ -48,7 +49,21 @@ process.on('SIGINT', () => {
   console.log('\ninterrupted: cleaning up (Ctrl-C again to abort cleanup)')
 })
 
+/** Load on the shared dev stack while we measure (other workstreams run VMs too). */
+async function noteLoad(when: string): Promise<void> {
+  const s = await control.operator('GET', '/v1/internal/status').catch(() => null)
+  run.note(`load ${when}: ${s?.body?.active ?? '?'} active / ${s?.body?.running ?? '?'} running sandboxes on the dev control plane (all accounts)`)
+}
+
 try {
+  await noteLoad('at start')
+  // Idempotent: the eval accounts need the dev GitHub App installation to clone the private test repo.
+  for (const accountId of ['dev:w9-eval', 'dev:org:w9-eval-team', 'dev:w9-desktop']) {
+    const b = await control.operator('POST', '/v1/internal/github/bindings', { repoUrl: config.testRepo, accountId })
+    if (b.status !== 200) {
+      run.note(`github binding for ${accountId} -> ${b.status}`)
+    }
+  }
   if (!flag('no-checks')) {
     const ids = CATALOG.map((f) => f.id).filter((id) => (!only || only.includes(id)) && !skip.has(id) && !LATE.includes(id))
     const late = LATE.filter((id) => (!only || only.includes(id)) && !skip.has(id))
@@ -63,8 +78,10 @@ try {
     }
   }
   if (flag('bench') && !interrupted) {
+    await noteLoad('before benchmarks')
     await benchCreate(ctx, n)
     await benchWakeAndRollover(ctx, n)
+    await noteLoad('after benchmarks')
   }
 } finally {
   const { failed } = await ctx.sandboxes.destroyAll()

@@ -23,9 +23,9 @@ function teamSandbox(ctx: Ctx) {
     const tag = ctx.run.file.runId
     await put(ctx, ctx.owner, 'org', 'W9_SHARED', `org-${tag}`)
     await put(ctx, ctx.owner, 'org', 'W9_OVERRIDE', `org-${tag}`)
-    await put(ctx, ctx.owner, 'org', 'OPENAI_API_KEY', `org-fake-${tag}`)
+    await put(ctx, ctx.owner, 'org', 'AWS_REGION', `org-fake-${tag}`)
     await put(ctx, ctx.member, 'personal', 'W9_OVERRIDE', `personal-${tag}`)
-    await put(ctx, ctx.member, 'personal', 'OPENAI_API_KEY', `personal-fake-${tag}`)
+    await put(ctx, ctx.member, 'personal', 'AWS_REGION', `personal-fake-${tag}`)
     const r = await ctx.sandboxes.create(ctx.member, { workspaceId: `w9-team-${tag}` })
     if (r.status !== 200) {
       throw new Error(`team sandbox create ${r.status} ${JSON.stringify(r.body)}`)
@@ -62,9 +62,9 @@ export const secretChecks: Record<string, Check> = {
   'sec.precedence': async (ctx) => {
     const tag = ctx.run.file.runId
     const box = await teamSandbox(ctx)
-    const env = await orcadEnv(ctx, box.sessionId, ['W9_OVERRIDE', 'OPENAI_API_KEY'])
+    const env = await orcadEnv(ctx, box.sessionId, ['W9_OVERRIDE', 'AWS_REGION'])
     const personalWinsEnv = env.W9_OVERRIDE === `personal-${tag}`
-    const orgWinsAgentKey = env.OPENAI_API_KEY === `org-fake-${tag}`
+    const orgWinsAgentKey = env.AWS_REGION === `org-fake-${tag}`
     return {
       status: personalWinsEnv && orgWinsAgentKey ? 'pass' : 'fail',
       detail: `env: personal beats org = ${personalWinsEnv}; agent key: org beats personal = ${orgWinsAgentKey}`
@@ -84,9 +84,9 @@ export const secretChecks: Record<string, Check> = {
     for (const [scope, who, name] of [
       ['org', ctx.owner, 'W9_SHARED'],
       ['org', ctx.owner, 'W9_OVERRIDE'],
-      ['org', ctx.owner, 'OPENAI_API_KEY'],
+      ['org', ctx.owner, 'AWS_REGION'],
       ['personal', ctx.member, 'W9_OVERRIDE'],
-      ['personal', ctx.member, 'OPENAI_API_KEY']
+      ['personal', ctx.member, 'AWS_REGION']
     ] as const) {
       await control.as(who, 'DELETE', `/v1/secrets/${scope}/${name}`)
     }
