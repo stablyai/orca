@@ -7,7 +7,7 @@ import type { SandboxRow } from './store'
 
 const VERCEL_OIDC_HOSTNAME = 'oidc.vercel.com'
 /** Hosts whose clients are Node (undici); git/curl hosts use transform rules instead. */
-export const PROXIED_HOSTS: ReadonlySet<string> = new Set(['api.github.com'])
+export const PROXIED_HOSTS: ReadonlySet<string> = new Set(['api.github.com', 'api.anthropic.com', 'api.openai.com'])
 const DROP_HEADERS = [
   'vercel-forwarded-host',
   'vercel-forwarded-scheme',
@@ -30,12 +30,19 @@ export type CredentialBroker = {
 /** Until the GitHub App installation-token minter exists, proxied hosts are refused. */
 export const NO_CREDENTIALS: CredentialBroker = { authorizationFor: async () => null }
 
+/** One header the VM may send a placeholder in, and how to get the real value for it. */
+export type ProxiedRoute = {
+  header: string
+  placeholders: readonly string[]
+  credential: () => Promise<string | null>
+}
+
 export type EgressProxyDeps = {
   teamId: string
   projectId: string
   findSandbox: (providerName: string) => Promise<SandboxRow | null>
-  placeholdersFor: (row: SandboxRow) => readonly string[]
-  credentials: CredentialBroker
+  /** Placeholder routes for `host` on this sandbox; empty means every request to it is refused. */
+  routesFor: (row: SandboxRow, host: string) => readonly ProxiedRoute[]
   fetch?: typeof fetch
   /** Tests inject a local key set; production fetches `<issuer>/.well-known/jwks`. */
   keysForIssuer?: (issuer: string) => JWTVerifyGetKey
@@ -103,18 +110,27 @@ export async function handleEgressProxy(request: Request, deps: EgressProxyDeps)
   if (!row || row.status !== 'running') {
     return deny('sandbox_not_running')
   }
-  if (!deps.placeholdersFor(row).includes(request.headers.get('authorization') ?? '')) {
+  const routes = deps.routesFor(row, host)
+  const route = routes
+    .find((candidate) => candidate.placeholders.includes(request.headers.get(candidate.header) ?? ''))
+  if (!route) {
     return deny('placeholder_missing')
   }
-  const authorization = await deps.credentials.authorizationFor(row, host)
-  if (!authorization) {
+  const credential = await route.credential()
+  if (!credential) {
     return deny('credential_unavailable')
   }
   const headers = new Headers(request.headers)
   for (const name of DROP_HEADERS) {
     headers.delete(name)
   }
-  headers.set('authorization', authorization)
+  for (const other of routes) {
+    // A second placeholder header would reach the provider as a bogus credential; drop it.
+    if (other !== route && other.header !== route.header && other.placeholders.includes(headers.get(other.header) ?? '')) {
+      headers.delete(other.header)
+    }
+  }
+  headers.set(route.header, credential)
   const hasBody = request.method !== 'GET' && request.method !== 'HEAD'
   const upstream = await (deps.fetch ?? fetch)(`https://${host}${path}`, {
     method: request.method,

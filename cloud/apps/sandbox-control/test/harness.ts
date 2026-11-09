@@ -52,9 +52,9 @@ export async function createHarness(overrides: Partial<Env> = {}, extraDeps: Par
   }
   const deps: Deps = { provider: vercel, entitlements, now: clock, ...extraDeps }
 
-  async function token(sub: string, org?: string, purpose = 'sandbox') {
+  async function token(sub: string, org?: string, purpose = 'sandbox', extra: Record<string, string> = {}) {
     const iat = Math.floor(now / 1000)
-    return new SignJWT({ sub, ...(org ? { org } : {}), purpose })
+    return new SignJWT({ sub, ...(org ? { org } : {}), purpose, ...extra })
       .setProtectedHeader({ alg: 'ES256', kid: 'k1' })
       .setIssuer('https://login.onorca.dev')
       .setAudience('orca-sandbox')

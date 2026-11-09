@@ -6,9 +6,10 @@
 //   POST   /v1/sandboxes/:id/suspend | /resume | /rollover        -> {sandbox[, connection]}
 //   POST   /v1/sandboxes/:id/lease {extendMs}                     -> {sandbox}
 //   DELETE /v1/sandboxes/:id                                      -> {sandbox}
+//   GET /v1/secrets?scope= | PUT, DELETE /v1/secrets/:scope/:NAME     (see src/secrets.ts)
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
 import { authenticateDesktop } from './auth'
-import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker } from './egress-proxy'
+import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker, type ProxiedRoute } from './egress-proxy'
 import {
   BillingUnavailableError,
   createEntitlementClient,
@@ -29,9 +30,12 @@ import {
 } from './lifecycle'
 import { createGitHubAppMinter, type GitHubAppMinter } from './github-app'
 import { reconcile } from './reconcile'
+import { egressSecretHosts, secretPlaceholder } from './secret-egress'
+import { SecretError, handleSecretsRoute, keyringFor, resolveSandboxSecrets } from './secrets'
+import type { Keyring } from './secrets-crypto'
 import { ProviderError, type SandboxProviderApi } from './sandbox-provider'
 import { VmCommandError } from './sandbox-vm-commands'
-import { getSandbox, getSandboxByProviderName, listAccountSandboxes } from './store'
+import { getSandbox, getSandboxByProviderName, listAccountSandboxes, type SandboxRow } from './store'
 import { createVercelSandboxApi } from './vercel-sandbox-api'
 import { CreateRequestSchema, LeaseRequestSchema, readyView, sandboxView } from './wire'
 
@@ -45,6 +49,50 @@ export type Deps = {
   now?: () => number
   egressFetch?: typeof fetch
   egressKeysForIssuer?: Parameters<typeof handleEgressProxy>[1]['keysForIssuer']
+}
+
+// Decrypted model keys for the egress proxy, per sandbox session, for a minute: one D1 read and
+// a decrypt per session-minute instead of per model request. Isolate memory only.
+const SECRET_CACHE_MS = 60_000
+const secretCache = new Map<string, { at: number; env: Promise<Record<string, string>> }>()
+
+function sessionSecretEnv(db: D1Database, keyring: Keyring, row: SandboxRow, now: number): Promise<Record<string, string>> {
+  const key = `${row.id}:${row.session_id ?? ''}`
+  const hit = secretCache.get(key)
+  if (hit && now - hit.at < SECRET_CACHE_MS) {
+    return hit.env
+  }
+  for (const [cached, entry] of secretCache) {
+    if (now - entry.at >= SECRET_CACHE_MS) {
+      secretCache.delete(cached)
+    }
+  }
+  const env = resolveSandboxSecrets(db, keyring, row).then((resolved) => resolved.env)
+  secretCache.set(key, { at: now, env })
+  env.catch(() => secretCache.delete(key))
+  return env
+}
+
+function egressRoutes(env: Env, deps: Deps): (row: SandboxRow, host: string) => ProxiedRoute[] {
+  const broker = deps.credentials ?? egressCredentials(env)
+  return (row, host) => {
+    if (host === 'api.github.com') {
+      return [{ header: 'authorization', placeholders: githubPlaceholderHeaders(row), credential: () => broker.authorizationFor(row, host) }]
+    }
+    const entry = egressSecretHosts(row).find((candidate) => candidate.host === host)
+    const keyring = keyringFor(env)
+    if (!entry || !keyring) {
+      return []
+    }
+    return Object.entries(entry.headers).map(([header, format]) => ({
+      header,
+      placeholders: [format(secretPlaceholder(row, entry.slug))],
+      credential: async () => {
+        const value = (await sessionSecretEnv(env.SANDBOX_DB, await keyring, row, (deps.now ?? Date.now)()))[entry.secret]
+        return value ? format(value) : null
+      }
+    }))
+  }
 }
 
 const minters = new Map<string, GitHubAppMinter>()
@@ -155,7 +203,7 @@ async function readJson(request: Request): Promise<unknown> {
 }
 
 /** Lifecycle routes refuse to run half-configured rather than guess at Orca's provider account. */
-function lifecycleDeps(env: Env, deps: Deps): LifecycleDeps | null {
+async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null> {
   if (!env.GOLDEN_SNAPSHOT_ID || (!deps.provider && (!env.VERCEL_TOKEN || !env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID))) {
     return null
   }
@@ -171,6 +219,7 @@ function lifecycleDeps(env: Env, deps: Deps): LifecycleDeps | null {
       }),
     entitlements: deps.entitlements ?? withDevAccountBypass(env, createEntitlementClient(env)),
     github: deps.github ?? githubMinter(env),
+    secrets: await secretsDeps(env),
     now: deps.now ?? Date.now,
     config: {
       environment: env.SANDBOX_ENV,
@@ -180,6 +229,20 @@ function lifecycleDeps(env: Env, deps: Deps): LifecycleDeps | null {
       sessionDeadlineMs:
         env.SESSION_DEADLINE_MS && env.SANDBOX_ENV !== 'prod' ? Number(env.SESSION_DEADLINE_MS) : undefined
     }
+  }
+}
+
+async function secretsDeps(env: Env): Promise<LifecycleDeps['secrets']> {
+  const keyring = keyringFor(env)
+  if (!keyring) {
+    return undefined
+  }
+  try {
+    return { keyring: await keyring, egressPlaceholders: env.SECRETS_EGRESS_PLACEHOLDERS === 'on' }
+  } catch {
+    // A malformed KEK must not block sandbox starts; the secrets routes surface it as 503.
+    console.log(JSON.stringify({ event: 'secrets_kek_invalid' }))
+    return undefined
   }
 }
 
@@ -194,8 +257,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
         teamId: env.VERCEL_TEAM_ID,
         projectId: env.VERCEL_PROJECT_ID,
         findSandbox: (name) => getSandboxByProviderName(env.SANDBOX_DB, name),
-        placeholdersFor: githubPlaceholderHeaders,
-        credentials: deps.credentials ?? egressCredentials(env),
+        routesFor: egressRoutes(env, deps),
         fetch: deps.egressFetch,
         keysForIssuer: deps.egressKeysForIssuer
       })
@@ -209,6 +271,17 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     if (url.pathname === '/v1/github/setup') {
       return html('Orca Cloud (dev) is installed. You can close this tab.')
     }
+    if (url.pathname === '/v1/secrets' || url.pathname.startsWith('/v1/secrets/')) {
+      const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      const secrets = await secretsDeps(env)
+      if (!secrets) {
+        return fail('not_configured', 503)
+      }
+      return await handleSecretsRoute(request, url, env.SANDBOX_DB, secrets.keyring, caller, (deps.now ?? Date.now)(), readJson)
+    }
     const match = /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover))?)?$/.exec(url.pathname)
     if (!match) {
       return fail('not_found', 404)
@@ -217,7 +290,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
     if (!caller) {
       return fail('unauthorized', 401)
     }
-    const life = lifecycleDeps(env, deps)
+    const life = await lifecycleDeps(env, deps)
     if (!life) {
       return fail('not_configured', 503)
     }
@@ -277,6 +350,9 @@ function errorResponse(error: unknown): Response {
   if (error instanceof SyntaxError) {
     return fail('invalid_json', 400)
   }
+  if (error instanceof SecretError) {
+    return fail(error.code, error.status, error.reason)
+  }
   if (error instanceof LifecycleError) {
     const status = { not_found: 404, conflict: 409, entitlement_denied: 403, provider_unavailable: 502 }[error.code]
     return fail(error.code, status, error.reason)
@@ -296,10 +372,14 @@ export default {
     return handleRequest(request, env)
   },
   async scheduled(_controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    const life = lifecycleDeps(env, {})
-    if (life) {
-      // Counts only; no ids, tokens or pairing material.
-      ctx.waitUntil(reconcile(life).then((summary) => console.log(JSON.stringify({ event: 'reconcile', ...summary }))))
-    }
+    ctx.waitUntil(
+      lifecycleDeps(env, {}).then(async (life) => {
+        if (life) {
+          // Counts only; no ids, tokens or pairing material.
+          const summary = await reconcile(life)
+          console.log(JSON.stringify({ event: 'reconcile', ...summary }))
+        }
+      })
+    )
   }
 } satisfies ExportedHandler<Env>

@@ -4,7 +4,7 @@
   //   wrangler deploy -c wrangler.dev.jsonc
   // Secrets (wrangler secret put -c wrangler.dev.jsonc, never here): VERCEL_TOKEN, SANDBOX_DEV_JWKS,
   // EGRESS_DEV_STATIC_AUTHORIZATION, CONTROL_PLANE_TOKEN (same value as on
-  // orca-billing-dev), GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY (PKCS#8).
+  // orca-billing-dev), GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY (PKCS#8), SECRETS_KEK (base64 32 bytes).
   "name": "orca-sandbox-control-dev",
   "main": "src/index.ts",
   "compatibility_date": "2026-11-01",

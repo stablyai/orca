@@ -34,6 +34,8 @@ export type SandboxRow = {
   destroyed_at: number | null
   repo_url: string | null
   github_token_expires_at: number | null
+  /** Comma list of model API hosts whose key the egress proxy swaps in this session. */
+  egress_secret_hosts: string | null
 }
 
 export type SessionFields = Pick<
@@ -124,7 +126,8 @@ export async function listByStatus(db: D1Database, statuses: readonly SandboxSta
 type Patch = Partial<Omit<SandboxRow, 'id' | 'account_id' | 'generation' | 'created_at'>>
 const PATCHABLE = new Set<string>([
   'status', 'session_id', 'session_started_at', 'session_deadline_at', 'lease_expires_at',
-  'usage_settled_at', 'last_error', 'destroyed_at', 'github_token_expires_at'
+  'usage_settled_at', 'last_error', 'destroyed_at', 'github_token_expires_at',
+  'egress_secret_hosts'
 ])
 
 /** Applies `patch` only if nobody moved the row since `expected` was read; null on a lost race. */
