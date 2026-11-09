@@ -19804,7 +19804,8 @@
       "install": {
         "checking": "Checking whether {{agent}} is ready on this host…",
         "cliInstall": "Install",
-        "cliRecheck": "Check again"
+        "cliRecheck": "Check again",
+        "cliRecheckFailed": "Could not check installed agents on this host. Try again."
       },
       "reasoning": "Reasoning",
       "failureWords": {
