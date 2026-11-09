@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { LogOut } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -6,6 +6,16 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { useTranslate } from '@/i18n/use-translate'
 import { translate } from '@/i18n/i18n'
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -26,7 +36,7 @@ async function signOut(
   environmentId: string,
   hostLabel: string,
   agent: HostAgentSignInAgent
-): Promise<void> {
+): Promise<boolean> {
   const name = AGENT_NAME[agent]
   try {
     const report = await callRuntimeRpc<HostAgentSignInReport>(
@@ -40,15 +50,9 @@ async function signOut(
       translate('agentSignIn.signedOutToast', 'Signed out of {{agent}} on {{host}}', {
         agent: name,
         host: hostLabel
-      }),
-      {
-        description: translate(
-          'agentSignIn.signedOutDetail',
-          'The next {{agent}} you start there asks to sign in.',
-          { agent: name }
-        )
-      }
+      })
     )
+    return true
   } catch (error) {
     toast.error(
       error instanceof Error
@@ -57,6 +61,7 @@ async function signOut(
             host: hostLabel
           })
     )
+    return false
   }
 }
 
@@ -64,11 +69,13 @@ async function signOut(
 export function HostAgentSignOutMenuItems({
   environmentId,
   hostLabel,
-  open
+  open,
+  onSignOut
 }: {
   environmentId: string
   hostLabel: string
   open: boolean
+  onSignOut: (agent: HostAgentSignInAgent) => void
 }): React.JSX.Element | null {
   const t = useTranslate()
   const report = useSyncExternalStore(subscribeHostAgentSignInReports, () =>
@@ -80,7 +87,7 @@ export function HostAgentSignOutMenuItems({
       void refreshHostAgentSignInReport(environmentId)
     }
   }, [environmentId, open])
-  // API-key logins live in the host's own environment, which Orca does not manage.
+  // API-key logins live in the host's own environment, which a sign-out doesn't touch.
   const signedIn = (report?.agents ?? []).filter(
     (entry) => entry.state === 'signedIn' && entry.method !== 'apiKey'
   )
@@ -94,14 +101,71 @@ export function HostAgentSignOutMenuItems({
         {t('agentSignIn.menuLabel', 'Agents on {{host}}', { host: hostLabel })}
       </DropdownMenuLabel>
       {signedIn.map((entry) => (
-        <DropdownMenuItem
-          key={entry.agent}
-          onSelect={() => void signOut(environmentId, hostLabel, entry.agent)}
-        >
+        <DropdownMenuItem key={entry.agent} onSelect={() => onSignOut(entry.agent)}>
           <LogOut className="size-3.5" />
-          {t('agentSignIn.signOutOf', 'Sign out of {{agent}}', { agent: AGENT_NAME[entry.agent] })}
+          {t('agentSignIn.signOutOf', 'Sign out of {{agent}}…', { agent: AGENT_NAME[entry.agent] })}
         </DropdownMenuItem>
       ))}
     </>
+  )
+}
+
+/** Confirms a plain logout of one agent on one host before running it there. */
+export function HostAgentSignOutDialog({
+  environmentId,
+  hostLabel,
+  agent,
+  onClose
+}: {
+  environmentId: string
+  hostLabel: string
+  agent: HostAgentSignInAgent | null
+  onClose: () => void
+}): React.JSX.Element {
+  const t = useTranslate()
+  const [busy, setBusy] = useState(false)
+  const name = agent ? AGENT_NAME[agent] : ''
+  return (
+    <Dialog open={agent !== null} onOpenChange={(next) => !next && !busy && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>
+            {t('agentSignIn.signOutTitle', 'Sign out of {{agent}} on {{host}}?', {
+              agent: name,
+              host: hostLabel
+            })}
+          </DialogTitle>
+          <DialogDescription>
+            {t(
+              'agentSignIn.signOutBody',
+              'Runs {{agent}}’s own sign-out on {{host}}. The next {{agent}} you start there asks you to sign in. Agents already running there aren’t stopped, and saved accounts stay listed.',
+              { agent: name, host: hostLabel }
+            )}
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="ghost" disabled={busy} onClick={onClose}>
+            {t('agentSignIn.cancel', 'Cancel')}
+          </Button>
+          <Button
+            autoFocus
+            disabled={busy}
+            onClick={() => {
+              if (!agent) {
+                return
+              }
+              setBusy(true)
+              void signOut(environmentId, hostLabel, agent).finally(() => {
+                setBusy(false)
+                onClose()
+              })
+            }}
+          >
+            {busy ? <LoadingSpinner className="size-4" /> : null}
+            {t('agentSignIn.signOut', 'Sign out')}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

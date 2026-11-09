@@ -73,36 +73,30 @@ describe('classifyAgentStatusOutput', () => {
 })
 
 describe('HostAgentSignInStatusChecker', () => {
-  it('reports a selected Orca account as signed in and a missing CLI as not installed', async () => {
-    const accounts = emptyAccounts()
-    accounts.codex = {
-      accounts: [
-        {
-          id: 'codex-1',
-          email: 'a@example.com',
-          createdAt: 1,
-          updatedAt: 1,
-          lastAuthenticatedAt: 1
-        }
-      ],
-      activeAccountId: 'codex-1'
-    }
-    const runStatus = vi.fn<HostAgentSignInStatusDeps['runStatus']>()
+  it('asks the CLI in the selected account home, so a logout there reads as signed out', async () => {
+    const runStatus = vi.fn<HostAgentSignInStatusDeps['runStatus']>(async () => ({
+      exitCode: 1,
+      output: 'Not logged in',
+      timedOut: false
+    }))
     const checker = new HostAgentSignInStatusChecker({
       findCommand: async (command) =>
         command === 'codex' ? { status: 'available', binary: '/bin/codex' } : { status: 'absent' },
       runStatus,
-      readAccounts: () => accounts,
+      readAccounts: () => emptyAccounts(),
+      codexLaunchHome: () => '/orca/codex-accounts/codex-1/home',
       now: () => 1_000
     })
     await expect(checker.read()).resolves.toEqual({
       checkedAt: 1_000,
       agents: [
         { agent: 'claude', state: 'notInstalled' },
-        { agent: 'codex', state: 'signedIn', method: 'orcaAccount' }
+        { agent: 'codex', state: 'signedOut' }
       ]
     })
-    expect(runStatus).not.toHaveBeenCalled()
+    expect(runStatus).toHaveBeenCalledWith('/bin/codex', ['login', 'status'], {
+      CODEX_HOME: '/orca/codex-accounts/codex-1/home'
+    })
   })
 
   it('reports a selected Claude account without a login as signed out, even when the CLI is signed in', async () => {

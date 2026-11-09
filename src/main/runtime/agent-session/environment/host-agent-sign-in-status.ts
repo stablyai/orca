@@ -8,6 +8,7 @@ import type {
   HostAgentSignInReport
 } from '../../../../shared/host-agent-sign-in-status'
 import { parseClaudeAuthStatusReport } from '../../../claude/claude-auth-status-report'
+import { buildLocalPreflightEnv } from '../../../ipc/preflight-local-env'
 import {
   execLocalPreflightCommandOrThrow,
   findRunnableLocalCommand,
@@ -26,7 +27,13 @@ export type AgentStatusCommandResult = {
 
 export type HostAgentSignInStatusDeps = {
   findCommand: (command: string) => Promise<LocalCommandProbe>
-  runStatus: (binary: string, args: string[]) => Promise<AgentStatusCommandResult>
+  runStatus: (
+    binary: string,
+    args: string[],
+    env?: NodeJS.ProcessEnv
+  ) => Promise<AgentStatusCommandResult>
+  /** The CODEX_HOME launches here use when a host Orca account is selected; null otherwise. */
+  codexLaunchHome?: () => string | null
   /** This host's Orca account roster; null where it has none. */
   readAccounts: () => {
     claude: ClaudeRateLimitAccountsState
@@ -49,25 +56,36 @@ export function hostSelection(state: {
   return state.activeAccountIdsByRuntime?.host ?? state.activeAccountId
 }
 
-/** The verdict a selected Orca account fixes for launches here; null leaves it to the CLI's own login. */
-function orcaAccountVerdict(
+/** Where launches here keep this agent's login: a selected Orca account's own folder, or null
+ *  for the CLI's default. `signedOut` when that folder is known to hold no login. */
+function launchLogin(
   agent: HostAgentSignInAgent,
-  accounts: Accounts | null
-): 'signedIn' | 'signedOut' | null {
-  if (!accounts) {
-    return null
-  }
+  accounts: Accounts | null,
+  codexLaunchHome: (() => string | null) | undefined
+): { env: NodeJS.ProcessEnv } | 'signedOut' | null {
   if (agent === 'claude') {
-    const id = hostSelection(accounts.claude)
-    const account = accounts.claude.accounts.find((entry) => entry.id === id)
+    const id = accounts ? hostSelection(accounts.claude) : null
+    const account = accounts?.claude.accounts.find((entry) => entry.id === id)
     if (!account || account.runsOnSystemDefault) {
       return null
     }
-    // Launches use the account's own folder, which holds no login yet.
-    return account.needsSignIn ? 'signedOut' : 'signedIn'
+    if (account.needsSignIn || !account.home) {
+      return 'signedOut'
+    }
+    return { env: { CLAUDE_CONFIG_DIR: account.home } }
   }
-  const id = hostSelection(accounts.codex)
-  return accounts.codex.accounts.some((entry) => entry.id === id) ? 'signedIn' : null
+  const home = codexLaunchHome?.() ?? null
+  return home ? { env: { CODEX_HOME: home } } : null
+}
+
+/** The env override that points the agent's CLI at the login launches here use. */
+export function agentLaunchLoginEnv(
+  agent: HostAgentSignInAgent,
+  accounts: Accounts | null,
+  codexLaunchHome: (() => string | null) | undefined
+): NodeJS.ProcessEnv | null {
+  const login = launchLogin(agent, accounts, codexLaunchHome)
+  return login && login !== 'signedOut' ? login.env : null
 }
 
 export function classifyAgentStatusOutput(
@@ -163,17 +181,18 @@ export class HostAgentSignInStatusChecker {
     if (probe.status !== 'available') {
       return { agent, state: 'unknown' }
     }
-    const verdict = orcaAccountVerdict(agent, accounts)
-    if (verdict) {
-      return verdict === 'signedIn'
-        ? { agent, state: 'signedIn', method: 'orcaAccount' }
-        : { agent, state: 'signedOut' }
+    const login = launchLogin(agent, accounts, this.deps.codexLaunchHome)
+    if (login === 'signedOut') {
+      return { agent, state: 'signedOut' }
     }
     try {
-      return classifyAgentStatusOutput(
+      const entry = classifyAgentStatusOutput(
         agent,
-        await this.deps.runStatus(probe.binary, STATUS_ARGS[agent])
+        await this.deps.runStatus(probe.binary, STATUS_ARGS[agent], login?.env)
       )
+      return login && entry.state === 'signedIn' && entry.method !== 'apiKey'
+        ? { ...entry, method: 'orcaAccount' }
+        : entry
     } catch {
       return { agent, state: 'unknown' }
     }
@@ -189,11 +208,13 @@ function errorField(error: unknown, field: string): unknown {
 /** Runs a status verb; its output is classified here and never leaves the host. */
 export async function runAgentStatusCommand(
   binary: string,
-  args: string[]
+  args: string[],
+  env?: NodeJS.ProcessEnv
 ): Promise<AgentStatusCommandResult> {
   try {
     const { stdout, stderr } = await execLocalPreflightCommandOrThrow(binary, args, {
-      timeoutMs: STATUS_TIMEOUT_MS
+      timeoutMs: STATUS_TIMEOUT_MS,
+      ...(env ? { env: { ...(buildLocalPreflightEnv() ?? process.env), ...env } } : {})
     })
     return { exitCode: 0, output: `${stdout}\n${stderr}`, timedOut: false }
   } catch (error) {
@@ -214,26 +235,31 @@ const LOGOUT_ARGS: Record<HostAgentSignInAgent, string[]> = {
   codex: ['logout']
 }
 
-/** Signs the CLI's own login on this host out; the CLI deletes its credentials itself. */
-export async function runAgentLogoutCommand(agent: HostAgentSignInAgent): Promise<void> {
+/** Runs the agent's own logout against the login launches here use; the CLI clears it itself. */
+export async function runAgentLogoutCommand(
+  agent: HostAgentSignInAgent,
+  env?: NodeJS.ProcessEnv | null
+): Promise<void> {
   const name = agent === 'claude' ? 'Claude' : 'Codex'
   const probe = await findRunnableLocalCommand(agent)
   if (probe.status !== 'available') {
     throw new Error(`${name} is not installed on this host.`)
   }
-  const result = await runAgentStatusCommand(probe.binary, LOGOUT_ARGS[agent])
+  const result = await runAgentStatusCommand(probe.binary, LOGOUT_ARGS[agent], env ?? undefined)
   if (result.exitCode !== 0) {
     throw new Error(`${name} could not sign out on this host.`)
   }
 }
 
 export function createHostAgentSignInStatusChecker(
-  readAccounts: HostAgentSignInStatusDeps['readAccounts']
+  readAccounts: HostAgentSignInStatusDeps['readAccounts'],
+  codexLaunchHome: () => string | null
 ): HostAgentSignInStatusChecker {
   return new HostAgentSignInStatusChecker({
     findCommand: findRunnableLocalCommand,
     runStatus: runAgentStatusCommand,
     readAccounts,
+    codexLaunchHome,
     now: Date.now
   })
 }

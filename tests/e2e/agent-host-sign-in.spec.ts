@@ -168,6 +168,15 @@ for (const { agent, site, callbackPath, proof } of AGENTS) {
           { force: true }
         )
         expect(report.agents.find((entry) => entry.agent === agent)?.state).toBe('signedIn')
+
+        // Sign-out is the agent's own logout of that login; the host then reports it signed out.
+        const afterSignOut = await callRuntime<{ agents: { agent: string; state: string }[] }>(
+          page,
+          environmentId,
+          'accounts.agentSignOut',
+          { agent }
+        )
+        expect(afterSignOut.agents.find((entry) => entry.agent === agent)?.state).toBe('signedOut')
       } finally {
         await client.dispose()
       }
