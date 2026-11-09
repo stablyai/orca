@@ -185,3 +185,25 @@ it('preserves a replacement even when its ownership text was copied', async () =
   expect(await readFile(join(prepared, 'user.txt'), 'utf8')).toBe('preserve replacement\n')
   expect(await readFile(lock, 'utf8')).toBe(`${reason}\n`)
 })
+
+it('preserves a different missing-checkout registration with copied ownership text', async () => {
+  const { repo, prepared, lock, reason } = await fixture()
+  const preserved = join(dirname(repo), 'preserved-original')
+  await runner.gitExecFileAsync(['worktree', 'move', '-f', '-f', prepared, preserved], {
+    cwd: repo
+  })
+  await runner.gitExecFileAsync(
+    ['worktree', 'add', '--detach', '--no-checkout', prepared, 'HEAD'],
+    { cwd: repo }
+  )
+  await runner.gitExecFileAsync(['worktree', 'lock', '--reason', reason, prepared], { cwd: repo })
+  const replacementLock = (
+    await runner.gitExecFileAsync(['rev-parse', '--git-path', 'locked'], { cwd: prepared })
+  ).stdout.trim()
+  await rm(prepared, { recursive: true })
+  await expect(performDiscardPreparedWorktree(repo, prepared, {}, reason, lock)).rejects.toThrow(
+    'lock owner changed'
+  )
+  expect(await readFile(replacementLock, 'utf8')).toBe(`${reason}\n`)
+  expect(await readFile(lock, 'utf8')).toBe(`${reason}\n`)
+})

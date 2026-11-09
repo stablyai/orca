@@ -1,3 +1,7 @@
+import * as fsPromises from 'node:fs/promises'
+import * as gitReadCache from '../../../git/source-control/git-read-cache-invalidation'
+import * as gitAdmin from '../../../../shared/git/metadata/git-common-directory'
+import { preparationPathKey } from './worktree-create-preparation-claim'
 import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
@@ -470,3 +474,328 @@ it('releases exhausted capacity when the final admitted removal completes late',
   proof.resolve()
   await vi.waitFor(() => expect(preparationCapacityUsed()).toBe(0))
 })
+
+it('coalesces healthy fourth-key admission until eviction is proven, then consumes its requested tip', async () => {
+  const owners = await Promise.all([fixture(), fixture(), fixture()])
+  for (const owner of owners) {
+    await owner.arm()
+  }
+  const entries = listPreparations()
+  const fourth = await fixture()
+  const removing = Promise.withResolvers<void>()
+  const proof = Promise.withResolvers<void>()
+  const obsoleteFetch = Promise.withResolvers<void>()
+  const run = gitRunner.gitExecFileAsync
+  vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation((args, options) => {
+    if (args.includes('remove') && options.cwd === owners[0].repoPath) {
+      removing.resolve()
+      return run(args, {
+        ...options,
+        observeChildTermination: (terminated, writes) =>
+          options.observeChildTermination?.(
+            writes ? Promise.all([terminated, proof.promise]).then(() => {}) : terminated,
+            writes
+          )
+      })
+    }
+    return run(args, options)
+  })
+  const first = startPreparation(
+    {
+      repoPath: fourth.repoPath,
+      workspaceRoot: fourth.root,
+      baseBranch: 'main',
+      canonicalBase: 'refs/heads/main',
+      options: {},
+      beforeMaterialization: obsoleteFetch.promise
+    },
+    'automatic'
+  )
+  try {
+    await removing.promise
+    const joined = fourth.arm(Promise.resolve())
+    expect(preparationCapacityUsed()).toBe(3)
+    expect(listPreparations().map((entry) => entry.preparedPath)).toEqual(
+      entries.slice(1).map((entry) => entry.preparedPath)
+    )
+    proof.resolve()
+    await Promise.all([first, joined])
+    expect(listPreparations()).toHaveLength(3)
+    const timing = createWorktreeCreateTimingRecorder()
+    await fourth.create('fourth-hit', 'main', {}, undefined, timing)
+    expect(timing.finish().preparedCheckout).toMatchObject({ status: 'hit', origin: 'prefetch' })
+    expect(git(join(fourth.root, 'fourth-hit'), 'branch', '--show-current')).toBe('fourth-hit')
+    expect(await readFile(join(fourth.root, 'fourth-hit', 'version.txt'), 'utf8')).toBe(
+      'original\n'
+    )
+  } finally {
+    proof.resolve()
+    obsoleteFetch.resolve()
+    await first.catch(() => {})
+  }
+})
+
+it('admits with free capacity and reuses an exact full-pool hit while matching cleanup is pending', async () => {
+  const owner = await fixture()
+  git(owner.repoPath, 'update-ref', 'refs/remotes/origin/main', 'HEAD')
+  await owner.arm()
+  const [retired] = listPreparations()
+  const failed = Promise.withResolvers<void>()
+  const second = Promise.withResolvers<void>()
+  const releaseSecond = Promise.withResolvers<void>()
+  const third = Promise.withResolvers<void>()
+  const releaseThird = Promise.withResolvers<void>()
+  const run = gitRunner.gitExecFileAsync
+  let attempt = 0
+  vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+    if (args.includes('remove') && options.cwd === owner.repoPath) {
+      attempt += 1
+      if (attempt === 1) {
+        failed.resolve()
+        throw new Error('transient checkout lock')
+      }
+      if (attempt === 2) {
+        second.resolve()
+        await releaseSecond.promise
+        throw new Error('still locked')
+      }
+      third.resolve()
+      await releaseThird.promise
+    }
+    return run(args, options)
+  })
+  try {
+    discardRepoPreparations(retired.repoPathKey)
+    await failed.promise
+    await retired.operation.discard()
+    const free = owner.arm(undefined, {}, 'origin/main')
+    await second.promise
+    await free
+    const other = await fixture()
+    await other.arm()
+    expect(preparationCapacityUsed()).toBe(3)
+    releaseSecond.resolve()
+    await retired.operation.discard()
+    const exact = owner.arm(undefined, {}, 'origin/main')
+    await third.promise
+    await exact
+    const timing = createWorktreeCreateTimingRecorder()
+    await owner.create('retry-isolated', 'origin/main', {}, undefined, timing)
+    expect(timing.finish().preparedCheckout?.status).toBe('hit')
+    expect(await readFile(join(owner.root, 'retry-isolated', 'version.txt'), 'utf8')).toBe(
+      'original\n'
+    )
+  } finally {
+    releaseSecond.resolve()
+    releaseThird.resolve()
+  }
+})
+
+it.each(['removed', 'canceled'])(
+  'does not publish an admission invalidated while %s',
+  async (kind) => {
+    const owners = await Promise.all([fixture(), fixture(), fixture()])
+    for (const owner of owners) {
+      await owner.arm()
+    }
+    const fourth = await fixture()
+    const removing = Promise.withResolvers<void>()
+    const proof = Promise.withResolvers<void>()
+    const run = gitRunner.gitExecFileAsync
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation((args, options) => {
+      if (args.includes('remove') && options.cwd === owners[0].repoPath) {
+        removing.resolve()
+        return run(args, {
+          ...options,
+          observeChildTermination: (terminated, writes) =>
+            options.observeChildTermination?.(
+              writes ? Promise.all([terminated, proof.promise]).then(() => {}) : terminated,
+              writes
+            )
+        })
+      }
+      return run(args, options)
+    })
+    const controller = new AbortController()
+    const pending = fourth.arm(undefined, { signal: controller.signal })
+    try {
+      await removing.promise
+      if (kind === 'removed') {
+        discardRepoPreparations(preparationPathKey(fourth.repoPath))
+      } else {
+        controller.abort()
+      }
+      await pending
+      await fourth.create('foreground-during-cleanup')
+      expect(
+        await readFile(join(fourth.root, 'foreground-during-cleanup', 'version.txt'), 'utf8')
+      ).toBe('original\n')
+      proof.resolve()
+      await owners[0].arm()
+      expect(listPreparations().some((entry) => entry.repoPath === fourth.repoPath)).toBe(false)
+    } finally {
+      proof.resolve()
+      controller.abort()
+      await pending.catch(() => {})
+    }
+  }
+)
+
+it('bounds distinct capacity waiters while allowing three requests to recover', async () => {
+  const owners = await Promise.all([fixture(), fixture(), fixture()])
+  for (const owner of owners) {
+    await owner.arm()
+  }
+  const request = await fixture()
+  const proof = Promise.withResolvers<void>()
+  const removing = Promise.withResolvers<void>()
+  const run = gitRunner.gitExecFileAsync
+  vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation((args, options) => {
+    if (args.includes('remove')) {
+      removing.resolve()
+      return run(args, {
+        ...options,
+        observeChildTermination: (terminated, writes) =>
+          options.observeChildTermination?.(
+            writes ? Promise.all([terminated, proof.promise]).then(() => {}) : terminated,
+            writes
+          )
+      })
+    }
+    return run(args, options)
+  })
+  const roots = Array.from({ length: 30 }, (_, index) => join(request.root, `request-${index}`))
+  const pending = roots.map((workspaceRoot) =>
+    startPreparation({
+      repoPath: request.repoPath,
+      workspaceRoot,
+      baseBranch: 'main',
+      canonicalBase: 'refs/heads/main',
+      options: {}
+    })
+  )
+  try {
+    await removing.promise
+    await Promise.all(pending.slice(3))
+    expect(preparationCapacityUsed()).toBe(3)
+    expect(roots.slice(3).some((root) => existsSync(root))).toBe(false)
+    proof.resolve()
+    await Promise.all(pending)
+    expect(preparationCapacityUsed()).toBe(3)
+    expect(
+      listPreparations()
+        .map((entry) => entry.workspaceRoot)
+        .sort()
+    ).toEqual(roots.slice(0, 3).sort())
+    expect(roots.slice(3).some((root) => existsSync(root))).toBe(false)
+  } finally {
+    proof.resolve()
+    await Promise.allSettled(pending)
+  }
+})
+
+it('declines after a competing request takes the freed slot without evicting another victim', async () => {
+  const owners = await Promise.all([fixture(), fixture(), fixture()])
+  for (const owner of owners) {
+    await owner.arm()
+  }
+  const entries = listPreparations()
+  const fourth = await fixture()
+  const competitor = await fixture()
+  const validating = Promise.withResolvers<void>()
+  const release = Promise.withResolvers<void>()
+  let checks = 0
+  const gate = wslGate.blockedWslDistroForPath
+  vi.spyOn(wslGate, 'blockedWslDistroForPath').mockImplementation(async (path, distro, options) => {
+    if (path === fourth.repoPath && ++checks === 2) {
+      validating.resolve()
+      await release.promise
+    }
+    return gate(path, distro, options)
+  })
+  const pending = fourth.arm()
+  try {
+    await validating.promise
+    await competitor.arm()
+    release.resolve()
+    await pending
+    expect(preparationCapacityUsed()).toBe(3)
+    expect(entries.slice(1).every((entry) => existsSync(entry.preparedPath))).toBe(true)
+    expect(listPreparations().some((entry) => entry.repoPath === fourth.repoPath)).toBe(false)
+    await fourth.create('competing-fallback')
+    expect(await readFile(join(fourth.root, 'competing-fallback', 'version.txt'), 'utf8')).toBe(
+      'original\n'
+    )
+  } finally {
+    release.resolve()
+    await pending.catch(() => {})
+  }
+})
+
+it.each([750, 7500])(
+  'does not scan %i unrelated registrations when no add was issued',
+  async (width) => {
+    const owner = await fixture()
+    await owner.arm()
+    const [primer] = listPreparations()
+    discardRepoPreparations(primer.repoPathKey)
+    await primer.operation.discard()
+    const adminRoot = join(owner.repoPath, '.git', 'worktrees')
+    const head = git(owner.repoPath, 'rev-parse', 'HEAD')
+    for (let index = 0; index < width; index += 1) {
+      const admin = join(adminRoot, `unrelated-${index}`)
+      await fsPromises.mkdir(admin, { recursive: true })
+      await writeFile(join(admin, 'gitdir'), `${join(owner.root, `unrelated-${index}`, '.git')}\n`)
+      await writeFile(join(admin, 'commondir'), '../..\n')
+      await writeFile(join(admin, 'HEAD'), `${head}\n`)
+    }
+    const blockedRoot = join(owner.root, 'read-only-root')
+    const mkdir = fsPromises.mkdir
+    vi.spyOn(fsPromises, 'mkdir').mockImplementation((path, options) => {
+      if (path === join(blockedRoot, '.orca-preparing')) {
+        return Promise.reject(
+          Object.assign(new Error('read-only workspace root'), { code: 'EACCES' })
+        )
+      }
+      return mkdir(path, options)
+    })
+    const read = gitAdmin.readGitAdminFile
+    let unrelatedReads = 0
+    vi.spyOn(gitAdmin, 'readGitAdminFile').mockImplementation((path, signal) => {
+      if (path.startsWith(join(adminRoot, 'unrelated-')) && path.endsWith('gitdir')) {
+        unrelatedReads += 1
+      }
+      return read(path, signal)
+    })
+    const invalidations = vi.spyOn(gitReadCache, 'runWithGitReadCacheInvalidation')
+    const lookups = vi.spyOn(gitRunner, 'gitExecFileAsync')
+    for (let request = 0; request < 3; request += 1) {
+      await expect(
+        startPreparation({
+          repoPath: owner.repoPath,
+          workspaceRoot: blockedRoot,
+          baseBranch: 'main',
+          canonicalBase: 'refs/heads/main',
+          options: {}
+        })
+      ).rejects.toThrow('read-only workspace root')
+      await vi.waitFor(() => expect(preparationCapacityUsed()).toBe(0))
+    }
+    expect(unrelatedReads).toBe(0)
+    expect(invalidations).not.toHaveBeenCalled()
+    expect(lookups).not.toHaveBeenCalled()
+    lookups.mockRestore()
+    const run = gitRunner.gitExecFileAsync
+    vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args, options) => {
+      const result = await run(args, options)
+      if (args.includes('add') && args.includes('--no-checkout')) {
+        await rm(args.at(-2)!, { recursive: true, force: true })
+        throw new Error('issued add lost its public result')
+      }
+      return result
+    })
+    await expect(owner.arm()).rejects.toThrow('issued add lost its public result')
+    await vi.waitFor(() => expect(preparationCapacityUsed()).toBe(0))
+    expect(unrelatedReads).toBe(width)
+  }
+)

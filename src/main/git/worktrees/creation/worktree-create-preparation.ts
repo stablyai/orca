@@ -213,7 +213,11 @@ export async function finalizePreparedWorktree(
       if (location === 'target') {
         let eligible = true
         const rollback = owner.supervise(
-          { ...options, signal: undefined, canStart: () => eligible },
+          {
+            ...options,
+            signal: undefined,
+            canStart: () => eligible && options.canStart?.() !== false
+          },
           (rollbackOptions) =>
             removeFailedFinalization(
               repoPath,
@@ -221,7 +225,8 @@ export async function finalizePreparedWorktree(
               branch,
               true,
               rollbackOptions,
-              expectedLockReason
+              expectedLockReason,
+              captured.lockPath
             ),
           true
         )

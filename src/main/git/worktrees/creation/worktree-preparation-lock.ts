@@ -1,6 +1,7 @@
+import { canonicalWorktreePath } from '../catalog/worktree-path-comparison'
 import type { WorktreePreparationOperation } from './worktree-preparation-operation'
-import { readFile, unlink, writeFile } from 'node:fs/promises'
-import { posix, win32 } from 'node:path'
+import { readFile, realpath, unlink, writeFile } from 'node:fs/promises'
+import { dirname, posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../../../../shared/cross-platform-path'
 import {
   resolveGitMetadataPath,
@@ -141,4 +142,17 @@ export async function verifyWorktreePreparationLockAtPath(
     throw new WorktreePreparationLockOwnershipError(undefined, true)
   }
   signal?.throwIfAborted()
+}
+
+export async function verifyOriginalPreparationDirectory(
+  gitDir: string,
+  originalLockPath: string
+): Promise<void> {
+  const [actual, original] = await Promise.all([
+    realpath(gitDir),
+    realpath(dirname(originalLockPath))
+  ])
+  if (canonicalWorktreePath(actual) !== canonicalWorktreePath(original)) {
+    throw new WorktreePreparationLockOwnershipError(undefined, true)
+  }
 }

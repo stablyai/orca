@@ -21,6 +21,7 @@ import {
   type GitWorktreeExecOptions
 } from '../worktree-operation-options'
 import {
+  verifyOriginalPreparationDirectory,
   verifyWorktreePreparationLock,
   verifyWorktreePreparationLockAtPath,
   WorktreePreparationLockOwnershipError
@@ -47,14 +48,13 @@ async function verifyDiscardPreparationOwner(
       await verifyWorktreePreparationLock(worktreePath, expectedLockReason, options)
     )
     if (originalLockPath) {
-      const [actual, original] = await Promise.all([
-        realpath(gitDir),
-        realpath(dirname(originalLockPath))
-      ])
-      if (canonicalWorktreePath(actual) !== canonicalWorktreePath(original)) {
-        throw new WorktreePreparationLockOwnershipError(undefined, true)
-      }
+      await verifyOriginalPreparationDirectory(gitDir, originalLockPath)
     }
+    await verifyWorktreePreparationLockAtPath(
+      join(gitDir, 'locked'),
+      expectedLockReason,
+      options.signal
+    )
     return gitDir
   } catch (error) {
     const hostPath = resolveWorktreeHostPath(worktreePath, options)
@@ -86,7 +86,10 @@ async function verifyDiscardPreparationOwner(
       ) {
         return null
       }
-      throw error
+      throw new WorktreePreparationLockOwnershipError(error)
+    }
+    if (originalLockPath) {
+      await verifyOriginalPreparationDirectory(gitDir, originalLockPath)
     }
     const lockPath = toHostFilesystemPath(join(gitDir, 'locked'))
     const marker = await waitForPromiseWithSignal(lstat(lockPath), signal).catch(
@@ -248,7 +251,8 @@ export async function removeFailedFinalization(
   branch: string,
   moved: boolean,
   options: GitWorktreeExecOptions,
-  expectedLockReason?: string
+  expectedLockReason?: string,
+  originalLockPath?: string
 ): Promise<boolean> {
   let branchAttached = false
   if (moved) {
@@ -266,7 +270,8 @@ export async function removeFailedFinalization(
     repoPath,
     cleanupPath,
     options,
-    expectedLockReason
+    expectedLockReason,
+    originalLockPath
   ).then(
     (outcome) => outcome === 'removed',
     () => false

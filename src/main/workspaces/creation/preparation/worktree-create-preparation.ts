@@ -127,8 +127,7 @@ async function prepareWorktreeCreateInBackground(
     return
   }
   const options = getLocalProjectWorktreeGitOptions(store, repo)
-  // Resolve WSL homes asynchronously to avoid freezing the composer while wsl.exe runs.
-  // Match createLocalWorktree's mirror distro so preparation and consume use the same root key.
+  // Resolve WSL homes asynchronously with createLocalWorktree's mirror distro and root key.
   const workspaceRoot = await computeWorkspaceRootAsync(
     repo.path,
     getWorktreePathSettings(repo, store.getSettings(), getWorktreeMirrorDistro(store, repo))
@@ -144,7 +143,8 @@ async function prepareWorktreeCreateInBackground(
     baseBranch,
     canonicalBase,
     options,
-    beforeMaterialization
+    beforeMaterialization,
+    canPrepare: () => !store.getRepo || Boolean(store.getRepo(repo.id))
   })
 }
 
@@ -250,10 +250,7 @@ export async function consumePreparedWorktreeCreate(
 }
 
 function preparedCheckoutReset(retargeted: boolean, headReset: boolean): PreparedCheckoutReset {
-  if (!headReset) {
-    return 'none'
-  }
-  return retargeted ? 'retargeted' : 'base_moved'
+  return headReset ? (retargeted ? 'retargeted' : 'base_moved') : 'none'
 }
 
 async function attemptPreparedWorktreeCreate(
