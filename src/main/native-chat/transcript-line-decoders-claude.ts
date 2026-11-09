@@ -210,13 +210,18 @@ function parseTimestamp(value: unknown): number | null {
   return Number.isFinite(parsed) ? parsed : null
 }
 
-/** A user or assistant record, decodable or not, or a line too broken to say: what a transcript
- *  nothing was sent in lacks. */
+/** Anything but a typed record with no message may be a turn: what a transcript nothing was sent
+ *  in lacks. */
 export function mayBeClaudeConversationRecord(line: string): boolean {
+  let record: unknown
   try {
-    const type = (JSON.parse(line) as { type?: unknown } | null)?.type
-    return type === 'user' || type === 'assistant'
+    record = JSON.parse(line)
   } catch {
     return true
   }
+  if (!record || typeof record !== 'object' || Array.isArray(record) || 'message' in record) {
+    return true
+  }
+  const type = (record as { type?: unknown }).type
+  return typeof type !== 'string' || !type.trim() || type === 'user' || type === 'assistant'
 }

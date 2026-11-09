@@ -76,7 +76,19 @@ it.each([true, false])(
 
 it.each([
   { tail: '', sourceEmpty: true },
-  { tail: JSON.stringify({ type: 'user', uuid: 'u1' }), sourceEmpty: false },
+  { tail: '{"type":"future-metadata"}', sourceEmpty: true },
+  { tail: '{"message":{"role":"user","content":"existing prompt"}}', sourceEmpty: false },
+  {
+    tail: '{"type":"future-turn","message":{"role":"user","content":"existing prompt"}}',
+    sourceEmpty: false
+  },
+  { tail: '{"type":"summary","message":null}', sourceEmpty: false },
+  { tail: '{"type":"user","uuid":"u1"}', sourceEmpty: false },
+  { tail: '{"type":7}', sourceEmpty: false },
+  { tail: '{"type":""}', sourceEmpty: false },
+  { tail: '{}', sourceEmpty: false },
+  { tail: 'null', sourceEmpty: false },
+  { tail: '[]', sourceEmpty: false },
   { tail: '{"type":"user","message":{"role":"us', sourceEmpty: false }
 ])(
   'reads a Claude file nothing was sent in as empty, unlike one with a turn it cannot decode: %j',
@@ -84,7 +96,13 @@ it.each([
     const filePath = join(root, 'claude-unused.jsonl')
     const metadata = [
       { type: 'file-history-snapshot', messageId: 'm1', snapshot: { trackedFileBackups: {} } },
-      { type: 'summary', summary: 'New session', leafUuid: 'l1' }
+      {
+        type: 'summary',
+        summary: 'New session',
+        leafUuid: 'l1',
+        cwd: root,
+        sessionId: 'claude-unused'
+      }
     ]
     await writeFile(filePath, `${[...metadata.map((m) => JSON.stringify(m)), tail].join('\n')}\n`)
     // Adoption always names the conversation it expects, as Continue in Chat's create does.
@@ -94,7 +112,8 @@ it.each([
       sessionId: 'claude-unused',
       options: { filePath, source }
     })
-    // Only an empty file reads as nothing saved; any turn keeps the history's own answer.
-    expect(prepared.ok && prepared.items.length === 0 && prepared.sourceEmpty).toBe(sourceEmpty)
+    expect(prepared.ok).toBe(true)
+    expect(prepared.ok && prepared.items).toEqual([])
+    expect(prepared.ok && prepared.sourceEmpty).toBe(sourceEmpty)
   }
 )
