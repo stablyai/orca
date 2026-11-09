@@ -465,6 +465,14 @@ describe('routine triggers', () => {
     ).toBe(true)
   })
 
+  it('parses runner status even when a line precedes it or the result spans lines', async () => {
+    const { runnerStatus } = await import('../src/routines/vm-runner')
+    const result = { exitCode: 0, timedOut: false, summary: 's', prUrl: '', branch: '', base: 'main', pushed: false, changed: false, note: '' }
+    const provider = { runCommand: async () => ({ exitCode: 0, stdout: `warning: x\n{"state":"done","result":${JSON.stringify(result, null, 2)},"log":"ok"}\n`, stderr: '' }) }
+    const status = await runnerStatus(provider as never, 'sess', 'run_1')
+    expect(status).toMatchObject({ state: 'done', result: { base: 'main' } })
+  })
+
   it('redacts credential-shaped text from log tails', () => {
     const text = 'Authorization: Bearer abcdefghijklmnop\nGH_TOKEN=orca-ph-sbx_123 key sk-ant-0123456789abcdefghij \u001b[31mred\u001b[0m'
     const out = redactLog(text)

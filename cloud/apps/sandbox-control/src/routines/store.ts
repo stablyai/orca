@@ -99,8 +99,8 @@ function parseJson<T>(value: string | null): T | null {
 }
 
 export function triggerConfig(row: Pick<RoutineRow, 'trigger_kind' | 'trigger_config'>): TriggerConfig {
-  const config = parseJson<Record<string, unknown>>(row.trigger_config) ?? {}
-  return { ...config, kind: row.trigger_kind } as TriggerConfig
+  const { kind: _ignored, ...config } = parseJson<Record<string, unknown>>(row.trigger_config) ?? {}
+  return { kind: row.trigger_kind, ...config } as TriggerConfig
 }
 
 export function routineView(row: RoutineRecord) {

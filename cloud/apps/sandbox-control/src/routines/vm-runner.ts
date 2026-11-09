@@ -38,7 +38,7 @@ start)
   ;;
 status)
   if [ -s "$D/result.json" ]; then
-    printf '{"state":"done","result":%s,"log":%s}\n' "$(cat "$D/result.json")" "$(log_json)"
+    printf '{"state":"done","result":%s,"log":%s}\n' "$(jq -c . "$D/result.json")" "$(log_json)"
   elif [ -s "$D/pid" ] && kill -0 "$(cat "$D/pid")" 2>/dev/null; then
     printf '{"state":"running","log":%s}\n' "$(log_json)"
   elif [ -s "$D/pid" ]; then
@@ -65,7 +65,7 @@ export IS_SANDBOX=1 CI=1 NO_COLOR=1 GIT_TERMINAL_PROMPT=0
 { read -r agent; read -r post; read -r limit; read -r branch; } <"$D/args"
 code=0 summary="" pr="" pushed=false changed=false base="" note=""
 finish() {
-  jq -n --argjson code "$code" --arg summary "$summary" --arg pr "$pr" --arg branch "$branch" --arg base "$base" \
+  jq -cn --argjson code "$code" --arg summary "$summary" --arg pr "$pr" --arg branch "$branch" --arg base "$base" \
     --argjson pushed "$pushed" --argjson changed "$changed" --arg note "$note" \
     '{exitCode: $code, timedOut: ($code == 124 or $code == 137), summary: $summary, prUrl: $pr, branch: $branch,
       base: $base, pushed: $pushed, changed: $changed, note: $note}' >"$D/result.json.tmp" && mv "$D/result.json.tmp" "$D/result.json"
@@ -145,9 +145,11 @@ export class RunnerError extends Error {
 
 async function launcher(provider: SandboxProviderApi, sessionId: string, args: string[], timeoutMs = 30_000): Promise<RunnerStatus> {
   const result = await provider.runCommand(sessionId, { command: '/bin/bash', args: ['-c', LAUNCHER, 'routine', ...args], timeoutMs })
-  const line = result.stdout.trim().split('\n').at(-1) ?? ''
+  // One JSON document; take the outermost object so a stray line (or a pretty-printed file) cannot break parsing.
+  const start = result.stdout.indexOf('{')
+  const end = result.stdout.lastIndexOf('}')
   try {
-    return Status.parse(JSON.parse(line))
+    return Status.parse(JSON.parse(result.stdout.slice(start, end + 1)))
   } catch {
     throw new RunnerError(`runner_output_invalid:${result.exitCode}`)
   }
