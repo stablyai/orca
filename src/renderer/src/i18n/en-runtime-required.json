@@ -214,13 +214,6 @@
           "errorUnavailable": "Screenshot markup is not available on this page."
         }
       },
-      "contextual": {
-        "tours": {
-          "ContextualTourOverlaySurface": {
-            "d74ca948aa": "Next"
-          }
-        }
-      },
       "dashboard": {
         "DashboardAgentChildDisclosure": {
           "hideChildAgents_one": "Hide {{count}} child agent",
@@ -1393,17 +1386,6 @@
           "wslClaudeConfigUnavailable": "WSL Claude config unavailable for {{distro}}",
           "wslCodexHomeUnavailable": "WSL Codex home unavailable for {{distro}}",
           "wslKimiHomeUnavailable": "WSL Kimi home unavailable for {{distro}}"
-        }
-      }
-    },
-    "main": {
-      "window": {
-        "dashboard": {
-          "popout": {
-            "window": {
-              "title": "Orca Agent Dashboard"
-            }
-          }
         }
       }
     },

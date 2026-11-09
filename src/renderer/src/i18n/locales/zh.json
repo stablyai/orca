@@ -16743,8 +16743,7 @@
             "4a9568f773": "返回",
             "4f86e2a10b": "跳过导览",
             "d974f32a83": "关闭导览",
-            "complete": "完成",
-            "d74ca948aa": "下一步"
+            "complete": "完成"
           },
           "ContextualTourProgressDots": {
             "dcd6e6b03e": "第 {{value0}} 步，共 {{value1}} 步",

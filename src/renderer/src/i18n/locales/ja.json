@@ -16473,8 +16473,7 @@
             "4a9568f773": "戻る",
             "4f86e2a10b": "ツアーをスキップ",
             "d974f32a83": "ツアーを閉じる",
-            "complete": "完了",
-            "d74ca948aa": "次へ"
+            "complete": "完了"
           },
           "ContextualTourProgressDots": {
             "dcd6e6b03e": "ステップ {{value0}}/{{value1}}",

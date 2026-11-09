@@ -16473,8 +16473,7 @@
             "4a9568f773": "뒤로",
             "4f86e2a10b": "둘러보기 건너뛰기",
             "d974f32a83": "투어 닫기",
-            "complete": "완료",
-            "d74ca948aa": "다음"
+            "complete": "완료"
           },
           "ContextualTourProgressDots": {
             "dcd6e6b03e": "{{value1}}단계 중 {{value0}}단계",

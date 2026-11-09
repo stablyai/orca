@@ -17859,8 +17859,7 @@
             "4a9568f773": "Back",
             "4f86e2a10b": "Skip tour",
             "d974f32a83": "Dismiss tour",
-            "complete": "Done",
-            "d74ca948aa": "Next"
+            "complete": "Done"
           },
           "ContextualTourProgressDots": {
             "dcd6e6b03e": "Step {{value0}} of {{value1}}",

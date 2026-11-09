@@ -16881,8 +16881,7 @@
             "4a9568f773": "Atrás",
             "4f86e2a10b": "Saltar recorrido",
             "d974f32a83": "Descartar recorrido",
-            "complete": "Hecho",
-            "d74ca948aa": "Próximo"
+            "complete": "Hecho"
           },
           "ContextualTourProgressDots": {
             "dcd6e6b03e": "Paso {{value0}} de {{value1}}",
