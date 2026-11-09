@@ -16,7 +16,10 @@ export function VmBuildFailureCard({
   vmKept,
   firstErrorLine,
   canFixWithAgent,
+  canManageBilling,
   signingIn,
+  connectingGitHub,
+  repoName,
   actions
 }: {
   failure: VmBuildFailure | null
@@ -27,7 +30,11 @@ export function VmBuildFailureCard({
   /** First error in the build log, shown under a recipe's terse exit message. */
   firstErrorLine: string | null
   canFixWithAgent: boolean
+  canManageBilling: boolean
   signingIn: boolean
+  connectingGitHub: boolean
+  /** How the user knows the repository, for cards that name it. */
+  repoName: string
   actions: VmBuildFailureActions
 }): React.JSX.Element {
   const t = useTranslate()
@@ -46,18 +53,26 @@ export function VmBuildFailureCard({
     setShown(failure)
   }
   const visible = failure ?? shown
-  const copy = visible ? vmBuildFailureCopy(visible, cloud, t) : null
-  const headingRef = React.useRef<HTMLDivElement>(null)
+  const copy = visible
+    ? vmBuildFailureCopy(visible, { cloud, canManageBilling, repoName }, t)
+    : null
+  const headingRef = React.useRef<HTMLHeadingElement>(null)
+  const cardRef = React.useRef<HTMLDivElement>(null)
   // Move focus to the card when it opens, so keyboard and screen-reader users land on the way forward.
   React.useEffect(() => {
+    const card = cardRef.current
+    const sheet = card?.closest('[data-vm-build-sheet]')
+    const active = document.activeElement
     if (open) {
-      const heading = headingRef.current
-      const active = document.activeElement
       // Never pull focus out of something the user is typing in elsewhere.
-      const sheet = heading?.closest('[data-vm-build-sheet]')
-      if (heading && (!active || active === document.body || sheet?.contains(active))) {
-        heading.focus({ preventScroll: true })
+      if (!active || active === document.body || sheet?.contains(active)) {
+        headingRef.current?.focus({ preventScroll: true })
       }
+      return
+    }
+    // A Retry collapses (and inerts) the card under the focused button, so hand focus to the sheet.
+    if (active && card?.contains(active)) {
+      sheet?.querySelector<HTMLElement>('[data-vm-build-heading]')?.focus({ preventScroll: true })
     }
   }, [open, run])
   const detail =
@@ -70,11 +85,12 @@ export function VmBuildFailureCard({
       {visible && copy ? (
         <div
           key={run}
-          role={failure ? 'alert' : undefined}
+          ref={cardRef}
           className="flex flex-col gap-3 rounded-lg border border-border bg-card px-4 py-3"
         >
-          <div className="flex flex-col gap-1">
-            <div
+          {/* Only the cause is announced; the actions and check rows are read on demand. */}
+          <div role={failure ? 'alert' : undefined} className="flex flex-col gap-1">
+            <h3
               ref={headingRef}
               tabIndex={-1}
               className={cn(
@@ -83,7 +99,7 @@ export function VmBuildFailureCard({
               )}
             >
               {copy.title}
-            </div>
+            </h3>
             {copy.body ? (
               <p className="break-words text-xs text-muted-foreground">{copy.body}</p>
             ) : null}
@@ -103,7 +119,9 @@ export function VmBuildFailureCard({
             cloud={cloud}
             vmKept={vmKept}
             canFixWithAgent={canFixWithAgent}
+            canManageBilling={canManageBilling}
             signingIn={signingIn}
+            connectingGitHub={connectingGitHub}
             actions={actions}
             t={t}
           />

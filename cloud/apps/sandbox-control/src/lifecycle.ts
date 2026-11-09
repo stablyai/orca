@@ -59,8 +59,15 @@ export type LifecycleDeps = {
   /** GitHub App installation tokens for the workspace repo; absent until the app is configured. */
   github?: GitHubAppMinter
   /** Secret store; absent (no SECRETS_KEK) means sessions start without injected secrets. */
-  /** egressPlaceholders: every account (`true`) or only the listed account ids (staged rollout). */
-  secrets?: { keyring: Keyring; egressPlaceholders: boolean | ReadonlySet<string> }
+  /**
+   * egressPlaceholders: every account (`true`) or only the listed account ids (staged rollout);
+   * egressPlaceholdersOff: per-account kill switch that wins over both.
+   */
+  secrets?: {
+    keyring: Keyring
+    egressPlaceholders: boolean | ReadonlySet<string>
+    egressPlaceholdersOff?: ReadonlySet<string>
+  }
   now: () => number
   /** A member's GitHub identity (user token) for git-as-sender; absent = app identity only. */
   memberIdentity?: (row: SandboxRow, userId: string) => Promise<MemberGitIdentity | null>
@@ -325,11 +332,16 @@ async function boot(
       })
     )
   ])
+  const readyAt = deps.now()
   const running = await claim(deps, row, {
     status: 'running',
     last_error: null,
     orcad_endpoint: orcadEndpoint(state),
-    ready_at: deps.now(),
+    ready_at: readyAt,
+    // Start timings for GET /v1/config: a create is measured from the write-ahead row, a wake from
+    // its resume claim. ready_at alone can't tell them apart.
+    ...(row.status === 'creating' ? { create_ms: readyAt - row.created_at } : {}),
+    ...(row.status === 'resuming' ? { wake_ms: readyAt - row.updated_at } : {}),
     archived_at: null,
     archive_expires_at: null,
     retention_warned_at: null,

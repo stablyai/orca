@@ -38,6 +38,8 @@ function stubApi(overrides: Partial<OrcaCloudWorkspaceApi> = {}): OrcaCloudWorks
     unarchive: vi.fn(async () => ok(null)),
     getArchive: vi.fn(async () => ok(null)),
     listCloudWorkspaceIds: vi.fn(async () => ['a', 'b']),
+    getConfig: vi.fn(async () => null),
+    connectGitHub: vi.fn(async () => ok(null)),
     onWakeProgress: vi.fn(() => () => {}),
     onOom: vi.fn(() => () => {}),
     ...overrides

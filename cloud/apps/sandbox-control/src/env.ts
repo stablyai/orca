@@ -67,11 +67,13 @@ export type Env = {
   SECRETS_KEK_ID?: string
   SECRETS_KEK_RETIRED?: string
   /**
-   * `on`: model API keys (Anthropic, OpenAI, AI Gateway, custom provider) reach the VM as placeholders
-   * and the egress proxy swaps the real key in (forwardURL path). `accounts:<id>,<id>`: only those
-   * accounts (staged rollout). Anything else: plain env injection. Needs EGRESS_PROXY_URL.
+   * Model API keys (Anthropic, OpenAI, AI Gateway, custom provider) reach the VM as placeholders and
+   * the egress proxy swaps the real key in (forwardURL path). Unset or `on` (default): every account;
+   * `accounts:<id>,<id>`: only those; `off`: plain env injection. Needs EGRESS_PROXY_URL.
    */
   SECRETS_EGRESS_PLACEHOLDERS?: string
+  /** Per-team kill switch (comma account ids): those accounts get plain env injection. */
+  SECRETS_EGRESS_PLACEHOLDERS_OFF?: string
 
   /** App slug for the install URL (github.com/apps/<slug>). */
   GITHUB_APP_SLUG?: string

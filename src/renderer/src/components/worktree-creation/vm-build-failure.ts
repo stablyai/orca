@@ -5,8 +5,13 @@ import type { PendingWorktreeCreation } from '@/lib/workspace/creation/pending-w
 export type VmBuildAccountFailureKind =
   | 'plan'
   | 'hoursUsed'
+  | 'spendCap'
   | 'payment'
   | 'concurrency'
+  | 'memberConcurrency'
+  | 'githubNotConnected'
+  /** Refused before the control plane was asked: the sandbox could not clone this repository. */
+  | 'noGithubRemote'
   | 'signIn'
   | 'unavailable'
   | 'network'
@@ -24,16 +29,20 @@ const ERROR_CODE_KINDS: Partial<Record<string, VmBuildAccountFailureKind>> = {
   cloudPlanRequired: 'plan',
   cloudConcurrencyLimit: 'concurrency',
   cloudSignInRequired: 'signIn',
-  cloudUnavailable: 'unavailable'
+  cloudUnavailable: 'unavailable',
+  cloudGithubNotConnected: 'githubNotConnected',
+  cloudNoGithubRemote: 'noGithubRemote'
 }
 
 // The hosted provider logs the control plane's deny reason as `Orca Cloud: <reason>`.
 const DENY_REASON = /^Orca Cloud: ([a-z_]+)$/m
 const DENY_REASON_KINDS: Partial<Record<string, VmBuildAccountFailureKind>> = {
   included_hours_exhausted: 'hoursUsed',
-  overage_cap_reached: 'hoursUsed',
+  overage_cap_reached: 'spendCap',
   payment_past_due: 'payment',
-  payment_grace_expired: 'payment'
+  payment_grace_expired: 'payment',
+  concurrency_limit: 'concurrency',
+  member_concurrency_limit: 'memberConcurrency'
 }
 
 const SNAPSHOT_MISSING = /\bsnapshot\b[^\n]*\bnot found\b/i
@@ -58,9 +67,9 @@ export function classifyVmBuildFailure(args: {
     return null
   }
   const coded = entry.errorCode ? ERROR_CODE_KINDS[entry.errorCode] : undefined
-  if (coded === 'plan') {
+  if (coded === 'plan' || coded === 'concurrency') {
     const reason = DENY_REASON.exec(entry.provisioningLog ?? '')?.[1]
-    return { kind: (reason === undefined ? undefined : DENY_REASON_KINDS[reason]) ?? 'plan' }
+    return { kind: (reason === undefined ? undefined : DENY_REASON_KINDS[reason]) ?? coded }
   }
   if (coded) {
     return { kind: coded }
@@ -83,10 +92,38 @@ export function classifyVmBuildFailure(args: {
 const ACCOUNT_GATES: ReadonlySet<VmBuildFailure['kind']> = new Set([
   'plan',
   'hoursUsed',
+  'spendCap',
   'payment',
   'signIn',
-  'concurrency'
+  'concurrency',
+  'memberConcurrency',
+  'githubNotConnected',
+  'noGithubRemote'
 ])
+
+// Nothing started, so no step failed: steps stay pending instead of showing a red failure.
+const NOTHING_STARTED: ReadonlySet<VmBuildFailure['kind']> = new Set([
+  ...ACCOUNT_GATES,
+  'unavailable',
+  'network',
+  // Refused while picking the saved environment, before any sandbox existed.
+  'snapshotMissing'
+])
+
+export function nothingStarted(failure: VmBuildFailure | null): boolean {
+  return failure !== null && NOTHING_STARTED.has(failure.kind)
+}
+
+/** Billing refusals an owner or admin fixes in Plan & billing. */
+export function isBillingFailure(failure: VmBuildFailure | null): boolean {
+  return (
+    failure !== null &&
+    (failure.kind === 'plan' ||
+      failure.kind === 'hoursUsed' ||
+      failure.kind === 'spendCap' ||
+      failure.kind === 'payment')
+  )
+}
 
 /** Refused before anything started: an account limit, not a broken build. */
 export function isAccountGate(failure: VmBuildFailure | null): boolean {

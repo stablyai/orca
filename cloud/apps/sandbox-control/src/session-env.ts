@@ -76,7 +76,9 @@ export async function sessionSecretEnv(
   // Counts only.
   console.log(JSON.stringify({ event: 'session_secrets', sandboxId: row.id, injected: Object.keys(env).length, skipped }))
   const placeholders = deps.secrets.egressPlaceholders
-  const swap = placeholders === true || (placeholders instanceof Set && placeholders.has(row.account_id))
+  const swap =
+    !deps.secrets.egressPlaceholdersOff?.has(row.account_id) &&
+    (placeholders === true || (placeholders instanceof Set && placeholders.has(row.account_id)))
   if (!swap || !deps.config.egressProxyUrl) {
     return { env, egressSecretHosts: null, egressAllowHosts }
   }

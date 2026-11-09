@@ -21,6 +21,17 @@ flock -w 60 9
 # Background children close fd 9 (`9>&-`): an orcad that inherited it would hold the lock for its whole
 # life and every later start (resume of a running sandbox, a retried create) would wait out the 60 s.
 
+# orcad only lists a project once a client registers it (the desktop does on connect), so API, MCP,
+# routine and phone sessions saw no repo. Register the workspace project at every start, in the
+# background (ready is not delayed); `repo add` of an already-registered path is a no-op error.
+register_project() {
+  [ -x "$ORCA_HOME/bin/orca" ] && [ -d "$PROJECT" ] || return 0
+  local kind=()
+  [ -e "$PROJECT/.git" ] || kind=(--kind folder)
+  setsid "$ORCA_HOME/bin/orca" repo add --path "$PROJECT" "${kind[@]}" --json \
+    >"$STATE/register-project.log" 2>&1 </dev/null 9>&- &
+}
+
 print_ready() {
   if [ "${ORCA_READY_VIA:-}" = file ]; then
     printf '{"schemaVersion":1,"readyFile":"%s"}\n' "$STATE/ready.json"
@@ -158,6 +169,7 @@ for _ in $(seq 1 1200); do
       tail -n 5 "$STATE/clone.log" | redact_log >&2
       exit 1
     fi
+    register_project
     print_ready
     exit 0
   fi

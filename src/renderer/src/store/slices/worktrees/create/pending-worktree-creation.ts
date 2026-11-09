@@ -44,6 +44,18 @@ function nextPhaseLog(
   return entry.phaseLog
 }
 
+// When this attempt failed, so a failed step can show how long it ran.
+function nextErrorAt(
+  entry: PendingWorktreeCreation,
+  patch: Partial<PendingWorktreeCreation>
+): number | undefined {
+  const status = patch.status ?? entry.status
+  if (status !== 'error') {
+    return undefined
+  }
+  return entry.status === 'error' ? entry.errorAt : Date.now()
+}
+
 export function createUpdatePendingWorktreeCreation(
   set: WorktreeSliceSet,
   _get: WorktreeSliceGet
@@ -88,7 +100,12 @@ export function createUpdatePendingWorktreeCreation(
       return {
         pendingWorktreeCreations: {
           ...s.pendingWorktreeCreations,
-          [creationId]: { ...entry, ...changes, phaseLog: nextPhaseLog(entry, changes) }
+          [creationId]: {
+            ...entry,
+            ...changes,
+            phaseLog: nextPhaseLog(entry, changes),
+            errorAt: nextErrorAt(entry, changes)
+          }
         }
       }
     })

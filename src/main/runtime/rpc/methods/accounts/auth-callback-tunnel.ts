@@ -21,7 +21,8 @@ export function createAuthCallbackDialer(
   port: number,
   onExceeded: () => void,
   dial: (port: number) => Socket = (target) =>
-    netConnect({ host: 'localhost', port: target, autoSelectFamily: true, allowHalfOpen: true })
+    netConnect({ host: 'localhost', port: target, autoSelectFamily: true, allowHalfOpen: true }),
+  onStreamClosed?: () => void
 ): (target: { host: string; port: number }) => BrowserNetworkTunnelSocket {
   let streams = 0
   let bytes = 0
@@ -42,6 +43,9 @@ export function createAuthCallbackDialer(
     }
     streams += 1
     const socket = dial(port)
+    if (onStreamClosed) {
+      socket.once('close', onStreamClosed)
+    }
     const wrapper: BrowserNetworkTunnelSocket = {
       get destroyed() {
         return socket.destroyed
@@ -90,6 +94,83 @@ export function createAuthCallbackDialer(
   }
 }
 
+type CallbackGrant = { port: number; ended: AbortSignal }
+type TunnelEmit = (event: unknown) => void
+
+/** Serves one binary tunnel to `grant.port` on loopback until the grant ends, the caller leaves or the TTL. */
+export async function serveCallbackTunnel(
+  ctx: RpcContext,
+  emit: TunnelEmit,
+  grant: CallbackGrant,
+  subscriptionKey: string,
+  onStreamClosed?: () => void
+): Promise<void> {
+  const { runtime, connectionId, sendBinary, registerBinaryMessageHandler, signal } = ctx
+  if (!connectionId || !sendBinary || !registerBinaryMessageHandler || signal?.aborted) {
+    return
+  }
+  const closed = Promise.withResolvers<void>()
+  let session: BrowserNetworkTunnelSession | null = null
+  let unregisterBinary = (): void => {}
+  const close = (): void => session?.close()
+  const ttl = setTimeout(close, AUTH_CALLBACK_TUNNEL_TTL_MS)
+  const subscriptionId = JSON.stringify(['auth-callback-tunnel', connectionId, subscriptionKey])
+  let cleaned = false
+  const cleanup = (): void => {
+    if (cleaned) {
+      return
+    }
+    cleaned = true
+    clearTimeout(ttl)
+    grant.ended.removeEventListener('abort', close)
+    signal?.removeEventListener('abort', close)
+    unregisterBinary()
+    close()
+    closed.resolve()
+  }
+  session = new BrowserNetworkTunnelSession({
+    tunnelGeneration: TUNNEL_GENERATION,
+    connect: createAuthCallbackDialer(grant.port, close, undefined, onStreamClosed),
+    sendBinary: (bytes) => sendBinary(bytes) !== false,
+    flowControl: BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL,
+    onClose: () => {
+      try {
+        emit({ type: 'closed', tunnelGeneration: TUNNEL_GENERATION })
+      } finally {
+        cleanup()
+      }
+    }
+  })
+  console.info(`[auth-callback-tunnel] opened for port ${grant.port}`)
+  unregisterBinary = registerBinaryMessageHandler((bytes) => session?.handleBinary(bytes))
+  runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
+  grant.ended.addEventListener('abort', close, { once: true })
+  signal?.addEventListener('abort', close, { once: true })
+  if (grant.ended.aborted || signal?.aborted) {
+    close()
+  } else {
+    emit({ type: 'ready', tunnelGeneration: TUNNEL_GENERATION })
+  }
+  try {
+    await closed.promise
+  } finally {
+    cleanup()
+    console.info(`[auth-callback-tunnel] closed for port ${grant.port}`)
+  }
+}
+
+/** The tunnel needs a desktop runtime client that can carry binary frames. */
+export function requireCallbackTunnelClient(ctx: RpcContext): void {
+  const { connectionId, clientKind, clientCapabilities, sendBinary, registerBinaryMessageHandler } =
+    ctx
+  if (clientKind !== 'runtime' || !connectionId || !sendBinary || !registerBinaryMessageHandler) {
+    throw new Error('authenticated_binary_auth_callback_tunnel_required')
+  }
+  if (!clientCapabilities?.includes(HOST_ACCOUNT_SIGN_IN_CALLBACK_RUNTIME_CAPABILITY)) {
+    throw new Error('auth_callback_tunnel_capability_required')
+  }
+}
+
 /** Carries a desktop browser's redirect to the localhost callback of a sign-in this caller started here. */
 export function createAuthCallbackTunnelMethod(
   flowsFor: (runtime: OrcaRuntimeService) => HostAccountSignInFlows,
@@ -100,82 +181,13 @@ export function createAuthCallbackTunnelMethod(
     permission: 'accounts-admin',
     params: AuthCallbackTunnelParams,
     handler: async (params, ctx, emit) => {
-      const {
-        runtime,
-        connectionId,
-        clientKind,
-        clientCapabilities,
-        sendBinary,
-        registerBinaryMessageHandler,
-        signal
-      } = ctx
-      if (
-        clientKind !== 'runtime' ||
-        !connectionId ||
-        !sendBinary ||
-        !registerBinaryMessageHandler
-      ) {
-        throw new Error('authenticated_binary_auth_callback_tunnel_required')
-      }
-      if (!clientCapabilities?.includes(HOST_ACCOUNT_SIGN_IN_CALLBACK_RUNTIME_CAPABILITY)) {
-        throw new Error('auth_callback_tunnel_capability_required')
-      }
-      const grant = flowsFor(runtime).callbackTarget(ownerOf(ctx), params.flowId)
+      requireCallbackTunnelClient(ctx)
+      const grant = flowsFor(ctx.runtime).callbackTarget(ownerOf(ctx), params.flowId)
       if (!grant) {
         throw new Error('auth_callback_not_waiting')
       }
-      if (signal?.aborted) {
-        return
-      }
-      const closed = Promise.withResolvers<void>()
-      let session: BrowserNetworkTunnelSession | null = null
-      let unregisterBinary = (): void => {}
-      const close = (): void => session?.close()
-      const ttl = setTimeout(close, AUTH_CALLBACK_TUNNEL_TTL_MS)
-      const subscriptionId = JSON.stringify(['auth-callback-tunnel', connectionId, params.flowId])
-      let cleaned = false
-      const cleanup = (): void => {
-        if (cleaned) {
-          return
-        }
-        cleaned = true
-        clearTimeout(ttl)
-        grant.ended.removeEventListener('abort', close)
-        signal?.removeEventListener('abort', close)
-        unregisterBinary()
-        close()
-        closed.resolve()
-      }
-      session = new BrowserNetworkTunnelSession({
-        tunnelGeneration: TUNNEL_GENERATION,
-        connect: createAuthCallbackDialer(grant.port, close),
-        sendBinary: (bytes) => sendBinary(bytes) !== false,
-        flowControl: BROWSER_NETWORK_TUNNEL_WINDOW_V2_FLOW_CONTROL,
-        onClose: () => {
-          try {
-            emit({ type: 'closed', tunnelGeneration: TUNNEL_GENERATION })
-          } finally {
-            cleanup()
-          }
-        }
-      })
-      console.info(`[auth-callback-tunnel] opened for port ${grant.port}`)
-      unregisterBinary = registerBinaryMessageHandler((bytes) => session?.handleBinary(bytes))
-      runtime.registerSubscriptionCleanup(subscriptionId, cleanup, connectionId)
       // The grant ends with the login: success, failure, cancel or the owner going silent.
-      grant.ended.addEventListener('abort', close, { once: true })
-      signal?.addEventListener('abort', close, { once: true })
-      if (grant.ended.aborted || signal?.aborted) {
-        close()
-      } else {
-        emit({ type: 'ready', tunnelGeneration: TUNNEL_GENERATION })
-      }
-      try {
-        await closed.promise
-      } finally {
-        cleanup()
-        console.info(`[auth-callback-tunnel] closed for port ${grant.port}`)
-      }
+      await serveCallbackTunnel(ctx, emit, grant, params.flowId)
     }
   })
 }

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { cloudWorkspaceLink, parseCloudWorkspaceLink } from './cloud-workspaces-wire'
+import {
+  CloudWorkspaceSchema,
+  cloudWorkspaceLink,
+  parseCloudWorkspaceLink
+} from './cloud-workspaces-wire'
 import { base64ToBytes, bytesToBase64 } from './sealed-grant'
 import { parseSenderEnvelope, withSenderEnvelope } from './sender-envelope'
 
@@ -81,5 +85,46 @@ describe('sender envelope', () => {
       sender: { userId: 'a', name: 'A' },
       body: 'hello'
     })
+  })
+})
+
+describe('workspace member names', () => {
+  const base = {
+    id: 'sbx_1',
+    workspaceId: 'ws-1',
+    status: 'running',
+    machineSize: 'standard',
+    region: 'iad1',
+    createdAt: 1,
+    title: null,
+    repo: null,
+    visibility: 'team',
+    section: null,
+    archivedAt: null,
+    createdBy: 'alice',
+    ownerUserId: 'alice',
+    lastActivityAt: 1,
+    lastActivityBy: null,
+    cost: {
+      computeMs: 0,
+      rateUsdMicrosPerHour: 0,
+      computeUsdMicros: 0,
+      tokenUsdMicros: null,
+      totalUsdMicros: 0
+    },
+    access: 'owner',
+    presence: []
+  }
+
+  it('keeps names from the name claim and tolerates older or malformed control planes', () => {
+    expect(
+      CloudWorkspaceSchema.parse({ ...base, memberNames: { alice: 'Alice' } }).memberNames
+    ).toEqual({
+      alice: 'Alice'
+    })
+    expect(CloudWorkspaceSchema.parse(base).memberNames).toBeUndefined()
+    expect(
+      CloudWorkspaceSchema.parse({ ...base, memberNames: { alice: 'x'.repeat(81) } }).memberNames
+    ).toBeUndefined()
   })
 })

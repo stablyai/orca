@@ -11,6 +11,7 @@ import { useTranslate } from '@/i18n/use-translate'
 import WorktreeCreationTabStrip from './WorktreeCreationTabStrip'
 import { formatElapsedTime, useWorktreeCreationClock } from './worktree-creation-clock'
 import { VmBuildSheet } from './VmBuildSheet'
+import { VmDeleteConfirmDialog } from './VmDeleteConfirmDialog'
 
 /** Debounced in-frame creation placeholder: tab strip names the workspace while body shows status, enabling same-frame handoff without duplicating labels. */
 export default function WorktreeCreationPanel({
@@ -23,6 +24,7 @@ export default function WorktreeCreationPanel({
   const t = useTranslate()
   const entry = useAppStore((s) => s.pendingWorktreeCreations[creationId])
   const progressLabelId = React.useId()
+  const [confirmingDelete, setConfirmingDelete] = React.useState(false)
   const checksFinishedAt =
     entry?.environmentCheck?.status === 'failed' ? entry.environmentCheck.finishedAt : undefined
   // Depend on primitives so stderr’s fresh entry objects cannot continuously reset the interval;
@@ -35,11 +37,17 @@ export default function WorktreeCreationPanel({
   }
 
   const dismiss = (): void => useAppStore.getState().removePendingWorktreeCreation(creationId)
+  // A failed or paused VM build still holds a VM that dismissing deletes, so confirm first.
+  const holdsVm =
+    entry.environmentCheck?.status === 'failed' ||
+    (entry.status === 'error' && Boolean(entry.request.ephemeralVmRuntimeId))
+  const leave = holdsVm ? () => setConfirmingDelete(true) : dismiss
   const isError = entry.status === 'error'
   // A VM build keeps its sheet through fetch and checkout, so it never drops to the one-line status.
   const isVmCreation = Boolean(entry.request.ephemeralVmRecipe) || entry.phase === 'provisioning-vm'
   const title = entry.request.displayName || entry.request.name
-  const elapsedLabel = formatElapsedTime((checksFinishedAt ?? now) - entry.startedAt)
+  const stoppedAt = checksFinishedAt ?? (isError ? entry.errorAt : undefined)
+  const elapsedLabel = formatElapsedTime((stoppedAt ?? now) - entry.startedAt)
   const checkoutProgress = getVisibleCheckoutProgress(entry)
 
   return (
@@ -48,8 +56,19 @@ export default function WorktreeCreationPanel({
         title={title}
         isError={isError}
         reserveCollapsedSidebarHeaderSpace={reserveCollapsedSidebarHeaderSpace}
-        onCancel={dismiss}
+        onCancel={leave}
       />
+      {holdsVm ? (
+        <VmDeleteConfirmDialog
+          open={confirmingDelete}
+          cloud={entry.request.ephemeralVmRecipe?.provider === 'orca-cloud'}
+          onOpenChange={setConfirmingDelete}
+          onConfirm={() => {
+            setConfirmingDelete(false)
+            dismiss()
+          }}
+        />
+      ) : null}
 
       <div className="min-h-0 flex-1 p-3">
         {isVmCreation ? (
@@ -70,7 +89,7 @@ export default function WorktreeCreationPanel({
             }
             onCancel={dismiss}
             onRetry={() => retryBackgroundWorktreeCreation(creationId)}
-            onDismiss={dismiss}
+            onDismiss={leave}
             onEditRecipe={() => {
               const state = useAppStore.getState()
               state.openSettingsTarget({
