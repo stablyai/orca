@@ -74,6 +74,81 @@ describe('Codex sub-agent Stop', () => {
     expect(codex.interrupts()).toEqual([])
   })
 
+  it('stops a resumed parent before descendants across a settled helper and its surviving shell', async () => {
+    const timeout = new CodexAppServerTimeoutError('codex app-server turn/interrupt timed out')
+    let timeOut = true
+    let running = true
+    const terminated: unknown[] = []
+    const codex = await runningHelper({
+      'turn/interrupt': (params) => {
+        if (timeOut && params?.threadId === 'grandchild') {
+          throw timeout
+        }
+        return {}
+      },
+      'thread/backgroundTerminals/list': (params) => ({
+        data: running && params?.threadId === 'intermediary' ? [{ processId: '4343' }] : [],
+        nextCursor: null
+      }),
+      'thread/backgroundTerminals/terminate': (params) => {
+        terminated.push(params)
+        running = false
+        return { terminated: true }
+      }
+    })
+    const spawn = (parent: string, child: string, turnId: string) => {
+      codex.notify('item/started', {
+        threadId: parent,
+        turnId,
+        item: {
+          type: 'subAgentActivity',
+          id: `spawn-${child}`,
+          kind: 'started',
+          agentThreadId: child,
+          agentPath: `/root/${child}`
+        }
+      })
+      codex.notify('turn/started', {
+        threadId: child,
+        turn: { id: `${child}-turn`, status: 'inProgress' }
+      })
+    }
+    spawn(HELPER, 'intermediary', HELPER_TURN)
+    spawn('intermediary', 'grandchild', 'intermediary-turn')
+    codex.notify('item/started', {
+      threadId: 'intermediary',
+      turnId: 'intermediary-turn',
+      item: {
+        type: 'commandExecution',
+        id: 'surviving-shell',
+        processId: '4343',
+        source: 'unifiedExecStartup',
+        command: 'sleep 90',
+        status: 'inProgress'
+      }
+    })
+    for (const [threadId, id] of [
+      ['intermediary', 'intermediary-turn'],
+      [HELPER, HELPER_TURN]
+    ]) {
+      codex.notify('turn/completed', { threadId, turn: { id, status: 'completed' } })
+    }
+    codex.notify('turn/started', {
+      threadId: HELPER,
+      turn: { id: 'helper-turn-2', status: 'inProgress' }
+    })
+    await new Promise((resolve) => setImmediate(resolve))
+    await expect(codex.stop([HELPER])).rejects.toBe(timeout)
+    expect(codex.interrupts()).toEqual([
+      { threadId: HELPER, turnId: 'helper-turn-2' },
+      { threadId: 'grandchild', turnId: 'grandchild-turn' }
+    ])
+    expect(terminated).toEqual([])
+    timeOut = false
+    await expect(codex.stop([HELPER])).resolves.toEqual({ cancelled: true })
+    expect(terminated).toEqual([{ threadId: 'intermediary', processId: '4343' }])
+  })
+
   async function helperAndDevServer(interrupt: Route) {
     const running = ['4242']
     const terminated: unknown[] = []
