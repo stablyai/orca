@@ -10,7 +10,11 @@ import { callStructuredAgentSession } from '../requests/structured-agent-session
 import { structuredAgentSessionHostKey } from '../host-capabilities/structured-agent-session-host-capability'
 
 // Per host and agent; absence or an account-setting change drops them.
-const snapshots = new Map<string, HostModelCatalogSnapshot>()
+type SnapshotEntry = {
+  catalog?: HostModelCatalogSnapshot
+  completedAttempts: Map<string | null, number>
+}
+const snapshots = new Map<string, SnapshotEntry>()
 // Bumped when a host's answers are dropped, so a preload sent before then records nothing.
 const generations = new Map<string, number>()
 const catalogGenerations = new Map<string, number>()
@@ -66,7 +70,7 @@ export function readHostModelCatalogSnapshot(
   sourceKey = 'structured'
 ): AgentSessionModelCatalogResult | undefined {
   return selectHostModelCatalogSnapshot(
-    snapshots.get(snapshotKey(structuredAgentSessionHostKey(target), agent, sourceKey)),
+    snapshots.get(snapshotKey(structuredAgentSessionHostKey(target), agent, sourceKey))?.catalog,
     launch
   )
 }
@@ -80,7 +84,8 @@ export function recordHostModelCatalogSnapshot(
   sourceKey = 'structured'
 ): void {
   const key = snapshotKey(structuredAgentSessionHostKey(target), agent, sourceKey)
-  const previous = snapshots.get(key)
+  const entry = snapshots.get(key)
+  const previous = entry?.catalog
   const next = withHostModelCatalogAnswer(previous, worktree, catalog)
   if (
     sourceKey === 'structured' &&
@@ -101,11 +106,31 @@ export function recordHostModelCatalogSnapshot(
     return
   }
   if (next) {
-    snapshots.set(key, next)
+    snapshots.set(key, { catalog: next, completedAttempts: entry?.completedAttempts ?? new Map() })
   } else {
     snapshots.delete(key)
   }
   listeners.get(key)?.forEach((listener) => listener({ forgotten: false, worktree, catalog }))
+}
+
+/** Acquisition metadata shares the answer lifetime; it is never catalog equality or persisted data. */
+export function hostModelCatalogCompletedAttempt(
+  target: RuntimeClientTarget,
+  agent: string,
+  worktree: string | null,
+  sourceKey: string,
+  completedAt?: number
+): number | undefined {
+  const key = snapshotKey(structuredAgentSessionHostKey(target), agent, sourceKey)
+  let entry = snapshots.get(key)
+  if (completedAt !== undefined) {
+    if (!entry) {
+      entry = { completedAttempts: new Map() }
+      snapshots.set(key, entry)
+    }
+    entry.completedAttempts.set(worktree, completedAt)
+  }
+  return entry?.completedAttempts.get(worktree)
 }
 
 /** Drop all or selected agents’ host answers when the account a new chat pins may change. */

@@ -139,7 +139,12 @@ export const HOST_MODEL_CATALOG_ACCOUNT_SETTINGS = [
   'activeClaudeManagedAccountIdsByRuntime',
   'claudeManagedAccounts',
   'agentDefaultEnv',
-  'agentCmdOverrides'
+  'agentCmdOverrides',
+  'terminalWindowsShell',
+  'terminalWindowsWslDistro',
+  'terminalDefaultShell',
+  'localWindowsRuntimeDefault',
+  'experimentalWslHosts'
 ] as const satisfies readonly (keyof GlobalSettings)[]
 
 /** A host that advertises saved-only reads answers every agent without starting its CLI. */

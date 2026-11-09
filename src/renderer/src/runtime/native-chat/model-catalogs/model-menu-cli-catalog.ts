@@ -1,9 +1,11 @@
+import { TERMINAL_EXECUTION_CONTEXT_UNRESOLVED } from '../../../../../shared/terminal/effective-terminal-execution-context'
+import { ModelMenuContextUnresolvedError } from './host-model-menu-catalog'
 import type { AgentSessionModelCatalogResult } from '../../../../../shared/agent-session/agent-session-wire'
 import type {
   RuntimeDiscoverCommitMessageModelsResult,
   RuntimeGitContext
 } from '@/runtime/source-control/git/runtime-git-client-context'
-import { discoverRuntimeCommitMessageModels } from '@/runtime/source-control/git/runtime-git-generation-client'
+import { discoverRuntimeTerminalModels } from './terminal-model-discovery-client'
 import type { HostModelMenuScope } from './host-model-menu-catalog'
 
 export function cliModelCatalogAnswer(
@@ -43,9 +45,11 @@ export function cliModelMenuScope(
       if (context.target.kind === 'environment' && !context.worktreeId) {
         return undefined
       }
-      return cliModelCatalogAnswer(
-        await discoverRuntimeCommitMessageModels({ ...context, prefs: undefined }, agent)
-      )
+      const result = await discoverRuntimeTerminalModels({ ...context, prefs: undefined }, agent)
+      if (!result.success && result.error === TERMINAL_EXECUTION_CONTEXT_UNRESOLVED) {
+        throw new ModelMenuContextUnresolvedError(result.error)
+      }
+      return cliModelCatalogAnswer(result)
     }
   }
 }

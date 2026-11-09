@@ -4,6 +4,7 @@ import { structuredAgentSessionHostKey } from '../host-capabilities/structured-a
 import { callStructuredAgentSession } from '../requests/structured-agent-session-call'
 import {
   hostModelCatalogGeneration,
+  hostModelCatalogCompletedAttempt,
   readHostModelCatalogSnapshot,
   recordHostModelCatalogSnapshot,
   subscribeHostModelCatalogSnapshot
@@ -38,6 +39,9 @@ function keyOf(scope: HostModelMenuScope) {
     scope.sourceKey ?? 'structured'
   ])
 }
+
+export class ModelMenuContextUnresolvedError extends Error {}
+const CLI_REUSE_INTERVAL_MS = 10 * 60 * 1000
 
 class HostModelMenuCatalog {
   listeners = new Set<() => void>()
@@ -109,11 +113,18 @@ class HostModelMenuCatalog {
     if (this.pending) {
       return this.pending
     }
+    const completedAt = this.scope.sourceKey
+      ? hostModelCatalogCompletedAttempt(
+          this.scope.target,
+          this.scope.agent,
+          this.scope.worktree ?? null,
+          this.scope.sourceKey
+        )
+      : undefined
     if (
       reuseHeld &&
-      this.snapshot.answer?.origin !== 'unknown' &&
-      this.snapshot.answer &&
-      !this.snapshot.answer.listingInProgress
+      completedAt !== undefined &&
+      Date.now() - completedAt < CLI_REUSE_INTERVAL_MS
     ) {
       this.publish({ ...this.snapshot, pending: false, attempted: true })
       this.retire()
@@ -132,6 +143,7 @@ class HostModelMenuCatalog {
           ...(waitForListing ? { waitForListing: true } : {})
         }))
     this.publish({ ...this.snapshot, pending: true })
+    let contextUnresolved = false
     const operation: Promise<AgentSessionModelCatalogResult | undefined> = Promise.resolve()
       .then(() => request(false))
       .then(async (plain) => {
@@ -148,10 +160,22 @@ class HostModelMenuCatalog {
         }
         return plain
       })
-      .catch(() => undefined)
+      .catch((error) => {
+        contextUnresolved = error instanceof ModelMenuContextUnresolvedError
+        return undefined
+      })
       .then((answer) => {
         if (!current()) {
           return this.pending !== operation ? this.pending : undefined
+        }
+        if (this.scope.sourceKey && !contextUnresolved && !answer?.listingInProgress) {
+          hostModelCatalogCompletedAttempt(
+            target,
+            agent,
+            worktree ?? null,
+            this.scope.sourceKey,
+            Date.now()
+          )
         }
         if (answer) {
           recordHostModelCatalogSnapshot(
