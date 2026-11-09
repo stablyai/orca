@@ -6583,7 +6583,10 @@
               "a5fb30e4da": "Ativar Ditado por Voz",
               "ffaa3efe7c": "Transcrição da OpenAI",
               "c7a7eaa0da": "Remover hesitações",
-              "d0c230c061": "Modo de Ditado"
+              "d0c230c061": "Modo de Ditado",
+              "silenceStopTitle": "Parar após silêncio",
+              "silenceStopDescription": "Escolha por quanto tempo o ditado continua ouvindo quando você para de falar.",
+              "silenceStopKeyword": "silêncio"
             }
           }
         },
@@ -19206,7 +19209,6 @@
           "micFallback": "O microfone selecionado não está disponível. Usando o padrão do sistema.",
           "micDisconnected": "Microfone desconectado. O ditado foi interrompido.",
           "cloudLimitReached": "O ditado foi interrompido no limite de 10 minutos da nuvem.",
-          "stoppedAfterSilence": "Parou após um minuto de silêncio",
           "retryUnmatched": "Ao tentar de novo, não foi possível saber quais palavras já estavam digitadas, então todas foram inseridas."
         },
         "dictation-transcript-delivery": {
@@ -21725,6 +21727,11 @@
           "heardLabel": "{{model}} ouviu",
           "heardNothing": "Nenhuma palavra. Tente falar mais alto.",
           "heardFailed": "{{model}} não conseguiu transcrever a gravação."
+        },
+        "silenceStop": {
+          "title": "Parar após silêncio",
+          "description": "Para de ouvir depois desse tempo em silêncio. Nunca enquanto você segura o atalho.",
+          "off": "Desativado"
         }
       },
       "repositoryHooks": {
@@ -21896,6 +21903,9 @@
           "action": "Dividir painel"
         }
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "Parado após {{seconds}} segundos de silêncio"
     }
   },
   "csv": {

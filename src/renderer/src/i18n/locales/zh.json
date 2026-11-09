@@ -10554,7 +10554,10 @@
               "a5fb30e4da": "启用语音听写",
               "ffaa3efe7c": "OpenAI 转录",
               "c7a7eaa0da": "移除语气词",
-              "d0c230c061": "听写模式"
+              "d0c230c061": "听写模式",
+              "silenceStopTitle": "静音后停止",
+              "silenceStopDescription": "选择你停止说话后听写还会继续听多久。",
+              "silenceStopKeyword": "静音"
             }
           }
         },
@@ -16251,7 +16254,6 @@
           "micFallback": "所选麦克风不可用。使用系统默认值。",
           "micDisconnected": "麦克风已断开。听写停止了。",
           "cloudLimitReached": "已达 10 分钟云端上限。听写已停止。",
-          "stoppedAfterSilence": "静音一分钟后已停止",
           "retryUnmatched": "重试时无法判断哪些字词已输入，因此已全部插入。"
         },
         "dictation-transcript-delivery": {
@@ -20035,6 +20037,11 @@
           "heardLabel": "{{model}} 听到的内容",
           "heardNothing": "没有听到任何词。请大声一点。",
           "heardFailed": "{{model}} 无法转写这段录音。"
+        },
+        "silenceStop": {
+          "title": "静音后停止",
+          "description": "安静这么久后停止听写。按住快捷键时从不停止。",
+          "off": "关闭"
         }
       },
       "repositoryHooks": {
@@ -20206,6 +20213,9 @@
           "action": "拆分窗格"
         }
       }
+    },
+    "dictation": {
+      "stoppedAfterSilenceSeconds": "静音 {{seconds}} 秒后已停止"
     }
   },
   "dashboardPopout": {

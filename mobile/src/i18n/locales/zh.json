@@ -2564,8 +2564,8 @@
       "insertFailed": "无法插入听写文本",
       "insertFailedCopied": "无法插入听写文本，已复制到剪贴板",
       "inserted": "已插入听写文本",
-      "stoppedAfterSilence": "静音一分钟后已停止",
-      "stoppedAtCloudLimit": "已达 10 分钟云端上限。听写已停止。"
+      "stoppedAtCloudLimit": "已达 10 分钟云端上限。听写已停止。",
+      "stoppedAfterSilenceSeconds": "静音 {{seconds}} 秒后已停止"
     },
     "useNativeChatStop": {
       "stopNotSent": "停止指令未发送",
