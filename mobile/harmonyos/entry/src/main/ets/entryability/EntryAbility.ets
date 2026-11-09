@@ -10,6 +10,7 @@ import { ShellWindowRegions } from '../webshell/WindowRegions';
 
 export default class EntryAbility extends UIAbility {
   private windowReady: boolean = false;
+  private launchNavigationPending: boolean = false;
   private mainWindow: window.Window | null = null;
   private windowRegions: ShellWindowRegions | null = null;
   private appliedColorMode: number = -99;
@@ -56,18 +57,29 @@ export default class EntryAbility extends UIAbility {
     loadUiLanguage(this.context).catch(() => hilog.warn(0x0000, 'OrcaEntry', 'UI language could not be loaded'));
   }
   onNewWant(want: Want, _launchParam: AbilityConstant.LaunchParam): void {
-    AppStorage.setOrCreate('pendingLaunchUri', want.uri ?? ''); this.openLaunchRoute();
+    if (!want.uri) { return; }
+    AppStorage.setOrCreate('pendingLaunchUri', want.uri);
+    this.openLaunchRoute().catch(() => {});
   }
-  private openLaunchRoute(): void {
-    if (!this.windowReady) { return; }
+  private async openLaunchRoute(): Promise<void> {
+    if (!this.windowReady || !this.mainWindow || this.launchNavigationPending) { return; }
     let uri = AppStorage.get<string>('pendingLaunchUri') ?? ''; AppStorage.setOrCreate('pendingLaunchUri', '');
     let route = parseLaunchRoute(uri);
-    if (route) {
-      AppStorage.setOrCreate('explicitLaunchNavigation', true);
-      router.pushUrl({ url: route.page, params: route.params }).catch(() => {
-        hilog.error(0x0000, 'OrcaEntry', 'Could not open app route');
-      });
+    if (!route) { return; }
+    this.launchNavigationPending = true;
+    AppStorage.setOrCreate('explicitLaunchNavigation', true);
+    try {
+      let navigation = this.mainWindow.getUIContext().getRouter();
+      let options: router.RouterOptions = { url: route.page, params: route.params };
+      if (route.page === 'pages/PairScan' && navigation.getState().name === 'PairScan') {
+        await navigation.replaceUrl(options);
+      } else { await navigation.pushUrl(options); }
+    } catch (e) {
+      hilog.error(0x0000, 'OrcaEntry', 'Could not open app route');
+    } finally {
+      this.launchNavigationPending = false;
     }
+    await this.openLaunchRoute();
   }
   onWindowStageCreate(windowStage: window.WindowStage): void {
     windowStage.loadContent('pages/Home', (err) => {

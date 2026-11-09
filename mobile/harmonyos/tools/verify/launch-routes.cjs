@@ -43,3 +43,49 @@ test('ambiguous and malformed session destinations are refused', () => {
   assert.equal(parseLaunchRoute(`orca://session?hostId=${host}&worktreeId=%ZZ`), null)
   assert.equal(parseLaunchRoute('https://example.com'), null)
 })
+
+test('a newer external pairing link replaces the pending confirmation and keeps Home below it', async () => {
+  const stack = [{ url: 'pages/Home' }]
+  const router = {
+    getState: () => ({ name: stack.at(-1).url.split('/').at(-1) }),
+    async pushUrl(page) {
+      await Promise.resolve()
+      stack.push(page)
+    },
+    async replaceUrl(page) {
+      stack.splice(-1, 1, page)
+    }
+  }
+  const values = new Map()
+  const { EntryAbility } = loadArkts('entryability/EntryAbility.ets', ['EntryAbility'], {
+    UIAbility: class {},
+    AppStorage: {
+      get: (key) => values.get(key),
+      setOrCreate: (key, value) => values.set(key, value)
+    },
+    ShellWindowRegions: class {
+      start() {}
+    },
+    setAppearanceListener() {},
+    parseLaunchRoute,
+    router,
+    ConfigurationConstant: { ColorMode: { COLOR_MODE_NOT_SET: -1 } },
+    hilog: { error() {}, warn() {} }
+  })
+  const ability = new EntryAbility()
+  ability.onWindowStageCreate({
+    loadContent: (_page, callback) => callback({ code: 0 }),
+    getMainWindowSync: () => ({
+      setWindowSystemBarProperties: async () => {},
+      getUIContext: () => ({ getRouter: () => router })
+    })
+  })
+  ability.onNewWant({ uri: 'orca://pair?code=old' })
+  ability.onNewWant({ uri: 'orca://pair?code=new' })
+  await new Promise(setImmediate)
+  assert.deepEqual(
+    stack.map((page) => page.url),
+    ['pages/Home', 'pages/PairScan']
+  )
+  assert.equal(stack.at(-1).params.pairingCode, 'orca://pair?code=new')
+})
