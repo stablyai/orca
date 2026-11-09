@@ -20,6 +20,8 @@ export type SttEngine = SttRecognizerConfig & {
   detach: () => void
   /** Torn down on purpose, so a load it cut short is not a failure of the model. */
   retired: boolean
+  /** Called once this process is gone; set when it must not outlive its last dictation. */
+  onUnloaded: (() => void)[]
 }
 
 export type SttSession = {
