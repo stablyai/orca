@@ -69,7 +69,10 @@ export async function persistProjectGroupUpdates(
   ) {
     return Promise.all(
       mutations.map(({ groupId, updates }) =>
-        persistProjectGroupUpdate(target, groupId, updates).catch(() => null)
+        persistProjectGroupUpdate(target, groupId, updates).catch((err) => {
+          console.error('Failed to update project group:', err)
+          return null
+        })
       )
     )
   }
@@ -123,6 +126,9 @@ export async function initializeNewRootProjectGroupOrder(
     (await persistProjectGroupUpdate(target, group.id, {
       rootProjectOrder,
       tabOrder: tabOrder + 1000
-    }).catch(() => null)) ?? group
+    }).catch((err) => {
+      console.error('Failed to initialize project group order:', err)
+      return null
+    })) ?? group
   )
 }

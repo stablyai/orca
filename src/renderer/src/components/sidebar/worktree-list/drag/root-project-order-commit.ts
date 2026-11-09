@@ -80,18 +80,24 @@ export async function saveRootProjectOrderForSidebarDrop(args: {
           }))
         ),
       restore: () =>
-        state.updateProjectGroups(
-          groupUpdates.map(({ group, rootProjectOrder, tabOrder }) => ({
-            groupId: group.id,
-            hostId: getProjectGroupHostId(group),
-            updates: {
-              ...(rootProjectOrder !== undefined
-                ? { rootProjectOrder: group.rootProjectOrder ?? null }
-                : {}),
-              ...(tabOrder !== undefined ? { tabOrder: group.tabOrder } : {})
-            }
-          }))
-        )
+        Promise.all(
+          groupUpdates.map(({ group, rootProjectOrder, tabOrder }) =>
+            state
+              .updateProjectGroups([
+                {
+                  groupId: group.id,
+                  hostId: getProjectGroupHostId(group),
+                  updates: {
+                    ...(rootProjectOrder !== undefined
+                      ? { rootProjectOrder: group.rootProjectOrder ?? null }
+                      : {}),
+                    ...(tabOrder !== undefined ? { tabOrder: group.tabOrder } : {})
+                  }
+                }
+              ])
+              .catch(() => false)
+          )
+        ).then((results) => results.every(Boolean))
     })
   }
   for (const { repo, order } of repoUpdates) {
