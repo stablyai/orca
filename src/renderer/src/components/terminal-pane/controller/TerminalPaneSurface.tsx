@@ -53,6 +53,7 @@ export function TerminalPaneSurface({
     agentSessionContinuation,
     agentSessionFork,
     beginPaneDragFromHeader,
+    chatPane,
     closeTerminalLinkActions,
     contextMenu,
     contextMenuCanContinueInNewSession,
@@ -144,6 +145,7 @@ export function TerminalPaneSurface({
         className="absolute inset-0 min-h-0 min-w-0"
         data-terminal-tab-id={tabId}
         data-terminal-chat-view={effectiveChatViewMode && activePaneIsChatLeaf ? 'true' : undefined}
+        data-terminal-chat-pane={effectiveChatViewMode && chatPane ? '' : undefined}
         data-terminal-layout-leaf-ids={expectedLayoutLeafIdsAttr}
         data-pane-title-surface={titleUsesLightSurface ? 'light' : 'dark'}
         style={terminalContainerStyle}
