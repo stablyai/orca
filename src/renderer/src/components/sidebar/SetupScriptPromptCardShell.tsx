@@ -109,7 +109,7 @@ export function SetupScriptPromptCardShell({
         ) : null}
       </div>
       {/* Imported scripts are saved verbatim, so saving happens from a dialog that can show all of the text. */}
-      {isImport && detectedSetupPreview ? (
+      {isImport ? (
         <SetupScriptReviewDialog
           open={reviewOpen}
           onOpenChange={setReviewOpen}

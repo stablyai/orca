@@ -3,7 +3,7 @@ import { ChevronDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useTranslate } from '@/i18n/use-translate'
-import { countScriptTextareaLines } from '@/lib/script-textarea-rows'
+import { countScriptLines } from '@/lib/script-textarea-rows'
 
 export const SETUP_SCRIPT_COLLAPSED_LINES = 5
 const LINE_HEIGHT_PX = 20
@@ -19,7 +19,7 @@ export function SetupScriptCodeBlock({
 }): React.JSX.Element {
   const t = useTranslate()
   const contentId = useId()
-  const lineCount = useMemo(() => countScriptTextareaLines(script), [script])
+  const lineCount = useMemo(() => countScriptLines(script), [script])
   const collapsible = lineCount > SETUP_SCRIPT_COLLAPSED_LINES
   const [expanded, setExpanded] = useState(false)
   const collapsed = collapsible && !expanded
@@ -43,7 +43,7 @@ export function SetupScriptCodeBlock({
         <pre
           ref={preRef}
           id={contentId}
-          tabIndex={0}
+          tabIndex={collapsed ? -1 : 0}
           aria-label={heading}
           style={{
             maxHeight: collapsed
