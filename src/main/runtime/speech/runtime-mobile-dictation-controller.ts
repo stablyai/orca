@@ -173,6 +173,9 @@ export class RuntimeMobileDictationController {
   }
 
   private feedChunk(session: MobileDictationSession, chunk: MobileDictationChunk): void {
+    if (session.audioLimitReached) {
+      return
+    }
     const pcm = Buffer.from(chunk.audioBase64, 'base64')
     const samples = new Float32Array(Math.floor(pcm.length / 2))
     for (let i = 0; i < samples.length; i += 1) {
