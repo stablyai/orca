@@ -17159,10 +17159,6 @@
                     }
                   },
                   "browser": {
-                    "grab": {
-                      "title": "Seitenkontext für Agenten erfassen",
-                      "body": "Mit dem Erfassungswerkzeug den Kontext eines Seitenelements für Agenten kopieren."
-                    },
                     "annotate": {
                       "title": "Design-Feedback direkt auf der Seite markieren",
                       "body": "Elemente mit Anmerkungen versehen und diese Notizen an einen Agenten senden."
@@ -17295,7 +17291,6 @@
             "244266c122": "Importieren…",
             "e52a955e6f": "Diese Funktion ist jederzeit unter Einstellungen > Browser verfügbar.",
             "4f5ffaa6a1": "Browserdaten importieren",
-            "b24fef25be": "Importieren",
             "02e89014c5": "{{value0}} Cookies aus {{value1}}{{value2}} importiert.",
             "d40d584769": "{{value0}} Cookies aus Datei importiert."
           },
@@ -17357,7 +17352,6 @@
             "4328a0a062": "Erfassung fehlgeschlagen: {{value0}}",
             "759f32af29": "Wird heruntergeladen",
             "4300f38145": "Wird von {{value0}}{{value1}} heruntergeladen",
-            "acbe79fd01": "Seitenelement erfassen ({{value0}})",
             "cc4a071d3a": "Seitenelement mit Anmerkung versehen ({{value0}})",
             "572046436a": "Entfernter Browser",
             "b313a7275b": "Entfernter Browser wird geöffnet",

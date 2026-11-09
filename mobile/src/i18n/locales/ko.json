@@ -1335,7 +1335,17 @@
     },
     "announce": {
       "typedInto": "{{target}}에 입력됨",
-      "insertedIn": "{{target}}에 삽입됨"
+      "insertedIn": "{{target}}에 삽입됨",
+      "listeningOnPhone": "듣는 중. 이 휴대폰에서 받아쓰는 중입니다.",
+      "listeningOn": "듣는 중. {{computer}}에서 받아쓰는 중입니다.",
+      "listeningOnComputer": "듣는 중. 컴퓨터에서 받아쓰는 중입니다.",
+      "finishing": "마무리 중.",
+      "inserted": "삽입됨.",
+      "cancelled": "받아쓰기가 취소되었습니다.",
+      "movedTo": "이 휴대폰의 받아쓰기가 멈췄습니다. {{computer}}에서 계속합니다.",
+      "movedToComputer": "이 휴대폰의 받아쓰기가 멈췄습니다. 컴퓨터에서 계속합니다.",
+      "stoppedKept": "받아쓰기가 중지되었습니다. {{reason}}. 녹음은 보관됩니다.",
+      "stillListening": "계속 듣는 중입니다."
     },
     "pill": {
       "open": "열기",
