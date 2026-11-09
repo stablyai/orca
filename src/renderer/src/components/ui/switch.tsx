@@ -20,7 +20,7 @@ function Switch({ className, thumbClassName: thumbClasses, ...props }: SwitchPro
       data-slot="switch"
       className={cn(
         trackClassName,
-        'cursor-pointer outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50',
+        'cursor-pointer outline-none focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-focus-ring disabled:cursor-not-allowed disabled:opacity-50',
         className
       )}
       {...props}
