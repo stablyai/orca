@@ -171,6 +171,7 @@ export function registerProjectHostSetupHandlers(
           store.removeProjectForHost(result.repo)
           invalidateAuthorizedRootsCache()
         }
+        notifyReposChanged(mainWindow)
         throw err
       }
       invalidateAuthorizedRootsCache()

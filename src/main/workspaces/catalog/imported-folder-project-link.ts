@@ -72,7 +72,12 @@ export async function linkImportedFolderToProject(
   const updates: Partial<Repo> = {
     projectHostSetupMethod: args.setupMethod ?? 'imported-existing-folder'
   }
-  const projectedId = getProjectIdentityKey(repo)
+  if (needsEvidence && !repo.upstream) {
+    updates.gitRemoteIdentity = folderRemote.gitRemoteIdentity
+  }
+  const projectedId = getProjectIdentityKey(
+    needsEvidence && !repo.upstream ? { ...repo, ...folderRemote, repoIcon: undefined } : repo
+  )
   const localProvider = getGitRemoteProviderIdentity(folderRemote)
   if (projectedId !== args.projectId) {
     Object.assign(

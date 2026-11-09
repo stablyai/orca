@@ -2,6 +2,7 @@ import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../../shared/
 import type { Repo } from '../../../shared/repo-types'
 import { githubAvatarIcon, githubAvatarSlug } from '../../../shared/repo-icon'
 import { probeRepoUpstream } from '../../github/client/fetch/repo-slug-upstream'
+import { GhExecutableAbsenceBatch } from '../../git/command-runner/gh-executable-absence-batch'
 import type { RuntimeStore } from '../construction/runtime-store-contract'
 import { isWslMoveRepoBlocked } from '../../persistence/moving-wsl-projects/wsl-move-background-backoff'
 import { blockedWslDistroForPath, wslDistroForPath } from '../../wsl/filesystem/wsl-unc-access-gate'
@@ -11,17 +12,19 @@ type MetadataJob = {
   repo: Repo
   background: boolean
   active: boolean
-  waiters: number
-  onStarted: Set<() => void>
+  required: boolean
+  batch?: GhExecutableAbsenceBatch
   done: Promise<boolean>
   finish: (changed: boolean) => void
 }
 
 export class RuntimeRepositoryForkBackfill {
   private started = false
-  private draining = false
+  private active = 0
+  private backgroundActive = 0
   private readonly jobs = new Map<RuntimeStore, Map<string, MetadataJob>>()
-  private readonly queue: MetadataJob[] = []
+  private readonly requiredQueue = new Set<MetadataJob>()
+  private readonly backgroundQueue = new Set<MetadataJob>()
 
   constructor(
     private readonly getStore: () => RuntimeStore | null,
@@ -44,19 +47,28 @@ export class RuntimeRepositoryForkBackfill {
 
   async enqueue(repos: readonly Repo[]): Promise<void> {
     const batch: Promise<boolean>[] = []
-    for (const repo of repos) {
-      const job = this.admit(repo)
-      if (!job || job.background) {
-        continue
+    const availability = new GhExecutableAbsenceBatch()
+    try {
+      for (const repo of repos) {
+        const job = this.admit(repo)
+        if (!job || job.background) {
+          continue
+        }
+        job.background = true
+        job.batch = availability
+        if (!job.required && !job.active) {
+          this.backgroundQueue.add(job)
+        }
+        batch.push(job.done)
       }
-      job.background = true
-      batch.push(job.done)
-    }
-    this.drain()
-    // Each admitted finite batch owns its notice, independent of later arrivals.
-    const changes = await Promise.all(batch)
-    if (changes.some(Boolean)) {
-      this.notifyChanged()
+      this.drain()
+      // Each admitted finite batch owns its notice, independent of later arrivals.
+      const changes = await Promise.all(batch)
+      if (changes.some(Boolean)) {
+        this.notifyChanged()
+      }
+    } finally {
+      availability.close()
     }
   }
 
@@ -68,37 +80,14 @@ export class RuntimeRepositoryForkBackfill {
     if (!job) {
       return false
     }
-    job.waiters++
-    try {
-      const started =
-        job.active ||
-        (await new Promise<boolean>((resolve) => {
-          const onStarted = (): void => {
-            clearTimeout(timer)
-            job.onStarted.delete(onStarted)
-            resolve(true)
-          }
-          const timer = setTimeout(() => {
-            job.onStarted.delete(onStarted)
-            resolve(false)
-          }, 10_000)
-          job.onStarted.add(onStarted)
-          this.drain()
-        }))
-      if (started) {
-        await job.done
-      }
-      return started
-    } finally {
-      job.waiters--
-      if (!job.active && !job.background && job.waiters === 0) {
-        const index = this.queue.indexOf(job)
-        if (index !== -1) {
-          this.queue.splice(index, 1)
-        }
-        this.retire(job, false)
-      }
+    if (!job.required && !job.active) {
+      this.backgroundQueue.delete(job)
+      this.requiredQueue.add(job)
     }
+    job.required = true
+    this.drain()
+    await job.done
+    return true
   }
 
   private key(repo: Repo): string {
@@ -154,42 +143,50 @@ export class RuntimeRepositoryForkBackfill {
       repo: { ...current },
       background: false,
       active: false,
-      waiters: 0,
-      onStarted: new Set(),
+      required: false,
       done,
       finish
     }
     jobs.set(key, job)
-    this.queue.push(job)
     return job
   }
 
   private drain(): void {
-    if (this.draining) {
-      return
+    while (this.active < 4) {
+      const queue = this.requiredQueue.size ? this.requiredQueue : this.backgroundQueue
+      if (queue === this.backgroundQueue && this.backgroundActive > 0) {
+        return
+      }
+      const job = queue.values().next().value
+      if (!job) {
+        return
+      }
+      queue.delete(job)
+      job.active = true
+      this.active++
+      const background = !job.required
+      if (background) {
+        this.backgroundActive++
+      }
+      void this.processJob(job, background)
     }
-    this.draining = true
-    void this.processQueue()
   }
 
-  private async processQueue(): Promise<void> {
+  private async processJob(job: MetadataJob, background: boolean): Promise<void> {
+    let changed = false
     try {
-      let job: MetadataJob | undefined
-      while ((job = this.queue.shift())) {
-        job.active = true
-        for (const onStarted of job.onStarted) {
-          onStarted()
-        }
-        let changed = false
-        try {
-          changed = await this.probe(job)
-        } catch {
-          /* Optional metadata stays retryable. */
-        }
-        this.retire(job, changed)
-      }
+      changed = await (background && job.batch
+        ? job.batch.run(() => this.probe(job))
+        : this.probe(job))
+    } catch {
+      /* Optional metadata stays retryable. */
     } finally {
-      this.draining = false
+      this.active--
+      if (background) {
+        this.backgroundActive--
+      }
+      this.retire(job, changed)
+      this.drain()
     }
   }
 
@@ -199,7 +196,6 @@ export class RuntimeRepositoryForkBackfill {
     if (jobs?.size === 0) {
       this.jobs.delete(job.store)
     }
-    job.onStarted.clear()
     job.finish(changed)
   }
 
@@ -225,10 +221,13 @@ export class RuntimeRepositoryForkBackfill {
     if (current.upstream === undefined && result.upstream !== undefined) {
       updates.upstream = result.upstream
     }
-    const iconUnchanged = JSON.stringify(current.repoIcon) === JSON.stringify(repo.repoIcon)
     if (
       current.repoIcon === undefined ||
-      (iconUnchanged && current.repoIcon?.type === 'image' && current.repoIcon.source === 'github')
+      (current.repoIcon?.type === 'image' &&
+        current.repoIcon.source === 'github' &&
+        repo.repoIcon?.type === 'image' &&
+        repo.repoIcon.source === 'github' &&
+        JSON.stringify(current.repoIcon) === JSON.stringify(repo.repoIcon))
     ) {
       // Defined null is an explicit origin choice or a proved negative, never the late parent.
       const upstream = current.upstream === undefined ? result.upstream : current.upstream

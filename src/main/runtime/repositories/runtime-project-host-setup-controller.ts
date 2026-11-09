@@ -280,8 +280,8 @@ export class RuntimeProjectHostSetupController {
         this.deps.invalidateResolvedWorktrees()
         this.deps.invalidateWorktreeScan(initialRepo.id)
         invalidateAuthorizedRootsCache()
-        this.deps.notifyReposChanged()
       }
+      this.deps.notifyReposChanged()
       throw error
     }
   }

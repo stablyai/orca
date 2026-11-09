@@ -77,17 +77,18 @@ export async function probeRepoUpstream(
         return { upstream: null, origin }
       }
       let host = parsed.host
+      let hostResolved = true
       const alias = gitHubSshConfigHostAlias(url)
       if (alias) {
         const resolved = await resolveSshConfigHostname(alias, context)
         if (resolved.resolved && resolved.hostname) {
           host = effectiveGitHubRemoteHost(host, resolved.hostname)
         } else {
-          return { upstream: undefined, origin }
+          hostResolved = false
         }
       }
       const forgeHost = normalizeForgeWebHost(foldWwwHostAlias(host))
-      if (forgeHost === 'gitlab.com' || forgeHost === 'bitbucket.org') {
+      if (hostResolved && (forgeHost === 'gitlab.com' || forgeHost === 'bitbucket.org')) {
         return { upstream: null, origin }
       }
       const execution = await resolveGitHubRepoExecution(
