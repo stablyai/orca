@@ -8,6 +8,7 @@ import type {
   EphemeralVmWorkspaceLifecycleResult
 } from '../../shared/ephemeral-vm-runtimes'
 import type { EphemeralVmFailure } from '../../shared/ephemeral-vm-failure-copy'
+import type { PendingVmCheckout } from '../../shared/pending-vm-checkouts'
 
 export type EphemeralVmApi = {
   listRecipes: (args: { repoId: string }) => Promise<{
@@ -85,4 +86,9 @@ export type EphemeralVmApi = {
     cleanupDisabled: boolean
     message?: string
   }>
+  /** This window's VM checkouts whose creates have not adopted them yet; replaces its last set. */
+  publishPendingCheckouts: (checkouts: PendingVmCheckout[]) => void
+  listPendingCheckouts: () => Promise<PendingVmCheckout[]>
+  /** Every window's pending VM checkouts, whenever any window's set changes. */
+  onPendingCheckoutsChanged: (callback: (checkouts: PendingVmCheckout[]) => void) => () => void
 }
