@@ -11,7 +11,7 @@ import type {
 } from './writing/journal-writer-step'
 import { resolveJournalTimelineItem } from './writing/journal-timeline-resolution'
 import { resolveProviderTimelineSettlement } from '../agent-session-timeline/provider-timeline-writer-resolution'
-import { applyJournalDomainItem, assertJournalDomainItemAuthority } from './journal-domain-item'
+import { applyJournalDomainItem } from './journal-domain-item'
 import { journalDomainTimelineReads } from './journal-domain-timeline-reads'
 import {
   applyJournalDomainLifecycle,
@@ -100,7 +100,12 @@ function writeStep(
   savedAt: number
 ): { commit?: JournalDomainLifecycleCommit; outcome: JournalStepOutcome } {
   const { target } = command
-  const view = journalDomainTimelineReads(db, target, command.facts?.stopSettle)
+  const view = journalDomainTimelineReads(
+    db,
+    target,
+    command.facts?.stopSettle,
+    step.kind === 'settlement' ? undefined : step.options.fence
+  )
   if (step.kind === 'settlement') {
     if (hasJournalDomainSettlement(db, target, step.settlementId)) {
       return { outcome: { kind: 'committed', wrote: false } }
@@ -198,7 +203,6 @@ function writeStep(
     identity = step.identity
     body = step.body
   } else if (step.kind === 'resolved-item') {
-    assertJournalDomainItemAuthority(db, target, step.options.fence)
     const resolved = resolveJournalTimelineItem(
       view,
       step.resolution,

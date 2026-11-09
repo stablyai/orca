@@ -162,6 +162,23 @@ it('rejects stale direct and nested warning writers before suppressing a matchin
       expect(result.publication?.items).toEqual([])
     }
   }
+  const ordinary = await f.run({
+    kind: 'steps',
+    steps: [
+      {
+        kind: 'resolved-item',
+        reservedBytes: 4096,
+        options,
+        resolution: {
+          kind: 'turn-claim',
+          identity: { provider: 'orca', clientMessageId: 'ordinary-claim' },
+          providerTurnId: 'provider-turn'
+        }
+      }
+    ]
+  })
+  expect(ordinary.value).toMatchObject({ outcomes: [{ kind: 'dropped' }] })
+  expect(ordinary.value).not.toHaveProperty('failure')
   expect(f.item(originalId)).toEqual(original)
 })
 

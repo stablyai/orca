@@ -7,12 +7,14 @@ import {
   journalDomainStopDecidesTurn
 } from './journal-domain-item-normalization'
 import type { JournalStopSettleFact } from './journal-writer-host-facts'
+import { assertJournalDomainItemAuthority } from './journal-domain-item'
 
 /** Typed named selections used only during the owning synchronous writer command. */
 export function journalDomainTimelineReads(
   db: Database.Database,
   target: { sessionId: string; epoch: string },
-  stopSettle?: JournalStopSettleFact
+  stopSettle?: JournalStopSettleFact,
+  itemFence?: number
 ): JournalTimelineView {
   const prefix = [target.sessionId, target.epoch] as const
   const decode = (row: Record<string, unknown> | undefined): AgentJournalRenderItem | null =>
@@ -72,13 +74,18 @@ export function journalDomainTimelineReads(
   return {
     item,
     itemBody: (key) => item(key)?.body ?? null,
-    hasVisibleProviderItemKey: (key) =>
-      Boolean(
+    hasVisibleProviderItemKey: (key) => {
+      if (itemFence === undefined) {
+        throw new Error('journal warning selection omitted its writer fence')
+      }
+      assertJournalDomainItemAuthority(db, target, itemFence)
+      return Boolean(
         db
           .prepare(`SELECT 1 FROM journal_items WHERE session_id=? AND epoch=? AND hidden=0
             AND legacy_provider_item_key IS NOT NULL AND legacy_provider_item_key=? LIMIT 1`)
           .get(...prefix, key)
-      ),
+      )
+    },
     newestTurn: () =>
       decode(
         db
