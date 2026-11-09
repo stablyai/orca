@@ -18,17 +18,17 @@ FILLERS_BY_LANGUAGE.yue = FILLERS_BY_LANGUAGE.zh
 // For an unknown language: English fillers that are no word elsewhere ("um" is German and Portuguese, "er" German).
 const LANGUAGE_NEUTRAL_FILLERS = 'u+h+m*|u+m{2,}|e+r+m+|h+m+|m{3,}'
 
-const WORD_CHAR = String.raw`[\p{L}\p{N}\p{M}_/'’\-]`
+const WORD_CHAR = String.raw`[\p{L}\p{N}\p{M}_/'\u2019\-]`
 // A filler stands alone: nothing joins it to a word (a dot only does inside a name like "um.txt"),
 // and "hm?" or "eh!" is a question or a call, so it stays.
 const standalone = (fillers: string): string =>
-  String.raw`(?<!${WORD_CHAR}|${WORD_CHAR}\.)(${fillers})(?!${WORD_CHAR}|\.${WORD_CHAR})(?!\s*[?？!！])`
+  String.raw`(?<!${WORD_CHAR}|${WORD_CHAR}\.)(${fillers})(?!${WORD_CHAR}|\.${WORD_CHAR})(?!\s*[?\uFF1F!\uFF01])`
 // The comma or ellipsis after a filler goes with it.
-const TRAILING_PAUSE = String.raw`(?:\s*(?:[,，、…]|\.{3}))?\s*`
+const TRAILING_PAUSE = String.raw`(?:\s*(?:[,\uFF0C\u3001\u2026]|\.{3}))?\s*`
 const SENTENCE_END_CHARS = '.!?。！？'
 const SENTENCE_END_RE = new RegExp(`^[${SENTENCE_END_CHARS}]+\\s*`, 'u')
 // A comma left in front of a removed filler that ended the sentence or the text.
-const TRAILING_SOFT_PUNCTUATION_RE = /[\s,，、]+$/u
+const TRAILING_SOFT_PUNCTUATION_RE = /[\s,\uFF0C\u3001]+$/u
 const NON_LATIN_LETTER_RE = /(?=\p{L})\P{Script=Latin}/u
 
 function fillerPattern(languages: readonly string[] | undefined, text: string): RegExp | null {
