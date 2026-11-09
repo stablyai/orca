@@ -145,6 +145,8 @@ describe('sandbox control plane cron', () => {
     const { body } = await h.call('POST', '/v1/sandboxes', { body: create })
     await h.call('POST', `/v1/sandboxes/${body.sandbox.id}/lease`, { body: { extendMs: 60 * MIN } })
     h.advance(23 * 60 * MIN + 50 * MIN)
+    expect((await h.reconcile()).suspendedForDeadline).toBe(0)
+    h.advance(5 * MIN)
     expect((await h.reconcile()).suspendedForDeadline).toBe(1)
     expect((await h.call('GET', `/v1/sandboxes/${body.sandbox.id}`)).body.sandbox.status).toBe('suspended')
   })
