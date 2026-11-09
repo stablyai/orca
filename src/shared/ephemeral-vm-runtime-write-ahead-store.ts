@@ -50,7 +50,7 @@ function readWriteAheadFile(path: string): {
       'utf8'
     )
   } catch (error) {
-    const missing = (error as NodeJS.ErrnoException | undefined)?.code === 'ENOENT'
+    const missing = error instanceof Error && 'code' in error && error.code === 'ENOENT'
     return { runtimes: [], state: missing ? 'missing' : 'unreadable' }
   }
   try {
