@@ -1262,22 +1262,23 @@ export class BridgeHost {
     } else if (record.method === 'nativeChat.subscribe') {
       method = 'nativeChat.unsubscribe'; params['subscriptionId'] = wireId;
     } else if (SERVER_STREAM_RELEASE.has(record.method)) {
+      if (record.method === 'browser.screencast') {
+        if (this.desktopSubs.get(id) === record) { this.desktopSubs.delete(id); }
+        if (!record.readyId) { transport.retirePendingScreencast(wireId); return; }
+        transport.releaseScreencast(wireId);
+      }
       if (!record.readyId) { return; }
       method = SERVER_STREAM_RELEASE.get(record.method) ?? '';
       params['subscriptionId'] = record.readyId;
     }
     if (this.desktopSubs.get(id) === record) { this.desktopSubs.delete(id); }
-    if (record.method !== 'browser.screencast') { transport.cancelById(wireId); }
+    transport.cancelById(wireId);
     if (!method) { return; }
     this.unsubscribeCounter++;
     let requestId = `${this.wirePrefix}-u-${this.unsubscribeCounter}`;
     let wire = this.buildForwardWire(record.envelope, requestId, method, params, transport);
     if (wire.length > 0) {
-      transport.requestRaw(requestId, wire).then((reply: RpcResponse): void => {
-        if (record.method === 'browser.screencast' && reply instanceof RpcSuccess) {
-          transport.cancelById(wireId); transport.releaseScreencast(wireId);
-        }
-      }).catch((): void => {});
+      transport.requestRaw(requestId, wire).catch((): void => {});
     }
   }
 

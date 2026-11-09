@@ -202,6 +202,62 @@ test('cancel before browser ready releases the remote subscription when its iden
   client.close()
 })
 
+test('switching browser view starts the next stream while the previous unsubscribe is pending', async (t) => {
+  const { bridge, client, view, sent, receiveText, receiveBinary } = await bridgeSession([
+    'screencastBinary'
+  ])
+  t.after(() => {
+    bridge.dispose()
+    client.close()
+  })
+  const subscribe = (id, page) => {
+    post(bridge, {
+      type: 'subscribe',
+      id,
+      method: 'browser.screencast',
+      params: { page },
+      wantsBinary: true
+    })
+    return JSON.parse(sent.at(-1))
+  }
+  const ready = (request, subscriptionId) =>
+    receiveText(
+      JSON.stringify({
+        id: request.id,
+        ok: true,
+        streaming: true,
+        result: {
+          type: 'ready',
+          subscriptionId
+        }
+      })
+    )
+  ready(subscribe('old-screen', 'page'), 'server-old')
+  post(bridge, { type: 'cancel', id: 'old-screen' })
+  const stop = JSON.parse(sent.at(-1))
+  assert.equal(stop.method, 'browser.screencast.unsubscribe')
+  const next = subscribe('new-screen', 'other-page')
+  assert.equal(next.method, 'browser.screencast')
+  const frame = Buffer.alloc(21)
+  frame.set([0x62, 1, 1, 1])
+  frame.writeUInt32LE(2, 8)
+  frame.write('{}', 16)
+  frame.set([0xff, 0xd8, 0xff], 18)
+  receiveBinary(frame)
+  assert.equal(
+    view.frames.some((value) => value.binary),
+    false
+  )
+  ready(next, 'server-new')
+  receiveText(JSON.stringify({ id: stop.id, ok: true, result: { unsubscribed: true } }))
+  await Promise.resolve()
+  receiveBinary(frame)
+  assert.deepEqual(
+    view.frames.filter((value) => value.binary).map((value) => value.id),
+    ['new-screen']
+  )
+})
+
 function deviceRows(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'orca-device-rows-'))
   t.after(() => fs.rmSync(root, { recursive: true, force: true }))

@@ -51,6 +51,11 @@ interface PendingRequest {
   timer: number;
 }
 
+interface RetiredScreencast {
+  id: string;
+  onEvent: (responseJson: string) => void;
+}
+
 type ChannelState = 'awaiting-relay' | 'idle' | 'connecting' | 'awaiting-ready' | 'awaiting-authenticated' | 'ready' | 'closed';
 
 export class SpikeRpcClient {
@@ -107,6 +112,7 @@ export class SpikeRpcClient {
     this.rejectAllPending(reason);
     this.streams.clear();
     this.screencastOwner = '';
+    this.retiredScreencast = null;
     if (!this.closedNotified) {
       this.closedNotified = true;
       for (let i = 0; i < this.closeListeners.length; i++) { this.closeListeners[i](); }
@@ -118,6 +124,7 @@ export class SpikeRpcClient {
   private closeListeners: (() => void)[] = [];
   private binaryListeners: ((bytes: Uint8Array) => void)[] = [];
   private screencastOwner: string = '';
+  private retiredScreencast: RetiredScreencast | null = null;
 
   claimScreencast(id: string): boolean {
     if (this.screencastOwner) { return false; }
@@ -125,6 +132,15 @@ export class SpikeRpcClient {
   }
   ownsScreencast(id: string): boolean { return this.screencastOwner === id; }
   releaseScreencast(id: string): void { if (this.ownsScreencast(id)) { this.screencastOwner = ''; } }
+
+  retirePendingScreencast(id: string): void {
+    if (!this.ownsScreencast(id)) { return; }
+    this.releaseScreencast(id);
+    let onEvent = this.streams.get(id);
+    if (!onEvent) { return; }
+    this.streams.delete(id);
+    this.retiredScreencast = { id: id, onEvent: onEvent };
+  }
 
   onBinaryFrames(listener: (bytes: Uint8Array) => void): () => void {
     this.binaryListeners.push(listener);
@@ -434,15 +450,13 @@ export class SpikeRpcClient {
     }
     let id = idValue;
     let streamingValue: Object = rec['streaming'];
+    let retired = this.retiredScreencast;
+    let stream = this.streams.get(id) ?? (retired?.id === id ? retired.onEvent : undefined);
     if (streamingValue === true) {
-      let handler = this.streams.get(id);
-      if (handler) {
-        handler(plaintext);
-      }
+      stream?.(plaintext);
       return;
     }
-    let stream = this.streams.get(id);
-    if (stream && rec['ok'] === false) { this.streams.delete(id); stream(plaintext); return; }
+    if (stream && rec['ok'] === false) { this.cancelById(id); stream(plaintext); return; }
     let pending = this.pending.get(id);
     if (!pending) {
       return;
@@ -570,11 +584,14 @@ export class SpikeRpcClient {
       this.streams.delete(id);
       return false;
     }
+    // Desktop replaces the prior stream on this socket, including starts cancelled before ready.
+    if (this.ownsScreencast(id)) { this.retiredScreencast = null; }
     return true;
   }
 
   cancelById(id: string): void {
     this.streams.delete(id);
+    if (this.retiredScreencast?.id === id) { this.retiredScreencast = null; }
     let pending = this.pending.get(id);
     if (pending) { clearTimeout(pending.timer); this.pending.delete(id); pending.resolve(new RpcFailure(id, 'cancelled', 'request cancelled')); }
   }
