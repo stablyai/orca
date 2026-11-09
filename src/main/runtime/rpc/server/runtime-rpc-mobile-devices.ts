@@ -8,6 +8,7 @@ import type {
 } from '../../../../shared/delegated-mobile-device-contract'
 import type { DeviceEntry } from './pairing/device-entry'
 import { RuntimeRpcRequestAdmission } from './runtime-rpc-request-admission'
+import { revokeOrcaCloudAccessForUnpairedPhone } from '../methods/orca-cloud/orca-cloud-device-enrollment'
 
 // Why: below dispatch so a caller-bound RPC context can revoke and mint mobile devices.
 export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
@@ -18,6 +19,7 @@ export class RuntimeRpcMobileDevices extends RuntimeRpcRequestAdmission {
     const revoked = device?.scope === 'mobile' && this.revokeDevicesNow([device])
     if (revoked) {
       this.mobileDesktopRelay?.phonesChanged()
+      revokeOrcaCloudAccessForUnpairedPhone(deviceId)
     }
     return revoked
   }

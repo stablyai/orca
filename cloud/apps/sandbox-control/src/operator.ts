@@ -124,6 +124,11 @@ export async function handleOperator(
         .prepare(`UPDATE api_keys SET revoked_at = ?, revoked_by = 'system:member_removed' WHERE account_id = ? AND created_by = ? AND revoked_at IS NULL`)
         .bind(now, body.data.accountId, body.data.userId)
         .run()
+      // MCP OAuth tokens are api_keys rows (revoked above); pending codes and approvals die too.
+      await life.db.batch([
+        life.db.prepare('UPDATE oauth_codes SET consumed_at = ? WHERE account_id = ? AND user_id = ? AND consumed_at IS NULL').bind(now, body.data.accountId, body.data.userId),
+        life.db.prepare('UPDATE oauth_approvals SET consumed_at = ? WHERE account_id = ? AND user_id = ? AND consumed_at IS NULL').bind(now, body.data.accountId, body.data.userId)
+      ])
       await audit(life.db, { accountId: body.data.accountId, type: 'system', id: 'auth', userId: body.data.userId }, { action: 'member.removed', detail: { keysRevoked: result.meta.changes } }, now)
       return Response.json({ revoked: result.meta.changes })
     }

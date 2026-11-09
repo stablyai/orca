@@ -94,11 +94,40 @@ export type PoolTick = { created: number; recycled: number; ready: number }
  * Cron (and after each claim): delete stale VMs (old, other golden image, stuck warming, or pool off /
  * kill switch on), then boot up to `size` ready VMs.
  */
-export async function maintainPool(deps: PoolDeps): Promise<PoolTick> {
+export async function maintainPool(deps: PoolDeps): Promise<PoolTick | { skipped: 'busy' }> {
+  // One maintainer at a time (every create, hit or miss, asks for a refill): a lease row, not a VM.
+  if (!(await takeLease(deps))) {
+    return { skipped: 'busy' }
+  }
+  try {
+    return await maintain(deps)
+  } finally {
+    await deps.db.prepare(`DELETE FROM sandbox_pool WHERE id = ?`).bind(LEASE_ID).run()
+  }
+}
+
+const LEASE_ID = 'pool-maintainer'
+const LEASE_MS = 2 * 60_000
+
+async function takeLease(deps: PoolDeps): Promise<boolean> {
+  const now = deps.now()
+  // A crashed maintainer's lease lapses; status 'lease' is never claimable or counted.
+  await deps.db.prepare(`DELETE FROM sandbox_pool WHERE id = ? AND updated_at < ?`).bind(LEASE_ID, now - LEASE_MS).run()
+  const taken = await deps.db
+    .prepare(
+      `INSERT INTO sandbox_pool (id, provider_name, machine_size, region, snapshot_id, status, created_at, updated_at)
+       VALUES (?, ?, '', '', '', 'lease', ?, ?) ON CONFLICT (id) DO NOTHING RETURNING id`
+    )
+    .bind(LEASE_ID, LEASE_ID, now, now)
+    .first()
+  return taken !== null
+}
+
+async function maintain(deps: PoolDeps): Promise<PoolTick> {
   const now = deps.now()
   const pool = deps.config.pool
   const draining = !pool || (deps.config.guardrails ? await killSwitchOn(deps.db, deps.config.guardrails) : false)
-  const all = (await deps.db.prepare('SELECT * FROM sandbox_pool').all<PooledVm>()).results
+  const all = (await deps.db.prepare(`SELECT * FROM sandbox_pool WHERE status != 'lease'`).all<PooledVm>()).results
   const maxAge = pool?.maxAgeMs ?? DEFAULT_POOL_MAX_AGE_MS
   const expired = (vm: PooledVm) =>
     draining ||

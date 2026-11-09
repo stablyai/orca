@@ -98,6 +98,14 @@ export function getSandboxByProviderName(db: D1Database, name: string): Promise<
   return db.prepare('SELECT * FROM sandboxes WHERE provider_name = ?').bind(name).first<SandboxRow>()
 }
 
+/** A failed attempt that is still being cleaned up stops blocking its workspace (unique live index). */
+export async function detachFromWorkspace(db: D1Database, id: string): Promise<void> {
+  await db
+    .prepare(`UPDATE sandboxes SET workspace_id = workspace_id || '#abandoned:' || id WHERE id = ? AND status <> 'destroyed'`)
+    .bind(id)
+    .run()
+}
+
 export function liveSandboxForWorkspace(
   db: D1Database,
   accountId: string,

@@ -19,6 +19,7 @@ import type { Keyring } from './secrets-crypto'
 import { ORCAD_PORT, drainOrcad, runningOrcad, startOrcad, type OrcadReady } from './sandbox-vm-commands'
 import { claimPooledVm, deletePooledVm, maintainPool, type PoolConfig, type PooledVm } from './pool'
 import {
+  detachFromWorkspace,
   NO_SESSION,
   countActiveSandboxes,
   countActiveSandboxesForUser,
@@ -346,8 +347,9 @@ export async function createSandbox(
     options.pool === false
       ? null
       : await timer.time('pool', () => claimPooledVm(deps, request.machineSize, region).catch(() => null))
-  if (pooled) {
-    // Refill behind the response so the next create finds one too.
+  if (deps.config.pool) {
+    // Refill behind the response, on a miss too (empty, or stale after a golden rotation), so the next
+    // create finds one without waiting for the cron.
     const refill = maintainPool(deps).catch((error: unknown) =>
       console.log(JSON.stringify({ event: 'pool_refill_failed', error: String(error).slice(0, 200) }))
     )
@@ -399,6 +401,9 @@ export async function createSandbox(
       // A pooled VM that will not take the session is discarded; the caller still gets a workspace.
       console.log(JSON.stringify({ event: 'pool_adopt_failed', error: String(error).slice(0, 200) }))
       await failAndRelease(deps, (await getSandbox(deps.db, row.id)) ?? row)
+      // Destroy can stop short (e.g. the provider's delete snapshot is still being written); the cron
+      // finishes it. That row never held user data, so it lets go of the workspace now.
+      await detachFromWorkspace(deps.db, row.id)
       return createSandbox(deps, caller, request, { pool: false })
     }
   }

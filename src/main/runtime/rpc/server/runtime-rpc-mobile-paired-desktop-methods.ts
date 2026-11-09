@@ -16,6 +16,8 @@ export const PAIRED_DESKTOP_METHODS = [
   'pairing.provisionRelay',
   'pairing.registerDeviceKey',
   'pairing.exchangeTicket',
+  // The phone borrows the desktop's signed-in Orca Cloud user once, then reaches the cloud itself.
+  'orcaCloud.enrollDevice',
   // The configured servers the desktop shows, and their workspace lists as it last fetched them.
   'mobileRelay.hosts.list',
   'mobileRelay.hosts.worktrees',

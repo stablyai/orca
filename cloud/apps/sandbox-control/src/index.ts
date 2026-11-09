@@ -16,17 +16,24 @@
 //   GET /v1/secrets?scope= | PUT, DELETE /v1/secrets/:scope/:NAME     (see src/secrets.ts)
 //   POST   /v1/github/connect -> {installUrl, authorizeUrl}  (bind a GitHub App installation to the account)
 //   GET    /v1/github/installations                          -> {installations}
+//   POST   /v1/device-sessions | GET | DELETE /:id  per-phone access (see device-sessions.ts)
+// Phones sign their own EdDSA tokens (device-sessions.ts) and act as their user, except that they
+// cannot enroll devices, manage secrets or connect GitHub.
 // Browser (GitHub redirects): GET /v1/github/setup, GET /v1/github/callback
 // Operator (OPERATOR_TOKEN): /v1/internal/* (see operator.ts)
 // Vercel network-policy forwardURL target (Vercel sandbox OIDC):  /v1/egress/proxy
 import { z } from 'zod'
 import { maintainPool, poolConfigFromEnv } from './pool'
 import { authenticateDesktop } from './auth'
-import { handleApi, isApiPath, type ApiExtension } from './api/router'
+import { authenticateApi } from './api/caller'
+import { handleApi, handleApiAs, isApiPath, type ApiContext, type ApiExtension } from './api/router'
+import { handleMcpRoutes, isMcpPath, oauthApprovalsApi, oauthGrantsApi } from './mcp'
+import { purgeOAuth } from './mcp/oauth'
 import { retryPendingMessages } from './api/messages'
 import { revokeWorkspaceTokens } from './api/keys'
 import { provisionWorkspaceToken } from './api/settings'
 import { docsPage, openApiDocument } from './api/openapi'
+import { handleDeviceSessionsRoute } from './device-sessions'
 import { advanceGoldenImages, currentGoldenSnapshotId } from './golden-images'
 import { NO_CREDENTIALS, handleEgressProxy, type CredentialBroker, type ProxiedRoute } from './egress-proxy'
 import {
@@ -116,6 +123,8 @@ export type Deps = {
   apiExtensions?: ApiExtension[]
   /** Long-poll sleep (tests advance a fake clock). */
   sleep?: (ms: number) => Promise<void>
+  /** Workspace-grant cleanup for a revoked device session (wired by the workspace registry). */
+  onDeviceSessionRevoked?: (deviceSessionId: string) => Promise<void>
 }
 
 function workspaceConfig(env: Env, deps: Deps): WorkspaceConfig {
@@ -328,6 +337,17 @@ async function readJson(request: Request, maxBytes = MAX_JSON_BYTES): Promise<un
   return text ? JSON.parse(text) : {}
 }
 
+async function apiContext(env: Env, deps: Deps, request: Request, life?: Promise<ApiContext['life']>): Promise<ApiContext> {
+  return {
+    db: env.SANDBOX_DB,
+    now: deps.now ?? Date.now,
+    life: await (life ?? lifecycleDeps(env, deps)),
+    waitUntil: deps.waitUntil ?? ((promise) => void promise.catch(() => undefined)),
+    readJson: () => readJson(request),
+    extensions: [oauthApprovalsApi, oauthGrantsApi,...(deps.apiExtensions ?? [])]
+  }
+}
+
 /** Lifecycle routes refuse to run half-configured rather than guess at Orca's provider account. */
 async function lifecycleDeps(env: Env, deps: Deps): Promise<LifecycleDeps | null> {
   if (!deps.provider && (!env.VERCEL_TOKEN || !env.VERCEL_TEAM_ID || !env.VERCEL_PROJECT_ID)) {
@@ -506,10 +526,27 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       const state = await createConnectState(env.SANDBOX_DB, connect.stateSecret, { accountId: `dev:${sub}`, userId: sub }, (deps.now ?? Date.now)())
       return Response.redirect(authorizeUrl(connect, url.origin, state), 302)
     }
+    if (url.pathname === '/v1/device-sessions' || url.pathname.startsWith('/v1/device-sessions/')) {
+      const now = (deps.now ?? Date.now)()
+      const caller = await authenticateDesktop(env, request, now)
+      if (!caller) {
+        return fail('unauthorized', 401)
+      }
+      return await handleDeviceSessionsRoute(request, url, {
+        db: env.SANDBOX_DB,
+        caller,
+        now,
+        readJson: () => readJson(request),
+        onRevoked: deps.onDeviceSessionRevoked
+      })
+    }
     if (url.pathname === '/v1/github/connect' || url.pathname === '/v1/github/installations') {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
         return fail('unauthorized', 401)
+      }
+      if (caller.deviceSessionId) {
+        return fail('forbidden', 403, 'device_session')
       }
       if (url.pathname === '/v1/github/installations' && request.method === 'GET') {
         const rows = await listAccountInstallations(env.SANDBOX_DB, caller.accountId)
@@ -534,24 +571,44 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       return docsPage(publicOrigin(env, url)!)
     }
     if (isApiPath(url.pathname)) {
-      const life = await lifecycleDeps(env, deps)
       try {
-        return await handleApi(request, url, env, {
-          db: env.SANDBOX_DB,
-          now: deps.now ?? Date.now,
-          life,
-          waitUntil: deps.waitUntil ?? ((promise) => void promise.catch(() => undefined)),
-          readJson: () => readJson(request),
-          extensions: deps.apiExtensions
-        })
+        return await handleApi(request, url, env, await apiContext(env, deps, request))
       } catch (error) {
         return errorResponse(error)
       }
+    }
+    if (isMcpPath(url.pathname)) {
+      // Hosted MCP server (src/mcp): every tool call runs through the public API as the MCP caller.
+      const now = deps.now ?? Date.now
+      let life: Promise<ApiContext['life']> | undefined
+      return await handleMcpRoutes(request, url, {
+        origin: publicOrigin(env, url)!,
+        db: env.SANDBOX_DB,
+        now,
+        allowedOrigins: (env.MCP_ALLOWED_ORIGINS ?? '').split(',').map((o) => o.trim()).filter(Boolean),
+        authenticate: (req) => authenticateApi(env, req, now()),
+        api: async (caller, method, path, body) => {
+          const inner = new Request(new URL(path, url.origin), {
+            method,
+            headers: { 'content-type': 'application/json' },
+            body: body === undefined ? undefined : JSON.stringify(body)
+          })
+          life ??= lifecycleDeps(env, deps)
+          try {
+            return await handleApiAs(caller, inner, new URL(inner.url), await apiContext(env, deps, inner, life))
+          } catch (error) {
+            return errorResponse(error)
+          }
+        }
+      })
     }
     if (url.pathname === '/v1/secrets' || url.pathname.startsWith('/v1/secrets/')) {
       const caller = await authenticateDesktop(env, request, (deps.now ?? Date.now)())
       if (!caller) {
         return fail('unauthorized', 401)
+      }
+      if (caller.deviceSessionId) {
+        return fail('forbidden', 403, 'device_session')
       }
       const secrets = await secretsDeps(env)
       if (!secrets) {
@@ -750,17 +807,26 @@ export default {
           // Counts only; no ids, tokens or pairing material.
           const summary = await reconcile(life)
           console.log(JSON.stringify({ event: 'reconcile', ...summary }))
-          // Runs with the pool off too: that is how a size change to 0 or the kill switch drains it.
-          const pool = await maintainPool(life).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
-          console.log(JSON.stringify({ event: 'pool', ...pool }))
           const retried = await retryPendingMessages(life).catch(() => -1)
           if (retried !== 0) {
             console.log(JSON.stringify({ event: 'message_retry', retried }))
           }
         }
+        // Abandoned MCP client registrations and dead OAuth codes/approvals.
+        const purged = await purgeOAuth(env.SANDBOX_DB, Date.now()).catch(() => -1)
+        if (purged !== 0) {
+          console.log(JSON.stringify({ event: 'oauth_purge', purged }))
+        }
         await advanceGoldenImagesFromEnv(env).catch((error: unknown) =>
           console.log(JSON.stringify({ event: 'golden_image_tick_failed', error: String(error).slice(0, 200) }))
         )
+        // After the golden tick, with fresh deps: a just-activated image replaces pooled VMs this tick.
+        // Runs with the pool off too: that is how a size change to 0 or the kill switch drains it.
+        const fresh = await lifecycleDeps(env, {})
+        if (fresh) {
+          const pool = await maintainPool(fresh).catch((error: unknown) => ({ error: String(error).slice(0, 200) }))
+          console.log(JSON.stringify({ event: 'pool', ...pool }))
+        }
       })
     )
   }

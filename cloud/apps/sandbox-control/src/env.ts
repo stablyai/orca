@@ -2,6 +2,8 @@
 // wrangler.jsonc or git. Deployed environments live in the private deploy config.
 export type Env = {
   SANDBOX_DB: D1Database
+  /** Comma-separated browser origins allowed to call /mcp besides this Worker's own (MCP web clients). */
+  MCP_ALLOWED_ORIGINS?: string
   /** `prod` | `dev` | `local`; tagged on every provider resource so environments never mix. */
   SANDBOX_ENV: string
 

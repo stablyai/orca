@@ -6,10 +6,13 @@ import { ADMIN_SCOPES, API_SCOPES, parseScopes, resolveApiKey, type ApiKeyKind, 
 
 export type ApiCaller = SandboxCaller & {
   scopes: ReadonlySet<ApiScope>
-  via: 'session' | ApiKeyKind
+  /** `device`: an enrolled phone. It acts as its user but never mints keys or approves OAuth clients. */
+  via: 'session' | 'device' | ApiKeyKind
   keyId?: string
   /** Workspace tokens: the VM the token was minted for (its workspaces are siblings). */
   sandboxId?: string
+  /** MCP OAuth access tokens: the resource they were issued for (RFC 8707). */
+  audience?: string
 }
 
 export class ApiError extends Error {
@@ -54,11 +57,15 @@ export async function authenticateApi(env: Env, request: Request, now: number): 
       scopes: new Set(parseScopes(key.scopes).filter((scope) => allowed.has(scope))),
       via: key.kind,
       keyId: key.id,
-      ...(key.sandbox_id ? { sandboxId: key.sandbox_id } : {})
+      ...(key.sandbox_id ? { sandboxId: key.sandbox_id } : {}),
+      ...(key.audience ? { audience: key.audience } : {})
     }
   }
   const session = await authenticateDesktop(env, request, now)
-  return session ? { ...session, scopes: new Set(scopesForRole(session)), via: 'session' } : null
+  if (!session) {
+    return null
+  }
+  return { ...session, scopes: new Set(scopesForRole(session)), via: session.deviceSessionId ? 'device' : 'session' }
 }
 
 export function requireScope(caller: ApiCaller, scope: ApiScope): void {
@@ -77,6 +84,9 @@ export function requireAdmin(caller: ApiCaller): void {
 export function actorOf(caller: ApiCaller): { type: string; id: string } {
   if (caller.via === 'session') {
     return { type: 'user', id: caller.userId }
+  }
+  if (caller.via === 'device') {
+    return { type: 'device', id: caller.deviceSessionId ?? caller.userId }
   }
   const type = { user: 'api_key', workspace: 'workspace_token', oauth: 'mcp', oauth_refresh: 'mcp' }[caller.via]
   return { type, id: caller.keyId ?? caller.userId }
