@@ -17,7 +17,7 @@ type ChildMessage =
   | { type: 'chunk'; streamId: string; text: string; samples: number }
   | { type: 'speech-pending'; streamId: string; pending: boolean }
   | {
-      type: 'ready' | 'loading' | 'stopped' | 'error' | 'partial' | 'final'
+      type: 'ready' | 'loading' | 'stopped' | 'discarded' | 'error' | 'partial' | 'final'
       streamId?: string
       text?: string
       error?: string

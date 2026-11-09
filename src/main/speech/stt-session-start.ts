@@ -154,6 +154,10 @@ async function acquireSttEngine(
     const current = state.engine
     // Bound in the same step it is chosen, so an idle teardown never sees it unused.
     if (current && sameSttRecognizerConfig(current, config)) {
+      if (current.draining) {
+        await current.draining
+        continue
+      }
       clearSttIdleTeardownTimer(state)
       return bindSttEngine(session, current)
     }
@@ -212,6 +216,7 @@ export function spawnSttEngine(
     retired: false,
     vadModelPath,
     onUnloaded: [],
+    draining: null,
     ready: readyPromise.catch((error: unknown) => {
       failSttEngine(state, engine, STT_WORKER_EXITED_ERROR)
       throw error
