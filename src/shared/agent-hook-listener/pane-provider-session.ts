@@ -141,7 +141,9 @@ function readAgentCwd(
     return continued?.cwd
   }
   // A new process runs where it reports, even when its launch seed recorded another folder.
-  return hookPayload.source === 'startup' || hookPayload.source === 'resume'
+  return hookPayload.source === 'startup' ||
+    hookPayload.source === 'resume' ||
+    hookPayload.source === 'fork'
     ? (reported ?? continued?.cwd)
     : (continued?.cwd ?? reported)
 }
