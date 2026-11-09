@@ -85,6 +85,7 @@ import { reconcile } from './reconcile'
 import { egressSecretHosts, secretPlaceholder } from './secret-egress'
 import { SecretError, handleSecretsRoute, keyringFor, type SecretChange } from './secrets'
 import { refreshAfterSecretChange, refreshSandboxEnv } from './env-refresh'
+import { EgressHostsSchema, egressUserHosts, normalizeUserHosts, setEgressUserHosts } from './egress-hosts'
 import { cachedProviderEnv } from './session-env'
 import { credentialTargets } from './provider-env'
 import type { Keyring } from './secrets-crypto'
@@ -972,7 +973,7 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       return await workspaceRoute(request, url, env, deps, caller)
     }
     const match =
-      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|archive|unarchive|env\/refresh|ssh-keys|desktop))?)?$/.exec(
+      /^\/v1\/sandboxes(?:\/([A-Za-z0-9_]+)(?:\/(suspend|resume|lease|rollover|wake|restart|status|archive|unarchive|env\/refresh|egress\/hosts|ssh-keys|desktop))?)?$/.exec(
         url.pathname
       )
     if (!match) {
@@ -1073,6 +1074,20 @@ export async function handleRequest(request: Request, env: Env, deps: Deps = {})
       }
       case 'POST env/refresh':
         return json({ applied: await refreshSandboxEnv(life, row) })
+      case 'GET egress/hosts':
+        return json({ hosts: egressUserHosts(row) })
+      case 'PUT egress/hosts': {
+        const body = EgressHostsSchema.safeParse(await readJson(request))
+        const hosts = body.success ? normalizeUserHosts(body.data.hosts) : null
+        if (!hosts) {
+          return fail('invalid_request', 400, 'invalid_host')
+        }
+        const next = await setEgressUserHosts(life, row, hosts)
+        if (!next) {
+          return fail('conflict', 409, 'concurrent_transition')
+        }
+        return json({ hosts: egressUserHosts(next) })
+      }
       case 'POST desktop': {
         // Runs only the image's fixed entry point; the desktop listens on the VM's loopback and is
         // reached through the paired runtime's port forward, never a public route.

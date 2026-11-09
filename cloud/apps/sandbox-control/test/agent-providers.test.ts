@@ -327,3 +327,27 @@ describe('staged egress placeholder rollout', () => {
     expect(row!.egress_secret_hosts).toBe('ANTHROPIC_AUTH_TOKEN@llm.example.com')
   })
 })
+
+describe('workspace tool hosts (synced remote MCP servers)', () => {
+  it('opens declared hosts on the running sandbox now and on every later boot; refuses wildcards and private names', async () => {
+    const { h, as } = await setup()
+    const mia = await as('mia')
+    const created = await h.call('POST', '/v1/sandboxes', { body: { workspaceId: 'ws-1', machineSize: 'standard' }, bearer: mia })
+    const id: string = created.body.sandbox.id
+    const box = () => [...h.vercel.boxes.values()][0]!
+    expect(box().policy.allow['mcp.linear.app']).toBeUndefined()
+    const put = await h.call('PUT', `/v1/sandboxes/${id}/egress/hosts`, { bearer: mia, body: { hosts: ['MCP.linear.app', 'mcp.notion.com.', 'mcp.linear.app'] } })
+    expect(put.body).toEqual({ hosts: ['mcp.linear.app', 'mcp.notion.com'] })
+    expect(box().policy.allow['mcp.linear.app']).toEqual([])
+    expect(box().policy.allow['*']).toBeUndefined()
+    for (const bad of ['*', '*.example.com', '10.0.0.1', 'localhost', 'box.internal', 'http://x.example.com']) {
+      expect((await h.call('PUT', `/v1/sandboxes/${id}/egress/hosts`, { bearer: mia, body: { hosts: [bad] } })).status).toBe(400)
+    }
+    expect((await h.call('PUT', `/v1/sandboxes/${id}/egress/hosts`, { bearer: await as('bob'), body: { hosts: ['x.example.com'] } })).status).toBe(404)
+    // Sleep and wake: the hosts come back with the new session's policy.
+    await h.call('POST', `/v1/sandboxes/${id}/suspend`, { bearer: mia })
+    await h.call('POST', `/v1/sandboxes/${id}/resume`, { bearer: mia })
+    expect(box().policy.allow['mcp.notion.com']).toEqual([])
+    expect((await h.call('GET', `/v1/sandboxes/${id}/egress/hosts`, { bearer: mia })).body).toEqual({ hosts: ['mcp.linear.app', 'mcp.notion.com'] })
+  })
+})
