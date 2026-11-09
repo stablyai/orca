@@ -35,11 +35,6 @@ vi.mock('../git/command-runner/gh-exec-file', async (importOriginal) => ({
   ghExecFileAsync: ghExecFileAsyncMock
 }))
 
-vi.mock('../git/exec-error', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  extractExecError: vi.fn()
-}))
-
 vi.mock('../github/client', () => ({
   createGitHubPullRequest: vi.fn(),
   getRepoSlug: getRepoSlugMock,
@@ -200,20 +195,18 @@ describe('GitLab self-hosted hosted review creation eligibility', () => {
           detectHostedReviewProvider({ repoPath, executionHostId: 'local' })
         ).resolves.toBe('github')
       }
+
+      gitExecFileAsyncMock.mockResolvedValue({ stdout: 'https://forge.acme.test/team/orca.git\n' })
+      glabExecFileAsyncMock.mockRejectedValue(
+        Object.assign(new Error('glab auth status failed'), {
+          stdout: '',
+          stderr:
+            'forge.acme.test\n  x forge.acme.test: API call failed\n  ! No token found (checked config file, keyring, and environment variables).\n'
+        })
+      )
+      await expect(
+        detectHostedReviewProvider({ repoPath: '/custom', executionHostId: 'local' })
+      ).resolves.toBe('gitlab')
     }
   )
-
-  it('retains GitLab sign-in routing for a configured custom host without a token', async () => {
-    gitExecFileAsyncMock.mockResolvedValue({ stdout: 'https://forge.acme.test/team/orca.git\n' })
-    glabExecFileAsyncMock.mockRejectedValue(
-      Object.assign(new Error('glab auth status failed'), {
-        stdout: '',
-        stderr:
-          'forge.acme.test\n  x forge.acme.test: API call failed\n  ! No token found (checked config file, keyring, and environment variables).\n'
-      })
-    )
-    await expect(
-      detectHostedReviewProvider({ repoPath: '/custom', executionHostId: 'local' })
-    ).resolves.toBe('gitlab')
-  })
 })

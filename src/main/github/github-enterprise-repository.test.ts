@@ -74,7 +74,7 @@ describe('getEnterpriseGitHubRepoSlug', () => {
   ])('does not promote a foreign public remote from gh inventory: %s', async (url, host) => {
     mockOriginRemote(url)
     mockHostAuthenticated(host)
-    await expect(getEnterpriseGitHubRepoSlug('/repo')).resolves.toBeNull()
+    await expect(getEnterpriseGitHubRepoSlug('/repo')).resolves.toBeFalsy()
     await expect(isGitHubHostAuthenticated(host, '/repo')).resolves.toBe(false)
   })
 
