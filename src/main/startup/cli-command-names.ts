@@ -16,6 +16,7 @@ export const CLI_COMMAND_NAMES = [
   'cloud',
   'click',
   'clipboard',
+  'cloud',
   'computer',
   'connector',
   'console',
