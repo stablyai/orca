@@ -87,6 +87,7 @@ export function getOrcaUserDataPath(): string {
   return join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'orca')
 }
 
+/** Keep other resources on the system home while global instructions follow the user's override. */
 export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string): void {
   const targetHome = managedHomePath ?? getOrcaManagedCodexHomePath()
   const systemHomePath = getSystemCodexHomePath()
@@ -104,16 +105,20 @@ export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string
   syncSystemCodexRulesIntoManagedHome(systemHomePath, targetHome)
 }
 
+/** WSL may omit ORCA_CODEX_HOME, so inherited account homes also need an on-disk ownership check. */
 function getCodexGlobalInstructionsHomePath(systemHomePath: string, targetHome: string): string {
   const configuredHome = resolve(resolveAbsoluteDirOverride(process.env.CODEX_HOME, systemHomePath))
   const configuredKey = normalizeRuntimePathForComparison(configuredHome)
-  // An Orca child can inherit an account home; never use it as another account's global source.
   const managedHomes = [targetHome, process.env.ORCA_CODEX_HOME?.trim()]
-  return managedHomes.some(
-    (home) => home && normalizeRuntimePathForComparison(resolve(home)) === configuredKey
-  )
-    ? systemHomePath
-    : configuredHome
+  if (
+    managedHomes.some(
+      (home) => home && normalizeRuntimePathForComparison(resolve(home)) === configuredKey
+    )
+  ) {
+    return systemHomePath
+  }
+  const ownershipMarker = observe(() => lstatSync(join(configuredHome, '.orca-managed-home')))
+  return ownershipMarker.kind === 'absent' ? configuredHome : systemHomePath
 }
 
 export function syncCodexGlobalInstructionsIntoManagedHome({
@@ -130,6 +135,7 @@ export function syncCodexGlobalInstructionsIntoManagedHome({
   })
 }
 
+/** Refresh or remove only links and copies whose ownership Orca can establish. */
 function linkSystemCodexResource(
   systemHomePath: string,
   managedHomePath: string,
@@ -159,16 +165,21 @@ function linkSystemCodexResource(
     return
   }
 
-  if (targetAlreadyPointsToSource(targetPath, sourcePath)) {
+  // Unreadable targets must not enter the copier's removal path.
+  let targetObservation = observe(() => lstatSync(targetPath))
+  if (targetObservation.kind === 'indeterminate') {
+    return
+  }
+  if (
+    targetObservation.kind === 'present' &&
+    targetObservation.value.isSymbolicLink() &&
+    targetLinkPointsToSource(targetPath, sourcePath)
+  ) {
     clearCopiedResourceMarker(managedHomePath, entryName)
     if (!preferCopy || !removeSymlinkEntry(targetPath)) {
       return
     }
-  }
-  // Unreadable targets must not enter the copier's removal path.
-  const targetObservation = observe(() => lstatSync(targetPath))
-  if (targetObservation.kind === 'indeterminate') {
-    return
+    targetObservation = { kind: 'absent' }
   }
   const shouldRefreshFallbackCopy =
     targetObservation.kind === 'present' &&
@@ -265,15 +276,9 @@ function copiedFileContentsMatch(
   }
 }
 
-function targetAlreadyPointsToSource(targetPath: string, sourcePath: string): boolean {
-  try {
-    return (
-      lstatSync(targetPath).isSymbolicLink() &&
-      linkTargetsMatch(readlinkSync(targetPath), sourcePath)
-    )
-  } catch {
-    return false
-  }
+function targetLinkPointsToSource(targetPath: string, sourcePath: string): boolean {
+  const targetLink = observe(() => readlinkSync(targetPath))
+  return targetLink.kind === 'present' && linkTargetsMatch(targetLink.value, sourcePath)
 }
 
 function linkTargetsMatch(actualTarget: string, expectedTarget: string): boolean {
