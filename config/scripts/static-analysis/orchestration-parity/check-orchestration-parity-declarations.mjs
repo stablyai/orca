@@ -17,7 +17,7 @@ const LABELS = [
   'Terminal · SSH/WSL',
   'Chat · SSH/WSL'
 ]
-const CELL = /^(?:supported(?:: .+)?|refused `([a-z_]+)`: .+|n\/a: .+)$/
+const CELL = /^(?:supported(?:: .+)?|refused `([a-z]+(?:_[a-z]+)+)`: .+|n\/a: .+)$/
 
 // Both catalog lists are generated from the registry: methods with shared params, then those without.
 export function registeredMethods(catalogText) {
@@ -41,7 +41,7 @@ export function declaredSections(markdown) {
   return sections
 }
 
-/** `codeExists` says whether Orca throws a refusal code. */
+/** `codeExists` says whether a refusal code is an error code in the source. */
 export function censusProblems(methods, sections, codeExists) {
   const problems = []
   const declared = new Set()
@@ -64,7 +64,7 @@ export function censusProblems(methods, sections, codeExists) {
           `${method}: "${value}" is not supported, refused \`<code>\`: <reason>, or n/a: <reason>.`
         )
       } else if (match[1] && !codeExists(match[1])) {
-        problems.push(`${method}: Orca never throws refusal code ${match[1]}.`)
+        problems.push(`${method}: ${match[1]} is not an error code in src/main or src/shared.`)
       }
     }
   }
@@ -76,22 +76,13 @@ export function censusProblems(methods, sections, codeExists) {
   return problems
 }
 
-// Codes Orca throws: an OrchestrationError's code, an RPC errorResponse's code, or a shared orchestration code table.
-const THROWN_CODE = [
-  /OrchestrationError\(\s*'([a-z_]+)'/g,
-  /errorResponse\(\s*[^,()]+,\s*[^,()]+,\s*'([a-z_]+)'/g
-]
-
-export function thrownRefusalCodes(sources) {
+// Error codes are snake_case words joined by underscores; a lone word such as `question` is data, not a code.
+// This catches typos and invented codes, not a real code declared for the wrong method.
+export function sourceErrorCodes(sources) {
   const codes = new Set()
-  for (const [rel, text] of sources) {
-    const patterns = /^src\/shared\/orchestration\/.+-codes\.ts$/.test(rel)
-      ? [...THROWN_CODE, /:\s*'([a-z_]+)'/g]
-      : THROWN_CODE
-    for (const pattern of patterns) {
-      for (const match of text.matchAll(pattern)) {
-        codes.add(match[1])
-      }
+  for (const text of sources.values()) {
+    for (const match of text.matchAll(/'([a-z]+(?:_[a-z]+)+)'/g)) {
+      codes.add(match[1])
     }
   }
   return codes
@@ -99,7 +90,7 @@ export function thrownRefusalCodes(sources) {
 
 export function main(root = process.cwd()) {
   const read = (rel) => readFileSync(path.join(root, rel), 'utf8')
-  const codes = thrownRefusalCodes(
+  const codes = sourceErrorCodes(
     readTrackedSources(root, ['src/main', 'src/shared'], (rel) => /(?<!\.test)\.ts$/.test(rel))
   )
   const codeExists = (code) => codes.has(code)
