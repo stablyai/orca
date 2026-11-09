@@ -36,6 +36,12 @@ export type NewWorktreeModalProps = {
     warning?: string,
     executionHost?: ExecutionHostId
   ) => void
+  /** Direct navigation to an existing worktree when adding an already-checked-out project. */
+  onOpenWorktree?: (
+    worktreeId: string,
+    name: string,
+    executionHost?: ExecutionHostId
+  ) => void
   onClose: () => void
 }
 

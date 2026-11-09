@@ -153,5 +153,39 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
     lineHeight: 19,
     fontFamily: typography.monoFamily,
     color: colors.textPrimary
+  },
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    marginTop: spacing.sm
+  },
+  createButton: {
+    backgroundColor: colors.textPrimary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.button,
+    minWidth: 160,
+    alignItems: 'center'
+  },
+  createButtonDisabled: {
+    opacity: 0.4
+  },
+  createText: {
+    color: colors.bgBase,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
+  },
+  addProjectButton: {
+    marginTop: spacing.md,
+    backgroundColor: colors.textPrimary,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.button,
+    alignItems: 'center'
+  },
+  addProjectButtonText: {
+    color: colors.bgBase,
+    fontSize: typography.bodySize,
+    fontWeight: '600'
   }
 }))

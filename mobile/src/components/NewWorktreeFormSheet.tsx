@@ -51,6 +51,7 @@ export function NewWorktreeFormSheet(props: {
   onClose: () => void
   onOpenExternalUrl: (url: string) => void
   onOpenProject: () => void
+  onOpenAddProject?: () => void
   onOpenRunTarget: () => void
   onOpenSource: () => void
   onClearError: () => void
@@ -100,6 +101,14 @@ export function NewWorktreeFormSheet(props: {
         <MobileStateView
           icon={FolderGit2}
           title={t('components.newWorktreeFormSheet.noProjectsFound', 'No projects found')}
+          action={
+            props.onOpenAddProject
+              ? {
+                  label: t('components.newWorktreeFormSheet.addProject', 'Add project'),
+                  onPress: props.onOpenAddProject
+                }
+              : null
+          }
         />
       ) : (
         <>
