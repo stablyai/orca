@@ -277,7 +277,11 @@ export function useChecksPanelReviewState(model: ChecksPanelReviewStateInput) {
     if (!settings) {
       return DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS
     }
-    const hostKey = getRuntimeGitRepoDiscoveryHostKey(ownerTarget ?? { kind: 'local' }, repo)
+    const hostKey = getRuntimeGitRepoDiscoveryHostKey(
+      ownerTarget ?? { kind: 'local' },
+      repo,
+      repo?.connectionId
+    )
     const resolved = resolveSourceControlAiForOperation({
       settings,
       repo,

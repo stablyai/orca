@@ -38,7 +38,8 @@ export function useSourceControlCreatePrIntentCommitMessage({
             operation: 'commitMessage',
             discoveryHostKey: getRuntimeGitRepoDiscoveryHostKey(
               target.target ?? { kind: 'local' },
-              activeRepo
+              activeRepo,
+              target.connectionId
             )
           })
         : null

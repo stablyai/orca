@@ -58,7 +58,8 @@ export function useSourceControlAi({
 
   const sourceControlAiDiscoveryHostKey = getRuntimeGitRepoDiscoveryHostKey(
     target ?? { kind: 'local' },
-    activeRepo
+    activeRepo,
+    activeConnectionId
   )
   const sourceControlAiActionsVisible = useMemo(
     () => (settings ? resolveSourceControlAiEnabled({ settings, repo: activeRepo }) : false),

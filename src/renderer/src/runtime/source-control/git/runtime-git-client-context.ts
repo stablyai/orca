@@ -91,11 +91,13 @@ export function getRuntimeGitScope(
 /** The host key a repo's text-model picks are saved under, so generation reads the pick the picker wrote. */
 export function getRuntimeGitRepoDiscoveryHostKey(
   target: RuntimeClientTarget,
-  repo: { connectionId?: string | null; executionHostId?: string | null } | null | undefined
+  repo: { connectionId?: string | null; executionHostId?: string | null } | null | undefined,
+  connectionId: string | null | undefined
 ): string {
-  return target.kind === 'environment'
-    ? getCommitMessageModelDiscoveryHostKeyForScope(getRuntimeGitScope(target, null))
-    : getRepoCommitMessageModelDiscoveryHostKey(repo ?? {})
+  // Why: without a loaded repo record only the connection can say where it runs; unknown keeps no host's pick.
+  return target.kind !== 'environment' && repo
+    ? getRepoCommitMessageModelDiscoveryHostKey(repo)
+    : getCommitMessageModelDiscoveryHostKeyForScope(getRuntimeGitScope(target, connectionId))
 }
 
 export function getRuntimeCommitMessageSettings(

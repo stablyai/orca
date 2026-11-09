@@ -83,11 +83,12 @@ export function useSourceControlCommitMessageGeneration({
           operation: 'commitMessage',
           discoveryHostKey: getRuntimeGitRepoDiscoveryHostKey(
             activeRepoTarget ?? { kind: 'local' },
-            activeRepo
+            activeRepo,
+            sourceControlConnectionId(scope, activeWorktreeId)
           )
         })
       : null
-  }, [activeRepo, activeRepoTarget])
+  }, [activeRepo, activeRepoTarget, activeWorktreeId, scope])
 
   const handleGenerate = useCallback(
     async (overrides?: RuntimeGenerateCommitMessageOverrides): Promise<void> => {
