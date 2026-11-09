@@ -36,7 +36,7 @@ export function agentSignInGateRequest(
   const hostLabel =
     useAppStore
       .getState()
-      .runtimeEnvironments.find((environment) => environment.id === environmentId)?.name ??
+      .runtimeEnvironments?.find((environment) => environment.id === environmentId)?.name ??
     environmentId
   return {
     key: session.cacheKey,
