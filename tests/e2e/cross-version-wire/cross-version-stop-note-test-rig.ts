@@ -3,15 +3,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeAll, beforeEach, expect } from 'vitest'
 import { StructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-host'
-import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router-test-support'
+import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/providers/testing/structured-agent-session-adapter-router.test-fixture'
 import { startsWhenPublished } from '../../../src/main/native-chat/agent-session-wire/host/testing/structured-agent-session-instant-start.test-fixture'
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-registry'
 import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/host/structured-agent-session-logger'
-import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
 import {
-  closeTestJournalHostDatabase,
-  openTestJournalHostDatabase
-} from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
+  openTestAgentSessionDatabase,
+  openTestAgentSessionRecordStore
+} from '../../../src/main/runtime/agent-session/records/agent-session-record-store-test-harness'
+import { closeTestJournalHostDatabase } from '../../../src/main/native-chat/agent-session-journal/store-lifecycle/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
 import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
@@ -93,7 +93,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
     host = new StructuredAgentSessionHost({
       agents: NO_STRUCTURED_AGENTS,
       store,
-      journalDatabase: openTestJournalHostDatabase(root),
+      journalDatabase: await openTestAgentSessionDatabase(root),
       claimKeyId: 'key-1',
       logger: createStructuredAgentSessionLogger(),
       now: () => NOW,
