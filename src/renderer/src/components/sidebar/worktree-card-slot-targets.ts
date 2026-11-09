@@ -9,7 +9,7 @@ import type {
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { activateAndRevealWorkspace } from '@/lib/workspace/activation/worktree-activation'
 import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structured-agent-session-tab-activation'
-import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateTabAndFocusPane } from '@/lib/workspace/tabs/activate-tab-and-focus-pane'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import {

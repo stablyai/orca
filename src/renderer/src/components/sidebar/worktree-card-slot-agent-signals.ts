@@ -3,7 +3,7 @@ import type { AgentRowState } from '../../../../shared/agent-status/presentation
 import type { AgentChildRowModel } from '../../../../shared/agent-status/presentation/agent-child-row-model'
 import type { DashboardAgentRow } from '@/components/dashboard/useDashboardData'
 import { buildAgentRowLineageTree } from '@/components/dashboard/agent-row-lineage-model'
-import { agentRowDisplayDotState } from '@/lib/agent-row-dot-state'
+import { agentRowDisplayDotState } from '@/lib/agent-status/presentation/agent-row-dot-state'
 import { resolveRowProgramStatus } from '@/lib/program-status/agent-row-presentation'
 import {
   classifySlotLine,

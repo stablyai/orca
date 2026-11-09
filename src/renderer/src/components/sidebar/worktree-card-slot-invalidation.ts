@@ -1,6 +1,8 @@
 import type { AppState } from '@/store/types'
-import { isExplicitAgentStatusFresh } from '@/lib/pane-agent-evidence'
-import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status/contracts/agent-status-freshness'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  isAgentStatusFresh
+} from '../../../../shared/agent-status/contracts/agent-status-freshness'
 import { getStructuredAgentSessionTabsByPaneKey } from '@/components/native-chat/session/status/structured-agent-session-tabs'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { getTabIdToWorktreeId } from './workspace-card/activity/worktree-agent-row-selectors'
@@ -90,8 +92,8 @@ export function changedSlotWorkspaces(
           previous !== next ||
           (next &&
             before.epoch !== after.epoch &&
-            isExplicitAgentStatusFresh(next, before.at, AGENT_STATUS_STALE_AFTER_MS) !==
-              isExplicitAgentStatusFresh(next, after.at, AGENT_STATUS_STALE_AFTER_MS))
+            isAgentStatusFresh(next, before.at, AGENT_STATUS_STALE_AFTER_MS) !==
+              isAgentStatusFresh(next, after.at, AGENT_STATUS_STALE_AFTER_MS))
         ) {
           includePane(paneKey)
         }
