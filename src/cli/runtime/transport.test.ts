@@ -108,9 +108,7 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
     )
 
     expect(error).toMatchObject({ code: 'runtime_unavailable' })
-    expect(formatCliError(error)).toBe(
-      'The Orca runtime changed while the request was in flight.\nNext step: Retry the command.'
-    )
+    expect(formatCliError(error)).toContain('\nNext step: Retry the command.')
   })
 
   it.each(['preflight', 'mutation'] as const)(

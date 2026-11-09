@@ -24,22 +24,13 @@ function listResult(overrides: Partial<RuntimeTerminalListResult> = {}): Runtime
   return { terminals: [terminal()], totalCount: 1, truncated: false, ...overrides }
 }
 
-describe('formatTerminalList host identity', () => {
-  it('prints unverifiable, not local, for a row whose host the runtime could not name', () => {
-    const output = formatTerminalList(listResult({ terminals: [terminal()] }))
-
-    expect(output).toContain('host=unverifiable')
-    expect(output).not.toContain('host=local')
-  })
-})
-
 describe('formatTerminalList orphaned marker', () => {
   it('marks only the terminal with no pane binding', () => {
     const list = formatTerminalList(
       listResult({ terminals: [terminal(), terminal({ handle: 'term_2', orphaned: true })] })
     )
-    expect(list).toContain('term_1  worker  connected  host=')
-    expect(list).toContain('term_2  worker  connected  orphaned  host=')
+    expect(list).toContain('term_1  worker  connected  /repo')
+    expect(list).toContain('term_2  worker  connected  orphaned  /repo')
   })
 })
 

@@ -4,6 +4,7 @@ import {
 } from '../shared/terminal/pty/lifecycle/pty-liveness-verdict'
 import { describeTerminalWaitBlockedReason } from '../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
+import { ownerTokenOf, type OwnerContext } from './row-owner-server'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
@@ -23,7 +24,8 @@ import type {
 } from '../shared/runtime-types'
 
 export function formatTerminalList(
-  result: WithAnnotatedHostScope<RuntimeTerminalListResult>
+  result: WithAnnotatedHostScope<RuntimeTerminalListResult>,
+  owners?: OwnerContext
 ): string {
   const scope = formatListingHostScope(result.hostScope)
   if (result.terminals.length === 0) {
@@ -32,7 +34,7 @@ export function formatTerminalList(
   const body = result.terminals
     .map(
       (terminal) =>
-        `${terminal.handle}  ${terminal.paneTitle ?? terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}${terminal.orphaned ? '  orphaned' : ''}  host=${terminal.executionHostId ?? 'unverifiable'}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
+        `${terminal.handle}  ${terminal.paneTitle ?? terminal.title ?? '(untitled)'}  ${terminal.connected ? 'connected' : 'disconnected'}${terminal.orphaned ? '  orphaned' : ''}${ownerTokenOf(terminal.executionHostId, owners)}  ${terminal.worktreePath}\n${terminal.preview ? `preview: ${terminal.preview}` : 'preview: <empty>'}`
     )
     .join('\n\n')
   const visualLayout = formatTerminalVisualLayouts(result.visualLayouts)
@@ -216,7 +218,7 @@ function promptObservationWarning(
   }
   if (prompt.observation === 'unsupported') {
     return prompt.provider === 'old-host'
-      ? 'this host predates durable prompt receipts. Update Orca on the execution host, and inspect the terminal before retrying an ambiguous send.'
+      ? 'this server predates durable prompt receipts. Update Orca on that server, and inspect the terminal before retrying an ambiguous send.'
       : 'input was accepted, but this provider cannot report delivery. Inspect the terminal before retrying.'
   }
   return null

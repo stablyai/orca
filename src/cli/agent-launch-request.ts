@@ -75,7 +75,7 @@ export function readCliAgentLaunch(
     model: getOptionalStringFlag(flags, 'model'),
     effort: getOptionalStringFlag(flags, 'effort'),
     createsWorktree: target.createsWorktree,
-    // The execution host verifies an OpenCode model itself before it starts one.
+    // The server verifies an OpenCode model itself before it starts one.
     openCodeModelLaunchSupported: true
   })
   if ('refusal' in checked) {
@@ -107,7 +107,7 @@ export function hasLaunchModelFlags(flags: Flags): boolean {
 
 // An older host strips `surface` and follows its own setting, so an explicit pick never reaches it.
 export const SURFACE_UNSUPPORTED_MESSAGE =
-  'This Orca host cannot start an agent as a chat or a terminal on request. Update Orca on the execution host, or omit --surface.'
+  'This Orca server cannot start an agent as a chat or a terminal on request. Update Orca on that server, or omit --surface.'
 
 export async function getAgentLaunchCapabilities(
   client: RuntimeClient
@@ -128,13 +128,13 @@ export async function callAgentLaunch(
   if (launch.operationId && !replaySupported) {
     throw new RuntimeClientError(
       'agent_session_operation_unknown',
-      'This host cannot replay the earlier launch. Return to the original execution host; do not retry without --retry-launch.'
+      'This server cannot replay the earlier launch. Return to the server that started it; do not retry without --retry-launch.'
     )
   }
   if (launch.prompt && !capabilities.includes(AGENT_LAUNCH_PROMPT_CARRY_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError(
       'incompatible_runtime',
-      'This Orca host cannot safely carry launch prompts. Update Orca on the execution host.'
+      'This Orca server cannot safely carry launch prompts. Update Orca on that server.'
     )
   }
   if (launch.surface && !capabilities.includes(AGENT_LAUNCH_SURFACE_RUNTIME_CAPABILITY)) {
@@ -143,7 +143,7 @@ export async function callAgentLaunch(
   if (!capabilities.includes(AGENT_LAUNCH_LOCAL_PRESENTATION_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError(
       'incompatible_runtime',
-      'This Orca host cannot honor CLI launch focus or background behavior. Update Orca on the execution host.'
+      'This Orca server cannot honor CLI launch focus or background behavior. Update Orca on that server.'
     )
   }
   const operationId = replaySupported

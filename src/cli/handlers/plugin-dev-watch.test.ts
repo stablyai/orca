@@ -44,7 +44,7 @@ describe('orca plugin dev watch', () => {
       '--approve',
       'ap1-old',
       '--json',
-      '--environment',
+      '--server',
       'box'
     ]
     const call = vi
@@ -65,7 +65,7 @@ describe('orca plugin dev watch', () => {
       dir: '/work/notes',
       approve: 'ap1-new',
       json: true,
-      environment: 'box'
+      server: 'box'
     })
   })
 

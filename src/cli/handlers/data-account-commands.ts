@@ -23,7 +23,7 @@ export async function assertDataAccountsSupported(ctx: HandlerContext): Promise<
   if (!status.result.capabilities?.includes(DATA_ACCOUNT_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError(
       'incompatible_runtime',
-      'Update or restart this Orca host to manage OpenCode and Devin accounts.'
+      'Update or restart this Orca server to manage OpenCode and Devin accounts.'
     )
   }
 }

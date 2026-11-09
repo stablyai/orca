@@ -46,12 +46,7 @@ describe('terminal safety', () => {
       { updatedAt: '2026-09-12\u001b[31mT18:04:11.000Z' },
       'Claude  2026-09-12T18:04:11.000Z'
     ],
-    [
-      'executionHostId',
-      { executionHostId: 'ssh:\u001b]0;pwned\u0007build-01' },
-      'host=ssh:build-01'
-    ],
-    ['title', { title: 'resize\u001b[2Jrace' }, '  resizerace  host='],
+    ['title', { title: 'resize\u001b[2Jrace' }, '  resizerace\n'],
     [
       'evidence snippet',
       { evidence: { ...localHit.evidence!, snippet: 'a\u001b[1mb' } },
@@ -125,7 +120,7 @@ describe('terminal safety', () => {
         ]
       })
     )
-    expect(text).toContain('Claude  2026-09-12T18:04:11.000Z  wrapped title  host=ssh:build-01')
+    expect(text).toContain('Claude  2026-09-12T18:04:11.000Z  wrapped title\n')
     expect(text).toContain('    assistant: first second')
   })
 })

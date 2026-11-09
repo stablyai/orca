@@ -1,16 +1,25 @@
 import { isUnresolvedOwnerHostId, parseExecutionHostId } from '../shared/execution-host'
-import { listEnvironments } from '../shared/remote-runtime/host-store/runtime-environment-store'
 import { parseWorkspaceKey } from '../shared/workspace-scope'
 import type { CrossStoreParentRef } from '../shared/worktree/lineage-types'
 import { LOCAL_ENVIRONMENT } from './local-environment-selector'
 import type { RuntimeClient } from './runtime-client'
 import { quoteCliCommandArgument } from './shell-command-quote'
 
-/** Which Orca answered: `local`, a saved environment, or a one-off pairing-code connection (id null). */
-export type WorkspaceEnvironment = { id: string | null; name: string | null }
+import {
+  formatOwner,
+  LOCAL_SERVER,
+  ownerOfHostId,
+  readOwnerContext,
+  serverLabel,
+  type OwnerContext,
+  type ServerUnknownReason,
+  type WorkspaceServer
+} from './row-owner-server'
 
-/** A copyable route to one workspace; `environment` is the exact `--environment` value. */
-export type WorkspaceAddress = { environment: string; worktree: string; line: string }
+export type { WorkspaceServer }
+
+/** A copyable route to one workspace; `server` is the exact `--server` value. */
+export type WorkspaceAddress = { server: string; worktree: string; line: string }
 
 export type AddressUnavailableReason =
   | 'one-off-connection'
@@ -18,14 +27,16 @@ export type AddressUnavailableReason =
   | 'duplicate-folder-id'
 
 export type WorkspaceParentAnnotation = {
-  state: 'known' | 'unknown-environment'
+  state: 'known' | 'unknown-server'
   selector: string
-  environment: WorkspaceEnvironment | null
+  server: WorkspaceServer | null
   address: WorkspaceAddress | null
 }
 
+/** `server` owns the row; `address` is the route that answered and a selector it accepts. */
 export type WorkspaceAnnotation = {
-  environment: WorkspaceEnvironment
+  server: WorkspaceServer | null
+  serverUnknown?: ServerUnknownReason
   address: WorkspaceAddress | null
   addressUnavailable?: AddressUnavailableReason
   parent: WorkspaceParentAnnotation | null
@@ -42,26 +53,9 @@ export type AddressableRow = {
 }
 
 export type AddressContext = {
-  environment: WorkspaceEnvironment
+  owners: OwnerContext
   /** The caller's own store, read only when some row has a parent in another store. */
   localInstallationId?: string
-}
-
-const LOCAL: WorkspaceEnvironment = { id: LOCAL_ENVIRONMENT, name: LOCAL_ENVIRONMENT }
-
-/** The environment the client routes to; a saved route is named by its stored id and name. */
-export function describeClientEnvironment(client: RuntimeClient): WorkspaceEnvironment {
-  if (!client.isRemote) {
-    return LOCAL
-  }
-  const selector = client.environmentSelector
-  if (!selector) {
-    return { id: null, name: null }
-  }
-  const saved = listEnvironments(client.userDataPath).find(
-    (environment) => environment.id === selector || environment.name === selector
-  )
-  return saved ? { id: saved.id, name: saved.name } : { id: selector, name: selector }
 }
 
 export async function readAddressContext(
@@ -69,24 +63,20 @@ export async function readAddressContext(
   rows: readonly AddressableRow[],
   readLocalInstallationId: () => Promise<string | undefined>
 ): Promise<AddressContext> {
-  const environment = describeClientEnvironment(client)
+  const owners = readOwnerContext(client)
   if (!rows.some((row) => row.crossStoreParent)) {
-    return { environment }
+    return { owners }
   }
-  // Only the caller's own store is verified here; other environments are never dialed.
+  // Only the caller's own store is verified here; other servers are never dialed.
   const localInstallationId = await readLocalInstallationId().catch(() => undefined)
-  return { environment, localInstallationId }
+  return { owners, localInstallationId }
 }
 
-export function environmentLabel(environment: WorkspaceEnvironment | null): string {
-  return environment?.name ?? 'one-off connection'
-}
-
-function addressOf(environment: string, worktree: string): WorkspaceAddress {
+function addressOf(server: string, worktree: string): WorkspaceAddress {
   return {
-    environment,
+    server,
     worktree,
-    line: `--environment ${quoteCliCommandArgument(environment)} --worktree ${quoteCliCommandArgument(worktree)}`
+    line: `--server ${quoteCliCommandArgument(server)} --worktree ${quoteCliCommandArgument(worktree)}`
   }
 }
 
@@ -113,7 +103,7 @@ function listingOf(rows: readonly AddressableRow[]): Listing {
   return { rowsById }
 }
 
-/** The selector naming this row alone in its environment, or why none can. */
+/** The selector naming this row alone on the answering server, or why none can. */
 function rowSelector(
   row: AddressableRow,
   listing: Listing
@@ -137,16 +127,18 @@ function rowSelector(
 
 function parentOf(
   row: AddressableRow,
+  rowServer: WorkspaceServer | null,
   listing: Listing,
   context: AddressContext
 ): WorkspaceParentAnnotation | null {
-  const route = context.environment.id
-  const sameEnvironment = (selector: string, parentRow?: AddressableRow) => {
+  const route = context.owners.answering.id
+  // A same-store parent shares its child's owner.
+  const sameServer = (selector: string, parentRow?: AddressableRow) => {
     const resolved = parentRow ? rowSelector(parentRow, listing) : { selector }
     return {
       state: 'known' as const,
       selector,
-      environment: context.environment,
+      server: rowServer,
       address: route && 'selector' in resolved ? addressOf(route, resolved.selector) : null
     }
   }
@@ -155,11 +147,11 @@ function parentOf(
     const parentRow = listing.rowsById
       .get(row.parentWorktreeId)
       ?.find((candidate) => (candidate.hostId ?? null) === (row.hostId ?? null))
-    return sameEnvironment(`id:${row.parentWorktreeId}`, parentRow)
+    return sameServer(`id:${row.parentWorktreeId}`, parentRow)
   }
   if (row.parentFolderKey) {
     // A listed copy carries the duplicate-folder-id check, so a shared id gets no address.
-    return sameEnvironment(row.parentFolderKey, listing.rowsById.get(row.parentFolderKey)?.[0])
+    return sameServer(row.parentFolderKey, listing.rowsById.get(row.parentFolderKey)?.[0])
   }
   const ref = row.crossStoreParent
   if (!ref) {
@@ -170,11 +162,11 @@ function parentOf(
     return {
       state: 'known',
       selector,
-      environment: LOCAL,
+      server: LOCAL_SERVER,
       address: addressOf(LOCAL_ENVIRONMENT, selector)
     }
   }
-  return { state: 'unknown-environment', selector, environment: null, address: null }
+  return { state: 'unknown-server', selector, server: null, address: null }
 }
 
 /** Annotations for every row of one listing, aligned by index. */
@@ -183,56 +175,66 @@ export function annotateWorkspaces(
   context: AddressContext
 ): WorkspaceAnnotation[] {
   const listing = listingOf(rows)
+  const route = context.owners.answering.id
   return rows.map((row) => {
-    const parent = parentOf(row, listing, context)
-    const route = context.environment.id
+    const owner = ownerOfHostId(row.hostId, context.owners)
+    const server = owner.server
+      ? { server: owner.server }
+      : { server: null, serverUnknown: owner.unknown }
+    const parent = parentOf(row, owner.server, listing, context)
     if (!route) {
-      return {
-        environment: context.environment,
-        address: null,
-        addressUnavailable: 'one-off-connection',
-        parent
-      }
+      return { ...server, address: null, addressUnavailable: 'one-off-connection', parent }
     }
     const selected = rowSelector(row, listing)
     return 'selector' in selected
-      ? { environment: context.environment, address: addressOf(route, selected.selector), parent }
-      : {
-          environment: context.environment,
-          address: null,
-          addressUnavailable: selected.unavailable,
-          parent
-        }
+      ? { ...server, address: addressOf(route, selected.selector), parent }
+      : { ...server, address: null, addressUnavailable: selected.unavailable, parent }
   })
 }
 
 const UNAVAILABLE_TEXT: Record<AddressUnavailableReason, string> = {
   'one-off-connection':
-    'unavailable (one-off pairing-code connection; save it with `orca environment add --name <name> --pairing-code <code>`)',
-  'unverifiable-row': "unavailable (this row's host or identity can't be verified)",
+    'unavailable (one-off connection; save it with `orca server add --name <name> --pairing-code <code>`)',
+  'unverifiable-row': "unavailable (this row's owner or identity can't be verified)",
   'duplicate-folder-id':
     'unavailable (several folder workspaces share this id; remove one in the Orca app and add its folder again)'
 }
 
-/** `environment:` and `address:` lines, each on its own line. */
-export function formatAddressLines(annotation: WorkspaceAnnotation): string {
-  return `\nenvironment: ${environmentLabel(annotation.environment)}\naddress: ${
+/** `server:` and `address:` lines, each on its own line. */
+export function formatAddressLines(
+  annotation: WorkspaceAnnotation,
+  hostId?: string | null
+): string {
+  const owner = annotation.server
+    ? { server: annotation.server }
+    : {
+        server: null,
+        unknown: annotation.serverUnknown ?? ('owner-not-reported' as const),
+        stored: hostId ?? null
+      }
+  return `\nserver: ${formatOwner(owner)}\naddress: ${
     annotation.address?.line ??
     UNAVAILABLE_TEXT[annotation.addressUnavailable ?? 'unverifiable-row']
   }`
 }
 
-/** The `parent:` line, naming the parent's environment when it differs from the row's. */
-export function formatParentLine(annotation: WorkspaceAnnotation): string {
+/** The parent text after `parent: `, naming the parent's server when it differs from the row's. */
+export function formatParentText(annotation: WorkspaceAnnotation): string | null {
   const { parent } = annotation
   if (!parent) {
-    return ''
+    return null
   }
-  if (parent.state === 'unknown-environment') {
-    return `\nparent: ${parent.selector}  environment=unknown (no verified route here)`
+  if (parent.state === 'unknown-server') {
+    return `${parent.selector}  server=unknown (no verified route here)`
   }
-  const differs = parent.environment?.id !== annotation.environment.id
-  return `\nparent: ${parent.selector}${differs ? `  environment=${environmentLabel(parent.environment)}` : ''}`
+  const differs = parent.server?.id !== annotation.server?.id
+  return `${parent.selector}${differs ? `  server=${serverLabel(parent.server)}` : ''}`
+}
+
+/** The `parent:` line, or nothing when the row has no parent. */
+export function formatParentLine(annotation: WorkspaceAnnotation): string {
+  const text = formatParentText(annotation)
+  return text === null ? '' : `\nparent: ${text}`
 }
 
 type PsRowFacts = {
@@ -275,10 +277,11 @@ export function addressableOfShowRecord(record: ShowRecordFacts): AddressableRow
   }
 }
 
-/** The JSON fields one row gains; `addressUnavailable` appears only beside a null address. */
+/** The JSON fields one row gains; the `*Unavailable`/`*Unknown` reasons appear only beside a null. */
 export function annotationFields(annotation: WorkspaceAnnotation): WorkspaceAnnotation {
   return {
-    environment: annotation.environment,
+    server: annotation.server,
+    ...(annotation.serverUnknown ? { serverUnknown: annotation.serverUnknown } : {}),
     parent: annotation.parent,
     address: annotation.address,
     ...(annotation.addressUnavailable ? { addressUnavailable: annotation.addressUnavailable } : {})

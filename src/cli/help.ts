@@ -1,6 +1,7 @@
 import type { CommandSpec } from './args'
 import { findCommandSpec, isCommandGroup, matches, supportsBrowserPageFlag } from './args'
 import { unknownCommandData } from './command-suggestion'
+import { INPUT_ONLY_FLAGS } from './command-spec'
 import { formatCommandScopedFlagHelp } from './command-scoped-flag-help'
 import { FLAG_HELP_TEXT } from './flag-help-text'
 import { ROOT_HELP_TEXT_PRIMARY } from './root-help-text-primary'
@@ -34,9 +35,9 @@ export function formatCommandHelp(spec: CommandSpec): string {
   const displayedFlags =
     spec.argumentMode === 'passthrough'
       ? []
-      : supportsBrowserPageFlag(spec)
-        ? [...spec.allowedFlags, 'page']
-        : spec.allowedFlags
+      : (supportsBrowserPageFlag(spec) ? [...spec.allowedFlags, 'page'] : spec.allowedFlags).filter(
+          (flag) => !INPUT_ONLY_FLAGS.has(flag)
+        )
 
   if (displayedFlags.length > 0) {
     lines.push('', 'Options:')

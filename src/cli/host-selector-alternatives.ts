@@ -72,23 +72,24 @@ export function ambiguousEnvironments(
   return byName.length > 1 ? byName : []
 }
 
+/** SSH is how a server is set up, never a place to run; Orca does not guess which server it hosts. */
+export function sshConnectionStep(name: string): string {
+  return `"${name}" is an SSH connection, not a server. If Orca runs a server there, it is in \`orca server list\`; otherwise set it up in Settings → SSH Hosts.`
+}
+
 export function crossKindNextSteps(
   name: string,
   alternatives: HostAlternatives,
-  requested: 'environment' | 'ssh'
+  requested: 'server' | 'ssh'
 ): string[] {
   const steps: string[] = []
   const ssh = findSshTargetByName(alternatives.sshTargets, name)
-  const environment = findEnvironmentByName(alternatives.environments, name)
+  const server = findEnvironmentByName(alternatives.environments, name)
   if (requested !== 'ssh' && ssh) {
-    steps.push(
-      `"${name}" is an SSH target on this Orca host, not a paired server. Use --host ssh:${ssh.id}.`
-    )
+    steps.push(sshConnectionStep(name))
   }
-  if (requested !== 'environment' && environment) {
-    steps.push(
-      `"${name}" is a paired Orca server, not an SSH target. Use --environment ${environment.name}.`
-    )
+  if (requested !== 'server' && server) {
+    steps.push(`"${name}" is a saved server, not an SSH connection. Use --server ${server.id}.`)
   }
   return steps
 }
@@ -167,23 +168,21 @@ export async function resolveSshHostTargetId(
       `Ambiguous SSH target in ${flagSpelling}: ${ambiguous.length} targets share that label. Use the target id.`,
       {
         knownSshTargets: ambiguous,
-        nextSteps: ambiguous.map((target) => `Use --host ssh:${target.id} for ${target.label}.`)
+        nextSteps: [sshConnectionStep(targetId)]
       }
     )
   }
   throw new RuntimeClientError(
     'invalid_argument',
     bareName
-      ? `Unknown host in ${flagSpelling}: it is not this machine or a paired Orca server the command can use, and the connected Orca host has no SSH target named ${targetId}. Run \`orca host list\` to see every name.`
-      : `Unknown SSH target in ${flagSpelling}: this Orca host has no SSH target named or with id ${targetId}.`,
+      ? `Unknown name in ${flagSpelling}: it is not this computer, a saved server, or an SSH connection of the answering server.`
+      : `Unknown SSH target in ${flagSpelling}: the answering Orca server has no SSH target named or with id ${targetId}.`,
     {
       knownSshTargets: targets,
-      knownEnvironments: environments,
+      knownServers: environments,
       nextSteps: [
         ...crossKindNextSteps(targetId, { sshTargets: targets, environments }, 'ssh'),
-        ...(targets.length > 0
-          ? [`Known SSH targets: ${targets.map((target) => target.label).join(', ')}.`]
-          : ['This Orca host has no SSH targets registered.'])
+        'To run on another server, use --server <id>; `orca server list` prints each id.'
       ]
     }
   )

@@ -48,18 +48,17 @@ describe('findEnvironmentByName', () => {
 describe('crossKindNextSteps', () => {
   const alternatives = { sshTargets: SSH_TARGETS, environments: ENVIRONMENTS }
 
-  it('points an SSH name at the SSH flag when a server was asked for', () => {
-    const steps = crossKindNextSteps('openclaw', alternatives, 'environment')
+  it('never offers an SSH connection as a place to run', () => {
+    const steps = crossKindNextSteps('openclaw', alternatives, 'server')
 
-    expect(steps.join('\n')).toContain('--host ssh:ssh-1755000000000-a1b2c3')
-    expect(steps.join('\n')).toContain('is an SSH target')
+    expect(steps.join('\n')).toContain('`orca server list`')
+    expect(steps.join('\n')).not.toContain('--host')
   })
 
-  it('points a server name at --environment when an SSH target was asked for', () => {
+  it('points a server name at --server <id> when an SSH target was asked for', () => {
     const steps = crossKindNextSteps('awin', alternatives, 'ssh')
 
-    expect(steps.join('\n')).toContain('--environment awin')
-    expect(steps.join('\n')).toContain('is a paired Orca server')
+    expect(steps.join('\n')).toContain('--server 03ef704c-b180-4b10-998d-e28fbd5de9a3')
   })
 
   it('says nothing when the name exists on neither axis', () => {
@@ -68,7 +67,7 @@ describe('crossKindNextSteps', () => {
 
   it('does not suggest the axis that was already requested', () => {
     expect(crossKindNextSteps('openclaw', alternatives, 'ssh')).toEqual([])
-    expect(crossKindNextSteps('awin', alternatives, 'environment')).toEqual([])
+    expect(crossKindNextSteps('awin', alternatives, 'server')).toEqual([])
   })
 })
 
@@ -94,17 +93,10 @@ describe('resolveSshHostTargetId', () => {
     ).rejects.toMatchObject({
       code: 'invalid_argument',
       data: {
-        nextSteps: expect.arrayContaining([expect.stringContaining('--environment awin')])
+        nextSteps: expect.arrayContaining([
+          expect.stringContaining('--server 03ef704c-b180-4b10-998d-e28fbd5de9a3')
+        ])
       }
-    })
-  })
-
-  it('says so plainly when the host has no SSH targets at all', async () => {
-    await expect(
-      resolveSshHostTargetId(clientReturning([]), 'openclaw', ENVIRONMENTS)
-    ).rejects.toMatchObject({
-      code: 'invalid_argument',
-      data: { nextSteps: expect.arrayContaining(['This Orca host has no SSH targets registered.']) }
     })
   })
 })
@@ -188,10 +180,10 @@ describe('ambiguous names never resolve silently', () => {
     ).rejects.toMatchObject({
       code: 'invalid_argument',
       data: {
-        nextSteps: expect.arrayContaining([
-          expect.stringContaining('ssh-1-a'),
-          expect.stringContaining('ssh-2-b')
-        ])
+        knownSshTargets: [
+          expect.objectContaining({ id: 'ssh-1-a' }),
+          expect.objectContaining({ id: 'ssh-2-b' })
+        ]
       }
     })
   })

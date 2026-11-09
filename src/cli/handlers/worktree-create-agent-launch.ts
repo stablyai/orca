@@ -1,4 +1,4 @@
-// Use agent.launch for surface/model/effort; older hosts fall back to the create startup terminal.
+// Use agent.launch for surface/model/effort; older servers fall back to the create startup terminal.
 
 import type { AgentLaunchResult } from '../../shared/agent-launch/contracts/agent-launch-intent'
 import {
@@ -17,6 +17,7 @@ import {
 import { formatWorktreeShow, printResult } from '../format'
 import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { printLineageSummary } from './worktree-lineage-summary'
+import { annotateMutationResult } from './worktree-address-annotation'
 import { printHookWarning } from './worktree-removal-warnings'
 import { withSetupDecisionRecovery } from './worktree-setup-decision-recovery'
 import { withCliAgentLaunchRecovery } from '../agent-launch-recovery'
@@ -25,7 +26,7 @@ type WorktreeAgentLaunchResult = Pick<
   RuntimeWorktreeCreateResult,
   'lineage' | 'workspaceLineage' | 'crossStoreLineage'
 > & {
-  /** Absent only when the host could not show the worktree it just created. */
+  /** Absent only when the server could not show the worktree it just created. */
   worktree?: RuntimeWorktreeRecord
   launch: AgentLaunchResult
 }
@@ -47,13 +48,13 @@ export async function createWorktreeWithAgent(args: {
     if (launch.operationId) {
       throw new RuntimeClientError(
         'agent_session_operation_unknown',
-        'This host cannot replay the earlier launch. Return to the original execution host; do not retry without --retry-launch.'
+        'This server cannot replay the earlier launch. Return to the server that started it; do not retry without --retry-launch.'
       )
     }
     if (hasLaunchModelFlags(flags)) {
       throw new RuntimeClientError(
         'incompatible_runtime',
-        'This Orca host cannot start an agent on a chosen model or effort. Update Orca on the execution host, or omit --model and --effort.'
+        "This Orca server can't start an agent on a chosen model or effort. Update Orca on that server, or omit --model and --effort."
       )
     }
     if (launch.surface) {
@@ -74,9 +75,10 @@ export async function createWorktreeWithAgent(args: {
         }
       )
     )
-    printHookWarning(created.result, json)
-    printLineageSummary(created.result, json)
-    printResult(created, json, formatWorktreeShow)
+    const { response, parentText } = await annotateMutationResult(client, created)
+    printHookWarning(response.result, json)
+    printLineageSummary(response.result, json, parentText)
+    printResult(response, json, formatWorktreeShow)
     return
   }
   const launched = await withSetupDecisionRecovery(
@@ -92,7 +94,11 @@ export async function createWorktreeWithAgent(args: {
     ),
     launch.operationId !== undefined
   )
-  const worktree = await showLaunchedWorktree(client, launched.result.worktreeId)
+  const shown = await showLaunchedWorktree(client, launched.result.worktreeId)
+  const annotated = shown
+    ? await annotateMutationResult(client, { result: { worktree: shown } })
+    : undefined
+  const worktree = annotated?.response.result.worktree
   const result: WorktreeAgentLaunchResult = {
     ...(worktree
       ? {
@@ -104,7 +110,7 @@ export async function createWorktreeWithAgent(args: {
       : { lineage: null }),
     launch: launched.result
   }
-  printLineageSummary(result, json)
+  printLineageSummary(result, json, annotated?.parentText ?? null)
   printResult({ ...launched, result }, json, (value) =>
     [
       ...(value.worktree ? [formatWorktreeShow({ worktree: value.worktree })] : []),

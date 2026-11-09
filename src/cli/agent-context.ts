@@ -1,5 +1,6 @@
 import type { CommandSpec } from './args'
 import { effectiveAllowedFlags } from './args'
+import { INPUT_ONLY_FLAGS } from './command-spec'
 
 const SCHEMA_VERSION = 1
 
@@ -36,7 +37,7 @@ export function buildAgentContext(specs: CommandSpec[]): AgentContextSchema {
       summary: spec.summary,
       usage: spec.usage,
       // Include globals and conditional flags so discovery matches validation.
-      flags: effectiveAllowedFlags(spec),
+      flags: effectiveAllowedFlags(spec).filter((flag) => !INPUT_ONLY_FLAGS.has(flag)),
       positionalArgs: spec.positionalArgs ?? [],
       ...(spec.variadicPositional ? { variadicPositional: true } : {}),
       ...(spec.repeatableFlags ? { repeatableFlags: spec.repeatableFlags } : {}),

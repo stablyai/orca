@@ -126,7 +126,7 @@ const APPROVE_NOTE =
 export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['plugin', 'list'],
-    summary: 'List plugins on the Orca host with their status and access level',
+    summary: 'List plugins on the Orca server with their status and access level',
     usage: 'orca plugin list [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
     notes: [
@@ -167,18 +167,18 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['plugin', 'system', 'on'],
-    summary: 'Turn plugins on for the Orca host',
+    summary: 'Turn plugins on for the Orca server',
     usage: 'orca plugin system on [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
     notes: [
-      'The same switch as "Turn on plugins" in Settings → Plugins, for a host with no window such as `orca serve`.',
+      'The same switch as "Turn on plugins" in Settings → Plugins, for a server with no window such as `orca serve`.',
       'Approves nothing: only plugins approved earlier start; anything else still needs its own --approve.'
     ],
-    examples: ['orca plugin system on', 'orca plugin system on --environment build-box --json']
+    examples: ['orca plugin system on', 'orca plugin system on --server build-box --json']
   },
   {
     path: ['plugin', 'system', 'off'],
-    summary: 'Turn plugins off for the Orca host',
+    summary: 'Turn plugins off for the Orca server',
     usage: 'orca plugin system off [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
     notes: [
@@ -215,7 +215,7 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
       '--shot <out-dir> opens one panel in the right sidebar once (the first, or --shot-panel <id>; an unknown id fails at start), then after the load and each reload that leaves the plugin running saves a PNG of it, like `orca plugin shot`, to <out-dir>/<plugin-key>-<panel>.png (overwritten; a `shot` event). It never switches the sidebar again: while you show another tab or close the sidebar it skips, with one `shot_skipped` event per time away, and resumes when the panel is back. With --check, the check runs first. Needs the Orca desktop app.',
       '--json prints one JSON object per line: `loaded`, `log`, `reloaded`, `status`, `approval`, `check`, `shot`, `shot_skipped`, `warning`, `disconnected`, `unloaded` (field `type`). A failed first load prints the usual error envelope instead, on one line.',
       APPROVE_NOTE,
-      'With --environment the folder is a path on that Orca server; pass it absolute.',
+      'With --server the folder is a path on that Orca server; pass it absolute.',
       EXIT_CODES_NOTE
     ],
     examples: [
@@ -232,12 +232,12 @@ export const PLUGIN_RUNTIME_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'dir', 'approve'],
     positionalArgs: ['dir'],
     notes: [
-      'Adds the folder to Settings → Plugins → Development folders on the Orca host; it overrides an installed plugin with the same key.',
+      'Adds the folder to Settings → Plugins → Development folders on the Orca server; it overrides an installed plugin with the same key.',
       'Orca reloads the plugin when its files change. For an approved panel, editor or worker, later code edits run without asking again; new access does not.',
       '.ts, .tsx, .mts and .jsx files load without a build step. When the folder uses them (or components panels) and is on this machine, this also refreshes its .orca/types typings, like `orca plugin types`.',
       APPROVE_NOTE,
       'Without approval the folder stays loaded but nothing in it runs.',
-      'With --environment the folder is a path on that Orca server; pass it absolute.',
+      'With --server the folder is a path on that Orca server; pass it absolute.',
       EXIT_CODES_NOTE
     ],
     examples: ['orca plugin dev load ./dusk-theme', 'orca plugin dev load ./notes-editor --json']

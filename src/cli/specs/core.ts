@@ -60,10 +60,10 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca worktree activate --worktree <selector> [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'worktree'],
     notes: [
-      'With --environment naming a recipe VM that is asleep, Orca on this computer wakes the VM first and waits for it.',
+      'With --server naming a recipe VM that is asleep, Orca on this computer wakes the VM first and waits for it.',
       'Folder workspaces cannot be activated from the CLI yet; open them from the Orca sidebar.'
     ],
-    examples: ['orca worktree activate --worktree branch:fix-login --environment sandbox']
+    examples: ['orca worktree activate --worktree branch:fix-login --server sandbox']
   },
   {
     path: ['worktree', 'current'],
@@ -184,7 +184,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'Creates a visible terminal tab without switching focus when possible; falls back to a background handle if the UI cannot adopt it. Pass --focus to switch to it.',
       'This creates a terminal and runs --command in it. To start an agent, use `orca agent launch` (or `orca worktree create --agent` for a new checkout), which follows your Chat | CLI choice.',
       '--shell picks the shell the terminal IS on a Windows host (cmd.exe, powershell.exe, pwsh.exe, wsl.exe, bash.exe, git-bash); --command is typed into whatever shell the host started, so `--command cmd.exe` leaves a cmd running INSIDE the default shell and exiting it drops back to that shell.',
-      'A host that cannot apply --shell refuses the create rather than quietly spawning its default shell: macOS and Linux execution hosts spawn the login shell, terminals routed over SSH resolve their shell on the SSH host, a --shell that contradicts the project execution runtime (WSL vs Windows host) is refused, and an Orca host older than --shell is refused by the CLI.'
+      'A host that cannot apply --shell refuses the create rather than quietly spawning its default shell: macOS and Linux servers spawn the login shell, terminals routed over SSH resolve their shell on the SSH host, a --shell that contradicts the project execution runtime (WSL vs Windows host) is refused, and an Orca server older than --shell is refused by the CLI.'
     ],
     examples: [
       'orca terminal create --json',
@@ -202,7 +202,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca terminal switch [--terminal <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'terminal'],
     notes: [
-      "With --environment, the desktop app on this machine switches to that server's terminal; a server has no window of its own."
+      "With --server, the desktop app on this machine switches to that server's terminal; a server has no window of its own."
     ],
     examples: ['orca terminal switch --terminal term_abc123']
   },

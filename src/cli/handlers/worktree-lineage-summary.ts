@@ -19,35 +19,42 @@ function getLineageSourceLabel(source: string): string {
   }
 }
 
-/** The summary line for a parent saved in another Orca store. */
-export function formatCrossStoreParentLine(
-  lineage: NonNullable<RuntimeWorktreeCreateResult['crossStoreLineage']>
+/**
+ * The stderr parent summary for create/set: the `ps` parent text plus how the parent was captured.
+ * `parentText` comes from the result's annotation; without one, a cross-store parent's server is unknown.
+ */
+function parentSummaryText(
+  parentText: string | null,
+  fallback: string,
+  capture: { confidence: string; source: string }
 ): string {
-  return `parent: ${lineage.parent.workspaceKey} on another machine (${lineage.capture.confidence} from ${getLineageSourceLabel(lineage.capture.source)})`
-}
-
-export function formatFolderParentLine(
-  lineage: NonNullable<RuntimeWorktreeCreateResult['workspaceLineage']>
-): string {
-  return `parent: ${lineage.parentWorkspaceKey} (folder workspace)`
+  return `parent: ${parentText ?? fallback} (${capture.confidence} from ${getLineageSourceLabel(capture.source)})`
 }
 
 /** The parent `worktree set` attached; same-store lineage fields stay null for both kinds. */
 export function printSetParentLine(
   worktree: RuntimeWorktreeRecord,
-  parentFields: { crossStoreParent?: unknown; parentWorktree?: string }
+  parentFields: { crossStoreParent?: unknown; parentWorktree?: string },
+  parentText: string | null
 ): void {
   if (parentFields.crossStoreParent && worktree.crossStoreLineage) {
-    console.error(formatCrossStoreParentLine(worktree.crossStoreLineage))
+    const { parent, capture } = worktree.crossStoreLineage
+    console.error(parentSummaryText(parentText, crossStoreFallback(parent.workspaceKey), capture))
   } else if (parentFields.parentWorktree && worktree.workspaceLineage) {
-    console.error(formatFolderParentLine(worktree.workspaceLineage))
+    const { parentWorkspaceKey, capture } = worktree.workspaceLineage
+    console.error(parentSummaryText(parentText, parentWorkspaceKey, capture))
   }
+}
+
+function crossStoreFallback(workspaceKey: string): string {
+  return `${workspaceKey}  server=unknown (no verified route here)`
 }
 
 export function printLineageSummary(
   result: Pick<RuntimeWorktreeCreateResult, 'lineage' | 'workspaceLineage'> &
     Partial<Pick<RuntimeWorktreeCreateResult, 'warnings' | 'crossStoreLineage'>>,
-  json: boolean
+  json: boolean,
+  parentText: string | null = null
 ): void {
   if (json) {
     return
@@ -56,21 +63,18 @@ export function printLineageSummary(
     console.error(`warning: ${warning.message}`)
   }
   if (result.crossStoreLineage) {
-    console.error(formatCrossStoreParentLine(result.crossStoreLineage))
+    const { parent, capture } = result.crossStoreLineage
+    console.error(parentSummaryText(parentText, crossStoreFallback(parent.workspaceKey), capture))
     return
   }
   if (result.workspaceLineage) {
     const { parentWorkspaceKey, capture } = result.workspaceLineage
-    console.error(
-      `parent: ${parentWorkspaceKey} (${capture.confidence} from ${getLineageSourceLabel(capture.source)})`
-    )
+    console.error(parentSummaryText(parentText, parentWorkspaceKey, capture))
     return
   }
   if (result.lineage) {
     const { parentWorktreeId, capture } = result.lineage
-    console.error(
-      `parent: ${parentWorktreeId} (${capture.confidence} from ${getLineageSourceLabel(capture.source)})`
-    )
+    console.error(parentSummaryText(parentText, `id:${parentWorktreeId}`, capture))
     return
   }
   console.error('parent: none')

@@ -140,7 +140,7 @@ async function scanPortsOnWorkspaceHost(
     if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
       throw new RuntimeClientError(
         'incompatible_runtime',
-        'This Orca runtime cannot list workspace ports yet. Update Orca and try again.'
+        'This Orca server cannot list workspace ports yet. Update Orca and try again.'
       )
     }
     throw error

@@ -67,7 +67,7 @@ re-checks changed commands and shortcuts), `ORCA plugin dev unload <dir>`.
   a dev plugin, run inside its folder. The result adds `replay: true` and `scenario`, and
   `errors` has what the render reported; an unknown name fails and lists the scenarios. Limits:
   a still frame (host-owned control values start from the tree's props), images show their
-  placeholder, no `--act`, local only (no `--environment`), and Orca's window must be hidden
+  placeholder, no `--act`, local only (no `--server`), and Orca's window must be hidden
   or minimized. Default file `.orca/shots/<plugin-key>-<panel>.<scenario>.png`.
 - `ORCA plugin open <plugin-key> [--panel <id> | --editor <file>]` shows the panel in the right
   sidebar, or a file in the plugin's custom editor. Neither raises the window. `--editor` opens the

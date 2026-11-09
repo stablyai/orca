@@ -1,4 +1,8 @@
-import { normalizeExecutionHostId, type ParsedExecutionHost } from '../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
+  type ParsedExecutionHost
+} from '../shared/execution-host'
 import type { ProjectHostSetup } from '../shared/project-types'
 import { hostFilterMatchesHostId, resolveHostFlagTarget } from './execution-host-flag'
 import { findProjectSetups, setupHostId } from './project-selector'
@@ -6,10 +10,18 @@ import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime-client'
 import { getPresentStringFlag } from './flags'
 import { getFolderWorkspaceMissingRepoError } from './caller-folder-workspace'
+import {
+  formatOwnerToken,
+  ownerOfHostId,
+  readOwnerContext,
+  serverLabel,
+  type OwnerContext
+} from './row-owner-server'
+import { quoteCliCommandArgument } from './shell-command-quote'
 
 export type ProjectCreateTarget = {
   repoSelector: string
-  /** Repo ids can be shared across hosts. */
+  /** Repo ids can be shared across servers. */
   repoHostId: string
   setup: ProjectHostSetup
 }
@@ -34,11 +46,25 @@ export function assertWorkspaceTargetFlagsCompatible(flags: Map<string, string |
   }
 }
 
+/** How a setup choice is explained: by the server that owns each setup, never by --host. */
+type SetupChoiceContext = { owners: OwnerContext; explicitServer: boolean }
+
+function describeSetupChoices(
+  candidates: readonly ProjectHostSetup[],
+  context: SetupChoiceContext
+): string[] {
+  return candidates.map(
+    (candidate) =>
+      `${candidate.path}  ${formatOwnerToken(ownerOfHostId(setupHostId(candidate), context.owners))}`
+  )
+}
+
 // Prefer the exact runtime stamp over its local alias when both setups exist.
 function selectSetupOnHost(
   candidates: readonly ProjectHostSetup[],
   host: ParsedExecutionHost | undefined,
-  selectorLabel: string
+  selectorLabel: string,
+  context: SetupChoiceContext
 ): ProjectHostSetup | undefined {
   if (host) {
     return (
@@ -51,16 +77,25 @@ function selectSetupOnHost(
   if (hostIds.size <= 1) {
     return candidates[0]
   }
+  // An explicit --server names the server the command runs on, which owns its local setups.
+  const own = candidates.filter((candidate) => setupHostId(candidate) === LOCAL_EXECUTION_HOST_ID)
+  if (context.explicitServer && own.length > 0) {
+    return own[0]
+  }
+  const answering = context.owners.answering
   throw new RuntimeClientError(
     'invalid_argument',
-    `Ambiguous ${selectorLabel}: it is set up on ${hostIds.size} hosts. Pass --host to choose one.`,
+    `Ambiguous ${selectorLabel}: it has setups for ${hostIds.size} servers here.`,
     {
       knownProjectHostSetups: candidates.map(summarizeSetup),
       nextSteps: [
-        ...candidates.map(
-          (candidate) => `Use --host ${setupHostId(candidate)} for ${candidate.path}.`
-        ),
-        'Run `orca host list` to see every machine you can target and the flag for each.'
+        ...describeSetupChoices(candidates, context),
+        ...(own.length > 0 && answering.id
+          ? [
+              `Add --server ${quoteCliCommandArgument(answering.id)} to use the setup on ${serverLabel(answering)}.`
+            ]
+          : []),
+        'A setup owned by another server is used by running the command on that server with --server <id>.'
       ]
     }
   )
@@ -104,14 +139,19 @@ export async function resolveProjectCreateTarget(
       : (await findProjectSetups(client, result.result.setups, projectId)).filter(
           (candidate) => candidate.setupState === 'ready'
         )
-  // Setup ids are scoped to a host, so --host must disambiguate them too.
+  // Setup ids are scoped to a host, so the same owner rule disambiguates them too.
+  const choice: SetupChoiceContext = {
+    owners: readOwnerContext(client),
+    explicitServer: flags.has('server')
+  }
   const setup = projectHostSetupId
     ? selectSetupOnHost(
         ready.filter((candidate) => candidate.id === projectHostSetupId),
         host,
-        `--project-host-setup ${projectHostSetupId}`
+        `--project-host-setup ${projectHostSetupId}`,
+        choice
       )
-    : selectSetupOnHost(candidates, host, `--project ${projectId}`)
+    : selectSetupOnHost(candidates, host, `--project ${projectId}`, choice)
   if (!setup) {
     if (projectHostSetupId) {
       throw new RuntimeClientError(
@@ -122,7 +162,7 @@ export async function resolveProjectCreateTarget(
     if (candidates.length === 0) {
       throw new RuntimeClientError(
         'invalid_argument',
-        `No ready setup found for --project ${projectId} on any host.`,
+        `No ready setup found for --project ${projectId} on this server.`,
         {
           nextSteps: [
             'Run `orca project list` for project ids and names, and `orca project setups` for where each is set up.'
@@ -132,12 +172,10 @@ export async function resolveProjectCreateTarget(
     }
     throw new RuntimeClientError(
       'invalid_argument',
-      `Project is not set up on the selected host: ${projectId}${host ? ` on ${host.id}` : ''}`,
+      `Project ${projectId} has no ready setup${host ? ` for ${host.id}` : ''} here.`,
       {
         knownProjectHostSetups: candidates.map(summarizeSetup),
-        nextSteps: candidates.map(
-          (candidate) => `Use --host ${setupHostId(candidate)} for ${candidate.path}.`
-        )
+        nextSteps: describeSetupChoices(candidates, choice)
       }
     )
   }

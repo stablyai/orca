@@ -142,7 +142,7 @@ Confirm `ORCA status --json` unless already checked this turn, then read the iss
 
 ## Connections and verified reads
 
-Configure credentials in Orca Settings. `ORCA jira connection --json` lists saved site IDs; it does not test access or agent MCP authentication. These commands use credentials on the selected execution host, including SSH hosts. Update that host if the CLI reports `incompatible_runtime`.
+Configure credentials in Orca Settings. `ORCA jira connection --json` lists saved site IDs; it does not test access or agent MCP authentication. These commands use credentials on the selected server, including servers on SSH hosts. Update that host if the CLI reports `incompatible_runtime`.
 
 A successful empty list means the Jira read completed; API, permission and network errors remain errors. Jira keys are case-insensitive; full browse URLs are accepted wherever an issue key is required. Use `--body-file <path>` for multiline descriptions and comments, or `--body-file -` for stdin.
 

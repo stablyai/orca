@@ -54,7 +54,7 @@ export function worktreeSelectorRecovery(selector: string): WorktreeSelectorReco
       `No Orca workspace matched the worktree selector "${selector}".`,
       ...(suggestions.length > 0 ? [`Did you mean: ${suggestions.join(', ')}`] : []),
       `Valid selector forms: ${WORKTREE_SELECTOR_FORMS.join(', ')}.`,
-      'List the exact values, folder workspaces included, with `orca worktree ps --json` (add `--environment <id>` for a workspace in another environment); a bare repository id is not a worktree id.'
+      'List the exact values, folder workspaces included, with `orca worktree ps --json` (add `--server <id>` for a workspace on another server); a bare repository id is not a worktree id.'
     ]
   }
 }

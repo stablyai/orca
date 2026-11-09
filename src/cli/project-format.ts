@@ -1,3 +1,4 @@
+import { ownerTokenOf, type OwnerContext } from './row-owner-server'
 import type {
   Project,
   ProjectHostSetup,
@@ -21,14 +22,17 @@ export function formatProjectList(result: { projects: Project[] }): string {
     .join('\n')
 }
 
-export function formatProjectHostSetupList(result: { setups: ProjectHostSetup[] }): string {
+export function formatProjectHostSetupList(
+  result: { setups: ProjectHostSetup[] },
+  owners?: OwnerContext
+): string {
   if (result.setups.length === 0) {
     return 'No project host setups found.'
   }
   return result.setups
     .map(
       (setup) =>
-        `${setup.id}  project:${setup.projectId}  host:${setup.hostId}  ${setup.setupState}  ${setup.path}`
+        `${setup.id}  project:${setup.projectId}${ownerTokenOf(setup.hostId, owners)}  ${setup.setupState}  ${setup.path}`
     )
     .join('\n')
 }

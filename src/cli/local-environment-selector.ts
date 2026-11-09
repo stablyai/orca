@@ -3,7 +3,7 @@ import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
 import { quoteCliCommandArgument } from './shell-command-quote'
 
-/** `--environment local`: the caller's own Orca, even over an ambient ORCA_ENVIRONMENT or pairing code. */
+/** `--server local`: the caller's own Orca, even over an ambient ORCA_ENVIRONMENT or pairing code. */
 export const LOCAL_ENVIRONMENT = 'local'
 
 export function isLocalEnvironmentSelector(value: unknown): value is string {
@@ -21,24 +21,29 @@ export async function savedEnvironmentNamedLocal(): Promise<{ id: string } | und
   )
 }
 
-/** `orca environment …` takes --environment as a saved entry to act on; local is not one. */
+/** `orca server …` management commands act on a saved entry named by --server; `server name` is routed. */
+export function isServerManagementCommand(commandPath: readonly string[]): boolean {
+  return commandPath[0] === 'server' && commandPath[1] !== 'name'
+}
+
+/** Management commands take --server as a saved entry to act on; local is not one. */
 export async function refuseLocalManagementSelector(
   commandPath: readonly string[],
   flags: Map<string, string | boolean>
 ): Promise<void> {
-  if (commandPath[0] !== 'environment' || !isLocalEnvironmentSelector(flags.get('environment'))) {
+  if (!isServerManagementCommand(commandPath) || !isLocalEnvironmentSelector(flags.get('server'))) {
     return
   }
   const named = await savedEnvironmentNamedLocal()
   throw new RuntimeClientError(
     'invalid_argument',
-    `--environment local names this machine's own Orca, not a saved environment, so \`orca ${commandPath.join(' ')}\` cannot act on it.`,
+    `--server local is the Orca on this computer, not a saved server, so \`orca ${commandPath.join(' ')}\` can't act on it.`,
     {
       nextSteps: [
         ...(named
-          ? [`A saved environment named local is reached by its id: --environment ${named.id}.`]
+          ? [`A saved server named local is reached by its id: --server ${named.id}.`]
           : []),
-        'Run `orca environment list` to see saved environments.'
+        'Run `orca server list` to see saved servers.'
       ]
     }
   )
@@ -48,7 +53,7 @@ export function refuseReservedEnvironmentName(name: string): void {
   if (isLocalEnvironmentSelector(name)) {
     throw new RuntimeClientError(
       'invalid_argument',
-      '`local` is reserved: --environment local always means this machine’s own Orca. Save the environment under another name.'
+      '`local` is reserved: --server local always means the Orca on this computer. Save the server under another name.'
     )
   }
 }
@@ -59,16 +64,16 @@ export function assertLocalCwdWorktreeSelector(selector: string, client: Runtime
     return
   }
   // A paired CLI's cwd belongs to the client filesystem, so it cannot identify server worktrees.
-  const environment = client.environmentSelector
+  const server = client.environmentSelector
   throw new RuntimeClientError(
     'invalid_argument',
-    `${selector} is a local cwd shortcut and cannot be resolved against a remote runtime. Pass an explicit server-side worktree selector such as identity:<identity>, id:<repo-id>::<path>, folder:<id>, name:<displayName>, branch:<branch>, issue:<number>, or path:<absolute-server-path>.`,
+    `${selector} is a cwd shortcut and resolves only on the Orca on this computer. Pass an explicit server-side worktree selector such as identity:<identity>, id:<repo-id>::<path>, folder:<id>, name:<displayName>, branch:<branch>, issue:<number>, or path:<absolute-server-path>.`,
     {
       nextSteps: [
-        environment
-          ? `List that environment's workspaces: \`orca worktree ps --environment ${quoteCliCommandArgument(environment)} --json\`, then copy a row's address.`
-          : 'Save this connection with `orca environment add --name <name> --pairing-code <code>`, then list its workspaces with `orca worktree ps --environment <name> --json`.',
-        `For this machine's own workspace, rerun with --environment local.`
+        server
+          ? `List that server's workspaces: \`orca worktree ps --server ${quoteCliCommandArgument(server)} --json\`, then copy a row's address.`
+          : 'Save this connection with `orca server add --name <name> --pairing-code <code>`, then list its workspaces with `orca worktree ps --server <name> --json`.',
+        'For a workspace on this computer, rerun with --server local.'
       ]
     }
   )

@@ -67,6 +67,7 @@ const SERVE_VALUE_FLAG_NAMES = new Set([
   '--project-root',
   '--serve-project-root',
   '--pairing-code',
+  '--server',
   '--environment'
 ])
 

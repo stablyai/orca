@@ -14,7 +14,7 @@ const EXACT_FORMS = {
   },
   worktree: {
     forms:
-      'identity:<identity.key> (host-qualified), id:<repo-id>::<absolute-path> when only one host has that checkout, or folder:<folder-id> for a folder workspace',
+      'identity:<identity.key> (host-qualified), id:<repo-id>::<absolute-path> when only one server has that checkout, or folder:<folder-id> for a folder workspace',
     list: 'orca worktree ps --json',
     noun: 'workspace'
   }
@@ -45,7 +45,7 @@ export function selectorAmbiguityRecovery(selectors: {
       return [
         `${matched} Pass an exact selector: ${exact.forms}.`,
         selectors.remoteServerSelected
-          ? `List the exact values with \`${exact.list}\`, passing the same server flag (--environment, --pairing-code or --host runtime:<id>) as this command.`
+          ? `List the exact values with \`${exact.list}\`, passing the same server flag (--server, --pairing-code or --host runtime:<id>) as this command.`
           : `List the exact values with \`${exact.list}\`.`
       ]
     })

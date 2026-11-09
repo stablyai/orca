@@ -3,7 +3,7 @@ import { requiredString } from './rpc-param-primitives'
 
 /** A managed Orca server on this host, by environment name or id. */
 export const ManagedServerSelector = z.object({
-  selector: requiredString('Missing required --environment')
+  selector: requiredString('Missing required --server')
 })
 
 export const ManagedServerRecover = ManagedServerSelector.extend({

@@ -38,7 +38,7 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     usage: 'orca skills list [--json]',
     allowedFlags: [...GLOBAL_FLAGS],
     notes: [
-      'Reads bundled guide metadata locally without contacting the Orca runtime.',
+      'Reads bundled guide metadata locally without contacting an Orca server.',
       'With --json, prints a topics array of canonical names and one-line descriptions.',
       'Use `orca skills get <name>` for the compact guide, `--full` for its full reference package, or `orca skills install` to install skills.'
     ]
@@ -51,7 +51,7 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'topic', 'full', 'reference', 'references'],
     positionalArgs: ['topic'],
     notes: [
-      'Reads bundled guide content locally without contacting the Orca runtime.',
+      'Reads bundled guide content locally without contacting an Orca server.',
       'Prints the compact guide by default. Use --full to print the full guide with bundled references when provided.',
       'Use --reference <name> to print one bundled reference alone, which is what an action gate in the compact guide needs; --references lists the available names.',
       'A reference name may be given bare (recovery-and-cleanup) or as the guide spells it (references/recovery-and-cleanup.md).',
@@ -72,7 +72,7 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
       '[--local] [--force] [--dry-run] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'agent', 'local', 'force', 'dry-run'],
     notes: [
-      'Reads the bundled skill registry locally without contacting the Orca runtime, ' +
+      'Reads the bundled skill registry locally without contacting an Orca server, ' +
         'and needs no network, Node, Git or npx.',
       'Writes the copy this Orca build ships into the shared .agents/skills folder and ' +
         'links it into each detected agent\u2019s skills folder, the same way the app\u2019s ' +

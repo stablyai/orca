@@ -66,7 +66,7 @@ export class OrcadManagedIdentityError extends Error {
         'to the host as a different SSH user, or the server was reinstalled), so reconnecting ' +
         `won’t restore access. To pair with the host’s current server, open the ⋯ menu on ` +
         `${environmentName} in Settings › Remote Orca Servers and choose Forget… (or run ` +
-        `\`orca environment forget --environment ${selector} --yes\`), then click ` +
+        `\`orca server forget --server ${selector} --yes\`), then click ` +
         'Connect on the SSH host',
       detail
     )

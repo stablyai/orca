@@ -3,43 +3,45 @@ import { GLOBAL_FLAGS, LOCAL_COMMAND_FLAGS } from '../args'
 
 export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
   {
-    path: ['host', 'name'],
-    summary: 'Show or set the name this Orca runtime reports to connected clients',
-    usage: 'orca host name [--name <name>] [--json]',
+    path: ['server', 'name'],
+    legacyAliases: [['host', 'name']],
+    summary:
+      'Show or set the name this Orca server reports (its computer name, not its saved name)',
+    usage: 'orca server name [--name <name>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'name'],
     notes: [
-      'With --name, updates the answering runtime over its authenticated connection. Use an empty value to return to the detected computer name.',
-      'Without --name, prints the name and platform the answering runtime reports.'
+      'With --name, updates the answering server over its authenticated connection. Use an empty value to return to the detected computer name.',
+      'Without --name, prints the name and platform the answering server reports.'
     ],
-    examples: ['orca host name', 'orca host name --name build-server']
+    examples: ['orca server name', 'orca server name --name build-server']
   },
   {
     path: ['host', 'list'],
-    summary: 'List every machine this Orca host can target, and how to name each one',
+    hidden: true,
+    summary: 'List this computer, its SSH connections and saved Orca servers',
     usage: 'orca host list [--json]',
     allowedFlags: [...LOCAL_COMMAND_FLAGS],
     notes: [
-      'Answers "what can I target and what do I pass" in one place: this machine, the SSH targets registered on it, and the Orca servers paired with it.',
-      'The three kinds are reached differently. A paired Orca server is a connection, selected with --environment <name>. An SSH target is a machine the connected Orca host reaches, selected with --host ssh:<id>. Passing one where the other belongs is the most common way to get an empty or missing-host answer.',
-      'Commands that take --host also accept any name this list prints, such as --host "this machine" or --host <ssh-target-name> (except `orca host rm`, which takes only the ssh:<target-id> form). A name two hosts share is refused with the exact flag for each.',
+      'Lists this computer, the SSH connections registered on it, and the saved Orca servers. To run a command on a server, use --server; see `orca server list`.',
       'SSH rows include the detected remote platform after that target has connected (linux, darwin, or win32); disconnected or older targets report platform unknown.',
       'SSH rows also include whether the target is currently connected and its lifecycle status when known.',
-      'Paired-server rows come from the pairing store and report platform unknown; ask one server directly with `orca host name --environment <name>`.',
-      "SSH targets are read from this machine's own Orca runtime, so this lists that machine's targets and not another server's. Run `orca host list` on the other machine to see the targets registered there.",
-      '--environment and --pairing-code are rejected rather than ignored: paired servers come from this machine\u2019s pairing store, so a routed answer would describe two machines at once.'
+      'Saved-server rows come from the pairing store and report platform unknown; ask one server directly with `orca server name --server <id>`.',
+      "SSH connections are read from the Orca on this computer, so this lists this computer's connections and not another server's.",
+      '--server and --pairing-code are rejected rather than ignored: saved servers come from this computer\u2019s pairing store, so a routed answer would describe two computers at once.'
     ],
     examples: ['orca host list', 'orca host list --json']
   },
   {
     path: ['host', 'rm'],
+    hidden: true,
     destructive: true,
-    summary: 'Remove one saved SSH target from this Orca host',
+    summary: 'Remove one saved SSH connection from the Orca on this computer',
     usage: 'orca host rm --host ssh:<target-id> [--json]',
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'host'],
     notes: [
       'Removes the target the same way Settings does: its connection closes, and the passive ~/.ssh/config import does not add the alias back. Restore removed hosts in Settings brings it back.',
-      'Takes only the --host ssh:<target-id> form that `orca host list` prints. This machine and paired Orca servers are refused; remove a paired server with `orca environment rm`.',
-      '--environment and --pairing-code are rejected rather than ignored: SSH targets are removed from this machine\u2019s own Orca runtime.'
+      'Takes only the --host ssh:<target-id> form that `orca host list` prints. This computer and saved Orca servers are refused; remove a saved server with `orca server rm`.',
+      '--server and --pairing-code are rejected rather than ignored: SSH connections are removed from the Orca on this computer.'
     ],
     examples: [
       'orca host rm --host ssh:ssh-1783599077486-fyasux',
@@ -47,32 +49,37 @@ export const ENVIRONMENT_COMMAND_SPECS: CommandSpec[] = [
     ]
   },
   {
-    path: ['environment', 'add'],
-    summary: 'Save a remote Orca runtime environment from a pairing code',
-    usage: 'orca environment add --name <name> --pairing-code <code> [--json]',
+    path: ['server', 'add'],
+    legacyAliases: [['environment', 'add']],
+    summary: 'Save an Orca server from a pairing code',
+    usage: 'orca server add --name <name> --pairing-code <code> [--json]',
     allowedFlags: [...LOCAL_COMMAND_FLAGS, 'pairing-code', 'name'],
-    examples: ['orca environment add --name work-laptop --pairing-code orca://pair?code=...']
+    examples: ['orca server add --name work-laptop --pairing-code orca://pair?code=...']
   },
   {
-    path: ['environment', 'list'],
-    summary: 'List saved Orca runtime environments',
-    usage: 'orca environment list [--json]',
+    path: ['server', 'list'],
+    legacyAliases: [['environment', 'list']],
+    summary: 'List saved Orca servers',
+    usage: 'orca server list [--json]',
     allowedFlags: [...LOCAL_COMMAND_FLAGS],
     notes: [
-      'Answers from this machine\u2019s pairing store. --environment and --pairing-code are rejected rather than ignored, because there is no other host that could answer.'
+      'Answers from this computer\u2019s pairing store and never contacts a server. `local` (the Orca on this computer) is always available and is not listed.',
+      '--server and --pairing-code are rejected rather than ignored, because no other server could answer.'
     ]
   },
   {
-    path: ['environment', 'show'],
-    summary: 'Show one saved Orca runtime environment',
-    usage: 'orca environment show --environment <selector> [--json]',
-    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'environment']
+    path: ['server', 'show'],
+    legacyAliases: [['environment', 'show']],
+    summary: 'Show one saved server',
+    usage: 'orca server show --server <id|name> [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'server']
   },
   {
-    path: ['environment', 'rm'],
+    path: ['server', 'rm'],
+    legacyAliases: [['environment', 'rm']],
     destructive: true,
-    summary: 'Remove one saved Orca runtime environment',
-    usage: 'orca environment rm --environment <selector> [--json]',
-    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'environment']
+    summary: 'Remove a saved server',
+    usage: 'orca server rm --server <id|name> [--json]',
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'server']
   }
 ]

@@ -18,10 +18,10 @@ when requesting a child of the current workspace.
 ORCA orchestration worker-start --task <task_id> --worktree new-child --agent codex --setup run
 
 # On a connected server; the Run stays on yours.
-ORCA orchestration worker-start --task <task_id> --on <environment> --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run
+ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-top-level --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run
 
 # On a connected server, nested under your workspace in the sidebar.
-ORCA orchestration worker-start --task <task_id> --on <environment> --worktree new-child --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run
+ORCA orchestration worker-start --task <task_id> --on <server> --worktree new-child --repo <exact_remote_repo_selector> --name <name> --agent codex --setup run
 ```
 
 With `--on`, both `new-child` and `new-top-level` need `--repo` naming a

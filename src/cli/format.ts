@@ -45,8 +45,8 @@ export {
 } from './automation-format'
 export type { AutomationListPayload, AutomationShowPayload } from './automation-format'
 export {
-  formatEnvironment,
-  formatEnvironmentList,
+  formatSavedServer,
+  formatSavedServerList,
   formatMemorySnapshot,
   formatRepoList,
   formatRepoRefs,
@@ -69,7 +69,7 @@ export function printResult<TResult>(
 }
 
 export type HostListEntry = {
-  kind: 'local' | 'ssh' | 'environment'
+  kind: 'local' | 'ssh' | 'server'
   name: string
   id: string
   selector: string
@@ -84,7 +84,7 @@ export function formatHostList(result: { hosts: HostListEntry[] }): string {
   const kindLabel: Record<HostListEntry['kind'], string> = {
     local: 'local',
     ssh: 'ssh target',
-    environment: 'orca server'
+    server: 'orca server'
   }
   return result.hosts
     .map(
@@ -94,7 +94,7 @@ export function formatHostList(result: { hosts: HostListEntry[] }): string {
     .join('\n')
 }
 
-/** What one runtime calls itself; `machineName` is absent when the runtime predates the field. */
+/** What one server calls itself; `machineName` is absent when the server predates the field. */
 export type HostNameResult = {
   machineName?: string
   platform?: string
@@ -118,20 +118,25 @@ function formatHostConnection(host: HostListEntry): string {
 
 export function formatCliStatus(status: CliStatusResult): string {
   return [
-    ...(status.target && status.target.kind === 'environment'
-      ? [`target: environment ${status.target.environment}`]
-      : []),
+    ...(status.target ? [`server: ${formatStatusTarget(status.target)}`] : []),
     `appRunning: ${status.app.running}`,
     `pid: ${status.app.pid ?? 'none'}`,
     `desktopWindowStatus: ${status.app.desktopWindowStatus ?? 'unknown'}`,
-    `runtimeState: ${status.runtime.state}`,
-    `runtimeReachable: ${status.runtime.reachable}`,
-    `runtimeConnectionState: ${status.runtime.connectionState ?? 'unknown'}`,
-    `runtimeId: ${status.runtime.runtimeId ?? 'none'}`,
+    `state: ${status.runtime.state}`,
+    `reachable: ${status.runtime.reachable}`,
+    `connection: ${status.runtime.connectionState ?? 'unknown'}`,
+    `instance: ${status.runtime.runtimeId ?? 'none'}`,
     `graphState: ${status.graph.state}`,
     ...(status.runtime.degradations ?? []).map((degradation) => `degraded: ${degradation.message}`),
     ...(status.caller === undefined ? [] : [`orcaSessionId: ${formatStatusCaller(status.caller)}`])
   ].join('\n')
+}
+
+function formatStatusTarget(target: NonNullable<CliStatusResult['target']>): string {
+  if (target.kind === 'local') {
+    return 'local'
+  }
+  return target.server === 'pairing-code' ? 'one-off connection' : target.server
 }
 
 function formatStatusCaller(caller: CliStatusCaller): string {

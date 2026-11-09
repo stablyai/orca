@@ -66,7 +66,7 @@ export function formatRemovedWorkListing(
 ): string {
   if (!removed) {
     // Also shown when a host could not read its record; run-show omits the field either way.
-    return 'No record of removed work is available from this Orca host.'
+    return 'No record of removed work is available from this Orca server.'
   }
   const entries = removed.entries ?? []
   if (entries.length === 0) {

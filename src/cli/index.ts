@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import {
+  canonicalizeLegacyFlagArgv,
   findCommandSpec,
   isCommandGroup,
   normalizeCommandPositionals,
@@ -97,6 +98,11 @@ export async function main(
     return
   }
   const json = parsed.flags.has('json')
+  // Passthrough argv belongs to another program; everything else is echoed in canonical spelling.
+  const echoedArgv =
+    findCommandSpec(COMMAND_SPECS, parsed.commandPath)?.argumentMode === 'passthrough'
+      ? argv
+      : canonicalizeLegacyFlagArgv(argv)
 
   try {
     // Report invalid commands before runtime lookup can mask them with connection errors.
@@ -107,27 +113,27 @@ export async function main(
     const RuntimeClientClass = await loadRuntimeClientClass()
     const ignoreRemoteSelection = ignoresRemoteSelection(parsed.commandPath)
     const pairingCode = ignoreRemoteSelection ? null : parsed.flags.get('pairing-code')
-    const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('environment')
+    const environmentSelector = ignoreRemoteSelection ? null : parsed.flags.get('server')
     // An explicit local route suppresses ambient ORCA_ENVIRONMENT and pairing codes.
     const explicitLocal = isLocalEnvironmentSelector(environmentSelector)
     if (explicitLocal && typeof pairingCode === 'string') {
       throw new RuntimeClientError(
         'invalid_argument',
-        'Use either --pairing-code or --environment, not both.'
+        'Use either --pairing-code or --server, not both.'
       )
     }
-    // Eagerly resolve explicit --environment; stale ambient config must not break local-only commands.
+    // Eagerly resolve explicit --server; stale ambient config must not break local-only commands.
     const listSshTargetsForSuggestion = async (): Promise<{ id: string; label: string }[]> =>
       listSshTargets(new RuntimeClientClass(undefined, undefined, null, null))
     const storeEnvironmentSelector =
       typeof environmentSelector === 'string' && !explicitLocal
         ? await resolveEnvironmentSelectorForStore(environmentSelector, listSshTargetsForSuggestion)
         : null
-    // Select the paired connection before constructing the client; reject conflicting environments.
+    // Select the saved connection before constructing the client; reject conflicting servers.
     const hostEnvironmentId = ignoreRemoteSelection
       ? null
       : await resolveHostFlagEnvironmentId(parsed.flags, {
-          // SSH targets belong to this machine, even when the missing name was a paired server.
+          // SSH targets belong to this computer, even when the missing name was a saved server.
           listSshTargets: listSshTargetsForSuggestion,
           verifySshTargets: async () =>
             (
@@ -138,7 +144,7 @@ export async function main(
           pairingCode: typeof pairingCode === 'string' ? pairingCode : null,
           environmentSelector:
             typeof environmentSelector === 'string'
-              ? { value: environmentSelector, label: '--environment' }
+              ? { value: environmentSelector, label: '--server' }
               : process.env.ORCA_ENVIRONMENT
                 ? { value: process.env.ORCA_ENVIRONMENT, label: 'ORCA_ENVIRONMENT' }
                 : null
@@ -164,13 +170,13 @@ export async function main(
           remotePairingCode,
           remoteEnvironment,
           resolveOrchestrationCliExecutable(),
-          argv
+          echoedArgv
         )
         return client
       },
       cwd,
       json,
-      rawArgs: argv
+      rawArgs: echoedArgv
     })
   } catch (error) {
     const worktreeSelector = parsed.flags.get('worktree')
@@ -181,8 +187,8 @@ export async function main(
       ...(typeof worktreeSelector === 'string' ? { worktreeSelector } : {}),
       ...(typeof repoSelector === 'string' ? { repoSelector } : {}),
       remoteServerSelected:
-        !isLocalEnvironmentSelector(parsed.flags.get('environment')) &&
-        (parsed.flags.has('environment') ||
+        !isLocalEnvironmentSelector(parsed.flags.get('server')) &&
+        (parsed.flags.has('server') ||
           parsed.flags.has('pairing-code') ||
           (typeof hostFlag === 'string' && hostFlag.startsWith('runtime:')) ||
           Boolean(process.env.ORCA_ENVIRONMENT?.trim() || process.env.ORCA_PAIRING_CODE?.trim())),

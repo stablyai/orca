@@ -66,14 +66,14 @@ orca automations create \
   --prompt "Triage open issues" \
   --provider claude \
   --project <projectId> \
-  --host <host> \
+  --server <server> \
   --disabled \
   --json
 ```
 
-`--project` takes the project id or the display name from `orca project list`. `--host` takes `local`, `ssh:<target-id>`, `runtime:<environment-id>`, or the bare name from `orca host list`, and it can be omitted entirely when the project is set up on only one host — Orca uses that one. When the project is set up on several, the error names each host and the flag to select it.
+`--project` takes the project id or the display name from `orca project list`. `--server` runs the command on that server and uses its own setup of the project; omit it to stay on this computer. When the project has setups for several servers here and no `--server` is given, the error names each setup and the server that owns it.
 
-Use `--project-host-setup <id>` when you already have a setup id. Optional `--source-context '<json>'` pins task/provider data to a host/account (pass `null` on edit to clear).
+Use `--project-host-setup <id>` when you already have a setup id. Optional `--source-context '<json>'` pins task/provider data to a server/account (pass `null` on edit to clear).
 
 ## Manage automations across hosts
 

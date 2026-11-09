@@ -11,12 +11,12 @@
 - `ORCA plugin validate <dir|orca-plugin.json|orca-catalog.json> [--json]`: Check a plugin folder, manifest or catalog the way Orca will load it
 - `ORCA plugin inspect <dir> [--json]`: Show what a plugin folder contributes, the access it asks for, and its content hash
 - `ORCA plugin release-entry <dir> [--json]`: Print the catalog release entry for a plugin folder's committed HEAD
-- `ORCA plugin list [--json]`: List plugins on the Orca host with their status and access level
+- `ORCA plugin list [--json]`: List plugins on the Orca server with their status and access level
 - `ORCA plugin logs <plugin-key> [--json]`: Print the recent log lines of a plugin
 - `ORCA plugin enable <plugin-key> [--approve <fingerprint>] [--json]`: Enable a plugin; code and capabilities need --approve
 - `ORCA plugin disable <plugin-key> [--json]`: Disable a plugin
-- `ORCA plugin system on [--json]`: Turn plugins on for the Orca host
-- `ORCA plugin system off [--json]`: Turn plugins off for the Orca host
+- `ORCA plugin system on [--json]`: Turn plugins on for the Orca server
+- `ORCA plugin system off [--json]`: Turn plugins off for the Orca server
 - `ORCA plugin restart <plugin-key> [--json]`: Stop a plugin's worker so its next command or event starts it fresh
 - `ORCA plugin dev watch <dir> [--check] [--shot <out-dir> [--shot-panel <id>]] [--approve <fingerprint>] [--json]`: Load a plugin folder, then stream its logs and reloads until Ctrl-C
 - `ORCA plugin dev load <dir> [--approve <fingerprint>] [--json]`: Load a plugin folder into Orca as a development plugin

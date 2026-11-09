@@ -23,7 +23,7 @@ export const TERMINAL_DAEMON_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'yes'],
     notes: [
       'Restarting ENDS every process running in its terminals. Agents that support resume can be resumed afterwards; shells and other jobs must be started again.',
-      'The host re-checks that the daemon is still the one reported by status before stopping it, and refuses otherwise.'
+      'Orca re-checks that the daemon is still the one reported by status before stopping it, and refuses otherwise.'
     ],
     examples: ['orca terminal-daemon restart --yes']
   }

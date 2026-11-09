@@ -69,24 +69,37 @@ export function suggestCommands(specs: CommandSpec[], commandPath: string[]): st
     ) {
       continue
     }
-    const candidates = specPaths(spec).map((path) =>
-      commandPath.length === 1 ? path.slice(0, 1) : path
-    )
-    for (const candidate of candidates) {
+    const canonical = (commandPath.length === 1 ? spec.path.slice(0, 1) : spec.path).join(' ')
+    const legacy = new Set((spec.legacyAliases ?? []).map((path) => path.join(' ')))
+    for (const path of specPaths(spec)) {
+      const candidate = commandPath.length === 1 ? path.slice(0, 1) : path
       if (candidate.length !== commandPath.length) {
         continue
       }
       const joined = candidate.join(' ')
+      // Legacy spellings are input only: match on them, but suggest the canonical path.
+      const label = legacy.has(path.join(' ')) ? canonical : joined
       if (seen.has(joined)) {
         continue
       }
       seen.add(joined)
       if (Math.abs(input.length - joined.length) <= SUGGESTION_THRESHOLD) {
-        scored.push({ label: joined, distance: levenshtein(input, joined) })
+        scored.push({ label, distance: levenshtein(input, joined) })
       }
     }
   }
-  return rankByDistance(scored)
+  return rankByDistance(bestPerLabel(scored))
+}
+
+// A legacy alias and its canonical path can share a label; keep the closer match.
+function bestPerLabel(
+  scored: { label: string; distance: number }[]
+): { label: string; distance: number }[] {
+  const best = new Map<string, number>()
+  for (const { label, distance } of scored) {
+    best.set(label, Math.min(distance, best.get(label) ?? distance))
+  }
+  return [...best].map(([label, distance]) => ({ label, distance }))
 }
 
 // A positional terminal handle lands in the command path; point at the flag form instead.
@@ -101,7 +114,7 @@ function terminalFlagSuggestion(specs: CommandSpec[], commandPath: string[]): st
       !candidate.hidden && specPaths(candidate).some((path) => path.join(' ') === parent)
   )
   return spec?.allowedFlags.includes('terminal') && spec.identityFlagRoles?.terminal !== 'caller'
-    ? [`${parent} --terminal <handle>`]
+    ? [`${spec.path.join(' ')} --terminal <handle>`]
     : []
 }
 
@@ -123,7 +136,7 @@ export type FlagErrorData = {
 }
 
 // Recover renamed flags only when the typed flag is rejected and its synonym is accepted.
-const FLAG_SYNONYMS: Readonly<Record<string, string>> = { from: 'terminal' }
+const FLAG_SYNONYMS: Readonly<Record<string, string>> = { from: 'terminal', host: 'server' }
 
 function suggestFlags(flag: string, validFlags: string[]): string[] {
   const synonym = FLAG_SYNONYMS[flag]

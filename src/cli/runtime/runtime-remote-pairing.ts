@@ -28,7 +28,7 @@ function resolvePairedConnection(
   if (pairingCode && environmentSelector) {
     throw new RuntimeClientError(
       'invalid_argument',
-      'Use either --pairing-code or --environment, not both.'
+      'Use either --pairing-code or --server, not both.'
     )
   }
   if (environmentSelector) {

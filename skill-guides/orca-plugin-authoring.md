@@ -18,7 +18,7 @@ Pass `--json` to every `ORCA plugin` command and branch on `error.code`, not on 
 
 - **Your files:** a new folder, ideally its own Git repository, with `orca-plugin.json` at its
   root, made by `ORCA plugin create` (never overwrites). Paths are on the machine that runs Orca;
-  with `--environment` pass an absolute path on that server.
+  with `--server` pass an absolute path on that server.
 - **Types:** `ORCA plugin types <dir>` (also run by `dev watch`) writes `.orca/types/` for every
   surface; the plugin's `tsconfig.json` extends `./.orca/types/tsconfig.json`. Never edit `.orca/`.
 - **Ground truth:** the references below match this Orca. Read them instead of guessing.

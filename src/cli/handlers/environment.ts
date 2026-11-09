@@ -1,7 +1,7 @@
 import type { CommandHandler } from '../dispatch'
 import {
-  formatEnvironment,
-  formatEnvironmentList,
+  formatSavedServer,
+  formatSavedServerList,
   formatHostList,
   formatHostName,
   printResult,
@@ -34,10 +34,11 @@ import {
 } from '../runtime/environments'
 import { exchangeCliPairingCode } from '../runtime/environment-pairing-exchange'
 import { refuseReservedEnvironmentName } from '../local-environment-selector'
+import { quoteCliCommandArgument } from '../shell-command-quote'
 import { listEnvironments } from '../../shared/remote-runtime/host-store/runtime-environment-store'
 
 export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
-  'host name': async ({ client, flags, json }) => {
+  'server name': async ({ client, flags, json }) => {
     const requestedName = flags.get('name')
     if (requestedName !== undefined && typeof requestedName !== 'string') {
       throw new RuntimeClientError('invalid_argument', 'Missing value for --name')
@@ -48,37 +49,36 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       if (current.result.machineName === undefined) {
         throw new RuntimeClientError(
           'incompatible_runtime',
-          'This Orca runtime does not support machine names. Update Orca on that host and try again.'
+          'This Orca server does not support machine names. Update Orca on that server and try again.'
         )
       }
       await client.call('settings.update', { machineName: requestedName })
     }
-    // A blank override restores the detected name; read it from the runtime after writing.
+    // A blank override restores the detected name; read it from the server after writing.
     const status = await client.call<RuntimeStatus>('status.get')
     printResult({ ...status, result: describeRuntimeHost(status.result) }, json, formatHostName)
   },
-  'environment add': async ({ flags, json }) => {
+  'server add': async ({ flags, json }) => {
     const name = getRequiredStringFlag(flags, 'name')
     refuseReservedEnvironmentName(name)
     const pairingCode = await exchangeCliPairingCode(getRequiredStringFlag(flags, 'pairing-code'))
-    const environment = redactRuntimeEnvironment(
+    const server = redactRuntimeEnvironment(
       addEnvironmentFromPairingCode(getDefaultUserDataPath(), {
         name,
         pairingCode
       })
     )
     printResult(
-      localSuccess({ environment }),
+      localSuccess({ server }),
       json,
-      (result: EnvironmentAddResult) =>
-        `Saved environment ${result.environment.name} (${result.environment.id}).`
+      (result: EnvironmentAddResult) => `Saved server ${result.server.name} (${result.server.id}).`
     )
   },
   'host list': async ({ client, flags, json }) => {
     rejectLocalPairingStoreRetargeting(
       flags,
-      '`orca host list`. It answers from this machine\u2019s own pairing store, so a routed answer would name servers paired with a different machine.',
-      'Run `orca host list` on that machine to see the SSH targets registered there.'
+      '`orca host list`. It answers from this computer\u2019s own pairing store, so a routed answer would name servers saved on a different computer.',
+      'Run `orca host list` on that computer to see the SSH connections registered there.'
     )
     const sshTargets = (await listSshTargets(client)).map((target) => ({
       kind: 'ssh' as const,
@@ -91,11 +91,11 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
     }))
     // Read the local pairing store without dialing every server, so listing works offline.
     const localStatus = await readLocalHostDescriptor(client)
-    const environments = listEnvironments(getDefaultUserDataPath()).map((environment) => ({
-      kind: 'environment' as const,
-      name: environment.name,
-      id: environment.id,
-      selector: `--environment ${environment.name}`
+    const servers = listEnvironments(getDefaultUserDataPath()).map((server) => ({
+      kind: 'server' as const,
+      name: server.name,
+      id: server.id,
+      selector: `--server ${quoteCliCommandArgument(server.id)}`
     }))
     const hosts = [
       {
@@ -107,15 +107,15 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
         platform: localStatus.platform ?? process.platform
       },
       ...sshTargets,
-      ...environments
+      ...servers
     ]
     printResult(localSuccess({ hosts }), json, formatHostList)
   },
   'host rm': async ({ client, flags, json }) => {
     rejectLocalPairingStoreRetargeting(
       flags,
-      '`orca host rm`. It removes an SSH target from this machine\u2019s own Orca runtime, the same one `orca host list` reads.',
-      'Run `orca host rm` on that machine to remove an SSH target registered there.'
+      '`orca host rm`. It removes an SSH connection from the Orca on this computer, the same one `orca host list` reads.',
+      'Run `orca host rm` on that computer to remove an SSH connection registered there.'
     )
     const targetId = requireSshHostFlag(flags)
     // Unlike listSshTargets, this keeps runtime_unavailable instead of reporting an unknown target.
@@ -124,7 +124,7 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
     if (!target) {
       throw new RuntimeClientError(
         'invalid_argument',
-        `Unknown SSH target in --host ssh:${targetId}: this Orca host has no SSH target with that id.`,
+        `Unknown SSH target in --host ssh:${targetId}: the Orca on this computer has no SSH target with that id.`,
         {
           knownSshTargets: targets,
           nextSteps: ['Run `orca host list` to see each SSH target and its --host ssh:<id> flag.']
@@ -141,32 +141,28 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
         `Removed SSH target ${result.removed.name} (${result.removed.id}).`
     )
   },
-  'environment list': async ({ flags, json }) => {
+  'server list': async ({ flags, json }) => {
     rejectLocalPairingStoreRetargeting(
       flags,
-      '`orca environment list`. Paired servers are stored on this machine, so there is no other host to ask.',
-      'Run `orca environment list` on that machine to see the servers paired with it.'
+      '`orca server list`. Saved servers are stored on this computer, so no other server could answer.',
+      'Run `orca server list` on that computer to see the servers saved there.'
     )
-    const environments = listEnvironments(getDefaultUserDataPath()).map(redactRuntimeEnvironment)
-    printResult(localSuccess({ environments }), json, formatEnvironmentList)
+    const servers = listEnvironments(getDefaultUserDataPath()).map(redactRuntimeEnvironment)
+    printResult(localSuccess({ servers }), json, formatSavedServerList)
   },
-  'environment show': async ({ flags, json }) => {
-    const selector = getRequiredStringFlag(flags, 'environment')
-    const environment = redactRuntimeEnvironment(
-      resolveEnvironment(getDefaultUserDataPath(), selector)
-    )
-    printResult(localSuccess({ environment }), json, ({ environment: value }) =>
-      formatEnvironment(value)
-    )
+  'server show': async ({ flags, json }) => {
+    const selector = getRequiredStringFlag(flags, 'server')
+    const server = redactRuntimeEnvironment(resolveEnvironment(getDefaultUserDataPath(), selector))
+    printResult(localSuccess({ server }), json, ({ server: value }) => formatSavedServer(value))
   },
-  'environment rm': async ({ flags, json }) => {
-    const selector = getRequiredStringFlag(flags, 'environment')
+  'server rm': async ({ flags, json }) => {
+    const selector = getRequiredStringFlag(flags, 'server')
     const removed = redactRuntimeEnvironment(removeEnvironment(getDefaultUserDataPath(), selector))
     printResult(
       localSuccess({ removed }),
       json,
       (result: EnvironmentRemoveResult) =>
-        `Removed environment ${result.removed.name} (${result.removed.id}).`
+        `Removed server ${result.removed.name} (${result.removed.id}).`
     )
   }
 }
@@ -178,7 +174,7 @@ function describeRuntimeHost(status: RuntimeStatus): HostNameResult {
   }
 }
 
-/** The local row of `host list` still prints when this machine's runtime is not running. */
+/** The local row of `host list` still prints when the Orca on this computer is not running. */
 async function readLocalHostDescriptor(client: RuntimeClient): Promise<HostNameResult> {
   try {
     return describeRuntimeHost((await client.call<RuntimeStatus>('status.get')).result)
@@ -187,14 +183,14 @@ async function readLocalHostDescriptor(client: RuntimeClient): Promise<HostNameR
   }
 }
 
-// Both listings read the local pairing store; reject flags that imply a different runtime.
+// Both listings read the local pairing store; reject flags that imply a different server.
 function rejectLocalPairingStoreRetargeting(
   flags: Map<string, string | boolean>,
   suffix: string,
   crossHostNextStep: string
 ): void {
   rejectRemoteSelectionFlags(flags, suffix, {
-    nextSteps: [crossHostNextStep, 'Drop the flag to answer for this machine.']
+    nextSteps: [crossHostNextStep, 'Drop the flag to answer for this computer.']
   })
 }
 
@@ -209,9 +205,9 @@ function requireSshHostFlag(flags: Map<string, string | boolean>): string {
   const named = host.kind === 'alias' ? host.alias : host.id
   const nextStep =
     host.kind === 'runtime'
-      ? 'A paired Orca server is removed with `orca environment rm --environment <name>`.'
+      ? 'A saved server is removed with `orca server rm --server <id>`.'
       : host.kind === 'local' || normalizeTypedName(named) === LOCAL_HOST_LIST_NAME
-        ? 'This machine is always listed and cannot be removed.'
+        ? 'This computer is always listed and cannot be removed.'
         : 'Pass the SSH target id as --host ssh:<target-id>; `orca host list` prints it.'
   throw new RuntimeClientError(
     'invalid_argument',

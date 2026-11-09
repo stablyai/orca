@@ -1,8 +1,9 @@
 import { RuntimeClientError } from './runtime/types'
 import { unknownCommandData, unknownFlagData } from './command-suggestion'
-import { specPaths, type CommandSpec } from './command-spec'
+import { INPUT_ONLY_FLAGS, specPaths, type CommandSpec } from './command-spec'
 import {
   CLI_BOOLEAN_FLAGS,
+  CLI_FLAG_ALIASES,
   CLI_GLOBAL_FLAGS,
   CLI_GLOBAL_VALUE_FLAGS,
   findCliCommandIndex
@@ -15,6 +16,8 @@ export type ParsedArgs = {
   commandPath: string[]
   flags: Map<string, string | boolean>
   positionalFlagConflicts?: string[]
+  /** Canonical flags given under both spellings with different values. */
+  flagAliasConflicts?: { flag: string; alias: string }[]
 }
 
 export const GLOBAL_FLAGS = CLI_GLOBAL_FLAGS
@@ -171,11 +174,71 @@ export function isCommandGroup(specs: CommandSpec[], commandPath: string[]): boo
   )
 }
 
-export function normalizeCommandPositionals(specs: CommandSpec[], parsed: ParsedArgs): ParsedArgs {
+/** Raw argv with old flag spellings renamed, so commands rebuilt from argv print only canonical flags. */
+export function canonicalizeLegacyFlagArgv(argv: readonly string[]): string[] {
+  const end = argv.indexOf('--')
+  return argv.map((token, index) => {
+    if ((end !== -1 && index >= end) || !token.startsWith('--')) {
+      return token
+    }
+    const [name, ...value] = token.slice(2).split('=')
+    const canonical = CLI_FLAG_ALIASES[name]
+    return canonical === undefined ? token : [`--${canonical}`, ...value].join('=')
+  })
+}
+
+/** Renames old flag spellings so every later reader sees only canonical flags. */
+function canonicalizeFlagAliases(parsed: ParsedArgs): ParsedArgs {
+  if (!Object.keys(CLI_FLAG_ALIASES).some((alias) => parsed.flags.has(alias))) {
+    return parsed
+  }
+  const flags = new Map<string, string | boolean>()
+  const conflicts: { flag: string; alias: string }[] = []
+  for (const [name, value] of parsed.flags) {
+    const canonical = CLI_FLAG_ALIASES[name]
+    if (canonical === undefined) {
+      flags.set(name, value)
+    } else if (!parsed.flags.has(canonical)) {
+      flags.set(canonical, value)
+    } else if (parsed.flags.get(canonical) !== value) {
+      conflicts.push({ flag: canonical, alias: name })
+    }
+  }
+  return {
+    ...parsed,
+    flags,
+    ...(conflicts.length > 0 ? { flagAliasConflicts: conflicts } : {})
+  }
+}
+
+/** A group typed under an alias (`orca environment`) names the canonical group (`orca server`). */
+function canonicalizeGroupAlias(specs: CommandSpec[], parsed: ParsedArgs): ParsedArgs {
+  const path = parsed.commandPath
+  if (path.length === 0 || isCanonicalPrefix(specs, path)) {
+    return parsed
+  }
+  for (const spec of specs) {
+    for (const alias of [...(spec.aliases ?? []), ...(spec.legacyAliases ?? [])]) {
+      if (alias.length > path.length && matches(alias.slice(0, path.length), path)) {
+        return { ...parsed, commandPath: spec.path.slice(0, path.length) }
+      }
+    }
+  }
+  return parsed
+}
+
+function isCanonicalPrefix(specs: CommandSpec[], path: string[]): boolean {
+  return specs.some(
+    (spec) => spec.path.length >= path.length && matches(spec.path.slice(0, path.length), path)
+  )
+}
+
+export function normalizeCommandPositionals(specs: CommandSpec[], input: ParsedArgs): ParsedArgs {
+  const parsed = canonicalizeFlagAliases(input)
   for (const spec of specs) {
     const positionalArgs = spec.positionalArgs ?? []
     // Alias-only paths still need canonicalization without positional arguments.
-    if (positionalArgs.length === 0 && !spec.aliases) {
+    if (positionalArgs.length === 0 && !spec.aliases && !spec.legacyAliases) {
       continue
     }
     for (const base of specPaths(spec)) {
@@ -203,10 +266,10 @@ export function normalizeCommandPositionals(specs: CommandSpec[], parsed: Parsed
           setFlagValue(flags, name, value, new Set(spec.repeatableFlags ?? []))
         }
       })
-      return { commandPath: spec.path, flags, positionalFlagConflicts }
+      return { ...parsed, commandPath: spec.path, flags, positionalFlagConflicts }
     }
   }
-  return parsed
+  return canonicalizeGroupAlias(specs, parsed)
 }
 
 export function findCommandSpec(
@@ -243,6 +306,14 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
     )
   }
 
+  const aliasConflict = parsed.flagAliasConflicts?.[0]
+  if (aliasConflict) {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      `--${aliasConflict.flag} and --${aliasConflict.alias} name different values; pass only --${aliasConflict.flag}.`
+    )
+  }
+
   const pageAllowed = supportsBrowserPageFlag(spec)
   const repeatable = new Set([...REPEATABLE_STRING_FLAGS, ...(spec.repeatableFlags ?? [])])
   for (const [flag, value] of parsed.flags) {
@@ -254,7 +325,10 @@ export function validateCommandAndFlags(specs: CommandSpec[], parsed: ParsedArgs
       throw new RuntimeClientError(
         'invalid_argument',
         `Unknown flag --${flag} for command: ${spec.path.join(' ')}`,
-        unknownFlagData(flag, effectiveAllowedFlags(spec))
+        unknownFlagData(
+          flag,
+          effectiveAllowedFlags(spec).filter((name) => !INPUT_ONLY_FLAGS.has(name))
+        )
       )
     }
     if (repeatable.has(flag) && !BOOLEAN_FLAGS.has(flag) && typeof value !== 'string') {

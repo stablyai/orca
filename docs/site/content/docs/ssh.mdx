@@ -25,7 +25,7 @@ Orca won't add a second target for a machine already in Orca. When it imports `~
 
 The import reads `Host` blocks only. It adds each concrete alias of a `Host` line and skips patterns with `*`, `?`, or `!`. A `Match` block adds no target: a `Match` line ends the `Host` block above it, and the import ignores its lines until the next `Host` line. A tool that writes its own SSH config blocks can use `Match originalhost <name>` instead of `Host <name>` to keep a machine out of the import. Orca expands `Include` files in place before it parses, so a `Host` block in an included file is imported even when the `Include` line is inside a `Match` block.
 
-When you remove a target that came from `~/.ssh/config` (in Settings, or with `orca host rm`), the passive import (on launch, **Sync ~/.ssh/config**, or **Add all**) does not add its alias back. **Restore removed hosts…** in Settings → SSH brings it back.
+When you remove a target that came from `~/.ssh/config` (in Settings), the passive import (on launch, **Sync ~/.ssh/config**, or **Add all**) does not add its alias back. **Restore removed hosts…** in Settings → SSH brings it back.
 
 ## Host key verification
 

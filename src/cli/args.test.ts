@@ -224,21 +224,21 @@ describe('validateCommandAndFlags', () => {
       'demo',
       '--pairing-code',
       'remote-runtime',
-      '--environment',
-      'server',
+      '--server',
+      'build-box',
       '--json'
     ])
 
     expect(() => validateCommandAndFlags(specs, parsed)).not.toThrow()
   })
 
-  it.each(['environment', 'pairing-code'])('rejects --%s without a value', (flag) => {
+  it.each(['server', 'pairing-code'])('rejects --%s without a value', (flag) => {
     const parsed = parseArgs([`--${flag}`, 'demo'], [['demo']])
 
     expect(() => validateCommandAndFlags(specs, parsed)).toThrow(`Flag --${flag} requires a value.`)
   })
 
-  it.each(['environment', 'pairing-code'])('rejects an empty --%s= value', (flag) => {
+  it.each(['server', 'pairing-code'])('rejects an empty --%s= value', (flag) => {
     const parsed = parseArgs(['demo', `--${flag}=`])
 
     expect(() => validateCommandAndFlags(specs, parsed)).toThrow(`Flag --${flag} requires a value.`)

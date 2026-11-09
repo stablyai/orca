@@ -46,8 +46,8 @@ export function translatePluginRpcError(
   if (code === 'method_not_found') {
     return new RuntimeClientError(
       'runtime_unsupported',
-      `The Orca host this command reached is too old for \`${method}\`.`,
-      { nextSteps: ['Update Orca on that host, then run the command again.'] }
+      `The Orca server this command reached is too old for \`${method}\`.`,
+      { nextSteps: ['Update Orca on that server, then run the command again.'] }
     )
   }
   const fingerprint = approvalFingerprintOf(data)
@@ -85,12 +85,12 @@ export async function callPlugins<T>(
   }
 }
 
-/** Development folders are paths on the Orca host, which may not be this machine. */
+/** Development folders are paths on the Orca server, which may not be this machine. */
 export function resolveHostPluginPath(ctx: HandlerContext, value: string): string {
   if (process.env.ORCA_CLI_CWD) {
     throw new RuntimeClientError(
       'invalid_environment',
-      'This shell forwards orca to an Orca host on another machine, which cannot read this folder. Run the command on the machine that runs Orca, or pass --environment for an Orca server that has the folder.'
+      'This shell forwards orca to an Orca server on another machine, which cannot read this folder. Run the command on the machine that runs Orca, or pass --server for an Orca server that has the folder.'
     )
   }
   if (isAbsolute(value)) {

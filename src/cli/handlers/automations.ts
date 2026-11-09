@@ -1,3 +1,4 @@
+import { describeClientServer } from '../row-owner-server'
 import type {
   Automation,
   AutomationCreateInput,
@@ -159,13 +160,13 @@ function buildAutomationRunContextFromSetup(setup: ProjectHostSetup): WorkspaceR
 export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
   'automations list': async ({ client, json }) => {
     const result = await client.call<{ automations: Automation[] }>('automation.list')
-    printResult(result, json, formatAutomationList)
+    printResult(result, json, (value) => formatAutomationList(value, describeClientServer(client)))
   },
   'automations show': async ({ flags, client, json }) => {
     const result = await client.call<AutomationShowPayload>('automation.show', {
       id: getRequiredStringFlag(flags, 'id')
     })
-    printResult(result, json, formatAutomationShow)
+    printResult(result, json, (value) => formatAutomationShow(value, describeClientServer(client)))
   },
   'automations create': async ({ flags, client, cwd, json }) => {
     const setupDecision = getAutomationSetupFlag(flags)
@@ -204,7 +205,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       await assertAutomationFieldsSupported(writer, create)
     }
     const result = await writer.call<{ automation: Automation }>('automation.create', params)
-    printResult(result, json, formatAutomationShow)
+    printResult(result, json, (value) => formatAutomationShow(value, describeClientServer(client)))
   },
   'automations edit': async ({ flags, client, cwd, json }) => {
     const setupDecision = getAutomationSetupFlag(flags)
@@ -251,7 +252,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       ...(setupDecision && !updates.workspaceMode ? { expectedWorkspaceMode: 'new_per_run' } : {}),
       updates
     })
-    printResult(result, json, formatAutomationShow)
+    printResult(result, json, (value) => formatAutomationShow(value, describeClientServer(client)))
   },
   'automations remove': async ({ flags, client, json }) => {
     const id = getRequiredStringFlag(flags, 'id')
@@ -269,7 +270,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       id,
       ...(expectedOwner ? { expectedOwner } : {})
     })
-    const environment = getOptionalStringFlag(flags, 'environment') ?? process.env.ORCA_ENVIRONMENT
+    const environment = getOptionalStringFlag(flags, 'server') ?? process.env.ORCA_ENVIRONMENT
     const preserveConnectionSettings = Boolean(
       (client.isRemote && !environment) || process.env.ORCA_USER_DATA_PATH
     )

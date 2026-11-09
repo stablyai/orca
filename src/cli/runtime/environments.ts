@@ -16,7 +16,7 @@ import type { PairingOffer } from '../../shared/remote-runtime/pairing/mobile-re
 import { RuntimeClientError } from './types'
 
 export type EnvironmentAddResult = {
-  environment: PublicKnownRuntimeEnvironment
+  server: PublicKnownRuntimeEnvironment
 }
 
 export type EnvironmentRemoveResult = {

@@ -15,6 +15,7 @@ import {
   LOCAL_HOST_LIST_NAME,
   normalizeTypedName,
   resolveSshHostTargetId,
+  sshConnectionStep,
   stripWrappingQuotes,
   type EnvironmentSummary,
   type SshTargetSummary
@@ -59,13 +60,13 @@ export function parseHostFlag(flags: Map<string, string | boolean>): HostFlagSel
   if (!alias || alias.startsWith('ssh:') || alias.startsWith('runtime:')) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `Invalid --host value: ${raw}. Expected local, ssh:<target-id>, runtime:<environment-id>, or a host name from \`orca host list\`.`
+      `Invalid --host value: ${raw}. To run on another server, use --server <id>; \`orca server list\` prints each id.`
     )
   }
   return { kind: 'alias', alias }
 }
 
-// Pairing IDs are local to this machine; route to the paired host before applying its filters.
+// Pairing IDs are local to this computer; route to the saved server before applying its filters.
 export async function resolveHostFlagEnvironmentId(
   flags: Map<string, string | boolean>,
   selection: HostFlagRoutingSelection
@@ -91,25 +92,25 @@ export async function resolveHostFlagEnvironmentId(
   if (host.kind === 'alias' && (selection.environmentSelector || selection.pairingCode)) {
     return null
   }
-  // Accept environment names but canonicalize them to IDs for stored-host comparisons.
+  // Accept server names but canonicalize them to IDs for stored-host comparisons.
   const environment = findEnvironmentByName(environments, wanted)
   if (!environment) {
     assertEnvironmentNameUnambiguous(environments, wanted, flagSpelling)
-    // A missing server alias may still name the local machine or one of its SSH targets.
+    // A missing server alias may still name this computer or one of its SSH targets.
     if (host.kind === 'alias') {
       return null
     }
     const sshTargets = await selection.listSshTargets()
     throw new RuntimeClientError(
       'invalid_argument',
-      `Unknown Orca server in ${flagSpelling}: no paired Orca server is named or has id ${wanted}.`,
+      `Unknown server in ${flagSpelling}: no saved server has that id or name.`,
       {
-        knownEnvironments: environments,
+        knownServers: environments,
         knownSshTargets: sshTargets,
         nextSteps: [
-          ...crossKindNextSteps(wanted, { environments, sshTargets }, 'environment'),
-          'Run `orca environment list` to see paired Orca servers.',
-          'Use --host local to target this machine.'
+          ...crossKindNextSteps(wanted, { environments, sshTargets }, 'server'),
+          'Run `orca server list` to see saved servers.',
+          'Use --server local for the Orca on this computer.'
         ]
       }
     )
@@ -118,12 +119,12 @@ export async function resolveHostFlagEnvironmentId(
     if (isLocalHostListName(host.alias)) {
       throw new RuntimeClientError(
         'invalid_argument',
-        `Ambiguous --host ${host.alias}: it names both this machine and a paired Orca server.`,
+        `Ambiguous --host ${host.alias}: it names both this computer and a saved server.`,
         {
-          knownEnvironments: [environment],
+          knownServers: [environment],
           nextSteps: [
-            'Use --host local for this machine.',
-            `Use --host runtime:${environment.id} for the paired Orca server named ${environment.name}.`
+            'Use --server local for the Orca on this computer.',
+            `Use --server ${environment.id} for the saved server named ${environment.name}.`
           ]
         }
       )
@@ -133,7 +134,7 @@ export async function resolveHostFlagEnvironmentId(
   if (selection.pairingCode) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `${flagSpelling} already selects a paired Orca server; use either --host runtime:<id> or --pairing-code, not both.`
+      `${flagSpelling} already selects a saved server; use either --server <id> or --pairing-code, not both.`
     )
   }
   if (selection.environmentSelector) {
@@ -144,14 +145,14 @@ export async function resolveHostFlagEnvironmentId(
     if (selected?.id !== environment.id) {
       throw new RuntimeClientError(
         'invalid_argument',
-        `${flagSpelling} and ${selection.environmentSelector.label} ${selection.environmentSelector.value} name different Orca servers.`
+        `${flagSpelling} and ${selection.environmentSelector.label} ${selection.environmentSelector.value} name different servers; pass only --server.`
       )
     }
   }
   return environment.id
 }
 
-// An alias naming both a paired server and an SSH target must not choose either silently.
+// An alias naming both a saved server and an SSH target must not choose either silently.
 async function assertAliasNamesOneHost(
   alias: string,
   environment: EnvironmentSummary,
@@ -163,11 +164,11 @@ async function assertAliasNamesOneHost(
   } catch {
     throw new RuntimeClientError(
       'invalid_argument',
-      `Cannot verify --host ${alias}: it names a paired Orca server, but this machine's SSH targets could not be read to rule out one with the same name.`,
+      `Cannot verify --host ${alias}: it names a saved server, but this computer's SSH connections could not be read to rule out one with the same name.`,
       {
-        knownEnvironments: [environment],
+        knownServers: [environment],
         nextSteps: [
-          `Use --host runtime:${environment.id} for the paired Orca server named ${environment.name}.`
+          `Use --server ${environment.id} for the saved server named ${environment.name}.`
         ]
       }
     )
@@ -182,15 +183,13 @@ async function assertAliasNamesOneHost(
     conflicts.length === 1 ? 'an SSH target' : `${conflicts.length} SSH targets sharing that label`
   throw new RuntimeClientError(
     'invalid_argument',
-    `Ambiguous --host ${alias}: it names both a paired Orca server and ${sshCount} on this machine.`,
+    `Ambiguous --host ${alias}: it names both a saved server and ${sshCount} on this computer.`,
     {
-      knownEnvironments: [environment],
+      knownServers: [environment],
       knownSshTargets: conflicts,
       nextSteps: [
-        `Use --host runtime:${environment.id} for the paired Orca server named ${environment.name}.`,
-        ...conflicts.map(
-          (target) => `Use --host ssh:${target.id} for the SSH target labeled ${target.label}.`
-        )
+        `Use --server ${environment.id} for the saved server named ${environment.name}.`,
+        sshConnectionStep(alias)
       ]
     }
   )
@@ -208,7 +207,7 @@ export function hostFilterMatchesHostId(
   return filter.kind === 'runtime' && candidate === LOCAL_EXECUTION_HOST_ID
 }
 
-// Validate SSH IDs against the connected runtime, not this machine's pairing store.
+// Validate SSH IDs against the connected server, not this computer's pairing store.
 export async function resolveHostFlagTarget(
   flags: Map<string, string | boolean>,
   client: RuntimeClient
@@ -255,20 +254,17 @@ async function resolveLocalHostListName(
   if (clashing.length > 0) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `Ambiguous --host ${alias}: it names both this machine and an SSH target.`,
+      `Ambiguous --host ${alias}: it names both this computer and an SSH connection.`,
       {
         knownSshTargets: clashing,
-        nextSteps: [
-          'Use --host local for this machine.',
-          ...clashing.map((target) => `Use --host ssh:${target.id} for ${target.label}.`)
-        ]
+        nextSteps: ['Use --server local for the Orca on this computer.', sshConnectionStep(alias)]
       }
     )
   }
   return { kind: 'local', id: LOCAL_EXECUTION_HOST_ID }
 }
 
-// Preserve the store's refusal to guess between duplicate environment names.
+// Preserve the store's refusal to guess between duplicate server names.
 function assertEnvironmentNameUnambiguous(
   environments: readonly { id: string; name: string }[],
   name: string,
@@ -280,11 +276,11 @@ function assertEnvironmentNameUnambiguous(
   }
   throw new RuntimeClientError(
     'invalid_argument',
-    `Ambiguous Orca server in ${flag}: ${ambiguous.length} paired servers are named ${name}. Use the environment id.`,
+    `Ambiguous server in ${flag}: ${ambiguous.length} saved servers are named ${name}. Use the server id.`,
     {
-      knownEnvironments: ambiguous,
+      knownServers: ambiguous,
       nextSteps: ambiguous.map(
-        (candidate) => `Use --host runtime:${candidate.id} for the server named ${candidate.name}.`
+        (candidate) => `Use --server ${candidate.id} for the server named ${candidate.name}.`
       )
     }
   )
@@ -308,17 +304,17 @@ export async function resolveEnvironmentSelectorForStore(
   if (found) {
     return found.id === selector || found.name === selector ? selector : found.id
   }
-  assertEnvironmentNameUnambiguous(environments, selector, `--environment ${selector}`)
+  assertEnvironmentNameUnambiguous(environments, selector, `--server ${selector}`)
   const sshTargets = await listSshTargetsForSuggestion()
   throw new RuntimeClientError(
     'invalid_argument',
-    `Unknown Orca server in --environment ${selector}: no paired Orca server is named or has id ${selector}.`,
+    `Unknown server in --server ${selector}: no saved server has that id or name.`,
     {
-      knownEnvironments: environments,
+      knownServers: environments,
       knownSshTargets: sshTargets,
       nextSteps: [
-        ...crossKindNextSteps(selector, { environments, sshTargets }, 'environment'),
-        'Run `orca host list` to see every machine you can target and the flag for each.'
+        ...crossKindNextSteps(selector, { environments, sshTargets }, 'server'),
+        'Run `orca server list` to see saved servers, or use --server local for the Orca on this computer.'
       ]
     }
   )

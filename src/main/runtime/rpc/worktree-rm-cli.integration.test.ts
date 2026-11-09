@@ -384,7 +384,7 @@ function legacyParams(worktree = `id:${id}`, hostId = 'local', force = false) {
 function warnings() {
   return vi
     .mocked(console.error)
-    .mock.calls.filter(([value]) => String(value).includes('host is older'))
+    .mock.calls.filter(([value]) => String(value).includes('server is older'))
 }
 it.each([false, true])('sends exact legacy params and one warning, JSON=%s', async (json) => {
   supported = false

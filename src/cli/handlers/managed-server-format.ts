@@ -1,4 +1,5 @@
 import type { OrcadManagedRuntimeStatus } from '../../shared/orcad-managed-runtime'
+import { quoteCliCommandArgument } from '../shell-command-quote'
 
 function count(value: number | null): string {
   return value === null ? 'unverifiable' : String(value)
@@ -12,7 +13,7 @@ export function formatManagedServerStatus(status: OrcadManagedRuntimeStatus): st
   ]
   if (status.recovery) {
     lines.push(
-      `Interrupted ${status.recovery.operation} of ${status.recovery.version} (${status.recovery.phase}); run \`orca environment recover\`.`
+      `Interrupted ${status.recovery.operation} of ${status.recovery.version} (${status.recovery.phase}); run \`orca server recover --server ${quoteCliCommandArgument(status.environmentId)}\`.`
     )
   }
   if (status.migration) {
@@ -25,7 +26,7 @@ export function formatManagedServerStatus(status: OrcadManagedRuntimeStatus): st
   }
   if (status.availableUpdate) {
     lines.push(
-      `Update available: ${status.availableUpdate}; run \`orca environment update --environment ${status.environmentId}\`.`
+      `Update available: ${status.availableUpdate}; run \`orca server update --server ${quoteCliCommandArgument(status.environmentId)}\`.`
     )
   }
   return lines.join('\n')

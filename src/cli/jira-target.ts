@@ -39,7 +39,7 @@ export async function resolveJiraTarget(
   if (!runtime.result.capabilities?.includes(JIRA_AGENT_ACCESS_RUNTIME_CAPABILITY)) {
     throw new RuntimeClientError(
       'incompatible_runtime',
-      'Update Orca on the execution host to use verified Jira commands.'
+      'Update Orca on that server to use verified Jira commands.'
     )
   }
   const { result: status } = await context.client.call<JiraConnectionStatus>('jira.status')

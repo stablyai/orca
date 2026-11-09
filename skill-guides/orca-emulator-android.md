@@ -30,7 +30,7 @@ device with `emulator_unsupported`. `tap`, `type`, `gesture`, `button`, `rotate`
 tree on Android, a serve-sim node tree on iOS.
 
 Camera and sensor injection are not wrapped; Android virtual-scene is out of scope. Commands
-drive the SDK and devices on the host that runs the Orca runtime, including a headless
+drive the SDK and devices on the computer that runs the Orca server, including a headless
 `orca serve` or SSH host.
 
 ## Prerequisites

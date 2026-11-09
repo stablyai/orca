@@ -125,11 +125,11 @@ function bindShotHost(
 export function bindPluginDevWatchHost(ctx: HandlerContext, path: string): PluginDevWatchHost {
   const approve = ctx.flags.get('approve')
   const check = ctx.flags.get('check') === true
-  // Why local only: the check renders the folder's code on this machine, not on the Orca host.
+  // Why local only: the check renders the folder's code on this machine, not on the Orca server.
   if (check && ctx.client.isRemote) {
     throw new RuntimeClientError(
       'invalid_argument',
-      '--check renders the plugin on this machine, so it needs a local folder; drop --environment or --check.'
+      '--check renders the plugin on this machine, so it needs a local folder; drop --server or --check.'
     )
   }
   const shotFlag = ctx.flags.get('shot')

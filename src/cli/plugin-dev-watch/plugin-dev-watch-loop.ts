@@ -18,7 +18,7 @@ import {
   type PluginDevWatchShotHost
 } from './plugin-dev-watch-shot'
 
-/** What the loop asks of the Orca host; the handler binds it to RPC for one folder. */
+/** What the loop asks of the Orca server; the handler binds it to RPC for one folder. */
 export type PluginDevWatchHost = {
   refreshTypes(): Promise<string[]>
   /** `approvalFingerprint` overrides `--approve` once the person approved at the prompt. */

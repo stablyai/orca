@@ -13,10 +13,10 @@ import { mayNameFolderWorkspace } from '../folder-workspace-selector'
 import { isLocalEnvironmentSelector, LOCAL_ENVIRONMENT } from '../local-environment-selector'
 import { RuntimeClient, RuntimeClientError, type RuntimeRpcSuccess } from '../runtime-client'
 import { quoteCliCommandArgument } from '../shell-command-quote'
-import { describeClientEnvironment, environmentLabel } from '../workspace-address'
+import { describeClientServer, serverLabel } from '../row-owner-server'
 import { attachCliErrorData } from './worktree-setup-decision-recovery'
 
-/** The Orca a parent lives in: `local` or a saved environment's id. */
+/** The server a parent lives on: `local` or a saved server's id. */
 export type ParentEnvironment = { route: string; name: string }
 
 const LOCAL: ParentEnvironment = { route: LOCAL_ENVIRONMENT, name: LOCAL_ENVIRONMENT }
@@ -36,43 +36,43 @@ function savedParentEnvironment(userDataPath: string, value: string): ParentEnvi
   if (byName.length > 1) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `--parent-environment ${value} is ambiguous: ${byName.length} saved environments have that name. Use the environment id.`,
-      { nextSteps: byName.map((environment) => `--parent-environment ${environment.id}`) }
+      `--parent-server ${value} is ambiguous: ${byName.length} saved servers have that name. Use the server id.`,
+      { nextSteps: byName.map((environment) => `--parent-server ${environment.id}`) }
     )
   }
   throw new RuntimeClientError(
-    'environment_not_paired',
-    `--parent-environment ${value} is not a saved environment here, so its workspaces can't be reached from this machine.`,
+    'server_not_saved',
+    `--parent-server ${value} is not a saved server here, so its workspaces can't be reached from here.`,
     {
-      environment: value,
-      knownEnvironments: saved.map(({ id, name }) => ({ id, name })),
+      server: value,
+      knownServers: saved.map(({ id, name }) => ({ id, name })),
       nextSteps: [
-        'Pass local, or the id or name of a saved environment from `orca environment list`.',
-        'Pair it first with `orca environment add --name <name> --pairing-code <code>`.'
+        "Pass local, or a saved server's id or name from `orca server list`.",
+        'Save it first with `orca server add --name <name> --pairing-code <code>`.'
       ]
     }
   )
 }
 
 /**
- * Which environment `--parent-worktree` names, when that differs from the child's. Undefined keeps
- * same-environment parents. A caller-relative parent (active/current) is always on the caller's own
- * Orca, so against another environment it is implicitly `local`.
+ * Which server `--parent-worktree` names, when that differs from the child's. Undefined keeps
+ * same-server parents. A caller-relative parent (active/current) is always on the caller's own
+ * Orca, so against another server it is implicitly `local`.
  */
 export function resolveParentEnvironment(
   flags: Map<string, string | boolean>,
   client: RuntimeClient
 ): ParentEnvironment | undefined {
   const parentSelector = getOptionalStringFlag(flags, 'parent-worktree')
-  const value = getOptionalStringFlag(flags, 'parent-environment')
-  if (flags.has('parent-environment')) {
+  const value = getOptionalStringFlag(flags, 'parent-server')
+  if (flags.has('parent-server')) {
     if (value === undefined) {
-      throw new RuntimeClientError('invalid_argument', 'Missing required --parent-environment')
+      throw new RuntimeClientError('invalid_argument', 'Missing required --parent-server')
     }
     if (flags.get('no-parent') === true || !parentSelector) {
       throw new RuntimeClientError(
         'invalid_argument',
-        '--parent-environment says where --parent-worktree lives; pass it with --parent-worktree, not with --no-parent or alone.'
+        '--parent-server says which server holds --parent-worktree; pass it with --parent-worktree, not with --no-parent or alone.'
       )
     }
   }
@@ -84,17 +84,17 @@ export function resolveParentEnvironment(
   if (isCallerRelative(parentSelector) && named && named.route !== LOCAL_ENVIRONMENT) {
     throw new RuntimeClientError(
       'invalid_argument',
-      `--parent-worktree ${parentSelector} names the workspace containing this terminal or cwd, which is on this machine's own Orca, not ${named.name}.`,
+      `--parent-worktree ${parentSelector} names the workspace containing this terminal or cwd, which is on the Orca on this computer, not ${named.name}.`,
       {
         nextSteps: [
-          `Drop --parent-environment, or pass --parent-environment local.`,
-          `For a workspace in ${named.name}, list it with \`orca worktree ps --environment ${quoteCliCommandArgument(named.route)} --json\` and pass its address.worktree as --parent-worktree.`
+          'Drop --parent-server, or pass --parent-server local.',
+          `For a workspace on ${named.name}, list it with \`orca worktree ps --server ${quoteCliCommandArgument(named.route)} --json\` and pass its address.worktree as --parent-worktree.`
         ]
       }
     )
   }
   const parentEnvironment = named ?? (isCallerRelative(parentSelector) ? LOCAL : undefined)
-  return parentEnvironment && parentEnvironment.route !== describeClientEnvironment(client).id
+  return parentEnvironment && parentEnvironment.route !== describeClientServer(client).id
     ? parentEnvironment
     : undefined
 }
@@ -117,11 +117,11 @@ async function assertChildSavesCrossStoreParents(client: RuntimeClient): Promise
   if (supportsCrossStoreLineage(status.capabilities)) {
     return
   }
-  const environment = describeClientEnvironment(client)
+  const server = describeClientServer(client)
   throw new RuntimeClientError(
     'incompatible_runtime',
-    `Update Orca in ${environmentLabel(environment)} to nest workspaces under a parent in another environment. Nothing was changed.`,
-    { environment: environment.id, requires: WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY }
+    `Update Orca on ${serverLabel(server)} to nest workspaces under a parent on another server. Nothing was changed.`,
+    { server: server.id, requires: WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY }
   )
 }
 
@@ -130,11 +130,11 @@ function unavailableError(error: unknown, environment: ParentEnvironment): unkno
     return error
   }
   return new RuntimeClientError(
-    'environment_unavailable',
+    'server_unavailable',
     `${environment.name} didn't answer, so the parent couldn't be checked. Nothing was changed. (${error.message})`,
     {
-      environment: environment.route,
-      nextSteps: [`orca status --environment ${quoteCliCommandArgument(environment.route)} --json`]
+      server: environment.route,
+      nextSteps: [`orca status --server ${quoteCliCommandArgument(environment.route)} --json`]
     }
   )
 }
@@ -145,7 +145,7 @@ function isParentLookupCode(code: string): code is ParentLookupCode {
   return code === 'LINEAGE_PARENT_NOT_FOUND' || code === 'LINEAGE_PARENT_AMBIGUOUS'
 }
 
-/** The lineage code for a parent lookup's own error, as the runtime reports an explicit parent. */
+/** The lineage code for a parent lookup's own error, as the server reports an explicit parent. */
 function parentLookupCode(error: RuntimeClientError): ParentLookupCode | undefined {
   if (isParentLookupCode(error.code)) {
     return error.code
@@ -158,8 +158,8 @@ function parentLookupCode(error: RuntimeClientError): ParentLookupCode | undefin
 }
 
 /**
- * Error data for a parent miss or ambiguity: the environment searched, and recovery that lists that
- * environment. Inherited steps are dropped because they inspect the caller's default route.
+ * Error data for a parent miss or ambiguity: the server searched, and recovery that lists that
+ * server. Inherited steps are dropped because they inspect the caller's default route.
  */
 function searchedEnvironmentData(
   error: RuntimeClientError,
@@ -168,16 +168,16 @@ function searchedEnvironmentData(
   extraSteps: readonly string[] = []
 ): Record<string, unknown> {
   const list = environment.route
-    ? `orca worktree ps --environment ${quoteCliCommandArgument(environment.route)} --json`
+    ? `orca worktree ps --server ${quoteCliCommandArgument(environment.route)} --json`
     : undefined
   const listStep = list
     ? code === 'LINEAGE_PARENT_AMBIGUOUS'
       ? `Compare the choices with \`${list}\`, then pass one as --parent-worktree.`
       : list
-    : 'This one-off connection has no listing route; save it with `orca environment add --name <name> --pairing-code <code>`, then run `orca worktree ps --environment <name> --json`.'
+    : 'This one-off connection has no listing route; save it with `orca server add --name <name> --pairing-code <code>`, then run `orca worktree ps --server <name> --json`.'
   return {
     ...(error.data && typeof error.data === 'object' ? error.data : {}),
-    environment: environment.route,
+    server: environment.route,
     nextSteps: [listStep, ...extraSteps]
   }
 }
@@ -192,14 +192,14 @@ function parentLookupError(error: unknown, environment: ParentEnvironment): unkn
   }
   const message =
     code === 'LINEAGE_PARENT_NOT_FOUND'
-      ? `No workspace in ${environment.name} matched the parent selector. Nothing was changed; no other environment was searched.`
-      : `${error.message} (in ${environment.name}; nothing was changed)`
+      ? `No workspace on ${environment.name} matched the parent selector. Nothing was changed; no other server was searched.`
+      : `${error.message} (on ${environment.name}; nothing was changed)`
   return new RuntimeClientError(code, message, searchedEnvironmentData(error, code, environment))
 }
 
 /**
- * The verified ref a child saves for a parent in another environment, built as the app builds it:
- * the parent store's own installationId plus the parent row's identity. No other environment is
+ * The verified ref a child saves for a parent on another server, built as the app builds it:
+ * the parent store's own installationId plus the parent row's identity. No other server is
  * searched, and every check runs before the child is changed.
  */
 export async function resolveCrossEnvironmentParent(
@@ -230,9 +230,9 @@ export async function resolveCrossEnvironmentParent(
     if (!installationId) {
       throw new RuntimeClientError(
         'incompatible_runtime',
-        `Update Orca in ${environment.name} so workspaces in other environments can name it as a parent. Nothing was changed.`,
+        `Update Orca on ${environment.name} so workspaces on other servers can name it as a parent. Nothing was changed.`,
         {
-          environment: environment.route,
+          server: environment.route,
           requires: WORKTREE_CROSS_STORE_LINEAGE_RUNTIME_CAPABILITY
         }
       )
@@ -249,7 +249,7 @@ export async function resolveCrossEnvironmentParent(
   }
 }
 
-/** Sends a create/set; a miss or ambiguity on its same-environment parent names where it looked
+/** Sends a create/set; a miss or ambiguity on its same-server parent names where it looked
  * and how to list it, and a miss says how to name a parent elsewhere. */
 export async function callNamingParentEnvironment<
   T,
@@ -274,16 +274,16 @@ export async function callNamingParentEnvironment<
       throw error
     }
     const code = error.code
-    const environment = describeClientEnvironment(client)
+    const environment = describeClientServer(client)
     throw attachCliErrorData(
       error,
       searchedEnvironmentData(
         error,
         code,
-        { route: environment.id, name: environmentLabel(environment) },
+        { route: environment.id, name: serverLabel(environment) },
         code === 'LINEAGE_PARENT_NOT_FOUND'
           ? [
-              `Only ${environmentLabel(environment)} was searched for "${parentSelector}". For a parent in another environment, add --parent-environment <local|environment-id> (a row's address.environment from \`orca worktree ps --environment <id> --json\`).`
+              `Only ${serverLabel(environment)} was searched for "${parentSelector}". For a parent on another server, add --parent-server <local|server-id> (a row's address.server from \`orca worktree ps --server <id> --json\`).`
             ]
           : []
       )

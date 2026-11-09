@@ -10,7 +10,11 @@ import type {
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult
 } from '../../shared/project-types'
-import { getSshTargetIdForExecutionHost, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  getSshTargetIdForExecutionHost,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import { PROJECT_HOST_SETUP_HOST_TARGET_RUNTIME_CAPABILITY } from '../../shared/worktree-runtime-capabilities'
 import type { CommandHandler, HandlerContext } from '../dispatch'
@@ -28,6 +32,7 @@ import {
   parseHostFlag,
   resolveHostFlagTarget
 } from '../execution-host-flag'
+import { readOwnerContext } from '../row-owner-server'
 import { getOptionalRepoKind, getOptionalStringFlag, getRequiredStringFlag } from '../flags'
 import { findProjectSetups, resolveProjectIdSelector } from '../project-selector'
 import { resolveRepoPathArgument } from '../repo-path-arguments'
@@ -59,10 +64,7 @@ async function getResolvedHostId(
   client: HandlerContext['client']
 ): Promise<ExecutionHostId> {
   const host = await resolveHostFlagTarget(flags, client)
-  if (!host) {
-    throw new RuntimeClientError('invalid_argument', 'Missing required --host')
-  }
-  return host.id
+  return host?.id ?? LOCAL_EXECUTION_HOST_ID
 }
 
 // The runtime rejects SSH setup operations regardless of target existence; preserve that refusal.
@@ -71,8 +73,9 @@ async function getRequiredHostId(
   client: HandlerContext['client']
 ): Promise<ExecutionHostId> {
   const host = parseHostFlag(flags)
+  // Without --host the setup belongs to the server the command runs on.
   if (!host) {
-    throw new RuntimeClientError('invalid_argument', 'Missing required --host')
+    return LOCAL_EXECUTION_HOST_ID
   }
   if (host.kind !== 'alias') {
     return host.id
@@ -123,7 +126,9 @@ export const PROJECT_HANDLERS: Record<string, CommandHandler> = {
     const setups = projectSetups.filter(
       (setup) => hostFilter === undefined || hostFilterMatchesHostId(hostFilter, setup.hostId)
     )
-    printResult({ ...result, result: { setups } }, json, formatProjectHostSetupList)
+    printResult({ ...result, result: { setups } }, json, (value) =>
+      formatProjectHostSetupList(value, readOwnerContext(client))
+    )
   },
   'project setup-existing-folder': async ({ flags, client, cwd, json }) => {
     const rawPath = getRequiredStringFlag(flags, 'path')

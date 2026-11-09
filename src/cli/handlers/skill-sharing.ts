@@ -134,7 +134,7 @@ async function callShare(
     if (error instanceof RuntimeRpcFailureError && error.code === 'method_not_found') {
       throw new RuntimeClientError(
         'update_required',
-        'The connected Orca runtime does not support agent skill sharing yet. Update Orca on that machine and try again.'
+        'The connected Orca server does not support agent skill sharing yet. Update Orca on that machine and try again.'
       )
     }
     throw error

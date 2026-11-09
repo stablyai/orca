@@ -42,7 +42,7 @@ export async function callConnector<TResult>(
     if (error instanceof RuntimeClientError && error.code === 'method_not_found') {
       throw new RuntimeClientError(
         'incompatible_runtime',
-        'This Orca host has no connectors. Update Orca on the host and try again.'
+        'This Orca server has no connectors. Update Orca on the server and try again.'
       )
     }
     throw error

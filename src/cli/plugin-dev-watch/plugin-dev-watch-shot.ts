@@ -15,7 +15,7 @@ export type PluginDevWatchShot = {
   pendingRequests?: number
 }
 
-/** What `--shot` asks of the Orca host; the handler binds it to RPC. */
+/** What `--shot` asks of the Orca server; the handler binds it to RPC. */
 export type PluginDevWatchShotHost = {
   /** `--shot-panel`, else the plugin's first panel; null when it has none. Throws on an unknown id. */
   panelOf(entry: PluginHostListEntry | null): string | null

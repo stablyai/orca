@@ -16,7 +16,7 @@ export type CliErrorContext = {
   worktreeSelector?: string
   /** The runtime error omits the original --repo selector. */
   repoSelector?: string
-  /** True when --environment, --pairing-code, --host runtime:, or their env vars chose a server. */
+  /** True when --server, --pairing-code, --host runtime:, or their env vars chose a server. */
   remoteServerSelected?: boolean
   /** Concise orchestration failures: compact JSON plus one `error: <code>: <message>` stderr line. */
   conciseOrchestration?: boolean
@@ -25,7 +25,7 @@ export type CliErrorContext = {
 type ContextRecovery = { nextSteps: readonly string[] } & Record<string, unknown>
 
 const STALE_HANDLE_SERVER_HINT =
-  'Terminal handles belong to the Orca server that issued them. If this handle came from a paired server (for example `orca terminal list --environment <server>`), pass the same --environment <server> to this command.'
+  'Terminal handles belong to the Orca server that issued them. If this handle came from another server (for example `orca terminal list --server <server>`), pass the same --server <server> to this command.'
 
 function contextRecovery(error: unknown, context: CliErrorContext): ContextRecovery | undefined {
   const code = cliErrorCode(error)

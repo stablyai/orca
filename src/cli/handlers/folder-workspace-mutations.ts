@@ -11,6 +11,7 @@ import { formatWorktreeShow, printResult } from '../format'
 import { getOptionalStringFlag, getOptionalStringFlagAllowingEmpty } from '../flags'
 import { RuntimeClientError, type RuntimeClient, type RuntimeRpcSuccess } from '../runtime-client'
 import { getWorktreeReadFlags } from './worktree-unread-flag'
+import { annotateMutationResult } from './worktree-address-annotation'
 
 type Flags = Map<string, string | boolean>
 
@@ -65,7 +66,11 @@ export async function setIfFolderWorkspace(
   if (folderId === undefined) {
     return false
   }
-  printResult(await setFolderWorkspace(client, flags, folderId), json, formatWorktreeShow)
+  const { response } = await annotateMutationResult(
+    client,
+    await setFolderWorkspace(client, flags, folderId)
+  )
+  printResult(response, json, formatWorktreeShow)
   return true
 }
 

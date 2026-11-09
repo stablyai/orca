@@ -5,7 +5,7 @@ description: Commands, selectors, and agent-friendly patterns for driving Orca f
 
 import { Callout } from '@/components/docs/prose'
 
-The `orca` CLI talks to a running Orca runtime. Use it when a shell script or agent needs to inspect worktrees, launch terminals, open files, automate the built-in browser, or report progress back into Orca.
+The `orca` CLI talks to a running Orca server. Use it when a shell script or agent needs to inspect worktrees, launch terminals, open files, automate the built-in browser, or report progress back into Orca.
 
 ## Verify the runtime
 
@@ -53,27 +53,19 @@ orca worktree show --worktree branch:feature-name --json
 orca worktree show --worktree issue:123 --json
 ```
 
-`active` and `current` resolve to the enclosing Orca-managed worktree from the shell's current directory or terminal context. Use explicit selectors in scripts that may run outside the target worktree. For remote runtimes, prefer full server-side selectors such as `id:<repoId>::<absolute-worktree-path>` or `path:<absolute-server-path>` because the local shell's current directory may not exist on the runtime host.
+`active` and `current` resolve to the enclosing Orca-managed worktree from the shell's current directory or terminal context. Use explicit selectors in scripts that may run outside the target worktree. With `--server`, prefer full server-side selectors such as `id:<repoId>::<absolute-worktree-path>` or `path:<absolute-server-path>` because the local shell's current directory may not exist on that server.
 
-## Choose a host
+## Choose a server
 
-List every machine the current Orca host can target and the selector for each one:
-
-```bash
-orca host list --json
-```
-
-The result includes this machine, its registered [SSH targets](/docs/ssh), and paired [Remote Orca Servers](/docs/remote-servers). Use `--host local` for this machine, `--host ssh:<target-id>` for an SSH target, and `--environment <server-name>` for a paired server. SSH rows include the detected remote platform (`linux`, `darwin`, or `win32`) after the target connects; older or disconnected targets report `platform unknown`. They also include `connected` and, when known, the SSH lifecycle `connectionStatus`. If you put a machine name on the wrong selector, Orca reports the matching machine and the flag to use instead of returning an empty result.
-
-`--host` also takes the bare name shown in the `name` column, on either axis — `--host trader-local` reaches the same machine as `--host ssh:ssh-1783599077486-fyasux`. Names resolve only when they are unique: a name held by two SSH targets, by two paired servers, or by one of each is refused, and the error hands back the id form for each candidate — `--host ssh:<target-id>` for an SSH target and `--host runtime:<environment-id>` for a paired server. Use those to settle it, since `--environment <server-name>` cannot separate two servers sharing a name.
-
-Remove a saved SSH target with the id `orca host list` prints:
+Every command runs on one Orca server. Without a flag it is `local`, the Orca on this computer. Pass `--server <id>` to run on a saved [Remote Orca Server](/docs/remote-servers), or `--server local` to stay on this computer even when `ORCA_ENVIRONMENT` sets a default. List the saved servers and the selector for each one:
 
 ```bash
-orca host rm --host ssh:<target-id> --json
+orca server list --json
 ```
 
-It removes the target the same way Settings does, so the passive `~/.ssh/config` import does not add the alias back on the next launch. It takes only the `ssh:<target-id>` form, not the bare name, because it deletes data. It refuses `--host local`, paired servers (use `orca environment rm`), and an id this Orca host does not have.
+`server list` reads this computer's pairing store and never contacts a server. Ask one server for its status with `orca status --server <id> --json`. A server set up over [SSH](/docs/ssh) is a saved server like any other; SSH connections themselves are managed in Settings.
+
+Listings name the server that owns each row: `server:` in `worktree ps` and `worktree show`, and `server=` in `worktree list`, `terminal list`, `project setups` and orchestration worker lines. `server=unknown (...)` means Orca cannot verify the owner from here, so don't treat that row's paths as files on this computer.
 
 ## Runtime commands
 
@@ -99,7 +91,7 @@ orca repo search-refs --repo id:<repoId> --query main --limit 10 --json
 
 Set the repo base ref before creating lots of worktrees so new tasks branch from the right place by default.
 
-`repo add` defaults to `--kind git`. Use `--kind folder` to open an ordinary directory, including a repo-tool root containing separate Git repositories, as a folder workspace without Git worktrees or source control. With `--environment`, use an absolute path on that Orca server.
+`repo add` defaults to `--kind git`. Use `--kind folder` to open an ordinary directory, including a repo-tool root containing separate Git repositories, as a folder workspace without Git worktrees or source control. With `--server`, use an absolute path on that Orca server.
 
 ## Worktrees
 
@@ -209,7 +201,7 @@ Omit `--terminal` to target the active terminal in the current worktree. Read be
 Close stops the process as part of removing the terminal. Use `--terminal <handle>` for one
 terminal, or `--worktree <selector> --all` to durably close every terminal in exactly that
 workspace, including its saved layouts and agent-resume records. Use workspace Sleep when those
-terminals should resume later. If the execution host cannot confirm that every PTY stopped, bulk
+terminals should resume later. If the server cannot confirm that every PTY stopped, bulk
 close returns a failing `unverifiable` result rather than claiming the processes exited.
 `terminal stop` remains only for compatibility with older tooling.
 
@@ -218,7 +210,7 @@ close returns a failing `unverifiable` result rather than claiming the processes
   handle, run `orca terminal list --json` and reacquire the handle.
 </Callout>
 
-`terminal list` reports each terminal's `executionHostId` when Orca can verify it, plus a result-level `hostScope` with covered and omitted host IDs. Treat a missing host identity or scope as **unverifiable**, not local. A missing terminal is evidence that it exited only when its execution host is listed in `hostScope.hostIds`.
+`terminal list` reports each terminal's `executionHostId` when Orca can verify it, plus a result-level `hostScope` with covered and omitted host IDs. Treat a missing host identity or scope as **unverifiable**, not local; text output prints it as `server=unknown`. A missing terminal is evidence that it exited only when its host is listed in `hostScope.hostIds`.
 
 By default, `terminal read` returns the accumulated output stream with terminal escapes stripped. Programs that redraw lines can therefore appear as stacked fragments. Use `--screen` when you need the currently rendered frame; the response's `source` identifies `stream`, `screen`, or `screen-unavailable`. Screen reads have no history to page, so `--screen` and `--cursor` are mutually exclusive.
 
@@ -231,7 +223,7 @@ orca chat rename --session <sessionId> --name "Release notes" --json
 orca chat rename --name "Migrate auth"
 ```
 
-Renames a chat tab, the same as renaming it by hand. `--session` takes the `sessionId` that `orca agent launch` prints. Run inside a chat, it defaults to that chat; with `--environment` it is required.
+Renames a chat tab, the same as renaming it by hand. `--session` takes the `sessionId` that `orca agent launch` prints. Run inside a chat, it defaults to that chat; with `--server` it is required.
 
 ## Files
 
@@ -384,7 +376,7 @@ orca skills install --all --dry-run
 orca skills update --all
 ```
 
-`install` / `update` run Orca's own skill installer on the machine that runs them, the same planner the app's **Update skills** uses. They do not contact the Orca runtime or need `npx`. See [Orca skills](/docs/cli/skills#keep-skills-up-to-date).
+`install` / `update` run Orca's own skill installer on the machine that runs them, the same planner the app's **Update skills** uses. They do not contact an Orca server or need `npx`. See [Orca skills](/docs/cli/skills#keep-skills-up-to-date).
 
 ## Account (host-local runtime)
 
@@ -442,12 +434,12 @@ orca automations create --name "Daily review" --trigger daily --time 09:00 --pro
 orca automations run <automationId> --json
 ```
 
-Remote runtime environments:
+Saved servers:
 
 ```bash
-orca environment add --name work-laptop --pairing-code "orca://pair?code=..." --json
-orca environment list --json
-orca environment rm --environment <selector> --json
+orca server add --name work-laptop --pairing-code "orca://pair?code=..." --json
+orca server list --json
+orca server rm --server <id> --json
 ```
 
 Agent status hooks:

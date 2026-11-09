@@ -8,6 +8,7 @@ import { getAutomationLegacyRepoId } from '../shared/automations/history/automat
 import { formatAutomationPrecheckTimeout } from '../shared/automations/launch/automation-precheck'
 import { formatAutomationSchedule } from '../shared/automations/scheduling/automation-schedules'
 import { quoteCliCommandArgument } from './shell-command-quote'
+import { serverLabel, type WorkspaceServer } from './row-owner-server'
 
 export type AutomationListPayload = {
   automations: Automation[]
@@ -21,24 +22,26 @@ export type AutomationShowPayload = {
   owner?: AutomationOwnerPrecondition
 }
 
-const ORPHAN_HOST_LABEL = 'orphan (no host can run this automation)'
-
-function formatOwnerSelector(selector: AutomationOwnerPrecondition['selector']): string {
+/** `self` is the answering server; an SSH owner is not proven to be an Orca server, so it is not named. */
+function formatOwnerServer(
+  selector: AutomationOwnerPrecondition['selector'] | AutomationListItem['selector'],
+  answering: WorkspaceServer | undefined,
+  orphanIssue: string
+): string {
   if (selector.kind === 'ssh') {
-    return `ssh:${selector.targetId} (generation ${selector.targetGeneration})`
+    return `unknown (SSH connection ssh:${selector.targetId}, generation ${selector.targetGeneration})`
   }
-  return selector.kind === 'orphan' ? ORPHAN_HOST_LABEL : 'self'
+  if (selector.kind === 'orphan') {
+    return `none (orphan: ${orphanIssue})`
+  }
+  return answering ? serverLabel(answering) : 'self'
 }
 
-function formatListItemSelector(item: AutomationListItem): string {
-  const selector = item.selector
-  if (selector.kind === 'ssh') {
-    return `ssh:${selector.targetId} (generation ${selector.targetGeneration})`
-  }
-  return selector.kind === 'orphan' ? `orphan — ${selector.issue}` : 'self'
-}
-
-export function formatAutomationList(result: AutomationListPayload): string {
+/** `answering` is the server that answered, which owns its `self` automations. */
+export function formatAutomationList(
+  result: AutomationListPayload,
+  answering?: WorkspaceServer
+): string {
   if (result.automations.length === 0) {
     return 'No automations found.'
   }
@@ -47,13 +50,18 @@ export function formatAutomationList(result: AutomationListPayload): string {
     .map((automation) => {
       const status = automation.enabled ? 'enabled' : 'disabled'
       const item = hosts.get(automation.id)
-      const host = item ? `\nhost: ${formatListItemSelector(item)}` : ''
-      return `${automation.id}  ${automation.name}  ${automation.agentId}  ${status}\n${formatAutomationSchedule(automation.rrule)}  next: ${new Date(automation.nextRunAt).toISOString()}${host}`
+      const server = item
+        ? `\nserver: ${formatOwnerServer(item.selector, answering, item.selector.kind === 'orphan' ? item.selector.issue : '')}`
+        : ''
+      return `${automation.id}  ${automation.name}  ${automation.agentId}  ${status}\n${formatAutomationSchedule(automation.rrule)}  next: ${new Date(automation.nextRunAt).toISOString()}${server}`
     })
     .join('\n\n')
 }
 
-export function formatAutomationShow(result: AutomationShowPayload): string {
+export function formatAutomationShow(
+  result: AutomationShowPayload,
+  answering?: WorkspaceServer
+): string {
   const automation = result.automation
   const runContext = automation.runContext ?? null
   const projectLines = runContext
@@ -92,7 +100,11 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
     `baseBranch: ${automation.baseBranch ?? 'null'}`,
     `reuseSession: ${automation.reuseSession}`,
     `target: ${automation.executionTargetType}:${automation.executionTargetId}`,
-    ...(result.owner ? [`host: ${formatOwnerSelector(result.owner.selector)}`] : []),
+    ...(result.owner
+      ? [
+          `server: ${formatOwnerServer(result.owner.selector, answering, 'no server can run this automation')}`
+        ]
+      : []),
     `prompt: ${automation.prompt}`
   ].join('\n')
 }
@@ -141,11 +153,11 @@ function formatAutomationRunFollowUp(
     !target.environment.startsWith('--') &&
     (process.platform !== 'win32' || /^[a-zA-Z0-9._:/@ -]+$/.test(target.environment))
   if (target.environment && safeEnvironment) {
-    command.push('--environment', quoteCliCommandArgument(target.environment))
+    command.push('--server', quoteCliCommandArgument(target.environment))
   }
   const prefix =
     target.preserveConnectionSettings || (target.environment && !safeEnvironment)
-      ? 'Follow up on the same host and profile (preserve your connection/profile settings)'
+      ? 'Follow up on the same server and profile (preserve your connection/profile settings)'
       : 'Follow up'
   return `${prefix}: ${command.join(' ')}`
 }

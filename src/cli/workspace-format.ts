@@ -11,6 +11,8 @@ import type { MemorySnapshot, WorktreeMemory } from '../shared/process-stats-typ
 import { formatListingHostScope, type WithAnnotatedHostScope } from './omitted-host-scope-selectors'
 import { formatWorktreePsTerminalFields } from './worktree-ps-terminal-verdict'
 import { formatWorktreePsProgramStatus } from './worktree-ps-program-status'
+import { quoteCliCommandArgument } from './shell-command-quote'
+import { ownerTokenOf, type OwnerContext } from './row-owner-server'
 
 export function formatMemorySnapshot(snapshot: MemorySnapshot): string {
   const topWorktrees = [...snapshot.worktrees].sort((a, b) => b.memory - a.memory).slice(0, 10)
@@ -109,28 +111,28 @@ function formatByteCount(bytes: number): string {
   return `${formatted} ${units[unitIndex]}`
 }
 
-export function formatEnvironmentList(result: {
-  environments: PublicKnownRuntimeEnvironment[]
+export function formatSavedServerList(result: {
+  servers: PublicKnownRuntimeEnvironment[]
 }): string {
-  if (result.environments.length === 0) {
-    return 'No saved environments.'
+  if (result.servers.length === 0) {
+    return 'No saved servers. Add one with `orca server add --name <name> --pairing-code <code>`.'
   }
-  return result.environments
+  return result.servers
     .map(
-      (environment) =>
-        `${environment.id}  ${environment.name}  ${environment.endpoints[0]?.endpoint ?? 'no-endpoint'}`
+      (server) =>
+        `${server.id}  ${server.name}  ${server.endpoints[0]?.endpoint ?? 'no-endpoint'}  ->  --server ${quoteCliCommandArgument(server.id)}`
     )
     .join('\n')
 }
 
-export function formatEnvironment(environment: PublicKnownRuntimeEnvironment): string {
+export function formatSavedServer(server: PublicKnownRuntimeEnvironment): string {
   return [
-    `id: ${environment.id}`,
-    `name: ${environment.name}`,
-    `runtimeId: ${environment.runtimeId ?? 'unknown'}`,
-    `lastUsedAt: ${environment.lastUsedAt ?? 'never'}`,
-    `preferredEndpointId: ${environment.preferredEndpointId}`,
-    ...environment.endpoints.map(
+    `id: ${server.id}`,
+    `name: ${server.name}`,
+    `instance: ${server.runtimeId ?? 'unknown'}`,
+    `lastUsedAt: ${server.lastUsedAt ?? 'never'}`,
+    `preferredEndpointId: ${server.preferredEndpointId}`,
+    ...server.endpoints.map(
       (endpoint) => `endpoint: ${endpoint.id} ${endpoint.kind} ${endpoint.endpoint}`
     )
   ].join('\n')
@@ -150,7 +152,7 @@ export function formatWorktreePs(
   const body = result.worktrees
     .map(
       (worktree) =>
-        `${worktree.repo} ${worktree.branch}  host=${worktree.hostId ?? 'unverifiable'}  ${formatWorktreePsTerminalFields(worktree)}  unread:${worktree.unread ? 'yes' : 'no'}${formatWorktreePsProgramStatus(worktree.agents)}\n${worktree.path}${formatWorktreePsLocation(worktree)}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
+        `${worktree.repo} ${worktree.branch}  ${formatWorktreePsTerminalFields(worktree)}  unread:${worktree.unread ? 'yes' : 'no'}${formatWorktreePsProgramStatus(worktree.agents)}\n${worktree.path}${formatWorktreePsLocation(worktree)}${worktree.preview ? `\npreview: ${worktree.preview}` : ''}`
     )
     .join('\n\n')
   const bodyWithScope = `${body}\n\n${scope}`
@@ -162,19 +164,8 @@ export function formatWorktreePs(
 function formatWorktreePsLocation(worktree: AnnotatedPsRow): string {
   const annotation = workspaceAnnotationOf(worktree)
   return annotation
-    ? `${formatParentLine(annotation)}${formatAddressLines(annotation)}`
-    : formatWorktreePsParent(worktree)
-}
-
-/** The parent line, in the sidebar's precedence: worktree, then folder workspace, then another machine. */
-function formatWorktreePsParent(worktree: RuntimeWorktreePsResult['worktrees'][number]): string {
-  const parent =
-    worktree.parentWorktreeId ??
-    worktree.workspaceLineage?.parentWorkspaceKey ??
-    (worktree.crossStoreParent
-      ? `${worktree.crossStoreParent.parent.workspaceKey} on another machine`
-      : null)
-  return parent ? `\nparent: ${parent}` : ''
+    ? `${formatParentLine(annotation)}${formatAddressLines(annotation, worktree.hostId)}`
+    : ''
 }
 
 export function formatRepoList(result: RuntimeRepoList): string {
@@ -201,7 +192,8 @@ export function formatRepoRefs(result: RuntimeRepoSearchRefs): string {
 }
 
 export function formatWorktreeList(
-  result: WithAnnotatedHostScope<RuntimeWorktreeListResult>
+  result: WithAnnotatedHostScope<RuntimeWorktreeListResult>,
+  owners?: OwnerContext
 ): string {
   const scope = formatListingHostScope(result.hostScope)
   if (result.worktrees.length === 0) {
@@ -210,7 +202,7 @@ export function formatWorktreeList(
   const body = result.worktrees
     .map((worktree) => {
       const childCount = worktree.childWorktreeIds?.length ?? 0
-      return `${String(worktree.id)}  ${String(worktree.branch)}  host=${String(worktree.hostId ?? 'unverifiable')}  ${String(worktree.path)}\ndisplayName: ${String(worktree.displayName ?? '')}\nparentWorktreeId: ${String(worktree.parentWorktreeId ?? 'null')}\nchildWorktreeIds: ${childCount > 0 ? worktree.childWorktreeIds.join(',') : '[]'}\nlinkedIssue: ${String(worktree.linkedIssue ?? 'null')}\ncomment: ${String(worktree.comment ?? '')}`
+      return `${String(worktree.id)}  ${String(worktree.branch)}${ownerTokenOf(worktree.hostId, owners)}  ${String(worktree.path)}\ndisplayName: ${String(worktree.displayName ?? '')}\nparentWorktreeId: ${String(worktree.parentWorktreeId ?? 'null')}\nchildWorktreeIds: ${childCount > 0 ? worktree.childWorktreeIds.join(',') : '[]'}\nlinkedIssue: ${String(worktree.linkedIssue ?? 'null')}\ncomment: ${String(worktree.comment ?? '')}`
     })
     .join('\n\n')
   const bodyWithScope = `${body}\n\n${scope}`
@@ -219,18 +211,26 @@ export function formatWorktreeList(
     : bodyWithScope
 }
 
-const ANNOTATION_KEYS = new Set(['environment', 'address', 'addressUnavailable', 'parent'])
+const ANNOTATION_KEYS = new Set([
+  'server',
+  'serverUnknown',
+  'address',
+  'addressUnavailable',
+  'parent'
+])
 
 function workspaceAnnotationOf(record: Partial<WorkspaceAnnotation>): WorkspaceAnnotation | null {
-  const { environment, address, addressUnavailable, parent } = record
-  return environment
-    ? {
-        environment,
-        address: address ?? null,
-        parent: parent ?? null,
-        ...(addressUnavailable ? { addressUnavailable } : {})
-      }
-    : null
+  if (!('address' in record)) {
+    return null
+  }
+  const { server, serverUnknown, address, addressUnavailable, parent } = record
+  return {
+    server: server ?? null,
+    address: address ?? null,
+    parent: parent ?? null,
+    ...(serverUnknown ? { serverUnknown } : {}),
+    ...(addressUnavailable ? { addressUnavailable } : {})
+  }
 }
 
 export function formatWorktreeShow(result: {
@@ -246,6 +246,6 @@ export function formatWorktreeShow(result: {
     )
     .join('\n')
   return annotation
-    ? `${fields}${formatParentLine(annotation)}${formatAddressLines(annotation)}`
+    ? `${fields}${formatParentLine(annotation)}${formatAddressLines(annotation, worktree.hostId)}`
     : fields
 }

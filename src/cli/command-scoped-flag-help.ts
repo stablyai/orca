@@ -46,16 +46,16 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     id: '--id <id>              Plugin id (default: the folder name)',
     name: '--name <display name>  Plugin name shown in Orca'
   },
-  'environment update': {
+  'server update': {
     force: '--force                Restart over running terminals instead of deferring the update'
   },
-  'environment recover': {
+  'server recover': {
     'accept-changed-state':
       '--accept-changed-state Restore the prelaunch snapshot over state a rejected build changed',
     yes: '--yes                  Confirm discarding what the rejected build changed'
   },
-  'environment stop': {
-    yes: '--yes                  Confirm stopping the server and unlinking it from this machine'
+  'server stop': {
+    yes: '--yes                  Confirm stopping the server and unlinking it from this computer'
   },
   'file open': {
     line: '--line <n>             Cursor line (1-based)',
@@ -82,18 +82,18 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   search: {
     query: '--query <text>         Search text; also accepted as the positional argument',
     scope: '--scope <corpus>       conversation (user and assistant turns) or all (default)',
-    fresh: '--fresh                Wait up to 5s for the host to reconcile its index first',
+    fresh: '--fresh                Wait up to 5s for the server to reconcile its index first',
     limit: '--limit <n>            Hits per page (default 20, maximum 100)',
     cursor: '--cursor <cursor>      Opaque cursor printed by the previous page of this search',
     agent: '--agent <id>           Restrict to one agent; repeat for several',
-    path: '--path <path>          Restrict to an execution-host path; repeat for several',
+    path: '--path <path>          Restrict to a path on the server; repeat for several',
     since: '--since <iso>          Only sessions updated at or after this ISO 8601 timestamp',
     sort: '--sort <order>         relevance (default) or newest',
-    debug: '--debug                Include the planner route the host used',
+    debug: '--debug                Include the planner route the server used',
     'index-status': '--index-status         Report the index instead of searching'
   },
   ports: {
-    all: '--all                  List every listener on the workspace host, not just this workspace'
+    all: '--all                  List every listener on the workspace server, not just this workspace'
   },
   snapshot: {
     interactive:
