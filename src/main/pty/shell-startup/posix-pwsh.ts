@@ -1,4 +1,5 @@
-import { accessSync, statSync, constants as fsConstants } from 'node:fs'
+import { constants as fsConstants } from 'node:fs'
+import { access, stat } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { posix as pathPosix } from 'node:path'
 
@@ -66,21 +67,26 @@ function posixPwshInstallCandidates(name: string): string[] {
   return []
 }
 
-function isExecutableFile(path: string): boolean {
+async function isExecutableFile(path: string): Promise<boolean> {
   try {
-    accessSync(path, fsConstants.X_OK)
-    return statSync(path).isFile()
+    await access(path, fsConstants.X_OK)
+    return (await stat(path)).isFile()
   } catch {
     return false
   }
 }
 
+/** True for a bare pwsh name on macOS/Linux, the only input resolvePosixPaneShellPath changes. */
+export function needsPosixPaneShellResolution(shellPath: string): boolean {
+  return process.platform !== 'win32' && !shellPath.includes('/') && isPosixPwshShell(shellPath)
+}
+
 /** Bare pwsh -> absolute path via the spawn PATH, then installs a Finder/desktop-entry PATH misses. */
-export function resolvePosixPaneShellPath(
+export async function resolvePosixPaneShellPath(
   shellPath: string,
   spawnPathValue = process.env.PATH ?? ''
-): string {
-  if (process.platform === 'win32' || shellPath.includes('/') || !isPosixPwshShell(shellPath)) {
+): Promise<string> {
+  if (!needsPosixPaneShellResolution(shellPath)) {
     return shellPath
   }
   for (const dir of spawnPathValue.split(':')) {
@@ -89,9 +95,14 @@ export function resolvePosixPaneShellPath(
       return shellPath
     }
     const candidate = pathPosix.join(dir, shellPath)
-    if (isExecutableFile(candidate)) {
+    if (await isExecutableFile(candidate)) {
       return candidate
     }
   }
-  return posixPwshInstallCandidates(shellPath).find(isExecutableFile) ?? shellPath
+  for (const candidate of posixPwshInstallCandidates(shellPath)) {
+    if (await isExecutableFile(candidate)) {
+      return candidate
+    }
+  }
+  return shellPath
 }

@@ -161,20 +161,21 @@ function parsePowerShellEnvironment(output: Buffer): NodeJS.ProcessEnv | null {
   }
 }
 
-function spawnShellAndReadEnvironment(
+async function spawnShellAndReadEnvironment(
   shell: string,
   env: NodeJS.ProcessEnv,
   timeoutMs = SPAWN_TIMEOUT_MS
 ): Promise<NodeJS.ProcessEnv | null> {
   const probe = shellProbe(shell)
   if (!probe) {
-    return Promise.resolve(null)
+    return null
   }
+  const program = await resolvePosixPaneShellPath(shell, env.PATH ?? '')
   return new Promise((resolve) => {
     let settled = false
     const chunks: Buffer[] = []
     const child = spawnProcess({
-      program: resolvePosixPaneShellPath(shell, env.PATH ?? ''),
+      program,
       args: probe.args,
       env,
       detached: shellProbeDetached()

@@ -148,7 +148,8 @@ export function runWithLaunchPath<T>(action: () => T): T {
   }
 }
 
-function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
+async function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
+  const program = await resolvePosixPaneShellPath(shell, shellProbeEnv().PATH ?? '')
   return new Promise((resolve) => {
     const probe = shellPathProbe(shell)
     let finished = false
@@ -157,12 +158,11 @@ function spawnShellAndReadPath(shell: string): Promise<HydrationResult> {
 
     let child: ChildProcess
     try {
-      const env = shellProbeEnv()
       child = spawnProcess({
-        program: resolvePosixPaneShellPath(shell, env.PATH ?? ''),
+        program,
         args: probe.args,
         // Preserve environment for rc setup while suppressing noisy shell stderr and ignoring stdin.
-        env,
+        env: shellProbeEnv(),
         stdio: ['ignore', 'pipe', 'ignore'],
         detached: probe.detached
       })
