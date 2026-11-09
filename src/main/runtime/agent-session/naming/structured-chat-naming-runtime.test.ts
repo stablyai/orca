@@ -676,7 +676,8 @@ it('retires the selected first-handover source without adopting a replacement ch
 it('finishes Send now naming during delivery even if recording its failure cannot commit', async () => {
   const { chat, title, done, seeded } = await atRestNaming()
   const release = chat.holdNextStart()
-  chat.failNextStart(new Error('Startup refused'))
+  let releaseSecond: (() => void) | undefined
+  chat.failNextStart(new AgentSessionStartFailure(new Error('Startup refused'), 'never'))
   const fields = { command: 'compact' as const }
   const command = chat.host.conversationCommand(QUEUED_RIG_CALLER, {
     ...fields,
@@ -699,9 +700,13 @@ it('finishes Send now naming during delivery even if recording its failure canno
     await seeded()
     const journal = chat.host.collaboratorsForTests().sessions.get(HOST_TEST_SESSION)!.journal
     const failure = vi
-      .spyOn(journal, 'resolveDispatch')
+      .spyOn(journal, 'appendLifecycleBatch')
       .mockRejectedValue(new Error('Journal write unavailable'))
+    releaseSecond = chat.holdNextStart()
     release()
+    await vi.waitFor(() => expect(chat.starts).toHaveBeenCalledTimes(2))
+    chat.failNextStart(new AgentSessionStartFailure(new Error('Startup refused'), 'never'))
+    releaseSecond()
     await done()
     expect(chat.store.getRecord(HOST_TEST_SESSION)?.conversationName).toBe('Login repair')
     expect((await chat.handoff(messageId))?.dispatchState).toBe('pending')
@@ -709,6 +714,7 @@ it('finishes Send now naming during delivery even if recording its failure canno
     failure.mockRestore()
   } finally {
     release()
+    releaseSecond?.()
     vi.restoreAllMocks()
     await chat.stop()
     await command
