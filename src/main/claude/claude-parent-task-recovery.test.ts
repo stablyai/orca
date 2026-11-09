@@ -182,6 +182,8 @@ it('uses the matching durable generation ownership when an earlier run receives 
       subtype: 'task_notification',
       task_id: 'reused',
       tool_use_id: 'tool-first',
+      session_id: 'claude-session',
+      uuid: 'historical-owned-completion',
       status: 'completed'
     }
   })
