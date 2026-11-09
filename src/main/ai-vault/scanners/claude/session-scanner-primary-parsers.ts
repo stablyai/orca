@@ -31,6 +31,7 @@ import { extractMessageText, normalizeTitleText } from '../../session-scanner-te
 import { extractString, parseJsonObject } from '../../session-scanner-values'
 
 type ParserSessionOptions = {
+  signal?: AbortSignal
   executionHostId?: ExecutionHostId
   executionHostPlatform?: NodeJS.Platform | null
 }
@@ -189,7 +190,8 @@ export async function finalizeClaudeSessionParseState(
     !options.executionHostId || options.executionHostId === LOCAL_EXECUTION_HOST_ID
   if (ownsTranscriptDisk) {
     snapshot.accumulator.subagentTranscriptCount = await countSubagentTranscripts(
-      snapshot.accumulator.filePath
+      snapshot.accumulator.filePath,
+      options.signal
     )
   }
   const titleKind = snapshot.accumulator.title || snapshot.generatedTitle ? 'named' : 'fallback'

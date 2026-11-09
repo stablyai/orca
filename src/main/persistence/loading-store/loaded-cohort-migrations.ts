@@ -119,6 +119,41 @@ export class LoadedCohortMigrationOperations {
   }
 
   migrateTelemetry(state: PersistedState, fileExistedOnLoad: boolean): PersistedState {
+    return this.seedMilestoneInstallCohort(
+      this.migrateTelemetryIdentity(state, fileExistedOnLoad),
+      fileExistedOnLoad
+    )
+  }
+
+  /** Freeze once so upgraded profiles' first post-release interaction is never counted as activation. */
+  private seedMilestoneInstallCohort(
+    state: PersistedState,
+    fileExistedOnLoad: boolean
+  ): PersistedState {
+    const telemetry = state.settings?.telemetry
+    if (!telemetry || telemetry.protectedMilestones?.installCohort !== undefined) {
+      return state
+    }
+    this.runtime.loadNeedsSave = true
+    return {
+      ...state,
+      settings: {
+        ...state.settings,
+        telemetry: {
+          ...telemetry,
+          protectedMilestones: {
+            ...telemetry.protectedMilestones,
+            installCohort: fileExistedOnLoad ? 'existing' : 'fresh'
+          }
+        }
+      }
+    }
+  }
+
+  private migrateTelemetryIdentity(
+    state: PersistedState,
+    fileExistedOnLoad: boolean
+  ): PersistedState {
     const existing = state.settings?.telemetry
     // Partial telemetry blocks still require migration unless all invariants hold.
     if (

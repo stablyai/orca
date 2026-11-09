@@ -119,6 +119,9 @@ export abstract class AgentBrowserBridgeTabs extends AgentBrowserBridgeState {
       return null
     }
   }
+  getRemoteTabFaviconUrl(browserPageId: string): string | null {
+    return this.browserManager.getBrowserPageRemoteTabFaviconUrl(browserPageId)
+  }
   onTabChanged(webContentsId: number, worktreeId?: string): void {
     this.selectForPerson(webContentsId, worktreeId)
     this.options.onTabsChanged?.(worktreeId)
