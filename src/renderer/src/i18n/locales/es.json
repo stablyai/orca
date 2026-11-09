@@ -20824,6 +20824,24 @@
     }
   },
   "browser": {
+    "passwords": {
+      "savePrompt": {
+        "open": "Aviso para guardar contraseña",
+        "updateTitle": "¿Actualizar contraseña?",
+        "saveTitle": "¿Guardar contraseña?",
+        "username": "Nombre de usuario",
+        "password": "Contraseña",
+        "never": "Nunca para este sitio",
+        "notNow": "Ahora no",
+        "update": "Actualizar",
+        "save": "Guardar"
+      },
+      "fill": {
+        "noUsername": "(sin nombre de usuario)",
+        "title": "Inicios de sesión guardados",
+        "otherLogins": "Otros inicios de sesión en este sitio"
+      }
+    },
     "newTab": {
       "emptyHint": "Busca o introduce una dirección arriba. Aquí aparecerán los sitios que visites, los servidores de desarrollo que se ejecuten en este espacio de trabajo, y su PR e incidencia.",
       "openServerFailed": "No se pudo abrir {{address}}",
