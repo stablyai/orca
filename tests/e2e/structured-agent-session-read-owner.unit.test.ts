@@ -1,3 +1,4 @@
+import { readTestJournalSubmissions } from '../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -78,7 +79,7 @@ async function fixture() {
   })
   expect(journal.cursor().sequence).toBe(100)
   const initial = structuredClone(
-    readAgentSessionHistory(journal, { sessionId: SESSION, direction: 'tail' })
+    await readAgentSessionHistory(journal, { sessionId: SESSION, direction: 'tail' })
   )
   const accept = () =>
     journal.resolveDispatch({
@@ -102,11 +103,13 @@ describe('structured session cursor/body regression', () => {
     for (let index = 102; index <= 140; index += 1) {
       await appendOutput(index)
     }
-    const bounded = readAgentSessionHistory(journal, {
-      sessionId: SESSION,
-      direction: 'tail',
-      limit: 1
-    }).page
+    const bounded = (
+      await readAgentSessionHistory(journal, {
+        sessionId: SESSION,
+        direction: 'tail',
+        limit: 1
+      })
+    ).page
     expect(bounded.liveCursor?.sequence).toBe(140)
     expect(bounded.items).not.toContainEqual(retained.items.at(-1))
     expect(bounded.submissions).toEqual([])
@@ -155,23 +158,23 @@ describe('structured session cursor/body regression', () => {
       })
       const delayedOlder = Promise.withResolvers<AgentSessionHistoryResult>()
       let warm = false
-      mocks.call.mockImplementation((_target, _method, request: AgentSessionHistoryRequest) => {
-        // Hold the measured bounded page before its asynchronous older-page fill can mask it.
-        if (warm && missedRows === 40 && request.direction === 'before') {
-          return delayedOlder.promise
-        }
-        const result = readAgentSessionHistory(journal, {
-          ...request,
-          ...(warm && missedRows === 40 ? { limit: 1 } : {})
-        })
-        return Promise.resolve(
-          structuredClone({
+      mocks.call.mockImplementation(
+        async (_target, _method, request: AgentSessionHistoryRequest) => {
+          // Hold the measured bounded page before its asynchronous older-page fill can mask it.
+          if (warm && missedRows === 40 && request.direction === 'before') {
+            return delayedOlder.promise
+          }
+          const result = await readAgentSessionHistory(journal, {
+            ...request,
+            ...(warm && missedRows === 40 ? { limit: 1 } : {})
+          })
+          return structuredClone({
             ...result,
             page: { ...result.page, fence: 1, hostNow: 1234 },
             providerSession: { key: 'session_id', id: 'provider-1' }
           })
-        )
-      })
+        }
+      )
       mocks.subscribe.mockImplementation(
         (
           _target,
@@ -205,11 +208,13 @@ describe('structured session cursor/body regression', () => {
       for (let index = 102; index <= 100 + missedRows; index += 1) {
         await appendOutput(index)
       }
-      const tail = readAgentSessionHistory(journal, {
-        sessionId: SESSION,
-        direction: 'tail',
-        limit: missedRows === 40 ? 1 : 200
-      }).page
+      const tail = (
+        await readAgentSessionHistory(journal, {
+          sessionId: SESSION,
+          direction: 'tail',
+          limit: missedRows === 40 ? 1 : 200
+        })
+      ).page
       expect(tail.liveCursor?.sequence).toBe(100 + missedRows)
       expect(tail.submissions).toEqual([])
       feed.publish(SESSION, journal)
@@ -241,7 +246,7 @@ describe('structured session cursor/body regression', () => {
         projectStructuredAgentSessionStatus(settled.items, settled.submissions, settled.fence)
       ).toBe(hostSummary?.status)
       expect(settled.submissions).toEqual(
-        missedRows > 200 ? tail.submissions : journal.snapshot().submissions
+        missedRows > 200 ? tail.submissions : await readTestJournalSubmissions(journal)
       )
       expect({
         cursor: caughtUp.cursor?.sequence,

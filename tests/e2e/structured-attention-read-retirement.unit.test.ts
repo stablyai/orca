@@ -179,7 +179,7 @@ describe('Explicit desktop read acknowledgements', () => {
           }
         ]
       ]),
-      readStatusState: () => projectStructuredAgentSessionStatusState(otherItems),
+      readStatusState: async () => projectStructuredAgentSessionStatusState(otherItems),
       readChildWork: () => undefined,
       now: () => 42
     })

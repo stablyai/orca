@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 // @vitest-environment happy-dom
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
@@ -163,7 +164,7 @@ it('picks model then effort through the menus during startup and uses both in th
     child.answerInit()
     await Promise.all(picked)
     await vi.waitFor(async () => {
-      const reply = (await host.journalSnapshot(SESSION)).items.find(
+      const reply = (await readTestHostJournal(host, SESSION)).items.find(
         (item) => item.body.kind === 'message' && item.body.role === 'assistant'
       )
       expect(reply?.body).toMatchObject({

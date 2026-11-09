@@ -1,3 +1,7 @@
+import {
+  readTestJournalSnapshot,
+  readTestJournalItems
+} from '../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 // @vitest-environment happy-dom
 import { renderHook } from '@testing-library/react'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -46,9 +50,8 @@ it('offers a recovered opener only when its saved native alias arrives, retainin
     fence: 1
   })
   await journals.closeAll()
-  const recovered = await journals.open(options)
-  await recovered.markPendingSubmissionsUnknown(2)
-  const snapshot = recovered.snapshot()
+  const recovered = await journals.open({ ...options, recover: { fence: 2 } })
+  const snapshot = await readTestJournalSnapshot(recovered)
   const target = agentJournalSubmissionKey('lost')
   expect(snapshot.submissions.find((row) => row.clientMessageId === 'lost')).toMatchObject({
     dispatchState: 'unknown',
@@ -74,26 +77,33 @@ it('offers a recovered opener only when its saved native alias arrives, retainin
     expect(view.result.current.surface?.eligibleItemIds).not.toContain(target)
     const cursor = recovered.cursor()
     expect(
-      structuredRewindCut(recovered, { itemId: target, provider: 'claude', nativeId: 'forked' })
+      await structuredRewindCut(recovered, {
+        itemId: target,
+        provider: 'claude',
+        nativeId: 'forked'
+      })
     ).toBeNull()
     expect(recovered.cursor()).toEqual(cursor)
     view.rerender({ ...props, state: { ...state, submissions: [] } })
     expect(view.result.current.surface?.eligibleItemIds).toContain(target)
-    await recovered.acceptLate({
+    await recovered.settleLateDispatch({
       clientMessageId: 'lost',
       state: 'accepted',
       providerIdentity: native('genuine'),
       fence: 2
     })
-    view.rerender({ ...props, state: { ...state, submissions: recovered.snapshot().submissions } })
+    view.rerender({
+      ...props,
+      state: { ...state, submissions: (await readTestJournalSnapshot(recovered)).submissions }
+    })
     expect(view.result.current.surface?.eligibleItemIds).toContain(target)
-    const cut = structuredRewindCut(recovered, {
+    const cut = await structuredRewindCut(recovered, {
       itemId: target,
       provider: 'claude',
       nativeId: 'forked'
     })
     expect(cut).toMatchObject({ beforeMessage: { sessionId: 'original', uuid: 'genuine' } })
-    expect(cut?.kept.map(({ identity }) => agentJournalItemKey(identity))).toEqual([
+    expect((await readTestJournalItems(recovered)).map(({ itemId }) => itemId)).toEqual([
       agentJournalItemKey(native('earlier')),
       agentJournalItemKey(native('reply'))
     ])

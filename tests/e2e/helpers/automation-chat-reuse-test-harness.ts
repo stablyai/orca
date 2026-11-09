@@ -1,3 +1,4 @@
+import { readTestHostJournal } from '../../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 import {
   ChatOpenTestRuntime,
   exerciseRecordedChatOpen,
@@ -253,7 +254,7 @@ export async function exerciseBusyChatReuse(
     })
     await eventually(() => expect(readCurrent().usage).not.toBeNull())
     const beforeOpen = {
-      journal: await rig.host.journalSnapshot(sessionId),
+      journal: await readTestHostJournal(rig.host, sessionId),
       runs: disk.listAutomationRuns(saved.id),
       record: rig.store.getConversation(sessionId)
     }
@@ -263,7 +264,7 @@ export async function exerciseBusyChatReuse(
     vi.spyOn(openingRuntime, 'openAgentSessionRecordStore').mockResolvedValue(rig.store)
     await exerciseRecordedChatOpen(openingRuntime, readCurrent(), controls.bindRenderer)
     expect(rig.host.isSessionTabVisible(sessionId)).toBe(true)
-    expect(await rig.host.journalSnapshot(sessionId)).toEqual(beforeOpen.journal)
+    expect(await readTestHostJournal(rig.host, sessionId)).toEqual(beforeOpen.journal)
     expect(disk.listAutomationRuns(saved.id)).toEqual(beforeOpen.runs)
     expect(rig.store.getConversation(sessionId)).toEqual(beforeOpen.record)
     expect(create).not.toHaveBeenCalled()

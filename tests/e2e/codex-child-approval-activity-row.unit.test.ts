@@ -1,3 +1,4 @@
+import { readTestJournalItems } from '../../src/main/native-chat/agent-session-journal/journal-observation.test-support'
 // @vitest-environment happy-dom
 
 // Round-trip subagent approval through the real translator/journal/status/activity pipeline; answering must preserve done time and read state.
@@ -187,7 +188,7 @@ async function openHost() {
   /** What the host's answer path commits before it tells Codex. */
   const answer = async (itemId: string): Promise<void> => {
     const identity = parseAgentJournalItemKey(itemId)
-    const asked = journal.snapshot().items.find((item) => item.itemId === itemId)?.body
+    const asked = (await readTestJournalItems(journal)).find((item) => item.itemId === itemId)?.body
     if (!identity || asked?.kind !== 'approval') {
       throw new Error(`approval ${itemId} missing`)
     }
