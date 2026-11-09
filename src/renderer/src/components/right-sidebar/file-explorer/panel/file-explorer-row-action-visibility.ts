@@ -22,16 +22,27 @@ export function shouldShowRemoteDownloadAction(
   connectionId?: string | null,
   runtimeDownloadContext?: RuntimeFileOperationArgs | null,
   // Require advertised SFTP recursive transfer; unknown and system-SSH folder downloads stay hidden.
-  supportsFolderDownload = false
+  supportsFolderDownload = false,
+  // Desktop main can stream from the runtime host directly, including host-zipped folders.
+  canStreamFromRuntime = false
 ): boolean {
-  // Native save dialogs require desktop; runtime/system-SSH folders lack recursive transfer contracts.
+  // Native save dialogs require desktop; system-SSH folders lack a recursive transfer contract.
   const hasDownloadCapability = node.isDirectory
-    ? Boolean(connectionId && supportsFolderDownload)
+    ? Boolean(connectionId ? supportsFolderDownload : canStreamFromRuntime)
     : Boolean(connectionId || runtimeDownloadContext)
   return (
     hasDownloadCapability &&
     (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ !== true
   )
+}
+
+/** Fetch a runtime-hosted file into a temp copy and open it with the local default app. */
+export function shouldShowOpenLocallyAction(
+  node: TreeNode,
+  connectionId: string | null | undefined,
+  canStreamFromRuntime: boolean
+): boolean {
+  return !node.isDirectory && !connectionId && canStreamFromRuntime
 }
 
 export function shouldShowCopyFileAction(

@@ -63,6 +63,7 @@ function isLongWaitRuntimeMethod(method: string): boolean {
 function isBulkReadRuntimeMethod(method: string): boolean {
   return (
     method === 'files.readChunk' ||
+    method === 'files.archiveRead' ||
     method === 'files.readDocPreviewChunk' ||
     method === 'files.readTerminalArtifactChunk'
   )

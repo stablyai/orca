@@ -11,6 +11,7 @@ import {
   FolderPlus,
   Globe,
   ListCollapse,
+  MonitorDown,
   Pencil,
   Search,
   SquareTerminal,
@@ -43,11 +44,13 @@ import {
   shouldShowCopyFileAction,
   shouldShowFindInFolderAction,
   shouldShowOpenInTerminalAction,
+  shouldShowOpenLocallyAction,
   shouldShowRemoteDownloadAction,
   shouldShowViewFileAction
 } from './file-explorer-row-action-visibility'
 import { copyFileToOsClipboard, downloadRemoteFile } from './file-explorer-row-file-transfer'
 import { fileExplorerNodeTabRelativePath } from '../tree/file-explorer-directory-listing'
+import { canStreamRuntimeDownload, startRuntimeDownload } from './runtime-download-actions'
 
 const isMac = navigator.userAgent.includes('Mac')
 
@@ -107,11 +110,19 @@ export function FileExplorerRowContextMenu({
   const copyPathShortcutLabel = useShortcutLabel('fileExplorer.copyPath')
   const copyRelativePathShortcutLabel = useShortcutLabel('fileExplorer.copyRelativePath')
   const findInFolderShortcutLabel = useShortcutLabel('sidebar.search.toggle')
+  const canStreamFromRuntime =
+    !connectionId && canStreamRuntimeDownload(node, runtimeDownloadContext)
   const showRemoteDownloadAction = shouldShowRemoteDownloadAction(
     node,
     connectionId,
     runtimeDownloadContext,
-    supportsFolderDownload
+    supportsFolderDownload,
+    canStreamFromRuntime
+  )
+  const showOpenLocallyAction = shouldShowOpenLocallyAction(
+    node,
+    connectionId,
+    canStreamFromRuntime
   )
   const showCopyFileAction = shouldShowCopyFileAction(node, connectionId, selectionSize)
   const revealOwner = useAppStore((s) =>
@@ -133,12 +144,21 @@ export function FileExplorerRowContextMenu({
     }
   }, [activeWorktreeId, node.path])
   const handleDownload = useCallback(() => {
+    if (canStreamFromRuntime && runtimeDownloadContext) {
+      void startRuntimeDownload(node, runtimeDownloadContext, 'save')
+      return
+    }
     const downloadTarget = connectionId || runtimeDownloadContext
     if (!downloadTarget) {
       return
     }
     void downloadRemoteFile(node, downloadTarget)
-  }, [connectionId, node, runtimeDownloadContext])
+  }, [canStreamFromRuntime, connectionId, node, runtimeDownloadContext])
+  const handleOpenLocally = useCallback(() => {
+    if (runtimeDownloadContext) {
+      void startRuntimeDownload(node, runtimeDownloadContext, 'open')
+    }
+  }, [node, runtimeDownloadContext])
   const handleCopyFile = useCallback(() => {
     void copyFileToOsClipboard(node, connectionId)
   }, [connectionId, node])
@@ -237,8 +257,19 @@ export function FileExplorerRowContextMenu({
         <ContextMenuItem onSelect={handleDownload}>
           <Download />
           {node.isDirectory
-            ? t('auto.components.right.sidebar.FileExplorerRow.7ac885bd2f', 'Download Folder')
+            ? canStreamFromRuntime
+              ? t(
+                  'auto.components.right.sidebar.FileExplorerRow.downloadFolderZip',
+                  'Download as ZIP…'
+                )
+              : t('auto.components.right.sidebar.FileExplorerRow.7ac885bd2f', 'Download Folder')
             : t('auto.components.right.sidebar.FileExplorerRow.c2112579f6', 'Download')}
+        </ContextMenuItem>
+      )}
+      {showOpenLocallyAction && (
+        <ContextMenuItem onSelect={handleOpenLocally}>
+          <MonitorDown />
+          {t('auto.components.right.sidebar.FileExplorerRow.openLocally', 'Open on This Computer')}
         </ContextMenuItem>
       )}
       {canCollapseFolderSubtree && shouldShowCollapseFolderAction(node, isExpanded) && (

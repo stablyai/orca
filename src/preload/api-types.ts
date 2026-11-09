@@ -71,6 +71,7 @@ import type { ShellApi } from './api/shell-api'
 import type { SpeechApi } from './api/speech-api'
 import type { SshApi } from './api/ssh-api'
 import type { PlainSshTerminalApi } from './api/plain-ssh-terminal-bridge'
+import type { RuntimeDownloadsApi } from './api/runtime-downloads-bridge'
 import type { LegacyRelayBridgeApi } from './api/legacy-relay-bridge-api'
 import type { DiagnosticsApi, MemoryApi, StatsApi, TelemetryApi } from './api/telemetry-api'
 import type { UiCommandEventApi } from './api/ui-command-event-api'
@@ -180,6 +181,8 @@ export type PreloadApi = {
   ssh: SshApi
   /** Desktop only: an unmanaged ssh login to a host whose move is blocked. */
   plainSsh?: PlainSshTerminalApi
+  /** Desktop only: streams files and folders from a paired runtime host to this machine. */
+  runtimeDownloads?: RuntimeDownloadsApi
   /** Desktop only: the API keys Orca hands to agent launches. */
   agentApiKeys?: AgentApiKeysApi
   /** Desktop only: Orca Cloud API keys, org settings and routines (hosted builds). */
