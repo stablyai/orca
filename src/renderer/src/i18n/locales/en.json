@@ -26116,7 +26116,6 @@
       "failedDetail": "Your files and chats are saved.",
       "tryAgain": "Try again",
       "stalled": "Orca Cloud stopped responding while waking.",
-      "pendingInput": "Sending when awake",
       "pendingKeys_one": "{{count}} key waiting · goes to the terminal when it’s up",
       "pendingKeys_other": "{{count}} keys waiting · go to the terminal when it’s up",
       "clearPendingKeys": "Discard waiting keys"

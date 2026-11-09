@@ -82,7 +82,9 @@ export async function resumeEphemeralVmWorkspace(worktreeId: string): Promise<vo
     beginWorkspaceWake(worktreeId, startedAt)
   }
   // Start the wake before loading the store so activation never waits on a module import.
-  const resume = window.api.ephemeralVm.resumeWorkspace({ workspaceId: worktreeId })
+  const resume = window.api.ephemeralVm.resumeWorkspace({
+    workspaceId: worktreeId
+  })
   const store = (await import('@/store/index')).useAppStore
   // Every activation asks; only known VM workspaces pay for Waking state and a record re-read.
   const vmStatus = store.getState().ephemeralVmRuntimesByWorkspaceId[worktreeId]?.status
@@ -107,10 +109,7 @@ export async function resumeEphemeralVmWorkspace(worktreeId: string): Promise<vo
       if (getCloudWorkspaceSnapshot().wake[worktreeId]) {
         return
       }
-      endWorkspaceWake(
-        worktreeId,
-        result && (result as { ok?: boolean }).ok !== false ? 'ready' : 'failed'
-      )
+      endWorkspaceWake(worktreeId, result && result.ok !== false ? 'ready' : 'failed')
     })
   try {
     const result = await settleLifecycleCall(resume)

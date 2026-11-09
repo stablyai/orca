@@ -2168,7 +2168,6 @@
   },
   "orcaCloudWorkspace": {
     "overlay": {
-      "pendingInput": "Sending when awake",
       "pendingKeys_one": "{{count}} key waiting · goes to the terminal when it’s up",
       "pendingKeys_other": "{{count}} keys waiting · go to the terminal when it’s up"
     }
