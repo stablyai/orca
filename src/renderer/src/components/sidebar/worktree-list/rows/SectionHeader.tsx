@@ -25,7 +25,7 @@ import '../../workspace-status/presentation/workspace-status'
 import { getWorkspaceStatusFromGroupKey } from '../../../../../../shared/workspace-statuses'
 import { getVirtualRowTransform } from '../viewport/virtual-rows'
 import { getSidebarHeaderVisual } from './header-visuals'
-import { resolveProjectGroupHeaderColor } from './project-header-color'
+import { resolveProjectGroupHeaderColor, resolveSectionHeaderColor } from './project-header-color'
 import { ProjectHeaderActions } from './ProjectHeaderActions'
 import {
   getProjectGroupHeaderPaddingLeft,
@@ -74,6 +74,10 @@ export function renderWorktreeSectionHeaderRow(
   const { headerDrag } = ctx
   const isRepoHeader = ctx.groupBy === 'repo' && row.repo !== undefined
   const isProjectGroupHeader = ctx.groupBy === 'repo' && row.projectGroup !== undefined
+  const projectGroup =
+    isProjectGroupHeader && row.projectGroup && 'createdFrom' in row.projectGroup
+      ? row.projectGroup
+      : null
   const usesRootProjectDrag = Boolean(
     headerDrag.rootProjectHeaderKeys && (row.projectGroupDepth ?? 0) === 0
   )
@@ -90,10 +94,7 @@ export function renderWorktreeSectionHeaderRow(
   const projectGroupDragIdForHeader =
     row.repeated && !usesRootProjectDrag ? undefined : projectGroupIdForHeader
   // Why: rename/delete must route to the host that owns this row, not to whichever host has focus.
-  const projectGroupHostIdForHeader =
-    row.projectGroup && 'createdFrom' in row.projectGroup
-      ? getProjectGroupHostId(row.projectGroup)
-      : undefined
+  const projectGroupHostIdForHeader = projectGroup ? getProjectGroupHostId(projectGroup) : undefined
   const repoHeaderIndex = headerRepo && headerDrag.repoHeaderIndexByRepoId.get(headerRepo.id)
   const repoHeaderBucketKey = headerRepo && headerDrag.repoHeaderBucketByRepoId.get(headerRepo.id)
   const projectGroupHeaderIndex =
@@ -155,14 +156,8 @@ export function renderWorktreeSectionHeaderRow(
     headerKey: row.key,
     badgeColor: row.repo?.badgeColor
   })
-  const folderBackedProjectGroup =
-    isProjectGroupHeader &&
-    !row.repo &&
-    row.projectGroup &&
-    'parentPath' in row.projectGroup &&
-    row.projectGroup.parentPath
-      ? row.projectGroup
-      : null
+  const sectionHeaderColor = resolveSectionHeaderColor(projectGroup?.color)
+  const folderBackedProjectGroup = !row.repo && projectGroup?.parentPath ? projectGroup : null
   const projectGroupPathStatus = folderBackedProjectGroup
     ? ctx.getCachedFolderWorkspacePathStatus({
         scope: 'project-group',
@@ -323,6 +318,7 @@ export function renderWorktreeSectionHeaderRow(
                 'flex size-4 shrink-0 items-center justify-center rounded-[4px]',
                 repoHeaderColor ? 'text-muted-foreground' : headerVisual.tone
               )}
+              style={row.repo ? undefined : { color: sectionHeaderColor }}
             >
               {row.repo ? (
                 <RepoIconGlyph
@@ -371,7 +367,7 @@ export function renderWorktreeSectionHeaderRow(
                 groupId={projectGroupIdForHeader}
                 hostId={projectGroupHostIdForHeader}
                 label={label}
-                projectGroup={folderBackedProjectGroup}
+                projectGroup={projectGroup}
                 onRefreshProjectGroup={ctx.onRefreshProjectGroup}
                 onRename={ctx.onRenameProjectGroup}
                 onDelete={ctx.onDeleteProjectGroup}
