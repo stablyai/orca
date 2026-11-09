@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { MessageRow } from '../runtime/orchestration/db/orchestration-records'
-import type { MessageWaitResult } from '../runtime/runtime-message-waiters'
+import type { MessageWaitResult } from '../runtime/orchestration/mailbox/runtime-message-waiters'
 import {
   VoiceControlReplyPump,
   type ControlMailboxMessage,

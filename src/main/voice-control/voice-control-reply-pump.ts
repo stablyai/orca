@@ -1,5 +1,8 @@
 import type { MessageRow, MessageType } from '../runtime/orchestration/db/orchestration-records'
-import { MessageWake, type MessageWaitResult } from '../runtime/runtime-message-waiters'
+import {
+  MessageWake,
+  type MessageWaitResult
+} from '../runtime/orchestration/mailbox/runtime-message-waiters'
 
 /**
  * Long-poll loop on the control's run mailbox: waitForMessage wakes on routed mail (push,
