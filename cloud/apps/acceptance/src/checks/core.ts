@@ -5,7 +5,7 @@ import { log, timing, type Check } from '../context'
 import { openTerminal, orca, typeAndSee } from '../orca-cli'
 
 /** Login-shell PATH as the user's terminal sees it (the golden image puts tools under /opt/orca). */
-const LOGIN = (script: string) => `bash -lc ${JSON.stringify(script)}`
+const LOGIN = (script: string) => `bash -lc '${script.replaceAll("'", `'"'"'`)}'`
 
 export const coreChecks: Record<string, Check> = {
   'acct.signin': async (ctx) => {

@@ -3,6 +3,7 @@
 // Always destroys what it created (also on failure/Ctrl-C), verifies nothing is left, renders the report.
 import { benchCreate, benchWakeAndRollover } from './bench'
 import { CATALOG } from './catalog'
+import { agentChecks } from './checks/agents'
 import { billingChecks } from './checks/billing'
 import { coreChecks } from './checks/core'
 import { opsChecks } from './checks/ops'
@@ -23,7 +24,7 @@ const only = value('only')?.split(',')
 const skip = new Set(value('skip')?.split(',') ?? [])
 const n = Number(value('n') ?? 10)
 
-const CHECKS: Record<string, Check> = { ...pendingChecks, ...coreChecks, ...secretChecks, ...opsChecks, ...billingChecks }
+const CHECKS: Record<string, Check> = { ...pendingChecks, ...coreChecks, ...secretChecks, ...opsChecks, ...billingChecks, ...agentChecks }
 /** Checks that change the primary's lifecycle run after the ones that only read it; cleanup is last. */
 const LATE = ['billing.teardown', 'ops.kill-switch', 'life.sleep-wake', 'life.rollover', 'ops.cleanup']
 

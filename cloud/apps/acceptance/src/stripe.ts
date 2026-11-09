@@ -97,11 +97,16 @@ export async function completeCheckout(url: string, card: CheckoutCard, shotPath
       let done = false
       while (!done && Date.now() < deadline) {
         for (const frame of page.frames()) {
-          const button = frame.locator('#test-source-authorize-3ds, button:has-text("Complete")')
-          if (await button.count().catch(() => 0)) {
+          if (frame === page.mainFrame()) {
+            continue
+          }
+          const button = frame.locator('#test-source-authorize-3ds').first()
+          if (await button.isVisible().catch(() => false)) {
             await page.screenshot({ path: shotPath.replace('.png', '-3ds.png') })
-            await button.first().click().catch(() => {})
-            done = true
+            done = await button
+              .click({ timeout: 5000 })
+              .then(() => true)
+              .catch(() => false)
             break
           }
         }

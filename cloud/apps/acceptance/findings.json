@@ -1,0 +1,15 @@
+{
+  "findings": [
+    "<b>F1 (bug, core/vercel-driver, filed 2026-11-09):</b> <code>POST /v1/sandboxes/:id/resume</code> on a sandbox that is already <i>running</i> hangs ~60 s and answers <code>502 provider_unavailable / orcad_start_failed</code> (2/2 repro, VM stays running). Wake-on-open after a desktop restart hits this path. Expected: idempotent, return the live pairing in &lt;1 s.",
+    "<b>F2 (UX, core):</b> creating with <code>repo</code> for an account with no GitHub App binding fails as <code>502 orcad_start_failed</code> after 3.8 s instead of a clear <code>github_not_connected</code> the desktop can turn into a Connect GitHub prompt.",
+    "<b>F3 (blocker for agent.real-task, W6):</b> <code>ai-gateway.vercel.sh</code> is not on the sandbox egress allowlist (DNS fails, curl rc 6), so Claude Code/Codex via the AI Gateway key cannot run in a cloud VM. Secret injection itself works (ANTHROPIC_* reach orcad's env).",
+    "<b>F4 (parity gap, golden image):</b> the login shell lacks the <code>orca</code> CLI (Conductor ships its CLI in the VM, P0), <code>rg</code>, <code>tmux</code>, <code>vim</code>, <code>git-lfs</code> and Chrome/Chromium. Present: node 24, npm, pnpm, python3, git, gh, jq, Claude Code 2.1.319, Codex 0.166.0.",
+    "<b>F5 (parity gap):</b> standard disk is 32 GB (Conductor 64 GB since 0.82); no low-disk alert yet.",
+    "<b>Note:</b> kill-switch drain mode is not exercised on the shared dev Worker (it would suspend other workstreams' sandboxes); refusal of creates and wakes is verified."
+  ],
+  "gaps": [
+    "Real Anthropic-model Claude run pending an AI Gateway credit top-up (free credits ~$4.94, no anthropic/* models); the agent check uses moonshotai/kimi-k2.",
+    "Seat proration and the dunning flow (grace -> suspend -> pay -> resume) need MEMBERSHIP_SYNC_TOKEN / CONTROL_PLANE_TOKEN wiring for the harness (billing e2e-test-mode.ts covers them in isolation).",
+    "Team create/invite need the Orca Cloud auth endpoints deployed (merged, not deployed)."
+  ]
+}

@@ -6,7 +6,6 @@ import { log, type Check } from '../context'
 
 export const opsChecks: Record<string, Check> = {
   'ops.kill-switch': async (ctx) => {
-    const p = await ctx.primary()
     let created = 0
     let createWhileOff: number | null = null
     let resumeWhileOff: number | null = null
@@ -14,6 +13,13 @@ export const opsChecks: Record<string, Check> = {
     if (before.body?.killSwitch) {
       return { status: 'skipped', detail: 'kill switch already on (someone else is using it); not touching it' }
     }
+    // A slept sandbox: waking it is a start, which the kill switch must refuse.
+    const box = await ctx.sandboxes.create(ctx.solo, { workspaceId: 'w9-kill' })
+    if (box.status !== 200) {
+      return { status: 'fail', detail: `setup create ${box.status}` }
+    }
+    const boxId = box.body.sandbox.id
+    await ctx.sandboxes.suspend(boxId)
     try {
       const on = await control.operator('POST', '/v1/internal/kill-switch', { enabled: true, drain: false })
       if (on.status !== 200) {
@@ -25,10 +31,10 @@ export const opsChecks: Record<string, Check> = {
         created++
         await control.as(ctx.solo, 'DELETE', `/v1/sandboxes/${c.body.sandbox.id}`)
       }
-      // The primary is running; resume of a running sandbox must still be refused while killed.
-      resumeWhileOff = (await control.as(ctx.solo, 'POST', `/v1/sandboxes/${p.sandbox.id}/resume`)).status
+      resumeWhileOff = (await control.as(ctx.solo, 'POST', `/v1/sandboxes/${boxId}/resume`)).status
     } finally {
       await control.operator('POST', '/v1/internal/kill-switch', { enabled: false })
+      await ctx.sandboxes.destroy(boxId)
     }
     const after = await control.operator('GET', '/v1/internal/status')
     const ok = createWhileOff === 503 && resumeWhileOff === 503 && after.body?.killSwitch === false && created === 0
@@ -84,12 +90,12 @@ export const opsChecks: Record<string, Check> = {
     const api = vercel()
     const created = await api.createSandbox({
       name,
-      snapshotId: GOLDEN(),
+      snapshotId: await goldenSnapshot(),
       vcpus: 2,
       region: 'iad1',
       timeoutMs: 10 * 60_000,
-      ports: [],
-      networkPolicy: { allow: {} },
+      ports: [6768],
+      networkPolicy: { allow: { 'registry.npmjs.org': [] } },
       tags: { orcaEnv: 'dev', orcaSandbox: 'w9-orphan' },
       snapshotExpirationMs: 24 * 60 * 60_000
     })
@@ -133,6 +139,15 @@ export const opsChecks: Record<string, Check> = {
   }
 }
 
-function GOLDEN(): string {
-  return process.env.ORCA_EVAL_GOLDEN_SNAPSHOT ?? 'snap_vpcmcCAgTtISiTZgsCosOlThQbFd'
+/** Newest manual (golden-image) snapshot in the project; golden images self-rotate. */
+async function goldenSnapshot(): Promise<string> {
+  if (process.env.ORCA_EVAL_GOLDEN_SNAPSHOT) {
+    return process.env.ORCA_EVAL_GOLDEN_SNAPSHOT
+  }
+  const { snapshots } = await vercel().listProjectSnapshots()
+  const golden = snapshots.filter((s) => s.status === 'created' && s.creationMethod === 'manual').sort((a, b) => b.createdAt - a.createdAt)[0]
+  if (!golden) {
+    throw new Error('no golden snapshot found')
+  }
+  return golden.id
 }

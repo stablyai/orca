@@ -103,9 +103,9 @@ function ledgerTable(runs: RunFile[]): string {
   return `<details><summary>${rows.length} resources across ${runs.length} runs</summary><div class="tablewrap"><table><thead><tr><th>Run</th><th>Kind</th><th>Id</th><th>Label</th><th>Created (UTC)</th><th>Destroyed</th></tr></thead><tbody>${rows.join('')}</tbody></table></div></details>`
 }
 
-/** Hand-curated findings/gaps (HTML snippets), kept beside the report: acceptance-findings.json {findings, gaps}. */
+/** Hand-curated findings/gaps (HTML snippets), versioned with the harness: findings.json {findings, gaps}. */
 function loadFindings(): { gaps?: string[]; findings?: string[] } {
-  const path = `${config.contextDir}/acceptance-findings.json`
+  const path = new URL('../findings.json', import.meta.url).pathname
   return existsSync(path) ? (JSON.parse(readFileSync(path, 'utf8')) as { gaps?: string[]; findings?: string[] }) : {}
 }
 
