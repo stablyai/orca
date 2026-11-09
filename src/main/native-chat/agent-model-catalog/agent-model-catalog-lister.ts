@@ -40,6 +40,8 @@ export type AgentModelCatalogListingBudget = {
   deadline?: number
   /** This caller's interest; a queued listing is withdrawn a grace after no holder is left. */
   signal?: AbortSignal
+  /** Service shutdown retires the listing immediately, without the holder release grace. */
+  lifetime?: AbortSignal
   admission?: PrioritySemaphore
   /** Execution time after admission. */
   timeoutMs?: number
@@ -102,7 +104,7 @@ export function refreshAgentModelCatalogListing(input: {
   ) => AgentModelCatalogEntry | null
 }): Promise<AgentModelCatalogEntry | null> {
   const { fingerprint, agent, listModels } = input
-  const { signal, admission, timeoutMs } = input.budget ?? {}
+  const { signal, lifetime, admission, timeoutMs } = input.budget ?? {}
   let deadline = input.budget?.deadline
   const existing = input.refreshes.get(fingerprint)
   if (existing) {
@@ -124,6 +126,7 @@ export function refreshAgentModelCatalogListing(input: {
     agent,
     targets: new Set(input.selectedModel ? [input.selectedModel] : []),
     current: () =>
+      !lifetime?.aborted &&
       (held || holders.size > 0 || Date.now() < released + AGENT_MODEL_CATALOG_RELEASE_GRACE_MS) &&
       (deadline === undefined || Date.now() < deadline),
     hold: (holder) => {
@@ -149,6 +152,7 @@ export function refreshAgentModelCatalogListing(input: {
     cleanup: () => {
       clearTimeout(expiry)
       clearTimeout(grace)
+      lifetime?.removeEventListener('abort', retire)
       for (const [holder, abandon] of holders) {
         holder.removeEventListener('abort', abandon)
       }
@@ -160,6 +164,7 @@ export function refreshAgentModelCatalogListing(input: {
   const current = (): boolean => input.refreshes.get(fingerprint) === flight && flight.current()
   input.refreshes.set(fingerprint, flight)
   flight.hold(signal)
+  lifetime?.addEventListener('abort', retire, { once: true })
   const expire = (): void => {
     clearTimeout(expiry)
     if (deadline !== undefined) {

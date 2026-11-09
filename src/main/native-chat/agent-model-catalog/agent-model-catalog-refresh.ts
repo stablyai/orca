@@ -16,6 +16,7 @@ import {
 import { resolveAgentModelCatalogScope } from './agent-model-catalog-scope'
 import { scopedAgentModelCatalogLister } from './agent-model-catalog-lister'
 import { seedAccountList } from './agent-model-catalog-account-list'
+import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
 import {
   agentModelCatalogReleasedOwner,
   bindAgentModelCatalogScope,
@@ -155,6 +156,7 @@ export function createAgentModelCatalogRefreshes(context: {
       Object.assign(bound, { fingerprint, exact, cwd })
       bindAgentModelCatalogScope(bindings, launch.bindingKey, bound, requestKey)
       const probe = deps.probes?.[agent]
+      let completion: Promise<AgentModelCatalogEntry | null> | undefined
       if (
         !launch.passive &&
         (exact || !agentModelCatalogReleasedOwner(scoped)) &&
@@ -177,44 +179,41 @@ export function createAgentModelCatalogRefreshes(context: {
               deps.store.isListing(fingerprint))
           ) {
             // This refresh holds the listing while it runs; once admitted, the listing runs on.
-            void deps.store
-              .refresh(
-                fingerprint,
-                agent,
-                (selected, owner) => {
-                  const task = lister(selected, owner)
-                  tasks.add(task)
-                  void task.finally(() => tasks.delete(task)).catch(() => {})
-                  return task
-                },
-                {
-                  signal,
-                  ...(launch.legacy
-                    ? { deadline }
-                    : { admission, timeoutMs: AGENT_MODEL_CATALOG_REFRESH_MS })
-                },
-                model
-              )
-              .then((entry) => {
-                if (entry && bound.current()) {
-                  seedAccountList(deps, scope, agent)
-                }
-              })
+            completion = deps.store.refresh(
+              fingerprint,
+              agent,
+              (selected, owner) => {
+                const task = lister(selected, owner)
+                tasks.add(task)
+                void task.finally(() => tasks.delete(task)).catch(() => {})
+                return task
+              },
+              {
+                signal,
+                lifetime,
+                ...(launch.legacy
+                  ? { deadline }
+                  : { admission, timeoutMs: AGENT_MODEL_CATALOG_REFRESH_MS })
+              },
+              model
+            )
           }
         }
         for (const model of targets.size > 0 ? [...targets] : [undefined]) {
           list(model)
         }
-        listing.resolve()
-        await bounded(
-          deps.store.pendingListing(fingerprint, true, true, signal) ?? Promise.resolve(null)
-        )
       }
       listing.resolve()
       if (launch.passive) {
         await bound.projecting
-      } else if (current()) {
-        seedAccountList(deps, scope, agent)
+      } else {
+        // Discovery may finish after this refresh's setup budget ends.
+        const seeded = Promise.resolve(completion).then((entry) => {
+          if (entry !== null && bound.current()) {
+            seedAccountList(deps, scope, agent)
+          }
+        })
+        await bounded(seeded)
       }
     }
     const end = (): void => ended.abort()

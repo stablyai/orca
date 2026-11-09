@@ -130,9 +130,8 @@ export function createAgentModelCatalogService(
       if (!expired || !answer.listingInProgress) {
         return answer
       }
-      // A waiting read that used its whole budget is final, and says its listing outlasted it.
-      const { listingInProgress: _, ...settled } = answer
-      return { ...settled, waitExpired: true }
+      // Expiring a reader cannot settle the listing, including for clients predating waitExpired.
+      return { ...answer, waitExpired: true }
     },
     recordLiveListing: live.recordLiveListing,
     async prewarm() {

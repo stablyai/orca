@@ -400,8 +400,8 @@ export type AgentSessionModelCatalogResult = {
    *  the probe re-checking `unavailable`); a `waitForListing` read answers when it lands. Absent
    *  from a host that predates it; such a host sends it only with `unknown`. */
   listingInProgress?: true
-  /** A `waitForListing` read ran out of budget while its listing still ran; it answers as final
-   *  without `listingInProgress`, and a reader still showing the picker may wait again. */
+  /** A `waitForListing` read ran out of budget while its listing still ran. The answer remains
+   *  provisional with `listingInProgress`; a reader still showing the picker may wait again. */
   waitExpired?: true
   /** Why no chat can start under the account, as the host's probe last found it. Absent is
    *  unknown, which shows nothing; an older host never sends it. */

@@ -6,6 +6,7 @@ import {
 } from '../structured-agent-command-resolution'
 import { AgentModelCatalogStore, type AgentModelCatalogSuccess } from './agent-model-catalog-store'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session/lifecycle/agent-session-account-home'
+import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
 
 function listing(id: string): AgentModelCatalogSuccess {
   return {
@@ -153,6 +154,29 @@ it('keeps a queued listing only while a refresh or reader still waits on it', as
   expect(h.runs.map((entry) => entry.identity)).toEqual(['/busy-1', '/busy-2', '/own-waited'])
 })
 
+it('retires queued discovery before shutdown releases an admission slot', async () => {
+  vi.useFakeTimers()
+  onTestFinished(() => {
+    vi.useRealTimers()
+  })
+  const h = sharedListingHarness()
+  for (const workspacePath of ['/busy-1', '/busy-2', '/own-queued']) {
+    void h.service.demand({ agent: 'codex', workspacePath })
+  }
+  await vi.advanceTimersByTimeAsync(0)
+  expect(h.service.snapshot({ agent: 'codex', workspacePath: '/own-queued' })).toMatchObject({
+    listingInProgress: true
+  })
+
+  const stopped = h.service.stop()
+  h.listingFor('/busy-1').resolve(listing('busy'))
+  h.listingFor('/busy-2').resolve(listing('busy'))
+  await vi.advanceTimersByTimeAsync(0)
+  await stopped
+
+  expect(h.runs.map((entry) => entry.identity)).toEqual(['/busy-1', '/busy-2'])
+})
+
 it('reports an expired captured wait and lets the next reader finish its queued listing', async () => {
   vi.useFakeTimers()
   onTestFinished(() => {
@@ -168,7 +192,7 @@ it('reports an expired captured wait and lets the next reader finish its queued 
   const request = { ...params, operation, deadline: operation.deadline }
   const first = h.service.read(request)
   await vi.advanceTimersByTimeAsync(30_000)
-  expect(await first).toEqual({ origin: 'unknown', waitExpired: true })
+  expect(await first).toEqual({ origin: 'unknown', listingInProgress: true, waitExpired: true })
 
   operation.controller.abort()
   expect(await h.service.read(request)).toEqual({ origin: 'unknown' })
@@ -378,12 +402,32 @@ it('publishes cached catalogs immediately and completes queued discoveries after
       listingInProgress: true
     })
 
-    await vi.advanceTimersByTimeAsync(20_000)
+    const expired = service.read({
+      agent: 'claude',
+      waitForListing: true,
+      deadline: Date.now() + 5_000
+    })
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(await expired).toMatchObject({
+      models: [{ id: 'saved' }],
+      listingInProgress: true,
+      waitExpired: true
+    })
+
+    await vi.advanceTimersByTimeAsync(15_000)
     const warm = service.read({ agent: 'claude', waitForListing: true })
     const cold = service.read({ agent: 'codex', waitForListing: true })
     await vi.advanceTimersByTimeAsync(15_000)
     expect(await warm).toMatchObject({ models: [{ id: 'claude-fresh' }] })
     expect(await cold).toMatchObject({ models: [{ id: 'codex-fresh' }] })
+    const account = agentModelCatalogFingerprint({
+      agent: 'claude',
+      accountHome: { variable: 'CODEX_HOME', path: '/account' },
+      wslDistro: null
+    })
+    expect(store.observation(account)).toMatchObject({
+      models: [{ id: 'claude-fresh', isDefault: false }]
+    })
   } finally {
     await service.stop()
     vi.useRealTimers()
