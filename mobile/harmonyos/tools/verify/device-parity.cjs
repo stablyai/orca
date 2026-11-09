@@ -1,6 +1,10 @@
 const assert = require('node:assert/strict')
 const { test } = require('node:test')
 const { loadArkts } = require('./arkts-source.cjs')
+const notificationIdentity = loadArkts('notifications/NotificationIdentity.ets', [
+  'notificationFenceKey',
+  'readNotificationIdentity'
+])
 const bytes = {
   base64Decode: (value) => Uint8Array.from(Buffer.from(value, 'base64'))
 }
@@ -335,7 +339,11 @@ test('leaving an image page during download prevents a later clipboard write', a
 test('desktop notifications retain pane and execution scope and ignore replays or events after stop', () => {
   let receive
   const delivered = []
-  const { AgentWatch } = loadArkts('notifications/AgentWatch.ets', ['AgentWatch'])
+  const { AgentWatch } = loadArkts(
+    'notifications/AgentWatch.ets',
+    ['AgentWatch'],
+    notificationIdentity
+  )
   const watch = new AgentWatch({
     deviceToken: 'test-token',
     hostId: 'host',
@@ -377,7 +385,7 @@ test('desktop notifications retain pane and execution scope and ignore replays o
       streaming: true,
       result: {
         type: 'notification',
-        source: 'test',
+        source: 'terminal-bell',
         title: 'Stopped',
         body: '',
         notificationEpoch: 'epoch',
@@ -399,6 +407,7 @@ function notifierHarness(settings = {}) {
     ...settings
   }
   const { LocalNotifier } = loadArkts('notifications/LocalNotifier.ets', ['LocalNotifier'], {
+    ...notificationIdentity,
     getBool: async (_context, key) => key === 'enabled',
     KEY_NOTIFICATIONS_LOCAL_ENABLED: 'enabled',
     KEY_NOTIFICATIONS_DND_ENABLED: 'dnd',
@@ -410,6 +419,8 @@ function notifierHarness(settings = {}) {
       publish: async (request) => {
         requests.push(request)
       },
+      getActiveNotifications: async () =>
+        requests.filter((request) => !cancelled.includes(request.id)),
       cancel: async (id) => {
         cancelled.push(id)
       },
@@ -425,9 +436,12 @@ function notifierHarness(settings = {}) {
       WantAgentFlags: { UPDATE_PRESENT_FLAG: 0 }
     }
   })
-  const notifier = new LocalNotifier()
-  notifier.setContext({})
-  return { notifier, requests, cancelled, prefs }
+  const createNotifier = () => {
+    const notifier = new LocalNotifier()
+    notifier.setContext({ abilityInfo: { bundleName: 'example.orca', name: 'MainAbility' } })
+    return notifier
+  }
+  return { notifier: createNotifier(), createNotifier, requests, cancelled, prefs }
 }
 const notificationEvent = {
   title: 'Agent event',
@@ -439,7 +453,7 @@ const notificationEvent = {
   source: 'agent-task-complete',
   agentState: 'waiting',
   desktopAway: true,
-  notificationId: 'event'
+  identity: { notificationId: 'event', notificationEpoch: 'one', notificationSeq: 4 }
 }
 
 test('notification delivery filters desktop activity, finished agents and the visible execution host', async () => {
@@ -457,26 +471,65 @@ test('notification delivery filters desktop activity, finished agents and the vi
   notifier.setViewing('host', 'workspace', '')
   assert.equal(await notifier.publishDesktopEventAsync(notificationEvent), true)
   assert.equal(requests[0].notificationFlags.soundEnabled, 2)
+  assert.equal(requests[0].wantAgent.wants[0].bundleName, 'example.orca')
   assert.match(
     requests[0].wantAgent.wants[0].uri,
     /paneKey=terminal%3Apane&executionHost=runtime%3Aremote/
   )
-  await notifier.dismiss('event')
+  await notifier.dismiss('host', notificationEvent.identity)
   assert.equal(await notifier.publishDesktopEventAsync(notificationEvent), false)
 })
 
 test('a dismissal received before a notification finishes publishing cannot leave a stale alert', async () => {
   const { notifier, requests } = notifierHarness()
   const published = notifier.publishDesktopEventAsync(notificationEvent)
-  await notifier.dismiss('event')
+  await notifier.dismiss('host', notificationEvent.identity)
   assert.equal(await published, false)
   assert.deepEqual(requests, [])
+})
+
+test('reconnecting withdraws only the dismissed desktop receipt from the tray after a restart', async () => {
+  const { notifier, createNotifier, requests, cancelled } = notifierHarness()
+  const next = {
+    ...notificationEvent,
+    identity: { ...notificationEvent.identity, notificationSeq: 6 }
+  }
+  const other = { ...notificationEvent, hostId: 'other-desktop' }
+  for (const event of [notificationEvent, next, other]) {
+    assert.equal(await notifier.publishDesktopEventAsync(event), true)
+  }
+  const restarted = createNotifier()
+  await restarted.reconcile(
+    'host',
+    async (receipts) => {
+      assert.deepEqual(
+        Array.from(receipts, (receipt) => receipt.notificationSeq),
+        [4, 6]
+      )
+      return [notificationEvent.identity]
+    },
+    () => true
+  )
+  assert.deepEqual(cancelled, [requests[0].id])
+  await restarted.dismiss('host', { ...notificationEvent.identity, notificationSeq: 5 })
+  assert.deepEqual(cancelled, [requests[0].id])
+  assert.equal(
+    await restarted.publishDesktopEventAsync({
+      ...next,
+      identity: { ...next.identity, notificationSeq: 7 }
+    }),
+    true
+  )
 })
 
 test('old-host notification fallback treats a continuing interactive prompt as one input-needed transition', () => {
   let receive
   const delivered = []
-  const { AgentWatch } = loadArkts('notifications/AgentWatch.ets', ['AgentWatch'])
+  const { AgentWatch } = loadArkts(
+    'notifications/AgentWatch.ets',
+    ['AgentWatch'],
+    notificationIdentity
+  )
   const watch = new AgentWatch({
     deviceToken: 'test-token',
     hostId: 'host',

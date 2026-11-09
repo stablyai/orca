@@ -3845,5 +3845,82 @@
   "桌面未提供新建工作区页面": {
     "zh": "桌面未提供新建工作区页面",
     "en": "The desktop does not offer the new workspace page"
+  },
+  "启用通知": {
+    "zh": "启用通知",
+    "en": "Enable notifications",
+    "zh-Hant": "啟用通知",
+    "ko": "알림 활성화",
+    "ja": "通知を有効にする",
+    "es": "Activar notificaciones",
+    "fr": "Activer les notifications",
+    "pt": "Ativar notificações",
+    "ru": "Включить уведомления",
+    "tr": "Bildirimleri etkinleştir",
+    "de": "Benachrichtigungen aktivieren"
+  },
+  "系统设置中的通知已关闭。": {
+    "zh": "系统设置中的通知已关闭。",
+    "en": "Notifications are disabled in system settings.",
+    "zh-Hant": "系統設定已停用通知。",
+    "ko": "시스템 설정에서 알림이 비활성화되어 있습니다.",
+    "ja": "システム設定で通知が無効になっています。",
+    "es": "Las notificaciones están desactivadas en los ajustes del sistema.",
+    "fr": "Les notifications sont désactivées dans les paramètres système.",
+    "pt": "As notificações estão desativadas nas configurações do sistema.",
+    "ru": "Уведомления отключены в системных настройках.",
+    "tr": "Sistem ayarlarında bildirimler devre dışı.",
+    "de": "Benachrichtigungen sind in den Systemeinstellungen deaktiviert."
+  },
+  "仅在离开桌面时": {
+    "zh": "仅在离开桌面时",
+    "en": "Only when away from desktop",
+    "zh-Hant": "僅在離開電腦時",
+    "ko": "데스크톱을 사용하지 않을 때만",
+    "ja": "デスクトップから離れているときのみ",
+    "es": "Solo cuando no uses el escritorio",
+    "fr": "Uniquement si vous n'êtes pas à l'ordinateur",
+    "pt": "Só quando estiver longe do desktop",
+    "ru": "Только когда вы не за компьютером",
+    "tr": "Yalnızca bilgisayardan uzaktayken",
+    "de": "Nur bei Abwesenheit vom Computer"
+  },
+  "键盘和鼠标均无操作达 3 分钟后，或锁屏时。": {
+    "zh": "键盘和鼠标均无操作达 3 分钟后，或锁屏时。",
+    "en": "After 3 minutes without keyboard or mouse activity, or when locked.",
+    "zh-Hant": "鍵盤和滑鼠皆無操作達 3 分鐘後，或電腦鎖定時。",
+    "ko": "키보드나 마우스를 3분간 사용하지 않거나 데스크톱이 잠겨 있을 때 알림을 보냅니다.",
+    "ja": "キーボードやマウスの操作が 3 分間ないとき、またはロック中に通知します。",
+    "es": "Tras 3 minutos sin actividad del teclado o del ratón, o cuando el equipo esté bloqueado.",
+    "fr": "Après 3 minutes sans activité au clavier ou à la souris, ou si l'ordinateur est verrouillé.",
+    "pt": "Após 3 minutos sem atividade do teclado ou mouse, ou quando o desktop estiver bloqueado.",
+    "ru": "Если клавиатура и мышь не используются 3 минуты или компьютер заблокирован.",
+    "tr": "3 dakika boyunca klavye veya fare etkinliği olmadığında ya da bilgisayar kilitliyken.",
+    "de": "Nach 3 Minuten ohne Tastatur- oder Mausaktivität oder bei gesperrtem Computer."
+  },
+  "仅在智能体需要我时": {
+    "zh": "仅在智能体需要我时",
+    "en": "Only when an agent needs me"
+  },
+  "保留权限请求和问题，跳过 Agent 完成通知": {
+    "zh": "保留权限请求和问题，跳过 Agent 完成通知",
+    "en": "Permission requests and questions. Skips finished agents."
+  },
+  "不发送此手机上当前打开的工作区的提醒。": {
+    "zh": "不发送此手机上当前打开的工作区的提醒。",
+    "en": "Skip alerts for the workspace open on this phone.",
+    "zh-Hant": "略過此手機目前開啟的工作區通知。",
+    "ko": "이 휴대폰에서 열어 둔 워크스페이스의 알림을 받지 않습니다.",
+    "ja": "このスマートフォンで開いているワークスペースの通知を省略します。",
+    "es": "Omite las alertas del espacio de trabajo abierto en este teléfono.",
+    "fr": "Ignorer les alertes de l'espace de travail ouvert sur ce téléphone.",
+    "pt": "Não enviar alertas do espaço de trabalho aberto neste celular.",
+    "ru": "Не уведомлять о рабочем пространстве, открытом на этом телефоне.",
+    "tr": "Bu telefonda açık olan çalışma alanı için bildirim gönderilmez.",
+    "de": "Für den auf diesem Smartphone geöffneten Arbeitsbereich keine Benachrichtigungen senden."
+  },
+  "提醒类型遵循各个已配对桌面的通知设置。": {
+    "zh": "提醒类型遵循各个已配对桌面的通知设置。",
+    "en": "Alert types follow each paired desktop’s notification settings."
   }
 }

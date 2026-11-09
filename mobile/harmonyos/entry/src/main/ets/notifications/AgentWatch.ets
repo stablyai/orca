@@ -1,4 +1,5 @@
 import { DesktopNotification } from './LocalNotifier';
+import { NotificationIdentity, readNotificationIdentity } from './NotificationIdentity';
 /** Live desktop notifications, with session-state fallback for older hosts. */
 
 export interface AgentWatchDeps {
@@ -15,7 +16,8 @@ export interface AgentWatchDeps {
   /** Publish a local notification (LocalNotifier.publishAgentEvent). */
   notify: (title: string, body: string, hostId: string, worktreeId: string, paneKey?: string, executionHost?: string) => boolean;
   notifyEvent?: (event: DesktopNotification) => boolean;
-  dismiss?: (notificationId: string) => void;
+  ready?: () => void;
+  dismiss?: (identity: NotificationIdentity) => void;
   logSink: (line: string) => void;
 }
 
@@ -140,8 +142,11 @@ export class AgentWatch {
       if (typeof typeValue !== 'string') {
         return;
       }
+      if (typeValue === 'ready') { if (!this.legacy) { this.deps.ready?.(); } return; }
       if (typeValue === 'dismiss') {
-        let notificationId = this.readStringMember(event, 'notificationId'); if (notificationId && this.deps.dismiss) { this.deps.dismiss(notificationId); } return;
+        let identity = readNotificationIdentity(event['dismissedDelivery'] ?? event);
+        if (identity) { this.deps.dismiss?.(identity); }
+        return;
       }
       if (typeValue === 'notification') { this.onNotification(event); return; }
       if (typeValue === 'end') {
@@ -205,23 +210,34 @@ export class AgentWatch {
   }
 
   private onNotification(event: Record<string, Object>): void {
-    if (event['desktopAllowed'] === false || !['agent-task-complete', 'terminal-bell', 'test', 'plugin'].includes(this.readStringMember(event, 'source'))) { return; }
+    let source = this.readStringMember(event, 'source');
+    if (event['desktopAllowed'] === false || !['agent-task-complete', 'terminal-bell', 'plugin'].includes(source)) { return; }
     let title = this.readStringMember(event, 'title'); let body = this.readStringMember(event, 'body');
     let epoch = this.readStringMember(event, 'notificationEpoch'); let sequence = event['notificationSeq'];
-    if (title.length === 0 || epoch.length === 0 || typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0) { return; }
+    if (typeof event['title'] !== 'string' || typeof event['body'] !== 'string' || epoch.length === 0 || epoch.length > 128
+      || typeof sequence !== 'number' || !Number.isSafeInteger(sequence) || sequence < 0) { return; }
+    let state = this.readStringMember(event, 'agentState');
+    if (source === 'agent-task-complete' && state && !['done', 'finished', 'blocked', 'waiting', 'needs-input'].includes(state)) { return; }
     let identity = `${epoch}/${sequence}`; if (this.seenNotifications.has(identity)) { return; }
     this.seenNotifications.add(identity);
     if (this.seenNotifications.size > 128) { let first = Array.from(this.seenNotifications)[0]; this.seenNotifications.delete(first); }
     if (this.deps.notifyEvent) {
-      this.deps.notifyEvent({ title: title.replace(/\s+/g, ' ').slice(0, 80), body: body.replace(/\s+/g, ' ').slice(0, 180),
+      let emittedAt = event['emittedAt'];
+      this.deps.notifyEvent({ title: this.clipAlertText(title, 80), body: this.clipAlertText(body, 180),
         hostId: this.deps.hostId, worktreeId: this.readStringMember(event, 'worktreeId'), paneKey: this.readStringMember(event, 'paneKey'),
-        executionHost: this.readStringMember(event, 'executionHost'), source: this.readStringMember(event, 'source'),
-        agentState: this.readStringMember(event, 'agentState'), desktopAway: typeof event['desktopAway'] === 'boolean' ? event['desktopAway'] as boolean : null,
-        notificationId: this.readStringMember(event, 'notificationId') });
+        executionHost: this.readStringMember(event, 'executionHost'), source: source, agentState: state,
+        desktopAway: typeof event['desktopAway'] === 'boolean' ? event['desktopAway'] as boolean : null,
+        identity: readNotificationIdentity(event), attentionKey: this.readStringMember(event, 'attentionKey'),
+        emittedAt: typeof emittedAt === 'number' && Number.isFinite(emittedAt) ? emittedAt : undefined });
       return;
     }
-    this.deps.notify(title.replace(/\s+/g, ' ').slice(0, 80), body.replace(/\s+/g, ' ').slice(0, 180), this.deps.hostId,
+    this.deps.notify(this.clipAlertText(title, 80), this.clipAlertText(body, 180), this.deps.hostId,
       this.readStringMember(event, 'worktreeId'), this.readStringMember(event, 'paneKey'), this.readStringMember(event, 'executionHost'));
+  }
+
+  private clipAlertText(value: string, max: number): string {
+    let normalized = value.replace(/\s+/g, ' ').trim();
+    return normalized.length <= max ? normalized : `${normalized.slice(0, max - 1)}…`;
   }
 
   /** Reads one tab loosely; returns the state key it recorded ('' when nothing usable). */
@@ -328,7 +344,7 @@ export class AgentWatch {
     if (this.deps.notifyEvent) {
       this.deps.notifyEvent({ title: title, body: body, hostId: this.deps.hostId, worktreeId: worktreeId,
         paneKey: this.readStringMember(tab, 'paneKey'), executionHost: this.readStringMember(tab, 'executionHost'),
-        source: 'agent-task-complete', agentState: state, desktopAway: null, notificationId: '' });
+        source: 'agent-task-complete', agentState: state, desktopAway: null, identity: null });
     } else { this.deps.notify(title, body, this.deps.hostId, worktreeId); }
   }
 
