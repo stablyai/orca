@@ -253,4 +253,17 @@ describe('resolveSessionFilePath', () => {
       })
     ).resolves.toBe(fullFile)
   })
+
+  it('never builds an Antigravity probe path that leaves the brain folder', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-agy-escape-')
+    const brainDir = join(root, 'antigravity-cli', 'brain')
+    const outsideLogs = join(root, 'antigravity-cli', 'outside', '.system_generated', 'logs')
+    await mkdir(brainDir, { recursive: true })
+    await mkdir(outsideLogs, { recursive: true })
+    await writeFile(join(outsideLogs, 'transcript_full.jsonl'), '{}\n')
+
+    await expect(
+      resolveSessionFilePath('antigravity', '../outside', { antigravityBrainDir: brainDir })
+    ).resolves.toBeNull()
+  })
 })

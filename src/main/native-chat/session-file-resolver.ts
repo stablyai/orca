@@ -28,6 +28,7 @@ import {
 } from './host-readable-transcript-path'
 import { SESSION_FILE_ID_LAYOUTS, type SessionIdLookupAgent } from './session-file-id-layouts'
 import { findWslSessionPath } from './wsl-session-path-scan'
+import { findAntigravityBrainTranscript } from './session-file-resolver-antigravity-probe'
 import { findClaudeSessionFile } from './session-file-resolver-claude-probe'
 import { parseSshTranscriptPath } from './ssh-transcript-path'
 import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
@@ -277,14 +278,7 @@ async function findHostSessionFile(
 ): Promise<string | null> {
   const { signal, strictErrors } = options
   if (agent === 'antigravity' && !strictErrors) {
-    const logsDir = join(root, sessionId, '.system_generated', 'logs')
-    for (const filename of ['transcript_full.jsonl', 'transcript.jsonl']) {
-      const candidate = await toHostReadableTranscriptPath(join(logsDir, filename), { signal })
-      if (candidate) {
-        return candidate
-      }
-    }
-    return null
+    return findAntigravityBrainTranscript(root, sessionId, signal)
   }
   if (agent === 'grok' && !strictErrors) {
     // Bound main-thread work with direct-layout async lookup rather than a recursive scan.
