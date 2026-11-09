@@ -163,12 +163,13 @@ export function structuredHostStub(
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
     readCurrentRequests: vi.fn(() => ({ json: '[]', nextCursor: null })),
     sessionAgent: vi.fn(() => null),
-    journalSnapshot: vi.fn(() => ({
+    conversationOutline: vi.fn(() => ({
       sessionId,
       cursor: { epoch: 'epoch-a', sequence: 0 },
-      items: [],
-      submissions: []
+      entries: [],
+      omittedEntries: 0
     })),
+    historyItem: vi.fn(() => null),
     subscribe: vi.fn(() => () => undefined),
     subscribeStatus: vi.fn((subscriber: { emit: (event: unknown) => void }) => {
       subscriber.emit({ type: 'snapshot', sessions: [] })

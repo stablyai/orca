@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../src/shared/agent-session/journal/agent-session-journal-item-key'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session/failures/agent-session-failure'
 import { agentSessionFailureWords } from '../../../src/shared/agent-session/failures/agent-session-failure-words'
@@ -24,7 +24,7 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
     '%s client against the current host Stop projection',
     (ref) => {
       const rig = createReleasedStopNoteRig(port, ref)
-      const { page, subscribe, events, reduce, render, turn, note, seed } = rig
+      const { page, subscribe, events, delivered, reduce, render, turn, note, seed } = rig
       it('renders the derived page with the interrupted turn outside the page', async () => {
         await turn('interrupted')
         await note()
@@ -52,10 +52,15 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
           const replies = await subscribe()
           replies.length = 0
           await turn('interrupted', batch)
-          const event = events(replies).find(
-            (event) =>
-              event.type === 'batch' && event.batch.items.some((item) => item.itemId === noteId)
-          )
+          // The note's batch follows the committed turn end.
+          const event = await vi.waitFor(() => {
+            const found = events(replies).find(
+              (event) =>
+                event.type === 'batch' && event.batch.items.some((item) => item.itemId === noteId)
+            )
+            expect(found).toBeDefined()
+            return found
+          })
           expect(event).toMatchObject({
             type: 'batch',
             batch: {
@@ -92,6 +97,7 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
         const replies = await subscribe()
         replies.length = 0
         await turn('interrupted')
+        await delivered(replies)
         state = reduce(state, replies)
         expect(state.items.some((item) => item.itemId === noteId)).toBe(false)
         state = rig.client.reduceStructuredAgentSession(state, {
@@ -103,6 +109,7 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
         expect(state.cursor).toEqual(rig.journal.cursor())
         const held = rig.journal.cursor()
         const refreshed = await subscribe(held)
+        await delivered(refreshed)
         state = reduce(state, refreshed)
         expect(render(state)).toEqual({ type: 'text', text: ordinary.text })
         expect(rig.journal.cursor()).toEqual(held)
@@ -130,9 +137,11 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
         const first = await page({ direction: 'after', cursor: held, limit: 3 })
         expect(first.hasNewer).toBe(true)
         const caughtUp = await subscribe(held)
+        await delivered(caughtUp)
         expect(events(caughtUp).every((event) => event.type === 'batch')).toBe(true)
         expect(reduce(before, caughtUp).cursor).toEqual(rig.journal.cursor())
         const fresh = await subscribe(null)
+        await delivered(fresh)
         let after = reduce(before, fresh)
         expect(events(fresh)[0]).toMatchObject({ type: 'snapshot', page: { hasOlder: true } })
         while (after.hasOlder && !after.items.some((item) => item.itemId === noteId)) {
@@ -193,6 +202,7 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
         })
         await turn('interrupted')
         const replies = await subscribe(held)
+        await delivered(replies)
         const after = reduce(before, replies)
         expect(after.items.some((item) => item.itemId === agentJournalItemKey(op))).toBe(false)
         expect(render(after)).toEqual({ type: 'text', text: ordinary.text })
