@@ -192,7 +192,7 @@ describe('incremental terminal history restore', () => {
     await manager.appendIncrements(SESSION_ID, 1, [{ kind: 'output', data: 'before relaunch\r\n' }])
 
     const relaunched = new HistoryManager(dir)
-    relaunched.registerWriter(SESSION_ID)
+    await relaunched.registerWriter(SESSION_ID)
     await relaunched.appendIncrements(SESSION_ID, 2, [
       { kind: 'output', data: 'after relaunch\r\n' }
     ])

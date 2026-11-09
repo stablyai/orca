@@ -1,3 +1,6 @@
+import { PendingTerminalHistoryRetirements } from '../../../pty/pending-terminal-history-retirement'
+import { admitProspectivePtySpawn } from '../../../pty/prospective-pty-spawn'
+import { DaemonRouterSpawnAuthority } from './daemon-router-spawn-authority'
 import { DaemonPtyTargetInspection } from './daemon-pty-target-inspection'
 import { terminateResolvedDaemonSession } from '../../server/daemon-fenced-termination'
 import type { PtyFencedTerminationRequest } from '../../../../shared/terminal/pty/lifecycle/pty-fenced-termination'
@@ -21,13 +24,12 @@ import type {
 import { DaemonSessionOwnerResolver } from './daemon-session-owner-resolution'
 import type { DaemonIdleRetirementResult } from '../adapter/daemon-pty-runtime-state'
 import { DaemonRouterRetirement } from './daemon-router-retirement'
-import { routeSpawnOrHold } from './daemon-router-newer-daemon-hold'
-import { findLegacySessionOwner } from './daemon-router-legacy-owner'
 import { retireExitedLegacyAdapter, type ExitedLegacyVerdict } from './daemon-router-exited-legacy'
 import type { WriteSettlement } from '../../../../shared/terminal/pty/lifecycle/pty-write-settlement'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal/protocol/queries/terminal-osc-color-reply'
 
 export class DaemonPtyRouter implements IPtyProvider {
+  private readonly historyRetirements = new PendingTerminalHistoryRetirements()
   private current: DaemonPtyAdapter
   private legacy: DaemonPtyAdapter[]
   private sessionAdapters = new Map<string, DaemonPtyAdapter>()
@@ -35,6 +37,7 @@ export class DaemonPtyRouter implements IPtyProvider {
   private readonly ownerResolver: DaemonSessionOwnerResolver<DaemonPtyAdapter>
   private readonly subscriptions: DaemonPtyAdapterSubscriptionFanout
   private readonly legacyExitProof = new LegacyDaemonExitProof()
+  private readonly spawns: DaemonRouterSpawnAuthority
   readonly retirement = new DaemonRouterRetirement(() => this.allAdapters())
 
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
@@ -50,6 +53,15 @@ export class DaemonPtyRouter implements IPtyProvider {
       this.allAdapters(),
       this.sessionAdapters,
       (adapter, error) => this.retireExitedLegacy(adapter, error) !== 'not-exited'
+    )
+    this.spawns = new DaemonRouterSpawnAuthority(
+      this,
+      this.current,
+      this.legacy,
+      this.sessionAdapters,
+      this.legacyExitProof,
+      this.ownerResolver,
+      this.retirement
     )
     this.targetInspection = new DaemonPtyTargetInspection(
       this.allAdapters,
@@ -72,29 +84,8 @@ export class DaemonPtyRouter implements IPtyProvider {
     this.legacyExitProof.record(this.legacy)
   }
 
-  async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
-    if (this.retirement.admissionClosed) {
-      throw new Error('Terminal daemon is decommissioning')
-    }
-    // Retirement census must account for spawns that have not published their sessions yet.
-    this.retirement.spawnInFlight++
-    try {
-      if (opts.attachOnly && opts.sessionId) {
-        return await this.ownerResolver.spawnAttachOnly({ ...opts, sessionId: opts.sessionId })
-      }
-      const adapter =
-        (opts.sessionId ? this.sessionAdapters.get(opts.sessionId) : undefined) ??
-        (await findLegacySessionOwner(opts, this.current, this.legacy, this.legacyExitProof))
-      const target = await routeSpawnOrHold(opts, adapter, this.current, this.ownerResolver)
-      const result = await target.spawn(opts)
-      if (!result.exitedBeforeSpawnReply) {
-        this.ownerResolver.recordRoute(result.id, target, result.incarnationId)
-      }
-      return result
-    } finally {
-      this.retirement.spawnInFlight--
-    }
-  }
+  [admitProspectivePtySpawn] = (opts: PtySpawnOptions) => this.spawns.admit(opts)
+  spawn = (opts: PtySpawnOptions): Promise<PtySpawnResult> => this.spawns.spawn(opts)
 
   requestIdleRetirement(): Promise<DaemonIdleRetirementResult> {
     return this.retirement.requestIdleRetirement()
@@ -127,8 +118,10 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   killFenced = (request: PtyFencedTerminationRequest) =>
-    terminateResolvedDaemonSession(request, () =>
-      this.ownerResolver.resolveTermination(request.id, request.expectedIncarnationId)
+    terminateResolvedDaemonSession(
+      request,
+      () => this.ownerResolver.resolveTermination(request.id, request.expectedIncarnationId),
+      this.historyRetirements
     )
 
   supportsAgentSessionCreateOperations(): boolean {
@@ -333,19 +326,20 @@ export class DaemonPtyRouter implements IPtyProvider {
     return reconcileDaemonRouterSessions(this.allAdapters(), this.ownerResolver, validWorktreeIds)
   }
 
-  dispose(): void {
+  async dispose(): Promise<void> {
+    this.spawns.close()
     this.subscriptions.dispose()
-    for (const adapter of this.allAdapters()) {
-      adapter.dispose()
-    }
+    await Promise.all(this.allAdapters().map((adapter) => adapter.dispose()))
   }
 
   // Restart reuses legacy adapters; detach subscriptions without disposing those adapters.
   disposeRouterOnly(): void {
+    this.spawns.close()
     this.subscriptions.dispose()
   }
 
   async disconnectOnly(): Promise<void> {
+    this.spawns.close()
     this.subscriptions.dispose()
     await Promise.all([...this.allAdapters()].map((adapter) => adapter.disconnectOnly()))
   }

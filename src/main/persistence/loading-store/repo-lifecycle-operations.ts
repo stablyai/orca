@@ -1,3 +1,4 @@
+import { notifyLegacyTerminalCatalogChanged } from './legacy-terminal-identity-claims'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import type { ProjectHostSetup, ProjectHostSetupUpdateArgs } from '../../../shared/project-types'
 import type { Repo } from '../../../shared/repo-types'
@@ -102,6 +103,7 @@ export class RepoLifecycleOperations {
       repoLifecycleOperationsContext
     ].runtime.state.repos.filter((r) => !(r.id === id && getRepoExecutionHostId(r) === hostId))
     if (repoRemoved) {
+      notifyLegacyTerminalCatalogChanged(this[repoLifecycleOperationsContext].runtime.state)
       bumpLocalWorktreeScanGeneration(id)
     }
     const idStillPresent = this[repoLifecycleOperationsContext].runtime.state.repos.some(

@@ -1,3 +1,5 @@
+import { retireRemovedScopedTerminalRow } from '../../pty/legacy-terminal-restore-ownership'
+import { legacyTerminalIdentityClaims } from './legacy-terminal-identity-claims'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { sanitizeWorkspaceSessionTerminalRetirements } from '../../runtime/terminal/surface/mobile-session-terminal-persistence-retirement'
@@ -96,7 +98,34 @@ export function setLocalWorkspaceSession(
   if (remappedLeases.changed) {
     context.runtime.state.sshRemotePtyLeases = remappedLeases.leases
   }
-  session = preserveMissingWorkspaceSessionTerminalBindings(session, prior, context.bindingRecovery)
+  const claims = legacyTerminalIdentityClaims(context.runtime)
+  session = preserveMissingWorkspaceSessionTerminalBindings(
+    session,
+    prior,
+    context.bindingRecovery,
+    {
+      identityAuthority: claims,
+      observeRow: claims
+        ? (workspace, row, layout) =>
+            claims.observeRow(workspace, row, layout, session.remoteSessionIdsByTabId?.[row.id])
+        : undefined,
+      observeLayout: claims?.observeLayout.bind(claims),
+      isLocalWorkspace: claims?.isLocalWorkspace.bind(claims),
+      retirePriorRow:
+        claims && prior
+          ? (workspace, row, survives, retainedLeaves) =>
+              retireRemovedScopedTerminalRow(
+                claims,
+                workspace,
+                row,
+                prior,
+                session,
+                survives,
+                retainedLeaves
+              )
+          : undefined
+    }
+  )
   session = pruneLocalTerminalScrollbackBuffers(session, context.runtime.state.repos)
   if (!deferSnapshotFiles) {
     const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(

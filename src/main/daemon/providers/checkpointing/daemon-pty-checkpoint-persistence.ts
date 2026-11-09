@@ -1,3 +1,4 @@
+import type { TerminalHistoryCheckpointReceipt } from '../../history/storage/terminal-history-root'
 import { buildDurableCheckpointSnapshot } from './daemon-durable-history-snapshot'
 import { DaemonPtyCheckpointScheduler } from './daemon-pty-checkpoint-scheduler'
 import type { SnapshotCheckpointResult } from '../adapter/daemon-pty-runtime-state'
@@ -7,12 +8,18 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
   // Defer without appending so cooldown preserves a consistent log prefix; keep the session dirty for retry.
   protected async writeSessionCheckpoint(
     sessionId: string,
-    opts: { final: boolean; teardown: boolean }
+    opts: { final: boolean; teardown: boolean },
+    receipt?: TerminalHistoryCheckpointReceipt
   ): Promise<'done' | 'deferred'> {
     if (!this.supportsIncrementalCheckpoints) {
       const result = await this.client.request<GetSnapshotResult>('getSnapshot', { sessionId })
       if (result.snapshot && this.historyManager) {
-        const checkpoint = await this.historyManager.checkpoint(sessionId, result.snapshot)
+        const checkpoint = await this.historyManager.checkpoint(
+          sessionId,
+          result.snapshot,
+          undefined,
+          receipt
+        )
         return checkpoint === 'retryable' ? 'deferred' : 'done'
       }
       return 'done'
@@ -22,11 +29,15 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         return 'deferred'
       }
       // Drain and snapshot atomically so warm reattach cannot append records already in the checkpoint.
-      const checkpoint = await this.takeSnapshotAndCheckpoint(sessionId, {
-        teardown: opts.teardown,
-        forceLiveSnapshot: this.sessionsNeedingLiveCheckpoint.has(sessionId),
-        requireContinuityProof: this.sessionsNeedingContinuityCheckpoint.has(sessionId)
-      })
+      const checkpoint = await this.takeSnapshotAndCheckpoint(
+        sessionId,
+        {
+          teardown: opts.teardown,
+          forceLiveSnapshot: this.sessionsNeedingLiveCheckpoint.has(sessionId),
+          requireContinuityProof: this.sessionsNeedingContinuityCheckpoint.has(sessionId)
+        },
+        receipt
+      )
       if (checkpoint.checkpoint === 'retryable') {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
@@ -48,10 +59,14 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
       }
-      const checkpoint = await this.takeSnapshotAndCheckpoint(sessionId, {
-        teardown: false,
-        forceLiveSnapshot: true
-      })
+      const checkpoint = await this.takeSnapshotAndCheckpoint(
+        sessionId,
+        {
+          teardown: false,
+          forceLiveSnapshot: true
+        },
+        receipt
+      )
       if (checkpoint.checkpoint === 'retryable') {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
@@ -67,7 +82,8 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
     const appendResult = await this.historyManager.appendIncrements(
       sessionId,
       take.seq,
-      take.records
+      take.records,
+      receipt
     )
     if (appendResult === 'needs-checkpoint') {
       // The emulator already contains these records; a full snapshot can replace the failed append.
@@ -75,10 +91,14 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
       }
-      const checkpoint = await this.takeSnapshotAndCheckpoint(sessionId, {
-        teardown: false,
-        forceLiveSnapshot: true
-      })
+      const checkpoint = await this.takeSnapshotAndCheckpoint(
+        sessionId,
+        {
+          teardown: false,
+          forceLiveSnapshot: true
+        },
+        receipt
+      )
       if (checkpoint.checkpoint === 'retryable') {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         return 'deferred'
@@ -93,7 +113,8 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       teardown: boolean
       forceLiveSnapshot?: boolean
       requireContinuityProof?: boolean
-    }
+    },
+    receipt?: TerminalHistoryCheckpointReceipt
   ): Promise<SnapshotCheckpointResult> {
     const take = await this.client.request<TakePendingOutputResult | null>('takePendingOutput', {
       sessionId,
@@ -115,9 +136,14 @@ export abstract class DaemonPtyCheckpointPersistence extends DaemonPtyCheckpoint
       // Set only inside an exclusive final pass (Sleep or quit), so no other checkpoint sees it.
       const probedCwd = this.probedShellCwds.get(sessionId)
       const snapshot = probedCwd ? { ...durable, cwd: probedCwd } : durable
-      const checkpoint = await this.historyManager.checkpoint(sessionId, snapshot, {
-        pendingOutputSeq: take.seq
-      })
+      const checkpoint = await this.historyManager.checkpoint(
+        sessionId,
+        snapshot,
+        {
+          pendingOutputSeq: take.seq
+        },
+        receipt
+      )
       if (checkpoint === 'retryable') {
         this.sessionsNeedingFullCheckpoint.add(sessionId)
         this.sessionsNeedingLiveCheckpoint.add(sessionId)

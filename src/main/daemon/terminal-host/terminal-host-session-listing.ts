@@ -64,3 +64,23 @@ export function hasLiveTerminalHostSessions(sessions: ReadonlyMap<string, Sessio
   }
   return hasLive
 }
+
+export function createTerminalHostReservationListing(
+  authorityGeneration: string,
+  sessions: ReadonlyMap<string, unknown>,
+  pending: ReadonlyMap<string, unknown>,
+  teardown: { reservedSessionIds(): Iterable<string> }
+) {
+  return (preparingSessionIds: Iterable<string>) => ({
+    complete: true as const,
+    authorityGeneration,
+    sessionIds: [
+      ...new Set([
+        ...sessions.keys(),
+        ...pending.keys(),
+        ...teardown.reservedSessionIds(),
+        ...preparingSessionIds
+      ])
+    ]
+  })
+}

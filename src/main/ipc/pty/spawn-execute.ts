@@ -1,5 +1,12 @@
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
+import { stageSelectedTerminal } from '../../pty/selected-terminal-retirement'
+import { retainSelectedTerminalHistory } from '../../pty/pty-history-preserving-termination'
+import {
+  selectedLegacyIdentity,
+  assertSelectedLegacyIdentityOpen
+} from './pane/legacy-pane-identity-selection'
 import type { PtySpawnResult } from '../../providers/pty-provider-contract'
-import { ptyIncarnationById } from './provider/ownership-state'
+import { ptyIncarnationById, restorePtyIncarnation } from './provider/ownership-state'
 import { ensureWslHookRelayForReattach } from '../../agent-hooks/wsl-relay/wsl-hook-relay-reattach'
 import {
   noteWslDistroWoken,
@@ -80,6 +87,8 @@ export async function executePtySpawn(
       : 0
     ctx.spawnTiming?.mark('options')
     const validateDispatch = (): void => {
+      assertSelectedLegacyIdentityOpen(ctx.spawnOptions)
+      ctx.paneSpawnOperation?.legacyRestore?.selection?.follow(args)
       facts.validateDispatch?.()
       if (ctx.paneSpawnOperation?.mustExist && args.worktreeId && args.tabId && args.leafId) {
         assertPaneStillExists(
@@ -135,7 +144,7 @@ export async function executePtySpawn(
             assertSpawnRegistrationAllowed(ctx.deps.runtime, providerResult)
             if (providerResult.incarnationId) {
               // In-process providers cannot list controller claims; record exact incarnation before ownership promotion.
-              ptyIncarnationById.set(providerResult.id, providerResult.incarnationId)
+              restorePtyIncarnation(providerResult.id, providerResult.incarnationId)
             }
             const providerEnsure = providerResult.agentSessionEnsure
             return {
@@ -194,6 +203,19 @@ export async function executePtySpawn(
       facts.reportPtySpawnCommitted?.()
       ctx.stablePaneOwner = null
       ctx.rejectedRegistrationCandidate = ctx.result
+    }
+    if (selectedLegacyIdentity(ctx.args)) {
+      retainSelectedTerminalHistory(ctx.result)
+      if (ctx.deps.store && ctx.args.worktreeId && ctx.args.tabId && ctx.args.leafId) {
+        stageSelectedTerminal(ctx.result, {
+          attempt: selectedLegacyIdentity(ctx.args)?.attempt,
+          authority: ctx.deps.store.legacyTerminalIdentityAuthority,
+          workspace: ctx.args.worktreeId,
+          paneKey: makePaneKey(ctx.args.tabId, ctx.args.leafId),
+          provider: ctx.provider,
+          result: ctx.result
+        })
+      }
     }
     if (ctx.result.isReattach || ctx.result.agentSessionEnsure?.disposition === 'adopted') {
       ctx.result.isReattach = true

@@ -1,3 +1,4 @@
+import { carrySelectedLegacyIdentity } from './pane/legacy-pane-identity-selection'
 import { withClaudeAgentViewPlugin } from '../../../shared/claude-agent-view-launch'
 import { resolveStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
@@ -243,6 +244,7 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
         : undefined
     }
   }
+  carrySelectedLegacyIdentity(args, spawnOptions)
   return { spawnOptions, env, launchCommand }
 }
 

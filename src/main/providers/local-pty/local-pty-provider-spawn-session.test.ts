@@ -181,6 +181,23 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('spawn', () => {
+    it('allocates independent scoped terminal identities for fresh fallback spawns, including numeric hints', async () => {
+      const first = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        worktreeId: 'project::/first',
+        sessionId: '9',
+        isNewSession: true
+      })
+      const second = await provider.spawn({ cols: 80, rows: 24, worktreeId: 'project::/second' })
+      expect(first.id).toMatch(/^project::\/first@@[a-f0-9]{8}$/)
+      expect(second.id).toMatch(/^project::\/second@@[a-f0-9]{8}$/)
+      expect(provider.getPtyProcess(first.id)).toBe(mockProc)
+      expect(provider.getPtyProcess(second.id)).toBe(mockProc)
+      expect(first.isReattach).toBeUndefined()
+      expect(second.isReattach).toBeUndefined()
+    })
+
     it('retires buffered output and synchronous Bun exit before replying to spawn', async () => {
       const disposeData = vi.fn()
       const disposeExit = vi.fn()

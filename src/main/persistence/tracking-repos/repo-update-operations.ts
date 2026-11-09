@@ -1,3 +1,4 @@
+import { notifyLegacyTerminalCatalogChanged } from '../loading-store/legacy-terminal-identity-claims'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -254,6 +255,13 @@ export class RepoUpdatePersistenceOperations {
       }
     }
     Object.assign(repo, sanitizedUpdates)
+    if (
+      ['path', 'projectGroupId', 'connectionId', 'executionHostId', 'orcadRetained'].some((key) =>
+        Object.hasOwn(sanitizedUpdates, key)
+      )
+    ) {
+      notifyLegacyTerminalCatalogChanged(this.state)
+    }
     this.bumpLocalWorktreeScanGeneration(repo.id)
     this.syncProjectHostSetupCompatibilityState()
     this.scheduleSave()

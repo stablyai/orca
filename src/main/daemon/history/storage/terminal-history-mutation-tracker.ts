@@ -12,9 +12,19 @@ export class TerminalHistoryMutationTracker {
     return operation
   }
 
+  waitIfPending(sessionId: string): Promise<void> | undefined {
+    return this.pending.has(sessionId) ? this.wait(sessionId) : undefined
+  }
+
   async wait(sessionId: string): Promise<void> {
     while (this.pending.has(sessionId)) {
       await Promise.allSettled(this.pending.get(sessionId)!)
+    }
+  }
+
+  async waitAll(): Promise<void> {
+    while (this.pending.size) {
+      await Promise.all([...this.pending.keys()].map((id) => this.wait(id)))
     }
   }
 

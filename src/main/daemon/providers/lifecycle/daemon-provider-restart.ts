@@ -19,6 +19,7 @@ import {
   disposeProviderSubscriptionsOnly,
   getCurrentDaemonAdapter,
   getLegacyDaemonAdapters,
+  getAllDaemonAdapters,
   type DaemonProvider
 } from './daemon-provider-routing'
 import { getDaemonProvider, getDaemonSpawner, replaceDaemonProvider } from './daemon-provider-state'
@@ -187,6 +188,14 @@ async function runRestartDaemon(
   // Dispose only old subscriptions after adoption; full disposal would kill shared legacy adapters.
   disposeProviderSubscriptionsOnly(currentAdapter)
 
+  const retained = new Set(getAllDaemonAdapters(newProvider))
+  for (const old of getAllDaemonAdapters(currentAdapter)) {
+    if (!retained.has(old)) {
+      void old
+        .retire()
+        .catch((error: unknown) => console.warn('[daemon] retired adapter drain failed', error))
+    }
+  }
   replaceDaemonProvider(newProvider)
 
   rebindLocalProviderListeners()

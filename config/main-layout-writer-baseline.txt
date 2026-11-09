@@ -17,12 +17,14 @@
 2 src/main/orca-profiles/profile-project-transfer.ts
 9 src/main/orca-profiles/profile-session-owner-transfer.ts
 3 src/main/persistence/leasing-ssh-ptys/ssh-pty-binding-cleanup.ts
+5 src/main/persistence/loading-store/legacy-terminal-binding-replay.ts
 1 src/main/persistence/loading-store/loaded-state-parsing.ts
 1 src/main/persistence/loading-store/metadata-lineage-operations.ts
 1 src/main/persistence/loading-store/mobile-tab-selection-persistence.ts
 1 src/main/persistence/loading-store/normalize-loaded-profile-state.ts
-8 src/main/persistence/loading-store/pty-binding-persistence.ts
-10 src/main/persistence/loading-store/pty-binding-session-update.ts
+2 src/main/persistence/loading-store/pty-binding-durability-only.ts
+3 src/main/persistence/loading-store/pty-binding-persistence.ts
+14 src/main/persistence/loading-store/pty-binding-session-update.ts
 10 src/main/persistence/loading-store/repo-lifecycle-operations.ts
 10 src/main/persistence/loading-store/session-host-partitions.ts
 9 src/main/persistence/loading-store/session-snapshot-operations.ts

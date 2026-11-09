@@ -8,7 +8,8 @@ import type { WorkspaceSessionState } from '../../shared/workspace-session/works
 /** Suppress recorded closes across all writers until TTL expiry; failed-close rollback bypasses the fence. */
 export function dropClosedTerminalTabs(
   session: WorkspaceSessionState,
-  now = Date.now()
+  now = Date.now(),
+  onDropped?: (workspace: string, tabId: string) => void
 ): WorkspaceSessionState {
   const records = session.closedTerminalTabTombstonesByTabId
   if (!records) {
@@ -26,6 +27,7 @@ export function dropClosedTerminalTabs(
       hasClosedTerminalTabRecord(records, tabId, undefined, now) &&
       workspaceSessionListsTerminalTab(next, worktreeId, tabId)
     ) {
+      onDropped?.(worktreeId, tabId)
       next = closeTerminalTabInWorkspaceSession(next, worktreeId, tabId, { force: true }).session
     }
   }

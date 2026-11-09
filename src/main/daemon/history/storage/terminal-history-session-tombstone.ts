@@ -94,7 +94,7 @@ export async function removeTerminalHistorySessionTrees(
   }
 }
 
-async function removeSessionOwnedTree(basePath: string, dir: string): Promise<void> {
+export async function removeSessionOwnedTree(basePath: string, dir: string): Promise<void> {
   if (!existsSync(dir)) {
     return
   }
@@ -105,6 +105,18 @@ async function removeSessionOwnedTree(basePath: string, dir: string): Promise<vo
   }
   // Fall back to awaited deletion when renaming fails.
   await removeHostTree(dir)
+}
+
+/** Captured generations must leave the reusable path before any asynchronous deletion. */
+export function tombstoneCapturedSessionTree(basePath: string, dir: string): void {
+  if (!existsSync(dir)) {
+    return
+  }
+  const tombstone = tombstoneSessionTree(basePath, dir)
+  if (!tombstone) {
+    throw new Error('terminal_history_tombstone_unavailable')
+  }
+  scheduleSessionTreeRemoval(tombstone)
 }
 
 export function schedulePendingSessionTreeRemovals(basePath: string): void {

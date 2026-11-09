@@ -1,3 +1,5 @@
+import { legacyPaneRestoreAttempt } from './pane/legacy-pane-identity-selection'
+import { publishTerminalCompletionSurface } from './pane/terminal-completion-surface'
 import { agentHookServer } from '../../agent-hooks/server/agent-hook-server'
 import { clearMigrationUnsupportedPtysForPaneKey } from '../../agent-hooks/observations/migration-unsupported-pty-state'
 import { registerPty } from '../../memory/pty-registry'
@@ -125,6 +127,10 @@ export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOu
         ? { launchEnv: input.codexLaunchEnv }
         : {})
   })
+  const attempt = legacyPaneRestoreAttempt(args)
+  if (attempt && input.preAllocatedHandle) {
+    publishTerminalCompletionSurface(input.response, result, attempt, input.preAllocatedHandle)
+  }
   return { kind: 'committed', result: input.response }
 }
 

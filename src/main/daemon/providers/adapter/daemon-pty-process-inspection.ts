@@ -233,7 +233,7 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
             historyManager.suspendSession(session.sessionId, recoveryFreeze)
             return
           }
-          historyManager.reopenSession(session.sessionId, recoveryFreeze)
+          await historyManager.reopenSession(session.sessionId, recoveryFreeze)
         } finally {
           historyManager.abandonRecoveryFreeze(recoveryFreeze)
         }

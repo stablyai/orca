@@ -1,3 +1,4 @@
+import { notifyLegacyTerminalCatalogChanged } from '../loading-store/legacy-terminal-identity-claims'
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -185,6 +186,7 @@ export function reassignSshTargetId(
     operations.state.repos = [...operations.state.repos]
     operations.state.automations = [...(operations.state.automations ?? [])]
     operations.state.automationRuns = [...(operations.state.automationRuns ?? [])]
+    notifyLegacyTerminalCatalogChanged(operations.state)
     operations.scheduleSave()
   }
   return [...repoIds]

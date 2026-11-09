@@ -117,7 +117,7 @@
 1 src/main/codex-accounts/codex-login-auth-snapshot.ts
 5 src/main/codex-accounts/codex-managed-home-lifecycle.ts
 6 src/main/codex-accounts/codex-managed-home-path.ts
-17 src/main/codex-accounts/fs-utils.ts
+15 src/main/codex-accounts/fs-utils.ts
 1 src/main/codex-accounts/guest-codex-account-homes.ts
 6 src/main/codex-accounts/host-codex-managed-home-ownership.ts
 2 src/main/codex-accounts/legacy-shared-auth-migration.ts
@@ -209,11 +209,13 @@
 1 src/main/daemon/history/restoration/terminal-history-checkpoint-reader.ts
 1 src/main/daemon/history/restoration/terminal-history-legacy-scrollback-restore.ts
 1 src/main/daemon/history/storage/history-manager.ts
+5 src/main/daemon/history/storage/terminal-history-identity-install.ts
 3 src/main/daemon/history/storage/terminal-history-metadata.ts
 2 src/main/daemon/history/storage/terminal-history-permission-repair.ts
 8 src/main/daemon/history/storage/terminal-history-recovery-quarantine.ts
+1 src/main/daemon/history/storage/terminal-history-root-registry.ts
 1 src/main/daemon/history/storage/terminal-history-session-files.ts
-3 src/main/daemon/history/storage/terminal-history-session-tombstone.ts
+4 src/main/daemon/history/storage/terminal-history-session-tombstone.ts
 6 src/main/daemon/history/storage/terminal-history-session-writer.ts
 1 src/main/daemon/launch/daemon-bundle-staleness.ts
 1 src/main/daemon/launch/daemon-endpoint-adoption.ts
@@ -248,6 +250,7 @@
 17 src/main/emulator/serve-sim-runtime-materializer.ts
 12 src/main/external-editors/external-editor-launch.ts
 9 src/main/filesystem/durable-file-write.ts
+1 src/main/filesystem/publish-file-without-overwrite.ts
 2 src/main/filesystem/rolling-file-backup.ts
 2 src/main/foreign-sqlite-readers/foreign-sqlite-reader-entry-path.ts
 1 src/main/foreign-sqlite-readers/foreign-sqlite-reader-spawn.ts
@@ -356,7 +359,7 @@
 4 src/main/orcad/orcad-host-account-launch-env-store.ts
 1 src/main/orcad/orcad-host-adapters.ts
 2 src/main/orcad/orcad-idle-stop-record.ts
-3 src/main/orcad/orcad-instance-lock-hold.ts
+4 src/main/orcad/orcad-instance-lock-hold.ts
 16 src/main/orcad/orcad-instance-lock-reclaim.ts
 4 src/main/orcad/orcad-instance-lock.ts
 7 src/main/orcad/orcad-local-serve-selection.ts

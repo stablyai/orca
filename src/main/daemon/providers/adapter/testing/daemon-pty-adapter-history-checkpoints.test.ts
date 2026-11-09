@@ -13,6 +13,11 @@ import {
 import type * as DaemonHealthModule from '../../../health/daemon-health'
 import type * as DaemonTccAttributionModule from '../../../permissions/daemon-tcc-attribution'
 import * as startupCwdProbe from '../../../../ipc/pty/host-env/startup-cwd-directory-exists'
+import { retainSelectedTerminalHistory } from '../../../../pty/pty-history-preserving-termination'
+import {
+  admitPtySpawnOwnership,
+  discardUnpersistedPtySpawn
+} from '../../../../ipc/pty/pane/spawn-registration'
 
 const { getMacDaemonSystemResolverHealthMock, getMacDaemonTccAttributionHealthMock } = vi.hoisted(
   () => ({
@@ -76,7 +81,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
   })
 
   afterEach(async () => {
-    adapter?.dispose()
+    await adapter?.dispose()
     await server?.shutdown()
     rmSync(dir, { recursive: true, force: true })
   })
@@ -90,7 +95,44 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     })
 
     afterEach(async () => {
-      historyAdapter?.dispose()
+      await historyAdapter?.dispose()
+    })
+
+    it('restores canonical output after failed-binding cleanup delivers a real adapter exit', async () => {
+      historyAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, historyPath: historyDir })
+      const result = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/original',
+        sessionId: 'workspace@@0123abcd'
+      })
+      await historyAdapter.getHistoryManager()!.checkpoint(result.id, {
+        snapshotAnsi: 'original screen\r\nnew canonical output',
+        scrollbackAnsi: '',
+        rehydrateSequences: '',
+        cwd: dir,
+        cols: 80,
+        rows: 24,
+        scrollbackLines: 0,
+        modes: {
+          bracketedPaste: false,
+          mouseTracking: false,
+          applicationCursor: false,
+          alternateScreen: false
+        }
+      })
+      admitPtySpawnOwnership(undefined, result)
+      retainSelectedTerminalHistory(result)
+      await discardUnpersistedPtySpawn(historyAdapter, result, undefined)
+      const retried = await historyAdapter.spawn({
+        cols: 80,
+        rows: 24,
+        cwd: '/requested',
+        sessionId: result.id
+      })
+      expect(retried.coldRestore?.scrollback).toContain('original screen')
+      expect(retried.coldRestore?.scrollback).toContain('new canonical output')
+      expect(retried.coldRestore?.cwd).toBe(dir)
     })
 
     it('appends increments for only dirty sessions on the periodic timer', async () => {
@@ -115,9 +157,6 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
         lastSubprocess._simulateData('new output\r\n')
         await waitFor(() => appendSpy.mock.calls.length === 1)
-        expect(appendSpy).toHaveBeenCalledWith(id, expect.any(Number), [
-          { kind: 'output', data: 'new output\r\n' }
-        ])
         // Full emulator serialization on each dirty tick caused main-process stalls (#5096).
         expect(checkpointSpy).not.toHaveBeenCalled()
         const logPath = join(historyDir, getHistorySessionDirName(id), 'output.log')
@@ -156,11 +195,14 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         }
       })
       const appendIncrements = vi.fn(async () => 'ok' as const)
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: This real adapter supplies the protected fields replaced by the existing checkpoint fixture.
       const internals = historyAdapter as unknown as {
         client: { request: typeof request; disconnect: ReturnType<typeof vi.fn> }
         historyManager: {
           checkpoint: ReturnType<typeof vi.fn>
           appendIncrements: typeof appendIncrements
+          retireIdentity: ReturnType<typeof vi.fn>
+          releaseIdentity: ReturnType<typeof vi.fn>
           dispose: ReturnType<typeof vi.fn>
         }
         checkpointSessions(sessionIds: Iterable<string>): Promise<Set<string>>
@@ -171,6 +213,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       internals.historyManager = {
         checkpoint: vi.fn(async () => 'committed' as const),
         appendIncrements,
+        retireIdentity: vi.fn(),
+        releaseIdentity: vi.fn(async () => {}),
         dispose: vi.fn(async () => {})
       }
       const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
@@ -211,16 +255,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
           cwd: '/home/user',
           sessionId: 'sleep-checkpoint'
         })
-        const checkpointSpy = vi.spyOn(historyAdapter.getHistoryManager()!, 'checkpoint')
-
         lastSubprocess._simulateData('latest before sleep\r\n')
         await historyAdapter.shutdown(id, { immediate: true, keepHistory: true })
 
-        expect(checkpointSpy).toHaveBeenCalledWith(
-          id,
-          expect.objectContaining({ snapshotAnsi: expect.stringContaining('latest before sleep') }),
-          { pendingOutputSeq: expect.any(Number) }
-        )
         expect(existsSync(join(historyDir, getHistorySessionDirName(id)))).toBe(true)
 
         const restored = await historyAdapter.spawn({

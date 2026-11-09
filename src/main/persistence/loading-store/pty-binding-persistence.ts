@@ -1,7 +1,6 @@
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
 import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
-import { rollbackFailedPtyBinding } from './pty-binding-write-rollback'
 import { cloneWorkspaceSessionState } from '../restoring-sessions/session-owner-fields'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../restoring-sessions/workspace-session-write-rollback'
 import { clearReplacedPaneBinding } from './replaced-pane-binding'
@@ -15,9 +14,13 @@ import {
   type UnstartedPaneKept
 } from '../terminal-topology/unstarted-pane-withdraw'
 import { evaluatePtyBindingFastLane } from './pty-binding-fast-lane'
-import { durabilityOnlyBindingResult, isDurabilityOnlyMatch } from './pty-binding-durability-only'
+import {
+  durabilityOnlyBindingResult,
+  isDurabilityOnlyMatch,
+  markPtyBindingSessionDirty
+} from './pty-binding-durability-only'
 import { ptyBindingIsRefused } from './pty-binding-refusals'
-import { applyPtyBinding } from './pty-binding-session-update'
+import { writePtyBinding, capturedLegacyTerminalBinding } from './pty-binding-session-update'
 import {
   reportPtyBindingOwnerConflict,
   reportPtyBindingPlacement,
@@ -34,8 +37,7 @@ import {
   admitPane,
   moveLeaf,
   topologyCommitContext,
-  withdrawPane,
-  type TerminalTopologyCommitContext
+  withdrawPane
 } from '../terminal-topology/terminal-topology-commit'
 import type {
   TerminalPaneAdmission,
@@ -60,15 +62,6 @@ type PtyBindingPersistenceOperationsRuntime = Pick<
   | 'ptyBindingGenerations'
 >
 
-function markPtyBindingSessionDirty(
-  runtime: Pick<StoreRuntimeState, 'dirtyProfileStateDomains'>,
-  hostId: ReturnType<typeof resolveHostId>
-): void {
-  runtime.dirtyProfileStateDomains?.add(
-    hostId === LOCAL_EXECUTION_HOST_ID ? 'workspaceSession' : 'workspaceSessionsByHostId'
-  )
-}
-
 export type PersistPtyBindingArgs = {
   worktreeId: string
   tabId: string
@@ -91,7 +84,7 @@ export type PersistPtyBindingArgs = {
 }
 
 const ptyBindingPersistenceOperationsContext = Symbol('PtyBindingPersistenceOperations')
-type PtyBindingPersistenceOperationsContext = {
+export type PtyBindingPersistenceOperationsContext = {
   runtime: PtyBindingPersistenceOperationsRuntime
   sessions: SessionHostPartitionOperations
 }
@@ -104,6 +97,23 @@ export class PtyBindingPersistenceOperations {
     sessions: SessionHostPartitionOperations
   ) {
     this[ptyBindingPersistenceOperationsContext] = { runtime, sessions }
+  }
+
+  /** Establish only the captured legacy claim durably; canonical binding stays after dispatch. */
+  prepareLegacyTerminalIdentity(
+    claim:
+      | Pick<PersistPtyBindingArgs, 'worktreeId' | 'tabId' | 'leafId' | 'ptyId' | 'incarnationId'>
+      | (() => Pick<
+          PersistPtyBindingArgs,
+          'worktreeId' | 'tabId' | 'leafId' | 'ptyId' | 'incarnationId'
+        >)
+  ): Promise<boolean> {
+    return this.persistPtyBinding(() =>
+      capturedLegacyTerminalBinding(
+        this[ptyBindingPersistenceOperationsContext].sessions.getWorkspaceSession(),
+        typeof claim === 'function' ? claim() : claim
+      )
+    )
   }
 
   /** Preserve the pane while clearing its dead binding; an incarnation fence narrows absence evidence. */
@@ -223,7 +233,14 @@ export class PtyBindingPersistenceOperations {
         return {
           value: true,
           writtenHostIds: [resolvedHostId],
-          rollback: writePtyBinding(this, args, session, resolvedHostId, bindingWorktreeId, paneKey)
+          rollback: writePtyBinding(
+            this[ptyBindingPersistenceOperationsContext],
+            args,
+            session,
+            resolvedHostId,
+            bindingWorktreeId,
+            paneKey
+          )
         }
       })
       span?.finish(outcome)
@@ -237,7 +254,7 @@ export class PtyBindingPersistenceOperations {
   /** Commit detached-tab moves before the renderer mounts the destination. */
   moveTerminalLeafToNewTab(request: TerminalLeafMoveRequest): Promise<TerminalLeafMoveResult> {
     return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
-      moveLeaf(request, this.topology())
+      moveLeaf(request, topologyCommitContext(this[ptyBindingPersistenceOperationsContext]))
     )
   }
 
@@ -246,7 +263,11 @@ export class PtyBindingPersistenceOperations {
     hostId?: string | null
   ): Promise<TerminalPaneAdmissionOutcome> {
     return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
-      admitPane(resolveHostId(hostId), admission, this.topology())
+      admitPane(
+        resolveHostId(hostId),
+        admission,
+        topologyCommitContext(this[ptyBindingPersistenceOperationsContext])
+      )
     )
   }
 
@@ -259,64 +280,17 @@ export class PtyBindingPersistenceOperations {
     const resolved = resolveHostId(hostId)
     return this[ptyBindingPersistenceOperationsContext].runtime.runDurableMutation(
       stillStarting
-        ? withdrawUnstartedPane(resolved, pane, this.topology(), stillStarting)
-        : withdrawPane(resolved, pane, this.topology())
+        ? withdrawUnstartedPane(
+            resolved,
+            pane,
+            topologyCommitContext(this[ptyBindingPersistenceOperationsContext]),
+            stillStarting
+          )
+        : withdrawPane(
+            resolved,
+            pane,
+            topologyCommitContext(this[ptyBindingPersistenceOperationsContext])
+          )
     )
-  }
-
-  private topology(): TerminalTopologyCommitContext {
-    return topologyCommitContext(this[ptyBindingPersistenceOperationsContext])
-  }
-}
-
-function writePtyBinding(
-  owner: PtyBindingPersistenceOperations,
-  args: PersistPtyBindingArgs,
-  session: WorkspaceSessionState,
-  resolvedHostId: ReturnType<typeof resolveHostId>,
-  bindingWorktreeId: string,
-  paneKey: string
-): () => void {
-  const { runtime, sessions } = owner[ptyBindingPersistenceOperationsContext]
-  const sessionBeforeBinding = cloneWorkspaceSessionState(session)
-  const restore = (restoredSession = sessionBeforeBinding): void => {
-    if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
-      runtime.state.workspaceSession = restoredSession
-    } else {
-      runtime.state.workspaceSessionsByHostId = {
-        ...runtime.state.workspaceSessionsByHostId,
-        [resolvedHostId]: restoredSession
-      }
-    }
-  }
-  try {
-    if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
-      runtime.state.workspaceSessionsByHostId = {
-        ...runtime.state.workspaceSessionsByHostId,
-        [resolvedHostId]: session
-      }
-    }
-    applyPtyBinding(args, session, bindingWorktreeId, paneKey)
-    bumpPtyBindingGeneration(runtime, resolvedHostId, args.leafId)
-    markPtyBindingSessionDirty(runtime, resolvedHostId)
-    const boundSession = cloneWorkspaceSessionState(session)
-    return () => {
-      const current = sessions.getWorkspaceSession(resolvedHostId)
-      const rolledBack = rollbackFailedPtyBinding(
-        sessionBeforeBinding,
-        boundSession,
-        current,
-        bindingWorktreeId,
-        args.tabId,
-        args.leafId
-      )
-      if (rolledBack !== current) {
-        restore(rolledBack)
-        bumpPtyBindingGeneration(runtime, resolvedHostId, args.leafId)
-      }
-    }
-  } catch (error) {
-    restore()
-    throw error
   }
 }

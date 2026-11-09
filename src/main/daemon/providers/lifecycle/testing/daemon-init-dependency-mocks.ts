@@ -124,6 +124,7 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
     readonly establishLifecycleLease: Mock
     readonly shutdown: Mock
     readonly dispose: Mock
+    readonly retire: Mock
     readonly disconnectOnly: Mock
     readonly hasRetiredForIdle: Mock
     readonly onData: Mock
@@ -148,7 +149,8 @@ export function createDaemonInitModuleFactories(state: DaemonInitMockState) {
         }
       })
       this.shutdown = vi.fn(async () => {})
-      this.dispose = vi.fn()
+      this.dispose = vi.fn(async () => {})
+      this.retire = vi.fn(async () => {})
       const disconnectOnlyError = disconnectOnlyErrors.shift()
       this.disconnectOnly = vi.fn(async () => {
         if (disconnectOnlyError) {

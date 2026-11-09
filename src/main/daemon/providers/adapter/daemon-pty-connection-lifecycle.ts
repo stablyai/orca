@@ -41,6 +41,9 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
       // Release the temporary respawn pair once permanent reconnect succeeds or fails.
       this.releasePendingRespawnAdoptionLease()
     }
+    if (this.retired) {
+      throw new Error('Retired daemon adapter')
+    }
     this.recordAuthenticatedIdentity()
     // Sample before installing routing so a fresh connection resyncs daemon-local background state.
     const isFreshConnection = this.removeEventListener === null
@@ -72,6 +75,11 @@ export abstract class DaemonPtyConnectionLifecycle extends DaemonPtyEventSubscri
     if (previous) {
       // Recheck capabilities for each incarnation: the replacement may support getSize.
       this.getSizeUnsupported = false
+    }
+    if (previous) {
+      for (const retirement of this.historyRetirements.values()) {
+        void retirement.finish(true).catch(() => {})
+      }
     }
     this.lastAuthenticatedIdentity = { ...current }
     this.exactDaemonIncarnation = exactDaemonIncarnationForPidRecord(current, this.pidRecord)

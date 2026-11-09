@@ -99,7 +99,8 @@ export function commitLayoutCommand(
   if (effects) {
     run.noteEffects?.(effects)
   }
-  return written(routed, routed.ok ? changes.filter(({ change }) => change.value.ok) : [], context)
+  const applied = routed.ok ? changes.filter(({ change }) => change.value.ok) : []
+  return written(routed, applied, context)
 }
 
 /** Any partition refusal prevents the whole write. */
@@ -116,7 +117,11 @@ export function commitLayoutCommandsAcrossPartitions(
   return written(first, changes, context)
 }
 
-type PartitionChange = { hostId: ExecutionHostId; change: PaneLayoutChange<LayoutApplyOutcome> }
+type PartitionChange = {
+  hostId: ExecutionHostId
+  workspace: string
+  change: PaneLayoutChange<LayoutApplyOutcome>
+}
 
 function changeIn(
   hostId: ExecutionHostId,
@@ -127,6 +132,7 @@ function changeIn(
   const { editorViews } = context
   return {
     hostId,
+    workspace: command.workspace,
     change: applyCommandToSession(
       hostId,
       context.getSession(hostId),
@@ -144,6 +150,20 @@ function written(
   context: TerminalTopologyCommitContext
 ): DurableProfileStateMutation<LayoutApplyOutcome> {
   const { editorViews } = context
+  const handoffRestores: (() => void)[] = []
+  for (const { hostId, workspace, change } of applied) {
+    if (hostId === LOCAL_EXECUTION_HOST_ID && change.session && change.terminalTabIds?.length) {
+      const restore = context.terminalWrite?.(
+        workspace,
+        context.getSession(hostId),
+        keepFrozen(hostId, change.session, context),
+        change.terminalTabIds
+      )
+      if (restore) {
+        handoffRestores.push(restore)
+      }
+    }
+  }
   // View-only changes still need publication even without a durable session write.
   const viewRestores = applied.flatMap(({ hostId, change }) =>
     editorViews && change.views ? [keepPartitionEditorViews(editorViews, hostId, change.views)] : []
@@ -163,6 +183,6 @@ function written(
   if (sessionRestores.length === 0) {
     return { value, persist: false }
   }
-  const restores = [...viewRestores, ...sessionRestores]
+  const restores = [...viewRestores, ...sessionRestores, ...handoffRestores.toReversed()]
   return { value, rollback: () => restores.forEach((restore) => restore()) }
 }

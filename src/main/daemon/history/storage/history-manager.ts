@@ -1,34 +1,32 @@
+import {
+  releaseTerminalHistoryManager,
+  registerTerminalHistoryManager,
+  closeTerminalHistoryWriter,
+  settleCapturedTerminalHistoryWriter,
+  registerRecoveredTerminalHistoryWriter,
+  reopenTerminalHistoryWriter
+} from './terminal-history-manager-release'
 import { join } from 'node:path'
-import { randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { getHistorySessionDirName } from './history-paths'
-import { ensurePrivateDir } from '../../endpoint/publication/daemon-private-file-modes'
-import { clearReplayableTerminalHistorySessionFiles } from './terminal-history-session-files'
-import {
-  fingerprintTerminalHistorySession,
-  hasTerminalHistoryRecoveryProtection,
-  quarantineTerminalHistorySession,
-  type ActiveHistoryRecoveryFreeze,
-  type HistoryRecoveryFreeze
-} from './terminal-history-recovery-quarantine'
+import type { HistoryRecoveryFreeze } from './terminal-history-recovery-quarantine'
+import { openTerminalHistoryWriter } from './terminal-history-session-opening'
 import { TerminalHistoryRecoveryFreezes } from './terminal-history-recovery-freezes'
 import {
   removeTerminalHistorySessionTrees,
   schedulePendingSessionTreeRemovals
 } from './terminal-history-session-tombstone'
-import { TerminalHistorySessionWriter } from './terminal-history-session-writer'
+import type { TerminalHistorySessionWriter } from './terminal-history-session-writer'
 import {
-  newTerminalHistoryMeta,
   stampTerminalHistoryResizeModel,
   readTerminalHistoryMetaFromDir,
-  updateTerminalHistoryMeta,
-  writeTerminalHistoryMeta,
   type SessionMeta
 } from './terminal-history-metadata'
 import type { PendingOutputRecord } from '../../protocol/daemon-rpc-contract'
 import type { TerminalSnapshot } from '../../protocol/terminal-snapshot'
 import { TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES } from './terminal-history-file-limits'
 import { TerminalHistoryMutationTracker } from './terminal-history-mutation-tracker'
+import { terminalHistoryRoot, type TerminalHistoryCheckpointReceipt } from './terminal-history-root'
 import type {
   HistoryCheckpointResult,
   HistoryManagerOptions,
@@ -39,7 +37,11 @@ export class HistoryManager {
   private writers = new Map<string, TerminalHistorySessionWriter>()
   private disabledSessions = new Set<string>()
   private mutations = new TerminalHistoryMutationTracker()
+  private lifecycleMutations = new TerminalHistoryMutationTracker()
+  readonly identityRoot: ReturnType<typeof terminalHistoryRoot>
+  private readonly identity: ReturnType<typeof registerTerminalHistoryManager>
   private readonly recoveryFreezes: TerminalHistoryRecoveryFreezes
+  private identityRelease: Promise<void> | undefined
   private onWriteError?: (sessionId: string, error: Error) => void
   private checkpointMaxBytes: number
   /** The hosting daemon's reported model, which its live output (and so a rebuild) follows. */
@@ -53,128 +55,138 @@ export class HistoryManager {
     this.checkpointMaxBytes = opts?.checkpointMaxBytes ?? TERMINAL_HISTORY_CHECKPOINT_MAX_BYTES
     this.hostingResizeModel = opts?.resizeModel ?? (() => null)
     this.recoveryFreezes = new TerminalHistoryRecoveryFreezes(basePath)
+    this.identityRoot = terminalHistoryRoot(basePath)
+    this.identity = registerTerminalHistoryManager(this.identityRoot, {
+      writer: (id) => this.writers.get(id) ?? this.recoveryFreezes.get(id),
+      drain: (id) => Promise.all([this.lifecycleMutations.wait(id), this.mutations.wait(id)]),
+      freeze: (id) => this.recoveryFreezes.freezeDrained(id, this.writers)
+    })
     // Resume reclamation left pending by a quit between tombstoning and deletion.
     schedulePendingSessionTreeRemovals(this.basePath)
   }
 
+  private prepareWriter = (sessionId: string, recoveryFreeze?: HistoryRecoveryFreeze) => ({
+    deadlineMs: this.recoveryFreezes.deadline(recoveryFreeze),
+    prepare: () => {
+      const work = [
+        this.identity.drainRetired(sessionId),
+        this.lifecycleMutations.waitIfPending(sessionId),
+        this.mutations.waitIfPending(sessionId)
+      ].filter((pending) => pending !== undefined)
+      return work.length ? Promise.all(work) : undefined
+    },
+    abandon: () => this.abandonRecoveryFreeze(recoveryFreeze)
+  })
+
   async openSession(sessionId: string, opts: OpenSessionOptions): Promise<void> {
-    let recoveryFreeze = opts.recoveryFreeze
-    try {
-      this.disabledSessions.delete(sessionId)
-      const dir = this.sessionDir(sessionId)
-      recoveryFreeze ??= await this.freezeForRecovery(sessionId)
-      const activeFreeze = this.requireRecoveryFreeze(sessionId, recoveryFreeze)
-
-      if (opts.quarantineUnreadableRecovery) {
-        quarantineTerminalHistorySession(this.basePath, sessionId, activeFreeze.fingerprint ?? null)
-      } else if (hasTerminalHistoryRecoveryProtection(this.basePath, sessionId)) {
-        throw new Error('terminal_history_recovery_protected')
-      } else if (
-        fingerprintTerminalHistorySession(this.basePath, sessionId) !== activeFreeze.fingerprint
-      ) {
-        throw new Error('terminal_history_recovery_generation_changed')
-      }
-      this.recoveryFreezes.release(sessionId)
-      ensurePrivateDir(dir)
-
-      writeTerminalHistoryMeta(dir, newTerminalHistoryMeta(opts, this.hostingResizeModel() ?? null))
-
-      if (!opts.quarantineUnreadableRecovery) {
-        clearReplayableTerminalHistorySessionFiles(dir)
-      }
-
-      this.writers.set(
-        sessionId,
-        new TerminalHistorySessionWriter(dir, true, this.checkpointMaxBytes)
-      )
-    } catch (err) {
-      if (recoveryFreeze) {
-        this.abandonRecoveryFreeze(recoveryFreeze)
-      }
-      this.handleWriteError(sessionId, err)
-    }
-  }
-
-  async freezeForRecovery(sessionId: string): Promise<HistoryRecoveryFreeze> {
-    if (this.recoveryFreezes.has(sessionId)) {
-      throw new Error('terminal_history_recovery_already_frozen')
-    }
-
-    this.writers.delete(sessionId)
-    const handle: HistoryRecoveryFreeze = {
+    this.identityRoot?.willMutate(sessionId)
+    await this.identity.acquire(
       sessionId,
-      token: randomUUID()
-    }
-    const activeFreeze: ActiveHistoryRecoveryFreeze = { handle }
-    this.recoveryFreezes.hold(sessionId, activeFreeze)
-    try {
-      await this.mutations.wait(sessionId)
-      activeFreeze.fingerprint = fingerprintTerminalHistorySession(this.basePath, sessionId)
-      return handle
-    } catch (err) {
-      if (this.recoveryFreezes.get(sessionId) === activeFreeze) {
-        this.recoveryFreezes.release(sessionId)
+      this.prepareWriter(sessionId, opts.recoveryFreeze),
+      (deadlineMs) => {
+        this.disabledSessions.delete(sessionId)
+        openTerminalHistoryWriter(
+          this.basePath,
+          sessionId,
+          opts,
+          deadlineMs,
+          this.writers,
+          this.recoveryFreezes,
+          this.checkpointMaxBytes,
+          this.hostingResizeModel() ?? null,
+          (error) => this.handleWriteError(sessionId, error)
+        )
       }
-      throw err
-    }
-  }
-
-  abandonRecoveryFreeze(freeze?: HistoryRecoveryFreeze): void {
-    const activeFreeze = freeze ? this.recoveryFreezes.get(freeze.sessionId) : undefined
-    if (activeFreeze && activeFreeze.handle === freeze) {
-      this.recoveryFreezes.release(activeFreeze.handle.sessionId)
-    }
-  }
-
-  // Warm reattach must preserve on-disk recovery until the next checkpoint.
-  registerWriter(sessionId: string, recoveryFreeze?: HistoryRecoveryFreeze): void {
-    if (this.writers.has(sessionId)) {
-      return
-    }
-    if (hasTerminalHistoryRecoveryProtection(this.basePath, sessionId)) {
-      this.abandonRecoveryFreeze(recoveryFreeze)
-      return void this.disabledSessions.add(sessionId)
-    }
-    if (recoveryFreeze) {
-      try {
-        const activeFreeze = this.requireRecoveryFreeze(sessionId, recoveryFreeze)
-        if (
-          fingerprintTerminalHistorySession(this.basePath, sessionId) !== activeFreeze.fingerprint
-        ) {
-          throw new Error('terminal_history_recovery_generation_changed')
-        }
-        this.recoveryFreezes.release(sessionId)
-      } catch (err) {
-        this.abandonRecoveryFreeze(recoveryFreeze)
-        this.handleWriteError(sessionId, err)
-        return
-      }
-    } else if (this.recoveryFreezes.has(sessionId)) {
-      return
-    }
-    const dir = this.sessionDir(sessionId)
-    this.writers.set(
-      sessionId,
-      new TerminalHistorySessionWriter(dir, false, this.checkpointMaxBytes)
     )
   }
 
+  async freezeForRecovery(sessionId: string): Promise<HistoryRecoveryFreeze> {
+    this.identityRoot?.willMutate(sessionId)
+    const result = await this.identity.acquire(
+      sessionId,
+      this.prepareWriter(sessionId),
+      (deadlineMs) => this.recoveryFreezes.freeze(sessionId, this.writers, deadlineMs)
+    )
+    if (!result.entered) {
+      throw new Error('terminal_history_writer_admission_unavailable')
+    }
+    return result.value
+  }
+
+  retireIdentity = (tail: (id: string) => Promise<unknown>): void => this.identity.retire(tail)
+
+  abandonRecoveryFreeze(freeze?: HistoryRecoveryFreeze): void {
+    this.recoveryFreezes.abandon(freeze)
+  }
+
+  registerWriter(sessionId: string, recoveryFreeze?: HistoryRecoveryFreeze): Promise<void> {
+    return this.registerRecoveredWriter(sessionId, recoveryFreeze, false)
+  }
+
   // Wake preserves the sleep checkpoint and clears the clean-end marker for future recovery.
-  reopenSession(sessionId: string, recoveryFreeze?: HistoryRecoveryFreeze): void {
-    this.disabledSessions.delete(sessionId)
-    this.registerWriter(sessionId, recoveryFreeze)
-    const writer = this.writers.get(sessionId)
-    if (!writer) {
+  reopenSession(sessionId: string, recoveryFreeze?: HistoryRecoveryFreeze): Promise<void> {
+    return this.registerRecoveredWriter(sessionId, recoveryFreeze, true)
+  }
+
+  private async registerRecoveredWriter(
+    sessionId: string,
+    recoveryFreeze: HistoryRecoveryFreeze | undefined,
+    reopen: boolean
+  ): Promise<void> {
+    this.identityRoot?.willMutate(sessionId)
+    const operation = (): void => {
+      registerRecoveredTerminalHistoryWriter(
+        this.basePath,
+        sessionId,
+        recoveryFreeze,
+        this.writers,
+        this.recoveryFreezes,
+        this.checkpointMaxBytes,
+        () => this.disabledSessions.add(sessionId),
+        (error) => this.handleWriteError(sessionId, error)
+      )
+      if (this.writers.has(sessionId)) {
+        this.disabledSessions.delete(sessionId)
+        if (reopen) {
+          reopenTerminalHistoryWriter(sessionId, this.writers, (error) =>
+            this.handleWriteError(sessionId, error)
+          )
+        }
+      }
+    }
+    if (this.writers.has(sessionId) && this.identity.admissionsOpen()) {
+      operation()
       return
     }
-    try {
-      updateTerminalHistoryMeta(writer.dir, { endedAt: null, exitCode: null })
-    } catch (err) {
-      this.handleWriteError(sessionId, err)
+    await this.identity.acquire(sessionId, this.prepareWriter(sessionId, recoveryFreeze), operation)
+  }
+
+  captureWriter = (sessionId: string): TerminalHistorySessionWriter | undefined =>
+    this.writers.get(sessionId)
+
+  drainCapturedWriter = (id: string): Promise<unknown> =>
+    Promise.all([this.lifecycleMutations.wait(id), this.mutations.wait(id)])
+
+  settleCapturedWriter(
+    sessionId: string,
+    writer: TerminalHistorySessionWriter,
+    removeHistory: boolean
+  ): void {
+    if (removeHistory) {
+      this.identityRoot?.willMutate(sessionId)
     }
+    settleCapturedTerminalHistoryWriter(
+      sessionId,
+      writer,
+      removeHistory,
+      this.writers,
+      this.disabledSessions,
+      this.basePath
+    )
   }
 
   suspendSession(sessionId: string, recoveryFreeze?: HistoryRecoveryFreeze): void {
+    this.identityRoot?.willMutate(sessionId)
     // Stop checkpoints from overwriting the only valid recovered scrollback.
     this.writers.delete(sessionId)
     if (recoveryFreeze) {
@@ -183,12 +195,13 @@ export class HistoryManager {
     this.disabledSessions.delete(sessionId)
   }
 
-  /** At log capacity, return needs-checkpoint so the caller can checkpoint and reset the log. */
   appendIncrements(
     sessionId: string,
     seq: number,
-    records: PendingOutputRecord[]
+    records: PendingOutputRecord[],
+    receipt?: TerminalHistoryCheckpointReceipt
   ): Promise<'ok' | 'needs-checkpoint'> {
+    this.identityRoot?.willMutate(sessionId, receipt)
     return this.mutations.track(sessionId, this.appendIncrementsUntracked(sessionId, seq, records))
   }
 
@@ -215,8 +228,10 @@ export class HistoryManager {
   checkpoint(
     sessionId: string,
     snapshot: TerminalSnapshot,
-    opts?: { pendingOutputSeq?: number }
+    opts?: { pendingOutputSeq?: number },
+    receipt?: TerminalHistoryCheckpointReceipt
   ): Promise<HistoryCheckpointResult> {
+    this.identityRoot?.willMutate(sessionId, receipt)
     return this.mutations.track(sessionId, this.checkpointUntracked(sessionId, snapshot, opts))
   }
 
@@ -252,23 +267,18 @@ export class HistoryManager {
   }
 
   async closeSession(sessionId: string, exitCode: number): Promise<void> {
-    const writer = this.writers.get(sessionId)
-    if (!writer) {
-      return
-    }
-
-    this.writers.delete(sessionId)
-    // Normal exit must also release IDs disabled by transient write failures.
-    this.disabledSessions.delete(sessionId)
-    try {
-      updateTerminalHistoryMeta(writer.dir, { endedAt: new Date().toISOString(), exitCode })
-    } catch (err) {
-      // Missing endedAt would falsely authorize cold restore on the next launch.
-      this.handleWriteError(sessionId, err)
-    }
+    this.identityRoot?.willMutate(sessionId)
+    closeTerminalHistoryWriter(sessionId, exitCode, this.writers, this.disabledSessions, (error) =>
+      this.handleWriteError(sessionId, error)
+    )
   }
 
-  async removeSession(sessionId: string): Promise<void> {
+  removeSession(sessionId: string): Promise<void> {
+    this.identityRoot?.willMutate(sessionId)
+    return this.lifecycleMutations.track(sessionId, this.removeSessionUntracked(sessionId))
+  }
+
+  private async removeSessionUntracked(sessionId: string): Promise<void> {
     this.writers.delete(sessionId)
     this.disabledSessions.delete(sessionId)
     this.recoveryFreezes.release(sessionId)
@@ -281,9 +291,7 @@ export class HistoryManager {
     return this.disabledSessions.has(sessionId)
   }
 
-  disabledSessionCount(): number {
-    return this.disabledSessions.size
-  }
+  disabledSessionCount = (): number => this.disabledSessions.size
 
   hasWriter(sessionId: string): boolean {
     return this.writers.has(sessionId)
@@ -297,20 +305,25 @@ export class HistoryManager {
     return readTerminalHistoryMetaFromDir(this.sessionDir(sessionId))
   }
 
-  async dispose(): Promise<void> {
-    // Mark orderly teardown clean so ended sessions cannot trigger cold restore.
-    for (const [sessionId, writer] of this.writers) {
-      try {
-        updateTerminalHistoryMeta(writer.dir, {
-          endedAt: new Date().toISOString(),
-          exitCode: null
-        })
-      } catch {
-        this.disabledSessions.add(sessionId)
-      }
-    }
-    this.writers.clear()
-    this.recoveryFreezes.releaseAll()
+  dispose = (): Promise<void> => this.releaseIdentity('clean')
+
+  releaseIdentity(disposition: 'clean' | 'detach'): Promise<void> {
+    this.identityRoot?.cancelMigrations()
+    this.identity.closeAdmissions()
+    this.identityRelease ??= this.identity
+      .drainAcquisitions()
+      .then(() =>
+        releaseTerminalHistoryManager(
+          disposition,
+          this.writers,
+          this.disabledSessions,
+          this.lifecycleMutations,
+          this.mutations,
+          this.recoveryFreezes,
+          this.identity.release
+        )
+      )
+    return this.identityRelease
   }
 
   // Disable best-effort history on error instead of rejecting fire-and-forget callers.
@@ -321,20 +334,5 @@ export class HistoryManager {
 
   private sessionDir(sessionId: string): string {
     return join(this.basePath, getHistorySessionDirName(sessionId))
-  }
-
-  private requireRecoveryFreeze(
-    sessionId: string,
-    recoveryFreeze: HistoryRecoveryFreeze
-  ): ActiveHistoryRecoveryFreeze {
-    const activeFreeze = this.recoveryFreezes.get(sessionId)
-    if (
-      recoveryFreeze.sessionId !== sessionId ||
-      activeFreeze?.handle !== recoveryFreeze ||
-      activeFreeze.fingerprint === undefined
-    ) {
-      throw new Error('terminal_history_recovery_freeze_invalid')
-    }
-    return activeFreeze
   }
 }

@@ -1,6 +1,15 @@
+import { knownTerminalHistoryRootPath } from './terminal-history-root-registry'
 import { createHash, randomUUID } from 'node:crypto'
-import { existsSync, lstatSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
-import { join, resolve } from 'node:path'
+import {
+  existsSync,
+  lstatSync,
+  readdirSync,
+  renameSync,
+  unlinkSync,
+  writeFileSync,
+  type Stats
+} from 'node:fs'
+import { basename, dirname, join } from 'node:path'
 import {
   ensurePrivateDir,
   PRIVATE_FILE_MODE
@@ -34,13 +43,17 @@ export function getTerminalHistoryQuarantineOwnerDir(basePath: string, sessionId
 // Reference-count across managers so permission sweeps cannot change frozen recovery fingerprints.
 const recoveryFrozenSessionDirs = new Map<string, number>()
 
+function recoveryDirectoryKey(sessionDir: string): string {
+  return join(knownTerminalHistoryRootPath(dirname(sessionDir)), basename(sessionDir))
+}
+
 export function markTerminalHistorySessionRecoveryFrozen(sessionDir: string): void {
-  const key = resolve(sessionDir)
+  const key = recoveryDirectoryKey(sessionDir)
   recoveryFrozenSessionDirs.set(key, (recoveryFrozenSessionDirs.get(key) ?? 0) + 1)
 }
 
 export function unmarkTerminalHistorySessionRecoveryFrozen(sessionDir: string): void {
-  const key = resolve(sessionDir)
+  const key = recoveryDirectoryKey(sessionDir)
   const held = recoveryFrozenSessionDirs.get(key)
   if (held === undefined) {
     return
@@ -55,7 +68,7 @@ export function unmarkTerminalHistorySessionRecoveryFrozen(sessionDir: string): 
 /** Protect frozen or quarantined session trees from mutations outside their recovery handshake. */
 export function isTerminalHistorySessionDirRecoveryProtected(sessionDir: string): boolean {
   return (
-    recoveryFrozenSessionDirs.has(resolve(sessionDir)) ||
+    recoveryFrozenSessionDirs.has(recoveryDirectoryKey(sessionDir)) ||
     existsSync(join(sessionDir, RECOVERY_PROTECTION_MARKER))
   )
 }
@@ -74,17 +87,28 @@ export function clearTerminalHistoryRecoveryProtection(dir: string): void {
 
 export function fingerprintTerminalHistorySession(
   basePath: string,
-  sessionId: string
+  sessionId: string,
+  validatedEntries?: readonly string[]
 ): TerminalHistoryDirectoryFingerprint {
   const sessionDir = join(basePath, getHistorySessionDirName(sessionId))
   if (!existsSync(sessionDir)) {
     return null
   }
 
+  const entries = validatedEntries ? [...validatedEntries].sort() : readdirSync(sessionDir).sort()
+  return fingerprintTerminalHistoryEntries(
+    ['.', ...entries].map((name) => [
+      name,
+      lstatSync(name === '.' ? sessionDir : join(sessionDir, name))
+    ])
+  )
+}
+
+export function fingerprintTerminalHistoryEntries(
+  entries: readonly (readonly [string, Stats])[]
+): string {
   const fingerprint = createHash('sha256')
-  const entries = readdirSync(sessionDir).sort()
-  for (const name of ['.', ...entries]) {
-    const stats = lstatSync(name === '.' ? sessionDir : join(sessionDir, name))
+  for (const [name, stats] of entries) {
     fingerprint.update(name)
     fingerprint.update('\0')
     fingerprint.update(

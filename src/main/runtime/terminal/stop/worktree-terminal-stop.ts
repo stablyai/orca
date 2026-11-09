@@ -1,3 +1,4 @@
+import { cancelLocalLegacyTerminalRestores } from '../../../pty/legacy-terminal-restore-ownership'
 import { OrcaRuntimeWithResolveTerminalSplitSourceAuthority } from '../launch/terminal-split-source-authority'
 import type { ResolvedWorktree } from '../../workspaces/catalog/runtime-worktree-path-identity'
 import { worktreeIdentityKey } from '../../../../shared/worktree/id'
@@ -13,12 +14,11 @@ import type { WorktreeTerminalMutationKind } from '../../workspaces/lifecycle/wo
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session/workspace-session-state-types'
 import { cloneWorkspaceSessionState } from '../../../persistence/restoring-sessions/session-owner-fields'
 import { rollbackWorkspaceSessionAfterFailedAsyncWrite } from '../../../persistence/restoring-sessions/workspace-session-write-rollback'
+import type { ExecutionHostId } from '../../../../shared/execution-host'
 import {
-  getWorktreeExecutionHostId,
-  parseExecutionHostId,
-  type ExecutionHostId
-} from '../../../../shared/execution-host'
-import type { WorktreePtyHostFence } from '../../workspaces/removal/worktree-pty-host-fence'
+  resolveWorktreePtyHostFence,
+  type WorktreePtyHostFence
+} from '../../workspaces/removal/worktree-pty-host-fence'
 import { collectWorktreePtyIds } from './worktree-pty-collection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { withMainBoundLeaves } from '../surface/main-terminal-surfaces'
@@ -36,23 +36,13 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     soleLivePtyId?: string
   ): Promise<RuntimeWorktreeTerminalSleepResult>
 
-  private getWorktreeHostFence(
-    worktree: { id: string; repoId?: string } & Parameters<typeof getWorktreeExecutionHostId>[0]
-  ): WorktreePtyHostFence {
-    const repo = worktree.repoId ? this.store?.getRepo?.(worktree.repoId) : undefined
-    const parsedHost = parseExecutionHostId(getWorktreeExecutionHostId(worktree, repo))
-    return parsedHost?.kind === 'runtime'
-      ? { resolvedRuntimeEnvironmentId: parsedHost.environmentId }
-      : { resolvedConnectionId: parsedHost?.kind === 'ssh' ? parsedHost.targetId : null }
-  }
-
   async closeTerminalsForWorktree(
     worktreeSelector: string
   ): Promise<RuntimeWorktreeTerminalCloseResult> {
     const graphEpoch = this.captureReadyGraphEpoch()
     const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     this.assertStableReadyGraph(graphEpoch)
-    const hostFence = this.getWorktreeHostFence(worktree)
+    const hostFence = resolveWorktreePtyHostFence(worktree, this.store)
 
     return await this.runWorktreeTerminalMutation(worktree.id, async () => {
       // Clearing a rotated partition can reroute ownership; retain the session host that held tabs when close began.
@@ -61,7 +51,6 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
         includeAgentSenders: false
       })
       const targetPtyIds = collectWorktreePtyIds(
-        // Switch point: main's bound terminals too, registered or not.
         ORCA_LAYOUT_OWNER_IS_MAIN
           ? withMainBoundLeaves(this, this.leaves.values())
           : this.leaves.values(),
@@ -169,6 +158,14 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
     }
   }
 
+  cancelPendingLegacyTerminalRestores(worktreeId: string, fence: WorktreePtyHostFence): void {
+    cancelLocalLegacyTerminalRestores(
+      this.store?.legacyTerminalIdentityAuthority,
+      worktreeId,
+      fence
+    )
+  }
+
   async stopTerminalsForWorktree(
     worktreeSelector: string,
     options: WorktreeTerminalStopOptions = {}
@@ -190,9 +187,9 @@ export abstract class OrcaRuntimeWithStopTerminalsForWorktree extends OrcaRuntim
       options.resolvedConnectionId !== undefined ||
       options.resolvedRuntimeEnvironmentId !== undefined
         ? options
-        : this.getWorktreeHostFence(worktree)
+        : resolveWorktreePtyHostFence(worktree, this.store)
+    this.cancelPendingLegacyTerminalRestores(worktree.id, hostFence)
     const ptyIds = collectWorktreePtyIds(
-      // Switch point: main's bound terminals too, registered or not.
       ORCA_LAYOUT_OWNER_IS_MAIN
         ? withMainBoundLeaves(this, this.leaves.values())
         : this.leaves.values(),

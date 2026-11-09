@@ -1,3 +1,4 @@
+import { terminalCompletionSurface } from '../../../ipc/pty/pane/terminal-completion-surface'
 import { terminalLaunchFacts } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { admitStablePaneAdoption } from '../identity/runtime-terminal-pane-identity'
 import type { RuntimePtyController } from '../lifecycle/runtime-pty-controller-contract'
@@ -28,7 +29,9 @@ export function resolveTerminalLaunchResult(
   const owner = result.stablePaneOwner
   const surface =
     result.agentSessionEnsure?.owner.surface ??
-    (owner ? { terminalHandle: owner.handle, tabId: owner.tabId, leafId: owner.leafId } : undefined)
+    (owner
+      ? { terminalHandle: owner.handle, tabId: owner.tabId, leafId: owner.leafId }
+      : terminalCompletionSurface(result))
   return {
     adoptedStablePane,
     surface,

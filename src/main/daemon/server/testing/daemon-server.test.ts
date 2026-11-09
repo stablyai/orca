@@ -60,6 +60,11 @@ type DaemonServerPrivate = {
   lifecycle: { server: Server | null }
   preparations: { pending: Map<string, Set<unknown>> }
   host: {
+    listReservations: (...args: unknown[]) => {
+      complete: true
+      authorityGeneration: string
+      sessionIds: string[]
+    }
     kill: (sessionId: string, opts?: { immediate?: boolean }) => void | Promise<void>
     dispose: () => Promise<void>
   }
@@ -153,6 +158,42 @@ describe('DaemonServer', () => {
   }
 
   describe('RPC routing', () => {
+    it.each([300, 3000])(
+      'only constructs reservation inventory when requested at %i sessions',
+      async (count) => {
+        const ids = Array.from({ length: count }, (_, i) => `workspace-${i}@@12345678`)
+        try {
+          server = new DaemonServer({
+            socketPath,
+            tokenPath,
+            spawnSubprocess: () => createMockSubprocess()
+          })
+          const listing = vi
+            .spyOn((server as unknown as DaemonServerPrivate).host, 'listReservations')
+            .mockReturnValue({
+              complete: true,
+              authorityGeneration: 'test-generation',
+              sessionIds: ids
+            })
+          await server.start()
+          const c = await connectClient()
+          expect(await c.request('listSessions', undefined)).toEqual({ sessions: [] })
+          expect(listing).not.toHaveBeenCalled()
+          expect(await c.request('listSessions', { includeReservations: true })).toEqual({
+            sessions: [],
+            reservations: {
+              complete: true,
+              authorityGeneration: 'test-generation',
+              sessionIds: ids
+            }
+          })
+          expect(listing).toHaveBeenCalledOnce()
+        } finally {
+          vi.restoreAllMocks()
+        }
+      }
+    )
+
     it('keeps RPC responsive and creates one subprocess while spawn preparation is pending', async () => {
       let finishPreparation!: () => void
       const preparation = new Promise<void>((resolve) => {
@@ -184,11 +225,22 @@ describe('DaemonServer', () => {
       // Synchronous preflight previously blocked RPC and live PTY traffic.
       await expect(c.request('ping', undefined)).resolves.toEqual({ pong: true })
       expect(spawnSubprocess).not.toHaveBeenCalled()
+      await expect(c.request('listSessions', { includeReservations: true })).resolves.toMatchObject(
+        {
+          sessions: [],
+          reservations: { complete: true, sessionIds: ['prepared-session'] }
+        }
+      )
 
       finishPreparation()
       const results = await Promise.all([firstCreate, concurrentCreate])
       expect(results.map((result) => result.isNew).sort()).toEqual([false, true])
       expect(spawnSubprocess).toHaveBeenCalledOnce()
+      await expect(c.request('listSessions', { includeReservations: true })).resolves.toMatchObject(
+        {
+          reservations: { complete: true, sessionIds: ['prepared-session'] }
+        }
+      )
     })
 
     it.each(['cancelCreateOrAttach', 'kill'] as const)(

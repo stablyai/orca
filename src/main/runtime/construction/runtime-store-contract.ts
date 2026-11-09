@@ -3,6 +3,7 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { VoiceSettings } from '../../../shared/speech-types'
 
 export type RuntimeStore = {
+  readonly legacyTerminalIdentityAuthority?: Store['legacyTerminalIdentityAuthority']
   getRepos: Store['getRepos']
   getSshTargets?: Store['getSshTargets']
   getRepo: Store['getRepo']

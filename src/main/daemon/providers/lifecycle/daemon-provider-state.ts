@@ -118,10 +118,15 @@ export async function disconnectDaemon(): Promise<void> {
 
 /** Kill the daemon and all its sessions. Use for full cleanup only. */
 export async function shutdownDaemon(): Promise<void> {
-  adapter?.dispose()
+  const closing = adapter
+  const stopping = spawner
   adapter = null
-  await spawner?.shutdown()
   spawner = null
+  try {
+    await closing?.dispose()
+  } finally {
+    await stopping?.shutdown()
+  }
 }
 
 /** Returns null unless every daemon generation supplied an authoritative inventory. */

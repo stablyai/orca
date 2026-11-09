@@ -90,6 +90,12 @@ describe('daemon async spawn cancellation', () => {
       })
       const canceled = expect(create).rejects.toThrow('Attach canceled for session canceled-spawn')
       await spawnStarted
+      await expect(
+        client.request('listSessions', { includeReservations: true })
+      ).resolves.toMatchObject({
+        sessions: [],
+        reservations: { complete: true, sessionIds: ['canceled-spawn'] }
+      })
 
       await (requestType === 'kill'
         ? client.request('kill', { sessionId: 'canceled-spawn', immediate: true })
@@ -98,7 +104,12 @@ describe('daemon async spawn cancellation', () => {
       await canceled
 
       expect(subprocess.forceKill).toHaveBeenCalledOnce()
-      await expect(client.request('listSessions', undefined)).resolves.toEqual({ sessions: [] })
+      await expect(
+        client.request('listSessions', { includeReservations: true })
+      ).resolves.toMatchObject({
+        sessions: [],
+        reservations: { complete: true, sessionIds: [] }
+      })
     }
   )
 
@@ -137,7 +148,12 @@ describe('daemon async spawn cancellation', () => {
     releaseSpawn()
 
     await vi.waitFor(() => expect(subprocess.forceKill).toHaveBeenCalledOnce())
-    await expect(client.request('listSessions', undefined)).resolves.toEqual({ sessions: [] })
+    await expect(
+      client.request('listSessions', { includeReservations: true })
+    ).resolves.toMatchObject({
+      sessions: [],
+      reservations: { complete: true, sessionIds: [] }
+    })
   })
 
   it('reaps a subprocess after the client aborts its request', async () => {
@@ -155,7 +171,12 @@ describe('daemon async spawn cancellation', () => {
     releaseSpawn()
 
     await vi.waitFor(() => expect(subprocess.forceKill).toHaveBeenCalledOnce())
-    await expect(client.request('listSessions', undefined)).resolves.toEqual({ sessions: [] })
+    await expect(
+      client.request('listSessions', { includeReservations: true })
+    ).resolves.toMatchObject({
+      sessions: [],
+      reservations: { complete: true, sessionIds: [] }
+    })
   })
 
   it('matches a cancel for an attach-only request queued behind a hung create', async () => {
@@ -206,7 +227,9 @@ describe('daemon async spawn cancellation', () => {
 
     await expect(first).resolves.toMatchObject({ isNew: true })
     expect(subprocess.forceKill).not.toHaveBeenCalled()
-    await expect(client.request('listSessions', undefined)).resolves.toMatchObject({
+    await expect(
+      client.request('listSessions', { includeReservations: true })
+    ).resolves.toMatchObject({
       sessions: [expect.objectContaining({ sessionId: 'shared-session' })]
     })
   })

@@ -1,3 +1,4 @@
+import { legacyTerminalIdentityClaims } from './legacy-terminal-identity-claims'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import {
   parseCodexResetCreditAttemptLedger,
@@ -62,6 +63,8 @@ export class PrimaryStateWriteOperations {
       if (runtime.profileStateAuthority?.asynchronous) {
         runtime.profileStateAuthority.assertWritable()
       }
+      const claims = legacyTerminalIdentityClaims(runtime)
+      const catalogRevision = claims?.revision
       let mutation: DurableProfileStateMutation<T>
       try {
         mutation = this.runAdmittedMutationCallback(
@@ -96,6 +99,9 @@ export class PrimaryStateWriteOperations {
           if (mutation.rollback) {
             try {
               this.runAdmittedMutationCallback('rollback', mutation.rollback)
+              if (claims && claims.revision !== catalogRevision) {
+                claims.refreshCatalog()
+              }
             } catch (rollbackError) {
               await stopAfterFailedPrimaryStateMutation(runtime, rollbackError)
               throw rollbackError

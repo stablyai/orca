@@ -24,6 +24,7 @@ import { TerminalHostAgentSessionGenerations } from './terminal-host-agent-sessi
 import { resolveTerminalHostSessionCwd } from './terminal-host-session-cwd'
 import { TerminalHostTombstones } from './terminal-host-tombstones'
 import {
+  createTerminalHostReservationListing,
   listLiveTerminalHostSessions,
   hasLiveTerminalHostSessions
 } from './terminal-host-session-listing'
@@ -306,6 +307,13 @@ export class TerminalHost {
   listSessions(): SessionInfo[] {
     return listLiveTerminalHostSessions(this.sessions, this.agentSessionOwners)
   }
+
+  listReservations = createTerminalHostReservationListing(
+    this.authorityGeneration,
+    this.sessions,
+    this.pendingCreations,
+    this.sessionTeardown
+  )
 
   hasLiveSessions(): boolean {
     return hasLiveTerminalHostSessions(this.sessions)

@@ -1,4 +1,9 @@
 import {
+  ptyIncarnationById,
+  restorePtyIncarnation,
+  ptyOwnership
+} from '../provider/ownership-state'
+import {
   classifyTerminalCreationFailure,
   terminalExitError
 } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
@@ -7,7 +12,6 @@ import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-p
 import { isPtyIncarnationId } from '../../../../shared/terminal/pty/lifecycle/pty-incarnation'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
 import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
-import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { registeredPtyProviders, tryGetProviderForPty } from '../provider/registry'
 
@@ -77,6 +81,11 @@ export async function reconcileAgentSessionOwnerListings(): Promise<void> {
     return await agentSessionOwnerReconciliation
   }
   const reconciliation = (async () => {
+    const observedIncarnations = new Map(ptyIncarnationById)
+    const observedHosts = new Map(ptyOwnership)
+    const current = (id: string) =>
+      observedIncarnations.get(id) === ptyIncarnationById.get(id) &&
+      observedHosts.get(id) === ptyOwnership.get(id)
     const deadlineMs = Date.now() + OWNER_LISTING_DEADLINE_MS
     const listings = await Promise.all(
       registeredPtyProviders().map(async ({ provider, hostId }) => ({
@@ -94,6 +103,9 @@ export async function reconcileAgentSessionOwnerListings(): Promise<void> {
     }[] = []
     for (const { hostId, sessions } of listings) {
       for (const session of sessions) {
+        if (!current(session.id)) {
+          continue
+        }
         const incarnationId = session.incarnationId
         let hasAdvertisedOwner = false
         for (const owner of session.agentSessionOwners ?? []) {
@@ -112,13 +124,16 @@ export async function reconcileAgentSessionOwnerListings(): Promise<void> {
     agentSessionOwners.reconcileAuthoritative(advertisedOwners, {
       // Reconnecting relays can still own live PTYs; only claim-listing providers prove absence.
       isInAuthoritativeScope: (owner) => {
+        if (!current(owner.ptyId)) {
+          return false
+        }
         const provider = tryGetProviderForPty(owner.ptyId)
         return provider?.providesAgentSessionOwnerListings?.(owner.ptyId) === true
       }
     })
     for (const session of advertisedOwnerSessions) {
       ptyOwnership.set(session.id, session.hostId)
-      ptyIncarnationById.set(session.id, session.incarnationId)
+      restorePtyIncarnation(session.id, session.incarnationId)
     }
   })()
   agentSessionOwnerReconciliation = reconciliation

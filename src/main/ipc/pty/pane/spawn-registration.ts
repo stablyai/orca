@@ -1,3 +1,8 @@
+import { publishSelectedTerminal } from '../../../pty/selected-terminal-retirement'
+import {
+  hasSelectedTerminalHistory,
+  preserveFencedTerminalHistory
+} from '../../../pty/pty-history-preserving-termination'
 import { classifyTerminalCreationFailure } from '../../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { PtyRegistrationClaim } from '../../../runtime/terminal/records/runtime-terminal-state-records'
 import { PaneOwnerContentionError } from './pane-spawn-operation'
@@ -9,7 +14,8 @@ import {
   ptyIncarnationById,
   ptyOwnership,
   setAdoptedPtyOwnership,
-  setPtyOwnership
+  setPtyOwnership,
+  restorePtyIncarnation
 } from '../provider/ownership-state'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { finishPtyShutdown, isPtyAlreadyGoneError } from '../provider/liveness'
@@ -33,8 +39,9 @@ export function admitPtySpawnOwnership(
     setPtyOwnership(result.id, LOCAL_EXECUTION_HOST_ID)
   }
   if (result.incarnationId) {
-    ptyIncarnationById.set(result.id, result.incarnationId)
+    restorePtyIncarnation(result.id, result.incarnationId)
   }
+  publishSelectedTerminal(result)
 }
 
 /** Read incarnation-scoped early-exit proof without throwing; registration reports refusal itself. */
@@ -78,10 +85,28 @@ export async function discardUnpersistedPtySpawn(
   try {
     let proof: PtyExitProof
     try {
-      await provider.shutdown(result.id, {
-        immediate: true,
-        ...(result.incarnationId ? { expectedIncarnationId: result.incarnationId } : {})
-      })
+      if (hasSelectedTerminalHistory(result) && result.incarnationId && provider.killFenced) {
+        const outcome = await provider.killFenced(
+          preserveFencedTerminalHistory({
+            id: result.id,
+            expectedIncarnationId: result.incarnationId,
+            requireNoAgentOwner: false,
+            requireUnattached: false
+          })
+        )
+        if (outcome.outcome === 'refused') {
+          if (outcome.reason === 'replaced') {
+            return
+          }
+          throw new Error(`Selected terminal stop is ${outcome.reason}`)
+        }
+      } else {
+        await provider.shutdown(result.id, {
+          immediate: true,
+          ...(hasSelectedTerminalHistory(result) ? { keepHistory: true } : {}),
+          ...(result.incarnationId ? { expectedIncarnationId: result.incarnationId } : {})
+        })
+      }
       proof = PtyExitProof.from('shutdown-acknowledged', result.incarnationId)
     } catch (error) {
       if (!isPtyAlreadyGoneError(error)) {

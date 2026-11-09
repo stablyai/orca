@@ -1,3 +1,8 @@
+import {
+  closeLegacyTerminalRestores,
+  retireRemovedScopedTerminalRow
+} from '../../pty/legacy-terminal-restore-ownership'
+import { legacyTerminalIdentityClaims } from './legacy-terminal-identity-claims'
 import { orderTerminalRowsByTabGroups } from '../../../shared/workspace-layout/terminal-row-order'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
@@ -203,6 +208,15 @@ export function removeWorkspaceSessionOwnerInPartition(
   // Releasing session ownership may unblock metadata pruning; no other signal covers this write.
   invalidateLocalWorktreeMetadataPruneInputs()
   if (resolved === LOCAL_EXECUTION_HOST_ID) {
+    const claims = legacyTerminalIdentityClaims(
+      owner[sessionHostPartitionOperationsContext].runtime
+    )
+    if (claims) {
+      closeLegacyTerminalRestores(claims, worktreeId)
+      for (const row of current.tabsByWorktree?.[worktreeId] ?? []) {
+        retireRemovedScopedTerminalRow(claims, worktreeId, row, current, session, false)
+      }
+    }
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSession = session
   } else {
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId = {

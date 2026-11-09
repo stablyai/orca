@@ -46,6 +46,7 @@ export type PaneLayoutChange<T> = {
   session: WorkspaceSessionState | null
   views?: PartitionEditorViews
   /** Run after persistence; never expose effects in replies. */
+  terminalTabIds?: readonly string[]
   effects?: LayoutEffects
 }
 
@@ -176,6 +177,7 @@ function applyToSession(
     ? {
         value: { ok: true, result: applied.result },
         session: write(saveWorkspaceLayout({ ...loaded, layout: applied.model })),
+        terminalTabIds: terminalMembershipTabs(command, applied.result),
         effects: applied.effects,
         ...(keepsViews ? { views: editorViewsOfModel(applied.model) } : {})
       }
@@ -285,4 +287,27 @@ function takenLeafId(
     (tab) => tab.kind === 'terminal' && leafIdsOf(tab).includes(newLeafId)
   )
   return held ? { ok: false, code: 'pane_in_other_tab' } : null
+}
+
+/** Commands already know the membership they touched; scalar edits add no identity traversal. */
+function terminalMembershipTabs(
+  command: LayoutCommand,
+  result: Extract<LayoutApplyOutcome, { ok: true }>['result']
+): readonly string[] {
+  const created = result?.createdTabs?.map((tab) => tab.tabId) ?? []
+  if (command.type === 'closeTabs') {
+    return command.tabIds
+  }
+  if (command.type === 'createTerminalTab') {
+    return command.tabId ? [command.tabId] : created
+  }
+  if (
+    command.type === 'splitPane' ||
+    command.type === 'closePane' ||
+    command.type === 'movePane' ||
+    command.type === 'movePaneToNewTab'
+  ) {
+    return [...new Set([command.tabId, ...(result?.tabId ? [result.tabId] : []), ...created])]
+  }
+  return command.type === 'applyDefaultTabs' ? created : []
 }

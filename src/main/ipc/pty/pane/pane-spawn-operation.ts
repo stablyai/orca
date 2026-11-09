@@ -1,3 +1,8 @@
+import type {
+  LegacyIdentityCarrier,
+  legacyPaneIdentitySelection
+} from './legacy-pane-identity-selection'
+import type { LegacyTerminalRestoreAttempt } from '../../../pty/legacy-terminal-restore-ownership'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import type { Store } from '../../../persistence/loading-store/store'
@@ -16,6 +21,11 @@ export type AbsentPaneBinding = { ptyId: string; incarnationIds: readonly string
 
 /** In-process authority of the enclosing operation; never sent over IPC/RPC or saved. */
 export type PaneSpawnOperation = {
+  legacyRestore?: {
+    attempt: LegacyTerminalRestoreAttempt
+    selection: ReturnType<typeof legacyPaneIdentitySelection>
+    carrier?: LegacyIdentityCarrier
+  }
   mustExist: boolean
   absentOwner?: AbsentPaneBinding
   acquisition?: {

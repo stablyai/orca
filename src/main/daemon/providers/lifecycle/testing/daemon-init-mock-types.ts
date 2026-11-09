@@ -29,6 +29,7 @@ export type MockAdapter = {
   establishLifecycleLease: Mock
   shutdown: Mock
   dispose: Mock
+  retire: Mock
   disconnectOnly: Mock
   hasRetiredForIdle: Mock
   onData: Mock

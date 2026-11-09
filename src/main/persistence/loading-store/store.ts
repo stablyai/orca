@@ -1,3 +1,5 @@
+import type { LegacyTerminalIdentityClaims } from './legacy-terminal-identity-claims'
+import { initializeLegacyTerminalIdentityClaims } from './legacy-terminal-identity-claims'
 import { dirname } from 'node:path'
 import {
   setMigrationUnsupportedPty,
@@ -68,6 +70,7 @@ export type PtyBindingSourceExpectation = {
 
 // oxlint-disable-next-line typescript-eslint/no-unsafe-declaration-merging -- Store installs the exact concrete domain class descriptors and contexts below
 export class Store {
+  readonly legacyTerminalIdentityAuthority: LegacyTerminalIdentityClaims
   private readonly runtime: StoreRuntimeState
   private readonly domains: StoreDomains
   private readonly state: PersistedState
@@ -180,6 +183,7 @@ export class Store {
         scheduleSave(this.domains.scheduling)
       }
     }
+    this.legacyTerminalIdentityAuthority = initializeLegacyTerminalIdentityClaims(this.runtime)
   }
 
   /** Retain the legacy settings key until migration to the main-owned store succeeds. */

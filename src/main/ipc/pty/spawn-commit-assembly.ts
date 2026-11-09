@@ -1,3 +1,5 @@
+import { legacyPaneRestoreAttempt } from './pane/legacy-pane-identity-selection'
+import { makePaneKey } from '../../../shared/workspace-layout/stable-pane-id'
 import { readTerminalStartFailure } from '../../../shared/terminal/pty/lifecycle/terminal-start-failure'
 import type { PtySpawnSizeSeed } from './spawn-options-assembly'
 import { isValidTerminalTabId } from '../../../shared/workspace-layout/terminal-tab-id'
@@ -136,6 +138,16 @@ export async function commitPtySpawn(input: PtySpawnCommitInput): Promise<PtySpa
   })
   if (input.paneBinding) {
     await savePtySpawnPaneBinding(state, input.paneBinding, state.args.connectionId)
+  }
+  const attempt = legacyPaneRestoreAttempt(state.args)
+  if (attempt?.tabId && attempt.leafId) {
+    if (attempt.closed) {
+      throw new Error('terminal_pane_owner_changed')
+    }
+    state.args.tabId = attempt.tabId
+    state.metadataLeafId = attempt.leafId
+    input.paneKey = makePaneKey(attempt.tabId, attempt.leafId)
+    input.seedPaneKey = input.paneKey
   }
   const { registration } = input
   if (registration.worktreeId) {

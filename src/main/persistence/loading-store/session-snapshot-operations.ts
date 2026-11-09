@@ -1,3 +1,5 @@
+import { retireRemovedScopedTerminalRow } from '../../pty/legacy-terminal-restore-ownership'
+import { legacyTerminalIdentityClaims } from './legacy-terminal-identity-claims'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type {
   WorkspaceSessionPatch,
@@ -105,13 +107,60 @@ export class SessionSnapshotOperations {
     if (Object.hasOwn(patch, 'browserUrlHistory')) {
       next = pruneWorkspaceSessionBrowserHistory(next)
     }
-    // Unified-tab patches bypass full normalization but still need close tombstones.
+    const removed = new Map<string, Set<string>>()
+    const remove = (workspace: string, id: string) => {
+      const ids = removed.get(workspace) ?? new Set<string>()
+      ids.add(id)
+      removed.set(workspace, ids)
+    }
+    const prior = this[sessionSnapshotOperationsContext].sessions.getWorkspaceSession(resolved)
     if (Object.hasOwn(patch, 'unifiedTabs')) {
-      next = dropClosedTerminalTabs(next)
+      next = dropClosedTerminalTabs(next, Date.now(), remove)
+      for (const [workspace, tabs] of Object.entries(prior.unifiedTabs ?? {})) {
+        const accepted = next.unifiedTabs?.[workspace]
+        if (!accepted) {
+          continue
+        }
+        const shown = new Set(
+          accepted.filter((tab) => tab.contentType === 'terminal').map((tab) => tab.entityId)
+        )
+        for (const tab of tabs) {
+          if (tab.contentType === 'terminal' && !shown.has(tab.entityId)) {
+            remove(workspace, tab.entityId)
+          }
+        }
+      }
     }
     if (resolved === LOCAL_EXECUTION_HOST_ID) {
-      const { state } = this[sessionSnapshotOperationsContext].runtime
-      next = keepWslMoveFrozenSessionsForStore(next, state.workspaceSession)
+      const { runtime } = this[sessionSnapshotOperationsContext]
+      next = keepWslMoveFrozenSessionsForStore(next, runtime.state.workspaceSession)
+      const claims = legacyTerminalIdentityClaims(runtime)
+      if (claims) {
+        for (const [workspace, ids] of removed) {
+          if (!claims.isLocalWorkspace(workspace)) {
+            continue
+          }
+          const beforeShown = new Set(
+            (prior.unifiedTabs?.[workspace] ?? [])
+              .filter((tab) => tab.contentType === 'terminal')
+              .map((tab) => tab.entityId)
+          )
+          const accepted = next.unifiedTabs?.[workspace]
+          const shown = accepted
+            ? new Set(
+                accepted.filter((tab) => tab.contentType === 'terminal').map((tab) => tab.entityId)
+              )
+            : undefined
+          for (const id of ids) {
+            const survives =
+              !!next.terminalLayoutsByTabId?.[id]?.root &&
+              !(shown && beforeShown.has(id) && !shown.has(id))
+            if (!survives) {
+              retireRemovedScopedTerminalRow(claims, workspace, { id }, prior, next, false)
+            }
+          }
+        }
+      }
     }
     this.publishSession(next, resolved)
   }

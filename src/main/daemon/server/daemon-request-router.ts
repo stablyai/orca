@@ -156,7 +156,16 @@ export class DaemonRequestRouter {
         this.options.host.reportFocusLost(request.payload.sessionId)
         return {}
       case 'listSessions':
-        return { sessions: this.options.host.listSessions() }
+        return {
+          sessions: this.options.host.listSessions(),
+          ...(request.payload?.includeReservations === true
+            ? {
+                reservations: this.options.host.listReservations(
+                  this.options.preparations.reservedSessionIds()
+                )
+              }
+            : {})
+        }
       case 'shutdownIfIdle':
         return this.shutdownIfIdle(clientId, request.id)
       case 'getSnapshot':

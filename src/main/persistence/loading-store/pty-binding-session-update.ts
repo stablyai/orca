@@ -1,15 +1,27 @@
-import { isTerminalLeafId } from '../../../shared/workspace-layout/stable-pane-id'
+import type { resolveHostId } from './session-host-partitions'
+import { observeLegacyTerminalBinding } from './legacy-terminal-identity-claims'
+import { rollbackFailedPtyBinding } from './pty-binding-write-rollback'
+import {
+  cloneWorkspaceSessionState,
+  createMinimalPersistedTerminalTab
+} from '../restoring-sessions/session-owner-fields'
+import { bumpPtyBindingGeneration } from './pty-binding-generations'
+import { markPtyBindingSessionDirty } from './pty-binding-durability-only'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import type {
+  PtyBindingPersistenceOperationsContext,
+  PersistPtyBindingArgs
+} from './pty-binding-persistence'
+import { makePaneKey, isTerminalLeafId } from '../../../shared/workspace-layout/stable-pane-id'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import {
   cloneLayoutNode,
   layoutContainsLeafId
 } from '../restoring-sessions/terminal-layout-normalization'
-import { createMinimalPersistedTerminalTab } from '../restoring-sessions/session-owner-fields'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { placedSplitRoot } from '../terminal-topology/terminal-pane-placement-graft'
 import { tabRowPtyIdAfterLeafBinding } from './terminal-tab-pty-ownership'
-import type { PersistPtyBindingArgs } from './pty-binding-persistence'
 import { reusedTerminalIdUnbinding } from './reused-terminal-id-unbind'
 
 export function applyPtyBinding(
@@ -150,4 +162,74 @@ export function applyPtyBinding(
   }
   session.terminalLayoutsByTabId = layoutsByTab
   advanceTopologyFence()
+}
+
+export function capturedLegacyTerminalBinding(
+  session: WorkspaceSessionState,
+  claim: Pick<PersistPtyBindingArgs, 'worktreeId' | 'tabId' | 'leafId' | 'ptyId' | 'incarnationId'>
+): PersistPtyBindingArgs | null {
+  const layout = session.terminalLayoutsByTabId?.[claim.tabId]
+  const row = session.tabsByWorktree?.[claim.worktreeId]?.find((tab) => tab.id === claim.tabId)
+  const id =
+    layout?.ptyIdsByLeafId?.[claim.leafId] ??
+    (layout?.root?.type === 'leaf' && layout.root.leafId === claim.leafId ? row?.ptyId : undefined)
+  return row &&
+    id === claim.ptyId &&
+    session.terminalPtyIncarnationsByPaneKey?.[makePaneKey(claim.tabId, claim.leafId)] ===
+      claim.incarnationId
+    ? { ...claim, mayCreate: false }
+    : null
+}
+
+export function writePtyBinding(
+  context: PtyBindingPersistenceOperationsContext,
+  args: PersistPtyBindingArgs,
+  session: WorkspaceSessionState,
+  resolvedHostId: ReturnType<typeof resolveHostId>,
+  bindingWorktreeId: string,
+  paneKey: string
+): () => void {
+  const { runtime, sessions } = context
+  const sessionBeforeBinding = cloneWorkspaceSessionState(session)
+  const restore = (restoredSession = sessionBeforeBinding): void => {
+    if (resolvedHostId === LOCAL_EXECUTION_HOST_ID) {
+      runtime.state.workspaceSession = restoredSession
+    } else {
+      runtime.state.workspaceSessionsByHostId = {
+        ...runtime.state.workspaceSessionsByHostId,
+        [resolvedHostId]: restoredSession
+      }
+    }
+  }
+  try {
+    if (resolvedHostId !== LOCAL_EXECUTION_HOST_ID) {
+      runtime.state.workspaceSessionsByHostId = {
+        ...runtime.state.workspaceSessionsByHostId,
+        [resolvedHostId]: session
+      }
+    }
+    observeLegacyTerminalBinding(runtime, args, resolvedHostId, bindingWorktreeId)
+    applyPtyBinding(args, session, bindingWorktreeId, paneKey)
+    bumpPtyBindingGeneration(runtime, resolvedHostId, args.leafId)
+    markPtyBindingSessionDirty(runtime, resolvedHostId)
+    const boundSession = cloneWorkspaceSessionState(session)
+    return () => {
+      const current = sessions.getWorkspaceSession(resolvedHostId)
+      const rolledBack = rollbackFailedPtyBinding(
+        sessionBeforeBinding,
+        boundSession,
+        current,
+        bindingWorktreeId,
+        args.tabId,
+        args.leafId
+      )
+      if (rolledBack !== current) {
+        restore(rolledBack)
+        bumpPtyBindingGeneration(runtime, resolvedHostId, args.leafId)
+      }
+    }
+  } catch (error) {
+    restore()
+    throw error
+  }
 }

@@ -1,3 +1,4 @@
+import type { TerminalHistoryCheckpointReceipt } from '../../history/storage/terminal-history-root'
 import { normalizeDesktopTerminalSnapshotRows } from '../../../../shared/terminal/replay/terminal-scrollback-policy'
 import { parseTerminalKittyKeyboardFlags } from '../../../../shared/terminal/protocol/input-modes/terminal-kitty-keyboard-flags'
 import { boundSnapshot } from './daemon-durable-history-snapshot'
@@ -90,9 +91,14 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
     // Bound this session's reattach wait; timed-out compaction still commits durable history.
     return await this.checkpointQueue.runWithDeadline(
       sessionId,
-      async () => {
+      async (receipt) => {
         try {
-          return await this.compactDurableRestoreSnapshot(sessionId, liveSnapshot, scrollbackRows)
+          return await this.compactDurableRestoreSnapshot(
+            sessionId,
+            liveSnapshot,
+            scrollbackRows,
+            receipt
+          )
         } finally {
           this.releaseNonFinalCheckpointAdmission(sessionId)
           this.overlayDeadlineWarnedSessionIds.delete(sessionId)
@@ -112,6 +118,9 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
   }
 
   protected tryAdmitNonFinalCheckpoint(sessionId: string): boolean {
+    if (this.retired || this.historyRetirements.has(sessionId)) {
+      return false
+    }
     if (this.nonFinalCheckpointAdmissionSessionIds.has(sessionId)) {
       if (!this.nonFinalAdmissionDeniedSessionIds.has(sessionId)) {
         this.nonFinalAdmissionDeniedSessionIds.add(sessionId)
@@ -148,18 +157,23 @@ export abstract class DaemonPtyBufferSnapshots extends DaemonPtySessionControl {
   protected async compactDurableRestoreSnapshot(
     sessionId: string,
     liveSnapshot: NonNullable<GetSnapshotResult['snapshot']>,
-    scrollbackRows?: number
+    scrollbackRows?: number,
+    receipt?: TerminalHistoryCheckpointReceipt
   ): Promise<NonNullable<GetSnapshotResult['snapshot']>> {
     if (!this.historyReader) {
       return liveSnapshot
     }
     try {
       // Compact before reading to avoid racing the periodic checkpoint and creating a sequence gap.
-      const checkpoint = await this.takeSnapshotAndCheckpoint(sessionId, {
-        teardown: false,
-        forceLiveSnapshot: this.sessionsNeedingLiveCheckpoint.has(sessionId),
-        requireContinuityProof: this.sessionsNeedingContinuityCheckpoint.has(sessionId)
-      })
+      const checkpoint = await this.takeSnapshotAndCheckpoint(
+        sessionId,
+        {
+          teardown: false,
+          forceLiveSnapshot: this.sessionsNeedingLiveCheckpoint.has(sessionId),
+          requireContinuityProof: this.sessionsNeedingContinuityCheckpoint.has(sessionId)
+        },
+        receipt
+      )
       if (checkpoint.checkpoint === 'committed') {
         this.sessionsNeedingFullCheckpoint.delete(sessionId)
       }

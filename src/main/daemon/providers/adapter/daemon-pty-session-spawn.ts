@@ -1,3 +1,5 @@
+import { validateProspectivePtySpawn } from '../../../pty/prospective-pty-spawn'
+import { withDaemonHistoryIsolation } from './daemon-pty-history-isolation'
 import type {
   HistoryRecoveryContext,
   PendingDaemonSpawnOperation
@@ -11,7 +13,8 @@ import { TerminalKilledError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySpawnResult } from './daemon-pty-spawn-result'
 import type { DaemonPtySpawnContext } from './daemon-pty-spawn-request'
 import type { ColdRestoreInfo } from '../../history/restoration/terminal-history-cold-restore-info'
-import { mintPtySessionId } from '../../sessions/pty-session-id'
+import { mintPtySessionId, normalizeFreshPtySessionId } from '../../sessions/pty-session-id'
+import { SessionNotFoundError } from '../../protocol/daemon-errors'
 import {
   shellPathSupportsPtyStartupBarrier,
   resolvePtyShellPath
@@ -26,12 +29,6 @@ import { resolveSafePtyDefaultCwd } from '../../../providers/pty-default-cwd'
 import { probeRecoveredStartupCwdDirectory } from '../../../ipc/pty/host-env/startup-cwd-directory-exists'
 import { resolveUnixShellPath } from '../../../providers/local-pty/local-pty-executable-spawn'
 import type { PtySpawnOptions, PtySpawnResult } from '../../../providers/pty-provider-contract'
-import {
-  injectHistoryEnv,
-  injectWslFishHistoryEnv,
-  logHistoryInjection
-} from '../../../pty/history/terminal-history'
-import { addWslEnvKeys } from '../../../../shared/wsl-env'
 import { holdPassiveRestoreOfStoppedWslDistro } from '../wsl/daemon-wsl-passive-restore-hold'
 
 export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
@@ -43,9 +40,18 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
   }
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    opts = normalizeFreshPtySessionId(opts)
     this.assertSpawnAdmission()
-    const spawnOpts = this.withHistoryIsolation(opts)
+    const spawnOpts = withDaemonHistoryIsolation(opts)
     const sessionId = spawnOpts.sessionId ?? mintPtySessionId(spawnOpts.worktreeId)
+    const strictAttach =
+      opts.attachOnly === true &&
+      this.protocolVersion >= STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
+    const finishObservation = this.historyManager?.identityRoot?.observeNumeric(
+      sessionId,
+      !strictAttach
+    )
+    let missing = false
     const operation: PendingDaemonSpawnOperation = {
       exitsBySessionId: new Map(),
       ignoredExitIncarnationIds: new Set<string>(),
@@ -68,7 +74,11 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
           this.doSpawn({ ...spawnOpts, sessionId }, operation, historyRecovery)
         )
       )
+    } catch (error) {
+      missing = strictAttach && error instanceof SessionNotFoundError
+      throw error
     } finally {
+      finishObservation?.(missing)
       if (historyRecovery.freeze) {
         this.historyManager?.abandonRecoveryFreeze(historyRecovery.freeze)
       }
@@ -78,44 +88,6 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
         this.pendingSpawnOperationsBySessionId.delete(sessionId)
       }
     }
-  }
-
-  protected withHistoryIsolation(opts: PtySpawnOptions): PtySpawnOptions {
-    const wslContext = resolveWslSessionContext({
-      cwd: opts.cwd,
-      sessionId: opts.sessionId,
-      shellOverride: opts.shellOverride,
-      terminalWindowsWslDistro: opts.terminalWindowsWslDistro
-    })
-    if (
-      opts.attachOnly === true ||
-      (opts.sessionId !== undefined && opts.isNewSession !== true) ||
-      !opts.worktreeId ||
-      opts.historyIsolationEnabled !== true ||
-      (process.platform === 'win32' && !wslContext)
-    ) {
-      return opts
-    }
-    const env = { ...opts.env }
-    const preferredShell = wslContext
-      ? 'bash'
-      : opts.shellOverride || env.SHELL || process.env.SHELL || '/bin/zsh'
-    const shellPath = resolveUnixShellPath(preferredShell)
-    const historyArgs = [
-      env,
-      opts.worktreeId,
-      shellPath,
-      opts.cwd ?? resolveSafePtyDefaultCwd()
-    ] as const
-    const result = wslContext
-      ? injectHistoryEnv(...historyArgs, { wslDistro: wslContext.distro })
-      : injectHistoryEnv(...historyArgs)
-    if (wslContext) {
-      injectWslFishHistoryEnv(env, opts.worktreeId, wslContext.distro)
-      addWslEnvKeys(env, ['HISTFILE', 'fish_history'])
-    }
-    logHistoryInjection(opts.worktreeId, result)
-    return { ...opts, env }
   }
 
   protected async doSpawn(
@@ -211,6 +183,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     }
 
     await this.ensureConnected()
+    await validateProspectivePtySpawn(this, opts)
     // Clear stale background state before attach when the preserved daemon cannot safely thin or retract 2031 facts.
     if (!this.canDelegateBackgroundToDaemon) {
       this.setPtyBackgrounded(sessionId, false)
