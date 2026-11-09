@@ -1,3 +1,4 @@
+import { isValidOrgName } from '../../shared/orca-org-management'
 import type { OrcaProfileOrgCreateResult } from '../../shared/orca-org-management'
 import { randomUUID } from 'node:crypto'
 import { addDevOrganization, removeDevOrganization } from './profile-cloud-dev-auth'
@@ -160,7 +161,7 @@ export function removeDevOrcaCloudOrgMember(
 
 export function createDevOrcaCloudOrg(name: string): OrcaProfileOrgCreateResult {
   const trimmed = name.trim()
-  if (!trimmed) {
+  if (!isValidOrgName(trimmed)) {
     return { status: 'invalid' }
   }
   const orgId = `dev-team-${randomUUID().slice(0, 8)}`

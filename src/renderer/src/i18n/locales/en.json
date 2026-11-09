@@ -20313,7 +20313,6 @@
           "createdToast": "{{value0}} created",
           "createFailed": "Could not create the team. Try again.",
           "createHint": "Share one Orca Cloud plan with your teammates.",
-          "createInvalid": "Choose a different team name.",
           "createTitle": "Create a team",
           "createUnavailable": "Team creation isn’t available yet. Ask a teammate to invite you.",
           "createWorkspace": "Create a cloud workspace",
@@ -20413,7 +20412,9 @@
           "nowAdmin": "{{value0}} is now an admin",
           "nowMember": "{{value0}} is now a member",
           "nowOwner": "{{value0}} is now an owner",
-          "perSeatPerMonth": "{{value0}} per seat per month"
+          "perSeatPerMonth": "{{value0}} per seat per month",
+          "createInvalid2": "Use letters, numbers, spaces or underscores (up to 64).",
+          "nameTaken": "That team name is taken. Try another."
         },
         "manageBilling": "Manage billing",
         "comparePlans": "Compare plans",
