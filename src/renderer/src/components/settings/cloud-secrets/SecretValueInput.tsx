@@ -83,8 +83,8 @@ export function SecretValueInput({
             readOnly
             autoFocus={pastedMultiline}
             variant="code"
-            value={t('cloudSecrets.value.lines', 'Multi-line value · {{lines}} lines', {
-              lines: String(lines)
+            value={t('cloudSecrets.value.lines', 'Multi-line value · {{count}} lines', {
+              count: lines
             })}
             aria-invalid={invalid || undefined}
             aria-describedby={describedBy}

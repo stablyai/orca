@@ -157,7 +157,7 @@ export function CloudSecretsPane({
   const withViewer: CloudSecretPeople = { ...people, viewerUserId: caller?.userId ?? null }
   const adminNotice = t(
     'cloudSecrets.readOnly.shared',
-    'Only owners and admins can change shared secrets. Ask an admin.'
+    'Ask an owner or admin to change shared secrets.'
   )
 
   return (
@@ -267,7 +267,7 @@ export function CloudSecretsPane({
                 <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-muted-foreground">
                   {t(
                     'cloudSecrets.repo.noReposDetail',
-                    'Repo secrets follow a GitHub repository. Add a project with a GitHub remote to set them.'
+                    'Repository secrets follow a GitHub repository. Add a project with a GitHub remote to set them.'
                   )}
                 </p>
               </div>
@@ -289,7 +289,7 @@ export function CloudSecretsPane({
                     people={withViewer}
                     readOnlyNotice={t(
                       'cloudSecrets.readOnly.repo',
-                      'Only owners and admins can change this repository’s secrets. Ask an admin.'
+                      'Ask an owner or admin to change this repository’s secrets.'
                     )}
                     description={t(
                       'cloudSecrets.repo.description',

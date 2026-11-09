@@ -171,7 +171,7 @@ export function VmBuildCloudAgentStepView({
           title={t('cloudAgentSetup.signInPending', 'Agent sign-in')}
           detail={t(
             'cloudAgentSetup.signInPendingDetail',
-            'Opens when the VM is ready. Keep Orca open until then.'
+            'Opens when the sandbox is ready. Keep Orca open until then.'
           )}
           actions={
             <Button
@@ -235,7 +235,7 @@ export function VmBuildCloudAgentStepView({
     go(
       { kind: 'signIn' },
       'row',
-      t('cloudAgentSetup.signInQueued', 'Agent sign-in will open when the VM is ready')
+      t('cloudAgentSetup.signInQueued', 'Agent sign-in will open when the sandbox is ready')
     )
   }
 

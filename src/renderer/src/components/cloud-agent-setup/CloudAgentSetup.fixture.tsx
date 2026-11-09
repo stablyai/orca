@@ -5,6 +5,7 @@ import { VmBuildSheet } from '../worktree-creation/VmBuildSheet'
 import type { CloudAgentReadiness } from './cloud-agent-readiness'
 import type { CloudAgentSetupFailure, CloudAgentSetupOption } from './cloud-agent-setup-choices'
 import { CloudAgentSetupSavedNotice, CloudAgentSetupView } from './CloudAgentSetupView'
+import { ComposerCloudAgentHintView } from './ComposerCloudAgentHint'
 import {
   VmBuildCloudAgentStepView,
   type VmBuildCloudAgentStepMode,
@@ -179,5 +180,14 @@ export const dialogSaved = defineFixture({
         onClose={noop}
       />
     </Dialogish>
+  )
+})
+
+export const composerHint = defineFixture({
+  width: 520,
+  render: () => (
+    <div className="bg-background p-4">
+      <ComposerCloudAgentHintView onSetUp={noop} onLater={noop} />
+    </div>
   )
 })

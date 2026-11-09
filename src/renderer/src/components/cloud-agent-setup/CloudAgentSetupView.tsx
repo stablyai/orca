@@ -169,14 +169,14 @@ export function CloudAgentSetupView({
       tab: t('cloudAgentSetup.option.signIn', 'Subscription'),
       detail: t(
         'cloudAgentSetup.option.signInDialog',
-        'Sign in once inside a cloud workspace. The sign-in stays on that sandbox’s disk, including through sleep.'
+        'Sign in once inside a cloud workspace. Agent sign-ins stay on the sandbox’s disk, including through sleep.'
       )
     },
     'api-key': {
-      tab: t('cloudAgentSetup.option.apiKey', 'API key'),
+      tab: t('cloudAgentSetup.option.apiKey', 'Agent key'),
       detail: t(
         'cloudAgentSetup.option.apiKeyDetail',
-        'An Anthropic or OpenAI key, billed by usage.'
+        'An Anthropic or OpenAI API key, billed by usage.'
       )
     },
     gateway: {

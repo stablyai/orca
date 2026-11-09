@@ -58,10 +58,7 @@ export function cloudSecretsErrorCopy(
         'Base URLs must start with https:// and point at a public host.'
       )
     case 'org_admin_required':
-      return t(
-        'cloudSecrets.error.adminRequired',
-        'Only team owners and admins can change this. Ask an admin.'
-      )
+      return t('cloudSecrets.error.adminRequired', 'Ask an owner or admin to change this.')
     case 'no_org':
       return t('cloudSecrets.error.noOrg', 'Join or create a team to share secrets.')
     case 'secret_limit':
@@ -75,7 +72,10 @@ export function cloudSecretsErrorCopy(
       return t('cloudSecrets.error.notConfigured', 'Orca Cloud is not available in this build.')
     case 'unavailable':
     case 'timeout':
-      return t('cloudSecrets.error.unavailable', 'Orca Cloud did not answer. Try again.')
+      return t(
+        'cloudSecrets.error.unavailable',
+        'Couldn’t reach Orca Cloud. Nothing was changed. Try again.'
+      )
     case 'syntax':
       return t('cloudSecrets.error.syntax', 'Not a NAME=value line.')
     case 'unterminated_quote':
@@ -85,6 +85,9 @@ export function cloudSecretsErrorCopy(
     case 'invalid_scope':
     case 'not_found':
     case 'unknown':
-      return t('cloudSecrets.error.unknown', 'Orca Cloud could not do that. Try again.')
+      return t(
+        'cloudSecrets.error.unknown',
+        'Something went wrong in Orca Cloud. Nothing was changed. Try again.'
+      )
   }
 }
