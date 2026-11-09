@@ -1,5 +1,6 @@
+import { annotateRecordReplacement } from '@/store/keyed-record-transitions'
 import { sleepingAgentRecordIndex } from '../../terminals/sleeping-agent-record-index'
-import { terminalInputRecordTransition } from '../../terminals/terminal-input-record-transition'
+
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session/lifecycle/agent-session-resume'
 import type { AgentStatusSlice } from './agent-status-slice-contract'
 import type { AgentStatusRuntime } from './agent-status-runtime'
@@ -45,15 +46,10 @@ export function createAgentStatusRecoveryActions(
         }
         return changed
           ? {
-              sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
-                s.sleepingAgentSessionsByPaneKey,
+              sleepingAgentSessionsByPaneKey: annotateRecordReplacement(
+                replaced.records,
                 next,
-                [
-                  ...sleepingAgentRecordIndex
-                    .entries(s.sleepingAgentSessionsByPaneKey, worktreeId)
-                    .map(([key]) => key),
-                  ...Object.keys(records)
-                ]
+                Object.keys(records)
               )
             }
           : s
@@ -84,7 +80,7 @@ export function createAgentStatusRecoveryActions(
         }
         return changed
           ? {
-              sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+              sleepingAgentSessionsByPaneKey: annotateRecordReplacement(
                 s.sleepingAgentSessionsByPaneKey,
                 next,
                 Object.keys(s.agentStatusByPaneKey)
@@ -101,7 +97,7 @@ export function createAgentStatusRecoveryActions(
         s.sleepingAgentSessionsByPaneKey[record.paneKey] !== replaces
           ? s
           : {
-              sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+              sleepingAgentSessionsByPaneKey: annotateRecordReplacement(
                 s.sleepingAgentSessionsByPaneKey,
                 {
                   ...s.sleepingAgentSessionsByPaneKey,
@@ -138,7 +134,7 @@ export function createAgentStatusRecoveryActions(
           delete nextLaunch[paneKey]
         }
         return {
-          sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+          sleepingAgentSessionsByPaneKey: annotateRecordReplacement(
             s.sleepingAgentSessionsByPaneKey,
             next,
             removed
@@ -172,7 +168,7 @@ export function createAgentStatusRecoveryActions(
           delete nextLaunch[paneKey]
         }
         return {
-          sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+          sleepingAgentSessionsByPaneKey: annotateRecordReplacement(
             s.sleepingAgentSessionsByPaneKey,
             next,
             removed

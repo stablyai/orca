@@ -1,4 +1,4 @@
-import { terminalInputRecordTransition } from '../../terminals/terminal-input-record-transition'
+import { annotateRecordReplacement } from '@/store/keyed-record-transitions'
 export const RECENTLY_CLOSED_AGENT_STATUS_TAB_IDS_MAX = 1024
 export const RECENTLY_RETIRED_AGENT_STATUS_PANE_KEYS_MAX = 1024
 
@@ -87,7 +87,7 @@ export function movePaneKeyedRecord<T>(
   const next = { ...record }
   delete next[fromPaneKey]
   next[toPaneKey] = transform(value)
-  return terminalInputRecordTransition(record, next, [fromPaneKey, toPaneKey])
+  return annotateRecordReplacement(record, next, [fromPaneKey, toPaneKey])
 }
 
 export function removePaneKeys<T>(
@@ -103,7 +103,7 @@ export function removePaneKeys<T>(
     next ??= { ...record }
     delete next[key]
   }
-  return next ? terminalInputRecordTransition(record, next, paneKeys) : record
+  return next ? annotateRecordReplacement(record, next, paneKeys) : record
 }
 
 export function removePaneKeysByTabPrefix<T>(

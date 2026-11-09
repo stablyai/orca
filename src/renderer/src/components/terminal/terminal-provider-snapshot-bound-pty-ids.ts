@@ -1,4 +1,4 @@
-import { terminalInputRecordChangedKeys } from '@/store/terminals/terminal-input-record-transition'
+import { readRecordChanges } from '@/store/keyed-record-transitions'
 import { createTerminalTabOwnerIndex } from '@/store/terminals/terminal-tab-owner-index'
 import type { SnapshotCapabilityBindingState } from './terminal-provider-snapshot-capability'
 
@@ -102,18 +102,36 @@ export function createTerminalProviderSnapshotBoundPtyIdsSelector(): (state: Sta
       layouts: state.terminalLayoutsByTabId ?? EMPTY_LAYOUTS,
       reconnect: state.pendingReconnectPtyIdByTabId ?? EMPTY_RECONNECT
     }
-    const changedWorkspaces = previous
-      ? terminalInputRecordChangedKeys(previous.tabs, source.tabs)
+    const tabsChanges = previous ? readRecordChanges(source.tabs, previous.tabs) : null
+    const changedWorkspaces =
+      tabsChanges?.kind === 'addressed'
+        ? tabsChanges.keys
+        : previous?.tabs === source.tabs
+          ? []
+          : null
+    const bindingsChanges = previous ? readRecordChanges(source.bindings, previous.bindings) : null
+    const changedBindings =
+      bindingsChanges?.kind === 'addressed'
+        ? bindingsChanges.keys
+        : previous?.bindings === source.bindings
+          ? []
+          : null
+    const layoutsChanges = previous ? readRecordChanges(source.layouts, previous.layouts) : null
+    const changedLayouts =
+      layoutsChanges?.kind === 'addressed'
+        ? layoutsChanges.keys
+        : previous?.layouts === source.layouts
+          ? []
+          : null
+    const reconnectChanges = previous
+      ? readRecordChanges(source.reconnect, previous.reconnect)
       : null
-    const changedBindings = previous
-      ? terminalInputRecordChangedKeys(previous.bindings, source.bindings)
-      : null
-    const changedLayouts = previous
-      ? terminalInputRecordChangedKeys(previous.layouts, source.layouts)
-      : null
-    const changedReconnect = previous
-      ? terminalInputRecordChangedKeys(previous.reconnect, source.reconnect)
-      : null
+    const changedReconnect =
+      reconnectChanges?.kind === 'addressed'
+        ? reconnectChanges.keys
+        : previous?.reconnect === source.reconnect
+          ? []
+          : null
     tabOwners.getOwners(source.tabs)
     if (!changedWorkspaces || !changedBindings || !changedLayouts || !changedReconnect) {
       resyncUnknownSnapshot(source)

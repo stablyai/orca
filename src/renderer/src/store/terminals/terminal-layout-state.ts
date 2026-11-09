@@ -1,4 +1,4 @@
-import { terminalInputRecordTransition } from './terminal-input-record-transition'
+import { annotateRecordReplacement } from '@/store/keyed-record-transitions'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { makePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import { terminalLayoutEqual } from '../../../../shared/workspace-layout/terminal-layout-equality'
@@ -50,7 +50,7 @@ export function createTerminalLayoutActions(
           return s
         }
         return {
-          terminalLayoutsByTabId: terminalInputRecordTransition(
+          terminalLayoutsByTabId: annotateRecordReplacement(
             s.terminalLayoutsByTabId,
             {
               ...s.terminalLayoutsByTabId,
@@ -90,7 +90,7 @@ export function createTerminalLayoutActions(
           const next = { ...s.terminalLayoutsByTabId }
           delete next[tabId]
           return {
-            terminalLayoutsByTabId: terminalInputRecordTransition(s.terminalLayoutsByTabId, next, [
+            terminalLayoutsByTabId: annotateRecordReplacement(s.terminalLayoutsByTabId, next, [
               tabId
             ])
           }
@@ -109,7 +109,7 @@ export function createTerminalLayoutActions(
           return s
         }
         return {
-          terminalLayoutsByTabId: terminalInputRecordTransition(
+          terminalLayoutsByTabId: annotateRecordReplacement(
             s.terminalLayoutsByTabId,
             { ...s.terminalLayoutsByTabId, [tabId]: normalized.snapshot },
             [tabId]
@@ -165,11 +165,11 @@ export function createTerminalLayoutActions(
           ...(detachedPtyId ? [{ tabId: targetTabId, ptyId: detachedPtyId }] : [])
         ])
         return {
-          ptyIdsByTabId: terminalInputRecordTransition(s.ptyIdsByTabId, nextPtyIdsByTabId, [
+          ptyIdsByTabId: annotateRecordReplacement(s.ptyIdsByTabId, nextPtyIdsByTabId, [
             sourceTabId,
             targetTabId
           ]),
-          lastKnownRelayPtyIdByTabId: terminalInputRecordTransition(
+          lastKnownRelayPtyIdByTabId: annotateRecordReplacement(
             s.lastKnownRelayPtyIdByTabId,
             nextLastKnownRelayPtyIdByTabId,
             [sourceTabId, targetTabId]

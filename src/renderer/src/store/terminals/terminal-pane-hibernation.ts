@@ -1,4 +1,7 @@
-import { terminalInputRecordTransition } from './terminal-input-record-transition'
+import {
+  annotateRecordReplacement,
+  annotateTabBucketReplacement
+} from '@/store/keyed-record-transitions'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { parsePaneKey } from '../../../../shared/workspace-layout/stable-pane-id'
 import '@/components/terminal-pane/pty-transport/delivery/pty-dispatcher'
@@ -121,7 +124,7 @@ export function createTerminalPaneHibernationActions(
           }
           return {
             suppressedPtyExitIds: next,
-            sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+            sleepingAgentSessionsByPaneKey: annotateRecordReplacement(
               s.sleepingAgentSessionsByPaneKey,
               nextSleeping,
               sleepingRecordKeys
@@ -134,7 +137,7 @@ export function createTerminalPaneHibernationActions(
           ...s.suppressedPtyExitIds,
           ...Object.fromEntries(exitGuardPtyIds.map((ptyId) => [ptyId, true] as const))
         },
-        sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+        sleepingAgentSessionsByPaneKey: annotateRecordReplacement(
           s.sleepingAgentSessionsByPaneKey,
           {
             ...s.sleepingAgentSessionsByPaneKey,
@@ -252,10 +255,10 @@ export function createTerminalPaneHibernationActions(
           const nextLastTerminalInputAtByPaneKey = { ...s.lastTerminalInputAtByPaneKey }
           delete nextLastTerminalInputAtByPaneKey[opts.paneKey]
           return {
-            tabsByWorktree: terminalInputRecordTransition(s.tabsByWorktree, nextTabsByWorktree, [
+            tabsByWorktree: annotateTabBucketReplacement(s.tabsByWorktree, nextTabsByWorktree, [
               worktreeId
             ]),
-            ptyIdsByTabId: terminalInputRecordTransition(
+            ptyIdsByTabId: annotateRecordReplacement(
               s.ptyIdsByTabId,
               {
                 ...s.ptyIdsByTabId,
@@ -263,7 +266,7 @@ export function createTerminalPaneHibernationActions(
               },
               [opts.tabId]
             ),
-            lastKnownRelayPtyIdByTabId: terminalInputRecordTransition(
+            lastKnownRelayPtyIdByTabId: annotateRecordReplacement(
               s.lastKnownRelayPtyIdByTabId,
               nextLastKnownRelay,
               [opts.tabId]
@@ -275,7 +278,7 @@ export function createTerminalPaneHibernationActions(
             codexRestartNoticeByPtyId: nextCodexRestartNoticeByPtyId,
             ...(nextRuntimePaneTitlesByTabId !== s.runtimePaneTitlesByTabId
               ? {
-                  runtimePaneTitlesByTabId: terminalInputRecordTransition(
+                  runtimePaneTitlesByTabId: annotateRecordReplacement(
                     s.runtimePaneTitlesByTabId,
                     nextRuntimePaneTitlesByTabId,
                     [opts.tabId]

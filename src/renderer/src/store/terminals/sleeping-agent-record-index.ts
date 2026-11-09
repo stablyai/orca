@@ -1,5 +1,5 @@
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
-import { terminalInputRecordChangedKeys } from './terminal-input-record-transition'
+import { readRecordChanges } from '@/store/keyed-record-transitions'
 
 type Records = Readonly<Record<string, SleepingAgentSessionRecord | undefined>>
 type RecordEntry = readonly [string, SleepingAgentSessionRecord]
@@ -34,7 +34,8 @@ export function createSleepingAgentRecordIndex() {
     }
     const previous = source
     const dirty = new Set<string>()
-    const keys = previous ? terminalInputRecordChangedKeys(previous, records) : null
+    const changes = previous ? readRecordChanges(records, previous) : null
+    const keys = changes?.kind === 'addressed' ? changes.keys : null
     // Bootstrap, hydration or an unknown replacement has no trusted partial change list.
     if (keys === null) {
       for (const id of entriesByWorktree.keys()) {
@@ -141,7 +142,8 @@ export function createSleepingAgentRecordIndex() {
     acceptTransition(previous: Records | null, next: Records) {
       const worktreeIds = new Set<string>()
       const tabIds = new Set<string>()
-      const keys = previous ? terminalInputRecordChangedKeys(previous, next) : null
+      const changes = previous ? readRecordChanges(next, previous) : null
+      const keys = changes?.kind === 'addressed' ? changes.keys : previous === next ? [] : null
       const changedKeys = keys ?? new Set([...Object.keys(previous ?? {}), ...Object.keys(next)])
       for (const key of changedKeys) {
         const before = previous?.[key]

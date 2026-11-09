@@ -1,4 +1,4 @@
-import { terminalInputRecordTransition } from './terminal-input-record-transition'
+import { annotateTabBucketReplacement } from '@/store/keyed-record-transitions'
 import { getTerminalTabOwnerWorktreeIds } from './terminal-tab-owner-index'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { resolveTerminalWorktreeRoute } from '@/lib/terminal-worktree-route'
@@ -27,7 +27,7 @@ export function createTerminalTabAppearanceActions(
           next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, customTitle: title } : t))
         }
         scheduleRuntimeGraphSync()
-        return { tabsByWorktree: terminalInputRecordTransition(s.tabsByWorktree, next, owners) }
+        return { tabsByWorktree: annotateTabBucketReplacement(s.tabsByWorktree, next, owners) }
       })
       const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
       if (item?.contentType === 'agent-session') {
@@ -58,7 +58,7 @@ export function createTerminalTabAppearanceActions(
         for (const wId of owners) {
           next[wId] = next[wId].map((t) => (t.id === tabId ? { ...t, color } : t))
         }
-        return { tabsByWorktree: terminalInputRecordTransition(s.tabsByWorktree, next, owners) }
+        return { tabsByWorktree: annotateTabBucketReplacement(s.tabsByWorktree, next, owners) }
       })
       const item = findRenamableUnifiedTab(get().unifiedTabsByWorktree, tabId)
       if (item) {

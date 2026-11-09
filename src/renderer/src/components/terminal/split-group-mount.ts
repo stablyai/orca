@@ -1,5 +1,5 @@
 import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
-import { terminalInputRecordChangedKeys } from '@/store/terminals/terminal-input-record-transition'
+import { readRecordChanges } from '@/store/keyed-record-transitions'
 
 export class MountedTerminalWorktrees extends Set<string> {
   private readonly changedIds = new Set<string>()
@@ -101,12 +101,12 @@ export function anyMountedWorktreeHasLayout(
       [previous.groups, groupsByWorktree],
       [previous.activeGroups, activeGroupIdByWorktree]
     ]) {
-      const changed = terminalInputRecordChangedKeys(before, after)
-      if (changed === null) {
+      const changed = readRecordChanges(after, before)
+      if (changed?.kind === 'full-resync') {
         dirty = null
         break
       }
-      for (const id of changed) {
+      for (const id of changed?.keys ?? []) {
         dirty.add(id)
       }
     }

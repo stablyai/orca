@@ -86,7 +86,9 @@ const ORDINARY_WRITERS = [
   'store/slices/agent-status/agent-status-authority-actions.ts'
 ].map((rel) => RENDERER + rel)
 const RECORD_TRANSITIONS = new Set([
-  'terminalInputRecordTransition',
+  'annotateRecordReplacement',
+  'replaceRecordEntries',
+  'markFullResync',
   'removePaneKeys',
   'movePaneKeyedRecord',
   'removePaneKeysByTabPrefix'

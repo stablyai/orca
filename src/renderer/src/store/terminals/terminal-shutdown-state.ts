@@ -1,4 +1,7 @@
-import { terminalInputRecordTransition } from './terminal-input-record-transition'
+import {
+  annotateTabBucketReplacement,
+  annotateRecordReplacement
+} from '@/store/keyed-record-transitions'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session/lifecycle/agent-session-resume'
 import { clearTransientTerminalState } from './terminal-transient-state'
@@ -114,20 +117,20 @@ export function commitTerminalShutdownState({
       }
 
       return {
-        tabsByWorktree: terminalInputRecordTransition(state.tabsByWorktree, tabsByWorktree, [
+        tabsByWorktree: annotateTabBucketReplacement(state.tabsByWorktree, tabsByWorktree, [
           worktreeId
         ]),
-        ptyIdsByTabId: terminalInputRecordTransition(
+        ptyIdsByTabId: annotateRecordReplacement(
           state.ptyIdsByTabId,
           ptyIdsByTabId.read(),
           tabs.map((tab) => tab.id)
         ),
-        lastKnownRelayPtyIdByTabId: terminalInputRecordTransition(
+        lastKnownRelayPtyIdByTabId: annotateRecordReplacement(
           state.lastKnownRelayPtyIdByTabId,
           lastKnownRelayPtyIdByTabId.read(),
           tabs.map((tab) => tab.id)
         ),
-        runtimePaneTitlesByTabId: terminalInputRecordTransition(
+        runtimePaneTitlesByTabId: annotateRecordReplacement(
           state.runtimePaneTitlesByTabId,
           runtimePaneTitlesByTabId.read(),
           tabs.map((tab) => tab.id)
@@ -137,7 +140,7 @@ export function commitTerminalShutdownState({
         pendingPaneAccountRestarts: pendingPaneAccountRestarts.read(),
         codexRestartNoticeByPtyId: codexRestartNoticeByPtyId.read(),
         pendingIssueCommandSplitByTabId: pendingIssueCommandSplitByTabId.read(),
-        terminalLayoutsByTabId: terminalInputRecordTransition(
+        terminalLayoutsByTabId: annotateRecordReplacement(
           state.terminalLayoutsByTabId,
           terminalLayoutsByTabId.read(),
           tabs.map((tab) => tab.id)
@@ -163,7 +166,7 @@ export function commitTerminalShutdownState({
             ).records
           : state.sleepingAgentSessionsByPaneKey
       return {
-        sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+        sleepingAgentSessionsByPaneKey: annotateRecordReplacement(
           base,
           { ...base, ...sleepingAgentSessionRecords },
           Object.keys(sleepingAgentSessionRecords)

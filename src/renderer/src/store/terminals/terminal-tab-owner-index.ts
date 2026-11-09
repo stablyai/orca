@@ -1,7 +1,4 @@
-import {
-  terminalInputRecordChangedKeys,
-  terminalInputRecordTransition
-} from './terminal-input-record-transition'
+import { annotateTabBucketReplacement, readTabMapChanges } from '@/store/keyed-record-transitions'
 
 type TerminalTabOwnerBuckets = Readonly<Record<string, readonly { id: string }[]>>
 
@@ -60,7 +57,8 @@ export function createTerminalTabOwnerIndex(): TerminalTabOwnerIndex {
       return ownerByTabId
     }
 
-    const knownKeys = source ? terminalInputRecordChangedKeys(source, tabsByWorktree) : null
+    const changes = source ? readTabMapChanges(tabsByWorktree, source) : null
+    const knownKeys = changes?.kind === 'addressed' ? changes.workspaceIds : null
     if (knownKeys && source) {
       const affectedTabIds = new Set<string>()
       for (const worktreeId of knownKeys) {
@@ -275,5 +273,5 @@ export function adoptTerminalTabOwnerMetadataOnlyBuckets(
   nextTabsByWorktree: TerminalTabOwnerBuckets,
   replacedWorktreeIds: Iterable<string>
 ): void {
-  terminalInputRecordTransition(previousTabsByWorktree, nextTabsByWorktree, replacedWorktreeIds)
+  annotateTabBucketReplacement(previousTabsByWorktree, nextTabsByWorktree, replacedWorktreeIds)
 }

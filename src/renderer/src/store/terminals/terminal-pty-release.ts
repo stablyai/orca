@@ -1,4 +1,7 @@
-import { terminalInputRecordTransition } from './terminal-input-record-transition'
+import {
+  annotateTabBucketReplacement,
+  annotateRecordReplacement
+} from '@/store/keyed-record-transitions'
 import { getFirstTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import { isRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
@@ -95,15 +98,15 @@ export function createTerminalPtyReleaseActions(
         return {
           ...(nextTabsByWorktree !== s.tabsByWorktree
             ? {
-                tabsByWorktree: terminalInputRecordTransition(
+                tabsByWorktree: annotateTabBucketReplacement(
                   s.tabsByWorktree,
                   nextTabsByWorktree,
                   worktreeId ? [worktreeId] : []
                 )
               }
             : {}),
-          ptyIdsByTabId: terminalInputRecordTransition(s.ptyIdsByTabId, nextPtyIdsByTabId, [tabId]),
-          lastKnownRelayPtyIdByTabId: terminalInputRecordTransition(
+          ptyIdsByTabId: annotateRecordReplacement(s.ptyIdsByTabId, nextPtyIdsByTabId, [tabId]),
+          lastKnownRelayPtyIdByTabId: annotateRecordReplacement(
             s.lastKnownRelayPtyIdByTabId,
             nextLastKnownRelay,
             [tabId]

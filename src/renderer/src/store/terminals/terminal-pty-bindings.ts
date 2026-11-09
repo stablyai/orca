@@ -1,4 +1,7 @@
-import { terminalInputRecordTransition } from './terminal-input-record-transition'
+import {
+  annotateTabBucketReplacement,
+  annotateRecordReplacement
+} from '@/store/keyed-record-transitions'
 import { getFirstTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import {
   isRemoteRuntimePtyId,
@@ -181,7 +184,7 @@ export function createTerminalPtyBindingActions(
         return {
           ...(nextTabsByWorktree !== s.tabsByWorktree
             ? {
-                tabsByWorktree: terminalInputRecordTransition(
+                tabsByWorktree: annotateTabBucketReplacement(
                   s.tabsByWorktree,
                   nextTabsByWorktree,
                   worktreeId ? [worktreeId] : []
@@ -190,7 +193,7 @@ export function createTerminalPtyBindingActions(
             : {}),
           ...(nextPtyIds !== existingPtyIds || !(tabId in s.ptyIdsByTabId)
             ? {
-                ptyIdsByTabId: terminalInputRecordTransition(
+                ptyIdsByTabId: annotateRecordReplacement(
                   s.ptyIdsByTabId,
                   { ...s.ptyIdsByTabId, [tabId]: nextPtyIds },
                   [tabId]
@@ -199,7 +202,7 @@ export function createTerminalPtyBindingActions(
             : {}),
           ...(s.lastKnownRelayPtyIdByTabId[tabId] !== ptyId
             ? {
-                lastKnownRelayPtyIdByTabId: terminalInputRecordTransition(
+                lastKnownRelayPtyIdByTabId: annotateRecordReplacement(
                   s.lastKnownRelayPtyIdByTabId,
                   { ...s.lastKnownRelayPtyIdByTabId, [tabId]: ptyId },
                   [tabId]
@@ -218,7 +221,7 @@ export function createTerminalPtyBindingActions(
           migrationUnsupportedByPtyId: nextMigrationUnsupportedByPtyId,
           ...(nextTerminalLayoutsByTabId !== s.terminalLayoutsByTabId
             ? {
-                terminalLayoutsByTabId: terminalInputRecordTransition(
+                terminalLayoutsByTabId: annotateRecordReplacement(
                   s.terminalLayoutsByTabId,
                   nextTerminalLayoutsByTabId,
                   [tabId]

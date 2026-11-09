@@ -1,6 +1,6 @@
+import { annotateRecordReplacement } from '@/store/keyed-record-transitions'
 import { createNonSecureContextUuid as createBrowserUuid } from '../../../../shared/non-secure-context-uuid'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
-import { terminalInputRecordTransition } from './terminal-input-record-transition'
 
 type TabStartupCommand = TerminalSlice['pendingStartupByTabId'][string]
 
@@ -33,7 +33,7 @@ export function createTerminalStartupQueueActions(
     queueTabStartupCommand: (tabId, startup) => {
       const normalized = normalizeTabStartupCommand(startup)
       set((s) => ({
-        pendingStartupByTabId: terminalInputRecordTransition(
+        pendingStartupByTabId: annotateRecordReplacement(
           s.pendingStartupByTabId,
           {
             ...s.pendingStartupByTabId,
@@ -77,9 +77,7 @@ export function createTerminalStartupQueueActions(
         const next = { ...s.pendingStartupByTabId }
         delete next[tabId]
         return {
-          pendingStartupByTabId: terminalInputRecordTransition(s.pendingStartupByTabId, next, [
-            tabId
-          ])
+          pendingStartupByTabId: annotateRecordReplacement(s.pendingStartupByTabId, next, [tabId])
         }
       })
       return pending

@@ -1,4 +1,4 @@
-import { terminalInputRecordTransition } from './terminal-input-record-transition'
+import { annotateTabBucketReplacement } from '@/store/keyed-record-transitions'
 import { getFirstTerminalTabOwnerWorktreeId } from './terminal-tab-owner-index'
 import type {
   TerminalLayoutSnapshot,
@@ -76,5 +76,5 @@ export function withTerminalTabPtyIds(
     next[worktreeId] = nextTabs
     changedWorktreeIds.add(worktreeId)
   }
-  return terminalInputRecordTransition(tabsByWorktree, next, changedWorktreeIds)
+  return annotateTabBucketReplacement(tabsByWorktree, next, changedWorktreeIds)
 }

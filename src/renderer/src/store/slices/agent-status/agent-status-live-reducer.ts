@@ -1,4 +1,4 @@
-import { terminalInputRecordTransition } from '../../terminals/terminal-input-record-transition'
+import { annotateRecordReplacement } from '@/store/keyed-record-transitions'
 import { projectAgentPaneConversation } from './agent-pane-conversation'
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -117,7 +117,7 @@ export function reduceAgentStatusLiveUpdate(
       ? { agentConversationsByPaneKey: nextConversations }
       : {}),
     retainedAgentsByPaneKey: nextRetainedAgents,
-    sleepingAgentSessionsByPaneKey: terminalInputRecordTransition(
+    sleepingAgentSessionsByPaneKey: annotateRecordReplacement(
       state.sleepingAgentSessionsByPaneKey,
       nextSleepingAgentSessions,
       [paneKey, ...evictedPaneKeys]

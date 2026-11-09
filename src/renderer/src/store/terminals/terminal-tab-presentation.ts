@@ -1,4 +1,7 @@
-import { terminalInputRecordTransition } from './terminal-input-record-transition'
+import {
+  annotateTabBucketReplacement,
+  annotateRecordReplacement
+} from '@/store/keyed-record-transitions'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-status/title/agent-decorative-title-signature'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph/graph-sync-scheduler'
 import { classifyTitleActivity } from '@/lib/pane-agent-evidence'
@@ -73,7 +76,7 @@ export function createTerminalTabPresentationActions(
         scheduleRuntimeGraphSync()
         return {
           tabsByWorktree: nextTabsByWorktree,
-          unifiedTabsByWorktree: terminalInputRecordTransition(
+          unifiedTabsByWorktree: annotateTabBucketReplacement(
             s.unifiedTabsByWorktree,
             { ...s.unifiedTabsByWorktree, [ownerWorktreeId]: nextUnifiedTabs },
             [ownerWorktreeId]
@@ -139,7 +142,7 @@ export function createTerminalTabPresentationActions(
         nextTabs[tabIndex] = tabWithoutLaunchAgent
         scheduleRuntimeGraphSync()
         return {
-          tabsByWorktree: terminalInputRecordTransition(
+          tabsByWorktree: annotateTabBucketReplacement(
             s.tabsByWorktree,
             { ...s.tabsByWorktree, [ownerWorktreeId]: nextTabs },
             [ownerWorktreeId]
@@ -167,7 +170,7 @@ export function createTerminalTabPresentationActions(
         const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
         const shouldBump = classificationChanged && ownerWorktreeId !== null && !isActive
         return {
-          runtimePaneTitlesByTabId: terminalInputRecordTransition(
+          runtimePaneTitlesByTabId: annotateRecordReplacement(
             s.runtimePaneTitlesByTabId,
             { ...s.runtimePaneTitlesByTabId, [tabId]: { ...currentByPane, [paneId]: title } },
             [tabId]
@@ -200,11 +203,9 @@ export function createTerminalTabPresentationActions(
         const isActive = ownerWorktreeId !== null && ownerWorktreeId === s.activeWorktreeId
         const shouldBump = hadClassification && ownerWorktreeId !== null && !isActive
         return {
-          runtimePaneTitlesByTabId: terminalInputRecordTransition(
-            s.runtimePaneTitlesByTabId,
-            next,
-            [tabId]
-          ),
+          runtimePaneTitlesByTabId: annotateRecordReplacement(s.runtimePaneTitlesByTabId, next, [
+            tabId
+          ]),
           ...(shouldBump ? { sortEpoch: s.sortEpoch + 1 } : {})
         }
       })

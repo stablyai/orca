@@ -7,6 +7,7 @@ import {
 } from '@/components/terminal-pane/parking/output-watchers/terminal-parked-watcher-registry'
 import type { AppState } from '../types'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
+import { readRecordChanges } from '@/store/keyed-record-transitions'
 import { terminalInputRecordChangedKeys } from './terminal-input-record-transition'
 import { sleepingAgentRecordIndex } from './sleeping-agent-record-index'
 import { getTerminalTabOwnerWorktreeId, getTerminalTabOwners } from './terminal-tab-owner-index'
@@ -47,11 +48,16 @@ function sameTitleSlots(previous: object | undefined, next: object | undefined):
   return before.length === after.length && before.every((key) => key in (next ?? {}))
 }
 
-function changedKeys(previous: object, next: object): Iterable<string> {
-  return (
-    terminalInputRecordChangedKeys(previous, next) ??
-    new Set([...Object.keys(previous), ...Object.keys(next)])
-  )
+function changedKeys(
+  previous: Readonly<Record<string, unknown>>,
+  next: Readonly<Record<string, unknown>>
+): Iterable<string> {
+  const changes = readRecordChanges(next, previous)
+  return changes?.kind === 'addressed'
+    ? changes.keys
+    : changes === null
+      ? []
+      : new Set([...Object.keys(previous), ...Object.keys(next)])
 }
 
 function replacePtyMembership(state: AppState, tabId: string): void {
@@ -102,7 +108,7 @@ function replacePtyMembership(state: AppState, tabId: string): void {
   }
 }
 
-/** Install pure source ownership before Zustand dispatch; the caller publishes after the accepted write. */
+/** Accepted source ownership makes retirement synchronous without starting watchers inside a store write. */
 export function acceptTerminalParkingInputs(state: AppState): ReadonlySet<string> {
   if (accepted === state) {
     return new Set()

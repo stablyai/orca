@@ -1,4 +1,4 @@
-import { terminalInputRecordTransition } from './terminal-input-record-transition'
+import { annotateTabBucketReplacement } from '@/store/keyed-record-transitions'
 import { getTerminalTabOwnerWorktreeIds } from './terminal-tab-owner-index'
 import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type { TerminalSlice, TerminalStoreSet } from './terminal-state'
@@ -31,7 +31,7 @@ export function createTerminalTabAgentLaunchPaneActions(
             return launchPane ? { ...remounted, agentLaunchPane: launchPane } : remounted
           })
         }
-        return { tabsByWorktree: terminalInputRecordTransition(s.tabsByWorktree, next, owners) }
+        return { tabsByWorktree: annotateTabBucketReplacement(s.tabsByWorktree, next, owners) }
       })
     }
   }

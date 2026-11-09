@@ -1,4 +1,4 @@
-import { terminalInputRecordTransition } from '../../terminals/terminal-input-record-transition'
+import { annotateRecordReplacement } from '@/store/keyed-record-transitions'
 import { sleepingAgentRecordIndex } from '../../terminals/sleeping-agent-record-index'
 import type { AppState } from '../../types'
 import type { AgentStatusEntry } from '../../../../../shared/agent-status/contracts/agent-status-types'
@@ -96,5 +96,5 @@ export function removeSleepingRecordsReplacedByManualWorktreeSleep(
     removed.add(paneKey)
     changed = true
   }
-  return { records: terminalInputRecordTransition(records, next, removed), changed }
+  return { records: annotateRecordReplacement(records, next, removed), changed }
 }

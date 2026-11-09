@@ -1,3 +1,4 @@
+import { annotateRecordReplacement } from '@/store/keyed-record-transitions'
 // Main starts window-drawn tabs under their IDs after recording them; panes wait (D1b-1). Inputs main cannot carry retain window spawn (L252).
 
 import { callRuntimeRpc } from '@/runtime/rpc/calls/runtime-rpc-call'
@@ -8,7 +9,6 @@ import { isSupportedWindowsShellOverride } from '../../../../shared/windows-term
 import type { AppState } from '../types'
 import type { TerminalPaneStart } from './terminal-state'
 import { getRemoteConnectionIdForWorktree, worktreeUsesWslPath } from './terminal-workspace-routing'
-import { terminalInputRecordTransition } from './terminal-input-record-transition'
 
 type TabStartup = AppState['pendingStartupByTabId'][string]
 
@@ -96,7 +96,7 @@ export function startWindowTabInMain(
     // Main runs it; a later mount of the pane must not run it again.
     const { [tab.id]: _started, ...pendingStartupByTabId } = state.pendingStartupByTabId
     store.setState({
-      pendingStartupByTabId: terminalInputRecordTransition(
+      pendingStartupByTabId: annotateRecordReplacement(
         state.pendingStartupByTabId,
         pendingStartupByTabId,
         [tab.id]
@@ -132,7 +132,7 @@ export function startWindowTabInMain(
         if (startup && store.getState().terminalLayoutsByTabId[tab.id]) {
           const pending = store.getState().pendingStartupByTabId
           store.setState({
-            pendingStartupByTabId: terminalInputRecordTransition(
+            pendingStartupByTabId: annotateRecordReplacement(
               pending,
               { ...pending, [tab.id]: startup },
               [tab.id]
