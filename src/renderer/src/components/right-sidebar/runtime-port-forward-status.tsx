@@ -21,8 +21,11 @@ export function RuntimePortForwardStatus({
   state,
   onForward,
   onOpenLocal,
-  onReconnect
+  onReconnect,
+  isSandbox = false
 }: {
+  /** Orca Cloud: says "sandbox" and offers Wake instead of Reconnect. */
+  isSandbox?: boolean
   remotePort: number
   state: RuntimePortForwardRowState
   onForward: () => void
@@ -36,7 +39,9 @@ export function RuntimePortForwardStatus({
     const unreachable = !offline && Boolean(forward.lastError)
     const remapped = forward.localPort !== remotePort
     const note = offline
-      ? t('auto.components.right.sidebar.RuntimePortForward.hostOfflineNote', 'Host offline')
+      ? isSandbox
+        ? t('auto.components.right.sidebar.RuntimePortForward.sandboxAsleep', 'Sandbox is asleep')
+        : t('auto.components.right.sidebar.RuntimePortForward.hostOfflineNote', 'Host offline')
       : unreachable
         ? t(
             'auto.components.right.sidebar.RuntimePortForward.notAnswering',
@@ -45,8 +50,8 @@ export function RuntimePortForwardStatus({
           )
         : remapped
           ? t(
-              'auto.components.right.sidebar.RuntimePortForward.remappedInUseHere',
-              '({{value0}} in use here)',
+              'auto.components.right.sidebar.RuntimePortForward.remappedInUseOnComputer',
+              '({{value0}} in use on this computer)',
               { value0: remotePort }
             )
           : null
@@ -101,7 +106,9 @@ export function RuntimePortForwardStatus({
         ) : null}
         {offline && onReconnect ? (
           <Button type="button" variant="quiet" size="statusAction" onClick={onReconnect}>
-            {t('auto.components.right.sidebar.RuntimePortForward.reconnect', 'Reconnect')}
+            {isSandbox
+              ? t('auto.components.right.sidebar.RuntimePortForward.wake', 'Wake')
+              : t('auto.components.right.sidebar.RuntimePortForward.reconnect', 'Reconnect')}
           </Button>
         ) : null}
       </span>

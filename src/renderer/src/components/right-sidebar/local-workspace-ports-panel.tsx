@@ -36,7 +36,8 @@ export function LocalWorkspacePortsPanel({
   runtimeTarget,
   sshForwardTargetId = null,
   portMenuItems,
-  footer
+  footer,
+  isSandbox = false
 }: {
   isVisible: boolean
   /** The endpoint that owns the active workspace, even if the sidebar is focused elsewhere. */
@@ -47,6 +48,8 @@ export function LocalWorkspacePortsPanel({
   portMenuItems?: (port: WorkspacePort) => React.ReactNode
   /** Host-specific sections below the ports (Orca Cloud: shared links), given the listening ports. */
   footer?: (activePorts: readonly WorkspacePort[]) => React.ReactNode
+  /** An Orca Cloud sandbox: copy says "sandbox" and offers Wake. */
+  isSandbox?: boolean
 }): React.JSX.Element {
   const t = useTranslate()
   const activeWorktree = useActiveWorktree()
@@ -66,7 +69,7 @@ export function LocalWorkspacePortsPanel({
   })
 
   const scanKey = runtimeTarget ? `${workspacePortRuntimeTargetKey(runtimeTarget)}:all` : null
-  const runtimeForwarding = useRuntimePortRowForwarding(runtimeTarget, portMenuItems)
+  const runtimeForwarding = useRuntimePortRowForwarding(runtimeTarget, portMenuItems, isSandbox)
 
   const refresh = useCallback(() => {
     if (!activeRepoId || !runtimeTarget || !scanKey) {

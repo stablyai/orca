@@ -2181,6 +2181,13 @@
         "failedAnnouncement": "Couldn't forward :{{value0}}. {{value1}}",
         "busyInUseHere": "localhost:{{value0}} in use on this computer",
         "listenFailedRetry": "Couldn't listen on this computer. Retry or pick another port"
+      },
+      "orcaCloudTransfer": {
+        "waking": "Waking the workspace…",
+        "done": "Moved to this computer",
+        "leftovers": "Some changes did not apply cleanly; they were saved to {{dir}}.",
+        "summary": "Branch {{branch}} with your uncommitted changes and agent chats ({{count}}). The cloud workspace is unchanged.",
+        "failed": "Could not move the workspace"
       }
     },
     "hooks": {
@@ -6961,7 +6968,8 @@
           "copyPathOption": "Path",
           "copyNameOption": "Worktree Name",
           "lineageSubmenu": "Parent & Children",
-          "projectGroupSubmenu": "Project Group"
+          "projectGroupSubmenu": "Project Group",
+          "moveToThisComputer": "Move to this computer"
         },
         "WorktreeList": {
           "7a8b9c0d1e": "Update required",
@@ -15678,7 +15686,9 @@
             "actionLabel": "{{value0}} for port {{value1}}",
             "copyLocalUrl": "Copy local URL",
             "stopAndSkip": "Stop and don't auto-forward :{{value0}}",
-            "remappedInUseHere": "({{value0}} in use here)"
+            "sandboxAsleep": "Sandbox is asleep",
+            "remappedInUseOnComputer": "({{value0}} in use on this computer)",
+            "wake": "Wake"
           },
           "CloudShare": {
             "alreadyShared": "Already shared",
