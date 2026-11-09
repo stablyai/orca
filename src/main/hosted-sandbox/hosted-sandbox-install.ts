@@ -1,4 +1,4 @@
-import { withCloudBuildDefaults } from '../cloud-build-defaults'
+import { cloudDevSigningAllowed, withCloudBuildDefaults } from '../cloud-build-defaults'
 // Wires Orca Cloud into the desktop when this build has a control plane configured (off by default).
 import { app, BrowserWindow } from 'electron'
 import { ensureActiveOrcaProfile } from '../orca-profiles/profile-index-store'
@@ -72,7 +72,7 @@ export function installHostedSandbox(): void {
 
 /** Orca Cloud auth's `sandbox` capability rolls it out per account; the dev key bypasses it in dev builds. */
 async function orcaCloudOffered(): Promise<boolean> {
-  if (!app.isPackaged && process.env.ORCA_CLOUD_SANDBOX_DEV_KEY_FILE) {
+  if (cloudDevSigningAllowed(app.isPackaged) && process.env.ORCA_CLOUD_SANDBOX_DEV_KEY_FILE) {
     return true
   }
   const auth = getOrcaCloudAuthConfig(process.env, app.isPackaged)

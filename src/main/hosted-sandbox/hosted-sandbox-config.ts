@@ -3,6 +3,7 @@
 import { createPrivateKey, sign } from 'node:crypto'
 import { readFile } from 'node:fs/promises'
 import { z } from 'zod'
+import { cloudDevSigningAllowed } from '../cloud-build-defaults'
 import { cleanCloudServiceUrl } from '../../shared/cloud-service-url'
 import { getOrcaCloudAuthConfig } from '../orca-profiles/profile-cloud-auth-config'
 import { OrcaCloudRequestError } from '../orca-profiles/profile-cloud-client'
@@ -42,7 +43,9 @@ export function getHostedSandboxConfig(
   if (!controlPlaneUrl) {
     return null
   }
-  const devKeyFile = packaged ? undefined : env.ORCA_CLOUD_SANDBOX_DEV_KEY_FILE?.trim()
+  const devKeyFile = cloudDevSigningAllowed(packaged)
+    ? env.ORCA_CLOUD_SANDBOX_DEV_KEY_FILE?.trim()
+    : undefined
   let cached: { token: string; expiresAt: number } | null = null
   return {
     controlPlaneUrl,

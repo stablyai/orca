@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { withCloudBuildDefaults } from './cloud-build-defaults'
+import { cloudDevSigningAllowed, withCloudBuildDefaults } from './cloud-build-defaults'
 
 describe('withCloudBuildDefaults', () => {
   afterEach(() => vi.unstubAllGlobals())
@@ -22,5 +22,12 @@ describe('withCloudBuildDefaults', () => {
       ORCA_BILLING_API_URL: 'https://billing.dev.example',
       ORCA_CLOUD_SANDBOX_URL: 'https://override.example'
     })
+  })
+
+  it('allows dev signing in packaged builds only when the build opts in', () => {
+    expect(cloudDevSigningAllowed(false)).toBe(true)
+    expect(cloudDevSigningAllowed(true)).toBe(false)
+    vi.stubGlobal('ORCA_CLOUD_BUILD_DEFAULTS', { allowDevSigning: true })
+    expect(cloudDevSigningAllowed(true)).toBe(true)
   })
 })
