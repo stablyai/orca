@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { defineFixture } from '../../component-fixtures/component-fixture'
 import { SettingsSegmentedControl } from '../settings/form-controls/SettingsFormControls'
+import { Button } from './button'
 import { InlineError } from './inline-error'
 import { Skeleton } from './skeleton'
 
@@ -36,6 +37,16 @@ export const inlineError = defineFixture({
         retrying
       />
       <InlineError tone="neutral" title="Status unavailable right now." />
+      <InlineError
+        density="compact"
+        title="Couldn't load shared links."
+        detail="Sign in to Orca to see them."
+        action={
+          <Button type="button" variant="outline" size="xs">
+            Sign in
+          </Button>
+        }
+      />
     </div>
   )
 })
