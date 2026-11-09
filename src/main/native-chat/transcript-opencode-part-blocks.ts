@@ -5,7 +5,7 @@ import type {
   NativeChatMessage,
   NativeChatTextBlock
 } from '../../shared/native-chat/native-chat-types'
-import { agentSessionHostStatusBody } from '../../shared/agent-session-host-status-rows'
+import { agentSessionHostStatusBody } from '../../shared/agent-session/view/agent-session-host-status-rows'
 import { asRecord, extractString, parseJsonObject } from '../ai-vault/session-scanner-values'
 // Electron-free: imported by the OpenCode SQLite worker.
 

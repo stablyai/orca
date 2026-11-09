@@ -1,13 +1,13 @@
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from '@/components/terminal-pane/remote-runtime-pty-shell'
+import { REMOTE_RUNTIME_PTY_HONOURS_TAB_SHELL_OVERRIDE } from '@/components/terminal-pane/pty-transport/remote-runtime/remote-runtime-pty-shell'
 import { parseExecutionHostId } from '../../../shared/execution-host'
-import { lastVerifiedRuntimeStatus } from '../../../shared/runtime-host-status'
+import { lastVerifiedRuntimeStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import { isWindowsAbsolutePathLike } from '../../../shared/cross-platform-path'
 import { resolveHostAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import type { AppState } from '@/store/types'
-import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
-import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
+import type { ProjectExecutionRuntimeResolution } from '../../../shared/execution-host/project-execution-runtime'
+import type { AgentStartupShell } from '../../../shared/agent-launch/startup/tui-agent-startup-shell'
 
 export type AgentResumeLaunchTarget = {
   platform: NodeJS.Platform

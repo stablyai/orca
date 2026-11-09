@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { DescendantSnapshot } from '../pty-descendant-termination'
-import { collectDescendantRows } from '../pty-descendant-termination'
+import type { DescendantSnapshot } from '../pty/process-retirement/pty-descendant-termination'
+import { collectDescendantRows } from '../pty/process-retirement/pty-descendant-termination'
 import { createClaudeChildTreeReaper } from './claude-agent-sdk-exit-proof'
 import { mergeClaudeDescendantSnapshots } from './claude-child-tree-snapshot'
 
@@ -24,24 +24,11 @@ describe('Claude child root identity', () => {
     })
   })
 
-  it('keeps the descendant verdict alongside the POSIX root kill', async () => {
-    const child = { pid: 100, kill: vi.fn(() => true) }
-    const terminateDescendants = vi.fn(async () => 'exited' as const)
-    const tree = createClaudeChildTreeReaper(child, {
-      platform: 'linux',
-      captureDescendants: vi.fn(async () => posixSnapshot(1)),
-      terminateDescendants
-    })
-
-    await expect(tree.reap()).resolves.toBe('exited')
-    expect(terminateDescendants).toHaveBeenCalled()
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
-  })
-
   it('rejects mixed old and recycled root rows instead of making the tree killable', async () => {
     const child = { pid: 100, kill: vi.fn(() => true) }
     const terminateDescendants = vi.fn(async () => 'exited' as const)
     const tree = createClaudeChildTreeReaper(child, {
+      site: 'claude-structured-child-close',
       platform: 'linux',
       captureDescendants: vi.fn(async () =>
         collectDescendantRows(

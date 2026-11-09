@@ -51,6 +51,7 @@ describe('mergeNativeChatLiveSession', () => {
       transcriptLifecycle: { state: 'completed', turnId: 'turn-1', timestamp: 2 }
     })
     expect(session.status).toBe('ready')
+    expect(session.hookWorking).toBe(false)
   })
 
   it('does not apply an older completion marker to a newer working turn', () => {
@@ -186,11 +187,12 @@ describe('mergeNativeChatLiveSession', () => {
       messages: [],
       sessionId: 'sess',
       agent: 'claude',
-      hookState: null,
+      hookState: 'working',
       error: 'unreadable'
     })
     expect(errored.status).toBe('error')
     expect(errored.error).toBe('unreadable')
+    expect(errored.hookWorking).toBe(true)
   })
 })
 

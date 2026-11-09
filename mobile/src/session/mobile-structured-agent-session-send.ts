@@ -1,16 +1,14 @@
-import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
-import type {
-  AgentJournalCursor,
-  AgentJournalSkillRef
-} from '../../../src/shared/agent-session-journal-types'
+import type { AgentSessionSendResult } from '../../../src/shared/agent-session/agent-session-wire'
+import type { AgentJournalCursor } from '../../../src/shared/agent-session/journal/agent-session-journal-identity'
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session/journal/agent-session-journal-types'
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
-} from '../../../src/shared/structured-agent-session-send-mutation'
+} from '../../../src/shared/agent-session/requests/structured-agent-session-send-mutation'
 import { structuredAgentSessionBlocksTooLarge } from '../../../src/shared/rpc-contract/structured-agent-session-message-params'
-import { AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS } from '../../../src/shared/agent-session-refusal-notice'
+import { AGENT_SESSION_MESSAGE_TOO_LARGE_PARTS } from '../../../src/shared/agent-session/failures/agent-session-refusal-notice'
 import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
 import {
   requestStructuredAgentSessionMutation,
@@ -33,6 +31,8 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
   selection?: Readonly<Record<string, string>>
   /** Sent only when the host advertises `agent-session.send-options.v1`. */
   options?: Readonly<Record<string, string>>
+  /** Sent only when the host advertises `agent-session.send-usage-limit-continuation.v1`. */
+  usageLimitContinuationOfTurnItemId?: string
   deadline?: number
   clientMessageId: string
   onError: MobileNativeChatSendErrorReporter
@@ -60,7 +60,10 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
       body,
       ...(input.delivery ? { delivery: input.delivery } : {}),
       ...(input.options ? { options: input.options } : {}),
-      ...(input.selection !== undefined ? { selection: input.selection } : {})
+      ...(input.selection !== undefined ? { selection: input.selection } : {}),
+      ...(input.usageLimitContinuationOfTurnItemId
+        ? { usageLimitContinuationOfTurnItemId: input.usageLimitContinuationOfTurnItemId }
+        : {})
     },
     clientOperationId: input.clientMessageId,
     timeoutMs

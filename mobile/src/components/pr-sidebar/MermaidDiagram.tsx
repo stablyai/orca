@@ -1,11 +1,14 @@
 import { memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { Maximize2 } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
+import { colors, radii, spacing, typography, pressedStyle } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { readableMermaidFlowchartSvg } from '../../../../src/shared/mermaid-flowchart-contrast'
-import { readSvgIntrinsicSize, svgMarkupDataUri } from '../../../../src/shared/svg-document'
+import {
+  readSvgIntrinsicSize,
+  svgMarkupDataUri
+} from '../../../../src/shared/file-preview/svg-document'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
 import { MobileNativeChatImageViewer } from '../../session/native-chat/visual/MobileNativeChatImageViewer'
 import { mermaidDiagramConfig } from './mermaid-diagram-config'
@@ -88,7 +91,12 @@ export const MermaidDiagram = memo(function MermaidDiagram({ source, base }: Mer
   return (
     <MermaidFrame onExpand={drawnSvg ? () => setExpanded(true) : undefined}>
       {/* The header button is the accessible control; the drawing is a tap shortcut. */}
-      <Pressable accessible={false} disabled={!drawnSvg} onPress={() => setExpanded(true)}>
+      <Pressable
+        style={({ pressed }) => pressed && pressedStyle}
+        accessible={false}
+        disabled={!drawnSvg}
+        onPress={() => setExpanded(true)}
+      >
         <View ref={hostRef} style={styles.host} />
       </Pressable>
       {expanded && drawnSvg ? (
@@ -125,6 +133,7 @@ function MermaidFrame({ children, onExpand }: { children: ReactNode; onExpand?: 
         <Text style={styles.labelText}>mermaid</Text>
         {onExpand ? (
           <Pressable
+            style={({ pressed }) => pressed && pressedStyle}
             onPress={onExpand}
             hitSlop={8}
             accessibilityRole="button"

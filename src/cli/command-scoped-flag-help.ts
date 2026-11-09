@@ -3,6 +3,11 @@ const FILE_OPEN_FOCUS_HELP =
   "--focus                Bring the user to the file (switches Orca's window to its worktree)"
 
 const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
+  'extension reload': {
+    'extension-id':
+      '--extension-id <id>   Installed unpacked extension ID; also accepted positionally',
+    path: '--path <folder>        Source folder of exactly one installed unpacked extension'
+  },
   'reference add': {
     url: '--url <url-or-jira-key> Full review/issue URL or Jira key; use positionals or repeated --url',
     'reference-site': '--reference-site <id> Jira site for bare keys; see orca jira connection'
@@ -34,6 +39,12 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
     full: '--full                 Print the full guide with bundled references',
     reference: '--reference <name>     Print one bundled reference by name',
     references: '--references           List the bundled reference names for a topic'
+  },
+  'plugin create': {
+    template: '--template <name>      Template to scaffold from (see Usage)',
+    publisher: '--publisher <name>     Repository owner; only for Orca older than 1.4.246',
+    id: '--id <id>              Plugin id (default: the folder name)',
+    name: '--name <display name>  Plugin name shown in Orca'
   },
   'environment update': {
     force: '--force                Restart over running terminals instead of deferring the update'

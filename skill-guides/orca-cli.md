@@ -30,6 +30,8 @@ A handoff is done when the new worktree id and agent handle have been reported a
 
 Do not use `orca orchestration task-create`, `orca orchestration dispatch --inject`, or `orca orchestration check --wait` for full handoffs. `task-create` is also forbidden because it records coordinator-owned tracking state; if a task row is needed, the user asked for supervised orchestration. Deliver the prompt with the agent launch, or with terminal commands for an agent that is already running.
 
+For local work in the caller’s project, omit `--repo` and `--project`. Pass one to target another project or when Orca asks you to disambiguate; do not pick a repo from a list for unambiguous same-project work. The project comes from the caller’s directory, not the project visible in the app. Paired-server calls require an explicit server-side target.
+
 Independent new-worktree handoff:
 
 ```text
@@ -70,12 +72,34 @@ An Orca worktree is Orca's tracked view of a repo checkout, its metadata, termin
 
 Its id is a two-part address, `<repoId>::<worktreePath>`, such as `repo-123::/Users/me/orca/fix-login`. Copy the whole `id` field from `ORCA worktree create --json` or `ORCA worktree list --json`. `repo-123` alone names only the repo.
 
-Common commands:
+For local creation, omit `--repo` and `--project` to stay in the caller's project. Use `--parent-worktree active` for a child of the current workspace. Project selection and parent selection are separate: a native folder parent supplies lineage, not a Git destination, so pass an explicit Git target when creating from a folder outside any managed checkout. Otherwise, pass `--repo` or `--project` only when deliberately creating in another project, or when Orca asks you to disambiguate. Outside any Orca-managed project, pass an explicit target. With a paired server, discover and use that server's exact target instead of the local cwd.
+
+If several Orca workspaces share the checkout and no caller identity selects one, workspace-specific commands ask you to choose an exact selector. Inspect a listed workspace with `ORCA worktree show --worktree <exact-selector> --json`, then use the command’s workspace target flag. For an implicit-create refusal, use `ORCA worktree list --limit 10000 --json` with the same server and host selection; match path and host, increasing --limit if truncated. Pass `--parent-worktree <exact-selector>` or deliberately use `--no-parent` on a fresh request without --retry-launch. Retrying the refused ID returns its original explanation. Pass each exact selector as one argument quoted for your shell. Native folder choices are shown in the local error; exact show inspection is supported, while native folders are not enumerated by worktree list. Implicit creation checks this only when the host actually uses the directory’s parent context; older hosts retain their existing implicit-parent behavior.
+
+Same-project creation:
+
+```text
+ORCA worktree create --name related-task --parent-worktree active --json
+ORCA worktree create --name child-task --parent-worktree active --agent codex --prompt "hi" --json
+ORCA worktree create --name independent-task --no-parent --json
+ORCA worktree create --name review-task --parent-worktree active --pr 123 --json
+```
+
+A native folder parent with an explicit Git destination:
+
+```text
+ORCA worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json
+```
+
+A worktree created with `--repo` from a folder workspace (or with `--parent-worktree folder:<folderId>`) is attached to that folder workspace and shown in its Source Control and Attached worktrees panels. To attach an existing worktree, use `worktree set --parent-worktree folder:<folderId>`.
+
+Other common commands:
 
 ```text
 ORCA repo list --json
 ORCA repo show --repo id:<repoId> --json
 ORCA repo add --path /abs/repo --json
+ORCA repo add --path /abs/folder --kind folder --json
 ORCA repo set --repo id:<repoId> --external-worktree-visibility show --json
 ORCA repo set-base-ref --repo id:<repoId> --ref origin/main --json
 ORCA repo search-refs --repo id:<repoId> --query main --limit 10 --json
@@ -84,22 +108,19 @@ ORCA worktree ps --json
 ORCA worktree ps --agent-wait --json
 ORCA worktree current --json
 ORCA worktree show --worktree <selector> --json
-ORCA worktree create --repo id:<repoId> --name related-task --json
-ORCA worktree create --repo id:<repoId> --name related-task --parent-worktree active --json
-ORCA worktree create --repo id:<repoId> --name folder-child --parent-worktree folder:<folderId> --json
-ORCA worktree create --name child-task --agent codex --prompt "hi" --json
-ORCA worktree create --name independent-task --no-parent --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task" --json
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
 ORCA worktree set --worktree active --workspace-status in-review --json
 ORCA worktree set --worktree active --unread --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --parent-worktree id:<parentRepoId>::<parentPath> --json
 ORCA worktree set --worktree id:<repoId>::<worktreePath> --no-parent --json
-ORCA worktree create --repo id:<repoId> --name review-task --pr 123 --json
+ORCA worktree set --worktree id:<repoId>::<worktreePath> --parent-worktree folder:<folderId> --json
 ORCA worktree set --worktree active --gitlab-issue '#42' --gitlab-mr '!77' --json
 ORCA worktree set --worktree active --pr null --gitlab-mr null --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
+
+`repo add` defaults to Git. Use `--kind folder` for an ordinary directory or a parent of separate Git repositories; worktrees attached to a folder workspace appear in its Source Control panel, one section each. With `--environment`, pass an absolute path on that server.
 
 Ports: `ORCA ports --json` lists the listening ports Orca tied to the current workspace (`--worktree <selector>` for another one, `--all` for every listener on that workspace's host). Each row has `port`, `pid`, `processName`, `connectHost`, `protocol`, and `kind` (`workspace`, `container`, or `external`). Only `workspace` rows have `owner` (with `owner.confidence`: `cwd` or `command`) and, when the dev server printed one in an Orca terminal, `advertisedUrl`. Use this to find a dev server's port instead of running `lsof` yourself. If `unavailableReason` is set, the scan could not run on that host. Native folder workspaces need `--all`, because Orca does not tie ports to them. SSH workspaces opened directly from this app report `unavailableReason` for now; a workspace on a managed Orca server is scanned on that server.
 
@@ -109,10 +130,16 @@ Per-worktree visibility rules still apply.
 
 Selectors:
 
-- `id:<repoId>::<worktreePath>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`
+- `id:<repoId>::<worktreePath>`, `name:<displayName>`, `path:<absolutePath>`, `branch:<branchName>`, `issue:<number>`, `identity:<identityKey>`
+- `folder:<folderId>` names a folder workspace, for commands that take one (`worktree activate` doesn't yet). On a folder workspace, `worktree set` changes `--display-name`, `--comment`, `--workspace-status` and `--unread`/`--read` (links go through `reference add`), and `worktree rm` makes Orca forget it while the folder stays on disk. `path:` and `name:` also match folder workspaces, so `--worktree path:<folderPath>` reaches the folder; `branch:`, `issue:` and `identity:` match worktrees only. `ORCA worktree ps --json` lists folder workspaces; `worktree list` does not.
+- Older Orca versions match `path:` and `name:` against worktrees only, and may pick a worktree at the folder's path. If a folder is meant, pass `folder:<folderId>`.
+- When several workspaces match, the error usually lists each choice's kind, host, path and exact selector; pass one of those. If it lists none, find the row with `ORCA worktree ps --json` (if `truncated`, repeat with `--limit <totalCount>`) and pass `identity:<identity.key>`, `folder:<folderId>`, or `id:<worktreeId>` when no other row has that id. A folder id that two folder workspaces share can't be selected; the error says how to repair it.
+- For a workspace in another environment, add `--environment <id>` to the command, as with any other selector.
 - The full id is the exact `<repo-id>::<path>` value returned by `ORCA worktree create --json` or `ORCA worktree list --json`; a bare repo id is not a worktree id.
-- `active` / `current` for the enclosing Orca-managed worktree from the shell cwd; when targeting a paired server with `--environment` or `--pairing-code`, use an explicit selector from that server instead.
-- For `worktree create --parent-worktree` only, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`
+- `active` / `current` for the Orca workspace enclosing the shell cwd, worktree or folder workspace: the innermost one wins, so a worktree nested inside a folder workspace is picked over the folder; at equal depth this terminal's own workspace wins, otherwise the error lists the choices. Pass `folder:<folderId>` to get the folder itself. `worktree rm` refuses `current`/`active` and needs an explicit selector; its error prints the one `current` resolves to. `current` resolves on this machine's Orca, so it is refused with `--environment <id>` or `--pairing-code`; use an explicit selector from that environment instead (`--environment local` keeps it on this machine even when `ORCA_ENVIRONMENT` is set).
+- `--environment` selects which Orca receives the command (`local` is this machine's own Orca); `host` is that Orca's stored location metadata. Never derive an environment from `host`.
+- `worktree ps` and `worktree show` give each workspace an `address` (text: an `address:` line). Copy `address.line` as is, keeping its `--environment`, or pass `address.environment` and `address.worktree` as `--environment` and `--worktree`. If `address` is null, follow `addressUnavailable` (`one-off-connection`, `unverifiable-row` or `duplicate-folder-id`) and never construct a route yourself. `parent` names the parent's environment when it is known; with `state: unknown-environment` there is no route to it from here.
+- For `worktree create --parent-worktree`, folder/worktree parent context keys are also valid: `folder:<folderId>`, `worktree:<repoId>::<worktreePath>`, `id:folder:<folderId>`, `id:worktree:<repoId>::<worktreePath>`. `worktree set --parent-worktree` also takes the folder keys, `folder:<folderId>` or `id:folder:<folderId>`. On both, `path:` and `name:` record a folder workspace parent when they match one.
 
 Lineage rules:
 
@@ -121,17 +148,18 @@ Lineage rules:
 - Use `--parent-worktree folder:<folderId>` or `--parent-worktree worktree:<repoId>::<worktreePath>` when a folder or worktree parent context should be explicit.
 - Use `--no-parent` only when the new work is independent.
 - A parent can be in a different project from its child, such as `worktree create --repo id:<otherRepoId> --name related-task --parent-worktree id:<parentRepoId>::<parentPath>`. A worktree parent and child must use the same execution host (local machine, SSH target, or paired server).
+- `--parent-worktree` is looked up in the child's environment. For a parent in another environment, add `--parent-environment <local|environment-id>`: to reuse a workspace from `ps`/`show` as a parent, pass its `address.environment` as `--parent-environment` and its `address.worktree` as `--parent-worktree`. Orca never searches other environments; a parent missing there is an error. `active`/`current` always mean this machine's own workspace, so they take only `--parent-environment local`.
+- An address with `--environment local` means the Orca that printed it, because `local` is always the machine running the command; don't hand an address to another machine to run. To link workspaces across environments, run the command from the Orca that has both paired, such as `--environment <server> --worktree <selector> --parent-worktree current`.
 - To move an existing worktree under a different parent, or make it top-level, use `worktree set` with `--parent-worktree <selector>` or `--no-parent`.
 - `--no-parent` only controls Orca lineage; it does not choose the Git base. For independent top-level work, omit `--base-branch` so Orca uses the repo default base, or explicitly pass the repo default base. Never base it on the current feature branch unless the user asks for stacked work or "branch from current".
-- If `--repo` is omitted, Orca infers the repo from the current Orca worktree when possible.
 
 Agent/setup flags:
 
 ```text
-ORCA worktree create --name task --agent codex --prompt "hi" --json
-ORCA worktree create --name task --agent claude --setup run --json
-ORCA worktree create --name task --setup skip --json
-ORCA worktree create --name task --run-hooks --json
+ORCA worktree create --name task --parent-worktree active --agent codex --prompt "hi" --json
+ORCA worktree create --name task --parent-worktree active --agent claude --setup run --json
+ORCA worktree create --name task --parent-worktree active --setup skip --json
+ORCA worktree create --name task --parent-worktree active --run-hooks --json
 ```
 
 - `--agent <id>` starts that agent with the worktree, as a chat or a terminal per the user's Chat | CLI choice for that agent (see Starting agents); `--prompt <text>` sends initial work to it, and `--model <id>` / `--effort <level>` pick its model and reasoning effort, and `--surface chat|terminal` picks chat or terminal for this launch. Known ids include `claude`, `codex`, `omp`, `pi`, `grok`, and other installed agents.
@@ -151,7 +179,7 @@ ORCA reference add https://github.com/acme/api/pull/5123 https://linear.app/acme
 ORCA reference add ENG-123 --reference-site <jira-site-id> --worktree name:api --json
 ORCA reference remove https://github.com/acme/api/pull/5123 --worktree name:api --json
 ORCA reference remove --key <key-from-list> --worktree name:api --json
-ORCA worktree create --name fix --reference https://github.com/acme/api/pull/5123 --reference https://linear.app/acme/issue/STA-1234 --json
+ORCA worktree create --name fix --parent-worktree active --reference https://github.com/acme/api/pull/5123 --reference https://linear.app/acme/issue/STA-1234 --json
 ORCA reference find STA-1234 --json
 ```
 
@@ -223,6 +251,7 @@ Terminal rules:
 - A bulk close fails when the execution host cannot confirm every PTY stopped. Treat that as `unverifiable`; do not report the processes as exited or retry against another host.
 - Use workspace Sleep, not close, when the terminals and agent sessions should resume later. `terminal stop` is legacy compatibility plumbing and should not be used in new agent workflows.
 - `terminal list --json` omits `visualLayouts` to keep the common agent payload bounded. Add `--include-visual-layouts` only when tab and pane topology is required.
+- A chat tab has no terminal handle, so `terminal rename` cannot rename it. Use `ORCA chat rename --session <sessionId> --name "New Name" --json` with the `sessionId` `agent launch` printed; inside a chat, omit `--session` to rename that chat.
 - `terminal create --title` and `terminal rename` set the tab title, which `terminal list` reports under `visualLayouts`. `terminal set-pane-title` sets one pane's title, reported as `terminals[].paneTitle`. `terminals[].title` may be the tab title or the running program's own title, which agents repaint constantly, so never match on it to re-find a terminal.
 - `terminals[].agentIdentity`, when present, is only the agent type (e.g. `codex`), not a session identity, so two Codex panes share it. To find a specific agent's terminal, join `worktree ps --json` `agents[].paneKey` (`<tabId>:<leafId>`) to the `tabId` and `leafId` of a `terminal list` row to get its handle.
 - A paired server has no window. `terminal switch --environment <name>` moves the desktop app on this machine to that server's terminal, and reports `navigated: false` when no desktop here shows that server.
@@ -288,10 +317,11 @@ The commands, snapshot and ref rules, page affinity, and `browser_*` recoveries 
 
 ## Plugins
 
-Make, validate, load and manage Orca plugins with `ORCA plugin ...`. Themes, icons, syntaxes and
-translations load without approval; anything that runs code returns `approval_required` with
-exactly what it would get and an `--approve <fingerprint>` re-run command. Load
-`references/plugins.md` before creating, loading, enabling or publishing a plugin.
+Make, validate, load, install, update and manage Orca plugins with `ORCA plugin ...`. Themes,
+icons, syntaxes and translations install without approval; anything that runs code returns
+`approval_required` with exactly what it would get and an `--approve <fingerprint>` re-run
+command. Load `references/plugins.md` before creating, loading, installing, enabling or publishing
+a plugin. To design, write and debug a plugin end to end, invoke the `orca-plugin-authoring` skill.
 
 ## Agent Session Search
 
@@ -314,7 +344,7 @@ Search rules:
 
 - Quote a multi-word query; unquoted words are read as command names.
 - Search for a distinctive phrase or identifier, not a description of the topic. An exact sentence matches as a phrase first, then as all of its words, then as any of them.
-- `--scope all` (the default) covers conversation turns, commands, and tool output; `--scope conversation` keeps user and assistant turns only.
+- `--scope all` (the default) and `--scope conversation` search user and assistant turns; tool output is excluded.
 - Each hit carries the session, a snippet with the matched text marked, and a `resumeCommand`. `--debug` adds the route the host used.
 - Check `--index-status --json` first. Search runs only where a human turned it on under Settings → Agent Session History; when `enabled` is false, say so and stop. There is no CLI way to turn it on.
 - While `phase` is `indexing`, results can be incomplete. `--fresh` waits up to five seconds for the host to catch up, then searches anyway.
@@ -329,5 +359,5 @@ This guide covers worktrees, terminals, and handoffs on its own. At a gate below
 | --------------------------------------------------------------------------------------------------------------- | -------------------------------- |
 | Driving Orca's embedded browser: navigation, snapshots, refs, tabs, concurrent pages, or `browser_*` recoveries | `references/browser.md`          |
 | Creating, editing, running, or inspecting scheduled automations                                                 | `references/automations.md`      |
-| Creating, validating, loading, enabling, approving, or publishing an Orca plugin                                | `references/plugins.md`          |
+| Creating, loading, installing, updating, approving, or publishing an Orca plugin, or adding a plugin catalog    | `references/plugins.md`          |
 | Mobile emulator taps, gestures, typing, buttons, camera, or permissions                                         | invoke the `orca-emulator` skill |

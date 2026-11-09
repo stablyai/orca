@@ -1,20 +1,20 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../../src/shared/execution-host'
-import { findAutomationRepo } from '../../../src/shared/automation-repo-target'
-import { getAutomationSetupDefaultDecision } from '../../../src/shared/automation-setup-decision'
+import { findAutomationRepo } from '../../../src/shared/automations/ownership/automation-repo-target'
+import { getAutomationSetupDefaultDecision } from '../../../src/shared/automations/launch/automation-setup-decision'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
 import {
   newWorkspaceSetupHooksRead,
   newWorkspaceUiStateRead
 } from '../components/new-workspace-operations'
-import type { SetupTrustPrompt } from '../components/SetupHookTrustDrawer'
-import { newTabRepoListRead } from '../session/mobile-session-read-operations'
+import type { OrcaHookTrustPrompt } from '../components/OrcaHookTrustDrawer'
+import { newTabRepoListRead } from '../session/agent-launch/mobile-runtime-repo-operations'
 import {
   isSetupHookTrusted,
   normalizeSetupHookTrust,
   readRepoHooksSetupCommand,
   wasSetupHookPreviouslyApproved
 } from '../tasks/setup-hook-trust'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { AutomationDraft } from './automation-draft'
 import { AutomationDraftValidationError } from './automation-error'
 import {
@@ -31,7 +31,7 @@ export async function prepareAutomationSetup(args: {
   targets: AutomationTargets
   current: () => boolean
   confirm: (
-    prompt: SetupTrustPrompt,
+    prompt: OrcaHookTrustPrompt,
     trust: PersistedTrustedOrcaHooks
   ) => Promise<'run' | 'skip' | null>
 }): Promise<AutomationDraft | null> {
@@ -119,6 +119,7 @@ export async function prepareAutomationSetup(args: {
   }
   const approved = await args.confirm(
     {
+      kind: 'setup',
       repoId: setup.repoId,
       repoName: setup.displayName,
       ...setupTrust,

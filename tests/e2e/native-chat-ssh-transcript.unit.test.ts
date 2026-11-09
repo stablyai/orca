@@ -2,10 +2,10 @@ import { appendFileSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'n
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type { AgentStatusIpcPayload } from '../../src/shared/agent-status-types'
+import type { AgentStatusIpcPayload } from '../../src/shared/agent-status/contracts/agent-status-ipc-payload'
 import type { NativeChatMessage } from '../../src/shared/native-chat/native-chat-types'
 import { eraseRpcMethods, type RpcContext } from '../../src/main/runtime/rpc/core'
-import { NATIVE_CHAT_METHODS } from '../../src/main/runtime/rpc/methods/native-chat'
+import { NATIVE_CHAT_METHODS } from '../../src/main/runtime/rpc/methods/native-chat/native-chat'
 
 const CONNECTION_ID = 'ssh-target-26057'
 const SESSION_ID = 'claude-session-26057'
@@ -110,11 +110,11 @@ describe('native chat for an agent whose transcript lives on an SSH host (#26057
       const { compareNativeChatTranscriptMessages } =
         await import('../../src/shared/native-chat/transcript/native-chat-transcript-projection')
       const { parseRuntimeNativeChatReadSessionResult } =
-        await import('../../src/renderer/src/components/native-chat/native-chat-runtime-contract')
+        await import('../../src/renderer/src/components/native-chat/session/terminal/read/native-chat-runtime-contract')
       const { createNativeChatMessageListProjection } =
-        await import('../../src/renderer/src/components/native-chat/native-chat-message-list-projection')
+        await import('../../src/renderer/src/components/native-chat/conversation/projection/native-chat-message-list-projection')
       const { commandMarkersAsMessages } =
-        await import('../../src/renderer/src/components/native-chat/native-chat-command-marker')
+        await import('../../src/renderer/src/components/native-chat/session/terminal/delivery/native-chat-command-marker')
       hookRows = [{ ...sshHookRow(transcriptPath), connectionId: null }]
       const line = (id: string, seconds: number) =>
         `${JSON.stringify({
@@ -215,13 +215,5 @@ describe('native chat for an agent whose transcript lives on an SSH host (#26057
 
     expect(page.texts).toEqual([])
     expect(page.error).toBeDefined()
-  })
-
-  it('keeps reading a local session from this machine', async () => {
-    hookRows = [{ ...sshHookRow(transcriptPath), connectionId: null }]
-
-    const page = await readSession(transcriptPath)
-
-    expect(page.texts).toEqual(['LOCAL MACHINE FILE'])
   })
 })

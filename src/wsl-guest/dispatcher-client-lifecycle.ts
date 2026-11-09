@@ -1,5 +1,5 @@
 import { FrameDecoder, KEEPALIVE_SEND_MS, TIMEOUT_MS, encodeKeepAliveFrame } from './protocol'
-import type { PtyConsumerCloseCause } from '../shared/pty-consumer-session-contract'
+import type { PtyConsumerCloseCause } from '../shared/terminal/pty/lifecycle/pty-consumer-session-contract'
 import type {
   DispatcherClientWriter,
   RelayClientSinkOptions,

@@ -1,8 +1,8 @@
 import { useCallback } from 'react'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
+import type { TuiAgent } from '../../../../shared/agent-launch/catalog/tui-agent'
+import type { WorktreeCreationRequest } from '@/lib/workspace/creation/pending-worktree-creation'
 import type { QuickSubmitOptions } from './quick-creation-request'
-import { findPendingLinkedWorkItemCreationId } from '@/lib/pending-worktree-creation'
+import { findPendingLinkedWorkItemCreationId } from '@/lib/workspace/creation/pending-worktree-creation'
 import { useAppStore } from '@/store'
 import { getWorkspaceSeedName } from '@/lib/new-workspace'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
@@ -32,6 +32,7 @@ type QuickSubmitActionInput = Pick<
   | 'resolvePendingSmartGitHubSubmit'
   | 'selectedRepo'
   | 'selectedRepoRequiresConnection'
+  | 'selectedTargetNeedsVisibleHost'
   | 'selectedWorkspaceTarget'
   | 'setCreateError'
   | 'setCreating'
@@ -61,6 +62,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
     resolvePendingSmartGitHubSubmit,
     selectedRepo,
     selectedRepoRequiresConnection,
+    selectedTargetNeedsVisibleHost,
     selectedWorkspaceTarget,
     setCreateError,
     setCreating,
@@ -97,6 +99,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
         !workspaceNameSeed ||
         sourceIntentBlocksCreate ||
         selectedRepoRequiresConnection ||
+        selectedTargetNeedsVisibleHost ||
         (requiresExplicitSetupChoice && !setupDecision) ||
         sparseError !== null
       ) {
@@ -128,6 +131,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       )
 
       if (pendingCreationId) {
+        liveStore.updatePendingWorktreeCreation(pendingCreationId, { loaderVisible: true })
         liveStore.setActivePendingWorktreeCreation(pendingCreationId)
         liveStore.setActiveView('terminal')
         liveStore.setSidebarOpen(true)
@@ -213,6 +217,7 @@ export function useQuickSubmitAction(input: QuickSubmitActionInput) {
       resolvePendingSmartGitHubSubmit,
       selectedRepo,
       selectedRepoRequiresConnection,
+      selectedTargetNeedsVisibleHost,
       selectedWorkspaceTarget,
       setCreateError,
       setCreating,

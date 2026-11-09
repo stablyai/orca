@@ -1,13 +1,14 @@
 import { X } from 'lucide-react'
-import { translate } from '@/i18n/i18n'
-import { useLeftNavigationPluginPanels } from '@/store/plugin-panels'
+import { useTranslate } from '@/i18n/use-translate'
+import { useLeftNavigationPluginPanels } from '@/store/plugins/catalog/plugin-contribution-catalog'
 import { useAppStore } from '@/store'
 import { Button } from '@/components/ui/button'
-import { canGoBackWorktreeHistory } from '@/store/slices/worktree-nav-history'
-import PluginPanel from '@/components/right-sidebar/PluginPanel'
+import { canGoBackWorktreeHistory } from '@/store/slices/ui/workspace-navigation-history'
+import PluginPanel from '@/components/right-sidebar/plugin-panels/PluginPanel'
 
 /** Host-owned chrome remains usable after the plugin's content is revoked. */
 export function PluginMainPage({ tabKey }: { tabKey: `plugin:${string}` }): React.JSX.Element {
+  const t = useTranslate()
   const panels = useLeftNavigationPluginPanels()
   const pluginSystemEnabled = useAppStore((state) => state.settings?.pluginSystemEnabled === true)
   const panel = pluginSystemEnabled
@@ -29,10 +30,7 @@ export function PluginMainPage({ tabKey }: { tabKey: `plugin:${string}` }): Reac
           type="button"
           variant="ghost"
           size="icon-sm"
-          aria-label={translate(
-            'auto.components.plugins.PluginMainPage.close',
-            'Close plugin page'
-          )}
+          aria-label={t('auto.components.plugins.PluginMainPage.close', 'Close plugin page')}
           onClick={closePage}
         >
           <X />
@@ -40,7 +38,7 @@ export function PluginMainPage({ tabKey }: { tabKey: `plugin:${string}` }): Reac
         <div className="min-w-0">
           <h1 className="truncate text-sm font-semibold">
             {panel?.title ??
-              translate('auto.components.plugins.PluginMainPage.unavailableTitle', 'Plugin page')}
+              t('auto.components.plugins.PluginMainPage.unavailableTitle', 'Plugin page')}
           </h1>
           {panel ? (
             <p className="truncate text-xs text-muted-foreground">{panel.pluginName}</p>
@@ -51,7 +49,7 @@ export function PluginMainPage({ tabKey }: { tabKey: `plugin:${string}` }): Reac
         <PluginPanel key={tabKey} tabKey={tabKey} />
       ) : (
         <div className="flex flex-1 items-center justify-center p-6 text-sm text-muted-foreground">
-          {translate(
+          {t(
             'auto.components.right.sidebar.PluginPanel.unavailable',
             'This plugin panel is no longer available.'
           )}

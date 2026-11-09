@@ -12,11 +12,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { SetupGuideSidebarEntry } from './SetupGuideSidebarEntry'
 import { SidebarTaskNavButton } from './SidebarTaskNavButton'
 import { HideSidebarMenu } from './sidebar-nav-controls'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { useLeftNavigationPluginPanels } from '@/store/plugin-panels'
-import { resolvePluginPanelIcon } from '@/components/right-sidebar/plugin-panel-activity-items'
+import { useLeftNavigationPluginPanels } from '@/store/plugins/catalog/plugin-contribution-catalog'
+import { resolvePluginPanelIcon } from '@/components/right-sidebar/plugin-panels/plugin-panel-activity-items'
 
 export function shouldShowMobileButton(
   settings: Partial<Pick<GlobalSettings, 'showMobileButton'>> | null | undefined
@@ -52,6 +52,7 @@ const AgentDashboardSidebarEntry = lazyWithRetry(() => import('./AgentDashboardS
 
 /** Keep revocable plugin pages separate from built-ins and the workspace viewport. */
 const SidebarNav = React.memo(function SidebarNav() {
+  const t = useTranslate()
   // Subscribe across this memo boundary; translate still handles pseudo-localization.
   useTranslation()
   const worktreePaletteShortcutCombos = useShortcutKeyComboDetails('worktree.palette')
@@ -97,7 +98,7 @@ const SidebarNav = React.memo(function SidebarNav() {
       <button
         type="button"
         onClick={() => openModal('worktree-palette')}
-        aria-label={translate(
+        aria-label={t(
           'auto.components.sidebar.SidebarNav.0c3395fd32',
           'Search worktrees and browser tabs'
         )}
@@ -108,7 +109,7 @@ const SidebarNav = React.memo(function SidebarNav() {
           strokeWidth={1.75}
         />
         <span className="flex-1">
-          {translate('auto.components.sidebar.SidebarNav.80611a8b10', 'Search')}
+          {t('auto.components.sidebar.SidebarNav.80611a8b10', 'Search')}
         </span>
         <span className="pointer-events-none hidden shrink-0 items-center gap-1 group-hover:flex group-focus-within:flex">
           {worktreePaletteShortcutCombos.map((combo) => (
@@ -147,7 +148,7 @@ const SidebarNav = React.memo(function SidebarNav() {
                 strokeWidth={artifactsActive ? 2.25 : 1.75}
               />
               <span className="flex-1">
-                {translate('auto.components.sidebar.SidebarNav.artifacts', 'Artifacts')}
+                {t('auto.components.sidebar.SidebarNav.artifacts', 'Artifacts')}
               </span>
             </button>
           </ContextMenuTrigger>
@@ -176,7 +177,7 @@ const SidebarNav = React.memo(function SidebarNav() {
                 strokeWidth={skillsActive ? 2.25 : 1.75}
               />
               <span className="flex-1">
-                {translate('auto.components.sidebar.SidebarNav.skills', 'Skills')}
+                {t('auto.components.sidebar.SidebarNav.skills', 'Skills')}
               </span>
             </button>
           </ContextMenuTrigger>
@@ -243,7 +244,7 @@ const SidebarNav = React.memo(function SidebarNav() {
                 strokeWidth={automationsActive ? 2.25 : 1.75}
               />
               <span className="flex-1">
-                {translate('auto.components.sidebar.SidebarNav.f323383e9a', 'Automations')}
+                {t('auto.components.sidebar.SidebarNav.f323383e9a', 'Automations')}
               </span>
             </button>
           </ContextMenuTrigger>
@@ -283,11 +284,11 @@ const SidebarNav = React.memo(function SidebarNav() {
                   strokeWidth={mobileActive ? 2.25 : 1.75}
                 />
                 <span className="min-w-0 flex-1 truncate">
-                  {translate('auto.components.sidebar.SidebarNav.1b5c41caee', 'Orca Mobile')}
+                  {t('auto.components.sidebar.SidebarNav.1b5c41caee', 'Orca Mobile')}
                 </span>
                 {mobileOnboardingBadge.visible ? (
                   <span className="shrink-0 rounded-full bg-primary px-1.5 py-px text-[10px] font-semibold text-primary-foreground">
-                    {translate('auto.components.sidebar.SidebarNav.c86d83b5c3', 'New')}
+                    {t('auto.components.sidebar.SidebarNav.c86d83b5c3', 'New')}
                   </span>
                 ) : null}
               </button>
@@ -307,7 +308,7 @@ const SidebarNav = React.memo(function SidebarNav() {
                         event.stopPropagation()
                         hideMobileButton()
                       }}
-                      aria-label={translate(
+                      aria-label={t(
                         'auto.components.sidebar.SidebarNav.d599269755',
                         'Hide from sidebar'
                       )}
@@ -316,10 +317,7 @@ const SidebarNav = React.memo(function SidebarNav() {
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="top" sideOffset={4}>
-                    {translate(
-                      'auto.components.sidebar.SidebarNav.d599269755',
-                      'Hide from sidebar'
-                    )}
+                    {t('auto.components.sidebar.SidebarNav.d599269755', 'Hide from sidebar')}
                   </TooltipContent>
                 </Tooltip>
               ) : null}

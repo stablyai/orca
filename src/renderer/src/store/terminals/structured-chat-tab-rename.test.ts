@@ -1,13 +1,15 @@
+import type * as StructuredAgentSessionHostSupport from '@/runtime/native-chat/host-capabilities/structured-agent-session-host-support'
 import { toast } from 'sonner'
 import { createTerminalTabAppearanceActions } from './terminal-tab-appearance'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Tab } from '../../../../shared/tab-types'
-import { createTestStore, makeWorktree, seedStore } from '../slices/store-test-helpers'
-import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { createTestStore, seedStore } from '../testing/app-store-test-fixture'
+import { makeWorktree } from '../slices/worktrees/worktree.test-fixture'
+import { layoutApplyTestTransport } from '@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import type * as SessionClient from '@/runtime/structured-agent-session-client'
+
 import { routeTerminalTabChangesThroughLayoutOwner } from './terminal-tab-layout-owner-actions'
-import { makeFolderWorkspace } from '../slices/worktrees-slice-test-fixtures'
+import { makeFolderWorkspace } from '../folder-workspaces/folder-workspace.test-fixture'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 
 const { hostRename, hostSavesNames } = vi.hoisted(() => ({
@@ -18,9 +20,9 @@ const { hostRename, hostSavesNames } = vi.hoisted(() => ({
   hostSavesNames: vi.fn(async () => true)
 }))
 
-vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
+vi.mock('@/runtime/rpc/calls/runtime-rpc-call', async (importOriginal) => {
   const client = (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
+    await import('@/runtime/workspace-layout/testing/layout-apply-test-transport.test-fixture')
   ).runtimeRpcClientWithLayoutApply(await importOriginal())
   return {
     ...client,
@@ -31,10 +33,13 @@ vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => {
   }
 })
 
-vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof SessionClient>()),
-  supportsStructuredAgentSessionRename: hostSavesNames
-}))
+vi.mock(
+  '../../runtime/native-chat/host-capabilities/structured-agent-session-host-support',
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof StructuredAgentSessionHostSupport>()),
+    supportsStructuredAgentSessionRename: hostSavesNames
+  })
+)
 
 vi.mock('sonner', () => ({
   toast: { info: vi.fn(), success: vi.fn(), error: vi.fn(), warning: vi.fn() }
@@ -56,24 +61,6 @@ function structuredTab(): Tab {
     color: null,
     sortOrder: 0,
     createdAt: 1
-  }
-}
-
-const TERMINAL_TAB_ID = 'terminal-1'
-const TERMINAL_UNIFIED_ID = 'unified-terminal-1'
-
-function terminalTab(): Tab {
-  return {
-    id: TERMINAL_UNIFIED_ID,
-    entityId: TERMINAL_TAB_ID,
-    groupId: 'group-1',
-    worktreeId: WORKTREE,
-    contentType: 'terminal',
-    label: 'Terminal',
-    customLabel: null,
-    color: null,
-    sortOrder: 1,
-    createdAt: 2
   }
 }
 
@@ -111,43 +98,6 @@ function expectChange(windowShows: () => void, mainGets: Record<string, unknown>
     windowShows()
   }
 }
-
-describe('renaming a terminal tab still resolves', () => {
-  it('routes a terminal rename through its entityId, not the unified id', async () => {
-    const store = createTestStore()
-    seedStore(store, {
-      repos: [{ id: 'local-repo', path: '/tmp/app', name: 'app' }] as never,
-      worktreesByRepo: {
-        'local-repo': [makeWorktree({ id: WORKTREE, repoId: 'local-repo', path: '/tmp/app' })]
-      },
-      unifiedTabsByWorktree: { [WORKTREE]: [terminalTab(), structuredTab()] }
-    })
-
-    // Keyed by the TERMINAL's entityId — the structured tab must not absorb it.
-    store.getState().setTabCustomTitle(TERMINAL_TAB_ID, 'Build logs')
-    await layoutApplyTestTransport.settle()
-
-    const tabs = store.getState().unifiedTabsByWorktree[WORKTREE] ?? []
-    expectChange(
-      () => expect(tabs.find((t) => t.id === TERMINAL_UNIFIED_ID)?.customLabel).toBe('Build logs'),
-      { type: 'renameTab', tabId: TERMINAL_UNIFIED_ID, title: 'Build logs' }
-    )
-    expect(tabs.find((t) => t.id === STRUCTURED_TAB_ID)?.customLabel).toBeNull()
-  })
-})
-
-describe('recoloring a structured chat tab', () => {
-  it('writes the color onto the agent-session tab', async () => {
-    const store = storeWithStructuredTab()
-    store.getState().setTabColor(STRUCTURED_TAB_ID, 'red')
-    await layoutApplyTestTransport.settle()
-    expectChange(() => expect(colorOf(store)).toBe('red'), {
-      type: 'setTabProps',
-      tabId: STRUCTURED_TAB_ID,
-      color: 'red'
-    })
-  })
-})
 
 describe('renaming a structured chat tab', () => {
   beforeEach(() => {

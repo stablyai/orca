@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react'
-import { isTerminalPaneCloseChord } from '@/components/terminal-pane/terminal-shortcut-policy'
+import { isTerminalPaneCloseChord } from '@/components/terminal-pane/input/keyboard/terminal-shortcut-policy'
 import { ensureClientCreationActionAllowed } from '@/lib/client-creation-action-error'
 import {
   matchFloatingWorkspacePanelOwnedAction,

@@ -1,11 +1,11 @@
-import type { ProtectedSecretRetentionUpdate } from '../../protected-secret-persistence'
+import type { ProtectedSecretRetentionUpdate } from '../../credentials/protected-secret-persistence'
 import type {
   ProfileStateAuthority,
   ProfileStateDomainReplacement,
   ProfileStatePersistenceAuthority
 } from './profile-state-authority'
 import type { StateSerializationSecretHandlingOperations } from './state-serialization-secret-handling'
-import type { AutomationRun } from '../../../shared/automations-types'
+import type { AutomationRun } from '../../../shared/automations/history/automation-run'
 
 export type SelectiveProfileStateWriteResult = {
   handled: boolean

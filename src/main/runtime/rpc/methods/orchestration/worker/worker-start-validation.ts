@@ -1,8 +1,8 @@
-import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
+import { isTuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent-config'
+import type { TuiAgent } from '../../../../../../shared/agent-launch/catalog/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import type { FederationAttachStartInput } from '../federation/federation-start-schema'
+import type { FederationAttachStartInput } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
   createWorkerLaunchReceipt,
@@ -19,7 +19,7 @@ export function validateFederatedWorkerStartPlacement(
   if (createsWorktree && !params.repo) {
     throw new OrchestrationError(
       'invalid_argument',
-      'Remote new-top-level requires an explicit --repo from remote discovery.'
+      'Remote new-child and new-top-level require an explicit --repo from remote discovery.'
     )
   }
   if (createsWorktree && params.terminal) {
@@ -31,7 +31,7 @@ export function validateFederatedWorkerStartPlacement(
   if (!createsWorktree && (params.name || params.repo || params.baseBranch || params.setup)) {
     throw new OrchestrationError(
       'invalid_argument',
-      'Creation and setup options apply only to remote new-top-level worktrees.'
+      'Creation and setup options apply only to remote new-child or new-top-level worktrees.'
     )
   }
   if (params.terminal && params.agent) {

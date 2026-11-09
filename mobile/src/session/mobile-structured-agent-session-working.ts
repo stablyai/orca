@@ -1,9 +1,9 @@
-import type { StructuredAgentSessionState } from '../../../src/shared/structured-agent-session-reducer'
+import type { StructuredAgentSessionState } from '../../../src/shared/agent-session/structured-agent-session-reducer'
 import {
   runningStructuredAgentSessionTurnId,
   structuredAgentSessionHostSaysWorking
-} from '../../../src/shared/structured-agent-session-live-turn'
-import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/structured-agent-session-main-agent-working'
+} from '../../../src/shared/agent-session/view/structured-agent-session-live-turn'
+import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/agent-session/view/structured-agent-session-main-agent-working'
 
 export function mobileStructuredAgentSessionWorking(state: StructuredAgentSessionState): boolean {
   return structuredAgentSessionHostSaysWorking(state.working, () =>

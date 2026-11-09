@@ -1,6 +1,5 @@
-import { getGitHubTaskKind } from '../../../src/shared/task-github-search'
-export { scopeGitHubTaskSearch } from '../../../src/shared/task-github-search'
-export { getTaskPresetQuery } from '../../../src/shared/task-preset-query'
+import { getGitHubTaskKind } from '../../../src/shared/work-items/task-github-search'
+
 import { type RpcSuccess, type GitHubOwnerRepo, colors } from './mobile-tasks-dependencies'
 import type {
   GitHubPreset,
@@ -42,8 +41,6 @@ export function formatUpdatedAt(value: string): string {
   }
   return `${Math.floor(hours / 24)}d`
 }
-
-export { isTaskProvider } from '../../../src/shared/task-providers'
 
 export function normalizeGitHubPreset(value: unknown): GitHubPreset {
   return value === 'my-issues' ||
@@ -122,7 +119,7 @@ export function projectRowStatusLabel(row: GitHubProjectRow): string {
     return 'Draft'
   }
   if (row.itemType === 'REDACTED') {
-    return 'Redacted'
+    return 'Restricted'
   }
   if (row.content.isDraft) {
     return 'Draft'

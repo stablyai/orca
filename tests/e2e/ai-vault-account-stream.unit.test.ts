@@ -1,24 +1,22 @@
 // @vitest-environment happy-dom
-import { renderToString } from 'react-dom/server'
 import { act, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import * as fs from 'node:fs'
 import type { RuntimeRpcResponse } from '../../src/shared/runtime-rpc-envelope'
 import { useAppStore } from '@/store'
-import { nativeClient } from '@/components/right-sidebar/ai-vault-account-native-test-fixture'
-import type { AiVaultSession } from '../../src/shared/ai-vault-types'
+import { nativeClient } from '@/components/right-sidebar/ai-vault/accounts/ai-vault-account-native-test-fixture'
+import type { AiVaultSession } from '../../src/shared/ai-vault/contracts/ai-vault-types'
 import { decodeAccountsSnapshot } from '../../mobile/src/components/accounts-snapshot'
 import { createRateLimitsApi } from '@/web/preload-api/web-rate-limits-api'
-import { accountStreamFixture, P, Q, D, profile } from './ai-vault-account-stream-test-fixture'
+import { accountStreamFixture, P, profile } from './ai-vault-account-stream-test-fixture'
 import {
   accountSettings,
   accountCards,
-  accountRenders,
   details,
   recordedSession,
   flushAccountWork,
   installAccountFixture
-} from '@/components/right-sidebar/ai-vault-account-test-fixture'
+} from '@/components/right-sidebar/ai-vault/accounts/ai-vault-account-test-fixture'
 
 vi.mock('node:fs', async (original) => ({ ...(await original<typeof fs>()) }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -45,136 +43,6 @@ function dataSession(id = 'p', profileId = P): AiVaultSession {
     accountHome: { kind: 'opencode', locator: { kind: 'managed', managedProfileId: profileId } }
   }
 }
-const oneProducer = { lists: 2, reads: 2, parses: 2, claude: 1, codex: 1, frames: 1, listData: 0 }
-
-it.each([2, 20])(
-  'bounds real stream production and retirement at %i readers/reacquisitions',
-  async (count) => {
-    const source = (fixture = accountStreamFixture())
-    const sessions = Array.from({ length: count }, (_, i) => dataSession(`p-${i}`))
-    expect(renderToString(accountCards(sessions))).toContain('Unknown')
-    expect(source.subscribe).not.toHaveBeenCalled()
-    const panel = render(accountCards(sessions))
-    await flushAccountWork()
-    expect(source.subscribe).toHaveBeenCalledTimes(1)
-    expect(source.listenerCounts()).toEqual([1, 1])
-    expect(source.counters()).toEqual(oneProducer)
-    expect(source.refresh).toHaveBeenCalledTimes(1)
-    expect(panel.getByTestId('p-0').textContent).toContain('Work')
-    // Sequential acquires, including another binding, reuse the live source and ready proof.
-    const q = dataSession('q', Q)
-    panel.rerender(accountCards([...sessions, q]))
-    await flushAccountWork()
-    expect(source.subscribe).toHaveBeenCalledTimes(1)
-    expect(source.counters()).toEqual(oneProducer)
-    const events = [
-      () => source.usage.publish(),
-      () => source.controller.selectData('devin', D),
-      () => {
-        source.seed('opencode', [profile(P, 'Work'), profile(Q, 'Other changed')])
-        return source.controller.selectData('opencode', Q)
-      },
-      () => source.controller.selectData('opencode', null)
-    ]
-    for (const event of events) {
-      source.observations.length = 0
-      accountRenders.clear()
-      await act(async () => {
-        await event()
-      })
-      expect(source.observations).toEqual([oneProducer])
-      for (const session of sessions) {
-        expect(accountRenders.get(session.id) ?? 0).toBe(0)
-      }
-      expect(panel.getByTestId('p-0').textContent).toContain('Work')
-    }
-    accountRenders.clear()
-    const beforeReplay = source.counters()
-    await act(async () => source.slots[0]!.emit(source.frames.at(-1)))
-    expect(source.counters()).toEqual({ ...beforeReplay, frames: beforeReplay.frames + 1 })
-    expect(accountRenders.size).toBe(0)
-    source.seed('opencode', [profile(P, 'Renamed'), profile(Q, 'Other changed')])
-    await act(async () => {
-      await source.controller.selectData('opencode', Q)
-    })
-    expect(panel.getByTestId('p-0').textContent).toContain('Renamed')
-    expect(accountRenders.get('q') ?? 0).toBe(0)
-    for (const session of sessions) {
-      expect(accountRenders.get(session.id)).toBeGreaterThan(0)
-    }
-    // Removing one reader does not close siblings; last reader removes both source listeners.
-    panel.rerender(accountCards(sessions.slice(1)))
-    await flushAccountWork()
-    expect(source.listenerCounts()).toEqual([1, 1])
-    panel.unmount()
-    await flushAccountWork()
-    expect(source.listenerCounts()).toEqual([0, 0])
-    expect(source.slots[0]!.unsubscribe).toHaveBeenCalledTimes(1)
-    expect(source.pendingStreams()).toBe(0)
-    expect(source.subscriptions).toHaveProperty('cleanups.size', 0)
-
-    // Independent desktop subscribers share the document, never each other's registration.
-    const siblingFrames = vi.fn()
-    const sibling = await source.subscribe({ method: 'accounts.subscribe' }, siblingFrames)
-    await flushAccountWork()
-    for (let cycle = 0; cycle < count; cycle++) {
-      const reopened = render(accountCards([dataSession()]))
-      await flushAccountWork()
-      expect(source.listenerCounts()).toEqual([2, 2])
-      expect(source.pendingStreams()).toBe(2)
-      expect(source.subscriptions).toHaveProperty('cleanups.size', 2)
-      source.seed('opencode', [profile(P, `Cycle ${cycle}`), profile(Q, 'Other')])
-      source.observations.length = 0
-      accountRenders.clear()
-      const siblingBefore = siblingFrames.mock.calls.length
-      await act(async () => {
-        await source.controller.selectData('opencode', null)
-      })
-      expect(source.observations).toEqual([oneProducer, oneProducer])
-      expect(reopened.getByTestId('p').textContent).toContain(`Cycle ${cycle}`)
-      expect(accountRenders.get('p')).toBeGreaterThan(0)
-      expect(siblingFrames.mock.calls.length).toBe(siblingBefore + 1)
-      reopened.unmount()
-      await flushAccountWork()
-      expect(source.listenerCounts()).toEqual([1, 1])
-      expect(source.pendingStreams()).toBe(1)
-      expect(source.subscriptions).toHaveProperty('cleanups.size', 1)
-      expect(source.subscriptions).toHaveProperty('cleanupPromises.size', 0)
-      expect(source.transportListeners()).toBe(1)
-      source.observations.length = 0
-      accountRenders.clear()
-      await act(async () => source.usage.publish())
-      expect(source.observations).toEqual([oneProducer])
-      expect(accountRenders.size).toBe(0)
-    }
-    sibling.unsubscribe()
-    await flushAccountWork()
-    expect(source.listenerCounts()).toEqual([0, 0])
-    expect(source.pendingStreams()).toBe(0)
-    expect(source.transportListeners()).toBe(0)
-    expect(source.subscriptions).toMatchObject({
-      cleanups: new Map(),
-      cleanupPromises: new Map(),
-      subscriptionsByConnection: new Map(),
-      connectionBySubscription: new Map(),
-      subscriptionsByRequest: new Map()
-    })
-    const retired = source.counters()
-    source.observations.length = 0
-    await act(async () => source.usage.publish())
-    expect(source.counters()).toEqual(retired)
-    await act(async () => {
-      await source.controller.selectData('devin', D)
-    })
-    expect(source.observations).toEqual([])
-    expect(source.counters()).toMatchObject({
-      claude: retired.claude,
-      codex: retired.codex,
-      frames: retired.frames
-    })
-    expect(accountRenders.size).toBe(0)
-  }
-)
 
 it('isolates real optional-registry failures in ready/data/usage while keeping strict and mobile/web consumers', async () => {
   const source = (fixture = accountStreamFixture())

@@ -1,7 +1,7 @@
 import { ipcMain, Menu, Notification, type BrowserWindow } from 'electron'
 import { QUIT_RENDERER_ACK_TIMEOUT_MS } from '../../shared/quit-teardown-deadline'
 import { translateMain } from '../i18n/main-i18n'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { resolveWindowCloseAction } from './window-close-decision'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
@@ -24,6 +24,7 @@ export function installMainWindowCloseLifecycle(args: {
   let windowCloseConfirmed = false
   const confirmCloseChannel = 'window:confirm-close'
   const closeRequestReceivedChannel = 'window:close-request-received'
+  const closeCancelledChannel = 'window:close-cancelled'
   let closeRequestSequence = 0
   let quitRendererAckRequestId: number | null = null
   let quitRendererAckTimer: ReturnType<typeof setTimeout> | null = null
@@ -52,8 +53,15 @@ export function installMainWindowCloseLifecycle(args: {
     }, WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS)
     quitRendererAckTimer.unref?.()
   }
-  const onCloseRequestReceived = (event: Electron.IpcMainEvent, requestId: number): void => {
-    if (event.sender.id === rendererWebContentsId && requestId === quitRendererAckRequestId) {
+  let lastAcknowledgedRequestId = 0
+  const onCloseRequestReceived = (event: Electron.IpcMainEvent, requestId: unknown): void => {
+    if (event.sender.id !== rendererWebContentsId) {
+      return
+    }
+    if (typeof requestId === 'number' && requestId > lastAcknowledgedRequestId) {
+      lastAcknowledgedRequestId = requestId
+    }
+    if (requestId === quitRendererAckRequestId) {
       clearQuitRendererAckTimer()
     }
   }
@@ -125,13 +133,26 @@ export function installMainWindowCloseLifecycle(args: {
       requestId
     })
   })
-  mainWindow.webContents.on('will-prevent-unload', () => {
-    // A veto cancels quit; resume bounds persistence for subsequent user resizing.
+  // A veto cancels quit; resume bounds persistence for subsequent user resizing.
+  const abortQuit = (): void => {
     state.resumeBoundsPersistence()
     clearQuitRendererAckTimer()
     opts?.onQuitAborted?.()
+  }
+  mainWindow.webContents.on('will-prevent-unload', () => {
+    abortQuit()
     mainWindow.webContents.send('window:unload-prevented')
   })
+  // Renderer prompts never reach will-prevent-unload. IPC is ordered, so a cancel before the newest ack is stale.
+  const onCloseCancelled = (event: Electron.IpcMainEvent): void => {
+    if (
+      event.sender.id === rendererWebContentsId &&
+      lastAcknowledgedRequestId === closeRequestSequence &&
+      opts?.getIsQuitting?.() === true
+    ) {
+      abortQuit()
+    }
+  }
 
   const onConfirmClose = (): void => {
     clearQuitRendererAckTimer()
@@ -194,6 +215,7 @@ export function installMainWindowCloseLifecycle(args: {
 
   ipcMain.on(confirmCloseChannel, onConfirmClose)
   ipcMain.on(closeRequestReceivedChannel, onCloseRequestReceived)
+  ipcMain.on(closeCancelledChannel, onCloseCancelled)
 
   const dispose = (): void => {
     clearQuitRendererAckTimer()
@@ -205,6 +227,7 @@ export function installMainWindowCloseLifecycle(args: {
     ipcMain.removeHandler(isMaximizedChannel)
     ipcMain.removeListener(confirmCloseChannel, onConfirmClose)
     ipcMain.removeListener(closeRequestReceivedChannel, onCloseRequestReceived)
+    ipcMain.removeListener(closeCancelledChannel, onCloseCancelled)
   }
   return { dispose }
 }

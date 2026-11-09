@@ -1,16 +1,16 @@
 import { useCallback, useRef } from 'react'
 import { useFocusEffect } from 'expo-router'
 import type { AgentMessageSource } from '../../../src/shared/agent-session/agent-session-message-source'
-import { structuredAgentSessionPaneKey } from '../../../src/shared/structured-agent-session-projection'
+import { structuredAgentSessionPaneKey } from '../../../src/shared/agent-session/view/structured-agent-session-projection'
 import {
   structuredSessionOpenFailure,
   type StructuredSessionOpenFailure
 } from '../../../src/shared/open-structured-agent-session'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { mobileStructuredSessionOpenMessage } from './mobile-structured-session-open-message'
 import { openMobileStructuredSession } from './open-mobile-structured-session'
-import { openMobileAgentMessageTerminal } from './mobile-agent-message-terminal'
-import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
+import { openMobileAgentMessageTerminal } from '../terminal/session/mobile-agent-message-terminal'
+import type { MobileSessionKeyboardStateModel } from '../terminal/session/use-mobile-session-keyboard-state'
 
 export function useMobileAgentMessageNavigation(
   client: RpcClient | null,
@@ -81,7 +81,12 @@ export function useMobileAgentMessageNavigation(
       const failure = (outcome: StructuredSessionOpenFailure) => {
         if (current()) {
           showToast(
-            mobileStructuredSessionOpenMessage(outcome.reason, sender.name ?? '', outcome.surface),
+            mobileStructuredSessionOpenMessage(
+              outcome.reason,
+              sender.name ?? '',
+              outcome.surface,
+              outcome.workspaceKind
+            ),
             3000
           )
         }

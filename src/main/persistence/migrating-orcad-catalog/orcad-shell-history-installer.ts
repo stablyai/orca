@@ -15,17 +15,17 @@ import {
 import { dirname, join, resolve } from 'node:path'
 import { ORCAD_MIGRATION_BLOB_KIND_CONTRACTS } from '../../../shared/orcad-migration/orcad-migration-blob-transfer'
 import type { OrcadMigrationManifest } from '../../../shared/orcad-migration/orcad-migration-manifest'
-import { projectGroupIdFromRepoId } from '../../../shared/folder-workspace-worktree'
+import { projectGroupIdFromRepoId } from '../../../shared/folder-workspaces/folder-workspace-worktree'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import {
   durableWriteTempPath,
   syncDirectoryDurablySync,
   writeFileDurableSync
-} from '../../durable-file-write'
-import { resolveUnixPaneShellPath } from '../../daemon/shell-ready'
-import { resolveUnixShellPath } from '../../providers/local-pty-utils'
-import { readHistoryMeta, resolveShellKind } from '../../terminal-history'
+} from '../../filesystem/durable-file-write'
+import { resolveUnixPaneShellPath } from '../../daemon/shell-readiness/shell-ready'
+import { resolveUnixShellPath } from '../../providers/local-pty/local-pty-executable-spawn'
+import { readHistoryMeta, resolveShellKind } from '../../pty/history/terminal-history'
 import {
   getOrcadMigrationReceivedBlobPath,
   listOrcadMigrationReceivedBlobNames

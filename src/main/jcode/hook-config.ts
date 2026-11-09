@@ -6,9 +6,12 @@ import {
   isTomlStructuralLine,
   updateTomlLineScanState,
   parseTomlSingleLineStringValue
-} from '../codex/config-toml-line-scan'
-import { parseTomlKeyPath, parseTomlTableHeaderPath } from '../codex/config-toml-key-path'
-import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
+} from '../codex/configuration/toml/config-toml-line-scan'
+import {
+  parseTomlKeyPath,
+  parseTomlTableHeaderPath
+} from '../codex/configuration/toml/config-toml-key-path'
+import { createManagedCommandMatcher } from '../agent-hooks/installation/commands/managed-hook-command-matching'
 import {
   appendJcodeHookCommand,
   removeJcodeHookCommand,

@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import * as z from 'zod'
 
 /** Host-owned sidebar facts use ExecutionHostId spellings and each row’s own workspace ID. */
 export const DesktopSidebarFactsSchema = z.object({
@@ -23,7 +23,9 @@ export const DesktopSidebarFactsSchema = z.object({
   /** The user's own names for hosts, by host id. */
   hostLabels: z.record(z.string(), z.string()).optional(),
   /** "Also show pinned workspaces in their groups"; absent reads as off. */
-  showPinnedInGroups: z.boolean().optional()
+  showPinnedInGroups: z.boolean().optional(),
+  /** This host's store identity, which other stores' cross-store records name; older hosts omit it. */
+  installationId: z.string().optional().catch(undefined)
 })
 
 export type DesktopSidebarFacts = z.infer<typeof DesktopSidebarFactsSchema>

@@ -1,9 +1,9 @@
 import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
-import { waitForWorkerAgentReady } from '../../../../launched-agent-composer-readiness'
-import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
-import { buildDispatchPreamble } from '../../../../orchestration/preamble'
-import { sendAgentTurn } from '../../../../orchestration/send-agent-turn'
-import { createWorkerBriefWriteGuard } from '../../../../launched-agent-write-guard'
+import { waitForWorkerAgentReady } from '../../../../terminal/wait/launched-agent-composer-readiness'
+import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal/runtime-policy/terminal-wait-blocked-reason-legacy-alias'
+import { buildDispatchPreamble } from '../../../../orchestration/workers/launch/worker-dispatch-preamble'
+import { sendAgentTurn } from '../../../../orchestration/turn-delivery/send-agent-turn'
+import { createWorkerBriefWriteGuard } from '../../../../terminal/wait/launched-agent-write-guard'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { defineMethod } from '../../../core'
 import { assertOrchestrationWorktreeCreationSupported } from '../worker/folder-worktree-placement'
@@ -16,15 +16,16 @@ import {
   persistFederatedSetupSpawnFailure,
   persistFederatedSetupWaitOutcome
 } from './federation-setup'
-import { FederationAttachStartParams } from './federation-start-schema'
+import { FederationAttachStartParams } from '../../../../../../shared/rpc-contract/orchestration-federation-start-params'
 import { failFederatedAttachmentWithReceipt } from './federation-start-receipt'
 import { prepareFederationWorkerLaunchOnHost } from '../worker/worker-opencode-model-preflight'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
-} from '../../../../../../shared/orchestration-timing-budgets'
+} from '../../../../../../shared/orchestration/orchestration-timing-budgets'
 import { assertWorkerStartTaskSpecWithinPromptBudget } from '../worker/worker-start-prompt-budget'
 import { prepareFederatedAttachmentAuthority } from './federation-attachment-authority'
+import { resolveRpcWorkspaceCreatorProvenance } from '../../../workspace-creator-context'
 
 export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
   defineMethod({
@@ -32,7 +33,8 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
     requires: ['accounts'],
     permission: 'workspace',
     params: FederationAttachStartParams,
-    handler: async (params, { runtime, orchestrationMutation }) => {
+    handler: async (params, context) => {
+      const { runtime, orchestrationMutation } = context
       if (!orchestrationMutation) {
         throw new OrchestrationError(
           'invalid_argument',
@@ -102,7 +104,9 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS = [
             params,
             agent,
             launchPreferences: launch.preferences,
-            ...(existing ? { worktree: existing } : {}),
+            ...(existing
+              ? { worktree: existing }
+              : { creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context) }),
             setupSource,
             effects,
             onSetup: (created) => {

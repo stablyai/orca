@@ -1,35 +1,35 @@
-import React, { useCallback } from 'react'
-import { ExternalLink, MonitorUp, Pencil, StickyNote } from 'lucide-react'
-import { toast } from 'sonner'
-import { Badge } from '@/components/ui/badge'
-import { HoverCard, HoverCardContent } from '@/components/ui/hover-card'
-import { LinearIcon } from '@/components/icons/LinearIcon'
-import { JiraIcon } from '@/components/icons/JiraIcon'
+import React, { useCallback, useEffect } from 'react'
+import { Pencil, StickyNote } from 'lucide-react'
+import { HoverCardContent } from '@/components/ui/hover-card'
 import { SelectedTextCopyMenu } from '@/components/SelectedTextCopyMenu'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import CommentMarkdown from '../sidebar/CommentMarkdown'
-import { DetailHeader, MetadataActionIcon } from '../sidebar/WorktreeCardMetadataControls'
+import {
+  DetailHeader,
+  MetadataActionIcon
+} from '../sidebar/workspace-card/metadata/WorktreeCardMetadataControls'
 import {
   WorktreeCardDetailSection,
   WorktreeCardDetailSectionContent
-} from '../sidebar/WorktreeCardDetailSection'
-import { LinearStateBadge } from '../sidebar/WorktreeCardMetadataStatusBadges'
-import { WorktreeCardIssueDetailSection } from '../sidebar/WorktreeCardIssueDetailSection'
-import { WorktreeCardReviewDetailSection } from '../sidebar/WorktreeCardReviewDetailSection'
-import { WorktreeCardAutomationDetailSection } from '../sidebar/WorktreeCardAutomationDetailSection'
-import { WorktreeCardCliDetailSection } from '../sidebar/WorktreeCardCliDetailSection'
-import { WorktreeCardPortsDetails } from '../sidebar/WorktreeCardPorts'
-import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from '../sidebar/WorktreeContextMenu'
-import { useWorktreeCardDetailsHoverControl } from '../sidebar/worktree-card-details-hover-state'
-import { useWorktreeCardFoundation } from '../sidebar/use-worktree-card-foundation'
-import { useWorktreeCardReviewDetails } from '../sidebar/use-worktree-card-review-details'
-import { useWorktreeCardLinkedDetails } from '../sidebar/use-worktree-card-linked-details'
-import { useWorktreeCardLifecycleEffects } from '../sidebar/use-worktree-card-lifecycle-effects'
-import { useWorktreeCardSecondaryDetails } from '../sidebar/use-worktree-card-secondary-details'
-import { useWorkspaceReferenceLinkActions } from '../sidebar/use-workspace-reference-link-actions'
+} from '../sidebar/workspace-card/details/WorktreeCardDetailSection'
+import { WorktreeCardTaskDetailSection } from '../sidebar/workspace-card/review/WorktreeCardTaskDetailSection'
+import { getWorktreeCardTaskActions } from '../sidebar/workspace-card/review/worktree-card-task-actions'
+import { WorktreeCardReviewDetailSection } from '../sidebar/workspace-card/review/WorktreeCardReviewDetailSection'
+import { WorktreeCardAutomationDetailSection } from '../sidebar/workspace-card/details/WorktreeCardAutomationDetailSection'
+import { WorktreeCardCliDetailSection } from '../sidebar/workspace-card/details/WorktreeCardCliDetailSection'
+import { WorktreeCardPortsDetails } from '../sidebar/workspace-card/details/WorktreeCardPorts'
+import '../sidebar/workspace-actions/context-menu/WorktreeContextMenu'
+import { WORKTREE_NATIVE_CONTEXT_MENU_ATTR } from '../sidebar/workspace-actions/context-menu/worktree-context-menu-policy'
+import { useWorktreeCardDetailsHoverControl } from '../sidebar/workspace-card/details/worktree-card-details-hover-state'
+import { useWorktreeCardFoundation } from '../sidebar/workspace-card/controller/use-worktree-card-foundation'
+import { useWorktreeCardReviewDetails } from '../sidebar/workspace-card/details/use-worktree-card-review-details'
+import { useWorktreeCardLinkedDetails } from '../sidebar/workspace-card/details/use-worktree-card-linked-details'
+import { useWorktreeCardLifecycleEffects } from '../sidebar/workspace-card/controller/use-worktree-card-lifecycle-effects'
+import { useWorktreeCardSecondaryDetails } from '../sidebar/workspace-card/details/use-worktree-card-secondary-details'
+import { useWorkspaceReferenceLinkActions } from '../sidebar/workspace-card/review/use-workspace-reference-link-actions'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { ActivityThreadHoverCardSummary } from './activity-thread-hover-card-summary'
-import { ActivityThreadHoverCardTrigger } from './activity-thread-hover-card-trigger'
+import { ActivityThreadHoverCardRoot } from './activity-thread-hover-card-root'
 import type { AgentPaneThread } from './activity-thread-types'
 
 export type ActivityThreadHoverCardProps = {
@@ -55,25 +55,27 @@ export function ActivityThreadHoverCard({
 }: ActivityThreadHoverCardProps): React.JSX.Element {
   const detailsHoverControl = useWorktreeCardDetailsHoverControl()
   const open = detailsHoverControl.hoverOpen && !suppressed
+  const { closeHover } = detailsHoverControl
+  useEffect(() => {
+    if (suppressed) {
+      closeHover()
+    }
+  }, [suppressed, closeHover])
   const { linkActionPopoverProps, onOpenLink, onAuxClickCapture } =
     useWorkspaceReferenceLinkActions(thread.worktree.id, detailsHoverControl)
 
   return (
-    <HoverCard
+    <ActivityThreadHoverCardRoot
       open={open}
       onOpenChange={detailsHoverControl.handleHoverOpenChange}
       openDelay={openDelay}
       closeDelay={closeDelay}
+      enabled={!suppressed}
+      trigger={children}
     >
       <span className="contents" onClick={(event) => event.stopPropagation()}>
         <LinkActionPopover {...linkActionPopoverProps} />
       </span>
-      <ActivityThreadHoverCardTrigger
-        open={open}
-        onOpenChange={detailsHoverControl.handleHoverOpenChange}
-      >
-        {children}
-      </ActivityThreadHoverCardTrigger>
       {open ? (
         <ActivityThreadHoverCardContent
           thread={thread}
@@ -84,7 +86,7 @@ export function ActivityThreadHoverCard({
           canJumpToWorkspace={canJumpToWorkspace}
         />
       ) : null}
-    </HoverCard>
+    </ActivityThreadHoverCardRoot>
   )
 }
 
@@ -103,6 +105,7 @@ function ActivityThreadHoverCardContent({
   onJumpToWorkspace?: (thread: AgentPaneThread) => void
   canJumpToWorkspace?: boolean
 }): React.JSX.Element {
+  const t = useTranslate()
   const { worktree, repo } = thread
   const foundation = useWorktreeCardFoundation({ worktree, repo: repo ?? undefined })
   const review = useWorktreeCardReviewDetails({
@@ -180,31 +183,12 @@ function ActivityThreadHoverCardContent({
     settings: foundation.settings
   })
 
-  const copyLinkedWorkItemLink = useCallback(async (url: string, label: string) => {
-    try {
-      await window.api.ui.writeClipboardText(url)
-      toast.success(
-        translate('auto.components.sidebar.WorktreeCardMeta.copyLinkSuccess', '{{value0}} copied', {
-          value0: label
-        })
-      )
-    } catch {
-      toast.error(
-        translate('auto.components.sidebar.WorktreeCardMeta.copyLinkFailure', 'Failed to copy link')
-      )
-    }
-  }, [])
-
-  const handleCopyIssueLink = useCallback(() => {
-    if (!secondary.hoverIssue?.url) {
-      return
-    }
-    detailsHoverControl.closeHover()
-    void copyLinkedWorkItemLink(
-      secondary.hoverIssue.url,
-      translate('auto.components.sidebar.WorktreeCardMeta.issueLinkLabel', 'Issue link')
-    )
-  }, [copyLinkedWorkItemLink, detailsHoverControl, secondary.hoverIssue?.url])
+  const taskActions = getWorktreeCardTaskActions(detailsHoverControl.closeHover, {
+    onEditIssue: foundation.handleEditIssue,
+    onOpenGitHubIssueInOrca: secondary.handleOpenGitHubIssueInOrca,
+    onOpenIssueInBrowser: secondary.handleOpenIssueInBrowser,
+    onOpenLinearIssueInOrca: secondary.handleOpenLinearIssueInOrca
+  })
 
   const dismissAndRun = useCallback(
     (handler: ((event: React.MouseEvent) => void) | undefined) => (event: React.MouseEvent) => {
@@ -234,120 +218,6 @@ function ActivityThreadHoverCardContent({
           }
           canJumpToWorkspace={canJumpToWorkspace}
         />
-        <WorktreeCardIssueDetailSection
-          issue={secondary.hoverIssue}
-          workspaceId={thread.worktree.id}
-          onManageLinks={dismissAndRun(foundation.handleManageLinks)}
-          issueMenuOpen={detailsHoverControl.issueMenuOpen}
-          onIssueMenuOpenChange={detailsHoverControl.handleIssueMenuOpenChange}
-          onCopyIssueLink={secondary.hoverIssue?.url ? handleCopyIssueLink : undefined}
-          onEditIssue={foundation.handleEditIssue}
-          onOpenGitHubIssueInOrca={
-            secondary.handleOpenGitHubIssueInOrca
-              ? dismissAndRun(secondary.handleOpenGitHubIssueInOrca)
-              : undefined
-          }
-          onOpenIssueInBrowser={
-            secondary.hoverIssue?.url
-              ? (url: string) => {
-                  detailsHoverControl.closeHover()
-                  secondary.handleOpenIssueInBrowser(url)
-                }
-              : undefined
-          }
-        />
-
-        {/* Linear Issue */}
-        {secondary.hoverLinearIssue && (
-          <WorktreeCardDetailSection>
-            <DetailHeader
-              icon={<LinearIcon className="size-3 text-muted-foreground" />}
-              label={translate(
-                'auto.components.sidebar.WorktreeCardMeta.5e982e6128',
-                'Linear {{value0}}',
-                { value0: secondary.hoverLinearIssue.identifier }
-              )}
-              actions={
-                <>
-                  {secondary.hoverLinearIssue.url && secondary.handleOpenLinearIssueInOrca && (
-                    <MetadataActionIcon
-                      label={translate(
-                        'auto.components.sidebar.WorktreeCardMeta.2c67730e07',
-                        'Open in Orca'
-                      )}
-                      onClick={dismissAndRun(secondary.handleOpenLinearIssueInOrca)}
-                    >
-                      <MonitorUp className="size-3" />
-                    </MetadataActionIcon>
-                  )}
-                  {secondary.hoverLinearIssue.url && (
-                    <MetadataActionIcon
-                      label={translate(
-                        'auto.components.sidebar.WorktreeCardMeta.e42941631a',
-                        'View on Linear'
-                      )}
-                      href={secondary.hoverLinearIssue.url}
-                      workspaceId={thread.worktree.id}
-                    >
-                      <ExternalLink className="size-3" />
-                    </MetadataActionIcon>
-                  )}
-                </>
-              }
-            />
-            <WorktreeCardDetailSectionContent className="space-y-1.5">
-              <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
-                {secondary.hoverLinearIssue.title}
-              </div>
-              {((secondary.hoverLinearIssue.labels &&
-                secondary.hoverLinearIssue.labels.length > 0) ||
-                secondary.hoverLinearIssue.stateName) && (
-                <div className="flex flex-wrap gap-1">
-                  {secondary.hoverLinearIssue.stateName && (
-                    <LinearStateBadge stateName={secondary.hoverLinearIssue.stateName} />
-                  )}
-                  {(secondary.hoverLinearIssue.labels ?? []).map((label) => (
-                    <Badge key={label} variant="outline" className="h-4 px-1.5 text-[9px]">
-                      {label}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-            </WorktreeCardDetailSectionContent>
-          </WorktreeCardDetailSection>
-        )}
-
-        {/* Jira Issue */}
-        {secondary.hoverJiraIssue && (
-          <WorktreeCardDetailSection>
-            <DetailHeader
-              icon={<JiraIcon className="size-3 text-muted-foreground" />}
-              label={translate(
-                'auto.components.sidebar.WorktreeCardMeta.jiraIssue',
-                'Jira {{value0}}',
-                { value0: secondary.hoverJiraIssue.identifier }
-              )}
-              actions={
-                <MetadataActionIcon
-                  label={translate(
-                    'auto.components.sidebar.WorktreeCardMeta.viewOnJira',
-                    'View on Jira'
-                  )}
-                  href={secondary.hoverJiraIssue.url}
-                  workspaceId={thread.worktree.id}
-                >
-                  <ExternalLink className="size-3" />
-                </MetadataActionIcon>
-              }
-            />
-            <WorktreeCardDetailSectionContent>
-              <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
-                {secondary.hoverJiraIssue.title}
-              </div>
-            </WorktreeCardDetailSectionContent>
-          </WorktreeCardDetailSection>
-        )}
-
         {/* Pull Request / Review */}
         <WorktreeCardReviewDetailSection
           review={secondary.hoverReview}
@@ -358,6 +228,16 @@ function ActivityThreadHoverCardContent({
           onOpenLink={onOpenLink}
           onUnlinkReview={secondary.canUnlinkReview ? secondary.handleUnlinkReview : undefined}
           closeHover={detailsHoverControl.closeHover}
+        />
+
+        <WorktreeCardTaskDetailSection
+          issue={secondary.hoverIssue}
+          linearIssue={secondary.hoverLinearIssue}
+          jiraIssue={secondary.hoverJiraIssue}
+          actions={taskActions}
+          onMenuOpenChange={detailsHoverControl.handleIssueMenuOpenChange}
+          onOpenLink={onOpenLink}
+          onManageLinks={dismissAndRun(foundation.handleManageLinks)}
         />
 
         {/* Automation Provenance */}
@@ -387,13 +267,10 @@ function ActivityThreadHoverCardContent({
           <WorktreeCardDetailSection>
             <DetailHeader
               icon={<StickyNote className="size-3 text-muted-foreground" />}
-              label={translate('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
+              label={t('auto.components.sidebar.WorktreeCardMeta.93cbea12c2', 'Notes')}
               actions={
                 <MetadataActionIcon
-                  label={translate(
-                    'auto.components.sidebar.WorktreeCardMeta.c7fa72ead0',
-                    'Edit notes'
-                  )}
+                  label={t('auto.components.sidebar.WorktreeCardMeta.c7fa72ead0', 'Edit notes')}
                   onClick={foundation.handleEditComment}
                 >
                   <Pencil className="size-3" />

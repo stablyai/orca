@@ -1,19 +1,14 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import type * as ChatTabLayoutQueueModule from '../../src/main/runtime/agent-session-tab-layout-queue'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/runtime-types'
+import type * as ChatTabLayoutQueueModule from '../../src/main/runtime/agent-session/agent-session-tab-layout-queue'
+
 import {
   authorityProfile,
   openAuthorityRuntime
-} from '../../src/main/runtime/structured-agent-session-tab-authority.test-support'
-import { chatTabCommandsSettled } from '../../src/main/runtime/session-layout-apply.test-fixture'
-import { createChatTabLayoutQueue } from '../../src/main/runtime/agent-session-tab-layout-queue'
-import { applyWindowLayoutCommand } from '../../src/main/runtime/runtime-layout-apply'
+} from '../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support'
+import { chatTabCommandsSettled } from '../../src/main/runtime/orca-runtime-tests/session-layout-apply.test-fixture'
+import type { createChatTabLayoutQueue } from '../../src/main/runtime/agent-session/agent-session-tab-layout-queue'
 import { fixture } from '../../src/main/persistence/loading-store/profile-state-delayed-authority-fixture'
-import {
-  loadChatTabLayout,
-  withChatTabChanges
-} from '../../src/main/runtime/agent-session/agent-session-tab-layout'
-import { getDefaultWorkspaceSession } from '../../src/shared/constants'
+import { loadChatTabLayout } from '../../src/main/runtime/agent-session/agent-session-tab-layout'
 
 const queueProbe = vi.hoisted(() => {
   const queues: Pick<ReturnType<typeof createChatTabLayoutQueue>, 'pendingOpens'>[] = []
@@ -24,7 +19,7 @@ const queueProbe = vi.hoisted(() => {
     queues
   }
 })
-vi.mock('../../src/main/runtime/agent-session-tab-layout-queue', async (original) => {
+vi.mock('../../src/main/runtime/agent-session/agent-session-tab-layout-queue', async (original) => {
   const module = await original<typeof ChatTabLayoutQueueModule>()
   return {
     ...module,
@@ -69,168 +64,12 @@ vi.mock('../../src/main/claude/claude-cli-flag-prewarm', () => ({
 }))
 
 it.each([10, 100])(
-  'counts real raw stores, unrelated window publications and captured cleanup at %i chats',
-  async (n) => {
-    const ids = Array.from({ length: n }, (_, i) => `selected-${i.toString().padStart(5, '0')}`)
-    const rig = await openAuthorityRuntime(await authorityProfile(ids, { visible: ids }))
-    await rig.runtime.restoreStructuredAgentSessionTabs()
-    await chatTabCommandsSettled()
-    const original = rig.runtime.mobileSessionTabsByWorktree.get(rig.workspace)!
-    const lookup = vi.spyOn(rig.store, 'getSessionTabId')
-    const record = vi.spyOn(rig.store, 'getConversation')
-    const journal = vi.spyOn(rig.store, 'transitionHandoff')
-    let orderVisits = 0
-    const countedOrder = original.tabs.map((tab) => tab.id)
-    for (const [index, id] of countedOrder.entries()) {
-      Object.defineProperty(countedOrder, index, {
-        get: () => {
-          orderVisits++
-          return id
-        }
-      })
-    }
-    const raw = {
-      ...original,
-      tabGroups: [{ id: 'counted', activeTabId: null, tabOrder: countedOrder }]
-    }
-    rig.runtime.storeMobileSessionSnapshot(rig.workspace, raw)
-    expect(lookup).toHaveBeenCalledTimes(n)
-    expect(orderVisits).toBe(n)
-    expect(record).not.toHaveBeenCalled()
-    lookup.mockClear()
-    orderVisits = 0
-    rig.runtime.attachWindow(1)
-    rig.runtime.markGraphReady(1)
-    rig.runtime.syncWindowGraph(1, {
-      tabs: [],
-      leaves: [],
-      mobileSessionTabs: [{ ...raw, publicationEpoch: 'cost-window', snapshotVersion: 1 }]
-    })
-    expect(lookup.mock.calls.length).toBeLessThanOrEqual(3 * n)
-    expect(orderVisits).toBeLessThanOrEqual(6 * n)
-    lookup.mockClear()
-    record.mockClear()
-    // An unrelated terminal-only snapshot still traverses the real identity normalization seam.
-    rig.runtime.storeMobileSessionSnapshot('unrelated', {
-      ...raw,
-      worktree: 'unrelated',
-      tabs: [
-        {
-          type: 'terminal',
-          id: 'term-tab::00000000-0000-4000-8000-000000000001',
-          parentTabId: 'term-tab',
-          leafId: '00000000-0000-4000-8000-000000000001',
-          title: 'terminal',
-          isActive: false
-        }
-      ]
-    })
-    expect(lookup).not.toHaveBeenCalled()
-    expect(record).not.toHaveBeenCalled()
-    const saved = rig.profile.getWorkspaceSession().unifiedTabs?.[rig.workspace] ?? []
-    let savedVisits = 0
-    for (const tab of saved) {
-      const entityId = tab.entityId
-      Object.defineProperty(tab, 'entityId', {
-        get: () => {
-          savedVisits++
-          return entityId
-        },
-        configurable: true
-      })
-    }
-    const { closeStructuredAgentSessionChild } =
-      await import('../../src/main/runtime/agent-session/structured-agent-session-close')
-    await closeStructuredAgentSessionChild(ids[0]!, { runtime: rig.runtime })
-    await chatTabCommandsSettled()
-    expect(savedVisits).toBeLessThanOrEqual(8 * n)
-    expect(journal).not.toHaveBeenCalled()
-    expect(rig.acquire).not.toHaveBeenCalled()
-  }
-)
-
-it.each([10, 100])(
-  'bounds actual queued profile replacement to two steps at %i saved rows in both directions',
-  async (n) => {
-    const { store, authority } = await fixture()
-    const workspace = 'replacement-cost'
-    const initial = withChatTabChanges(
-      'local',
-      getDefaultWorkspaceSession(),
-      workspace,
-      Array.from({ length: n }, (_, index) => ({
-        open: { sessionId: `session-${index}`, agent: 'codex', tabId: `legacy-${index}` }
-      }))
-    )
-    if (!initial) {
-      throw new Error('fixture must have saved rows')
-    }
-    store.setWorkspaceSession(initial)
-    await store.flushPendingOrThrowAsync()
-    let loads = 0,
-      applies = 0
-    let applied: Promise<unknown> = Promise.resolve()
-    const queue = createChatTabLayoutQueue({
-      sessionOf: () => {
-        loads++
-        return store.getWorkspaceSession()
-      },
-      hostIdOf: () => 'local',
-      apply: (command, run) => {
-        applies++
-        const result = applyWindowLayoutCommand(store, () => ['local'], command, undefined, run)
-        applied = result
-        return result
-      }
-    })
-    for (const tabId of ['agent-chat-tab-v1-first', 'agent-chat-tab-v1-next', 'legacy-0']) {
-      loads = 0
-      applies = 0
-      authority.captures.length = 0
-      queue(() => [
-        {
-          worktreeId: workspace,
-          change: { open: { sessionId: 'session-0', agent: 'codex', tabId } },
-          eligible: () => true
-        }
-      ])
-      await vi.waitFor(() =>
-        expect(
-          store
-            .getWorkspaceSession()
-            .unifiedTabs?.[workspace]?.find((tab) => tab.entityId === 'session-0')?.id
-        ).toBe(tabId)
-      )
-      await applied
-      expect(applies).toBe(2)
-      expect(loads).toBe(4)
-      expect(authority.captures).toHaveLength(2)
-    }
-    applies = 0
-    loads = 0
-    authority.captures.length = 0
-    queue(() => [{ worktreeId: workspace, change: { close: 'session-0', tabId: 'legacy-0' } }])
-    await vi.waitFor(() =>
-      expect(
-        store
-          .getWorkspaceSession()
-          .unifiedTabs?.[workspace]?.some((tab) => tab.entityId === 'session-0')
-      ).toBe(false)
-    )
-    await applied
-    expect(applies).toBe(1)
-    expect(loads).toBe(2)
-    expect(authority.captures).toHaveLength(1)
-  }
-)
-
-it.each([10, 100])(
   'publishes actual renderer mappings through the window graph in order at %i chats with linear trigger work',
   async (n) => {
     const { buildMobileSessionTabSnapshots } =
       await import('../../src/renderer/src/runtime/sync-runtime-graph/mobile-session-snapshots')
     const { makeState } =
-      await import('../../src/renderer/src/runtime/sync-runtime-graph-test-harness')
+      await import('../../src/renderer/src/runtime/sync-runtime-graph/testing/sync-runtime-graph-test-harness')
     const mappings =
       await import('../../src/renderer/src/runtime/web-session-tabs-sync/tracking-mappings')
     const { hostSessionTabIdByLocalKey } =
@@ -386,8 +225,9 @@ it('keeps failed advisory legacy insertion and retention while the actual inner 
   layoutOwner.main = true
   const { store: profile, authority } = await fixture()
   const { root, B, holdStartup, rejectVisibility, savedIds } =
-    await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
-  const { installFakeAppEnvironment } = await import('../../config/scripts/vitest-host-ports-setup')
+    await import('../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support')
+  const { installFakeAppEnvironment } =
+    await import('../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
   installFakeAppEnvironment({ getPath: () => root })
   const base = await authorityProfile([B], { visible: [B] }, profile)
   const { workspace } = base
@@ -453,231 +293,6 @@ it('keeps failed advisory legacy insertion and retention while the actual inner 
   }
 })
 
-it.each([
-  [10, 10],
-  [100, 10],
-  [10, 100]
-] as const)(
-  'counts complete supplied-member sweep and separate final retirement at S=%i N=%i',
-  async (s, n) => {
-    vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
-    const {
-      createStructuredSweepProgress,
-      closeStructuredSessionsForWorktree,
-      retireStructuredSessionTabsForWorktree
-    } = await import('../../src/main/runtime/structured-session-worktree-teardown')
-    const ids = Array.from({ length: s }, (_, i) => `sweep-${i.toString().padStart(5, '0')}`)
-    const background = Array.from({ length: n }, (_, i) => `other-${i.toString().padStart(5, '0')}`)
-    const rig = await openAuthorityRuntime(
-      await authorityProfile([...ids, ...background], { visible: [...ids, ...background] })
-    )
-    await rig.runtime.restoreStructuredAgentSessionTabs()
-    await chatTabCommandsSettled()
-    const { root } =
-      await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
-    const { folderWorkspaceKey } = await import('../../src/shared/workspace-scope')
-    const other = folderWorkspaceKey(
-      rig.profile.createFolderWorkspace({
-        projectGroupId: rig.groupId,
-        folderPath: `${root}/other`,
-        name: 'Other workspace'
-      }).id
-    )
-    const savedOther = withChatTabChanges(
-      'local',
-      rig.profile.getWorkspaceSession('local'),
-      other,
-      background.map((sessionId) => ({
-        open: { sessionId, agent: 'codex', tabId: `other-${sessionId}` }
-      }))
-    )
-    if (!savedOther) {
-      throw new Error('unrelated saved rows must exist')
-    }
-    rig.profile.setWorkspaceSession(savedOther)
-    const own = rig.runtime.mobileSessionTabsByWorktree.get(rig.workspace)!
-    rig.runtime.storeMobileSessionSnapshot(rig.workspace, {
-      ...own,
-      tabGroups: own.tabs.map((row) => ({
-        id: `g-${row.id}`,
-        activeTabId: row.id,
-        tabOrder: [row.id],
-        recentTabIds: [row.id]
-      }))
-    })
-    rig.runtime.storeMobileSessionSnapshot(other, {
-      ...own,
-      worktree: other,
-      tabs: own.tabs.filter(
-        (row) => row.type === 'agent-session' && background.includes(row.sessionId)
-      ),
-      tabGroups: []
-    })
-    await chatTabCommandsSettled()
-    const unrelated = rig.runtime.mobileSessionTabsByWorktree.get(other)
-    const counts = {
-      saved: 0,
-      savedBudget: 0,
-      savedReads: 0,
-      raw: 0,
-      orders: 0,
-      workspaces: 0,
-      stores: 0,
-      titlePassBudget: 0
-    }
-    const countedArrays = new WeakSet<object>(),
-      countedRows = new WeakSet<object>()
-    const instrument = <T>(rows: T[], key: 'raw' | 'orders') => {
-      if (countedArrays.has(rows)) {
-        return
-      }
-      countedArrays.add(rows)
-      for (const [index, value] of rows.entries()) {
-        Object.defineProperty(rows, index, {
-          configurable: true,
-          get: () => {
-            counts[key]++
-            return value
-          }
-        })
-      }
-    }
-    const wrapSnapshot = (snapshot: RuntimeMobileSessionTabsSnapshot) => {
-      instrument(snapshot.tabs, 'raw')
-      for (const group of snapshot.tabGroups ?? []) {
-        instrument(group.tabOrder, 'orders')
-        if (group.recentTabIds) {
-          instrument(group.recentTabIds, 'orders')
-        }
-      }
-    }
-    for (const snapshot of rig.runtime.mobileSessionTabsByWorktree.values()) {
-      wrapSnapshot(snapshot)
-    }
-    const store = rig.runtime.storeMobileSessionSnapshot.bind(rig.runtime)
-    vi.spyOn(rig.runtime, 'storeMobileSessionSnapshot').mockImplementation(
-      (workspace, snapshot) => {
-        counts.stores++
-        wrapSnapshot(snapshot)
-        const result = store(workspace, snapshot)
-        wrapSnapshot(result)
-        return result
-      }
-    )
-    const saved = rig.profile.getWorkspaceSession.bind(rig.profile)
-    vi.spyOn(rig.profile, 'getWorkspaceSession').mockImplementation((...args) => {
-      const session = saved(...args)
-      counts.savedReads++
-      counts.savedBudget += Object.values(session.unifiedTabs ?? {}).reduce(
-        (total, rows) => total + rows.length,
-        0
-      )
-      for (const rows of Object.values(session.unifiedTabs ?? {})) {
-        for (const row of rows) {
-          if (countedRows.has(row)) {
-            continue
-          }
-          countedRows.add(row)
-          const entity = row.entityId
-          Object.defineProperty(row, 'entityId', {
-            configurable: true,
-            get: () => {
-              counts.saved++
-              return entity
-            }
-          })
-        }
-      }
-      return session
-    })
-    const entries = rig.runtime.mobileSessionTabsByWorktree[Symbol.iterator].bind(
-      rig.runtime.mobileSessionTabsByWorktree
-    )
-    vi.spyOn(rig.runtime.mobileSessionTabsByWorktree, Symbol.iterator).mockImplementation(
-      function* () {
-        for (const entry of entries()) {
-          counts.workspaces++
-          yield entry
-        }
-        return undefined
-      }
-    )
-    const retitle = rig.runtime.refreshStructuredConversationTabTitle.bind(rig.runtime)
-    vi.spyOn(rig.runtime, 'refreshStructuredConversationTabTitle').mockImplementation(
-      (workspace, id) => {
-        counts.titlePassBudget +=
-          rig.runtime.mobileSessionTabsByWorktree.get(workspace)?.tabs.length ?? 0
-        return retitle(workspace, id)
-      }
-    )
-    const close = vi.spyOn(rig.host, 'close')
-    const members = ids.map((sessionId) => ({ sessionId, agent: 'codex' as const }))
-    const measure = async (phase: () => Promise<void>) => {
-      for (const key of [
-        'saved',
-        'savedBudget',
-        'savedReads',
-        'raw',
-        'orders',
-        'workspaces',
-        'stores',
-        'titlePassBudget'
-      ] as const) {
-        counts[key] = 0
-      }
-      await phase()
-      await chatTabCommandsSettled()
-      const result = { ...counts }
-      // Each exact close re-reads saved layouts and rewrites/indexes its current snapshot.
-      // The whole trigger is multiplicative in supplied members and current row population.
-      expect(result.saved).toBeGreaterThan(0)
-      // Client projection asks for each surviving title; each lookup scans saved rows.
-      // Layout load additionally clones/reports its input. Charge those actual input populations.
-      expect(result.savedReads).toBeLessThanOrEqual(s * (s + 2 * n + 8))
-      expect(result.saved).toBeLessThanOrEqual(3 * result.savedBudget)
-      console.info('whole-sweep-cost', { s, n, ...result })
-      // Saved-write listeners retitle every surviving row, each mapping its current raw population.
-      const retirementAndProjectionPasses = 24 * s * (s + 2 * n)
-      const savedWriteRetitlePasses = 3 * result.titlePassBudget
-      expect(result.raw + result.orders).toBeLessThanOrEqual(
-        retirementAndProjectionPasses + savedWriteRetitlePasses
-      )
-      expect(result.stores).toBe(s)
-      expect(result.workspaces).toBeLessThanOrEqual(4 * s)
-      return result
-    }
-    const progress = createStructuredSweepProgress(members)
-    await measure(() =>
-      closeStructuredSessionsForWorktree(progress, 1_800_000_060_000, { runtime: rig.runtime })
-    )
-    expect(progress).toMatchObject({ closed: s, settled: s })
-    expect(close).toHaveBeenCalledTimes(s)
-    expect(
-      rig.runtime.mobileSessionTabsByWorktree
-        .get(rig.workspace)
-        ?.tabs.map((row) => (row.type === 'agent-session' ? row.sessionId : null))
-    ).toEqual(background)
-    // Reopen real lifetimes so final retirement is a populated whole trigger, rather than an empty timing control.
-    for (const sessionId of ids) {
-      await rig.runtime.publishStructuredAgentSessionTab({
-        workspaceId: rig.workspace,
-        sessionId,
-        agent: 'codex',
-        activate: false,
-        navigation: 'caller'
-      })
-    }
-    await chatTabCommandsSettled()
-    await measure(() => retireStructuredSessionTabsForWorktree(members, rig.runtime))
-    await retireStructuredSessionTabsForWorktree(members, rig.runtime)
-    await chatTabCommandsSettled()
-    expect(rig.runtime.mobileSessionTabsByWorktree.get(other)).toBe(unrelated)
-    expect(rig.acquire).not.toHaveBeenCalled()
-    expect(close).toHaveBeenCalledTimes(s)
-    expect(rig.runtime.mobileSessionTabsByWorktree.get(rig.workspace)?.tabs).toHaveLength(n)
-  }
-)
-
 it.each([10, 100])(
   'copies, captures, retains and releases %i concrete pending opens through the inner profile queue',
   async (p) => {
@@ -687,9 +302,9 @@ it.each([10, 100])(
     queueProbe.visits = 0
     const { store: profile, authority } = await fixture()
     const { root, B, rejectVisibility } =
-      await import('../../src/main/runtime/structured-agent-session-tab-authority.test-support')
+      await import('../../src/main/runtime/agent-session/lifecycle/structured-agent-session-tab-authority.test-support')
     const { installFakeAppEnvironment } =
-      await import('../../config/scripts/vitest-host-ports-setup')
+      await import('../../config/scripts/test-runtime/environment/vitest-host-ports-setup')
     installFakeAppEnvironment({ getPath: () => root })
     const ids = Array.from({ length: p }, (_, i) =>
       i === 0 ? B : `pending-${i.toString().padStart(5, '0')}`

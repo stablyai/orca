@@ -159,12 +159,14 @@ function validateFrameIdentity(frame: BrowserNetworkTunnelFrame): void {
   ) {
     throw new Error('Browser tunnel generation is invalid')
   }
-  const connectionFrame =
+  // Stream 0 addresses the connection: heartbeats, and connection credit when window.v2 is negotiated.
+  const streamFrame =
     frame.opcode !== BrowserNetworkTunnelOpcode.Ping &&
-    frame.opcode !== BrowserNetworkTunnelOpcode.Pong
+    frame.opcode !== BrowserNetworkTunnelOpcode.Pong &&
+    frame.opcode !== BrowserNetworkTunnelOpcode.WindowUpdate
   if (
     !Number.isInteger(frame.streamId) ||
-    frame.streamId < (connectionFrame ? 1 : 0) ||
+    frame.streamId < (streamFrame ? 1 : 0) ||
     frame.streamId > MAX_UINT32
   ) {
     throw new Error('Browser tunnel stream id is invalid')

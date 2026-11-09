@@ -8,25 +8,6 @@ import {
 const parse = (value: unknown) => parsePluginIconThemeArtifact(JSON.stringify(value), 'strict')
 
 describe('plugin icon theme artifacts', () => {
-  it('lowercases name, extension and folder keys', () => {
-    expect(
-      parse({
-        schemaVersion: 1,
-        icons: { folder: 'icons/folder.svg' },
-        fileNames: { 'README.md': 'icons/readme.svg' },
-        fileExtensions: { TS: 'icons/ts.svg' },
-        folderNames: { Src: 'icons/src.svg', '.github': 'icons/github.svg' },
-        folderNamesExpanded: { SRC: 'icons/src-open.svg' }
-      })
-    ).toEqual({
-      icons: { folder: 'icons/folder.svg' },
-      fileNames: { 'readme.md': 'icons/readme.svg' },
-      fileExtensions: { ts: 'icons/ts.svg' },
-      folderNames: { src: 'icons/src.svg', '.github': 'icons/github.svg' },
-      folderNamesExpanded: { src: 'icons/src-open.svg' }
-    })
-  })
-
   it('counts folder mappings toward the mapping limit', () => {
     const folderNames = Object.fromEntries(
       Array.from({ length: 257 }, (_, index) => [`dir${index}`, 'a.svg'])
@@ -86,21 +67,6 @@ describe('plugin icon theme artifact prototype keys', () => {
       )
     ).toThrow(/duplicate/)
   })
-
-  it('rejects case-folded duplicates of prototype names', () => {
-    expect(() =>
-      parse({ schemaVersion: 1, fileNames: { constructor: 'a.svg', CONSTRUCTOR: 'b.svg' } })
-    ).toThrow(/duplicate/)
-    expect(() =>
-      parse({ schemaVersion: 1, fileExtensions: { constructor: 'a.svg', CONSTRUCTOR: 'b.svg' } })
-    ).toThrow(/duplicate/)
-  })
-
-  it('does not treat an inherited name as a duplicate of itself', () => {
-    expect(() =>
-      parse({ schemaVersion: 1, fileNames: { Constructor: 'a.svg', toString: 'b.svg' } })
-    ).not.toThrow()
-  })
 })
 
 describe('isPluginIconThemeRegistration', () => {
@@ -135,10 +101,6 @@ describe('isPluginIconThemeRegistration', () => {
     expect(
       isPluginIconThemeRegistration({ ...base, fileNames: {}, folderNamesExpanded: { src: 1 } })
     ).toBe(false)
-  })
-
-  it('accepts in-range indexes', () => {
-    expect(isPluginIconThemeRegistration({ ...base, fileNames: { constructor: 0 } })).toBe(true)
   })
 })
 

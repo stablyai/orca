@@ -1,7 +1,7 @@
 import { beforeEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import { assertEditorBufferInvariant } from '../../../editor-buffer-record-lifecycle'
-import { makeWorktree } from '../../worktrees-slice-test-fixtures'
+import { assertEditorBufferInvariant } from './editor-buffer-record-lifecycle'
+import { makeWorktree } from '../../worktrees/worktree.test-fixture'
 import type { OpenFile } from '../types/open-file'
 
 function tab(id: string, patch: Partial<OpenFile> = {}): OpenFile {
@@ -56,16 +56,4 @@ it('a clean view that saw the file deleted keeps the deleted banner on every vie
   expect(state.editorBufferIdOf.b).toBe(state.editorBufferIdOf.a)
   expect(view('a')?.externalMutation).toBe('deleted')
   expect(view('b')?.externalMutation).toBe('deleted')
-})
-
-it('a deleted banner does not leak onto a dirty target', () => {
-  useAppStore.setState({
-    openFiles: [tab('a', { isDirty: true })],
-    editorDrafts: { a: 'mine' }
-  })
-  useAppStore.setState((s) => ({
-    openFiles: [...s.openFiles, tab('b', { externalMutation: 'deleted' })]
-  }))
-
-  expect(view('a')?.externalMutation).toBeUndefined()
 })

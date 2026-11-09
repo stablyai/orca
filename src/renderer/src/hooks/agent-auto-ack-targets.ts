@@ -1,13 +1,13 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import { isOrcaWindowForegroundFocused } from '@/components/terminal-pane/terminal-notification-pane-visibility'
-import { isStructuredTab } from '../../../shared/structured-agent-session-tab'
+import { isOrcaWindowForegroundFocused } from '@/attention/orca-window-foreground-focus'
+import { isStructuredTab } from '../../../shared/agent-session/view/structured-agent-session-tab'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import { collectTabGroupLayoutGroupIds } from '../../../shared/workspace-layout/tab-group-moves'
 import { isPresenceConfirmed } from './agent-auto-ack-presence'
 import {
   selectFloatingWorkspacePanelVisible,
   type FloatingWorkspacePanelVisibilityState
-} from '@/store/floating-workspace-panel-selector'
+} from '@/store/workspaces/floating/floating-workspace-panel-selector'
 
 export type AutoAckTabTarget = {
   tabId: string

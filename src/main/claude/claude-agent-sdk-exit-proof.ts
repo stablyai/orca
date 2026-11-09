@@ -2,9 +2,12 @@ import type { SpawnedProcess } from '@orca/process-host/process-spec'
 import {
   terminateDescendantSnapshotWithVerdict,
   type DescendantTreeVerdict
-} from '../pty-descendant-exit-verification'
-import { captureDescendantSnapshot, type DescendantSnapshot } from '../pty-descendant-termination'
-import { terminateWindowsProcessTree } from '../windows-process-tree-kill'
+} from '../pty/process-retirement/pty-descendant-exit-verification'
+import {
+  captureDescendantSnapshot,
+  type DescendantSnapshot
+} from '../pty/process-retirement/pty-descendant-termination'
+import { terminateWindowsProcessTree } from '../pty/process-retirement/windows-process-tree-kill'
 import { mergeClaudeDescendantSnapshots } from './claude-child-tree-snapshot'
 import { terminateClaudeRoot } from './claude-child-root-termination'
 import { killProviderWriter } from '../provider-process/provider-process-teardown'
@@ -34,6 +37,7 @@ function admissibleTree(
 }
 
 export type ClaudeChildTreeReaperDeps = {
+  site: string
   platform?: NodeJS.Platform
   supervised?: boolean
   /** Whether the root's exit has been observed; only a live root can be walked. */
@@ -61,7 +65,7 @@ export type ClaudeChildTreeReaper = {
 // Pipe children have no PTY job to sweep; only explicit tree verification can prove their exit.
 export function createClaudeChildTreeReaper(
   child: ReapableChild,
-  deps: ClaudeChildTreeReaperDeps = {}
+  deps: ClaudeChildTreeReaperDeps
 ): ClaudeChildTreeReaper {
   const platform = deps.platform ?? process.platform
   const exited = deps.exited ?? (() => false)
@@ -202,7 +206,7 @@ export function createClaudeChildTreeReaper(
     }
     const terminateTree =
       deps.terminateWindowsTree ??
-      ((pid: number) => terminateWindowsProcessTree(pid, { site: 'claude-structured-child-close' }))
+      ((pid: number) => terminateWindowsProcessTree(pid, { site: deps.site }))
     const terminated = await terminateTree(rootPid).catch(() => false)
     killDelivered ||= terminated
     try {
@@ -299,6 +303,7 @@ export function createClaudeChildTreeReaper(
 export function proveClaudeChildExit(input: ClaudeChildExitProofInput): Promise<boolean> {
   return proveClaudeChildExitWithReaper(input, () =>
     createClaudeChildTreeReaper(input.managed.child, {
+      site: 'claude-structured-child-close',
       exited: () => input.managed.rootVerdict === 'exited'
     })
   )

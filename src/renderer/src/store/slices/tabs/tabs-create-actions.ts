@@ -1,16 +1,13 @@
+import { releaseUnreferencedEditorContent } from '../editor/tabs/editor-tab-retirement'
+import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { createNonSecureContextUuid as createBrowserUuid } from '../../../../../shared/non-secure-context-uuid'
 import { getActiveExecutionHostIdForWorktree } from '@/lib/unified-tab-host-ownership'
 import type { Tab, TabGroup } from '../../../../../shared/tab-types'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import { buildActiveSurfacePatch } from './tabs-surface'
-import {
-  ensureGroup,
-  findGroupForTab,
-  pushRecentTabId,
-  sanitizeRecentTabIds,
-  updateGroup
-} from '../tab-group-state'
+import { ensureGroup, findGroupForTab, updateGroup } from './tab-group-state'
+import { pushRecentTabId, sanitizeRecentTabIds } from './tab-selection-history'
 import {
   applyTabOrderSortValues,
   canReplacePreviewContentType,
@@ -19,9 +16,9 @@ import {
 } from '../../../../../shared/workspace-layout/tab-order'
 import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { emptySplitGroup, insertSplitGroup } from './tabs-group-actions'
-import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspace-worktree'
+import { folderWorkspaceToWorktree } from '../../../../../shared/folder-workspaces/folder-workspace-worktree'
 import { createdTabPreviewFlag } from './tab-preview-flag'
-import { selectFolderWorkspaces } from '../../workspace-record-selectors'
+import { selectFolderWorkspaces } from '../../workspaces/catalog/workspace-record-fields'
 
 export function createTabsCreateActions(
   set: TabsSliceSet,
@@ -31,6 +28,7 @@ export function createTabsCreateActions(
     createUnifiedTab: (worktreeId, contentType, init) => {
       const id = init?.id ?? createBrowserUuid()
       const splitGroupId = init?.split ? createBrowserUuid() : undefined
+      let replacedEditorId: string | undefined
       let created!: Tab
       set((current) => {
         init?.validatePlacement?.(current)
@@ -77,6 +75,9 @@ export function createTabsCreateActions(
               canReplacePreviewContentType(contentType, tab.contentType)
           )
           if (existingPreview) {
+            if (isEditorTabContentType(existingPreview.contentType)) {
+              replacedEditorId = existingPreview.entityId
+            }
             nextTabs = existingTabs.filter((tab) => tab.id !== existingPreview.id)
             nextOrder = nextOrder.filter((tabId) => tabId !== existingPreview.id)
           }
@@ -128,7 +129,8 @@ export function createTabsCreateActions(
           isPinned: init?.isPinned
         }
 
-        const nextActiveTabId = shouldActivate ? created.id : (group.activeTabId ?? created.id)
+        const nextActiveTabId =
+          shouldActivate || init?.showInGroup ? created.id : (group.activeTabId ?? created.id)
         const sanitizedRecent = sanitizeRecentTabIds(group.recentTabIds, nextOrder)
         // Automation-created browsers paint without stealing the visible group selection.
         const nextRecent = shouldActivate
@@ -155,6 +157,9 @@ export function createTabsCreateActions(
           }
         }
       })
+      if (replacedEditorId) {
+        releaseUnreferencedEditorContent(get, replacedEditorId)
+      }
       if (init?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }

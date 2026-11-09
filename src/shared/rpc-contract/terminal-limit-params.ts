@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { MAX_CONFIGURED_TERMINALS } from '../terminal-limit-policy'
+import { MAX_CONFIGURED_TERMINALS } from '../terminal/runtime-policy/terminal-limit-policy'
 
 export const TerminalLimitUpdateParams = z.object({
   maxTerminals: z.number().int().min(1).max(MAX_CONFIGURED_TERMINALS),

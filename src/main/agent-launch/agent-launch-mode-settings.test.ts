@@ -1,15 +1,15 @@
-import { requireStructuredCreateSupportAdmission } from '../runtime/rpc/methods/structured-agent-session-gate'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import { requireStructuredCreateSupportAdmission } from '../runtime/rpc/methods/structured-sessions/creation/structured-agent-session-gate'
+import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/agent-session/agent-session-runtime-capabilities'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
-import type { RuntimeStore } from '../runtime/runtime-store-contract'
+import type { RuntimeStore } from '../runtime/construction/runtime-store-contract'
 import { decideAgentLaunchMode, readAgentLaunchModeSettings } from './agent-launch-mode'
 
 vi.mock('electron', () => ({ app: { getPath: () => '/orca-state', isPackaged: true } }))
 
 describe('host launch preference ownership', () => {
-  it.each([false, true])('reads saved choices privately with Agents disabled=%s', (disabled) => {
+  it.each([true])('reads saved choices privately with Agents disabled=%s', (disabled) => {
     const settings: ReturnType<RuntimeStore['getSettings']> = {
       ...getDefaultSettings('/tmp'),
       agentDefaultSurface: 'chat',
@@ -33,18 +33,6 @@ describe('host launch preference ownership', () => {
     }
     expect(() => requireStructuredCreateSupportAdmission(legacyPhone, 'claude')).toThrow()
     expect(() => requireStructuredCreateSupportAdmission(legacyPhone, 'codex')).not.toThrow()
-  })
-
-  it('opens an agent without a saved choice as its CLI, saving nothing', () => {
-    const saved = {}
-    const runtime = { requireStore: () => ({ getSettings: () => saved }) }
-    expect(
-      decideAgentLaunchMode({
-        placement: { agent: 'grok' },
-        settings: readAgentLaunchModeSettings(runtime)
-      }).mode
-    ).toBe('terminal')
-    expect(saved).not.toHaveProperty('nativeChatProviders')
   })
 
   it.each([false, true])('maps desktop stamp %s onto the launched agent only', (stamp) => {

@@ -1,3 +1,4 @@
+import { projectContentField } from '../../../src/shared/github/project-content-field'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { translate } from '../i18n/mobile-i18n'
 import {
@@ -27,17 +28,18 @@ import {
   projectRowStatusLabel
 } from './mobile-tasks-legacy-foundation'
 import type { GitHubProjectField, GitHubProjectRow } from './mobile-tasks-view-state-types'
+import { pressedStyle } from '../theme/mobile-theme'
 
 function isProjectFieldEmpty(row: GitHubProjectRow, field: GitHubProjectField): boolean {
+  const contentValue = projectContentField(row.content, field.dataType)
+  if (contentValue !== undefined) {
+    return contentValue === null
+  }
   switch (field.dataType) {
     case 'ASSIGNEES':
       return row.content.assignees.map((user) => user.login).join(', ') === ''
     case 'LABELS':
       return row.content.labels.map((label) => label.name).join(', ') === ''
-    case 'REPOSITORY':
-      return row.content.repository == null
-    case 'PARENT_ISSUE':
-      return !row.content.parentIssue
     case 'ISSUE_TYPE':
       return row.content.issueType?.name == null
     case 'TITLE':
@@ -98,7 +100,11 @@ export function renderMobileTasksGitHubProjectList(
         {translate('tasks.githubProjectList.chooseProject', 'Choose a GitHub project')}
       </Text>
       <Pressable
-        style={[styles.targetButton, styles.centerActionButton]}
+        style={({ pressed }) => [
+          styles.targetButton,
+          styles.centerActionButton,
+          pressed && pressedStyle
+        ]}
         disabled={!taskUiReady}
         onPress={() => {
           if (!taskUiReady) {
@@ -152,7 +158,7 @@ export function renderMobileTasksGitHubProjectList(
         if (entry.type === 'group') {
           return (
             <Pressable
-              style={styles.projectGroupHeader}
+              style={({ pressed }) => [styles.projectGroupHeader, pressed && pressedStyle]}
               onPress={() =>
                 setCollapsedGitHubProjectGroups((current) => {
                   const next = new Set(current)

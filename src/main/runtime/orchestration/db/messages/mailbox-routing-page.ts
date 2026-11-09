@@ -1,4 +1,4 @@
-import type { MessageType } from '../../types'
+import type { MessageType } from '../orchestration-records'
 
 export const ORCHESTRATION_DELIVERY_BATCH_LIMIT = 50
 

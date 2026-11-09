@@ -2,15 +2,15 @@ import { parseExecutionHostId, type ExecutionHostId } from '../../../src/shared/
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { ComponentProps } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
-import type { SetupHookTrustDrawer, SetupTrustPrompt } from '../components/SetupHookTrustDrawer'
+import type { OrcaHookTrustDrawer, OrcaHookTrustPrompt } from '../components/OrcaHookTrustDrawer'
 import { persistSetupHookTrustApproval } from '../tasks/setup-hook-trust'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import { prepareAutomationSetup } from './automation-setup-preparation'
 import type { AutomationDraft } from './automation-draft'
 import type { AutomationTargets } from './automation-target-inventory'
 
 type Consent = {
-  prompt: SetupTrustPrompt
+  prompt: OrcaHookTrustPrompt
   client: RpcClient
   executionHost?: ExecutionHostId
   trust: PersistedTrustedOrcaHooks
@@ -81,7 +81,7 @@ export function useAutomationSetupConsent(
       setBusy(false)
     }
   }
-  const drawer: ComponentProps<typeof SetupHookTrustDrawer> = {
+  const drawer: ComponentProps<typeof OrcaHookTrustDrawer> = {
     prompt: confirmation?.prompt ?? null,
     visible: confirmation !== null,
     allowAlwaysTrust: parseExecutionHostId(confirmation?.executionHost)?.kind !== 'runtime',

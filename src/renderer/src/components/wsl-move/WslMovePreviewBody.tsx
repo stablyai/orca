@@ -1,5 +1,6 @@
 import React from 'react'
 import { translate } from '@/i18n/i18n'
+import { useTranslate, type Translate } from '@/i18n/use-translate'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -38,8 +39,8 @@ export type WslMovePreviewBodyProps = {
 const isSelected = (selected: readonly WslMoveRowRef[], row: WslMoveRowRef): boolean =>
   selected.some((ref) => ref.kind === row.kind && ref.id === row.id)
 
-function countsLine(counts: WslMoveCounts): string {
-  return translate(
+function countsLine(counts: WslMoveCounts, t: Translate = translate): string {
+  return t(
     'wslMove.preview.counts',
     'Projects: {{projects}} · Workspaces: {{workspaces}} · Terminals: {{terminals}} · Chats: {{chats}}',
     { ...counts }
@@ -47,27 +48,34 @@ function countsLine(counts: WslMoveCounts): string {
 }
 
 export function WslMovePreviewBody(props: WslMovePreviewBodyProps): React.JSX.Element {
+  const t = useTranslate()
   const { distro, rows, selected, preview, blockers } = props
   const ready = selected.length > 0 && wslMovePreviewStartable(preview, blockers.length)
   return (
     <>
       <div className="space-y-3 text-sm">
+        <p data-testid="wsl-move-why">
+          {t(
+            'wslMove.preview.why',
+            'Work then runs inside Linux, next to your files, so terminals, Git and file changes are faster and more reliable. Your projects don’t change, and you can move any project back with “Use on this computer again”.'
+          )}
+        </p>
         <p className="text-muted-foreground">
-          {translate(
+          {t(
             'wslMove.preview.whatHappens',
             'Your files stay where they are. Terminals restart in the same folder; their output, shell history and agent conversations are kept.'
           )}
         </p>
-        <p data-testid="wsl-move-chats-stay">{wslMoveChatsStayCopy()}</p>
+        <p data-testid="wsl-move-chats-stay">{wslMoveChatsStayCopy(t)}</p>
         {preview?.outcome === 'ready' && preview.browserLoginsNotCarried ? (
           <p data-testid="wsl-move-browser-logins">
-            {wslMoveBrowserLoginsNotCarried(preview.browserLoginsNotCarried)}
+            {wslMoveBrowserLoginsNotCarried(preview.browserLoginsNotCarried, t)}
           </p>
         ) : null}
         {rows.length > 0 ? (
           <div className="space-y-1.5">
             <div className="text-xs font-medium text-muted-foreground">
-              {translate('wslMove.preview.projects', 'Projects in {{distro}}', { distro })}
+              {t('wslMove.preview.projects', 'Projects in {{distro}}', { distro })}
             </div>
             <ul className="max-h-48 divide-y divide-border overflow-y-auto rounded-md border border-border scrollbar-sleek">
               {rows.map((row) => {
@@ -83,9 +91,7 @@ export function WslMovePreviewBody(props: WslMovePreviewBodyProps): React.JSX.El
                       {row.name}
                     </label>
                     {row.kind === 'folder' ? (
-                      <Badge variant="outline">
-                        {translate('wslMove.preview.folderBadge', 'Folder')}
-                      </Badge>
+                      <Badge variant="outline">{t('wslMove.preview.folderBadge', 'Folder')}</Badge>
                     ) : null}
                   </li>
                 )
@@ -93,7 +99,7 @@ export function WslMovePreviewBody(props: WslMovePreviewBodyProps): React.JSX.El
             </ul>
             {selected.length > 0 ? (
               <div className="text-xs text-muted-foreground" data-testid="wsl-move-counts">
-                {countsLine(props.counts)}
+                {countsLine(props.counts, t)}
               </div>
             ) : null}
           </div>
@@ -101,7 +107,7 @@ export function WslMovePreviewBody(props: WslMovePreviewBodyProps): React.JSX.El
         {props.notMoving.length > 0 ? (
           <div className="space-y-1">
             <div className="text-xs font-medium text-muted-foreground">
-              {translate('wslMove.preview.notMoving', 'Not moving')}
+              {t('wslMove.preview.notMoving', 'Not moving')}
             </div>
             <ul className="space-y-0.5 text-xs">
               {props.notMoving.map((entry) => (
@@ -117,12 +123,12 @@ export function WslMovePreviewBody(props: WslMovePreviewBodyProps): React.JSX.El
         {preview === null && selected.length > 0 ? (
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <LoadingSpinner className="size-3.5" />
-            {translate('wslMove.preview.checking', 'Checking the selected projects…')}
+            {t('wslMove.preview.checking', 'Checking the selected projects…')}
           </div>
         ) : null}
         {preview?.outcome === 'refused' ? (
           <div className="space-y-1 text-destructive" role="alert">
-            <p>{wslMoveRefusalMessage(preview, distro, 'preview')}</p>
+            <p>{wslMoveRefusalMessage(preview, distro, 'preview', t)}</p>
             {preview.reasons?.length ? (
               <ul className="list-disc space-y-0.5 pl-5 text-xs">
                 {preview.reasons.map((reason) => (
@@ -145,16 +151,16 @@ export function WslMovePreviewBody(props: WslMovePreviewBodyProps): React.JSX.El
             disabled={preview === null}
             onClick={props.onRecheck}
           >
-            {translate('wslMove.preview.checkAgain', 'Check again')}
+            {t('wslMove.preview.checkAgain', 'Check again')}
           </Button>
         ) : null}
         <Button type="button" variant="ghost" onClick={props.onClose}>
-          {translate('wslMove.cancel', 'Cancel')}
+          {t('wslMove.cancel', 'Cancel')}
         </Button>
         <Button type="button" disabled={!ready} onClick={props.onStart}>
           {selected.length === 1
-            ? translate('wslMove.preview.moveOne', 'Move 1 project')
-            : translate('wslMove.preview.moveMany', 'Move {{n}} projects', {
+            ? t('wslMove.preview.moveOne', 'Move 1 project')
+            : t('wslMove.preview.moveMany', 'Move {{n}} projects', {
                 n: selected.length
               })}
         </Button>
@@ -174,7 +180,8 @@ export function wslMovePreviewStartable(preview: WslMovePreview | null, blockers
 export function wslMoveNotMovingLines(
   preview: WslMovePreview,
   nameOf: (ref: WslMoveRowRef) => string,
-  distro: string
+  distro: string,
+  t: Translate = translate
 ): { name: string; why: string }[] {
   if (preview.outcome !== 'ready') {
     return []
@@ -182,18 +189,18 @@ export function wslMoveNotMovingLines(
   return [
     ...preview.heldByHost.map((ref) => ({
       name: nameOf(ref),
-      why: translate('wslMove.preview.heldByHost', 'Already on the {{distro}} host.', { distro })
+      why: t('wslMove.preview.heldByHost', 'Already on the {{distro}} host.', { distro })
     })),
     ...preview.changed.map((ref) => ({
       name: nameOf(ref),
-      why: translate(
+      why: t(
         'wslMove.preview.changed',
         'Moved earlier, then changed here by an older version of Orca. It is not moved again.'
       )
     })),
     ...preview.refused.map((entry) => ({
       name: nameOf({ kind: entry.kind === 'repo' ? 'repo' : 'folder', id: entry.id }),
-      why: wslMoveScopeRefusalReason(entry.reason)
+      why: wslMoveScopeRefusalReason(entry.reason, t)
     }))
   ]
 }

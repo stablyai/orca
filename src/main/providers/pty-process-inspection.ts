@@ -1,12 +1,10 @@
 import type { IPtyProvider } from './pty-provider-contract'
-import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtyIncarnationId } from '../../shared/terminal/pty/lifecycle/pty-incarnation'
 import {
   classifyTerminalProcessInspectionFailure,
   clientOnlyUnverifiableInspection,
-  type TerminalProcessInspection
-} from '../../shared/terminal-process-inspection'
-
-export type PtyProcessInspection = TerminalProcessInspection
+  type TerminalProcessInspection as PtyProcessInspection
+} from '../../shared/terminal/pty/lifecycle/terminal-process-inspection'
 
 type CompletionSensitivePtyProvider = IPtyProvider & {
   inspectProcess?: (
@@ -17,6 +15,7 @@ type CompletionSensitivePtyProvider = IPtyProvider & {
 
 /** scanChildProcesses requests decision-time evidence; steady polls may rely on the next tick to correct stale reads. */
 export type PtyProcessInspectionOptions = {
+  foregroundOnly?: boolean
   expectedIncarnationId?: PtyIncarnationId
   scanChildProcesses?: boolean
   /** Adoption only: ignore members outside both shell ancestry and console; close still reaches the whole job. */

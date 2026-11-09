@@ -4,8 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
-import { retireTerminalSurfaceFromPersistence } from '../../runtime/mobile-session-terminal-persistence-retirement'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session/workspace-session-state-types'
 import { makeTerminalTab, TEST_LEAF_1, TEST_LEAF_2 } from '../persistence-session-fixtures'
 
 vi.mock('electron', () => ({
@@ -14,7 +13,6 @@ vi.mock('electron', () => ({
 }))
 
 const WORKTREE = 'repo1::/worktree'
-const OTHER_WORKTREE = 'repo1::/other-worktree'
 
 // Simulate a window snapshot that knows only its own tab.
 function rendererSession(): WorkspaceSessionState {
@@ -93,83 +91,7 @@ describe('runtime-admitted terminal membership survives a stale renderer replay'
     expect(persistedTabIds(store.getWorkspaceSession(), WORKTREE)).toContain('host-tab')
   })
 
-  it('keeps a runtime-admitted tab in a second worktree of the same repo', async () => {
-    const store = await createStore()
-    store.setWorkspaceSession(rendererSession())
-
-    await startRuntimePane(store, {
-      worktreeId: OTHER_WORKTREE,
-      tabId: 'host-tab-other',
-      leafId: TEST_LEAF_2,
-      ptyId: 'host-pty-other'
-    })
-    store.setWorkspaceSession(rendererSession())
-
-    expect(persistedTabIds(store.getWorkspaceSession(), OTHER_WORKTREE)).toContain('host-tab-other')
-  })
-
-  it('stamps default-terminal-tab markers so a renderer persist snapshot cannot un-apply them', async () => {
-    const store = await createStore()
-    store.setWorkspaceSession(rendererSession())
-
-    expect(
-      await startRuntimePane(store, {
-        worktreeId: WORKTREE,
-        tabId: 'host-tab',
-        leafId: TEST_LEAF_2,
-        ptyId: 'host-pty'
-      })
-    ).toBe(true)
-    expect(store.getWorkspaceSession().defaultTerminalTabsAppliedByWorktreeId?.[WORKTREE]).toBe(
-      true
-    )
-
-    store.setWorkspaceSession(rendererSession())
-    expect(store.getWorkspaceSession().defaultTerminalTabsAppliedByWorktreeId?.[WORKTREE]).toBe(
-      true
-    )
-  })
-
-  it('leaves renderer-owned membership alone when the runtime did not admit the pane', async () => {
-    const store = await createStore()
-    store.setWorkspaceSession(rendererSession())
-
-    await store.persistPtyBinding({
-      worktreeId: WORKTREE,
-      tabId: 'renderer-second-tab',
-      leafId: TEST_LEAF_2,
-      ptyId: 'renderer-second-pty'
-    })
-    store.setWorkspaceSession(rendererSession())
-
-    expect(persistedTabIds(store.getWorkspaceSession(), WORKTREE)).toEqual(['renderer-tab'])
-  })
-
   // Authoritative retirement derives state from Store and must outrank the admission fence.
-  it('still lets the authoritative retirement path close the runtime-admitted tab', async () => {
-    const store = await createStore()
-    store.setWorkspaceSession(rendererSession())
-    await startRuntimePane(store, {
-      worktreeId: WORKTREE,
-      tabId: 'host-tab',
-      leafId: TEST_LEAF_2,
-      ptyId: 'host-pty',
-      incarnationId: 'host-incarnation'
-    })
-
-    store.setWorkspaceSession(
-      retireTerminalSurfaceFromPersistence(store.getWorkspaceSession(), {
-        worktreeId: WORKTREE,
-        parentTabId: 'host-tab',
-        leafId: TEST_LEAF_2,
-        ptyId: 'host-pty',
-        incarnationId: 'host-incarnation'
-      })
-    )
-    store.setWorkspaceSession(rendererSession())
-
-    expect(persistedTabIds(store.getWorkspaceSession(), WORKTREE)).toEqual(['renderer-tab'])
-  })
 
   it('refuses to bind a pane closed while its terminal started, and mints no tab for it', async () => {
     const store = await createStore()

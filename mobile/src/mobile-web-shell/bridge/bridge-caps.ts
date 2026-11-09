@@ -68,6 +68,13 @@ export const BRIDGE_MAX_HOST_FIELD_CHARS = 1024
 
 // The native host enforces in-flight caps; page-side copies fail early to avoid a wasted round trip.
 export const BRIDGE_MAX_PENDING_REQUESTS = 64
+// Desktop calls can outlive a reconnect; keep the last slots for device verbs such as Attach Photos and its cleanup.
+export const BRIDGE_MAX_PENDING_DESKTOP_REQUESTS = BRIDGE_MAX_PENDING_REQUESTS - 4
+
+export function bridgePendingRequestCap(isNative: boolean): number {
+  return isNative ? BRIDGE_MAX_PENDING_REQUESTS : BRIDGE_MAX_PENDING_DESKTOP_REQUESTS
+}
+
 export const BRIDGE_MAX_SUBSCRIPTIONS = 32
 
 // Viewport updates change cached terminal subscription params, including native streams; enforce desktop ranges at the frame so a bad page cannot poison resubscription.
@@ -99,9 +106,16 @@ export type BridgeRead<TMessage> =
   | { ok: true; message: TMessage }
   | { ok: false; refusal: BridgeRefusal }
 
+const NON_ASCII_UNIT = /[\u0080-\uffff]/
+
+// Find the ASCII prefix natively: Hermes interprets the per-unit loop, which dominated the cost of a large reply.
 export function utf8ByteLength(value: string): number {
-  let bytes = 0
-  for (let index = 0; index < value.length; index += 1) {
+  const firstNonAscii = value.search(NON_ASCII_UNIT)
+  if (firstNonAscii < 0) {
+    return value.length
+  }
+  let bytes = firstNonAscii
+  for (let index = firstNonAscii; index < value.length; index += 1) {
     const unit = value.charCodeAt(index)
     if (unit < 0x80) {
       bytes += 1

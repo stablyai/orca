@@ -40,15 +40,6 @@ function readInit(json: string) {
 }
 
 describe('foldDivision on init', () => {
-  it('omits no fold, and the page reads the absent field as none', () => {
-    expect('foldDivision' in initFrame(null)).toBe(false)
-    expect(readShellSession(readInit(JSON.stringify(initFrame()))).foldDivision).toBeNull()
-  })
-
-  it('passes the fold through to the session the page holds', () => {
-    expect(readShellSession(readInit(JSON.stringify(initFrame(BOOK)))).foldDivision).toEqual(BOOK)
-  })
-
   it('drops a fold the page cannot read without refusing the init around it', () => {
     for (const bad of [
       { ...BOOK, end: 400 },

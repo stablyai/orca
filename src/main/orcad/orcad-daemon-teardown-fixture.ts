@@ -9,12 +9,12 @@ import {
   type ProcessTableIndexOf
 } from '../../shared/process-table-index'
 import { removeTree } from '../../shared/windows-transient-lock-removal'
-import { parseLinuxStartTicks } from '../agent-hooks/managed-hook-owner-identity'
-import { DaemonEndpointOwnershipError } from '../daemon/daemon-endpoint-adoption'
-import { parseLinuxProcessState } from '../daemon/daemon-incarnation-evidence'
-import { readDaemonPidRecord } from '../daemon/daemon-endpoint-incarnation'
-import { readLinuxStat } from '../daemon/daemon-process-inspection'
-import { cleanupDaemonForProtocol } from '../daemon/daemon-protocol-cleanup'
+import { parseLinuxStartTicks } from '../agent-hooks/installation/locking/managed-hook-owner-identity'
+import { DaemonEndpointOwnershipError } from '../daemon/launch/daemon-endpoint-adoption'
+import { parseLinuxProcessState } from '../daemon/endpoint/identity/daemon-incarnation-evidence'
+import { readDaemonPidRecord } from '../daemon/endpoint/identity/daemon-endpoint-incarnation'
+import { readLinuxStat } from '../daemon/endpoint/identity/daemon-process-inspection'
+import { cleanupDaemonForProtocol } from '../daemon/launch/daemon-protocol-cleanup'
 import type { WindowsProcessIdentityRow } from '../windows/windows-process-table'
 import type { spawnProcess } from '@orca/process-host'
 

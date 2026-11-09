@@ -1,7 +1,7 @@
-import { pairedRuntimeConnectionFromOffer } from '../paired-runtime-connection'
+import { pairedRuntimeConnectionFromOffer } from './pairing/paired-runtime-connection'
 import { createServer, type Server, type Socket } from 'node:net'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { generateKeyPair, publicKeyToBase64 } from '../e2ee-crypto'
+import { generateKeyPair, publicKeyToBase64 } from './e2ee/node/e2ee-crypto'
 import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { isRecoverableRemoteRuntimeConnectionError } from './remote-runtime-client-error-classification'
 import {
@@ -62,7 +62,7 @@ describe('remote runtime connect bound', () => {
     const endpoint = await listenSilentUpgradeServer()
     const keyPair = generateKeyPair()
     const onError = vi.fn()
-    const onTextFrame = vi.fn()
+    const onFrame = vi.fn()
 
     const opened = openRemoteRuntimeWebSocket(
       pairedRuntimeConnectionFromOffer({
@@ -71,7 +71,7 @@ describe('remote runtime connect bound', () => {
         deviceToken: 'device-token',
         publicKeyB64: publicKeyToBase64(keyPair.publicKey)
       }),
-      { onClose: vi.fn(), onError, onTextFrame },
+      { onClose: vi.fn(), onError, onFrame },
       150
     )
     if (!opened.ok) {
@@ -88,7 +88,7 @@ describe('remote runtime connect bound', () => {
     expect(error.code).toBe('remote_runtime_unavailable')
     expect(error.message).toContain(endpoint)
     expect(error.message).toContain('unverifiable')
-    expect(onTextFrame).not.toHaveBeenCalled()
+    expect(onFrame).not.toHaveBeenCalled()
 
     // Loss of contact is never evidence the host's work stopped.
     expect(error.message).not.toMatch(/\b(exited|gone|stopped|empty|no terminals)\b/i)

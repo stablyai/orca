@@ -1,17 +1,14 @@
 import { useCallback } from 'react'
 import { translate } from '@/i18n/i18n'
 import { readEditorPanelFileContent } from './editor-panel-file-reads'
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import { getConnectionIdForFile, isWorktreeConnectionResolved } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
-import { getRuntimeFileReadScope } from '@/runtime/runtime-file-routing'
+import { getRuntimeFileReadScope } from '@/runtime/files/runtime-file-routing'
 import { readEditorCsvFileContent } from './csv/csv-file-content'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
-import {
-  findWorkspaceFileRoute,
-  type RuntimeWorkspaceFileRoute
-} from '@/lib/runtime-workspace-file-route'
+import type { RuntimeWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toRuntimeExecutionHostId,
@@ -22,23 +19,20 @@ import {
   type EditorPanelFileContentLoader,
   type UseEditorPanelFileContentLoaderParams
 } from './editor-panel-content-types'
-import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
+import type { EditorPanelContentLoadOptions } from './external-changes/useEditorPanelExternalContentEvents'
 import {
   migrateRestoredEditorFileOwner,
   restoredOwnerMigrationErrorMessage
 } from './migrate-restored-editor-file-owner'
 import { findRestoredEditorWorkspaceRuntimeOwner } from './restored-editor-workspace-runtime-owner'
 import { editorTabFileAccess, isClientLocalReadOnlyTab } from '@/lib/local-file-access'
-import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
-import { grantRestoredHostFile } from './restored-host-file-grant'
-import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
-import { chatScratchFileAddress } from '@/runtime/runtime-chat-scratch-file-address'
-import type { RuntimeFileReadArgs } from '@/runtime/runtime-file-client-types'
-import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
+import { placeAbsoluteTab } from './absolute-tab-placement'
+import type { RuntimeFileReadArgs } from '@/runtime/files/runtime-file-client-types'
+import { stampCleanTabDiskBaseline } from './external-changes/editor-clean-tab-disk-baseline'
 import {
   applyEditorFileLoadFailure,
   getEditorFileLoadFailureContent
-} from './editor-deleted-file-reload'
+} from './external-changes/editor-deleted-file-reload'
 export type { EditorPanelFileContentLoader } from './editor-panel-content-types'
 import {
   acquireEditorFileOperation,
@@ -171,39 +165,28 @@ export function useEditorPanelFileContentLoader({
           if (isClientLocalTab) {
             readConnectionId = undefined
           } else {
-            const currentState = useAppStore.getState()
             const executionHostId = externalSshOwnerId
               ? toSshExecutionHostId(externalSshOwnerId)
               : runtimeEnvironmentId
                 ? toRuntimeExecutionHostId(runtimeEnvironmentId)
                 : LOCAL_EXECUTION_HOST_ID
-            // Floating files stay in their panel even when a project also contains the path.
-            const route = isFloatingWorkspaceId(worktreeId)
-              ? null
-              : findWorkspaceFileRoute(currentState, executionHostId, filePath)
-            if (route && route.worktreeId !== worktreeId) {
-              await reownRestoredFile(route, runtimeEnvironmentId ?? null)
+            const placement = await placeAbsoluteTab({
+              state: useAppStore.getState(),
+              worktreeId,
+              tab: { ...restoredOpenFile, terminalArtifactGrantId: readGrantId },
+              executionHostId,
+              readTarget,
+              runtimeEnvironmentId
+            })
+            if (placement.kind === 'move') {
+              await reownRestoredFile(placement.route, runtimeEnvironmentId ?? null)
               return
             }
-            if (
-              runtimeEnvironmentId &&
-              !route &&
-              !readGrantId &&
-              !chatScratchFileAddress(filePath)
-            ) {
-              readGrantPairing =
-                readTarget.kind === 'environment'
-                  ? captureRuntimeEnvironmentRequestRevision(readTarget.environmentId)
-                  : undefined
-              const restored = await grantRestoredHostFile(
-                readTarget,
-                worktreeId,
-                filePath,
-                readGrantPairing
-              )
-              readGrantId = restored.grantId
+            if (placement.kind === 'grant') {
+              readGrantId = placement.grantId
+              readGrantPairing = placement.pairing
               // Why: a read-only grant stays off the tab, so its save asks the host again and is refused.
-              if (!restored.readOnly) {
+              if (!placement.readOnly) {
                 useAppStore.getState().setTerminalArtifactGrant(id, readGrantId)
               }
             }
@@ -266,8 +249,26 @@ export function useEditorPanelFileContentLoader({
           useAppStore.getState().setCsvPreviewOnly(id, Boolean(result.csvPreview))
         }
         delete fileLoadRetryAttemptsRef.current[id]
-        // Why: a bytes custom editor pages a binary file on the same route; a grant has no ranged reads.
-        const byteSource = result.isBinary && !readArgs.terminalArtifactGrantId ? readArgs : null
+        const servedGrantId = result.terminalArtifactGrantId
+        const state = useAppStore.getState()
+        const tabGrantId = state.openFiles.find((file) => file.id === id)?.terminalArtifactGrantId
+        // Why: the read renews a lapsed grant; keep the tab on it, as a save that renews one does. A
+        // read-only copy stays off the tab, as a read-only grant does, so the next read still says so.
+        if (
+          servedGrantId &&
+          !result.readOnly &&
+          tabGrantId === readGrantId &&
+          tabGrantId &&
+          servedGrantId !== tabGrantId
+        ) {
+          state.setTerminalArtifactGrant(id, servedGrantId)
+        }
+        // Why: a bytes custom editor pages a binary file on the same route, a granted one through the grant that served it.
+        const byteSource = result.isBinary
+          ? servedGrantId
+            ? { ...readArgs, terminalArtifactGrantId: servedGrantId }
+            : readArgs
+          : null
         const loaded = byteSource ? { ...result, byteSource } : result
         setFileContents((prev) => (requestCurrent() ? { ...prev, [id]: loaded } : prev))
         stampCleanTabDiskBaseline(id, result)

@@ -11,11 +11,11 @@ const mocks = vi.hoisted(() => {
   return { panels }
 })
 
-vi.mock('@/store/plugin-panels', () => ({
+vi.mock('@/store/plugins/catalog/plugin-contribution-catalog', () => ({
   useLeftNavigationPluginPanels: () => mocks.panels
 }))
 
-vi.mock('@/components/right-sidebar/PluginPanel', () => ({
+vi.mock('@/components/right-sidebar/plugin-panels/PluginPanel', () => ({
   default: ({ tabKey }: { tabKey: string }) => <div data-panel-tab-key={tabKey} />
 }))
 

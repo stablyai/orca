@@ -2,9 +2,9 @@ import { useEffect, useMemo, useState, type CSSProperties, type JSX, type ReactN
 import { ArrowUp, ChevronDown, ChevronRight, Eye, Hand, Plus, Square, X } from 'lucide-react'
 import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { usePrefersReducedMotion } from '@/components/feature-wall/feature-wall-modal-helpers'
-import { nativeChatPermissionModeLabel } from '@/components/native-chat/native-chat-permission-mode-labels'
-import { nativeChatToolRowVerb } from '@/components/native-chat/native-chat-tool-line-label'
-import { translate } from '@/i18n/i18n'
+import { nativeChatPermissionModeLabel } from '@/components/native-chat/session/options/controls/native-chat-permission-mode-labels'
+import { nativeChatToolRowVerb } from '@/components/native-chat/tools/lines/native-chat-tool-line-label'
+import { useIntlLocale, useTranslate } from '@/i18n/use-translate'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import {
@@ -81,6 +81,7 @@ export function FlowDiagram({
 }
 
 function Transcript({ copy, frame }: { copy: ChatDemoCopy; frame: ChatDemoFrame }): JSX.Element {
+  const t = useTranslate()
   return (
     <div
       className="flex min-h-full shrink-0 flex-col transition-opacity duration-700 ease-in-out"
@@ -104,7 +105,7 @@ function Transcript({ copy, frame }: { copy: ChatDemoCopy; frame: ChatDemoFrame 
           <span className="flex size-4 items-center justify-center text-chat-foreground-faint">
             <Eye className="size-3.5" />
           </span>
-          <span className="text-chat-foreground-faint">{nativeChatToolRowVerb('read')}</span>
+          <span className="text-chat-foreground-faint">{nativeChatToolRowVerb('read', t)}</span>
           <span>{CHAT_DEMO_FILE}</span>
           <ChevronRight className="ml-auto size-3.5 text-chat-foreground-faint" />
         </div>
@@ -113,7 +114,7 @@ function Transcript({ copy, frame }: { copy: ChatDemoCopy; frame: ChatDemoFrame 
         <div className="mt-3 flex min-h-6 items-center gap-1.5 text-chat-foreground-faint">
           <LoadingSpinner className="size-4 shrink-0" />
           <span className="text-chat-foreground">
-            {translate('components.native-chat.status.working', 'Working…')}
+            {t('components.native-chat.status.working', 'Working…')}
           </span>
         </div>
       </Row>
@@ -153,6 +154,7 @@ function Transcript({ copy, frame }: { copy: ChatDemoCopy; frame: ChatDemoFrame 
 }
 
 function Composer({ prompt, frame }: { prompt: string; frame: ChatDemoFrame }): JSX.Element {
+  const t = useTranslate()
   const typing = frame.typed > 0
   return (
     <div className="shrink-0 px-3 pt-1.5 pb-3">
@@ -165,7 +167,7 @@ function Composer({ prompt, frame }: { prompt: string; frame: ChatDemoFrame }): 
             </span>
           ) : (
             <span className="text-chat-foreground-faint">
-              {translate(
+              {t(
                 'components.native-chat.composer.placeholder',
                 'Ask anything, @ to mention files, / for commands'
               )}
@@ -179,7 +181,7 @@ function Composer({ prompt, frame }: { prompt: string; frame: ChatDemoFrame }): 
             </span>
             <span className="flex h-5.5 min-w-0 items-center gap-1 px-1.5 text-xs font-medium whitespace-nowrap">
               <Hand className="size-3 shrink-0" />
-              <span className="truncate">{nativeChatPermissionModeLabel('ask')}</span>
+              <span className="truncate">{nativeChatPermissionModeLabel('ask', t)}</span>
               <ChevronDown className="size-3 shrink-0" />
             </span>
           </div>
@@ -215,10 +217,19 @@ function Composer({ prompt, frame }: { prompt: string; frame: ChatDemoFrame }): 
   )
 }
 
-/** A miniature chat that sends one question and draws its reply, then fades and starts over. */
-export function ChatUiHereFeatureTipVisual(): JSX.Element {
+/** The animated chat miniature used by the tip dialog. */
+export function ChatUiDemoCard({
+  loop = true,
+  className
+}: {
+  /** A one-shot demo holds its finished frame; the dialog loops it. */
+  loop?: boolean
+  className?: string
+}): JSX.Element {
+  const t = useTranslate()
+  const intlLocale = useIntlLocale()
   const reducedMotion = usePrefersReducedMotion()
-  const copy = getChatDemoCopy()
+  const copy = getChatDemoCopy(t, intlLocale)
   const promptLength = Array.from(copy.prompt).length
   const timeline = useMemo(
     () => createChatDemoTimeline(promptLength, copy.reply.length),
@@ -226,9 +237,10 @@ export function ChatUiHereFeatureTipVisual(): JSX.Element {
   )
   const [at, setAt] = useState(0)
   const frame = timeline.frameAt(reducedMotion ? CHAT_DEMO_FINISHED_AT : at)
+  const finished = !loop && at >= CHAT_DEMO_FINISHED_AT
 
   useEffect(() => {
-    if (reducedMotion) {
+    if (reducedMotion || finished) {
       return
     }
     const next = timeline.nextBeat(at)
@@ -237,35 +249,48 @@ export function ChatUiHereFeatureTipVisual(): JSX.Element {
       next - at
     )
     return () => window.clearTimeout(timeoutId)
-  }, [at, reducedMotion, timeline])
+  }, [at, finished, reducedMotion, timeline])
 
+  return (
+    <div
+      className={cn(
+        'flex h-[22rem] w-full max-w-[22rem] flex-col overflow-hidden rounded-xl border border-border/80 bg-chat-canvas text-left tracking-[0.01em] shadow-xs motion-reduce:**:transition-none',
+        className
+      )}
+      aria-hidden="true"
+    >
+      <div className="flex h-9 shrink-0 items-stretch border-b border-border bg-card">
+        <span className="-mb-px flex max-w-[75%] items-center gap-1.5 border-r border-border bg-chat-canvas px-3 text-[11px] whitespace-nowrap text-foreground">
+          <span className="shrink-0">
+            <AgentIcon agent="claude" size={12} />
+          </span>
+          <span className="truncate">{copy.tabTitle}</span>
+          <X className="ml-1 size-2.5 shrink-0 text-muted-foreground" />
+        </span>
+      </div>
+      <div
+        className="native-chat-appearance flex min-h-0 flex-1 flex-col text-sm leading-relaxed text-chat-foreground"
+        style={CHAT_SCALE}
+      >
+        {/* Bottom-anchored, so a transcript taller than the card keeps its end in view. */}
+        <div className="flex min-h-0 flex-1 flex-col justify-end overflow-hidden px-[calc(var(--spacing)*3+5px)]">
+          <Transcript copy={copy} frame={frame} />
+        </div>
+        <Composer prompt={copy.prompt} frame={frame} />
+      </div>
+    </div>
+  )
+}
+
+/** A miniature chat that sends one question and draws its reply, then fades and starts over. */
+export function ChatUiHereFeatureTipVisual(): JSX.Element {
   return (
     <div
       className="relative flex h-full min-h-[23rem] flex-col items-center justify-center overflow-hidden px-6 py-7"
       aria-hidden="true"
     >
       {/* Turning reduced motion on mid-loop jumps straight to the finished still. */}
-      <div className="flex h-[22rem] w-full max-w-[22rem] flex-col overflow-hidden rounded-xl border border-border/80 bg-chat-canvas text-left tracking-[0.01em] shadow-xs motion-reduce:**:transition-none">
-        <div className="flex h-9 shrink-0 items-stretch border-b border-border bg-card">
-          <span className="-mb-px flex max-w-[75%] items-center gap-1.5 border-r border-border bg-chat-canvas px-3 text-[11px] whitespace-nowrap text-foreground">
-            <span className="shrink-0">
-              <AgentIcon agent="claude" size={12} />
-            </span>
-            <span className="truncate">{copy.tabTitle}</span>
-            <X className="ml-1 size-2.5 shrink-0 text-muted-foreground" />
-          </span>
-        </div>
-        <div
-          className="native-chat-appearance flex min-h-0 flex-1 flex-col text-sm leading-relaxed text-chat-foreground"
-          style={CHAT_SCALE}
-        >
-          {/* Bottom-anchored, so a transcript taller than the card keeps its end in view. */}
-          <div className="flex min-h-0 flex-1 flex-col justify-end overflow-hidden px-[calc(var(--spacing)*3+5px)]">
-            <Transcript copy={copy} frame={frame} />
-          </div>
-          <Composer prompt={copy.prompt} frame={frame} />
-        </div>
-      </div>
+      <ChatUiDemoCard />
     </div>
   )
 }

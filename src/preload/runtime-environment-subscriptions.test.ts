@@ -1,5 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
-import { subscribeRuntimeEnvironmentFromPreload } from './runtime-environment-subscriptions'
+import {
+  subscribeRuntimeEnvironmentFromPreload,
+  subscribeCrewAttemptFromPreload,
+  cancelRuntimeEnvironmentSubscriptionFromPreload
+} from './runtime-environment-subscriptions'
 
 function deferred<T>(): {
   promise: Promise<T>
@@ -344,5 +348,114 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
     )
     expect(ipc.removeListener).toHaveBeenCalledTimes(1)
     expect(ipc.listenerCount()).toBe(0)
+  })
+})
+
+describe('opt-in crew setup registration', () => {
+  const args = {
+    selector: 'desk',
+    method: 'orchestration.crewSubscribe',
+    subscriptionId: 'crew',
+    expectedEnvironmentPairingRevision: 1,
+    expectedEnvironmentRuntimeId: null
+  } as const
+
+  it('forwards plain failure after a terminal event and releases the exact registration', async () => {
+    const ipc = createIpc()
+    const pending = deferred<unknown>()
+    ipc.invoke.mockReturnValue(pending.promise)
+    const onClose = vi.fn()
+    const onError = vi.fn()
+    const first = subscribeCrewAttemptFromPreload(ipc, args, {
+      onResponse: vi.fn(),
+      onClose,
+      onError
+    })
+    expect(ipc.invoke).toHaveBeenCalledWith('runtimeEnvironments:subscribe', {
+      ...args,
+      setupResult: 'crew'
+    })
+    dispatch(ipc, {
+      subscriptionId: 'crew',
+      type: 'error',
+      code: 'remote_runtime_unavailable',
+      message: 'offline'
+    })
+    dispatch(ipc, { subscriptionId: 'crew', type: 'close' })
+    const failure = {
+      subscriptionId: 'crew',
+      ok: false,
+      failure: { message: 'revoked', fact: { kind: 'remote', code: 'unauthorized' } }
+    }
+    pending.resolve(failure)
+    await expect(first).resolves.toBe(failure)
+    expect(ipc.listenerCount()).toBe(0)
+    expect(onClose).toHaveBeenCalledTimes(1)
+    expect(onError).toHaveBeenCalledTimes(1)
+  })
+
+  it('releases cancelled registrations while held invoke tails settle in either order', async () => {
+    const count = 2
+    const ipc = createIpc()
+    const held = Array.from({ length: count }, () => deferred<unknown>())
+    let next = 0
+    ipc.invoke.mockImplementation((channel) =>
+      channel === 'runtimeEnvironments:subscribe' ? held[next++].promise : Promise.resolve({})
+    )
+    const responses = vi.fn()
+    const attempts = held.map((_, index) =>
+      subscribeCrewAttemptFromPreload(
+        ipc,
+        { ...args, subscriptionId: `crew-${index}` },
+        { onResponse: responses }
+      ).catch((error: unknown) => error)
+    )
+    expect(ipc.listenerCount()).toBe(1)
+    for (let index = 0; index < count; index++) {
+      await cancelRuntimeEnvironmentSubscriptionFromPreload(ipc, `crew-${index}`)
+    }
+    expect(ipc.listenerCount()).toBe(0)
+    expect(ipc.on).toHaveBeenCalledTimes(1)
+    expect(ipc.removeListener).toHaveBeenCalledTimes(1)
+    for (let index = 0; index < count; index++) {
+      if (index % 2) {
+        held[index].reject(new Error('late invoke rejection'))
+      } else {
+        held[index].resolve({ subscriptionId: `crew-${index}`, ok: true })
+      }
+      dispatch(ipc, {
+        subscriptionId: `crew-${index}`,
+        type: 'response',
+        response: { id: 'late', ok: true, result: {}, _meta: { runtimeId: 'rt' } }
+      })
+    }
+    await Promise.all(attempts)
+    expect(ipc.listenerCount()).toBe(0)
+    expect(responses).not.toHaveBeenCalled()
+    expect(ipc.invoke).toHaveBeenCalledTimes(count * 2)
+  })
+
+  it('keeps a replacement registration when an old cancelled invoke later rejects', async () => {
+    const ipc = createIpc()
+    const old = deferred<unknown>()
+    ipc.invoke.mockImplementation((channel) =>
+      channel === 'runtimeEnvironments:subscribe' ? old.promise : Promise.resolve({})
+    )
+    const first = subscribeCrewAttemptFromPreload(ipc, args, { onResponse: vi.fn() })
+    const rejected = expect(first).rejects.toThrow('old invoke')
+    await cancelRuntimeEnvironmentSubscriptionFromPreload(ipc, 'crew')
+    ipc.invoke.mockResolvedValue({ subscriptionId: 'crew', ok: true })
+    const response = vi.fn()
+    await subscribeCrewAttemptFromPreload(ipc, args, { onResponse: response })
+    old.reject(new Error('old invoke'))
+    await rejected
+    dispatch(ipc, {
+      subscriptionId: 'crew',
+      type: 'response',
+      response: { id: 'current', ok: true, result: {}, _meta: { runtimeId: 'rt' } }
+    })
+    expect(response).toHaveBeenCalledOnce()
+    expect(ipc.listenerCount()).toBe(1)
+    await cancelRuntimeEnvironmentSubscriptionFromPreload(ipc, 'crew')
   })
 })

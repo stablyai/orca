@@ -1,4 +1,4 @@
-import type { UISlice } from '@/store/slices/ui'
+import type { UISlice } from '@/store/slices/ui/ui-slice-contract'
 import { isPluginPanelTabKey } from '../../../shared/plugins/frames/plugin-tab-key'
 
 /** Buttons and shortcut handlers share the same canonical page-route eligibility. */

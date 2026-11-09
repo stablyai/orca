@@ -1,4 +1,5 @@
 import { deleteAutomationForTarget, updateAutomationForTarget } from './automation-host-client'
+import type { AutomationUpdateInput } from '../../../../shared/automations/automation-definition'
 import {
   dispatchAutomationDelete,
   dispatchAutomationUpdate
@@ -6,6 +7,8 @@ import {
 import { persistSkipDeleteAutomationConfirm } from './automation-delete-confirm-preference'
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { AutomationsPageActionContext } from './automations-page-action-context'
+import type { SetupTrustMismatch } from '../../../../shared/worktree/create-types'
+import { reviewAutomationSkippedSetup } from './automation-setup-review'
 
 /** Fenced toggle/delete handlers and the confirmation preference flow. */
 export function createAutomationManagementActions({
@@ -52,6 +55,33 @@ export function createAutomationManagementActions({
     await pageRefresh.refresh()
   }
 
+  const updateAutomationRow = async (
+    row: AutomationListRow,
+    updates: AutomationUpdateInput
+  ): Promise<boolean> => {
+    const result = await dispatchAutomationUpdate(
+      automationDispatchContext,
+      { rowKey: row.key, automationId: row.automation.id },
+      updates,
+      () => updateAutomationForTarget(row.automation, updates, automationHostTargetFor(row)),
+      'save'
+    )
+    reportOwnerAction(row.key, result.ok ? null : result.notice)
+    if (result.ok) {
+      invalidateRowHost(row.key, 'definition')
+    }
+    await pageRefresh.refresh()
+    return result.ok
+  }
+
+  const reviewSkippedSetup = (row: AutomationListRow, content: SetupTrustMismatch): void => {
+    void reviewAutomationSkippedSetup(row.automation, content, (setupTrustHash) =>
+      updateAutomationRow(row, { setupDecision: 'run', setupTrustHash })
+    ).catch((error: unknown) => {
+      console.error('Failed to approve the automation setup:', error)
+    })
+  }
+
   const deleteAutomation = async (row: AutomationListRow): Promise<void> => {
     const result = await dispatchAutomationDelete(
       automationDispatchContext,
@@ -96,7 +126,13 @@ export function createAutomationManagementActions({
     await deleteAutomation(target)
   }
 
-  return { toggleAutomation, deleteAutomation, requestDeleteAutomation, confirmDeleteAutomation }
+  return {
+    toggleAutomation,
+    reviewSkippedSetup,
+    deleteAutomation,
+    requestDeleteAutomation,
+    confirmDeleteAutomation
+  }
 }
 
 export type AutomationManagementActions = ReturnType<typeof createAutomationManagementActions>

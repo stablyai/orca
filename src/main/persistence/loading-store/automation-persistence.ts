@@ -3,23 +3,26 @@ import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified
 import type {
   Automation,
   AutomationCreateInput,
+  AutomationUpdateInput
+} from '../../../shared/automations/automation-definition'
+import type {
   AutomationDispatchResult,
   AutomationRun,
-  AutomationRunTrigger,
-  AutomationUpdateInput
-} from '../../../shared/automations-types'
+  AutomationRunTrigger
+} from '../../../shared/automations/history/automation-run'
 import type {
   AutomationCapturedHostIssue,
   AutomationChangeSelector,
   AutomationListParams,
   AutomationListResult
-} from '../../../shared/automation-list-scope'
+} from '../../../shared/automations/ownership/automation-list-scope'
 import type {
   AutomationDestination,
   AutomationOwnerFenceOperation,
-  AutomationOwnerPrecondition
-} from '../../../shared/automation-owner-precondition'
-import type { WorkspaceRunContext } from '../../../shared/task-source-context'
+  AutomationOwnerPrecondition,
+  AutomationUpdatePreconditions
+} from '../../../shared/automations/ownership/automation-owner-precondition'
+import type { WorkspaceRunContext } from '../../../shared/work-items/task-source-context'
 import { getWorktreePathBasenameFromId } from '../../../shared/worktree/id'
 import { normalizeAutomationRunWorkspaceDisplayName } from '../scheduling-automations/automation-context-migration'
 import {
@@ -154,11 +157,7 @@ export class AutomationPersistence {
   updateAutomation(
     id: string,
     updates: AutomationUpdateInput,
-    options?: {
-      expectedOwner?: AutomationOwnerPrecondition
-      destination?: AutomationDestination
-      resolvedRepo?: Repo
-    }
+    options?: AutomationUpdatePreconditions & { resolvedRepo?: Repo }
   ): Automation {
     return updateAutomationOperation(getAutomationDefinitionOperations(this), id, updates, options)
   }

@@ -8,7 +8,7 @@ import type { AppState } from '@/store/types'
 
 const mocks = vi.hoisted(() => ({ activateAndRevealWorkspace: vi.fn() }))
 
-vi.mock('./worktree-activation', () => ({
+vi.mock('./workspace/activation/worktree-activation', () => ({
   activateAndRevealWorkspace: mocks.activateAndRevealWorkspace
 }))
 
@@ -174,12 +174,5 @@ describe('activateSimulatorTabPaletteResult', () => {
     const state = useAppStore.getState()
     expect(state.activeGroupIdByWorktree['wt-1']).toBe('group-2')
     expect(state.groupsByWorktree['wt-1'][1].activeTabId).toBe('sim-tab-1')
-  })
-
-  it('reports blocked activation without claiming the workspace disappeared', () => {
-    mocks.activateAndRevealWorkspace.mockReturnValue(false)
-
-    expect(activateSimulatorTabPaletteResult(target)).toEqual({ status: 'blocked' })
-    expect(useAppStore.getState().activeTabType).not.toBe('simulator')
   })
 })

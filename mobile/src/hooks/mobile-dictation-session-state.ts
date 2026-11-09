@@ -1,7 +1,7 @@
 // Use the buffer polyfill: Metro cannot resolve node:buffer in React Native.
 import { Buffer } from 'buffer'
 
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import type { MobileDictationMeter } from './mobile-dictation-meter'
 
 export type DictationStatus = 'idle' | 'starting' | 'recording' | 'processing' | 'error'
@@ -11,6 +11,8 @@ export type UseMobileDictationOptions = {
   enabled: boolean
   onTranscript: (text: string) => void
   onError?: (error: Error) => void
+  // The computer's filler switch, for text the phone recognizes itself; unknown means on.
+  removeFillerWords?: boolean
 }
 
 export type UseMobileDictationResult = {

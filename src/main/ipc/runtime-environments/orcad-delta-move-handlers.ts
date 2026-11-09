@@ -4,17 +4,20 @@ import type {
   OrcadDeltaMovePreview,
   OrcadDeltaMoveResult
 } from '../../../shared/orcad-managed-runtime'
-import { listEnvironments } from '../../../shared/runtime-environment-store'
+import { listEnvironments } from '../../../shared/remote-runtime/host-store/runtime-environment-store'
 import { requireManagedOrcadInfrastructure } from '../../managed-server/lifecycle/orcad-managed-runtime-context'
 import { ensureOrcadManagedTunnel } from '../../managed-server/lifecycle/orcad-managed-tunnel'
-import { keepOrcadServerVersion, runOrcadDeltaMove } from '../../ssh/orcad-migration-delta-move'
-import { planOrcadDeltaMove } from '../../ssh/orcad-migration-delta-plan'
-import { censusHostRelayTerminalsFor } from '../../ssh/legacy-relay/ssh-host-relay-census-for-target'
+import {
+  keepOrcadServerVersion,
+  runOrcadDeltaMove
+} from '../../managed-server/migration/cutover/orcad-migration-delta-move'
+import { planOrcadDeltaMove } from '../../managed-server/migration/cutover/orcad-migration-delta-plan'
+import { censusHostRelayTerminalsFor } from '../../ssh/legacy-relay/endpoints/ssh-host-relay-census-for-target'
 import {
   orcadMigrationDestinationFor,
   orcadServerAutomationEnablerFor
 } from '../../managed-server/lifecycle/orcad-runtime-conversion-wiring'
-import { enableMovedOrcadAutomationsForTarget } from '../../ssh/orcad-migration-moved-automations'
+import { enableMovedOrcadAutomationsForTarget } from '../../persistence/migrating-orcad-catalog/orcad-migration-moved-automations'
 import { requiredString } from './orcad-runtime-lifecycle-handlers'
 import { publishResolvedChangedHostStatus } from './runtime-environment-managed-tunnel'
 import { runTargetLifecycle } from '../ssh/ssh-target-lifecycle-queue'

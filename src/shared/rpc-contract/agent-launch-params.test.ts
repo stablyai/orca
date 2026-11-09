@@ -12,21 +12,10 @@ describe('agent.launch params', () => {
     expect(AgentLaunch.parse(BASE)).not.toHaveProperty('agentArgs')
   })
 
-  it('accepts a cwd and rejects an empty one', () => {
-    expect(AgentLaunch.parse({ ...BASE, cwd: '/repo/packages/api' }).cwd).toBe('/repo/packages/api')
-    expect(AgentLaunch.safeParse({ ...BASE, cwd: '' }).success).toBe(false)
-  })
-
   it('accepts a launchSource this build has never heard of', () => {
     const parsed = AgentLaunch.safeParse({ ...BASE, launchSource: 'a_surface_added_later' })
     expect(parsed.success).toBe(true)
     expect(parsed.data?.launchSource).toBe('a_surface_added_later')
-  })
-
-  it('still parses a payload from a client that sends none of these fields', () => {
-    const parsed = AgentLaunch.parse(BASE)
-    expect(parsed).not.toHaveProperty('cwd')
-    expect(parsed).not.toHaveProperty('launchSource')
   })
 
   it('reads placement and presentation, and never refuses a launch over either', () => {

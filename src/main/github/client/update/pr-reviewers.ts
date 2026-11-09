@@ -57,13 +57,13 @@ export async function requestPRReviewers(
       ...ghOptions,
       env: { ...process.env, GH_PROMPT_DISABLED: '1' }
     })
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
     return { ok: false, error: message }
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     release()
   }
 }
@@ -96,13 +96,13 @@ export async function removePRReviewers(
       ...ghOptions,
       env: { ...process.env, GH_PROMPT_DISABLED: '1' }
     })
-    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     return { ok: true }
   } catch (err) {
     const message =
       err instanceof Error ? err.message : typeof err === 'string' ? err : 'Unknown error'
     return { ok: false, error: message }
   } finally {
+    invalidateReviewLookupsAfterPRMutation(repoPath, connectionId)
     release()
   }
 }

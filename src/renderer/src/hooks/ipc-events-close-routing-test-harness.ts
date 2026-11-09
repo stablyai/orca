@@ -1,6 +1,7 @@
+import type * as UIZoomLevelModule from '../../../shared/ui-zoom-level'
 import type * as ReactModule from 'react'
 import { vi } from 'vitest'
-import type { TerminalSurfaceCloseTarget } from '../../../shared/terminal-surface-close-target'
+import type { TerminalSurfaceCloseTarget } from '../../../shared/workspace-layout/terminal-surface-close-target'
 import { createIdleSshApiStub } from './ipc-events-ssh-api-test-fixtures'
 
 export type RequestTabCloseListener = (data: {
@@ -122,29 +123,30 @@ export async function useIpcEventsForCloseRouting({
   vi.doMock('@/lib/ui-zoom', () => ({
     applyUIZoom: vi.fn()
   }))
-  vi.doMock('@/lib/worktree-activation', () => ({
+  vi.doMock('@/lib/workspace/activation/worktree-activation', () => ({
     activateAndRevealWorktree: vi.fn(),
     ensureWorktreeHasInitialTerminal: vi.fn()
   }))
-  vi.doMock('@/components/sidebar/visible-worktrees', () => ({
+  vi.doMock('@/components/sidebar/worktree-list/listing/visible-worktrees', () => ({
     getVisibleWorktreeIds: () => []
   }))
   vi.doMock('@/lib/editor-font-zoom', () => ({
     nextEditorFontZoomLevel: vi.fn(() => 0),
     computeEditorFontSize: vi.fn(() => 13)
   }))
-  vi.doMock('@/components/settings/SettingsConstants', () => ({
+  vi.doMock('../../../shared/ui-zoom-level', async (importOriginal) => ({
+    ...(await importOriginal<typeof UIZoomLevelModule>()),
     zoomLevelToPercent: vi.fn(() => 100),
-    ZOOM_MIN: -3,
-    ZOOM_MAX: 3
+    UI_ZOOM_MIN: -3,
+    UI_ZOOM_MAX: 3
   }))
   vi.doMock('@/lib/zoom-events', () => ({
     dispatchZoomLevelChanged: vi.fn()
   }))
-  vi.doMock('@/lib/workspace-session-host-persistence', () => ({
+  vi.doMock('@/lib/workspace/persistence/workspace-session-host-persistence', () => ({
     persistWorkspaceSessionByHost: persistWorkspaceSession
   }))
-  vi.doMock('@/lib/workspace-session', () => ({
+  vi.doMock('@/lib/workspace/persistence/workspace-session', () => ({
     buildWorkspaceSessionPayload: vi.fn(() => ({}))
   }))
 
@@ -179,6 +181,7 @@ export async function useIpcEventsForCloseRouting({
         onRequestTerminalCreate: () => () => {},
         onPublishAgentLaunchTab: () => () => {},
         onRevealTerminalPane: () => () => {},
+        onApplyAgentPaneActivity: () => () => {},
         onAgentLaunchPaneVerdict: () => () => {},
         onLaunchRecipe: () => () => {},
         onRequestTerminalTabMount: () => () => {},

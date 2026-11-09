@@ -3,9 +3,9 @@ import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react'
 import {
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand
-} from '../../../../shared/terminal-quick-commands'
+} from '../../../../shared/terminal/quick-commands/terminal-quick-commands'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useClipboardTextCopyFeedback } from '@/hooks/use-clipboard-text-copy-feedback'
 import type { HostedTerminalQuickCommand } from '@/hooks/use-terminal-quick-command-hosts'
 import { cn } from '@/lib/utils'
@@ -41,6 +41,7 @@ export function TabBarQuickCommandItem({
   onEdit,
   onDelete
 }: TabBarQuickCommandItemProps): React.JSX.Element {
+  const t = useTranslate()
   const id = useId()
   const { command } = entry
   const body = getTerminalQuickCommandBody(command)
@@ -48,19 +49,14 @@ export function TabBarQuickCommandItem({
 
   const copyLabel =
     status === 'copied'
-      ? translate('auto.components.tab.bar.TabBarQuickCommandsButton.8d525e5f15', 'Copied')
+      ? t('auto.components.tab.bar.TabBarQuickCommandsButton.8d525e5f15', 'Copied')
       : status === 'failed'
-        ? translate('auto.components.tab.bar.TabBarQuickCommandsButton.53b17a4b1b', "Couldn't copy")
+        ? t('auto.components.tab.bar.TabBarQuickCommandsButton.53b17a4b1b', "Couldn't copy")
         : canCopy
-          ? translate(
-              'auto.components.tab.bar.TabBarQuickCommandsButton.a9a564b7e7',
-              'Copy {{value0}}',
-              { value0: command.label }
-            )
-          : translate(
-              'auto.components.tab.bar.TabBarQuickCommandsButton.69a1441a21',
-              'Nothing to copy'
-            )
+          ? t('auto.components.tab.bar.TabBarQuickCommandsButton.a9a564b7e7', 'Copy {{value0}}', {
+              value0: command.label
+            })
+          : t('auto.components.tab.bar.TabBarQuickCommandsButton.69a1441a21', 'Nothing to copy')
 
   return (
     <div
@@ -109,7 +105,7 @@ export function TabBarQuickCommandItem({
             event.stopPropagation()
           }
         }}
-        aria-label={translate(
+        aria-label={t(
           'auto.components.tab.bar.TabBarQuickCommandsButton.192a4616a5',
           'Quick command actions'
         )}
@@ -141,7 +137,7 @@ export function TabBarQuickCommandItem({
             onEdit()
           }}
           className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.tab.bar.TabBarQuickCommandsButton.15529ede69',
             'Edit {{value0}}',
             { value0: command.label }
@@ -157,7 +153,7 @@ export function TabBarQuickCommandItem({
             onDelete()
           }}
           className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-destructive"
-          aria-label={translate(
+          aria-label={t(
             'auto.components.tab.bar.TabBarQuickCommandsButton.196593b6a9',
             'Remove {{value0}}',
             { value0: command.label }

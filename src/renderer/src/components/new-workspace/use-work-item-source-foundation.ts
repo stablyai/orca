@@ -2,7 +2,7 @@ import type {
   LinearIssueData,
   LinearIssueView
 } from '@/store/slices/linear/linear-issue-publication'
-import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { getProviderRuntimeContextKey } from '@/runtime/hosts/observations/provider-runtime-context'
 import { useLinearIssueResult } from '@/hooks/linear-issue-committed-state'
 import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
 import { getSelectedWorkspaceId } from '@/store/slices/linear/linear-cache'
@@ -14,7 +14,7 @@ import React, { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
-import { buildTaskSourceContextFromRepo } from '../../../../shared/task-source-context'
+import { buildTaskSourceContextFromRepo } from '../../../../shared/work-items/task-source-context'
 import type {
   NormalizedWorkItemSourceSearchProps,
   RepoBackedSearchTarget

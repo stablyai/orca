@@ -1,11 +1,11 @@
-import type { AgentJournalSnapshot } from '../../shared/agent-session-journal-types'
-import type { AgentSessionSendResult } from '../../shared/agent-session-wire'
-import { agentJournalSubmissionKey } from '../../shared/agent-session-journal-item-key'
+import type { AgentJournalSnapshot } from '../../shared/agent-session/journal/agent-session-journal-types'
+import type { AgentSessionSendResult } from '../../shared/agent-session/agent-session-wire'
+import { agentJournalSubmissionKey } from '../../shared/agent-session/journal/agent-session-journal-item-key'
 import {
   readAgentJournalTurn,
   readAgentJournalTurnOutcome
-} from '../../shared/agent-session-turn-record'
-import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
+} from '../../shared/agent-session/lifecycle/agent-session-turn-record'
+import { createAutomationOutputSnapshotBuffer } from './automation-launch'
 import type { AutomationRunCompletionObservation } from './run-completion-watcher'
 
 export function resolveChatAutomationRun(
@@ -65,7 +65,7 @@ function observationForResolvedRun(
   if (turn.state === 'running') {
     return null
   }
-  const buffer = createHeadlessAutomationOutputSnapshotBuffer()
+  const buffer = createAutomationOutputSnapshotBuffer()
   for (const item of snapshot.items) {
     if (
       item.agentId ||

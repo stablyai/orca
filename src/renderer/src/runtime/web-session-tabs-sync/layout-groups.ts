@@ -1,16 +1,16 @@
 import type { RuntimeMobileSessionTabGroup } from '../../../../shared/runtime-types'
 import type { TabGroup } from '../../../../shared/tab-types'
-import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { TerminalTab } from '../../../../shared/workspace-layout/terminal-tab-types'
 import type {
   MirroredAgentTab,
   MirroredBrowserTab,
   MirroredEditorTab,
   TerminalSurface
 } from './state'
-import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { toWebTerminalSurfaceTabId } from '../../../../shared/workspace-layout/terminal-surface-id'
 import { clearHostSessionTabIdMappings, setHostSessionTabIdMapping } from './tracking-mappings'
-import { isWebSessionBrowserPlacementGroupReserved } from '../web-session-browser-placement'
-import { resolveWebSessionReorderedOrder } from '../web-session-reorder-intent'
+import { isWebSessionBrowserPlacementGroupReserved } from '../browser/placement/web-session-browser-placement'
+import { resolveWebSessionReorderedOrder } from './navigation/web-session-reorder-intent'
 import { mapHostRecentTabIds } from './tab-group-layout-tree'
 import { pushRecentTabId, sanitizeRecentTabIds } from './state-equality-core'
 

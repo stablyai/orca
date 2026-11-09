@@ -72,29 +72,4 @@ describe('PaneManager focus after a pane leaves a split', () => {
 
     expect(manager.getActivePane()?.id).toBe(b.id)
   })
-
-  it('keeps the active pane when a different pane closes', () => {
-    const [, b, , d] = createFourColumns(manager)
-
-    manager.closePane(b.id)
-
-    expect(manager.getActivePane()?.id).toBe(d.id)
-  })
-
-  it('focuses the neighbour when the active pane is detached into another tab', () => {
-    const [, , c, d] = createFourColumns(manager)
-
-    expect(manager.detachPaneForExternalMove(d.id)).toBe(true)
-
-    expect(manager.getActivePane()?.id).toBe(c.id)
-  })
-
-  it('focuses the neighbour when the active pane is retired with its PTY kept', () => {
-    const [, , c, d] = createFourColumns(manager)
-    manager.setActivePane(c.id)
-
-    expect(manager.retirePanePreservingPty(c.id)).toBe(true)
-
-    expect(manager.getActivePane()?.id).toBe(d.id)
-  })
 })

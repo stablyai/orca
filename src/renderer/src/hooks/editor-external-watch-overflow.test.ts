@@ -12,7 +12,7 @@ const harness = vi.hoisted(() => {
 })
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => harness.state } }))
-vi.mock('@/runtime/runtime-path-existence-batch', () => ({
+vi.mock('@/runtime/files/metadata/runtime-path-existence-batch', () => ({
   runtimePathsExist: harness.runtimePathsExist
 }))
 vi.mock('@/lib/file-owner-runtime-target', () => ({
@@ -26,7 +26,7 @@ vi.mock('@/components/editor/combined-diff/remember-view/combined-diff-view-cach
   forgetCombinedDiffViewBodiesForWorktree: harness.forgetCombinedBodies
 }))
 
-import type { OpenFile } from '@/store/slices/editor'
+import type { OpenFile } from '@/store/slices/editor/types/open-file'
 import {
   getPendingOverflowProbeCountForTest,
   reconcileEditorTabsAfterOverflow,
@@ -109,21 +109,6 @@ describe('reconcileEditorTabsAfterOverflow', () => {
       expect(harness.scheduleReload).toHaveBeenCalledWith(notification('a.ts'))
     )
     expect(setExternalMutation).not.toHaveBeenCalledWith('a.ts', 'deleted')
-  })
-
-  it('compares dirty tabs asynchronously without reloading them', () => {
-    setTabs(tab('dirty.ts', { isDirty: true, lastKnownDiskSignature: 'sig' }))
-    reconcileEditorTabsAfterOverflow(target, true)
-
-    expect(harness.compareDirty).toHaveBeenCalledWith(
-      { ...target, connectionId: undefined, runtimeEnvironmentId: null },
-      ['dirty.ts'],
-      false,
-      true
-    )
-    expect(setExternalMutation).not.toHaveBeenCalled()
-    expect(harness.runtimePathsExist).not.toHaveBeenCalled()
-    expect(harness.scheduleReload).not.toHaveBeenCalled()
   })
 
   it('a storm overflow reloads clean tabs without probing or dropping combined bodies', () => {

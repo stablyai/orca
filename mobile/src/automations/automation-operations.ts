@@ -1,8 +1,9 @@
-import { z } from 'zod'
-import type { TuiAgent } from '../../../src/shared/tui-agent'
-import { isTuiAgent } from '../../../src/shared/tui-agent-config'
-import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
-import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
+import * as z from 'zod'
+import type { TuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent'
+import { isTuiAgent } from '../../../src/shared/agent-launch/catalog/tui-agent-config'
+import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc/rpc-operation'
+import { rpcResultVariant } from '../transport/rpc/rpc-operation-result-reader'
+import { salvagedOptional } from '../../../src/shared/zod-salvage'
 import {
   automationListSchema,
   automationSchema,
@@ -76,6 +77,16 @@ export const automationRunsRead = bindDeferredRpcOperation(
     read: rpcResultVariant('runs-page', runsPageSchema)
   })
 )
+// An old host ignores `runId` and lists instead, which reads as no `run`.
+export const automationRunRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'automation.mobile-run',
+    method: 'automation.runs',
+    acceptance: 'require-result-or-throw',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('run', z.object({ run: runSchema.optional() }))
+  })
+)
 export const automationProjectsRead = bindDeferredRpcOperation(
   defineRpcOperation({
     name: 'project.mobile-automation-inventory',
@@ -132,9 +143,13 @@ export const automationAgentSettingsRead = bindDeferredRpcOperation(
       'agent-policy',
       z.object({
         settings: z.object({
-          defaultTuiAgent: z
-            .custom<TuiAgent | 'blank'>((value) => isTuiAgent(value) || value === 'blank')
-            .nullish(),
+          // A newer host's default agent reads as unset, so agent discovery still loads.
+          defaultTuiAgent: salvagedOptional(
+            'defaultTuiAgent',
+            z
+              .custom<TuiAgent | 'blank'>((value) => isTuiAgent(value) || value === 'blank')
+              .nullable()
+          ),
           disabledTuiAgents: z.array(z.string()).optional()
         })
       })

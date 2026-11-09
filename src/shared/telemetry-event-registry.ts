@@ -46,10 +46,13 @@ import {
   setupGuideClosedSchema,
   setupGuideOpenedSchema,
   setupGuideStepCompletedSchema,
-  terminalPaneSplitSchema
+  terminalPaneSplitSchema,
+  toastActionOverModalSchema
 } from './telemetry-feature-education-event-schemas'
 import {
   chatUiFeatureTipActionSchema,
+  chatUiFeatureTipExposureSchema,
+  agentDefaultSurfaceChangedSchema,
   chatUiFeatureTipShownSchema,
   cmdJPaletteFeatureTipAcknowledgedSchema,
   cmdJPaletteFeatureTipShownSchema,
@@ -60,6 +63,7 @@ import {
   featureWallOpenedSchema,
   featureWallTileClickedSchema,
   featureWallTileFocusedSchema,
+  mobileSessionOpenedSchema,
   nativeChatMessageSentSchema,
   nativeChatPickerItemAcceptedSchema,
   nativeChatPickerOpenedSchema,
@@ -106,6 +110,10 @@ import {
   workspaceCreateFailedSchema
 } from './telemetry-repository-event-schemas'
 import { pluginInstalledSchema } from './telemetry-plugin-event-schemas'
+import {
+  firstAgentInteractionSchema,
+  meaningfulActivityDaySchema
+} from './telemetry-protected-milestone-schemas'
 import { sshRemoteRuntimeResolvedSchema } from './telemetry-ssh-runtime-event-schemas'
 import { wslUsageSnapshotSchema } from './telemetry-wsl-usage-event-schemas'
 import {
@@ -130,6 +138,8 @@ export const eventSchemas = {
   app_starred_orca: appStarredOrcaSchema,
   star_nag_outcome: starNagOutcomeEventSchema,
   feature_interaction_usage_bucket_reached: featureInteractionUsageBucketReachedSchema,
+  first_agent_interaction: firstAgentInteractionSchema,
+  meaningful_activity_day: meaningfulActivityDaySchema,
 
   repo_added: repoAddedSchema,
   add_repo_setup_step_action: addRepoSetupStepActionEventSchema,
@@ -170,10 +180,13 @@ export const eventSchemas = {
 
   native_chat_toggled: nativeChatToggledSchema,
   native_chat_message_sent: nativeChatMessageSentSchema,
+  // Main-owned provider-accepted prompts; legacy message_sent includes commands and queued writes.
+  native_chat_prompt_submitted: nativeChatMessageSentSchema,
   native_chat_picker_opened: nativeChatPickerOpenedSchema,
   native_chat_picker_item_accepted: nativeChatPickerItemAcceptedSchema,
   native_chat_send_classified: nativeChatSendClassifiedSchema,
   native_chat_skill_discovery: nativeChatSkillDiscoverySchema,
+  mobile_session_opened: mobileSessionOpenedSchema,
 
   telemetry_opted_in: telemetryOptedInSchema,
   telemetry_opted_out: telemetryOptedOutSchema,
@@ -185,6 +198,8 @@ export const eventSchemas = {
   cmd_j_palette_feature_tip_acknowledged: cmdJPaletteFeatureTipAcknowledgedSchema,
   chat_ui_feature_tip_shown: chatUiFeatureTipShownSchema,
   chat_ui_feature_tip_action: chatUiFeatureTipActionSchema,
+  chat_ui_feature_tip_exposure: chatUiFeatureTipExposureSchema,
+  agent_default_surface_changed: agentDefaultSurfaceChangedSchema,
 
   feature_wall_opened: featureWallOpenedSchema,
   feature_wall_closed: featureWallClosedSchema,
@@ -224,6 +239,7 @@ export const eventSchemas = {
   setup_guide_closed: setupGuideClosedSchema,
   setup_guide_step_completed: setupGuideStepCompletedSchema,
   terminal_pane_split: terminalPaneSplitSchema,
+  toast_action_over_modal: toastActionOverModalSchema,
 
   editor_external_change_conflict_shown: editorExternalChangeConflictShownSchema,
   editor_external_change_conflict_action: editorExternalChangeConflictActionSchema,

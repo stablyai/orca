@@ -1,12 +1,13 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
-import { translate } from '@/i18n/i18n'
+import { useTranslate } from '@/i18n/use-translate'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAppStore } from '@/store'
 import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
 import BrowserAddressBar from './BrowserAddressBar'
 import { BrowserChromeToolbar } from './browser-chrome-toolbar'
 import { BrowserImportHintButton } from './BrowserImportHintButton'
+import { BrowserPasswordSaveButton } from '../passwords/BrowserPasswordSaveButton'
 import { BrowserReloadControl } from './browser-reload-control'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
 import { BrowserExtensionToolbar } from './browser-extension-toolbar'
@@ -29,7 +30,7 @@ import type {
 import {
   advanceAcrossBrowserPageConversion,
   returnAcrossBrowserPageConversion
-} from '@/lib/browser-page-conversion-history'
+} from '@/lib/browser/history/browser-page-conversion-history'
 import { convertBrowserPageToWorkspaceDoc } from '@/lib/file-preview'
 import type { GrabIntent } from '../describe-page/browser-page-types'
 
@@ -115,6 +116,7 @@ export function BrowserPageToolbar({
   currentBrowserUrl: string
   externalUrl: string | null
 }): React.JSX.Element {
+  const t = useTranslate()
   const annotateElementShortcut = useShortcutLabel('browser.annotateElement')
   const browserTourStep = useAppStore((state) =>
     state.activeContextualTourId === 'browser' ? state.activeContextualTourStepIndex : null
@@ -142,6 +144,7 @@ export function BrowserPageToolbar({
 
   return (
     <BrowserChromeToolbar
+      closeTabOwner={{ worktreeId, browserPageId }}
       showTourAnchors
       pinnedStage={pinnedStage}
       controls={{
@@ -200,6 +203,9 @@ export function BrowserPageToolbar({
           onHardReload={() => runReloadTrigger('hard-reload')}
         />
       }
+      passwordControl={
+        <BrowserPasswordSaveButton browserPageId={browserPageId} isActive={isActive} />
+      }
       importControl={(compact) => (
         <BrowserImportHintButton profileId={sessionProfileId} compact={compact} />
       )}
@@ -241,10 +247,7 @@ export function BrowserPageToolbar({
       }
       viewSource={{
         onSelect: () => void window.api.browser.openDevTools({ browserPageId }),
-        label: translate(
-          'auto.components.browser.pane.BrowserPane.ec75d0c412',
-          'Open browser devtools'
-        )
+        label: t('auto.components.browser.pane.BrowserPane.ec75d0c412', 'Open browser devtools')
       }}
       openExternal={{
         onSelect: () => {
@@ -253,10 +256,7 @@ export function BrowserPageToolbar({
           }
           void window.api.shell.openUrl(externalUrl)
         },
-        label: translate(
-          'auto.components.browser.pane.BrowserPane.0f41bf80c7',
-          'Open in default browser'
-        ),
+        label: t('auto.components.browser.pane.BrowserPane.0f41bf80c7', 'Open in default browser'),
         disabled: !externalUrl
       }}
       overflowMenu={(overflow) => (

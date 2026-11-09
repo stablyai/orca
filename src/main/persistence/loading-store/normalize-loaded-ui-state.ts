@@ -1,5 +1,6 @@
+import { normalizeGitGraphFilters } from '../../../shared/git/history/git-graph-filters'
 import { resolveStatusBarCompactChangeNoticeDismissed } from '../../../shared/status-bar-compact-change-notice'
-import { migrateExplorerDisplayRoots } from '../../../shared/file-explorer-display-root'
+import { migrateExplorerDisplayRoots } from '../../../shared/file-listing/file-explorer-display-root'
 import {
   getWorktreeCardModeProperties,
   isCurrentCompactWorktreeCardProperties,
@@ -222,6 +223,7 @@ export function normalizeLoadedUiState(
     sortBy: migrate ? ('smart' as const) : sort,
     _explorerDisplayRootMigrated: true,
     explorerDisplayRootByWorktree,
+    gitGraphFiltersByWorktree: normalizeGitGraphFilters(parsed.ui?.gitGraphFiltersByWorktree),
     showDotfilesByWorktree: normalizeShowDotfilesByWorktree(parsed.ui?.showDotfilesByWorktree),
     workspaceStatuses,
     _workspaceStatusesDefaultOrderMigrated: true,

@@ -2,7 +2,7 @@ import { automationOrphanIssueText } from './automation-orphan-issue-copy'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useEffect, useState } from 'react'
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/rpc/rpc-client-contract'
 import {
   loadAutomationTargets,
   automationSetupKey,
@@ -11,7 +11,7 @@ import {
 } from './automation-target-inventory'
 import { Switch, Text, View } from 'react-native'
 import { formatAutomationSchedule } from './automation-schedule-label'
-import { MOBILE_TUI_AGENT_LABELS } from '../tasks/mobile-tui-agents'
+import { mobileTuiAgentLabel } from '../tasks/mobile-tui-agents'
 import type { MobileAutomationRow } from './automation-reply-schema'
 import { AutomationButton, AutomationMetadata } from './AutomationControls'
 import { automationDate } from './automation-run-presentation'
@@ -150,7 +150,7 @@ export function AutomationDetail(props: {
         />
         <AutomationMetadata
           label={t('automations.mobile.agent', 'Agent')}
-          value={MOBILE_TUI_AGENT_LABELS[automation.agentId]}
+          value={mobileTuiAgentLabel(automation.agentId)}
         />
         <AutomationMetadata
           label={t('automations.mobile.project', 'Project')}

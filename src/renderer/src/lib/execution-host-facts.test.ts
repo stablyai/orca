@@ -1,9 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { RuntimeEnvironmentStatus } from '../../../shared/runtime-host-status'
+import type { RuntimeEnvironmentStatus } from '../../../shared/remote-runtime/host-status/runtime-host-status'
 import {
-  resolveExecutionHostAgentStartupShell,
-  resolveRepoExecutionHostPlatform,
-  resolveRepoWorktreeLaunchPlatform
+  resolveRepoWorktreeLaunchPlatform,
+  resolveWorktreeExecutionHostPlatform
 } from './execution-host-facts'
 import { getDefaultSettings } from '../../../shared/constants'
 
@@ -54,10 +53,63 @@ function state(): State {
 const serverRepo = { path: '/srv/repo', executionHostId: 'runtime:linux-box' }
 
 describe('resolveRepoWorktreeLaunchPlatform from a Windows client', () => {
-  it("reads a server project's worktree as the server's OS (#27971)", () => {
+  it('keeps the nested SSH platform for a captured folder owner, matching ordinary launch', () => {
+    const nested = state()
+    nested.folderWorkspaces = [
+      {
+        id: 'folder',
+        projectGroupId: 'group',
+        name: 'Folder',
+        folderPath: 'C:\\project',
+        executionHostId: 'runtime:linux-box',
+        connectionId: 'box',
+        linkedTask: null,
+        comment: '',
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 0,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+    nested.sshStateByEnvironment.set('linux-box', {
+      connectionStates: new Map([
+        [
+          'box',
+          {
+            targetId: 'box',
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            remotePlatform: 'win32'
+          }
+        ]
+      ]),
+      targetLabels: new Map(),
+      targetGenerations: new Map(),
+      removedTargetLabels: new Map(),
+      targetsHydrated: true
+    })
+    const ordinary = resolveWorktreeExecutionHostPlatform(nested, 'folder:folder', 'C:\\project')
+    const captured = resolveWorktreeExecutionHostPlatform(
+      { ...nested, activeWorktreeId: 'folder:folder' },
+      'folder:folder',
+      'C:\\project',
+      'runtime:linux-box'
+    )
+    expect(ordinary).toMatchObject({ kind: 'known', platform: 'win32', hostKind: 'ssh' })
+    expect(captured).toEqual(ordinary)
+    nested.runtimeStatusByEnvironmentId.clear()
     expect(
-      resolveRepoWorktreeLaunchPlatform(state(), serverRepo, { id: 'wt', path: '/srv/wt' })
-    ).toBe('linux')
+      resolveWorktreeExecutionHostPlatform(
+        nested,
+        'folder:folder',
+        'C:\\project',
+        'runtime:linux-box'
+      )
+    ).toEqual(ordinary)
   })
 
   it("lets a worktree's own host outrank its repo's", () => {
@@ -112,50 +164,5 @@ describe('resolveRepoWorktreeLaunchPlatform from a Windows client', () => {
     expect(
       resolveRepoWorktreeLaunchPlatform(withheld, serverRepo, { id: 'wt', path: '/srv/wt' })
     ).toBeUndefined()
-  })
-})
-
-// Why: a desktop-built command runs in the server's own Windows shell, as resume quoting assumes.
-describe('resolveExecutionHostAgentStartupShell for a paired Windows server', () => {
-  it.each([
-    ['cmd.exe', 'cmd'],
-    ['git-bash', 'posix'],
-    [undefined, undefined]
-  ] as const)('quotes for a server whose shell is %s as %s', (serverShell, expected) => {
-    const fact = {
-      kind: 'known' as const,
-      platform: 'win32' as const,
-      hostKind: 'runtime' as const,
-      ...(serverShell ? { terminalWindowsShell: serverShell } : {})
-    }
-    expect(resolveExecutionHostAgentStartupShell(fact, 'powershell.exe')).toBe(expected)
-  })
-
-  it('reads the shell the server reported into its host fact', () => {
-    const windowsServer = new Map(
-      [...linuxServer()].map(([id, entry]) => [
-        id,
-        {
-          ...entry,
-          status: entry.status && {
-            ...entry.status,
-            hostPlatform: 'win32' as const,
-            terminalWindowsShell: 'cmd.exe'
-          }
-        }
-      ])
-    )
-    expect(
-      resolveRepoExecutionHostPlatform(
-        { ...state(), runtimeStatusByEnvironmentId: windowsServer },
-        serverRepo,
-        () => undefined
-      )
-    ).toEqual({
-      kind: 'known',
-      platform: 'win32',
-      hostKind: 'runtime',
-      terminalWindowsShell: 'cmd.exe'
-    })
   })
 })

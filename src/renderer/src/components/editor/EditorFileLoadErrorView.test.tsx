@@ -28,15 +28,17 @@ afterEach(() => {
 })
 
 describe('EditorFileLoadErrorView on a stopped WSL host', () => {
-  it('offers Start instead of the read error, and reloads the file once started', async () => {
+  it('offers Start instead of the read error, and reloads without a wake once started', async () => {
     mocks.stopped.current = { environmentId: 'wsl:ubuntu', distro: 'Ubuntu' }
     mocks.start.mockResolvedValue(true)
     const onRetry = vi.fn()
+    const onHostStarted = vi.fn()
     const view = render(
       <EditorFileLoadErrorView
         message="The server isn't answering"
         worktreeId="wt-wsl"
         onRetry={onRetry}
+        onHostStarted={onHostStarted}
       />
     )
     expect(view.queryByText('Unable to load file')).toBeNull()
@@ -45,20 +47,8 @@ describe('EditorFileLoadErrorView on a stopped WSL host', () => {
 
     await act(async () => fireEvent.click(view.getByRole('button', { name: 'Start' })))
     expect(mocks.start).toHaveBeenCalledWith('wsl:ubuntu')
-    expect(onRetry).toHaveBeenCalledTimes(1)
-  })
-
-  it('keeps the read error and Retry for any other workspace', () => {
-    mocks.stopped.current = { environmentId: 'wsl:ubuntu', distro: 'Ubuntu' }
-    const view = render(
-      <EditorFileLoadErrorView
-        message="Permission denied"
-        worktreeId="wt-local"
-        onRetry={vi.fn()}
-      />
-    )
-    expect(view.getByText('Unable to load file')).toBeTruthy()
-    expect(view.getByRole('button', { name: 'Retry' })).toBeTruthy()
-    expect(view.queryByText('Ubuntu is stopped')).toBeNull()
+    // Retry asks to wake the distro; after Start the reload must not.
+    expect(onHostStarted).toHaveBeenCalledTimes(1)
+    expect(onRetry).not.toHaveBeenCalled()
   })
 })

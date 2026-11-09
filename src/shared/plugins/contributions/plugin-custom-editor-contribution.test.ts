@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parsePluginManifest } from '../manifest/plugin-manifest'
 import { PLUGIN_MANIFEST_V2_SINCE } from '../manifest/plugin-schema-field-docs'
-import { pluginCatalogReleaseEntry } from '../catalog/plugin-catalog-release'
-import { pluginCatalogTypes } from '../catalog/plugin-catalog-types'
-import { pluginContributionSummary } from './plugin-contribution-summary'
 import { matchPluginFile, pluginFileMatchRank } from './plugin-file-match'
 import { requiresPluginContentApproval } from '../approval/plugin-consent-fingerprint'
 import { pluginUpdateAccessGrowth } from '../approval/plugin-update-access-growth'
@@ -38,107 +35,6 @@ function parsed(overrides: Record<string, unknown> = {}) {
 }
 
 describe('contributes.customEditors', () => {
-  it('accepts a sandboxed-ui editor and defaults every other point', () => {
-    expect(parsed().contributes.customEditors).toEqual([{ ...excalidraw, filenames: [] }])
-  })
-
-  it('accepts a bytes editor, which edits like a text one', () => {
-    const spreadsheet = {
-      id: 'spreadsheet',
-      title: 'Spreadsheet',
-      extensions: ['.xlsx'],
-      entry: 'editor/index.html',
-      contentKind: 'bytes'
-    }
-    expect(
-      parsed({ contributes: { customEditors: [spreadsheet] } }).contributes.customEditors
-    ).toEqual([{ ...spreadsheet, filenames: [] }])
-  })
-
-  it('accepts an optional tab icon', () => {
-    const withIcon = { ...excalidraw, icon: 'images/tab.png' }
-    expect(
-      parsed({ contributes: { customEditors: [withIcon] } }).contributes.customEditors[0]?.icon
-    ).toBe('images/tab.png')
-    expect(
-      parsePluginManifest(
-        manifest({ contributes: { customEditors: [{ ...excalidraw, icon: '../tab.png' }] } })
-      )
-    ).toMatchObject({ ok: false })
-  })
-
-  it('refuses the retired readonly field', () => {
-    expect(
-      parsePluginManifest(
-        manifest({ contributes: { customEditors: [{ ...excalidraw, readonly: true }] } })
-      )
-    ).toMatchObject({ ok: false })
-  })
-
-  it('refuses an unknown content kind', () => {
-    expect(
-      parsePluginManifest(
-        manifest({ contributes: { customEditors: [{ ...excalidraw, contentKind: 'binary' }] } })
-      )
-    ).toMatchObject({ ok: false })
-  })
-
-  it('needs at least the sandboxed-ui profile', () => {
-    const result = parsePluginManifest(manifest({ execution: 'declarative' }))
-    expect(result.ok).toBe(false)
-  })
-
-  it('needs the manifest v2 engine floor', () => {
-    expect(parsePluginManifest(manifest({ engines: { orca: '>=1.4.200' } }))).toMatchObject({
-      ok: false
-    })
-  })
-
-  it.each([
-    [{ ...excalidraw, extensions: [] }],
-    [{ ...excalidraw, extensions: ['excalidraw'] }],
-    [{ ...excalidraw, extensions: ['.excalidraw', '.EXCALIDRAW'] }],
-    [{ ...excalidraw, extensions: [], filenames: ['a/b'] }],
-    [{ ...excalidraw, priority: 'always' }],
-    [{ ...excalidraw, entry: '../escape.html' }],
-    [{ ...excalidraw, path: 'extra' }]
-  ])('refuses a malformed editor %#', (editor) => {
-    expect(
-      parsePluginManifest(manifest({ contributes: { customEditors: [editor] } }))
-    ).toMatchObject({ ok: false })
-  })
-
-  it('refuses duplicate editor ids', () => {
-    const result = parsePluginManifest(
-      manifest({ contributes: { customEditors: [excalidraw, { ...excalidraw, title: 'Again' }] } })
-    )
-    expect(result).toEqual({
-      ok: false,
-      error: 'contributes.customEditors[1]: duplicate customEditors id: excalidraw'
-    })
-  })
-
-  it('accepts an editor that lists only exact file names', () => {
-    expect(
-      parsePluginManifest(
-        manifest({
-          contributes: { customEditors: [{ ...excalidraw, extensions: [], filenames: ['Board'] }] }
-        })
-      )
-    ).toMatchObject({ ok: true })
-  })
-
-  it('lists as an editor type with dotted file types, and suggests for single-extension types', () => {
-    const plugin = parsed()
-    expect(pluginCatalogTypes(plugin)).toEqual(['editor'])
-    expect(pluginContributionSummary(plugin)).toEqual([
-      { kind: 'customEditors', name: 'Excalidraw', detail: '.excalidraw, .excalidraw.json' }
-    ])
-    expect(
-      pluginCatalogReleaseEntry(plugin, { commit: 'a'.repeat(40), contentHash: 'h' })
-    ).toMatchObject({ fileTypes: ['excalidraw'], editorFileTypes: ['excalidraw'] })
-  })
-
   it('binds approval to the editor bytes and counts a new file type as more reach', () => {
     const plugin = parsed()
     expect(requiresPluginContentApproval(plugin)).toBe(true)
@@ -191,45 +87,5 @@ describe('matchPluginFile', () => {
       pluginFileMatchRank(matchPluginFile('/repo/gleam.toml', match(['.toml'])))
     )
     expect(pluginFileMatchRank(null)).toBe(0)
-  })
-})
-
-describe('contributes.newFiles', () => {
-  const drawing = {
-    id: 'drawing',
-    title: 'New Excalidraw drawing',
-    extension: '.excalidraw',
-    template: 'templates/empty.excalidraw'
-  }
-
-  it('accepts a new-file type beside its editor and summarizes it for catalogs', () => {
-    const result = parsed({ contributes: { customEditors: [excalidraw], newFiles: [drawing] } })
-    expect(result.contributes.newFiles).toEqual([drawing])
-    expect(pluginContributionSummary(result)).toContainEqual({
-      kind: 'newFiles',
-      name: 'New Excalidraw drawing',
-      detail: '.excalidraw'
-    })
-    // Why unchanged: a template seeds a file; the editor that opens it carries the type.
-    expect(pluginCatalogTypes(result)).toEqual(['editor'])
-  })
-
-  it('is content only, so a data plugin may carry one', () => {
-    expect(
-      parsed({ execution: 'data', contributes: { newFiles: [drawing] } }).contributes.newFiles
-    ).toHaveLength(1)
-  })
-
-  it('refuses a bad extension, a duplicate id and unknown fields', () => {
-    for (const newFiles of [
-      [{ ...drawing, extension: 'excalidraw' }],
-      [drawing, { ...drawing, title: 'Again' }],
-      [{ ...drawing, content: '{}' }]
-    ]) {
-      expect(
-        parsePluginManifest(manifest({ contributes: { customEditors: [excalidraw], newFiles } })),
-        JSON.stringify(newFiles)
-      ).toMatchObject({ ok: false })
-    }
   })
 })

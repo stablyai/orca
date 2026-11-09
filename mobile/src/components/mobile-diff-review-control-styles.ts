@@ -1,5 +1,5 @@
 import { StyleSheet } from 'react-native'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, feedback, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
@@ -15,41 +15,23 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderSubtle
   },
-  fileActionRow: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
   footerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm
   },
+  // Sized like SheetPrimaryButton so the bar matches every other bottom action.
   navButton: {
-    width: 44,
-    minHeight: 44,
+    width: 48,
+    height: 48,
     borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'
   },
-  footerButton: {
-    minHeight: 44,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.xs,
-    paddingHorizontal: spacing.md,
-    borderRadius: radii.control,
-    backgroundColor: colors.bgRaised
-  },
-  footerButtonText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize,
-    fontWeight: '700'
-  },
   primaryButton: {
     flex: 1,
-    minHeight: 44,
+    height: 48,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -58,13 +40,10 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     borderRadius: radii.control,
     backgroundColor: colors.textPrimary
   },
-  primaryButtonDone: {
-    backgroundColor: colors.statusGreen
-  },
   primaryButtonText: {
     color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '800'
+    fontSize: 15,
+    fontWeight: '600'
   },
   secondaryButton: {
     flex: 1,
@@ -91,7 +70,10 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     fontWeight: '700'
   },
   buttonPressed: {
-    opacity: 0.76
+    opacity: feedback.pressedOpacity
+  },
+  buttonDisabled: {
+    opacity: feedback.disabledOpacity
   },
   composerHeader: {
     flexDirection: 'row',
@@ -109,6 +91,15 @@ export const mobileDiffReviewControlStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     fontSize: typography.metaSize,
     marginTop: 2
+  },
+  rangeField: {
+    minHeight: 96,
+    alignItems: 'flex-start'
+  },
+  rangeError: {
+    marginTop: spacing.sm,
+    color: colors.statusRed,
+    fontSize: typography.metaSize
   },
   drawerButtonRow: {
     flexDirection: 'row',

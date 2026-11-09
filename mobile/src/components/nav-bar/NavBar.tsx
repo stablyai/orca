@@ -1,8 +1,19 @@
 import type { ReactNode } from 'react'
-import { Animated, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native'
-import { colors, spacing } from '../../theme/mobile-theme'
+import {
+  Animated,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  type StyleProp,
+  type ViewStyle
+} from 'react-native'
+import { ChevronDown } from 'lucide-react-native'
+import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
+import { colors, pressedStyle, spacing } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
+import { useWorkingSweep } from '../use-working-motion'
 
 export const NAV_BAR_HEIGHT = 52
 
@@ -22,6 +33,8 @@ type NavBarProps = {
   /** From useCollapsingTitle: the title waits until the list's PageTitle has scrolled under the bar. */
   titleOpacity?: Animated.AnimatedInterpolation<number>
   dividerOpacity?: Animated.AnimatedInterpolation<number>
+  /** From useRefreshHint: shown data is refreshing in the background. */
+  refreshing?: boolean
 }
 
 // The one top bar: leading button, a centred compact title, and up to two trailing buttons.
@@ -34,7 +47,8 @@ export function NavBar({
   accessory,
   style,
   titleOpacity,
-  dividerOpacity
+  dividerOpacity,
+  refreshing = false
 }: NavBarProps) {
   useMobileColorScheme()
   return (
@@ -69,7 +83,67 @@ export function NavBar({
       {dividerOpacity ? (
         <Animated.View pointerEvents="none" style={[styles.divider, { opacity: dividerOpacity }]} />
       ) : null}
+      {refreshing ? <NavBarRefreshLine /> : null}
     </View>
+  )
+}
+
+// Sits on its parent's bottom edge so the title, subtitle and accessory never move.
+export function NavBarRefreshLine() {
+  const reducedMotion = useReducedMotionEnabled()
+  const sweep = useWorkingSweep(reducedMotion === false)
+  // Draw nothing until the preference is known, so a reveal never swaps shapes.
+  if (reducedMotion === null) {
+    return null
+  }
+  return (
+    <View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      style={styles.refreshTrack}
+    >
+      <Animated.View
+        ref={sweep.ref}
+        onLayout={sweep.onLayout}
+        style={[styles.refreshSegment, reducedMotion ? styles.refreshSegmentStill : sweep.style]}
+      />
+    </View>
+  )
+}
+
+/** A title that opens a picker, e.g. the diff screen's file name that opens Jump to file. */
+export function NavBarTitleButton({
+  title,
+  subtitle,
+  onPress,
+  accessibilityLabel
+}: {
+  title: string
+  subtitle?: string
+  onPress: () => void
+  accessibilityLabel: string
+}) {
+  useMobileColorScheme()
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      style={({ pressed }) => [styles.titleButton, pressed && pressedStyle]}
+    >
+      <View style={styles.titleButtonRow}>
+        <Text style={[styles.title, styles.titleButtonText]} numberOfLines={1}>
+          {title}
+        </Text>
+        <ChevronDown size={14} color={colors.textSecondary} strokeWidth={2.2} />
+      </View>
+      {subtitle !== undefined ? (
+        <Text style={styles.subtitle} numberOfLines={1}>
+          {subtitle}
+        </Text>
+      ) : null}
+    </Pressable>
   )
 }
 
@@ -110,6 +184,24 @@ const styles = themedStyleSheet(() => ({
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle
   },
+  refreshTrack: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: -StyleSheet.hairlineWidth,
+    height: 2,
+    overflow: 'hidden'
+  },
+  refreshSegment: {
+    width: '28%',
+    height: '100%',
+    borderRadius: 1,
+    backgroundColor: colors.textSecondary
+  },
+  refreshSegmentStill: {
+    width: '100%',
+    opacity: 0.45
+  },
   // Equal sides keep the title centred whatever the buttons on either side.
   side: {
     flex: 1,
@@ -140,6 +232,21 @@ const styles = themedStyleSheet(() => ({
   subtitle: {
     color: colors.textSecondary,
     fontSize: 12,
+    flexShrink: 1
+  },
+  titleButton: {
+    alignItems: 'center',
+    minHeight: 44,
+    justifyContent: 'center',
+    maxWidth: '100%'
+  },
+  titleButtonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs,
+    maxWidth: '100%'
+  },
+  titleButtonText: {
     flexShrink: 1
   }
 }))

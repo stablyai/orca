@@ -1,5 +1,5 @@
 import path from 'node:path'
-import type { Store } from '../persistence'
+import type { Store } from '../persistence/loading-store/store'
 import { splitWorktreeId, splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isFolderRepo } from '../../shared/repo-kind'
 import type {

@@ -19,7 +19,7 @@ import {
   getHostedMergeLabel,
   type MobileColorScheme
 } from './mobile-tasks-dependencies'
-import { renderMobileTasksListState } from './mobile-tasks-list-state'
+import { ignoreKeptRowPress, renderMobileTasksListState } from './mobile-tasks-list-state'
 import { styles, getPrSignalToneStyle } from './mobile-tasks-legacy-styles'
 import {
   taskRepositoryMeta,
@@ -32,6 +32,7 @@ import {
   type TaskItem
 } from './mobile-tasks-legacy-foundation'
 import { taskItemStateGlyph } from './mobile-tasks-item-state-glyph'
+import { pressedStyle } from '../theme/mobile-theme'
 
 // Where the item lives and how fresh it is; the glyph carries kind and state except for Jira and todos.
 function formatTaskRowMeta(item: TaskItem): string {
@@ -65,11 +66,12 @@ export function renderMobileTasksProviderItemList(
     refreshTasks,
     refreshing,
     reposById,
-    setActionItem,
     setShowGitHubPagePicker,
     sortedItems,
     taskUiReady
   } = model
+  // The last list, kept before Tasks is ready, is read-only.
+  const setActionItem = taskUiReady ? model.setActionItem : ignoreKeptRowPress
   const listState = renderMobileTasksListState(model, sortedItems.length, bottomBarHeight)
   if (listState) {
     return listState
@@ -99,10 +101,11 @@ export function renderMobileTasksProviderItemList(
               accessibilityState={{
                 disabled: githubCurrentPage === 0 || githubPaginationLoading
               }}
-              style={[
+              style={({ pressed }) => [
                 styles.paginationButton,
                 (githubCurrentPage === 0 || githubPaginationLoading) &&
-                  styles.paginationButtonDisabled
+                  styles.paginationButtonDisabled,
+                pressed && pressedStyle
               ]}
               disabled={githubCurrentPage === 0 || githubPaginationLoading}
               onPress={() => void handleGitHubPageChange(githubCurrentPage - 1)}
@@ -123,7 +126,7 @@ export function renderMobileTasksProviderItemList(
                     )
               }
               accessibilityState={{ disabled: githubPaginationLoading }}
-              style={styles.paginationLabelButton}
+              style={({ pressed }) => [styles.paginationLabelButton, pressed && pressedStyle]}
               disabled={githubPaginationLoading}
               onPress={() => {
                 if (!taskUiReady) {
@@ -151,11 +154,12 @@ export function renderMobileTasksProviderItemList(
                   (!githubCanLoadUncountedNextPage && githubCurrentPage >= githubTotalPages - 1) ||
                   githubPaginationLoading
               }}
-              style={[
+              style={({ pressed }) => [
                 styles.paginationButton,
                 ((!githubCanLoadUncountedNextPage && githubCurrentPage >= githubTotalPages - 1) ||
                   githubPaginationLoading) &&
-                  styles.paginationButtonDisabled
+                  styles.paginationButtonDisabled,
+                pressed && pressedStyle
               ]}
               disabled={
                 (!githubCanLoadUncountedNextPage && githubCurrentPage >= githubTotalPages - 1) ||

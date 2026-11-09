@@ -1,8 +1,8 @@
-import { z } from 'zod'
+import * as z from 'zod'
 import type { PersistedUIState } from '../../../src/shared/persisted-ui-state-types'
 import type { RepoIcon } from '../../../src/shared/repo-icon'
 import { hostUnionArms, salvagedOptional, salvagingArray } from '../../../src/shared/zod-salvage'
-import { NODE_PLATFORM_NAMES } from '../transport/mobile-runtime-host-platform'
+import { NODE_PLATFORM_NAMES } from '../transport/connection/mobile-runtime-host-platform'
 
 export const WORKSPACE_GROUP_BY_ARMS = hostUnionArms<PersistedUIState['groupBy']>({
   none: true,
@@ -49,7 +49,7 @@ export function readMobileRepoIcon(value: unknown): MobileHostRepoIcon | null {
 // Drop catalog rows without id/displayName; salvage badgeColor and unknown icon arms to the renderer’s existing fallbacks. path labels older hosts’ repo sections.
 // Image icons read only src/label; leave source opaque so newer source arms do not erase usable images.
 // Keep host ids as strings: getRepoExecutionHostId already maps unknown spellings to local, preserving newer hosts’ rows.
-const hostRepoCatalogRepos = salvagingArray(
+export const hostRepoCatalogRepos = salvagingArray(
   z.looseObject({
     id: z.string(),
     displayName: z.string(),
@@ -83,20 +83,17 @@ export const hostRepoCatalogSnapshotSchema = z.union([
 ])
 
 // Keep target parsing total: absent/malformed targets yield [] and labels degrade to host ids on older hosts. A throw here would also skip the subsequent platform write.
+export const hostSshTargetSummarySchema = z.looseObject({
+  id: z.string(),
+  label: z.string(),
+  // Read raw: an arm a newer desktop adds must leave the badge as it is, not read as a verdict.
+  connected: salvagedOptional('connected', z.boolean()),
+  connectionStatus: salvagedOptional('connectionStatus', z.string())
+})
+
 export const hostSshTargetSummariesSchema = z
   .looseObject({
-    targets: salvagedOptional(
-      'targets',
-      salvagingArray(
-        z.looseObject({
-          id: z.string(),
-          label: z.string(),
-          // Read raw: an arm a newer desktop adds must leave the badge as it is, not read as a verdict.
-          connected: salvagedOptional('connected', z.boolean()),
-          connectionStatus: salvagedOptional('connectionStatus', z.string())
-        })
-      )
-    )
+    targets: salvagedOptional('targets', salvagingArray(hostSshTargetSummarySchema))
   })
   .transform((reply) => reply.targets ?? [])
   .catch(() => [])
@@ -157,6 +154,16 @@ export const hostViewSettingsSchema = z
 // Most writes read acceptance alone; keep activation opaque for its second consumer.
 // headlessActivationNeedsHostRenderer is a total guard inside a fire-and-forget startup task: a throwing reader would cause an unhandled rejection and skip terminal loading.
 export const hostScreenUnreadReplySchema = z.unknown()
+
+// null: no orca.yaml archive script needs trust. Absent (older host) or malformed: unknown, so the hook does not run.
+export const worktreeArchiveHookTrustSchema = z
+  .looseObject({
+    archiveTrust: salvagedOptional(
+      'archiveTrust',
+      z.looseObject({ contentHash: z.string().min(1), scriptContent: z.string() }).nullable()
+    )
+  })
+  .transform((reply) => reply.archiveTrust)
 
 export type HostRepoCatalogRow = z.output<typeof hostRepoCatalogSchema>[number]
 

@@ -1,14 +1,16 @@
+import { GITHUB_BODY_MEDIA_TYPE } from '../../body-image-urls'
 import type { PRComment } from '../../../../shared/github/comment-types'
-import { runCoalescedProbe, type CoalescedProbes } from '../../../git/coalesced-probe'
+import { runCoalescedProbe, type CoalescedProbes } from '../../../git/remotes/coalesced-probe'
 import { extractExecError } from '../../../git/exec-error'
 import { githubReadExecutionScope } from '../../github-read-execution-scope'
-import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/work-items'
+import { GITHUB_WORK_ITEMS_SSH_REMOTE_REQUIRED_MESSAGE } from '../../../../shared/github/work-item-ssh-error'
 import { ghExecFileAsync, acquire, release, type LocalGitExecOptions } from '../../gh-utils'
 import { resolveGitHubRepoExecution, type GitHubApiRepository } from '../../github-api-repository'
 import { noteRepositoryRateLimitSpend, repositoryRateLimitGuard } from '../../rate-limit'
 import { assertRateLimitBudget } from './../lookup/pr-lookup-rate-limit'
 import { REVIEW_THREADS_QUERY } from './pr-review-threads-query'
 import { parsePRConversationResponse, parseRestPRComments } from './pr-conversation-response'
+import { readViewerLogin } from './authenticated-viewer'
 /** Combine conversation comments, review summaries and GraphQL threads with resolution metadata. */
 async function readPRComments(
   repoPath: string,
@@ -30,8 +32,6 @@ async function readPRComments(
   let restBudgetFailed = false
   try {
     if (ownerRepo) {
-      // Explicit refresh bypasses the polling cache.
-      const cacheArgs = options?.noCache ? [] : ['--cache', '60s']
       const base = `repos/${ownerRepo.owner}/${ownerRepo.repo}`
 
       // Retain successful comment sources when another endpoint fails.
@@ -59,9 +59,9 @@ async function readPRComments(
           )
         } catch (error) {
           // gh exits nonzero for partial GraphQL errors; keep the successful sources.
-          const { stdout } = extractExecError(error)
+          const { stdout, stderr } = extractExecError(error)
           threadsResult = stdout ? { stdout } : null
-          console.warn('Failed to fetch review threads:', error)
+          console.warn('Failed to fetch review threads:', stderr)
         }
       }
 
@@ -75,26 +75,30 @@ async function readPRComments(
       }
       const { issueComments, reviewSummaries, reviewComments } = conversation
 
-      const readRestSource = async (endpoint: string): Promise<PRComment[]> => {
+      // REST has no viewerDidAuthor, so conversation comments match the reading account's login instead.
+      const readRestSource = async (endpoint: string, reviews: boolean): Promise<PRComment[]> => {
         await assertRateLimitBudget('core', ownerRepo, ghOptions).catch((error: unknown) => {
           restBudgetFailed = true
           throw error
         })
         try {
-          noteRepositoryRateLimitSpend(ownerRepo, 'core', 1, ghOptions)
-          const { stdout } = await ghExecFileAsync(['api', ...cacheArgs, endpoint], ghOptions)
-          return parseRestPRComments(stdout, endpoint.includes('/reviews?'))
+          noteRepositoryRateLimitSpend(ownerRepo, 'core', reviews ? 1 : 2, ghOptions)
+          const [{ stdout }, viewerLogin] = await Promise.all([
+            ghExecFileAsync(['api', '-H', GITHUB_BODY_MEDIA_TYPE, endpoint], ghOptions),
+            reviews ? null : readViewerLogin(ghOptions)
+          ])
+          return parseRestPRComments(stdout, reviews, viewerLogin)
         } catch (error) {
-          console.warn('Failed to fetch PR conversation fallback:', error)
+          console.warn('Failed to fetch PR conversation fallback:', extractExecError(error).stderr)
           return []
         }
       }
       const [issueResult, reviewsResult] = await Promise.all([
         issueComments === undefined
-          ? readRestSource(`${base}/issues/${prNumber}/comments?per_page=100`)
+          ? readRestSource(`${base}/issues/${prNumber}/comments?per_page=100`, false)
           : null,
         reviewSummaries === undefined
-          ? readRestSource(`${base}/pulls/${prNumber}/reviews?per_page=100`)
+          ? readRestSource(`${base}/pulls/${prNumber}/reviews?per_page=100`, true)
           : null
       ])
       const all = [
@@ -112,21 +116,23 @@ async function readPRComments(
       ghOptions
     )
     noteRepositoryRateLimitSpend(ownerRepo, 'graphql', 1, ghOptions)
-    const data = JSON.parse(stdout) as {
+    const data: {
       comments: {
         author: { login: string }
         body: string
         createdAt: string
         url: string
+        viewerDidAuthor?: boolean
       }[]
-    }
+    } = JSON.parse(stdout)
     return (data.comments ?? []).map((c, i) => ({
       id: i,
       author: c.author?.login ?? 'ghost',
       authorAvatarUrl: '',
       body: c.body ?? '',
       createdAt: c.createdAt,
-      url: c.url ?? ''
+      url: c.url ?? '',
+      ...(c.viewerDidAuthor === true ? { viewerDidAuthor: true } : {})
     }))
   } catch (err) {
     if (restBudgetFailed) {

@@ -37,6 +37,11 @@ export const SelectAccountParams = z.object({
     .transform((v) => (v === null ? null : v))
 })
 
+export const SelectClaudeAccountParams = SelectAccountParams.extend({
+  // The web client moves running sessions in its own window; older hosts strip this.
+  movesRunningSessions: z.literal(true).optional()
+})
+
 export const SelectCodexAccountForTargetParams = SelectAccountParams.extend({
   target: CodexSelectionTarget
 })
@@ -81,7 +86,9 @@ export const AddCodexFromHomeParams = z.object({
 
 // Account list opts out: forced usage refresh bypasses throttle/Retry-After and costs a serial round trip per account.
 export const ListAccountsParams = z.object({
-  refreshUsage: z.boolean().default(true)
+  refreshUsage: z.boolean().default(true),
+  // Older hosts strip this and skip the refresh, which matches their prior behavior.
+  refreshStaleUsage: z.boolean().optional()
 })
 
 export const AccountsUnsubscribeParams = z.object({

@@ -2,7 +2,7 @@
 import {
   getRuntimeSshAccess,
   type KnownRuntimeEnvironment
-} from '../../../shared/runtime-environments'
+} from '../../../shared/remote-runtime/host-catalog/runtime-environments'
 import type { SshTarget } from '../../../shared/ssh-types'
 import type { ServeReadiness } from '../../server/serve-readiness'
 import { managedOrcadInstallDir } from './orcad-managed-runtime-context'
@@ -15,7 +15,8 @@ import {
   execOrcadRemote,
   type OrcadRemoteExecTarget
 } from '../install/orcad-remote-runtime-control'
-import type { OrcadHostTarget, OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import type { OrcadHostTarget, OrcadHostTransport } from '../install/orcad-host-transport'
+import { parsePairingCode } from '../../../shared/remote-runtime/pairing/pairing'
 
 export type OrcadTunnelPortInput = {
   environment: KnownRuntimeEnvironment
@@ -96,6 +97,23 @@ export async function readManagedOrcadPublishedPort(
 ): Promise<number | null> {
   try {
     return await readActiveSlotBoundPort(input)
+  } catch {
+    return null
+  }
+}
+
+/** The server key the active slot offers to new pairings; null when unpublished or unreadable. */
+export async function readManagedOrcadPublishedKey(
+  input: OrcadTunnelPortInput
+): Promise<string | null> {
+  if (!input.environment.orcadDeployment) {
+    return null
+  }
+  try {
+    const readiness = await readActiveManagedOrcadReadiness(input)
+    return readiness?.pairing.available
+      ? (parsePairingCode(readiness.pairing.url)?.publicKeyB64 ?? null)
+      : null
   } catch {
     return null
   }

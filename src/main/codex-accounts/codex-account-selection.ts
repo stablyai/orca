@@ -4,8 +4,8 @@ import type {
   CodexSystemDefaultIdentity
 } from '../../shared/managed-account-types'
 import { parseWslUncPath } from '../../shared/wsl-paths'
-import type { Store } from '../persistence'
-import type { RateLimitService } from '../rate-limits/service'
+import type { Store } from '../persistence/loading-store/store'
+import type { RateLimitService } from '../rate-limits/service/rate-limit-service'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import type { CodexConfigMirror } from './codex-config-mirror'
 import type { ResolvedCodexIdentity } from './codex-account-identity'

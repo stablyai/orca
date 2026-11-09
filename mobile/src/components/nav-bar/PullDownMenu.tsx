@@ -5,13 +5,16 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
   useWindowDimensions
 } from 'react-native'
+import { Check } from 'lucide-react-native'
 import { useReducedMotionEnabled } from '../../platform/use-reduced-motion'
-import { colors, radii, spacing } from '../../theme/mobile-theme'
+import { useBackClaim } from '../../navigation/use-back-claim'
+import { colors, radii, spacing, typography } from '../../theme/mobile-theme'
 import { themedStyleSheet } from '../../theme/themed-styles'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
@@ -24,7 +27,8 @@ const EDGE_INSET = 8
 const OPEN_SPRING = { stiffness: 420, damping: 32, mass: 1 }
 const CLOSE_FADE_MS = 150
 
-type Anchor = { top: number; right: number }
+// Below the button, or above it when the button sits in the lower half, so the menu never runs off-screen.
+type Anchor = { top: number; right: number } | { bottom: number; right: number }
 
 type PullDownMenuProps = {
   visible: boolean
@@ -55,12 +59,14 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
       return
     }
     anchorRef.current?.measureInWindow((x, y, width, height) => {
-      setAnchor({
-        top: y + height + ANCHOR_GAP,
-        right: Math.max(EDGE_INSET, window.width - (x + width))
-      })
+      const right = Math.max(EDGE_INSET, window.width - (x + width))
+      setAnchor(
+        y + height / 2 > window.height / 2
+          ? { bottom: window.height - y + ANCHOR_GAP, right }
+          : { top: y + height + ANCHOR_GAP, right }
+      )
     })
-  }, [anchorRef, visible, window.width])
+  }, [anchorRef, visible, window.width, window.height])
 
   useEffect(() => {
     if (!visible || anchor === null) {
@@ -125,6 +131,15 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
     }
   }
 
+  // The page's Back (Android, the iOS edge swipe) closes the menu before the screen under it.
+  useBackClaim(
+    visible
+      ? () => {
+          onClose()
+          return true
+        }
+      : null
+  )
   const shown = groups.map((group) => group.filter(Boolean)).filter((group) => group.length > 0)
   return (
     <Modal visible={presented} transparent animationType="none" onRequestClose={onClose}>
@@ -138,7 +153,11 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
         <Animated.View
           style={[
             styles.menu,
-            { top: anchor.top, right: anchor.right },
+            anchor,
+            // Long menus scroll instead of running off a short (landscape) screen.
+            {
+              maxHeight: window.height - ('top' in anchor ? anchor.top : anchor.bottom) - EDGE_INSET
+            },
             {
               opacity: appear.interpolate({
                 inputRange: [0, 1],
@@ -146,7 +165,7 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
                 extrapolate: 'clamp'
               }),
               // Grows out of the button it hangs from rather than from its own middle.
-              transformOrigin: 'top right',
+              transformOrigin: 'top' in anchor ? 'top right' : 'bottom right',
               transform: [
                 {
                   scale: appear.interpolate({
@@ -159,37 +178,54 @@ export function PullDownMenu({ visible, anchorRef, groups, onClose }: PullDownMe
           ]}
           accessibilityRole="menu"
         >
-          {shown.map((group, groupIndex) => (
-            <View key={groupIndex} style={groupIndex > 0 && styles.groupGap}>
-              {group.map((action, index) => {
-                const Icon = action.icon
-                const tint = action.destructive ? colors.statusRed : colors.textPrimary
-                return (
-                  <Pressable
-                    key={action.id ?? action.label}
-                    style={({ pressed }) => [
-                      styles.item,
-                      index > 0 && styles.itemDivider,
-                      pressed && styles.itemPressed,
-                      action.disabled && styles.itemDisabled
-                    ]}
-                    disabled={action.disabled || action.loading}
-                    onPress={() => press(action)}
-                    accessibilityRole="menuitem"
-                    accessibilityLabel={action.label}
-                    accessibilityHint={action.hint}
-                  >
-                    <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
-                      {action.label}
-                    </Text>
-                    {action.renderIcon
-                      ? action.renderIcon()
-                      : Icon && <Icon size={17} color={tint} strokeWidth={2} />}
-                  </Pressable>
-                )
-              })}
-            </View>
-          ))}
+          <ScrollView bounces={false} showsVerticalScrollIndicator={false}>
+            {shown.map((group, groupIndex) => (
+              <View key={groupIndex} style={groupIndex > 0 && styles.groupGap}>
+                {group.map((action, index) => {
+                  const Icon = action.icon
+                  const tint = action.destructive ? colors.statusRed : colors.textPrimary
+                  return (
+                    <Pressable
+                      key={action.id ?? action.label}
+                      style={({ pressed }) => [
+                        styles.item,
+                        index > 0 && styles.itemDivider,
+                        pressed && styles.itemPressed,
+                        action.disabled && styles.itemDisabled
+                      ]}
+                      disabled={action.disabled || action.loading}
+                      onPress={() => press(action)}
+                      accessibilityRole="menuitem"
+                      accessibilityLabel={action.label}
+                      accessibilityHint={action.hint}
+                      accessibilityState={
+                        action.checked === undefined ? undefined : { checked: action.checked }
+                      }
+                    >
+                      <View style={styles.labelBlock}>
+                        <Text style={[styles.label, { color: tint }]} numberOfLines={1}>
+                          {action.label}
+                        </Text>
+                        {/* No tooltips on a phone: a disabled item says why, a destructive one what it replaces. */}
+                        {(action.disabled || action.destructive) && action.hint ? (
+                          <Text style={styles.hint} numberOfLines={2}>
+                            {action.hint}
+                          </Text>
+                        ) : null}
+                      </View>
+                      {action.checked ? (
+                        <Check size={17} color={tint} strokeWidth={2.2} />
+                      ) : action.renderIcon ? (
+                        action.renderIcon()
+                      ) : (
+                        Icon && <Icon size={17} color={tint} strokeWidth={2} />
+                      )}
+                    </Pressable>
+                  )
+                })}
+              </View>
+            ))}
+          </ScrollView>
         </Animated.View>
       ) : null}
     </Modal>
@@ -233,8 +269,16 @@ const styles = themedStyleSheet(() => ({
   itemDisabled: {
     opacity: 0.4
   },
+  labelBlock: {
+    flexShrink: 1,
+    gap: 2
+  },
   label: {
     flexShrink: 1,
     fontSize: 15.5
+  },
+  hint: {
+    color: colors.textSecondary,
+    fontSize: typography.metaSize
   }
 }))
