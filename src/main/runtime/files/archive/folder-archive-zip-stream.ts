@@ -293,6 +293,13 @@ export function isContainedLinkTarget(archivePath: string, target: string): bool
   if (target === '' || isAbsolute(target) || target.includes('\\') || /^[a-zA-Z]:/.test(target)) {
     return false
   }
+  // A `..` after a normal segment may climb through another stored link (`s/../..`), which the
+  // lexical check below can't see; keep only targets whose `..` steps all come first.
+  const segments = target.split('/')
+  const firstNormal = segments.findIndex((segment) => segment !== '..' && segment !== '.')
+  if (firstNormal !== -1 && segments.slice(firstNormal).includes('..')) {
+    return false
+  }
   const rootName = archivePath.slice(0, archivePath.indexOf('/'))
   const resolved = posix.normalize(posix.join(posix.dirname(archivePath), target))
   return resolved === rootName || resolved.startsWith(`${rootName}/`)

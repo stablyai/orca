@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, rename, rm, symlink, writeFile, chmod } from 'node:fs/promises'
+import { mkdtemp, mkdir, realpath, rename, rm, symlink, writeFile, chmod } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { unzipSync } from 'fflate'
@@ -14,7 +14,8 @@ import { FolderArchiveZipStream, isContainedLinkTarget } from './folder-archive-
 let root: string
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-archive-test-'))
+  // Canonical, as the RPC hands it over (macOS tmpdir sits behind /var -> /private/var).
+  root = await realpath(await mkdtemp(join(tmpdir(), 'orca-archive-test-')))
 })
 
 afterEach(async () => {
@@ -114,6 +115,7 @@ describe('FolderArchiveSessions', () => {
     expect(isContainedLinkTarget('p/a/l', '../../x')).toBe(false)
     expect(isContainedLinkTarget('p/l', '/etc/passwd')).toBe(false)
     expect(isContainedLinkTarget('p/l', 'C:x')).toBe(false)
+    expect(isContainedLinkTarget('p/a/b/l', 's/../../..')).toBe(false)
     expect(isContainedLinkTarget('p/l', '..\\x')).toBe(false)
   })
 
@@ -195,6 +197,14 @@ describe('FolderArchiveSessions', () => {
     await expect(
       planFolderArchive(root, 'r', { excludeDefaultDirs: true, maxEntries: 2 })
     ).rejects.toEqual(new FolderArchiveLimitError('archive_too_many_entries'))
+  })
+
+  it('refuses a folder that was swapped for a link after it was authorized', async () => {
+    await mkdir(join(root, 'real'))
+    await symlink(join(root, 'real'), join(root, 'swapped'))
+    await expect(
+      planFolderArchive(join(root, 'swapped'), 's', { excludeDefaultDirs: true })
+    ).rejects.toThrow('archive_not_directory')
   })
 
   it('refuses to archive a file', async () => {

@@ -52,8 +52,16 @@ export async function planFolderArchive(
   archiveRootName: string,
   options: FolderArchiveWalkOptions
 ): Promise<FolderArchivePlan> {
-  // Child realpath checks compare against this, so the root itself must be canonical.
+  // The caller hands over the authorized, canonical path. If it no longer resolves to itself (the
+  // folder was swapped for a link after authorization), refuse rather than walk wherever it points.
   const rootRealPath = await realpath(rootPath)
+  const sameRoot =
+    process.platform === 'win32'
+      ? rootRealPath.toLowerCase() === rootPath.toLowerCase()
+      : rootRealPath === rootPath
+  if (!sameRoot) {
+    throw new Error('archive_not_directory')
+  }
   const maxTotalBytes = options.maxTotalBytes ?? FOLDER_ARCHIVE_MAX_TOTAL_BYTES
   const maxEntries = options.maxEntries ?? FOLDER_ARCHIVE_MAX_ENTRIES
   const excluded = new Set<string>(
@@ -211,8 +219,9 @@ export function sanitizeArchiveSegment(name: string): string {
   return WINDOWS_RESERVED_NAME.test(cleaned) ? `_${cleaned}` : cleaned
 }
 
+// Superscript digits written as escapes: the orcad bundle must stay ASCII.
 const WINDOWS_RESERVED_NAME =
-  /^(?:con|prn|aux|nul|conin\$|conout\$|com[0-9¹²³]|lpt[0-9¹²³])(?:\..*)?$/i
+  /^(?:con|prn|aux|nul|conin\$|conout\$|com[0-9\u00B9\u00B2\u00B3]|lpt[0-9\u00B9\u00B2\u00B3])(?:\..*)?$/i
 
 const INVISIBLE_FORMAT_CHARS = /[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]/g
 
