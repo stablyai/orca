@@ -300,6 +300,7 @@
       "plan": "Plan",
       "stoppedManually": "Elle durduruldu",
       "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
+      "safetyReviewApproved": "{{agent}} bu işleme onay verdi. Ayrıntıları görüntüleyin.",
       "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
       "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt).",
       "modelFallback": "Claude model değiştirdi: {{from}} → {{to}}.",

@@ -19032,6 +19032,7 @@
         "orcaStopCanContinue": "你可以在此对话中继续。",
         "orcaStopUnnamedServer": "远程服务器",
         "permissionDenied": "{{agent}} 拒绝了权限。查看详情。",
+        "safetyReviewApproved": "{{agent}} 已批准此操作。查看详情。",
         "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
         "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。",
         "forkedFrom": "分支来源"
@@ -19162,7 +19163,8 @@
       "contextUsage": {
         "label": "上下文 {{used}}/{{window}} token，已用 {{percent}}%",
         "title": "上下文",
-        "estimated": "根据上一次响应的估算值。"
+        "estimated": "根据上一次响应的估算值。",
+        "deferredNote": "按需加载，不计入已用总量。"
       },
       "dismissDeliveryNotice": "关闭",
       "addSelectionToChat": "添加到聊天",

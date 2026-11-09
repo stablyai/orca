@@ -7,7 +7,7 @@ import type { AppState } from '../../../types'
 import type { OpenFile } from '../types/open-file'
 import { createEditorTabsStore } from '../editor-slice-test-harness'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace/tabs/workspace-tab-commands'
-import { captureEditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
+import { captureEditorFileOperationProvenance } from '@/lib/editor/file-operations/editor-file-operation-provenance'
 import {
   drawTabsFromMain,
   type TabsDrawnFromMain

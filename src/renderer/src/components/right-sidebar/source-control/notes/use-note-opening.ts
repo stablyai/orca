@@ -1,5 +1,5 @@
 import { useCallback, useRef, type RefObject } from 'react'
-import { detectLanguage } from '@/lib/language-detect'
+import { detectLanguage } from '../../../../../../shared/editor-language/editor-language-detect'
 import { getDiffCommentSource } from '@/lib/diff-comment-compat'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'

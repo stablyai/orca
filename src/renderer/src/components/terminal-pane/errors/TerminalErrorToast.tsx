@@ -16,7 +16,7 @@ import {
   failedSpawnEnvironmentFooter,
   withoutTerminalSpawnIssueRequest
 } from './terminal-spawn-error-display'
-import { isWslDistroHoldText } from '@/lib/wsl-distro-hold-copy'
+import { isWslDistroHoldText } from '@/runtime/hosts/wsl/wsl-distro-hold-copy'
 import { isSshSignInRequiredTerminalError } from './terminal-ssh-sign-in-error'
 
 export function TerminalErrorToast({

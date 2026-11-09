@@ -17,7 +17,9 @@ import { usePluginPanelsStore } from '@/store/plugins/catalog/plugin-contributio
 import { bumpEditorDiscardEpoch, EditorSaveDiscardedError } from '../flush/editor-discard-epoch'
 import { editorBufferIdOfView } from '@/store/slices/editor/buffers/editor-buffer-views'
 
-vi.mock('@/lib/connection-context', () => ({ getConnectionIdForFile: () => undefined }))
+vi.mock('@/lib/workspace/ownership/connection-context', () => ({
+  getConnectionIdForFile: () => undefined
+}))
 vi.mock('@/runtime/rpc/calls/runtime-rpc-call', () => ({
   callRuntimeRpc: vi.fn()
 }))

@@ -2,7 +2,7 @@ import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-co
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { getExecutionHostIdForWorktree } from '@/lib/workspace/ownership/worktree-runtime-owner'
 import { getAiVaultResumeWorkspacePath } from '@/lib/agent-session/resume/history/ai-vault-resume-shell'
-import { resolveWorktreeExecutionHostPlatform } from '@/lib/execution-host-facts'
+import { resolveWorktreeExecutionHostPlatform } from '@/runtime/hosts/platform/execution-host-facts'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { parseWslUncPath } from '../../../../../../shared/wsl-paths'
 

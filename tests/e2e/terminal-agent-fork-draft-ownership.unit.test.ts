@@ -1,9 +1,9 @@
 // @vitest-environment happy-dom
 import { mocks, store } from './launch-agent-web-terminal.test-fixture'
 import { expect, it, vi } from 'vitest'
-import { buildAgentSessionForkPrompt } from '@/lib/agent-session-fork-context'
+import { buildAgentSessionForkPrompt } from '@/lib/agent-session/context/agent-session-fork-context'
 import { isWebRuntimeSessionActive } from '@/runtime/web-session-tabs-sync/identity/web-runtime-session-environment'
-import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import { pasteDraftWhenAgentReady } from '@/lib/agent-session/messaging/paste/agent-paste-draft'
 import { newAgentPromptOutcome } from '@/lib/new-agent-prompt-outcome'
 import { projectAgentLaunchSettings } from '../../src/shared/agent-launch/choices/agent-launch-settings'
 import { retainedPrefillHost } from './terminal-agent-fork-retained-prefill.test-fixture'

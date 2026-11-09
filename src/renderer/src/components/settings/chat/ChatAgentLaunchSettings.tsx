@@ -1,8 +1,12 @@
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import { useEffect } from 'react'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
-import { AgentIcon, getAgentCatalog } from '@/lib/agent-catalog'
-import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
+import { getAgentCatalog } from '@/lib/agent-catalog/agent-catalog'
+import { AgentIcon } from '@/components/agent/icons/AgentIcon'
+import {
+  chatProviderAgents,
+  useHostStructuredAgentsVersion
+} from '@/runtime/native-chat/agent-catalogs/chat-provider-agents'
 import { recomputeOn } from '@/lib/recompute-on'
 import { readChatProgram, resolveChatProgramContext } from '@/lib/host-chat-program'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'

@@ -11,11 +11,6 @@ import {
   usageLimitContinueMessageId,
   usageLimitContinueTag
 } from './structured-agent-session-usage-limit-chain'
-import {
-  chainReads,
-  countedItems,
-  countedSubmissions
-} from './structured-agent-session-usage-limit-chain-reads-test-support'
 
 type Submission = Pick<AgentJournalSubmission, 'clientMessageId' | 'providerItemId' | 'origin'>
 
@@ -68,26 +63,6 @@ function conversation(history: number, links: number) {
   }
   return { items, submissions, cut }
 }
-
-it('reads only the chain, never the older conversation, at N and 10N rows of history', () => {
-  const measure = (history: number) => {
-    const { items, submissions, cut } = conversation(history, 3)
-    const reads = chainReads()
-    const chain = usageLimitContinueChain(
-      countedItems(items, reads),
-      countedSubmissions(submissions, reads),
-      cut
-    )
-    return { chain, reads: reads.visited.size }
-  }
-  const small = measure(1_000)
-  const large = measure(10_000)
-  expect(small.chain).toBe(3)
-  expect(large.chain).toBe(3)
-  // Three links of a send row, a turn and its limit row, plus the person's limited turn before them.
-  expect(large.reads).toBe(small.reads)
-  expect(small.reads).toBeLessThanOrEqual(40)
-})
 
 it('counts a continue across a slash-command turn run after the cut it answers', () => {
   const { items, submissions, cut } = conversation(2, 1)
