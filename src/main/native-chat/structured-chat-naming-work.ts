@@ -1,6 +1,12 @@
 import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/agent-session-record'
+import type { AutomaticChatTitle } from './structured-chat-naming-types'
 
-export type NamingRequest = { record: AgentSessionRecord; automatic: boolean; firstPrompt?: string }
+export type NamingRequest = {
+  record: AgentSessionRecord
+  automatic: boolean
+  firstPrompt?: string
+  automaticTitle?: AutomaticChatTitle
+}
 type NamingJob = { desired?: NamingRequest; executing?: NamingRequest; preparing: boolean }
 
 export function createStructuredChatNamingWork(deps: {
@@ -31,7 +37,7 @@ export function createStructuredChatNamingWork(deps: {
     }
   }
   return {
-    run(record: AgentSessionRecord, automatic: boolean) {
+    run(record: AgentSessionRecord, automatic: boolean, automaticTitle?: AutomaticChatTitle) {
       const { sessionId } = record
       const job: NamingJob = jobs.get(sessionId) ?? { preparing: false }
       const pending = job.desired ?? job.executing
@@ -44,7 +50,7 @@ export function createStructuredChatNamingWork(deps: {
       ) {
         return
       }
-      job.desired = { record, automatic }
+      job.desired = { record, automatic, automaticTitle }
       jobs.set(sessionId, job)
       if (!job.preparing) {
         job.preparing = true

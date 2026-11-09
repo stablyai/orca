@@ -9,7 +9,10 @@ import {
   setAgentSessionRecordUserName
 } from '../runtime/agent-session/records/agent-session-record-conversation-name'
 
-function rig(generate: StructuredChatNamingDeps['generate']) {
+function rig(
+  generate: StructuredChatNamingDeps['generate'],
+  captureAutomaticTitle: StructuredChatNamingDeps['captureAutomaticTitle'] = () => ({ owner: null })
+) {
   let record = agentSessionRecordFixture({ sessionId: 'chat-1' })
   let beforeWrite: (() => Promise<void>) | undefined
   const handler = createStructuredChatNamingHandler({
@@ -40,6 +43,7 @@ function rig(generate: StructuredChatNamingDeps['generate']) {
     readJournalFirstPrompt: async () => 'Repair login',
     workerTaskTitle: () => null,
     generate,
+    captureAutomaticTitle,
     wait: async () => {},
     onNamed: () => {},
     logger: { warn: vi.fn(), error: vi.fn() }
@@ -92,10 +96,13 @@ it.each(['owner', 'same-text rename'] as const)(
   'rejects a queued title write after %s changes',
   async (change) => {
     let owned = true
-    const state = rig(async (_record, _prompt, _current, automatic) => {
-      automatic!.retainOwnership(() => owned)
-      return { name: 'CLI title' }
-    })
+    const state = rig(
+      async (_record, _prompt, _current, automatic) =>
+        automatic ? { name: 'CLI title', shouldApply: () => owned } : { name: 'Independent title' },
+      () => ({
+        owner: { isCurrent: () => owned, generate: async () => null }
+      })
+    )
     state.beforeWrite(async () => {
       if (change === 'owner') {
         owned = false
@@ -105,7 +112,9 @@ it.each(['owner', 'same-text rename'] as const)(
     })
     state.start()
     await state.done()
-    expect(state.record().conversationName).toBe('Repair login')
+    expect(state.record().conversationName).toBe(
+      change === 'owner' ? 'Independent title' : 'Repair login'
+    )
   }
 )
 

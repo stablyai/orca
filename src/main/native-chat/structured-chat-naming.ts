@@ -66,11 +66,13 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     const record = deps.getStore()?.getRecord(sessionId)
     return !!record && contextId(record) === context
   }
-  const applicable = (request: NamingRequest) => {
-    const store = deps.getStore()
+  const applicable = (request: NamingRequest, latest?: AgentSessionRecord) => {
+    const current = latest ?? deps.getStore()?.getRecord(request.record.sessionId)
     return (
-      !!store &&
-      generationStillCurrent(store, request.record) &&
+      !!current &&
+      current.conversationNameSource !== 'user' &&
+      current.conversationName === request.record.conversationName &&
+      contextId(current) === contextId(request.record) &&
       (!request.automatic || deps.getSettings().nativeChatAutoName !== false)
     )
   }
@@ -79,9 +81,9 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     prepare,
     execute: (request, firstPrompt) =>
       runStructuredChatNameGeneration({
-        automatic: request.automatic,
+        automaticTitle: request.automaticTitle,
         getRecord: () => deps.getStore()?.getRecord(request.record.sessionId),
-        applicable: () => applicable(request),
+        applicable: (current) => applicable(request, current),
         generate: (stillCurrent, automaticTitle) =>
           generateName(
             request.record,
@@ -135,7 +137,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     retryDelays: readonly number[],
     stillCurrent: () => boolean,
     automaticTitle?: Parameters<StructuredChatNamingDeps['generate']>[3]
-  ): Promise<{ name: string; shouldApply?: () => boolean } | null> {
+  ): Promise<{ name: string; shouldApply?: (record?: AgentSessionRecord) => boolean } | null> {
     attempted.set(record.sessionId, contextId(record))
     for (let attempt = 0; stillCurrent(); attempt += 1) {
       let failure: NamingRunFailure
@@ -193,16 +195,6 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
       refresh(named.location.workspaceId, named.sessionId)
     }
     return named
-  }
-
-  const generationStillCurrent = (store: NamingStore, record: AgentSessionRecord) => {
-    const current = store.getRecord(record.sessionId)
-    return (
-      current !== null &&
-      current.conversationNameSource !== 'user' &&
-      current.conversationName === record.conversationName &&
-      contextId(current) === contextId(record)
-    )
   }
 
   async function prepare(request: NamingRequest): Promise<NamingRequest | null> {
@@ -267,7 +259,12 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
         return
       }
       attempted.set(summary.sessionId, contextId(record))
-      work.run(record, true)
+      const automaticTitle =
+        record.conversationName === undefined &&
+        !(!record.providerContextBoundary && deps.workerTaskTitle(record))
+          ? deps.captureAutomaticTitle?.(record)
+          : undefined
+      work.run(record, true, automaticTitle)
     } catch (error) {
       warn(summary.sessionId, error)
     }

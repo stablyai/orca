@@ -3,10 +3,16 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import type { AgentSessionRecordStore } from '../runtime/agent-session/records/agent-session-record-store'
 import type { AgentGenerationFailureOutput } from '../text-generation/agent-failure-output'
 import type { StructuredAgentSessionLogger } from './agent-session-wire/host/structured-agent-session-logger'
+import type { StructuredAgentSessionAdapter } from './agent-session-wire/providers/structured-agent-session-adapter'
+
+export type AutomaticChatTitle = {
+  owner: ReturnType<NonNullable<StructuredAgentSessionAdapter['captureConversationTitleOwner']>>
+  retainOwnership?: (isCurrent: (record: AgentSessionRecord) => boolean) => void
+}
 
 /** null means unavailable/canceled: no failure to display or retry. */
 export type StructuredChatNameGeneration =
-  | { name: string; shouldApply?: () => boolean }
+  | { name: string; shouldApply?: (record?: AgentSessionRecord) => boolean }
   | { error: string; errorCode?: string; failureOutput?: AgentGenerationFailureOutput }
   | null
 
@@ -21,13 +27,12 @@ export type StructuredChatNamingDeps = {
   readJournalFirstPrompt: (sessionId: string) => Promise<string>
   now?: () => number
   workerTaskTitle: (record: AgentSessionRecord) => { title: string } | null
+  captureAutomaticTitle?: (record: AgentSessionRecord) => AutomaticChatTitle | undefined
   generate: (
     record: AgentSessionRecord,
     firstPrompt: string,
     shouldExecute?: () => boolean,
-    automaticTitle?: {
-      retainOwnership: (isCurrent: (record: AgentSessionRecord) => boolean) => void
-    }
+    automaticTitle?: AutomaticChatTitle
   ) => Promise<StructuredChatNameGeneration>
   onNamed: (workspaceId: string, sessionId: string) => void
   logger: StructuredAgentSessionLogger

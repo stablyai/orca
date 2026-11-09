@@ -2,13 +2,13 @@ import type { AgentSessionRecord } from '../../shared/agent-session/lifecycle/ag
 import type { StructuredChatNamingDeps } from './structured-chat-naming'
 
 export async function runStructuredChatNameGeneration(input: {
-  automatic: boolean
+  automaticTitle?: Parameters<StructuredChatNamingDeps['generate']>[3]
   getRecord: () => AgentSessionRecord | null | undefined
-  applicable: () => boolean
+  applicable: (current?: AgentSessionRecord) => boolean
   generate: (
     stillCurrent: () => boolean,
     automaticTitle?: Parameters<StructuredChatNamingDeps['generate']>[3]
-  ) => Promise<{ name: string; shouldApply?: () => boolean } | null>
+  ) => Promise<{ name: string; shouldApply?: (record?: AgentSessionRecord) => boolean } | null>
   setName: (
     name: string,
     applicable: (record: AgentSessionRecord) => boolean
@@ -17,15 +17,16 @@ export async function runStructuredChatNameGeneration(input: {
   let owner: ((record: AgentSessionRecord) => boolean) | undefined
   const stillCurrent = (latest?: AgentSessionRecord) => {
     const record = latest ?? input.getRecord()
-    return input.applicable() && !!record && (owner?.(record) ?? true)
+    return !!record && input.applicable(record) && (owner?.(record) ?? true)
   }
   if (!stillCurrent()) {
     return
   }
   const name = await input.generate(
     stillCurrent,
-    input.automatic
+    input.automaticTitle
       ? {
+          ...input.automaticTitle,
           retainOwnership: (check) => {
             owner = check
           }
@@ -37,10 +38,10 @@ export async function runStructuredChatNameGeneration(input: {
   }
   const named = await input.setName(
     name.name,
-    (current) => stillCurrent(current) && (name.shouldApply?.() ?? true)
+    (current) => stillCurrent(current) && (name.shouldApply?.(current) ?? true)
   )
-  // A queued write can lose its naming settings while retaining its live session owner.
-  if (!named && name.shouldApply && !name.shouldApply() && stillCurrent()) {
+  // Independent fallback retains the canonical name/context owner; only timeout retains live ownership.
+  if (!named && name.shouldApply && stillCurrent()) {
     const fallback = await input.generate(stillCurrent)
     if (fallback && stillCurrent()) {
       await input.setName(fallback.name, stillCurrent)

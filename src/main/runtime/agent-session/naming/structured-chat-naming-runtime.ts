@@ -1,3 +1,4 @@
+import { ClaudeControlRequestTimeoutError } from '../../../claude/claude-agent-sdk-control-requests'
 import { normalizeSourceControlAiSettings } from '../../../../shared/source-control/ai/settings/source-control-ai-settings'
 import {
   resolveSourceControlActionRecipe,
@@ -64,6 +65,35 @@ function canReuseClaudeTitle(
   )
 }
 
+function resolveChatNamingParams(
+  current: Parameters<typeof resolveTextGenerationParams>[0],
+  provider: Parameters<StructuredChatNamingDeps['generate']>[0]['provider'],
+  recipe = resolveSourceControlActionRecipe({ settings: current, actionId: 'conversationName' })
+) {
+  const source = normalizeSourceControlAiSettings(current.sourceControlAi, current.commitMessageAi)
+  const useChatAgent = !recipe.agentId && !recipe.agentArgs?.trim()
+  return resolveTextGenerationParams(
+    useChatAgent
+      ? {
+          ...current,
+          sourceControlAi: {
+            ...source,
+            actions: {
+              ...source.actions,
+              conversationName: normalizeSourceControlActionRecipe({
+                ...recipe,
+                agentId: provider
+              })
+            }
+          }
+        }
+      : current,
+    LOCAL_COMMIT_MESSAGE_HOST_KEY,
+    'conversationName',
+    null
+  )
+}
+
 export function structuredChatNamingDeps(
   getStore: () => {
     getSettings: () => Parameters<typeof resolveTextGenerationParams>[0] &
@@ -91,6 +121,25 @@ export function structuredChatNamingDeps(
         : ''
     },
     workerTaskTitle: runtime.workerTaskTitle,
+    captureAutomaticTitle: (record) => {
+      const current = getStore().getSettings()
+      if (
+        record.provider !== 'claude' ||
+        record.location.wslDistro !== null ||
+        current.nativeChatAutoName === false
+      ) {
+        return undefined
+      }
+      const settings = resolveChatNamingParams(current, record.provider)
+      if (!settings.ok || !canReuseClaudeTitle(current, settings.params.model)) {
+        return undefined
+      }
+      return {
+        owner:
+          getStructuredAgentSessionHost()?.deps.adapter.captureConversationTitleOwner?.(record) ??
+          null
+      }
+    },
     generate: async function generate(record, firstPrompt, shouldExecute, automaticTitle) {
       // Unsupported execution contexts keep the seed regardless of native naming settings.
       if (record.location.wslDistro !== null) {
@@ -101,10 +150,6 @@ export function structuredChatNamingDeps(
         return null
       }
       const current = getStore().getSettings()
-      const source = normalizeSourceControlAiSettings(
-        current.sourceControlAi,
-        current.commitMessageAi
-      )
       const recipe = resolveSourceControlActionRecipe({
         settings: current,
         actionId: 'conversationName'
@@ -139,26 +184,7 @@ export function structuredChatNamingDeps(
           return chatNamingFailure(record.provider === 'grok' ? 'grokFailed' : 'antigravityFailed')
         }
       }
-      const settings = resolveTextGenerationParams(
-        useChatAgent
-          ? {
-              ...current,
-              sourceControlAi: {
-                ...source,
-                actions: {
-                  ...source.actions,
-                  conversationName: normalizeSourceControlActionRecipe({
-                    ...recipe,
-                    agentId: record.provider
-                  })
-                }
-              }
-            }
-          : current,
-        LOCAL_COMMIT_MESSAGE_HOST_KEY,
-        'conversationName',
-        null
-      )
+      const settings = resolveChatNamingParams(current, record.provider, recipe)
       if (!settings.ok) {
         logger.warn(settings.error, log)
         return { error: settings.error }
@@ -169,29 +195,32 @@ export function structuredChatNamingDeps(
         current.nativeChatAutoName !== false &&
         canReuseClaudeTitle(current, settings.params.model)
       ) {
-        const owner =
-          getStructuredAgentSessionHost()?.deps.adapter.captureConversationTitleOwner?.(record)
+        const owner = automaticTitle.owner
         if (owner) {
-          automaticTitle.retainOwnership(owner.isCurrent)
-          const isCurrent = () => shouldExecute?.() ?? true
+          const isCurrent = (
+            current = getStructuredAgentSessionHost()?.deps.store?.getRecord(record.sessionId) ??
+              record
+          ) => (shouldExecute?.() ?? true) && owner.isCurrent(current)
           const eligible = () =>
             getStore().getSettings().nativeChatAutoName !== false &&
             canReuseClaudeTitle(getStore().getSettings(), settings.params.model)
-          if (!isCurrent()) {
-            return null
-          }
           let output: unknown
           try {
-            output = await owner.generate(firstPrompt, () => isCurrent() && eligible())
-          } catch {
-            // Optional CLI control failure keeps the existing generator's recovery path.
-          }
-          if (!isCurrent()) {
-            return null
+            if (isCurrent()) {
+              output = await owner.generate(firstPrompt, () => isCurrent() && eligible())
+            }
+          } catch (error) {
+            if (error instanceof ClaudeControlRequestTimeoutError) {
+              // A timed-out control is still in flight; its fallback keeps the original live owner.
+              automaticTitle.retainOwnership?.(owner.isCurrent)
+              if (!isCurrent()) {
+                return null
+              }
+            }
           }
           const name = typeof output === 'string' ? sanitizeGeneratedConversationName(output) : ''
-          if (name && eligible()) {
-            return { name, shouldApply: eligible }
+          if (name && isCurrent() && eligible()) {
+            return { name, shouldApply: (current) => isCurrent(current) && eligible() }
           }
           return generate(record, firstPrompt, shouldExecute, undefined)
         }
