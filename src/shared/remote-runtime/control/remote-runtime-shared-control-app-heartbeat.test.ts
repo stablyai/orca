@@ -74,6 +74,49 @@ describe('shared control app heartbeat', () => {
     heartbeat.stop()
   })
 
+  it('clears the mark when a reconnected socket streams frames without needing a probe', async () => {
+    const { heartbeat, onUnresponsive, onRecovered } = setup(
+      (timeoutMs) =>
+        new Promise((_, reject) => setTimeout(() => reject(remoteRuntimeTimeoutError()), timeoutMs))
+    )
+    await vi.advanceTimersByTimeAsync(1_500)
+    expect(onUnresponsive).toHaveBeenCalledTimes(1)
+    heartbeat.stop()
+    // A handshake frame before the new socket is ready proves nothing.
+    heartbeat.noteAnswer()
+    expect(heartbeat.unresponsiveAt).not.toBeNull()
+    heartbeat.start(2)
+    heartbeat.noteAnswer()
+    expect(heartbeat.unresponsiveAt).toBeNull()
+    expect(onRecovered).toHaveBeenCalledTimes(1)
+    heartbeat.stop()
+  })
+
+  it('does not blame the host for a deadline that fired late after this process slept', async () => {
+    let now = 0
+    let rejectProbe: (error: Error) => void = () => {}
+    const onUnresponsive = vi.fn()
+    const heartbeat = new SharedControlAppHeartbeat(
+      { intervalMs: 1_000, timeoutMs: 500 },
+      {
+        probe: () => new Promise((_, reject) => (rejectProbe = reject)),
+        isCurrent: () => true,
+        shouldProbe: () => true,
+        onUnresponsive,
+        onRecovered: vi.fn(),
+        now: () => now
+      }
+    )
+    heartbeat.start(1)
+    now = 1_000
+    await vi.advanceTimersByTimeAsync(1_000)
+    now = 60_000
+    rejectProbe(remoteRuntimeTimeoutError())
+    await vi.advanceTimersByTimeAsync(0)
+    expect(onUnresponsive).not.toHaveBeenCalled()
+    heartbeat.stop()
+  })
+
   it('treats an error reply as an answer and a socket loss as neither', async () => {
     const errors = [
       new RemoteRuntimeClientError('method_not_found', 'old host'),

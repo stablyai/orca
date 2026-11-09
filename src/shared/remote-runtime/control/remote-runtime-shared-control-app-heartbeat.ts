@@ -4,7 +4,8 @@ import type { RuntimeRpcResponse } from '../../runtime-rpc-envelope'
 // request path is stuck still answers them, so a socket can stay "ready" for hours with no updates (#39785).
 // This probe needs the runtime itself to decrypt, dispatch and answer one cheap request.
 export const SHARED_CONTROL_APP_HEARTBEAT_INTERVAL_MS = 30_000
-export const SHARED_CONTROL_APP_HEARTBEAT_TIMEOUT_MS = 20_000
+// Above the 25s ws liveness window, so a dropped link is reported as a transport loss, not a stuck runtime.
+export const SHARED_CONTROL_APP_HEARTBEAT_TIMEOUT_MS = 30_000
 
 export type SharedControlAppHeartbeatOptions = {
   intervalMs?: number
@@ -34,13 +35,13 @@ export class SharedControlAppHeartbeat {
       shouldProbe: () => boolean
       /** The runtime missed a probe on this socket; retire it so reconnect backoff runs. */
       onUnresponsive: (generation: number) => void
-      /** A probe answered after the runtime had been marked unresponsive. */
+      /** The runtime answered on a ready socket after it had been marked unresponsive. */
       onRecovered: () => void
       now?: () => number
     }
   ) {}
 
-  /** Null until a probe misses; cleared only by a later answer, so it survives reconnects. */
+  /** Null until a probe misses; cleared only by a later answer on a ready socket, so it survives reconnects. */
   get unresponsiveAt(): number | null {
     return this.unresponsiveSince
   }
@@ -74,6 +75,11 @@ export class SharedControlAppHeartbeat {
 
   noteAnswer(): void {
     this.lastAnswerAt = this.now()
+    // Why: before start() the frame is the handshake; after it, any sealed frame is the runtime answering.
+    if (this.generation !== null && this.unresponsiveSince !== null) {
+      this.unresponsiveSince = null
+      this.args.onRecovered()
+    }
   }
 
   private tick(): void {
@@ -97,7 +103,11 @@ export class SharedControlAppHeartbeat {
     const timeoutMs = this.options.timeoutMs ?? SHARED_CONTROL_APP_HEARTBEAT_TIMEOUT_MS
     this.args.probe(timeoutMs).then(
       () => this.settle(generation, true),
-      (error: unknown) => this.settle(generation, isTimeout(error) ? false : null)
+      (error: unknown) => {
+        // Why: a deadline that fired late means this process slept (Windows timers count through suspend).
+        const late = this.now() - now > timeoutMs * 1.5
+        this.settle(generation, isTimeout(error) && !late ? false : null)
+      }
     )
   }
 
@@ -109,10 +119,6 @@ export class SharedControlAppHeartbeat {
     this.probeInFlight = false
     if (answered) {
       this.noteAnswer()
-      if (this.unresponsiveSince !== null) {
-        this.unresponsiveSince = null
-        this.args.onRecovered()
-      }
       return
     }
     if (answered === false) {
